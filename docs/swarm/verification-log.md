@@ -71,3 +71,22 @@ Follow-up:
 [2026-07-16T23:07:46Z] Worker finished. Checker required before completion.
 [2026-07-16T23:07:50Z] Worker finished. Checker required before completion.
 [2026-07-16T23:12:09Z] Worker finished. Checker required before completion.
+[2026-07-16T23:13:04Z] Worker finished. Checker required before completion.
+
+## T009 - Migration: identity/roster tables
+Date: 2026-07-16
+Result: PASS (MINOR finding, non-blocking)
+Checker: checker-tests (attempt 1)
+Evidence:
+- Column-by-column diff of all 5 tables (profiles, teams, seasons, students, guardian_links) against PRD 8.1 ground truth: zero deltas
+- id/created_at conventions and FK `on delete restrict` conventions confirmed table by table
+- `seasons` partial unique index on `(is_active) where is_active = true` verified correct via static SQL review (no live Postgres instance available)
+- Confirmed no RLS/policy statements present (correctly out of scope — T012's job)
+- `supabase/migrations/` directory listing confirmed exactly one file exists (constitution item 10)
+- `role_enum` type placement judged reasonable for this migration; forward note logged for future migrations to reuse, not redefine, the type
+Findings:
+- MINOR: `profiles.avatar_url text not null` with no default. Worker applied a consistent "no null-marker in PRD 8.1 = NOT NULL" rule, but PRD SET-01 describes avatar upload as a post-creation settings action, so this column would block INSERT into `profiles` until an avatar URL is supplied. Judged a genuine PRD 8.1 ambiguity, not a worker error. Non-blocking for T009.
+Follow-up:
+- Routed as an amendment to T019's existing acceptance criteria (task-ledger.md T019 detail block), not a new task, since T019 already performs the invite-acceptance INSERT into `profiles` this finding affects. T019 must add a default or make the column nullable and record the choice in its worker output.
+[2026-07-16T23:17:44Z] Worker finished. Checker required before completion.
+[2026-07-16T23:18:00Z] Worker finished. Checker required before completion.
