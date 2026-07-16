@@ -22,7 +22,7 @@ Epic dependency order (PRD Section 13): **E1 → E2 → E3 → (E4, E5, E6 paral
 
 | ID | Epic | Title | Worker | Checker | Deps | Attempts | Status | Last Result | Escalated |
 |---|---|---|---|---|---|---:|---|---|---|
-| T001 | E1 | Vite + TS(strict) + ESLint/Prettier scaffold | worker-implementer | checker-tests | none | 0 | Not Started | None | No |
+| T001 | E1 | Vite + TS(strict) + ESLint/Prettier scaffold | worker-implementer | checker-tests | none | 0 | In Check | Checker error (git-bundling evidence) vacated by boss-arbiter, D001 — re-checking on merits | No |
 | T002 | E1 | Astryx install + `volt.ts` theme (DES-03 exact spec) | worker-implementer | checker-accessibility | T001 | 0 | Blocked | None | No |
 | T003 | E1 | CSS cascade layers + `theme.css` build pattern | worker-implementer | checker-tests | T002 | 0 | Blocked | None | No |
 | T004 | E1 | CI pipeline (typecheck/lint/unit/build + bundle budget) | worker-implementer | checker-tests | T001,T002,T003 | 0 | Blocked | None | No |
