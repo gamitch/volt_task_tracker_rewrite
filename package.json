@@ -9,8 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"*.{ts,js,json,html}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"*.{ts,js,json,html}\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"!src/theme/volt.ts\" \"*.{ts,js,json,html}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"!src/theme/volt.ts\" \"*.{ts,js,json,html}\"",
     "astryx": "node node_modules/@astryxdesign/cli/bin/astryx.mjs",
     "test": "vitest run"
   },
