@@ -16,7 +16,7 @@ A private, role-aware portal for VOLT (FRC Team 11195) that separates meeting at
 1. Supabase Auth (email/password + Google), closed roster, coach-sent invites, parent↔student linking (PRD AUTH, ROS).
 2. Meetings module: recurring scheduling, live check-in console, rotating QR/6-char code, coach roll-call override, participation % (PRD MTG, MET-01/02).
 3. Outreach module: events with multi-day sessions, student RSVPs, coach mark-day-complete, hours toward goals, leaderboard (PRD OUT, MET-03/04).
-4. Calendar page + personal read-only ICS feed for Google Calendar (PRD CAL).
+4. Calendar page (meetings, outreach, and competitions) + personal read-only ICS feed for Google Calendar. Competitions are a metric-neutral v1 event type, RSVP-able and shown on calendar/reminders (PRD CAL, CMP).
 5. Email reminders and weekly parent digest via Resend + pg_cron (PRD EML).
 6. Roster/teams/seasons management, reports with CSV export (PRD ROS, RPT, SET).
 7. Full data migration from the existing Lovable Cloud app (source: github.com/gamitch/volt-timetracker; normative mapping in PRD Section 10.2).
@@ -33,4 +33,4 @@ The ten v1 acceptance criteria in PRD Section 14, including the four persona smo
 - RLS default-deny on every table; metric formulas exist only in SQL views (PRD Section 8, DATA-01).
 - All students are minors: no public pages, contact info restricted to admin/coach, leaderboard shows "First L." by default (PRD SEC-01…04).
 - Timezone display America/Chicago; storage UTC.
-- Constitution additions listed in PRD Section 13 must be adopted verbatim.
+- The six constitution additions listed in PRD Section 13 are incorporated in the constitution's "Project-Specific Standards" section (items map to Astryx sourcing, RLS default-deny, metrics-only-in-SQL, no-PII, requirement-ID precedence). SQL and Astryx props are the parts copied verbatim from their named sources.
