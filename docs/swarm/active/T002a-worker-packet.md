@@ -7,7 +7,7 @@ T002a
 Upgrade the stack from React 18 to React 19 (D002 stack-lock reversal, constitution item 8) so `@astryxdesign/core` runs correctly — the shipped `Theme.js` calls React's `use()` hook, which does not exist in React 18 and throws a TypeError at first render. T002 passed on typecheck/build/contrast alone with no runtime render, so this crash was never exercised. This task closes that gap: dependency upgrade + a mandatory runtime smoke check. It is a corrective, forward-fix task — T002 is not being reopened or redone.
 
 ## Allowed Files
-- `package.json`
+- `package.json` — this includes the `format` and `format:check` script strings specifically, not just the `react`/`react-dom`/`@types/react*` version fields. See Most Recent Failure below: you are explicitly authorized to edit these two script strings to exclude `src/theme/volt.ts` from Prettier's purview. This is not a new scope grant; `package.json` was already fully in-scope, this note just confirms the specific edit is covered.
 - `package-lock.json`
 - `src/theme/astryx-augment.d.ts` — touch ONLY if the `@types/react` 19 compiler forces a change (e.g. a genuine type error). Do not edit it speculatively or "for cleanliness."
 - One new minimal runtime-smoke test file, your choice of exact name, but it must live under `src/theme/` (e.g. `src/theme/theme.smoke.test.tsx`) or under a new `src/test-setup/**` directory if a shared vitest/jsdom setup file is genuinely required. Do not scatter test files elsewhere.
@@ -37,7 +37,9 @@ Item 9 (Dependency allowlist): dev tooling including `vitest` is already allowli
 Definition of Done: no worker may mark its own work complete; every checker must inspect the actual artifact, not just your summary. Your output below is evidence for the checker, not a self-certification.
 
 ## Most Recent Failure
-None. This is T002a's first attempt (T002 itself passed on the criteria it was given; the criteria changed under D002, which is why this task exists as a forward fix rather than a T002 rework).
+Attempt 1: FAIL/MAJOR (checker-tests) — the React 19 upgrade itself is fully sound (install, `npm ls`, `use()` check, build/typecheck/lint, and the mandatory runtime smoke test all passed and were independently re-verified). The sole gap is `npm run format:check` exiting 1 on `src/theme/volt.ts`, a pre-existing Prettier `bracketSpacing` drift against the verbatim DES-03 block that predates T002a (traces to T002, confirmed via git-show). Full detail, root cause, both fix options (B preferred: narrow the `format`/`format:check` glob strings in `package.json`; A fallback: `.prettierignore` scope exception), and the exact re-verification command are in `docs/swarm/active/T002a-latest-failure.md` — read it before starting attempt 2.
+
+Hard constraint: do NOT edit `src/theme/volt.ts` content under any circumstance to fix this. That remains forbidden per this packet's Forbidden Files list.
 
 ## Required Worker Output
 - files changed (exact list, cross-checked against Allowed Files)

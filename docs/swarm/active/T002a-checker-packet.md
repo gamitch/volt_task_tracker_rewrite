@@ -7,10 +7,10 @@ T002a
 checker-tests
 
 ## Attempt
-1 (first check; T002a has no prior checker verdict)
+2 (re-check after rework; attempt 1 FAILed/MAJOR on a single narrow gap — see Most Recent Failure below)
 
 ## Objective
-Verify the worker's React 18→19 upgrade (D002 corrective task). Do not trust any worker claim below — re-run every command yourself and quote literal output. This closes the gap D002 identified: T002 passed on typecheck/build/contrast alone, with no runtime render, and `@astryxdesign/core`'s `Theme.js` calls React's `use()` (React 19-only) and crashes under React 18 at first render.
+Re-verify the worker's rework of the React 18→19 upgrade (D002 corrective task). Attempt 1 already fully verified the upgrade itself (install, `npm ls`, `use()`, build/typecheck/lint, mandatory runtime smoke test) — do not re-derive that from scratch, but DO re-confirm none of it regressed while the worker touched `package.json` again for this rework. Do not trust any worker claim below — re-run every command yourself and quote literal output. This is a full re-check, not a diff-only spot check.
 
 ## Allowed Files (for this task)
 - `package.json`
@@ -20,107 +20,41 @@ Verify the worker's React 18→19 upgrade (D002 corrective task). Do not trust a
 
 ## Forbidden Files (check first)
 - `docs/swarm/**`, `.claude/**`
-- `src/theme/volt.ts` — must remain byte-identical to the DES-03 block already verified in T002. Any content edit here is an automatic BLOCKER regardless of the reason (including "to satisfy Prettier" — see Known Finding below).
+- `src/theme/volt.ts` — must remain byte-identical to the DES-03 block already verified in T002. Any content edit here is an automatic BLOCKER regardless of the reason (including "to satisfy Prettier").
 - Anything outside the Allowed Files list.
 
 Compare the current file tree directly against this list (per D001 precedent: do not use git commit/diff history as evidence of what the worker touched — bundled commits are not reliable per-agent attribution in this environment). Read files on disk directly.
 
+## What Attempt 1 Already Established (do not re-litigate; only re-confirm no regression)
+- `react`/`react-dom` at `^19.2.7`, `@types/react`/`@types/react-dom` bumped to 19, no `--legacy-peer-deps` anywhere.
+- `npm ls react react-dom @astryxdesign/core` clean.
+- `node -e "console.log(typeof require('react').use === 'function')"` → `true`.
+- `npm run build` / `npm run typecheck` / `npm run lint` all exit 0.
+- Mandatory runtime smoke test (`src/theme/theme.smoke.test.tsx`: vitest + jsdom, real `createRoot`/`act` render of `<Theme><App/></Theme>`, asserts `h1` text `VOLT Team Portal`) is a real render assertion and passes.
+- `astryx-augment.d.ts` unchanged and compiles clean.
+- No forced peer-bumps on other allowlisted deps (none present to bump).
+- `tsconfig.json` `strict: true` unchanged.
+
+These are folded into Required Verification Steps 5-7 below as "re-confirm," not "re-derive."
+
+## Attempt 2 — What Changed
+Worker's rework: narrowed `format`/`format:check` scripts in `package.json` with a Prettier glob negation (`"!src/theme/volt.ts"`) rather than adding a new `.prettierignore` file, since `package.json` was already an Allowed File (no scope exception needed for this path — narrower than Option A from the attempt-1 failure notice). Worker claims: `npm run format:check` exits 0; `volt.ts` byte-identical (git diff empty); typecheck/lint/build/vitest unaffected; `npm ls` clean; `react.use()` still a function; worker also claims to have proactively validated the negation isn't silently over-broad by temporarily injecting a formatting violation into `astryx-augment.d.ts`, confirming `format:check` still caught it, then fully reverting (git diff on that file also empty).
+
+None of this is to be accepted on the worker's word. Verify independently per the steps below.
+
 ## Required Verification Steps
 
-### 1. `package.json` dependency versions — inspect directly
-Current on-disk values (already read by foreman, re-confirm yourself):
-- `react`: `^19.2.7`, `react-dom`: `^19.2.7`
-- `@types/react`: `^19.2.17`, `@types/react-dom`: `^19.2.3`
-Confirm these are present and no `--legacy-peer-deps` workaround survives anywhere (check for a committed `.npmrc` with `legacy-peer-deps=true` — none exists on disk as of this packet's writing; re-confirm) and no such flag appears in any `package.json` script.
+### 1. `format:check` — independently re-run, quote real output
+Run `npm run format:check` yourself. Confirm exit code 0. Quote the literal command and output (or the tail of it if long). If it does not exit 0, this is an immediate FAIL — stop and report exactly what still fails.
 
-### 2. Clean reinstall, no flags
-Run `npm install` with no flags (or `rm -rf node_modules && npm install` for a true clean install) and confirm it completes with exit 0 and no peer-conflict errors/warnings requiring override. Quote the tail of the install output.
+### 2. `package.json` diff — confirm the fix is scoped to exactly what's claimed
+Read the current `package.json` `format` and `format:check` script strings directly. Confirm:
+- The only change from the attempt-1 state is a glob negation (e.g. `"!src/theme/volt.ts"`) added to those two script strings.
+- No other script, dependency version, or field in `package.json` changed since attempt 1's approved state (react/react-dom/@types versions must be identical to what attempt 1 verified).
+- If you have a way to diff against the attempt-1 `package.json` content (the version quoted/implied in the attempt-1 failure notice at `docs/swarm/active/T002a-latest-failure.md`), use it; otherwise reason from the on-disk content plus the attempt-1 record.
 
-### 3. `npm ls` clean check
-Run `npm ls react react-dom @astryxdesign/core`. Quote full output. Must show no `ELSPROBLEMS`, no `invalid`, no `UNMET PEER DEPENDENCY` markers. `package-lock.json` already shows `node_modules/react` at `19.2.7` and `@astryxdesign/core`'s peerDependencies at `react >=19.0.0` / `react-dom >=19.0.0` (lines ~132-146, ~4884-4902) — confirm the installed tree actually satisfies this, don't just trust the lockfile.
-
-### 4. React `use()` availability
-Run `node -e "console.log(typeof require('react').use === 'function')"`. Must print `true`. Quote output.
-
-### 5. build / typecheck / lint — run yourself, quote real output
-Run `npm run build`, `npm run typecheck`, `npm run lint`. All three must exit 0. Quote exit codes and any warnings.
-
-### 6. `format:check` — expect FAILURE, verify root cause (see Known Finding below)
-Run `npm run format:check`. As of this packet, no `.prettierignore` exists at repo root and the script is `prettier --check "src/**/*.{ts,tsx}" "*.{ts,js,json,html}"`, which includes `src/theme/volt.ts`. `.prettierrc.json` does not override `bracketSpacing` (Prettier default `true`, i.e. `{ accent: ... }` with inner spaces), but `volt.ts`'s object literals (verbatim DES-03 text, e.g. `{accent: '#5B2EE5', neutralStyle: 'cool'}`) have no inner spacing. Expect `format:check` to fail solely on `volt.ts`. Confirm this is the *only* file it flags — if other files are also flagged, that's a separate, real worker defect (do not fold it into the known-issue disposition below).
-
-### 7. Independently re-verify the "pre-existing, not introduced by T002a" claim
-Worker claims (via `git stash`/`git stash pop` against T002a's pre-upgrade state) that this same `volt.ts`-vs-Prettier drift exists identically before this task's changes. Re-verify with your own method — `git stash`/`git stash pop`, or `git show <pre-T002a-commit>:src/theme/volt.ts | npx prettier --check --stdin-filepath src/theme/volt.ts`, or equivalent — and confirm independently rather than accepting the worker's stash/pop narrative. State your method and result.
-
-### 8. Runtime smoke test — the mandatory D002 check
-Read `src/theme/theme.smoke.test.tsx` directly (already reproduced below for reference; re-read on disk, don't trust this excerpt as current):
-```tsx
-import { act } from 'react';
-import { createRoot } from 'react-dom/client';
-import { describe, expect, it } from 'vitest';
-import { Theme } from '@astryxdesign/core';
-import App from '../App';
-import { voltTheme } from './volt';
-
-describe('Theme runtime smoke check', () => {
-  it('renders the app root inside the Astryx Theme provider without throwing', () => {
-    const container = document.createElement('div');
-    document.body.appendChild(container);
-    const root = createRoot(container);
-    try {
-      expect(() => {
-        act(() => {
-          root.render(
-            <Theme theme={voltTheme}>
-              <App />
-            </Theme>,
-          );
-        });
-      }).not.toThrow();
-      expect(container.querySelector('h1')?.textContent).toBe('VOLT Team Portal');
-    } finally {
-      act(() => { root.unmount(); });
-      container.remove();
-    }
-  });
-});
-```
-Confirm this is a REAL render assertion, not tautological:
-- It uses `react-dom/client` `createRoot` + `act` — an actual DOM render, not a shallow/mock render.
-- It renders `<Theme theme={voltTheme}>` — the real Astryx `Theme` provider from `@astryxdesign/core` (the exact component whose `Theme.js` calls `use()` per D002's evidence), not a stub.
-- The `container.querySelector('h1')?.textContent === 'VOLT Team Portal'` assertion is meaningful: `src/App.tsx` on disk literally renders `<h1>VOLT Team Portal</h1>` — confirm this yourself by reading `src/App.tsx`. This means the test would fail both on a `Theme`-provider throw AND on App not actually mounting inside it — it is not a no-op assertion.
-- Confirm the `@vitest-environment jsdom` pragma is present (line 1) and that `jsdom` is an installed devDependency (`package.json` shows `"jsdom": "^29.1.1"`).
-Then actually run `npx vitest run` (or `npm test`) yourself and quote the pass/fail output for this specific test file. A green typecheck does NOT substitute for this — the test must actually execute.
-
-### 9. `astryx-augment.d.ts` — confirm unchanged
-Read `src/theme/astryx-augment.d.ts` on disk. It should be identical to T002's checker-approved content:
-```ts
-export {};
-
-declare module '@astryxdesign/core/theme' {
-  interface TypographyRole {
-    url?: string;
-  }
-}
-```
-Worker claims no edit was needed and it still compiles clean against `@types/react` 19 (already covered by step 5's typecheck pass, since this file is part of the compiled project). If it differs from the above, treat any change as needing the same scrutiny T002's `export {}` fix received — do not accept a new edit here without independent justification.
-
-### 10. Forced peer-bumps on other allowlisted deps — confirm the "nothing to check" claim is true
-`package.json` `dependencies`/`devDependencies` currently contain no `@tanstack/react-query`, `react-router-dom`, or `qrcode.react` (confirmed absent by foreman via grep). Re-confirm yourself by reading `package.json`. If true, the worker's claim that "no forced bump check applies" is factually correct (not an excuse to skip a check that had nothing to check) — note this plainly rather than penalizing it.
-
-### 11. `tsconfig.json` strict unchanged
-Confirm `strict: true` is still set and no other compiler options changed without justification.
-
-## Known Finding — `format:check` fails on `volt.ts` (decision required, not a re-investigation)
-Root cause (steps 6-7 should confirm, not re-derive from scratch): `volt.ts` is verbatim DES-03 text and is a forbidden file for this task — its content must not change. The repo's `.prettierrc.json` uses Prettier's default `bracketSpacing: true`, which conflicts with DES-03's exact object-literal formatting. This is pre-existing drift, not something T002a introduced.
-
-Disposition:
-- Editing `volt.ts`'s content to satisfy Prettier is **NOT acceptable** — verbatim DES-03 compliance outranks formatting lint (same precedence as constitution item 1: PRD requirement IDs > constitution > ledger > agent judgment; formatting is not a requirement ID).
-- The correct scoped fix is excluding `volt.ts` from Prettier's purview without altering its content — either a new root `.prettierignore` containing `src/theme/volt.ts`, or narrowing the `format`/`format:check` glob in `package.json` to exclude that one path. `package.json` edits are already in-scope (Allowed Files); a new `.prettierignore` file is outside T002a's literal Allowed Files list but follows the exact same precedent as D001's approved index.html/package-lock.json scope exceptions (packet's literal file list made its own acceptance criterion — `format:check` exits 0 — unachievable without it).
-- **Required rework** if: (a) `volt.ts` was edited to fix formatting, or (b) `format:check` still fails after the worker's fix, or (c) the worker did nothing about it and just reported the failure without a fix.
-- **Acceptable to PASS** (on this point) if: the worker added a `.prettierignore` (or narrowed the glob in `package.json`) that scopes out only `volt.ts`, `format:check` now exits 0, `volt.ts` content is unchanged (re-diff it — see step below), and no other file is newly excluded from formatting without justification.
-- If the worker used a `.prettierignore` file: note it as a scope exception in your verdict (same class as D001's), not a forbidden-file violation, since it doesn't appear on T002a's list but is the minimal fix for an otherwise-unachievable acceptance criterion.
-
-Re-diff `volt.ts` against the DES-03 block (identical to the block quoted in the archived T002 checker packet) regardless of which fix path was taken — content must be byte-for-byte unchanged:
+### 3. `volt.ts` byte-identical — verify against the DES-03 spec directly, not just "git diff was empty"
+Read `src/theme/volt.ts` on disk right now and diff its actual current content against the DES-03 block reproduced below (identical to the block already verified in T002 and in attempt 1's packet). Do not accept "git diff was empty" as sufficient — confirm the file's current content, character for character, matches:
 ```tsx
 import {defineTheme} from '@astryxdesign/core/theme';
 import {neutralTheme} from '@astryxdesign/theme-neutral';
@@ -149,23 +83,50 @@ export const voltTheme = defineTheme({
 });
 ```
 
+### 4. Independently verify the glob negation actually scopes correctly (not silently over-broad)
+Do your own version of the worker's claimed validation — do not trust that the worker's already-reverted test proves anything, since you cannot inspect a reverted state after the fact. Options (pick one, or more than one if the first is inconclusive):
+- Temporarily inject a formatting violation into a *different* file than the worker used (e.g. a file under `src/` other than `volt.ts` and `astryx-augment.d.ts`, to avoid any doubt about which file the worker already touched), run `format:check`, confirm it fails and correctly flags that file, then fully revert and re-confirm `git diff`/content is clean and `format:check` passes again.
+- Alternatively (or additionally), reason directly from the glob syntax itself: read the exact script string and confirm the negation pattern is syntactically a Prettier ignore-glob that only matches `src/theme/volt.ts` and nothing else (e.g. it isn't an overly broad pattern like `!src/theme/*` that would also exclude `astryx-augment.d.ts` or a future file in that directory). State explicitly what the pattern excludes and confirm it is exactly one file.
+- Confirm `astryx-augment.d.ts` and any other previously-formatted file are still actually being checked by `format:check` (not silently excluded) — e.g. run `npx prettier --check src/theme/astryx-augment.d.ts` directly and confirm it's covered/clean, or point to the script's glob still matching it.
+
+State your method and result explicitly — this cannot be a rubber stamp of the worker's already-reverted test.
+
+### 5. Re-confirm no regression: typecheck/lint/build/vitest
+Run `npm run build`, `npm run typecheck`, `npm run lint`, and `npx vitest run` (or `npm test`) yourself. All must exit 0. Quote exit codes and any warnings. Specifically confirm `src/theme/theme.smoke.test.tsx` (or wherever the runtime smoke test lives) still passes — this is the mandatory D002 check and must not silently regress while the worker edited `package.json` again.
+
+### 6. Re-confirm `npm ls` clean and `react.use()` still a function
+Run `npm ls react react-dom @astryxdesign/core` — quote full output, confirm no `ELSPROBLEMS`/`invalid`/`UNMET PEER DEPENDENCY`. Run `node -e "console.log(typeof require('react').use === 'function')"` — must print `true`. These should be unchanged from attempt 1 since the rework didn't touch dependency versions, but re-verify rather than assume, since this is a full re-check.
+
+### 7. `astryx-augment.d.ts` — confirm unchanged from T002's approved content
+Read `src/theme/astryx-augment.d.ts` on disk. It must be identical to T002's checker-approved content (the worker claims it used this file transiently to test the glob negation and fully reverted it):
+```ts
+export {};
+
+declare module '@astryxdesign/core/theme' {
+  interface TypographyRole {
+    url?: string;
+  }
+}
+```
+If it differs in any way from this, that is a BLOCKER — the worker's claimed revert failed, regardless of intent.
+
 ## Relevant Constitution Excerpts
 - Non-Negotiables: "The app must build successfully." / "Protected source text must remain verbatim unless explicitly approved." / "Every checker must inspect the actual artifact, not just the worker's summary." / "No worker may mark its own work complete."
 - Item 8 (Stack locks): React 19 is the approved, human-authorized deviation from PRD D2 (see D002). No Tailwind/shadcn/alternate UI libs.
 - Item 9 (Dependency allowlist): `vitest` and other dev tooling are pre-allowlisted; no extra approval needed.
-- D001 precedent (dispute-log.md): scope exceptions for mechanical/infra files (there: index.html, package-lock.json) are approvable when the packet's literal Allowed Files list makes its own acceptance criteria unachievable; not a forbidden-file violation when the worker discloses the deviation rather than hiding it. Applies here to a `.prettierignore` addition if the worker chose that path.
+- D001 precedent (dispute-log.md): scope exceptions for mechanical/infra files are approvable when a packet's literal Allowed Files list makes its own acceptance criteria unachievable; not a forbidden-file violation when disclosed. Not directly needed this attempt since the worker's fix path (glob negation inside `package.json`) required no scope exception — `package.json` was already fully allowed.
 
-## Most Recent Failure
-None. First checker attempt for T002a.
+## Most Recent Failure (attempt 1 — condensed; full detail in `docs/swarm/active/T002a-latest-failure.md`)
+FAIL/MAJOR. Everything about the React 19 upgrade itself was sound and independently verified (install, `npm ls`, `use()`, build/typecheck/lint, mandatory runtime smoke test, `astryx-augment.d.ts` unchanged, no forced peer-bumps, `strict:true` unchanged). Sole gap: `npm run format:check` exited 1, flagging only `src/theme/volt.ts` — pre-existing Prettier `bracketSpacing` drift against the verbatim DES-03 block, confirmed by checker via `git show` to predate T002a (traces to T002, not introduced by this task). Checker-approved fix: narrow the `format`/`format:check` glob in `package.json` (already an Allowed File) to exclude `src/theme/volt.ts`, or fall back to a `.prettierignore` scope exception if the glob approach didn't work cleanly. Hard constraint carried forward: `volt.ts` content must never be edited to satisfy Prettier.
 
 ## Required Checker Output
-- PASS or FAIL (cannot PASS while build/typecheck/lint/`npm ls`/the `use()` check/the vitest smoke test fail; `format:check` disposition follows the Known Finding rules above, not a blanket "all scripts must exit 0")
+- PASS or FAIL (cannot PASS while format:check/build/typecheck/lint/`npm ls`/the `use()` check/the vitest smoke test fail, or if `volt.ts` content deviates even slightly, or if the glob negation is shown to be over-broad)
 - severity: BLOCKER / MAJOR / MINOR / NIT per finding
-- exact commands run and literal output for: clean install, `npm ls react react-dom @astryxdesign/core`, the `node -e` `use()` check, `npm run build`, `npm run typecheck`, `npm run lint`, `npm run format:check`, `npx vitest run` (smoke test specifically)
-- your independent verdict on whether the smoke test is a real render assertion (step 8) — method and result
-- your independent verdict on the "pre-existing drift" claim (step 7) — method and result
-- `volt.ts` re-diff result (must be byte-identical regardless of which prettier fix path was taken)
-- `astryx-augment.d.ts` diff-or-unchanged confirmation
-- forbidden-file/scope check result, including explicit disposition on any `.prettierignore` addition
+- exact commands run and literal output for: `npm run format:check`, `npm run build`, `npm run typecheck`, `npm run lint`, `npx vitest run`, `npm ls react react-dom @astryxdesign/core`, the `node -e` `use()` check
+- `package.json` script-diff confirmation (step 2) — exact statement of what changed vs. attempt 1
+- `volt.ts` byte-identical confirmation (step 3) — method and result, not just "git diff empty"
+- independent glob-scoping verification (step 4) — method and result; must not merely cite the worker's already-reverted test
+- `astryx-augment.d.ts` unchanged confirmation (step 7)
+- forbidden-file/scope check result
 - whether a dispute is warranted (should not be if the worker's account holds up under independent checks)
-- required rework, if any, stated explicitly (especially: rework required if `volt.ts` content was touched, or if `format:check` still fails with no fix attempted)
+- required rework, if any, stated explicitly — if this attempt fails, this will be attempt 2's FAIL, with one attempt remaining before mandatory escalation to boss-arbiter (loop limit = 3)
