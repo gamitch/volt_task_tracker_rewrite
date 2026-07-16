@@ -218,7 +218,7 @@ export const voltTheme = defineTheme({
 
 - **DES-17** WCAG 2.1 AA. Keyboard path for every flow including the roll-call console (arrow through roster rows, 1–4 keys set Present/Late/Excused/Absent on the focused row). Visible focus, labels on all inputs, `aria-live="polite"` on the live check-in tally.
 
-### 5.6 How agents must consult Astryx (constitution material)
+### 5.6 How agents must consult Astryx (constitution material) 
 
 - **DES-18** Add to `package.json`: `"astryx": "node node_modules/@astryxdesign/cli/bin/astryx.mjs"`.
 - **DES-19** The authoritative component API is the static file **`docs/swarm/astryx-api.md`** (generated from the installed package; ships with this PRD — regenerate on Astryx upgrades via `npm run astryx -- manifest --json` + `docs.mjs`). Workers copy prop names from that file; the CLI (`npm run astryx -- component <Name>`) is a live cross-check, not the primary source. A prop that does not appear in `astryx-api.md` is presumed hallucinated — checker MAJOR.
