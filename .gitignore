@@ -11,10 +11,11 @@ out/
 .nuxt/
 .cache/
 
-# Environment
+# Environment — never commit secrets (old repo leaked a .env)
 .env
-.env.local
-.env.*.local
+.env.*
+*.local
+!.env.local.example
 
 # OS
 .DS_Store
