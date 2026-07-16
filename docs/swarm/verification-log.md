@@ -46,3 +46,4 @@ Evidence:
 - file tree = Allowed Files + approved exceptions only
 Follow-up:
 - None
+[2026-07-16T15:33:23Z] Worker finished. Checker required before completion.
