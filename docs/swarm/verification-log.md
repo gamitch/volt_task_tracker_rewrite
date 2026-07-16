@@ -67,3 +67,6 @@ Attempts: 1 (single legitimate FAIL, attempt 1; PASS on attempt 2)
 Follow-up:
 - NIT (log only, not a new task): consider filing an upstream issue against `@astryxdesign/core@0.1.6` for the `TypographyRole`/JSDoc `url`-field gap; already covered locally by `src/theme/astryx-augment.d.ts`.
 [2026-07-16T22:51:12Z] Worker finished. Checker required before completion.
+[2026-07-16T23:02:50Z] Worker finished. Checker required before completion.
+[2026-07-16T23:07:46Z] Worker finished. Checker required before completion.
+[2026-07-16T23:07:50Z] Worker finished. Checker required before completion.
