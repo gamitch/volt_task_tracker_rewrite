@@ -24,13 +24,14 @@ Epic dependency order (PRD Section 13): **E1 → E2 → E3 → (E4, E5, E6 paral
 |---|---|---|---|---|---|---:|---|---|---|
 | T001 | E1 | Vite + TS(strict) + ESLint/Prettier scaffold | worker-implementer | checker-tests | none | 0 | Passed | PASS (2nd check, on merits): build/typecheck/lint/format:check all exit 0, dev server boots clean, tsconfig strict:true confirmed, zero Tailwind/shadcn confirmed via grep on package.json + package-lock.json, index.html + package-lock.json verified per D001-approved scope exceptions (not re-litigated), file tree = Allowed Files + approved exceptions only. No findings. | No |
 | T002 | E1 | Astryx install + `volt.ts` theme (DES-03 exact spec) | worker-implementer | checker-accessibility | T001 | 1 | Passed | PASS (2nd check, on merits): Astryx installed, `volt.ts` byte-for-byte verbatim vs DES-03, `astryx-augment.d.ts` correctly scoped to fix the upstream `TypographyRole`/`url` type gap only (empirically verified via negative-control test — checker removed `export{}`, reproduced a real TS2305 break on `defineTheme` resolution project-wide, restored it, reconfirmed clean), `npx tsc --noEmit` and `npm run build` both exit 0, WCAG AA contrast passes both modes, no forbidden-file violations, astryx script/CLI cross-check confirmed. NIT: upstream `@astryxdesign/core@0.1.6` type gap logged as a follow-up note, not a new task. | No |
-| T003 | E1 | CSS cascade layers + `theme.css` build pattern | worker-implementer | checker-tests | T002 | 0 | Ready | None | No |
+| T002a | E1 | React 18→19 upgrade (D002 corrective task) | worker-implementer | checker-tests | T002 | 0 | In Progress | Dispatched — worker packet issued. | No |
+| T003 | E1 | CSS cascade layers + `theme.css` build pattern | worker-implementer | checker-tests | T002,T002a | 0 | Blocked | Reverted Ready→Blocked per D002: T003 builds `theme.css` from the same theme system and must wait for the React 19 upgrade (T002a) to land first. | No |
 | T004 | E1 | CI pipeline (typecheck/lint/unit/build + bundle budget) | worker-implementer | checker-tests | T001,T002,T003 | 0 | Blocked | None | No |
 | T005 | E1 | Router skeleton + route guards + deep-link redirect | worker-implementer | checker-reviewer | T001 | 0 | Ready | None | No |
 | T006 | E1 | AppShell + TopNav | worker-implementer | checker-accessibility | T002,T005 | 0 | Blocked | None | No |
 | T007 | E1 | SideNav (role-filtered) + outreach badge scaffold | worker-implementer | checker-accessibility | T006 | 0 | Blocked | None | No |
 | T008 | E1 | MobileNav drawer + Student Home live-card slot | worker-implementer | checker-accessibility | T006,T007 | 0 | Blocked | None | No |
-| T009 | E2 | Migration: identity/roster tables | worker-implementer | checker-tests | T001 | 0 | Ready | None | No |
+| T009 | E2 | Migration: identity/roster tables | worker-implementer | checker-tests | T001 | 0 | In Progress | Dispatched — worker packet issued. | No |
 | T010 | E2 | Migration: scheduling/attendance tables | worker-implementer | checker-tests | T009 | 0 | Blocked | None | No |
 | T011 | E2 | Migration: support tables + audit triggers (DATA-02) | worker-implementer | checker-tests | T010 | 0 | Blocked | None | No |
 | T012 | E2 | RLS helper functions + policies (verbatim 8.4) | worker-implementer | checker-tests | T009,T010,T011 | 0 | Blocked | None | No |
@@ -110,6 +111,21 @@ Objective: Install `@astryxdesign/core` + `@astryxdesign/theme-neutral` + CLI; a
 Allowed files: `package.json`, `src/theme/volt.ts`.
 Acceptance: theme file matches DES-03 verbatim (accent hex, font families/URLs, radius, token array order); `npm run astryx -- component --list` runs; both light/dark accent-on-surface pass WCAG AA (DES-06) — cite constitution item 2 (Astryx props only from `astryx-api.md`).
 Evidence: contrast-check output (both modes), CLI run log, file diff vs DES-03 block.
+
+**T002a — React 18 → React 19 upgrade (D002 corrective task)**
+Objective: Upgrade the stack from React 18 to React 19 per the D002 stack-lock reversal (constitution item 8), closing the runtime gap a typecheck-only T002 check missed — `@astryxdesign/core`'s shipped `Theme.js` calls React's `use()` hook, which does not exist in React 18 and throws at first render.
+Allowed files: `package.json`, `package-lock.json`, `src/theme/astryx-augment.d.ts` (adjust only if the @types/react 19 compiler forces a change — do not touch speculatively), one minimal new runtime-smoke test file, which must live under `src/theme/` (e.g. `src/theme/theme.smoke.test.tsx`) or a new `src/test-setup/**` if a shared setup file is genuinely required — worker's call on exact naming.
+Note: `src/theme/volt.ts` is explicitly forbidden for this task — it is already verbatim-correct per D001/D002; this task is a dependency + infra upgrade only, not a theme-content change.
+Acceptance:
+- `react`/`react-dom` bumped to `^19`, `@types/react`/`@types/react-dom` bumped to `19`, in `package.json`.
+- Clean reinstall performed WITHOUT `--legacy-peer-deps`; regenerated `package-lock.json` committed.
+- `npm ls react react-dom @astryxdesign/core` clean — no ELSPROBLEMS/invalid markers.
+- `node -e` check confirms `typeof require('react').use === 'function'`.
+- build/typecheck/lint/format all exit 0; tsconfig `strict` unchanged.
+- **Mandatory runtime smoke check** (this is the failure mode typecheck missed on T002): render the app root together with the Astryx Theme provider (vitest + jsdom, or an equivalent minimal runtime render) and assert no throw. A green typecheck alone does NOT close this task.
+- `src/theme/astryx-augment.d.ts` re-verified to still compile against `@types/react` 19; adjust only if the compiler forces it.
+- Any allowlisted runtime dep (`@tanstack/react-query`, `react-router-dom`, `qrcode.react` when added) whose peer range forces a version bump on install is reported explicitly in the worker output, not silently taken.
+Evidence: `npm ls` output, `node -e` check output, build/typecheck/lint/format:check output, test-runner output showing the smoke test passing, `package.json`/`package-lock.json` diff, diff (or explicit "no change needed") for `astryx-augment.d.ts`.
 
 **T003 — CSS cascade layers + `theme.css` build**
 Objective: Declare explicit `@layer reset, astryx-base, app` (NFR-08); wire the `/built` theme import + prebuilt `theme.css` pattern (DES-07), no runtime style injection.
