@@ -90,3 +90,15 @@ Follow-up:
 - Routed as an amendment to T019's existing acceptance criteria (task-ledger.md T019 detail block), not a new task, since T019 already performs the invite-acceptance INSERT into `profiles` this finding affects. T019 must add a default or make the column nullable and record the choice in its worker output.
 [2026-07-16T23:17:44Z] Worker finished. Checker required before completion.
 [2026-07-16T23:18:00Z] Worker finished. Checker required before completion.
+[2026-07-16T23:20:26Z] Worker finished. Checker required before completion.
+
+## T002a - React 18→19 upgrade (D002 corrective task)
+Date: 2026-07-16
+Result: PASS
+Checker: checker-tests (attempt 2, on merits; attempt 1 FAIL was a legitimate but narrow pre-existing gap, not a worker fault)
+Evidence:
+- Attempt 1 (FAIL/MAJOR): React 19 upgrade itself fully sound — clean install with no `--legacy-peer-deps`, `npm ls react react-dom @astryxdesign/core` clean, `node -e` confirmed `react.use()` is a function, build/typecheck/lint exit 0, mandatory runtime smoke test (vitest+jsdom, real `createRoot`/`act` render of `<Theme><App/></Theme>`, asserts h1 text) passes. Sole gap: `npm run format:check` exited 1 on `src/theme/volt.ts` — checker traced this via `git show` to a pre-existing Prettier `bracketSpacing` drift predating T002a (inherited from T002's verbatim DES-03 block), not introduced by this task. Checker-approved fix: narrow the `format`/`format:check` glob in `package.json` to exclude `src/theme/volt.ts`; `volt.ts` content itself must never be edited.
+- Attempt 2 (PASS): worker applied a `package.json` glob negation (`"!src/theme/volt.ts"`) scoping the exclusion to exactly one file. Checker independently re-ran everything rather than trusting worker claims: `npm run format:check` exits 0; `react`/`react-dom` confirmed at 19.2.7 via re-run of `npm ls` (clean, no ELSPROBLEMS); `react.use()` re-confirmed a function; build/typecheck/lint/vitest all exit 0, including the mandatory runtime smoke test still passing; `volt.ts` re-diffed byte-for-byte identical to the DES-03 block (not just "git diff empty"); `astryx-augment.d.ts` unchanged from T002's approved content; glob negation independently verified not over-broad via the checker's own injected-formatting-violation test on a different file (`astryx-augment.d.ts`, subsequently fully reverted and reconfirmed clean) plus direct reading of the glob syntax; no forbidden-file violations (`docs/swarm/**`, `.claude/**` untouched; `volt.ts` content untouched).
+Attempts: 1 (single legitimate FAIL, attempt 1; PASS on attempt 2)
+Follow-up:
+- None. D002's React 18→19 stack-lock reversal is now fully closed out end-to-end. T003 unblocked (Blocked→Ready) as a direct result — see task-ledger.md and state-summary.md.
