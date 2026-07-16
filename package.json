@@ -10,9 +10,13 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write \"src/**/*.{ts,tsx}\" \"*.{ts,js,json,html}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"*.{ts,js,json,html}\""
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"*.{ts,js,json,html}\"",
+    "astryx": "node node_modules/@astryxdesign/cli/bin/astryx.mjs"
   },
   "dependencies": {
+    "@astryxdesign/cli": "^0.1.6",
+    "@astryxdesign/core": "^0.1.6",
+    "@astryxdesign/theme-neutral": "^0.1.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
