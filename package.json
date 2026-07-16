@@ -9,8 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"*.{ts,js,json,html}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"*.{ts,js,json,html}\""
   },
   "dependencies": {
     "react": "^18.3.1",
