@@ -26,11 +26,11 @@ Epic dependency order (PRD Section 13): **E1 → E2 → E3 → (E4, E5, E6 paral
 | T002 | E1 | Astryx install + `volt.ts` theme (DES-03 exact spec) | worker-implementer | checker-accessibility | T001 | 1 | Passed | PASS (2nd check, on merits): Astryx installed, `volt.ts` byte-for-byte verbatim vs DES-03, `astryx-augment.d.ts` correctly scoped to fix the upstream `TypographyRole`/`url` type gap only (empirically verified via negative-control test — checker removed `export{}`, reproduced a real TS2305 break on `defineTheme` resolution project-wide, restored it, reconfirmed clean), `npx tsc --noEmit` and `npm run build` both exit 0, WCAG AA contrast passes both modes, no forbidden-file violations, astryx script/CLI cross-check confirmed. NIT: upstream `@astryxdesign/core@0.1.6` type gap logged as a follow-up note, not a new task. | No |
 | T003 | E1 | CSS cascade layers + `theme.css` build pattern | worker-implementer | checker-tests | T002 | 0 | Ready | None | No |
 | T004 | E1 | CI pipeline (typecheck/lint/unit/build + bundle budget) | worker-implementer | checker-tests | T001,T002,T003 | 0 | Blocked | None | No |
-| T005 | E1 | Router skeleton + route guards + deep-link redirect | worker-implementer | checker-reviewer | T001 | 0 | Blocked | None | No |
+| T005 | E1 | Router skeleton + route guards + deep-link redirect | worker-implementer | checker-reviewer | T001 | 0 | Ready | None | No |
 | T006 | E1 | AppShell + TopNav | worker-implementer | checker-accessibility | T002,T005 | 0 | Blocked | None | No |
 | T007 | E1 | SideNav (role-filtered) + outreach badge scaffold | worker-implementer | checker-accessibility | T006 | 0 | Blocked | None | No |
 | T008 | E1 | MobileNav drawer + Student Home live-card slot | worker-implementer | checker-accessibility | T006,T007 | 0 | Blocked | None | No |
-| T009 | E2 | Migration: identity/roster tables | worker-implementer | checker-tests | T001 | 0 | Blocked | None | No |
+| T009 | E2 | Migration: identity/roster tables | worker-implementer | checker-tests | T001 | 0 | Ready | None | No |
 | T010 | E2 | Migration: scheduling/attendance tables | worker-implementer | checker-tests | T009 | 0 | Blocked | None | No |
 | T011 | E2 | Migration: support tables + audit triggers (DATA-02) | worker-implementer | checker-tests | T010 | 0 | Blocked | None | No |
 | T012 | E2 | RLS helper functions + policies (verbatim 8.4) | worker-implementer | checker-tests | T009,T010,T011 | 0 | Blocked | None | No |

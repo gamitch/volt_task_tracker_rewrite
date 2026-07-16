@@ -1,7 +1,7 @@
 # Swarm State Summary
 
 ## Current Phase
-E1 (Scaffold + theme) underway — T001 and T002 complete, T003 ready to dispatch. Full breakdown in `docs/swarm/task-ledger.md` (70 tasks, T001–T070, epics E1–E11).
+E1 (Scaffold + theme) underway — T001 and T002 complete. Ready to dispatch: T003 (E1), T005 (E1), T009 (E2) — all three depend only on already-Passed tasks (T005/T009 were corrected to Ready during a full-ledger dependency sweep on 2026-07-16; see Known Decisions). Full breakdown in `docs/swarm/task-ledger.md` (70 tasks, T001–T070, epics E1–E11).
 
 ## Completed
 - **T001** — Vite + TS(strict) + ESLint/Prettier scaffold. Passed checker-tests: build/typecheck/lint/format:check all clean, strict mode confirmed, zero Tailwind/shadcn, scope exceptions (index.html, package-lock.json) verified per D001.
@@ -17,6 +17,7 @@ None.
 - Motivation ethics (constitution item 17 / PRD 5.7 BEH-01…09): honest progress signals only — no streaks, loss-aversion, FOMO, or guilt copy. Folded into task acceptance criteria wherever progress bars, milestones, or meeting history appear (not a separate epic).
 - Human gates live in the ledger as checker = "human (George)": T052 (production email), T063 (MIG-04 validation sign-off), T065 (MIG-06 cutover), T070 (Vercel domain go-live).
 - **D001 (resolved)** — T001's first checker-tests run FAILed on a git-commit-bundling evidence trap: it inferred worker authorship of `docs/swarm/**` changes from a bundled orchestrator commit, but git identity here doesn't distinguish per-agent authorship (commits mix orchestrator, foreman-authored packets, and hook-generated log lines). Boss-arbiter vacated the verdict. **Standing rule for all future checker packets:** never use git history/commit diffs as evidence of which agent touched a file. Instead compare the task's Allowed Files list against the current file tree state directly. This risk recurs on every checker-tests run unless checker packets keep stating the file-tree-comparison method explicitly.
+- **Ledger status-propagation gap (found + fixed 2026-07-16):** when T001 passed, only its direct dependent T002 was flipped Blocked→Ready; T005 and T009 (both dep solely on T001) were incorrectly left Blocked. A full-ledger sweep was run comparing every Blocked task's Deps column against current dependency Status; only tasks with ALL deps Passed flip to Ready. Result: T005 and T009 corrected to Ready (see task-ledger.md). No other rows qualified — every other Blocked task has at least one dependency that is itself not yet Passed. **Standing rule:** on every task Passed close-out, sweep the full ledger for newly-unblocked tasks, not just the task's immediate/listed dependents.
 
 ## Current Risks
 - **External prerequisites (not swarm tasks, block specific ledger tasks):** (1) George must create the new Supabase project (blocks T009 onward for live verification); (2) George must create the Google OAuth client (blocks T015 end-to-end); (3) George must verify the `mail.voltfrc.org` Resend sending domain (blocks T052); (4) George must add the Vercel CNAME for `portal.voltfrc.org` (blocks T070). The swarm cannot start real migration, production email, or domain go-live work without these.
@@ -26,4 +27,7 @@ None.
 - No task may be marked complete on worker self-report; every row requires checker-inspected evidence per the Definition of Done.
 
 ## Next Recommended Task
-**T003 — CSS cascade layers + `theme.css` build pattern** (Epic E1, checker-tests). Now Ready — its only dependency, T002, has Passed. Dispatch to worker-implementer with a fresh packet covering `@layer reset, astryx-base, app` (NFR-08) and the prebuilt `theme.css` import pattern (DES-07).
+Three tasks are now Ready and unblocked for dispatch (independent of each other — can be worked in any order or parallel):
+- **T003 — CSS cascade layers + `theme.css` build pattern** (E1, checker-tests). Dep T002 Passed.
+- **T005 — Router skeleton + route guards + deep-link redirect** (E1, checker-reviewer). Dep T001 Passed.
+- **T009 — Migration: identity/roster tables** (E2, checker-tests). Dep T001 Passed. Note: live verification blocked on George's Supabase project (external prerequisite); the migration file can still be authored and applied to a local/dev instance for CI per the task's Evidence requirement.
