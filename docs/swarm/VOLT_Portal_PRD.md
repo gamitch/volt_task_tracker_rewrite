@@ -1,7 +1,7 @@
 # VOLT Team Portal — Redesign PRD
 
 **Product:** VOLT Time Tracker → VOLT Team Portal (working name)
-**Version:** 1.5 — July 12, 2026 (v1.1: exact source schema + migration mapping from `gamitch/volt-timetracker`; v1.2: domains locked — `portal.voltfrc.org`, `mail.voltfrc.org`; v1.3: per-route layout specs in 7.1; v1.4: shareable deep links NAV-08; v1.5: cheap-agent hardening — static Astryx API doc, normative SQL in 8.4, ICS library mandate, no-ASCII-in-DOM rule)
+**Version:** 1.5 — July 12, 2026 (v1.1: exact source schema + migration mapping from `gamitch/volt-timetracker`; v1.2: domains locked — `portal.voltfrc.org`, `mail.voltfrc.org`; v1.3: per-route layout specs in 7.1; v1.4: shareable deep links NAV-08; v1.5: cheap-agent hardening — static Astryx API doc, normative SQL in 8.4, ICS library mandate, no-ASCII-in-DOM rule; v1.6: behavioral design rules 5.7 BEH-01…09 + motivation-ethics constitution rule)
 **Owner:** George Mitchom (VOLT — Valkyries Of Leadership and Technology, FRC Team 11195)
 **Consumers of this document:** The multi-agent swarm at `gamitch/volt_task_tracker_rewrite` (boss-architect, foreman-planner, worker/checker agents). Every requirement carries an ID so checkers can cite it in acceptance criteria.
 
@@ -218,12 +218,24 @@ export const voltTheme = defineTheme({
 
 - **DES-17** WCAG 2.1 AA. Keyboard path for every flow including the roll-call console (arrow through roster rows, 1–4 keys set Present/Late/Excused/Absent on the focused row). Visible focus, labels on all inputs, `aria-live="polite"` on the live check-in tally.
 
-### 5.6 How agents must consult Astryx (constitution material)
+### 5.6 How agents must consult Astryx (constitution material) 
 
 - **DES-18** Add to `package.json`: `"astryx": "node node_modules/@astryxdesign/cli/bin/astryx.mjs"`.
 - **DES-19** The authoritative component API is the static file **`docs/swarm/astryx-api.md`** (generated from the installed package; ships with this PRD — regenerate on Astryx upgrades via `npm run astryx -- manifest --json` + `docs.mjs`). Workers copy prop names from that file; the CLI (`npm run astryx -- component <Name>`) is a live cross-check, not the primary source. A prop that does not appear in `astryx-api.md` is presumed hallucinated — checker MAJOR.
 - **DES-20** Discovery commands: `npm run astryx -- component --list`, `npm run astryx -- template --list`, `npm run astryx -- docs theme`, `npm run astryx -- manifest --json`.
 - **DES-21** Styling escalation order (do not skip steps): component as-is → theme token in `volt.ts` → `xstyle`/className on the component → custom CSS. Ejecting component source requires boss-architect approval.
+
+### 5.7 Behavioral design rules (v1.6 — these extend/override the requirements they reference)
+
+- **BEH-01 Milestones (goal gradient):** every hours-vs-goal `ProgressBar` (HOME-01/02/03, OUT-01, RPT-03) renders tick marks at 25/50/75/100%. Student/parent views add one line: "12 h to your next milestone". Crossing a milestone fires a single celebratory `Toast` ("75% of your goal — nice work ⚡"); dedupe per device (localStorage of last celebrated milestone per student+season).
+- **BEH-02 Honest momentum:** the student hours bar renders confirmed hours (accent) plus MET-04 planned hours as a visually lighter second segment, legend "62 h confirmed + 14 h planned". The two are never summed into one number. Progress is never artificially inflated (no fake head starts).
+- **BEH-03 One primary action (Student Home):** the hero card resolves to exactly ONE CTA by priority: live meeting check-in → oldest unanswered future RSVP ("You have 2 events to answer → Sign-up opportunities") → quiet greeting (no CTA). Never two primary `Button`s in the hero area.
+- **BEH-04 RSVP completion nudge:** the SideNav Outreach item shows a neutral count `Badge` of unanswered future outreach sessions (student: own; parent: linked kids combined). Clears as answered. Neutral styling — never error/red, never urgency copy.
+- **BEH-05 KPI card discipline:** one metric per `Card` — large value, small label, optional secondary trend/delta line. Never two numbers of equal visual weight in one card.
+- **BEH-06 Consistency strip, not streaks:** student/parent meeting views (MTG-14, HOME-03) show the last 5 completed meetings as `StatusDot`s (present/late/excused/absent per DES-05). Streak counters and "don't break it" mechanics are prohibited (see constitution) — excused kids must never look like failures.
+- **BEH-07 Smart defaults + computed buttons:** every form field pre-fills its most common value; event times and locations default to the creator's last-used values. Confirm buttons state their computed outcome: "Create 14 meetings", "Mark complete — 6 attended · 42 h", "Send 3 invites". A bare "Create"/"Submit"/"OK" is a checker MAJOR (extends DES-14).
+- **BEH-08 Date rendering:** dates always carry weekday names ("Sat, Jul 25"); ranges and schedules show computed counts and durations ("Tue + Thu · 8 sessions", "6:00–8:00 PM · 2 h"). Applies everywhere sessions render, including emails and ICS summaries.
+- **BEH-09 Say what happens next:** action confirmations state the next system event ("You're signed up — we'll remind you 2 days before"). RSVP controls carry helper text "You can change this until the event starts". The ICS Subscribe `Popover` states what the feed contains. Extends DES-14/16.
 
 ## 6. Feature requirements
 
@@ -750,6 +762,7 @@ Dependency order: E1 → E2 → E3 → (E4, E5, E6 in parallel) → (E7, E8, E9)
 4. No PII in logs, URLs, or fixtures with real student names.
 5. Requirement IDs in this PRD outrank any agent preference; conflicts escalate to boss-arbiter.
 6. Astryx props come only from `docs/swarm/astryx-api.md` (DES-19); RLS policies and metric views come only from Section 8.4, copied verbatim.
+7. Motivation mechanics are limited to honest progress signals (Section 5.7). Loss-aversion framing, streaks, FOMO/scarcity, countdowns, guilt copy, and re-engagement pressure are prohibited → BLOCKER. Users are minors and volunteers; the app never optimizes for its own engagement.
 
 ## 14. v1 acceptance criteria (overall)
 
