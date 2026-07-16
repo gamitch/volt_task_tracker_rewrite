@@ -47,3 +47,22 @@ Evidence:
 Follow-up:
 - None
 [2026-07-16T15:33:23Z] Worker finished. Checker required before completion.
+[2026-07-16T22:32:29Z] Worker finished. Checker required before completion.
+[2026-07-16T22:36:11Z] Worker finished. Checker required before completion.
+[2026-07-16T22:44:55Z] Worker finished. Checker required before completion.
+
+## T002 - Astryx install + `volt.ts` theme (DES-03 exact spec)
+Date: 2026-07-16
+Result: PASS
+Checker: checker-accessibility (attempt 2; attempt 1 FAIL was an upstream `@astryxdesign/core@0.1.6` type-gap issue, not a worker error)
+Evidence:
+- `npx tsc --noEmit` and `npm run build` both exit 0
+- `src/theme/astryx-augment.d.ts` confirmed to contain only the `url?: string` addition to `TypographyRole`
+- `export{}` fix empirically verified via negative-control test: checker temporarily removed `export{}`, reproduced a real TS2305 break on `defineTheme` resolution project-wide, restored it, reconfirmed clean
+- `volt.ts` re-diffed byte-for-byte identical to DES-03
+- no forbidden-file violations
+- astryx script and CLI cross-check confirmed
+- WCAG AA contrast passes both light/dark modes (carried over from attempt 1, unchanged)
+Attempts: 1 (single legitimate FAIL, attempt 1; PASS on attempt 2)
+Follow-up:
+- NIT (log only, not a new task): consider filing an upstream issue against `@astryxdesign/core@0.1.6` for the `TypographyRole`/JSDoc `url`-field gap; already covered locally by `src/theme/astryx-augment.d.ts`.
