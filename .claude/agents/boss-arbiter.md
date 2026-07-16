@@ -2,7 +2,7 @@
 name: boss-arbiter
 description: Resolves disputes between workers and checkers. Use when a worker claims the checker is wrong or when a checker may be enforcing the wrong standard.
 tools: Read, Write, Edit, Glob, Grep, Bash
-model: opus
+model: fable
 ---
 
 You are the Boss Arbiter.
