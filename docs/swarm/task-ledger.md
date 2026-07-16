@@ -22,8 +22,8 @@ Epic dependency order (PRD Section 13): **E1 → E2 → E3 → (E4, E5, E6 paral
 
 | ID | Epic | Title | Worker | Checker | Deps | Attempts | Status | Last Result | Escalated |
 |---|---|---|---|---|---|---:|---|---|---|
-| T001 | E1 | Vite + TS(strict) + ESLint/Prettier scaffold | worker-implementer | checker-tests | none | 0 | In Check | Checker error (git-bundling evidence) vacated by boss-arbiter, D001 — re-checking on merits | No |
-| T002 | E1 | Astryx install + `volt.ts` theme (DES-03 exact spec) | worker-implementer | checker-accessibility | T001 | 0 | Blocked | None | No |
+| T001 | E1 | Vite + TS(strict) + ESLint/Prettier scaffold | worker-implementer | checker-tests | none | 0 | Passed | PASS (2nd check, on merits): build/typecheck/lint/format:check all exit 0, dev server boots clean, tsconfig strict:true confirmed, zero Tailwind/shadcn confirmed via grep on package.json + package-lock.json, index.html + package-lock.json verified per D001-approved scope exceptions (not re-litigated), file tree = Allowed Files + approved exceptions only. No findings. | No |
+| T002 | E1 | Astryx install + `volt.ts` theme (DES-03 exact spec) | worker-implementer | checker-accessibility | T001 | 0 | Ready | None | No |
 | T003 | E1 | CSS cascade layers + `theme.css` build pattern | worker-implementer | checker-tests | T002 | 0 | Blocked | None | No |
 | T004 | E1 | CI pipeline (typecheck/lint/unit/build + bundle budget) | worker-implementer | checker-tests | T001,T002,T003 | 0 | Blocked | None | No |
 | T005 | E1 | Router skeleton + route guards + deep-link redirect | worker-implementer | checker-reviewer | T001 | 0 | Blocked | None | No |
