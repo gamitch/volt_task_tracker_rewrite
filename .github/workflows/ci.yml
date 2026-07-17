@@ -1,0 +1,130 @@
+name: CI
+
+# NFR-01 requires CI on "every push/PR" -- so intentionally no `branches:`
+# filter is applied here: this runs on a push to any branch and on any
+# pull_request event regardless of base branch. (Repo default branch was
+# confirmed to be `main` via `git remote show origin` / `HEAD branch: main`,
+# but that fact is not used to narrow these triggers -- narrowing would mean
+# feature-branch pushes silently skip CI, which NFR-01's "every push" wording
+# does not allow.)
+on:
+  push:
+  pull_request:
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Typecheck, Lint, Test, Build, Bundle Size
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Node version is pinned explicitly (not left floating) per NFR-01.
+      # Node 20.x LTS is the minimum runtime required by Vite 5 / Vitest 4.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.18.1'
+          cache: npm
+
+      - name: Install dependencies (reproducible)
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      # NFR-04: "Initial route JS < 300 KB gz; route-level code splitting present."
+      #
+      # "Initial route JS" is read here as the eager entry chunk(s) that are
+      # actually loaded on first paint -- i.e. the <script type="module" src="...">
+      # tag(s) Vite writes directly into dist/index.html -- NOT the sum of every
+      # JS file emitted into dist/. This distinction matters because once real
+      # route-level code splitting lands (React.lazy()/dynamic import() per
+      # route, in T006+), lazily-loaded route chunks will NOT be referenced by
+      # an eager <script> tag in index.html; they only load on navigation. A
+      # gate that summed the whole dist/ directory would falsely fail as the
+      # app grows via legitimate code-splitting, and a gate that only checked
+      # the largest single file could falsely pass if there were multiple eager
+      # entry chunks. Measuring exactly the index.html-referenced eager
+      # module script(s) is what stays correctly scoped as routes are added:
+      # it enforces the initial-paint budget today, and it will continue to
+      # correctly enforce it once T006+ adds real lazy route chunks that sit
+      # outside index.html's eager <script> tags.
+      #
+      # No bundle-analyzer dependency is used -- this only shells out to the
+      # standard `gzip`/`wc` CLIs (present on ubuntu-latest) plus a `grep -oP`
+      # regex extraction of the handful of <script type="module"> tags in
+      # dist/index.html, per the dependency allowlist (constitution item 9).
+      - name: 'Bundle size gate (NFR-04: initial route JS < 300 KB gz)'
+        run: |
+          set -euo pipefail
+
+          BUDGET_BYTES=$((300 * 1024))
+          DIST_DIR="dist"
+          INDEX_HTML="$DIST_DIR/index.html"
+
+          if [ ! -f "$INDEX_HTML" ]; then
+            echo "ERROR: $INDEX_HTML not found. Run 'npm run build' first." >&2
+            exit 1
+          fi
+
+          # Extract src="" from any <script type="module" ...> tag in
+          # dist/index.html. These are the eagerly-loaded entry chunk(s) for
+          # first paint. Attribute order (e.g. crossorigin before/after
+          # type="module") does not matter to this extraction.
+          mapfile -t ENTRY_SCRIPTS < <(
+            grep -oP '<script\b[^>]*>' "$INDEX_HTML" \
+              | grep 'type="module"' \
+              | grep -oP 'src="\K[^"]+' || true
+          )
+
+          if [ "${#ENTRY_SCRIPTS[@]}" -eq 0 ]; then
+            echo "ERROR: no <script type=\"module\" src=\"...\"> tags found in $INDEX_HTML" >&2
+            exit 1
+          fi
+
+          TOTAL_BYTES=0
+          echo "Initial route JS (eager entry chunks referenced in $INDEX_HTML):"
+          for src in "${ENTRY_SCRIPTS[@]}"; do
+            # Strip query string/hash, strip leading slash, resolve into dist/.
+            clean_src="${src%%\?*}"
+            clean_src="${clean_src%%\#*}"
+            clean_src="${clean_src#/}"
+            file="$DIST_DIR/$clean_src"
+
+            if [ ! -f "$file" ]; then
+              echo "ERROR: entry script '$src' referenced in $INDEX_HTML but '$file' does not exist" >&2
+              exit 1
+            fi
+
+            gz_size=$(gzip -9 -c "$file" | wc -c)
+            echo "  - $file : ${gz_size} bytes (gzip)"
+            TOTAL_BYTES=$((TOTAL_BYTES + gz_size))
+          done
+
+          echo ""
+          echo "Total initial route JS (gzip): ${TOTAL_BYTES} bytes"
+          echo "Budget (NFR-04):               ${BUDGET_BYTES} bytes (300 KB)"
+
+          if [ "$TOTAL_BYTES" -gt "$BUDGET_BYTES" ]; then
+            echo ""
+            echo "FAIL: initial route JS gzip size (${TOTAL_BYTES} bytes) exceeds the 300 KB budget (${BUDGET_BYTES} bytes)."
+            exit 1
+          fi
+
+          echo ""
+          echo "PASS: initial route JS gzip size is within the 300 KB budget."
