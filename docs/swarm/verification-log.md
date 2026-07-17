@@ -272,3 +272,4 @@ Follow-up:
 - None requiring a new task. T013's worker packet must explicitly account for closing the Trap 1 teammate-visibility gap deferred here. Full worker/checker packets archived at `docs/swarm/archive/T012-worker-packet.md` and `docs/swarm/archive/T012-checker-packet.md`.
 [2026-07-17T21:52:00Z] Worker finished. Checker required before completion.
 [2026-07-17T21:57:27Z] Worker finished. Checker required before completion.
+[2026-07-17T22:01:59Z] Worker finished. Checker required before completion.
