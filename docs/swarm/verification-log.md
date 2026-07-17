@@ -283,3 +283,23 @@ Follow-up:
 [2026-07-17T22:31:51Z] Worker finished. Checker required before completion.
 [2026-07-17T22:41:41Z] Worker finished. Checker required before completion.
 [2026-07-17T22:48:41Z] Worker finished. Checker required before completion.
+[2026-07-17T22:49:43Z] Worker finished. Checker required before completion.
+
+## T015 — Supabase Auth provider config
+Verdict: PASS (1st attempt). Severity: NIT (non-blocking, no rework).
+Checker: checker-tests. Files inspected: `supabase/config.toml`, `.env.example`, `.gitignore`, `docs/swarm/active/T015-worker-packet.md`, `docs/swarm/active/T015-checker-packet.md`.
+Findings:
+- Line-by-line confirmation: `[auth]` `enable_signup = false` (line 133, AUTH-01 master switch); `[auth.email]` `enable_signup = false` (line 173, provider-scoped level); `[auth.external.google]` `enabled = true` (line 205).
+- `client_id = env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)` (line 209), `secret = env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)` (line 214) — env(...) references only, no literal secret values.
+- Env-var naming discrepancy (worker's `..._EXTERNAL_GOOGLE_...` vs. packet's illustrative `..._GOOGLE_...`): Supabase CLI not available in checker's sandbox (`which supabase` exit 1, no binary found anywhere in project) — checker performed a manual structural review instead of CLI reproduction, explicitly stated as the method used. Judged the worker's section-path-derived naming (`SUPABASE_<SECTION_PATH>`, matching `auth.external.google`) logically sound and within the packet's explicit allowance for "the exact equivalent current Supabase CLI env-reference syntax." Passed with the caveat noted, not treated as unverifiable/failing.
+- Independent secret-detection re-scan (3 varied grep patterns: secret/password/key/token/credential; JWT-shaped strings; 40+-char alphanumeric runs) across both files: zero matches in all three passes.
+- `.env.example` confirmed to contain only blank `VITE_SUPABASE_URL=` / `VITE_SUPABASE_ANON_KEY=` placeholders (lines 7-8), no stray or filled-in values.
+- `.gitignore` coverage: `.env` covered by an exact-match pattern (line 15); `.env.example` confirmed NOT matched by any pattern (will commit correctly); `.env.local` / `.env.*.local` also covered (defense-in-depth).
+- `minimum_password_length = 8` (line 139, CLI default is 6, worker's own unrequested hardening): explicit **NIT** severity verdict — does not violate any requirement, does not modify forbidden files, does not break build/tests, matches Supabase's own documented recommendation ("8 or more"), reasonable engineering judgment within scope. Not a defect, does not block.
+- External blocker (George's real Google OAuth client doesn't exist yet) correctly handled: no fake/placeholder client ID or secret anywhere; `redirect_uri` left blank to use the Supabase-managed default; config is structurally ready to receive real credentials via env vars at runtime — not failed for being unable to live-test.
+- Other config review: `enable_anonymous_sign_ins = false`, `enable_manual_linking = false`, reasonable rate limits, 1-hour JWT expiry, refresh token rotation enabled — no other suspicious settings found.
+- D001-method forbidden-file check (file-tree comparison, not git history): only `supabase/config.toml` (new) and `.env.example` (edited) touched; zero writes under `docs/swarm/**` or `.claude/**`; real `.env` file confirmed not created. Clean.
+Attempts: 0 (clean first-attempt PASS)
+Follow-up:
+- Optional NIT-level follow-up (not spun into a new task): document the `SUPABASE_AUTH_EXTERNAL_GOOGLE_*` env-var naming decision somewhere durable in case Supabase CLI conventions change in a future version — logged here instead.
+- Full worker/checker packets archived at `docs/swarm/archive/T015-worker-packet.md` and `docs/swarm/archive/T015-checker-packet.md`.
