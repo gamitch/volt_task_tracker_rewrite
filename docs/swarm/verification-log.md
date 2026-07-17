@@ -241,3 +241,4 @@ Follow-up:
 - None requiring a new task. Standing process note logged in `docs/swarm/state-summary.md`: future checker packets' "Forbidden Modification Check" instructions should state upfront that new `docs/swarm/active/*.md` files and verification-log.md's hook-appended lines are always-expected background artifacts, not per-task findings to file.
 [2026-07-17T12:38:49Z] Worker finished. Checker required before completion.
 [2026-07-17T12:42:31Z] Worker finished. Checker required before completion.
+[2026-07-17T19:29:24Z] Worker finished. Checker required before completion.
