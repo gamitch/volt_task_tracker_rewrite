@@ -126,3 +126,21 @@ Follow-up:
 Note: T010's close-out (this entry, plus the ledger/state-summary updates) was performed directly by the orchestrating session rather than foreman-planner, because the dispatched foreman-planner close-out agent failed mid-run on a session usage limit before writing anything. No partial/inconsistent state resulted from that failure; this entry reflects the same close-out that agent was given complete instructions to perform.
 [2026-07-17T03:36:04Z] Worker finished. Checker required before completion.
 [2026-07-17T11:47:29Z] Worker finished. Checker required before completion.
+
+## T003 - CSS cascade layers + `theme.css` build pattern
+Date: 2026-07-17
+Result: PASS (1st attempt, clean, no findings)
+Checker: checker-tests
+Evidence:
+- build/typecheck/lint/format:check all exit 0
+- `src/theme/theme.css` declares `@layer reset, astryx-base, app;` as its first statement, matching NFR-08 exactly; every rule in the file confirmed to sit inside one of the three layer blocks (no unlayered global CSS)
+- Astryx's own `reset.css`/`astryx.css` confirmed pre-wrapped in their own `@layer` blocks by the package itself (not something the worker needed to wrap)
+- `src/theme/volt.ts` re-confirmed byte-identical to the DES-03 spec block (untouched)
+- `src/main.tsx` diff confirmed exactly two lines (vite/client triple-slash reference + `theme.css` import), no other restructuring
+- `npm run build` output inspected: `dist/assets/theme.css` exists as a real static file and is linked via a `<link rel="stylesheet">` tag in `dist/index.html` (DES-07 — no runtime style injection)
+- no forbidden-file violations (file tree compared directly against Allowed Files list per D001 standing rule, not git history)
+Attempts: 0 (clean first-attempt PASS)
+Follow-up:
+- None.
+[2026-07-17T12:05:00Z] Worker finished. Checker required before completion.
+[2026-07-17T11:51:03Z] Worker finished. Checker required before completion.
