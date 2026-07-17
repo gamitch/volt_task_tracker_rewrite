@@ -11,11 +11,13 @@
  *
  * Route protection matrix (NAV-06):
  *   - `/login`, `/accept-invite`: public (these ARE the auth entry points).
- *   - `/kiosk/:sessionId`: public/unauthenticated by design -- kiosk mode is
- *     a walk-up, session-scoped check-in surface where the `:sessionId`
- *     itself is the access token, not a logged-in user. This is an
- *     ASSUMPTION (the PRD excerpt available to this task packet does not
- *     spell out kiosk auth requirements); flagged for confirmation.
+ *   - `/kiosk/:sessionId`: protected, restricted to `coach`/`admin`. PRD
+ *     Section 7's route table explicitly assigns this route the role
+ *     `coach/admin` (row: `| /kiosk/:sessionId | coach/admin | fullscreen |
+ *     QR, tally | MTG-07 |`), and SEC-04 ("All students are minors: no
+ *     public pages...") rules out leaving it unauthenticated. Guarded with
+ *     `RequireAuth` + `RequireRole(['coach', 'admin'])`, same nesting
+ *     pattern as `/settings` below.
  *   - Everything else: requires authentication (`RequireAuth`).
  *   - `/settings` additionally requires the `admin` role (`RequireRole`) as
  *     an illustrative placeholder of the NAV-06 role-guard mechanism -- the
@@ -155,8 +157,17 @@ export function AppRoutes(): ReactNode {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/accept-invite" element={<AcceptInvitePage />} />
 
-      {/* Public by design -- see route protection matrix in the module doc. */}
-      <Route path="/kiosk/:sessionId" element={<KioskSessionPage />} />
+      {/* Protected + role-guarded: coach/admin only (PRD Section 7 + SEC-04). */}
+      <Route
+        path="/kiosk/:sessionId"
+        element={
+          <RequireAuth>
+            <RequireRole allowedRoles={['coach', 'admin']}>
+              <KioskSessionPage />
+            </RequireRole>
+          </RequireAuth>
+        }
+      />
 
       {/* Protected routes -- require authentication. */}
       <Route

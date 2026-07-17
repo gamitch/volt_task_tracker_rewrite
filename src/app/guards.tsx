@@ -33,8 +33,14 @@ import { Navigate, useLocation } from 'react-router-dom';
  * covering the roles implied elsewhere in the available PRD excerpts. Treat
  * this as provisional and reconcile against the full PRD RBAC section before
  * relying on it for anything beyond demonstrating the guard mechanism.
+ *
+ * `'coach'` was added in the T005 rework attempt specifically so that
+ * `/kiosk/:sessionId` (PRD Section 7: role = coach/admin) can be guarded with
+ * `RequireRole(['coach', 'admin'])`. Full reconciliation against the PRD's
+ * complete role vocabulary (admin/coach/student/parent, per AUTH-05) is left
+ * open -- flagged here, not resolved in this attempt.
  */
-export type Role = 'admin' | 'staff' | 'volunteer';
+export type Role = 'admin' | 'staff' | 'volunteer' | 'coach';
 
 export interface AuthUser {
   id: string;
