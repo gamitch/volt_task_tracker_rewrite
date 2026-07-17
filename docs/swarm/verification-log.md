@@ -103,3 +103,4 @@ Attempts: 1 (single legitimate FAIL, attempt 1; PASS on attempt 2)
 Follow-up:
 - None. D002's React 18→19 stack-lock reversal is now fully closed out end-to-end. T003 unblocked (Blocked→Ready) as a direct result — see task-ledger.md and state-summary.md.
 [2026-07-16T23:25:07Z] Worker finished. Checker required before completion.
+[2026-07-16T23:26:04Z] Worker finished. Checker required before completion.

@@ -1,7 +1,7 @@
 # Swarm State Summary
 
 ## Current Phase
-E1 (Scaffold + theme) underway — T001, T002, and T002a complete; T003 (CSS cascade layers) now Ready. D002's React 18→19 stack-lock reversal is fully closed out end-to-end: the corrective task (T002a) passed on its merits, not just the constitution amendment. T009 (E2) Passed with a MINOR finding (tracked as an amendment to T019). T010 (E2) is Ready (unblocked by T009's PASS). T005 (E1) remains Ready/undispatched. No task currently in progress. Full breakdown in `docs/swarm/task-ledger.md` (71 tasks, T001–T070 + T002a, epics E1–E11).
+E1 (Scaffold + theme) and E2 (Schema) underway in parallel. T001, T002, T002a, T009 complete. T003, T005, T010 were all Ready with no allowed-file overlap and were dispatched together on 2026-07-17: worker packets written to `docs/swarm/active/{T003,T005,T010}-worker-packet.md`, all three flipped Ready→In Progress in the ledger (attempts still 0). Awaiting worker-implementer runs on all three. Full breakdown in `docs/swarm/task-ledger.md` (71 tasks, T001–T070 + T002a, epics E1–E11).
 
 ## Completed
 - **T001** — Vite + TS(strict) + ESLint/Prettier scaffold. Passed checker-tests: build/typecheck/lint/format:check all clean, strict mode confirmed, zero Tailwind/shadcn, scope exceptions (index.html, package-lock.json) verified per D001.
@@ -10,7 +10,9 @@ E1 (Scaffold + theme) underway — T001, T002, and T002a complete; T003 (CSS cas
 - **T009** — Migration: identity/roster tables. Passed checker-tests (1st attempt, MINOR finding, non-blocking): all 5 tables (profiles, teams, seasons, students, guardian_links) verified column-by-column against PRD 8.1, zero deltas; id/created_at/FK-restrict conventions and the `seasons` partial unique index correct; no RLS present (correct, out of scope). MINOR: `profiles.avatar_url text not null` with no default is a genuine PRD 8.1 ambiguity (SET-01 implies avatar upload happens post-creation) that would block `profiles` inserts — amended onto T019's acceptance criteria (T019 is the first task to insert into `profiles`), not spun out as a new task. See `docs/swarm/verification-log.md` T009 entry and task-ledger.md T019 detail block.
 
 ## Active
-None. No task is currently in progress with a worker or checker.
+- **T003** — CSS cascade layers + `theme.css` build pattern. In Progress. Worker packet: `docs/swarm/active/T003-worker-packet.md`.
+- **T005** — Router skeleton + route guards + deep-link redirect. In Progress. Worker packet: `docs/swarm/active/T005-worker-packet.md`.
+- **T010** — Migration: scheduling/attendance tables. In Progress. Worker packet: `docs/swarm/active/T010-worker-packet.md`.
 
 ## Known Decisions
 - Stack locked: Vite + **React 19** + TS strict + Supabase; Astryx only, no Tailwind/shadcn (PRD D2/D3, constitution item 8). **React 19 is a human-authorized deviation from PRD D2's "React 18"** — see `dispute-log.md` D002 (2026-07-16): `@astryxdesign/core` requires React 19 at runtime (calls `use()`), confirmed by the fact that T002's own shipped `Theme.js` would throw under React 18 at first render. **D002 is now fully closed out end-to-end, not just constitution-amended:** corrective task T002a Passed checker-tests on the merits (2nd check) — react/react-dom actually running at 19.2.7, `npm ls` clean, `react.use()` confirmed callable, a real runtime render of Theme+App passing under vitest+jsdom, and no regression to `volt.ts`'s verbatim DES-03 content. T003 was unblocked accordingly (Blocked→Ready, 2026-07-16).
