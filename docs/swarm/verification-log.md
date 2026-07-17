@@ -107,3 +107,20 @@ Follow-up:
 [2026-07-17T00:33:21Z] Worker finished. Checker required before completion.
 [2026-07-17T00:34:33Z] Worker finished. Checker required before completion.
 [2026-07-17T00:35:32Z] Worker finished. Checker required before completion.
+[2026-07-17T00:40:24Z] Worker finished. Checker required before completion.
+
+## T010 - Migration: scheduling/attendance tables
+Date: 2026-07-17
+Result: PASS (1st attempt, MINOR finding, non-blocking)
+Checker: checker-tests
+Evidence:
+- All 5 tables (invites, events, event_sessions, rsvps, attendance) verified column-by-column against PRD 8.1 ground truth — zero deltas.
+- FK on-delete scoping confirmed: event_sessions.event_id cascade (the sole explicit PRD exception), all other 10 FKs restrict.
+- role_enum confirmed referenced from T009's migration, not redefined (grep for `create type role_enum` in this file: no match).
+- unique(session_id, student_id) confirmed on both rsvps and attendance; all check constraints (status/type/method enums) confirmed.
+- T009's migration file confirmed zero diff via git (constitution item 10).
+- No RLS/policy statements present (correctly out of scope, T012's job); no PII/seed data.
+Attempts: 0 (clean first-attempt PASS)
+Follow-up:
+- MINOR (non-blocking): `event_sessions.notes text not null` with no default follows the same "no null-marker = NOT NULL" convention as T009's `avatar_url`, but checker found stronger evidence it should be optional — PRD's MTG-02 dialog doesn't require notes to enable its create button, and OUT-02's dialog omits notes from the form spec entirely. Amended onto T031 and T039's acceptance criteria (task-ledger.md), not a new task — whichever lands first should add the small additive migration resolving nullability, not both.
+Note: T010's close-out (this entry, plus the ledger/state-summary updates) was performed directly by the orchestrating session rather than foreman-planner, because the dispatched foreman-planner close-out agent failed mid-run on a session usage limit before writing anything. No partial/inconsistent state resulted from that failure; this entry reflects the same close-out that agent was given complete instructions to perform.
