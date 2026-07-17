@@ -172,3 +172,19 @@ Follow-up:
 [2026-07-17T11:59:47Z] Worker finished. Checker required before completion.
 [2026-07-17T12:00:27Z] Worker finished. Checker required before completion.
 [2026-07-17T12:01:33Z] Worker finished. Checker required before completion.
+
+## T005 - Router skeleton + route guards + deep-link redirect (PASS close-out)
+Date: 2026-07-17
+Result: PASS (attempt 2, targeted re-check of a targeted fix, on merits)
+Checker: checker-reviewer
+Evidence:
+- Attempt 1 (FAIL, MAJOR/BLOCKER-class) — see full entry above and `docs/swarm/archive/T005-latest-failure.md`: all 13 PRD Section 7 routes present, RequireAuth/RequireRole guard logic and NAV-08 round-trip independently verified correct via checker's own 6-test suite, build/typecheck/lint clean, dependency hygiene clean. Sole failure (K1): `/kiosk/:sessionId` stubbed as a fully public, unguarded route with a doc comment incorrectly claiming the PRD is silent on kiosk auth, against PRD Section 7's explicit coach/admin assignment and SEC-04's "no public pages" rule (constitution BLOCKER-class).
+- Attempt 2 (PASS): checker read `src/app/router.tsx` and `src/app/guards.tsx` directly and confirmed `/kiosk/:sessionId` genuinely wrapped in `RequireAuth` + `RequireRole(['coach','admin'])` in the real JSX tree, not merely claimed in a comment; `Role` union confirmed to now include `'coach'`, and this is the only substantive change to `guards.tsx` — `RequireRole`'s `pushToast`-during-render logic (K3) confirmed byte-identical to before, deliberately untouched.
+- Checker's own independent throwaway 5-test suite (`createRoot`/jsdom/`MemoryRouter`/`AuthProvider`) against the real `AppRoutes` tree confirmed all 3 kiosk-access cases: unauthenticated → stores full intended URL and redirects to `/login`; wrong-role (staff/volunteer) → redirects to `/` with exact toast "You don't have access to that page."; correct-role (coach/admin) → renders through to kiosk content. Scratch test file deleted before finishing, confirmed no leftover scratch files in tree.
+- Regression sweep: all 13 PRD Section 7 routes still present; `src/main.tsx`/`src/App.tsx` still not wired to router/guards (correctly deferred to T006); `npm run build`/`typecheck`/`lint` all exit 0, same 8 pre-existing non-blocking `react-refresh/only-export-components` warnings, no new warnings/errors.
+- Forbidden-file check (D001 standing rule, file-tree comparison not git history): `src/app/` contains only `router.tsx`/`guards.tsx`, no scratch/leftover files; no changes under `src/theme/**`, `docs/swarm/**`, `.claude/**`; `package.json`/`package-lock.json` unchanged (no new dependency this attempt).
+Attempts: 1 (single legitimate FAIL, attempt 1, BLOCKER-class; PASS on attempt 2)
+Follow-up:
+- K2 (Role union completeness) and K3 (`pushToast`-during-render in `RequireRole`) logged as context for whichever future task next touches `guards.tsx`/routing (expected T006) — not spun into new ledger rows. See task-ledger.md T005 row and state-summary.md Completed section.
+[2026-07-17T12:05:00Z] Worker finished. Checker required before completion.
+[2026-07-17T12:04:43Z] Worker finished. Checker required before completion.
