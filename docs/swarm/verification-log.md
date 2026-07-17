@@ -147,3 +147,24 @@ Follow-up:
 [2026-07-17T11:54:04Z] Worker finished. Checker required before completion.
 [2026-07-17T11:54:21Z] Worker finished. Checker required before completion.
 [2026-07-17T11:55:27Z] Worker finished. Checker required before completion.
+[2026-07-17T11:56:59Z] Worker finished. Checker required before completion.
+
+## T005 - Router skeleton + route guards + deep-link redirect
+Date: 2026-07-17
+Result: FAIL (1st attempt, MAJOR finding, BLOCKER-class per constitution SEC-04/kiosk rule)
+Checker: checker-reviewer
+Evidence:
+- No worker self-report existed (worker session died on a session usage limit before reporting); checker derived all findings independently from artifacts + its own 6-test suite.
+- All 13 PRD Section 7 routes confirmed present as stub `<Route>` elements.
+- RequireAuth/RequireRole guard logic independently verified: unauth → `/login`; wrong-role → `/` + exact toast "You don't have access to that page."
+- NAV-08 intended-URL round-trip verified for both `login()` and `loginWithGoogle()` placeholder paths — stores full pathname+search+hash, consumes exactly once.
+- `src/main.tsx`/`src/App.tsx` confirmed not wired to router/guards (correctly deferred to T006).
+- `npm run build`/`typecheck`/`lint` all exit 0 (only expected non-blocking react-refresh/only-export-components warnings).
+- `react-router-dom@7.18.1` confirmed the only new dependency; peer range satisfied by React 19, no `--legacy-peer-deps`.
+Findings:
+- MAJOR/BLOCKER-class (K1): `/kiosk/:sessionId` stubbed as a fully public, unguarded route; module doc comment incorrectly claims the PRD doesn't spell out kiosk auth requirements. PRD Section 7's route table explicitly assigns `/kiosk/:sessionId` to coach/admin; SEC-04 states "no public pages." Constitution flags SEC-04/kiosk surfaces as BLOCKER-class.
+- Minor (K2, bundled with K1's fix): `guards.tsx`'s `Role` union (`'admin' | 'staff' | 'volunteer'`) is missing `'coach'`, needed for K1's fix to compile. Full role vocabulary reconciliation against AUTH-05 (admin|coach|student|parent) left open, not required this attempt.
+- NIT (K3, log only): `RequireRole` calls `pushToast` during render rather than in an effect. Deferred to T006 when real toast UI lands — not a blocker for this task.
+Attempts: 1 (FAIL, attempt 1)
+Follow-up:
+- Rework dispatched as a targeted fix (not a full redo): guard `/kiosk/:sessionId` with RequireAuth+RequireRole(['coach','admin']), add `'coach'` to the Role union, correct the doc comment. Detail: `docs/swarm/active/T005-latest-failure.md`. Worker packet updated: `docs/swarm/active/T005-worker-packet.md`.

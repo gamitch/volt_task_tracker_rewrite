@@ -11,6 +11,10 @@ Build a self-contained React Router route table stub covering every route in PRD
 - `src/app/guards.tsx`
 - `package.json` / `package-lock.json` (install `react-router-dom` only — already on the constitution's dependency allowlist, item 9; no additional approval needed)
 
+Unchanged from attempt 1 — both files touched by the required rework (`router.tsx`, `guards.tsx`)
+were already in scope. No `package.json`/`package-lock.json` change is expected for this rework
+attempt (no new dependency needed to add `'coach'` to a union type or guard an existing route).
+
 ## Forbidden Files
 - `docs/swarm/**`
 - `.claude/**`
@@ -36,7 +40,21 @@ Item 1 (Precedence): PRD requirement IDs (NAV-06, NAV-08, Section 7 route list) 
 Definition of Done: no worker may mark its own work complete; the checker inspects the actual artifact, not your summary.
 
 ## Most Recent Failure
-None. First attempt on T005.
+Attempt 1 FAILED (MAJOR/BLOCKER-class): `/kiosk/:sessionId` was left as a fully public, unguarded
+route with a doc comment incorrectly claiming the PRD is silent on kiosk auth — PRD Section 7
+assigns that route to coach/admin and SEC-04 requires no public pages. Full detail, exact PRD
+quotes, and required fix: see `docs/swarm/active/T005-latest-failure.md`.
+
+**This attempt (attempt 2) is a targeted fix only, not a redo of the task.** Everything else
+about T005 was independently verified correct by the checker (all 13 routes, guard logic, NAV-08
+round-trip, build/typecheck/lint, dependency hygiene) and must not be touched or reworked. Scope
+for this attempt is exactly:
+1. Guard `/kiosk/:sessionId` with `RequireAuth` + `RequireRole(['coach','admin'])` and fix the
+   incorrect doc comment (K1).
+2. Add `'coach'` to `guards.tsx`'s `Role` union so K1's fix compiles (K2, minimal — do not
+   reconcile the full role vocabulary unless trivial).
+Do not touch the toast-during-render pattern in `RequireRole` (K3) — explicitly deferred to T006,
+out of scope here.
 
 ## Required Worker Output
 - files changed (`src/app/router.tsx`, `src/app/guards.tsx`, `package.json`/`package-lock.json` diff)
