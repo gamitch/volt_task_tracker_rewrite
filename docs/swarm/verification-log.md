@@ -220,3 +220,23 @@ Follow-up:
 [2026-07-17T12:22:57Z] Worker finished. Checker required before completion.
 [2026-07-17T12:29:14Z] Worker finished. Checker required before completion.
 [2026-07-17T12:30:06Z] Worker finished. Checker required before completion.
+
+## T004 - CI pipeline (typecheck/lint/unit/build + bundle budget)
+Date: 2026-07-17
+Result: PASS (1st attempt, clean, no defect findings)
+Checker: checker-tests
+Evidence:
+- `.github/workflows/ci.yml` read directly and confirmed structurally correct: `push`/`pull_request` triggers, Node `20.18.1` pinned via `actions/setup-node@v4` with `cache: npm`, `npm ci` (not `npm install`), five separate steps (typecheck, lint, test, build, bundle-size gate) — no `continue-on-error:`, no `\|\| true`, no other exit-code-swallowing anywhere in the file.
+- `package.json` confirmed zero diff via direct file-tree comparison against the pre-T004 baseline (D001 method — file state, not git commit authorship).
+- Checker independently re-ran every workflow `run:` command, extracted verbatim from the YAML itself (not retyped from worker report): `npm ci`, `npm run typecheck`, `npm run lint`, `npm run test`, `npm run build` — all exit 0 against the current clean tree.
+- Checker ran its own full, independent bundle-size inflate/revert cycle rather than trusting the worker's numbers: clean build passes at 60236 bytes gzip vs the 307200 byte (300 KB) budget; checker's own injected probe (a different injection method than the worker's) produced an inflated build of 334497 bytes, correctly failing the gate (worker's own inflate test, for comparison, had separately produced 414185 bytes — the differing numbers are expected given different injection methods, and both independently prove the gate functions correctly); checker fully reverted its probe and reconfirmed a clean PASS at the real size afterward, with `git diff --stat`/`git status` showing zero net change.
+- NFR-04 scoping reasoning assessed and confirmed correct: measuring only the eager `<script type="module">` entry chunk(s) referenced in `dist/index.html` (not summing all of `dist/`) is the right reading of "initial route JS," and the gate's loop logic would correctly generalize to multiple eager entry scripts once real route-level splitting lands in T006+.
+- YAML validity independently confirmed via PyYAML (`yaml.safe_load`).
+- Deliverable location (`.github/workflows/ci.yml`) confirmed correct against the Allowed Files list; the worker packet's bullet-list phrasing (grouping the workflow file alongside `package.json`) was packet imprecision, not an actual scope violation.
+- No forbidden-file violations found via full-list check (`docs/swarm/**`, `.claude/**`, anything outside `.github/workflows/` and `package.json`'s `scripts` block, `src/**`) — file tree compared directly, not git history.
+Findings:
+- MINOR, calibration-only, not a task defect: checker separately flagged new `docs/swarm/active/*.md` files (the worker/checker packets for this very task) and a hook-appended `verification-log.md` line as a "technical violation" of the zero-net-diff-outside-allowed-files criterion, explicitly noting this "does not affect deliverable quality" and that the workflow is "ready for use." These are expected background swarm-process artifacts present on every task (every checker packet is itself a new `docs/swarm/active/*.md` file; the SubagentStop hook appends a verification-log.md line on every worker completion, regardless of task) — not something the worker produced or could avoid, and not real evidence to weigh per task. Routed as a checker-packet-writing calibration note in `docs/swarm/state-summary.md` (Known Decisions), not a follow-up task and not a mark against this PASS.
+Attempts: 0 (clean first-attempt PASS)
+Follow-up:
+- None requiring a new task. Standing process note logged in `docs/swarm/state-summary.md`: future checker packets' "Forbidden Modification Check" instructions should state upfront that new `docs/swarm/active/*.md` files and verification-log.md's hook-appended lines are always-expected background artifacts, not per-task findings to file.
+[2026-07-17T12:38:49Z] Worker finished. Checker required before completion.
