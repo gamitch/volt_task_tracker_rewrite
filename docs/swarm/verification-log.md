@@ -170,3 +170,4 @@ Follow-up:
 - Rework dispatched as a targeted fix (not a full redo): guard `/kiosk/:sessionId` with RequireAuth+RequireRole(['coach','admin']), add `'coach'` to the Role union, correct the doc comment. Detail: `docs/swarm/active/T005-latest-failure.md`. Worker packet updated: `docs/swarm/active/T005-worker-packet.md`.
 [2026-07-17T11:58:58Z] Worker finished. Checker required before completion.
 [2026-07-17T11:59:47Z] Worker finished. Checker required before completion.
+[2026-07-17T12:00:27Z] Worker finished. Checker required before completion.
