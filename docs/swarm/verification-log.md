@@ -216,3 +216,4 @@ Follow-up:
 - None requiring a new task or acceptance-criteria amendment. Operational note on `audit_log.actor` NOT NULL logged centrally in `docs/swarm/state-summary.md` (Known Decisions) as a standing risk for any future task/packet involving service-role or background writes to the five trigger-guarded tables, rather than amended onto specific rows — see that file for the rationale.
 [2026-07-17T12:07:55Z] Worker finished. Checker required before completion.
 [2026-07-17T12:12:34Z] Worker finished. Checker required before completion.
+[2026-07-17T12:22:00Z] Worker finished. Checker required before completion.
