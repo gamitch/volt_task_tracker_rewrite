@@ -188,3 +188,30 @@ Follow-up:
 - K2 (Role union completeness) and K3 (`pushToast`-during-render in `RequireRole`) logged as context for whichever future task next touches `guards.tsx`/routing (expected T006) — not spun into new ledger rows. See task-ledger.md T005 row and state-summary.md Completed section.
 [2026-07-17T12:05:00Z] Worker finished. Checker required before completion.
 [2026-07-17T12:04:43Z] Worker finished. Checker required before completion.
+
+## T011 - Migration: support tables + audit triggers (DATA-02)
+Date: 2026-07-17
+Result: PASS (1st attempt, MINOR finding, non-blocking)
+Checker: checker-tests
+Evidence:
+- All 4 support tables (notification_prefs, calendar_feeds, email_log, audit_log) verified column-by-column against PRD 8.1 ground truth — zero deltas.
+- `role_enum` confirmed reused from T009's migration, not redefined (grep for `create type role_enum`: no match); confirmed consistent with ground truth that none of T011's four tables carry a role column.
+- All 5 DATA-02 triggers independently tested against a real scratch Postgres instance (T009→T010→T011 applied in order), with full positive AND negative controls, not merely re-running the worker's claimed tests:
+  - attendance UPDATE while parent `event_sessions.status='scheduled'` → 0 rows; same session flipped to `completed`, attendance UPDATE again → exactly 1 row (`entity='attendance'`).
+  - `profiles.role` no-op UPDATE → 0 rows; real role change → exactly 1 row.
+  - `students.is_active` `true→false` → exactly 1 row; `false→true` (reactivation) → 0 rows; other no-op update → 0 rows.
+  - `event_sessions.status` → `canceled` → exactly 1 row (`entity='event_sessions'`); transition to any other status (e.g. `scheduled→completed`) → 0 rows.
+  - `invites.status` → `revoked` → exactly 1 row; transition to any other status → 0 rows.
+  - All 12 sub-tests (5 positive + 7 negative/no-op controls) passed.
+- Cancellation trigger confirmed attached to `event_sessions` (not `events`) after independently reading T010's migration and confirming `events` has no `status` column.
+- T009's and T010's migration files confirmed byte-identical to their pre-T011 on-disk state (constitution item 10) — file content comparison, not git history (per D001 standing rule).
+- All 5 `meta jsonb` payloads independently read from the actual `jsonb_build_object(...)` calls in the trigger function bodies — confirmed to contain only IDs, enum/status values, and booleans; no names/emails/free text (constitution item 6).
+- File-count/scope check: exactly one new file under `supabase/migrations/` beyond the T009/T010 baseline; nothing else in the repo touched.
+Findings:
+- MINOR (accept-as-is, no follow-up task per checker's own recommendation): `notification_prefs` extends `not null default true` to all 6 EML-02 category bools, not just `digest_enabled` (the only column PRD 8.1 ground truth explicitly specifies a default for). Judged a reasonable, well-documented UX interpretation (opt-in-by-default), not a defect. Note for future EML-02 spec work: make per-column defaults explicit.
+- Design decision (adjudicated, not-blocking, logged as a standing operational risk rather than a task amendment — see state-summary.md Known Decisions): `audit_log.actor uuid not null` with no default, following the established fk-not-marked-null convention. Any future write to `attendance`/`profiles`/`students`/`event_sessions`/`invites` made outside a user's own authenticated browser session (e.g. via a service-role Edge Function or background job) will hard-fail the entire triggering UPDATE unless `app.actor_id` is set via `SET LOCAL` first, since `auth.uid()` won't resolve in that context. Ruled acceptable as designed; not routed as an amendment to any specific downstream task because which future tasks actually write to these five tables via a service-role/non-interactive context depends on implementation choices not yet made (see state-summary.md for full reasoning).
+- Design decision (adjudicated, not-blocking): no FK on `email_log.session_id`/`email_log.profile_id` — confirmed correct reading of PRD 8.1's "null, not fk" marking; log rows intentionally survive deletion of the referenced session/profile.
+Attempts: 0 (clean first-attempt PASS)
+Follow-up:
+- None requiring a new task or acceptance-criteria amendment. Operational note on `audit_log.actor` NOT NULL logged centrally in `docs/swarm/state-summary.md` (Known Decisions) as a standing risk for any future task/packet involving service-role or background writes to the five trigger-guarded tables, rather than amended onto specific rows — see that file for the rationale.
+[2026-07-17T12:07:55Z] Worker finished. Checker required before completion.
