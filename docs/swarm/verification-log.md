@@ -324,3 +324,4 @@ Follow-up:
 - None requiring a new task. T014 (NFR-03 metric-view fixture tests) unblocked (Blocked→Ready) as a direct result.
 - Full worker/checker packets archived at `docs/swarm/archive/T013-worker-packet.md` and `docs/swarm/archive/T013-checker-packet.md`.
 [2026-07-17T22:53:08Z] Worker finished. Checker required before completion.
+[2026-07-17T22:55:41Z] Worker finished. Checker required before completion.
