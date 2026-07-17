@@ -303,3 +303,24 @@ Attempts: 0 (clean first-attempt PASS)
 Follow-up:
 - Optional NIT-level follow-up (not spun into a new task): document the `SUPABASE_AUTH_EXTERNAL_GOOGLE_*` env-var naming decision somewhere durable in case Supabase CLI conventions change in a future version — logged here instead.
 - Full worker/checker packets archived at `docs/swarm/archive/T015-worker-packet.md` and `docs/swarm/archive/T015-checker-packet.md`.
+
+## T013 — Metric views (verbatim PRD 8.4)
+Verdict: PASS (1st attempt). Severity: none — no BLOCKER/MAJOR/MINOR findings.
+Checker: checker-tests. Files inspected: `supabase/migrations/20260717000003_metric_views.sql`, `src/` (grep sweep), `docs/swarm/active/T013-worker-packet.md`, `docs/swarm/active/T013-checker-packet.md`.
+Findings:
+- Byte-verbatim confirmation: SQL body of the three views (`v_student_hours`, `v_student_participation`, `v_team_participation`) matches ground-truth PRD 8.4 text via SHA-256 checksum match on both sides, not an eyeballed diff. Prescribed implementation-note comment present, substantively unchanged.
+- TS formula-duplication grep (`participation_pct|confirmed_hours|hours_override` across `src/`): zero hits.
+- NFR-03 fixture validation on a fresh scratch Postgres, using the checker's own independently-designed fixtures (migrations T009→T013 applied in order):
+  - (a) excused-shrinks-denominator: 2 expected sessions, 1 present, 1 excused → participation_pct = 100.0 off a denominator of 1. Confirmed correct.
+  - (b) hours_override wins: raw check-in/out duration ≈1.667h, `hours_override = 3.5` shipped as `confirmed_hours`. Confirmed override wins.
+  - (c) check-in/check-out clamping: partial-overlap case clamps to the session window (2h); entirely-outside-window case clamps to 0 (not negative). Both confirmed via direct computation matching the view's `greatest(..., 0)` formula.
+  - (d) no-completed-sessions case: student's only attendance is against a `status='scheduled'` (not `completed`) session → zero rows produced, not a row with `expected_ct=0`. Confirmed.
+- Null-`team_ids` ("applies to all teams") semantics independently re-verified: 5-student/4-team fixture, all 5 students correctly pulled into the expected-CTE for a null-team_ids event, confirming NULL is treated as "applies to all teams" per the verbatim SQL. Could not independently verify the worker's own narrative of finding/fixing a fixture bug during its own development (no persisted artifact for that), but the underlying semantics claim itself is confirmed correct.
+- T009–T012 migration files re-read directly and confirmed unchanged; exactly one new file under `supabase/migrations/`.
+- Trap 1 gap re-confirmed via `information_schema.columns`: all three views contain only id/metric numeric columns, zero PII/identity columns (no name/email/avatar_url/display_name); no self-referential `students` subquery anywhere. Correctly leaves the teammate-leaderboard-visibility gap deferred to a future task (most likely T044), not a T013 defect.
+- Forbidden-file/scope check: file tree confirmed to contain exactly the one new allowed migration file; `src/` unchanged (7 files, same as before).
+Attempts: 0 (clean first-attempt PASS)
+Follow-up:
+- None requiring a new task. T014 (NFR-03 metric-view fixture tests) unblocked (Blocked→Ready) as a direct result.
+- Full worker/checker packets archived at `docs/swarm/archive/T013-worker-packet.md` and `docs/swarm/archive/T013-checker-packet.md`.
+[2026-07-17T22:53:08Z] Worker finished. Checker required before completion.
