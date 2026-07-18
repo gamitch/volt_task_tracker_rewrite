@@ -522,3 +522,20 @@ Follow-up (both non-blocking MINOR/NIT, not spun into new tasks):
 [2026-07-18T20:26:38Z] Worker finished. Checker required before completion.
 [2026-07-18T20:29:30Z] Worker finished. Checker required before completion.
 [2026-07-18T20:32:50Z] Worker finished. Checker required before completion.
+
+## T014 — NFR-03 metric-view fixture tests
+Verdict: PASS (1st attempt). Severity: none — no findings.
+Checker: checker-tests. Files inspected: `supabase/tests/{auth_stub,seed,assertions}.sql`, `run.sh`, all 5 migration files.
+Findings:
+- Independently re-ran `bash supabase/tests/run.sh` 3 times from a fresh scratch Postgres — clean pass each time.
+- Designed and ran its own negative-control patch (not reusing the worker's — changed `participation_pct` expectation to a wrong value), confirmed the suite correctly fails and identifies the bad case, then confirmed a clean pass after reverting.
+- Independently re-derived the arithmetic for all 4 NFR-03 cases directly against the real view formulas in `20260717000003_metric_views.sql`: excused-shrinks-denominator (`round(100*1/greatest(2-1,1),1)=100.0`), hours_override-wins (`9.25`, not the clamped `2.0`), check-in clamping positive (`2.0`) and zero-floor (`0`, never negative), no-completed-sessions (zero rows, not a row with `expected_ct=0`).
+- All 5 migration files confirmed byte-unchanged via SHA-256 checksum.
+- Fabricated-names-only fixture data confirmed (constitution item 6) via grep — all names follow "Fixture [Type] [Greek Letter]".
+- Zero TS formula duplication confirmed via grep.
+- D001-method forbidden-file check clean: only `supabase/tests/**` (4 files) touched.
+- Build/typecheck/lint/format:check/test independently re-run — all clean, same baseline warning count.
+Attempts: 1 (clean first-attempt PASS)
+Follow-up:
+- None. T056 (`/reports` shell) unblocked (Blocked→Ready) as a direct result.
+- Full worker/checker packets archived at `docs/swarm/archive/T014-worker-packet.md` and `docs/swarm/archive/T014-checker-packet.md`.
