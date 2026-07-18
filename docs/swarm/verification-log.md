@@ -506,3 +506,5 @@ Follow-up (both non-blocking MINOR/NIT, not spun into new tasks):
 - Full worker/checker packets archived at `docs/swarm/archive/T008-worker-packet.md` and `docs/swarm/archive/T008-checker-packet.md`.
 [2026-07-18T19:24:44Z] Worker finished. Checker required before completion.
 [2026-07-18T19:27:28Z] Worker finished. Checker required before completion.
+[2026-07-18T19:35:58Z] Worker finished. Checker required before completion.
+[2026-07-18T19:38:22Z] Worker finished. Checker required before completion.
