@@ -361,3 +361,4 @@ Findings:
 Attempts: 1 (FAIL, not attributable to worker error — escalated rather than reworked)
 Follow-up:
 - Dispute filed with boss-arbiter requesting explicit authorization for: (a) a new shared test-setup file with a matchMedia polyfill wired into vite.config.ts's test.setupFiles, and (b) an edit to the currently-forbidden theme.smoke.test.tsx to replace its stale assertion. T006 stays In Progress pending the ruling and a green re-check on real CI.
+[2026-07-18T01:04:07Z] Worker finished. Checker required before completion.
