@@ -436,3 +436,5 @@ Follow-up:
 - Full worker/checker packets archived at `docs/swarm/archive/T016a-worker-packet.md` and `docs/swarm/archive/T016a-checker-packet.md`.
 [2026-07-18T12:55:25Z] Worker finished. Checker required before completion.
 [2026-07-18T12:57:04Z] Worker finished. Checker required before completion.
+[2026-07-18T13:02:29Z] Worker finished. Checker required before completion.
+[2026-07-18T13:15:32Z] Worker finished. Checker required before completion.

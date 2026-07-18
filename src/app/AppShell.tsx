@@ -2,10 +2,10 @@
  * T006: NAV-01 application chrome wrapper.
  *
  * Composes the Astryx `AppShell` (top-level layout frame) with `TopNav` as
- * its `topNav` slot. `SideNav` (T007) and `MobileNav` (T008) do not exist
- * yet, so `sideNav` is intentionally `undefined` and `mobileNav` is
- * intentionally `false` -- both are documented, sanctioned `AppShell` prop
- * values (astryx-api.md's own `AppShell` example shows
+ * its `topNav` slot and, as of T007, `SideNav` as its `sideNav` slot.
+ * `MobileNav` (T008) does not exist yet, so `mobileNav` is intentionally
+ * `false` -- a documented, sanctioned `AppShell` prop value
+ * (astryx-api.md's own `AppShell` example shows
  * `<AppShell mobileNav={false} />` as the way to disable it), not a
  * workaround. See `docs/swarm/astryx-api.md` "AppShell" section for the
  * `topNav`/`sideNav`/`mobileNav` prop definitions this relies on.
@@ -34,6 +34,7 @@ import { useLocation } from 'react-router-dom';
 import { AppShell as AstryxAppShell } from '@astryxdesign/core';
 import { routePaths } from './router';
 import { TopNav } from '../components/nav/TopNav';
+import { SideNav } from '../components/nav/SideNav';
 
 export interface AppShellProps {
   children: ReactNode;
@@ -49,7 +50,7 @@ export function AppShell({ children }: AppShellProps): ReactNode {
   }
 
   return (
-    <AstryxAppShell topNav={<TopNav />} sideNav={undefined} mobileNav={false}>
+    <AstryxAppShell topNav={<TopNav />} sideNav={<SideNav />} mobileNav={false}>
       {children}
     </AstryxAppShell>
   );
