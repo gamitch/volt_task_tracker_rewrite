@@ -1,9 +1,17 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // D003: minimal shared Vitest setup (guarded matchMedia polyfill only --
+  // see src/test-setup.ts). The `/// <reference types="vitest/config" />`
+  // triple-slash directive above is the one mechanical typing change the
+  // `test` key below requires so `defineConfig`'s config type recognizes it.
+  test: {
+    setupFiles: ['./src/test-setup.ts'],
+  },
   build: {
     rollupOptions: {
       output: {
