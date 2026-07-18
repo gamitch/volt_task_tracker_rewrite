@@ -7,7 +7,12 @@ import tsParser from '@typescript-eslint/parser';
 import eslintConfigPrettier from 'eslint-config-prettier';
 
 export default [
-  { ignores: ['dist', 'node_modules'] },
+  // supabase/functions/** are Deno-runtime Edge Functions, not part of the
+  // Vite/React project this config targets -- they use the Deno global and
+  // are linted/typechecked separately via `deno lint`/`deno check` (see
+  // T017's worker verification). Linting them here with browser globals
+  // produces false no-undef errors on every `Deno.*` reference.
+  { ignores: ['dist', 'node_modules', 'supabase/functions/**'] },
   js.configs.recommended,
   {
     files: ['**/*.{ts,tsx}'],
