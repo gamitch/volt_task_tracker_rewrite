@@ -4,9 +4,27 @@
  * Composes the Astryx `AppShell` (top-level layout frame) with `TopNav` as
  * its `topNav` slot, `SideNav` (T007) as its `sideNav` slot, and, as of
  * T008, `MobileNav` as its `mobileNav` slot (NAV-05: below 768px, `SideNav`
- * is replaced by the `MobileNav` drawer, triggered from `TopNav` via
- * `MobileNavToggle`). See `docs/swarm/astryx-api.md` "AppShell" section for
- * the `topNav`/`sideNav`/`mobileNav` prop definitions this relies on.
+ * is replaced by the `MobileNav` drawer). See `docs/swarm/astryx-api.md`
+ * "AppShell" section for the `topNav`/`sideNav`/`mobileNav` prop
+ * definitions this relies on.
+ *
+ * `mobileNav` D004 note: this passes the `MobileNavConfig` OBJECT form,
+ * `{ content: <MobileNav /> }`, not the plain `<MobileNav />` ReactNode
+ * shorthand the original T008 packet mandated. In the actually-installed
+ * `@astryxdesign/core@0.1.6`, the ReactNode shorthand sets an internal
+ * "full escape hatch" flag that permanently disables the shell's own
+ * mobile-nav-open context state, which in turn makes `MobileNavToggle`
+ * render nothing and `openMobileNav`/`toggleMobileNav` permanent no-ops --
+ * i.e. the drawer can never open. The `{ content }` object form keeps the
+ * shell's context state enabled, renders our `MobileNav` as the drawer's
+ * content (suppressing Astryx's own auto-generated drawer), and puts
+ * `TopNav` into its "mobile-bar" render mode below the `breakpoint` (768px,
+ * matching NAV-05), which auto-injects a working `MobileNavToggle` trigger
+ * inside `TopNav` itself -- no `TopNav.tsx` edit needed to satisfy NAV-05's
+ * "triggered from TopNav" requirement. See docs/swarm/dispute-log.md D004
+ * for the full source-verified evidence and ruling (this is the
+ * corrective, boss-arbiter-authorized fix superseding the original
+ * packet's mandated wiring).
  *
  * `/login` and `/accept-invite` are pre-auth public entry points. PRD 7.1
  * assigns `/login` the "Basic Login" template ("VOLT wordmark above the
@@ -49,7 +67,11 @@ export function AppShell({ children }: AppShellProps): ReactNode {
   }
 
   return (
-    <AstryxAppShell topNav={<TopNav />} sideNav={<SideNav />} mobileNav={<MobileNav />}>
+    <AstryxAppShell
+      topNav={<TopNav />}
+      sideNav={<SideNav />}
+      mobileNav={{ content: <MobileNav /> }}
+    >
       {children}
     </AstryxAppShell>
   );

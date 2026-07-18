@@ -1,39 +1,32 @@
 /**
  * T008: NAV-05 mobile counterpart to `SideNav` (T007) -- a slide-out drawer
- * shown below 768px, intended to be triggered from `TopNav` via
- * `MobileNavToggle` (astryx-api.md line 4698: "Inside AppShell, use
- * MobileNavToggle as the trigger; it reads state from context
- * automatically.").
+ * shown below 768px, triggered from `TopNav`.
  *
- * *** KNOWN BLOCKER (verified via installed component source + live
- * Playwright, not assumed -- see worker output for full evidence) ***
- * The `mobileNav={<MobileNav />}` ReactNode-shorthand wiring in
- * `AppShell.tsx` (the exact, packet-mandated edit, matching astryx-api.md's
- * own sanctioned example at line 2549/4703) produces a **non-functional**
- * `MobileNavToggle` in the actually-installed `@astryxdesign/core@0.1.6`:
- * reading that package's own `AppShell.tsx` source shows `mobileNavEnabled`
- * (the flag `MobileNavToggle`/`openMobileNav` gate their rendering/behavior
- * on) is computed as
- * `!mobileNavDisabled && hasNavContent && mobileNavReactNode == null` --
- * i.e. it is **forced `false`** whenever `mobileNav` is passed as a raw
- * ReactNode (our case), even though astryx-api.md's prose claims
- * "Inside AppShell, this is managed automatically via context" for this
- * exact usage with no such carve-out documented anywhere. Confirmed live:
- * at <768px in the real signed-in app, `MobileNavToggle` renders nothing at
- * all (no button in the DOM, not even hidden), and even forcing the native
- * `<dialog>` open via `showModal()` directly has no visual effect (Astryx's
- * own `display:none` styling is gated on the same permanently-`false`
- * `isOpen` state). The only in-source fix identified (not applied here,
- * since it exceeds this task's packet-mandated "exactly these two edits"
- * scope for `AppShell.tsx`) is switching to the `MobileNavConfig`
- * config-object form: `mobileNav={{ content: <MobileNav ... /> }}`, which
- * this same source shows resolves `mobileNavReactNode` to `null` and lets
- * `mobileNavEnabled` evaluate `true`. Flagged as a dispute candidate -- see
- * worker output. Everything else in this file (drawer content, active-item
- * highlight, `as={Link}` SPA nav, the `document.title` effect, close
- * behavior) was independently verified via a working-context scratch
- * harness and is correct on its own merits; only the real app's trigger
- * path is broken.
+ * D004 resolution (was "KNOWN BLOCKER" in attempt 1, now resolved): the
+ * original packet mandated wiring this component into `AppShell.tsx` via
+ * the plain `mobileNav={<MobileNav />}` ReactNode shorthand, matching
+ * astryx-api.md's own examples. That wiring turned out to be
+ * non-functional in the actually-installed `@astryxdesign/core@0.1.6` --
+ * the ReactNode shorthand is a "full escape hatch" that disables the
+ * shell's own mobile-nav-open context state, permanently no-opping
+ * `MobileNavToggle`/`openMobileNav`/`toggleMobileNav`. Verified via
+ * installed component source, CLI template output, and live Playwright
+ * (zero toggle button in the DOM at any viewport). Filed and ruled on in
+ * docs/swarm/dispute-log.md D004: `AppShell.tsx` now wires this component
+ * via the `MobileNavConfig` object form (`mobileNav={{ content: <MobileNav
+ * /> }}`), which keeps the shell's context state enabled, renders this
+ * component as the drawer's content (suppressing Astryx's own
+ * auto-generated drawer), and puts `TopNav` into "mobile-bar" render mode
+ * below the 768px breakpoint -- which auto-injects a working
+ * `MobileNavToggle` trigger inside `TopNav` itself, satisfying NAV-05's
+ * "triggered from TopNav" requirement with no `TopNav.tsx` edit needed.
+ * This component's own logic/JSX required NO change for the fix: it
+ * already correctly omits `isOpen`/`onOpenChange` on `AstryxMobileNav`
+ * below, letting the installed `AstryxMobileNav`'s own internal context
+ * fallback (`isOpenProp ?? appShellMobile.isMobileNavOpen`, confirmed via
+ * its shipped source) supply open state -- exactly what the object-form
+ * `content` slot needs. See D004 for the full source-verified evidence and
+ * ruling.
  *
  * This component intentionally duplicates most of `SideNav.tsx`'s internals
  * (`NAV_ITEMS`, `isStaffRole` filtering, active-item matching, the Outreach
@@ -113,9 +106,12 @@
  * This is internal `AstryxMobileNav` behavior with no exposed prop to
  * change it, and no manual `onOpenChange` override was added here (that
  * would violate the "don't pass isOpen/onOpenChange inside AppShell" rule
- * above). Flagged as a UX gap / dispute candidate in worker output --
- * moot in the real app today since the trigger itself doesn't work (see
- * KNOWN BLOCKER above), but relevant once that is fixed.
+ * above). D004 Ruling C: this is now a real (not moot) MINOR, non-blocking
+ * follow-up now that the trigger/drawer are actually functional -- the
+ * only sanctioned lever (`useAppShellMobile`) is undocumented in
+ * astryx-api.md, so constitution item 2 forbids using it today. Not fixed
+ * in this task; logged as a follow-up candidate for whenever
+ * astryx-api.md is legitimately refreshed (or upstream adds auto-close).
  */
 import { useEffect, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';

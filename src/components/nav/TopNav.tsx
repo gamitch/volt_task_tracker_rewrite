@@ -19,22 +19,23 @@
  * sections are skipped entirely when there is no authenticated user, rather
  * than assuming `user` is always non-null.
  *
- * T008 addition: `startContent={<MobileNavToggle />}` satisfies NAV-05's
- * "triggered from TopNav" requirement for the `MobileNav` drawer (T008).
- * `TopNav` has no dedicated "mobile menu button" prop -- `MobileNavToggle`
- * is a self-contained hamburger button that "reads state from context
- * automatically" (astryx-api.md line 4698) and "renders nothing above the
- * mobile breakpoint" (line 4745), so this is a zero-visible-change addition
- * at >=768px. It is rendered in `startContent` (not a new prop, not a
- * wrapping fragment) because that is the only existing `TopNav` slot this
- * doc's own composition pattern supports for this purpose.
+ * D004 note (T008 rework): this file needs no edit for NAV-05's "triggered
+ * from TopNav" mobile-drawer-toggle requirement. `AppShell.tsx` wires
+ * `mobileNav={{ content: <MobileNav /> }}` (the `MobileNavConfig` object
+ * form); any non-ReactNode `mobileNav` value puts the installed
+ * `@astryxdesign/core@0.1.6` `TopNav` into its "mobile-bar" render mode
+ * below the 768px breakpoint, which auto-injects its own `MobileNavToggle`
+ * inside the real `TopNav` bar with no project code required. T008's
+ * attempt-1 edit here (`startContent={<MobileNavToggle />}`) has been
+ * reverted: under mobile-bar mode `startContent` is not rendered at all
+ * below the breakpoint, so that edit was permanently dead code. See
+ * docs/swarm/dispute-log.md D004 for the full evidence and ruling.
  */
 import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Avatar,
   DropdownMenu,
-  MobileNavToggle,
   Selector,
   TopNav as AstryxTopNav,
   TopNavHeading,
@@ -73,7 +74,6 @@ export function TopNav(): ReactNode {
     <AstryxTopNav
       label="Main navigation"
       heading={<TopNavHeading heading="VOLT" headingHref={routePaths.dashboard} />}
-      startContent={<MobileNavToggle />}
       endContent={
         user ? (
           <>
