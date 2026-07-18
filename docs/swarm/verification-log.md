@@ -459,3 +459,20 @@ Follow-up:
 - Rework packet dispatched to worker-implementer for attempt 2, citing the checker's exact fix (`as={Link}` on all `SideNavItem`s) and evidence.
 [2026-07-18T13:30:09Z] Worker finished. Checker required before completion.
 [2026-07-18T13:33:09Z] Worker finished. Checker required before completion.
+[2026-07-18T13:33:48Z] Worker finished. Checker required before completion.
+
+## T007 — SideNav (role-filtered) + outreach badge scaffold (attempt 2)
+Verdict: PASS (2nd check, on merits). Severity: none — no findings (one NIT logged).
+Checker: checker-accessibility. Files inspected: `src/components/nav/SideNav.tsx` (post-fix), `src/app/AppShell.tsx`, `src/app/router.tsx`, `src/app/guards.tsx`, `src/components/nav/TopNav.tsx`, node_modules Astryx type declarations.
+Findings:
+- Fix confirmed applied correctly: `import { Link } from 'react-router-dom'` + `as={Link}` on `SideNavItem`, independently re-confirmed as a genuine, CLI-documented prop (`npm run astryx -- component SideNavItem` re-run, matches `SideNavItem.d.ts`'s real type declaration).
+- Live re-reproduction (real Chromium + dev server + `/login` flow): zero `load` events on both mouse click and keyboard Enter-activation, session preserved (SideNav still rendered post-navigation, never bounced to `/login`), URL/`document.title` update correctly, `data-discover="true"` confirmed on the anchors (React Router's own internal marker, proving genuine `Link` rendering, not styling alone).
+- **Negative control performed**: checker temporarily reverted the fix, reproduced the exact original attempt-1 defect (1 `load` event, session lost, bounced to `/login`) on both input modalities, then restored the file byte-identical (confirmed via `git diff --stat`) and re-ran the positive test to reconfirm PASS — validating its own test methodology, not just asserting success.
+- NAV-03/04/07/BEH-04 spot-re-checked clean (not touched by this fix, not re-proven from scratch per the targeted re-check scope): correct 5-item staff-tier set, `aria-current`/`data-selected` on the active item, Meetings/Outreach as distinct items, neutral-only Outreach badge.
+- D001-method forbidden-file check: confirmed via `git log`/direct re-read that `AppShell.tsx`/`router.tsx`/`guards.tsx`/`TopNav.tsx` were last modified by their respective original tasks (T006/T005/T016a), not by this attempt's commit — only `SideNav.tsx` changed.
+- Build/typecheck/lint/format:check independently re-run — all exit 0, same 8 pre-existing warnings, no new ones.
+Attempts: 2 (attempt 1 legitimate FAIL/BLOCKER with an identified in-scope fix; attempt 2 PASS on the merits, not a rubber stamp)
+Follow-up:
+- NIT (log only, not a new task): `TopNav.tsx`'s wordmark link (`TopNavHeading`) has the same structural plain-`<a>` gap that caused this task's BLOCKER — pre-existing from T006, out of scope/forbidden here, flagged for whenever `TopNav.tsx` is next touched.
+- T008 (MobileNav + Student Home live-card slot) unblocked (Blocked→Ready) as a direct result.
+- Full worker/checker packets archived at `docs/swarm/archive/T007-worker-packet.md` and `docs/swarm/archive/T007-checker-packet.md`.
