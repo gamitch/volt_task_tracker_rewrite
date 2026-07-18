@@ -477,3 +477,4 @@ Follow-up:
 - T008 (MobileNav + Student Home live-card slot) unblocked (Blocked→Ready) as a direct result.
 - Full worker/checker packets archived at `docs/swarm/archive/T007-worker-packet.md` and `docs/swarm/archive/T007-checker-packet.md`.
 [2026-07-18T13:40:05Z] Worker finished. Checker required before completion.
+[2026-07-18T13:52:17Z] Worker finished. Checker required before completion.
