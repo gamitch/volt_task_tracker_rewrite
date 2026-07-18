@@ -347,3 +347,17 @@ Follow-up:
 [2026-07-18T00:58:49Z] Worker finished. Checker required before completion.
 [2026-07-18T01:00:00Z] Worker finished. Checker required before completion.
 [2026-07-18T01:01:43Z] Worker finished. Checker required before completion.
+[2026-07-18T01:02:21Z] Worker finished. Checker required before completion.
+
+## T006 — AppShell + TopNav (attempt 1)
+Verdict: FAIL. Severity: BLOCKER (structural, not a worker-code defect).
+Checker: checker-accessibility. Files inspected: `src/app/AppShell.tsx`, `src/components/nav/TopNav.tsx`, `src/App.tsx`, `src/theme/theme.smoke.test.tsx`, `src/app/router.tsx`, `src/app/guards.tsx`, `docs/swarm/astryx-api.md` (every cited line range), `vite.config.ts`, `package.json`, `dist/assets/theme.css`.
+Findings:
+- NAV-01/NAV-02, Astryx prop cross-check (every prop re-verified against astryx-api.md's actual line numbers, no hallucinations), DES-17 keyboard/focus (verified via a real scratch-test harness dispatching actual KeyboardEvents, not just screenshots — worker's claimed screenshots were never found on disk), role-gating (admin/coach show the season Selector, staff/volunteer don't — confirmed via the same harness), null-user no-crash (confirmed both as a direct component mount and full end-to-end redirect), forbidden-file boundary (router.tsx/guards.tsx confirmed untouched via mtime + content re-read), and build/typecheck/lint/format:check: all independently verified clean, zero findings.
+- The BLOCKER: wiring `App.tsx` into a real `BrowserRouter > AuthProvider > LayerProvider > Theme > AppShell > AppRoutes` tree (mandated by T005's own module doc, confirmed by reading it directly — not worker scope creep) broke the pre-existing, already-Passed `theme.smoke.test.tsx` (T002a, outside T006's Allowed Files) two independent ways: (a) `TypeError: window.matchMedia is not a function` — no matchMedia polyfill exists anywhere in the project, and `App` now needs it once real Astryx components actually mount for the first time; (b) confirmed independently by temporarily patching in a polyfill then reverting cleanly — even fixed, the test's `'VOLT Team Portal'` assertion is now permanently stale, since an unauthenticated session now correctly redirects to `/login`'s placeholder rather than rendering the old root content.
+- Constitution Non-Negotiable directly implicated: "Existing tests must pass unless the boss explicitly approves a test update" — no such approval exists yet.
+- Checker's explicit judgment: this is not fixable within T006's own Allowed Files (the fix requires editing the forbidden test file), so sending T006's worker into a rework loop would waste an attempt on an unfixable-in-scope problem. Recommended immediate escalation to boss-arbiter, same pattern as D001/D002, rather than a passively-logged follow-up — citing direct precedent from CI break #1/#2 (both treated as same-day urgent fixes).
+- Confirmed live on real GitHub Actions CI: required `npm run test` gate red on every push to this branch since commit e20b8d1.
+Attempts: 1 (FAIL, not attributable to worker error — escalated rather than reworked)
+Follow-up:
+- Dispute filed with boss-arbiter requesting explicit authorization for: (a) a new shared test-setup file with a matchMedia polyfill wired into vite.config.ts's test.setupFiles, and (b) an edit to the currently-forbidden theme.smoke.test.tsx to replace its stale assertion. T006 stays In Progress pending the ruling and a green re-check on real CI.
