@@ -184,3 +184,147 @@ D2 amended (React 18 -> React 19) with human-owner authorization.
 Constitution item 8 updated, citing this entry. Corrective task T002a
 directed; foreman-planner to write the packet. PRD file untouched by
 design.
+
+## D003 - T006 App wiring breaks pre-existing theme.smoke.test.tsx (CI test gate red); test-update + test-infra authorization
+
+Worker position:
+T006's deliverables (AppShell.tsx, TopNav.tsx, App.tsx wiring) are complete
+and correct. The App.tsx wiring — explicitly mandated by T005's own
+router.tsx module doc ("Wiring `AppRoutes` (and `AuthProvider` from
+`./guards`) into `main.tsx` / `App.tsx` is T006's job") — broke the
+T002a-authored `src/theme/theme.smoke.test.tsx`, which is outside T006's
+Allowed Files and forbidden to the worker. Worker did not touch the
+forbidden file; self-reported the regression instead of hiding it.
+
+Checker position (checker-accessibility, T006 check attempt 1):
+T006 verified correct on every substantive axis: NAV-01/NAV-02 compliance,
+Astryx prop cross-check against astryx-api.md, DES-17 keyboard/focus,
+season-Selector role-gating, `user === null` no-crash, forbidden-file
+boundary clean, build/typecheck/lint/format:check all exit 0. But
+`npm run test` fails, breaking the required CI gate (ci.yml runs
+`npm run test` on every push, no branch filter) — a Non-Negotiable
+("Existing tests must pass unless the boss explicitly approves a test
+update") with no approval on record. Checker confirmed via real command
+execution that the break has TWO independent causes: (1) no matchMedia
+polyfill exists anywhere (no vitest setupFiles at all) and the real Astryx
+component tree now calls `window.matchMedia` at mount, throwing in raw
+jsdom; (2) even with a polyfill temporarily patched in, the test's
+`'VOLT Team Portal'` h1 assertion fails — an unauthenticated `user: null`
+session at `/` is now correctly redirected by RequireAuth to `/login`'s
+placeholder (`<h1>Login (placeholder)</h1>`).
+
+Boss decision (boss-arbiter, 2026-07-18):
+All evidence re-verified independently — not taken from either party:
+
+1. Reproduced failure mode 1 myself: `npx vitest run` fails with
+   `TypeError: window.matchMedia is not a function` at
+   theme.smoke.test.tsx:34. Grep confirms zero matchMedia polyfills and
+   zero `setupFiles` config anywhere in the repo; vite.config.ts has no
+   `test` block at all.
+2. Reproduced failure mode 2 myself with a scratch test (created, run,
+   deleted): with matchMedia polyfilled, the render succeeds without
+   throwing and the first h1 is exactly `"Login (placeholder)"` — not
+   `'VOLT Team Portal'`. Both failure modes are real and independent; both
+   must be fixed.
+3. Read router.tsx's module doc directly: the App.tsx wiring was T005's
+   explicit standing instruction to T006, not scope creep. Read the old
+   assertion's target: App.tsx's placeholder `<h1>VOLT Team Portal</h1>`
+   was deleted by that mandated wiring. The redirect-to-/login behavior is
+   the CORRECT new behavior (NAV-06); the old assertion describes a DOM
+   state that structurally cannot recur. This is a stale test, not an app
+   bug.
+4. Confirmed ci.yml runs `npm run test` as a required step on every
+   push/PR with no branch filter. CI is red on real infrastructure right
+   now — same class as CI breaks #1/#2 (state-summary.md), both treated as
+   same-day urgent fixes. Same treatment applies here.
+
+Rulings:
+
+A. Worker is NOT at fault and no rework of T006's own files is required or
+   permitted. The regression was structurally unavoidable inside T006's
+   Allowed Files: the worker was forbidden from src/theme/** and had no
+   in-scope file in which to add test setup. The worker's self-report was
+   the correct move (D001 precedent: flag deviations, don't hide them).
+
+B. Checker's BLOCKER classification of the red CI gate is UPHELD as to the
+   repo state — red required CI is a blocker regardless of whose fault it
+   is — but the blocker is reassigned from T006-rework to a new corrective
+   task T006a (mirroring D002's T002a forward-fix pattern: T006 met the
+   criteria it was given; the fix belongs to files outside its scope).
+
+C. Test update APPROVED (this entry is the explicit boss approval the
+   Non-Negotiable requires) for `src/theme/theme.smoke.test.tsx`, exact
+   scope:
+   - Remove the outer `<Theme theme={voltTheme}>` wrapper and render
+     `<App />` directly; App now owns the Theme provider internally per
+     NAV-01, so the old wrapper double-wraps Theme and no longer represents
+     the real app root. Remove the then-unused `Theme`/`voltTheme` imports.
+   - Keep the `.not.toThrow()` render assertion as the core of the test —
+     its documented purpose (exercising the React-19 `use()` runtime
+     failure mode T002 missed) is unchanged and still served, now against
+     the full real tree.
+   - Replace `expect(container.querySelector('h1')?.textContent).toBe('VOLT
+     Team Portal')` with a durable blank-render guard:
+     `expect(container.textContent?.trim()).toBeTruthy()`. Deliberately do
+     NOT assert the `'Login (placeholder)'` copy — that placeholder is
+     scheduled to be replaced by T016 and asserting it would re-create this
+     exact staleness problem; route/guard content behavior is T005/T016
+     checker territory, not this smoke test's job.
+   - Update the module doc: keep the T002a history, add one line citing
+     D003 for the restructure.
+   No other changes to this file. Restructuring to an authenticated-session
+   render is REJECTED: it would couple a smoke test to placeholder auth
+   machinery that is itself temporary (real Supabase auth lands E3),
+   guaranteeing another stale-test cycle.
+
+D. Shared test infrastructure APPROVED, exact scope:
+   - New file `src/test-setup.ts`: a minimal, guarded matchMedia polyfill
+     only (assign only if `window.matchMedia` is undefined; return a
+     MediaQueryList stub with `matches: false`, `media: query`, no-op
+     `addEventListener`/`removeEventListener`/`addListener`/
+     `removeListener`/`dispatchEvent`, `onchange: null`). Nothing else in
+     this file — it is not a general mock dumping ground.
+   - `vite.config.ts` edit: add `test: { setupFiles: ['./src/test-setup.ts'] }`
+     plus the one mechanical typing change the `test` key requires (either
+     `/// <reference types="vitest/config" />` or switching the
+     `defineConfig` import to `'vitest/config'` — worker's call). The
+     `build.rollupOptions` block (T003's theme.css emission) must be
+     byte-untouched; checker verifies `npm run build` still emits
+     `dist/assets/theme.css` and the bundle-size gate stays green.
+
+E. Delivery vehicle: ONE corrective task T006a (Epic E1, worker:
+   worker-implementer, checker: checker-tests — deliberately a different
+   checker than T006's checker-accessibility; this is test/CI-gate
+   territory), dispatched immediately as a same-day fix per CI-break
+   precedent. Allowed files: exactly `src/test-setup.ts` (new),
+   `vite.config.ts` (scoped edit per D), `src/theme/theme.smoke.test.tsx`
+   (scoped edit per C). Everything else forbidden — explicitly including
+   `src/theme/volt.ts`, `src/App.tsx`, `src/app/**`, `src/components/**`,
+   `package.json`, `.github/workflows/ci.yml`. Acceptance: `npm run test`
+   exits 0 (full suite); build/typecheck/lint/format:check exit 0; the
+   smoke test still renders the real App tree (no shallow/mock render);
+   polyfill guarded and minimal; production build artifacts unchanged.
+   Both fixes land in the one task — splitting them would leave CI red
+   between tasks. Foreman-planner builds the packet verbatim from C/D/E;
+   no further judgment calls are delegated.
+
+F. Sequencing: T006 stays "In Progress". Ledger records check attempt 1 as
+   FAIL (BLOCKER: required CI test gate red) with the notation that the
+   FAIL is not a worker fault and no T006 rework exists — resolved via
+   D003/T006a. T006 flips to Passed simultaneously with T006a's PASS: T006a's
+   checker-tests run (`npm run test` green plus the other gates) IS the
+   re-verification T006 is waiting on; no separate checker-accessibility
+   re-run of T006 is required, since every accessibility/NAV/prop axis
+   already passed on attempt 1 and T006a cannot touch T006's files.
+   T007/T008/T016 remain blocked until T006 is Passed (i.e., until T006a
+   passes). T006a's attempt counter starts fresh at 0.
+
+Outcome:
+Spec gap resolved (no task owned test infrastructure; the mandated wiring
+inevitably invalidated a placeholder-era assertion). Test update to
+theme.smoke.test.tsx explicitly boss-approved per the Non-Negotiable's own
+override mechanism. Corrective task T006a directed with exact scope;
+foreman-planner to write the packet and dispatch immediately. T006 held at
+In Progress pending T006a PASS, then flips to Passed with no further
+re-check. Constitution unchanged — its text already provided for exactly
+this situation.
