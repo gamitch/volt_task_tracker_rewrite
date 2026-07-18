@@ -435,3 +435,4 @@ Follow-up:
 - None. `/login` is now genuinely reachable in the running app — the first real page in the app viewable end-to-end, not just in isolation.
 - Full worker/checker packets archived at `docs/swarm/archive/T016a-worker-packet.md` and `docs/swarm/archive/T016a-checker-packet.md`.
 [2026-07-18T12:55:25Z] Worker finished. Checker required before completion.
+[2026-07-18T12:57:04Z] Worker finished. Checker required before completion.
