@@ -508,3 +508,5 @@ Follow-up (both non-blocking MINOR/NIT, not spun into new tasks):
 [2026-07-18T19:27:28Z] Worker finished. Checker required before completion.
 [2026-07-18T19:35:58Z] Worker finished. Checker required before completion.
 [2026-07-18T19:38:22Z] Worker finished. Checker required before completion.
+[2026-07-18T19:38:51Z] Worker finished. Checker required before completion.
+[2026-07-18T19:42:21Z] Worker finished. Checker required before completion.
