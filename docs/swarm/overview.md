@@ -14,10 +14,10 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-18, ~evening)
+## Status snapshot (2026-07-18, ~night)
 
-71 tasks (T001–T070 + T002a + T006a + T016a) across epics E1–E11.
-**20 Passed · 4 Ready · 2 In Progress · 47 Blocked.**
+73 tasks (T001–T070 + T002a + T006a + T016a) across epics E1–E11.
+**21 Passed · 5 Ready · 1 In Progress · 46 Blocked.**
 
 - **E1 (Scaffold/shell/nav) — fully complete.** T001–T008 all Passed. App has a
   real AppShell/TopNav/SideNav/MobileNav, `/login` is genuinely reachable and
@@ -32,13 +32,16 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
   checker packet built, checker not yet dispatched — Wave 2 of a batch).
 - **E8 — T048** (Resend integration) Ready, undispatched.
 - **E9 — T056** (`/reports` shell) Ready, undispatched.
-- **E10 — T061** (schema verification + mapping doc) In Progress (worker
-  done, checker packet built, checker not yet dispatched — Wave 2).
+- **E10 — T061** (schema verification + mapping doc) **Passed** (1st attempt,
+  clean). MIG-01 scoped to an honest, checker-reconfirmed blocker report (no
+  live old-project access reachable); MIG-02 (`mapping.md`) confirmed
+  byte-identical to PRD 10.2. **T062** (ETL script `scripts/migrate.ts`) is
+  now Ready, undispatched.
 - **E4, E6, E7, E9 (rest), E11** — all Blocked on T019 or later, not yet
   reachable.
 
-Everything else (all 47 Blocked rows) is waiting transitively on T019 or on
-one of the four Ready/In-Progress tasks above. See `task-ledger.md`'s Deps
+Everything else (all 46 Blocked rows) is waiting transitively on T019 or on
+one of the five Ready/In-Progress tasks above. See `task-ledger.md`'s Deps
 column for exact chains if needed — don't re-derive from memory.
 
 ## Standing rules (condensed — full reasoning lives in state-summary.md/dispute-log.md if ever needed)
@@ -69,7 +72,7 @@ column for exact chains if needed — don't re-derive from memory.
 
 ## Next recommended action
 
-Dispatch checkers for **T032** and **T061** (Wave 2, packets already built
-at `docs/swarm/active/T032-checker-packet.md` / `T061-checker-packet.md`),
-then **T018 + T019** — T019 is the highest-value next task since it unblocks
-the first real content pages.
+Dispatch checker for **T032** (Wave 2, packet already built at
+`docs/swarm/active/T032-checker-packet.md`), then **T018 + T019** — T019 is
+the highest-value next task since it unblocks the first real content pages.
+**T062** is also Ready and undispatched.

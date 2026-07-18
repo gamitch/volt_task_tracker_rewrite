@@ -558,3 +558,18 @@ Follow-up:
 - Downstream note (not a defect): T024/T027 must build against the documented `{ error: { code, message } }` response shape and status codes.
 - T018, T019, and T048 unblocked (Blocked→Ready) as a direct result.
 - Full worker/checker packets archived at `docs/swarm/archive/T017-worker-packet.md` and `docs/swarm/archive/T017-checker-packet.md`.
+[2026-07-18T23:55:12Z] Worker finished. Checker required before completion.
+
+## T061 — Schema verification + mapping doc copy (MIG-01/MIG-02)
+Verdict: PASS (1st attempt). Severity: None (no BLOCKER/MAJOR/MINOR/NIT findings).
+Checker: checker-reviewer. Files inspected: `docs/migration/source-schema.md`, `docs/migration/mapping.md`, `docs/swarm/VOLT_Portal_PRD.md` lines 670–719, `.env.example`, `docs/swarm/state-summary.md`, `docs/swarm/COWORK-HANDOFF.md`.
+Findings:
+- Independently re-ran all five no-live-access sub-checks rather than trusting the worker's report: (a) `env | grep -i old`/`-i supabase` — no `OLD_SUPABASE_URL`/`OLD_SERVICE_ROLE_KEY` or equivalent; (b) filesystem `.env*` search (repo + whole-machine) — only `.env.example` exists, containing blank `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` placeholders, no old-project entries; (c) repo-wide grep for `OLD_SUPABASE`/`OLD_SERVICE_ROLE` — hits confined to `docs/swarm/**` task artifacts plus one genuinely forward-looking note in `COWORK-HANDOFF.md:10` for T062, no value supplied; (d) network reachability — real `curl` to `github.com/gamitch/volt-timetracker` returned a genuine 403 with a body byte-for-byte identical to what `source-schema.md` quotes; (e) whole-machine search for `volt-timetracker`/`georgemitchom` mirrors — no matches.
+- `mapping.md` confirmed byte-identical to PRD Section 10.2 (lines 695–710): `diff` empty, exit 0, identical byte count (2297) and identical md5 checksum (`ef3354638d6ee642674d43f6fdbdc00f`); the `### 10.2` heading also byte-identical; `mapping.md`'s added preamble is accurate new framing that does not alter the copied table.
+- `source-schema.md` confirmed to make no fabricated "drift found"/"no drift found" claim (explicit disclaimer at lines 100–101 that no live diff was performed) and to unambiguously label its PRD 10.1 reference as "Reference only ... NOT independently re-verified against a live instance" — not reasonably mistakable by T062's implementer for a completed introspection.
+- D001-method forbidden-file check clean: working tree otherwise clean except one hook-appended `verification-log.md` line (excluded per constitution); `git ls-files docs/migration/` = exactly the two deliverables; zero changes under `src/**`/`supabase/migrations/**`; no WRITE/ALTER/DELETE attempted against the old project anywhere (constitution item 16 — no connection was even reachable).
+- Unblock-path (George supplies `OLD_SUPABASE_URL`/`OLD_SERVICE_ROLE_KEY` via secure channel, not committed) confirmed consistent with how the other George-only external prerequisites (Supabase project creation, Google OAuth client, Vercel CNAME) are already tracked in `state-summary.md`.
+Attempts: 1 (clean first-attempt PASS)
+Follow-up:
+- None. T062 (`scripts/migrate.ts` ETL script) unblocked (Blocked→Ready) as a direct result.
+- Full worker/checker packets archived at `docs/swarm/archive/T061-worker-packet.md` and `docs/swarm/archive/T061-checker-packet.md`.
