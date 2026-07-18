@@ -439,3 +439,21 @@ Follow-up:
 [2026-07-18T13:02:29Z] Worker finished. Checker required before completion.
 [2026-07-18T13:15:32Z] Worker finished. Checker required before completion.
 [2026-07-18T13:16:18Z] Worker finished. Checker required before completion.
+[2026-07-18T13:20:08Z] Worker finished. Checker required before completion.
+
+## T007 — SideNav (role-filtered) + outreach badge scaffold (attempt 1)
+Verdict: FAIL. Severity: BLOCKER (single finding; every other axis independently verified PASS).
+Checker: checker-accessibility. Files inspected: `src/components/nav/SideNav.tsx`, `src/app/AppShell.tsx` (diffed against pre-T007), `src/app/guards.tsx`, `src/app/router.tsx`, `src/components/nav/TopNav.tsx`, `src/App.tsx`, `src/pages/login/LoginPage.tsx`, `docs/swarm/astryx-api.md` at every cited range, `node_modules/@astryxdesign/core/dist/SideNav/SideNavItem.d.ts` and `Link/*.d.ts`.
+Findings:
+- Astryx prop cross-check: all confirmed correct, including independently re-running the worker's cited CLI cross-checks (`npm run astryx -- component SideNavItem`/`SideNavSection`) since astryx-api.md has no prop tables for these sub-components. Confirmed the doc's own internal inconsistency (`heading` at line 5669 vs. `title` at line 5711) is real, not fabricated, and the worker's CLI tie-break resolution (`title`) is correct.
+- NAV-03 role matrix independently reproduced for all 5 conditions (admin, coach, real `/login`-flow staff, volunteer-as-Parent-stand-in via scratch harness, null-user) across both light and dark mode — item sets, not just counts, verified via DOM text/href extraction.
+- NAV-04 (active-item highlight + document.title), NAV-07 (Meetings/Outreach separation), BEH-04 (neutral-only badge) — all independently verified PASS via real DOM/state tracing.
+- Keyboard + focus — PASS in both modes, all 7 items reachable, real visible focus outline confirmed via computed style.
+- D001 forbidden-file check — PASS, only `SideNav.tsx` (new) and `AppShell.tsx` (the exact scoped two-line diff) changed.
+- Build/typecheck/lint/format:check — all independently re-run, all exit 0.
+- **The BLOCKER**: `SideNavItem` renders a plain `<a href>` with no router-aware link component wired. Independently reproduced via real Playwright (both mouse click and keyboard Enter-activation): every navigation triggers a genuine full-document reload (`page.on('load')` fired), which resets the in-memory `AuthProvider` and bounces back to `/login` — confirmed across every item in every role tested. Judged materially worse than T006's already-Passed TopNav precedent (one edge-case wordmark link vs. SideNav's total breakage on its only interaction surface) — checker explicitly declined to import T006's lower-severity precedent here per its own reasoning, without retroactively reopening T006.
+- Critically, the checker found and empirically proved an in-scope fix: `SideNavItem`'s own CLI-confirmed `as: LinkComponentType` prop (present in the same CLI output the worker already ran, one row past what it cited) wired to React Router's already-allowlisted `Link` eliminates the reload entirely — verified via a temporary patch, confirmed working (zero reloads, session preserved, URL/title update correctly), then reverted before finishing.
+- Checker's explicit recommendation: rework by the same worker (attempt 2 of 3), not a dispute or deferred follow-up — the fix requires no forbidden-file edit and no app-wide `LinkProvider` architectural decision.
+Attempts: 1 (legitimate FAIL, in-scope fix identified — not attributable to a dead end)
+Follow-up:
+- Rework packet dispatched to worker-implementer for attempt 2, citing the checker's exact fix (`as={Link}` on all `SideNavItem`s) and evidence.
