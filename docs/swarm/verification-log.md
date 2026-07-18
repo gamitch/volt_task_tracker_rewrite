@@ -539,3 +539,22 @@ Attempts: 1 (clean first-attempt PASS)
 Follow-up:
 - None. T056 (`/reports` shell) unblocked (Blocked→Ready) as a direct result.
 - Full worker/checker packets archived at `docs/swarm/archive/T014-worker-packet.md` and `docs/swarm/archive/T014-checker-packet.md`.
+
+## T017 — `send-invite` Edge Function
+Verdict: PASS (1st attempt). Severity: MINOR (highest finding; two NITs also adjudicated, no BLOCKER/MAJOR).
+Checker: checker-reviewer. Files inspected: `supabase/functions/send-invite/{index.ts,validation.ts,validation.test.ts,deno.json,deno.lock}`, `supabase/migrations/20260717000000_scheduling_attendance.sql`, `20260717000002_rls.sql`, `20260716000000_identity_roster.sql`.
+Findings:
+- Two-client architecture independently confirmed by tracing control flow (not comments): anon-JWT `callerClient` used only for `auth.getUser()` and the caller's own RLS-subject `profiles` lookup; the admin/coach authorization gate executes and can reject BEFORE the service-role `adminClient` is even constructed.
+- Secret hygiene (constitution item 5) clean: `SUPABASE_SERVICE_ROLE_KEY` only ever sourced via `Deno.env.get`, never logged/echoed/placed in a response body, no hardcoded key literal anywhere (grep for JWT-shaped strings empty).
+- `invites` insert payload and RLS posture cross-checked against the real migrations: schema match exact, `invites` has RLS enabled with only a `staff_all` policy and no non-staff write path, confirming the function's own authorization gate is genuinely load-bearing (the service-role client bypasses RLS entirely).
+- AUTH-06 14-day `expires_at` hand-derived and confirmed correct.
+- `deno`/Docker were both unavailable in the checker's own sandbox too (deno.land and Docker Hub CDN both return 403 under the egress policy) — checker went further than accepting this on the worker's word: manually started a Docker daemon to independently confirm the block is genuine and environment-level, then ported all 21 `Deno.test` assertions to a faithful Node equivalent and independently confirmed all 21 pass.
+- Judgment call verdicts: custom error-response shape (NIT — stable, DES-16-compliant copy, acceptable as-is); wildcard CORS (NIT — safe given bearer-token auth with no `Access-Control-Allow-Credentials` flag); no dedup/idempotency on `inviteUserByEmail` retries (MINOR — real but low-severity, a client retry could create a duplicate pending `invites` row/duplicate email, not a security break or data corruption).
+- D001-method forbidden-file check clean: exactly the 5 expected files, no `src/**`/migration changes.
+Attempts: 1 (clean first-attempt PASS)
+Follow-up:
+- MINOR (non-blocking, logged): add idempotency to `send-invite` for `inviteUserByEmail` retries (e.g. a partial unique index on `invites(lower(email)) where status='pending'`, or a pre-insert dedupe check).
+- NIT (optional): consider restricting CORS to the deployed frontend origin as defense-in-depth.
+- Downstream note (not a defect): T024/T027 must build against the documented `{ error: { code, message } }` response shape and status codes.
+- T018, T019, and T048 unblocked (Blocked→Ready) as a direct result.
+- Full worker/checker packets archived at `docs/swarm/archive/T017-worker-packet.md` and `docs/swarm/archive/T017-checker-packet.md`.
