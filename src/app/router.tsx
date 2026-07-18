@@ -7,7 +7,9 @@
  * not a `<BrowserRouter>`. Wiring `AppRoutes` (and `AuthProvider` from
  * `./guards`) into `main.tsx` / `App.tsx` is T006's job (AppShell + TopNav).
  * Every page component below is a placeholder -- real page implementations
- * land in their own future tasks.
+ * land in their own future tasks -- except `/login`, whose real
+ * `LoginPage` component (`../pages/login`, built by T016) is imported and
+ * wired in below (T016a).
  *
  * Route protection matrix (NAV-06):
  *   - `/login`, `/accept-invite`: public (these ARE the auth entry points).
@@ -26,49 +28,13 @@
  *     before this is treated as final.
  */
 import type { ReactNode } from 'react';
-import { Route, Routes, useNavigate, useParams } from 'react-router-dom';
-import { RequireAuth, RequireRole, consumeIntendedUrl, useAuth, type Role } from './guards';
+import { Route, Routes, useParams } from 'react-router-dom';
+import { RequireAuth, RequireRole } from './guards';
+import { LoginPage } from '../pages/login';
 
 // ---------------------------------------------------------------------------
 // Placeholder page components (one per PRD Section 7 route)
 // ---------------------------------------------------------------------------
-
-function LoginPage(): ReactNode {
-  const { login, loginWithGoogle } = useAuth();
-  const navigate = useNavigate();
-
-  const signInAs = (role: Role) => {
-    login({ id: `placeholder-${role}`, email: `placeholder.${role}@example.com`, role });
-    navigate(consumeIntendedUrl('/'), { replace: true });
-  };
-
-  const continueWithGoogle = () => {
-    // NAV-08 Google OAuth round-trip placeholder -- see the TODO on
-    // `AuthContextValue.loginWithGoogle` in ./guards.tsx.
-    void loginWithGoogle().then(() => {
-      navigate(consumeIntendedUrl('/'), { replace: true });
-    });
-  };
-
-  return (
-    <div>
-      <h1>Login (placeholder)</h1>
-      <p>
-        NAV-08: after a successful sign-in you are returned to the page you originally requested, if
-        any.
-      </p>
-      <button type="button" onClick={() => signInAs('staff')}>
-        Sign in as staff (placeholder)
-      </button>
-      <button type="button" onClick={() => signInAs('admin')}>
-        Sign in as admin (placeholder)
-      </button>
-      <button type="button" onClick={continueWithGoogle}>
-        Continue with Google (placeholder round trip)
-      </button>
-    </div>
-  );
-}
 
 function AcceptInvitePage(): ReactNode {
   return <div>Accept Invite (placeholder)</div>;
