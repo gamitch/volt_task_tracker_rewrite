@@ -2594,6 +2594,23 @@ function Layout({ children, sidebar }) {
 | `variant` | `'wash' | 'surface' | 'section' | 'elevated'` | `'elevated'` | Navigation background style controlling how nav areas contrast with content. 'wash' uses wash background, 'surface' uses surface background, 'section' adds dividers between nav and content, 'elevated' uses wash nav with elevated surface content and border radius. |
 | `xstyle` | `StyleXStyles` | — | StyleX styles for layout customization (margins, positioning, sizing). Must be a stylex.create() value, not an inline style object like style={{}}. |
 
+> **[VOLT project annotation — D004 (docs/swarm/dispute-log.md), boss-arbiter, 2026-07-18. Verified against the installed `@astryxdesign/core@0.1.6` shipped source (`node_modules/@astryxdesign/core/src/AppShell/AppShell.tsx`), not vendor prose. The vendor text above is left unmodified.]**
+>
+> The `mobileNav` row above is incomplete, and the ReactNode example above (`mobileNav={<MobileNav title="Menu">...</MobileNav>}`) is **non-functional when combined with `MobileNavToggle`** in v0.1.6. The installed source computes `mobileNavEnabled = !mobileNavDisabled && hasNavContent && mobileNavReactNode == null` — the ReactNode shorthand is a "you own everything" escape hatch that disables AppShell's context state entirely: `MobileNavToggle` renders `null` and `openMobileNav()`/`toggleMobileNav()` become no-ops. With the shorthand you must manage `isOpen`/`onOpenChange` and your own trigger manually (see the source's own example and the CLI template `MobileNavToggleBasic`).
+>
+> To keep AppShell's context-managed open state with custom drawer content, use the **`MobileNavConfig` object form**. Verified v0.1.6 fields (source: `interface MobileNavConfig`):
+>
+> | Field | Type | Default | Description (verified from source) |
+> |------|------|---------|-----------------------------------|
+> | `hasToggle` | `boolean` | `true` | Auto-render the hamburger toggle. When `false`, place `<MobileNavToggle />` yourself. Caveat: below the breakpoint, TopNav renders in "mobile-bar" mode, which renders only `heading` + `endContent` + the auto toggle — `startContent`/`centerContent` are NOT rendered there, so a `startContent`-placed toggle never appears. |
+> | `isOpen` | `boolean` | — | Controlled open state; when provided, AppShell stops managing state internally. |
+> | `onOpenChange` | `(isOpen: boolean) => void` | — | Open-state change callback. |
+> | `content` | `ReactNode` | — | Custom drawer content (e.g. a `<MobileNav>`); replaces the auto-generated drawer. Context-managed when `isOpen` is not supplied on the inner `MobileNav`. |
+> | `breakpoint` | `'sm' \| 'md' \| 'lg' \| 'none'` | `'md'` | Breakpoint below which mobile nav activates (`sm`=640px, `md`=768px, `lg`=1024px). |
+> | `defaultIsMobile` | `boolean` | `false` | SSR hint seeding the initial breakpoint state. |
+>
+> **Sanctioned usage for this project** (per D004): `mobileNav={{ content: <MobileNav header="...">...</MobileNav> }}` — the drawer opens via the toggle Astryx TopNav auto-injects in mobile-bar mode below the breakpoint.
+
 ## Theming
 
 | Component class | Preferred data attributes | Props | States |
@@ -4696,6 +4713,8 @@ undefined
 # MobileNav
 
 A slide-out drawer for mobile navigation. MobileNav is the mobile counterpart to SideNav and accepts the same children. Use it on narrow viewports where a persistent sidebar is not practical. Inside AppShell, use MobileNavToggle as the trigger; it reads state from context automatically.
+
+> **[VOLT project annotation — D004]** The first example below (`<AppShell mobileNav={<MobileNav ...>}>`) does NOT work with `MobileNavToggle` in the installed v0.1.6 — the ReactNode shorthand disables AppShell's context state, making the toggle render `null`. Use `mobileNav={{ content: <MobileNav ...> }}` instead; see the D004 annotation in this file's AppShell section (after the AppShell Props table) for the verified `MobileNavConfig` fields, and `docs/swarm/dispute-log.md` D004 for the full ruling.
 
 ## Example
 

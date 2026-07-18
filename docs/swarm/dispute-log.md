@@ -328,3 +328,181 @@ foreman-planner to write the packet and dispatch immediately. T006 held at
 In Progress pending T006a PASS, then flips to Passed with no further
 re-check. Constitution unchanged — its text already provided for exactly
 this situation.
+
+## D004 - T008 Packet-mandated `mobileNav={<MobileNav />}` wiring is non-functional in installed @astryxdesign/core@0.1.6; astryx-api.md's own example/prose is wrong for this version
+
+Nature:
+Worker-filed mid-task dispute (attempt 1, no checker verdict yet). The
+worker built every T008 deliverable, then discovered the packet-mandated
+`AppShell.tsx` wiring — `mobileNav={<MobileNav />}`, the exact ReactNode
+shorthand astryx-api.md's own examples show (lines 2549 and 4703–4707) —
+produces a drawer that can never open in the installed library version.
+Per D001 precedent the worker flagged instead of silently deviating from
+the packet's "exactly these two edits" instruction. This is a spec-defect
+dispute (constitution item 1: conflicts are disputes, never improvised
+around), not a worker/checker disagreement.
+
+Worker position:
+In `@astryxdesign/core@0.1.6`, passing `mobileNav` as a raw ReactNode sets
+`mobileNavReactNode` non-null, which forces
+`mobileNavEnabled = !mobileNavDisabled && hasNavContent && mobileNavReactNode == null`
+to `false`, which makes `MobileNavToggle` render nothing and
+`openMobileNav()`/`toggleMobileNav()` permanent no-ops — contradicting
+astryx-api.md's prose that this usage is context-managed automatically.
+Verified three ways: installed library source, CLI template output, and
+live Playwright (zero toggle button in the DOM at any viewport). Proposed
+fix: the `MobileNavConfig` object form,
+`mobileNav={{ content: <MobileNav /> }}`. Separately disclosed (not
+disputed): the drawer does not auto-close on nav-item selection, with no
+exposed Astryx prop to change that.
+
+Checker position:
+None — escalated before check.
+
+Boss decision (boss-arbiter, 2026-07-18):
+All evidence re-verified independently against the installed package's own
+shipped source (`node_modules/@astryxdesign/core/src/**`), the CLI, and
+the repo's actual files — not taken from the worker's report:
+
+1. Worker's core claim CONFIRMED. `AppShell.tsx` (installed source) lines
+   539–540: `mobileNavEnabled = !mobileNavDisabled && hasNavContent &&
+   mobileNavReactNode == null`. Lines 606–607 gate `toggleMobileNav`/
+   `openMobileNav` on `mobileNavEnabled`; `MobileNavToggle.tsx` line 73
+   returns `null` when `!isMobileNavEnabled`. The source's own doc comment
+   (line 224) describes the ReactNode form as "Full escape hatch: provide
+   your own `<MobileNav>` (you own everything)" — i.e. the shorthand
+   INTENTIONALLY disables the shell's context state; the caller is expected
+   to manage `isOpen`/`onOpenChange` and a trigger entirely themselves
+   (the source's own example at lines 447–456 shows exactly that). The CLI
+   template `MobileNavToggleBasic` confirms: it hand-builds a full
+   `AppShellMobileContext.Provider` with manual `useState` rather than ever
+   composing the shorthand with `MobileNavToggle`. astryx-api.md's prose
+   ("Inside AppShell, use MobileNavToggle as the trigger; it reads state
+   from context automatically", line 4698) and its examples at 2549/4703
+   are wrong for the installed 0.1.6 when combined: the doc's ReactNode
+   example and its MobileNavToggle prose describe mutually exclusive modes.
+
+2. Worker's proposed fix CONFIRMED CORRECT as the mechanism, with one
+   amendment (finding 3). `MobileNavConfig` (installed source, lines
+   131–174) has fields `hasToggle?` (default true), `isOpen?`,
+   `onOpenChange?`, `content?: ReactNode` ("Custom drawer content.
+   Replaces the auto-generated drawer."), `breakpoint?` (default 'md' =
+   768px — exactly NAV-05's threshold), `defaultIsMobile?`. With
+   `mobileNav={{ content: <MobileNav /> }}`: `mobileNavEnabled` is true;
+   the custom content renders below the breakpoint (line 816) and reads
+   context state (`MobileNav.tsx` line 295: `isOpen = isOpenProp ??
+   appShellMobile.isMobileNavOpen`) — the worker's component already
+   correctly omits `isOpen`/`onOpenChange`, so no component change needed;
+   the auto-generated drawer is suppressed (line 820 `!mobileNavConfigContent`),
+   so exactly one drawer exists. The fix works.
+
+3. NEW FINDING (mine, beyond the worker's report): the packet's OTHER
+   mandated edit — `TopNav.tsx`'s `startContent={<MobileNavToggle />}` —
+   becomes permanently dead code under the config form and must be
+   REVERTED, not kept. With any non-ReactNode `mobileNav`, AppShell puts
+   TopNav into "mobile-bar" render mode below the breakpoint (line 647),
+   and Astryx TopNav's mobile-bar branch (installed `TopNav.tsx` lines
+   201–221) renders ONLY `heading` + `endContent` + its own auto-injected
+   `<MobileNavToggle />` (line 217, gated on config `hasToggle !== false`)
+   — `startContent` is not rendered at all below the breakpoint, and at or
+   above the breakpoint `MobileNavToggle` returns `null` (`!isMobile`). So
+   the startContent toggle never renders in any state. The trigger users
+   actually get is TopNav's own auto-injected toggle, rendered inside the
+   real TopNav bar — which still satisfies NAV-05's "triggered from
+   TopNav" literally and needs zero project code. The alternative
+   (`hasToggle: false` + a manually-placed toggle) was checked and does
+   NOT work for our layout: mobile-bar mode still drops `startContent`,
+   and `hasToggle: false` also suppresses the auto toggle — no trigger at
+   all. (astryx-api.md's `{ hasToggle: false }` example places the toggle
+   in AppShell children, not TopNav — not our composition.)
+
+4. Doc-gap ruling (differs from T002's "log only" treatment, deliberately):
+   astryx-api.md documents NONE of `MobileNavConfig`'s fields — the
+   `mobileNav` prop row (line 2591) says only "config object (tune auto
+   behavior)" — so under constitution item 2 a checker would be OBLIGED to
+   flag the authorized fix's `content` key as hallucinated (MAJOR). T002's
+   TypographyRole gap needed no undocumented API to work around; this one
+   does, so item 2's own machinery forces a doc amendment. astryx-api.md
+   is an internal project doc (a vendored snapshot, not the third-party
+   PRD): boss-arbiter has amended it with a clearly-marked, source-cited
+   D004 annotation in the AppShell section (after the Props table) plus a
+   one-line cross-reference in the MobileNav section — documenting the
+   verified 0.1.6 `MobileNavConfig` fields and the ReactNode-shorthand
+   trap. The vendor's original text is left in place and marked, not
+   silently rewritten, so future doc-refresh tasks can diff cleanly.
+   Constitution item 2 itself is UNCHANGED — astryx-api.md remains the
+   sole prop source; it has simply been corrected.
+
+Rulings:
+
+A. Fix AUTHORIZED, amended from the worker's proposal per finding 3.
+   Scoped continuation of T008 — same worker, same attempt (counter stays
+   at 1; the worker is not at fault and no FAIL is recorded), delivered as
+   an amended worker packet, not a new task. Exact scope:
+   1. `src/app/AppShell.tsx`: change `mobileNav={<MobileNav />}` to
+      `mobileNav={{ content: <MobileNav /> }}` (one line), plus
+      module-doc accuracy edits only (the header comment's description of
+      the trigger mechanism must describe the auto-injected mobile-bar
+      toggle and cite D004).
+   2. `src/components/nav/TopNav.tsx`: REVERT both T008 edits — remove
+      `MobileNavToggle` from the import list and remove
+      `startContent={<MobileNavToggle />}` — returning the file to its
+      T006-passed functional state. The T008 doc-comment block may be
+      replaced by a short note recording that NAV-05's trigger is
+      auto-injected by Astryx TopNav's mobile-bar mode below 768px (cite
+      D004), or removed entirely; no other changes.
+   3. `src/components/nav/MobileNav.tsx`: module-doc edits only — rewrite
+      the now-stale "KNOWN BLOCKER" block to describe the resolved
+      config-object wiring, citing D004. Component logic unchanged
+      (verified correct as-is: no `isOpen`/`onOpenChange`, context
+      fallback works, `as={Link}` present, title effect load-bearing).
+   4. Nothing else. `StudentHomeSlot.tsx`, `router.tsx`, `guards.tsx`,
+      `SideNav.tsx` untouched.
+
+B. Amended acceptance criteria replacing packet criteria 8–11 (all other
+   packet criteria stand):
+   - Below 768px, live (real dev server + Playwright + real sign-in):
+     exactly ONE hamburger toggle in the DOM, inside the TopNav bar
+     (Astryx auto-injected, default label 'Open navigation'); it opens the
+     worker's MobileNav drawer; Escape, backdrop, and close button all
+     close it; keyboard (Tab/Enter/Space) and touch paths verified —
+     DES-17 remains BLOCKER-on-failure.
+   - Exactly one drawer in the DOM (config content must suppress the
+     auto-generated drawer — verify no duplicated nav item lists).
+   - At >=768px, TopNav renders identically to its T006-passed state
+     (revert verified by diff against git history).
+   - `document.title` NAV-04 parity re-verified below 768px through the
+     now-openable real drawer.
+   - Checker note: `mobileNav={{ content: ... }}` is D004-authorized and
+     documented in the D004-marked annotation now present in
+     astryx-api.md's AppShell section — it is NOT a hallucinated prop.
+     TopNav rendering in mobile-bar mode below 768px (heading + endContent
+     + toggle; startContent/centerContent hidden) is the library's
+     intended responsive behavior, not a regression — NAV-02's content
+     (wordmark, season selector, user menu) all live in heading/endContent
+     and remain present.
+
+C. Drawer does NOT auto-close on nav-item selection: classified MINOR
+   (follow-up, non-blocking), worker's disclosure accepted as correct
+   handling. The only sanctioned lever (`useAppShellMobile`) is absent
+   from astryx-api.md, so constitution item 2 forbids using it today; no
+   workaround is authorized. Logged as a follow-up candidate for whenever
+   astryx-api.md is legitimately refreshed (or upstream adds auto-close).
+   The checker records the observed behavior in evidence; it does not fail
+   the task on it.
+
+D. Ledger: T008 stays In Progress, attempt 1. Orchestrating session /
+   foreman dispatches the amended packet verbatim from Rulings A–C; no
+   further judgment calls are delegated. Checker remains
+   checker-accessibility, checking the full T008 including this amendment.
+
+Outcome:
+Spec defect confirmed against the installed artifact; packet's mandated
+wiring vacated and replaced (Ruling A), including reverting the packet's
+own now-dead TopNav.tsx edit. astryx-api.md corrected via marked D004
+annotation (first correction of the vendored API doc — T002's "log only"
+precedent distinguished, not overturned). Worker commended: correct
+escalation under D001 precedent, and its three-way evidence held up fully
+under independent re-verification. Constitution unchanged. Human decision
+not required — the fix is source-verified against the installed library
+and NAV-05's requirement is still met literally.
