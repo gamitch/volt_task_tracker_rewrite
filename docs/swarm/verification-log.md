@@ -389,3 +389,4 @@ Follow-up:
 - Worker packet archived at `docs/swarm/archive/T006a-worker-packet.md` (no separate checker packet file — checker-tests was dispatched directly with inline instructions for this small corrective task).
 [2026-07-18T01:20:06Z] Worker finished. Checker required before completion.
 [2026-07-18T01:25:50Z] Worker finished. Checker required before completion.
+[2026-07-18T01:27:15Z] Worker finished. Checker required before completion.
