@@ -393,3 +393,27 @@ Follow-up:
 [2026-07-18T01:32:11Z] Worker finished. Checker required before completion.
 [2026-07-18T01:45:41Z] Worker finished. Checker required before completion.
 [2026-07-18T01:46:41Z] Worker finished. Checker required before completion.
+[2026-07-18T01:49:51Z] Worker finished. Checker required before completion.
+
+## T016 — `/login` screen
+Verdict: PASS (1st attempt). Severity: MINOR (highest finding; several NITs also logged).
+Checker: checker-accessibility. Files inspected: `src/pages/login/LoginPage.tsx`, `src/pages/login/index.ts`, `src/app/guards.tsx`, `src/app/router.tsx`, `src/app/AppShell.tsx`, `src/theme/theme.css`, `src/theme/volt.ts`, `docs/swarm/astryx-api.md` at every cited line range.
+Findings:
+- Astryx prop cross-check: every cited prop (TextInput, Button, Link, Card, Center, VStack, Heading, Text, Banner) independently re-verified against astryx-api.md's actual line numbers — zero hallucinated props.
+- AUTH-02: zero self-serve signup affordances anywhere, confirmed via full DOM text scan across every reachable UI state in both modes (empty, error, loading, reset-panel open/error/success, dark mode).
+- DES-12 four-state handling traced to real conditional renders (`isSubmitting`, `formError`/`fieldErrors`, `resetStatus`, `isResetPanelOpen`), not just described — a fifth sub-state (reset-panel success banner) confirmed real but not explicitly named in the module doc's summary (documentation-completeness NIT).
+- Independent live-render evidence via the checker's own temporary Playwright harness (real Chromium, not jsdom), self-declared and confirmed deleted (`ls`/`find` both empty afterward). Checker caught and corrected its own initial dark-mode testing mistake (a stale `data-theme` attribute is dead CSS; the real mechanism is `prefers-color-scheme` — re-tested correctly via `page.emulateMedia`) rather than filing a false BLOCKER.
+- WCAG AA contrast independently computed for every token pair the component actually uses, both modes — all pass (light primary text 16.74:1, dark 13.33:1, light accent link 6.89:1, dark 5.46:1, error/secondary/button-text pairs all pass).
+- Keyboard walkthrough and visible focus confirmed via real KeyboardEvent dispatch and computed-style checks in both modes: Email(auto)→Password→Forgot password→Sign in→Continue with Google, reset panel Email(auto)→Send reset link→Back to sign in. No focus traps, no keyboard path failures.
+- Submission wiring to `guards.tsx`'s real `login()`/`loginWithGoogle()`/`consumeIntendedUrl()` contract confirmed matching, cross-checked against `router.tsx`'s existing inline placeholder pattern.
+- Judgment call (a) — `Link`+`onClick` vs `Button variant="ghost"` for "Forgot password": checker discovered Astryx's `Link` renders a genuine semantic `<button>` when given no `href`, so the doc's generic non-navigating-action warning doesn't apply in substance here. NIT, zero accessibility impact.
+- Judgment call (b) — `SIMULATED_AUTH_LATENCY_MS=350` (disclosed, timing-only, non-PRD): MINOR — acceptable in scope, but checker independently discovered it's inconsistently applied (missing from the Google sign-in path, undermining its own stated observability purpose there). Routed as a follow-up, not rework.
+- D001-method forbidden-file check clean: only the two new files exist under `src/pages/login/**`; `router.tsx`/`guards.tsx`/`AppShell.tsx`/nav components all confirmed untouched via direct re-read.
+- Independently re-ran build/typecheck/lint/format:check twice (before and after harness cleanup) — all exit 0, zero new lint warnings.
+Attempts: 0 (clean first-attempt PASS)
+Follow-up:
+- MINOR (non-blocking, logged): apply `SIMULATED_AUTH_LATENCY_MS` consistently to `handleGoogleSignIn` too, or remove it everywhere once real Supabase wiring lands.
+- NIT: explicitly name the reset-panel success banner as a fifth/sub-state in the module doc's DES-12 mapping.
+- NIT: consider `Button variant="ghost"` instead of `Link isStandalone onClick` for API-intent clarity (no functional change).
+- Two dispute-candidate gaps flagged by both worker and checker, NOT blocking this task's PASS, routed to the orchestrating session for scheduling: (1) `router.tsx` wiring gap — the page isn't reachable live at `/login` yet since the inline placeholder hasn't been swapped for the real component; checker leans toward a small standalone task now rather than waiting for T018. (2) No real Supabase auth client exists anywhere in `src/` yet — `guards.tsx`'s `login()`/`loginWithGoogle()` remain T005's always-succeeds in-memory placeholder; checker flags this as more significant, core-requirement debt accumulating across tasks (T005, now T016), recommending it get scheduled deliberately rather than treated as an ordinary backlog item.
+- Full worker/checker packets archived at `docs/swarm/archive/T016-worker-packet.md` and `docs/swarm/archive/T016-checker-packet.md`.
