@@ -484,3 +484,23 @@ Follow-up:
 [2026-07-18T18:55:36Z] Worker finished. Checker required before completion.
 [2026-07-18T19:04:54Z] Worker finished. Checker required before completion.
 [2026-07-18T19:05:37Z] Worker finished. Checker required before completion.
+[2026-07-18T19:09:02Z] Worker finished. Checker required before completion.
+
+## T008 — MobileNav drawer + Student Home live-card slot (D004-amended, attempt 1)
+Verdict: PASS. Severity: none — no BLOCKER/MAJOR findings (two non-blocking MINOR/NIT logged).
+Checker: checker-accessibility. Files inspected: `src/app/AppShell.tsx`, `src/components/nav/TopNav.tsx`, `src/components/nav/MobileNav.tsx`, `src/pages/home/StudentHomeSlot.tsx`, installed `@astryxdesign/core` source (`AppShell.tsx`, `MobileNavToggle.tsx`, `MobileNav.tsx`, `TopNav.tsx`), `docs/swarm/dispute-log.md` D004, `docs/swarm/astryx-api.md`'s D004 annotations.
+Findings:
+- Independently re-derived the entire `mobileNavEnabled`/`MobileNavConfig` gating mechanism directly from the installed library source (not trusting D004's or the worker's line citations) — confirmed exactly: `{ content: <MobileNav /> }` (a plain object) resolves to `mobileNavConfig` non-null / `mobileNavReactNode` null, keeping `mobileNavEnabled` true, whereas the original `<MobileNav />` shorthand forced it false. D004's mechanism claims hold up fully under independent re-derivation, with one trivial one-line citation offset (substance unaffected).
+- Byte-diffed `TopNav.tsx` against the actual T006-Passed git commit: zero diff in imports/JSX/logic, only a D004-authorized doc-comment addition — `MobileNavToggle`/`startContent` confirmed absent from all real code.
+- Byte-diffed `MobileNav.tsx` against attempt 1: zero diff outside the doc comment — all component logic (`as={Link}` on every item, `NAV_ITEMS` role gating, active-item logic, `document.title` effect, Outreach badge) confirmed unchanged.
+- Live Playwright verification (real dev server + Chromium, real `/login` sign-in, both light and dark mode): exactly 1 toggle below 768px / 0 at ≥768px; exactly 1 drawer/dialog (Astryx's auto-generated drawer confirmed genuinely suppressed, no duplicate nav-item list); three independent close paths (Escape, backdrop-click, close button) each confirmed from a fresh open; visible keyboard focus confirmed via screenshot ground truth in both modes; `document.title` parity confirmed through the now-functional trigger across two in-drawer navigations; zero full-page reloads confirmed via `performance.getEntriesByType('navigation').length` unchanged across clicks, with session survival confirmed (no bounce to `/login`).
+- ≥768px regression check: TopNav/SideNav render identically to T006-Passed behavior, no visible toggle, no layout shift.
+- `StudentHomeSlot.tsx`: scratch-test-verified (3/3, self-deleted) renders `null` when `hasLiveSession` is absent/false, renders the labeled `Card` stub when true; confirmed still isolated via a `router.tsx` grep sweep (zero references).
+- D001-method forbidden-file check: exactly the 4 expected files touched across all of T008 (`AppShell.tsx`, `TopNav.tsx`, `MobileNav.tsx`, `StudentHomeSlot.tsx`) — `router.tsx`/`guards.tsx`/`SideNav.tsx` confirmed zero diff across the entire task.
+- Build/typecheck/lint/format:check/test independently re-run — all exit 0, same pre-existing warning set, no new categories.
+- D004 Ruling C's drawer-doesn't-auto-close-on-navigate MINOR re-confirmed still true and correctly left unfixed (no sanctioned Astryx lever exists today) — not re-litigated.
+Attempts: 1 (the mid-attempt escalation to boss-arbiter was a correct worker judgment call per D001/D003 precedent, not a rework loop or FAIL)
+Follow-up (both non-blocking MINOR/NIT, not spun into new tasks):
+- Stale Astryx line-citation in `StudentHomeSlot.tsx`'s own module doc comment (cites a Best Practices bullet instead of the actual Props table row) — fix whenever that file is next legitimately opened.
+- A vendor-library (not project-code) native-`<dialog>` Tab-cycle quirk produces one focus-invisible stop before wrapping correctly — informational only, doesn't break the keyboard trap.
+- Full worker/checker packets archived at `docs/swarm/archive/T008-worker-packet.md` and `docs/swarm/archive/T008-checker-packet.md`.
