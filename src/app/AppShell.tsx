@@ -2,13 +2,11 @@
  * T006: NAV-01 application chrome wrapper.
  *
  * Composes the Astryx `AppShell` (top-level layout frame) with `TopNav` as
- * its `topNav` slot and, as of T007, `SideNav` as its `sideNav` slot.
- * `MobileNav` (T008) does not exist yet, so `mobileNav` is intentionally
- * `false` -- a documented, sanctioned `AppShell` prop value
- * (astryx-api.md's own `AppShell` example shows
- * `<AppShell mobileNav={false} />` as the way to disable it), not a
- * workaround. See `docs/swarm/astryx-api.md` "AppShell" section for the
- * `topNav`/`sideNav`/`mobileNav` prop definitions this relies on.
+ * its `topNav` slot, `SideNav` (T007) as its `sideNav` slot, and, as of
+ * T008, `MobileNav` as its `mobileNav` slot (NAV-05: below 768px, `SideNav`
+ * is replaced by the `MobileNav` drawer, triggered from `TopNav` via
+ * `MobileNavToggle`). See `docs/swarm/astryx-api.md` "AppShell" section for
+ * the `topNav`/`sideNav`/`mobileNav` prop definitions this relies on.
  *
  * `/login` and `/accept-invite` are pre-auth public entry points. PRD 7.1
  * assigns `/login` the "Basic Login" template ("VOLT wordmark above the
@@ -35,6 +33,7 @@ import { AppShell as AstryxAppShell } from '@astryxdesign/core';
 import { routePaths } from './router';
 import { TopNav } from '../components/nav/TopNav';
 import { SideNav } from '../components/nav/SideNav';
+import { MobileNav } from '../components/nav/MobileNav';
 
 export interface AppShellProps {
   children: ReactNode;
@@ -50,7 +49,7 @@ export function AppShell({ children }: AppShellProps): ReactNode {
   }
 
   return (
-    <AstryxAppShell topNav={<TopNav />} sideNav={<SideNav />} mobileNav={false}>
+    <AstryxAppShell topNav={<TopNav />} sideNav={<SideNav />} mobileNav={<MobileNav />}>
       {children}
     </AstryxAppShell>
   );

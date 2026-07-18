@@ -18,12 +18,23 @@
  * (`user?.role`, `user ? ... : null`), and the season selector / user menu
  * sections are skipped entirely when there is no authenticated user, rather
  * than assuming `user` is always non-null.
+ *
+ * T008 addition: `startContent={<MobileNavToggle />}` satisfies NAV-05's
+ * "triggered from TopNav" requirement for the `MobileNav` drawer (T008).
+ * `TopNav` has no dedicated "mobile menu button" prop -- `MobileNavToggle`
+ * is a self-contained hamburger button that "reads state from context
+ * automatically" (astryx-api.md line 4698) and "renders nothing above the
+ * mobile breakpoint" (line 4745), so this is a zero-visible-change addition
+ * at >=768px. It is rendered in `startContent` (not a new prop, not a
+ * wrapping fragment) because that is the only existing `TopNav` slot this
+ * doc's own composition pattern supports for this purpose.
  */
 import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Avatar,
   DropdownMenu,
+  MobileNavToggle,
   Selector,
   TopNav as AstryxTopNav,
   TopNavHeading,
@@ -62,6 +73,7 @@ export function TopNav(): ReactNode {
     <AstryxTopNav
       label="Main navigation"
       heading={<TopNavHeading heading="VOLT" headingHref={routePaths.dashboard} />}
+      startContent={<MobileNavToggle />}
       endContent={
         user ? (
           <>
