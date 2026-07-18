@@ -371,3 +371,19 @@ Follow-up:
 [2026-07-18T01:10:30Z] Worker finished. Checker required before completion.
 [2026-07-18T01:11:14Z] Worker finished. Checker required before completion.
 [2026-07-18T01:12:10Z] Worker finished. Checker required before completion.
+[2026-07-18T01:12:46Z] Worker finished. Checker required before completion.
+
+## T006a — Fix CI test regression from T006 wiring (D003 corrective task)
+Verdict: PASS (1st attempt). Severity: none — no findings.
+Checker: checker-tests. Files inspected: `src/theme/theme.smoke.test.tsx`, `src/test-setup.ts`, `vite.config.ts`, D003 ruling text, T006a worker packet.
+Findings:
+- `theme.smoke.test.tsx`: confirmed renders `<App/>` directly (no `<Theme>` double-wrap, App owns Theme per NAV-01), unused Theme/voltTheme imports removed, `.not.toThrow()` kept as core assertion, stale `'VOLT Team Portal'` h1 check replaced with `expect(container.textContent?.trim()).toBeTruthy()` — independently confirmed no `'Login (placeholder)'` copy asserted either (avoids recreating the same staleness trap once T016 changes that copy).
+- `test-setup.ts`: guard logic independently tested (not just read) — confirmed the polyfill only installs when `window.matchMedia` is undefined and does not clobber a real one when present.
+- `vite.config.ts`: `test.setupFiles` wiring confirmed; T003's `build.rollupOptions` block confirmed byte-unchanged via git-history checksum comparison across the pre/post commits (both `e22252de279f3624ad4e17cae517fe46`).
+- Independently re-ran `npm run test`/`typecheck`/`lint`/`build`/`format:check` — all exit 0. Independently re-executed the exact bundle-size-gate shell logic from `.github/workflows/ci.yml` against a fresh build: 128,239 bytes gzip vs. 307,200 byte budget, PASS.
+- D001-method forbidden-file check clean: only the three D003-authorized files changed; T006's own AppShell.tsx/TopNav.tsx/App.tsx untouched.
+- Checker's explicit conclusion, matching D003 Ruling F: this PASS re-verifies T006's own CI gate too — no separate checker-accessibility re-run needed. T006 and T006a Passed together.
+Attempts: 1 (clean first-attempt PASS; T006's own attempt-1 FAIL was reassigned to this task per D003, not a T006a rework)
+Follow-up:
+- None. T007 and T016 unblocked (Blocked→Ready) as a direct result — see task-ledger.md full-ledger sweep note.
+- Worker packet archived at `docs/swarm/archive/T006a-worker-packet.md` (no separate checker packet file — checker-tests was dispatched directly with inline instructions for this small corrective task).
