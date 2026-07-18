@@ -504,3 +504,4 @@ Follow-up (both non-blocking MINOR/NIT, not spun into new tasks):
 - Stale Astryx line-citation in `StudentHomeSlot.tsx`'s own module doc comment (cites a Best Practices bullet instead of the actual Props table row) — fix whenever that file is next legitimately opened.
 - A vendor-library (not project-code) native-`<dialog>` Tab-cycle quirk produces one focus-invisible stop before wrapping correctly — informational only, doesn't break the keyboard trap.
 - Full worker/checker packets archived at `docs/swarm/archive/T008-worker-packet.md` and `docs/swarm/archive/T008-checker-packet.md`.
+[2026-07-18T19:24:44Z] Worker finished. Checker required before completion.
