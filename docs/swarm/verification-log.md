@@ -387,3 +387,4 @@ Attempts: 1 (clean first-attempt PASS; T006's own attempt-1 FAIL was reassigned 
 Follow-up:
 - None. T007 and T016 unblocked (Blocked→Ready) as a direct result — see task-ledger.md full-ledger sweep note.
 - Worker packet archived at `docs/swarm/archive/T006a-worker-packet.md` (no separate checker packet file — checker-tests was dispatched directly with inline instructions for this small corrective task).
+[2026-07-18T01:20:06Z] Worker finished. Checker required before completion.
