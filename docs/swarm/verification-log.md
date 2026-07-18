@@ -420,3 +420,17 @@ Follow-up:
 [2026-07-18T02:07:39Z] Worker finished. Checker required before completion.
 [2026-07-18T02:14:22Z] Worker finished. Checker required before completion.
 [2026-07-18T12:42:31Z] Worker finished. Checker required before completion.
+[2026-07-18T12:43:16Z] Worker finished. Checker required before completion.
+
+## T016a — Wire real LoginPage into router.tsx (corrective task)
+Verdict: PASS (1st attempt). Severity: none — no findings.
+Checker: checker-tests (two prior attempts on this task failed mid-run due to session-limit interruptions, not quality issues — this is the successful retry). Files inspected: `src/app/router.tsx`, `src/pages/login/LoginPage.tsx`, `src/pages/login/index.ts`, `src/app/guards.tsx`.
+Findings:
+- Re-read router.tsx directly and confirmed only `/login`-related lines changed: inline placeholder `LoginPage()` function and its `signInAs`/`continueWithGoogle` helpers removed, now-unused imports (`useNavigate`, `useAuth`, `consumeIntendedUrl`, `Role`) removed, `import { LoginPage } from '../pages/login'` added. Every other route, placeholder component, and `routePaths` export confirmed byte-unchanged.
+- Independently re-ran `npm run typecheck`/`lint`/`build`/`format:check`/`test` — all exit 0, lint shows only the same 8 pre-existing warnings, no new ones.
+- Built its own live Playwright verification (real Chromium + real dev server, not jsdom) reproducing all claimed scenarios independently: `/login` renders the real component (old "Login (placeholder)" text confirmed absent, all real form elements present), full sign-in round trip lands on the Dashboard placeholder at `/`, NAV-08 intended-URL preservation confirmed (unauthenticated visit to `/roster` → redirect to `/login` → sign in → lands back on `/roster`), `/kiosk/:sessionId` unauthenticated regression spot-check still redirects correctly, plus an added 5th spot-check confirming `/accept-invite`'s placeholder is unaffected.
+- D001-method forbidden-file check clean: only `src/app/router.tsx` changed; `src/pages/login/**` and `guards.tsx` confirmed untouched.
+Attempts: 1 (clean first-attempt PASS; two earlier session-limit failures were infrastructure interruptions, not rework)
+Follow-up:
+- None. `/login` is now genuinely reachable in the running app — the first real page in the app viewable end-to-end, not just in isolation.
+- Full worker/checker packets archived at `docs/swarm/archive/T016a-worker-packet.md` and `docs/swarm/archive/T016a-checker-packet.md`.
