@@ -11,6 +11,11 @@ export default defineConfig({
   // `test` key below requires so `defineConfig`'s config type recognizes it.
   test: {
     setupFiles: ['./src/test-setup.ts'],
+    // supabase/functions/** are Deno-runtime Edge Functions with their own
+    // *.test.ts files (Deno.test(...), run separately via `deno test`) --
+    // exclude them from vitest's default discovery, same reasoning as the
+    // eslint.config.js exclusion added alongside this (CI break #4).
+    exclude: ['**/node_modules/**', '**/dist/**', 'supabase/functions/**'],
   },
   build: {
     rollupOptions: {
