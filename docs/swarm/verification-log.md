@@ -476,3 +476,4 @@ Follow-up:
 - NIT (log only, not a new task): `TopNav.tsx`'s wordmark link (`TopNavHeading`) has the same structural plain-`<a>` gap that caused this task's BLOCKER — pre-existing from T006, out of scope/forbidden here, flagged for whenever `TopNav.tsx` is next touched.
 - T008 (MobileNav + Student Home live-card slot) unblocked (Blocked→Ready) as a direct result.
 - Full worker/checker packets archived at `docs/swarm/archive/T007-worker-packet.md` and `docs/swarm/archive/T007-checker-packet.md`.
+[2026-07-18T13:40:05Z] Worker finished. Checker required before completion.
