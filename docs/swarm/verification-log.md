@@ -457,3 +457,5 @@ Findings:
 Attempts: 1 (legitimate FAIL, in-scope fix identified — not attributable to a dead end)
 Follow-up:
 - Rework packet dispatched to worker-implementer for attempt 2, citing the checker's exact fix (`as={Link}` on all `SideNavItem`s) and evidence.
+[2026-07-18T13:30:09Z] Worker finished. Checker required before completion.
+[2026-07-18T13:33:09Z] Worker finished. Checker required before completion.

@@ -3,6 +3,20 @@
  * highlight + `document.title`, NAV-07 nav-level Meetings/Outreach
  * separation, BEH-04 Outreach badge slot, NAV-01 collapsibility.
  *
+ * Attempt 2 fix (checker-accessibility BLOCKER on attempt 1): every
+ * `SideNavItem` now passes `as={Link}` (from `react-router-dom`, already
+ * allowlisted). Without it, `SideNavItem`'s `href` renders a plain `<a>`,
+ * so every click/Enter-activation does a full document navigation instead
+ * of an SPA transition -- that reload resets `AuthProvider`'s in-memory
+ * session and bounces back to `/login` via `RequireAuth`. `as` is a
+ * documented `SideNavItem` prop: `npm run astryx -- component SideNavItem`
+ * lists `| \`as\` | \`LinkComponentType\` | -- | Custom link component. |`,
+ * resolved via Astryx's `useLinkComponent()` (priority: `as` prop >
+ * `LinkProvider` context > native `<a>`, with automatic `to`-prop injection
+ * for React Router compatibility). Re-verified fix eliminates the reload
+ * (no `load` event refire, session preserved, URL + `document.title` still
+ * update correctly) -- see worker output for the live-Playwright evidence.
+ *
  * Role filtering (K2 gap): `guards.tsx`'s `Role` union is
  * `'admin' | 'staff' | 'volunteer' | 'coach'`, not the PRD's
  * `admin`/`coach`/`student`/`parent` vocabulary (AUTH-05). `guards.tsx` is a
@@ -38,6 +52,7 @@
  *
  *    `npm run astryx -- component SideNavItem` (verbatim, relevant rows):
  *      | `label` | `string` | -- | Item label. (required) |
+ *      | `as` | `LinkComponentType` | -- | Custom link component. |
  *      | `isSelected` | `boolean` | `false` | Marks this item as the
  *        current page. |
  *      | `href` | `string` | -- | Navigation URL. |
@@ -88,7 +103,7 @@
  * oversight.
  */
 import { useEffect, type ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Badge, SideNav as AstryxSideNav, SideNavItem, SideNavSection } from '@astryxdesign/core';
 import { routePaths } from '../../app/router';
 import { useAuth } from '../../app/guards';
@@ -149,6 +164,7 @@ export function SideNav(): ReactNode {
             key={item.route}
             label={item.label}
             href={item.route}
+            as={Link}
             isSelected={activeItem?.route === item.route}
             endContent={
               // BEH-04: neutral, never-red badge slot -- see module doc
