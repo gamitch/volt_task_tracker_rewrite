@@ -2249,3 +2249,4 @@ shouldn't have to re-derive this from `BaseProps.d.ts` each time. Routed as a do
 note for whoever next touches `astryx-api.md`.
 
 **NFR-06 is now genuinely satisfied on `LiveConsole.tsx`.**
+[2026-07-19T13:07:43Z] Worker finished. Checker required before completion.
