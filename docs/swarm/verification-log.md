@@ -1333,3 +1333,27 @@ precedent, plus its own additional finding (an edit-mode email-field-disable wri
 
 Full packets archived at `docs/swarm/archive/T023-worker-packet.md` and
 `docs/swarm/archive/T023-checker-packet.md`.
+
+## T024 — Invite parent dialog (ROS-05)
+
+**Result: PASS (1st attempt). Severity: NIT.**
+
+Worker built `InviteParentDialog.tsx`, grounding its multi-student-invite data shape in real,
+already-applied schema/trigger evidence rather than inventing one, and discovering a genuine
+downstream gap (relationship label has nowhere to persist yet) in the process.
+
+**Checker's independent verification (checker-reviewer):**
+- **Central data-shape decision re-verified directly**: opened T019's
+  `20260718000000_invite_trigger.sql` and confirmed the cited comment ("N separate invites rows
+  sharing one email... every one gets its own guardian_links row") genuinely exists, and the
+  trigger's actual loop body genuinely implements it — the comment isn't aspirational.
+- **Relationship-hardcoded-to-'guardian' claim re-verified**: confirmed the trigger genuinely
+  hardcodes this value with its own self-aware comment flagging it as an unresolved assumption.
+  Confirmed the real `send-invite` request contract has no relationship field, making this task's
+  disclosed persistence gap the correct, honest disposition rather than something to silently
+  invent a workaround for.
+- BEH-07/DES-14 copy, genuine native-disabled validation, and the `Toast` prop doc-gap (`onDismiss`
+  vs. the doc's incorrect `onHide`) all independently re-confirmed against the installed source.
+
+Full packets archived at `docs/swarm/archive/T024-worker-packet.md` and
+`docs/swarm/archive/T024-checker-packet.md`.
