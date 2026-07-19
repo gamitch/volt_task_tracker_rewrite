@@ -394,7 +394,15 @@ function useSessionRsvpLock(session: RsvpControlSession, getNow: () => Date): bo
     setIsEditable(computeIsEditable());
     if (!computeIsEditable()) return;
     const msUntilLock = new Date(session.startsAt).getTime() - getNow().getTime();
-    if (msUntilLock <= 0) return;
+    // `window.setTimeout`'s delay is a signed 32-bit int (max 2147483647ms,
+    // ~24.85 days) -- per spec, any larger delay is silently CLAMPED to 1ms
+    // rather than throwing/warning, which would fire this timeout almost
+    // immediately and incorrectly lock a session that's actually weeks away.
+    // A natural re-render/remount recomputes `isEditable` correctly long
+    // before such a distant boundary is ever actually reached, so no timer
+    // is scheduled at all beyond this bound (no fallback re-scheduling
+    // needed).
+    if (msUntilLock <= 0 || msUntilLock > 2147483647) return;
     const timeoutId = window.setTimeout(() => setIsEditable(false), msUntilLock);
     return () => window.clearTimeout(timeoutId);
   }, [computeIsEditable, session.startsAt, getNow]);

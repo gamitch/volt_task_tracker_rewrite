@@ -241,6 +241,49 @@ describe('RsvpControl -- editable vs. locked rendering', () => {
     expect(segmentButton('going')?.getAttribute('aria-disabled')).toBe('true');
     expect(container.textContent).toContain('RSVP locked');
   });
+
+  it('does NOT self-lock almost immediately for a session more than ~25 days away (32-bit setTimeout overflow regression)', async () => {
+    // `window.setTimeout`'s delay argument is a signed 32-bit int (max
+    // 2147483647ms, ~24.85 days). A session scheduled further out than that
+    // yields an `msUntilLock` exceeding that bound -- per spec, browsers/Node
+    // silently CLAMP an over-range delay to 1ms instead of throwing, which
+    // would incorrectly flip `isEditable` to false almost right after mount
+    // even though the session is weeks away. `useSessionRsvpLock` must skip
+    // scheduling a timer at all once `msUntilLock` exceeds that 32-bit bound.
+    vi.useFakeTimers();
+    const now = new Date('2026-07-19T12:00:00.000Z');
+    vi.setSystemTime(now);
+    // 30 days out -- comfortably past the ~24.85-day 32-bit ceiling.
+    const farFutureStartsAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const farFutureSession: RsvpControlSession = {
+      ...BASE_SESSION,
+      startsAt: farFutureStartsAt,
+    };
+
+    act(() => {
+      root.render(
+        <RsvpControl
+          studentId={STUDENT_ID}
+          session={farFutureSession}
+          eventTitle="Community Food Bank Sort"
+          currentRsvp={null}
+          now={() => new Date()}
+        />,
+      );
+    });
+
+    expect(segmentButton('going')?.getAttribute('aria-disabled')).not.toBe('true');
+    expect(container.textContent).not.toContain('RSVP locked');
+
+    // Flush every pending timer (including any clamped-to-1ms overflow
+    // timer, if the bug regresses) -- the control must remain editable.
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    expect(segmentButton('going')?.getAttribute('aria-disabled')).not.toBe('true');
+    expect(container.textContent).not.toContain('RSVP locked');
+  });
 });
 
 // ---------------------------------------------------------------------------
