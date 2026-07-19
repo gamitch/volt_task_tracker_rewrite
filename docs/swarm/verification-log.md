@@ -2510,3 +2510,89 @@ own "disclosed, not disputing" framing) — both routed to follow-up tasks, not 
 wired end to end. The router-wiring series is complete.**
 [2026-07-19T16:09:12Z] Worker finished. Checker required before completion.
 [2026-07-19T16:11:43Z] Worker finished. Checker required before completion.
+[2026-07-19T16:18:46Z] Worker finished. Checker required before completion.
+[2026-07-19T16:26:01Z] Worker finished. Checker required before completion.
+[2026-07-19T16:33:02Z] Worker finished. Checker required before completion.
+[2026-07-19T16:35:02Z] Worker finished. Checker required before completion.
+[2026-07-19T16:39:25Z] Worker finished. Checker required before completion.
+[2026-07-19T16:41:15Z] Worker finished. Checker required before completion.
+[2026-07-19T16:44:36Z] Worker finished. Checker required before completion.
+[2026-07-19T16:47:59Z] Worker finished. Checker required before completion.
+[2026-07-19T16:57:45Z] Worker finished. Checker required before completion.
+
+## T076 — Fix `RequireRole` misuse of `NoAccessPage` (Gap B from T073b2), Epic E3
+
+**Result: PASS (1st attempt). Severity: none — the MAJOR defect this task fixes is now
+resolved.**
+
+Fixes the real design defect both T073b2's worker and checker independently flagged: `RequireRole`
+was reusing `NoAccessPage` (built exclusively for AUTH-04's "you're not on the roster, signing you
+out unconditionally" scenario) for routine role-mismatches, unnecessarily signing out valid users
+and showing them factually-inaccurate copy. New `AccessDeniedPage.tsx`: no sign-out, accurate copy
+("This page isn't part of your role... You're signed in and your account is fine..."), a real
+working "Go to your dashboard" `Link` (not `Button` — matches Astryx's own guidance against using
+`Button` for navigation, and this codebase's established convention). `guards.tsx`'s `RequireRole`
+role-mismatch branch now renders `AccessDeniedPage`; `RequireAuth`'s `noProfile` branch and
+`RequireRole`'s own `isLoading`/`noProfile` branches are untouched, still correctly pointed at
+`NoAccessPage` for genuine AUTH-04 cases.
+
+**Design note**: `DASHBOARD_PATH` is a hardcoded `'/'` literal rather than an import of
+`routePaths.dashboard` from `router.tsx`, specifically to avoid a genuine circular import
+(`router.tsx` → `guards.tsx` → `AccessDeniedPage.tsx` → `router.tsx`) — documented in-file with a
+comment tracing back to the real constant.
+
+**Checker's independent verification (checker-tests):**
+- Confirmed `NoAccessPage.tsx`/`types.ts`/`index.ts` have zero diff.
+- Read `guards.tsx` directly and confirmed only the role-mismatch branch changed — `RequireAuth`'s
+  `noProfile` branch and `RequireRole`'s own `isLoading`/`noProfile` branches genuinely untouched.
+- Independently traced the import graph and confirmed the circular-import claim is genuinely true,
+  judged the hardcoded-literal-with-comment resolution reasonable.
+- Confirmed the new tests genuinely prove the core fix: `signOut` is never called and `user` stays
+  non-null after a role-denied render (not just cosmetic — the actual session-integrity property).
+- Independently confirmed the Link-vs-Button choice matches established codebase precedent
+  (`CalendarPage`, `LiveConsole`, `AdminToggles` all use `Link` for navigation).
+- Confirmed the 4 known test failures in other files (outside this task's scope) are exactly the
+  expected, disclosed consequence of this correct behavior change, already being fixed by T078
+  (dispatched separately) — did not let those affect this task's own verdict.
+- Independently ran the full suite (910/910 once T078's fix is included, this task's own files
+  17/17), typecheck, lint, build — all clean.
+
+## T077 — Real invite-completion password flow (Gap A from T073b2), Epic E3
+
+**Result: PASS (1st attempt). Severity: MINOR — one disclosed follow-up candidate, not blocking.**
+
+Fixes T073b2's disclosed Gap A: `AcceptInvitePage.tsx`'s "Set a password" flow previously called the
+real `login(email, password)` — a genuine sign-in attempt against a password that was never set
+anywhere, guaranteed to fail. Added a real `updateUserPassword` function to
+`src/lib/supabase/auth.ts` (thin, typed wrapper around `client.auth.updateUser`, following every
+sibling function's established conventions exactly). `handleSetPassword` now calls it directly,
+bypassing `useAuth()`/`guards.tsx` entirely (forbidden file, contract unchanged).
+
+**Deeper bug found and fixed during investigation, not just the missing function**: tracing the
+real `send-invite`/T019-trigger mechanism confirmed the invite email link itself establishes a real
+Supabase session on click — meaning `useAuth()`'s `user` could already be resolved the moment the
+page loads, before the visitor does anything. T073b2's generic "navigate once any user resolves"
+effect (correct for `LoginPage.tsx`, wrong here) would have redirected the visitor away before they
+ever saw or completed the password form. Fixed via two explicit completion signals —
+`hasCompletedSetup` (set only after `updateUserPassword` succeeds) and `googleSignInStarted` (set
+the instant the Google button is clicked, distinguishing "just completed Google" from "arrived with
+a pre-existing session, did nothing yet") — replacing the passive user-resolution trigger entirely.
+
+**Checker's independent verification (checker-tests):**
+- Independently reproduced the worker's own revert-and-verify proof: temporarily disabled the
+  `hasCompletedSetup` gating, confirmed 3 tests genuinely fail under the old logic, restored the
+  fix, confirmed all 9 pass again — not just trusting the worker's account of having done this.
+- Confirmed `updateUserPassword` matches every sibling function's established conventions
+  (injectable client, unwrapped error propagation, fail-loud-on-missing-data).
+- Confirmed forbidden files (`guards.tsx`, `LoginPage.tsx`, `client.ts`/`loader.ts`/`types.ts`,
+  `router.tsx`) untouched.
+- Gave independent severity judgment on the disclosed Google OAuth hard-redirect risk (a genuine
+  production browser redirect-and-back fully remounts the page, resetting `googleSignInStarted`,
+  so that specific return-leg landing wouldn't auto-navigate): judged MINOR, real but limited in
+  scope (affects only the OAuth-on-invite-page case, not a functional regression, no crash/security
+  issue), recommended as a follow-up task rather than a blocker.
+- Independently ran the full suite (910/910), typecheck, lint, build, format:check — all clean.
+
+**Both of T073b2's disclosed MAJOR gaps are now resolved (T076 for Gap B, T077 for Gap A).** One new
+MINOR follow-up candidate disclosed: the Google OAuth hard-redirect return-leg auto-navigation gap
+on the invite-accept page, not yet a task.

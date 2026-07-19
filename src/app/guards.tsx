@@ -23,6 +23,7 @@ import type { Role } from '../lib/supabase';
 import * as supabaseAuthModule from '../lib/supabase/auth';
 import type { AuthChangeEvent, AuthSession, RoleResolution } from '../lib/supabase/auth';
 import { NoAccessPage } from '../pages/no-access';
+import { AccessDeniedPage } from '../pages/no-access/AccessDeniedPage';
 
 // ---------------------------------------------------------------------------
 // Auth context
@@ -454,20 +455,35 @@ export interface RequireRoleProps {
 }
 
 /**
- * Renders `<NoAccessPage />` in place for a role-denied (or still-anonymous,
- * or no-profile) viewer -- no longer `<Navigate to="/" />` (T073b2, Trap #3:
- * a real, disclosed behavior change). `/` is now a real role dispatcher
- * (T075) that itself just re-enters role logic, so redirecting there on
- * denial is fragile/loop-prone; rendering `NoAccessPage` in place matches
- * the AUTH-04 no-profile case's own treatment (`RequireAuth` above) instead.
+ * Renders in place for a role-denied (or still-anonymous, or no-profile)
+ * viewer -- no longer `<Navigate to="/" />` (T073b2, Trap #3: a real,
+ * disclosed behavior change). `/` is now a real role dispatcher (T075) that
+ * itself just re-enters role logic, so redirecting there on denial is
+ * fragile/loop-prone; rendering a screen in place instead of redirecting
+ * matches the AUTH-04 no-profile case's own treatment (`RequireAuth` above).
  * Also waits out `isLoading` first, same reasoning as `RequireAuth` -- a
  * role check performed before the role is even known must not treat
  * "still loading" as "denied".
  *
+ * T076: the `noProfile` branch below is a genuine AUTH-04 case (this
+ * session has NO matching `profiles` row at all) and correctly stays
+ * pointed at `NoAccessPage` -- same reasoning as `RequireAuth`'s own
+ * `noProfile` branch above. The role-mismatch branch (`!user ||
+ * !allowedRoles.includes(user.role)`) is a DIFFERENT case -- a resolved,
+ * valid account whose role just doesn't cover this page (or, in the
+ * defensive `!user` half, `RequireRole` used standalone with no session to
+ * speak of either way) -- and renders `AccessDeniedPage` instead: reusing
+ * `NoAccessPage` there was a MAJOR-severity design defect (flagged against
+ * T073b2, corrected here) because `NoAccessPage` unconditionally signs the
+ * session out on mount and shows "You're not on the roster yet.", both
+ * wrong for a perfectly valid role-mismatched account. See
+ * `../pages/no-access/AccessDeniedPage.tsx`'s own module doc for the full
+ * reasoning and copy.
+ *
  * Meant to be nested *inside* `RequireAuth` so `user`/`isLoading`/
  * `noProfile` are already resolved by the time this runs; it still degrades
- * safely (renders `NoAccessPage`, never crashes) if used standalone with no
- * authenticated user.
+ * safely (renders `AccessDeniedPage`, never crashes) if used standalone with
+ * no authenticated user.
  */
 export function RequireRole({ allowedRoles, children }: RequireRoleProps): ReactNode {
   const { user, isLoading, noProfile } = useAuth();
@@ -481,7 +497,7 @@ export function RequireRole({ allowedRoles, children }: RequireRoleProps): React
   }
 
   if (!user || !allowedRoles.includes(user.role)) {
-    return <NoAccessPage />;
+    return <AccessDeniedPage />;
   }
 
   return <>{children}</>;

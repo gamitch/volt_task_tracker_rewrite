@@ -10,8 +10,9 @@
  *   2. No session -> anonymous -> `RequireAuth` redirects to `/login`.
  *   3. No-profile (AUTH-04) -> `RequireAuth` renders `NoAccessPage` in
  *      place, never a redirect.
- *   4. Role-denied -> `RequireRole` renders `NoAccessPage` in place, never
- *      a redirect to `/`.
+ *   4. Role-denied -> `RequireRole` renders `AccessDeniedPage` (T076,
+ *      NOT `NoAccessPage`) in place, never a redirect to `/`, and never
+ *      signs the still-valid session out.
  *   5. Subscription-driven updates (`SIGNED_IN`/`SIGNED_OUT` events fired
  *      through the fake module's own subscription callback) update `user`
  *      correctly.
@@ -251,18 +252,22 @@ describe('RequireAuth: AUTH-04 no-profile', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. Role-denied -> RequireRole renders NoAccessPage, never redirects to /.
+// 4. Role-denied -> RequireRole renders AccessDeniedPage (T076), never
+//    redirects to /, and never signs the still-valid session out.
 // ---------------------------------------------------------------------------
 
 describe('RequireRole: role-denied', () => {
-  it('renders NoAccessPage in place, not a "/" redirect', async () => {
+  it('renders AccessDeniedPage in place, not NoAccessPage, not a "/" redirect', async () => {
+    // T076: unlike the pre-existing AUTH-04 no-profile test above, this
+    // fake `signOut` DOES resolve immediately -- `AccessDeniedPage` (unlike
+    // `NoAccessPage`) never calls `logout()` on mount, so there is nothing
+    // here that would race this test's own assertions. A call to `signOut`
+    // at all would itself be a bug this test is implicitly guarding against
+    // (see the dedicated "does not sign the user out" test below, which
+    // asserts this directly via a spy).
     const authModule = buildControllableAuthModule({
       getInitialSession: async () => buildFakeSession('user-3', 'student@example.com'),
       resolveRole: async (): Promise<RoleResolution> => ({ status: 'found', role: 'student' }),
-      // See the identical `signOut` note in the AUTH-04 no-profile test
-      // above -- `NoAccessPage` signs the user out on mount, which would
-      // otherwise race this test's own assertion.
-      signOut: () => new Promise<void>(() => {}),
     });
 
     act(() => {
@@ -288,9 +293,98 @@ describe('RequireRole: role-denied', () => {
     });
     await flushMicrotasks();
 
-    expect(container.textContent).toContain("You're not on the roster yet.");
+    // AccessDeniedPage's real copy -- accurate for a role-mismatch, and
+    // distinct from NoAccessPage's AUTH-04 copy.
+    expect(container.textContent).toContain("This page isn't part of your role");
+    expect(container.textContent).not.toContain("You're not on the roster yet.");
     expect(container.querySelector('[data-testid="redirected-home"]')).toBeNull();
     expect(container.querySelector('[data-testid="coach-content"]')).toBeNull();
+  });
+
+  it('does not sign the user out, and the session/user state stays intact', async () => {
+    // T076 Acceptance Criterion (b): a role-denied but otherwise valid user
+    // must still be signed in afterward -- proven the same way
+    // `SettingsPage.test.tsx`'s existing logout test does: render a
+    // `useAuth()` observer alongside the guarded tree and assert `user` is
+    // still non-null (not cleared) after the role-denied render. This
+    // reuses the file's own `Observer` component (same shape
+    // `SettingsPage.test.tsx`'s local `AuthObserver` uses).
+    const signOut = vi.fn(async () => {});
+    const authModule = buildControllableAuthModule({
+      getInitialSession: async () => buildFakeSession('user-3b', 'student2@example.com'),
+      resolveRole: async (): Promise<RoleResolution> => ({ status: 'found', role: 'student' }),
+      signOut,
+    });
+
+    const sink = { user: null, isLoading: true, noProfile: false } as {
+      user: ReturnType<typeof useAuth>['user'];
+      isLoading: boolean;
+      noProfile: boolean;
+    };
+
+    act(() => {
+      root.render(
+        <MemoryRouter initialEntries={['/coach-only']}>
+          <AuthProvider authModule={authModule}>
+            <Observer sink={sink} />
+            <Routes>
+              <Route
+                path="/coach-only"
+                element={
+                  <RequireAuth>
+                    <RequireRole allowedRoles={['coach', 'admin']}>
+                      <div data-testid="coach-content">Coach-only</div>
+                    </RequireRole>
+                  </RequireAuth>
+                }
+              />
+            </Routes>
+          </AuthProvider>
+        </MemoryRouter>,
+      );
+    });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain("This page isn't part of your role");
+    expect(signOut).not.toHaveBeenCalled();
+    expect(sink.user).toEqual({ id: 'user-3b', email: 'student2@example.com', role: 'student' });
+    expect(sink.isLoading).toBe(false);
+    expect(sink.noProfile).toBe(false);
+  });
+
+  it('the real "go home" action points to "/"', async () => {
+    const authModule = buildControllableAuthModule({
+      getInitialSession: async () => buildFakeSession('user-3c', 'student3@example.com'),
+      resolveRole: async (): Promise<RoleResolution> => ({ status: 'found', role: 'student' }),
+    });
+
+    act(() => {
+      root.render(
+        <MemoryRouter initialEntries={['/coach-only']}>
+          <AuthProvider authModule={authModule}>
+            <Routes>
+              <Route
+                path="/coach-only"
+                element={
+                  <RequireAuth>
+                    <RequireRole allowedRoles={['coach', 'admin']}>
+                      <div data-testid="coach-content">Coach-only</div>
+                    </RequireRole>
+                  </RequireAuth>
+                }
+              />
+            </Routes>
+          </AuthProvider>
+        </MemoryRouter>,
+      );
+    });
+    await flushMicrotasks();
+
+    const homeLink = Array.from(container.querySelectorAll('a')).find(
+      (anchor) => anchor.textContent?.trim() === 'Go to your dashboard',
+    );
+    expect(homeLink, 'expected a real "Go to your dashboard" link').toBeTruthy();
+    expect(homeLink?.getAttribute('href')).toBe('/');
   });
 
   it('renders children for an allowed role', async () => {

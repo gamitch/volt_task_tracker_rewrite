@@ -1,13 +1,32 @@
 // @vitest-environment jsdom
 /**
- * T073b2: tests for `AcceptInvitePage.tsx`'s real-auth wiring -- the
- * `login(email, password)`/`loginWithGoogle(redirectTo)` contract migration
- * and the OAuth-redirect-leg `useEffect` design (mirrors `../login/
- * LoginPage.test.tsx`'s identical tests; see that file's and this page's
- * own module docs for the full reasoning). Exercises the real
- * `AuthProvider` (`../../app/guards`) against an injected fake `authModule`
- * (`AuthModule`, T073b2's seam) -- never a real Supabase backend, per this
- * task's worker packet Trap #9 (no `.env` in this environment).
+ * T073b2 (original) / T077 (this task): tests for `AcceptInvitePage.tsx`'s
+ * real-auth wiring -- the `updateUserPassword(password)`/
+ * `loginWithGoogle(redirectTo)` contract and the two explicit-completion
+ * `useEffect`s (mirrors `../login/LoginPage.test.tsx`'s Google-path tests
+ * where applicable; see that file's and this page's own module docs for the
+ * full reasoning). Exercises the real `AuthProvider` (`../../app/guards`)
+ * against an injected fake `authModule` (`AuthModule`, T073b2's seam) --
+ * never a real Supabase backend, per this task's worker packet Trap #9 (no
+ * `.env` in this environment).
+ *
+ * T077: `handleSetPassword` no longer calls `login(email, password)` --  it
+ * calls the page's own injected `updateUserPassword` seam (see
+ * `AcceptInvitePage.tsx`'s `AcceptInvitePageProps.updateUserPassword`),
+ * since a session already exists from the invite link by the time this page
+ * renders. Every "Set a password" test below supplies a fake
+ * `updateUserPassword` prop instead of stubbing `authModule.
+ * signInWithPassword`.
+ *
+ * T077's central addition is the `describe('<AcceptInvitePage /> premature
+ * navigation (T077)')` block below: it exercises exactly the race condition
+ * this task fixes -- `authModule.getInitialSession`/`resolveRole` resolving
+ * to an ALREADY-VALID user before the visitor has done anything (simulating
+ * "arrived via the invite link, whose own session is already active on
+ * mount"). This test is written to genuinely fail against the pre-T077 code
+ * (verified by temporarily reverting the navigate-effect fix locally and
+ * re-running -- see this task's worker output for the full description of
+ * that verification).
  *
  * No `@testing-library/react` is installed in this repo (confirmed via
  * `package.json`) -- these tests use the same raw `createRoot`/`act`
@@ -18,7 +37,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthModule } from '../../app/guards';
-import type { AuthChangeEvent, AuthSession } from '../../lib/supabase/auth';
+import type { AuthChangeEvent, AuthSession, AuthUser } from '../../lib/supabase/auth';
 import { AcceptInvitePage } from './AcceptInvitePage';
 import type { AcceptInviteData } from './types';
 
@@ -64,6 +83,10 @@ function buildFakeSession(id: string, email: string): AuthSession {
   } as AuthSession;
 }
 
+function buildFakeAuthUser(id: string, email: string): AuthUser {
+  return buildFakeSession(id, email).user;
+}
+
 function buildControllableAuthModule(overrides: Partial<AuthModule> = {}): AuthModule & {
   getSubscriptionCallback: () =>
     ((event: AuthChangeEvent, session: AuthSession | null) => void) | null;
@@ -103,8 +126,16 @@ const PENDING_INVITE: AcceptInviteData = {
 
 function renderAcceptInvitePage(
   authModule: AuthModule,
-  initialEntries: string[] = ['/accept-invite?token=fixture-token'],
+  options: {
+    updateUserPassword?: (password: string) => Promise<AuthUser>;
+    initialEntries?: string[];
+  } = {},
 ): void {
+  const {
+    updateUserPassword = async () => buildFakeAuthUser('user-default', PENDING_INVITE.email),
+    initialEntries = ['/accept-invite?token=fixture-token'],
+  } = options;
+
   act(() => {
     root.render(
       <MemoryRouter initialEntries={initialEntries}>
@@ -112,7 +143,12 @@ function renderAcceptInvitePage(
           <Routes>
             <Route
               path="/accept-invite"
-              element={<AcceptInvitePage loadInvite={async () => PENDING_INVITE} />}
+              element={
+                <AcceptInvitePage
+                  loadInvite={async () => PENDING_INVITE}
+                  updateUserPassword={updateUserPassword}
+                />
+              }
             />
             <Route path="/" element={<div data-testid="home-page">Home</div>} />
           </Routes>
@@ -162,58 +198,62 @@ async function submitSetPasswordForm(password: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// "Set a password" -- migrated to the login(email, password) contract.
+// "Set a password" -- T077's updateUserPassword(password) contract.
 // ---------------------------------------------------------------------------
 
 describe('<AcceptInvitePage /> "Set a password"', () => {
-  it('calls login(invite email, password) with the chosen password', async () => {
+  it('calls updateUserPassword(password) with the chosen password -- NOT login()', async () => {
+    const updateUserPassword = vi.fn(async () => buildFakeAuthUser('user-1', PENDING_INVITE.email));
     const signInWithPassword = vi.fn(async () => buildFakeSession('user-1', PENDING_INVITE.email));
     const authModule = buildControllableAuthModule({ signInWithPassword });
 
-    renderAcceptInvitePage(authModule);
+    renderAcceptInvitePage(authModule, { updateUserPassword });
     await flushMicrotasks();
     await submitSetPasswordForm('a-strong-password');
 
-    expect(signInWithPassword).toHaveBeenCalledWith(PENDING_INVITE.email, 'a-strong-password');
+    expect(updateUserPassword).toHaveBeenCalledWith('a-strong-password');
+    // The central bug T077 fixes: setting a password must never attempt a
+    // real sign-in against a password that was never set anywhere.
+    expect(signInWithPassword).not.toHaveBeenCalled();
   });
 
-  it('navigates to "/" once login() resolves, via the useEffect', async () => {
-    const authModule = buildControllableAuthModule({
-      signInWithPassword: async () => buildFakeSession('user-2', PENDING_INVITE.email),
-    });
+  it('navigates to "/" once updateUserPassword() resolves, via the explicit hasCompletedSetup signal', async () => {
+    const authModule = buildControllableAuthModule();
 
-    renderAcceptInvitePage(authModule);
+    renderAcceptInvitePage(authModule, {
+      updateUserPassword: async () => buildFakeAuthUser('user-2', PENDING_INVITE.email),
+    });
     await flushMicrotasks();
     await submitSetPasswordForm('a-strong-password');
 
     expect(container.querySelector('[data-testid="home-page"]')).toBeTruthy();
   });
 
-  it('shows the real error message when login() rejects (the disclosed, deferred gap -- no real password-setting backend call exists yet)', async () => {
-    const authModule = buildControllableAuthModule({
-      signInWithPassword: async () => {
-        throw new Error('Invalid login credentials');
+  it('shows the real error message when updateUserPassword() rejects and does not navigate', async () => {
+    const authModule = buildControllableAuthModule();
+
+    renderAcceptInvitePage(authModule, {
+      updateUserPassword: async () => {
+        throw new Error('Password should be at least 6 characters.');
       },
     });
-
-    renderAcceptInvitePage(authModule);
     await flushMicrotasks();
     await submitSetPasswordForm('a-strong-password');
 
-    expect(container.textContent).toContain('Invalid login credentials');
+    expect(container.textContent).toContain('Password should be at least 6 characters.');
     expect(container.querySelector('[data-testid="home-page"]')).toBeNull();
   });
 
-  it('validates password fields client-side and does not call login() when invalid', async () => {
-    const signInWithPassword = vi.fn(async () => buildFakeSession('user-3', PENDING_INVITE.email));
-    const authModule = buildControllableAuthModule({ signInWithPassword });
+  it('validates password fields client-side and does not call updateUserPassword() when invalid', async () => {
+    const updateUserPassword = vi.fn(async () => buildFakeAuthUser('user-3', PENDING_INVITE.email));
+    const authModule = buildControllableAuthModule();
 
-    renderAcceptInvitePage(authModule);
+    renderAcceptInvitePage(authModule, { updateUserPassword });
     await flushMicrotasks();
     clickButton(findButtonByText('Set password'));
     await flushMicrotasks();
 
-    expect(signInWithPassword).not.toHaveBeenCalled();
+    expect(updateUserPassword).not.toHaveBeenCalled();
     expect(container.textContent).toContain("Couldn't set password");
   });
 });
@@ -275,4 +315,66 @@ describe('<AcceptInvitePage /> Google sign-in', () => {
 
     expect(container.textContent).toContain('OAuth provider unavailable');
   });
+});
+
+// ---------------------------------------------------------------------------
+// T077: THE premature-navigation race condition this task fixes.
+// ---------------------------------------------------------------------------
+
+describe('<AcceptInvitePage /> premature navigation (T077)', () => {
+  it(
+    'does NOT navigate away when a session/user is ALREADY resolved on initial mount ' +
+      '(simulating arriving via the invite link, which establishes its own session before ' +
+      'the visitor has done anything) -- still shows the "Set a password" form',
+    async () => {
+      // Simulates the Ground Truth scenario exactly: `getInitialSession()`
+      // and `resolveRole()` both resolve to an already-valid user the
+      // moment the page mounts, with ZERO user action having occurred.
+      const authModule = buildControllableAuthModule({
+        getInitialSession: async () => buildFakeSession('invite-user', PENDING_INVITE.email),
+        resolveRole: async () => ({ status: 'found', role: 'student' }),
+      });
+      const updateUserPassword = vi.fn(async () =>
+        buildFakeAuthUser('invite-user', PENDING_INVITE.email),
+      );
+
+      renderAcceptInvitePage(authModule, { updateUserPassword });
+      await flushMicrotasks();
+
+      // The bug this task fixes: under the OLD code, reaching a resolved
+      // `user` alone (regardless of how it got resolved) triggered an
+      // immediate `navigate()` -- bouncing the visitor away before they
+      // ever saw the form. Assert that does NOT happen.
+      expect(container.querySelector('[data-testid="home-page"]')).toBeNull();
+      // The "Set a password" form must still be rendered and usable.
+      expect(findButtonByText('Set password')).toBeTruthy();
+      expect(updateUserPassword).not.toHaveBeenCalled();
+
+      // Now the visitor actually completes the form -- THIS is genuine
+      // completion, and navigation should occur only now.
+      await submitSetPasswordForm('a-strong-password');
+
+      expect(updateUserPassword).toHaveBeenCalledWith('a-strong-password');
+      expect(container.querySelector('[data-testid="home-page"]')).toBeTruthy();
+    },
+  );
+
+  it(
+    'does NOT navigate away merely because a session resolves on mount, even across ' +
+      'several microtask flushes with no user action taken at all',
+    async () => {
+      const authModule = buildControllableAuthModule({
+        getInitialSession: async () => buildFakeSession('invite-user-2', PENDING_INVITE.email),
+        resolveRole: async () => ({ status: 'found', role: 'parent' }),
+      });
+
+      renderAcceptInvitePage(authModule);
+      await flushMicrotasks();
+      await flushMicrotasks();
+      await flushMicrotasks();
+
+      expect(container.querySelector('[data-testid="home-page"]')).toBeNull();
+      expect(findButtonByText('Set password')).toBeTruthy();
+    },
+  );
 });

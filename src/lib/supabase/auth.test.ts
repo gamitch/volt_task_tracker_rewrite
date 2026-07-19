@@ -10,6 +10,7 @@ import {
   signInWithPassword,
   signOut,
   subscribeToAuthStateChange,
+  updateUserPassword,
 } from './auth.ts';
 import { isSupabaseLoaderError } from './loader.ts';
 
@@ -26,6 +27,7 @@ function buildFakeAuth(overrides: Record<string, unknown> = {}) {
       .fn()
       .mockResolvedValue({ data: { provider: 'google', url: null }, error: null }),
     signOut: vi.fn().mockResolvedValue({ error: null }),
+    updateUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
     ...overrides,
   };
 }
@@ -116,6 +118,45 @@ describe('signInWithPassword', () => {
     const client = { auth } as unknown as SupabaseClient;
 
     await expect(signInWithPassword('a@example.com', 'wrong', client)).rejects.toEqual(authError);
+  });
+});
+
+describe('updateUserPassword', () => {
+  it('resolves the updated user on success', async () => {
+    const auth = buildFakeAuth({
+      updateUser: vi.fn().mockResolvedValue({ data: { user: FAKE_SESSION.user }, error: null }),
+    });
+    const client = { auth } as unknown as SupabaseClient;
+
+    const user = await updateUserPassword('a-new-password', client);
+
+    expect(user).toEqual(FAKE_SESSION.user);
+    expect(auth.updateUser).toHaveBeenCalledWith({ password: 'a-new-password' });
+  });
+
+  it('rejects when the transport reports an error (e.g. weak password, expired/consumed session)', async () => {
+    const authError = {
+      message: 'Password should be at least 6 characters',
+      name: 'AuthError',
+      status: 422,
+    };
+    const auth = buildFakeAuth({
+      updateUser: vi.fn().mockResolvedValue({ data: { user: null }, error: authError }),
+    });
+    const client = { auth } as unknown as SupabaseClient;
+
+    await expect(updateUserPassword('short', client)).rejects.toEqual(authError);
+  });
+
+  it('fails loud when the SDK reports success but returns no user', async () => {
+    const auth = buildFakeAuth({
+      updateUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
+    });
+    const client = { auth } as unknown as SupabaseClient;
+
+    await expect(updateUserPassword('a-new-password', client)).rejects.toThrow(
+      'Password update succeeded but no user was returned.',
+    );
   });
 });
 

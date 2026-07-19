@@ -127,6 +127,40 @@
  * nothing real to await either, which would make the Loading state
  * (correctly wired) visually imperceptible. Remove once real async calls
  * with real latency replace these placeholders.
+ *
+ * -----------------------------------------------------------------------
+ * T077 -- Ground Truth (real invite mechanism) + the premature-navigation
+ * fix.
+ *
+ * `supabase/functions/send-invite/index.ts` (read-only reference) calls
+ * Supabase's own `adminClient.auth.admin.inviteUserByEmail(email, { data:
+ * {...} })` at invite-*send* time -- this creates the `auth.users` row
+ * immediately and emails the invitee a link containing an access token.
+ * `supabase/migrations/20260718000000_invite_trigger.sql` (read-only
+ * reference, T019) installs a DB trigger that fires around that user's
+ * first sign-in (i.e. when they click the emailed link) and creates their
+ * matching `profiles` row with the invited role. Clicking that link
+ * therefore establishes a REAL, valid Supabase session client-side, using
+ * the same auto-parse-the-callback-URL mechanism this page's
+ * `subscribeToAuthStateChange`-backed `useAuth()` already relies on for the
+ * Google OAuth return leg -- `getInitialSession()` picks it up automatically
+ * on mount, no special-case code needed. This is what makes
+ * `updateUserPassword` (see `UpdateUserPasswordFn` below) possible while
+ * "signed in" as that not-yet-fully-onboarded user.
+ *
+ * This also means `useAuth()`'s `user` can already be resolved (non-null)
+ * the MOMENT this page mounts -- before the visitor has done anything at
+ * all, let alone submitted the "Set a password" form. T073b2's original
+ * navigate-away-once-resolved effect (mirroring `LoginPage.tsx`'s identical,
+ * but here INCORRECT, "any resolved user means completion" assumption)
+ * would have fired immediately on load under a real backend, bouncing the
+ * visitor away before they ever saw the form -- see the
+ * `hasCompletedSetup`/`googleSignInStarted` state and the two effects right
+ * before `handleSetPassword` below for the fix (an explicit
+ * "onboarding genuinely completed" signal, set only from the two submit
+ * handlers' own success paths, never from the passive session-resolution
+ * effect itself).
+ * -----------------------------------------------------------------------
  */
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -143,13 +177,31 @@ import {
   VStack,
 } from '@astryxdesign/core';
 import { consumeIntendedUrl, useAuth } from '../../app/guards';
+import { updateUserPassword as defaultUpdateUserPassword } from '../../lib/supabase/auth';
+import type { AuthUser } from '../../lib/supabase/auth';
 import type { AcceptInviteData, InviteRole, InviteStatus, LoadInviteFn } from './types';
 
+/**
+ * T077: the "set a password" backend seam, same pattern as `LoadInviteFn`
+ * below (an injectable prop defaulting to a real implementation, so tests
+ * never need to mock a module import or reach a real Supabase client).
+ * Deliberately dropped from `../../app/guards`'s `AuthContextValue` --
+ * `guards.tsx` is a forbidden file for this task and `login()`'s contract
+ * there does not change (see this file's module doc gap notes above and the
+ * worker packet) -- so this page calls `../../lib/supabase/auth.ts`'s real
+ * `updateUserPassword` directly instead, bypassing `useAuth()` entirely for
+ * this one call. This is safe because `updateUserPassword` only mutates the
+ * password on whatever Supabase session is already active client-side (the
+ * invite link's own session -- see Ground Truth section below); it never
+ * needs `guards.tsx`'s in-memory `AuthContextValue` state at all.
+ */
+type UpdateUserPasswordFn = (password: string) => Promise<AuthUser>;
+
 /** See module doc above -- placeholder-latency disclosure, not a PRD value.
- * T073b2: only `defaultLoadInvite`'s own fixture-loading delay still uses
- * this -- the "Set a password" submit round trip that used to reuse it was
- * migrated to a real `login()` call (see `handleSetPassword` below), which
- * has its own real latency and no longer needs a borrowed fake delay. */
+ * Only `defaultLoadInvite`'s own fixture-loading delay still uses this --
+ * the "Set a password" submit round trip instead calls a real
+ * `updateUserPassword` (T077, see `handleSetPassword` below), which has its
+ * own real latency and no longer needs a borrowed fake delay. */
 const SIMULATED_ASYNC_LATENCY_MS = 350;
 
 /**
@@ -229,6 +281,15 @@ export interface AcceptInvitePageProps {
    * here.
    */
   loadInvite?: LoadInviteFn;
+  /**
+   * T077: "Set a password" backend seam -- see the module-level
+   * `UpdateUserPasswordFn` doc comment above. Defaults to the real
+   * `../../lib/supabase/auth.ts`'s `updateUserPassword` (with its own
+   * `client` parameter defaulting to the shared Supabase client singleton)
+   * when not supplied; tests pass a fake here instead of reaching a real
+   * backend.
+   */
+  updateUserPassword?: UpdateUserPasswordFn;
 }
 
 /**
@@ -264,8 +325,9 @@ function getInviteStatusError(status: InviteStatus): FormBannerError | null {
 
 export function AcceptInvitePage({
   loadInvite = defaultLoadInvite,
+  updateUserPassword = defaultUpdateUserPassword,
 }: AcceptInvitePageProps = {}): ReactNode {
-  const { login, loginWithGoogle, user, isLoading, noProfile } = useAuth();
+  const { loginWithGoogle, user, isLoading, noProfile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -282,6 +344,25 @@ export function AcceptInvitePage({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<FormBannerError | null>(null);
   const [fieldErrors, setFieldErrors] = useState<PasswordFieldErrors>({});
+
+  // T077: THE explicit "onboarding genuinely completed" signal -- see the
+  // module doc's "Premature-navigation bug" section below for the full
+  // reasoning. Starts `false`; the ONLY two places that ever set it `true`
+  // are `handleSetPassword`'s success path and the Google-completion effect
+  // just below (itself gated on `googleSignInStarted`, an explicit
+  // "the visitor clicked this button on THIS page instance" marker). Neither
+  // is ever set from the passive initial-session-resolution effect, which is
+  // exactly what makes this immune to the invite link's own session being
+  // already-resolved on mount.
+  const [hasCompletedSetup, setHasCompletedSetup] = useState(false);
+  // T077: set synchronously the moment the visitor clicks "Continue with
+  // Google" on THIS page instance (see `handleGoogleSignIn` below) --
+  // distinguishes "a resolved `user` because the visitor just finished the
+  // Google round trip" from "a resolved `user` merely because the invite
+  // link's own session was already active when this page mounted". A
+  // `useState` (not a `useRef`) because it needs to participate in the
+  // effect below's dependency array to correctly re-run once it flips.
+  const [googleSignInStarted, setGoogleSignInStarted] = useState(false);
 
   const runLoadInvite = useCallback(() => {
     setInviteLoadState('loading');
@@ -306,22 +387,53 @@ export function AcceptInvitePage({
     // on every render -- `runLoadInvite` is itself memoized against both.
   }, [runLoadInvite]);
 
-  // T073b2 OAuth-redirect-leg design -- mirrors `../login/LoginPage.tsx`'s
-  // identical `useEffect` (see that file's module doc for the full
-  // double-navigate-avoidance reasoning, which applies verbatim here): the
-  // single source of post-completion navigation for BOTH the "Set a
-  // password" path and the Google OAuth return leg. Neither
-  // `handleSetPassword` nor `handleGoogleSignIn` below calls
-  // `navigate(consumeIntendedUrl())` inline for the same reason
-  // `LoginPage.tsx` doesn't -- `consumeIntendedUrl()` both reads AND clears
-  // the stored intended URL, so a second inline call after this effect's
-  // own call would silently collapse to the `/` fallback instead of the
-  // real destination.
+  // T077: PREMATURE-NAVIGATION BUG FIX -- read in full before touching
+  // either effect below.
+  //
+  // T073b2 built this page's navigate-away-once-resolved effect by mirroring
+  // `../login/LoginPage.tsx`'s identical effect verbatim: "once `useAuth()`'s
+  // `user` resolves (non-null, not loading, not no-profile), navigate away."
+  // For `LoginPage.tsx` that is correct -- reaching a resolved `user` IS
+  // completion there, no matter which sign-in method got them there. It is
+  // NOT correct here: per this file's Ground Truth section, the invite email
+  // link itself already establishes a real, resolved Supabase session the
+  // moment this page mounts (the same auto-parse-the-callback-URL mechanism
+  // the Google OAuth return leg relies on) -- BEFORE the visitor has done
+  // anything at all, let alone set a password. Navigating away the instant
+  // `user` resolves would bounce the visitor off this page before they ever
+  // see the "Set a password" form.
+  //
+  // Fix: the effect below fires on the EXPLICIT `hasCompletedSetup` signal,
+  // never directly on `user`/`isLoading`/`noProfile`. `hasCompletedSetup` is
+  // set `true` in exactly two places, both explicit, both gated on the
+  // visitor having actually done something on THIS page instance:
+  //   - `handleSetPassword`'s success path (after `updateUserPassword`
+  //     resolves) -- see below.
+  //   - The Google-completion effect immediately below this comment, itself
+  //     gated on `googleSignInStarted` (set the moment the visitor clicks
+  //     "Continue with Google" in `handleGoogleSignIn`) -- so a resolved
+  //     `user` only counts as Google-path completion if the visitor started
+  //     that round trip on this page instance, not merely because a session
+  //     happened to already be active on mount.
   useEffect(() => {
-    if (!isLoading && !noProfile && user) {
+    if (googleSignInStarted && !isLoading && !noProfile && user) {
+      setHasCompletedSetup(true);
+    }
+  }, [googleSignInStarted, user, isLoading, noProfile]);
+
+  // Single source of post-completion navigation for BOTH the "Set a
+  // password" path and the Google OAuth return leg -- mirrors
+  // `../login/LoginPage.tsx`'s double-navigate-avoidance reasoning for why
+  // neither `handleSetPassword` nor `handleGoogleSignIn` below calls
+  // `navigate(consumeIntendedUrl())` inline: `consumeIntendedUrl()` both
+  // reads AND clears the stored intended URL, so a second inline call after
+  // this effect's own call would silently collapse to the `/` fallback
+  // instead of the real destination.
+  useEffect(() => {
+    if (hasCompletedSetup) {
       navigate(consumeIntendedUrl('/'), { replace: true });
     }
-  }, [user, isLoading, noProfile, navigate]);
+  }, [hasCompletedSetup, navigate]);
 
   const handleSetPassword = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -352,27 +464,21 @@ export function AcceptInvitePage({
 
     setIsSubmitting(true);
     try {
-      // T073b2: migrated to the new `login(email, password)` contract (see
-      // module doc gap #2/#3, further specified here). This attempts a
-      // REAL Supabase sign-in with the password just chosen -- it does NOT
-      // itself set that password on the backend. No `updateUser({ password
-      // })` wrapper exists yet in `../../lib/supabase/auth.ts` (a
-      // forbidden/read-only file for this task), and adding one is out of
-      // this task's scope (this task's Allowed Files cover only
-      // `login`/`loginWithGoogle`/`logout`'s own call sites, not a new
-      // backend function). A complete real "accept invite" flow needs, in
-      // order: (a) a session already established from the invite email's
-      // own link/token (the Supabase client auto-parses that on load, the
-      // same mechanism the Google OAuth return leg below relies on), then
-      // (b) a real `updateUser({ password })` call while that session is
-      // active to actually set the password -- only then would this
-      // `login()` call have a real password to authenticate against. Until
-      // (a)/(b) exist, this call will realistically fail against a live
-      // backend, surfaced via the `catch` below exactly like any other
-      // sign-in failure -- a disclosed, deferred gap, not a regression this
-      // task introduced.
-      await login(inviteData.email, password);
-      // No inline `navigate()` here -- see the `useEffect` above.
+      // T077: a real Supabase session already exists by the time this runs
+      // -- the invite email link's own auto-parsed session (see this file's
+      // Ground Truth section above), the same mechanism the Google OAuth
+      // return leg relies on. So there is no need to sign in again here;
+      // `updateUserPassword` simply sets the real password on that
+      // already-authenticated session. `login(email, password)` is
+      // deliberately NOT called -- there was never a real password to sign
+      // in with until this call itself sets one.
+      await updateUserPassword(password);
+      // Explicit completion signal -- see the "PREMATURE-NAVIGATION BUG FIX"
+      // comment above the navigate effects: this is the ONLY place the
+      // password path ever marks setup complete, and only after
+      // `updateUserPassword` has genuinely succeeded. No inline `navigate()`
+      // here -- the effect above does that once `hasCompletedSetup` flips.
+      setHasCompletedSetup(true);
     } catch (error) {
       setFormError({
         title: "Couldn't set password",
@@ -388,16 +494,24 @@ export function AcceptInvitePage({
 
   const handleGoogleSignIn = async () => {
     setFormError(null);
+    // T077: marks "the visitor explicitly started the Google flow on THIS
+    // page instance" BEFORE the async round trip -- see the
+    // "PREMATURE-NAVIGATION BUG FIX" comment above the navigate effects.
+    // Set unconditionally (not inside `try`) so it's true even if
+    // `loginWithGoogle` itself throws synchronously; the Google-completion
+    // effect only ever acts on it once `user` also resolves, so this alone
+    // can never cause a premature navigation.
+    setGoogleSignInStarted(true);
     try {
       // Redirects back to this exact page (path + query string, including
       // `?token=...`) once the OAuth round trip completes -- mirrors
       // `LoginPage.tsx`'s identical design. `AuthProvider`'s
       // `subscribeToAuthStateChange` listener picks up the resulting
-      // `SIGNED_IN` event on that later mount; the `useEffect` above then
-      // navigates once `user` resolves.
+      // `SIGNED_IN` event on that later mount; the Google-completion effect
+      // above then sets `hasCompletedSetup`, and the navigate effect fires.
       const redirectTo = `${window.location.origin}${location.pathname}${location.search}`;
       await loginWithGoogle(redirectTo);
-      // No inline action here either -- see the `useEffect` above.
+      // No inline action here either -- see the effects above.
     } catch (error) {
       setFormError({
         title: 'Google sign-in failed',

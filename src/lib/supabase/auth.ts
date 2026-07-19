@@ -148,6 +148,47 @@ export async function signInWithGoogle(
   }
 }
 
+/**
+ * T077: real "set a password" backend call for `../../pages/accept-invite/
+ * AcceptInvitePage.tsx`'s completion flow. A thin wrapper around
+ * `client.auth.updateUser({ password })`, requiring an already-established
+ * session (the SDK itself rejects with an `AuthError` if there is none) --
+ * see that page's Ground Truth section for why a session already exists by
+ * the time this is called (the invite email link's own auto-parsed session,
+ * same mechanism `getInitialSession`/`subscribeToAuthStateChange` rely on
+ * for the Google OAuth return leg). This does NOT sign in / establish a new
+ * session itself -- unlike `signInWithPassword`, it only mutates the
+ * password field of whichever session is already active.
+ *
+ * Return type: `AuthUser` (not `void`, not the raw `{ data, error }` SDK
+ * shape), mirroring `signInWithPassword`'s "fail loud if the expected data
+ * is missing" pattern -- the SDK's own `updateUser` return type
+ * (`Promise<UserResponse>`, i.e. `{ data: { user: User }, error: AuthError |
+ * null }`) always includes a `user` on any non-error response, so a missing
+ * `user` here would indicate a genuinely unexpected SDK response, not a
+ * normal edge case (unlike `signInWithPassword`'s email-confirmation-pending
+ * caveat) -- still guarded defensively rather than assumed. Returning the
+ * updated `AuthUser` (rather than `void`) gives a future caller access to
+ * the confirmed post-update user record for free, at no extra cost over
+ * `void`.
+ */
+export async function updateUserPassword(
+  password: string,
+  client: SupabaseClient = getSupabaseClient(),
+): Promise<AuthUser> {
+  const { data, error } = await client.auth.updateUser({ password });
+  if (error) {
+    throw error;
+  }
+  if (!data.user) {
+    // Should not happen for a successful `updateUser` call, but the SDK's
+    // own return type allows it -- fail loud rather than returning an
+    // invalid/absent user as if the update produced one.
+    throw new Error('Password update succeeded but no user was returned.');
+  }
+  return data.user;
+}
+
 /** Maps to `guards.tsx`'s `AuthContextValue.logout`. */
 export async function signOut(client: SupabaseClient = getSupabaseClient()): Promise<void> {
   const { error } = await client.auth.signOut();
