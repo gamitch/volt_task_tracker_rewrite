@@ -65,13 +65,27 @@ deliberately terse going forward.
 **E1, E2, and E3 are all fully complete.** Full evidence for every row above is in
 `verification-log.md` under its `## T0xx` heading.
 
-## Active (2026-07-19, updated after T041/T043/T046/T047/T051/T059 batch — all 6 closed)
+## Active (2026-07-19, updated after T042/T060 — E6 and E9 both fully complete)
 
-64 tasks Passed. E1-E8 fully Passed for all automatable work. E9 has one task left (T060). E6 has
-one task left (T042). Only two Ready, undispatched tasks remain: T042, T060. 9 tasks remain
-Blocked: T052/T063/T065/T070 (human gates) and T064/T066-T069 (waiting on those gates or on
-T042+T060). See `overview.md` for the current tiered priority list.
+66 tasks Passed. E1-E9 are now fully Passed for every automatable task in the entire app. E11's
+four launch sweeps (T066-T069) are all now Ready with worker packets pre-built — T066's packet
+flags a major, unresolved tension worth reading before dispatch (no page is wired into a real route
+with a real backend yet, so its literal PRD-described acceptance criteria may not be satisfiable as
+written). 5 tasks remain Blocked, all human gates or waiting on one: T052/T063/T065/T070 (human
+gates, George) and T064 (waiting on T063). See `overview.md` for the current tiered priority list.
 
+- **T060 — `/settings` screen.** PASS (1st attempt, MINOR — closes out E9). Checker independently
+  reproduced the "Sign out everywhere" seam-before-`logout()` ordering with its own live
+  `AuthProvider`-backed scratch test, cross-checked the per-role Notifications mapping directly
+  against the PRD's real EML-02 table, and confirmed a CI-caught heading-query bug's fix targets
+  the real DOM boundary (AlertDialog's native `<dialog>` root). **E9 (Reports/Home) is now fully
+  Passed. The T053-T060 range is complete — T066, T067, T068, T069 all unblocked.**
+- **T042 — Mark day complete dialog.** PASS (1st attempt, NIT — closes out E6). Checker hand-traced
+  the real `v_student_hours` SQL and confirmed the worker's MET-03 structural claim exactly:
+  since this dialog always writes `check_in_at`/`check_out_at` as `null`, the view's coalesce chain
+  provably degenerates to the client-computed 2-tier expression — a genuine guarantee, not a
+  coincidence. Judged the adult-volunteers additive/delta design correct and safer than a
+  cumulative-total model. **E6 (Outreach) is now fully Passed.**
 - **T051 — `send-reminders` Edge Function + `pg_cron` + dedupe.** PASS (1st attempt, clean).
   Checker had real Deno available and independently ran the full suite itself (54/54), reproducing
   the dedupe re-run proof for both key shapes plus its own adversarial

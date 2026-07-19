@@ -14,27 +14,32 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-19, post-T041/T043/T046/T047/T051/T059 batch — all 6 closed)
+## Status snapshot (2026-07-19, post-T042/T060 — E6 and E9 both fully complete)
 
 75 tasks (T001–T071 + T002a + T002b + T006a + T016a) across epics E1–E11.
-**64 Passed · 2 Ready · 0 In Progress · 9 Blocked.**
+**66 Passed · 4 Ready · 0 In Progress · 5 Blocked.**
 
-- **E1–E8 all fully Passed for every automatable task.** E6's last automatable piece was T042
-  (still Ready — the one remaining outreach task); E7/E8 are both now 100% Passed.
-- **E9 (Reports/Home) — one task from fully complete.** T053–T059 all Passed. **T060 (`/settings`)**
-  Ready (unblocked by T046).
-- **T042 (Mark day complete dialog)** Ready — the last piece of E6, unblocked by T041.
+- **E1–E9 all fully Passed for every automatable task.** Every content page, dialog, and Edge
+  Function in the entire app is built and independently checker-verified.
 - **E10 (Migration)** — T061, T062 Passed. T063/T064/T065 remain Blocked, gated on human-supplied
   old-project credentials and sign-offs (George).
-- **E11 (Launch sweeps)** — T066–T069 remain Blocked, waiting on T042 and T060 (the last two pieces
-  of the T053–T060-equivalent range) before they can start.
-- **Only two Ready tasks left with no packet yet: T042, T060** — once both land, essentially
-  everything left in the ledger is a human gate (T052, T063, T065, T070) or an E11 sweep waiting on
-  them.
-- **This session's four legitimate FAIL→rework→PASS cycles** (across both recent batches): T033
-  (secret-name leak), T054 (Divider-instead-of-Heading), T040 (`setTimeout` int32 overflow), T045
-  (non-unique link text). Every one was fixed with a narrow attempt-2 rework and re-verified by a
-  narrow re-check that independently reproduced the worker's own regression proof.
+- **E11 (Launch sweeps) — all four now Ready**, unblocked by T060 completing the full T053–T060
+  range: **T066** (Playwright persona smoke tests), **T067** (accessibility sweep), **T068**
+  (responsive sweep), **T069** (empty/error copy audit). Worker packets are pre-built for all four.
+  **T066's packet flags a major, unresolved tension worth reading before dispatch**: no page in the
+  app is wired into a real route with a real backend yet, so a literal "click through the real
+  running app" Playwright suite may not be buildable as PRD Section 14 literally describes — the
+  packet gives three honest resolution paths (build against fixture data with disclosed skips,
+  escalate as a dispute that this task is scheduled ahead of the still-undispatched T016a wiring
+  series, or a disclosed combination).
+- **Once T066–T069 land, essentially everything left is a human gate**: T052 (production email —
+  only needs George's Resend domain verification + final sign-off now; the `digest_enabled`
+  question is resolved), T063/T065 (migration gates), T070 (final go-live).
+- **This session's four legitimate FAIL→rework→PASS cycles**: T033 (secret-name leak), T054
+  (Divider-instead-of-Heading), T040 (`setTimeout` int32 overflow), T045 (non-unique link text).
+  Every one was fixed with a narrow attempt-2 rework and re-verified by a narrow re-check that
+  independently reproduced the worker's own regression proof.
+
 
 **T071 (shared Supabase client) Passed, clean, no findings.** The recurring
 cross-cutting gap flagged by six prior tasks is now closed at the
@@ -52,26 +57,24 @@ page/`guards.tsx`.
 - **E4 (Roster) — fully complete.** T021–T029 all Passed.
 - **E5 (Meetings/Check-in) — fully complete.** T030–T036 all Passed
   (T033, T036 each had one legitimate FAIL→rework→PASS cycle).
-- **E6 (Outreach) — one task left.** T038–T041, T043, T044 all Passed.
-  **T042 (Mark day complete dialog)** Ready, undispatched — the last piece.
+- **E6 (Outreach) — fully complete.** T038–T044 all Passed.
 - **E7 (Calendar) — fully complete.** T045–T047 all Passed.
 - **E8 (Reminders) — fully complete for all automatable work.** T048–T051
   all Passed. T052 (human gate) Blocked, externally gated on George's
-  `mail.voltfrc.org` domain verification and sign-off — carries a real,
-  disclosed follow-up question (does `notification_prefs.digest_enabled`
-  need to also gate weekly-digest sends?) for that sign-off to resolve.
-- **E9 (Reports/Home) — one task left.** T053–T059 all Passed. **T060
-  (`/settings`)** Ready, undispatched — the last piece.
+  `mail.voltfrc.org` domain verification and final sign-off — the
+  `digest_enabled`-vs-`weekly_digest` question is resolved (George
+  confirmed `weekly_digest` alone is correct, `digest_enabled` is
+  vestigial).
+- **E9 (Reports/Home) — fully complete.** T053–T060 all Passed.
 - **E10 (Migration) — T061, T062 Passed.** T063 is a human gate blocked on
   George's real old-project credentials; T064/T065 blocked behind it.
-- **E11 (Launch sweeps) — Blocked**, waiting on T042 and T060 (the last two
-  pieces of the T053–T060-equivalent completion range) before any of
-  T066–T069 can start.
+- **E11 (Launch sweeps) — all four tasks now Ready**, unblocked by T060
+  completing the full T053–T060 range: T066, T067, T068, T069.
 
-Two Ready tasks have no packets built yet: T042, T060 — each needs one
-built (directly or via foreman-planner) before dispatch. Once both land,
-essentially everything remaining in the ledger is either a human gate
-(T052, T063, T065, T070) or an E11 sweep waiting on them.
+Four Ready tasks have worker packets already pre-built: T066, T067, T068,
+T069 (`docs/swarm/active/T0{66,67,68,69}-worker-packet.md`). T066's packet
+flags a major, unresolved tension worth reading before dispatch — see the
+Status snapshot above.
 
 Two real incidents earlier this session, both handled cleanly — see Known
 Decisions/Current Risks in `state-summary.md` if ever needed: (1) a
@@ -126,13 +129,14 @@ See the T071 detail block in `task-ledger.md` (end of E3) and its
 
 ## Next recommended action
 
-Two tasks are Ready: T042, T060. Neither has a worker packet pre-built yet
-— both need one built first, either directly or via foreman-planner. They
-are file-disjoint and dispatchable in parallel.
-**Both are equally high-leverage** — they are the last two pieces standing
-between the current state and E11's launch sweeps (T066–T069) becoming
-dispatchable. T060 (`/settings`) also closes out E9 entirely; T042 (Mark
-day complete dialog) closes out E6 entirely.
+Four tasks are Ready, all with worker packets already pre-built: T066,
+T067, T068, T069 (E11's launch sweeps). **Read T066's packet before
+dispatching it** — it flags a major, unresolved tension (no page is wired
+into a real route with a real backend yet, so its literal "click through
+the real app" acceptance criteria may not be satisfiable as written) and
+gives three honest resolution paths, one of which is escalating a dispute
+rather than proceeding. T067/T068/T069 (accessibility/responsive/copy
+sweeps) are lower-risk audit tasks and can be dispatched as-is.
 
 Separately, worth deciding when to prioritize: drafting the T016a-pattern
 wiring series that connects T071's new client into `guards.tsx` and the
