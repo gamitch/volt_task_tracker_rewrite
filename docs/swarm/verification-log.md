@@ -1637,3 +1637,55 @@ Passed.
 
 Full packets archived at `docs/swarm/archive/T049-worker-packet.md` and
 `docs/swarm/archive/T049-checker-packet.md`.
+[2026-07-19T07:50:58Z] Worker finished. Checker required before completion.
+
+## T057 — Hours tab (RPT-03)
+
+**Result: PASS (1st attempt). Severity: NIT.**
+
+Worker built `HoursTab.tsx`: per-student/team confirmed/planned hours, goal/%-to-goal, team
+subtotals, season totals.
+
+**Checker's independent verification (checker-reviewer):**
+- **Central safety check**: independently grepped and confirmed every `attendance`/`hours_override`/
+  `check_in`/`check_out` reference is inside a comment — confirmed hours originate exclusively from
+  `v_student_hours`'s own verbatim-renamed value, never recomputed.
+- Planned-hours and goal-hours computations confirmed byte-for-byte logically identical to
+  `OutreachList.tsx`'s and `StudentHome.tsx`'s established, already-checker-approved patterns.
+- Team/season subtotals confirmed correct (no cross-team summing, null-`peopleReached` handling
+  matches disclosure).
+- **Dispute candidate resolved without escalation**: independently read BEH-01's literal PRD text
+  and concurred the worker's per-team (not per-student-row) milestone Toast scoping is the correct,
+  context-appropriate reading for a coach/admin aggregate report — BEH-01's celebratory framing is
+  textually scoped to student/parent views, and per-row toasts on a dense table would be a flood,
+  not a celebration. Logged one NIT: per-row `ProgressBar`s show a percent value but not literal
+  tick marks (ticks live once per team).
+- 736/736 repo-wide, 26/26 own tests, typecheck/lint/build clean.
+
+Full packets archived at `docs/swarm/archive/T057-worker-packet.md` and
+`docs/swarm/archive/T057-checker-packet.md`.
+
+## T040 — RSVP control (OUT-03)
+
+**Result: PASS (attempt 2).**
+
+Worker built `RsvpControl.tsx`: OUT-03's literal `[Sign up | Maybe | Can't go]` labels, real
+`responded_by` profile-id attribution, session-start lock boundary.
+
+Attempt 1 was a legitimate FAIL (MAJOR) after `responded_by`/label-mapping/lock-boundary/BEH-09
+copy were all independently confirmed correct: the checker found a real int32 `setTimeout` overflow
+in the disclosed live re-lock enhancement — `msUntilLock` exceeding ~24.85 days gets silently
+clamped to 1ms by the JS timer spec, incorrectly locking the RSVP control almost immediately for
+any session more than ~25 days out (a routine, in-scope case), reproduced against the real
+component.
+
+Attempt 2's fix: `useSessionRsvpLock` guarded against scheduling a timer beyond the max safe 32-bit
+delay (`msUntilLock > 2147483647`). The narrow re-check independently confirmed the fix is correct
+and narrowly scoped, and — rather than trusting the worker's own revert-fix-restore claim —
+independently reproduced it: reverted the guard, confirmed the new 30-day-out regression test fails
+(14/15), restored the guard, confirmed 15/15. Zero regressions.
+
+**T041, T043 unblocked (Blocked→Ready).**
+
+Full packets archived at `docs/swarm/archive/T040-worker-packet.md` and
+`docs/swarm/archive/T040-checker-packet.md`.
