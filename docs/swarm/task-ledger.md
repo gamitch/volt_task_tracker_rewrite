@@ -96,7 +96,7 @@ Epic dependency order (PRD Section 13): **E1 → E2 → E3 → (E4, E5, E6 paral
 | T068 | E11 | Responsive sweep 375–1440px | worker-implementer | checker-accessibility | T053–T060 | 0 | Blocked | None | No |
 | T069 | E11 | Empty/error state copy audit (DES-12/15/16) | worker-implementer | checker-content | T053–T060 | 0 | Blocked | None | No |
 | T070 | E11 | **HUMAN GATE** — Vercel domain go-live | — | human (George) | T065,T066,T067,T068,T069 | — | Blocked | None | — |
-| T071 | E3 | Shared Supabase client + auth/session surface + typed loader seam (`src/lib/supabase/**`) | worker-implementer | checker-tests | T015,T019 | 0 | In Progress | Dispatched 2026-07-19 to worker-implementer per `docs/swarm/active/T071-worker-packet.md`. Awaiting worker output. | No |
+| T071 | E3 | Shared Supabase client + auth/session surface + typed loader seam (`src/lib/supabase/**`) | worker-implementer | checker-tests | T015,T019 | 0 | In Progress | Worker done (`17ae532`), claims single client instance, lazy-init unconfigured mode, guards.tsx-shaped auth surface, zero fake-data fallback in loader, 62/62 tests pass, secret-hygiene clean, bundle-size neutral (module fully tree-shaken, unused so far). Checker dispatched per `docs/swarm/active/T071-checker-packet.md`. | No |
 
 ---
 
