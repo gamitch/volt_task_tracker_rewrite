@@ -379,16 +379,29 @@ describe('computeCurrentSchoolYearRange (module doc #2 -- real DateRangeInput pr
 // ---------------------------------------------------------------------------
 
 describe('<SeasonSettings /> admin-only gate', () => {
-  it('redirects an unauthenticated viewer to "/"', () => {
+  // T073b2: `RequireRole` (`guards.tsx`) no longer redirects a role-denied
+  // (or unauthenticated) viewer to "/" -- it renders `<NoAccessPage />` in
+  // place instead (a real, disclosed behavior change; see that file's own
+  // module doc). Both tests below now assert the `NoAccessPage` render
+  // (its own real `EmptyState` title) rather than the old redirect target,
+  // and both now flush microtasks first -- auth resolution (even the
+  // real default `authModule`'s own fail-safe-to-anonymous path for the
+  // unauthenticated case, or the fake `authModule` `LoginAs` injects for
+  // the coach case) is genuinely async now, so `RequireRole` renders
+  // nothing (`isLoading`) until that resolves.
+  it('renders NoAccessPage for an unauthenticated viewer, not a redirect', async () => {
     renderSeasonSettings(null, { loadData: testLoadData });
-    expect(document.querySelector('[data-testid="redirected-home"]')).toBeTruthy();
+    await flushMicrotasks();
+    expect(document.querySelector('[data-testid="redirected-home"]')).toBeNull();
+    expect(container.textContent).toContain("You're not on the roster yet.");
     expect(container.textContent).not.toContain('Season settings');
   });
 
-  it('redirects a non-admin (coach) viewer to "/"', async () => {
+  it('renders NoAccessPage for a non-admin (coach) viewer, not a redirect', async () => {
     renderSeasonSettings(COACH_USER, { loadData: testLoadData });
     await flushMicrotasks();
-    expect(document.querySelector('[data-testid="redirected-home"]')).toBeTruthy();
+    expect(document.querySelector('[data-testid="redirected-home"]')).toBeNull();
+    expect(container.textContent).toContain("You're not on the roster yet.");
     expect(container.textContent).not.toContain('Season settings');
   });
 
@@ -405,8 +418,14 @@ describe('<SeasonSettings /> admin-only gate', () => {
 // ---------------------------------------------------------------------------
 
 describe('<SeasonSettings /> DES-12 states', () => {
-  it('shows a loading spinner before data resolves', () => {
+  it('shows a loading spinner before data resolves', async () => {
     renderSeasonSettings(ADMIN_USER, { loadData: () => new Promise(() => {}) });
+    // T073b2: auth resolution (even via the fake `authModule` this
+    // harness's `LoginAs` now uses) is genuinely async -- a flush is needed
+    // before the authenticated, admin-gated body (and its own DES-12
+    // loading state) mounts. See `src/test-utils/authHarness.tsx`'s module
+    // doc.
+    await flushMicrotasks();
     expect(container.textContent).toContain('Loading seasons');
   });
 

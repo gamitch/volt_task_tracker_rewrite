@@ -129,7 +129,7 @@
  * with real latency replace these placeholders.
  */
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Banner,
   Button,
@@ -142,11 +142,27 @@ import {
   TextInput,
   VStack,
 } from '@astryxdesign/core';
-import { consumeIntendedUrl, useAuth, type Role } from '../../app/guards';
+import { consumeIntendedUrl, useAuth } from '../../app/guards';
 import type { AcceptInviteData, InviteRole, InviteStatus, LoadInviteFn } from './types';
 
-/** See module doc above -- placeholder-latency disclosure, not a PRD value. */
+/** See module doc above -- placeholder-latency disclosure, not a PRD value.
+ * T073b2: only `defaultLoadInvite`'s own fixture-loading delay still uses
+ * this -- the "Set a password" submit round trip that used to reuse it was
+ * migrated to a real `login()` call (see `handleSetPassword` below), which
+ * has its own real latency and no longer needs a borrowed fake delay. */
 const SIMULATED_ASYNC_LATENCY_MS = 350;
+
+/**
+ * Surfaces a real error's own `.message` when available, falling back to a
+ * generic description otherwise. Same helper/reasoning as
+ * `../login/LoginPage.tsx`'s identical function -- duplicated locally
+ * rather than factored into a shared module, since these are this task's
+ * only two call sites and neither file may introduce a new shared utility
+ * module outside its own Allowed Files.
+ */
+function describeAuthError(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
 
 /** Minimum password length enforced by this form. Not a PRD requirement --
  * no AUTH-0x excerpt available to this task specifies one -- a reasonable
@@ -192,19 +208,6 @@ async function defaultLoadInvite(token: string | null): Promise<AcceptInviteData
   await new Promise((resolve) => setTimeout(resolve, SIMULATED_ASYNC_LATENCY_MS));
   return DEFAULT_PLACEHOLDER_INVITE;
 }
-
-/**
- * Role assigned to a successful "Set a password" or "Continue with
- * Google" completion. See module doc gap #3 -- this intentionally ignores
- * the invite's own real `InviteRole` and matches `LoginPage.tsx`'s
- * identical placeholder (`PLACEHOLDER_SIGN_IN_ROLE: Role = 'coach'`,
- * T073a's chosen shared placeholder value -- see `guards.tsx`'s
- * `PLACEHOLDER_GOOGLE_USER` doc comment for the full reasoning), because
- * `guards.tsx`'s placeholder `login()` has no real credential/role
- * resolution to trust, independent of the fact its `Role` vocabulary now
- * does include `student`/`parent` (T073a).
- */
-const PLACEHOLDER_SIGN_IN_ROLE: Role = 'coach';
 
 type InviteLoadState = 'loading' | 'ready' | 'error';
 
@@ -262,8 +265,9 @@ function getInviteStatusError(status: InviteStatus): FormBannerError | null {
 export function AcceptInvitePage({
   loadInvite = defaultLoadInvite,
 }: AcceptInvitePageProps = {}): ReactNode {
-  const { login, loginWithGoogle } = useAuth();
+  const { login, loginWithGoogle, user, isLoading, noProfile } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
 
@@ -302,21 +306,30 @@ export function AcceptInvitePage({
     // on every render -- `runLoadInvite` is itself memoized against both.
   }, [runLoadInvite]);
 
-  const completeSignUp = () => {
-    if (!inviteData) {
-      return;
+  // T073b2 OAuth-redirect-leg design -- mirrors `../login/LoginPage.tsx`'s
+  // identical `useEffect` (see that file's module doc for the full
+  // double-navigate-avoidance reasoning, which applies verbatim here): the
+  // single source of post-completion navigation for BOTH the "Set a
+  // password" path and the Google OAuth return leg. Neither
+  // `handleSetPassword` nor `handleGoogleSignIn` below calls
+  // `navigate(consumeIntendedUrl())` inline for the same reason
+  // `LoginPage.tsx` doesn't -- `consumeIntendedUrl()` both reads AND clears
+  // the stored intended URL, so a second inline call after this effect's
+  // own call would silently collapse to the `/` fallback instead of the
+  // real destination.
+  useEffect(() => {
+    if (!isLoading && !noProfile && user) {
+      navigate(consumeIntendedUrl('/'), { replace: true });
     }
-    login({
-      id: `placeholder-invite-${PLACEHOLDER_SIGN_IN_ROLE}`,
-      email: inviteData.email,
-      role: PLACEHOLDER_SIGN_IN_ROLE,
-    });
-    navigate(consumeIntendedUrl('/'), { replace: true });
-  };
+  }, [user, isLoading, noProfile, navigate]);
 
   const handleSetPassword = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError(null);
+
+    if (!inviteData) {
+      return;
+    }
 
     const nextFieldErrors: PasswordFieldErrors = {};
     if (!password || password.length < MIN_PASSWORD_LENGTH) {
@@ -339,19 +352,34 @@ export function AcceptInvitePage({
 
     setIsSubmitting(true);
     try {
-      // Placeholder round trip -- see module doc gap #2/#3. Once a real
-      // Supabase call (e.g. `updateUser({ password })` against the
-      // unconfirmed `auth.users` row created at invite-send time -- see
-      // this task's worker output on why this is NOT a fresh signup) and
-      // real role resolution replace this, this block is exactly where the
-      // `catch` below would surface a real failure via the same
-      // Banner/status wiring.
-      await new Promise((resolve) => setTimeout(resolve, SIMULATED_ASYNC_LATENCY_MS));
-      completeSignUp();
-    } catch {
+      // T073b2: migrated to the new `login(email, password)` contract (see
+      // module doc gap #2/#3, further specified here). This attempts a
+      // REAL Supabase sign-in with the password just chosen -- it does NOT
+      // itself set that password on the backend. No `updateUser({ password
+      // })` wrapper exists yet in `../../lib/supabase/auth.ts` (a
+      // forbidden/read-only file for this task), and adding one is out of
+      // this task's scope (this task's Allowed Files cover only
+      // `login`/`loginWithGoogle`/`logout`'s own call sites, not a new
+      // backend function). A complete real "accept invite" flow needs, in
+      // order: (a) a session already established from the invite email's
+      // own link/token (the Supabase client auto-parses that on load, the
+      // same mechanism the Google OAuth return leg below relies on), then
+      // (b) a real `updateUser({ password })` call while that session is
+      // active to actually set the password -- only then would this
+      // `login()` call have a real password to authenticate against. Until
+      // (a)/(b) exist, this call will realistically fail against a live
+      // backend, surfaced via the `catch` below exactly like any other
+      // sign-in failure -- a disclosed, deferred gap, not a regression this
+      // task introduced.
+      await login(inviteData.email, password);
+      // No inline `navigate()` here -- see the `useEffect` above.
+    } catch (error) {
       setFormError({
         title: "Couldn't set password",
-        description: 'We could not finish setting up your account. Try again.',
+        description: describeAuthError(
+          error,
+          'We could not finish setting up your account. Try again.',
+        ),
       });
     } finally {
       setIsSubmitting(false);
@@ -361,12 +389,22 @@ export function AcceptInvitePage({
   const handleGoogleSignIn = async () => {
     setFormError(null);
     try {
-      await loginWithGoogle();
-      completeSignUp();
-    } catch {
+      // Redirects back to this exact page (path + query string, including
+      // `?token=...`) once the OAuth round trip completes -- mirrors
+      // `LoginPage.tsx`'s identical design. `AuthProvider`'s
+      // `subscribeToAuthStateChange` listener picks up the resulting
+      // `SIGNED_IN` event on that later mount; the `useEffect` above then
+      // navigates once `user` resolves.
+      const redirectTo = `${window.location.origin}${location.pathname}${location.search}`;
+      await loginWithGoogle(redirectTo);
+      // No inline action here either -- see the `useEffect` above.
+    } catch (error) {
       setFormError({
         title: 'Google sign-in failed',
-        description: 'We could not complete sign-in with Google. Try again.',
+        description: describeAuthError(
+          error,
+          'We could not complete sign-in with Google. Try again.',
+        ),
       });
     }
   };

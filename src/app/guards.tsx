@@ -10,20 +10,22 @@
  * functions (`setIntendedUrl`, `consumeIntendedUrl`, `pushToast`, etc.)
  * directly.
  *
- * The real auth backend (Supabase) is not wired up by this task -- only
- * `react-router-dom` was installed per the T005 packet. `AuthProvider` below
- * is a self-contained in-memory placeholder that exposes the same shape a
- * real Supabase-backed provider would need (`user`, `isLoading`, `login`,
- * `loginWithGoogle`, `logout`), so a later auth task can swap the internals
- * without changing the public `useAuth()` contract the guards depend on.
+ * T073b2: `AuthProvider` below is now wired to the real, typed Supabase auth
+ * module (`../lib/supabase/auth.ts`, T071, Passed) instead of T005's
+ * in-memory placeholder. See the "Real auth wiring" section below for the
+ * full design (two-step async session->role resolution, the injectable
+ * `authModule` seam, and the AUTH-04 no-profile state).
  */
 import type { ReactNode } from 'react';
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import type { Role } from '../lib/supabase';
+import * as supabaseAuthModule from '../lib/supabase/auth';
+import type { AuthChangeEvent, AuthSession, RoleResolution } from '../lib/supabase/auth';
+import { NoAccessPage } from '../pages/no-access';
 
 // ---------------------------------------------------------------------------
-// Auth context (placeholder implementation -- see module doc above)
+// Auth context
 // ---------------------------------------------------------------------------
 
 /**
@@ -49,74 +51,284 @@ export interface AuthUser {
   role: Role;
 }
 
+/**
+ * T073b2: the injectable auth-module seam. Same six function shapes
+ * `../lib/supabase/auth.ts` (T071) exports, minus each function's optional
+ * trailing `client` parameter (the real module's own default -- the shared
+ * `getSupabaseClient()` singleton -- still applies when a test doesn't
+ * override it via this seam). `AuthProvider` defaults to the real module
+ * (`defaultAuthModule` below) when no `authModule` prop is supplied; tests
+ * (`src/test-utils/authHarness.tsx`) supply a fake implementation instead so
+ * they never touch a real backend.
+ */
+export interface AuthModule {
+  getInitialSession: () => Promise<AuthSession | null>;
+  subscribeToAuthStateChange: (
+    callback: (event: AuthChangeEvent, session: AuthSession | null) => void,
+  ) => () => void;
+  signInWithPassword: (email: string, password: string) => Promise<AuthSession>;
+  signInWithGoogle: (redirectTo: string) => Promise<void>;
+  signOut: () => Promise<void>;
+  resolveRole: (userId: string) => Promise<RoleResolution>;
+}
+
+/** The real implementation, wired to `../lib/supabase/auth.ts` (T071). This
+ * is `AuthProvider`'s default `authModule` -- production code never passes
+ * `authModule` explicitly, only tests do. */
+const defaultAuthModule: AuthModule = {
+  getInitialSession: supabaseAuthModule.getInitialSession,
+  subscribeToAuthStateChange: supabaseAuthModule.subscribeToAuthStateChange,
+  signInWithPassword: supabaseAuthModule.signInWithPassword,
+  signInWithGoogle: supabaseAuthModule.signInWithGoogle,
+  signOut: supabaseAuthModule.signOut,
+  resolveRole: supabaseAuthModule.resolveRole,
+};
+
 export interface AuthContextValue {
-  /** Null while unauthenticated (or before an initial session check resolves). */
-  user: AuthUser | null;
-  /** True until the placeholder "session check" has resolved once. */
-  isLoading: boolean;
-  /** Simulates a successful login (e.g. after a credentials or magic-link flow). */
-  login: (user: AuthUser) => void;
   /**
-   * NAV-08 Google OAuth round-trip placeholder.
-   *
-   * TODO(auth task): replace this body with a real
-   * `supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })`
-   * call plus a callback-route handler once Supabase auth is wired up. Until
-   * then this simulates an immediate successful round trip so the NAV-08
-   * "return to intended URL after login" behavior can be built and reasoned
-   * about end-to-end against a stable contract.
+   * Null while unauthenticated, while the initial session check is still
+   * resolving (`isLoading`), or while `noProfile` is `true` (see below) --
+   * never a half-resolved/partial user.
    */
-  loginWithGoogle: () => Promise<AuthUser>;
-  logout: () => void;
+  user: AuthUser | null;
+  /**
+   * True until the two-step session->role resolution (see module doc
+   * "Real auth wiring" below) has resolved ONCE, spanning BOTH steps. A
+   * consumer must never treat `user === null` as "signed out" while
+   * `isLoading` is still `true` -- it may simply mean "not resolved yet".
+   */
+  isLoading: boolean;
+  /**
+   * T073b2 / AUTH-04: `true` when the visitor has a real, signed-in Supabase
+   * auth session but no matching `profiles` row (`resolveRole` returned
+   * `{ status: 'no-profile' }`, T071's `RoleResolution` type). This is a
+   * THIRD auth state, distinct from both "anonymous" (`user === null &&
+   * noProfile === false`, not signed in at all) and "authenticated"
+   * (`user !== null`) -- redirecting a no-profile visitor to `/login` would
+   * loop (they can sign in again, still have no profile, redirect again...).
+   * `RequireAuth` renders `<NoAccessPage />` in place for this case instead
+   * of redirecting. Chosen as a standalone boolean (over e.g. a `status:
+   * 'anonymous' | 'authenticated' | 'no-profile' | 'loading'` enum) because
+   * it's additive: every existing `user`/`isLoading` consumer in this
+   * codebase keeps its current meaning unchanged, and the one new case this
+   * task adds is genuinely boolean ("does this signed-in session have a
+   * profile or not"), not one of several mutually-exclusive named statuses
+   * layered on top of `user`/`isLoading`'s own already-adequate null-ness/
+   * loading-ness.
+   */
+  noProfile: boolean;
+  /**
+   * Signs in with email + password (`../lib/supabase/auth.ts`'s
+   * `signInWithPassword`), then resolves session->role the same way the
+   * initial-mount flow does (see `resolveSessionToAuthState` below) BEFORE
+   * this promise resolves -- so a caller's `await login(...)` is guaranteed
+   * a fully-resolved `user`/`noProfile` by the time it returns. Lets the
+   * real `AuthError` (or a role-resolution failure) propagate unwrapped, per
+   * `../lib/supabase/auth.ts`'s own disclosed error-propagation choice --
+   * this function does not catch/wrap it.
+   */
+  login: (email: string, password: string) => Promise<void>;
+  /**
+   * Starts the Google OAuth round trip (`../lib/supabase/auth.ts`'s
+   * `signInWithGoogle`). Does NOT return a user -- a real OAuth flow
+   * redirects the browser away before anything meaningful could be
+   * returned synchronously. The eventual `SIGNED_IN` event on the return
+   * leg is picked up by this provider's own `subscribeToAuthStateChange`
+   * listener; callers (`LoginPage.tsx`/`AcceptInvitePage.tsx`) observe the
+   * resulting resolved `user` via `useAuth()` itself, not this call's
+   * return value -- see those files' module docs for the full return-leg
+   * design.
+   */
+  loginWithGoogle: (redirectTo: string) => Promise<void>;
+  /**
+   * Signs out (`../lib/supabase/auth.ts`'s `signOut`) and clears local auth
+   * state. Deliberately NEVER rejects (internally catches and logs any
+   * `signOut()` failure) -- two existing call sites
+   * (`src/pages/no-access/NoAccessPage.tsx`, `src/pages/settings/
+   * SettingsPage.tsx`) call `logout()` fire-and-forget with no
+   * `.catch`/`try`, so a remote failure here must not surface as an
+   * unhandled promise rejection. Local session state is cleared regardless
+   * of whether the remote `signOut()` call itself succeeded.
+   */
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+// ---------------------------------------------------------------------------
+// Real auth wiring (T073b2)
+// ---------------------------------------------------------------------------
+
+interface ResolvedAuthState {
+  user: AuthUser | null;
+  noProfile: boolean;
+}
+
 /**
- * T073a: `role: 'coach'` is the chosen "shared placeholder role" -- the
- * same value `LoginPage.tsx`'s and `AcceptInvitePage.tsx`'s
- * `PLACEHOLDER_SIGN_IN_ROLE` constants now use, so every "no real backend
- * yet" placeholder sign-in path (email/password, Google, and accept-invite
- * completion) resolves to one consistent role rather than three different
- * ones. `'coach'` was chosen over `'admin'`/`'student'`/`'parent'` because
- * it is the closest practical analog to the old `'staff'` placeholder's
- * broad, non-admin operational access -- most existing `RequireRole`
- * gates in this codebase allow `['coach', 'admin']`, so a placeholder
- * sign-in still reaches the same routes it did before this fix, whereas
- * `'student'`/`'parent'` would newly lock a placeholder-authenticated
- * session out of most coach/admin-gated screens during manual testing.
- * Previously `role: 'staff'`, invalid under the now-corrected `Role` type.
+ * THE single source of truth for the two-step session->role resolution
+ * (Trap #1/#6 of this task's worker packet): `session = await
+ * getInitialSession()`, then (if a session exists) `role = await
+ * resolveRole(session.user.id)`. Called by all three places that ever need
+ * to turn a (possibly-null) session into `user`/`noProfile`: the
+ * initial-mount effect, the `subscribeToAuthStateChange` listener, and
+ * `login()`'s own explicit resolution -- see each call site below. Never
+ * touches `isLoading` itself; every caller is responsible for setting
+ * `isLoading: false` only once this promise has settled, which is what
+ * guarantees `isLoading` spans BOTH steps no matter which caller invoked it.
  */
-const PLACEHOLDER_GOOGLE_USER: AuthUser = {
-  id: 'placeholder-google-user',
-  email: 'placeholder.google.user@example.com',
-  role: 'coach',
-};
+async function resolveSessionToAuthState(
+  session: AuthSession | null,
+  resolveRole: AuthModule['resolveRole'],
+): Promise<ResolvedAuthState> {
+  if (!session) {
+    return { user: null, noProfile: false };
+  }
 
-export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  // No real session lookup exists yet (no Supabase client wired up in this
-  // task), so there is nothing async to await on mount. `isLoading` is kept
-  // in the contract for when a real session check lands.
-  const [isLoading] = useState(false);
+  const roleResolution = await resolveRole(session.user.id);
+  if (roleResolution.status === 'no-profile') {
+    return { user: null, noProfile: true };
+  }
 
-  const login = useCallback((nextUser: AuthUser) => {
-    setUser(nextUser);
-  }, []);
+  const { email } = session.user;
+  if (!email) {
+    // Every real sign-in path this app supports (email/password, Google)
+    // supplies an email -- the SDK's own type still allows `email` to be
+    // undefined (e.g. phone-based auth, unused here). Fail loud rather than
+    // fabricate an empty-string email a downstream screen could mistake for
+    // a real one: treated the same as "no usable profile" so `RequireAuth`
+    // renders `NoAccessPage` instead of crashing on a malformed `AuthUser`.
+    return { user: null, noProfile: true };
+  }
 
-  const loginWithGoogle = useCallback(async () => {
-    // Placeholder round trip -- see TODO on AuthContextValue.loginWithGoogle.
-    setUser(PLACEHOLDER_GOOGLE_USER);
-    return PLACEHOLDER_GOOGLE_USER;
-  }, []);
+  return {
+    user: { id: session.user.id, email, role: roleResolution.role },
+    noProfile: false,
+  };
+}
 
-  const logout = useCallback(() => {
-    setUser(null);
-  }, []);
+export interface AuthProviderProps {
+  children: ReactNode;
+  /**
+   * T073b2: injectable seam (see `AuthModule` above). Defaults to the real
+   * `../lib/supabase/auth.ts`-backed implementation; tests pass a fake here
+   * (see `src/test-utils/authHarness.tsx`) instead of hitting a real
+   * backend.
+   */
+  authModule?: AuthModule;
+}
+
+export function AuthProvider({
+  children,
+  authModule = defaultAuthModule,
+}: AuthProviderProps): ReactNode {
+  const [state, setState] = useState<{
+    user: AuthUser | null;
+    isLoading: boolean;
+    noProfile: boolean;
+  }>({
+    user: null,
+    isLoading: true,
+    noProfile: false,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function init(): Promise<void> {
+      try {
+        const session = await authModule.getInitialSession();
+        const resolved = await resolveSessionToAuthState(session, authModule.resolveRole);
+        if (isMounted) {
+          setState({ user: resolved.user, isLoading: false, noProfile: resolved.noProfile });
+        }
+      } catch (error) {
+        // Real backend unreachable/unconfigured (e.g. `SupabaseNotConfiguredError`
+        // -- no `.env` present, per `src/lib/supabase/client.ts`) or a
+        // genuine transport failure resolving the initial session. Fail
+        // safe to "anonymous" rather than leaving `isLoading` stuck `true`
+        // forever -- that would blank every `RequireAuth`-protected route
+        // indefinitely, a worse and less visible failure than the `/login`
+        // redirect this produces instead. Logged, never silently swallowed.
+        console.error('AuthProvider: failed to resolve the initial auth session.', error);
+        if (isMounted) {
+          setState({ user: null, isLoading: false, noProfile: false });
+        }
+      }
+    }
+
+    void init();
+
+    async function handleAuthStateChange(session: AuthSession | null): Promise<void> {
+      try {
+        const resolved = await resolveSessionToAuthState(session, authModule.resolveRole);
+        if (isMounted) {
+          setState({ user: resolved.user, isLoading: false, noProfile: resolved.noProfile });
+        }
+      } catch (error) {
+        console.error('AuthProvider: failed to resolve an auth state change.', error);
+      }
+    }
+
+    let unsubscribe = (): void => {};
+    try {
+      unsubscribe = authModule.subscribeToAuthStateChange((_event, session) => {
+        void handleAuthStateChange(session);
+      });
+    } catch (error) {
+      // Same unconfigured/transport-failure family as `init()`'s catch
+      // above -- `subscribeToAuthStateChange` is a plain (non-`async`)
+      // function, so an unconfigured-client failure throws SYNCHRONOUSLY
+      // here rather than rejecting a promise; caught the same way, for the
+      // same reason (never let it crash this effect / the render tree).
+      console.error('AuthProvider: failed to subscribe to auth state changes.', error);
+    }
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [authModule]);
+
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const session = await authModule.signInWithPassword(email, password);
+      const resolved = await resolveSessionToAuthState(session, authModule.resolveRole);
+      setState({ user: resolved.user, isLoading: false, noProfile: resolved.noProfile });
+    },
+    [authModule],
+  );
+
+  const loginWithGoogle = useCallback(
+    async (redirectTo: string) => {
+      await authModule.signInWithGoogle(redirectTo);
+      // No further action here -- see `AuthContextValue.loginWithGoogle`'s
+      // doc comment above for the full return-leg design.
+    },
+    [authModule],
+  );
+
+  const logout = useCallback(async () => {
+    try {
+      await authModule.signOut();
+    } catch (error) {
+      // See `AuthContextValue.logout`'s doc comment above -- deliberately
+      // never rethrown.
+      console.error('AuthProvider: signOut() failed; clearing local session anyway.', error);
+    } finally {
+      setState({ user: null, isLoading: false, noProfile: false });
+    }
+  }, [authModule]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, isLoading, login, loginWithGoogle, logout }),
-    [user, isLoading, login, loginWithGoogle, logout],
+    () => ({
+      user: state.user,
+      isLoading: state.isLoading,
+      noProfile: state.noProfile,
+      login,
+      loginWithGoogle,
+      logout,
+    }),
+    [state, login, loginWithGoogle, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -163,8 +375,8 @@ export function clearIntendedUrl(): void {
 /**
  * Reads and clears the stored intended URL in one step, returning
  * `fallback` when none was stored. Intended for use by the `/login` page
- * (or a future Google OAuth callback handler) immediately after a
- * successful login round trip, per NAV-08.
+ * (or the Google OAuth callback return leg) immediately after a successful
+ * login round trip resolves, per NAV-08.
  */
 export function consumeIntendedUrl(fallback = '/'): string {
   const intended = getIntendedUrl();
@@ -209,14 +421,23 @@ export interface RequireAuthProps {
 
 /**
  * Redirects unauthenticated users to `/login`, first storing the intended
- * URL (NAV-08) so the login flow can return them to it afterward.
+ * URL (NAV-08) so the login flow can return them to it afterward. Renders
+ * nothing while `isLoading` (Trap #1: this must stay `true` across BOTH
+ * steps of session->role resolution, or this guard would wrongly bounce an
+ * authenticated-but-role-pending user to `/login`). Renders `<NoAccessPage
+ * />` in place -- never a redirect -- for AUTH-04's no-profile case (Trap
+ * #2), since redirecting to `/login` would loop.
  */
 export function RequireAuth({ children }: RequireAuthProps): ReactNode {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, noProfile } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
     return null;
+  }
+
+  if (noProfile) {
+    return <NoAccessPage />;
   }
 
   if (!user) {
@@ -233,17 +454,34 @@ export interface RequireRoleProps {
 }
 
 /**
- * Redirects users whose role is not in `allowedRoles` back to `/` and fires
- * the NAV-06 access-denied toast. Meant to be nested *inside* `RequireAuth`
- * so `user` is guaranteed non-null by the time this runs; it still degrades
- * safely (redirects) if used standalone with no authenticated user.
+ * Renders `<NoAccessPage />` in place for a role-denied (or still-anonymous,
+ * or no-profile) viewer -- no longer `<Navigate to="/" />` (T073b2, Trap #3:
+ * a real, disclosed behavior change). `/` is now a real role dispatcher
+ * (T075) that itself just re-enters role logic, so redirecting there on
+ * denial is fragile/loop-prone; rendering `NoAccessPage` in place matches
+ * the AUTH-04 no-profile case's own treatment (`RequireAuth` above) instead.
+ * Also waits out `isLoading` first, same reasoning as `RequireAuth` -- a
+ * role check performed before the role is even known must not treat
+ * "still loading" as "denied".
+ *
+ * Meant to be nested *inside* `RequireAuth` so `user`/`isLoading`/
+ * `noProfile` are already resolved by the time this runs; it still degrades
+ * safely (renders `NoAccessPage`, never crashes) if used standalone with no
+ * authenticated user.
  */
 export function RequireRole({ allowedRoles, children }: RequireRoleProps): ReactNode {
-  const { user } = useAuth();
+  const { user, isLoading, noProfile } = useAuth();
+
+  if (isLoading) {
+    return null;
+  }
+
+  if (noProfile) {
+    return <NoAccessPage />;
+  }
 
   if (!user || !allowedRoles.includes(user.role)) {
-    pushToast(ACCESS_DENIED_TOAST_MESSAGE);
-    return <Navigate to="/" replace />;
+    return <NoAccessPage />;
   }
 
   return <>{children}</>;

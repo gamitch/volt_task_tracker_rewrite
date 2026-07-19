@@ -531,10 +531,16 @@ describe('MTG-12 excused gating (defense in depth)', () => {
 // ---------------------------------------------------------------------------
 
 describe('LiveConsolePage role guard', () => {
-  it('redirects a non-coach/admin role to "/"', async () => {
+  // T073b2: `RequireRole` (`guards.tsx`) no longer redirects a role-denied
+  // viewer to "/" -- it renders `<NoAccessPage />` in place instead (a
+  // real, disclosed behavior change; see that file's own module doc). This
+  // test now asserts the `NoAccessPage` render (its own real
+  // `EmptyState` title) rather than the old redirect target.
+  it('renders NoAccessPage for a non-coach/admin role, not a redirect', async () => {
     renderPage(STUDENT_USER);
     await flushMicrotasks();
-    expect(container.querySelector('[data-testid="redirected-home"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="redirected-home"]')).toBeNull();
+    expect(container.textContent).toContain("You're not on the roster yet.");
     expect(container.textContent).not.toContain('Roster');
   });
 

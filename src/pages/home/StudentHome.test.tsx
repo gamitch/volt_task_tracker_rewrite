@@ -725,8 +725,13 @@ describe('StudentHome DES-12 states', () => {
     expect(container.textContent).toContain('Sign in to view Home');
   });
 
-  it('shows a spinner while loading', () => {
+  it('shows a spinner while loading', async () => {
     renderAsUser(STUDENT_USER, { loadData: () => new Promise(() => {}) });
+    // T073b2: auth resolution (even via the fake `authModule` this
+    // harness's `LoginAs` now uses) is genuinely async -- a flush is needed
+    // before the authenticated body (and its own DES-12 loading state)
+    // mounts. See `src/test-utils/authHarness.tsx`'s module doc.
+    await flushMicrotasks();
     expect(container.textContent).toContain('Loading Home');
   });
 

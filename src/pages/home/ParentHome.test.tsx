@@ -332,10 +332,15 @@ describe('<ParentHome /> signed out', () => {
 });
 
 describe('<ParentHome /> page-level DES-12 states', () => {
-  it('loading state', () => {
+  it('loading state', async () => {
     renderAsUser(PARENT_USER, {
       loadLinkedStudents: () => new Promise<LinkedStudentsResult>(() => {}),
     });
+    // T073b2: auth resolution (even via the fake `authModule` this
+    // harness's `LoginAs` now uses) is genuinely async -- a flush is needed
+    // before the authenticated body (and its own DES-12 loading state)
+    // mounts. See `src/test-utils/authHarness.tsx`'s module doc.
+    await flushMicrotasks();
     expect(container.textContent).toContain('Loading Home');
   });
 
