@@ -1357,3 +1357,5 @@ downstream gap (relationship label has nowhere to persist yet) in the process.
 
 Full packets archived at `docs/swarm/archive/T024-worker-packet.md` and
 `docs/swarm/archive/T024-checker-packet.md`.
+[2026-07-19T06:58:15Z] Worker finished. Checker required before completion.
+[2026-07-19T06:58:16Z] Worker finished. Checker required before completion.
