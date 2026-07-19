@@ -65,15 +65,30 @@ deliberately terse going forward.
 **E1, E2, and E3 are all fully complete.** Full evidence for every row above is in
 `verification-log.md` under its `## T0xx` heading.
 
-## Active (2026-07-19, updated after T042/T060 — E6 and E9 both fully complete)
+## Active (2026-07-19, updated after T067/T068/T069 — E11 sweeps 3 of 4 complete)
 
-66 tasks Passed. E1-E9 are now fully Passed for every automatable task in the entire app. E11's
-four launch sweeps (T066-T069) are all now Ready with worker packets pre-built — T066's packet
-flags a major, unresolved tension worth reading before dispatch (no page is wired into a real route
-with a real backend yet, so its literal PRD-described acceptance criteria may not be satisfiable as
-written). 5 tasks remain Blocked, all human gates or waiting on one: T052/T063/T065/T070 (human
-gates, George) and T064 (waiting on T063). See `overview.md` for the current tiered priority list.
+69 tasks Passed. E1-E9 are fully Passed for every automatable task in the entire app. George
+dispatched T067/T068/T069 first and explicitly held T066 back pending review of its own disclosed
+router-wiring tension. 1 task Ready (T066, held), 5 Blocked, all human gates or waiting on one:
+T052/T063/T065/T070 (human gates, George) and T064 (waiting on T063). See `overview.md` for the
+current tiered priority list.
 
+- **T068 — Responsive sweep 375-1440px.** PASS (audit itself; underlying finding is BLOCKER
+  severity). Surfaced a genuine NFR-06 gap: `LiveConsole.tsx` has no QR show/hide toggle at any
+  viewport width, plus its roster pane is the only fixed-width usage in the codebase missing the
+  `maxWidth="100%"` safety pairing every other screen uses. Checker independently re-derived every
+  dense-table minimum-width computation to the exact pixel and confirmed the jsdom
+  no-layout-engine limitation empirically. **No follow-up fix task created yet — needs a decision.**
+- **T067 — Accessibility sweep, all screens both modes.** PASS (1st attempt, MINOR). No
+  BLOCKER-class keyboard-path failures found on any core flow; D005's dark-mode contrast fix
+  re-confirmed still holding (including cascade-layer ordering). Two new cross-screen findings:
+  widespread `EmptyState` heading-level skips (~19 locations across 13 files) and a DES-04
+  event-type color-mapping inconsistency unique to `CoachHome.tsx`.
+- **T069 — Empty/error state copy audit (DES-12/15/16).** PASS (1st attempt, MINOR). DES-12's
+  `Skeleton` loading component is never used anywhere (universal `Spinner` substitution instead);
+  error-Banner retry actions missing almost everywhere; all 5 DES-15 verbatim empty-state examples
+  ship as paraphrases, not the PRD's literal text. Checker independently confirmed all counts
+  exactly (0 sorry/oops, 47 "something went wrong" hits across 30 files).
 - **T060 — `/settings` screen.** PASS (1st attempt, MINOR — closes out E9). Checker independently
   reproduced the "Sign out everywhere" seam-before-`logout()` ordering with its own live
   `AuthProvider`-backed scratch test, cross-checked the per-role Notifications mapping directly

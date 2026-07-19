@@ -14,25 +14,35 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-19, post-T042/T060 — E6 and E9 both fully complete)
+## Status snapshot (2026-07-19, post-T067/T068/T069 — E11 sweeps 3 of 4 complete)
 
 75 tasks (T001–T071 + T002a + T002b + T006a + T016a) across epics E1–E11.
-**66 Passed · 4 Ready · 0 In Progress · 5 Blocked.**
+**69 Passed · 1 Ready · 0 In Progress · 5 Blocked.**
 
 - **E1–E9 all fully Passed for every automatable task.** Every content page, dialog, and Edge
   Function in the entire app is built and independently checker-verified.
 - **E10 (Migration)** — T061, T062 Passed. T063/T064/T065 remain Blocked, gated on human-supplied
   old-project credentials and sign-offs (George).
-- **E11 (Launch sweeps) — all four now Ready**, unblocked by T060 completing the full T053–T060
-  range: **T066** (Playwright persona smoke tests), **T067** (accessibility sweep), **T068**
-  (responsive sweep), **T069** (empty/error copy audit). Worker packets are pre-built for all four.
-  **T066's packet flags a major, unresolved tension worth reading before dispatch**: no page in the
-  app is wired into a real route with a real backend yet, so a literal "click through the real
-  running app" Playwright suite may not be buildable as PRD Section 14 literally describes — the
-  packet gives three honest resolution paths (build against fixture data with disclosed skips,
-  escalate as a dispute that this task is scheduled ahead of the still-undispatched T016a wiring
-  series, or a disclosed combination).
-- **Once T066–T069 land, essentially everything left is a human gate**: T052 (production email —
+- **E11 (Launch sweeps) — T067/T068/T069 Passed, T066 held.** George dispatched T067 (accessibility
+  sweep), T068 (responsive sweep), and T069 (empty/error copy audit) first and explicitly held
+  T066 (Playwright persona smoke tests) back pending review of its disclosed router-wiring tension.
+  All three completed audits surfaced real, evidenced findings routed as follow-up candidates (see
+  `verification-log.md` `## T067`/`## T068`/`## T069` for full detail):
+  - **T068 surfaced a genuine BLOCKER-severity NFR-06 gap**: `LiveConsole.tsx` (T033, the live
+    check-in console) has no QR show/hide toggle at any viewport width at all, plus its roster pane
+    is the only fixed-width usage in the codebase missing the `maxWidth="100%"` safety pairing every
+    other screen uses. **No follow-up fix task has been created yet — needs a decision.**
+  - T067 (MINOR): widespread `EmptyState` heading-level skips (~19 locations across 13 files,
+    including `LiveConsole.tsx`) and a DES-04 event-type color-mapping inconsistency unique to
+    `CoachHome.tsx`.
+  - T069 (MINOR): DES-12's `Skeleton` loading component is never used anywhere (universal `Spinner`
+    substitution instead), error-Banner retry actions are missing almost everywhere, and all 5
+    DES-15 verbatim empty-state copy examples ship as paraphrases rather than the PRD's literal text.
+  - **T066 still held**, per George's instruction, pending review of its own disclosed tension: no
+    page in the app is wired into a real route with a real backend yet, so a literal "click through
+    the real running app" Playwright suite may not be buildable as PRD Section 14 literally
+    describes.
+- **Once T066 lands, essentially everything left is a human gate**: T052 (production email —
   only needs George's Resend domain verification + final sign-off now; the `digest_enabled`
   question is resolved), T063/T065 (migration gates), T070 (final go-live).
 - **This session's four legitimate FAIL→rework→PASS cycles**: T033 (secret-name leak), T054
@@ -68,13 +78,14 @@ page/`guards.tsx`.
 - **E9 (Reports/Home) — fully complete.** T053–T060 all Passed.
 - **E10 (Migration) — T061, T062 Passed.** T063 is a human gate blocked on
   George's real old-project credentials; T064/T065 blocked behind it.
-- **E11 (Launch sweeps) — all four tasks now Ready**, unblocked by T060
-  completing the full T053–T060 range: T066, T067, T068, T069.
+- **E11 (Launch sweeps) — T067, T068, T069 all Passed.** T066 remains
+  Ready but held per George's instruction, pending review of its
+  disclosed router-wiring tension.
 
-Four Ready tasks have worker packets already pre-built: T066, T067, T068,
-T069 (`docs/swarm/active/T0{66,67,68,69}-worker-packet.md`). T066's packet
-flags a major, unresolved tension worth reading before dispatch — see the
-Status snapshot above.
+T066's worker packet is pre-built (`docs/swarm/active/T066-worker-packet.md`)
+and flags a major, unresolved tension worth reading before dispatch — see
+the Status snapshot above. A follow-up fix task for T068's BLOCKER-severity
+finding on `LiveConsole.tsx` also needs to be created — not yet done.
 
 Two real incidents earlier this session, both handled cleanly — see Known
 Decisions/Current Risks in `state-summary.md` if ever needed: (1) a
