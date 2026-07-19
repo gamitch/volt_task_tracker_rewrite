@@ -96,7 +96,7 @@ Epic dependency order (PRD Section 13): **E1 → E2 → E3 → (E4, E5, E6 paral
 | T068 | E11 | Responsive sweep 375–1440px | worker-implementer | checker-accessibility | T053–T060 | 0 | Blocked | None | No |
 | T069 | E11 | Empty/error state copy audit (DES-12/15/16) | worker-implementer | checker-content | T053–T060 | 0 | Blocked | None | No |
 | T070 | E11 | **HUMAN GATE** — Vercel domain go-live | — | human (George) | T065,T066,T067,T068,T069 | — | Blocked | None | — |
-| T071 | E3 | Shared Supabase client + auth/session surface + typed loader seam (`src/lib/supabase/**`) | worker-implementer | checker-tests | T015,T019 | 0 | Ready | Created 2026-07-19 by boss-architect after six independent tasks (T018, T020, T021, T034, T035, T056) each hit and correctly flagged the identical gap: no shared Supabase client anywhere in `src/` (grep for `createClient`/`supabase-js` under `src/` = zero hits). Purely additive infra task — new `src/lib/supabase/**` module only; does NOT touch `guards.tsx`, `router.tsx`, or any page. Wiring into `guards.tsx`/pages is a separate T016a-pattern follow-up series after this Passes. Not blocked on George's real Supabase project: builds against T015's real env-var names (`VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`) with a fail-loud unconfigured mode, never fabricated credentials. Both deps (T015, T019) Passed. Not yet dispatched, no worker packet drafted yet. | No |
+| T071 | E3 | Shared Supabase client + auth/session surface + typed loader seam (`src/lib/supabase/**`) | worker-implementer | checker-tests | T015,T019 | 0 | In Progress | Dispatched 2026-07-19 to worker-implementer per `docs/swarm/active/T071-worker-packet.md`. Awaiting worker output. | No |
 
 ---
 
