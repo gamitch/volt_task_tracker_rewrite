@@ -590,3 +590,4 @@ Follow-up:
 - T034 (Kiosk view) and T035 (`/checkin` result screen) unblocked (Blocked→Ready) as a direct result. T033 (deps T031,T032) and T054 (deps T030,T032,T038,T013) remain correctly Blocked — their other dependencies are not yet Passed.
 - Full worker/checker packets archived at `docs/swarm/archive/T032-worker-packet.md` and `docs/swarm/archive/T032-checker-packet.md`.
 [2026-07-18T23:59:45Z] Worker finished. Checker required before completion.
+[2026-07-19T00:03:04Z] Worker finished. Checker required before completion.
