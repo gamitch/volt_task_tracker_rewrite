@@ -159,8 +159,17 @@ async function flushMicrotasks(): Promise<void> {
   });
 }
 
+/**
+ * Only the page's own section headings -- `AlertDialog`/`Dialog` titles are
+ * always mounted in the DOM (module doc note re: Popover's identical
+ * always-mounted behavior) even while closed, so headings inside a native
+ * `<dialog>` element (AlertDialog's own root, confirmed via
+ * `SubscribePopover.test.tsx`'s own jsdom-gap note) are excluded here.
+ */
 function headingTexts(): string[] {
-  return Array.from(container.querySelectorAll('h1, h2')).map((el) => el.textContent ?? '');
+  return Array.from(container.querySelectorAll('h1, h2'))
+    .filter((el) => el.closest('dialog') === null)
+    .map((el) => el.textContent ?? '');
 }
 
 function findButtonByText(text: string): HTMLButtonElement | undefined {
@@ -335,9 +344,7 @@ describe('<SettingsPage /> Notifications section (SET-02, module doc #4)', () =>
     await flushMicrotasks();
 
     expect(first.checked).toBe(false);
-    expect(calls).toEqual([
-      { profileId: 'profile-test', key: 'signupConfirm', value: false },
-    ]);
+    expect(calls).toEqual([{ profileId: 'profile-test', key: 'signupConfirm', value: false }]);
   });
 
   it('reverts the optimistic flip when the injected seam rejects', async () => {
@@ -549,10 +556,7 @@ describe('<SettingsPage /> Profile section', () => {
     ) as HTMLInputElement;
     expect(nameInput).toBeTruthy();
 
-    const setter = Object.getOwnPropertyDescriptor(
-      window.HTMLInputElement.prototype,
-      'value',
-    )?.set;
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
     act(() => {
       setter?.call(nameInput, 'Casey N.');
       nameInput.dispatchEvent(new Event('input', { bubbles: true }));
