@@ -14,42 +14,40 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-19, post-T018/D005)
+## Status snapshot (2026-07-19, post-T021)
 
 74 tasks (T001–T070 + T002a + T002b + T006a + T016a) across epics E1–E11.
-**24 Passed · 10 Ready · 0 In Progress · 40 Blocked.**
+**27 Passed · 13 Ready · 4 In Progress · 30 Blocked.**
 
-- **E1 (Scaffold/shell/nav) — fully complete.** T001–T008 all Passed. App has a
-  real AppShell/TopNav/SideNav/MobileNav, `/login` is genuinely reachable and
-  wired into the router.
-- **E2 (Schema/RLS/metrics) — fully complete.** T009–T014 all Passed. Schema,
-  RLS policies, metric views, and their fixture tests are all done.
-- **E3 (Auth/invites) — T019 Passed, this was the critical-path unlock.**
-  T015/T016/T016a/T017/**T019** all Passed. **T019** (invite-acceptance DB
-  trigger) resolved a genuinely tricky design decision (which `auth.users`
-  column-transition signals mean "first successful sign-in," given invite
-  emails are sent earlier via T017) — checker independently re-ran 6
-  scenarios + 3 adversarial probes on its own scratch Postgres and explicitly
-  concluded no dispute escalation was needed. **T018** (`/accept-invite`
-  screen) Passed 2026-07-19 — **E3 is now fully Passed pending T020**
-  (AUTH-04 uninvited path, Ready). T018's checker incidentally surfaced the
-  cross-cutting dark-mode contrast defect now resolved as **D005/T002b**
-  (see below).
-- **E4 — T021** (`/roster` shell) now Ready — **the first real content-page
-  task in the entire ledger.**
-- **E5 — T030** (`/meetings` list) now Ready (first content page in E5).
-  T032 (`checkin` Edge Function) Passed earlier. T034/T035 also Ready.
-- **E6 — T038** (`/outreach` list) now Ready (first content page in E6).
-- **E8 — T048** (Resend integration) Ready, undispatched.
-- **E9 — T056** (`/reports` shell) Ready, undispatched.
+- **E1–E2 — fully complete** (T001–T014, plus D004/D005 corrective tasks
+  T002b). App has a real AppShell/TopNav/SideNav/MobileNav, `/login` is
+  reachable, dark-mode contrast is WCAG AA across the board.
+- **E3 (Auth/invites) — fully complete.** T015–T020 (incl. T016a) all
+  Passed. T019 was the critical-path unlock (tricky "first sign-in" signal
+  design, checker-validated with 6 scenarios + 3 adversarial probes). T018
+  incidentally surfaced D005 (dark-mode contrast), fixed same-day via T002b.
+- **E4 (Roster) — open.** **T021** (`/roster` shell) Passed — first real
+  content-page task in the ledger. Unblocked **T022, T025, T026, T027, T028,
+  T029** (rest of E4's first wave), all Ready, undispatched.
+- **E5 (Meetings/Check-in) — in progress.** T030 (`/meetings` list) Ready,
+  undispatched. **T034** (Kiosk) and **T035** (Check-in result) dispatched,
+  In Progress.
+- **E6 — T038** (`/outreach` list) Ready, undispatched.
+- **E8 — T048** (Resend integration) dispatched, In Progress.
+- **E9 — T056** (`/reports` shell) dispatched, In Progress.
 - **E10 — T061 Passed.** T062 (ETL script) Ready, undispatched.
-- **E7, E9 (rest), E11** — still Blocked, waiting on E4/E5/E6's list pages
-  landing first.
+- **E7, E9 (rest), E11** — still Blocked, waiting on E4/E5/E6's list pages.
 
-Worker packets are already pre-built for T034, T035, T048, T056, T062
-(`docs/swarm/active/T0xx-worker-packet.md`) — ready to dispatch without
-another foreman round-trip. T002b/T020/T021/T030/T038 don't have packets
-yet (T002b's is a verbatim transcription of its ledger detail block).
+Worker packets pre-built and ready to dispatch without a foreman round-trip:
+T030, T038, T062 (`docs/swarm/active/T0xx-worker-packet.md`).
+T022/T025–T029 don't have packets yet.
+
+Two real incidents this session, both handled cleanly — see Known
+Decisions/Current Risks in `state-summary.md` if ever needed: (1) a
+concurrent-checker scratch-file collision (T020/T021 checkers running in
+parallel, no lasting harm); (2) a pre-existing `RequireRole` React 19
+console warning surfaced by T021's checker, logged for later reconciliation,
+not caused by or fixable within T021's own scope.
 
 ## Standing rules (condensed — full reasoning lives in state-summary.md/dispute-log.md if ever needed)
 
