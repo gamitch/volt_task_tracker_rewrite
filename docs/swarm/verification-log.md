@@ -2008,3 +2008,5 @@ Full packets archived at `docs/swarm/archive/T060-worker-packet.md` and
 [2026-07-19T11:40:19Z] Worker finished. Checker required before completion.
 [2026-07-19T11:49:08Z] Worker finished. Checker required before completion.
 [2026-07-19T11:49:47Z] Worker finished. Checker required before completion.
+[2026-07-19T11:51:27Z] Worker finished. Checker required before completion.
+[2026-07-19T11:58:38Z] Worker finished. Checker required before completion.
