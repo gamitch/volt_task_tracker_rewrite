@@ -1470,3 +1470,4 @@ and Revoke that does not duplicate the already-applied `trg_audit_invite_revocat
 
 Full packets archived at `docs/swarm/archive/T027-worker-packet.md` and
 `docs/swarm/archive/T027-checker-packet.md`.
+[2026-07-19T07:09:41Z] Worker finished. Checker required before completion.
