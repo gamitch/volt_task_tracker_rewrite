@@ -916,3 +916,5 @@ Full packets archived at `docs/swarm/archive/T071-worker-packet.md` and
 `docs/swarm/archive/T071-checker-packet.md`. Sets up (does not yet dispatch) a future T016a-pattern
 wiring series into `guards.tsx` and each of the six pages that flagged this gap.
 [2026-07-19T04:11:09Z] Worker finished. Checker required before completion.
+[2026-07-19T04:15:59Z] Worker finished. Checker required before completion.
+[2026-07-19T04:28:41Z] Worker finished. Checker required before completion.
