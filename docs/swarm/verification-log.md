@@ -1216,3 +1216,33 @@ Full packets archived at `docs/swarm/archive/T033-worker-packet.md` and
 [2026-07-19T06:19:18Z] Worker finished. Checker required before completion.
 [2026-07-19T06:24:09Z] Worker finished. Checker required before completion.
 [2026-07-19T06:30:05Z] Worker finished. Checker required before completion.
+
+## T055 — Parent Home (HOME-03)
+
+**Result: PASS (1st attempt). Severity: MINOR (two informational follow-ups, no BLOCKER/MAJOR).**
+
+Worker built `ParentHome.tsx`: one `Card` per linked student, correctly handling multiple children,
+reusing T037's already-checker-verified `ConsistencyStrip` component (imported unmodified) to
+satisfy both HOME-03's participation-% field and BEH-06's meeting-history requirement.
+
+**Checker's independent verification (checker-accessibility):**
+- **ConsistencyStrip reuse decision independently re-derived from the real PRD text**, not the
+  ledger's paraphrase: BEH-06 (PRD line 235) names HOME-03 unconditionally as a required consumer of
+  the last-5-meetings strip. Checker concurred reuse was the defensible, lower-risk choice versus
+  reimplementing new attendance-selection logic (which would have reopened constitution item 17
+  BLOCKER-class risk).
+- **Multi-linked-student independence reproduced**: each `StudentHomeCard` has its own
+  `useLoadState` instance, no shared parent-level loading gate — checker ran the staggered-latency
+  and staggered-failure tests itself, both passed.
+- "Next 3 events" boundary re-derived correctly, including specific competition-type and wrong-team
+  exclusion cases.
+- RSVP-on-behalf scope confirmed genuinely short of T043's job via direct grep (zero persistence
+  calls, zero `responded_by`/attribution copy anywhere).
+- Constitution item 3 re-verified: the `StudentParticipationMetric` type is genuinely imported from
+  `StudentMeetingView.tsx`, not redefined (avoiding silent drift risk).
+- Two informational, non-blocking follow-ups: an anonymous per-card error `Banner` (inherited
+  unmodified from T037's identical pattern, not a new regression); the same already-accepted
+  h1→h3→h4 heading-level-skip class T038's checker already logged.
+
+Full packets archived at `docs/swarm/archive/T055-worker-packet.md` and
+`docs/swarm/archive/T055-checker-packet.md`.
