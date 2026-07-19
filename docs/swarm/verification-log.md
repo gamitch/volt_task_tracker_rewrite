@@ -1753,3 +1753,4 @@ installed `Link`/`EmptyState` source that the visible text becomes the accessibl
 
 Full packets archived at `docs/swarm/archive/T045-worker-packet.md` and
 `docs/swarm/archive/T045-checker-packet.md`.
+[2026-07-19T08:02:13Z] Worker finished. Checker required before completion.

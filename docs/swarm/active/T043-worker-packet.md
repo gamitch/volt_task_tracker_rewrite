@@ -5,19 +5,26 @@ T043
 
 ## Objective
 Build `src/pages/outreach/ParentRsvp.tsx` — parent RSVP-on-behalf (OUT-06): a parent sets their
-linked student's RSVP (`responded_by='parent'`); the student sees "Mom signed you up"
-(`Timestamp` + responder name) and may change it themselves afterward.
+linked student's RSVP (`responded_by` attributed to the acting parent's own real profile id); the
+student sees "Mom signed you up" (`Timestamp` + responder name) and may change it themselves
+afterward.
 
 ## Dependencies (status)
 - T038 (`/outreach` list) — Passed. Read `OutreachList.tsx` (read-only) for established
   `rsvps`/`guardian_links` fixture conventions.
-- T040 (RSVP control) — **listed as this task's ledger dependency; may or may not be Passed by the
-  time you're dispatched.** If Passed, **read `RsvpControl.tsx` in full (read-only)** — this task is
+- T040 (RSVP control) — Passed. **Read `RsvpControl.tsx` in full (read-only)** — this task is
   structurally the parent-facing counterpart of that student-facing control (same
-  `SegmentedControl`/status-mapping shape, different `responded_by` value and different
+  `SegmentedControl`/status-mapping shape, different `responded_by` attribution and a different
   responder-attribution display). Reuse its established `RsvpRow` shape and status-label mapping
-  (`'declined'` ↔ "Can't go") rather than inventing a divergent one. If T040 hasn't Passed yet, build
-  against `OutreachList.tsx`'s existing shapes and disclose that you did so.
+  (`'declined'` ↔ "Can't go") rather than inventing a divergent one. **Critically, also reuse T040's
+  now-corrected `responded_by` design**: `rsvps.responded_by` is a real `profiles.id` foreign key
+  (confirmed at `20260717000000_scheduling_attendance.sql` line 72:
+  `responded_by uuid references public.profiles (id)`), never a literal `'parent'`/`'student'` role
+  string — T040's attempt 1 originally got this right after an earlier draft of ITS OWN packet
+  mistakenly suggested hardcoding a string, and its checker independently verified the real-profile-
+  id design. This task's packet had the same mistaken assumption in an earlier draft (see the
+  corrected Ground Truth/Trap #1 below) — do not write a literal `'parent'` string into
+  `responded_by` anywhere.
 
 ## Allowed Files
 - `src/pages/outreach/ParentRsvp.tsx` (new — confirm via `Glob` this doesn't exist yet)
@@ -38,19 +45,20 @@ linked student's RSVP (`responded_by='parent'`); the student sees "Mom signed yo
 `parent_profile_id`, `student_id`, `relationship` — `20260716000000_identity_roster.sql` lines
 71-79.
 
-## Known Context / Traps
-
-**1. `responded_by` values — this is the crux of the whole task.** The `rsvps.responded_by` column
-is a plain reference/enum-shaped value (confirm its real type yourself — likely a role-shaped
-string or a profile-id FK; read the migration line directly and cite the exact type). Your component
-must correctly write `responded_by='parent'` when the parent sets/changes an RSVP, and must
-correctly render the "Mom signed you up" attribution when displaying a row where
-`responded_by='parent'` — but the actual *display name* ("Mom") is NOT literally stored anywhere;
-it's derived from the `guardian_links.relationship` field (e.g. "Mom", "Dad", "Guardian") for the
-specific parent who set it. If `responded_by` alone doesn't carry which specific parent (in a
-multi-parent-per-student scenario), investigate and disclose how you determine which parent's
-`relationship` label to show — do not fabricate a specific parent identity you can't actually derive
-from the stored data.
+**1. `responded_by` — a real `profiles.id` FK, this is the crux of the whole task.** Confirmed by
+direct read of the migration: `responded_by uuid references public.profiles (id)`, nullable, NOT a
+role-shaped string. Your component must write `responded_by` as the ACTING PARENT'S OWN real
+profile id (from your injectable auth/session seam, same pattern `RsvpControl.tsx` uses for its
+`currentUserProfileId` prop) when the parent sets/changes an RSVP. To determine "is this a
+parent-set RSVP, and if so, which parent/relationship label to show," you cannot rely on
+`responded_by`'s VALUE alone (it's just a profile id, not a role marker) — you must cross-reference
+it against `guardian_links` (`parent_profile_id`, `student_id`, `relationship`) to find the matching
+link row for `(responded_by, student_id)` and read that row's `relationship` field (e.g. "Mom",
+"Dad", "Guardian") for the attribution label. If `responded_by` matches the STUDENT's own profile id
+instead of any of their guardians', render the plain/no-attribution display (the student answered
+for themself). If `responded_by` is a profile id that matches neither the student nor any of their
+guardian_links rows, disclose how you handle that edge case (e.g. a coach recorded it on their
+behalf — decide and disclose, don't silently misattribute it as a parent).
 
 **2. Student can override a parent-set RSVP.** This component renders the parent-facing view where a
 parent sets/changes their student's RSVP; the acceptance criterion "student can override" refers to
@@ -77,10 +85,12 @@ linked student.
 posture as every prior content page.
 
 ## Acceptance Criteria
-- Parent can set/change a linked student's RSVP, correctly writing `responded_by='parent'`.
+- Parent can set/change a linked student's RSVP, correctly writing `responded_by` as the acting
+  parent's own real profile id (never a literal role string).
 - "Mom signed you up" (or the correct relationship label) + `Timestamp` attribution renders
-  correctly when `responded_by='parent'`, with real test proof.
-- The specific-parent-identity question (Known Context/Traps #1) explicitly investigated and
+  correctly, derived by cross-referencing `responded_by` against `guardian_links`, with real test
+  proof.
+- The specific-parent-identity resolution (Known Context/Traps #1) explicitly investigated and
   disclosed, not silently fabricated.
 - No box-drawing/bracket characters rendered (constitution item 13).
 - `npm run build`/`typecheck`/`lint`/`format:check`/`test` all exit 0.

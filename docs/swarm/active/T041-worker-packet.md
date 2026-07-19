@@ -12,11 +12,11 @@ action.
 ## Dependencies (status)
 - T038 (`/outreach` list) — Passed. Read `OutreachList.tsx` (read-only) for established fixture
   conventions (`events`/`event_sessions`/`rsvps` shapes).
-- T039 (event dialog), T040 (RSVP control) — **listed as this task's ledger dependencies; may or may
-  not be Passed by the time you're dispatched.** If Passed, read `OutreachEventDialog.tsx`/
-  `RsvpControl.tsx` (read-only) for their established conventions and cite them. If not yet Passed,
-  build against `OutreachList.tsx`'s existing shapes and disclose that you did so — do not block on
-  or wait for those files.
+- T039 (event dialog) — Passed. Read `OutreachEventDialog.tsx` (read-only) for its established
+  `events`/`event_sessions` fixture conventions.
+- T040 (RSVP control) — Passed. Read `RsvpControl.tsx` (read-only) for its established `rsvps`
+  fixture shape and its now-corrected `responded_by` real-profile-id attribution — reuse the same
+  shape for the signup-list grouping data.
 
 ## Allowed Files
 - `src/pages/outreach/OutreachDetail.tsx` (new — confirm via `Glob` this doesn't exist yet)
@@ -72,7 +72,12 @@ per event (flattening all sessions) or per-session (nested), based on your read 
 the PRD phrase "per-session signup lists" suggests per-session grouping is correct; state this
 explicitly rather than silently flattening.
 
-**5. Edit/Cancel `MoreMenu` stubs** — obvious disclosure banners, per Forbidden Files.
+**5. Edit/Cancel `MoreMenu` stubs** — obvious disclosure banners, per Forbidden Files. (FYI, not a
+requirement: if you instead judge a real Cancel mutation — a plain `event_sessions.status='canceled'`
+flip — to be reasonably in-scope given how simple it is, note that a real, already-applied trigger
+`trg_audit_session_cancellation` (`20260717000001_support_audit.sql` lines 224-249) fires
+automatically on that exact transition; do not duplicate its `audit_log` write if you go this route.
+A stub banner remains the safer default and is fully acceptable.)
 
 **6. No shared Supabase client wired in — deliberate scope, not a gap for you to solve.** Same
 posture as every prior content page.
