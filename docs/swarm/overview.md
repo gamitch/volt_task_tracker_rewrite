@@ -14,20 +14,27 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-19, post-T029/T039)
+## Status snapshot (2026-07-19, post-T036/T040/T049/T057/T058 batch)
 
 75 tasks (T001–T071 + T002a + T002b + T006a + T016a) across epics E1–E11.
-**51 Passed · 7 Ready · 0 In Progress · 17 Blocked.**
+**57 Passed · 4 Ready · 1 In Progress · 13 Blocked.**
 
-- **E4 (Roster) — fully complete.** T021–T029 all Passed. Went 9-for-9 on first-attempt PASS.
-- **E6 (Outreach) — in progress.** T038, T039, T044 Passed. **T040 (RSVP control) now Ready**
-  (unblocked by T039). T041–T043 still Blocked — T041 needs T039+T040, T043 needs T040 alone
-  (not T039), T042 needs T041. T045 Ready (undispatched, separate E7 dependency).
-- **E9 (Home dashboards) — fully done.** T053 (Coach/Admin), T054 (Student, attempt 2), T055
-  (Parent) all Passed — the two legitimate FAIL cycles this session were T033 (E5, constitution
-  item 5 secret leak in a comment) and T054 (E9, Divider-instead-of-Heading a11y regression), both
-  fixed with narrow attempt-2 reworks and re-verified clean.
-- Seven tasks Ready, undispatched, no packets yet: **T036, T040, T045, T049, T050, T057, T058.**
+- **In Progress now**: T045 (`/calendar` page) attempt 2 — attempt 1 was a legitimate MAJOR FAIL
+  (every row's Link rendered identical undifferentiated "View details" text, a real screen-reader
+  links-list problem); narrow rework in flight (distinguish each row's link text, fix a heading
+  h1→h3 skip on the empty state).
+- **E4 (Roster) — fully complete.** T021–T029 all Passed, 9-for-9 first-attempt PASS.
+- **E5 (Meetings/Check-in) — fully complete.** T036 (End meeting flow) Passed, closing out the epic.
+- **E6 (Outreach) — nearly done.** T038, T039, T040 (attempt 2), T044 Passed. **T041, T043 now
+  Ready** (unblocked by T040). T042 Blocked (needs T041).
+- **E8 (Email) — building out.** T048, T049, T050 Passed. **T051 Ready** (unblocked by T049,
+  T050 already Passed + T011 already Passed).
+- **E9 (Reports/Home) — fully complete except T059/T060.** T053–T058 all Passed (T057, T058 this
+  batch). **T059 (CSV exports) Ready** (unblocked by T058). T060 still Blocked (needs T046).
+- **Two legitimate FAIL→rework→PASS cycles this batch**: T040 (RSVP control — an int32 `setTimeout`
+  overflow silently locking the control for sessions >~25 days out) and T045 (in progress — a
+  non-unique-link-text accessibility regression).
+- Four tasks Ready, undispatched, no packets yet: **T041, T043, T051, T059.**
 
 **T071 (shared Supabase client) Passed, clean, no findings.** The recurring
 cross-cutting gap flagged by six prior tasks is now closed at the
@@ -43,27 +50,23 @@ page/`guards.tsx`.
   `/login`→`/accept-invite` auth flow works end to end, dark-mode contrast is
   WCAG AA across the board.
 - **E4 (Roster) — fully complete.** T021–T029 all Passed.
-- **E5 (Meetings/Check-in) — fully complete.** T030, T031, T032, T033
-  (attempt 2), T034, T035 all Passed. **T036** Ready, undispatched — the
-  last E5 task.
-- **E6 (Outreach) — in progress.** T038, T039, T044 Passed. **T040** Ready,
-  undispatched. T041 Blocked (needs T039+T040), T042 Blocked (needs T041),
-  T043 Blocked (needs T040 only). T045 Ready, undispatched (separate E7 dep).
-- **E7 (Calendar) — Blocked**, waiting on T045 (T046 needs T045; T047 needs
-  T045+T010).
-- **E8 (Reminders) — T048 Passed.** T049, T050 Ready, undispatched.
-  T051/T052 Blocked behind them.
-- **E9 (Reports/Home) — fully complete.** T053, T054 (attempt 2), T055,
-  T056 all Passed. T057, T058 Ready, undispatched. T059/T060 Blocked
-  behind those two.
+- **E5 (Meetings/Check-in) — fully complete.** T030–T036 all Passed
+  (T033, T036 each had one legitimate FAIL→rework→PASS cycle).
+- **E6 (Outreach) — nearly complete.** T038, T039, T040 (attempt 2), T044
+  Passed. **T041, T043** Ready, undispatched. T042 Blocked (needs T041).
+- **E7 (Calendar) — T045 In Progress** (attempt 2, narrow rework after a
+  legitimate MAJOR a11y FAIL on attempt 1). T046/T047 Blocked behind it.
+- **E8 (Reminders) — T048, T049, T050 Passed.** **T051** Ready, undispatched.
+  T052 (human gate) Blocked behind it.
+- **E9 (Reports/Home) — fully complete except T059/T060.** T053–T058 all
+  Passed. **T059** Ready, undispatched. T060 Blocked (needs T046).
 - **E10 (Migration) — T061, T062 Passed.** T063 is a human gate blocked on
   George's real old-project credentials; T064/T065 blocked behind it.
 - **E11 (Launch sweeps) — Blocked**, waiting on the E6/E7/E8/E9 tail
   (T053–T060) to all Pass first.
 
-Seven Ready tasks have no packets built yet: T036, T040, T045, T049, T050,
-T057, T058 — each needs one built (directly or via foreman-planner) before
-dispatch.
+Four Ready tasks have no packets built yet: T041, T043, T051, T059 — each
+needs one built (directly or via foreman-planner) before dispatch.
 
 Two real incidents earlier this session, both handled cleanly — see Known
 Decisions/Current Risks in `state-summary.md` if ever needed: (1) a
@@ -118,15 +121,14 @@ See the T071 detail block in `task-ledger.md` (end of E3) and its
 
 ## Next recommended action
 
-Seven tasks are Ready: T036, T040, T045, T049, T050, T057, T058. None
-currently have worker packets pre-built — each needs one built first,
-either directly or via foreman-planner. All are file-disjoint and
-independently dispatchable in parallel if budget allows.
-**T045 (`/calendar` month grid) is the highest-leverage pick** — it starts
-E7 (currently 100% Blocked) and is on the critical path to T060
-(`/settings`) and thence to E11's launch sweeps. T057/T058 (Hours/Events
-tabs) are close behind — they complete the T053–T060 range that all four
-E11 sweep tasks (T066–T069) are waiting on.
+Four tasks are Ready: T041, T043, T051, T059. None currently have worker
+packets pre-built — each needs one built first, either directly or via
+foreman-planner. All are file-disjoint and independently dispatchable in
+parallel once T045's rework lands (T041 depends on T039+T040, both already
+Passed, so it's not blocked by T045).
+**T059 (CSV exports) is the highest-leverage pick** — it's the last piece
+of the T053–T060 range all four E11 sweep tasks (T066–T069) are waiting on.
+T041/T043 continue the E6 outreach-detail chain toward T042.
 
 Separately, worth deciding when to prioritize: drafting the T016a-pattern
 wiring series that connects T071's new client into `guards.tsx` and the

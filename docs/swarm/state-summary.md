@@ -65,13 +65,13 @@ deliberately terse going forward.
 **E1, E2, and E3 are all fully complete.** Full evidence for every row above is in
 `verification-log.md` under its `## T0xx` heading.
 
-## Active (2026-07-19, updated after T029/T039 close-out)
+## Active (2026-07-19, updated after T036/T040/T049/T057/T058 batch)
 
-51 tasks Passed. E4 (Roster) is essentially complete (T021-T029 all Passed). T039 Passed, unblocking
-**T040** (Ready) — T043 remains Blocked (its Depends is T040, not T039). Six tasks Ready and
-undispatched: T036, T040, T045, T049, T050, T057, T058. 17 tasks remain Blocked, mostly gated on
-the T040→T041→T042/T043 chain, E7/E8 infra, E9's remaining content pages, the E10 human migration
-gates, and E11's final sweeps. See `overview.md` for the current tiered priority list.
+57 tasks Passed. E4/E5 fully complete. E6/E8/E9 nearly complete (T041, T043, T051, T059 all
+Ready, undispatched). T045 (`/calendar`) is In Progress on attempt 2 — attempt 1 was a legitimate
+MAJOR a11y FAIL (non-unique row link text), narrow rework in flight. 13 tasks remain Blocked,
+mostly gated on T045's chain, E10's human migration gates, and E11's final sweeps. See
+`overview.md` for the current tiered priority list.
 
 - **T029 — Season management.** PASS (1st attempt, NIT). Checker independently confirmed the real
   `seasons_single_active_idx` partial unique index and the single-payload atomicity contract;
@@ -81,6 +81,24 @@ gates, and E11's final sweeps. See `overview.md` for the current tiered priority
   competitions get created); verified CMP-02 flag defaults against the real ETL's own
   `eventTypeMetricDefaults`; confirmed the disclosed prefill race-condition bug and its `useMemo`
   fix are real. **T040 unblocked.**
+- **T036 — End meeting flow.** PASS (1st attempt, NIT — closes E5). Checker independently confirmed
+  `trg_audit_attendance_post_completion` fires as cited with zero client-side duplicate writes, and
+  judged the pre-confirm-summary design (current-state tally + separate future-change disclosure)
+  the better of two options.
+- **T040 — RSVP control.** PASS (attempt 2). Attempt 1 was a legitimate MAJOR FAIL — a real int32
+  `setTimeout` overflow silently locked the control for sessions >~25 days out. Attempt 2's fix
+  independently re-verified, including reproducing the worker's own revert-fix-restore regression
+  proof rather than trusting the claim. **T041, T043 unblocked.**
+- **T049 — Transactional email templates.** PASS (1st attempt, MINOR). Checker (no Bash access)
+  hand-verified all five templates' EML-02 recipient framing directly against the PRD and confirmed
+  EML-05 single-student-only props; I closed its disclosed follow-up myself (73/73 tests, byte-diff
+  confirming the forbidden fixture file untouched). **T051 unblocked.**
+- **T057 — Hours tab.** PASS (1st attempt, NIT). Checker independently confirmed confirmed-hours
+  are never recomputed (`v_student_hours` only), and concurred with (did not escalate) the worker's
+  disclosed per-team BEH-01 milestone-Toast scoping dispute candidate.
+- **T058 — Events tab.** PASS (1st attempt, MINOR). Checker independently confirmed the per-session
+  hours-awarded computation legitimately mirrors `v_student_hours`'s fallback logic without
+  re-deriving its aggregate. **T059 unblocked.**
 
 ## Known Decisions (condensed — full rulings in dispute-log.md)
 
