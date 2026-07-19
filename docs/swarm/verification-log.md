@@ -869,3 +869,49 @@ Full packets archived at `docs/swarm/archive/T035-worker-packet.md` and
 [2026-07-19T03:48:15Z] Worker finished. Checker required before completion.
 [2026-07-19T03:51:12Z] Worker finished. Checker required before completion.
 [2026-07-19T04:03:51Z] Worker finished. Checker required before completion.
+[2026-07-19T04:05:08Z] Worker finished. Checker required before completion.
+
+## T071 — Shared Supabase client + auth/session surface + typed loader seam (`src/lib/supabase/**`)
+
+**Result: PASS (1st attempt). Severity: none — clean, no findings.**
+
+Worker built the single shared Supabase client module the whole frontend will eventually consume:
+a lazily-initialized client singleton, an auth/session surface shaped to slot into `guards.tsx`'s
+existing `AuthContextValue` contract, and a generic typed loader helper matching the `loadData`
+seam pattern all six prior page tasks (T018, T020, T021, T034, T035, T056) independently converged
+on. Purely additive — `src/lib/supabase/**` plus `@supabase/supabase-js` in `package.json` only.
+
+**Checker's independent verification (checker-tests), all safety-relevant claims re-derived rather
+than trusted:**
+- Exactly one `createClient(` call site confirmed via direct grep (`client.ts:79`).
+- **Lazy-init safety property genuinely holds**: module-level code contains only imports and
+  function definitions, zero executable statements that could throw; the real `createClient()`
+  call is deferred inside `getSupabaseClient()`, invoked only on first real use. A blank-env test
+  suite explicitly proves import alone never throws.
+- **`resolveRole`'s three-way behavior re-derived by source read**: a found `profiles` row returns
+  a typed success, a genuinely-missing row returns a distinct `{status:'no-profile'}` (the AUTH-04
+  path, never an exception), and a real query/transport error still rejects as a
+  `SupabaseLoaderError` — never silently coerced into "no profile."
+- **`loader.ts`'s "zero fake-data fallback" claim reproduced**: exactly two `throw` statements
+  (both `toLoaderError`), the only success path is `return result.data ?? null`, no
+  fixture/placeholder literal anywhere.
+- **`types.ts`'s citation table fully re-verified, row by row**, against the real migration SQL —
+  all 8 row types (`Role`/`role_enum`, `ProfileRow`, `TeamRow`, `StudentRow`, `InviteRow`,
+  `EventSessionRow`, `AttendanceRow`, `VStudentParticipationRow`) confirmed column-name/type/
+  nullability-accurate; zero arithmetic operators found (constitution item 3 — clean).
+- **Secret hygiene re-checked against a freshly-built `dist/`** (not just source): zero matches for
+  any Supabase URL, JWT-shaped string, "service_role", or the literal env-var names — the module is
+  genuinely tree-shaken out entirely since nothing imports it yet.
+- Dependency diff reproduced independently: `@supabase/supabase-js@2.110.7` added, zero existing
+  package's resolved version silently bumped.
+- **DES-16-wrapping-scope judgment call** (the five direct `client.auth.*` wrappers in `auth.ts`
+  left unwrapped in the SDK's native `AuthError` shape, while only the loader helper is DES-16-
+  wrapped): ruled reasonable and defensible — double-wrapping would obscure auth-specific fields a
+  future login-error UI may need, the design is fully disclosed in-file, and `resolveRole` (which
+  does go through the loader) correctly IS DES-16-wrapped.
+- 62/62 tests, build, typecheck, lint, and format:check all reproduced independently, matching the
+  worker's claims exactly.
+
+Full packets archived at `docs/swarm/archive/T071-worker-packet.md` and
+`docs/swarm/archive/T071-checker-packet.md`. Sets up (does not yet dispatch) a future T016a-pattern
+wiring series into `guards.tsx` and each of the six pages that flagged this gap.

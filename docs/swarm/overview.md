@@ -14,10 +14,19 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-19, post-T034/T035/T048/T056; T071 added)
+## Status snapshot (2026-07-19, post-T071)
 
 75 tasks (T001–T071 + T002a + T002b + T006a + T016a) across epics E1–E11.
-**31 Passed · 14 Ready · 0 In Progress · 30 Blocked.**
+**32 Passed · 13 Ready · 0 In Progress · 30 Blocked.**
+
+**T071 (shared Supabase client) Passed, clean, no findings.** The recurring
+cross-cutting gap flagged by six prior tasks is now closed at the
+infrastructure level — `src/lib/supabase/**` exists, is fully tested, and
+is safe (lazy-init, zero secrets in the built bundle, zero fake-data
+fallback). It is not wired into `guards.tsx` or any page yet (deliberately
+out of scope, see Standing Rules) — a follow-up T016a-pattern wiring series
+is the next step whenever it's prioritized, one small task per
+page/`guards.tsx`.
 
 - **E1–E3 — fully complete** (T001–T020, incl. T002a/T002b/T006a/T016a
   corrective tasks). App has a real AppShell/TopNav/SideNav/MobileNav,
@@ -56,17 +65,14 @@ parallel, no lasting harm); (2) a pre-existing `RequireRole` React 19
 console warning surfaced by T021's checker, logged for later reconciliation,
 not caused by or fixable within T021's own scope.
 
-**Recurring cross-cutting gap, flagged by T018/T020/T021/T034/T035/T056
-independently**: no shared Supabase client exists anywhere in `src/` yet.
-Every content page so far ships an injectable `loadData`-style seam
-defaulting to honest fixture/null data rather than fabricating. **Now
-scheduled: boss-architect created T071 (E3, Ready — deps T015/T019 both
-Passed) on 2026-07-19** — a purely additive `src/lib/supabase/**` module
-(client singleton + auth/session surface + typed loader helper), staged
-against real env-var names with a fail-loud unconfigured mode so George's
-still-missing Supabase project doesn't block it. `guards.tsx`/per-page
-wiring is explicitly deferred to T016a-pattern follow-ups after T071
-Passes. See the T071 detail block in `task-ledger.md` (end of E3).
+**Recurring cross-cutting gap, flagged by T018/T020/T021/T034/T035/T056,
+now resolved at the infra level**: T071 (`src/lib/supabase/**` — client
+singleton, auth/session surface, typed loader helper) **Passed clean on
+2026-07-19**. Every page so far still renders its own fixture/null data
+(none are wired to T071 yet — that's a deliberate, separate follow-up
+series, T016a-pattern, one small task per page + one for `guards.tsx`).
+See the T071 detail block in `task-ledger.md` (end of E3) and its
+`verification-log.md` entry for full evidence.
 
 ## Standing rules (condensed — full reasoning lives in state-summary.md/dispute-log.md if ever needed)
 
@@ -94,9 +100,10 @@ Passes. See the T071 detail block in `task-ledger.md` (end of E3).
   re-derivation of evidence, not trust of worker claims.
 - External prerequisites still open: Supabase project creation, Google OAuth
   client, Vercel CNAME (all George). Resend domain verification is done.
-- No real Supabase auth client exists yet anywhere in `src/` — `guards.tsx`
-  is still T005's in-memory placeholder. Flagged as debt needing deliberate
-  scheduling, not yet a dispatched task.
+- A real Supabase client now exists (`src/lib/supabase/**`, T071, Passed)
+  but is not wired in anywhere yet — `guards.tsx` is still T005's in-memory
+  placeholder. Wiring is a deliberate future follow-up series, not yet
+  dispatched tasks.
 - 4 real CI-breaking regressions have occurred and been fixed same-day
   (vitest/Vite mismatch, Node version floor, T006 wiring/D003, Deno files
   leaking into root ESLint/vitest scope) — see state-summary.md if a 5th
@@ -104,15 +111,16 @@ Passes. See the T071 detail block in `task-ledger.md` (end of E3).
 
 ## Next recommended action
 
-Fourteen tasks are Ready: T022, T025, T026, T027, T028, T029, T030, T038,
-T049, T050, T057, T058, T062, **T071 (new — shared Supabase client infra,
-high leverage: it's the prerequisite for wiring real data into every
-`loadData` seam shipped so far)**. Worker packets already exist for T030/
-T038/T062 — dispatch those directly. The rest need packets built first
-(T071 from its own unusually-detailed ledger block; T049/T050
-straightforward from the ledger's T048 detail block; T057/T058 from T056's;
-T022/T025–T029 need foreman planning against E4's roster spec). All are
-file-disjoint and independently dispatchable in parallel if budget allows
-(T071 touches `package.json`/`package-lock.json`, so avoid dispatching it
-concurrently with any other task that would touch those two files);
-pace per session/weekly usage as usual.
+Thirteen tasks are Ready: T022, T025, T026, T027, T028, T029, T030, T038,
+T049, T050, T057, T058, T062. Worker packets already exist for T030/T038/
+T062 — dispatch those directly. The rest need packets built first (T049/
+T050 straightforward from the ledger's T048 detail block; T057/T058 from
+T056's; T022/T025–T029 need foreman planning against E4's roster spec).
+All are file-disjoint and independently dispatchable in parallel if budget
+allows; pace per session/weekly usage as usual.
+
+Separately, worth deciding when to prioritize: drafting the T016a-pattern
+wiring series that connects T071's new client into `guards.tsx` and the
+six pages that flagged the gap (T018/T020/T021/T034/T035/T056) — this is
+what actually makes the app show real data instead of fixtures, once
+George's Supabase project exists.
