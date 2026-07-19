@@ -1283,3 +1283,29 @@ Full packets archived at `docs/swarm/archive/T054-worker-packet.md` and
 [2026-07-19T06:46:57Z] Worker finished. Checker required before completion.
 [2026-07-19T06:48:45Z] Worker finished. Checker required before completion.
 [2026-07-19T06:50:05Z] Worker finished. Checker required before completion.
+[2026-07-19T06:50:13Z] Worker finished. Checker required before completion.
+[2026-07-19T06:50:20Z] Worker finished. Checker required before completion.
+
+## T028 — Roster admin toggles (ROS-08)
+
+**Result: PASS (1st attempt). Severity: NIT.**
+
+Worker built `AdminToggles.tsx`: an admin-only leaderboard-privacy toggle (default ON, SEC-04) and a
+season default-goal shortcut link, correctly discovering and disclosing a real schema gap (no
+privacy-persistence column exists anywhere) rather than inventing a migration.
+
+**Checker's independent verification (checker-reviewer):**
+- **Schema-gap disclosure re-verified**: reproduced the migration-wide grep itself (zero hits),
+  read every `create table` statement directly, and concurred `seasons.leaderboard_show_full_name`
+  is the more defensible guess given `default_goal_hours`'s existing per-season-config precedent.
+- **Admin-only gate choice validated**: read `RosterShell.tsx` directly and confirmed coaches
+  genuinely have access to `/roster` at large — nesting a stricter `RequireRole(['admin'])` would
+  have incorrectly redirected them away from the whole page, a real regression the worker correctly
+  avoided by gating with `useAuth()` directly instead. Confirmed no flash-of-content risk (gate
+  precedes all JSX; `isLoading` is always `false` in the current auth stub).
+- SEC-04 default-ON and the season-shortcut route (`/settings/season`) both re-verified by source
+  read.
+
+Full packets archived at `docs/swarm/archive/T028-worker-packet.md` and
+`docs/swarm/archive/T028-checker-packet.md`. Real follow-up: an additive migration to add the
+privacy-persistence column, correctly not added by this UI-only task itself.
