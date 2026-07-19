@@ -2297,3 +2297,4 @@ with no other content touched.
 **Role vocabulary is now correct everywhere it's referenced. This unblocks the rest of the
 router-wiring series** (T074 batched route swaps, T075 role dispatchers for `/` and
 `/meetings/live/:sessionId`, and T073b real Supabase `AuthProvider` wiring — none yet created).
+[2026-07-19T13:36:40Z] Worker finished. Checker required before completion.
