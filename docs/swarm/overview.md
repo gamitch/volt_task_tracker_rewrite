@@ -14,11 +14,23 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-19, post-T075 — router-wiring series' route-swap phase complete)
+## Status snapshot (2026-07-19, post-T073b2 — router-wiring series COMPLETE)
 
-79 tasks (T001–T075 + T002a + T002b + T006a + T016a + T073a) across epics E1–E11 plus an
-in-progress router-wiring series (E3).
-**73 Passed · 1 Ready · 0 In Progress · 5 Blocked.**
+81 tasks (T001–T075 + T002a + T002b + T006a + T016a + T073a + T073b1 + T073b2) across epics
+E1–E11 plus the now-complete router-wiring series (E3).
+**75 Passed · 1 Ready · 0 In Progress · 5 Blocked.**
+
+**The router-wiring series is done.** All 13 app routes resolve to real components with real,
+working Supabase authentication end to end (`guards.tsx`'s `AuthProvider` now genuinely calls
+Supabase via T071's auth module — two-step async session→role resolution, AUTH-04 no-profile
+handling, async `login`/`loginWithGoogle`/`logout`, a real OAuth intended-URL bug fixed). Two
+MAJOR-severity gaps were disclosed and independently checker-confirmed, both awaiting a follow-up
+task decision — see `## T073b2` in `verification-log.md` for full detail:
+- **Gap A**: `AcceptInvitePage`'s "Set a password" now genuinely fails (previously silently
+  fake-succeeded) — needs a real invite-completion Supabase function that doesn't exist yet.
+- **Gap B**: `RequireRole` denial reuses `NoAccessPage`'s unconditional-sign-out AUTH-04 treatment,
+  which is likely the wrong screen/copy for a routine role-mismatch (signs out a perfectly valid
+  session, shows "you're not on the roster" to a user who very much is).
 
 - **E1–E9 all fully Passed for every automatable task.** Every content page, dialog, and Edge
   Function in the entire app is built and independently checker-verified.
