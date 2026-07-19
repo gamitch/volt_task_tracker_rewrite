@@ -241,10 +241,17 @@
  *  - `ProgressBar` (line 5416 section, Props table): `label` (required),
  *    `value`, `max`, `isLabelHidden`, `hasValueLabel`, `formatValueLabel`
  *    used.
- *  - `Divider` (line 543 section, Props table): `label` used -- the real,
- *    documented way to render a labeled section separator, used here for
- *    "Next up" / "Sign-up opportunities" instead of literal box-drawing
- *    dash characters from the PRD wireframe (constitution item 13).
+ *  - `Divider` (line 543 section, Props table): no `label` prop used here (a
+ *    prior revision used `label` for "Next up" / "Sign-up opportunities",
+ *    but reading Astryx's own installed source directly
+ *    (`node_modules/@astryxdesign/core/dist/Divider/Divider.js`) shows the
+ *    `label` renders inside a plain `<div>` -- not a heading, not any
+ *    landmark -- so it is invisible to screen-reader heading navigation.
+ *    Each section's real accessible title is now a `Heading level={2}`
+ *    element instead (same pattern `CoachHome.tsx`'s own already-Passed
+ *    "Next up" / "Recent signups" sections use), with a bare, unlabeled
+ *    `Divider` (default `orientation`/`variant`, no props) kept alongside
+ *    purely as a visual separator line.
  *  - `List`/`ListItem` (line 4536 section): `List`'s Props table
  *    (`children`, `hasDividers`, `header`) used directly. `ListItem`'s own
  *    subsection is `undefined` (same disclosed CLI-cross-checked gap every
@@ -1192,7 +1199,16 @@ export function StudentHome({
       {heroState === 'unanswered-rsvp' && (
         <UnansweredRsvpHero
           count={opportunities.length}
-          onReview={() => opportunitiesSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}
+          onReview={() => {
+            // Moves both the viewport AND real programmatic keyboard focus
+            // to the target section (the `tabIndex={-1}` div above makes it
+            // focusable without adding it to the normal Tab order) --
+            // scrollIntoView alone does not move focus, which would strand
+            // keyboard/screen-reader users after activating this control.
+            const target = opportunitiesSectionRef.current;
+            target?.scrollIntoView({ behavior: 'smooth' });
+            target?.focus();
+          }}
         />
       )}
       {heroState === 'quiet-greeting' && (
@@ -1217,40 +1233,46 @@ export function StudentHome({
         </Text>
       </VStack>
 
-      <Divider label="Next up" />
-      {nextUp.length === 0 ? (
-        <EmptyState
-          headingLevel={3}
-          title="Nothing scheduled"
-          description="Your team's next meetings, and the outreach events you're going to, will show up here."
-        />
-      ) : (
-        <List hasDividers header="Next up">
-          {nextUp.map((row) => (
-            <NextUpRowItem key={row.sessionId} row={row} onCantGo={handleRsvpChange} />
-          ))}
-        </List>
-      )}
-
-      <Divider label="Sign-up opportunities" />
-      <div ref={opportunitiesSectionRef}>
-        {opportunities.length === 0 ? (
+      <Divider />
+      <VStack gap={3}>
+        <Heading level={2}>Next up</Heading>
+        {nextUp.length === 0 ? (
           <EmptyState
             headingLevel={3}
-            title="You're all caught up"
-            description="Outreach events awaiting your response will show up here."
+            title="Nothing scheduled"
+            description="Your team's next meetings, and the outreach events you're going to, will show up here."
           />
         ) : (
-          <List hasDividers header="Sign-up opportunities">
-            {opportunities.map((row) => (
-              <SignupOpportunityRowItem
-                key={row.sessionId}
-                row={row}
-                onRespond={handleRsvpChange}
-              />
+          <List hasDividers header="Next up">
+            {nextUp.map((row) => (
+              <NextUpRowItem key={row.sessionId} row={row} onCantGo={handleRsvpChange} />
             ))}
           </List>
         )}
+      </VStack>
+
+      <Divider />
+      <div ref={opportunitiesSectionRef} tabIndex={-1}>
+        <VStack gap={3}>
+          <Heading level={2}>Sign-up opportunities</Heading>
+          {opportunities.length === 0 ? (
+            <EmptyState
+              headingLevel={3}
+              title="You're all caught up"
+              description="Outreach events awaiting your response will show up here."
+            />
+          ) : (
+            <List hasDividers header="Sign-up opportunities">
+              {opportunities.map((row) => (
+                <SignupOpportunityRowItem
+                  key={row.sessionId}
+                  row={row}
+                  onRespond={handleRsvpChange}
+                />
+              ))}
+            </List>
+          )}
+        </VStack>
       </div>
     </VStack>
   );
