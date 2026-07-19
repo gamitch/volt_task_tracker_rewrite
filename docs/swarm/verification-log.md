@@ -918,3 +918,43 @@ wiring series into `guards.tsx` and each of the six pages that flagged this gap.
 [2026-07-19T04:11:09Z] Worker finished. Checker required before completion.
 [2026-07-19T04:15:59Z] Worker finished. Checker required before completion.
 [2026-07-19T04:28:41Z] Worker finished. Checker required before completion.
+[2026-07-19T04:30:08Z] Worker finished. Checker required before completion.
+[2026-07-19T04:35:11Z] Worker finished. Checker required before completion.
+
+## T030 — `/meetings` list (MTG-01)
+
+**Result: PASS (1st attempt). Severity: MINOR (three small follow-ups, no accessibility-blocking
+defects).**
+
+Worker built `MeetingsList.tsx`: coach view (Upcoming/Past sections, status badges, real Cancel/
+AlertDialog flow, stubbed Schedule/Edit) and student/parent view (own history + participation %,
+consistency-strip placeholder), all four DES-12 states per role variant.
+
+**Checker's independent verification (checker-accessibility):**
+- **NAV-07 re-derived structurally, not just from one test assertion**: traced the actual code path
+  and confirmed the one outreach-type fixture item is unreachable in either view's rendering logic
+  — both view-builders filter to `event.type === 'meeting'` before any row mapping occurs.
+- **Participation-% sourcing re-verified against the real `v_student_participation` SQL**: the
+  fixture type is a verbatim column rename, zero arithmetic operators found in executable code
+  (the one `100*4/7`-shaped text exists only inside a doc comment explaining the fixture value's
+  origin, not in code).
+- BEH-08 date/duration formatting confirmed on every row in both variants, pinned to
+  America/Chicago (NFR-09), no bare ISO strings.
+- All four DES-12 states confirmed independently wired per role variant (not built once and
+  assumed to cover both).
+- Cancel/`AlertDialog` flow confirmed genuinely real: real `showModal()`-based modal (verified
+  against Astryx's installed source), correct ARIA, a real state update on confirm — not a stub.
+- Test-file-outside-Allowed-Files judged in-scope, independently re-derived (not just copied from
+  the T035 precedent) — co-located, zero production impact, exists to produce the packet's own
+  demanded evidence.
+- jsdom `showModal` polyfill confirmed to be a pure test-environment shim for a real browser API,
+  correctly scoped to the one test file that needed it first — doesn't mask a production gap.
+- Two disclosed whole-repo lint/format discrepancies (small count differences from the worker's own
+  numbers) confirmed to be caused by other concurrently-running workers' in-flight files, not this
+  task's commit.
+- Three follow-ups, none blocking: a `ProgressBar` visible-rounded-value (57%) vs.
+  accessible-label-text (57.1%) precision mismatch; a heading-level skip (h1→h3) on the
+  fully-empty DES-12 state; stale JSDoc citing `Section`/`hasTabularNumbers`, neither actually used.
+
+Full packets archived at `docs/swarm/archive/T030-worker-packet.md` and
+`docs/swarm/archive/T030-checker-packet.md`. Unblocks T031, T037.
