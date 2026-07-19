@@ -960,3 +960,36 @@ Full packets archived at `docs/swarm/archive/T030-worker-packet.md` and
 `docs/swarm/archive/T030-checker-packet.md`. Unblocks T031, T037.
 [2026-07-19T04:37:45Z] Worker finished. Checker required before completion.
 [2026-07-19T04:39:45Z] Worker finished. Checker required before completion.
+[2026-07-19T04:41:03Z] Worker finished. Checker required before completion.
+
+## T062 — ETL script `scripts/migrate.ts` (MIG-03)
+
+**Result: PASS (1st attempt). Severity: none — clean, no findings.**
+
+Worker built an idempotent ETL script (`scripts/migrate.ts` + `scripts/migrate/**`) implementing
+every row of `docs/migration/mapping.md`'s transform table, with natural-key/deterministic-UUID
+upserts, a `--dry-run` mode, and a pre-write attendees-backfill assertion gate.
+
+**Checker's independent verification (checker-tests), all correctness-critical claims re-derived:**
+- Cross-checked all 11 mapping-table rows against `transform.ts` directly, row by row.
+- **`hours_override = old.hours` confirmed genuinely unconditional** in `mapAttendance` — no
+  branching, no derived value, only the literal old row's hours.
+- **Attendees-backfill assertion gate confirmed real**: computed before any write, throws and
+  blocks all writes on a real run when a mismatch exists; dry-run only reports.
+- **Idempotency/dry-run-safety proofs reproduced independently**: ran the 33-assertion
+  `verify-fixture.ts` harness itself — dry-run writes nothing on both empty and populated stores, a
+  real run aborts with zero writes on a mismatch, a second real run produces zero new creates.
+- **UUIDv5 determinism re-verified directly**: same (kind, old-id) input produces the same UUID
+  across repeated calls; different kind produces a different UUID.
+- Ran the real `--dry-run --fixture` CLI itself and confirmed genuine edge-case coverage.
+- Secret hygiene re-checked via its own grep: zero hardcoded URLs/keys/JWT-shaped strings;
+  `redactSecret` used wherever a secret-shaped value could reach a log line.
+- External-blocker citation confirmed genuine: script fails cleanly without credentials, citing
+  T061's `source-schema.md` rather than re-investigating.
+- PII sweep clean: migration report prints only ids/counts, never names.
+- `NEW_SUPABASE_URL`/`NEW_SERVICE_ROLE_KEY` naming choice ruled reasonable — consistent with the
+  already-documented `OLD_*` convention.
+
+Full packets archived at `docs/swarm/archive/T062-worker-packet.md` and
+`docs/swarm/archive/T062-checker-packet.md`. T063 (MIG-04 human gate) remains externally blocked on
+George's real old-project credentials, unaffected by this PASS.

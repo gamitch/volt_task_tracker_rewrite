@@ -14,10 +14,18 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-19, post-T071)
+## Status snapshot (2026-07-19, post-T030/T062, T038 checking)
 
 75 tasks (T001–T071 + T002a + T002b + T006a + T016a) across epics E1–E11.
-**32 Passed · 13 Ready · 0 In Progress · 30 Blocked.**
+**34 Passed · 12 Ready · 1 In Progress (T038, checker running) · 28 Blocked.**
+
+- T030 (`/meetings` list) Passed, MINOR — unblocked T031, T037.
+- T062 (ETL script) Passed, clean. T063 (MIG-04 human gate) still externally
+  blocked on George's real old-project credentials, unaffected by the PASS.
+- T038 (`/outreach` list) worker done, checker running — flagged the
+  SideNav-badge wiring gap as a dispute candidate exactly per its packet's
+  pre-authorized instruction (exposed a reusable `getUnansweredRsvpCount`
+  rather than editing the forbidden `SideNav.tsx`).
 
 **T071 (shared Supabase client) Passed, clean, no findings.** The recurring
 cross-cutting gap flagged by six prior tasks is now closed at the
