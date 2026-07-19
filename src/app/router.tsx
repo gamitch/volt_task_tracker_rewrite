@@ -10,9 +10,14 @@
  * T074 wired 11 of the 12 remaining routes below to their real,
  * already-Passed page components (every route's own module doc documents
  * why it needs the guard nesting it gets here -- see each import's
- * originating file for that reasoning; not re-derived in this file). Only
- * `/` (the dashboard) is still a placeholder -- it needs a small new
- * role-dispatch component, which is T075's job, not T074's.
+ * originating file for that reasoning; not re-derived in this file). T075
+ * wired the last one, `/` (the dashboard), to `DashboardPage`
+ * (`../pages/home/DashboardPage`) -- a small role-dispatch component that
+ * renders `CoachHome` for `coach`/`admin`, `StudentHome` for `student`, and
+ * `ParentHome` for `parent` (see that file's own module doc for the full
+ * reasoning). `/` keeps its pre-existing `RequireAuth`-only wrap (no
+ * `RequireRole`) -- every real role gets a valid dashboard, so there is no
+ * "wrong role" case to exclude here.
  *
  * Route protection matrix (NAV-06):
  *   - `/login`, `/accept-invite`: public (these ARE the auth entry points).
@@ -39,6 +44,7 @@ import { Route, Routes } from 'react-router-dom';
 import { RequireAuth, RequireRole } from './guards';
 import { LoginPage } from '../pages/login';
 import { AcceptInvitePage } from '../pages/accept-invite';
+import { DashboardPage } from '../pages/home/DashboardPage';
 import { MeetingsList } from '../pages/meetings/MeetingsList';
 import LiveConsolePage from '../pages/meetings/LiveConsole';
 import { KioskPage } from '../pages/meetings/Kiosk';
@@ -49,14 +55,6 @@ import { CalendarPage } from '../pages/calendar/CalendarPage';
 import { RosterShell } from '../pages/roster/RosterShell';
 import { ReportsShell } from '../pages/reports/ReportsShell';
 import { SettingsPage } from '../pages/settings/SettingsPage';
-
-// ---------------------------------------------------------------------------
-// Placeholder page components (routes not yet wired to a real component)
-// ---------------------------------------------------------------------------
-
-function DashboardPage(): ReactNode {
-  return <div>Dashboard (placeholder)</div>;
-}
 
 // ---------------------------------------------------------------------------
 // Route path constants (for reuse by future nav/link code, e.g. T006)

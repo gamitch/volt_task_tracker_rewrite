@@ -2351,3 +2351,52 @@ for this task; correctly flagged as an observation, not fixed.
 
 **11 of 12 routes now genuinely wired to real components. Only `/` remains — T075's job.**
 [2026-07-19T14:05:15Z] Worker finished. Checker required before completion.
+[2026-07-19T14:13:05Z] Worker finished. Checker required before completion.
+[2026-07-19T14:29:16Z] Worker finished. Checker required before completion.
+
+## T075 — Build and wire the `/` dashboard role dispatcher, Epic E3
+
+**Result: PASS (1st attempt). Severity: none — clean.**
+
+Final route-swap task of the router-wiring series. New `src/pages/home/DashboardPage.tsx` dispatches
+by role: `admin`/`coach` → `CoachHome`, `student` → `StudentHome`, `parent` → `ParentHome`. HOME-04's
+"Admin Home = Coach Home + Season setup card" is already handled entirely inside `CoachHome.tsx`
+itself — the dispatcher needed no separate admin logic, just routing `admin` and `coach` to the same
+component. Wrapped in `RequireAuth` only (no `RequireRole` — every role gets a valid dashboard).
+
+**Genuine TypeScript-exhaustive dispatch**: the switch's default case does
+`const _exhaustive: never = user.role; throw new Error(...)` — proven real (not decorative) by an
+isolated standalone reproduction: the same switch shape against the real 4-literal `Role` type
+compiles clean, but adding a hypothetical 5th role literal without a matching case produces a
+genuine `TS2322` "not assignable to type 'never'" compile error.
+
+**Checker's independent verification (checker-tests):**
+- Read `DashboardPage.tsx` directly and confirmed the null-check, switch, exhaustiveness guard, and
+  export style exactly as claimed.
+- Independently reproduced the exhaustiveness-guard proof from scratch (own standalone `tsc --strict`
+  test), not just trusting the worker's claimed error text — confirmed the same `TS2322` error.
+- Read the `router.tsx` diff and confirmed it's scoped to exactly: module doc, new import, removed
+  placeholder — the `/` route's actual JSX (`RequireAuth`-only wrapper) is byte-identical to before,
+  all 11 other routes and `/login` untouched.
+- Read `DashboardPage.test.tsx` directly and confirmed all 5 tests genuinely exercise the dispatcher,
+  in particular confirming the admin test specifically asserts the "Season setup" card text is
+  present (proving `CoachHome`'s internal HOME-04 branch fires through the new dispatcher, not a
+  duplicate), while the coach test asserts it's absent.
+- Independently ran the full suite (872/872, +5 new), typecheck, lint, build — all clean.
+- Confirmed zero trace of the worker's temporary Playwright test-harness route remains in the final
+  `router.tsx`.
+- Confirmed all 6 forbidden files (`CoachHome.tsx`, `StudentHome.tsx`, `ParentHome.tsx`,
+  `StudentHomeSlot.tsx`, `guards.tsx`, `AppShell.tsx`) untouched via `git diff --quiet`.
+- Substituted the unit-test suite's real-fixture coverage for a full independent live-Playwright
+  re-run of all 4 roles (the real login form only ever produces `'coach'`, and reproducing the
+  worker's temporary harness route would have required the same forbidden-file workaround) — judged
+  the unit coverage genuinely equivalent since it renders the real Home components with real fixture
+  data and asserts real distinguishing content per role, not a methodology shortcut.
+- Independently assessed the worker's flagged near-duplicate utility logic
+  (`isEventInTeamScope`/`hoursVsGoalPercent` repeated across the three Home components) as MINOR and
+  reasonable to leave unfixed given this task's narrow scope — a genuine follow-up candidate, not
+  something this task should have touched.
+
+**All 13 routes in the app now resolve to real components. The route-swap phase of the
+router-wiring series is complete.** Only T073b (real Supabase `AuthProvider` wiring, not yet
+created) remains in the series.
