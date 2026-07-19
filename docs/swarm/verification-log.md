@@ -1072,3 +1072,5 @@ Full packets archived at `docs/swarm/archive/T037-worker-packet.md` and
 `docs/swarm/archive/T037-checker-packet.md`. Unblocks T055. Full-ledger sweep also caught and fixed
 a missed unblock: **T054** (Student Home) had all four of its dependencies (T030/T032/T038/T013)
 already Passed as of T038's close-out but was never flipped to Ready — corrected now.
+[2026-07-19T05:25:30Z] Worker finished. Checker required before completion.
+[2026-07-19T05:25:50Z] Worker finished. Checker required before completion.
