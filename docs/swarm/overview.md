@@ -14,43 +14,24 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-19, post-T054/T055)
+## Status snapshot (2026-07-19, post-T025/T026/T027)
 
 75 tasks (T001–T071 + T002a + T002b + T006a + T016a) across epics E1–E11.
-**42 Passed · 15 Ready · 0 In Progress · 18 Blocked.**
+**49 Passed · 6 Ready · 2 In Progress · 18 Blocked.**
 
-- **T033 (live check-in console) Passed on attempt 2** — a legitimate FAIL on attempt 1 (MAJOR,
-  real constitution item 5 secret-name leak in a comment) after the checker independently confirmed
-  the BLOCKER-class DES-17 keyboard path, MTG-11, and MTG-12 all genuinely correct. Unblocks T036.
-- **T054 (Student Home) Passed on attempt 2** — a legitimate FAIL on attempt 1 (MAJOR, Divider
-  labels instead of real Heading landmarks for two sections, breaking screen-reader heading
-  navigation) after the StudentHomeSlot scope-tension resolution and BEH-03's combined-state CTA
-  invariant were independently confirmed correct.
-- **T055 (Parent Home) Passed, MINOR** — checker independently re-read PRD BEH-06's actual text and
-  concurred reusing T037's `ConsistencyStrip` was the right call.
-- All three of E9's Home dashboards (Coach/Admin, Student, Parent) are now Passed.
-- Worker packets written (not yet dispatched) for **T023, T024, T025, T026, T027, T028, T029,
-  T040, T041, T042, T043, T044** — twelve tasks across E4 (roster CRUD) and E6 (outreach detail/
-  RSVP/leaderboard). Several flag real, undocumented schema/data-model gaps for their assigned
-  workers to investigate and disclose rather than silently paper over — see
-  `docs/swarm/active/T0{23,24,25,26,27,28,29,40,41,42,43,44}-worker-packet.md`.
-
-- T022 (Students tab) Passed, NIT — unblocked T023, T024.
-- T031 (Schedule meetings dialog) Passed, NIT — unblocked **T033, the live
-  check-in console** (its other dependency, T032, was already Passed). This
-  is high-priority — the single most operationally critical screen in the
-  app (real-time attendance during an actual meeting).
-- T037 (consistency strip) Passed, NIT — unblocked T055 (Parent Home). A
-  full-ledger sweep also caught and fixed a missed unblock: **T054**
-  (Student Home) had all four dependencies already Passed but was never
-  flipped to Ready — corrected.
-- T053 (Coach/Admin Home) Passed, MINOR — checker independently rendered a
-  separate constitution-item-3 verdict per KPI card (2 of 4 don't map onto
-  a single T013 view); all four ruled compliant. First page in the ledger
-  built on Astryx's real `dashboard` template.
-- E9 (Reports/Home) now has 3 of 8 tasks Passed (T053, T056, T061-adjacent
-  work aside) with T054/T055 Ready and T057/T058 Ready — closing in on
-  being fully open.
+- **In Progress now**: T029 (Season management) and T039 (Outreach event dialog + competition
+  flags) — both workers done (shared commit `569a5d9`), checker packets being built/dispatched.
+  Once T039 Passes, **T040 and T043 unblock**, then T041, then T042 — the last blocked chain in E6.
+- **E4 (Roster) — essentially done.** T021, T022, T023, T024, T025, T026, T027, T028 all Passed;
+  only T029 remains (In Progress). Two legitimate FAIL→rework→PASS cycles this batch (T033, T054,
+  both E5/E9, not E4) — E4 itself went 8-for-8 on first-attempt PASS.
+- **E6 (Outreach) — in progress.** T038, T044 Passed. T039 In Progress. T040–T043 Blocked on T039.
+  T045 Ready (undispatched).
+- **E9 (Home dashboards) — fully done.** T053 (Coach/Admin), T054 (Student, attempt 2), T055
+  (Parent) all Passed — the two legitimate FAIL cycles were T033 (E5, constitution item 5 secret
+  leak in a comment) and T054 (E9, Divider-instead-of-Heading a11y regression), both fixed with
+  narrow attempt-2 reworks and re-verified clean.
+- Six tasks Ready, undispatched, no packets yet: **T036, T045, T049, T050, T057, T058.**
 
 **T071 (shared Supabase client) Passed, clean, no findings.** The recurring
 cross-cutting gap flagged by six prior tasks is now closed at the
@@ -65,31 +46,28 @@ page/`guards.tsx`.
   corrective tasks). App has a real AppShell/TopNav/SideNav/MobileNav,
   `/login`→`/accept-invite` auth flow works end to end, dark-mode contrast is
   WCAG AA across the board.
-- **E4 (Roster) — open.** T021 (`/roster` shell) Passed. **T022, T025, T026,
-  T027, T028, T029** (rest of E4's first wave) Ready, undispatched, no
-  packets yet.
-- **E5 (Meetings/Check-in) — in progress.** T030 (`/meetings` list) Ready,
-  undispatched (packet pre-built). **T034** (Kiosk) and **T035** (Check-in
-  result) both Passed. T035 opened a tracked MINOR follow-up: DES-01's
-  "running tally" has no real data source in the `checkin` payload; the
-  worker's honest omission-with-disclosure was pre-authorized by its own
-  packet and does not block PASS, but a small `checkin`-extending
-  corrective task (or an explicit permanent-descope decision) is still
-  needed eventually.
-- **E6 — T038** (`/outreach` list) Ready, undispatched, packet pre-built.
-- **E8 — T048** (Resend integration) **Passed** (NIT only — test-mode gate
-  independently re-verified airtight). Unblocked **T049, T050**, both Ready.
-- **E9 — T056** (`/reports` shell + Participation tab) **Passed** (NIT
-  only). Unblocked **T057, T058**, both Ready.
-- **E10 — T061 Passed.** T062 (ETL script) Ready, undispatched, packet
-  pre-built.
-- **E7, E9 (rest, T059+), E11** — still Blocked, waiting on E4/E5/E6's list
-  pages or on T057/T058.
+- **E4 (Roster) — essentially complete.** T021–T028 all Passed; T029 In
+  Progress (checker being dispatched).
+- **E5 (Meetings/Check-in) — fully complete.** T030, T031, T032, T033
+  (attempt 2), T034, T035 all Passed. **T036** Ready, undispatched — the
+  last E5 task.
+- **E6 (Outreach) — in progress.** T038, T044 Passed. **T039** In Progress.
+  T040–T043 Blocked on T039. T045 Ready, undispatched.
+- **E7 (Calendar) — Blocked**, waiting on T045 (T046 needs T045; T047 needs
+  T045+T010).
+- **E8 (Reminders) — T048 Passed.** T049, T050 Ready, undispatched.
+  T051/T052 Blocked behind them.
+- **E9 (Reports/Home) — fully complete.** T053, T054 (attempt 2), T055,
+  T056 all Passed. T057, T058 Ready, undispatched. T059/T060 Blocked
+  behind those two.
+- **E10 (Migration) — T061, T062 Passed.** T063 is a human gate blocked on
+  George's real old-project credentials; T064/T065 blocked behind it.
+- **E11 (Launch sweeps) — Blocked**, waiting on the E6/E7/E8/E9 tail
+  (T053–T060) to all Pass first.
 
-Worker packets pre-built and ready to dispatch without a foreman round-trip:
-T030, T038, T049, T050, T057, T058, T062 (`docs/swarm/active/` for T030/
-T038/T062 — need building for T049/T050/T057/T058).
-T022/T025–T029 don't have packets yet either.
+Six Ready tasks have no packets built yet: T036, T045, T049, T050, T057,
+T058 — each needs one built (directly or via foreman-planner) before
+dispatch.
 
 Two real incidents earlier this session, both handled cleanly — see Known
 Decisions/Current Risks in `state-summary.md` if ever needed: (1) a

@@ -1388,3 +1388,85 @@ Full packets archived at `docs/swarm/archive/T044-worker-packet.md` and
 `docs/swarm/archive/T044-checker-packet.md`.
 [2026-07-19T06:59:31Z] Worker finished. Checker required before completion.
 [2026-07-19T06:59:37Z] Worker finished. Checker required before completion.
+[2026-07-19T07:03:38Z] Worker finished. Checker required before completion.
+
+## T025 — Parents tab
+
+**Result: PASS (1st attempt). Severity: MINOR.**
+
+Worker built `ParentsTab.tsx`: linked-student `AvatarGroup`, invite status, `AlertDialog` Remove
+flow correctly split between a real schema-backed effect and an honestly-disclosed local-only
+stand-in.
+
+**Checker's independent verification (checker-accessibility):**
+- Reproduced the schema-gap claim directly (`profiles` genuinely has no active/inactive-shaped
+  column) rather than trusting the worker's citation.
+- **Central safety check**: confirmed `unlinkAllStudentsForParent` is a genuine `guardian_links`-row
+  deletion matching the real schema exactly, and that the "deactivate" half (`removedProfileIds`) is
+  never written into any data/fixture shape — purely local React state driving a UI badge, honestly
+  presented, never silently claimed as persisted.
+- Invite-only Remove confirmed to degrade to exactly one real effect (`invites.status='revoked'`),
+  a valid check-constraint value.
+- All-or-nothing multi-link unlinking judged a reasonable, disclosed scope call (no per-link editor
+  exists to unlink selectively; the `AlertDialog` states the exact count before confirming).
+- Self-gating divergence from `StudentsTab.tsx`/`InvitesTab.tsx`/`TeamsTab.tsx` independently
+  reproduced as real via grep (zero `RequireRole` in any of the three), and judged a genuine, latent
+  (not currently exploitable) inconsistency worth a follow-up.
+- Astryx `AvatarGroup` default `aria-label="Avatars"` independently confirmed against installed
+  source. 549/549 repo-wide, 25/25 own tests, typecheck/lint/build clean, zero box-drawing/PII.
+
+Full packets archived at `docs/swarm/archive/T025-worker-packet.md` and
+`docs/swarm/archive/T025-checker-packet.md`.
+
+## T026 — Teams tab (CRUD + archive)
+
+**Result: PASS (1st attempt). Severity: NIT.**
+
+Worker built `TeamsTab.tsx`: full team CRUD with reversible Archive vs. irreversible-and-gated Hard
+Delete, and a color-chip selector built entirely from genuinely-documented Astryx components (no
+invented `ColorPicker`).
+
+**Checker's independent verification (checker-accessibility):**
+- Confirmed by source read that `withArchivedOverride` never removes a row (pure boolean flip) and
+  `withHardDelete` is the sole removal path in the file.
+- **Central safety check**: `canHardDelete` independently confirmed as the single shared predicate at
+  all three call sites (menu-disable, open-guard, confirm-guard) — repo-wide grep found no second,
+  divergent implementation. All four boundary cases (blocked-active-link, history-only-blocked,
+  zero-link-allowed, archived-but-still-blocked) reproduced and passing.
+- Color-chip investigation independently reproduced: grepped all 94 documented Astryx component
+  headings, confirmed zero `ColorPicker`/`ColorInput`/`Swatch` exists; `Token`'s 11-color union and
+  `Selector.renderOption` verified against both doc and installed source, including source-level
+  claims about `hasClear`'s type widening and the trigger's plain-text-only rendering.
+  `toKnownTeamColor` confirmed to never mutate the stored value, only swatch rendering.
+- Disabled-not-hidden Hard Delete menu item explicitly judged the *correct* accessibility choice
+  (real `aria-disabled` semantics, reason-naming label), not merely defensible.
+- 549/549 repo-wide, 27/27 own tests, typecheck/lint/build/format clean, zero box-drawing.
+
+Full packets archived at `docs/swarm/archive/T026-worker-packet.md` and
+`docs/swarm/archive/T026-checker-packet.md`.
+
+## T027 — Invites tab
+
+**Result: PASS (1st attempt). Severity: MINOR.**
+
+Worker built `InvitesTab.tsx`: AUTH-06 14-day expiry display status, per-row Resend/Revoke gating,
+and Revoke that does not duplicate the already-applied `trg_audit_invite_revocation` DB trigger.
+
+**Checker's independent verification (checker-accessibility):**
+- **Central safety check**: opened the migration directly and confirmed the trigger exists and fires
+  exactly as cited (`after update ... when (old.status is distinct from new.status and
+  new.status='revoked')`). Reproduced the `audit_log` grep independently — every hit is inside a
+  comment, zero code-level references, zero imports, zero insert calls. Safety property holds.
+- AUTH-06 14-day boundary re-derived independently: exactly-14-days correctly resolves to "expired"
+  (boundary-inclusive, not off-by-one).
+- Resend/Revoke gating confirmed by source read, reasoning sound and consistent with the trigger's
+  own `IS DISTINCT FROM` guard.
+- The disclosed fourth "Revoked" display status independently judged *correct, not overreach* —
+  checker traced the literal three-status wording to AUTH-06 (which predates the Revoke action), not
+  ROS-07, and confirmed hiding a revoked row would make the Revoke action look broken.
+- Em-dash placeholder confirmed U+2014 (legitimate typography, not disguised box-drawing).
+- 549/549 repo-wide, 18/18 own tests, typecheck/lint/build clean; worker's isolation-move technique
+  reproduced to confirm pre-existing repo-wide failures are genuinely unrelated.
+
+Full packets archived at `docs/swarm/archive/T027-worker-packet.md` and
+`docs/swarm/archive/T027-checker-packet.md`.

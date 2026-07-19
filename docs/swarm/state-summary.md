@@ -54,18 +54,24 @@ deliberately terse going forward.
 - **T034 — Kiosk view `/kiosk/:sessionId`.** PASS (1st attempt, MINOR: two correctly-deferred infra gaps — no token-minting Edge Function, no shared Supabase client — plus one NIT duplicated caption). Checker independently re-derived the HMAC/QR scheme against `hmac.ts`, confirmed real `qrcode.react` QR rendering via jsdom render (not a static/fake SVG), confirmed `aria-live="polite"` and zero PII, and ruled the `package.json` `qrcode.react` addition in-scope (allowlisted, mechanically required).
 - **T048 — Resend integration + branded layout + `email_log`.** PASS (1st attempt, NIT only). Checker independently re-derived (not trusted) that the constitution item 7 test-mode gate is genuinely airtight — `fetch()` to `api.resend.com` is structurally unreachable in any non-`'production'` `RESEND_SEND_MODE`. `index.ts` diff vs. T017's Passed version confirmed to be exactly two additive hunks. Cross-runtime import into `src/emails/layout/**` ruled a correctly-flagged residual risk, deferred to T052's human gate. **T049, T050 unblocked (Blocked→Ready).**
 - **T056 — `/reports` shell + Participation tab.** PASS (1st attempt, NIT only). Checker independently re-derived constitution item 3 compliance against `v_student_participation`'s real SQL (zero formula re-derivation in executable code) and re-verified the RLS-on-views security claim against the real migration files (plain view, base-table `staff_all`/`is_staff()` policies — correct, no view-level gap needed). Below-70% strict-`<` boundary independently re-tested with a checker-authored fixture. Two flagged gaps (RPT-06 router-level gate, shared Supabase client) correctly deferred, same recurring pattern as T018/T020/T021/T034.
+- **T023 — Add/edit student dialog.** PASS (1st attempt, NIT only). Applied `StudentsTab.tsx`'s established "email (optional)" resolution consistently and correctly handled an edit-mode wrinkle (email field disables when the student already has a linked profile account).
+- **T024 — Invite parent dialog.** PASS (1st attempt, NIT only). Grounded its multi-student-invite data shape in a real, checker-reconfirmed citation of T019's own migration trigger comment (not an invented shape); disclosed that `guardian_links.relationship` is hardcoded `'guardian'` by that same trigger with no real persistence path yet. **T023, T024 unblock nothing further directly.**
+- **T028 — Roster admin toggles.** PASS (1st attempt, NIT only). Confirmed a real schema gap (no leaderboard-privacy persistence column anywhere), flagged as a best-guess follow-up. Deliberately bypassed `guards.tsx`'s `RequireRole` in favor of `useAuth()` directly for a sub-widget-level gate — checker independently confirmed via `RosterShell.tsx` this was correct (a nested `RequireRole` would have wrongly redirected coaches off the whole `/roster` page).
+- **T025 — Parents tab.** PASS (1st attempt, MINOR). Confirmed real schema gap (`profiles` has no active/inactive column); split "Remove" into a real `guardian_links`-deletion effect (profile-backed parents) plus an honestly-disclosed local-only "deactivate" UI marker, and a real `invites.status='revoked'` effect (invite-only parents). Checker independently reproduced the schema gap, confirmed no overclaiming, and flagged a genuine (currently non-exploitable) self-gating inconsistency across sibling roster tabs.
+- **T026 — Teams tab (CRUD + archive).** PASS (1st attempt, NIT only). Reversible Archive vs. gated, irreversible Hard Delete behind a single shared `canHardDelete` predicate (checker confirmed no divergent second implementation exists anywhere). Confirmed via grep no Astryx `ColorPicker` exists; built the color chip from real `Token`+`Selector.renderOption` instead — checker independently reproduced the grep and the source-level claims.
+- **T027 — Invites tab.** PASS (1st attempt, MINOR). Cited and did not duplicate the already-applied `trg_audit_invite_revocation` DB trigger (checker opened the migration directly and confirmed it fires exactly as claimed, zero client-side `audit_log` writes). Added a disclosed fourth "Revoked" display status beyond ROS-07's literal three-status wording — checker independently traced the three-status text to AUTH-06 (predates the Revoke action) and ruled the addition correct, not overreach.
+- **T044 — Leaderboard.** PASS (1st attempt, NIT only). BLOCKER-class SEC-04/ROS-08 name-format enforcement proven via both `textContent` and `innerHTML` checks. Correctly reversed its own initial toggle-OFF guess after discovering real evidence in T028's already-Passed `AdminToggles.tsx` Switch description — checker independently confirmed the citation and the reversal was correct (OFF means fully anonymized, not full names).
 
 **E1, E2, and E3 are all fully complete.** Full evidence for every row above is in
 `verification-log.md` under its `## T0xx` heading.
 
-## Active
+## Active (2026-07-19, updated after T025/T026/T027 close-out)
 
-Nothing currently dispatched. T020 and T021 both Passed 2026-07-19 (1st attempt each, clean/MINOR-
-only) — T021's checker recovered cleanly from the T020-checker scratch-file collision noted below
-(recreated its harness, completed a full independent verification, final `git status` clean).
-Fourteen Ready/undispatched tasks: T022, T025, T026, T027, T028, T029, T030, T034, T035, T038,
-T048, T056, T062 (see
-`overview.md` for the current count and recommended next action).
+49 tasks Passed. T029 (Season management) and T039 (Outreach event dialog) are In Progress — both
+workers done (shared commit `569a5d9`), checker packets being built/dispatched now. Once T039
+Passes, T040/T043 unblock (then T041, then T042) — the last blocked chain in E6. 18 tasks remain
+Blocked, mostly gated on that T039 chain, E7/E8 infra, E9's remaining content pages, the E10 human
+migration gates, and E11's final sweeps. See `overview.md` for the current tiered priority list.
 
 ## Known Decisions (condensed — full rulings in dispute-log.md)
 
