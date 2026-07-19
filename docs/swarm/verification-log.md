@@ -1471,3 +1471,33 @@ and Revoke that does not duplicate the already-applied `trg_audit_invite_revocat
 Full packets archived at `docs/swarm/archive/T027-worker-packet.md` and
 `docs/swarm/archive/T027-checker-packet.md`.
 [2026-07-19T07:09:41Z] Worker finished. Checker required before completion.
+
+## T029 — Season management `/settings/season`
+
+**Result: PASS (1st attempt). Severity: NIT.**
+
+Worker built `SeasonSettings.tsx`: admin-only season create/edit + set-active-season, correctly
+built around the real, already-applied `seasons_single_active_idx` DB constraint (not reinventing
+it), with a real `AlertDialog`-confirmed switch flow and client-side date-range validation.
+
+**Checker's independent verification (checker-reviewer):**
+- **Central safety check**: opened the migration directly and confirmed the partial unique index
+  genuinely exists (`create unique index seasons_single_active_idx on public.seasons (is_active)
+  where is_active = true`, lines 52-55). Confirmed the atomicity contract is real by source read:
+  `SetActiveSeasonPayload {activateSeasonId, deactivateSeasonId}` issues exactly one
+  `onSetActiveSeason` call, local state is flipped only after the await resolves, and rejection
+  leaves rows untouched — reproduced via the worker's own `onSetActiveSeason rejects` test.
+- **Admin-gating pattern distinction, independently judged correct**: read both `RosterShell.tsx`
+  and `AdminToggles.tsx` directly. `AdminToggles.tsx`'s embedded-widget `useAuth()`-direct pattern
+  exists specifically to avoid double-restricting a widget nested inside `RosterShell`'s own
+  `RequireRole`-guarded page — not applicable to `SeasonSettings`, a standalone route, where
+  whole-page `RequireRole allowedRoles={['admin']}` (mirroring `RosterShell.tsx`'s own precedent)
+  is the correct choice.
+- Date-range validation reproduced: `start === end` correctly rejected (strict `<` comparison), a
+  real disabled `<button>` (not a fake/CSS-only disabled state).
+- Disclosed format-run incident confirmed to have caused zero collateral damage: `Kiosk.tsx` byte-
+  identical to HEAD, working tree clean at check time.
+- 549/549 repo-wide, 26/26 own tests, typecheck/lint/build clean.
+
+Full packets archived at `docs/swarm/archive/T029-worker-packet.md` and
+`docs/swarm/archive/T029-checker-packet.md`.
