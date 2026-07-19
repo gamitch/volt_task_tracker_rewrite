@@ -14,10 +14,10 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-19, post-T034/T048/T056)
+## Status snapshot (2026-07-19, post-T034/T035/T048/T056)
 
 74 tasks (T001–T070 + T002a + T002b + T006a + T016a) across epics E1–E11.
-**30 Passed · 13 Ready · 1 In Progress · 30 Blocked.**
+**31 Passed · 13 Ready · 0 In Progress · 30 Blocked.**
 
 - **E1–E3 — fully complete** (T001–T020, incl. T002a/T002b/T006a/T016a
   corrective tasks). App has a real AppShell/TopNav/SideNav/MobileNav,
@@ -27,10 +27,13 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
   T027, T028, T029** (rest of E4's first wave) Ready, undispatched, no
   packets yet.
 - **E5 (Meetings/Check-in) — in progress.** T030 (`/meetings` list) Ready,
-  undispatched (packet pre-built). **T034** (Kiosk) Passed. **T035**
-  (Check-in result) checker dispatched, In Progress — flags a missing
-  "running tally" data source (DES-01 vs. the checkin contract) as a
-  dispute candidate for the checker to rule on.
+  undispatched (packet pre-built). **T034** (Kiosk) and **T035** (Check-in
+  result) both Passed. T035 opened a tracked MINOR follow-up: DES-01's
+  "running tally" has no real data source in the `checkin` payload; the
+  worker's honest omission-with-disclosure was pre-authorized by its own
+  packet and does not block PASS, but a small `checkin`-extending
+  corrective task (or an explicit permanent-descope decision) is still
+  needed eventually.
 - **E6 — T038** (`/outreach` list) Ready, undispatched, packet pre-built.
 - **E8 — T048** (Resend integration) **Passed** (NIT only — test-mode gate
   independently re-verified airtight). Unblocked **T049, T050**, both Ready.
@@ -102,6 +105,4 @@ T062 — dispatch those directly. The rest need packets built first (T049/T050
 straightforward from the ledger's T048 detail block; T057/T058 from T056's;
 T022/T025–T029 need foreman planning against E4's roster spec). All are
 file-disjoint and independently dispatchable in parallel if budget allows;
-pace per session/weekly usage as usual. T035 (`/checkin` result) is mid-check
-— its checker may surface a dispute candidate (missing running-tally data)
-that could need a boss-arbiter ruling or a small T032 extension.
+pace per session/weekly usage as usual.

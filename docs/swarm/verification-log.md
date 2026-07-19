@@ -826,3 +826,40 @@ all numbers from `v_student_participation` only.
 
 Full packets archived at `docs/swarm/archive/T056-worker-packet.md` and
 `docs/swarm/archive/T056-checker-packet.md`. Unblocks T057, T058.
+
+## T035 — `/checkin` result screen + Check-in Bolt (DES-01)
+
+**Result: PASS (1st attempt). Severity: MINOR (one tracked follow-up, two NITs).**
+
+Worker built `CheckinResult.tsx`: three DES-01 end states (success/Bolt, already-in, error)
+against the real (already-Passed) `checkin` Edge Function contract, with the app's only
+orchestrated animation, gated on `prefers-reduced-motion`.
+
+**Checker's independent verification (checker-accessibility):**
+- Re-derived the request/response contract directly against `index.ts`/`attendance_upsert.ts` —
+  field-for-field match, no hallucinated fields.
+- **Running-tally gap (the central judgment call)**: independently confirmed no tally field exists
+  in the real payload, and that `attendance`'s RLS (`staff_all` + `own_or_linked_read`) genuinely
+  blocks a student from querying other students' rows for the same session. Read the task's actual
+  ledger Acceptance line — the tally is not part of Acceptance. More decisively, the worker
+  packet's own Acceptance Criteria explicitly pre-authorized exactly this handling (disclose, don't
+  fabricate). **Verdict: does not block PASS, not dispute-worthy. Opens a MINOR follow-up** to give
+  the tally a real data source (recommended: extend T032's `checkin` response) or make an explicit
+  permanent-descope call. Independently confirmed the dev-only disclosure marker is genuinely
+  tree-shaken out of the production bundle (grepped `dist/assets/index-*.js` directly).
+- DES-02 "only orchestrated animation in the app" confirmed via a repo-wide grep for
+  `@keyframes`/`animation:`/`transition:` outside `theme.css`.
+- `prefers-reduced-motion` confirmed real (`window.matchMedia` subscription, not CSS-only);
+  checker independently re-ran both matchMedia-true/false tests rather than trusting the claim.
+- 400ms timing confirmed exact (`--duration-medium-max: 400ms` in `theme.css`).
+- Error copy re-read from the real source strings the `checkin` function can emit — confirmed
+  DES-16 "what happened + what to do" style, no raw/technical leakage.
+- Test-file-outside-Allowed-Files judged in-scope: the worker packet's own Required Worker Output
+  section explicitly demanded specific test evidence that cannot be produced without a test
+  artifact; disclosed prominently, zero production-bundle impact.
+- Two NITs: "Done" button should be a link (pure navigation, no side effect — Astryx's own
+  documented guidance); no explicit `aria-live` on the loading→success/already-in transition
+  (acceptable given a typically sub-second full-page load, worth revisiting if reported).
+
+Full packets archived at `docs/swarm/archive/T035-worker-packet.md` and
+`docs/swarm/archive/T035-checker-packet.md`.
