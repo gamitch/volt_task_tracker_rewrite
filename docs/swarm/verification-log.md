@@ -719,3 +719,110 @@ Follow-up:
 [2026-07-19T03:25:34Z] Worker finished. Checker required before completion.
 [2026-07-19T03:27:41Z] Worker finished. Checker required before completion.
 [2026-07-19T03:28:43Z] Worker finished. Checker required before completion.
+[2026-07-19T03:30:06Z] Worker finished. Checker required before completion.
+
+## T048 — Resend integration + branded layout + `email_log` (EML-01)
+
+**Result: PASS (1st attempt). Severity: NIT (informational only, no BLOCKER/MAJOR/MINOR).**
+
+Worker built `src/emails/layout/**` (shared branded HTML email layout, zero React/JSX dependency)
+and extended the already-Passed `send-invite` Edge Function at its marked EXTENSION POINT with a
+Resend `fetch()`-based client (`resend.ts`), an `email_log` write helper (`email_log.ts`), and a
+constitution item 7 (BLOCKER-class) test-mode gate.
+
+**Checker's independent verification (checker-reviewer):**
+- Re-read `resolveSendMode()`/`sendBrandedEmail()` line-by-line rather than trusting the worker's
+  test suite: `resolveSendMode()` takes zero parameters, reads only `Deno.env.get('RESEND_SEND_MODE')`,
+  fail-closed (`=== 'production' ? 'production' : 'test'`). `sendBrandedEmail()`'s first statement
+  is the mode check; `RESEND_API_KEY` isn't read and `fetch()` to `api.resend.com` isn't constructed
+  until structurally after and below it. Confirmed the real `fetch()` call is genuinely unreachable
+  in non-production mode, not merely skipped by a flag checked after the network call fires.
+- Reproduced all 11 tests independently (7 layout/vitest, 7 resend, 4 email_log via a Node/tsx port
+  with a Deno shim against the real source) — 11/11 pass.
+- `git diff` of `index.ts` against T017's Passed version: exactly two hunks (12 additive import
+  lines, and the extension block between the EXTENSION POINT comment and the byte-identical final
+  `return jsonResponse(201, ...)`). No pre-existing T017 logic altered/reordered/removed.
+- Sender address exact-matched (`VOLT Robotics <notifications@mail.voltfrc.org>`); accent hex values
+  in `constants.ts` confirmed to match `src/theme/volt.ts`'s real tokens exactly, including the
+  D005-authorized dark on-accent line.
+- `email_log` schema cross-check against `20260717000001_support_audit.sql`: columns/nullability
+  match; every send path (including `skipped_test_mode`) writes a row, none silently dropped.
+- Secret hygiene clean (grep re-run independently); no `resend` npm package; `qrcode.react` in the
+  same shared WIP-snapshot commit correctly attributed to T034, not conflated with T048.
+- Cross-runtime import (`send-invite/index.ts` importing `src/emails/layout/**`) ruled a
+  correctly-flagged, appropriately-deferred residual risk — not dispute-worthy, since it's gated
+  behind T052's human sign-off before any real send can occur regardless.
+- No forbidden-file violations; the `verification-log.md` hook-checkpoint line in `b4d4700` is
+  routine framework infrastructure, not worker content.
+
+**Follow-up (not blocking PASS):** before `RESEND_SEND_MODE` is ever set to `'production'` as part
+of T052's sign-off, run `supabase functions deploy send-invite` (or `deno check`) to confirm the
+eszip deploy bundler resolves the cross-runtime relative import into `src/emails/layout/**`.
+
+Full packets archived at `docs/swarm/archive/T048-worker-packet.md` and
+`docs/swarm/archive/T048-checker-packet.md`. Unblocks T049, T050.
+
+## T034 — Kiosk view `/kiosk/:sessionId` (MTG-07)
+
+**Result: PASS (1st attempt). Severity: MINOR (two correctly-deferred infra gaps, one NIT).**
+
+Worker built `src/pages/meetings/Kiosk.tsx`: `QRCodeSVG`+short code, `aria-live="polite"` tally,
+~45s client refresh, zero PII, per MTG-07/DES-12.
+
+**Checker's independent verification (checker-accessibility):**
+- Re-derived the HMAC/QR scheme against `supabase/functions/checkin/hmac.ts` directly (bucket =
+  floor(unixSeconds/60); token = HMAC-SHA256 first 16 bytes hex; short code = bytes[16..22) mapped
+  `byte % 34` into the documented alphabet; URL shape). Matches exactly, no divergence.
+- `grep -in "name|email|first|last|student"` swept clean — all hits are either the disclosure copy
+  itself or doc-comment scope statements. `CHECKIN_HMAC_SECRET` confirmed absent from `src/`.
+- `aria-live="polite"` confirmed both by source read and a live jsdom render (real DOM element,
+  correctly placed, not ARIA-stripped).
+- QR rendering independently rendered in jsdom: a genuine 3,817-character multi-segment SVG path
+  from `qrcode.react`'s real `QRCodeSVG`, not a static/fake graphic.
+- ~45s refresh confirmed wired to a real `setInterval`-based `usePolling` hook with correct cleanup.
+- `package.json`/`package-lock.json` `qrcode.react@^4.2.0` addition (outside literal Allowed Files)
+  ruled in-scope: constitution item 9 allowlisted verbatim, minimal, mechanically required to
+  satisfy the task's own "real QR rendering" requirement.
+- Both flagged architecture gaps (no token-minting Edge Function; no shared Supabase client) ruled
+  correctly-deferred infrastructure needs, not dispute-worthy — component ships honest fixture/null
+  data with disclosure banners rather than fabricating plausible-looking values.
+- Router-reachability gap (still renders `router.tsx`'s inline placeholder) confirmed genuine by
+  direct read, matches the T021/`RosterShell` precedent, correctly out of scope (editing
+  `router.tsx` is forbidden here).
+- One NIT: "Refreshes every 45s" caption duplicated under both the QR and short code.
+
+Full packets archived at `docs/swarm/archive/T034-worker-packet.md` and
+`docs/swarm/archive/T034-checker-packet.md`.
+
+## T056 — `/reports` shell + Participation tab (RPT-01/RPT-02)
+
+**Result: PASS (1st attempt). Severity: NIT only.**
+
+Worker built `ReportsShell.tsx` (coach/admin-gated TabList Participation|Hours|Events) and
+`ParticipationTab.tsx` (team-grouped table, below-70% quick filter answering P-COACH2), sourcing
+all numbers from `v_student_participation` only.
+
+**Checker's independent verification (checker-accessibility):**
+- Constitution item 3 (BLOCKER-class) — re-grepped the file directly against
+  `20260717000003_metric_views.sql`'s real view definition: zero formula re-derivation in
+  executable code. The one arithmetic operation found (`compareParticipationRows`'s sort-comparator
+  subtraction) was explicitly examined and judged non-violating — it orders two already-view-sourced
+  values, never produces a displayed/stored percentage.
+- Below-70% boundary independently re-tested with a checker-authored (not the worker's) fixture:
+  exact-70.0% correctly excluded (strict `<`), no-completed-sessions student correctly `null` (never
+  fabricated 0%), excused-shrinks-denominator case correctly included.
+- RLS-on-views security claim independently re-verified against `20260717000002_rls.sql`: plain
+  view (no `security_definer`/`security_barrier`), base-table `staff_all`/`is_staff()` policies —
+  confirmed correct, no view-level policy gap.
+- RPT-06 role gate confirmed by direct `guards.tsx`/`router.tsx` reads: component-level
+  `RequireRole(['coach','admin'])` genuinely wraps the content; route-level gate genuinely absent
+  (matches disclosed gap, same as T018/T020/T021/T034).
+- Full accessibility pass: correct heading hierarchy, descriptive accessible names on every control
+  (including a per-row value-inclusive `ProgressBar` label), no invisible-text-for-compliance
+  patterns, no hardcoded colors (dark-mode-safe via Astryx semantic tokens only), no manual focus
+  manipulation.
+- `sortable` Table column field non-use (avoiding an undocumented-in-the-props-table-but-real
+  package feature) judged a reasonable, explicitly-disclosed judgment call, not requiring rework.
+
+Full packets archived at `docs/swarm/archive/T056-worker-packet.md` and
+`docs/swarm/archive/T056-checker-packet.md`. Unblocks T057, T058.

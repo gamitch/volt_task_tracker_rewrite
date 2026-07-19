@@ -14,40 +14,51 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-19, post-T021)
+## Status snapshot (2026-07-19, post-T034/T048/T056)
 
 74 tasks (T001–T070 + T002a + T002b + T006a + T016a) across epics E1–E11.
-**27 Passed · 13 Ready · 4 In Progress · 30 Blocked.**
+**30 Passed · 13 Ready · 1 In Progress · 30 Blocked.**
 
-- **E1–E2 — fully complete** (T001–T014, plus D004/D005 corrective tasks
-  T002b). App has a real AppShell/TopNav/SideNav/MobileNav, `/login` is
-  reachable, dark-mode contrast is WCAG AA across the board.
-- **E3 (Auth/invites) — fully complete.** T015–T020 (incl. T016a) all
-  Passed. T019 was the critical-path unlock (tricky "first sign-in" signal
-  design, checker-validated with 6 scenarios + 3 adversarial probes). T018
-  incidentally surfaced D005 (dark-mode contrast), fixed same-day via T002b.
-- **E4 (Roster) — open.** **T021** (`/roster` shell) Passed — first real
-  content-page task in the ledger. Unblocked **T022, T025, T026, T027, T028,
-  T029** (rest of E4's first wave), all Ready, undispatched.
+- **E1–E3 — fully complete** (T001–T020, incl. T002a/T002b/T006a/T016a
+  corrective tasks). App has a real AppShell/TopNav/SideNav/MobileNav,
+  `/login`→`/accept-invite` auth flow works end to end, dark-mode contrast is
+  WCAG AA across the board.
+- **E4 (Roster) — open.** T021 (`/roster` shell) Passed. **T022, T025, T026,
+  T027, T028, T029** (rest of E4's first wave) Ready, undispatched, no
+  packets yet.
 - **E5 (Meetings/Check-in) — in progress.** T030 (`/meetings` list) Ready,
-  undispatched. **T034** (Kiosk) and **T035** (Check-in result) dispatched,
-  In Progress.
-- **E6 — T038** (`/outreach` list) Ready, undispatched.
-- **E8 — T048** (Resend integration) dispatched, In Progress.
-- **E9 — T056** (`/reports` shell) dispatched, In Progress.
-- **E10 — T061 Passed.** T062 (ETL script) Ready, undispatched.
-- **E7, E9 (rest), E11** — still Blocked, waiting on E4/E5/E6's list pages.
+  undispatched (packet pre-built). **T034** (Kiosk) Passed. **T035**
+  (Check-in result) checker dispatched, In Progress — flags a missing
+  "running tally" data source (DES-01 vs. the checkin contract) as a
+  dispute candidate for the checker to rule on.
+- **E6 — T038** (`/outreach` list) Ready, undispatched, packet pre-built.
+- **E8 — T048** (Resend integration) **Passed** (NIT only — test-mode gate
+  independently re-verified airtight). Unblocked **T049, T050**, both Ready.
+- **E9 — T056** (`/reports` shell + Participation tab) **Passed** (NIT
+  only). Unblocked **T057, T058**, both Ready.
+- **E10 — T061 Passed.** T062 (ETL script) Ready, undispatched, packet
+  pre-built.
+- **E7, E9 (rest, T059+), E11** — still Blocked, waiting on E4/E5/E6's list
+  pages or on T057/T058.
 
 Worker packets pre-built and ready to dispatch without a foreman round-trip:
-T030, T038, T062 (`docs/swarm/active/T0xx-worker-packet.md`).
-T022/T025–T029 don't have packets yet.
+T030, T038, T049, T050, T057, T058, T062 (`docs/swarm/active/` for T030/
+T038/T062 — need building for T049/T050/T057/T058).
+T022/T025–T029 don't have packets yet either.
 
-Two real incidents this session, both handled cleanly — see Known
+Two real incidents earlier this session, both handled cleanly — see Known
 Decisions/Current Risks in `state-summary.md` if ever needed: (1) a
 concurrent-checker scratch-file collision (T020/T021 checkers running in
 parallel, no lasting harm); (2) a pre-existing `RequireRole` React 19
 console warning surfaced by T021's checker, logged for later reconciliation,
 not caused by or fixable within T021's own scope.
+
+**Recurring cross-cutting gap, flagged by T018/T020/T021/T034/T035/T056
+independently**: no shared Supabase client exists anywhere in `src/` yet.
+Every content page so far ships an injectable `loadData`-style seam
+defaulting to honest fixture/null data rather than fabricating. Worth
+scheduling as a deliberate task once enough content pages exist to size it
+properly — not yet a dispatched task.
 
 ## Standing rules (condensed — full reasoning lives in state-summary.md/dispute-log.md if ever needed)
 
@@ -85,12 +96,12 @@ not caused by or fixable within T021's own scope.
 
 ## Next recommended action
 
-**Dispatch T002b first** (D005 corrective, same-day-class — live WCAG
-shortfall on `/login`; foreman builds the packet verbatim from the ledger's
-T002b detail block / D005 Rulings A–C). Ten tasks are Ready: T002b, T020,
-T021, T030, T034, T035, T038, T048, T056, T062. Worker packets already exist
-for T034/T035/T048/T056/T062 — dispatch those directly. T020/T021/T030/T038
-need packets built first. All ten are file-disjoint and independently
-dispatchable in parallel if budget allows; pace per session/weekly usage as
-usual. Note: George has veto opportunity on D005's one-line DES-03 deviation
-before T002b dispatches (see dispute-log D005 Ruling A).
+Thirteen tasks are Ready: T022, T025, T026, T027, T028, T029, T030, T038,
+T049, T050, T057, T058, T062. Worker packets already exist for T030/T038/
+T062 — dispatch those directly. The rest need packets built first (T049/T050
+straightforward from the ledger's T048 detail block; T057/T058 from T056's;
+T022/T025–T029 need foreman planning against E4's roster spec). All are
+file-disjoint and independently dispatchable in parallel if budget allows;
+pace per session/weekly usage as usual. T035 (`/checkin` result) is mid-check
+— its checker may surface a dispute candidate (missing running-tally data)
+that could need a boss-arbiter ruling or a small T032 extension.
