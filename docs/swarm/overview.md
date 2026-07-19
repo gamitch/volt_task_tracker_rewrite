@@ -14,21 +14,26 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-19, post-T030/T038/T062)
+## Status snapshot (2026-07-19, post-T022/T031/T037; T053 checking)
 
 75 tasks (T001–T071 + T002a + T002b + T006a + T016a) across epics E1–E11.
-**35 Passed · 16 Ready · 0 In Progress · 24 Blocked.**
+**38 Passed · 17 Ready · 1 In Progress (T053, checker running) · 19 Blocked.**
 
-- T030 (`/meetings` list) Passed, MINOR — unblocked T031, T037.
-- T038 (`/outreach` list) Passed, MINOR — unblocked T039, T044, T045, T053.
-  Checker confirmed the SideNav-badge wiring gap was handled correctly per
-  its packet's pre-authorized instruction (a reusable
-  `getUnansweredRsvpCount` export + dispute-candidate flag, not an edit to
-  the forbidden `SideNav.tsx`).
-- T062 (ETL script) Passed, clean. T063 (MIG-04 human gate) still externally
-  blocked on George's real old-project credentials, unaffected by the PASS.
-- E5 (Meetings) and E6 (Outreach) both now have their list-page anchor task
-  Passed, opening up most of each epic's remaining sub-tasks.
+- T022 (Students tab) Passed, NIT — unblocked T023, T024.
+- T031 (Schedule meetings dialog) Passed, NIT — unblocked **T033, the live
+  check-in console** (its other dependency, T032, was already Passed). This
+  is high-priority — the single most operationally critical screen in the
+  app (real-time attendance during an actual meeting).
+- T037 (consistency strip) Passed, NIT — unblocked T055 (Parent Home). A
+  full-ledger sweep also caught and fixed a missed unblock: **T054**
+  (Student Home) had all four dependencies already Passed but was never
+  flipped to Ready — corrected.
+- T053 (Coach/Admin Home) worker done, checker running — this check is
+  unusually high-stakes: the worker self-flagged 2 of its 4 KPI cards as
+  new formulas not sourced from any single T013 metric view (hours-vs-goal,
+  single-meeting attendance rate), so the checker packet demands a
+  separate, explicit constitution-item-3 verdict per KPI card rather than
+  a blanket pass/fail.
 
 **T071 (shared Supabase client) Passed, clean, no findings.** The recurring
 cross-cutting gap flagged by six prior tasks is now closed at the

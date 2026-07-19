@@ -1074,3 +1074,57 @@ a missed unblock: **T054** (Student Home) had all four of its dependencies (T030
 already Passed as of T038's close-out but was never flipped to Ready — corrected now.
 [2026-07-19T05:25:30Z] Worker finished. Checker required before completion.
 [2026-07-19T05:25:50Z] Worker finished. Checker required before completion.
+[2026-07-19T05:27:40Z] Worker finished. Checker required before completion.
+
+## T022 — Students tab table + row actions (ROS-02)
+
+**Result: PASS (1st attempt). Severity: NIT only.**
+
+Worker built `StudentsTab.tsx`: `Table`+`PowerSearch`, all ROS-02 columns, a three-state
+account-status `StatusDot` derivation, and a reversible ROS-09 Deactivate/Reactivate flow.
+
+**Checker's independent verification (checker-accessibility):**
+- **"Invite (if email)" judgment call re-derived independently**, not accepted from the worker's
+  framing: confirmed `students` genuinely has no email column and `send-invite`'s real request
+  contract genuinely takes `email` as caller-supplied input (never a DB lookup) — the worker's
+  gate-on-`no_account`-status reading is the correct, well-scoped resolution; not dispute-worthy.
+- **Parent-invite-decoy handling re-verified by direct source read**: a `role='parent'` invite
+  sharing the same `student_id` does not satisfy `hasPendingSelfInvite`'s `role === 'student'`
+  filter, so account status correctly falls through to `no_account`. The `status='expired'`
+  self-invite edge case also confirmed correct.
+- **ROS-09 reversibility independently confirmed**: `withActiveOverride` is a pure map with no row
+  removal anywhere in the file — genuinely the only mutation site for `is_active`.
+- **MoreMenu/popover jsdom finding independently verified against the installed source**: closed
+  popovers' menu items are always DOM-present (confirmed in `useLayer.tsx`), but real browsers hide/
+  exclude them via native Popover-API semantics, and `hasLightDismiss` ensures only one row's menu
+  can ever be open at once — correctly distinguished as a test-scoping quirk, not a real a11y
+  defect.
+- One NIT: `StatusDot`'s `aria-label` duplicates its adjacent visible `Text` — judged the doc-
+  mandated correct pattern, not a defect.
+
+Full packets archived at `docs/swarm/archive/T022-worker-packet.md` and
+`docs/swarm/archive/T022-checker-packet.md`. Unblocks T023, T024.
+
+## T031 — Schedule meetings dialog (MTG-02)
+
+**Result: PASS (1st attempt). Severity: NIT only.**
+
+Worker built `ScheduleMeetingsDialog.tsx`: MTG-02's exact field order, correct session-generation
+math for all three schedule modes, and a resolution of the `event_sessions.notes` NOT NULL
+nullability question without touching T010's applied migration.
+
+**Checker's independent verification (checker-reviewer):**
+- **Migration-safety re-confirmed directly**: `git show` on the commit shows only the two allowed
+  dialog files changed — the applied migration file genuinely untouched, no BLOCKER-class item 10
+  violation.
+- **Session-generation boundary math independently re-derived from scratch** (not trusting the
+  worker's claimed counts) via a checker-authored script: confirmed exactly 18 sessions for the
+  6-week Mon/Wed/Fri range, and both claimed boundary-shift adjustments (17/18) exactly correct.
+- BEH-07 confirm-button copy verified across all three modes, including the 0-sessions edge case
+  (button correctly stays disabled even though the computed label would read "Create 0 meetings").
+- Disabled-state confirmed genuinely native (absence of `tooltip` prop yields a real `disabled`
+  attribute per Astryx's documented behavior, not just a visual treatment).
+
+Full packets archived at `docs/swarm/archive/T031-worker-packet.md` and
+`docs/swarm/archive/T031-checker-packet.md`. Unblocks T033 (the live check-in console — a
+high-priority task since its other dependency, T032, was already Passed).
