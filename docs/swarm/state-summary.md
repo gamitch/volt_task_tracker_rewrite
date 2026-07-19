@@ -117,6 +117,34 @@ T048, T056, T062 (see
   scanning the whole repo) — excluded `supabase/functions/**` from both.
   **Pattern**: any new non-frontend runtime under a new top-level directory
   needs a matching root-config exclusion — check this proactively.
+- **T071 created (2026-07-19, boss-architect)** — shared Supabase client
+  scheduled as a deliberate task instead of remaining tracked debt. Trigger:
+  six independent worker tasks (T018, T020, T021, T034, T035, T056) each hit
+  the identical wall — zero `createClient`/`supabase-js` usages anywhere in
+  `src/` — and each independently converged on the same seam shape rather
+  than fabricating a backend: a typed async loader `(args) => Promise<Data |
+  null>` injected as an optional prop with an obviously-fake fixture/null
+  default (`LoadInviteFn`, `LoadNoAccessDataFn`, `KioskDisplayTokenLoader`/
+  `KioskTallyLoader`, `LoadParticipationDataFn`). That six-way convergence is
+  treated as the design signal for the real client's API surface: T071 ships
+  a `src/lib/supabase/**` singleton (T015's exact `VITE_SUPABASE_URL`/
+  `VITE_SUPABASE_ANON_KEY` names), an auth/session surface shaped to slot
+  into `guards.tsx`'s existing `AuthContextValue` contract without touching
+  `guards.tsx`, and a `createLoader`-style typed query helper matching the
+  convergent seam signature. Deliberately **purely additive** (new files +
+  `@supabase/supabase-js` in package.json only): `guards.tsx` is load-bearing
+  for many Passed tasks, carries the known stale `Role`-union mismatch and
+  the render-time `pushToast` bug, and D003 history shows first-mount wiring
+  changes break adjacent tests — so integration is split into T016a-pattern
+  follow-up wiring tasks with their own checkers. Not blocked on George's
+  missing Supabase project: fail-loud `SupabaseNotConfiguredError` +
+  `isSupabaseConfigured()` posture (same staged-not-blocked stance as
+  T015/T061), never fabricated credentials, never fixture data in the data
+  layer. Homed in E3 (operationalizes T015; PRD Section 13 has no infra
+  epic, and inventing an E12 would fork the PRD's epic vocabulary). Checker:
+  checker-tests (deterministic infra — unit tests, secret-hygiene greps of
+  src + dist, bundle-size gate, migration cross-check of hand-authored row
+  types).
 
 ## Current Risks
 
@@ -133,8 +161,9 @@ T048, T056, T062 (see
   `login()`/`loginWithGoogle()` are still T005's in-memory placeholder — no
   real `signInWithPassword`/`signInWithOAuth`, no real role lookup. This is
   core-requirement debt (AUTH-01) accumulating across multiple Passed tasks.
-  Not yet scheduled — flagged for deliberate prioritization, not an ordinary
-  backlog item.
+  **Update 2026-07-19: now scheduled — T071 (Ready) builds the shared client
+  module; the `guards.tsx` swap itself remains a follow-up wiring task after
+  T071 Passes (see Known Decisions).**
 - **External prerequisites (George-only, not swarm tasks)**: (1) Supabase
   project creation — blocks live verification beyond scratch-Postgres.
   (2) Google OAuth client — blocks T015 end-to-end. (3) ~~Resend domain

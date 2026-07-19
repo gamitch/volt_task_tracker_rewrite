@@ -14,10 +14,10 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-19, post-T034/T035/T048/T056)
+## Status snapshot (2026-07-19, post-T034/T035/T048/T056; T071 added)
 
-74 tasks (T001–T070 + T002a + T002b + T006a + T016a) across epics E1–E11.
-**31 Passed · 13 Ready · 0 In Progress · 30 Blocked.**
+75 tasks (T001–T071 + T002a + T002b + T006a + T016a) across epics E1–E11.
+**31 Passed · 14 Ready · 0 In Progress · 30 Blocked.**
 
 - **E1–E3 — fully complete** (T001–T020, incl. T002a/T002b/T006a/T016a
   corrective tasks). App has a real AppShell/TopNav/SideNav/MobileNav,
@@ -59,9 +59,14 @@ not caused by or fixable within T021's own scope.
 **Recurring cross-cutting gap, flagged by T018/T020/T021/T034/T035/T056
 independently**: no shared Supabase client exists anywhere in `src/` yet.
 Every content page so far ships an injectable `loadData`-style seam
-defaulting to honest fixture/null data rather than fabricating. Worth
-scheduling as a deliberate task once enough content pages exist to size it
-properly — not yet a dispatched task.
+defaulting to honest fixture/null data rather than fabricating. **Now
+scheduled: boss-architect created T071 (E3, Ready — deps T015/T019 both
+Passed) on 2026-07-19** — a purely additive `src/lib/supabase/**` module
+(client singleton + auth/session surface + typed loader helper), staged
+against real env-var names with a fail-loud unconfigured mode so George's
+still-missing Supabase project doesn't block it. `guards.tsx`/per-page
+wiring is explicitly deferred to T016a-pattern follow-ups after T071
+Passes. See the T071 detail block in `task-ledger.md` (end of E3).
 
 ## Standing rules (condensed — full reasoning lives in state-summary.md/dispute-log.md if ever needed)
 
@@ -99,10 +104,15 @@ properly — not yet a dispatched task.
 
 ## Next recommended action
 
-Thirteen tasks are Ready: T022, T025, T026, T027, T028, T029, T030, T038,
-T049, T050, T057, T058, T062. Worker packets already exist for T030/T038/
-T062 — dispatch those directly. The rest need packets built first (T049/T050
+Fourteen tasks are Ready: T022, T025, T026, T027, T028, T029, T030, T038,
+T049, T050, T057, T058, T062, **T071 (new — shared Supabase client infra,
+high leverage: it's the prerequisite for wiring real data into every
+`loadData` seam shipped so far)**. Worker packets already exist for T030/
+T038/T062 — dispatch those directly. The rest need packets built first
+(T071 from its own unusually-detailed ledger block; T049/T050
 straightforward from the ledger's T048 detail block; T057/T058 from T056's;
 T022/T025–T029 need foreman planning against E4's roster spec). All are
-file-disjoint and independently dispatchable in parallel if budget allows;
+file-disjoint and independently dispatchable in parallel if budget allows
+(T071 touches `package.json`/`package-lock.json`, so avoid dispatching it
+concurrently with any other task that would touch those two files);
 pace per session/weekly usage as usual.
