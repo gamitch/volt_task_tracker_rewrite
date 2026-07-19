@@ -37,17 +37,18 @@ deliberately terse going forward.
 - T018 — `/accept-invite` screen. PASS (1st attempt, MINOR copy-nit finding, non-blocking). Two dispute-candidate gaps re-confirmed (router.tsx wiring; invite-data-loading seam, `invites` RLS is staff-only + no `name` column) and routed to the orchestrating session, same class as T016's identical gaps — not blocking. **One incidental cross-cutting MAJOR finding routed to boss-arbiter as D005**: dark-mode `Button variant="primary"` text contrast measures ~4.04:1 (below WCAG AA 4.5:1), a `volt.ts`/Button-level defect inherited unchanged by the already-Passed T016 `/login` page too — not T018's own defect, potentially reopens T002/T016's contrast sign-off. **T020 unblocked (Blocked→Ready) — closes out E3.**
 - **T002b — D005 corrective task: dark-mode `--color-on-accent` contrast fix.** PASS (1st attempt, clean). Boss-arbiter-authorized one-line `volt.ts` token addition + `theme.css` regeneration, independently pixel-re-measured live on `/login` (4.818:1 dark / 7.078:1 light, both clear WCAG AA). D005 fully closed end-to-end.
 - **T020 — AUTH-04 no-access screen + NFR-02 RLS-denial test.** PASS (1st attempt, clean). Two independent deliverables both verified: the page (schema has no team-contact column anywhere — a genuine schema gap, disclosed via a data seam) and a from-scratch-Postgres RLS test suite the checker independently reran and stress-tested with its own negative control (injected a fake profile for the orphan session, confirmed the suite correctly flips to FAIL, then reverts). **E3 is now fully Passed — the entire auth/invites epic is done.**
+- **T021 — `/roster` shell + TabList (first real content-page task in the ledger).** PASS (1st attempt, two MINOR follow-ups). Established a novel, checker-validated pattern: nesting `guards.tsx`'s `RequireRole` inside a page component (since `router.tsx` is forbidden) produces byte-identical guard behavior to route-level usage. Surfaced a pre-existing, not-T021-caused latent risk in `guards.tsx`'s `RequireRole` (render-phase `pushToast`, StrictMode double-toast). **T022, T025, T026, T027, T028, T029 unblocked (Blocked→Ready) — the rest of E4's first wave.**
 
 **E1, E2, and E3 are all fully complete.** Full evidence for every row above is in
 `verification-log.md` under its `## T0xx` heading.
 
 ## Active
 
-T021 (`/roster` shell) is In Progress — worker done, checker-accessibility still verifying (a
-concurrently-dispatched T020 checker deleted some of T021's checker's in-progress scratch/harness
-files mid-run as a "leftover cleanup" false positive; flagged in Current Risks below, watch for a
-disrupted/incomplete T021 checker report as a result). T020 Passed 2026-07-19 (1st attempt, clean).
-Eight Ready/undispatched tasks otherwise: T030, T034, T035, T038, T048, T056, T062 (see
+Nothing currently dispatched. T020 and T021 both Passed 2026-07-19 (1st attempt each, clean/MINOR-
+only) — T021's checker recovered cleanly from the T020-checker scratch-file collision noted below
+(recreated its harness, completed a full independent verification, final `git status` clean).
+Fourteen Ready/undispatched tasks: T022, T025, T026, T027, T028, T029, T030, T034, T035, T038,
+T048, T056, T062 (see
 `overview.md` for the current count and recommended next action).
 
 ## Known Decisions (condensed — full rulings in dispute-log.md)
@@ -114,21 +115,15 @@ Eight Ready/undispatched tasks otherwise: T030, T034, T035, T038, T048, T056, T0
 
 ## Current Risks
 
-- **Concurrent-checker scratch-file collision (2026-07-19, T020/T021).** Two checkers were
-  dispatched in parallel against the same shared worktree (T021's checker-accessibility, still
-  running its own Playwright harness, and T020's checker-tests, dispatched after). T020's checker
-  found T021's checker's in-progress files (`checker-harness-roster.html`,
-  `src/checker-harness-roster-entry.tsx`, `checker-roster-driver.mjs`, `checker-screenshots/`) on
-  disk, assumed they were "leftover from previous checks," and deleted them as part of its own
-  cleanup — while T021's checker was still using them. No task's own PASS verdict is affected (each
-  checker's *reported* evidence was independently gathered before the deletion), but T021's checker
-  may return an incomplete/disrupted report as a result, or may have already re-generated what it
-  needed under different filenames. **Watch for this specifically when T021's checker report
-  lands** — if its evidence looks thin or it reports a file-not-found surprise, treat that as this
-  incident's fallout, not a new defect, and consider re-dispatching. **Standing rule for future
-  parallel dispatches sharing a worktree**: scratch/harness filenames should be prefixed with the
-  task ID (e.g. `T021-checker-harness-*`, not a generic `checker-harness-*`) so a concurrently-
-  running agent can't mistake another task's in-progress files for its own stale leftovers.
+- **Concurrent-checker scratch-file collision (2026-07-19, T020/T021 — resolved, no harm done).**
+  T020's checker-tests found T021's checker-accessibility's still-in-use scratch files on disk,
+  assumed they were stale leftovers, and deleted them mid-run. T021's checker noticed the
+  interference (logged it explicitly in its own report), recreated its harness, and completed a
+  full independent verification anyway — final PASS, clean `git status`, no gap in its evidence.
+  No corrective action needed this time, but the **standing rule stands** for future parallel
+  dispatches sharing a worktree: scratch/harness filenames should be prefixed with the task ID
+  (e.g. `T021-checker-harness-*`, not a generic `checker-harness-*`) so a concurrently-running agent
+  can't mistake another task's in-progress files for its own stale leftovers.
 - **No real Supabase auth client anywhere in `src/`**: `guards.tsx`'s
   `login()`/`loginWithGoogle()` are still T005's in-memory placeholder — no
   real `signInWithPassword`/`signInWithOAuth`, no real role lookup. This is
@@ -159,6 +154,16 @@ Eight Ready/undispatched tasks otherwise: T030, T034, T035, T038, T048, T056, T0
   risk remains — any task checked from this point on measures against the
   corrected token. Full ruling + close-out evidence in `dispute-log.md`
   D005 and `verification-log.md` T002b entry.
+- **`guards.tsx`'s `RequireRole` fires `pushToast` during render, not in an effect** (T005-era,
+  surfaced by T021's checker): produces a real React 19 console error ("Cannot update a component
+  while rendering a different component") and a StrictMode double-toast; also never checks
+  `isLoading` before evaluating role, a latent bug once a real async session check lands. Not
+  caused by, or fixable within, T021's scope (`guards.tsx` forbidden). Reconcile whenever
+  `guards.tsx` is next in scope for editing.
+- **T021 MINOR follow-ups (not yet scheduled as their own tasks)**: (1) the four `EmptyState`s in
+  `RosterShell.tsx` default to `headingLevel=3`, skipping h2 in the outline — one-line fix; (2)
+  their copy names internal task IDs ("T021, ROS-01") which must be reworded before any real user
+  reaches `/roster` (not yet possible given the router-wiring gap).
 - Loop limit: 3 failed attempts per task before mandatory boss-arbiter
   escalation (constitution "Loop Limit").
 - No task is ever marked complete on worker self-report — every PASS

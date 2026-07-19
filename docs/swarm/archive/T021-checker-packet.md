@@ -196,3 +196,6 @@ Do not mark this task complete based on the worker's claimed-changes summary abo
 unverified narration, not evidence. Do not flip `task-ledger.md` yourself — report your verdict
 back; the orchestrating session updates the ledger. T021 stays "In Progress" until your verdict is
 returned.
+
+---
+**ARCHIVED** 2026-07-19 — closed out as part of T021 PASS close-out.
