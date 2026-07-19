@@ -35,17 +35,17 @@ deliberately terse going forward.
 - **T019 — DB trigger: invite acceptance → profile/link (critical-path task).** PASS (1st attempt, MINOR: live-GoTrue re-verification follow-up once a real Supabase project exists). Resolved a genuinely tricky "first successful sign-in" signal design (OR of `email_confirmed_at`/`last_sign_in_at` transitions, since T017's `inviteUserByEmail` runs at invite-send time not acceptance time) — checker independently re-ran 6 scenarios + 3 adversarial probes on its own scratch Postgres, rendered an explicit weighed verdict, and concluded no boss-arbiter escalation was needed. **T021, T030, T038 unblocked (Blocked→Ready) — the first real content-page tasks in the entire ledger** (Roster, Meetings, Outreach).
 
 - T018 — `/accept-invite` screen. PASS (1st attempt, MINOR copy-nit finding, non-blocking). Two dispute-candidate gaps re-confirmed (router.tsx wiring; invite-data-loading seam, `invites` RLS is staff-only + no `name` column) and routed to the orchestrating session, same class as T016's identical gaps — not blocking. **One incidental cross-cutting MAJOR finding routed to boss-arbiter as D005**: dark-mode `Button variant="primary"` text contrast measures ~4.04:1 (below WCAG AA 4.5:1), a `volt.ts`/Button-level defect inherited unchanged by the already-Passed T016 `/login` page too — not T018's own defect, potentially reopens T002/T016's contrast sign-off. **T020 unblocked (Blocked→Ready) — closes out E3.**
+- **T002b — D005 corrective task: dark-mode `--color-on-accent` contrast fix.** PASS (1st attempt, clean). Boss-arbiter-authorized one-line `volt.ts` token addition + `theme.css` regeneration, independently pixel-re-measured live on `/login` (4.818:1 dark / 7.078:1 light, both clear WCAG AA). D005 fully closed end-to-end.
 
 **E1 and E2 are fully complete. E3 is now fully Passed pending T020 (dispatch-ready).** Full evidence
 for every row above is in `verification-log.md` under its `## T0xx` heading.
 
 ## Active
 
-D005 RESOLVED 2026-07-19 (see Known Decisions below and `dispute-log.md` D005) — corrective task
-**T002b** added to the ledger, dispatch-ready, same-day-class (live WCAG shortfall on `/login`, the
-app's only reachable real page). Ten Ready/undispatched tasks: **T002b (dispatch first)**, T020,
-T021, T030, T034, T035, T038, T048, T056, T062 (see `overview.md` for the current count and
-recommended next action).
+Nothing currently dispatched. **T002b Passed 2026-07-19 (1st attempt, clean)** — D005 fully closed
+out end-to-end, live WCAG AA shortfall on `/login` genuinely fixed and independently re-measured by
+the checker (4.818:1 dark / 7.078:1 light). Nine Ready/undispatched tasks: T020, T021, T030, T034,
+T035, T038, T048, T056, T062 (see `overview.md` for the current count and recommended next action).
 
 ## Known Decisions (condensed — full rulings in dispute-log.md)
 
@@ -135,14 +135,12 @@ recommended next action).
   read-only, token-keyed data channel (e.g. an Edge Function). T018's checker
   recommended scheduling this as its own ledger task rather than an
   indefinitely-deferred gap, given AUTH-03 is core-path. Not yet scheduled.
-- **D005 (RESOLVED 2026-07-19 — residual risk only)**: the dark-mode
-  primary-button contrast shortfall is confirmed real and remains LIVE on
-  `/login` until corrective task **T002b** passes — dispatch it first
-  (same-day-class, per D005 Ruling F). Residuals: (1) any page task
-  checked before T002b lands is measuring against the defective token;
-  (2) `theme.css` must be regenerated in lockstep with `volt.ts` or the
-  DES-07 built path ships the stale baked value regardless of the source
-  fix. Full ruling in `dispute-log.md` D005.
+- **D005 — fully closed 2026-07-19.** T002b Passed (1st attempt, clean):
+  `volt.ts`/`theme.css` fix shipped and independently pixel-re-measured by
+  the checker (4.818:1 dark / 7.078:1 light, both clear AA). No residual
+  risk remains — any task checked from this point on measures against the
+  corrected token. Full ruling + close-out evidence in `dispute-log.md`
+  D005 and `verification-log.md` T002b entry.
 - Loop limit: 3 failed attempts per task before mandatory boss-arbiter
   escalation (constitution "Loop Limit").
 - No task is ever marked complete on worker self-report — every PASS

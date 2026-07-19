@@ -718,4 +718,13 @@ file untouched; astryx-api.md given a second D004-style marked annotation.
 T002/T016 verdicts stand with one evidence sub-claim corrected; forward-only
 fix, no reopening. Constitution unchanged — item 1's dispute routing and the
 Non-Negotiables' own override mechanism covered this exactly. Human decision
-not required; George informed with veto opportunity before dispatch.
+not required; George informed with veto opportunity before dispatch — George
+approved dispatch 2026-07-19, no veto.
+
+**D005 CLOSED 2026-07-19.** T002b Passed on its first attempt: `volt.ts`/
+`theme.css` carry exactly the authorized one-line fix, and checker-
+accessibility independently re-measured live pixel contrast on `/login`
+from scratch (4.818:1 dark / 7.078:1 light), matching this ruling's
+recomputed values exactly. No residual risk remains. Full close-out
+evidence in `verification-log.md`'s `## T002b` entry and the archived
+`docs/swarm/archive/T002b-{worker,checker}-packet.md`.

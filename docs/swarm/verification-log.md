@@ -647,3 +647,22 @@ Follow-up:
 [2026-07-19T02:09:06Z] Worker finished. Checker required before completion.
 [2026-07-19T02:16:02Z] Worker finished. Checker required before completion.
 [2026-07-19T02:23:19Z] Worker finished. Checker required before completion.
+[2026-07-19T02:24:48Z] Worker finished. Checker required before completion.
+
+## T002b — D005 corrective task: dark-mode `--color-on-accent` contrast fix
+Verdict: PASS (1st attempt). Severity: none blocking — one informational MINOR note on the worker's own evidence, not the fix.
+Checker: checker-accessibility. Files inspected: `src/theme/volt.ts`, `src/theme/theme.css`, rebuilt `dist/assets/theme.css`, `docs/swarm/dispute-log.md` D005, `docs/swarm/astryx-api.md` (D005 annotation), `node_modules/@astryxdesign/core` source (Button/Badge/tokens/expandColorScale/defineTheme).
+Findings:
+- `volt.ts` diff re-derived independently (`git diff 37cd053~1 37cd053`): exactly the D005-authorized one-line addition (`'--color-on-accent': ['#FFFFFF', '#00008D']` + one comment), `--color-accent`/DES-04 brand palette confirmed byte-unchanged.
+- `theme.css` diff: exactly one content line changed to `light-dark(#FFFFFF, #00008D)`; whole-file sweep for `0000B3` — zero matches; `@layer reset, astryx-base, app;` (NFR-08) confirmed unchanged at its original position.
+- Checker rebuilt the app from scratch and swept the real shipped `dist/assets/theme.css` artifact directly (not just the source file): zero `0000B3`, one `00008D` — the fix genuinely reaches the DES-07 built-CSS path. One unrelated pre-existing `--color-on-accent:light-dark(#FFFFFF,#FFFFFF)` declaration found in Astryx's own lower-priority `astryx-base`-layer scaffold CSS — traced to the vendor package itself, confirmed present identically before T002b too, correctly not a regression (loses the cascade to the `app` layer).
+- **Independent from-scratch live pixel measurement** (own Playwright session, careful crop avoiding anti-aliased button edges, cross-checked against `getComputedStyle`): dark mode `rgb(0,0,141)` text on `rgb(155,123,255)` background → **4.818:1**, clears AA's 4.5:1, matches both the worker's and boss-arbiter's independently computed number exactly. Light mode `rgb(255,255,255)` on `rgb(91,46,229)` → **7.078:1**, unchanged, no regression. Checker's own light-mode figure (7.078:1) resolved a small accuracy gap in the worker's own claimed pixel-sampled figure (6.895:1, traced to anti-aliased-edge contamination in the worker's crop) — informational only, not a contrast defect; light mode passed AA comfortably under either number.
+- Other `--color-on-accent` consumers (Badge `info`, CheckboxInput, RadioListItem, NavIcon, Calendar) independently confirmed unreachable anywhere in `src/` today; the one reachable `Badge` usage (`variant="neutral"`, `SideNav`/`MobileNav`) independently confirmed via direct source + CSS-override inspection to not consume this token at all — worker's claim held up exactly.
+- All five build gates (build/typecheck/lint/format:check/test) and the manual bundle-size gate re-check (140881 bytes gzip vs. 307200 budget) all independently re-run, all clean — same 8 pre-existing unrelated lint warnings, no new ones.
+- D001-method forbidden-file check clean: only `volt.ts`/`theme.css` (+ the standing hook-appended `verification-log.md` line) have real diffs; `package.json`'s T002a-era Prettier exclusion glob confirmed untouched; all other Forbidden Files confirmed byte-unchanged. No leftover scratch files (checker's own `find`/`git status`/`git clean -ndx`, not the worker's claim).
+- `astryx-api.md`'s D005 annotation re-verified line-for-line against the installed `@astryxdesign/core@0.1.6` source (Button.tsx primary-variant styling, `tokens.stylex.ts`'s `colorDefaults`, `expandColorScale.ts`'s "stays baked" comment, `defineTheme.ts`'s precedence logic) — confirmed real and source-cited, not hallucinated (constitution item 2).
+Attempts: 0 (clean first-attempt PASS)
+Follow-up:
+- None requiring further work. **D005 fully closed out end-to-end** — see `dispute-log.md` D005 Outcome.
+- Informational note only (not a task defect): future evidence collected via screenshot-based pixel sampling should crop well clear of rounded-corner/focus-ring edges and cross-check against `getComputedStyle` to avoid anti-aliasing-induced undercounts, per this task's light-mode discrepancy.
+- Full worker/checker packets archived at `docs/swarm/archive/T002b-worker-packet.md` and `docs/swarm/archive/T002b-checker-packet.md`.
