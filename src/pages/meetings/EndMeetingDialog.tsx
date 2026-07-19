@@ -621,10 +621,15 @@ export const defaultOnEditAttendance: OnEditAttendanceFn = async (sessionId, stu
 // ---------------------------------------------------------------------------
 
 type LoadState<T> =
-  { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'success'; data: T };
+  | { status: 'loading' }
+  | { status: 'error'; error: unknown; retry: () => void }
+  | { status: 'success'; data: T };
 
 function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): LoadState<T> {
   const [state, setState] = useState<LoadState<T>>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action (DES-12) to force the effect
+  // below to re-run without changing the caller-supplied `deps` semantics.
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -634,13 +639,15 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
         if (isMounted) setState({ status: 'success', data });
       })
       .catch((error: unknown) => {
-        if (isMounted) setState({ status: 'error', error });
+        if (isMounted) {
+          setState({ status: 'error', error, retry: () => setRetryToken((token) => token + 1) });
+        }
       });
     return () => {
       isMounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list.
-  }, deps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list; `retryToken` is an additional internal trigger.
+  }, [...deps, retryToken]);
 
   return state;
 }
@@ -787,6 +794,15 @@ export function EndMeetingDialog({
 
   return (
     <VStack gap={4}>
+      {/* T081 (DES-12 loading-state sweep) judgment call: kept as `Spinner`,
+          NOT switched to `Skeleton` -- this dialog's eventual shape depends
+          entirely on `data.session.status`, which is unknown until this
+          load resolves: 'scheduled' renders an "End meeting" Button +
+          AlertDialog, 'completed' renders an attendance-correction List,
+          'canceled' renders a plain info Banner -- three structurally
+          different, dialog-sized renders, matching Astryx's own "a dialog
+          whose eventual content varies widely" case for keeping Spinner,
+          not a single table/list/card-grid shape to preview. */}
       {loadState.status === 'loading' && <Spinner label="Loading meeting summary..." />}
 
       {loadState.status === 'error' && (
@@ -794,6 +810,7 @@ export function EndMeetingDialog({
           status="error"
           title="Couldn't load this meeting"
           description="Something went wrong loading this session's attendance. Try refreshing the page."
+          endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
         />
       )}
 

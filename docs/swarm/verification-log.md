@@ -2816,3 +2816,95 @@ live PR (`Cannot find package 'playwright/test'`, `ERR_MODULE_NOT_FOUND`). One-l
   other concurrently in-flight tasks' edits.
 
 **This resolves the CI failure on PR #1.**
+[2026-07-19T18:19:50Z] Worker finished. Checker required before completion.
+
+## T081 — DES-12 loading-state sweep: `Spinner`→`Skeleton` where dimensions are known, Epic E11
+
+**Result: PASS (1st attempt). Severity: MINOR.**
+
+Fallout fix from T069's copy audit. Full sweep of all 25 files: 20 converted `Spinner`→`Skeleton`
+(shaped to approximate real populated content — table rows, KPI cards, list rows), 4 correctly left
+as `Spinner` with documented per-file reasoning (`AcceptInvitePage.tsx`, `SubscribePopover.tsx`,
+`CheckinResult.tsx`, `EndMeetingDialog.tsx` — each genuinely gates a structurally unpredictable
+render, not just a plausible-sounding one), 1 confirmed not applicable (`NoAccessPage.tsx` has zero
+`Spinner` usage). Every conversion wraps its container in `aria-busy="true"` plus a
+`VisuallyHidden role="status"` element carrying the exact original loading text — a real,
+Astryx-source-verified accessibility-preservation pattern (`Skeleton` itself is `aria-hidden` by
+design), not an invented workaround.
+
+**Checker's independent verification (checker-accessibility):**
+- Spot-checked all 20 conversions (not a sample) — confirmed real `Skeleton` props via the
+  installed Astryx source, confirmed the `aria-busy`/`VisuallyHidden` pattern present at every site
+  via exact `grep -c` counts matching the number of loading branches per file.
+- **Verified loading text is preserved byte-for-byte** at every site, and confirmed existing test
+  assertions were left untouched (only `it()` descriptions renamed) — passing because the text is
+  genuinely identical, not because an assertion was weakened.
+- Independently re-derived all 4 "left as Spinner" judgment calls by reading each file's actual
+  conditional render logic — confirmed each genuinely has multiple structurally different possible
+  renders, not a superficially-similar one.
+- Confirmed no submit-button/`isLoading` spinners were touched.
+- Confirmed clean scope containment in the heavily concurrent working tree — distinguished T081's
+  own changes from T080/T082/T083/T084's simultaneous edits to overlapping files, confirmed nothing
+  outside T081's own 24 files + test siblings was T081-attributable.
+- Independently ran the full suite (912/912 via the disclosed T066/T084 e2e exclusion), typecheck,
+  lint, build — all clean.
+- Gave independent shape-quality judgment on 4 sites (not just the requested 2-3): found two NIT-
+  level simplifications (`ParticipationTab.tsx`'s Skeleton omits its 4 filter/sort controls;
+  `MeetingsList.tsx`'s coach view shows one generic block where the real content has two labeled
+  sections) — neither wrong, both reasonable simplifications, neither blocking.
+[2026-07-19T18:24:07Z] Worker finished. Checker required before completion.
+
+## T082 — DES-12 error-state sweep: real retry actions on error `Banner`s, Epic E11
+
+**Result:** PASS (1st attempt, MINOR)
+
+**Scope:** 29 files investigated (fresh grep sweep of every `status="error"` `Banner` usage in
+`src/pages/**`, excluding the 2 already-correct reference screens `AcceptInvitePage.tsx`/
+`CheckinResult.tsx`). 22 changed with a real `Retry` button (`Button variant="ghost" label="Retry"`
+wired via `endContent`) re-invoking the actual failed load/operation. 8 correctly left unchanged:
+`LoginPage.tsx` (credentials error, not a load failure), 5 dialogs (`ScheduleMeetingsDialog`,
+`MarkDayCompleteDialog`, `OutreachEventDialog`, `InviteParentDialog`, `StudentDialog` — existing
+submit button already re-enables via `finally { setIsSubmitting(false) }`, a genuine resubmit
+affordance), 2 RSVP controls (`RsvpControl`, `ParentRsvp` — optimistic-rollback pattern already
+re-actionable). `EndMeetingDialog.tsx` is in-scope but its two specific error banners
+(`endError`/`editError`) correctly kept without a distinct Retry (dialog's own action button /
+per-row rollback already serve that role).
+
+**Mechanism:** each screen's local `LoadState<T>`-shaped hook extended with a `retryToken` counter
+and a `retry: () => void` field on the error variant, appended to the load effect's dependency
+array.
+
+**Three non-mechanical additions, independently verified line-by-line:**
+- `SeasonSettings.tsx` `activateError`: `handleConfirmSetActive(targetOverride?)` resolves and
+  captures the *resolved* target (`lastFailedActivateTarget`) before clearing dialog state; Retry
+  re-invokes with the exact original `{activateSeasonId, deactivateSeasonId}` payload.
+- `SettingsPage.tsx` `avatarError`: `lastFailedAvatarFile` holds the actual failed `File` object;
+  Retry re-attempts that exact file, bypassing the now-empty `FileInput`.
+- `SettingsPage.tsx` `themeError`: `persistTheme(value)` shared by both the original handler and
+  Retry; optimistic `profile.themeMode` update means Retry re-sends the exact value the user picked,
+  and a new pick before clicking Retry correctly supersedes the stale error.
+
+**Real bug caught and fixed during work, independently confirmed against installed source:**
+Astryx's `AlertDialog` (`node_modules/@astryxdesign/core/src/AlertDialog/AlertDialog.tsx`) wires
+`onClick` directly to the consumer's `onAction`, so an unwrapped `onAction={handleConfirmSetActive}`
+would receive a raw `MouseEvent` as `targetOverride`, corrupting the retry payload. Fixed via
+`onAction={() => handleConfirmSetActive()}`. Checker confirmed `SeasonSettings.test.tsx`'s existing
+"opens a real AlertDialog..." test — which dispatches a real `MouseEvent` on the actual DOM button,
+not a direct prop call — genuinely exercises and would have caught this bug.
+
+**Checker verification:** independently read all 22 changed files + all 8 unchanged-but-investigated
+files + both reference files (diffed against `HEAD` to confirm forbidden-file compliance) + installed
+`AlertDialog`/`Button`/`Banner` source. Ran `npx vitest run --exclude 'tests/e2e/**'` (912/912),
+`npm run typecheck`, `npm run lint`, `npm run build`, `npm run format:check` (full-repo failure
+isolated to pre-existing, untouched `Kiosk.tsx`; scoped `prettier --check` on the 22 files clean).
+Confirmed no `*.test.tsx` diff in any of the 22 files is attributable to T082 itself (all present
+test-file changes trace to T081/T083). Confirmed scope containment in the heavily concurrent working
+tree (T080's `NoAccessPage.tsx`/`RosterShell.tsx` changes correctly excluded from T082's own diff).
+
+**Findings (non-blocking):** no dedicated automated regression coverage yet for the 3 non-mechanical
+Retry behaviors (correct by inspection only) — follow-up test-coverage task recommended, not filed as
+blocking. Checker also independently flagged that this batch should not be committed until T081 was
+also checker-verified — satisfied as of this entry (T081 passed above).
+
+**Commit status:** held pending combined commit with T080/T081/T083 (all sharing overlapping files),
+now proceeding since all four have independently passed.

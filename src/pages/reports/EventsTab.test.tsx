@@ -267,7 +267,7 @@ describe('formatSessionDate -- NFR-09 America/Chicago rendering', () => {
 // ---------------------------------------------------------------------------
 
 describe('EventsTab component -- DES-12 four states', () => {
-  it('renders a loading Spinner, then the populated Table with real values from every fixture session', async () => {
+  it('renders a loading Skeleton (T081: table has predictable dimensions), then the populated Table with real values from every fixture session', async () => {
     act(() => {
       root.render(<EventsTab seasonId={PLACEHOLDER_CURRENT_SEASON_ID} />);
     });

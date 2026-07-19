@@ -638,6 +638,15 @@ export function AcceptInvitePage({
         <Heading level={1}>VOLT</Heading>
 
         <Card width={400} maxWidth="100%" padding={6} variant="default">
+          {/* T081 (DES-12 loading-state sweep) judgment call: kept as
+              `Spinner`, NOT switched to `Skeleton` -- per this file's own
+              module doc above, this branch gates an entire
+              Spinner-vs-form-vs-error render choice: until `loadInvite`
+              resolves, it is unknown whether this Card will end up showing
+              the "Set a password" form or a terminal error Banner (two
+              structurally different renders), not one known table/list/
+              card-grid shape to preview -- Astryx's own "for genuinely
+              unknown-dimension content, use Spinner" guidance applies. */}
           {inviteLoadState === 'loading' ? (
             <VStack gap={4} hAlign="center">
               <Spinner label="Loading your invite…" />

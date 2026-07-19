@@ -240,7 +240,15 @@
  *    `fontFamily: 'monospace'` style.
  *  - `Banner` (Props table, lines 2749-2763): `status`, `title`,
  *    `description`, `isDismissable`, `onDismiss` used.
- *  - `Spinner` (Props table, lines 5832-5840): `label` used.
+ *  - `Spinner` (Props table, lines 5832-5840): `label` used. T081 (DES-12
+ *    loading-state sweep) judgment call: kept as `Spinner`, NOT switched to
+ *    `Skeleton`. This widget's entire loaded shape is one small trigger
+ *    `Button` ("Subscribe") -- not a table/card-grid/list-row with a
+ *    meaningfully previewable layout, the class of content Astryx's own
+ *    Skeleton doc calls out ("tables, card grids, list rows"). A
+ *    button-sized `Skeleton` block would offer no real layout-preview value
+ *    over a `Spinner` here, so `Spinner` remains the better fit per
+ *    Astryx's own "don't force a bad fit" guidance.
  *  - `VStack`/`HStack` ("Stack" section, lines 350-396): `gap`, `wrap` used.
  *
  * -----------------------------------------------------------------------
@@ -416,10 +424,15 @@ export const defaultOnResetFeedToken: OnResetFeedTokenFn = async (payload) => {
 // ---------------------------------------------------------------------------
 
 type LoadState<T> =
-  { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'success'; data: T };
+  | { status: 'loading' }
+  | { status: 'error'; error: unknown; retry: () => void }
+  | { status: 'success'; data: T };
 
 function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): LoadState<T> {
   const [state, setState] = useState<LoadState<T>>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action (DES-12) to force the effect
+  // below to re-run without changing the caller-supplied `deps` semantics.
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -429,13 +442,15 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
         if (isMounted) setState({ status: 'success', data });
       })
       .catch((error: unknown) => {
-        if (isMounted) setState({ status: 'error', error });
+        if (isMounted) {
+          setState({ status: 'error', error, retry: () => setRetryToken((token) => token + 1) });
+        }
       });
     return () => {
       isMounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list.
-  }, deps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list; `retryToken` is an additional internal trigger.
+  }, [...deps, retryToken]);
 
   return state;
 }
@@ -529,6 +544,11 @@ export function SubscribePopover({
         status="error"
         title="Couldn't load your calendar link"
         description="Something went wrong loading your subscription link. Try refreshing the page."
+        endContent={
+          loadState.status === 'error' ? (
+            <Button variant="ghost" label="Retry" onClick={loadState.retry} />
+          ) : undefined
+        }
       />
     );
   }

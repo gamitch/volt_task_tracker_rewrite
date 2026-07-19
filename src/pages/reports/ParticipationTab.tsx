@@ -232,17 +232,20 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Banner,
+  Button,
   EmptyState,
   Heading,
+  HStack,
   PowerSearch,
   ProgressBar,
   SegmentedControl,
   SegmentedControlItem,
   Section,
-  Spinner,
+  Skeleton,
   Table,
   Text,
   ToggleButton,
+  VisuallyHidden,
   VStack,
   pixel,
   proportional,
@@ -502,7 +505,7 @@ export async function defaultLoadParticipationData(
 
 type ParticipationLoadState =
   | { status: 'loading' }
-  | { status: 'error'; error: unknown }
+  | { status: 'error'; error: unknown; retry: () => void }
   | { status: 'success'; rows: ParticipationDisplayRow[] };
 
 function useParticipationData(
@@ -510,6 +513,9 @@ function useParticipationData(
   loadData: LoadParticipationDataFn,
 ): ParticipationLoadState {
   const [state, setState] = useState<ParticipationLoadState>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action (DES-12) to force the effect
+  // below to re-run without changing `seasonId`/`loadData` deps semantics.
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -522,13 +528,13 @@ function useParticipationData(
       })
       .catch((error: unknown) => {
         if (isMounted) {
-          setState({ status: 'error', error });
+          setState({ status: 'error', error, retry: () => setRetryToken((token) => token + 1) });
         }
       });
     return () => {
       isMounted = false;
     };
-  }, [seasonId, loadData]);
+  }, [seasonId, loadData, retryToken]);
 
   return state;
 }
@@ -746,7 +752,26 @@ export function ParticipationTab({
   }, [filteredRows]);
 
   if (loadState.status === 'loading') {
-    return <Spinner label="Loading participation data…" />;
+    return (
+      <VStack gap={4} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          Loading participation data…
+        </VisuallyHidden>
+        <Skeleton width={280} height={32} />
+        <VStack gap={3}>
+          <Skeleton width={140} height={20} index={1} />
+          <VStack gap={2}>
+            {[0, 1, 2].map((row) => (
+              <HStack key={row} gap={4} vAlign="center">
+                <Skeleton width={160} height={16} index={row * 3 + 2} />
+                <Skeleton width={100} height={16} index={row * 3 + 3} />
+                <Skeleton width={80} height={16} index={row * 3 + 4} />
+              </HStack>
+            ))}
+          </VStack>
+        </VStack>
+      </VStack>
+    );
   }
 
   if (loadState.status === 'error') {
@@ -755,6 +780,7 @@ export function ParticipationTab({
         status="error"
         title="Couldn't load participation data"
         description="Something went wrong loading this season's participation numbers. Try refreshing the page."
+        endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
       />
     );
   }
@@ -793,14 +819,24 @@ export function ParticipationTab({
       {groupedByTeam.length === 0 ? (
         <EmptyState
           headingLevel={2}
+          // DES-15 verbatim (PRD line 214, the "Reports" example): "No
+          // completed sessions this season yet. Stats appear after the
+          // first meeting or outreach day is marked complete." -- title
+          // carries the first sentence, description the second;
+          // concatenated they reproduce the PRD text exactly. This example
+          // genuinely fits THIS tab (RPT-02 specifically reports
+          // completed-session participation, MET-01), unlike
+          // HoursTab.tsx/EventsTab.tsx's own adapted copy -- see those
+          // files' own module docs for why the same literal text does not
+          // fit their different empty-state semantics.
           title={
             rows.length === 0
-              ? 'No participation data for this season yet'
+              ? 'No completed sessions this season yet.'
               : 'No students match these filters'
           }
           description={
             rows.length === 0
-              ? 'No completed meetings have been recorded for this season yet.'
+              ? 'Stats appear after the first meeting or outreach day is marked complete.'
               : 'Try clearing the search filters or the "Below 70%" chip.'
           }
         />

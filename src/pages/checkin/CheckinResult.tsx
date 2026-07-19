@@ -551,7 +551,16 @@ export function CheckinResult({
           <Card width={420} maxWidth="100%" padding={6} variant="default">
             {state.status === 'loading' ? (
               <VStack gap={4} hAlign="center">
-                {/* astryx-api.md Spinner Props: label (line 5836). */}
+                {/* astryx-api.md Spinner Props: label (line 5836). T081
+                    (DES-12 loading-state sweep) judgment call: kept as
+                    `Spinner`, NOT switched to `Skeleton` -- this component's
+                    eventual shape is genuinely unpredictable until the
+                    check-in call resolves (a bolt-animated success card, an
+                    "Already checked in" icon card, or an error Banner, three
+                    structurally different renders -- see module doc above),
+                    not a table/list/card-grid with one known dimension to
+                    preview, so Astryx's own "for genuinely unknown-dimension
+                    content, use Spinner" guidance applies. */}
                 <Spinner label="Checking you in…" />
               </VStack>
             ) : null}

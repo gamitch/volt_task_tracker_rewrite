@@ -217,7 +217,7 @@ describe('DES-12 states', () => {
     vi.setSystemTime(new Date('2026-07-19T12:00:00.000Z'));
   });
 
-  it('loading state shows a Spinner', () => {
+  it('loading state shows a Skeleton (T081: calendar grid + session list have predictable dimensions)', () => {
     renderPage({ loadSessions: () => new Promise(() => {}) });
     expect(container.textContent).toContain('Loading calendar');
   });

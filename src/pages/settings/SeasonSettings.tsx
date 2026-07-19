@@ -253,7 +253,12 @@
  *    real create flow exists on those pages yet), this page DOES have a
  *    real "Create season" flow, so offering it from the empty state is a
  *    genuine next step, not a fabricated button with nowhere to go.
- *  - `Spinner` ("Spinner" Props table, lines 5832-5840): `label` used.
+ *  - `Skeleton` (T081, "Skeleton" section, lines 621-655): `width`,
+ *    `height`, `index` used to preview this screen's predictable `Table`
+ *    row/column shape, replacing `Spinner`'s prior use here per Astryx's
+ *    own guidance (known-dimension content) -- `VisuallyHidden` + the
+ *    wrapping `VStack`'s `aria-busy` carry the "Loading seasons…"
+ *    announcement `Spinner`'s `label` used to provide.
  *  - `Heading`: own `astryx-api.md` "Components > Heading" subsection is
  *    `undefined` (lines 882-884) -- same disclosed CLI-cross-checked gap
  *    `RosterShell.tsx`/T021 and every other content page already resolved
@@ -290,11 +295,12 @@ import {
   NumberInput,
   pixel,
   proportional,
-  Spinner,
+  Skeleton,
   Table,
   type TableColumn,
   Text,
   TextInput,
+  VisuallyHidden,
   VStack,
   type DateRange,
 } from '@astryxdesign/core';
@@ -532,10 +538,15 @@ export const defaultOnSetActiveSeason: OnSetActiveSeasonFn = async (payload) => 
 // ---------------------------------------------------------------------------
 
 type LoadState<T> =
-  { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'success'; data: T };
+  | { status: 'loading' }
+  | { status: 'error'; error: unknown; retry: () => void }
+  | { status: 'success'; data: T };
 
 function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): LoadState<T> {
   const [state, setState] = useState<LoadState<T>>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action (DES-12) to force the effect
+  // below to re-run without changing the caller-supplied `deps` semantics.
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -545,13 +556,15 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
         if (isMounted) setState({ status: 'success', data });
       })
       .catch((error: unknown) => {
-        if (isMounted) setState({ status: 'error', error });
+        if (isMounted) {
+          setState({ status: 'error', error, retry: () => setRetryToken((token) => token + 1) });
+        }
       });
     return () => {
       isMounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list.
-  }, deps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list; `retryToken` is an additional internal trigger.
+  }, [...deps, retryToken]);
 
   return state;
 }
@@ -734,6 +747,15 @@ export function SeasonSettings({
   const [activateTarget, setActivateTarget] = useState<SeasonRow | null>(null);
   const [isActivating, setIsActivating] = useState(false);
   const [activateError, setActivateError] = useState<string | null>(null);
+  // T082 (DES-12 retry sweep): the confirm `AlertDialog` closes on failure
+  // (`setActivateTarget(null)` below runs in BOTH the try and catch legs, so
+  // -- unlike the form dialogs elsewhere in this batch -- there is no
+  // lingering, still-open submit button a user could just click again once
+  // `activateError` renders. This remembers which row the last FAILED
+  // attempt targeted, purely so the error Banner's "Retry" action (below)
+  // can re-run the exact same `onSetActiveSeason` call without reopening the
+  // confirm dialog for a choice the user already confirmed once.
+  const [lastFailedActivateTarget, setLastFailedActivateTarget] = useState<SeasonRow | null>(null);
 
   const currentActiveRow = useMemo(() => rows.find((row) => row.isActive) ?? null, [rows]);
   const activateConfirmCopy = useMemo(
@@ -747,19 +769,23 @@ export function SeasonSettings({
     setActivateTarget(row);
   }
 
-  async function handleConfirmSetActive(): Promise<void> {
-    if (activateTarget === null) return;
+  async function handleConfirmSetActive(targetOverride?: SeasonRow): Promise<void> {
+    const target = targetOverride ?? activateTarget;
+    if (target === null) return;
     setIsActivating(true);
     const payload: SetActiveSeasonPayload = {
-      activateSeasonId: activateTarget.id,
+      activateSeasonId: target.id,
       deactivateSeasonId: currentActiveRow?.id ?? null,
     };
     try {
       await onSetActiveSeason(payload);
-      setRows((prev) => withActiveSeason(prev, activateTarget.id));
+      setRows((prev) => withActiveSeason(prev, target.id));
       setActivateTarget(null);
+      setActivateError(null);
+      setLastFailedActivateTarget(null);
     } catch (error) {
       setActivateTarget(null);
+      setLastFailedActivateTarget(target);
       setActivateError(
         error instanceof Error
           ? error.message
@@ -778,8 +804,20 @@ export function SeasonSettings({
   if (loadState.status === 'loading') {
     return (
       <RequireRole allowedRoles={['admin']}>
-        <VStack gap={4} padding={6}>
-          <Spinner label="Loading seasons…" />
+        <VStack gap={4} padding={6} aria-busy="true">
+          <VisuallyHidden as="div" role="status">
+            Loading seasons…
+          </VisuallyHidden>
+          <Skeleton width={160} height={28} />
+          <VStack gap={2}>
+            {[0, 1, 2].map((row) => (
+              <HStack key={row} gap={4} vAlign="center">
+                <Skeleton width={140} height={16} index={row * 3} />
+                <Skeleton width={180} height={16} index={row * 3 + 1} />
+                <Skeleton width={90} height={16} index={row * 3 + 2} />
+              </HStack>
+            ))}
+          </VStack>
         </VStack>
       </RequireRole>
     );
@@ -793,6 +831,7 @@ export function SeasonSettings({
             status="error"
             title="Couldn't load seasons"
             description="Something went wrong loading season settings. Try refreshing the page."
+            endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
           />
         </VStack>
       </RequireRole>
@@ -814,11 +853,21 @@ export function SeasonSettings({
             description={activateError}
             isDismissable
             onDismiss={() => setActivateError(null)}
+            endContent={
+              lastFailedActivateTarget !== null ? (
+                <Button
+                  variant="ghost"
+                  label="Retry"
+                  clickAction={() => handleConfirmSetActive(lastFailedActivateTarget)}
+                />
+              ) : undefined
+            }
           />
         )}
 
         {rows.length === 0 ? (
           <EmptyState
+            headingLevel={2}
             title="No seasons yet"
             description="Create your first season to start tracking goal hours."
             actions={<Button label="Create season" variant="primary" onClick={openCreateForm} />}
@@ -919,7 +968,7 @@ export function SeasonSettings({
           title={activateConfirmCopy?.title ?? ''}
           description={activateConfirmCopy?.description ?? ''}
           actionLabel="Set active"
-          onAction={handleConfirmSetActive}
+          onAction={() => handleConfirmSetActive()}
           isActionLoading={isActivating}
         />
       </VStack>

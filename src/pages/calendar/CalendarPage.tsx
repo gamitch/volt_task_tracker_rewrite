@@ -242,7 +242,12 @@
  *    `description` used.
  *  - `EmptyState` (line 3954 section, Props table): `title` (required),
  *    `description`, `headingLevel` used.
- *  - `Spinner` (line 5808 section, Props table): `label` used.
+ *  - `Skeleton` (T081, "Skeleton" section, lines 621-655): `width`,
+ *    `height`, `index` used to preview this screen's predictable
+ *    calendar-grid + chronological-list shape, replacing `Spinner`'s prior
+ *    use here per Astryx's own guidance (known-dimension content).
+ *    `VisuallyHidden` + the wrapping `VStack`'s `aria-busy` carry the
+ *    "Loading calendar…" announcement `Spinner`'s `label` used to provide.
  *  - `VStack`/`HStack` ("Stack" section, line 319, `VStack`/`HStack`
  *    subsections): `gap`, `padding`, `hAlign`, `vAlign`, `wrap` used.
  *
@@ -278,8 +283,9 @@ import {
   ListItem,
   SegmentedControl,
   SegmentedControlItem,
-  Spinner,
+  Skeleton,
   Text,
+  VisuallyHidden,
   VStack,
   type ISODateString,
 } from '@astryxdesign/core';
@@ -640,10 +646,15 @@ function CalendarSessionRowItem({
 // ---------------------------------------------------------------------------
 
 type LoadState<T> =
-  { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'success'; data: T };
+  | { status: 'loading' }
+  | { status: 'error'; error: unknown; retry: () => void }
+  | { status: 'success'; data: T };
 
 function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): LoadState<T> {
   const [state, setState] = useState<LoadState<T>>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action (DES-12) to force the effect
+  // below to re-run without changing the caller-supplied `deps` semantics.
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -653,13 +664,15 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
         if (isMounted) setState({ status: 'success', data });
       })
       .catch((error: unknown) => {
-        if (isMounted) setState({ status: 'error', error });
+        if (isMounted) {
+          setState({ status: 'error', error, retry: () => setRetryToken((token) => token + 1) });
+        }
       });
     return () => {
       isMounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list.
-  }, deps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list; `retryToken` is an additional internal trigger.
+  }, [...deps, retryToken]);
 
   return state;
 }
@@ -706,8 +719,23 @@ export function CalendarPage({
 
   if (loadState.status === 'loading') {
     return (
-      <VStack gap={4} padding={6}>
-        <Spinner label="Loading calendar…" />
+      <VStack gap={4} padding={6} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          Loading calendar…
+        </VisuallyHidden>
+        <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
+          <Skeleton width={140} height={28} index={0} />
+          <Skeleton width={80} height={32} index={1} />
+        </HStack>
+        <Skeleton width="100%" height={320} index={2} />
+        <VStack gap={2}>
+          {[0, 1, 2].map((row) => (
+            <HStack key={row} gap={3} vAlign="center">
+              <Skeleton width={16} height={16} radius="rounded" index={row + 3} />
+              <Skeleton width={220} height={16} index={row + 6} />
+            </HStack>
+          ))}
+        </VStack>
       </VStack>
     );
   }
@@ -719,6 +747,7 @@ export function CalendarPage({
           status="error"
           title="Couldn't load the calendar"
           description="Something went wrong loading this season's sessions. Try refreshing the page."
+          endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
         />
       </VStack>
     );

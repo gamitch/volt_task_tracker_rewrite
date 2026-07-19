@@ -725,7 +725,7 @@ describe('NFR-06 QR show/hide toggle (T072)', () => {
 // ---------------------------------------------------------------------------
 
 describe('DES-12 states', () => {
-  it('shows a loading Spinner before loadData resolves', () => {
+  it('shows a loading Skeleton (T081: roster-list-row shape is predictable) before loadData resolves', () => {
     renderBody(COACH_USER, {
       loadData: () => new Promise(() => {}), // never resolves
     });

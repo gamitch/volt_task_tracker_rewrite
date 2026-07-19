@@ -114,8 +114,12 @@
  *    first, and only, heading on the page, so it is h1 -- no level is
  *    skipped).
  *  - `EmptyState`: `astryx-api.md` lines 3991-4001 (Props table). `title`
- *    (line 3995, required) and `description` (line 3996) are used;
- *    `icon`/`actions`/`headingLevel`/`isCompact`/`xstyle` are not -- there
+ *    (line 3995, required), `description` (line 3996), and `headingLevel`
+ *    (default `3` per the component's own JSDoc) are used; `headingLevel={2}`
+ *    is set explicitly (T080 MINOR fix) because this `EmptyState` is a direct
+ *    sibling of the page's own `<Heading level={1}>` above -- the default h3
+ *    would otherwise skip a level in the document outline.
+ *    `icon`/`actions`/`isCompact`/`xstyle` are not used -- there
  *    is no action to offer yet (nothing is loaded, nothing to retry, no
  *    "create" flow exists on this shell), so `actions` is deliberately
  *    omitted rather than inventing a button with nowhere real to go.
@@ -188,7 +192,11 @@ export function RosterShell(): ReactNode {
           ))}
         </TabList>
 
-        <EmptyState title={activeConfig.emptyTitle} description={activeConfig.emptyDescription} />
+        <EmptyState
+          headingLevel={2}
+          title={activeConfig.emptyTitle}
+          description={activeConfig.emptyDescription}
+        />
       </VStack>
     </RequireRole>
   );

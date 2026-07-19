@@ -172,8 +172,14 @@
  *    (required). Only `level`/`children` used below.
  *  - `Text`: `astryx-api.md` "Text" Props table (lines 858-878). `type`,
  *    `color` used.
- *  - `Spinner` (`astryx-api.md` "Spinner" Props table, lines 5832-5838):
- *    `label` used.
+ *  - `Skeleton` (T081, `astryx-api.md` "Skeleton" section, lines 621-655):
+ *    `width`, `height`, `index` used to preview this widget's fixed,
+ *    always-identical shape (a heading + one `Switch` row) -- replacing
+ *    `Spinner`'s prior use here per Astryx's own guidance (known-dimension
+ *    content, arguably MORE predictable than a table since this widget's
+ *    layout never varies with data at all). `VisuallyHidden` + the wrapping
+ *    `VStack`'s `aria-busy` carry the "Loading admin settings…"
+ *    announcement `Spinner`'s `label` used to provide.
  *  - `VStack`/`HStack` (`astryx-api.md` "Stack" section, lines 350-396):
  *    `gap`, `padding`, `vAlign`, `hAlign` used.
  *
@@ -187,13 +193,15 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Banner,
+  Button,
   Heading,
   HStack,
   Icon,
   Link,
-  Spinner,
+  Skeleton,
   Switch,
   Text,
+  VisuallyHidden,
   VStack,
 } from '@astryxdesign/core';
 import { useAuth } from '../../app/guards';
@@ -243,10 +251,15 @@ const SCHEMA_GAP_BANNER = {
 // ---------------------------------------------------------------------------
 
 type LoadState<T> =
-  { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'success'; data: T };
+  | { status: 'loading' }
+  | { status: 'error'; error: unknown; retry: () => void }
+  | { status: 'success'; data: T };
 
 function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): LoadState<T> {
   const [state, setState] = useState<LoadState<T>>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action (DES-12) to force the effect
+  // below to re-run without changing the caller-supplied `deps` semantics.
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -256,13 +269,15 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
         if (isMounted) setState({ status: 'success', data });
       })
       .catch((error: unknown) => {
-        if (isMounted) setState({ status: 'error', error });
+        if (isMounted) {
+          setState({ status: 'error', error, retry: () => setRetryToken((token) => token + 1) });
+        }
       });
     return () => {
       isMounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list.
-  }, deps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list; `retryToken` is an additional internal trigger.
+  }, [...deps, retryToken]);
 
   return state;
 }
@@ -310,8 +325,18 @@ export function AdminToggles({
 
   if (loadState.status === 'loading') {
     return (
-      <VStack gap={4} padding={6}>
-        <Spinner label="Loading admin settings…" />
+      <VStack gap={4} padding={6} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          Loading admin settings…
+        </VisuallyHidden>
+        <Skeleton width={180} height={22} index={0} />
+        <HStack gap={3} vAlign="center">
+          <VStack gap={1}>
+            <Skeleton width={280} height={16} index={1} />
+            <Skeleton width={320} height={14} index={2} />
+          </VStack>
+          <Skeleton width={40} height={22} radius="rounded" index={3} />
+        </HStack>
       </VStack>
     );
   }
@@ -323,6 +348,7 @@ export function AdminToggles({
           status="error"
           title="Couldn't load admin settings"
           description="Something went wrong loading the leaderboard privacy setting. Try refreshing the page."
+          endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
         />
       </VStack>
     );

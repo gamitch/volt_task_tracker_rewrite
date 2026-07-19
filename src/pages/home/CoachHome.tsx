@@ -263,7 +263,10 @@
  * 11. DES-12 four states.
  *
  * Not-signed-in (`user === null`, a plain sign-in prompt) / loading
- * (`Spinner` while `loadData` is pending) / error (`loadData` rejects --
+ * (T081: `Skeleton`, previewing the known KPI-card-grid + "Next up"-list
+ * shape, while `loadData` is pending -- replacing the prior `Spinner` per
+ * Astryx's own guidance since this dashboard's dimensions are predictable)
+ * / error (`loadData` rejects --
  * `Banner status="error"`) / populated (KPI `Grid`, Next up, Recent
  * signups, admin-gated Season setup card). "Empty" (zero sessions/RSVPs at
  * all) is not a separate top-level branch -- HOME-01's KPI cards and
@@ -332,7 +335,12 @@
  *  - `ProgressBar` (line 5416 section, Props table): `label` (required),
  *    `value`, `max`, `isLabelHidden`, `hasValueLabel`, `formatValueLabel`
  *    used.
- *  - `Spinner` (line 5808 section, Props table): `label` used.
+ *  - `Skeleton` (T081, "Skeleton" section, lines 621-655): `width`,
+ *    `height`, `index` used to preview this dashboard's fixed, always-
+ *    present KPI-card grid + "Next up" list shape, replacing `Spinner`'s
+ *    prior use here per Astryx's own guidance (known-dimension content).
+ *    `VisuallyHidden` + the wrapping `VStack`'s `aria-busy` carry the
+ *    "Loading Home…" announcement `Spinner`'s `label` used to provide.
  *  - `Toast` (line 5998 section) -- same real, already-disclosed doc-gap
  *    `OutreachList.tsx`/T038 found and cross-checked against the INSTALLED
  *    source (`node_modules/@astryxdesign/core/dist/Toast/Toast.d.ts`): the
@@ -363,9 +371,10 @@ import {
   List,
   ListItem,
   ProgressBar,
-  Spinner,
+  Skeleton,
   Text,
   Toast,
+  VisuallyHidden,
   VStack,
 } from '@astryxdesign/core';
 import { useAuth } from '../../app/guards';
@@ -1135,10 +1144,15 @@ function useMilestoneToasts(
 // ---------------------------------------------------------------------------
 
 type LoadState<T> =
-  { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'success'; data: T };
+  | { status: 'loading' }
+  | { status: 'error'; error: unknown; retry: () => void }
+  | { status: 'success'; data: T };
 
 function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): LoadState<T> {
   const [state, setState] = useState<LoadState<T>>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action (DES-12) to force the effect
+  // below to re-run without changing the caller-supplied `deps` semantics.
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -1148,13 +1162,15 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
         if (isMounted) setState({ status: 'success', data });
       })
       .catch((error: unknown) => {
-        if (isMounted) setState({ status: 'error', error });
+        if (isMounted) {
+          setState({ status: 'error', error, retry: () => setRetryToken((token) => token + 1) });
+        }
       });
     return () => {
       isMounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list.
-  }, deps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list; `retryToken` is an additional internal trigger.
+  }, [...deps, retryToken]);
 
   return state;
 }
@@ -1186,10 +1202,15 @@ function KpiCard({
   );
 }
 
+// T080 MINOR fix: was meeting=blue/outreach=purple/competition=teal, which
+// was inconsistent with DES-04's real palette (`CalendarPage.tsx`'s own
+// "Meeting Violet"/"Circuit Blue"/"Comp Orange" mapping, also matched
+// verbatim by `EventsTab.tsx`) -- corrected to match both of those files
+// exactly: meeting=purple, outreach=blue, competition=orange.
 const EVENT_TYPE_BADGE: Record<EventType, { variant: BadgeVariant; label: string }> = {
-  meeting: { variant: 'blue', label: 'Meeting' },
-  outreach: { variant: 'purple', label: 'Outreach' },
-  competition: { variant: 'teal', label: 'Competition' },
+  meeting: { variant: 'purple', label: 'Meeting' },
+  outreach: { variant: 'blue', label: 'Outreach' },
+  competition: { variant: 'orange', label: 'Competition' },
 };
 
 function NextUpRowItem({ row }: { row: NextUpRow }): ReactNode {
@@ -1266,6 +1287,7 @@ export function CoachHome({
     return (
       <VStack gap={4} padding={6}>
         <EmptyState
+          headingLevel={1}
           title="Sign in to view Home"
           description="You need to be signed in to see this page."
         />
@@ -1275,8 +1297,30 @@ export function CoachHome({
 
   if (loadState.status === 'loading') {
     return (
-      <VStack gap={4} padding={6}>
-        <Spinner label="Loading Home…" />
+      <VStack gap={6} padding={6} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          Loading Home…
+        </VisuallyHidden>
+        <Skeleton width={100} height={28} index={0} />
+        <Grid columns={{ minWidth: 240, repeat: 'fit' }} gap={4}>
+          {[0, 1, 2, 3].map((card) => (
+            <VStack key={card} gap={2} padding={4}>
+              <Skeleton width={140} height={14} index={card * 2 + 1} />
+              <Skeleton width={70} height={22} index={card * 2 + 2} />
+            </VStack>
+          ))}
+        </Grid>
+        <VStack gap={3}>
+          <Skeleton width={110} height={20} index={9} />
+          <VStack gap={2}>
+            {[0, 1, 2].map((row) => (
+              <HStack key={row} gap={4} vAlign="center">
+                <Skeleton width={220} height={16} index={row * 2 + 10} />
+                <Skeleton width={80} height={16} index={row * 2 + 11} />
+              </HStack>
+            ))}
+          </VStack>
+        </VStack>
       </VStack>
     );
   }
@@ -1288,6 +1332,7 @@ export function CoachHome({
           status="error"
           title="Couldn't load Home"
           description="Something went wrong loading this season's dashboard. Try refreshing the page."
+          endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
         />
       </VStack>
     );

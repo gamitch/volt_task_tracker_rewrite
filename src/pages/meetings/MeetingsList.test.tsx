@@ -293,7 +293,11 @@ describe('<MeetingsList /> coach view', () => {
   it('empty state (zero meeting sessions)', async () => {
     renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve({ rows: [] }) });
     await flushMicrotasks();
-    expect(container.textContent).toContain('No meetings scheduled yet');
+    // DES-15 verbatim (PRD line 212, T083).
+    expect(container.textContent).toContain('No meetings scheduled.');
+    expect(container.textContent).toContain(
+      'Set up your weekly build meetings once and check-in takes care of itself.',
+    );
   });
 
   it('populated state: Upcoming/Past sections, status badges, team scope, dates, NAV-07 exclusion', async () => {

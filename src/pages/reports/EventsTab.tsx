@@ -312,10 +312,13 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Badge,
   Banner,
+  Button,
   EmptyState,
-  Spinner,
+  HStack,
+  Skeleton,
   Table,
   Text,
+  VisuallyHidden,
   VStack,
   pixel,
   proportional,
@@ -812,7 +815,7 @@ export async function defaultLoadEventSessionsData(
 
 type EventsLoadState =
   | { status: 'loading' }
-  | { status: 'error'; error: unknown }
+  | { status: 'error'; error: unknown; retry: () => void }
   | { status: 'success'; rows: EventSessionDisplayRow[] };
 
 function useEventSessionsData(
@@ -820,6 +823,9 @@ function useEventSessionsData(
   loadData: LoadEventSessionsDataFn,
 ): EventsLoadState {
   const [state, setState] = useState<EventsLoadState>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action (DES-12) to force the effect
+  // below to re-run without changing `seasonId`/`loadData` deps semantics.
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -832,13 +838,13 @@ function useEventSessionsData(
       })
       .catch((error: unknown) => {
         if (isMounted) {
-          setState({ status: 'error', error });
+          setState({ status: 'error', error, retry: () => setRetryToken((token) => token + 1) });
         }
       });
     return () => {
       isMounted = false;
     };
-  }, [seasonId, loadData]);
+  }, [seasonId, loadData, retryToken]);
 
   return state;
 }
@@ -995,7 +1001,21 @@ export function EventsTab({
   const columns = useMemo(() => buildColumns(), []);
 
   if (loadState.status === 'loading') {
-    return <Spinner label="Loading events data…" />;
+    return (
+      <VStack gap={2} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          Loading events data…
+        </VisuallyHidden>
+        {[0, 1, 2, 3, 4].map((row) => (
+          <HStack key={row} gap={4} vAlign="center">
+            <Skeleton width={80} height={20} radius="rounded" index={row * 4} />
+            <Skeleton width={110} height={16} index={row * 4 + 1} />
+            <Skeleton width={180} height={16} index={row * 4 + 2} />
+            <Skeleton width={80} height={16} index={row * 4 + 3} />
+          </HStack>
+        ))}
+      </VStack>
+    );
   }
 
   if (loadState.status === 'error') {
@@ -1004,6 +1024,7 @@ export function EventsTab({
         status="error"
         title="Couldn't load events data"
         description="Something went wrong loading this season's session data. Try refreshing the page."
+        endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
       />
     );
   }
@@ -1011,11 +1032,26 @@ export function EventsTab({
   const rows = loadState.rows;
 
   if (rows.length === 0) {
+    // T083 (worker packet Trap #2): the PRD's DES-15 "Reports" example
+    // ("No completed sessions this season yet. Stats appear after the
+    // first meeting or outreach day is marked complete.") is NOT used
+    // verbatim here -- it names a narrower condition ("completed") than
+    // this tab's real empty-state trigger. `rows` is EVERY session of
+    // EVERY status for the season (module doc #1/#2 -- RPT-04 is the
+    // deliberate NAV-07 exception that lists scheduled/completed/canceled
+    // sessions together, confirmed by this task's own already-Passed
+    // design), so `rows.length === 0` means "zero sessions of ANY status
+    // exist yet", not "sessions exist but none are completed". Applying the
+    // literal "no completed sessions" text here would misdescribe a tab
+    // that would still be showing real rows the moment a single session --
+    // scheduled or otherwise -- is created, well before any of them are
+    // ever marked complete. The copy below keeps DES-15's spirit (specific,
+    // tells the user what makes it populate) without that inaccuracy.
     return (
       <EmptyState
         headingLevel={2}
-        title="No sessions for this season yet"
-        description="Scheduled meetings, outreach events, and competitions will show up here once sessions exist for this season."
+        title="No sessions for this season yet."
+        description="Meetings, outreach events, and competitions will show up here as soon as your coach schedules one."
       />
     );
   }

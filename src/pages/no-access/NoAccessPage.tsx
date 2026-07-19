@@ -177,6 +177,7 @@ export function NoAccessPage({
 
         <Card width={400} maxWidth="100%" padding={6} variant="default">
           <EmptyState
+            headingLevel={2}
             title="You're not on the roster yet."
             description={`We couldn't find an invite or profile for your account. If you think this is a mistake, contact ${contactName}.`}
           />

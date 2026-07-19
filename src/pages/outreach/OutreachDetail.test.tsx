@@ -130,7 +130,7 @@ describe('DES-12 "not found" state (NAV-08 -- reveal nothing)', () => {
     expect(container.textContent).not.toContain("isn't available");
   });
 
-  it('loading state renders a Spinner before the load resolves', () => {
+  it('loading state renders a Skeleton (T081: detail-page shape is predictable) before the load resolves', () => {
     renderDetail('event-food-bank-sort', {
       loadData: () => new Promise<OutreachDetailData | null>(() => {}),
     });

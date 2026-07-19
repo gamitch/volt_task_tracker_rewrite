@@ -213,8 +213,11 @@
  * -----------------------------------------------------------------------
  * 10. DES-12 four states.
  *
- * Not-signed-in (`user === null`, sign-in prompt) / loading (`Spinner` while
- * `loadData` is pending) / error (`loadData` rejects -- `Banner
+ * Not-signed-in (`user === null`, sign-in prompt) / loading (T081: `Skeleton`,
+ * previewing the known hero + hours + "Next up"/"Sign-up opportunities" list
+ * shape, while `loadData` is pending -- replacing the prior `Spinner` per
+ * Astryx's own guidance since this dashboard's dimensions are predictable)
+ * / error (`loadData` rejects -- `Banner
  * status="error"`) / populated (hero + hours + Next up + Sign-up
  * opportunities). "Empty" is not a separate top-level branch -- the hours
  * bar and hero are meaningful even at zero; "Next up" and "Sign-up
@@ -268,7 +271,12 @@
  *    use color/neutral variants for category tags" guidance.
  *  - `EmptyState` (line 3954 section, Props table): `title` (required),
  *    `description`, `headingLevel` used.
- *  - `Spinner` (line 5808 section, Props table): `label` used.
+ *  - `Skeleton` (T081, "Skeleton" section, lines 621-655): `width`,
+ *    `height`, `index` used to preview this dashboard's predictable
+ *    hero/hours/list sections, replacing `Spinner`'s prior use here per
+ *    Astryx's own guidance (known-dimension content). `VisuallyHidden` +
+ *    the wrapping `VStack`'s `aria-busy` carry the "Loading Home…"
+ *    announcement `Spinner`'s `label` used to provide.
  *  - `Heading`: doc's own "Components > Heading" subsection is `undefined`
  *    (same disclosed CLI-cross-checked gap every sibling task hit);
  *    `level` (required) + `children` (required) only, per that established
@@ -291,9 +299,10 @@ import {
   ListItem,
   MoreMenu,
   ProgressBar,
-  Spinner,
+  Skeleton,
   Text,
   TextInput,
+  VisuallyHidden,
   VStack,
   type DropdownMenuOption,
 } from '@astryxdesign/core';
@@ -913,10 +922,15 @@ export async function defaultLoadStudentHomeData(
 // ---------------------------------------------------------------------------
 
 type LoadState<T> =
-  { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'success'; data: T };
+  | { status: 'loading' }
+  | { status: 'error'; error: unknown; retry: () => void }
+  | { status: 'success'; data: T };
 
 function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): LoadState<T> {
   const [state, setState] = useState<LoadState<T>>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action (DES-12) to force the effect
+  // below to re-run without changing the caller-supplied `deps` semantics.
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -926,13 +940,15 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
         if (isMounted) setState({ status: 'success', data });
       })
       .catch((error: unknown) => {
-        if (isMounted) setState({ status: 'error', error });
+        if (isMounted) {
+          setState({ status: 'error', error, retry: () => setRetryToken((token) => token + 1) });
+        }
       });
     return () => {
       isMounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list.
-  }, deps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list; `retryToken` is an additional internal trigger.
+  }, [...deps, retryToken]);
 
   return state;
 }
@@ -1137,6 +1153,7 @@ export function StudentHome({
     return (
       <VStack gap={4} padding={6}>
         <EmptyState
+          headingLevel={1}
           title="Sign in to view Home"
           description="You need to be signed in to see this page."
         />
@@ -1146,8 +1163,35 @@ export function StudentHome({
 
   if (loadState.status === 'loading') {
     return (
-      <VStack gap={4} padding={6}>
-        <Spinner label="Loading Home…" />
+      <VStack gap={6} padding={6} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          Loading Home…
+        </VisuallyHidden>
+        <Skeleton width={160} height={28} index={0} />
+        <Skeleton width="100%" height={64} index={1} />
+        <VStack gap={2}>
+          <Skeleton width={180} height={20} index={2} />
+          <Skeleton width="100%" height={10} index={3} />
+          <Skeleton width={220} height={14} index={4} />
+        </VStack>
+        <VStack gap={2}>
+          <Skeleton width={100} height={20} index={5} />
+          {[0, 1].map((row) => (
+            <HStack key={row} gap={4} vAlign="center">
+              <Skeleton width={220} height={16} index={row + 6} />
+              <Skeleton width={80} height={16} index={row + 8} />
+            </HStack>
+          ))}
+        </VStack>
+        <VStack gap={2}>
+          <Skeleton width={200} height={20} index={10} />
+          {[0, 1].map((row) => (
+            <HStack key={row} gap={4} vAlign="center">
+              <Skeleton width={220} height={16} index={row + 11} />
+              <Skeleton width={80} height={16} index={row + 13} />
+            </HStack>
+          ))}
+        </VStack>
       </VStack>
     );
   }
@@ -1159,6 +1203,7 @@ export function StudentHome({
           status="error"
           title="Couldn't load Home"
           description="Something went wrong loading your Home page. Try refreshing the page."
+          endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
         />
       </VStack>
     );

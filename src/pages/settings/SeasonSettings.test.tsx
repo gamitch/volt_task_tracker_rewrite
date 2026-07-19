@@ -446,7 +446,7 @@ describe('<SeasonSettings /> admin-only gate', () => {
 // ---------------------------------------------------------------------------
 
 describe('<SeasonSettings /> DES-12 states', () => {
-  it('shows a loading spinner before data resolves', async () => {
+  it('shows a loading Skeleton (T081: table has predictable dimensions) before data resolves', async () => {
     renderSeasonSettings(ADMIN_USER, { loadData: () => new Promise(() => {}) });
     // T073b2: auth resolution (even via the fake `authModule` this
     // harness's `LoginAs` now uses) is genuinely async -- a flush is needed

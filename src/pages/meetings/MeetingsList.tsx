@@ -160,8 +160,11 @@
  * 8. DES-12 four states, reachable independently per role variant (Known
  *    Context/Traps #6).
  *
- *    Coach view (`CoachMeetingsView`): loading (`Spinner` while
- *    `loadCoachData()` is pending) / error (`loadCoachData()` rejects --
+ *    Coach view (`CoachMeetingsView`): loading (T081: `Skeleton`,
+ *    previewing the known Upcoming/Past meeting-list-row shape, while
+ *    `loadCoachData()` is pending -- replacing the prior `Spinner` per
+ *    Astryx's own guidance since this list's dimensions are predictable)
+ *    / error (`loadCoachData()` rejects --
  *    `Banner status="error"`) / empty (`loadCoachData()` resolves zero
  *    meeting-type rows -- page-level `EmptyState` with an offer to open the
  *    stubbed "Schedule meetings" flow) / populated (Upcoming/Past `Section`s
@@ -220,7 +223,11 @@
  *  - `Banner`: "Banner" Props table. `status`, `title`, `description` used.
  *  - `EmptyState`: "EmptyState" Props table. `title` (required),
  *    `description`, `actions` used.
- *  - `Spinner`: "Spinner" Props table. `label` used.
+ *  - `Skeleton` (T081): "Skeleton" section, lines 621-655. `width`,
+ *    `height`, `index` used, replacing `Spinner`'s prior use in both role
+ *    variants per Astryx's own guidance (known-dimension content).
+ *    `VisuallyHidden` + the wrapping `VStack`'s `aria-busy` carry the same
+ *    "Loading…" announcements `Spinner`'s `label` used to provide.
  *  - `ProgressBar`: "ProgressBar" Props table. `label` (required), `value`,
  *    `isLabelHidden`, `hasValueLabel` used -- same idiom `ParticipationTab.tsx`
  *    already established for rendering a pre-computed percentage.
@@ -242,8 +249,9 @@ import {
   ListItem,
   MoreMenu,
   ProgressBar,
-  Spinner,
+  Skeleton,
   Text,
+  VisuallyHidden,
   VStack,
   type DropdownMenuOption,
 } from '@astryxdesign/core';
@@ -738,10 +746,15 @@ const ATTENDANCE_STATUS_BADGE: Record<AttendanceStatus, { variant: BadgeVariant;
 // ---------------------------------------------------------------------------
 
 type LoadState<T> =
-  { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'success'; data: T };
+  | { status: 'loading' }
+  | { status: 'error'; error: unknown; retry: () => void }
+  | { status: 'success'; data: T };
 
 function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): LoadState<T> {
   const [state, setState] = useState<LoadState<T>>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action (DES-12) to force the effect
+  // below to re-run without changing the caller-supplied `deps` semantics.
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -751,13 +764,15 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
         if (isMounted) setState({ status: 'success', data });
       })
       .catch((error: unknown) => {
-        if (isMounted) setState({ status: 'error', error });
+        if (isMounted) {
+          setState({ status: 'error', error, retry: () => setRetryToken((token) => token + 1) });
+        }
       });
     return () => {
       isMounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list.
-  }, deps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list; `retryToken` is an additional internal trigger.
+  }, [...deps, retryToken]);
 
   return state;
 }
@@ -915,7 +930,28 @@ function CoachMeetingsView({ loadData }: CoachMeetingsViewProps): ReactNode {
   }
 
   if (loadState.status === 'loading') {
-    return <Spinner label="Loading meetings…" />;
+    return (
+      <VStack gap={6} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          Loading meetings…
+        </VisuallyHidden>
+        <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
+          <Skeleton width={140} height={28} index={0} />
+          <Skeleton width={160} height={32} index={1} />
+        </HStack>
+        <VStack gap={3}>
+          <Skeleton width={100} height={20} index={2} />
+          <VStack gap={2}>
+            {[0, 1, 2].map((row) => (
+              <HStack key={row} gap={4} vAlign="center">
+                <Skeleton width={220} height={16} index={row * 2 + 3} />
+                <Skeleton width={80} height={16} index={row * 2 + 4} />
+              </HStack>
+            ))}
+          </VStack>
+        </VStack>
+      </VStack>
+    );
   }
 
   if (loadState.status === 'error') {
@@ -924,6 +960,7 @@ function CoachMeetingsView({ loadData }: CoachMeetingsViewProps): ReactNode {
         status="error"
         title="Couldn't load meetings"
         description="Something went wrong loading this season's meetings. Try refreshing the page."
+        endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
       />
     );
   }
@@ -943,8 +980,13 @@ function CoachMeetingsView({ loadData }: CoachMeetingsViewProps): ReactNode {
 
       {!hasAnyMeetings ? (
         <EmptyState
-          title="No meetings scheduled yet"
-          description="Meeting sessions for this season will show up here once they're scheduled."
+          headingLevel={2}
+          // DES-15 verbatim (PRD line 212): "No meetings scheduled. Set up
+          // your weekly build meetings once and check-in takes care of
+          // itself." -- title carries the first sentence, description the
+          // second; concatenated they reproduce the PRD text exactly.
+          title="No meetings scheduled."
+          description="Set up your weekly build meetings once and check-in takes care of itself."
           actions={
             <Button label="Schedule meetings" variant="primary" onClick={showScheduleStub} />
           }
@@ -1049,7 +1091,22 @@ function StudentMeetingsView({ studentId, loadData }: StudentMeetingsViewProps):
   const loadState = useLoadState(() => loadData(studentId), [loadData, studentId]);
 
   if (loadState.status === 'loading') {
-    return <Spinner label="Loading your meetings…" />;
+    return (
+      <VStack gap={3} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          Loading your meetings…
+        </VisuallyHidden>
+        <Skeleton width={100} height={20} index={0} />
+        <VStack gap={2}>
+          {[0, 1, 2].map((row) => (
+            <HStack key={row} gap={4} vAlign="center">
+              <Skeleton width={220} height={16} index={row * 2 + 1} />
+              <Skeleton width={80} height={16} index={row * 2 + 2} />
+            </HStack>
+          ))}
+        </VStack>
+      </VStack>
+    );
   }
 
   if (loadState.status === 'error') {
@@ -1058,6 +1115,7 @@ function StudentMeetingsView({ studentId, loadData }: StudentMeetingsViewProps):
         status="error"
         title="Couldn't load your meeting history"
         description="Something went wrong loading your meeting history. Try refreshing the page."
+        endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
       />
     );
   }
@@ -1072,6 +1130,7 @@ function StudentMeetingsView({ studentId, loadData }: StudentMeetingsViewProps):
 
       {isEmpty ? (
         <EmptyState
+          headingLevel={2}
           title="No meeting history yet"
           description="Your meeting attendance and participation will show up here once meetings for your team have been scheduled and recorded."
         />
@@ -1150,6 +1209,7 @@ export function MeetingsList({
     return (
       <VStack gap={4} padding={6}>
         <EmptyState
+          headingLevel={1}
           title="Sign in to view meetings"
           description="You need to be signed in to see this page."
         />

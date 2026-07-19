@@ -146,21 +146,29 @@
  *    `description` used.
  *  - `EmptyState` (line 3954 section, Props table): `title` (required),
  *    `description`, `headingLevel` used.
- *  - `Spinner` (line 5808 section, Props table): `label` used.
- *  - `VStack` ("Stack" section, `VStack` subsection): `gap`, `padding`
- *    used.
+ *  - `Skeleton` (T081, "Skeleton" section, lines 621-655): `width`,
+ *    `height`, `index` used to preview this screen's predictable ranked
+ *    student-list shape, replacing `Spinner`'s prior use here per Astryx's
+ *    own guidance (known-dimension content). `VisuallyHidden` + the
+ *    wrapping `VStack`'s `aria-busy` carry the "Loading leaderboard…"
+ *    announcement `Spinner`'s `label` used to provide.
+ *  - `VStack`/`HStack` ("Stack" section, `VStack`/`HStack` subsections):
+ *    `gap`, `padding`, `vAlign` used.
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   Badge,
   Banner,
+  Button,
   EmptyState,
   Heading,
+  HStack,
   List,
   ListItem,
   Section,
-  Spinner,
+  Skeleton,
   Text,
+  VisuallyHidden,
   VStack,
 } from '@astryxdesign/core';
 
@@ -379,7 +387,7 @@ interface LeaderboardData {
 
 type LoadState =
   | { status: 'loading' }
-  | { status: 'error'; error: unknown }
+  | { status: 'error'; error: unknown; retry: () => void }
   | { status: 'success'; data: LeaderboardData };
 
 function useLeaderboardData(
@@ -388,6 +396,9 @@ function useLeaderboardData(
   seasonId: string,
 ): LoadState {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action (DES-12) to force the effect
+  // below to re-run without changing the other deps' semantics.
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -399,12 +410,14 @@ function useLeaderboardData(
         setState({ status: 'success', data: { entries, isPrivacyOn } });
       })
       .catch((error: unknown) => {
-        if (isMounted) setState({ status: 'error', error });
+        if (isMounted) {
+          setState({ status: 'error', error, retry: () => setRetryToken((token) => token + 1) });
+        }
       });
     return () => {
       isMounted = false;
     };
-  }, [loadData, loadPrivacySetting, seasonId]);
+  }, [loadData, loadPrivacySetting, seasonId, retryToken]);
 
   return state;
 }
@@ -434,13 +447,26 @@ export function Leaderboard({
       <VStack gap={3}>
         <Heading level={2}>Season Volunteer Leaderboard</Heading>
 
-        {state.status === 'loading' && <Spinner label="Loading leaderboard…" />}
+        {state.status === 'loading' && (
+          <VStack gap={2} aria-busy="true">
+            <VisuallyHidden as="div" role="status">
+              Loading leaderboard…
+            </VisuallyHidden>
+            {[0, 1, 2, 3, 4].map((row) => (
+              <HStack key={row} hAlign="between" vAlign="center" gap={3}>
+                <Skeleton width={200} height={16} index={row * 2} />
+                <Skeleton width={60} height={20} radius="rounded" index={row * 2 + 1} />
+              </HStack>
+            ))}
+          </VStack>
+        )}
 
         {state.status === 'error' && (
           <Banner
             status="error"
             title="Couldn't load the leaderboard"
             description="Something went wrong loading this season's volunteer hours. Try refreshing the page."
+            endContent={<Button variant="ghost" label="Retry" onClick={state.retry} />}
           />
         )}
 

@@ -183,8 +183,10 @@
  *
  * `StudentConsistencyStripCard` (the per-student unit `variant="own"` uses
  * directly and `variant="linked"` repeats once per linked student):
- * loading (`Spinner` while `loadData(studentId)` is pending) / error
- * (`loadData` rejects -- `Banner status="error"`) / empty (zero completed-
+ * loading (T081: `Skeleton`, previewing the known dot-row + `ProgressBar`
+ * strip shape, while `loadData(studentId)` is pending -- replacing the
+ * prior `Spinner` per Astryx's own guidance since this widget's dimensions
+ * are predictable) / error (`loadData` rejects -- `Banner status="error"`) / empty (zero completed-
  * meeting entries AND no participation row -- rendered inline inside
  * `ConsistencyStrip`, not a page-level `EmptyState`, since this is a
  * compact embeddable widget that may be repeated several times on one
@@ -223,7 +225,11 @@
  *  - `EmptyState`: "EmptyState" Props table. `title` (required),
  *    `description` used (the `variant="linked"`/zero-linked-students case
  *    only).
- *  - `Spinner`: "Spinner" Props table. `label` used.
+ *  - `Skeleton` (T081): "Skeleton" section, lines 621-655. `width`,
+ *    `height`, `index` used, replacing `Spinner`'s prior use in both loading
+ *    branches per Astryx's own guidance (known-dimension content).
+ *    `VisuallyHidden` + the wrapping `VStack`'s `aria-busy` carry the same
+ *    "Loading…" announcements `Spinner`'s `label` used to provide.
  *  - `VStack`/`HStack`: "Stack" section, `VStack`/`HStack` subsections.
  *    `gap`, `vAlign`, `wrap` used.
  *  - `Text`: "Text" Props table. `type` (`'label'`, `'supporting'`),
@@ -232,14 +238,16 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   Banner,
+  Button,
   EmptyState,
   Heading,
   HStack,
   ProgressBar,
   Section,
-  Spinner,
+  Skeleton,
   StatusDot,
   Text,
+  VisuallyHidden,
   VStack,
 } from '@astryxdesign/core';
 
@@ -580,10 +588,15 @@ const ATTENDANCE_STATUS_DOT: Record<
 // ---------------------------------------------------------------------------
 
 type LoadState<T> =
-  { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'success'; data: T };
+  | { status: 'loading' }
+  | { status: 'error'; error: unknown; retry: () => void }
+  | { status: 'success'; data: T };
 
 function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): LoadState<T> {
   const [state, setState] = useState<LoadState<T>>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action (DES-12) to force the effect
+  // below to re-run without changing the caller-supplied `deps` semantics.
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -593,13 +606,15 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
         if (isMounted) setState({ status: 'success', data });
       })
       .catch((error: unknown) => {
-        if (isMounted) setState({ status: 'error', error });
+        if (isMounted) {
+          setState({ status: 'error', error, retry: () => setRetryToken((token) => token + 1) });
+        }
       });
     return () => {
       isMounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list.
-  }, deps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list; `retryToken` is an additional internal trigger.
+  }, [...deps, retryToken]);
 
   return state;
 }
@@ -698,13 +713,26 @@ function StudentConsistencyStripCard({
 
   if (loadState.status === 'loading') {
     return (
-      <Spinner
-        label={
-          studentLabel !== undefined
+      <VStack gap={3} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          {studentLabel !== undefined
             ? `Loading ${studentLabel}'s meeting consistency…`
-            : 'Loading your meeting consistency…'
-        }
-      />
+            : 'Loading your meeting consistency…'}
+        </VisuallyHidden>
+        {studentLabel !== undefined && <Skeleton width={120} height={18} index={0} />}
+        <VStack gap={1}>
+          <Skeleton width={180} height={14} index={1} />
+          <HStack gap={2} vAlign="center" wrap="wrap">
+            {[0, 1, 2, 3, 4].map((dot) => (
+              <Skeleton key={dot} width={12} height={12} radius="rounded" index={dot + 2} />
+            ))}
+          </HStack>
+        </VStack>
+        <VStack gap={1}>
+          <Skeleton width={90} height={14} index={7} />
+          <Skeleton width="100%" height={10} index={8} />
+        </VStack>
+      </VStack>
     );
   }
 
@@ -714,6 +742,7 @@ function StudentConsistencyStripCard({
         status="error"
         title="Couldn't load meeting consistency"
         description="Something went wrong loading this consistency strip. Try refreshing the page."
+        endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
       />
     );
   }
@@ -744,7 +773,30 @@ function ParentConsistencyStrips({
   const loadState = useLoadState(loadLinkedStudents, [loadLinkedStudents]);
 
   if (loadState.status === 'loading') {
-    return <Spinner label="Loading linked students…" />;
+    return (
+      <VStack gap={5} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          Loading linked students…
+        </VisuallyHidden>
+        {[0, 1].map((student) => (
+          <VStack key={student} gap={3}>
+            <Skeleton width={120} height={18} index={student * 4} />
+            <HStack gap={2} vAlign="center" wrap="wrap">
+              {[0, 1, 2].map((dot) => (
+                <Skeleton
+                  key={dot}
+                  width={12}
+                  height={12}
+                  radius="rounded"
+                  index={student * 4 + dot + 1}
+                />
+              ))}
+            </HStack>
+            <Skeleton width="100%" height={10} index={student * 4 + 3} />
+          </VStack>
+        ))}
+      </VStack>
+    );
   }
 
   if (loadState.status === 'error') {
@@ -753,6 +805,7 @@ function ParentConsistencyStrips({
         status="error"
         title="Couldn't load linked students"
         description="Something went wrong loading your linked students. Try refreshing the page."
+        endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
       />
     );
   }

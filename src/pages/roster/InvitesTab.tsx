@@ -261,7 +261,12 @@
  *    real invite-creation UI is `StudentsTab.tsx`'s "Invite"/"Invite
  *    parent" stubs, T023/T024's job, not this one's), so inventing a button
  *    with nowhere real to go would be fabricated content.
- *  - `Spinner` ("Spinner" Props table, lines 5832-5840): `label` used.
+ *  - `Skeleton` (T081, "Skeleton" section, lines 621-655): `width`,
+ *    `height`, `index` used to preview this screen's predictable `Table`
+ *    row/column shape, replacing `Spinner`'s prior use here per Astryx's
+ *    own guidance (known-dimension content) -- `VisuallyHidden` + the
+ *    wrapping `VStack`'s `aria-busy` carry the "Loading invites…"
+ *    announcement `Spinner`'s `label` used to provide.
  *  - `Heading`: own `astryx-api.md` subsection (line 882-884) is
  *    `undefined` -- the same disclosed CLI-cross-checked gap
  *    `RosterShell.tsx`/T021 and `StudentsTab.tsx`/T022 already hit.
@@ -278,17 +283,20 @@ import {
   AlertDialog,
   Badge,
   Banner,
+  Button,
   type DropdownMenuOption,
   EmptyState,
   Heading,
+  HStack,
   MoreMenu,
   pixel,
   proportional,
-  Spinner,
+  Skeleton,
   Table,
   type TableColumn,
   Text,
   Timestamp,
+  VisuallyHidden,
   VStack,
 } from '@astryxdesign/core';
 
@@ -514,10 +522,15 @@ const ROLE_LABELS: Record<ProfileRole, string> = {
 // ---------------------------------------------------------------------------
 
 type LoadState<T> =
-  { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'success'; data: T };
+  | { status: 'loading' }
+  | { status: 'error'; error: unknown; retry: () => void }
+  | { status: 'success'; data: T };
 
 function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): LoadState<T> {
   const [state, setState] = useState<LoadState<T>>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action (DES-12) to force the effect
+  // below to re-run without changing the caller-supplied `deps` semantics.
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -527,13 +540,15 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
         if (isMounted) setState({ status: 'success', data });
       })
       .catch((error: unknown) => {
-        if (isMounted) setState({ status: 'error', error });
+        if (isMounted) {
+          setState({ status: 'error', error, retry: () => setRetryToken((token) => token + 1) });
+        }
       });
     return () => {
       isMounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list.
-  }, deps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list; `retryToken` is an additional internal trigger.
+  }, [...deps, retryToken]);
 
   return state;
 }
@@ -721,8 +736,20 @@ export function InvitesTab({
 
   if (loadState.status === 'loading') {
     return (
-      <VStack gap={4} padding={6}>
-        <Spinner label="Loading invites…" />
+      <VStack gap={4} padding={6} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          Loading invites…
+        </VisuallyHidden>
+        <Skeleton width={120} height={28} />
+        <VStack gap={2}>
+          {[0, 1, 2, 3, 4].map((row) => (
+            <HStack key={row} gap={4} vAlign="center">
+              <Skeleton width={160} height={16} index={row * 3} />
+              <Skeleton width={100} height={16} index={row * 3 + 1} />
+              <Skeleton width={80} height={16} index={row * 3 + 2} />
+            </HStack>
+          ))}
+        </VStack>
       </VStack>
     );
   }
@@ -734,6 +761,7 @@ export function InvitesTab({
           status="error"
           title="Couldn't load invites"
           description="Something went wrong loading the invites list. Try refreshing the page."
+          endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
         />
       </VStack>
     );
@@ -755,6 +783,7 @@ export function InvitesTab({
 
       {rows.length === 0 ? (
         <EmptyState
+          headingLevel={2}
           title="No invites sent yet"
           description="Invites sent to students, parents, coaches, or admins will show up here."
         />

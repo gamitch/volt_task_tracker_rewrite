@@ -331,7 +331,7 @@ describe('buildSeasonTotals -- module doc #6', () => {
 // ---------------------------------------------------------------------------
 
 describe('HoursTab render', () => {
-  it('shows a loading spinner, then the populated report', async () => {
+  it('shows a loading Skeleton (T081: predictable KPI-card + table dimensions), then the populated report', async () => {
     render({ seasonId: PLACEHOLDER_CURRENT_SEASON_ID });
     expect(container.textContent).toContain('Loading hours data');
     await flushMicrotasks();

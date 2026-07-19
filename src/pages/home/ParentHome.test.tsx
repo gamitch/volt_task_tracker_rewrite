@@ -411,7 +411,7 @@ describe('<ParentHome /> populated: multi-student rendering (core structural req
     // Ada's card (resolved) is fully populated...
     expect(container.textContent).toContain('STEM Fair');
     // ...while Bea's card (never resolved) is still showing its own,
-    // independent Spinner -- not blocked by/blocking Ada's card.
+    // independent Skeleton (T081) -- not blocked by/blocking Ada's card.
     expect(container.textContent).toContain("Loading Bea R.'s Home card");
   });
 

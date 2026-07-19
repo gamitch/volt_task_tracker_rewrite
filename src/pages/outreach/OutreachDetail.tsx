@@ -188,7 +188,13 @@
  *    `description`, `isDismissable`, `onDismiss` used.
  *  - `EmptyState` (line 3954 section, Props table): `title` (required),
  *    `description` used.
- *  - `Spinner` (line 5808 section, Props table): `label` used.
+ *  - `Skeleton` (T081, "Skeleton" section, lines 621-655): `width`,
+ *    `height`, `index` used to preview this screen's predictable detail-page
+ *    shape (title bar + fixed-length `MetadataList` + signup sessions),
+ *    replacing `Spinner`'s prior use here per Astryx's own guidance
+ *    (known-dimension content). `VisuallyHidden` + the wrapping `VStack`'s
+ *    `aria-busy` carry the "Loading event…" announcement `Spinner`'s
+ *    `label` used to provide.
  *  - `Toast`: `astryx-api.md` line 5998 section's own Props table is a
  *    real, disclosed doc-gap already caught and cited by `OutreachList.tsx`'s
  *    own module doc #4 -- it names `uniqueID`/`onHide` where the installed
@@ -228,9 +234,10 @@ import {
   MetadataList,
   MetadataListItem,
   MoreMenu,
-  Spinner,
+  Skeleton,
   Text,
   Toast,
+  VisuallyHidden,
   VStack,
   type DropdownMenuOption,
 } from '@astryxdesign/core';
@@ -662,7 +669,7 @@ export function formatSessionDateTime(session: OutreachDetailSession): string {
 
 type DetailLoadState =
   | { status: 'loading' }
-  | { status: 'error' }
+  | { status: 'error'; retry: () => void }
   | { status: 'notFound' }
   | { status: 'success'; data: OutreachDetailData };
 
@@ -671,6 +678,9 @@ function useOutreachDetailLoadState(
   eventId: string,
 ): DetailLoadState {
   const [state, setState] = useState<DetailLoadState>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action (DES-12) to force the effect
+  // below to re-run without changing `loadData`/`eventId` deps semantics.
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -681,12 +691,14 @@ function useOutreachDetailLoadState(
         setState(result === null ? { status: 'notFound' } : { status: 'success', data: result });
       })
       .catch(() => {
-        if (isMounted) setState({ status: 'error' });
+        if (isMounted) {
+          setState({ status: 'error', retry: () => setRetryToken((token) => token + 1) });
+        }
       });
     return () => {
       isMounted = false;
     };
-  }, [loadData, eventId]);
+  }, [loadData, eventId, retryToken]);
 
   return state;
 }
@@ -815,8 +827,26 @@ export function OutreachDetail({
 
   if (loadState.status === 'loading') {
     return (
-      <VStack gap={4} padding={6}>
-        <Spinner label="Loading event…" />
+      <VStack gap={6} padding={6} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          Loading event…
+        </VisuallyHidden>
+        <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
+          <Skeleton width={260} height={28} index={0} />
+          <Skeleton width={100} height={32} index={1} />
+        </HStack>
+        <VStack gap={2}>
+          {['When', 'Where', 'Scope', 'Created by'].map((label, index) => (
+            <HStack key={label} gap={4} vAlign="center">
+              <Skeleton width={80} height={14} index={index * 2 + 2} />
+              <Skeleton width={220} height={14} index={index * 2 + 3} />
+            </HStack>
+          ))}
+        </VStack>
+        <VStack gap={3}>
+          <Skeleton width={100} height={22} index={10} />
+          <Skeleton width="100%" height={80} index={11} />
+        </VStack>
       </VStack>
     );
   }
@@ -828,6 +858,7 @@ export function OutreachDetail({
           status="error"
           title="Couldn't load this event"
           description="Something went wrong loading this outreach event. Try refreshing the page."
+          endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
         />
       </VStack>
     );
@@ -840,6 +871,7 @@ export function OutreachDetail({
     return (
       <VStack gap={4} padding={6}>
         <EmptyState
+          headingLevel={1}
           title="This outreach event isn't available"
           description="It may have been removed, or you may not have access to it."
         />

@@ -276,7 +276,7 @@ describe('setInviteStatusForEmail', () => {
 // ---------------------------------------------------------------------------
 
 describe('<ParentsTabBody /> DES-12 states', () => {
-  it('shows a loading spinner before data resolves', () => {
+  it('shows a loading Skeleton (T081: table has predictable dimensions) before data resolves', () => {
     renderBody({ loadData: () => new Promise(() => {}) });
     expect(container.textContent).toContain('Loading parents');
   });

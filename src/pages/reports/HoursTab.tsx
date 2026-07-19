@@ -213,8 +213,11 @@
  *    `season_id`.
  *
  * -----------------------------------------------------------------------
- * 10. DES-12 states. Loading (`Spinner` while `loadData` is pending) / error
- *     (`loadData` rejects -- `Banner status="error"`) / populated (season
+ * 10. DES-12 states. Loading (T081: `Skeleton`, previewing the known
+ *     season-totals-cards + grouped-table shape, while `loadData` is
+ *     pending -- replacing the prior `Spinner` per Astryx's own guidance
+ *     since this screen's dimensions are predictable) / error (`loadData`
+ *     rejects -- `Banner status="error"`) / populated (season
  *     totals cards + one grouped-table Section per team). "Empty" is not a
  *     separate top-level branch for the season-totals cards (0 is a
  *     legitimate value there, not a fabrication -- module doc #1/#6); the
@@ -254,7 +257,10 @@
  *    disclosed) -- `<Toast>` is rendered directly in normal document flow.
  *  - `EmptyState` ("EmptyState" Props table): `title` (required),
  *    `description`, `headingLevel` used.
- *  - `Spinner` ("Spinner" Props table): `label` used.
+ *  - `Skeleton` (T081, "Skeleton" section, lines 621-655): `width`,
+ *    `height`, `index` used. `VisuallyHidden` + the wrapping `VStack`'s
+ *    `aria-busy` carry the "Loading hours data…" announcement `Spinner`'s
+ *    `label` used to provide.
  *  - `Banner` ("Banner" Props table): `status`, `title`, `description` used.
  *  - `Heading`: doc's own "Components > Heading" subsection is `undefined`
  *    (same disclosed CLI-cross-checked gap every sibling task hit); `level`
@@ -269,6 +275,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Badge,
   Banner,
+  Button,
   Card,
   EmptyState,
   Grid,
@@ -276,10 +283,11 @@ import {
   HStack,
   ProgressBar,
   Section,
-  Spinner,
+  Skeleton,
   Table,
   Text,
   Toast,
+  VisuallyHidden,
   VStack,
   pixel,
   proportional,
@@ -864,11 +872,14 @@ const EMPTY_HOURS_DATA: HoursLoadResult = {
 
 type HoursLoadState =
   | { status: 'loading' }
-  | { status: 'error'; error: unknown }
+  | { status: 'error'; error: unknown; retry: () => void }
   | { status: 'success'; data: HoursLoadResult };
 
 function useHoursData(seasonId: string, loadData: LoadHoursDataFn): HoursLoadState {
   const [state, setState] = useState<HoursLoadState>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action (DES-12) to force the effect
+  // below to re-run without changing `seasonId`/`loadData` deps semantics.
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -878,12 +889,14 @@ function useHoursData(seasonId: string, loadData: LoadHoursDataFn): HoursLoadSta
         if (isMounted) setState({ status: 'success', data });
       })
       .catch((error: unknown) => {
-        if (isMounted) setState({ status: 'error', error });
+        if (isMounted) {
+          setState({ status: 'error', error, retry: () => setRetryToken((token) => token + 1) });
+        }
       });
     return () => {
       isMounted = false;
     };
-  }, [seasonId, loadData]);
+  }, [seasonId, loadData, retryToken]);
 
   return state;
 }
@@ -1066,7 +1079,36 @@ export function HoursTab({ seasonId, loadData = defaultLoadHoursData }: HoursTab
   const columns = useMemo(() => buildColumns(), []);
 
   if (loadState.status === 'loading') {
-    return <Spinner label="Loading hours data…" />;
+    return (
+      <VStack gap={6} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          Loading hours data…
+        </VisuallyHidden>
+        <VStack gap={3}>
+          <Skeleton width={160} height={22} index={0} />
+          <Grid columns={{ minWidth: 220, repeat: 'fit' }} gap={3}>
+            {[0, 1, 2].map((card) => (
+              <VStack key={card} gap={2} padding={4}>
+                <Skeleton width={140} height={14} index={card * 2 + 1} />
+                <Skeleton width={80} height={24} index={card * 2 + 2} />
+              </VStack>
+            ))}
+          </Grid>
+        </VStack>
+        <VStack gap={3}>
+          <Skeleton width={140} height={20} index={7} />
+          <VStack gap={2}>
+            {[0, 1, 2].map((row) => (
+              <HStack key={row} gap={4} vAlign="center">
+                <Skeleton width={160} height={16} index={row * 3 + 8} />
+                <Skeleton width={100} height={16} index={row * 3 + 9} />
+                <Skeleton width={80} height={16} index={row * 3 + 10} />
+              </HStack>
+            ))}
+          </VStack>
+        </VStack>
+      </VStack>
+    );
   }
 
   if (loadState.status === 'error') {
@@ -1075,6 +1117,7 @@ export function HoursTab({ seasonId, loadData = defaultLoadHoursData }: HoursTab
         status="error"
         title="Couldn't load hours data"
         description="Something went wrong loading this season's hours report. Try refreshing the page."
+        endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
       />
     );
   }
@@ -1084,10 +1127,31 @@ export function HoursTab({ seasonId, loadData = defaultLoadHoursData }: HoursTab
       <SeasonTotalsCards totals={seasonTotals} />
 
       {teamGroups.length === 0 ? (
+        // T083 (worker packet Trap #2): the PRD's DES-15 "Reports" example
+        // ("No completed sessions this season yet. Stats appear after the
+        // first meeting or outreach day is marked complete.") is NOT used
+        // verbatim here -- it does not match this tab's real empty-state
+        // trigger. `teamGroups` is built from `buildStudentRows(data)`
+        // (module doc #1), which produces one row per ROSTER student
+        // regardless of whether that student has any confirmed hours yet
+        // (a student with zero `v_student_hours` rows still gets a real row
+        // with `confirmedHours: 0`, module doc #1's own disclosed "0 is a
+        // legitimate value, not a fabrication" convention). So
+        // `teamGroups.length === 0` can ONLY happen when `data.students` is
+        // itself empty -- an empty ROSTER for the season, not a roster with
+        // zero completed sessions (that case renders a full team-grouped
+        // table of real 0.0h rows instead, never this EmptyState). Forcing
+        // the literal "no completed sessions" text here would misdescribe
+        // the actual cause and point the coach at the wrong fix (there is
+        // nothing to "mark complete" yet -- there is no one on the roster
+        // to do it). The roster-focused copy below is the accurate,
+        // DES-15-spirited adaptation: specific about the real cause, and
+        // actionable (add students) rather than a generic wait-and-see
+        // message.
         <EmptyState
           headingLevel={2}
-          title="No hours data for this season yet"
-          description="Add students to the roster to see confirmed and planned hours here."
+          title="No students on the roster yet."
+          description="Add students to the roster to see their confirmed and planned hours here."
         />
       ) : (
         teamGroups.map((group) => (

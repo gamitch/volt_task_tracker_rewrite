@@ -384,7 +384,13 @@
  *    for keeping this same documented default.
  *  - `Banner` ("Banner" Props table, lines 2749-2763): `status`, `title`,
  *    `description`, `isDismissable`, `onDismiss` used.
- *  - `Spinner` ("Spinner" Props table, lines 5832-5840): `label` used.
+ *  - `Skeleton` (T081, "Skeleton" section, lines 621-655): `width`,
+ *    `height`, `index` used to preview this page's fixed, always-identical
+ *    five-section layout (Profile / Notifications / etc., never data-
+ *    dependent in shape), replacing `Spinner`'s prior use here per Astryx's
+ *    own guidance (known-dimension content). `VisuallyHidden` + the
+ *    wrapping `VStack`'s `aria-busy` carry the "Loading settings…"
+ *    announcement `Spinner`'s `label` used to provide.
  *  - `Heading`: own "Components > Heading" subsection (lines 882-884) is
  *    `undefined` -- the same disclosed CLI/source-cross-checked gap every
  *    other content page in this batch already resolved identically
@@ -411,10 +417,11 @@ import {
   RadioList,
   RadioListItem,
   Section,
-  Spinner,
+  Skeleton,
   Switch,
   Text,
   TextInput,
+  VisuallyHidden,
   VStack,
 } from '@astryxdesign/core';
 import { useAuth, pushToast } from '../../app/guards';
@@ -681,10 +688,15 @@ export const defaultOnSignOutEverywhere: OnSignOutEverywhereFn = async () => {
 // ---------------------------------------------------------------------------
 
 type LoadState<T> =
-  { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'success'; data: T };
+  | { status: 'loading' }
+  | { status: 'error'; error: unknown; retry: () => void }
+  | { status: 'success'; data: T };
 
 function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): LoadState<T> {
   const [state, setState] = useState<LoadState<T>>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action (DES-12) to force the effect
+  // below to re-run without changing the caller-supplied `deps` semantics.
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -694,13 +706,15 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
         if (isMounted) setState({ status: 'success', data });
       })
       .catch((error: unknown) => {
-        if (isMounted) setState({ status: 'error', error });
+        if (isMounted) {
+          setState({ status: 'error', error, retry: () => setRetryToken((token) => token + 1) });
+        }
       });
     return () => {
       isMounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list.
-  }, deps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list; `retryToken` is an additional internal trigger.
+  }, [...deps, retryToken]);
 
   return state;
 }
@@ -755,6 +769,15 @@ export function SettingsPage({
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  // T082 (DES-12 retry sweep): `handleAvatarChangeAction`'s `finally` always
+  // clears `avatarFile` (both success and failure), so the `FileInput`
+  // itself is empty again once `avatarError` renders -- there is no
+  // still-populated control a user could just "click again" the way a
+  // dirty form's own Save button works elsewhere on this page. This keeps
+  // the actual failed `File` object (still a valid in-memory reference)
+  // purely so the error Banner's "Retry" action can re-attempt the SAME
+  // upload without making the user re-browse for the file.
+  const [lastFailedAvatarFile, setLastFailedAvatarFile] = useState<File | null>(null);
 
   async function handleSaveProfile(): Promise<void> {
     const payload = buildUpdateProfilePayload(displayNameDraft);
@@ -785,10 +808,12 @@ export function SettingsPage({
       const result = await onUploadAvatar(files);
       setProfile((prev) => (prev === null ? prev : { ...prev, avatarUrl: result.avatarUrl }));
       pushToast('Avatar updated');
+      setLastFailedAvatarFile(null);
     } catch (error) {
       setAvatarError(
         error instanceof Error ? error.message : 'Something went wrong uploading your avatar.',
       );
+      setLastFailedAvatarFile(files);
     } finally {
       setAvatarFile(null);
     }
@@ -797,9 +822,19 @@ export function SettingsPage({
   // ---- Appearance section state ----
   const [themeError, setThemeError] = useState<string | null>(null);
 
-  function handleThemeChange(value: string): void {
-    if (!isValidThemeMode(value)) return; // module doc #6
-    setProfile((prev) => (prev === null ? prev : { ...prev, themeMode: value }));
+  // T082 (DES-12 retry sweep): `handleThemeChange` optimistically writes the
+  // new value into `profile.themeMode` BEFORE the persist call resolves and
+  // never rolls it back on failure (module doc #6's own disclosed choice --
+  // the theme visibly applies immediately either way). That means the
+  // `RadioList` this drives already shows the target option selected once
+  // `themeError` renders, so re-clicking that SAME already-selected option
+  // would not fire `onChange` again -- unlike `RsvpControl`/`ParentRsvp`'s
+  // rollback-then-reselect idiom, there is no reliable existing control
+  // action that resubmits this exact attempt. `persistTheme` is the one
+  // place the actual persist call + error handling lives, so both the real
+  // `onChange` handler and the error Banner's "Retry" action call the exact
+  // same function.
+  function persistTheme(value: ThemeMode): void {
     setThemeError(null);
     onChangeTheme({ themeMode: value }).catch((error: unknown) => {
       setThemeError(
@@ -808,6 +843,12 @@ export function SettingsPage({
           : 'Something went wrong saving your theme preference.',
       );
     });
+  }
+
+  function handleThemeChange(value: string): void {
+    if (!isValidThemeMode(value)) return; // module doc #6
+    setProfile((prev) => (prev === null ? prev : { ...prev, themeMode: value }));
+    persistTheme(value);
   }
 
   // ---- Notifications section state ----
@@ -867,8 +908,17 @@ export function SettingsPage({
 
   if (loadState.status === 'loading') {
     return (
-      <VStack gap={4} padding={6}>
-        <Spinner label="Loading settings…" />
+      <VStack gap={4} padding={4} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          Loading settings…
+        </VisuallyHidden>
+        <Skeleton width={110} height={28} index={0} />
+        {[0, 1, 2, 3, 4].map((section) => (
+          <VStack key={section} gap={2}>
+            <Skeleton width={140} height={20} index={section * 2 + 1} />
+            <Skeleton width="100%" height={16} index={section * 2 + 2} />
+          </VStack>
+        ))}
       </VStack>
     );
   }
@@ -880,6 +930,11 @@ export function SettingsPage({
           status="error"
           title="Couldn't load settings"
           description="Something went wrong loading your settings. Try refreshing the page."
+          endContent={
+            loadState.status === 'error' ? (
+              <Button variant="ghost" label="Retry" onClick={loadState.retry} />
+            ) : undefined
+          }
         />
       </VStack>
     );
@@ -923,6 +978,15 @@ export function SettingsPage({
                       description={avatarError}
                       isDismissable
                       onDismiss={() => setAvatarError(null)}
+                      endContent={
+                        lastFailedAvatarFile !== null ? (
+                          <Button
+                            variant="ghost"
+                            label="Retry"
+                            clickAction={() => handleAvatarChangeAction(lastFailedAvatarFile)}
+                          />
+                        ) : undefined
+                      }
                     />
                   )}
 
@@ -981,6 +1045,13 @@ export function SettingsPage({
                       description={themeError}
                       isDismissable
                       onDismiss={() => setThemeError(null)}
+                      endContent={
+                        <Button
+                          variant="ghost"
+                          label="Retry"
+                          onClick={() => persistTheme(profile.themeMode)}
+                        />
+                      }
                     />
                   )}
 

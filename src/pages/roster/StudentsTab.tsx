@@ -243,7 +243,12 @@
  *    `actions` -- there is no "create student" flow named anywhere in this
  *    task's objective text, so inventing a button with nowhere real to go
  *    would be fabricated content).
- *  - `Spinner`: `label` used.
+ *  - `Skeleton` (T081, "Skeleton" section, lines 621-655): `width`,
+ *    `height`, `index` used to preview this screen's predictable `Table`
+ *    row/column shape, replacing `Spinner`'s prior use here per Astryx's
+ *    own guidance (known-dimension content) -- `VisuallyHidden` + the
+ *    wrapping `VStack`'s `aria-busy` carry the "Loading students…"
+ *    announcement `Spinner`'s `label` used to provide.
  *  - `Heading`: `level`, `children` used (own `astryx-api.md` subsection is
  *    `undefined`, the same disclosed CLI-cross-checked gap `RosterShell.tsx`
  *    /T021 and every other content page already hit; resolved identically).
@@ -257,6 +262,7 @@ import {
   Avatar,
   Badge,
   Banner,
+  Button,
   type DropdownMenuOption,
   EmptyState,
   Heading,
@@ -267,11 +273,12 @@ import {
   type PowerSearchConfig,
   type PowerSearchFilter,
   proportional,
-  Spinner,
+  Skeleton,
   StatusDot,
   Table,
   type TableColumn,
   Text,
+  VisuallyHidden,
   VStack,
 } from '@astryxdesign/core';
 
@@ -524,10 +531,15 @@ const ACCOUNT_STATUS_META: Record<
 // ---------------------------------------------------------------------------
 
 type LoadState<T> =
-  { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'success'; data: T };
+  | { status: 'loading' }
+  | { status: 'error'; error: unknown; retry: () => void }
+  | { status: 'success'; data: T };
 
 function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): LoadState<T> {
   const [state, setState] = useState<LoadState<T>>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action (DES-12) to force the effect
+  // below to re-run without changing the caller-supplied `deps` semantics.
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -537,13 +549,15 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
         if (isMounted) setState({ status: 'success', data });
       })
       .catch((error: unknown) => {
-        if (isMounted) setState({ status: 'error', error });
+        if (isMounted) {
+          setState({ status: 'error', error, retry: () => setRetryToken((token) => token + 1) });
+        }
       });
     return () => {
       isMounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list.
-  }, deps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list; `retryToken` is an additional internal trigger.
+  }, [...deps, retryToken]);
 
   return state;
 }
@@ -872,8 +886,20 @@ export function StudentsTab({
 
   if (loadState.status === 'loading') {
     return (
-      <VStack gap={4} padding={6}>
-        <Spinner label="Loading students…" />
+      <VStack gap={4} padding={6} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          Loading students…
+        </VisuallyHidden>
+        <Skeleton width={120} height={28} />
+        <VStack gap={2}>
+          {[0, 1, 2, 3, 4].map((row) => (
+            <HStack key={row} gap={4} vAlign="center">
+              <Skeleton width={160} height={16} index={row * 3} />
+              <Skeleton width={100} height={16} index={row * 3 + 1} />
+              <Skeleton width={80} height={16} index={row * 3 + 2} />
+            </HStack>
+          ))}
+        </VStack>
       </VStack>
     );
   }
@@ -885,6 +911,7 @@ export function StudentsTab({
           status="error"
           title="Couldn't load students"
           description="Something went wrong loading the student roster. Try refreshing the page."
+          endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
         />
       </VStack>
     );
@@ -915,6 +942,7 @@ export function StudentsTab({
 
       {rows.length === 0 ? (
         <EmptyState
+          headingLevel={2}
           title="No students on the roster yet"
           description="Students added to this program will show up here."
         />

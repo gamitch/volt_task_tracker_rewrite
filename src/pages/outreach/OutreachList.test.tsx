@@ -659,7 +659,11 @@ describe('<OutreachList /> student/parent view', () => {
         }),
     });
     await flushMicrotasks();
-    expect(container.textContent).toContain('No outreach events yet');
+    // DES-15 verbatim (PRD line 213, T083).
+    expect(container.textContent).toContain('No upcoming outreach yet.');
+    expect(container.textContent).toContain(
+      'When your coach posts an event, you can sign up here.',
+    );
   });
 
   it('populated state: own goal bar (confirmed/planned never summed), unanswered badge, RSVP controls, NAV-07 exclusion', async () => {

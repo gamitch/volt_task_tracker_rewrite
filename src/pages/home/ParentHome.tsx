@@ -294,7 +294,14 @@
  *    `endContent` used -- no `onClick`/`href` (rows are not interactive).
  *  - `EmptyState` (line 3954 section, Props table): `title` (required),
  *    `description`, `headingLevel`, `isCompact` used.
- *  - `Spinner` (line 5808 section, Props table): `label` used.
+ *  - `Skeleton` (T081, "Skeleton" section, lines 621-655): `width`,
+ *    `height`, `index` used to preview both this file's predictable shapes:
+ *    the per-student `Card` (heading + progress bar + list, always the same
+ *    layout) and the outer "linked students" list-of-cards -- replacing
+ *    `Spinner`'s prior use in both places per Astryx's own guidance
+ *    (known-dimension content). `VisuallyHidden` + the wrapping `VStack`'s
+ *    `aria-busy` carry the same "Loading…" announcements `Spinner`'s
+ *    `label` used to provide.
  *  - `Banner` (line 2694 section, Props table): `status`, `title`,
  *    `description` used.
  *  - `Layout`/`LayoutContent` (line 167/276 sections): `Layout`'s `height`,
@@ -311,6 +318,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import {
   Badge,
   Banner,
+  Button,
   Card,
   Divider,
   EmptyState,
@@ -323,8 +331,9 @@ import {
   ProgressBar,
   SegmentedControl,
   SegmentedControlItem,
-  Spinner,
+  Skeleton,
   Text,
+  VisuallyHidden,
   VStack,
 } from '@astryxdesign/core';
 import { useAuth } from '../../app/guards';
@@ -990,10 +999,15 @@ function formatSessionDateTime(row: {
 // ---------------------------------------------------------------------------
 
 type LoadState<T> =
-  { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'success'; data: T };
+  | { status: 'loading' }
+  | { status: 'error'; error: unknown; retry: () => void }
+  | { status: 'success'; data: T };
 
 function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): LoadState<T> {
   const [state, setState] = useState<LoadState<T>>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action (DES-12) to force the effect
+  // below to re-run without changing the caller-supplied `deps` semantics.
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -1003,13 +1017,15 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
         if (isMounted) setState({ status: 'success', data });
       })
       .catch((error: unknown) => {
-        if (isMounted) setState({ status: 'error', error });
+        if (isMounted) {
+          setState({ status: 'error', error, retry: () => setRetryToken((token) => token + 1) });
+        }
       });
     return () => {
       isMounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list.
-  }, deps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list; `retryToken` is an additional internal trigger.
+  }, [...deps, retryToken]);
 
   return state;
 }
@@ -1104,7 +1120,29 @@ function StudentHomeCard({
   if (loadState.status === 'loading') {
     return (
       <Card>
-        <Spinner label={`Loading ${displayName}'s Home card…`} />
+        <VStack gap={4} aria-busy="true">
+          <VisuallyHidden as="div" role="status">
+            {`Loading ${displayName}'s Home card…`}
+          </VisuallyHidden>
+          <HStack hAlign="between" vAlign="center" wrap="wrap" gap={2}>
+            <Skeleton width={120} height={20} index={0} />
+            <Skeleton width={70} height={22} radius="rounded" index={1} />
+          </HStack>
+          <VStack gap={1}>
+            <Skeleton width={100} height={14} index={2} />
+            <Skeleton width="100%" height={10} index={3} />
+          </VStack>
+          <HStack gap={2} wrap="wrap">
+            <Skeleton width={28} height={28} radius="rounded" index={4} />
+            <Skeleton width={28} height={28} radius="rounded" index={5} />
+            <Skeleton width={28} height={28} radius="rounded" index={6} />
+          </HStack>
+          <VStack gap={2}>
+            <Skeleton width={80} height={16} index={7} />
+            <Skeleton width="100%" height={16} index={8} />
+            <Skeleton width="100%" height={16} index={9} />
+          </VStack>
+        </VStack>
       </Card>
     );
   }
@@ -1116,6 +1154,7 @@ function StudentHomeCard({
           status="error"
           title="Couldn't load this student's Home card"
           description="Something went wrong loading this student's data. Try refreshing the page."
+          endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
         />
       </Card>
     );
@@ -1207,6 +1246,7 @@ export function ParentHome({
     return (
       <VStack gap={4} padding={6}>
         <EmptyState
+          headingLevel={1}
           title="Sign in to view Home"
           description="You need to be signed in to see this page."
         />
@@ -1216,8 +1256,19 @@ export function ParentHome({
 
   if (loadState.status === 'loading') {
     return (
-      <VStack gap={4} padding={6}>
-        <Spinner label="Loading Home…" />
+      <VStack gap={4} padding={6} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          Loading Home…
+        </VisuallyHidden>
+        {[0, 1].map((card) => (
+          <Card key={card}>
+            <VStack gap={3}>
+              <Skeleton width={140} height={20} index={card * 3} />
+              <Skeleton width="100%" height={10} index={card * 3 + 1} />
+              <Skeleton width="100%" height={16} index={card * 3 + 2} />
+            </VStack>
+          </Card>
+        ))}
       </VStack>
     );
   }
@@ -1229,6 +1280,7 @@ export function ParentHome({
           status="error"
           title="Couldn't load Home"
           description="Something went wrong loading your linked students. Try refreshing the page."
+          endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
         />
       </VStack>
     );
@@ -1241,6 +1293,7 @@ export function ParentHome({
     return (
       <VStack gap={4} padding={6}>
         <EmptyState
+          headingLevel={1}
           title="No linked students yet"
           description="Once a student is linked to your account, their Home card will show up here."
         />

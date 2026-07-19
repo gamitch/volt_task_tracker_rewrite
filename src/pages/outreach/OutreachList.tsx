@@ -273,7 +273,14 @@
  *    `description`, `isDismissable`, `onDismiss` used.
  *  - `EmptyState` (line 3954 section, Props table): `title` (required),
  *    `description`, `actions`, `headingLevel` used.
- *  - `Spinner` (line 5808 section, Props table): `label` used.
+ *  - `Skeleton` (T081, "Skeleton" section, lines 621-655): `width`,
+ *    `height`, `index` used to preview this screen's predictable
+ *    heading+goal-bar+session-list shape (shared by both the coach and
+ *    student/parent views, whichever the already-known `user.role`
+ *    resolves to), replacing `Spinner`'s prior use here per Astryx's own
+ *    guidance (known-dimension content). `VisuallyHidden` + the wrapping
+ *    `VStack`'s `aria-busy` carry the "Loading outreach events…"
+ *    announcement `Spinner`'s `label` used to provide.
  *  - `List`/`ListItem` (line 4536 section): `List`'s Props table
  *    (`children`, `hasDividers`, `header`) used directly. `ListItem`'s own
  *    subsection is `undefined`; `npm run astryx -- component ListItem`
@@ -310,9 +317,10 @@ import {
   ProgressBar,
   SegmentedControl,
   SegmentedControlItem,
-  Spinner,
+  Skeleton,
   Text,
   Toast,
+  VisuallyHidden,
   VStack,
 } from '@astryxdesign/core';
 import { useAuth } from '../../app/guards';
@@ -913,10 +921,15 @@ function useMilestoneToasts(
 // ---------------------------------------------------------------------------
 
 type LoadState<T> =
-  { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'success'; data: T };
+  | { status: 'loading' }
+  | { status: 'error'; error: unknown; retry: () => void }
+  | { status: 'success'; data: T };
 
 function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): LoadState<T> {
   const [state, setState] = useState<LoadState<T>>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action (DES-12) to force the effect
+  // below to re-run without changing the caller-supplied `deps` semantics.
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -926,13 +939,15 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
         if (isMounted) setState({ status: 'success', data });
       })
       .catch((error: unknown) => {
-        if (isMounted) setState({ status: 'error', error });
+        if (isMounted) {
+          setState({ status: 'error', error, retry: () => setRetryToken((token) => token + 1) });
+        }
       });
     return () => {
       isMounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list.
-  }, deps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list; `retryToken` is an additional internal trigger.
+  }, [...deps, retryToken]);
 
   return state;
 }
@@ -1187,6 +1202,7 @@ function CoachOutreachView({
 
       {!hasAnyOutreach ? (
         <EmptyState
+          headingLevel={2}
           title="No outreach events yet"
           description="Outreach events for this season will show up here once they're scheduled."
           actions={
@@ -1377,8 +1393,15 @@ function StudentParentOutreachView({
 
       {!hasAnyOutreach ? (
         <EmptyState
-          title="No outreach events yet"
-          description="Outreach events for this season will show up here once your coach schedules them."
+          headingLevel={2}
+          // DES-15 verbatim (PRD line 213): "No upcoming outreach yet. When
+          // your coach posts an event, you can sign up here." -- title
+          // carries the first sentence, description the second;
+          // concatenated they reproduce the PRD text exactly. (This is the
+          // student/parent-view empty state specifically; the coach view's
+          // own empty state above is a distinct, non-DES-15-named copy.)
+          title="No upcoming outreach yet."
+          description="When your coach posts an event, you can sign up here."
         />
       ) : (
         <>
@@ -1443,6 +1466,7 @@ export function OutreachList({
     return (
       <VStack gap={4} padding={6}>
         <EmptyState
+          headingLevel={1}
           title="Sign in to view outreach"
           description="You need to be signed in to see this page."
         />
@@ -1452,8 +1476,26 @@ export function OutreachList({
 
   if (loadState.status === 'loading') {
     return (
-      <VStack gap={4} padding={6}>
-        <Spinner label="Loading outreach events…" />
+      <VStack gap={6} padding={6} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          Loading outreach events…
+        </VisuallyHidden>
+        <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
+          <Skeleton width={140} height={28} index={0} />
+          <Skeleton width={110} height={22} radius="rounded" index={1} />
+        </HStack>
+        <Skeleton width="100%" height={16} index={2} />
+        <VStack gap={3}>
+          <Skeleton width={100} height={20} index={3} />
+          <VStack gap={2}>
+            {[0, 1, 2].map((row) => (
+              <HStack key={row} gap={4} vAlign="center">
+                <Skeleton width={220} height={16} index={row * 2 + 4} />
+                <Skeleton width={80} height={16} index={row * 2 + 5} />
+              </HStack>
+            ))}
+          </VStack>
+        </VStack>
       </VStack>
     );
   }
@@ -1465,6 +1507,7 @@ export function OutreachList({
           status="error"
           title="Couldn't load outreach events"
           description="Something went wrong loading this season's outreach events. Try refreshing the page."
+          endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
         />
       </VStack>
     );

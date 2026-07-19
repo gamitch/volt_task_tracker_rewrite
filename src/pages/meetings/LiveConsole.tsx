@@ -318,7 +318,12 @@
  *    `ATTENDANCE_STATUS_BADGE` already established: present=success,
  *    late=warning, excused=neutral, absent=error), plus `neutral` for the
  *    genuinely-unset "not recorded yet" state.
- *  - `Spinner`: `astryx-api.md` lines 5832-5840. `label` used.
+ *  - `Skeleton` (T081): `astryx-api.md` lines 621-655. `width`, `height`,
+ *    `index` used to preview this screen's predictable roster-list-row
+ *    shape (`RosterRow`/`ListItem`), replacing `Spinner`'s prior use here
+ *    per Astryx's own guidance (known-dimension content). `VisuallyHidden`
+ *    + the wrapping `VStack`'s `aria-busy` carry the "Loading roster…"
+ *    announcement `Spinner`'s `label` used to provide.
  *  - `EmptyState`: `astryx-api.md` lines 3991-4001. `title`, `description`
  *    used.
  *
@@ -372,10 +377,11 @@ import {
   ListItem,
   SegmentedControl,
   SegmentedControlItem,
-  Spinner,
+  Skeleton,
   StatusDot,
   Text,
   TextInput,
+  VisuallyHidden,
   VStack,
 } from '@astryxdesign/core';
 import { RequireRole, useAuth } from '../../app/guards';
@@ -666,10 +672,15 @@ const DIGIT_KEY_TO_STATUS: Record<string, AttendanceStatus> = {
 // ---------------------------------------------------------------------------
 
 type LoadState<T> =
-  { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'success'; data: T };
+  | { status: 'loading' }
+  | { status: 'error'; error: unknown; retry: () => void }
+  | { status: 'success'; data: T };
 
 function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): LoadState<T> {
   const [state, setState] = useState<LoadState<T>>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action (DES-12) to force the effect
+  // below to re-run without changing the caller-supplied `deps` semantics.
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -679,13 +690,15 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
         if (isMounted) setState({ status: 'success', data });
       })
       .catch((error: unknown) => {
-        if (isMounted) setState({ status: 'error', error });
+        if (isMounted) {
+          setState({ status: 'error', error, retry: () => setRetryToken((token) => token + 1) });
+        }
       });
     return () => {
       isMounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list.
-  }, deps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` is the caller-supplied dependency list; `retryToken` is an additional internal trigger.
+  }, [...deps, retryToken]);
 
   return state;
 }
@@ -1008,18 +1021,35 @@ export function LiveConsoleBody({
         description="attendance's RLS would allow a coach/admin-only real roster + Realtime feed once a shared Supabase client exists in src/ -- this is not an access-control gap, only a missing client (no createClient/supabase-js usage exists anywhere in src/ yet). Attendance changes made on this screen are local to this browser tab only."
       />
 
-      {loadState.status === 'loading' && <Spinner label="Loading roster..." />}
+      {loadState.status === 'loading' && (
+        <VStack gap={2} aria-busy="true">
+          <VisuallyHidden as="div" role="status">
+            Loading roster...
+          </VisuallyHidden>
+          {[0, 1, 2, 3, 4].map((row) => (
+            <HStack key={row} hAlign="between" vAlign="center" gap={4}>
+              <HStack gap={2} vAlign="center">
+                <Skeleton width={16} height={16} radius="rounded" index={row * 3} />
+                <Skeleton width={140} height={16} index={row * 3 + 1} />
+              </HStack>
+              <Skeleton width={160} height={28} index={row * 3 + 2} />
+            </HStack>
+          ))}
+        </VStack>
+      )}
 
       {loadState.status === 'error' && (
         <Banner
           status="error"
           title="Couldn't load this session"
           description="Something went wrong loading the roster for this session. Try refreshing the page."
+          endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
         />
       )}
 
       {loadState.status === 'success' && roster.length === 0 && (
         <EmptyState
+          headingLevel={2}
           title="No students on this roster"
           description="This session has no expected students yet."
         />

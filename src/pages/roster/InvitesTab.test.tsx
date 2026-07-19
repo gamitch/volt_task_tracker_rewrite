@@ -321,7 +321,7 @@ function testLoadData(): Promise<InvitesTabLoadResult> {
 // ---------------------------------------------------------------------------
 
 describe('<InvitesTab /> DES-12 states', () => {
-  it('shows a loading spinner before data resolves', () => {
+  it('shows a loading Skeleton (T081: table has predictable dimensions) before data resolves', () => {
     renderTab({ loadData: () => new Promise(() => {}) });
     expect(container.textContent).toContain('Loading invites');
   });
