@@ -2076,3 +2076,74 @@ phrase DES-16 warns against — appears 47 times across 30 files.
 Full worker packet archived at `docs/swarm/archive/T069-worker-packet.md`. No separate
 checker-packet file exists for this audit task (Allowed Files: None; checker's full findings are
 recorded here).
+
+## T068 — Responsive sweep 375–1440px (NFR-06), Epic E11
+
+**Result: PASS (audit itself). Severity: BLOCKER (on the underlying finding, not the audit work).**
+
+Audit-only task (zero Allowed Files). Worker disclosed upfront that this repo's only DOM
+environment is jsdom, which has no real layout engine (`clientWidth`/`scrollWidth`/
+`getBoundingClientRect` always return 0), making literal computed-overflow checks impossible.
+Substituted rigorous static analysis instead: traced fixed-pixel usages through Astryx's actual
+compiled component source (not just doc prose), and hand-re-executed the real, installed
+`resolveColumnWidths()` algorithm against each dense-table screen's real column definitions to
+derive true minimum table widths.
+
+**Primary finding — NFR-06 FAIL on `LiveConsole.tsx` (T033), the live check-in console:**
+- "Panes stack": the `HStack wrap="wrap"` mechanism is real (genuine flex-wrap, not cosmetic), but
+  the roster pane (`VStack width={480}`) is the *only* fixed-width usage in the entire codebase
+  that omits the `maxWidth="100%"` safety pairing every other screen uses (`LoginPage.tsx`,
+  `NoAccessPage.tsx`, `AcceptInvitePage.tsx`, `CheckinResult.tsx` all pair `width={N}` +
+  `maxWidth="100%"`) — a real, disclosed overflow risk once the pane wraps onto its own row at
+  narrow widths.
+- "QR collapses behind a button": **certain FAIL, no ambiguity.** No show/hide toggle of any kind
+  exists anywhere in the file — `QrPanel` renders unconditionally as a permanent sibling at every
+  viewport width. The only nearby interactive element ("Open kiosk view") navigates to a different
+  route, it doesn't toggle in-place visibility.
+
+**Dense-table minimum widths** (re-derived by hand-executing Astryx's real `columnUtils.js`
+algorithm against each screen's real columns): `HoursTab.tsx` ~820px, `ParticipationTab.tsx`
+~920px, `EventsTab.tsx` ~1290px (9 columns) — all scroll-contained (Astryx's `Table` auto-wraps in
+a keyboard-accessible `overflow-x:auto` container, confirmed real), so none of these break page
+layout, but `EventsTab.tsx` in particular is realistically desk-only on a phone, disclosed
+explicitly rather than silently passed.
+
+**Dialogs pass at 375px**: Astryx's `Dialog` component has a real, unconditional `max-width:90vw`
+CSS clamp (confirmed in compiled source/CSS) that wins over any explicit `width` prop, and none of
+the audited dialogs override the default `FormLayout direction="vertical"`, so there's no
+horizontal grid that needs to collapse. One open, honestly-disclosed risk: `DateRangeInput`'s
+calendar popover (used in 3 dialogs) has no equivalent clamp and its real width depends on runtime
+floating-ui positioning — not resolvable via static analysis, flagged rather than guessed at.
+
+**Checker's independent verification (checker-accessibility):**
+- Independently confirmed the NFR-06 FAIL verdict is correct and, if anything, understated — traced
+  `Stack.js` directly and confirmed `width` becomes a literal unconditional inline style with no
+  implicit clamp.
+- Independently re-derived all three dense-table minimum-width computations by hand-executing the
+  real `columnUtils.js` — matched the worker's numbers to the exact pixel on all three.
+- Confirmed the jsdom limitation claim empirically (ran a live jsdom test confirming
+  clientWidth/scrollWidth/getBoundingClientRect all return 0) and confirmed no Playwright/Puppeteer
+  package exists anywhere in the repo.
+- Confirmed the Dialog `max-width:90vw` clamp directly in Astryx's compiled source and CSS.
+- Confirmed the DateRangeInput popover risk is a genuine, structurally unresolvable-by-static-means
+  open question (uses Popover, not Dialog; no equivalent clamp exists anywhere in Popover's source)
+  — not an excuse for incomplete work.
+- Confirmed no stray files (`git status --short` clean apart from routine hook noise).
+
+**Follow-up candidates routed, not fixed by this task** (per Allowed Files: None):
+- **BLOCKER-priority follow-up task needed**: `LiveConsole.tsx` needs a real `useState`-driven
+  show/hide toggle for the QR panel at narrow widths, plus `maxWidth="100%"` added to the roster
+  `VStack` (line ~994) to match the codebase's established width-safety idiom. This is a genuine,
+  PRD-named acceptance-criterion gap on the single most operationally critical screen in the app
+  (live attendance-taking) — recommend the boss/foreman schedule a dedicated fix task rather than
+  leaving this as a disclosed-but-unfixed audit finding.
+- `DateRangeInput` popover width at 375px: flagged as an open risk requiring real-browser
+  (Playwright/Chromium) verification once available — not resolvable via this repo's current
+  jsdom-only test tooling.
+- `EventsTab.tsx`'s 1290px computed table minimum: informational, likely a deliberate wide
+  reporting table rather than an oversight — no action recommended unless product intent says
+  otherwise.
+
+Full worker packet archived at `docs/swarm/archive/T068-worker-packet.md`. No separate
+checker-packet file exists for this audit task (Allowed Files: None; checker's full findings are
+recorded here).
