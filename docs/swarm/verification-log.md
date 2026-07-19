@@ -666,3 +666,4 @@ Follow-up:
 - None requiring further work. **D005 fully closed out end-to-end** — see `dispute-log.md` D005 Outcome.
 - Informational note only (not a task defect): future evidence collected via screenshot-based pixel sampling should crop well clear of rounded-corner/focus-ring edges and cross-check against `getComputedStyle` to avoid anti-aliasing-induced undercounts, per this task's light-mode discrepancy.
 - Full worker/checker packets archived at `docs/swarm/archive/T002b-worker-packet.md` and `docs/swarm/archive/T002b-checker-packet.md`.
+[2026-07-19T02:34:01Z] Worker finished. Checker required before completion.
