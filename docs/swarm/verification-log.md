@@ -993,3 +993,45 @@ upserts, a `--dry-run` mode, and a pre-write attendees-backfill assertion gate.
 Full packets archived at `docs/swarm/archive/T062-worker-packet.md` and
 `docs/swarm/archive/T062-checker-packet.md`. T063 (MIG-04 human gate) remains externally blocked on
 George's real old-project credentials, unaffected by this PASS.
+[2026-07-19T04:42:47Z] Worker finished. Checker required before completion.
+
+## T038 — `/outreach` list + season goal bar (OUT-01)
+
+**Result: PASS (1st attempt). Severity: MINOR (two small, non-blocking follow-ups).**
+
+Worker built `OutreachList.tsx`: coach view (season goal bar with BEH-01 milestones, Upcoming/Past
+sections) and student/parent view (own goal bar with BEH-02 confirmed/planned segments never
+summed, per-row RSVP control), plus a real handling of the SideNav-badge scope tension its own
+worker packet pre-authorized.
+
+**Checker's independent verification (checker-accessibility):**
+- **SideNav-badge scope tension confirmed correctly handled**: `SideNav.tsx` byte-unchanged
+  (forbidden file respected); `getUnansweredRsvpCount`'s "unanswered" definition independently
+  re-verified against the real `rsvps` status vocabulary (declined/maybe correctly excluded as
+  answered); the function is genuinely exercised live via a real neutral `Badge` in both views
+  (fixture counts coach=4/viewer=1 independently hand-traced and confirmed matching), not an inert
+  export. Ruled a faithful, correct application of the packet's pre-authorized handling.
+- BEH-02 "never summed" confirmed true by source read: the only combined-expression text in the
+  file exists inside a doc comment stating it does NOT appear in code; all real code uses two
+  separate accumulators.
+- BEH-01 milestone dedupe confirmed correctly scoped (season + goal-bar identity in the localStorage
+  key).
+- NAV-07 confirmed structurally: a single filter predicate is the only gate feeding both role-variant
+  render trees, not merely absent from one test string.
+- A genuine Astryx documentation bug found and correctly worked around: the installed
+  `@supabase/supabase-js`... (n/a) — the installed `Toast.d.ts`/`types.d.ts` confirm `uniqueID`/
+  `onHide`/`collisionBehavior` belong to `ToastOptions` (the `useToast()` options bag), not
+  `<Toast>` itself; the worker's actual usage matches the real prop shape, not the doc's incorrect
+  one — correct per the established "CLI/source cross-check when the doc is wrong" precedent.
+- format:check baseline claim confirmed: the two failing files are genuinely pre-existing (T034
+  work), untouched by this task.
+- 119/119 tests reproduced independently (36/36 new); typecheck/lint/build all reproduced clean;
+  zero Supabase writes confirmed via grep; zero bundle impact from the test file confirmed via a
+  `dist/` grep.
+- Two non-blocking follow-ups: a heading-level skip (h1→h3) on the fully-empty state (same
+  recurring class as T021/T030's identical finding); an incomplete disclosure note (doesn't
+  explicitly flag that the top-level `/outreach` route itself, not just its `:eventId` sub-route, is
+  still unwired in `router.tsx`).
+
+Full packets archived at `docs/swarm/archive/T038-worker-packet.md` and
+`docs/swarm/archive/T038-checker-packet.md`. Unblocks T039, T044, T045, T053.

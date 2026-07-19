@@ -14,18 +14,21 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-19, post-T030/T062, T038 checking)
+## Status snapshot (2026-07-19, post-T030/T038/T062)
 
 75 tasks (T001–T071 + T002a + T002b + T006a + T016a) across epics E1–E11.
-**34 Passed · 12 Ready · 1 In Progress (T038, checker running) · 28 Blocked.**
+**35 Passed · 16 Ready · 0 In Progress · 24 Blocked.**
 
 - T030 (`/meetings` list) Passed, MINOR — unblocked T031, T037.
+- T038 (`/outreach` list) Passed, MINOR — unblocked T039, T044, T045, T053.
+  Checker confirmed the SideNav-badge wiring gap was handled correctly per
+  its packet's pre-authorized instruction (a reusable
+  `getUnansweredRsvpCount` export + dispute-candidate flag, not an edit to
+  the forbidden `SideNav.tsx`).
 - T062 (ETL script) Passed, clean. T063 (MIG-04 human gate) still externally
   blocked on George's real old-project credentials, unaffected by the PASS.
-- T038 (`/outreach` list) worker done, checker running — flagged the
-  SideNav-badge wiring gap as a dispute candidate exactly per its packet's
-  pre-authorized instruction (exposed a reusable `getUnansweredRsvpCount`
-  rather than editing the forbidden `SideNav.tsx`).
+- E5 (Meetings) and E6 (Outreach) both now have their list-page anchor task
+  Passed, opening up most of each epic's remaining sub-tasks.
 
 **T071 (shared Supabase client) Passed, clean, no findings.** The recurring
 cross-cutting gap flagged by six prior tasks is now closed at the
@@ -119,13 +122,12 @@ See the T071 detail block in `task-ledger.md` (end of E3) and its
 
 ## Next recommended action
 
-Thirteen tasks are Ready: T022, T025, T026, T027, T028, T029, T030, T038,
-T049, T050, T057, T058, T062. Worker packets already exist for T030/T038/
-T062 — dispatch those directly. The rest need packets built first (T049/
-T050 straightforward from the ledger's T048 detail block; T057/T058 from
-T056's; T022/T025–T029 need foreman planning against E4's roster spec).
-All are file-disjoint and independently dispatchable in parallel if budget
-allows; pace per session/weekly usage as usual.
+Sixteen tasks are Ready: T022, T025, T026, T027, T028, T029, T031, T037,
+T039, T044, T045, T049, T050, T053, T057, T058. None currently have
+worker packets pre-built (T030/T038/T062's packets were consumed and
+archived on PASS) — each needs one built first, either directly or via
+foreman-planner. All are file-disjoint and independently dispatchable in
+parallel if budget allows; pace per session/weekly usage as usual.
 
 Separately, worth deciding when to prioritize: drafting the T016a-pattern
 wiring series that connects T071's new client into `guards.tsx` and the
