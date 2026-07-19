@@ -1720,3 +1720,36 @@ Full packets archived at `docs/swarm/archive/T058-worker-packet.md` and
 `docs/swarm/archive/T058-checker-packet.md`.
 [2026-07-19T07:53:49Z] Worker finished. Checker required before completion.
 [2026-07-19T07:57:12Z] Worker finished. Checker required before completion.
+[2026-07-19T07:57:52Z] Worker finished. Checker required before completion.
+
+## T045 — `/calendar` month grid + filters + detail links
+
+**Result: PASS (attempt 2).**
+
+Worker built `CalendarPage.tsx`: Astryx `Calendar` month grid used only within its documented
+props, DES-04-colored session-list `Badge`s satisfying both the "dots" requirement and NAV-07,
+four-option filter, click-through links.
+
+Attempt 1 was a legitimate FAIL (MAJOR) after the central Trap #1 investigation (no
+day-content/dots-render prop exists in the real Astryx `Calendar`, verified against both the doc
+and the installed vendor source including the private `DayCell` component) and the DES-04/NAV-07
+dual-purpose Badge design were both independently confirmed sound: the checker found every row's
+`Link` rendered identical, undifferentiated "View details" text — a real screen-reader links-list
+problem across a list this task deliberately mixes across 3 event types, violating `astryx-api.md`'s
+own Link guidance. A MINOR heading h1→h3 skip on the zero-sessions state was also found. (The
+checker separately, non-bindingly flagged that the PRD's literal wireframe shows dots inside the
+grid itself, which the shipped resolution doesn't replicate — judged the correct engineering call
+given the verified prop constraint, recommended for design sign-off rather than required rework.)
+
+Attempt 2's fix: row `Link` visible text changed to `"View details – {event.title}"` (a genuine
+visible-text change, not an aria-label override); `headingLevel={2}` added to the zero-sessions
+`EmptyState`. The narrow re-check independently confirmed the diff was scoped to only these two
+fixes (the `Calendar` component usage, filter logic, and Badge mapping all byte-identical to
+attempt 1), and confirmed both new tests are genuinely non-tautological — verified against the
+installed `Link`/`EmptyState` source that the visible text becomes the accessible name and that
+`headingLevel` genuinely controls the rendered heading tag.
+
+**T046, T047 unblocked (Blocked→Ready).**
+
+Full packets archived at `docs/swarm/archive/T045-worker-packet.md` and
+`docs/swarm/archive/T045-checker-packet.md`.
