@@ -1689,3 +1689,32 @@ independently reproduced it: reverted the guard, confirmed the new 30-day-out re
 
 Full packets archived at `docs/swarm/archive/T040-worker-packet.md` and
 `docs/swarm/archive/T040-checker-packet.md`.
+
+## T058 — Events tab (RPT-04)
+
+**Result: PASS (1st attempt). Severity: MINOR.**
+
+Worker built `EventsTab.tsx`: one row per session across all three event types (NAV-07 exception),
+with a per-session hours-awarded computation faithfully mirroring `v_student_hours`'s own logic.
+
+**Checker's independent verification (checker-reviewer):**
+- **Central safety check**: read the metric-views migration directly and confirmed
+  `v_student_hours` is genuinely season-grain (`group by student_id, season_id`) with no
+  session-grain view anywhere in the file. Confirmed `computeAttendeeHours` is a faithful,
+  line-for-line mirror of the view's three-way `coalesce` fallback at per-attendee grain — reached
+  only via the fixture data seam, never the production read path. **Explicit verdict: legitimate
+  new computation, not a constitution item 3 violation.** Reproduced the `session-c1`
+  zero-despite-attendance case directly.
+- DES-04 type-Badge mapping confirmed correct against the PRD table. Independently confirmed
+  `CoachHome.tsx`'s own DES-04-inconsistent color mapping is real and pre-existing (last touched by
+  T053, not this task) — correctly flagged, correctly left unfixed.
+- Attendance-vs-signup and adult-volunteer-repetition disclosures confirmed accurate and reasonable.
+- 736/736 repo-wide, 24/24 own tests, typecheck/lint/build clean.
+
+**MINOR follow-up**: the per-session hours mirror will silently drift if `v_student_hours`'s SQL
+ever changes — tracked for a future real-backend-sourced replacement, not blocking.
+
+**T059 unblocked (Blocked→Ready)** — its other two dependencies, T057 and T056, were already Passed.
+
+Full packets archived at `docs/swarm/archive/T058-worker-packet.md` and
+`docs/swarm/archive/T058-checker-packet.md`.
