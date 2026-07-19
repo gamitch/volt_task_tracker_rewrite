@@ -2995,3 +2995,44 @@ out-of-scope for every ED-1 packet (routed to ED-5, a dispute if a packet is gen
 blocked by it, not a drive-by fix); distinguishing "empty because RLS" from "empty
 because no data" is impossible client-side by design — the rule for every packet is
 role-appropriate empty-state copy plus route guards, not loader-level workarounds.
+[2026-07-19T23:20:03Z] Worker finished. Checker required before completion.
+
+## T086 — ED-1 packet P0: data-layer foundation
+
+**Result:** PASS (1st attempt, NIT only)
+
+Added 9 row types to `src/lib/supabase/types.ts` (`SeasonRow`, `GuardianLinkRow`,
+`EventRow`/`EventType`, `RsvpRow`/`RsvpStatus`, `NotificationPrefsRow`,
+`CalendarFeedRow`, `EmailLogRow`, `AuditLogRow`, `VStudentHoursRow`,
+`VTeamParticipationRow`) and fixed `ProfileRow.avatarUrl` from `string` to `string |
+null` (the column has been nullable since T019's invite-trigger migration; the type
+was simply never updated). Fixed a real bug in `createLoader` where
+`getSupabaseClient()` was called outside the `try` block, letting
+`SupabaseNotConfiguredError` propagate raw instead of becoming a normal
+`SupabaseLoaderError` — the fix means a dev with no `.env` file now sees every future
+ED-1-wired page's normal DES-12 error state instead of a crash. Added `runMutation`
+(shared plain-write helper, `TResult` defaults to `void` for the common no-payload
+case) and `invokeEdgeFunction` (new `functions.ts`, calls the deployed Edge Functions
+via `client.functions.invoke`, relying on supabase-js's automatic session-JWT
+attachment — never touches a service-role key or manually handles a token) with
+matching DES-16 error mapping. Zero page files touched.
+
+**Checker verification:** independently re-derived every one of the 9 type citations
+column-by-column against the 5 real migration files from scratch — all correct, zero
+transcription errors found. Grepped for arithmetic in the two new view types
+(constitution item 3, BLOCKER) — clean, passthrough only. Grepped for
+service-role-key/manual-auth-header patterns in `functions.ts` (constitution item 5,
+BLOCKER) — clean. Confirmed the `getClient()`-outside-try bug was real via `git show
+HEAD:loader.ts` (present before this change). Verified the 4 quoted
+`send-invite/index.ts` error strings character-for-character. Confirmed the
+unconfigured-error tests genuinely stub-and-assert rather than being tautological.
+Judged both of the worker's self-flagged judgment calls (the `void`-default
+`runMutation` design, and the proactive `getSession()` gate in `invokeEdgeFunction`)
+sound and non-dispute-worthy. 951/951 tests, clean typecheck/lint/build,
+format:check failure isolated to pre-existing untouched `Kiosk.tsx`.
+
+**Findings (non-blocking, log-only):** `invokeEdgeFunction` unconditionally requires an
+active session before invoking — correct for every current call site (`checkin`,
+`send-invite`, `send-reminders`, all auth-required), but a future packet needing to
+call a public/token-authenticated function (e.g. `ics`) through this same helper would
+need an opt-out. Noted for later ED-1 packet authors, not filed as a task.
