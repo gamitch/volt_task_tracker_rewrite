@@ -1603,3 +1603,37 @@ T036 all Passed.
 
 Full packets archived at `docs/swarm/archive/T036-worker-packet.md` and
 `docs/swarm/archive/T036-checker-packet.md`.
+
+## T049 — Transactional email templates
+
+**Result: PASS (1st attempt). Severity: MINOR.**
+
+Worker built five EML-02 templates (`invite`, `signup-confirm`, `event-reminder-48h`,
+`event-reminder-3h`, `meeting-reminder-3h`), each producing `bodyHtml`/`previewText` consumable by
+`renderEmailLayout()`.
+
+**Checker's independent verification (checker-content):**
+- Confirmed `inviteFixtureBody.ts` (Forbidden File) reads as the untouched T048 placeholder and
+  `send-invite/index.ts` still calls it, not `invite.tsx` — content-level verification (checker had
+  no Bash access for a byte-diff, see below).
+- Confirmed by grep zero JSX/React/Astryx imports across all 10 files — the plain-TS `.tsx`
+  decision is genuine, matching T048's Deno-import-compatible precedent.
+- Cross-checked all five templates' recipient/trigger framing directly against the PRD's literal
+  EML-02 table (not the worker's transcription) — correct in every case, including the subtle
+  detail that `meeting-reminder-3h` deliberately has no parent-branching copy (meetings are
+  student-only, correctly matching "students in scope").
+- `escapeHtml` confirmed byte-identical to `renderEmailLayout.ts`'s own, applied to every dynamic
+  interpolated value in every `bodyHtml` builder.
+- EML-05 (single-student-only props) confirmed across all five templates — no array/list prop
+  anywhere.
+- **Disclosed limitation, closed by the orchestrating session**: checker-content has no Bash tool
+  access, so it could not execute the test suite or run a literal `git diff` on the Forbidden File.
+  I independently ran `npx vitest run src/emails/templates/` (**73/73 passing**) and
+  `git diff 2216eb0^ 2216eb0 -- src/emails/layout/inviteFixtureBody.ts` (**empty — byte-unchanged**),
+  closing both gaps before this close-out.
+
+**T051 unblocked (Blocked→Ready)** — its other two dependencies, T050 and T011, were already
+Passed.
+
+Full packets archived at `docs/swarm/archive/T049-worker-packet.md` and
+`docs/swarm/archive/T049-checker-packet.md`.
