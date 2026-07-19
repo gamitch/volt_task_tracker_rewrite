@@ -28,6 +28,17 @@
  * through its pure logic (`buildInviteParentSubmission`,
  * `computeSendInviteLabel`) rather than a simulated popover click -- a
  * disclosed, precedented scope boundary, not a skipped requirement.
+ *
+ * T087 (ED-1 Packet P1) additions: the `defaultOnSendInvite` describe block
+ * below proves the real `send-invite` calling seam -- one
+ * `invokeEdgeFunction` call per `inviteRequests` entry, strictly sequential,
+ * aborting (never calling request N+1) on the first failure -- against a
+ * mocked `../../lib/supabase` module (`invokeEdgeFunction` mocked, every
+ * other export re-exported from the real module via `importOriginal`), plus
+ * one full-render test proving a real `SupabaseLoaderError`-shaped
+ * rejection's `.message` (not an `Error` instance -- Known Context/Traps #6)
+ * reaches the dialog's existing `submitError` Banner unchanged, through the
+ * *default* `onSendInvite` (not an injected fixture).
  */
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -35,11 +46,50 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildInviteParentSubmission,
   computeSendInviteLabel,
+  defaultOnSendInvite,
   InviteParentDialog,
   isInviteParentFormValid,
   isValidInviteEmail,
   type InviteParentSubmission,
 } from './InviteParentDialog';
+import { invokeEdgeFunction } from '../../lib/supabase';
+
+// ---------------------------------------------------------------------------
+// T087: mock `invokeEdgeFunction` only -- every other `../../lib/supabase`
+// export (e.g. `isSupabaseLoaderError`, used unmocked by the component
+// itself) is re-exported from the real module via `importOriginal`, so this
+// file never has to hand-roll a second implementation of it.
+// ---------------------------------------------------------------------------
+vi.mock('../../lib/supabase', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/supabase')>();
+  return { ...actual, invokeEdgeFunction: vi.fn() };
+});
+
+const mockedInvokeEdgeFunction = vi.mocked(invokeEdgeFunction);
+
+function fakeSendInviteResponse(studentId: string | null): {
+  invite: {
+    id: string;
+    email: string;
+    role: 'parent';
+    student_id: string | null;
+    status: string;
+    expires_at: string;
+    created_at: string;
+  };
+} {
+  return {
+    invite: {
+      id: `invite-${studentId ?? 'none'}`,
+      email: 'parent@example.com',
+      role: 'parent',
+      student_id: studentId,
+      status: 'pending',
+      expires_at: '2026-08-01T00:00:00.000Z',
+      created_at: '2026-07-18T00:00:00.000Z',
+    },
+  };
+}
 
 // ---------------------------------------------------------------------------
 // jsdom gap: `Dialog` renders a native `<dialog>` and calls
@@ -391,5 +441,154 @@ describe('<InviteParentDialog /> BEH-07/DES-14 submit flow', () => {
     expect(container.textContent).toContain("Couldn't send this invite");
     expect(container.textContent).toContain('Network error. Try again.');
     expect(container.textContent ?? '').not.toContain('Invite sent to');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T087 (ED-1 Packet P1): `defaultOnSendInvite` -- the real `send-invite`
+// calling seam. `invokeEdgeFunction` mocked (module-level `vi.mock` above);
+// zero real network calls anywhere in this describe block.
+// ---------------------------------------------------------------------------
+
+describe('defaultOnSendInvite (T087 real send, Known Context/Traps #5 -- sequential, abort-on-first-failure)', () => {
+  it('calls invokeEdgeFunction once per inviteRequests entry, in order, with the exact request as the body', async () => {
+    mockedInvokeEdgeFunction.mockImplementation((_name, body) =>
+      Promise.resolve(fakeSendInviteResponse((body as { student_id: string }).student_id)),
+    );
+
+    const submission: InviteParentSubmission = {
+      inviteRequests: [
+        { email: 'parent@example.com', role: 'parent', student_id: 'student-a' },
+        { email: 'parent@example.com', role: 'parent', student_id: 'student-b' },
+        { email: 'parent@example.com', role: 'parent', student_id: 'student-c' },
+      ],
+      relationship: 'Mother',
+    };
+
+    await defaultOnSendInvite(submission);
+
+    expect(mockedInvokeEdgeFunction).toHaveBeenCalledTimes(3);
+    expect(mockedInvokeEdgeFunction).toHaveBeenNthCalledWith(
+      1,
+      'send-invite',
+      submission.inviteRequests[0],
+    );
+    expect(mockedInvokeEdgeFunction).toHaveBeenNthCalledWith(
+      2,
+      'send-invite',
+      submission.inviteRequests[1],
+    );
+    expect(mockedInvokeEdgeFunction).toHaveBeenNthCalledWith(
+      3,
+      'send-invite',
+      submission.inviteRequests[2],
+    );
+  });
+
+  it('calls them strictly sequentially, never overlapping (proves this is not Promise.all)', async () => {
+    const callOrder: string[] = [];
+    let resolveFirst: (() => void) | undefined;
+    mockedInvokeEdgeFunction.mockImplementation((_name, body) => {
+      const studentId = (body as { student_id: string }).student_id;
+      callOrder.push(`start:${studentId}`);
+      if (studentId === 'student-a') {
+        return new Promise((resolve) => {
+          resolveFirst = () => {
+            callOrder.push(`end:${studentId}`);
+            resolve(fakeSendInviteResponse(studentId));
+          };
+        });
+      }
+      callOrder.push(`end:${studentId}`);
+      return Promise.resolve(fakeSendInviteResponse(studentId));
+    });
+
+    const submission: InviteParentSubmission = {
+      inviteRequests: [
+        { email: 'parent@example.com', role: 'parent', student_id: 'student-a' },
+        { email: 'parent@example.com', role: 'parent', student_id: 'student-b' },
+      ],
+      relationship: 'Mother',
+    };
+
+    const pending = defaultOnSendInvite(submission);
+    // Only the first request has started -- the second must not start until
+    // the first's own promise resolves (a `Promise.all` would have started
+    // both immediately).
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(callOrder).toEqual(['start:student-a']);
+    expect(mockedInvokeEdgeFunction).toHaveBeenCalledTimes(1);
+
+    resolveFirst?.();
+    await pending;
+
+    expect(callOrder).toEqual([
+      'start:student-a',
+      'end:student-a',
+      'start:student-b',
+      'end:student-b',
+    ]);
+    expect(mockedInvokeEdgeFunction).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops after a failure on request 2 of 3 -- request 3 is never called -- and rethrows the original failure unchanged', async () => {
+    const failure = { code: 'ALREADY_INVITED', message: 'Already invited.', cause: null };
+    mockedInvokeEdgeFunction
+      .mockResolvedValueOnce(fakeSendInviteResponse('student-a'))
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValueOnce(fakeSendInviteResponse('student-c'));
+
+    const submission: InviteParentSubmission = {
+      inviteRequests: [
+        { email: 'parent@example.com', role: 'parent', student_id: 'student-a' },
+        { email: 'parent@example.com', role: 'parent', student_id: 'student-b' },
+        { email: 'parent@example.com', role: 'parent', student_id: 'student-c' },
+      ],
+      relationship: 'Mother',
+    };
+
+    await expect(defaultOnSendInvite(submission)).rejects.toBe(failure);
+    expect(mockedInvokeEdgeFunction).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T087 Known Context/Traps #6: a real `SupabaseLoaderError`-shaped rejection
+// (NOT an `Error` instance) surfaces its own `.message` through the
+// dialog's existing `submitError` Banner unchanged, via the *default*
+// (unwired-in-test) `onSendInvite` seam.
+// ---------------------------------------------------------------------------
+
+describe('<InviteParentDialog /> default onSendInvite error surface (Known Context/Traps #6)', () => {
+  it('shows the exact SupabaseLoaderError.message in the Banner (e.g. the real ALREADY_INVITED copy), not a hand-authored fallback', async () => {
+    mockedInvokeEdgeFunction.mockRejectedValue({
+      code: 'ALREADY_INVITED',
+      message:
+        'This person already has an account. They can sign in directly instead of using an invite.',
+      cause: null,
+    });
+
+    act(() => {
+      root.render(<InviteParentDialog isOpen onOpenChange={() => {}} student={PRIMARY_STUDENT} />);
+    });
+
+    const emailInput = getFieldControl('Email') as HTMLInputElement;
+    const relationshipInput = getFieldControl('Relationship') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(emailInput, 'parent.of.mika@example.com');
+    });
+    act(() => {
+      setNativeInputValue(relationshipInput, 'Mother');
+    });
+    clickButton(findButtonByText('Send invite') as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(mockedInvokeEdgeFunction).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain(
+      'This person already has an account. They can sign in directly instead of using an invite.',
+    );
+    // Not the generic hand-authored fallback -- the real DES-16 copy won.
+    expect(container.textContent ?? '').not.toContain('Something went wrong sending this invite.');
   });
 });

@@ -23,6 +23,16 @@
  *    'revoked', even though ROS-07's own literal text only names
  *    Pending/Accepted/Expired -- see module doc #3 below for why 'revoked'
  *    is still shown as a fourth, real, `Badge` state rather than hidden).
+ *    T087's own Known Context/Traps #1 (distinct from this file's own
+ *    "Packet Known Context/Trap #1" callout in module doc #2 below, which
+ *    is T027's original packet numbering): T087 deliberately keeps this
+ *    local `InviteRow`/`ProfileRole`/`InviteStatus` trio as-is rather than
+ *    switching to `src/lib/supabase/types.ts`'s now-equivalent shared
+ *    exports -- see `../../lib/supabase/loaders/invites.ts`'s own module
+ *    doc for the full reasoning (short version: the shared `InviteRow`
+ *    additionally carries `invitedBy`, a field this screen never needs,
+ *    and switching would have forced every existing fixture literal in
+ *    this file/its test file to grow an unused field).
  *
  * -----------------------------------------------------------------------
  * 2. AUTH-06's 14-day expiry -- a real, testable DISPLAY-status derivation,
@@ -173,16 +183,37 @@
  * supplies its own `onResend` prop.
  *
  * -----------------------------------------------------------------------
- * 7. No shared Supabase client wired in yet -- packet Known Context/Trap #5,
- *    deliberate scope, not a gap for this task to solve (same posture as
- *    every prior content page -- `StudentsTab.tsx`/T022,
- *    `OutreachList.tsx`/T038, `ParticipationTab.tsx`/T056).
+ * 7. T087 (ED-1 Packet P1): `loadData`/`onRevoke` are now wired to the real
+ *    Supabase data layer -- `onResend` deliberately is NOT (see #7b).
  *
- * `loadInvitesTabData`/`onResend`/`onRevoke` are the three injectable seams
- * (`LoadInvitesTabDataFn`/`ResendInviteFn`/`RevokeInviteFn`), each defaulting
- * to an obviously-fake fixture-backed implementation. A real caller, once a
- * shared Supabase client exists (a separate, not-yet-dispatched task per
- * every other content page's own disclosure), supplies its own props.
+ * `loadData`/`onResend`/`onRevoke` are the three injectable seams
+ * (`LoadInvitesTabDataFn`/`ResendInviteFn`/`RevokeInviteFn`).
+ * `loadData`/`onRevoke` now default to `loadInvitesTabData`/`revokeInvite`
+ * from `../../lib/supabase/loaders/invites` (T087) -- a real query against
+ * `invites` and a real `status = 'revoked'` mutation, respectively (see
+ * that module's own doc comment for the full Trap #1/#3/#4 reasoning).
+ * `onResend` still defaults to the fixture-backed `defaultOnResendInvite`
+ * below (#7b) -- this is correct, not incomplete. Tests inject the old
+ * fixture-backed `defaultLoadInvitesTabData`/`defaultOnRevokeInvite`
+ * explicitly through these same seams where fixture behavior is still
+ * useful to exercise, rather than relying on them being the default (T087
+ * Required Worker Output).
+ *
+ * -----------------------------------------------------------------------
+ * 7b. Resend is deliberately NOT wired in T087 -- do not mistake this for
+ *     an oversight.
+ *
+ * `send-invite`'s first call creates the `auth.users` row immediately via
+ * `inviteUserByEmail` (`supabase/functions/send-invite/index.ts`,
+ * read-only reference, not called here); calling it again for the same
+ * email always returns a real 409 `ALREADY_INVITED`. There is, today, no
+ * real resend path -- that requires a separate Edge Function extension not
+ * yet built (P3, a later ED-1 packet). Wiring `onResend` to `send-invite`
+ * now would be actively wrong (every resend would genuinely fail), not
+ * merely premature, so `onResend` keeps its obviously-fake fixture default
+ * (`defaultOnResendInvite`) unchanged, and the Resend button's visible
+ * behavior is untouched -- only its own future data seam is out of scope
+ * here.
  *
  * -----------------------------------------------------------------------
  * 8. Fixture data (constitution item 6: no PII, fabricated names/emails
@@ -299,6 +330,8 @@ import {
   VisuallyHidden,
   VStack,
 } from '@astryxdesign/core';
+// T087 (ED-1 Packet P1): real `loadData`/`onRevoke` defaults -- module doc #7.
+import { loadInvitesTabData, revokeInvite } from '../../lib/supabase/loaders/invites';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets. Module doc #1.
@@ -471,11 +504,20 @@ export function withResendResult(invites: readonly InviteRow[], updated: InviteR
   return invites.map((invite) => (invite.id === updated.id ? updated : invite));
 }
 
+/**
+ * T087: no longer the component's default `loadData` (that's now
+ * `loadInvitesTabData` from `../../lib/supabase/loaders/invites`, module
+ * doc #7) -- kept as a named export, fixture literal unchanged, for tests
+ * (and any future caller) that want fixture behavior explicitly rather
+ * than relying on it being the implicit default.
+ */
 export async function defaultLoadInvitesTabData(): Promise<InvitesTabLoadResult> {
   return { invites: FIXTURE_INVITES };
 }
 
-/** Module doc #6: fabricates a fresh 14-day `expires_at`, resets `status` to `'pending'`. */
+/** Module doc #6/#7b: fabricates a fresh 14-day `expires_at`, resets
+ * `status` to `'pending'`. Still the real `onResend` default (T087
+ * deliberately does not wire this -- see module doc #7b / Trap #2). */
 export async function defaultOnResendInvite(invite: InviteRow): Promise<InviteRow> {
   const now = new Date();
   const expiresAt = new Date(
@@ -485,9 +527,12 @@ export async function defaultOnResendInvite(invite: InviteRow): Promise<InviteRo
 }
 
 /**
- * Module doc #4/#7: fixture default. Represents "the real database update
- * that sets invites.status = 'revoked' happened" -- nothing else. No
- * audit_log write, no audit_log reference, anywhere in this function.
+ * T087: no longer the component's default `onRevoke` (that's now
+ * `revokeInvite` from `../../lib/supabase/loaders/invites`, module doc #7)
+ * -- kept as a named export for tests/future callers that want this no-op
+ * fixture explicitly. Module doc #4/#7: represents "the real database
+ * update that sets invites.status = 'revoked' happened" -- nothing else.
+ * No audit_log write, no audit_log reference, anywhere in this function.
  */
 export async function defaultOnRevokeInvite(): Promise<void> {
   // Deliberately empty: the real, not-yet-wired callback (once a shared
@@ -649,18 +694,28 @@ function buildColumns(args: BuildColumnsArgs): TableColumn<InviteDisplayRow>[] {
 const EMPTY_ROWS: InviteRow[] = [];
 
 export interface InvitesTabProps {
-  /** Injectable data-loading seam (module doc #7). Defaults to fixture data. */
+  /** Injectable data-loading seam (module doc #7). Defaults to a real query
+   * against `invites` (T087, `loadInvitesTabData`). */
   loadData?: LoadInvitesTabDataFn;
-  /** Injectable Resend seam (module doc #6). Defaults to a fixture-backed fake. */
+  /** Injectable Resend seam (module doc #6/#7b). Defaults to a
+   * fixture-backed fake -- deliberately NOT wired to a real Edge Function
+   * call in T087; see module doc #7b for why. */
   onResend?: ResendInviteFn;
-  /** Injectable Revoke seam (module doc #4). Defaults to a fixture-backed fake. */
+  /** Injectable Revoke seam (module doc #4). Defaults to a real
+   * `status = 'revoked'` mutation (T087, `revokeInvite`). */
   onRevoke?: RevokeInviteFn;
 }
 
 export function InvitesTab({
-  loadData = defaultLoadInvitesTabData,
+  loadData = loadInvitesTabData,
+  // T087 (ED-1 Packet P1): deliberately still fixture-backed -- see module
+  // doc #7b (Trap #2). Resend has no real backend path yet: `send-invite`'s
+  // first call already creates the `auth.users` row, so calling it again
+  // for the same email always fails with a real 409 `ALREADY_INVITED`. A
+  // real resend mechanism is P3's job (a separate, not-yet-built Edge
+  // Function extension), not this packet's.
   onResend = defaultOnResendInvite,
-  onRevoke = defaultOnRevokeInvite,
+  onRevoke = revokeInvite,
 }: InvitesTabProps = {}): ReactNode {
   const loadState = useLoadState(loadData, [loadData]);
   const [invites, setInvites] = useState<InviteRow[]>(EMPTY_ROWS);

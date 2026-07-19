@@ -107,13 +107,26 @@
  *    single-student case. Proven for both branches in the test file.
  *
  * -----------------------------------------------------------------------
- * 3. No shared Supabase client wired in (Known Context/Traps #5) --
- *    `onSendInvite: (submission) => Promise<void>` is the injectable seam,
- *    defaulting to `defaultOnSendInvite`, an obviously-fake stub that only
- *    `console.warn`s the payload it would have sent (one real `send-invite`
- *    call per `inviteRequests` entry, in a real caller). Same posture as
- *    every prior content page/dialog (`ScheduleMeetingsDialog.tsx`/T031,
- *    `OutreachList.tsx`/T038, `MeetingsList.tsx`/T030).
+ * 3. T087 (ED-1 Packet P1): `onSendInvite` is now wired to the real
+ *    `send-invite` Edge Function, sequentially, abort-on-first-failure.
+ *
+ * `onSendInvite: (submission) => Promise<void>` is the injectable seam.
+ * `defaultOnSendInvite` below now calls `invokeEdgeFunction<...>('send-invite',
+ * request)` (`../../lib/supabase`, T086's typed Edge Function calling
+ * convention) once per entry in `submission.inviteRequests`, in a plain
+ * sequential `for...of` loop with `await` inside -- deliberately NOT
+ * `Promise.all` (T087 worker packet Known Context/Traps #5): the design
+ * intentionally wants ordered, abort-on-first-failure semantics, and a
+ * bare `for...of`/`await` loop already gives exactly that (the loop stops
+ * calling `invokeEdgeFunction` the instant one call rejects, and that
+ * rejection propagates up through `handleSubmit`'s own `try`/`catch`
+ * unchanged). If invite 1 of 3 succeeds and invite 2 fails, invite 1's row
+ * genuinely exists as `pending` in the database already -- this is a
+ * disclosed, accepted characteristic of the sequential design (there is no
+ * staff-delete-invite UI to roll it back with), not a bug this task fixes.
+ * `submission.relationship` is still collected (module doc #1) but still
+ * has no `send-invite` request field to carry it -- untouched, out of
+ * scope here, same as before T087.
  *
  * -----------------------------------------------------------------------
  * 4. Known Context/Traps #4 -- relationship label is a REAL required field,
@@ -220,6 +233,8 @@ import {
   TextInput,
   Toast,
 } from '@astryxdesign/core';
+// T087 (ED-1 Packet P1): real `send-invite` calling seam -- module doc #3.
+import { invokeEdgeFunction, isSupabaseLoaderError } from '../../lib/supabase';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim shapes of the real columns/contract this dialog's field
@@ -315,13 +330,41 @@ export function buildInviteParentSubmission(
 // Default injectable persistence seam (module doc #3).
 // ---------------------------------------------------------------------------
 
+/**
+ * `send-invite`'s real success response shape (`supabase/functions/
+ * send-invite/index.ts` lines 302-312, read-only reference, not imported --
+ * that file is a Deno Edge Function, not something this Vite bundle can
+ * import): `{ invite: { id, email, role, student_id, status, expires_at,
+ * created_at } }`, snake_case, deliberately NOT the same shape as
+ * `../../lib/supabase`'s shared camelCase `InviteRow` (a different type,
+ * describing a table row, not this function's own response body). Declared
+ * only for `invokeEdgeFunction`'s own generic type parameter below --
+ * `defaultOnSendInvite` never reads any field off the resolved value.
+ */
+interface SendInviteResponse {
+  invite: {
+    id: string;
+    email: string;
+    role: 'parent';
+    student_id: string | null;
+    status: string;
+    expires_at: string;
+    created_at: string;
+  };
+}
+
+/**
+ * T087 (ED-1 Packet P1) -- real send, module doc #3. Sequential,
+ * abort-on-first-failure: a plain `for...of` loop with `await` inside is
+ * already exactly that (never `Promise.all` -- see module doc #3 for the
+ * full reasoning). A failure on request N stops before request N+1 ever
+ * calls `invokeEdgeFunction`, and rethrows unchanged so
+ * `handleSubmit`'s existing `catch` (below) surfaces it via `submitError`.
+ */
 export const defaultOnSendInvite: OnSendInviteFn = async (submission) => {
-  console.warn(
-    '[InviteParentDialog] No Supabase client wired in yet (Known Context/Traps #5) -- this ' +
-      'stub only logs the send-invite request(s) that would have been sent, one per linked ' +
-      'student, plus the collected (currently unplumbed -- see module doc #1) relationship value.',
-    submission,
-  );
+  for (const request of submission.inviteRequests) {
+    await invokeEdgeFunction<SendInviteResponse>('send-invite', request);
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -424,8 +467,19 @@ export function InviteParentDialog({
       // DES-14 (PRD line 210): "Send invite" -> toast "Invite sent to ada@...".
       setToastEmail(sentEmail);
     } catch (error) {
+      // T087 Known Context/Traps #6: `invokeEdgeFunction` rejects with a
+      // plain `SupabaseLoaderError` object (`{ code, message, cause }`),
+      // NOT an `Error` instance -- `isSupabaseLoaderError` is checked FIRST
+      // so its already-DES-16-compliant `.message` (e.g. the exact
+      // `ALREADY_INVITED` copy) is used directly, never replaced with new
+      // hand-authored copy. The plain `Error` branch remains for any other
+      // thrown value (defensive; should not happen against this seam).
       setSubmitError(
-        error instanceof Error ? error.message : 'Something went wrong sending this invite.',
+        isSupabaseLoaderError(error)
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'Something went wrong sending this invite.',
       );
     } finally {
       setIsSubmitting(false);

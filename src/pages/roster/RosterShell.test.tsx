@@ -25,6 +25,21 @@
  * role-login harness every other gated content page's test file in this
  * project already established (see e.g. `ParentsTab.test.tsx`,
  * `AdminToggles.test.tsx`).
+ *
+ * T088: `InvitesTab.tsx`'s default `loadData` was switched (T087) from a
+ * fixture stub to the real Supabase-backed `loadInvitesTabData`
+ * (`../../lib/supabase/loaders/invites`), which correctly rejects in this
+ * test environment (Supabase unconfigured). This file renders
+ * `<RosterShell />` bare -- zero props into `InvitesTab`, matching
+ * `RosterShell.tsx`'s own correct zero-props-per-tab design, a forbidden
+ * file here -- so it cannot inject a fixture through props. Instead it mocks
+ * `loadInvitesTabData` at the module boundary, mirroring the pattern
+ * `InviteParentDialog.test.tsx` already established for `invokeEdgeFunction`
+ * (mock only the one function needed, re-export everything else from the
+ * real module via `importOriginal`). This proves the same thing the two
+ * affected tests always proved -- `RosterShell` genuinely wires in
+ * `InvitesTab`'s real, populated content -- just via an explicit mock
+ * instead of an implicit fixture default.
  */
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -33,6 +48,39 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthUser } from '../../app/guards';
 import { LoginAsDeferred as LoginAs } from '../../test-utils/authHarness';
 import { RosterShell } from './RosterShell';
+import type { InviteRow, InvitesTabLoadResult } from './InvitesTab';
+import { loadInvitesTabData } from '../../lib/supabase/loaders/invites';
+
+// ---------------------------------------------------------------------------
+// T088: mock `loadInvitesTabData` only -- every other
+// `../../lib/supabase/loaders/invites` export (e.g. `revokeInvite`, unused
+// by these tests but still real) is re-exported from the real module via
+// `importOriginal`, same pattern `InviteParentDialog.test.tsx` established
+// for `../../lib/supabase`'s `invokeEdgeFunction`.
+// ---------------------------------------------------------------------------
+vi.mock('../../lib/supabase/loaders/invites', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/supabase/loaders/invites')>();
+  return { ...actual, loadInvitesTabData: vi.fn() };
+});
+
+const mockedLoadInvitesTabData = vi.mocked(loadInvitesTabData);
+
+// Small, deterministic fixture (same row shape as `InvitesTab.tsx`'s own
+// `FIXTURE_INVITES`, not imported since that constant isn't exported) --
+// covers exactly what these tests assert: the "briar" pending invite email.
+const MOCK_INVITE_ROWS: readonly InviteRow[] = [
+  {
+    id: 'invite-briar-pending',
+    email: 'briar.holloway.invite@example.com',
+    role: 'student',
+    studentId: 'student-briar-holloway',
+    status: 'pending',
+    createdAt: '2026-07-10T09:00:00.000Z',
+    expiresAt: '2026-07-24T09:00:00.000Z',
+  },
+];
+
+const MOCK_INVITES_RESULT: InvitesTabLoadResult = { invites: MOCK_INVITE_ROWS };
 
 // ---------------------------------------------------------------------------
 // jsdom gap: `AlertDialog`/`Dialog` render a native `<dialog>` and call
@@ -137,6 +185,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
+  mockedLoadInvitesTabData.mockReset().mockResolvedValue(MOCK_INVITES_RESULT);
 });
 
 afterEach(() => {

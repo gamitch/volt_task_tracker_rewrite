@@ -3036,3 +3036,71 @@ active session before invoking — correct for every current call site (`checkin
 `send-invite`, `send-reminders`, all auth-required), but a future packet needing to
 call a public/token-authenticated function (e.g. `ics`) through this same helper would
 need an opt-out. Noted for later ED-1 packet authors, not filed as a task.
+[2026-07-19T23:50:33Z] Worker finished. Checker required before completion.
+
+## T087 — ED-1 packet P1: real invites load/send/revoke
+
+**Result:** PASS (1st attempt, NIT — one unrelated pre-existing finding)
+
+**This packet unblocks the T052 production-email smoke test.** New
+`src/lib/supabase/loaders/invites.ts`: `loadInvitesTabData` (real `invites` query via
+`createLoader`, `.select('*').order('created_at', {ascending:false})`, null→`{invites:
+[]}` bridge) and `revokeInvite` (real `status='revoked'` mutation via `runMutation`,
+zero `audit_log` writes — the trigger handles that). `InvitesTab.tsx`'s `loadData`/
+`onRevoke` defaults wired to these. `onResend` deliberately left fixture-backed with an
+explanatory comment — `send-invite`'s first call creates the `auth.users` row
+immediately, so a second call for the same email always 409s; real resend needs a
+separate Edge Function extension (P3, not yet built). `InviteParentDialog.tsx`'s
+`onSendInvite` now calls `invokeEdgeFunction` once per selected student via a genuine
+sequential `for...of`/`await` loop (not `Promise.all`), aborting and rethrowing on the
+first failure — a partial-success state (some invites sent, one failed) is disclosed as
+accepted, not silently compensated (no staff-delete-invite UI exists to roll it back).
+
+**Trap #1 resolved:** kept `InvitesTab.tsx`'s own local `InviteRow`/`ProfileRole`/
+`InviteStatus` types rather than switching to the shared ones from T086's `types.ts`
+(the shared type carries an extra `invitedBy` field this page never uses) — independently
+re-verified value-identical to the shared types today, no drift.
+
+**Real bug found and fixed, in-scope:** `InviteParentDialog`'s error handler checked
+`error instanceof Error` before checking for the real `SupabaseLoaderError` shape (a
+plain object), which would have silently masked real DES-16 messages (e.g.
+`ALREADY_INVITED`) behind a generic fallback. Fixed by checking
+`isSupabaseLoaderError(error)` first.
+
+**Checker verification:** confirmed the loader's query/mutation shapes against the real
+`invites` schema, confirmed zero `audit_log` writes, confirmed `onResend` is genuinely
+untouched (comment-only diff), independently re-verified Trap #1's type-identity claim,
+confirmed the send loop is genuinely sequential (held one call pending, flushed
+microtasks, asserted exactly one call before resolving — disproving `Promise.all`),
+confirmed the error-handling bug via `git show HEAD` (real, pre-existing) and judged the
+fix correctly ordered and in-scope. Ran the full suite independently: 961/961 (the 2
+disclosed `RosterShell.test.tsx` failures T087 itself left are resolved by T088's
+separate fix, confirmed already present in the shared working tree).
+
+**Findings (non-blocking, pre-existing):** `npm run format:check` fails on
+`src/pages/meetings/Kiosk.tsx` — confirmed unmodified by T087, already broken at `HEAD`.
+Recommend a trivial standalone follow-up to `prettier --write` it.
+
+## T088 — Fix `RosterShell.test.tsx` regression from T087's real-data wiring
+
+**Result:** PASS (1st attempt, clean)
+
+Two tests in `RosterShell.test.tsx` (T085's file) asserted `InvitesTab`'s OLD
+fixture-backed default text — a direct, foreseen consequence of T087 correctly making
+that default a real Supabase query. Fixed entirely within the test file: added a
+`vi.mock('../../lib/supabase/loaders/invites', ...)` mocking only `loadInvitesTabData`
+(re-exporting `revokeInvite` and everything else via `importOriginal`), mirroring the
+exact pattern already established in `InviteParentDialog.test.tsx` for
+`invokeEdgeFunction`. Added a small local fixture matching `InvitesTab.tsx`'s own
+(non-exported) `FIXTURE_INVITES` row shape, wired into the file's `beforeEach` uniformly
+(not just the 2 originally-failing tests) since other tests in the file also visit the
+Invites tab and would otherwise hit an unmocked `vi.fn()`. Both original assertions
+preserved verbatim, not loosened. `RosterShell.tsx` itself genuinely untouched.
+
+**Checker verification:** confirmed the mock pattern matches `InviteParentDialog.test.tsx`'s
+established style, confirmed the fixture shape matches `InvitesTab.tsx`'s local
+`InviteRow` type exactly, confirmed the `beforeEach` wiring doesn't mask any other test's
+real behavior, confirmed both target assertions unchanged from their original strings,
+confirmed scope containment (only this one file, `+49/-0` lines). Full suite: 961/961.
+Clean typecheck/lint/build; format:check clean for the changed file (the pre-existing
+`Kiosk.tsx` issue correctly left out of scope, matching T087's own disclosure).

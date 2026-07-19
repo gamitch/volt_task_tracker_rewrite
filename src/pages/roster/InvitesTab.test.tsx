@@ -16,9 +16,22 @@
  * No `@testing-library/react` is installed in this repo (confirmed via
  * `package.json`) -- these tests use the same raw `createRoot`/`act` pattern
  * every prior content-page test file already established.
+ *
+ * T087 (ED-1 Packet P1) additions: the `loadInvitesTabData (T087 real load)`
+ * / `revokeInvite (T087 real mutation)` describe blocks below prove the new
+ * default `loadData`/`onRevoke` seams (`../../lib/supabase/loaders/invites`)
+ * genuinely query/mutate `invites` with the right shape, against a stubbed
+ * `SupabaseClient` (same DI pattern `src/lib/supabase/loader.test.ts`
+ * already established) -- zero real network calls anywhere in this file.
+ * Every pre-existing describe block below still passes its own explicit
+ * `loadData`/`onResend`/`onRevoke` fixture through the component's props
+ * (per this task's Known Context/Traps #7 -- "the default changes, the
+ * fixture literal doesn't"), so none of them depend on which function is
+ * the component's implicit default.
  */
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildDisplayRows,
@@ -31,6 +44,7 @@ import {
   type InviteRow,
   type InvitesTabLoadResult,
 } from './InvitesTab';
+import { makeLoadInvitesTabData, makeRevokeInvite } from '../../lib/supabase/loaders/invites';
 
 // ---------------------------------------------------------------------------
 // jsdom gap: `AlertDialog` renders a native `<dialog>` and calls
@@ -479,5 +493,157 @@ describe('<InvitesTab /> Revoke flow (module doc #4 -- trg_audit_invite_revocati
     expect(
       document.querySelector('button[aria-label="Actions for nova.abara@example.com"]'),
     ).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T087 (ED-1 Packet P1): real `loadData` seam --
+// `../../lib/supabase/loaders/invites`'s `makeLoadInvitesTabData`. Stubbed
+// `SupabaseClient` only, same DI pattern as `src/lib/supabase/loader.test.ts`
+// -- zero real network calls.
+// ---------------------------------------------------------------------------
+
+/** Minimal fake `SupabaseClient` supporting exactly the chain
+ * `client.from('invites').select('*').order('created_at', {...})` used --
+ * nothing else on the client is ever touched by `queryInvites`. */
+function makeFakeSelectClient(result: { data: unknown; error: unknown }): {
+  client: SupabaseClient;
+  fromSpy: ReturnType<typeof vi.fn>;
+  selectSpy: ReturnType<typeof vi.fn>;
+  orderSpy: ReturnType<typeof vi.fn>;
+} {
+  const orderSpy = vi.fn().mockResolvedValue(result);
+  const selectSpy = vi.fn(() => ({ order: orderSpy }));
+  const fromSpy = vi.fn(() => ({ select: selectSpy }));
+  const client = { from: fromSpy } as unknown as SupabaseClient;
+  return { client, fromSpy, selectSpy, orderSpy };
+}
+
+describe('loadInvitesTabData (T087 real load, packet Known Context/Traps #3)', () => {
+  it('queries invites ordered by created_at desc and maps snake_case DB rows to camelCase InviteRow', async () => {
+    const dbRows = [
+      {
+        id: 'invite-db-1',
+        email: 'db.row@example.com',
+        role: 'student',
+        student_id: 'student-db-1',
+        invited_by: 'profile-staff-1',
+        status: 'pending',
+        expires_at: '2026-08-01T00:00:00.000Z',
+        created_at: '2026-07-01T00:00:00.000Z',
+      },
+    ];
+    const { client, fromSpy, selectSpy, orderSpy } = makeFakeSelectClient({
+      data: dbRows,
+      error: null,
+    });
+    const load = makeLoadInvitesTabData(() => client);
+
+    const result = await load();
+
+    expect(fromSpy).toHaveBeenCalledWith('invites');
+    expect(selectSpy).toHaveBeenCalledWith('*');
+    expect(orderSpy).toHaveBeenCalledWith('created_at', { ascending: false });
+    // invited_by is deliberately dropped (Trap #1 decision) -- everything
+    // else is a 1:1 camelCase rename.
+    const expected: InvitesTabLoadResult = {
+      invites: [
+        {
+          id: 'invite-db-1',
+          email: 'db.row@example.com',
+          role: 'student',
+          studentId: 'student-db-1',
+          status: 'pending',
+          expiresAt: '2026-08-01T00:00:00.000Z',
+          createdAt: '2026-07-01T00:00:00.000Z',
+        },
+      ],
+    };
+    expect(result).toEqual(expected);
+  });
+
+  it('bridges the "no rows" (data: null, error: null) case to an empty invites array, not a crash', async () => {
+    const { client } = makeFakeSelectClient({ data: null, error: null });
+    const load = makeLoadInvitesTabData(() => client);
+
+    const result = await load();
+
+    expect(result).toEqual({ invites: [] });
+  });
+
+  it('rejects with the real SupabaseLoaderError on a genuine query error -- no fixture fallback', async () => {
+    const { client } = makeFakeSelectClient({
+      data: null,
+      error: { message: 'permission denied for table invites', code: '42501' },
+    });
+    const load = makeLoadInvitesTabData(() => client);
+
+    await expect(load()).rejects.toMatchObject({ code: '42501', message: expect.any(String) });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T087 (ED-1 Packet P1): real `onRevoke` seam --
+// `../../lib/supabase/loaders/invites`'s `makeRevokeInvite`.
+// ---------------------------------------------------------------------------
+
+/** Minimal fake `SupabaseClient` supporting exactly the chain
+ * `client.from('invites').update({...}).eq('id', ...)` used. */
+function makeFakeUpdateClient(result: { data: unknown; error: unknown }): {
+  client: SupabaseClient;
+  fromSpy: ReturnType<typeof vi.fn>;
+  updateSpy: ReturnType<typeof vi.fn>;
+  eqSpy: ReturnType<typeof vi.fn>;
+} {
+  const eqSpy = vi.fn().mockResolvedValue(result);
+  const updateSpy = vi.fn(() => ({ eq: eqSpy }));
+  const fromSpy = vi.fn(() => ({ update: updateSpy }));
+  const client = { from: fromSpy } as unknown as SupabaseClient;
+  return { client, fromSpy, updateSpy, eqSpy };
+}
+
+const REVOKE_TARGET: InviteRow = {
+  id: 'invite-to-revoke',
+  email: 'revoke.me@example.com',
+  role: 'parent',
+  studentId: null,
+  status: 'pending',
+  expiresAt: '2026-08-01T00:00:00.000Z',
+  createdAt: '2026-07-01T00:00:00.000Z',
+};
+
+describe('revokeInvite (T087 real mutation, packet Known Context/Traps #4)', () => {
+  it('calls invites.update({ status: "revoked" }).eq("id", invite.id) with exactly the targeted id', async () => {
+    const { client, fromSpy, updateSpy, eqSpy } = makeFakeUpdateClient({
+      data: null,
+      error: null,
+    });
+    const revoke = makeRevokeInvite(() => client);
+
+    await revoke(REVOKE_TARGET);
+
+    expect(fromSpy).toHaveBeenCalledWith('invites');
+    expect(updateSpy).toHaveBeenCalledWith({ status: 'revoked' });
+    expect(eqSpy).toHaveBeenCalledWith('id', 'invite-to-revoke');
+  });
+
+  it('resolves undefined (no return payload) on success', async () => {
+    const { client } = makeFakeUpdateClient({ data: null, error: null });
+    const revoke = makeRevokeInvite(() => client);
+
+    await expect(revoke(REVOKE_TARGET)).resolves.toBeUndefined();
+  });
+
+  it('rejects with the real SupabaseLoaderError on a genuine mutation error', async () => {
+    const { client } = makeFakeUpdateClient({
+      data: null,
+      error: { message: 'permission denied for table invites', code: '42501' },
+    });
+    const revoke = makeRevokeInvite(() => client);
+
+    await expect(revoke(REVOKE_TARGET)).rejects.toMatchObject({
+      code: '42501',
+      message: expect.any(String),
+    });
   });
 });
