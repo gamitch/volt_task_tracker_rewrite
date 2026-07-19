@@ -958,3 +958,5 @@ consistency-strip placeholder), all four DES-12 states per role variant.
 
 Full packets archived at `docs/swarm/archive/T030-worker-packet.md` and
 `docs/swarm/archive/T030-checker-packet.md`. Unblocks T031, T037.
+[2026-07-19T04:37:45Z] Worker finished. Checker required before completion.
+[2026-07-19T04:39:45Z] Worker finished. Checker required before completion.
