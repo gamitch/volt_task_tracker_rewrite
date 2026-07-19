@@ -1359,3 +1359,30 @@ Full packets archived at `docs/swarm/archive/T024-worker-packet.md` and
 `docs/swarm/archive/T024-checker-packet.md`.
 [2026-07-19T06:58:15Z] Worker finished. Checker required before completion.
 [2026-07-19T06:58:16Z] Worker finished. Checker required before completion.
+
+## T044 — Leaderboard (OUT-08)
+
+**Result: PASS (1st attempt). Severity: NIT.**
+
+Worker built `Leaderboard.tsx`: top-10-by-season-hours, sourced from `v_student_hours` only, with
+BLOCKER-class SEC-04/ROS-08 name-format enforcement, and a real evidence-driven reversal of its own
+initial guess about the privacy toggle's OFF-state semantics.
+
+**Checker's independent verification (checker-reviewer):**
+- **BLOCKER-class name-format check reproduced with `innerHTML`, not just visible text** — a name
+  leaking into an `alt`/`title`/`data-*` attribute would have passed a naive text-only check but
+  still have been a real violation; confirmed genuinely absent by both source read and its own full
+  test run.
+- Constitution item 3 re-verified: zero hits on `hours_override`/`check_in_at`/`check_out_at`
+  outside comments; `topStudentsByHours` confirmed a pure filter→sort→slice over an already-computed
+  value.
+- **Toggle-OFF semantics reversal confirmed correct**: read T028's already-Passed `AdminToggles.tsx`
+  directly and verified its real `Switch` description genuinely states OFF means fully anonymized
+  (not full names) — the worker's mid-implementation course-correction based on this real evidence
+  prevented what would have been a genuine privacy regression had it stuck with its own packet's
+  original, unconfirmed guess.
+- Zero role-gating confirmed by source read (no `useAuth`/`RequireRole` anywhere), matching OUT-08's
+  "all roles" requirement.
+
+Full packets archived at `docs/swarm/archive/T044-worker-packet.md` and
+`docs/swarm/archive/T044-checker-packet.md`.
