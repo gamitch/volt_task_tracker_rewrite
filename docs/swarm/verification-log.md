@@ -2350,3 +2350,4 @@ for this task; correctly flagged as an observation, not fixed.
   before commit, not part of either agent's actual diff.
 
 **11 of 12 routes now genuinely wired to real components. Only `/` remains — T075's job.**
+[2026-07-19T14:05:15Z] Worker finished. Checker required before completion.
