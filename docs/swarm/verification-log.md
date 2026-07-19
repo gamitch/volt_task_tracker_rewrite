@@ -1866,3 +1866,5 @@ plain Google Maps link, Copy link, and disclosed Edit/Cancel stubs.
 
 Full packets archived at `docs/swarm/archive/T041-worker-packet.md` and
 `docs/swarm/archive/T041-checker-packet.md`.
+[2026-07-19T08:40:50Z] Worker finished. Checker required before completion.
+[2026-07-19T08:43:20Z] Worker finished. Checker required before completion.
