@@ -81,7 +81,7 @@ Epic dependency order (PRD Section 13): **E1 → E2 → E3 → (E4, E5, E6 paral
 | T053 | E9 | Coach/Admin Home (HOME-01/04) | worker-implementer | checker-accessibility | T030,T038,T013 | 0 | Blocked | None | No |
 | T054 | E9 | Student Home (HOME-02) | worker-implementer | checker-accessibility | T030,T032,T038,T013 | 0 | Blocked | None | No |
 | T055 | E9 | Parent Home (HOME-03) | worker-implementer | checker-accessibility | T038,T037,T013 | 0 | Blocked | None | No |
-| T056 | E9 | `/reports` shell + Participation tab | worker-implementer | checker-accessibility | T013,T014 | 0 | In Progress | Dispatched 2026-07-19 to worker-implementer per `docs/swarm/active/T056-worker-packet.md`. Awaiting worker output. | No |
+| T056 | E9 | `/reports` shell + Participation tab | worker-implementer | checker-accessibility | T013,T014 | 0 | In Progress | Worker done (`6483b7b`), claims zero TS re-derivation of metric formula + correct below-70% strict-`<` boundary, flags RPT-06 router-level gap + shared Supabase client gaps. Checker dispatched per `docs/swarm/active/T056-checker-packet.md`. | No |
 | T057 | E9 | Hours tab (RPT-03) | worker-implementer | checker-reviewer | T056,T013 | 0 | Blocked | None | No |
 | T058 | E9 | Events tab (RPT-04) | worker-implementer | checker-reviewer | T056 | 0 | Blocked | None | No |
 | T059 | E9 | CSV exports (RPT-05/06) | worker-implementer | checker-tests | T057,T058,T056 | 0 | Blocked | None | No |
