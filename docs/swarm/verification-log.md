@@ -2147,3 +2147,62 @@ floating-ui positioning — not resolvable via static analysis, flagged rather t
 Full worker packet archived at `docs/swarm/archive/T068-worker-packet.md`. No separate
 checker-packet file exists for this audit task (Allowed Files: None; checker's full findings are
 recorded here).
+[2026-07-19T12:05:42Z] Worker finished. Checker required before completion.
+
+## T067 — Accessibility sweep, all screens, both modes (NFR-07/DES-17), Epic E11
+
+**Result: PASS. Severity: MINOR.**
+
+Audit-only task (zero Allowed Files). Worker read `verification-log.md` in full first per the
+packet's instruction, re-confirmed every already-disclosed accessibility finding (all still
+accurate, nothing regressed, nothing silently fixed), ran the full 864/864 test suite plus
+typecheck/lint/build clean, and confirmed D005's dark-mode contrast fix still holds by rebuilding
+`dist/assets/theme.css` fresh.
+
+**No BLOCKER-class keyboard-path failures on any core flow** (login, live check-in console, kiosk,
+every dialog with a primary confirm action, every list page's row-level actions) — all confirmed
+backed by real Astryx components (native `<dialog>`, roving-tabindex, `role="radiogroup"`), not
+hand-rolled. `aria-live="polite"` confirmed present and correctly placed on both the live
+check-in tally (`LiveConsole.tsx`) and kiosk view.
+
+**Two new MINOR findings from cross-screen comparison (the audit's specific value-add):**
+- **NEW-1**: `EmptyState` heading-level skips (missing `headingLevel`, defaulting to h3 as a
+  direct sibling of a page's h1) are far more widespread than the 4 files previously named across
+  individual task checkers — at least 13 files / ~19 render branches, including on
+  `LiveConsole.tsx` (the most operationally critical screen) and `OutreachDetail.tsx`'s `notFound`
+  branch, which has zero h1 anywhere in that render path (worse than a skip). Consolidated
+  follow-up recommended (single sweep task) rather than ~19 one-line PRs, plus extracting a shared
+  `SignInRequiredState` component for the 5 duplicated "Sign in to view X" instances.
+- **NEW-2**: `CoachHome.tsx`'s event-type Badge color mapping (`meeting: 'blue', outreach: 'purple',
+  competition: 'teal'`) is inconsistent with `CalendarPage.tsx`/`EventsTab.tsx` (both correctly
+  `meeting: 'purple', outreach: 'blue', competition: 'orange'` per DES-04's PRD-cited palette) — a
+  real cross-screen consistency defect, not a WCAG contrast failure (each Badge also carries a
+  text label). One-line-per-row fix.
+
+**Checker's independent verification (checker-accessibility):**
+- Independently re-derived D005's contrast fix, including verifying the CSS cascade-layer ordering
+  (`@layer reset, astryx-base, app`) so the app-layer override genuinely wins, not just present in
+  text.
+- Independently confirmed the DIGIT_KEY_TO_STATUS roll-call keyboard map and roving-tabindex
+  pattern in `LiveConsole.tsx` directly.
+- Spot-checked 7 of 11 NEW-1 citations directly against source — all confirmed accurate.
+- Independently confirmed NEW-2's color mismatch across all three files, citing `CalendarPage.tsx`'s
+  own module doc as the authoritative DES-04 source.
+- One MINOR correction: the worker's NEW-3 "zero hex-color hits anywhere in src/" claim was
+  over-broad — `src/emails/**` and `src/theme/theme.css`/`volt.ts` (the token-definition layer)
+  legitimately contain many hex colors outside the screens/pages audit scope. The underlying
+  substantive finding (zero hardcoded hex in `src/pages/`) is correct; only the phrasing was
+  imprecise. Does not change the verdict.
+- Independently ran a fresh 864/864 test suite, typecheck, lint, and build — all confirmed clean.
+- Confirmed no stray files.
+
+**Follow-up candidates routed, not fixed by this task** (per Allowed Files: None):
+- Consolidated EmptyState heading-level sweep (~19 locations) — see NEW-1 above.
+- `CoachHome.tsx:1192-1194` Badge variant map correction — see NEW-2 above.
+- `TopNavHeading`'s plain `<a>` wordmark (T007 NIT, still present, growing blast radius as the app
+  has grown to ~9 authenticated epics all sharing this one chrome element) — re-flagged for
+  reconsideration, not reclassified by this audit.
+
+Full worker packet archived at `docs/swarm/archive/T067-worker-packet.md`. No separate
+checker-packet file exists for this audit task (Allowed Files: None; checker's full findings are
+recorded here).
