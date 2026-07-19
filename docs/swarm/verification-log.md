@@ -1174,3 +1174,42 @@ Full packets archived at `docs/swarm/archive/T053-worker-packet.md` and
 [2026-07-19T06:03:54Z] Worker finished. Checker required before completion.
 [2026-07-19T06:07:27Z] Worker finished. Checker required before completion.
 [2026-07-19T06:12:20Z] Worker finished. Checker required before completion.
+
+## T033 — Live console `/meetings/live/:sessionId` (MTG-05) — the single most operationally critical screen in the app
+
+**Result: PASS (attempt 2). Attempt 1 was a legitimate FAIL, MAJOR — not a false alarm.**
+
+Worker built `LiveConsole.tsx`: two-pane layout (QR panel + roster), a BLOCKER-class DES-17 keyboard
+path, MTG-11 coach-override precedence, MTG-12 coach/admin-only excused gating, and NFR-05's
+Realtime-consumption logic (against a fixture/honest-stub transport, per the established "no shared
+client wired in yet" posture).
+
+**Checker's independent verification, attempt 1 (checker-accessibility) — traced to the DOM/library-
+source level, not just trusted from the test suite:**
+- **DES-17 keyboard path confirmed genuinely working**: read the exact keydown-handling source and
+  the installed Astryx `ListItem`/`Item` library source directly — `focusRow()` calls a real
+  imperative `.focus()` on the actual DOM `<li>`, not merely an internal state toggle. Digit keys
+  1-4 are bound on the row itself, never requiring `SegmentedControl` focus. Arrow navigation
+  correctly scoped to only the currently-filtered/visible rows, no stale-index bug.
+- **MTG-11 precedence re-derived independently**: a single `mergeAttendanceUpdate` function used by
+  both the coach-click path and the Realtime-consumption path — traced every branch, confirmed a
+  `method: 'coach'` record is structurally unable to be overwritten by any non-coach update.
+- **MTG-12 confirmed correct**: the Excused option is genuinely absent from the DOM (a JSX
+  conditional, not a disabled-but-present control) for non-coach/admin roles, and the `3` keyboard
+  shortcut agrees via the same shared guard.
+- **One real, independently-found constitution item 5 violation**: the literal string
+  `CHECKIN_HMAC_SECRET` appeared in a module-doc comment, directly contradicting an adjacent
+  sentence claiming the file never types it. Not in the shipped bundle, but the rule (per the
+  established D005/T034-precedent standard) is "must never appear in `src/`, no exceptions." This is
+  what failed attempt 1 at MAJOR severity — a genuine, real defect, correctly caught.
+
+**Attempt 2 rework and re-verification**: worker made a narrow, single-comment fix (replacing the
+literal secret name with the file's own existing "server-only signing secret" phrasing). Checker
+independently confirmed via direct diff read that the fix was genuinely narrow (only that one
+comment changed, zero logic touched), re-ran the secret-name grep (zero hits in `src/`), confirmed
+the adjacent claim is now accurate, and re-ran the full test suite (276/276, no regressions) —
+DES-17/MTG-11/MTG-12 were not re-derived from scratch since the diff conclusively showed they were
+untouched.
+
+Full packets archived at `docs/swarm/archive/T033-worker-packet.md` and
+`docs/swarm/archive/T033-checker-packet.md`. Unblocks T036 (End meeting flow).
