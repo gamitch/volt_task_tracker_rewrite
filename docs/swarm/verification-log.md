@@ -1788,3 +1788,27 @@ Passed.
 
 Full packets archived at `docs/swarm/archive/T046-worker-packet.md` and
 `docs/swarm/archive/T046-checker-packet.md`.
+
+## T043 — Parent RSVP-on-behalf (OUT-06)
+
+**Result: PASS (1st attempt). Severity: NIT.**
+
+Worker built `ParentRsvp.tsx`: a single-student-scoped parent RSVP control writing `responded_by`
+as the acting parent's real profile id, with a `guardian_links`-derived read-side attribution.
+
+**Checker's independent verification (checker-reviewer):**
+- **Central safety check**: grep-confirmed zero literal `'parent'` string writes to `responded_by`
+  anywhere — every write path uses the real `currentUserProfileId` prop.
+- Confirmed `resolveRsvpResponderAttribution` genuinely cross-references the passed
+  `guardianLinks` on the real `(parentProfileId, studentId)` composite, not an inference from
+  `responded_by`'s value alone; the `'unrecognized'` fallback (matches neither the student nor any
+  guardian) correctly renders only the disclosed generic copy, never a fabricated relationship
+  label — proven by tests confirming neither "Mom" nor "Dad" appears in that case.
+- **Independently confirmed the reimplemented `useSessionRsvpLock` did NOT reintroduce T040's int32
+  `setTimeout` overflow bug** — the `msUntilLock > 2147483647` guard is present byte-for-byte,
+  matching `RsvpControl.tsx`'s hard-won fix exactly.
+- Single-student scoping judged the correct boundary given the narrow one-file Allowed Files.
+- 22/22 own tests, typecheck/lint/build clean.
+
+Full packets archived at `docs/swarm/archive/T043-worker-packet.md` and
+`docs/swarm/archive/T043-checker-packet.md`.
