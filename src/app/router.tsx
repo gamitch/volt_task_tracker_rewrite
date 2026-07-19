@@ -6,10 +6,13 @@
  * This module deliberately exports the `<Routes>` tree only (`AppRoutes`),
  * not a `<BrowserRouter>`. Wiring `AppRoutes` (and `AuthProvider` from
  * `./guards`) into `main.tsx` / `App.tsx` is T006's job (AppShell + TopNav).
- * Every page component below is a placeholder -- real page implementations
- * land in their own future tasks -- except `/login`, whose real
- * `LoginPage` component (`../pages/login`, built by T016) is imported and
- * wired in below (T016a).
+ *
+ * T074 wired 11 of the 12 remaining routes below to their real,
+ * already-Passed page components (every route's own module doc documents
+ * why it needs the guard nesting it gets here -- see each import's
+ * originating file for that reasoning; not re-derived in this file). Only
+ * `/` (the dashboard) is still a placeholder -- it needs a small new
+ * role-dispatch component, which is T075's job, not T074's.
  *
  * Route protection matrix (NAV-06):
  *   - `/login`, `/accept-invite`: public (these ARE the auth entry points).
@@ -17,74 +20,42 @@
  *     Section 7's route table explicitly assigns this route the role
  *     `coach/admin` (row: `| /kiosk/:sessionId | coach/admin | fullscreen |
  *     QR, tally | MTG-07 |`), and SEC-04 ("All students are minors: no
- *     public pages...") rules out leaving it unauthenticated. Guarded with
- *     `RequireAuth` + `RequireRole(['coach', 'admin'])`, same nesting
- *     pattern as `/settings` below.
- *   - Everything else: requires authentication (`RequireAuth`).
- *   - `/settings` additionally requires the `admin` role (`RequireRole`) as
- *     an illustrative placeholder of the NAV-06 role-guard mechanism -- the
- *     full role-per-route matrix was not in the excerpts available to this
- *     task and should be reconciled against the full PRD RBAC section
- *     before this is treated as final.
+ *     public pages...") rules out leaving it unauthenticated. `KioskPage`
+ *     does not self-gate (per its own module doc), so this route keeps the
+ *     external `RequireAuth` + `RequireRole(['coach', 'admin'])` wrap.
+ *   - `/meetings/live/:sessionId`, `/roster`, `/reports`: protected by
+ *     `RequireAuth` only at this router level -- `LiveConsolePage`,
+ *     `RosterShell`, and `ReportsShell` each already nest `guards.tsx`'s
+ *     `RequireRole(['coach', 'admin'])` internally (per their own module
+ *     docs), so no external `RequireRole` is added here (would double-gate).
+ *   - Everything else: requires authentication (`RequireAuth`) only.
+ *   - `/settings`: `RequireAuth` only (T074 bug fix -- PRD Section 7 lists
+ *     this route's role as `all`, and the real `SettingsPage` has no
+ *     internal role-gating; the previous `RequireRole(['admin'])` wrap here
+ *     was incorrect and has been removed).
  */
 import type { ReactNode } from 'react';
-import { Route, Routes, useParams } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
 import { RequireAuth, RequireRole } from './guards';
 import { LoginPage } from '../pages/login';
+import { AcceptInvitePage } from '../pages/accept-invite';
+import { MeetingsList } from '../pages/meetings/MeetingsList';
+import LiveConsolePage from '../pages/meetings/LiveConsole';
+import { KioskPage } from '../pages/meetings/Kiosk';
+import { CheckinResult } from '../pages/checkin/CheckinResult';
+import { OutreachList } from '../pages/outreach/OutreachList';
+import { OutreachDetail } from '../pages/outreach/OutreachDetail';
+import { CalendarPage } from '../pages/calendar/CalendarPage';
+import { RosterShell } from '../pages/roster/RosterShell';
+import { ReportsShell } from '../pages/reports/ReportsShell';
+import { SettingsPage } from '../pages/settings/SettingsPage';
 
 // ---------------------------------------------------------------------------
-// Placeholder page components (one per PRD Section 7 route)
+// Placeholder page components (routes not yet wired to a real component)
 // ---------------------------------------------------------------------------
-
-function AcceptInvitePage(): ReactNode {
-  return <div>Accept Invite (placeholder)</div>;
-}
 
 function DashboardPage(): ReactNode {
   return <div>Dashboard (placeholder)</div>;
-}
-
-function MeetingsPage(): ReactNode {
-  return <div>Meetings (placeholder)</div>;
-}
-
-function MeetingLiveSessionPage(): ReactNode {
-  const { sessionId } = useParams<{ sessionId: string }>();
-  return <div>Live Meeting Session (placeholder) - sessionId: {sessionId}</div>;
-}
-
-function KioskSessionPage(): ReactNode {
-  const { sessionId } = useParams<{ sessionId: string }>();
-  return <div>Kiosk (placeholder) - sessionId: {sessionId}</div>;
-}
-
-function CheckInPage(): ReactNode {
-  return <div>Check-in (placeholder)</div>;
-}
-
-function OutreachPage(): ReactNode {
-  return <div>Outreach (placeholder)</div>;
-}
-
-function OutreachEventPage(): ReactNode {
-  const { eventId } = useParams<{ eventId: string }>();
-  return <div>Outreach Event (placeholder) - eventId: {eventId}</div>;
-}
-
-function CalendarPage(): ReactNode {
-  return <div>Calendar (placeholder)</div>;
-}
-
-function RosterPage(): ReactNode {
-  return <div>Roster (placeholder)</div>;
-}
-
-function ReportsPage(): ReactNode {
-  return <div>Reports (placeholder)</div>;
-}
-
-function SettingsPage(): ReactNode {
-  return <div>Settings (placeholder)</div>;
 }
 
 // ---------------------------------------------------------------------------
@@ -129,7 +100,7 @@ export function AppRoutes(): ReactNode {
         element={
           <RequireAuth>
             <RequireRole allowedRoles={['coach', 'admin']}>
-              <KioskSessionPage />
+              <KioskPage />
             </RequireRole>
           </RequireAuth>
         }
@@ -148,7 +119,7 @@ export function AppRoutes(): ReactNode {
         path="/meetings"
         element={
           <RequireAuth>
-            <MeetingsPage />
+            <MeetingsList />
           </RequireAuth>
         }
       />
@@ -156,7 +127,7 @@ export function AppRoutes(): ReactNode {
         path="/meetings/live/:sessionId"
         element={
           <RequireAuth>
-            <MeetingLiveSessionPage />
+            <LiveConsolePage />
           </RequireAuth>
         }
       />
@@ -164,7 +135,7 @@ export function AppRoutes(): ReactNode {
         path="/checkin"
         element={
           <RequireAuth>
-            <CheckInPage />
+            <CheckinResult />
           </RequireAuth>
         }
       />
@@ -172,7 +143,7 @@ export function AppRoutes(): ReactNode {
         path="/outreach"
         element={
           <RequireAuth>
-            <OutreachPage />
+            <OutreachList />
           </RequireAuth>
         }
       />
@@ -180,7 +151,7 @@ export function AppRoutes(): ReactNode {
         path="/outreach/:eventId"
         element={
           <RequireAuth>
-            <OutreachEventPage />
+            <OutreachDetail />
           </RequireAuth>
         }
       />
@@ -196,7 +167,7 @@ export function AppRoutes(): ReactNode {
         path="/roster"
         element={
           <RequireAuth>
-            <RosterPage />
+            <RosterShell />
           </RequireAuth>
         }
       />
@@ -204,19 +175,17 @@ export function AppRoutes(): ReactNode {
         path="/reports"
         element={
           <RequireAuth>
-            <ReportsPage />
+            <ReportsShell />
           </RequireAuth>
         }
       />
 
-      {/* Protected + role-guarded (illustrative placeholder -- see module doc). */}
+      {/* Protected -- T074: `RequireRole(['admin'])` removed, see module doc. */}
       <Route
         path="/settings"
         element={
           <RequireAuth>
-            <RequireRole allowedRoles={['admin']}>
-              <SettingsPage />
-            </RequireRole>
+            <SettingsPage />
           </RequireAuth>
         }
       />

@@ -2298,3 +2298,55 @@ with no other content touched.
 router-wiring series** (T074 batched route swaps, T075 role dispatchers for `/` and
 `/meetings/live/:sessionId`, and T073b real Supabase `AuthProvider` wiring — none yet created).
 [2026-07-19T13:36:40Z] Worker finished. Checker required before completion.
+[2026-07-19T13:45:59Z] Worker finished. Checker required before completion.
+[2026-07-19T13:59:02Z] Worker finished. Checker required before completion.
+
+## T074 — Wire 11 placeholder routes to their real components in `router.tsx`, Epic E3
+
+**Result: PASS (1st attempt). Severity: none — clean.**
+
+Second task of the router-wiring series. Wired 11 of the 12 remaining placeholder routes to their
+real, already-Passed page components: `/accept-invite`, `/meetings`, `/meetings/live/:sessionId`,
+`/kiosk/:sessionId`, `/checkin`, `/outreach`, `/outreach/:eventId`, `/calendar`, `/roster`,
+`/reports`, `/settings`. Only `/` remains a placeholder, deferred to T075 (a role dispatcher).
+
+**Real bug fix included**: `/settings` was previously wrapped in `RequireRole(['admin'])`. The
+PRD's own Section 7 route table lists `/settings` as role `all`, and the real `SettingsPage.tsx`
+has zero internal `RequireRole` usage (confirmed) — the restriction was simply wrong. Removed,
+leaving `RequireAuth` only.
+
+**Self-gating correctly respected, not double-wrapped**: `LiveConsolePage`, `RosterShell`, and
+`ReportsShell` already nest `RequireRole(['coach','admin'])` internally, so their routes get
+`RequireAuth` only at the router level. `KioskPage` does NOT self-gate, so its existing external
+`RequireAuth`+`RequireRole(['coach','admin'])` wrapper was correctly kept as-is.
+
+**`/checkin` disclosed, not invented**: PRD lists this route as `student`-only, but the real
+`CheckinResult.tsx` has no internal role-gating and its module doc discloses no gating intent
+either way. Worker correctly left it at `RequireAuth` only (unchanged) and flagged the PRD-vs-
+implementation gap as a known risk rather than inventing new gating logic.
+
+**New finding, not part of this task's scope**: `AppShell.tsx`'s chromeless-bypass list only covers
+`/login`/`/accept-invite` — `/kiosk/:sessionId` is NOT in it, so it renders with full SideNav/TopNav
+chrome despite PRD 7.1 specifying `fullscreen` for that route. `AppShell.tsx` is a forbidden file
+for this task; correctly flagged as an observation, not fixed.
+
+**Checker's independent verification (checker-tests):**
+- Read the full `router.tsx` diff directly and confirmed every one of the 11 route wirings matches
+  the packet's per-route table exactly (import paths, default-vs-named export usage, guard nesting).
+- Independently re-confirmed the self-gating claims by reading `LiveConsole.tsx`, `RosterShell.tsx`,
+  `ReportsShell.tsx`, and `Kiosk.tsx` directly.
+- Independently confirmed the `/settings` bug-fix reasoning against the PRD's actual route table and
+  a fresh grep of `SettingsPage.tsx`.
+- Independently confirmed the `/checkin` disclosure is accurate (module doc genuinely has no stated
+  role-gating intent).
+- Independently confirmed the `AppShell` chromeless-bypass finding by reading that file directly.
+- Ran `git diff --quiet` against all 11 imported components plus `guards.tsx`/`AppShell.tsx` —
+  confirmed untouched.
+- Independently ran typecheck/lint/test(867/867)/build — all clean; confirmed the one
+  `format:check` failure (`Kiosk.tsx`) is pre-existing via `git log` (last touched by T034, not in
+  this task's diff).
+- Found and flagged two stray artifacts from its own live-verification tooling (a hook
+  path-resolution-quirk directory and a scratch Playwright script) — removed by the orchestrator
+  before commit, not part of either agent's actual diff.
+
+**11 of 12 routes now genuinely wired to real components. Only `/` remains — T075's job.**
