@@ -50,11 +50,12 @@
  *     jsdom does not implement it), needed here for BOTH `Dialog` (the
  *     create/edit form) and `AlertDialog` (the active-season switch).
  */
-import { act, useEffect, type ReactNode } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AuthProvider, useAuth, type AuthUser } from '../../app/guards';
+import { AuthProvider, type AuthUser } from '../../app/guards';
+import { LoginAsDeferred as LoginAs } from '../../test-utils/authHarness';
 import {
   buildCreateSeasonPayload,
   buildUpdateSeasonPayload,
@@ -99,20 +100,12 @@ let root: Root;
 const ADMIN_USER: AuthUser = { id: 'user-admin', email: 'admin@example.com', role: 'admin' };
 const COACH_USER: AuthUser = { id: 'user-coach', email: 'coach@example.com', role: 'coach' };
 
-/**
- * Logs in via `useEffect` (not render-phase) and withholds `children` until
- * login has actually taken effect -- avoids `RequireRole` observing one
- * `user === null` render and permanently `<Navigate>`-ing away before login
- * lands (`LiveConsole.test.tsx`/T033's own documented reasoning).
- */
-function LoginAs({ user, children }: { user: AuthUser; children: ReactNode }): ReactNode {
-  const { login, user: currentUser } = useAuth();
-  useEffect(() => {
-    if (currentUser === null) login(user);
-  }, [currentUser, login, user]);
-  if (currentUser === null) return null;
-  return <>{children}</>;
-}
+// `LoginAsDeferred` (imported above, aliased to `LoginAs`) logs in via
+// `useEffect` (not render-phase) and withholds `children` until login has
+// actually taken effect -- avoids `RequireRole` observing one
+// `user === null` render and permanently `<Navigate>`-ing away before login
+// lands (`LiveConsole.test.tsx`/T033's own documented reasoning). T073b1
+// extracted it into `src/test-utils/authHarness.tsx`.
 
 function renderSeasonSettings(
   user: AuthUser | null,

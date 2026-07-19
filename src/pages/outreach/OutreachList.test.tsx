@@ -18,10 +18,11 @@
  * established, including `MeetingsList.test.tsx`'s `AuthProvider` +
  * `LoginAs` role-login harness.
  */
-import { act, type ReactNode } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AuthProvider, useAuth, type AuthUser } from '../../app/guards';
+import { AuthProvider, type AuthUser } from '../../app/guards';
+import { LoginAs } from '../../test-utils/authHarness';
 import {
   OutreachList,
   buildUpcomingPast,
@@ -65,14 +66,6 @@ const STUDENT_OR_PARENT_USER: AuthUser = {
   email: 'student@example.com',
   role: 'student',
 };
-
-function LoginAs({ user, children }: { user: AuthUser; children: ReactNode }): ReactNode {
-  const { login, user: currentUser } = useAuth();
-  if (currentUser === null) {
-    login(user);
-  }
-  return <>{children}</>;
-}
 
 function renderAsUser(user: AuthUser | null, props: Parameters<typeof OutreachList>[0] = {}): void {
   act(() => {

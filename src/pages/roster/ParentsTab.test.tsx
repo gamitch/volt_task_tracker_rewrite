@@ -17,11 +17,12 @@
  * `LiveConsole.test.tsx`'s own `AuthProvider` + `LoginAs` role-login harness
  * for the `ParentsTab` (gated) vs. `ParentsTabBody` (ungated) split.
  */
-import { act, useEffect, type ReactNode } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AuthProvider, useAuth, type AuthUser } from '../../app/guards';
+import { AuthProvider, type AuthUser } from '../../app/guards';
+import { LoginAsDeferred as LoginAs } from '../../test-utils/authHarness';
 import {
   buildParentDisplayRows,
   defaultLoadParentsTabData,
@@ -442,18 +443,12 @@ const STUDENT_USER: AuthUser = {
   role: 'student',
 };
 
-/** Mirrors `LiveConsole.test.tsx`'s own `LoginAs` harness: logs in via a
- * `useEffect` (not render-phase) and withholds rendering `children` until
- * the login has actually taken effect, so `RequireRole` never observes an
- * intermediate `user === null` render. */
-function LoginAs({ user, children }: { user: AuthUser; children: ReactNode }): ReactNode {
-  const { login, user: currentUser } = useAuth();
-  useEffect(() => {
-    if (currentUser === null) login(user);
-  }, [currentUser, login, user]);
-  if (currentUser === null) return null;
-  return <>{children}</>;
-}
+// `LoginAsDeferred` (imported above, aliased to `LoginAs`) mirrors
+// `LiveConsole.test.tsx`'s own original harness: logs in via a `useEffect`
+// (not render-phase) and withholds rendering `children` until the login has
+// actually taken effect, so `RequireRole` never observes an intermediate
+// `user === null` render. T073b1 extracted it into
+// `src/test-utils/authHarness.tsx`.
 
 function renderGatedPage(user: AuthUser | null): void {
   act(() => {

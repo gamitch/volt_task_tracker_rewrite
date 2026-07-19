@@ -34,11 +34,12 @@
  * router context to render a real `<a href>` into, matching
  * `CheckinResult.test.tsx`'s bare-`MemoryRouter` precedent).
  */
-import { act, useEffect, type ReactNode } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { AuthProvider, useAuth, type AuthUser } from '../../app/guards';
+import { AuthProvider, type AuthUser } from '../../app/guards';
+import { LoginAsDeferred as LoginAs } from '../../test-utils/authHarness';
 import { AdminToggles, defaultLoadPrivacySetting, defaultOnTogglePrivacy } from './AdminToggles';
 
 // ---------------------------------------------------------------------------
@@ -50,19 +51,6 @@ let root: Root;
 
 const ADMIN_USER: AuthUser = { id: 'user-admin', email: 'admin@example.com', role: 'admin' };
 const COACH_USER: AuthUser = { id: 'user-coach', email: 'coach@example.com', role: 'coach' };
-
-function LoginAs({ user, children }: { user: AuthUser; children: ReactNode }): ReactNode {
-  const { login, user: currentUser } = useAuth();
-  useEffect(() => {
-    if (currentUser === null) {
-      login(user);
-    }
-  }, [currentUser, login, user]);
-  if (currentUser === null) {
-    return null;
-  }
-  return <>{children}</>;
-}
 
 function renderToggles(
   user: AuthUser | null,

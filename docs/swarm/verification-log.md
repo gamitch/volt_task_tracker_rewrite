@@ -2401,3 +2401,42 @@ genuine `TS2322` "not assignable to type 'never'" compile error.
 router-wiring series is complete.** Only T073b (real Supabase `AuthProvider` wiring, not yet
 created) remains in the series.
 [2026-07-19T14:41:42Z] Worker finished. Checker required before completion.
+[2026-07-19T14:48:23Z] Worker finished. Checker required before completion.
+[2026-07-19T14:58:26Z] Worker finished. Checker required before completion.
+[2026-07-19T14:59:00Z] Worker finished. Checker required before completion.
+
+## T073b1 — Extract a shared auth test harness, Epic E3
+
+**Result: PASS (1st attempt). Severity: none — clean.**
+
+Preparatory task for T073b2 (real Supabase `AuthProvider` wiring). Extracted the 10 test files'
+duplicated local `LoginAs` auth-setup helper into a new shared `src/test-utils/authHarness.tsx`.
+
+**Real deviation from the packet's assumption, handled correctly**: the packet assumed one
+identical `LoginAs` shape across all 10 files; the worker found genuinely TWO distinct variants —
+`LoginAs` (render-phase `login()` call, used by 6 files with no `RequireRole` in their render tree)
+and `LoginAsDeferred` (`useEffect`-deferred login that withholds `children` until login lands, used
+by 4 files whose render tree includes `RequireRole`, which would otherwise `Navigate` away on a
+transient `user === null` render). Both preserved as separate exports rather than forced into one
+generic wrapper — exactly per the packet's own Trap #2 instruction to adapt to real variations
+found, not assume uniformity.
+
+**Checker's independent verification (checker-tests):**
+- Confirmed both `LoginAs`/`LoginAsDeferred` exports exist with genuinely different
+  implementations by reading the file directly.
+- Independently confirmed via grep which files actually contain `RequireRole` in their render tree,
+  validating the variant-choice justification is evidence-based, not asserted.
+- Spot-checked 3 files' full diffs and confirmed only import lines and the removed local helper
+  definition changed — no test assertion touched anywhere.
+- Compared all 10 files against their pre-task `git show HEAD:` versions to confirm the extraction
+  is genuinely lossless.
+- Independently assessed whether a single variant could have served both cases (it couldn't —
+  deferring login in the non-`RequireRole` files would have been unnecessarily conservative but
+  harmless, while using the render-phase variant in the `RequireRole` files would have caused
+  spurious redirects) — judged the two-variant design correct, not overcomplicated.
+- Confirmed `guards.tsx` untouched, `login()`'s signature unchanged, `SettingsPage.test.tsx`
+  untouched.
+- Independently ran the full suite (872/872 tests, 42 files — unchanged count), typecheck, lint,
+  build, format:check — all clean.
+
+**T073b2 (real Supabase `AuthProvider` wiring) is now unblocked.**

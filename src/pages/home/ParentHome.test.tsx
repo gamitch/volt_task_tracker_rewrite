@@ -13,11 +13,12 @@
  * pattern `CoachHome.test.tsx`/`OutreachList.test.tsx` already established,
  * including their `AuthProvider` + `LoginAs` role-login harness.
  */
-import { act, type ReactNode } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { AuthProvider, useAuth, type AuthUser } from '../../app/guards';
+import { AuthProvider, type AuthUser } from '../../app/guards';
+import { LoginAs } from '../../test-utils/authHarness';
 import {
   applyRsvpOverride,
   buildNextEventsForStudent,
@@ -47,14 +48,6 @@ let container: HTMLDivElement;
 let root: Root;
 
 const PARENT_USER: AuthUser = { id: 'user-parent', email: 'parent@example.com', role: 'parent' };
-
-function LoginAs({ user, children }: { user: AuthUser; children: ReactNode }): ReactNode {
-  const { login, user: currentUser } = useAuth();
-  if (currentUser === null) {
-    login(user);
-  }
-  return <>{children}</>;
-}
 
 function renderAsUser(user: AuthUser | null, props: Parameters<typeof ParentHome>[0] = {}): void {
   act(() => {

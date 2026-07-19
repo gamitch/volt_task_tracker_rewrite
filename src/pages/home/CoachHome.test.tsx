@@ -18,11 +18,12 @@
  * established, including their `AuthProvider` + `LoginAs` role-login
  * harness.
  */
-import { act, type ReactNode } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AuthProvider, useAuth, type AuthUser } from '../../app/guards';
+import { AuthProvider, type AuthUser } from '../../app/guards';
+import { LoginAs } from '../../test-utils/authHarness';
 import {
   attendanceRatePercent,
   buildLastCompletedMeetingSummary,
@@ -62,14 +63,6 @@ let root: Root;
 
 const COACH_USER: AuthUser = { id: 'user-coach', email: 'coach@example.com', role: 'coach' };
 const ADMIN_USER: AuthUser = { id: 'user-admin', email: 'admin@example.com', role: 'admin' };
-
-function LoginAs({ user, children }: { user: AuthUser; children: ReactNode }): ReactNode {
-  const { login, user: currentUser } = useAuth();
-  if (currentUser === null) {
-    login(user);
-  }
-  return <>{children}</>;
-}
 
 function renderAsUser(user: AuthUser | null, props: Parameters<typeof CoachHome>[0] = {}): void {
   act(() => {

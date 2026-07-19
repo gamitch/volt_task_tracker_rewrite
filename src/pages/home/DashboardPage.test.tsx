@@ -19,11 +19,12 @@
  * `CoachHome`, which itself calls `useNavigate()` internally and throws
  * outside a router context.
  */
-import { act, type ReactNode } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AuthProvider, useAuth, type AuthUser } from '../../app/guards';
+import { AuthProvider, type AuthUser } from '../../app/guards';
+import { LoginAs } from '../../test-utils/authHarness';
 import { DashboardPage } from './DashboardPage';
 
 // ---------------------------------------------------------------------------
@@ -41,14 +42,6 @@ const STUDENT_USER: AuthUser = {
   role: 'student',
 };
 const PARENT_USER: AuthUser = { id: 'user-parent', email: 'parent@example.com', role: 'parent' };
-
-function LoginAs({ user, children }: { user: AuthUser; children: ReactNode }): ReactNode {
-  const { login, user: currentUser } = useAuth();
-  if (currentUser === null) {
-    login(user);
-  }
-  return <>{children}</>;
-}
 
 function renderAsUser(user: AuthUser | null): void {
   act(() => {

@@ -39,11 +39,12 @@
  * route) and `ScheduleMeetingsDialog.test.tsx`'s own `setNativeInputValue`
  * helper for driving the search box.
  */
-import { act, useEffect, type ReactNode } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { AuthProvider, useAuth, type AuthUser } from '../../app/guards';
+import { AuthProvider, type AuthUser } from '../../app/guards';
+import { LoginAsDeferred as LoginAs } from '../../test-utils/authHarness';
 import {
   computeAttendanceTally,
   defaultLoadLiveConsoleData,
@@ -78,31 +79,14 @@ const STUDENT_USER: AuthUser = {
   role: 'student',
 };
 
-/**
- * Logs in via a `useEffect` (not a render-phase call) and withholds
- * rendering `children` until the login has actually taken effect. This
- * matters specifically for `renderPage` below: `LiveConsolePage` nests
- * `RequireRole`, which synchronously `<Navigate>`s away on ANY render where
- * `user` is still `null` -- a render-phase `login()` call (the simpler
- * pattern `CoachHome.test.tsx` uses, safe there because it has no
- * `RequireRole`/`Navigate` in its tree) would let `RequireRole` observe one
- * `user === null` render before the login state update lands, permanently
- * navigating away before the corrected re-render ever has a chance to run.
- * Rendering `null` until `currentUser` is set avoids ever mounting the
- * gated tree with an unauthenticated user.
- */
-function LoginAs({ user, children }: { user: AuthUser; children: ReactNode }): ReactNode {
-  const { login, user: currentUser } = useAuth();
-  useEffect(() => {
-    if (currentUser === null) {
-      login(user);
-    }
-  }, [currentUser, login, user]);
-  if (currentUser === null) {
-    return null;
-  }
-  return <>{children}</>;
-}
+// `LoginAsDeferred` (imported above, aliased to `LoginAs`) logs in via a
+// `useEffect` (not a render-phase call) and withholds rendering `children`
+// until the login has actually taken effect -- T073b1 extracted this
+// verbatim from this file's own original local `LoginAs` into
+// `src/test-utils/authHarness.tsx` (see that file's module doc for the full
+// rationale this file originally documented here: `LiveConsolePage` nests
+// `RequireRole`, which synchronously `<Navigate>`s away on ANY render where
+// `user` is still `null`, so login must not be a render-phase call here).
 
 const TEST_SESSION_ID = 'session-fixture-1';
 const TEST_PATH = `/meetings/live/${TEST_SESSION_ID}`;
