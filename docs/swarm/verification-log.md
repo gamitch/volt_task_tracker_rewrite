@@ -617,3 +617,4 @@ Follow-up:
 - NIT: replace the `display_name`/`relationship` placeholders once a real source exists upstream.
 - **T021, T030, and T038 unblocked (Blocked→Ready) as a direct result — the first real content-page tasks in the entire ledger** (Roster, Meetings, Outreach). T020 stays Blocked (still needs T018).
 - Full worker/checker packets archived at `docs/swarm/archive/T019-worker-packet.md` and `docs/swarm/archive/T019-checker-packet.md`.
+[2026-07-19T01:07:25Z] Worker finished. Checker required before completion.
