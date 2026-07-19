@@ -235,7 +235,7 @@ export async function runMigration(
       continue;
     }
     if (record.planned) {
-      rsvpRows.push(mapRsvp(record, newSessionId, newStudentId));
+      rsvpRows.push(mapRsvp(newSessionId, newStudentId));
     } else {
       attendanceRows.push(mapAttendance(record, newSessionId, newStudentId));
     }

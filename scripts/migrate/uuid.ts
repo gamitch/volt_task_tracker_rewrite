@@ -3,28 +3,19 @@
 // constraint to upsert against (students, events, event_sessions -- see
 // Known Context/Traps #1 and the "Natural-key / upsert strategy" section
 // of the worker report). Implemented by hand against RFC 4122 section 4.3
-// using only Node's built-in `node:crypto` (no new dependency -- package.json
-// is not in this task's Allowed Files list).
+// using only Node's built-in `crypto` module (no new dependency --
+// package.json is not in this task's Allowed Files list).
 //
 // Given the same (namespace, name) pair, this always produces the same
 // UUID, so re-running the ETL against the same old-project row always
 // derives the same new-project primary key, which is what makes
 // `.upsert(rows, { onConflict: 'id' })` idempotent for these tables.
 
-// Ambient module declaration for the one `node:crypto` export this file
-// uses. `@types/node` is not a dependency of this repo (package.json is
-// not in this task's Allowed Files list to extend), so this narrow
-// declaration keeps the file self-typed without widening any shared
-// config -- same reasoning as the local `declare const process` in env.ts.
-declare module 'node:crypto' {
-  interface Hash {
-    update(data: Uint8Array): Hash;
-    digest(): Uint8Array;
-  }
-  export function createHash(algorithm: string): Hash;
-}
-
-import { createHash } from 'node:crypto';
+// Type declaration for `crypto.createHash` lives in ./node-shims.d.ts
+// (a dedicated, non-module ambient .d.ts -- TypeScript's `bundler` module
+// resolution rejects a `declare module 'crypto' { ... }` placed in the
+// same file that imports it, "Invalid module name in augmentation").
+import { createHash } from 'crypto';
 
 // Fixed, arbitrary namespace UUID for this migration (generated once,
 // never changes -- changing it would break idempotency across ETL runs).

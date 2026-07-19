@@ -195,11 +195,11 @@ export function mapEventSession(
 
 // --- mapping.md rows: session_attendance split on `planned` -------------
 
-export function mapRsvp(
-  old: OldSessionAttendance,
-  newSessionId: string,
-  newStudentId: string,
-): NewRsvpRow {
+// Note: unlike mapAttendance, this deliberately does not take the old
+// session_attendance row -- per mapping.md, `rsvps` carries no field
+// sourced from the old row's data beyond the (session, student) pair
+// itself (status is always 'going', responded_by is always null).
+export function mapRsvp(newSessionId: string, newStudentId: string): NewRsvpRow {
   return {
     session_id: newSessionId,
     student_id: newStudentId,
