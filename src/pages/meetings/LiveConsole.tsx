@@ -70,10 +70,10 @@
  *      `starts_at`.
  *   2. Canonical message: `` `${sessionId}:${bucket}` `` (hmac.ts line 17,
  *      `digestFor` line 83).
- *   3. `digest = HMAC-SHA256(key = CHECKIN_HMAC_SECRET, message)` (hmac.ts
- *      lines 21, 72-79) -- 32 raw bytes. This secret can never exist in
- *      `src/` (constitution item 5) -- this file never types its literal
- *      env-var name anywhere, including in comments.
+ *   3. `digest = HMAC-SHA256(key = the server-only signing secret, message)`
+ *      (hmac.ts lines 21, 72-79) -- 32 raw bytes. This secret can never
+ *      exist in `src/` (constitution item 5) -- this file never types its
+ *      literal env-var name anywhere, including in comments.
  *   4. QR token: the first 16 bytes of `digest`, lower-case hex (hmac.ts
  *      lines 24-25, `TOKEN_BYTE_LENGTH = 16`, `tokenFor` lines 87-90) -- 32
  *      hex chars.
