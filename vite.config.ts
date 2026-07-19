@@ -15,7 +15,7 @@ export default defineConfig({
     // *.test.ts files (Deno.test(...), run separately via `deno test`) --
     // exclude them from vitest's default discovery, same reasoning as the
     // eslint.config.js exclusion added alongside this (CI break #4).
-    exclude: ['**/node_modules/**', '**/dist/**', 'supabase/functions/**'],
+    exclude: ['**/node_modules/**', '**/dist/**', 'supabase/functions/**', 'tests/e2e/**'],
   },
   build: {
     rollupOptions: {

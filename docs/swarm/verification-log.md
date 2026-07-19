@@ -2788,3 +2788,31 @@ pre-existing gap this task surfaced but cannot fix (`src/pages/**` forbidden her
 
 **Orchestrator note**: added `test-results/`/`playwright-report/` to `.gitignore` (Playwright's own
 regenerated artifacts, not previously excluded) before committing.
+[2026-07-19T18:11:17Z] Worker finished. Checker required before completion.
+[2026-07-19T18:12:47Z] Worker finished. Checker required before completion.
+[2026-07-19T18:14:27Z] Worker finished. Checker required before completion.
+[2026-07-19T18:15:15Z] Worker finished. Checker required before completion.
+[2026-07-19T18:15:45Z] Worker finished. Checker required before completion.
+[2026-07-19T18:16:12Z] Worker finished. Checker required before completion.
+
+## T084 — Fix CI: exclude `tests/e2e/**` from Vitest discovery, Epic E11
+
+**Result: PASS (1st attempt). Severity: none — clean, urgent.**
+
+Fallout from T066: `vite.config.ts` was forbidden to T066's own Allowed Files, so `tests/e2e/*.spec.ts`
+was never excluded from Vitest's default discovery — Vitest tried to parse the new Playwright specs
+and failed importing `playwright/test` (not a real `package.json` dependency), breaking CI on the
+live PR (`Cannot find package 'playwright/test'`, `ERR_MODULE_NOT_FOUND`). One-line fix: added
+`'tests/e2e/**'` to the existing `test.exclude` array, matching the exact pattern already used for
+`supabase/functions/**`.
+
+**Checker's independent verification (checker-tests):**
+- Confirmed the diff is genuinely exactly one line.
+- Independently ran the full suite and grepped its own output for any mention of "e2e"/"playwright"
+  — zero hits, confirming genuine exclusion, not just a claim.
+- Independently validated the glob pattern actually matches the real file paths
+  (`tests/e2e/public-routes.spec.ts`, `tests/e2e/protected-route-redirects.spec.ts`).
+- Confirmed typecheck/lint/build clean; confirmed the file was genuinely isolated from the many
+  other concurrently in-flight tasks' edits.
+
+**This resolves the CI failure on PR #1.**
