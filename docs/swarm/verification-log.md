@@ -1309,3 +1309,4 @@ privacy-persistence column exists anywhere) rather than inventing a migration.
 Full packets archived at `docs/swarm/archive/T028-worker-packet.md` and
 `docs/swarm/archive/T028-checker-packet.md`. Real follow-up: an additive migration to add the
 privacy-persistence column, correctly not added by this UI-only task itself.
+[2026-07-19T06:51:33Z] Worker finished. Checker required before completion.
