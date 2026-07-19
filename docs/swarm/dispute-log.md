@@ -543,8 +543,179 @@ Passed verdicts:
    instead of the theme token itself. Which lever is correct is a design/architecture call the
    checker was not positioned to make from within a single task's checker packet.
 
-Boss decision:
-(pending — not yet ruled)
+Boss decision (boss-arbiter, 2026-07-19):
+All evidence re-verified independently against the real artifacts — the WCAG
+math recomputed from scratch, the installed library's own source read
+directly, and the shipped theme.css inspected — not taken from the checker's
+report:
+
+1. The checker's measurement is CORRECT. Independently recomputed WCAG 2.x
+   relative-luminance contrast for `#0000B3` on `#9B7BFF`: 4.041:1 —
+   matching the checker's ~4.04 exactly. Button md text is 14px/weight-500,
+   which is "normal text" under WCAG's large-text definition (≥18pt, or
+   ≥14pt bold), so the AA minimum is 4.5:1, not 3:1. The shipped pairing
+   fails AA. Light mode independently confirmed fine: `#FFFFFF` on
+   `#5B2EE5` = 7.078:1.
+
+2. ROOT CAUSE (established from installed source, not inference): Astryx
+   derives dark-mode `--color-on-accent` as tone 20 of the seed-accent HCT
+   tonal palette and BAKES it as a resolved hex — the source's own comment
+   (expandColorScale.ts lines 126–129) says "--color-on-accent stays baked:
+   it is a contrast computation against the accent, which CSS cannot
+   express." Running the installed hct.ts against DES-03's seed `#5B2EE5`
+   reproduces the exact shipped values: derived dark accent P[80] =
+   `#D6BAFF`, baked dark on-accent P[20] = `#0000B3`. That pair is
+   self-consistent and passes AA handily (7.467:1). But DES-03's raw
+   `tokens: {'--color-accent': ['#5B2EE5', '#9B7BFF']}` override replaces
+   the dark background with a substantially darker violet (`#9B7BFF` ≠
+   P[80] `#D6BAFF`) at defineTheme's highest precedence (defineTheme.ts
+   step 2), while the baked on-accent foreground is NOT recomputed —
+   producing the 4.04:1 mismatch. This is not an Astryx bug (its pipeline
+   is internally consistent), not a T002/T016/T018 worker defect (all
+   shipped exactly what their specs mandated), and not new: it has been
+   latent in the theme since T002 and shipped/visible since T016a made
+   /login reachable. It is a PRD-internal spec conflict — DES-03's exact
+   token block vs DES-06's "Both modes must pass WCAG AA contrast" — of
+   exactly the class constitution item 1 routes here.
+
+3. Prior verdicts examined against their actual scope:
+   - T002's PASS is NOT contradicted. Its packet criterion and evidence
+     were accent-ON-surface (7.08:1 light / 4.81:1 dark, per the archived
+     T002 checker packet) — accent-colored elements against page
+     backgrounds. `#9B7BFF`-on-dark-surface genuinely passes (5.5–6:1
+     recomputed). The on-accent-text-ON-accent-background pairing was
+     never in its checklist. Scope gap in the criterion, not a false
+     verdict.
+   - T016's PASS contains one incorrect sub-claim: its evidence line
+     "button-text pairs all pass" cannot be true for the dark-mode primary
+     button (the baked pair is right there in theme.css line 218:
+     `--color-on-accent: light-dark(#FFFFFF, #0000B3)` and computes to
+     4.04). The claim is CORRECTED by this entry; the verdict is not
+     vacated (see Ruling D).
+   - T018's checker handled this exactly right: pixel-level measurement,
+     discarded its own flawed first method, did not fail the task for an
+     out-of-scope shared defect, routed it here. Commended — this is the
+     model for incidental cross-cutting findings.
+
+4. FIX LEVER (each alternative actually evaluated against the installed
+   library):
+   - Changing the brand accent hexes is REJECTED: `#5B2EE5`/`#9B7BFF` are
+     DES-04's named brand palette (Volt Violet) and the core of the visual
+     identity; a brand-color change is a George-level design decision no
+     defect this size justifies forcing.
+   - A Button-level override (theme `components:` map or CSS) is REJECTED:
+     Button's documented theming vars expose no text color, and
+     `--color-on-accent` is consumed by five installed components (Button,
+     Badge info, CheckboxInput checked, RadioListItem inner dot, NavIcon)
+     — a Button-only patch leaves four future surfaces broken, including
+     DES-01's Bolt confirmation (text on accent flash).
+   - The CORRECT lever is the theme-token override Astryx itself provides:
+     `--color-on-accent` is a valid, typed `TokenName` (colorDefaults,
+     tokens.stylex.ts line 27; `defineTheme` input `tokens?:
+     Partial<Record<TokenName, TokenValue>>`), and explicit `tokens`
+     entries are applied at highest precedence over the baked derivation
+     (defineTheme.ts step 2, verified in source). One added line in
+     volt.ts fixes every consumer at once — the same mechanism DES-03
+     already uses one line above.
+   - Authorized value: `['#FFFFFF', '#00008D']`. Light `#FFFFFF` is
+     byte-identical to today's resolved value (zero light-mode change).
+     Dark `#00008D` is P[10] of the same Astryx tonal ramp — the vendor's
+     own palette one stop darker, preserving the intended navy-on-violet
+     look — and measures 4.818:1 against `#9B7BFF` (recomputed
+     independently), clearing AA. Interactive states verified safe: dark-
+     mode hover/pressed overlays are white-alpha mixes (overlay-hover 5%,
+     overlay-pressed 10% white, expandColorScale.ts), which lighten the
+     background and only increase contrast against a dark foreground.
+     Pure black (6.67:1) was considered and rejected as an unnecessary
+     departure from the ramp; anything between P[10] and black remains
+     available if the checker's pixel measurement lands under 4.5 (it
+     should not — the math is exact and antialiasing was already accounted
+     for by the T018 checker's methodology).
+
+Rulings:
+
+A. PRD deviation AUTHORIZED, narrowly: `src/theme/volt.ts` may no longer be
+   byte-identical to DES-03's code block — the delta is exactly ONE added
+   token line, `'--color-on-accent': ['#FFFFFF', '#00008D'],` (plus a
+   one-line comment citing D005), inside the existing `tokens` map. Both
+   DES-03/DES-04 brand accent hexes remain byte-untouched. Where two PRD
+   requirement IDs conflict, constitution item 1 makes this a dispute for
+   this office, and the Non-Negotiables resolve the tie twice over:
+   "Accessibility … outrank[s] cosmetic preferences" and "Protected source
+   text must remain verbatim unless explicitly approved" — this entry is
+   that explicit approval (same override mechanism D003 used for the test
+   Non-Negotiable). Unlike D002, no human-locked decision is being
+   reversed (the brand palette, the stack, and the Astryx-only rule all
+   stand), so no human gate is required; George is being informed in the
+   ruling report and can veto before T002b dispatches. The PRD file itself
+   remains unedited by design (D002 precedent); the standing verbatim
+   check for volt.ts everywhere ("byte-identical to DES-03") is amended
+   to "byte-identical to DES-03 except the D005-authorized on-accent
+   line."
+
+B. astryx-api.md AMENDED (D004 precedent, second marked correction): the
+   Button section's Theming subsection now carries a D005-marked,
+   source-cited annotation documenting that primary-variant text color is
+   driven by the theme-level `--color-on-accent` token (baked by
+   expandColorScale against the DERIVED accent, not raw token overrides)
+   and that it is a valid `defineTheme` tokens key. Without this, T002b's
+   checker would be obliged under constitution item 2 to flag the
+   authorized fix as a hallucinated API — the same trap D004 closed.
+
+C. Corrective task T002b (Epic E1, worker: worker-implementer, checker:
+   checker-accessibility — the checker that found it and owns DES-06
+   verification), forward-fix in the T002a/T006a/T016a pattern. Allowed
+   files: exactly `src/theme/volt.ts` (the one authorized line + comment)
+   and `src/theme/theme.css` (regenerate the generated block per that
+   file's own header instructions — the baked `light-dark(#FFFFFF,
+   #0000B3)` at line 218 ships to production via DES-07's built path and
+   MUST move in lockstep with volt.ts). Everything else forbidden,
+   explicitly including `package.json` (the volt.ts Prettier exclusion
+   stays), `src/pages/**`, `src/app/**`, and all Astryx-installed files.
+   Acceptance: volt.ts diff is exactly the authorized addition (rest
+   byte-identical to DES-03); theme.css regenerated with
+   `--color-on-accent: light-dark(#FFFFFF, #00008D)` and NFR-08 layer
+   structure unchanged; build/typecheck/lint/format:check/test all exit 0;
+   `dist/assets/theme.css` still emitted and the bundle gate green;
+   pixel-level dark-mode re-measurement (T018-checker methodology, live
+   Chromium) of the /login primary button text ≥4.5:1; light-mode /login
+   spot-check unchanged (~7.08:1); computed-pair verification for the
+   other on-accent consumers reachable today (Badge `info` at minimum);
+   `#5B2EE5`/`#9B7BFF` confirmed byte-unchanged.
+
+D. T016 and T002 verdicts NOT vacated; NO reopening (D002/D003 precedent:
+   both passed the criteria they were given; the ledger stays
+   append-only). T016's "button-text pairs all pass" evidence sub-claim is
+   formally corrected by finding 3; T002b's PASS is the closing
+   re-verification for the shipped defect on /login. T018 needed no
+   correction of any kind. Forward-only.
+
+E. Standing rule for all future checker packets (foreman to carry into
+   templates): WCAG contrast checks MUST include foreground-on-accent
+   pairings (text/icons rendered ON accent-filled surfaces) in both modes,
+   not only accent-on-surface — the two are different measurements and
+   this dispute is what the gap costs. Pixel-level measurement of the
+   rendered artifact is the preferred method over token arithmetic when
+   the two disagree.
+
+F. Sequencing: T002b is dispatch-ready immediately (deps T002/T003 both
+   Passed) and is a same-day-class fix — a live accessibility shortfall on
+   the app's only reachable real page. It does NOT block T020/T021/T030/
+   T034/T035/T038/T048/T056/T062 (independent files), but any NEW page
+   task checked after T002b lands must be measured against the corrected
+   token. Attempt counter starts at 0.
 
 Outcome:
-(pending)
+Checker's incidental finding CONFIRMED in full (4.041:1 recomputed
+independently; below the 4.5:1 AA minimum for 14px/500 text). Root cause:
+PRD-internal conflict — DES-03's raw dark-accent override silently
+invalidates Astryx's baked on-accent contrast computation (verified against
+installed expandColorScale/defineTheme source); DES-06 wins per the
+constitution's accessibility Non-Negotiable. One-line theme-token fix
+authorized (`--color-on-accent: ['#FFFFFF', '#00008D']`, Astryx's own P[10]
+ramp stop, 4.818:1) via corrective task T002b; brand hexes untouched; PRD
+file untouched; astryx-api.md given a second D004-style marked annotation.
+T002/T016 verdicts stand with one evidence sub-claim corrected; forward-only
+fix, no reopening. Constitution unchanged — item 1's dispute routing and the
+Non-Negotiables' own override mechanism covered this exactly. Human decision
+not required; George informed with veto opportunity before dispatch.

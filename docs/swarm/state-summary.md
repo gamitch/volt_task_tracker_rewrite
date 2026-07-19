@@ -41,9 +41,11 @@ for every row above is in `verification-log.md` under its `## T0xx` heading.
 
 ## Active
 
-D005 (dark-mode primary-button contrast, cross-cutting) escalated to boss-arbiter — outcome
-pending. Nine Ready/undispatched tasks otherwise: T020, T021, T030, T034, T035, T038, T048, T056,
-T062 (see `overview.md` for the current count and recommended next action).
+D005 RESOLVED 2026-07-19 (see Known Decisions below and `dispute-log.md` D005) — corrective task
+**T002b** added to the ledger, dispatch-ready, same-day-class (live WCAG shortfall on `/login`, the
+app's only reachable real page). Ten Ready/undispatched tasks: **T002b (dispatch first)**, T020,
+T021, T030, T034, T035, T038, T048, T056, T062 (see `overview.md` for the current count and
+recommended next action).
 
 ## Known Decisions (condensed — full rulings in dispute-log.md)
 
@@ -61,6 +63,30 @@ T062 (see `overview.md` for the current count and recommended next action).
 - **D004** (resolved): Astryx's `mobileNav={<X/>}` shorthand silently
   disables the toggle in the installed version; use `{ content: <X/> }`
   instead. `astryx-api.md` corrected with marked annotations.
+- **D005** (resolved 2026-07-19): T018's checker's ~4.04:1 dark-mode
+  primary-button contrast measurement independently confirmed (4.041:1
+  recomputed; AA needs 4.5:1 at 14px/500). Root cause is a PRD-internal
+  conflict, not a worker/checker error: DES-03's raw dark-accent token
+  override (`#9B7BFF`) silently invalidates Astryx's *baked* dark
+  `--color-on-accent` (`#0000B3` = P[20], computed against the derived
+  P[80] `#D6BAFF`, never re-derived for raw overrides — verified in
+  installed `expandColorScale.ts`). DES-06 (WCAG AA both modes) wins per
+  the accessibility Non-Negotiable. Authorized fix: ONE added line in
+  `volt.ts`'s tokens map — `'--color-on-accent': ['#FFFFFF', '#00008D']`
+  (Astryx's own P[10] ramp stop, 4.818:1) — plus lockstep `theme.css`
+  regeneration, via corrective task **T002b**. Brand accent hexes and the
+  PRD file byte-untouched; volt.ts's standing verbatim check is now
+  "byte-identical to DES-03 *except the D005-authorized on-accent line*."
+  T002/T016 verdicts NOT reopened (forward-only per D002/D003 precedent;
+  T016's "button-text pairs all pass" evidence sub-claim formally
+  corrected). `astryx-api.md` given a second D004-style marked annotation
+  (Button Theming section) so checkers don't flag the token as
+  hallucinated. **Standing rule for all future checker packets: contrast
+  checks must include foreground-ON-accent pairings in both modes, not
+  only accent-on-surface — pixel-level measurement preferred when it
+  disagrees with token arithmetic.** George informed with veto
+  opportunity before T002b dispatches (no human-locked decision reversed,
+  so no hard human gate).
 - **Full-ledger sweep standing rule**: every PASS close-out sweeps the
   *entire* Deps column for newly-unblocked tasks, not just direct
   dependents. This has been done consistently since T001; the audit trail
@@ -109,13 +135,14 @@ T062 (see `overview.md` for the current count and recommended next action).
   read-only, token-keyed data channel (e.g. an Edge Function). T018's checker
   recommended scheduling this as its own ledger task rather than an
   indefinitely-deferred gap, given AUTH-03 is core-path. Not yet scheduled.
-- **D005 (open)**: T018's checker independently measured a real WCAG AA
-  contrast shortfall (~4.04:1, needs 4.5:1) on `Button variant="primary"`'s
-  dark-mode text, inherited unchanged from `volt.ts`'s theme tokens — same
-  button already shipped on the already-Passed T016 `/login` page, and
-  arguably in tension with T002's own "both modes pass WCAG AA" contrast
-  sign-off. Escalated to boss-arbiter (touches DES-03's verbatim-theme
-  requirement); not yet ruled.
+- **D005 (RESOLVED 2026-07-19 — residual risk only)**: the dark-mode
+  primary-button contrast shortfall is confirmed real and remains LIVE on
+  `/login` until corrective task **T002b** passes — dispatch it first
+  (same-day-class, per D005 Ruling F). Residuals: (1) any page task
+  checked before T002b lands is measuring against the defective token;
+  (2) `theme.css` must be regenerated in lockstep with `volt.ts` or the
+  DES-07 built path ships the stale baked value regardless of the source
+  fix. Full ruling in `dispute-log.md` D005.
 - Loop limit: 3 failed attempts per task before mandatory boss-arbiter
   escalation (constitution "Loop Limit").
 - No task is ever marked complete on worker self-report — every PASS

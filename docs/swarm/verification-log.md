@@ -643,3 +643,4 @@ Follow-up:
 - Router-wiring gap and invite-data-loading seam gap both logged in `docs/swarm/state-summary.md` (Current Risks) for future scheduling, not spun into new ledger rows yet.
 - D005 (dark-mode primary-button contrast) opened in `docs/swarm/dispute-log.md`, escalated to boss-arbiter — outcome pending.
 - Full worker/checker packets archived at `docs/swarm/archive/T018-worker-packet.md` and `docs/swarm/archive/T018-checker-packet.md`.
+[2026-07-19T01:59:52Z] Worker finished. Checker required before completion.

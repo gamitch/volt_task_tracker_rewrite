@@ -1839,6 +1839,12 @@ Button triggers an action when clicked. Use it for form submissions, confirmatio
 | `--button-focus-offset` | `3px` | Focus ring outline offset |
 | `--button-icon-only-aspect` | `1 / 1` | Aspect ratio for icon-only buttons |
 
+> **[D005 ANNOTATION — verified against installed `@astryxdesign/core@0.1.6` source, 2026-07-19.** The vendor text above is unmodified; this note documents behavior the tables omit. See `docs/swarm/dispute-log.md` D005.]
+>
+> **Primary/variant text color is theme-token-driven, not exposed as a Button CSS variable.** `variant="primary"` renders `backgroundColor: var(--color-accent)` and `color: var(--color-on-accent)` (installed source: `src/Button/Button.tsx` lines 163–165; the loading-spinner border also uses `--color-on-accent`, lines 493–496). `--color-on-accent` is additionally consumed by Badge (`variant="info"`), CheckboxInput (checked mark), RadioListItem (selected inner dot), and NavIcon — overriding it re-colors all of them consistently.
+> **Derivation trap:** when a theme supplies `color: { accent }`, `expandColorScale` bakes `--color-on-accent` as a resolved hex — light = P[100], dark = P[20] of the seed's HCT tonal palette — computed against the *derived* accent (`P[40]`/`P[80]`), and deliberately does NOT re-derive it when a raw `tokens: { '--color-accent': [...] }` override changes the actual accent (source comment, `src/theme/expandColorScale.ts` lines 126–129: "--color-on-accent stays baked: it is a contrast computation against the accent, which CSS cannot express"). A raw accent override that departs from the derived value can therefore silently break WCAG contrast between the two tokens.
+> **Sanctioned fix:** `--color-on-accent` is a valid `defineTheme` tokens key — it is a member of `colorDefaults` (`src/theme/tokens.stylex.ts` line 27) and thus of the typed `TokenName` union accepted by `tokens?: Partial<Record<TokenName, TokenValue>>`; explicit `tokens` entries are applied at highest precedence over the baked derivation (`src/theme/defineTheme.ts`, step 2). Supplying e.g. `'--color-on-accent': ['#FFFFFF', '#00008D']` is a documented, non-hallucinated usage (D005-authorized for this project's `volt.ts`).
+
 -e 
 ---
 
