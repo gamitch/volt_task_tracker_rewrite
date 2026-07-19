@@ -14,20 +14,26 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-19, post-T033; T054/T055 dispatched)
+## Status snapshot (2026-07-19, post-T054/T055)
 
 75 tasks (T001–T071 + T002a + T002b + T006a + T016a) across epics E1–E11.
-**40 Passed · 15 Ready · 2 In Progress (T054, T055 workers running) · 18 Blocked.**
+**42 Passed · 15 Ready · 0 In Progress · 18 Blocked.**
 
 - **T033 (live check-in console) Passed on attempt 2** — a legitimate FAIL on attempt 1 (MAJOR,
   real constitution item 5 secret-name leak in a comment) after the checker independently confirmed
   the BLOCKER-class DES-17 keyboard path, MTG-11, and MTG-12 all genuinely correct. Unblocks T036.
-- Worker packets written (not yet dispatched) for **T025, T026, T027, T028, T029** — the rest of
-  E4's roster CRUD. T025 (Parents) and T028 (Admin toggles) each flag a real, undocumented schema
-  gap (no `profiles` active/inactive concept; no leaderboard-privacy persistence column anywhere)
-  for the assigned worker to investigate and disclose rather than silently invent a migration for.
-  T027 (Invites) cites an already-applied DB trigger (`trg_audit_invite_revocation`) so its worker
-  doesn't redundantly reimplement the audit-log write. See `docs/swarm/active/T02{5,6,7,8,9}-worker-packet.md`.
+- **T054 (Student Home) Passed on attempt 2** — a legitimate FAIL on attempt 1 (MAJOR, Divider
+  labels instead of real Heading landmarks for two sections, breaking screen-reader heading
+  navigation) after the StudentHomeSlot scope-tension resolution and BEH-03's combined-state CTA
+  invariant were independently confirmed correct.
+- **T055 (Parent Home) Passed, MINOR** — checker independently re-read PRD BEH-06's actual text and
+  concurred reusing T037's `ConsistencyStrip` was the right call.
+- All three of E9's Home dashboards (Coach/Admin, Student, Parent) are now Passed.
+- Worker packets written (not yet dispatched) for **T023, T024, T025, T026, T027, T028, T029,
+  T040, T041, T042, T043, T044** — twelve tasks across E4 (roster CRUD) and E6 (outreach detail/
+  RSVP/leaderboard). Several flag real, undocumented schema/data-model gaps for their assigned
+  workers to investigate and disclose rather than silently paper over — see
+  `docs/swarm/active/T0{23,24,25,26,27,28,29,40,41,42,43,44}-worker-packet.md`.
 
 - T022 (Students tab) Passed, NIT — unblocked T023, T024.
 - T031 (Schedule meetings dialog) Passed, NIT — unblocked **T033, the live

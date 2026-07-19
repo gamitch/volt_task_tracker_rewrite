@@ -1246,3 +1246,35 @@ satisfy both HOME-03's participation-% field and BEH-06's meeting-history requir
 
 Full packets archived at `docs/swarm/archive/T055-worker-packet.md` and
 `docs/swarm/archive/T055-checker-packet.md`.
+[2026-07-19T06:31:18Z] Worker finished. Checker required before completion.
+
+## T054 — Student Home (HOME-02)
+
+**Result: PASS (attempt 2). Attempt 1 was a legitimate FAIL, MAJOR — not a false alarm.**
+
+Worker built `StudentHome.tsx`: a mobile-first Student Home with a real, self-built
+`LiveCheckInCard` (correctly resolving the `StudentHomeSlot.tsx` scope tension — that component has
+no `children` prop and structurally cannot hold real check-in UI), BEH-03's exactly-one-primary-CTA
+hero, BEH-02's never-summed hours, and a check-in path faithfully modeled on T032's real contract.
+
+**Checker's independent verification, attempt 1 (checker-accessibility)**: confirmed the
+StudentHomeSlot resolution correct and well-reasoned; confirmed BEH-03's strict priority holds
+genuinely, including the combined-state case (both a live session and unanswered RSVPs present
+simultaneously) via a real DOM `data-variant` count; confirmed BEH-02 and the check-in contract.
+Found one real MAJOR defect by reading Astryx's actual installed `Divider.js`/`List.js` source
+directly: "Next up" and "Sign-up opportunities" used `Divider label=` instead of real `Heading`
+elements, rendering their titles in plain non-landmark `<div>`s — invisible to screen-reader
+heading-navigation, and inconsistent with every already-Passed sibling page (`CoachHome.tsx`,
+`OutreachList.tsx`, `MeetingsList.tsx`), which all use real `Heading level={2}` for their equivalent
+sections.
+
+**Attempt 2 rework and re-verification**: worker replaced both `Divider label=` instances with real
+`Heading level={2}` elements matching `CoachHome.tsx`'s established pattern exactly, plus an
+accepted optional improvement (keyboard focus now moves to the target section on CTA activation, not
+just a viewport scroll). Checker independently confirmed via Astryx's real installed source that
+`level={2}` renders a literal `<h2>`, confirmed the diff was tightly scoped to just this fix (all
+previously-verified logic untouched), and re-ran the full suite (338/338, same count as attempt 1 —
+no regression).
+
+Full packets archived at `docs/swarm/archive/T054-worker-packet.md` and
+`docs/swarm/archive/T054-checker-packet.md`.
