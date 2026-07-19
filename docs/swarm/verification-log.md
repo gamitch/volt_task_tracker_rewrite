@@ -1537,3 +1537,33 @@ Full packets archived at `docs/swarm/archive/T039-worker-packet.md` and
 [2026-07-19T07:35:56Z] Worker finished. Checker required before completion.
 [2026-07-19T07:39:12Z] Worker finished. Checker required before completion.
 [2026-07-19T07:39:25Z] Worker finished. Checker required before completion.
+[2026-07-19T07:40:36Z] Worker finished. Checker required before completion.
+
+## T050 — Weekly digest template
+
+**Result: PASS (1st attempt). Severity: NIT.**
+
+Worker built `weekly-digest.tsx`: per-linked-student attendance/hours-vs-goal/next-week-schedule
+digest, EML-05 cross-family-leakage prevention.
+
+**Checker's independent verification (checker-content):**
+- **EML-05 (BLOCKER-class) — confirmed structurally impossible to leak**, not just untested: both
+  render functions take a single `params` argument, there is no module-level roster constant, no
+  cross-call state, no second data source in scope per call — reproduced the worker's own
+  two-family test by hand-trace and additionally reasoned about substring-collision risk (found
+  none in the existing fixtures; recommended a hardening fixture as an optional follow-up).
+- `confirmedHours`/`studentGoalHours`/`hoursVsGoalPercent` confirmed byte-identical in logic to
+  `ParentHome.tsx`'s established, already-checker-approved pattern.
+- Week-boundary computation independently hand-derived (including verifying the send-instant date
+  is genuinely a Sunday, and CDT-vs-UTC offset correctness) — matches the worker's claimed values
+  exactly.
+- Escaping confirmed byte-identical to `renderEmailLayout.ts`'s own `escapeHtml`.
+- **Disclosed limitation**: checker-content has no Bash tool access, so it could not execute the
+  test suite itself — it substituted exhaustive hand-verification of every one of the 28 assertions
+  against the source and flagged live execution as a required follow-up. I independently ran
+  `npx vitest run src/emails/templates/weekly-digest.test.tsx` and confirmed **28/28 passing**,
+  closing that gap before this close-out.
+
+Full packets archived at `docs/swarm/archive/T050-worker-packet.md` and
+`docs/swarm/archive/T050-checker-packet.md`.
+[2026-07-19T07:41:34Z] Worker finished. Checker required before completion.
