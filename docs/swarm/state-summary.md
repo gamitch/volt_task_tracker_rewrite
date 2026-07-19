@@ -65,20 +65,43 @@ deliberately terse going forward.
 **E1, E2, and E3 are all fully complete.** Full evidence for every row above is in
 `verification-log.md` under its `## T0xx` heading.
 
-## Active (2026-07-19, updated after T067/T068/T069 — E11 sweeps 3 of 4 complete)
+## Active (2026-07-19, updated after T075 — router-wiring series' route-swap phase complete)
 
-69 tasks Passed. E1-E9 are fully Passed for every automatable task in the entire app. George
-dispatched T067/T068/T069 first and explicitly held T066 back pending review of its own disclosed
-router-wiring tension. 1 task Ready (T066, held), 5 Blocked, all human gates or waiting on one:
-T052/T063/T065/T070 (human gates, George) and T064 (waiting on T063). See `overview.md` for the
+73 tasks Passed. E1-E9 are fully Passed for every automatable task in the entire app. All 13 app
+routes now resolve to real components (router-wiring series T073a/T074/T075, all Passed). 1 task
+Ready (T066, held — its original blocking tension is now resolved, worth a fresh look), 5 Blocked,
+all human gates or waiting on one: T052/T063/T065/T070 (human gates, George) and T064 (waiting on
+T063). Two open follow-up decisions, neither yet a task: `AppShell.tsx`'s chromeless-bypass gap on
+`/kiosk/:sessionId` (found by T074), and T067/T069's MINOR findings. See `overview.md` for the
 current tiered priority list.
 
+- **T075 — Build and wire the `/` dashboard role dispatcher.** PASS (1st attempt, clean). New
+  `DashboardPage` dispatches coach/admin→`CoachHome`, student→`StudentHome`, parent→`ParentHome`
+  via a genuinely TypeScript-exhaustive switch — checker independently reproduced the compile-error
+  proof from scratch. HOME-04's admin "Season setup" card confirmed to fire correctly through the
+  dispatcher (already handled inside `CoachHome.tsx`, no duplicate logic). Closes the router-wiring
+  series' route-swap phase — all 13 routes now resolve to real components.
+- **T074 — Wire 11 placeholder routes to real components.** PASS (1st attempt, clean). Batched
+  mechanical wiring task; included a real bug fix (`/settings`'s incorrect
+  `RequireRole(['admin'])` removed per the PRD's actual route table). Checker independently
+  confirmed every guard pattern against each component's actual self-gating behavior. Surfaced a
+  new finding: `AppShell.tsx` doesn't chromeless-bypass `/kiosk/:sessionId` despite PRD 7.1
+  specifying `fullscreen` for that route.
+- **T073a — Role vocabulary reconciliation.** PASS (1st attempt, clean). Fixed `guards.tsx`'s stale
+  `Role` type (missing `student`/`parent`) across 19 files — a hard blocker for the rest of the
+  router-wiring series. First task dispatched after a boss-architect consultation on the series'
+  design (which also corrected the original series proposal: no dispatcher was needed for
+  `/meetings/live/:sessionId` — `LiveConsolePage` already self-gates internally).
+- **T072 — Fix NFR-06 responsive gap on `LiveConsole.tsx`.** PASS (1st attempt, MINOR). Follow-up
+  task created directly from T068's checker-confirmed BLOCKER finding. Real, keyboard-accessible QR
+  show/hide toggle added (genuine DOM mount/unmount) plus roster `maxWidth` fix. NFR-06 now
+  genuinely satisfied.
 - **T068 — Responsive sweep 375-1440px.** PASS (audit itself; underlying finding is BLOCKER
   severity). Surfaced a genuine NFR-06 gap: `LiveConsole.tsx` has no QR show/hide toggle at any
   viewport width, plus its roster pane is the only fixed-width usage in the codebase missing the
   `maxWidth="100%"` safety pairing every other screen uses. Checker independently re-derived every
   dense-table minimum-width computation to the exact pixel and confirmed the jsdom
-  no-layout-engine limitation empirically. **No follow-up fix task created yet — needs a decision.**
+  no-layout-engine limitation empirically. Fixed as T072 (Passed, see above).
 - **T067 — Accessibility sweep, all screens both modes.** PASS (1st attempt, MINOR). No
   BLOCKER-class keyboard-path failures found on any core flow; D005's dark-mode contrast fix
   re-confirmed still holding (including cascade-layer ordering). Two new cross-screen findings:

@@ -14,41 +14,55 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-19, post-T067/T068/T069 — E11 sweeps 3 of 4 complete)
+## Status snapshot (2026-07-19, post-T075 — router-wiring series' route-swap phase complete)
 
-75 tasks (T001–T071 + T002a + T002b + T006a + T016a) across epics E1–E11.
-**69 Passed · 1 Ready · 0 In Progress · 5 Blocked.**
+79 tasks (T001–T075 + T002a + T002b + T006a + T016a + T073a) across epics E1–E11 plus an
+in-progress router-wiring series (E3).
+**73 Passed · 1 Ready · 0 In Progress · 5 Blocked.**
 
 - **E1–E9 all fully Passed for every automatable task.** Every content page, dialog, and Edge
   Function in the entire app is built and independently checker-verified.
 - **E10 (Migration)** — T061, T062 Passed. T063/T064/T065 remain Blocked, gated on human-supplied
   old-project credentials and sign-offs (George).
-- **E11 (Launch sweeps) — T067/T068/T069 Passed, T066 held.** George dispatched T067 (accessibility
-  sweep), T068 (responsive sweep), and T069 (empty/error copy audit) first and explicitly held
-  T066 (Playwright persona smoke tests) back pending review of its disclosed router-wiring tension.
-  All three completed audits surfaced real, evidenced findings routed as follow-up candidates (see
-  `verification-log.md` `## T067`/`## T068`/`## T069` for full detail):
-  - **T068 surfaced a genuine BLOCKER-severity NFR-06 gap**: `LiveConsole.tsx` (T033, the live
-    check-in console) has no QR show/hide toggle at any viewport width at all, plus its roster pane
-    is the only fixed-width usage in the codebase missing the `maxWidth="100%"` safety pairing every
-    other screen uses. **No follow-up fix task has been created yet — needs a decision.**
-  - T067 (MINOR): widespread `EmptyState` heading-level skips (~19 locations across 13 files,
-    including `LiveConsole.tsx`) and a DES-04 event-type color-mapping inconsistency unique to
-    `CoachHome.tsx`.
-  - T069 (MINOR): DES-12's `Skeleton` loading component is never used anywhere (universal `Spinner`
-    substitution instead), error-Banner retry actions are missing almost everywhere, and all 5
-    DES-15 verbatim empty-state copy examples ship as paraphrases rather than the PRD's literal text.
-  - **T066 still held**, per George's instruction, pending review of its own disclosed tension: no
-    page in the app is wired into a real route with a real backend yet, so a literal "click through
-    the real running app" Playwright suite may not be buildable as PRD Section 14 literally
-    describes.
-- **Once T066 lands, essentially everything left is a human gate**: T052 (production email —
-  only needs George's Resend domain verification + final sign-off now; the `digest_enabled`
-  question is resolved), T063/T065 (migration gates), T070 (final go-live).
-- **This session's four legitimate FAIL→rework→PASS cycles**: T033 (secret-name leak), T054
+- **E11 (Launch sweeps) — T067/T068/T069 Passed, T066 held.** All three completed audits surfaced
+  real, evidenced findings routed as follow-up candidates (see `verification-log.md`
+  `## T067`/`## T068`/`## T069`):
+  - T068's BLOCKER-severity NFR-06 finding on `LiveConsole.tsx` (no QR show/hide toggle, missing
+    `maxWidth` safety net) was fixed and Passed as **T072**.
+  - T067 (MINOR, not yet actioned): widespread `EmptyState` heading-level skips (~19 locations
+    across 13 files) and a DES-04 event-type color-mapping inconsistency on `CoachHome.tsx`.
+  - T069 (MINOR, not yet actioned): `Skeleton` never used (universal `Spinner` substitution),
+    error-Banner retry actions missing almost everywhere, all 5 DES-15 verbatim copy examples ship
+    as paraphrases.
+  - **T066 still held**, per George's instruction, pending the router-wiring series below — its own
+    packet flagged that a literal "click through the real running app" Playwright suite couldn't be
+    honestly built while every route was still a placeholder. That's no longer true (see below).
+- **Router-wiring series (E3), dispatched mid-session after a boss-architect consultation —
+  route-swap phase now complete**: `src/app/router.tsx` had only `/login` wired to a real component
+  since T016a; every other route rendered a placeholder `<div>`. Four tasks so far:
+  - **T073a** (Passed): fixed `guards.tsx`'s stale `Role` type (was missing `'student'`/`'parent'`)
+    — a hard blocker for anything role-aware.
+  - **T074** (Passed): wired 11 of 12 remaining routes to their real components in one batched task;
+    included a real bug fix (`/settings`'s incorrect `RequireRole(['admin'])` removed — PRD says
+    `all` roles). Surfaced a new finding: `AppShell.tsx`'s chromeless-bypass list omits
+    `/kiosk/:sessionId`, so it renders with normal chrome despite PRD 7.1 specifying `fullscreen` —
+    **no follow-up task created yet, needs a decision.**
+  - **T075** (Passed): built the last route, `/` — a small role dispatcher (`DashboardPage`) sending
+    coach/admin→`CoachHome`, student→`StudentHome`, parent→`ParentHome`, with a genuinely
+    TypeScript-exhaustive switch.
+  - **T072** (Passed, dispatched between T073a/T074): the T068 QR-toggle BLOCKER fix, see above.
+  - **All 13 routes in the app now resolve to real components.** Only **T073b** (real Supabase
+    `AuthProvider` wiring — the `login()` contract itself must change signature, not just
+    internals; not yet created) remains in the series. It is independent of the route-swap work and
+    does not block T066.
+- **Once T066 and T073b land, essentially everything left is a human gate**: T052 (production email
+  — only needs George's Resend domain verification + final sign-off now), T063/T065 (migration
+  gates), T070 (final go-live).
+- **This session's five legitimate FAIL→rework→PASS cycles**: T033 (secret-name leak), T054
   (Divider-instead-of-Heading), T040 (`setTimeout` int32 overflow), T045 (non-unique link text).
-  Every one was fixed with a narrow attempt-2 rework and re-verified by a narrow re-check that
-  independently reproduced the worker's own regression proof.
+  T072/T073a/T074/T075 all Passed on the first attempt. Every FAIL→rework was fixed with a narrow
+  attempt-2 rework and re-verified by a narrow re-check that independently reproduced the worker's
+  own regression proof.
 
 
 **T071 (shared Supabase client) Passed, clean, no findings.** The recurring
@@ -79,13 +93,18 @@ page/`guards.tsx`.
 - **E10 (Migration) — T061, T062 Passed.** T063 is a human gate blocked on
   George's real old-project credentials; T064/T065 blocked behind it.
 - **E11 (Launch sweeps) — T067, T068, T069 all Passed.** T066 remains
-  Ready but held per George's instruction, pending review of its
-  disclosed router-wiring tension.
+  Ready but held per George's instruction. T068's BLOCKER finding was fixed
+  as T072 (Passed).
+- **Router-wiring series (E3) — route-swap phase complete.** T073a, T074,
+  T075 all Passed; all 13 app routes now resolve to real components. Only
+  T073b (real Supabase `AuthProvider` wiring) remains.
 
 T066's worker packet is pre-built (`docs/swarm/active/T066-worker-packet.md`)
-and flags a major, unresolved tension worth reading before dispatch — see
-the Status snapshot above. A follow-up fix task for T068's BLOCKER-severity
-finding on `LiveConsole.tsx` also needs to be created — not yet done.
+— its original blocking tension (no real routes existed) is now resolved,
+worth a fresh look before dispatch. Two follow-up decisions still open,
+neither yet turned into a task: `AppShell.tsx`'s chromeless-bypass gap on
+`/kiosk/:sessionId` (found by T074), and whether/when to action T067/T069's
+MINOR findings.
 
 Two real incidents earlier this session, both handled cleanly — see Known
 Decisions/Current Risks in `state-summary.md` if ever needed: (1) a
