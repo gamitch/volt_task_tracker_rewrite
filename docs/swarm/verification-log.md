@@ -1041,3 +1041,34 @@ Full packets archived at `docs/swarm/archive/T038-worker-packet.md` and
 [2026-07-19T05:17:31Z] Worker finished. Checker required before completion.
 [2026-07-19T05:18:53Z] Worker finished. Checker required before completion.
 [2026-07-19T05:21:47Z] Worker finished. Checker required before completion.
+[2026-07-19T05:22:20Z] Worker finished. Checker required before completion.
+
+## T037 — Student/parent meeting view + consistency strip (BEH-06)
+
+**Result: PASS (1st attempt). Severity: NIT only — clean.**
+
+Worker read T030's already-Passed `MeetingsList.tsx` first, found it already ships the full
+student/parent history page with an explicit placeholder deferring the BEH-06 "consistency strip"
+to this task, and scoped itself accordingly: a standalone, reusable last-5-`StatusDot` strip +
+participation % component, not a duplicate rebuild.
+
+**Checker's independent verification (checker-reviewer):**
+- **Scope-overlap call independently re-verified**: read `MeetingsList.tsx` directly, confirmed its
+  placeholder text unambiguously defers the strip to T037 — concluded the worker's narrower reading
+  was correct, not something that needed a dispute.
+- **BLOCKER-class constitution item 17/BEH-06 cleared**: streak-language grep re-run independently
+  (zero hits outside comments); excused-entry color mapping confirmed `neutral` (never `error`) by
+  direct source read, not just the test assertion.
+- Last-5/fewer-than-5 selection logic re-derived correctly (filter-completed, descending sort, slice
+  5, no padding).
+- Participation-% sourcing re-verified against the real `v_student_participation` view — zero
+  arithmetic in executable code.
+- Parent multi-linked-student handling confirmed genuinely plural (one `Section` per student, not a
+  single-child assumption).
+- One NIT: a stale "seven columns" comment (inherited verbatim from T030) actually undercounts the
+  view's real 8 columns by one — cosmetic only, the rename itself is faithful.
+
+Full packets archived at `docs/swarm/archive/T037-worker-packet.md` and
+`docs/swarm/archive/T037-checker-packet.md`. Unblocks T055. Full-ledger sweep also caught and fixed
+a missed unblock: **T054** (Student Home) had all four of its dependencies (T030/T032/T038/T013)
+already Passed as of T038's close-out but was never flipped to Ready — corrected now.
