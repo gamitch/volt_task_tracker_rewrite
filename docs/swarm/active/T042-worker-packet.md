@@ -6,17 +6,19 @@ T042
 ## Objective
 Build `src/pages/outreach/MarkDayCompleteDialog.tsx` — the "Mark day complete" `Dialog` (OUT-05,
 coach-only, opens on/after a session date): attendee checklist pre-checked from `going` RSVPs
-(coach adjusts), people-reached `NumberInput`, optional per-student hours override `NumberInput`
-(defaults to session duration, for partial attendance). Confirm → session `completed`; checked
-students get `attendance` rows (`method='coach'`, status `present`); hours computed per MET-03. Not
-reversible without an audit-logged edit.
+(coach adjusts), actual people-reached `NumberInput`, adult-volunteers count + hours fields, optional
+per-student hours override `NumberInput` (defaults to session duration, for partial attendance).
+Confirm → session `completed`; checked students get `attendance` rows (`method='coach'`, status
+`present`); hours computed per MET-03. Not reversible without an audit-logged edit.
 
 ## Dependencies (status)
 - T038 (`/outreach` list) — Passed. Read `OutreachList.tsx` (read-only) for established
   `events`/`event_sessions`/`rsvps` fixture conventions.
-- T040 (RSVP control) — **listed as this task's ledger dependency; may or may not be Passed by the
-  time you're dispatched.** If Passed, read `RsvpControl.tsx` (read-only) for its `RsvpRow` shape
-  and cite it. If not, use `OutreachList.tsx`'s existing shapes and disclose that you did so.
+- T040 (RSVP control) — Passed. Read `RsvpControl.tsx` (read-only) for its `RsvpRow` shape and cite
+  it.
+- T041 (Outreach detail) — Passed. Read `OutreachDetail.tsx` (read-only) — it already renders the
+  same session's Going/Maybe/Can't go/No response grouping this dialog's checklist needs to seed
+  from; reuse the same roster/RSVP-grouping conventions rather than inventing a divergent shape.
 
 ## Allowed Files
 - `src/pages/outreach/MarkDayCompleteDialog.tsx` (new — confirm via `Glob` this doesn't exist yet)
@@ -38,6 +40,10 @@ reversible without an audit-logged edit.
   lines 82-95.
 - `event_sessions`: `status` (`'scheduled'|'completed'|'canceled'`), `people_reached` (nullable),
   `starts_at`/`ends_at` — same file, lines 53-63.
+- `events`: `adult_volunteers_count` (int, default 0), `adult_volunteer_hours` (numeric, default 0)
+  — same file, lines 29-46. **These are EVENT-level columns, not session-level** — see Known
+  Context/Traps #6 below, this is a real granularity mismatch you must resolve and disclose, not
+  silently paper over.
 - **MET-03 formula (read-only, cited here for context — you do NOT implement this formula
   yourself)**: `hours_override` if set, else `(check_out − check_in)` clamped to the session window
   if both exist, else scheduled session duration — this is entirely `v_student_hours`'s SQL, read
@@ -77,12 +83,26 @@ coach can toggle any row regardless of starting state.
 **5. People-reached `NumberInput`** — writes to `event_sessions.people_reached` (a session-level
 field, not per-student).
 
-**6. No shared Supabase client wired in — deliberate scope, not a gap for you to solve.** Same
+**6. Adult volunteers count + hours — a real event-level/session-level granularity mismatch, the
+PRD's own wireframe includes these fields in this dialog (line 478: "Adult volunteers [4] count ·
+[12] hours"), but the columns they'd write to (`events.adult_volunteers_count`/
+`adult_volunteer_hours`) live on the EVENT, not the SESSION being completed.** An event with
+multiple sessions (e.g. a multi-day outreach event) would have this dialog opened once per session
+— decide and disclose how you resolve this: (a) treat the field as "this session's contribution,"
+accumulating/summing into the event's running total each time a session is completed, or (b) treat
+it as "the event's total so far," letting the coach see/edit the current cumulative value each time
+(simpler, but risks a coach overwriting another session's already-recorded contribution if they
+don't realize it's shared). Either is defensible — state your reasoning and pick one, don't silently
+assume.
+
+**7. No shared Supabase client wired in — deliberate scope, not a gap for you to solve.** Same
 posture as every prior content page.
 
 ## Acceptance Criteria
 - Attendee checklist pre-checked from `going` RSVPs, coach-adjustable.
 - People-reached `NumberInput` present, session-scoped.
+- Adult-volunteers count + hours fields present, with the event-vs-session granularity resolution
+  explicitly disclosed (Known Context/Traps #6).
 - Per-student hours override `NumberInput`, defaulting to session duration, coach-adjustable.
 - BEH-07 confirm button states the live-computed outcome ("Mark complete — N attended · M h").
 - MET-03's real formula never reproduced in TypeScript — only a legitimate default-value duration
