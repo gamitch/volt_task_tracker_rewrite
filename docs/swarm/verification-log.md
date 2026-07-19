@@ -1128,3 +1128,42 @@ nullability question without touching T010's applied migration.
 Full packets archived at `docs/swarm/archive/T031-worker-packet.md` and
 `docs/swarm/archive/T031-checker-packet.md`. Unblocks T033 (the live check-in console — a
 high-priority task since its other dependency, T032, was already Passed).
+[2026-07-19T05:30:06Z] Worker finished. Checker required before completion.
+
+## T053 — Coach/Admin Home (HOME-01/HOME-04)
+
+**Result: PASS (1st attempt). Severity: MINOR (one test-coverage gap, one template-inherited NIT).**
+
+Worker built `CoachHome.tsx` on the real Astryx `dashboard` template (the "Analytics Dashboard"
+display name resolves to CLI id `dashboard`, independently reproduced by the checker) with four KPI
+cards, time-windowed "Start check-in," BEH-01 milestone dedupe, and HOME-04's admin-only role-gated
+card. Two of the four KPI cards don't map onto a single existing T013 metric view, so this check
+demanded a separate constitution item 3 verdict per card rather than a blanket pass.
+
+**Checker's independent per-KPI-card verdicts (checker-accessibility):**
+- **(a) Team participation %** — pure `v_team_participation` passthrough, zero arithmetic on the
+  value anywhere in the file. Compliant.
+- **(b) Hours vs. team goal** — numerator is a plain `.reduce()` sum over already-computed
+  `v_student_hours.confirmed_hours`-shaped values; grepped the whole file for
+  `hours_override`/`check_in_at`/`check_out_at` (the terms belonging to that view's real clamping/
+  override formula) — zero hits outside comments, confirming the formula itself is never reproduced
+  in TypeScript. Denominator is a legitimate sum with no corresponding view to duplicate. Compliant.
+- **(c) Attendance rate of last completed meeting** — independently judged a legitimately NEW
+  single-session metric (different grain than any season-aggregate view, no excused-exclusion
+  applied, explicitly disclosed as a deliberate divergence from `v_student_participation`'s
+  convention) — not a re-derivation. Zero-roster-size correctly returns `null` (checker wrote and
+  ran a throwaway test confirming this, then discarded it) rather than `NaN` or a fabricated 100%.
+  **MINOR follow-up**: the shipped test suite has no explicit unit test for the zero-roster case,
+  even though the source handles it correctly.
+- **(d) Events in next 7 days** — plain count, not metric-view-adjacent at all. Compliant.
+- 60-minute check-in eligibility boundary independently re-derived and reproduced exactly (inclusive
+  60-minute edge, live/ended/non-scheduled-status exclusions, type+team-scope filtering).
+- BEH-01 dedupe and HOME-04 role-gating both independently reproduced across all disclosed test
+  cases.
+- One NIT traced directly to the vendor `dashboard` template's own `MetricCard` composition (a
+  non-monotonic `Heading level={4}`→`level={2}` sequence inside each card) — confirmed inherited
+  verbatim, not introduced by this worker; flagged as a design-system-level follow-up rather than
+  this task's defect.
+
+Full packets archived at `docs/swarm/archive/T053-worker-packet.md` and
+`docs/swarm/archive/T053-checker-packet.md`.

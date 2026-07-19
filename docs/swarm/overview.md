@@ -14,10 +14,10 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-19, post-T022/T031/T037; T053 checking)
+## Status snapshot (2026-07-19, post-T022/T031/T037/T053)
 
 75 tasks (T001–T071 + T002a + T002b + T006a + T016a) across epics E1–E11.
-**38 Passed · 17 Ready · 1 In Progress (T053, checker running) · 19 Blocked.**
+**39 Passed · 17 Ready · 0 In Progress · 19 Blocked.**
 
 - T022 (Students tab) Passed, NIT — unblocked T023, T024.
 - T031 (Schedule meetings dialog) Passed, NIT — unblocked **T033, the live
@@ -28,12 +28,13 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
   full-ledger sweep also caught and fixed a missed unblock: **T054**
   (Student Home) had all four dependencies already Passed but was never
   flipped to Ready — corrected.
-- T053 (Coach/Admin Home) worker done, checker running — this check is
-  unusually high-stakes: the worker self-flagged 2 of its 4 KPI cards as
-  new formulas not sourced from any single T013 metric view (hours-vs-goal,
-  single-meeting attendance rate), so the checker packet demands a
-  separate, explicit constitution-item-3 verdict per KPI card rather than
-  a blanket pass/fail.
+- T053 (Coach/Admin Home) Passed, MINOR — checker independently rendered a
+  separate constitution-item-3 verdict per KPI card (2 of 4 don't map onto
+  a single T013 view); all four ruled compliant. First page in the ledger
+  built on Astryx's real `dashboard` template.
+- E9 (Reports/Home) now has 3 of 8 tasks Passed (T053, T056, T061-adjacent
+  work aside) with T054/T055 Ready and T057/T058 Ready — closing in on
+  being fully open.
 
 **T071 (shared Supabase client) Passed, clean, no findings.** The recurring
 cross-cutting gap flagged by six prior tasks is now closed at the
@@ -127,12 +128,13 @@ See the T071 detail block in `task-ledger.md` (end of E3) and its
 
 ## Next recommended action
 
-Sixteen tasks are Ready: T022, T025, T026, T027, T028, T029, T031, T037,
-T039, T044, T045, T049, T050, T053, T057, T058. None currently have
-worker packets pre-built (T030/T038/T062's packets were consumed and
-archived on PASS) — each needs one built first, either directly or via
-foreman-planner. All are file-disjoint and independently dispatchable in
-parallel if budget allows; pace per session/weekly usage as usual.
+Seventeen tasks are Ready: T023, T024, T025, T026, T027, T028, T029, T033,
+T039, T044, T045, T049, T050, T054, T055, T057, T058. None currently have
+worker packets pre-built — each needs one built first, either directly or
+via foreman-planner. All are file-disjoint and independently dispatchable
+in parallel if budget allows; pace per session/weekly usage as usual.
+**T033 (live check-in console) is the highest-leverage pick** — the single
+most operationally critical screen in the app.
 
 Separately, worth deciding when to prioritize: drafting the T016a-pattern
 wiring series that connects T071's new client into `guards.tsx` and the
