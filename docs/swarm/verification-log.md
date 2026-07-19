@@ -1813,3 +1813,56 @@ as the acting parent's real profile id, with a `guardian_links`-derived read-sid
 Full packets archived at `docs/swarm/archive/T043-worker-packet.md` and
 `docs/swarm/archive/T043-checker-packet.md`.
 [2026-07-19T08:37:51Z] Worker finished. Checker required before completion.
+
+## T059 — CSV exports (RPT-05/06)
+
+**Result: PASS (1st attempt). Severity: clean — no findings.**
+
+Worker built `csvExport.ts`: four pure CSV-generation functions (`roster`, `events`, `attendance`,
+`hours_by_student`), zero data-fetching.
+
+**Checker's independent verification (checker-tests):**
+- Read `HoursTab.tsx`'s real `resolveGoalHours`/`hoursVsGoalPercent`/`round1` functions directly
+  and confirmed the test file's hand-reproductions are logically identical, then independently
+  recomputed the byte-for-byte fixture cross-check itself (not trusting the worker's own
+  computation) — all three fixture students matched exactly.
+- Independently reproduced the RFC 4180 escaping proof and added its own adversarial cases beyond
+  the worker's tests (a single-double-quote-character field, an empty string) — both correct.
+- Confirmed by grep zero data-fetching and zero arithmetic recomputation of confirmed/planned hours
+  or goal percentages anywhere in the file.
+- UTF-8 BOM, ISO dates, and the deferred-to-T063 old-app-parity disclosure all confirmed accurate.
+- 24/24 own tests, 816/816 repo-wide, typecheck/lint/build clean.
+
+**The T053–T060 range is now fully Passed except T060** — every E11 sweep task (T066–T069) is one
+dependency closer to Ready.
+
+Full packets archived at `docs/swarm/archive/T059-worker-packet.md` and
+`docs/swarm/archive/T059-checker-packet.md`.
+
+## T041 — Outreach detail `/outreach/:eventId` (OUT-04)
+
+**Result: PASS (1st attempt). Severity: MINOR.**
+
+Worker built `OutreachDetail.tsx`: `MetadataList`, per-session signup lists in four buckets, a
+plain Google Maps link, Copy link, and disclosed Edit/Cancel stubs.
+
+**Checker's independent verification (checker-accessibility):**
+- **Central safety check**: reproduced the "No response" roster-minus-rsvps diff and confirmed
+  team-scoped exclusion is structurally guaranteed (roster filtering happens upstream of bucket
+  computation, so an out-of-scope student can never appear in any bucket at all).
+- Reproduced the DES-12 reveal-nothing proof: confirmed `null` (not-found) and a rejected promise
+  (transient error) are genuinely distinct code paths with non-leaking, non-conflated copy;
+  independently confirmed `MetadataList` really does render a `<dl>` when present, making its
+  absence assertion in the not-found state a meaningful, non-trivial check.
+- **Independently confirmed via the migration that `events` has no `status` column at all** (only
+  `event_sessions` does) — concurred the disclosed Edit/Cancel stub-banner scope call was correct,
+  not a shortcut, given the real mismatch between the event-level `MoreMenu` action and the only
+  actually-mutable per-session state.
+- Google Maps URL encoding independently re-verified byte-for-byte against the fixture address.
+- 20/20 own tests, 816/816 repo-wide, typecheck/lint/build clean. MINOR follow-up: "Link copied"
+  toast fires before the clipboard-write promise settles (disclosed, low-risk, not blocking).
+
+**T042 unblocked (Blocked→Ready).**
+
+Full packets archived at `docs/swarm/archive/T041-worker-packet.md` and
+`docs/swarm/archive/T041-checker-packet.md`.
