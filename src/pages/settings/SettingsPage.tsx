@@ -147,16 +147,17 @@
  * cited spec fact).
  *
  * Trap #5's role source: NOT `useAuth()`. `guards.tsx`'s exported `Role`
- * union is `'admin' | 'staff' | 'volunteer' | 'coach'` -- a stale T005
- * placeholder that cannot even represent `'student'`/`'parent'` at all
- * (the same disclosed-not-fixed gap `SeasonSettings.tsx`/`AdminToggles.tsx`
- * already flagged). Reading `useAuth().user?.role` here would silently break
- * for every student/parent viewer. Instead, the viewer's role is read from
- * the REAL, loaded `profiles.role` column (`role_enum`: `admin | coach |
- * student | parent`, Ground Truth) via `loadSettingsData`'s resolved
- * `profile.role` -- the actual source of truth this page already has to load
- * regardless, sidestepping the stale `guards.tsx` vocabulary entirely rather
- * than coincidentally relying on it.
+ * union now matches AUTH-05's real `admin | coach | student | parent`
+ * vocabulary exactly (fixed by T073a; previously a stale T005 placeholder
+ * that could not even represent `'student'`/`'parent'` at all, the same
+ * gap `SeasonSettings.tsx`/`AdminToggles.tsx` already flagged). Even so,
+ * `useAuth().user?.role` is not the right source for this page: the
+ * viewer's role is read from the REAL, loaded `profiles.role` column
+ * (`role_enum`: `admin | coach | student | parent`, Ground Truth) via
+ * `loadSettingsData`'s resolved `profile.role` -- the actual source of
+ * truth this page already has to load regardless, sidestepping
+ * `guards.tsx`'s session-level role entirely rather than coincidentally
+ * relying on it.
  *
  * -----------------------------------------------------------------------
  * 5. "Settings template" investigation (constitution item 13) -- Trap #8.

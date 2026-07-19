@@ -34,19 +34,14 @@
  *
  * -----------------------------------------------------------------------
  * 2. `guards.tsx` `Role` vocabulary gap (packet Known Context/Traps #2) --
- * disclosed, not resolved here.
+ * resolved by T073a, not by this task.
  *
- * `guards.tsx`'s exported `Role` union is
- * `'admin' | 'staff' | 'volunteer' | 'coach'` (a stale T005 placeholder),
- * not AUTH-05's real profile-role vocabulary confirmed live by T019
- * (`admin | coach | student | parent`). `'coach'` and `'admin'` happen to
- * be spelled identically in both vocabularies, so
- * `allowedRoles={['coach', 'admin']}` below reads correctly under either
- * one for this specific task -- but that overlap is coincidental, not
- * evidence the mismatch is fixed. `guards.tsx` is a forbidden (read-only)
- * file for this task and this reconciliation is explicitly not attempted
- * here, matching the posture T007 and T018 were each told to take on this
- * same recurring gap.
+ * `guards.tsx`'s exported `Role` union now matches AUTH-05's real
+ * profile-role vocabulary confirmed live by T019 (`admin | coach | student
+ * | parent`) exactly -- previously a stale T005 placeholder
+ * (`'admin' | 'staff' | 'volunteer' | 'coach'`). `allowedRoles={['coach',
+ * 'admin']}` below continues to read correctly, now for the real (not
+ * merely coincidentally-overlapping) vocabulary.
  *
  * -----------------------------------------------------------------------
  * 3. `router.tsx` wiring gap (packet Known Context/Traps #3) -- flagged,

@@ -193,16 +193,14 @@
  * -----------------------------------------------------------------------
  * 7. `guards.tsx` `Role` vocabulary gap (same recurring gap `RosterShell.tsx`/
  *    T021, `MeetingsList.tsx`/T030, `OutreachList.tsx`/T038 already
- *    disclosed) -- NOT re-derived here, only applied identically.
+ *    disclosed) -- resolved by T073a, not by this task.
  *
- * `guards.tsx`'s exported `Role` union is still the stale
- * `'admin' | 'staff' | 'volunteer' | 'coach'` placeholder, not AUTH-05's
- * real `admin | coach | student | parent` vocabulary. `'admin'`/`'coach'`
- * happen to be spelled identically in both vocabularies, so the
+ * `guards.tsx`'s exported `Role` union now matches AUTH-05's real
+ * `admin | coach | student | parent` vocabulary exactly (previously a
+ * stale `'admin' | 'staff' | 'volunteer' | 'coach'` placeholder), so the
  * `user.role === 'admin'` HOME-04 check and this component's general
- * "Coach/Admin Home" framing read correctly under either vocabulary for
- * this task -- coincidental overlap, not a fixed mismatch (same posture
- * every sibling task in this batch has taken).
+ * "Coach/Admin Home" framing continue to read correctly, now against the
+ * real vocabulary rather than a coincidental overlap.
  *
  * Unlike `OutreachList.tsx`/`MeetingsList.tsx` (role-VARIANT pages: one URL,
  * different content per role, so they must branch on `user.role` internally

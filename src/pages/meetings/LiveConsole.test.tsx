@@ -67,7 +67,16 @@ let container: HTMLDivElement;
 let root: Root;
 
 const COACH_USER: AuthUser = { id: 'user-coach', email: 'coach@example.com', role: 'coach' };
-const STAFF_USER: AuthUser = { id: 'user-staff', email: 'staff@example.com', role: 'staff' };
+// T073a: renamed from `STAFF_USER`/`role: 'staff'` (invalid under the
+// corrected `Role` type) to `STUDENT_USER`/`role: 'student'`. This fixture
+// stands in generically for "a signed-in user who is NOT coach/admin" in
+// the tests below -- `'student'` preserves that intent (any non-coach/admin
+// role exercises the same "no Excused segment" / "redirect away" branches).
+const STUDENT_USER: AuthUser = {
+  id: 'user-student',
+  email: 'student@example.com',
+  role: 'student',
+};
 
 /**
  * Logs in via a `useEffect` (not a render-phase call) and withholds
@@ -512,14 +521,14 @@ describe('MTG-12 excused gating (defense in depth)', () => {
   });
 
   it('a non-coach/admin role never renders an Excused segment, even rendered directly against the ungated body', async () => {
-    renderBody(STAFF_USER);
+    renderBody(STUDENT_USER);
     await flushMicrotasks();
     const cy = row('student-cy');
     expect(cy.querySelector('[role="radio"][data-value="excused"]')).toBeNull();
   });
 
   it('digit "3" is a no-op for a non-coach/admin role (never sets excused via keyboard)', async () => {
-    renderBody(STAFF_USER);
+    renderBody(STUDENT_USER);
     await flushMicrotasks();
 
     const cy = row('student-cy');
@@ -539,7 +548,7 @@ describe('MTG-12 excused gating (defense in depth)', () => {
 
 describe('LiveConsolePage role guard', () => {
   it('redirects a non-coach/admin role to "/"', async () => {
-    renderPage(STAFF_USER);
+    renderPage(STUDENT_USER);
     await flushMicrotasks();
     expect(container.querySelector('[data-testid="redirected-home"]')).toBeTruthy();
     expect(container.textContent).not.toContain('Roster');

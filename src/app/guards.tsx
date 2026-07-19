@@ -20,6 +20,7 @@
 import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import type { Role } from '../lib/supabase';
 
 // ---------------------------------------------------------------------------
 // Auth context (placeholder implementation -- see module doc above)
@@ -28,19 +29,19 @@ import { Navigate, useLocation } from 'react-router-dom';
 /**
  * Role identifiers referenced by this task's guard mechanism.
  *
- * NOTE: the full RBAC matrix (which routes/actions each role may access) was
- * not excerpted into the T005 worker packet, so this union is a placeholder
- * covering the roles implied elsewhere in the available PRD excerpts. Treat
- * this as provisional and reconcile against the full PRD RBAC section before
- * relying on it for anything beyond demonstrating the guard mechanism.
- *
- * `'coach'` was added in the T005 rework attempt specifically so that
- * `/kiosk/:sessionId` (PRD Section 7: role = coach/admin) can be guarded with
- * `RequireRole(['coach', 'admin'])`. Full reconciliation against the PRD's
- * complete role vocabulary (admin/coach/student/parent, per AUTH-05) is left
- * open -- flagged here, not resolved in this attempt.
+ * T073a: this used to be a hand-retyped local union (`'admin' | 'staff' |
+ * 'volunteer' | 'coach'`, a stale T005 placeholder that predated AUTH-05's
+ * real role vocabulary and could not represent `'student'`/`'parent'` at
+ * all -- flagged as an open gap by T005 and every downstream task that
+ * touched a role check since). It is now a direct re-export of
+ * `src/lib/supabase/types.ts`'s `Role` (built by T071), which is already
+ * transcribed verbatim from `role_enum`
+ * (`supabase/migrations/20260716000000_identity_roster.sql`: `create type
+ * role_enum as enum ('admin', 'coach', 'student', 'parent');`) -- so this
+ * module can no longer drift from that source of truth by hand-editing a
+ * second copy of the union here.
  */
-export type Role = 'admin' | 'staff' | 'volunteer' | 'coach';
+export type { Role };
 
 export interface AuthUser {
   id: string;
@@ -71,10 +72,25 @@ export interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/**
+ * T073a: `role: 'coach'` is the chosen "shared placeholder role" -- the
+ * same value `LoginPage.tsx`'s and `AcceptInvitePage.tsx`'s
+ * `PLACEHOLDER_SIGN_IN_ROLE` constants now use, so every "no real backend
+ * yet" placeholder sign-in path (email/password, Google, and accept-invite
+ * completion) resolves to one consistent role rather than three different
+ * ones. `'coach'` was chosen over `'admin'`/`'student'`/`'parent'` because
+ * it is the closest practical analog to the old `'staff'` placeholder's
+ * broad, non-admin operational access -- most existing `RequireRole`
+ * gates in this codebase allow `['coach', 'admin']`, so a placeholder
+ * sign-in still reaches the same routes it did before this fix, whereas
+ * `'student'`/`'parent'` would newly lock a placeholder-authenticated
+ * session out of most coach/admin-gated screens during manual testing.
+ * Previously `role: 'staff'`, invalid under the now-corrected `Role` type.
+ */
 const PLACEHOLDER_GOOGLE_USER: AuthUser = {
   id: 'placeholder-google-user',
   email: 'placeholder.google.user@example.com',
-  role: 'staff',
+  role: 'coach',
 };
 
 export function AuthProvider({ children }: { children: ReactNode }): ReactNode {

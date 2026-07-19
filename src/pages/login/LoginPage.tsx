@@ -96,11 +96,14 @@ const SIMULATED_AUTH_LATENCY_MS = 350;
  * no real credential-to-role lookup (no Supabase client, no `profiles`
  * table read from the frontend yet -- see module doc gap #2 above). This
  * matches the role already used by `guards.tsx`'s own
- * `PLACEHOLDER_GOOGLE_USER` constant (`role: 'staff'`), so both sign-in
- * paths on this page resolve to the same placeholder role until a real
- * backend can supply the actual one.
+ * `PLACEHOLDER_GOOGLE_USER` constant (`role: 'coach'`, T073a's chosen
+ * shared placeholder value -- see that constant's own doc comment in
+ * `guards.tsx` for the full reasoning), so both sign-in paths on this page
+ * resolve to the same placeholder role until a real backend can supply the
+ * actual one. Previously `'staff'`, invalid under `guards.tsx`'s
+ * T073a-corrected `Role` type.
  */
-const PLACEHOLDER_SIGN_IN_ROLE: Role = 'staff';
+const PLACEHOLDER_SIGN_IN_ROLE: Role = 'coach';
 
 interface FieldErrors {
   email?: string;

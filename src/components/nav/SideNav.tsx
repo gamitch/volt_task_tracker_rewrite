@@ -17,11 +17,11 @@
  * (no `load` event refire, session preserved, URL + `document.title` still
  * update correctly) -- see worker output for the live-Playwright evidence.
  *
- * Role filtering (K2 gap): `guards.tsx`'s `Role` union is
- * `'admin' | 'staff' | 'volunteer' | 'coach'`, not the PRD's
- * `admin`/`coach`/`student`/`parent` vocabulary (AUTH-05). `guards.tsx` is a
- * forbidden file for this task and is not fixed here. NAV-03's table only
- * produces two distinct visibility sets (Admin/Coach see all 7 items;
+ * Role filtering (K2 gap): `guards.tsx`'s `Role` union now matches AUTH-05's
+ * `admin`/`coach`/`student`/`parent` vocabulary exactly (fixed by T073a;
+ * previously a stale `'admin' | 'staff' | 'volunteer' | 'coach'`
+ * placeholder). NAV-03's table only produces two distinct visibility sets
+ * (Admin/Coach see all 7 items;
  * Student/Parent see 5, no Roster/no Reports), so item *visibility* only
  * needs an "is this a staff-tier role" check -- it never needs to
  * distinguish `student` from `parent` (that only matters for page-level

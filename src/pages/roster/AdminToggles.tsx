@@ -119,12 +119,11 @@
  * packet's own instruction) and renders `null` (nothing at all) when
  * `user` is null, still loading, or `user.role !== 'admin'` -- the widget
  * simply doesn't exist for a non-admin viewer, the rest of the page is
- * unaffected. `guards.tsx`'s own exported `Role` union is
- * `'admin' | 'staff' | 'volunteer' | 'coach'` (a stale T005 placeholder,
- * not AUTH-05's real `admin | coach | student | parent` vocabulary) --
- * `'admin'` happens to be spelled identically in both, so `role === 'admin'`
- * reads correctly either way; this is the same disclosed-not-fixed gap
- * `RosterShell.tsx`/T021 already flagged, not re-derived as new here.
+ * unaffected. `guards.tsx`'s own exported `Role` union now matches AUTH-05's
+ * real `admin | coach | student | parent` vocabulary exactly (fixed by
+ * T073a; previously a stale `'admin' | 'staff' | 'volunteer' | 'coach'`
+ * placeholder), so `role === 'admin'` continues to read correctly -- see
+ * `RosterShell.tsx`/T021 for the same gap, now likewise resolved.
  *
  * -----------------------------------------------------------------------
  * 6. Season default-goal shortcut -- a real, cited route, not a raw string.

@@ -163,22 +163,21 @@
  * -----------------------------------------------------------------------
  * 6. `guards.tsx` `Role` vocabulary gap (same recurring gap `RosterShell.tsx`
  *    (T021), `ParticipationTab.tsx` (T056), and `MeetingsList.tsx` (T030)
- *    already disclosed) -- NOT re-derived here, only applied identically.
+ *    already disclosed) -- resolved by T073a, not by this task.
  *
- * `guards.tsx`'s exported `Role` union is still the stale
- * `'admin' | 'staff' | 'volunteer' | 'coach'` placeholder, not AUTH-05's
- * real `admin | coach | student | parent` vocabulary. Since `router.tsx`
- * wires `/outreach` with `RequireAuth` only (no `RequireRole` -- confirmed
- * by reading that forbidden/read-only file directly; this is CORRECT for
- * this route, not a gap: OUT-01 is a role-*variant* page, not a
+ * `guards.tsx`'s exported `Role` union now matches AUTH-05's real
+ * `admin | coach | student | parent` vocabulary exactly (previously a
+ * stale `'admin' | 'staff' | 'volunteer' | 'coach'` placeholder). Since
+ * `router.tsx` wires `/outreach` with `RequireAuth` only (no `RequireRole`
+ * -- confirmed by reading that forbidden/read-only file directly; this is
+ * CORRECT for this route, not a gap: OUT-01 is a role-*variant* page, not a
  * role-*gated* one, same posture as `/meetings`), this component never
  * imports/uses `RequireRole` -- it only reads `useAuth().user.role` to pick
  * which variant to render. `isCoachOrAdminView` below compares only against
- * the two role literals present in the stale `Role` union (`'coach'`,
- * `'admin'`); everything else (including a real `'student'`/`'parent'`
- * value a future Supabase-backed `AuthProvider` would actually produce --
- * not expressible in today's stale `Role` type, but still a plain string at
- * runtime) falls through to the student/parent variant.
+ * the `'coach'`/`'admin'` literals by design (it only needs to distinguish
+ * coach/admin from everyone else); everything else, including a real
+ * `'student'`/`'parent'` value, now correctly type-checks too and falls
+ * through to the student/parent variant.
  *
  * -----------------------------------------------------------------------
  * 7. No student/profile linkage on `AuthUser` yet -- a real gap, disclosed

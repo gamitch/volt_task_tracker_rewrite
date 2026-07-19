@@ -55,20 +55,23 @@
  *    query. `defaultLoadInvite` in this file is an obviously-fake
  *    placeholder, not a real data source.
  *
- * 3. `guards.tsx`'s `Role` union (`'admin' | 'staff' | 'volunteer' |
- *    'coach'`, a stale T005 placeholder per that file's own doc comment)
- *    does not match AUTH-05's real `role_enum` (`'admin' | 'coach' |
- *    'student' | 'parent'`). This page displays the invite's real AUTH-05
- *    role via `InviteRole` (`./types.ts`), completely independent of
- *    `guards.tsx`'s `Role` -- but when *completing* sign-up (calling
- *    `login({ id, email, role })`), there is no way to correctly carry the
- *    invite's real role through, since `guards.tsx`'s vocabulary has no
- *    `student`/`parent` member at all (only `admin`/`coach` happen to
- *    overlap, and even then there's no real backend role resolution to
- *    trust). Per this task's Known Context/Traps #4, this file does NOT
- *    attempt a partial/silent mapping -- it uses the same flat placeholder
- *    role `LoginPage.tsx` already established (`PLACEHOLDER_SIGN_IN_ROLE:
- *    Role = 'staff'`) for every invite regardless of the invite's actual
+ * 3. `guards.tsx`'s `Role` union previously (`'admin' | 'staff' |
+ *    'volunteer' | 'coach'`, a stale T005 placeholder per that file's own
+ *    doc comment) did not match AUTH-05's real `role_enum` (`'admin' |
+ *    'coach' | 'student' | 'parent'`) -- T073a reconciled the two, so
+ *    `guards.tsx`'s `Role` now IS AUTH-05's vocabulary verbatim. This page
+ *    displays the invite's real AUTH-05 role via `InviteRole`
+ *    (`./types.ts`), still completely independent of `guards.tsx`'s
+ *    `Role` -- when *completing* sign-up (calling `login({ id, email,
+ *    role })`), this file still does NOT attempt to carry the invite's
+ *    real displayed role through to the login call: no real
+ *    credential-to-role resolution exists yet (no Supabase client wired
+ *    into `guards.tsx`'s placeholder `login()`), so mapping `InviteRole`
+ *    to a real session role would be inventing unearned precision. Per
+ *    this task's Known Context/Traps #4, this file uses the same flat
+ *    placeholder role `LoginPage.tsx` already established
+ *    (`PLACEHOLDER_SIGN_IN_ROLE: Role = 'coach'`, T073a's chosen shared
+ *    placeholder value) for every invite regardless of the invite's actual
  *    displayed role, and says so here explicitly rather than silently
  *    coercing.
  * -----------------------------------------------------------------------
@@ -194,11 +197,14 @@ async function defaultLoadInvite(token: string | null): Promise<AcceptInviteData
  * Role assigned to a successful "Set a password" or "Continue with
  * Google" completion. See module doc gap #3 -- this intentionally ignores
  * the invite's own real `InviteRole` and matches `LoginPage.tsx`'s
- * identical placeholder (`PLACEHOLDER_SIGN_IN_ROLE: Role = 'staff'`),
- * because `guards.tsx`'s placeholder `login()` has no real credential/role
- * resolution and no vocabulary member for `student`/`parent` at all.
+ * identical placeholder (`PLACEHOLDER_SIGN_IN_ROLE: Role = 'coach'`,
+ * T073a's chosen shared placeholder value -- see `guards.tsx`'s
+ * `PLACEHOLDER_GOOGLE_USER` doc comment for the full reasoning), because
+ * `guards.tsx`'s placeholder `login()` has no real credential/role
+ * resolution to trust, independent of the fact its `Role` vocabulary now
+ * does include `student`/`parent` (T073a).
  */
-const PLACEHOLDER_SIGN_IN_ROLE: Role = 'staff';
+const PLACEHOLDER_SIGN_IN_ROLE: Role = 'coach';
 
 type InviteLoadState = 'loading' | 'ready' | 'error';
 

@@ -46,7 +46,7 @@ import {
 let container: HTMLDivElement;
 let root: Root;
 
-const PARENT_USER: AuthUser = { id: 'user-parent', email: 'parent@example.com', role: 'staff' };
+const PARENT_USER: AuthUser = { id: 'user-parent', email: 'parent@example.com', role: 'parent' };
 
 function LoginAs({ user, children }: { user: AuthUser; children: ReactNode }): ReactNode {
   const { login, user: currentUser } = useAuth();

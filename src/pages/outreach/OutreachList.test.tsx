@@ -55,14 +55,15 @@ let container: HTMLDivElement;
 let root: Root;
 
 const COACH_USER: AuthUser = { id: 'user-coach', email: 'coach@example.com', role: 'coach' };
-// guards.tsx's `Role` union has no 'student'/'parent' literal yet (module
-// doc #6 gap) -- 'staff' stands in for "not coach/admin" here, exactly the
-// branch OutreachList's own `isCoachOrAdminView` check falls through on for
-// any non-coach/admin role.
+// T073a: guards.tsx's `Role` union now includes 'student'/'parent'
+// (previously it did not -- module doc #6 gap, resolved). 'student' stands
+// in for "not coach/admin" here, exactly the branch OutreachList's own
+// `isCoachOrAdminView` check falls through on for any non-coach/admin role.
+// Previously `role: 'staff'`, invalid under the corrected `Role` type.
 const STUDENT_OR_PARENT_USER: AuthUser = {
   id: 'user-student',
   email: 'student@example.com',
-  role: 'staff',
+  role: 'student',
 };
 
 function LoginAs({ user, children }: { user: AuthUser; children: ReactNode }): ReactNode {

@@ -433,7 +433,14 @@ describe('<ParentsTabBody /> Edit links stub', () => {
 // ---------------------------------------------------------------------------
 
 const COACH_USER: AuthUser = { id: 'user-coach', email: 'coach@example.com', role: 'coach' };
-const STAFF_USER: AuthUser = { id: 'user-staff', email: 'staff@example.com', role: 'staff' };
+// T073a: renamed from `STAFF_USER`/`role: 'staff'` (invalid under the
+// corrected `Role` type) to `STUDENT_USER`/`role: 'student'`. Stands in
+// generically for "not coach/admin" in the `RequireRole` guard test below.
+const STUDENT_USER: AuthUser = {
+  id: 'user-student',
+  email: 'student@example.com',
+  role: 'student',
+};
 
 /** Mirrors `LiveConsole.test.tsx`'s own `LoginAs` harness: logs in via a
  * `useEffect` (not render-phase) and withholds rendering `children` until
@@ -476,7 +483,7 @@ function renderGatedPage(user: AuthUser | null): void {
 
 describe('<ParentsTab /> RequireRole guard', () => {
   it('redirects a non-coach/admin role to "/"', async () => {
-    renderGatedPage(STAFF_USER);
+    renderGatedPage(STUDENT_USER);
     await flushMicrotasks();
     expect(container.querySelector('[data-testid="redirected-home"]')).toBeTruthy();
     expect(container.textContent).not.toContain('Parents');

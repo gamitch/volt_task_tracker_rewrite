@@ -2250,3 +2250,50 @@ note for whoever next touches `astryx-api.md`.
 
 **NFR-06 is now genuinely satisfied on `LiveConsole.tsx`.**
 [2026-07-19T13:07:43Z] Worker finished. Checker required before completion.
+[2026-07-19T13:15:42Z] Worker finished. Checker required before completion.
+[2026-07-19T13:29:23Z] Worker finished. Checker required before completion.
+[2026-07-19T13:29:54Z] Worker finished. Checker required before completion.
+
+## T073a — Role vocabulary reconciliation (`guards.tsx`'s stale `Role` type), Epic E3
+
+**Result: PASS (1st attempt). Severity: none — clean.**
+
+First task of the router-wiring series, scoped after boss-architect consultation. `guards.tsx`'s
+`Role` type was a stale T005 placeholder (`'admin' | 'staff' | 'volunteer' | 'coach'`) missing
+`'student'`/`'parent'` — the real vocabulary, confirmed against `role_enum` in the actual migration
+SQL and already correctly defined by T071 (Passed) in `src/lib/supabase/types.ts`.
+
+**Fix**: `guards.tsx`'s `Role` now re-exports the real type from `src/lib/supabase`'s public barrel
+(`import type { Role } from '../lib/supabase'; export type { Role };`) rather than a second,
+independently-drifting local union — worker confirmed zero circular-dependency risk (`lib/supabase`
+has no dependency on `app/guards`) before choosing this over a local redefinition. Every now-invalid
+`'staff'`/`'volunteer'` role literal fixed across `guards.tsx`'s `PLACEHOLDER_GOOGLE_USER`,
+`LoginPage.tsx`'s and `AcceptInvitePage.tsx`'s `PLACEHOLDER_SIGN_IN_ROLE` (all three consistently
+set to `'coach'` — chosen because most `RequireRole` gates allow `['coach', 'admin']`, so a
+placeholder-authenticated session still reaches the same routes it did before), and 6 test fixtures
+that used `'staff'` either as an intended "student" or "parent" role, or generically as a
+"not coach/admin" stand-in (renamed accordingly: `StudentHome.test.tsx`, `ParentHome.test.tsx`,
+`LiveConsole.test.tsx`, `MeetingsList.test.tsx`, `ParentsTab.test.tsx`, `OutreachList.test.tsx`).
+10 additional files each had exactly one stale doc-comment citation of the old union corrected,
+with no other content touched.
+
+**Checker's independent verification (checker-tests):**
+- Independently confirmed the `Role` type re-export matches `role_enum` exactly, and confirmed the
+  no-circular-dependency claim by reading `lib/supabase`'s actual imports.
+- Spot-checked all 6 test-fixture fixes directly, confirming each rename/value change preserves the
+  original test's intent (e.g. `STAFF_USER`→`STUDENT_USER` renames genuinely test "not coach/admin"
+  behavior generically, not something requiring a specific non-student role).
+- Ran a fresh grep sweep confirming zero remaining live-code invalid role literals (doc-comment
+  citations of the historical fix are fine and expected).
+- Spot-checked several of the 10 doc-comment-only fixes, confirmed each is genuinely minimal and
+  targeted, no code logic changed.
+- Independently ran typecheck/lint/test(867/867)/build/format:check — all clean; confirmed the one
+  `format:check` failure (`Kiosk.tsx`) is pre-existing and unrelated (via `git log`, last touched by
+  T034, not in T073a's Allowed Files, not in the worker's diff).
+- Gave independent (not just agreeing) engineering-judgment assessment of both the barrel-import
+  choice and the `'coach'` shared-placeholder choice — judged both sound on their own merits.
+- Confirmed exactly the 19 claimed files changed via `git status`, nothing else.
+
+**Role vocabulary is now correct everywhere it's referenced. This unblocks the rest of the
+router-wiring series** (T074 batched route swaps, T075 role dispatchers for `/` and
+`/meetings/live/:sessionId`, and T073b real Supabase `AuthProvider` wiring — none yet created).

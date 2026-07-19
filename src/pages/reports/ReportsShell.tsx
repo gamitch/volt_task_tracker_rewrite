@@ -41,18 +41,16 @@
  * has, per T018/T021's own disclosed findings).
  *
  * -----------------------------------------------------------------------
- * 2. `guards.tsx`'s `Role` vocabulary gap -- disclosed, not resolved here
- *    (same posture T007/T018/T021 were each told to take on this same
- *    recurring gap).
+ * 2. `guards.tsx`'s `Role` vocabulary gap -- resolved by T073a, not by
+ *    this task (same posture T007/T018/T021 were each told to take on
+ *    this same recurring gap, before it was fixed).
  *
- * `guards.tsx`'s exported `Role` union is `'admin' | 'staff' | 'volunteer'
- * | 'coach'` (a stale T005 placeholder), not AUTH-05's real profile-role
- * vocabulary (`admin | coach | student | parent`). `'coach'` and `'admin'`
- * happen to be spelled identically in both vocabularies, so
- * `allowedRoles={['coach', 'admin']}` below reads correctly under either
- * one for this specific task -- but that overlap is coincidental, not
- * evidence the mismatch is fixed. `guards.tsx` is a forbidden (read-only)
- * file here and this reconciliation is explicitly not attempted.
+ * `guards.tsx`'s exported `Role` union now matches AUTH-05's real
+ * profile-role vocabulary exactly (`admin | coach | student | parent`),
+ * previously a stale `'admin' | 'staff' | 'volunteer' | 'coach'` T005
+ * placeholder. `allowedRoles={['coach', 'admin']}` below continues to read
+ * correctly, now against the real (not merely coincidentally-overlapping)
+ * vocabulary.
  *
  * -----------------------------------------------------------------------
  * 3. Astryx prop sourcing (constitution item 2), everything used below:

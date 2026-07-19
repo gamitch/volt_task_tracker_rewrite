@@ -191,12 +191,11 @@
  *    -- SET-04 says "admin only," not "admin or coach," so (unlike
  *    `RosterShell.tsx`'s `['coach', 'admin']`) only `'admin'` is listed,
  *    matching `AdminToggles.tsx`'s own `role === 'admin'` check. `guards.tsx`'s
- *    `Role` union (`'admin' | 'staff' | 'volunteer' | 'coach'`) is still the
- *    stale T005 placeholder, not AUTH-05's real `admin | coach | student |
- *    parent` vocabulary -- same disclosed, unresolved gap `RosterShell.tsx`/
- *    `AdminToggles.tsx` already flagged; `'admin'` happens to be spelled
- *    identically in both vocabularies, so this reads correctly under either
- *    one, coincidentally, same as before.
+ *    `Role` union now matches AUTH-05's real `admin | coach | student |
+ *    parent` vocabulary exactly (fixed by T073a; previously a stale T005
+ *    placeholder, `'admin' | 'staff' | 'volunteer' | 'coach'` -- same gap
+ *    `RosterShell.tsx`/`AdminToggles.tsx` already flagged, now likewise
+ *    resolved), so `allowedRoles={['admin']}` continues to read correctly.
  *
  * -----------------------------------------------------------------------
  * 7. DES-12 four states (loading / error / empty / populated) -- same

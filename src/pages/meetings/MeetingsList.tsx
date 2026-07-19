@@ -93,25 +93,23 @@
  *
  * -----------------------------------------------------------------------
  * 5. `guards.tsx` `Role` vocabulary gap (same recurring gap `RosterShell.tsx`/
- *    T021 and `ParticipationTab.tsx`/T056 already disclosed) -- NOT
- *    re-derived here, only applied.
+ *    T021 and `ParticipationTab.tsx`/T056 already disclosed) -- resolved by
+ *    T073a, not by this task.
  *
- * `guards.tsx`'s exported `Role` union is still the stale
- * `'admin' | 'staff' | 'volunteer' | 'coach'` placeholder, not AUTH-05's
- * real `admin | coach | student | parent` vocabulary. Since `router.tsx`
- * wires `/meetings` with `RequireAuth` only (no `RequireRole` -- confirmed
- * by reading that file directly; it is a forbidden/read-only file here, and
- * per the worker packet this is CORRECT for this route, not a gap to fix:
- * MTG-01 is a role-*variant* page, not a role-*gated* one), this component
- * never imports/uses `RequireRole` -- it only reads `useAuth().user.role` to
- * pick which variant to render. `isCoachOrAdminView` below compares only
- * against the two role literals that ARE present in the stale `Role` union
- * (`'coach'`, `'admin'`) so the comparison type-checks; everything else
- * (including a real `'student'`/`'parent'` value a future Supabase-backed
- * `AuthProvider` would actually produce -- not expressible in today's stale
- * `Role` type, but still a plain string at runtime) falls through to the
- * student/parent variant. This is the same "coincidental literal overlap,
- * not a fixed mismatch" posture `RosterShell.tsx` already documented.
+ * `guards.tsx`'s exported `Role` union now matches AUTH-05's real
+ * `admin | coach | student | parent` vocabulary exactly (previously a
+ * stale `'admin' | 'staff' | 'volunteer' | 'coach'` placeholder). Since
+ * `router.tsx` wires `/meetings` with `RequireAuth` only (no `RequireRole`
+ * -- confirmed by reading that file directly; it is a forbidden/read-only
+ * file here, and per the worker packet this is CORRECT for this route, not
+ * a gap to fix: MTG-01 is a role-*variant* page, not a role-*gated* one),
+ * this component never imports/uses `RequireRole` -- it only reads
+ * `useAuth().user.role` to pick which variant to render.
+ * `isCoachOrAdminView` below compares only against the `'coach'`/`'admin'`
+ * literals by design (it only needs to distinguish coach/admin from
+ * everyone else); everything else, including a real `'student'`/`'parent'`
+ * value, now correctly type-checks too and falls through to the
+ * student/parent variant.
  *
  * -----------------------------------------------------------------------
  * 6. No student/profile linkage on `AuthUser` yet -- a real gap, disclosed

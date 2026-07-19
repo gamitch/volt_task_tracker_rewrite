@@ -47,13 +47,12 @@
  * Swapping that placeholder for a real import requires editing router.tsx,
  * a forbidden file here.
  *
- * `guards.tsx`'s exported `Role` union is still the stale
- * `'admin' | 'staff' | 'volunteer' | 'coach'` placeholder (not AUTH-05's
- * real `admin | coach | student | parent` vocabulary) -- the same
- * recurring, disclosed-not-fixed gap `RosterShell.tsx`/`MeetingsList.tsx`
- * already flagged. `'coach'`/`'admin'` happen to be spelled identically in
- * both vocabularies, which is why `allowedRoles={['coach', 'admin']}` below
- * still reads correctly today.
+ * `guards.tsx`'s exported `Role` union now matches AUTH-05's real
+ * `admin | coach | student | parent` vocabulary exactly (fixed by T073a;
+ * previously a stale `'admin' | 'staff' | 'volunteer' | 'coach'`
+ * placeholder -- the same recurring gap `RosterShell.tsx`/`MeetingsList.tsx`
+ * already flagged, now likewise resolved). `allowedRoles={['coach',
+ * 'admin']}` below continues to read correctly.
  *
  * -----------------------------------------------------------------------
  * 2. QR panel -- T032's exact HMAC/short-code scheme, re-derived from
