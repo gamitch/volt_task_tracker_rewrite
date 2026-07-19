@@ -1278,3 +1278,4 @@ no regression).
 
 Full packets archived at `docs/swarm/archive/T054-worker-packet.md` and
 `docs/swarm/archive/T054-checker-packet.md`.
+[2026-07-19T06:34:54Z] Worker finished. Checker required before completion.
