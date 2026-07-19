@@ -1893,3 +1893,37 @@ Worker built `supabase/functions/ics/**`: role-scoped, `ical-generator`-only ICS
 
 Full packets archived at `docs/swarm/archive/T047-worker-packet.md` and
 `docs/swarm/archive/T047-checker-packet.md`.
+[2026-07-19T08:45:43Z] Worker finished. Checker required before completion.
+
+## T051 — `send-reminders` Edge Function + `pg_cron` + dedupe (EML-03)
+
+**Result: PASS (1st attempt). Severity: clean — no BLOCKER/MAJOR findings.**
+
+Worker built `supabase/functions/send-reminders/**` plus an additive `_cron.sql` migration:
+due-session selection, recipient expansion + `notification_prefs` filtering, `email_log` dedupe,
+Resend batching.
+
+**Checker's independent verification (checker-tests):**
+- Had real Deno available; independently ran the full suite itself (54/54, 0 typecheck errors)
+  rather than relying on the worker's own results.
+- **Central safety check**: reproduced the dedupe re-run proof for both key shapes (per-session
+  `(template, session_id, to_email)`; weekly-digest `(template, to_email, week-window)`), and added
+  its own adversarial case — two different recipients for the identical session+template correctly
+  NOT deduped against each other.
+- Confirmed the check-then-act ordering (dedupe check → send → log write) and that a detected
+  duplicate skips both the send and the log write entirely.
+- Confirmed `_cron.sql` is genuinely additive (only `create extension if not exists`/idempotent
+  `cron.schedule`, no `alter`/`drop`) with zero hardcoded secrets (Vault-resolved at invocation
+  time) — judged the migration's "unverified against a live Supabase install" disclosure honest and
+  explicit, not overclaimed as tested.
+- Confirmed the independently-reimplemented Resend client matches T048's fail-closed
+  `RESEND_SEND_MODE` gate design exactly.
+- **On the disclosed `digest_enabled`-vs-`weekly_digest` ambiguity**: judged the worker's
+  naming-convention-consistent choice more defensible than the alternative, but recommended
+  escalating to a T052 follow-up for human clarification rather than treating it as fully resolved.
+
+**E8 (Email + scheduling) is now fully Passed for all automatable work** — only T052 (human gate)
+remains, externally blocked on George's `mail.voltfrc.org` domain verification and sign-off.
+
+Full packets archived at `docs/swarm/archive/T051-worker-packet.md` and
+`docs/swarm/archive/T051-checker-packet.md`.
