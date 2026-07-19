@@ -2908,3 +2908,48 @@ also checker-verified — satisfied as of this entry (T081 passed above).
 
 **Commit status:** held pending combined commit with T080/T081/T083 (all sharing overlapping files),
 now proceeding since all four have independently passed.
+[2026-07-19T22:59:47Z] Worker finished. Checker required before completion.
+
+## T085 — Wire `RosterShell.tsx`/`ReportsShell.tsx` to their real, already-Passed tab components
+
+**Result:** PASS (1st attempt, MINOR)
+
+**Discovery:** found via live manual testing against the real production deployment (not caught by
+any prior isolated-component check) — `RosterShell.tsx` and `ReportsShell.tsx` still rendered stale
+T021/T056-era placeholder `EmptyState`s for most tabs, even though the real tab components
+(`StudentsTab`/`ParentsTab`/`TeamsTab`/`InvitesTab`/`AdminToggles`, `HoursTab`/`EventsTab`) were each
+independently built and checker-Passed. Nobody had wired the shells up afterward, since each tab
+task's own Allowed Files list forbade touching the shell file.
+
+**Fix:** `RosterShell.tsx` now renders all four tabs' real components (zero props, matching each
+one's real signature) plus `AdminToggles` (unconditional, self-gating, placed between the `TabList`
+and the active panel). `ReportsShell.tsx` now renders `HoursTab`/`EventsTab` with the same shared
+`seasonId` already threaded to `ParticipationTab`. Both shells' stale module docs rewritten. Two new
+test files (`RosterShell.test.tsx` — 14 tests, `ReportsShell.test.tsx` — 11 tests) added.
+
+**Real bug found and fixed mid-task:** statically importing `AdminToggles` into `RosterShell.tsx`
+closed a genuine 3-file circular import (`router.tsx` → `RosterShell.tsx` → `AdminToggles.tsx` →
+`router.tsx`, via `AdminToggles.tsx`'s own pre-existing `routePaths` import, evaluated before
+`router.tsx` finishes defining it), crashing the app and 5 unrelated test suites. Fixed entirely
+within the allowed file via `React.lazy(() => import('./AdminToggles'))` + `<Suspense
+fallback={null}>`.
+
+**Checker verification:** independently reproduced the circular-import crash live — temporarily
+reverted to a static import, ran `theme.smoke.test.tsx`, got the exact reported
+`TypeError`/stack trace; restored the lazy fix, confirmed it passes again. Confirmed `npm run build`
+emits a genuinely separate `AdminToggles-*.js` chunk. Judged `Suspense fallback={null}` accessibility-
+acceptable (not a focus target, ambient page content, functionally identical to the pre-T085 empty
+window). Confirmed `AdminToggles`'s admin gate is a real `null` return (not visual hiding) via a
+`textContent`-level test assertion. Ran the two new test files 6 times total checking for
+`vi.waitFor`-based flakiness — 25/25 passed every run. Full suite: 937/937, typecheck/lint/build
+clean, format:check failure isolated to pre-existing untouched `Kiosk.tsx`. Scope containment
+confirmed — only the two shell files + two new test files changed.
+
+**Process note:** this checker run was interrupted mid-task by an infra-level restart (same class of
+event seen earlier this session with two other agents), captured mid-`npm run lint` with no report
+delivered. Resumed via `SendMessage` to its own agent ID rather than restarting from scratch; it
+picked up and completed the remaining verification, including live-reproducing the bug-fix claim.
+
+**Findings (non-blocking):** no dedicated accessibility-regression test for `AdminToggles`'
+`Heading`/`Switch` semantics surviving future refactors (currently covered only via text-content
+assertions) — follow-up recommended, not filed as blocking.

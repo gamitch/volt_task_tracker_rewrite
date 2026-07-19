@@ -1,105 +1,99 @@
 /**
- * T056: `/reports` shell (RPT-01) -- a `TabList` with three tabs, in the
+ * T056 (original shell + Participation wiring) + T085 (this task, corrective
+ * wiring): `/reports` shell (RPT-01) -- a `TabList` with three tabs, in the
  * PRD-literal order Participation | Hours | Events, restricted to
- * coach/admin. Participation (RPT-02) is built for real by this task (see
- * `./ParticipationTab.tsx`); Hours (RPT-03) and Events (RPT-04) are
- * separate, currently-Blocked tasks (T057, T058) whose content is NOT
- * built here -- this shell renders an explicit, clearly-labeled placeholder
- * for each of those two tabs' panels instead, per this task's own Forbidden
- * Files list.
+ * coach/admin.
+ *
+ * T085 UPDATE (read this first -- supersedes this file's original "Hours/
+ * Events are currently-Blocked" framing): Hours (RPT-03) and Events (RPT-04)
+ * now render their real, already-Passed components (`HoursTab`/T057,
+ * `EventsTab`/T058) -- both landed and were independently checker-Passed
+ * well after this shell's own T056 dispatch, and this file's own module doc
+ * was simply never updated afterward (T057/T058's own Allowed Files
+ * forbade touching this shell, by design, to keep each tab task narrowly
+ * scoped -- the same "STANDALONE component, not wired into
+ * `ReportsShell.tsx`" posture `StudentsTab.tsx`/`ParentsTab.tsx`/etc. also
+ * disclosed for `RosterShell.tsx`). The stale "currently-Blocked" claim
+ * below was discovered via live manual testing of the real running app
+ * (T085's own packet), the same wiring gap `RosterShell.tsx` had for its own
+ * four tabs. Participation's own wiring (T056) was already correct and is
+ * unchanged by this task -- it remains this file's own established
+ * precedent for how a real tab gets rendered here.
  *
  * -----------------------------------------------------------------------
- * 1. Role guard mechanism -- same pattern `RosterShell.tsx` (T021) already
- *    established and passed review for the identical `/roster` gap.
+ * 1. Role guard mechanism -- unchanged from T056, same pattern
+ *    `RosterShell.tsx` established.
  *
- * `router.tsx`'s current `/reports` route wraps an inline `ReportsPage()`
- * placeholder in `RequireAuth` only -- no role restriction at all (read
- * directly from `router.tsx`, a forbidden/read-only file for this task).
- * That is weaker than RPT-01 requires ("`/reports` (coach/admin)"). Since
- * `router.tsx` cannot be edited here, this component enforces its own role
- * restriction internally by nesting `guards.tsx`'s exported `RequireRole`
- * (read-only import) directly in this component's render tree, one level
- * lower than a `<Route element={...}>` would put it. `RequireRole`
- * (`guards.tsx` lines 225-234) has no dependency on being used inside a
- * `<Route>` -- it just reads `useAuth()` and, if `!user ||
- * !allowedRoles.includes(user.role)`, calls
- * `pushToast(ACCESS_DENIED_TOAST_MESSAGE)` and renders `<Navigate to="/" />`,
- * otherwise renders `children`. Nesting it here therefore produces
- * byte-identical guard behavior (redirect to `/` + the exact NAV-06 toast,
- * never a re-typed string) to `router.tsx`'s own `/kiosk/:sessionId` and
- * `/settings` routes, which use this same component at the route level.
- *
- * FLAGGED GAP (not fixed here, `router.tsx` is forbidden): this is a
- * reasonable stopgap, not as robust as a route-level guard -- a
- * component-level guard still executes this component's own render logic
- * before redirecting (however briefly), which a `<Route element={<RequireAuth><RequireRole>...`
- * wrapping at the route level would avoid entirely. Recommended as a
- * candidate for a future `router.tsx`-touching corrective task (same shape
- * as T016a), which would also need to swap the inline `ReportsPage()`
- * placeholder for this real `ReportsShell` (the same "not wired into
- * router.tsx yet" gap every not-yet-built route in `router.tsx` currently
- * has, per T018/T021's own disclosed findings).
+ * `router.tsx`'s `/reports` route wraps this component in `RequireAuth`
+ * only, so this component enforces its own coach/admin restriction
+ * internally via `guards.tsx`'s `RequireRole`, nested in this component's
+ * own render tree. `RequireRole` renders `AccessDeniedPage` in place (T076's
+ * corrected behavior) whenever `!user || !allowedRoles.includes(user.role)`.
+ * `router.tsx` (read-only reference, not edited here) already imports and
+ * renders the real `ReportsShell` at `/reports` -- the "not wired into
+ * router.tsx" gap this file's original module doc flagged as a candidate for
+ * a future corrective task was closed independently of this one.
  *
  * -----------------------------------------------------------------------
- * 2. `guards.tsx`'s `Role` vocabulary gap -- resolved by T073a, not by
- *    this task (same posture T007/T018/T021 were each told to take on
- *    this same recurring gap, before it was fixed).
+ * 2. Season scoping (RPT-01: "season-scoped") -- extended, not changed.
  *
- * `guards.tsx`'s exported `Role` union now matches AUTH-05's real
- * profile-role vocabulary exactly (`admin | coach | student | parent`),
- * previously a stale `'admin' | 'staff' | 'volunteer' | 'coach'` T005
- * placeholder. `allowedRoles={['coach', 'admin']}` below continues to read
- * correctly, now against the real (not merely coincidentally-overlapping)
- * vocabulary.
- *
- * -----------------------------------------------------------------------
- * 3. Astryx prop sourcing (constitution item 2), everything used below:
- *
- *  - `TabList`/`Tab`: `docs/swarm/astryx-api.md` lines 2044-2055 (`TabList`
- *    Props table: `value`, `onChange`, `children` used) + `Tab`'s own
- *    subsection (line 2059) reads "undefined" in the file, resolved via
- *    `npm run astryx -- component Tab` (`value`, `label` used) -- same
- *    doc-gap-resolution pattern `RosterShell.tsx` used for the same two
- *    components.
- *  - `Heading`: `astryx-api.md` cross-references `Heading` from the "Text"
- *    section (line 856) but its own subsection (line 882) reads
- *    "undefined"; resolved via `npm run astryx -- component Heading`
- *    (`level`, `children` used). `level={1}` for this page's own top
- *    heading (first and only h1 on the page).
- *  - `EmptyState`: `astryx-api.md` lines 3991-4001 (Props table). `title`
- *    (required), `description`, and `headingLevel={2}` (so the Hours/
- *    Events placeholders sit correctly under this page's `level={1}`
- *    heading rather than skipping to the component's own default h3 --
- *    the exact MINOR finding T021's checker raised against `RosterShell.tsx`,
- *    applied here proactively) are used.
- *  - `VStack`: `astryx-api.md` lines 374-396 (Props table). `gap`/`padding`
- *    used for page-level spacing, same as `RosterShell.tsx`.
+ * No season-selection UI exists anywhere yet (unchanged from T056's own
+ * disclosure). This shell threads ONE `seasonId` value (defaulting to
+ * `ParticipationTab.tsx`'s own disclosed `PLACEHOLDER_CURRENT_SEASON_ID`
+ * placeholder) to all THREE tabs now -- `ParticipationTab`, `HoursTab`, AND
+ * `EventsTab` -- so all three share one season selection rather than
+ * inventing a second, different placeholder for the two tabs this task
+ * wires up (T085's own packet, Known Context/Traps #3, explicit
+ * instruction). `HoursTab`/`EventsTab` each independently define their own
+ * copy of the identical `PLACEHOLDER_CURRENT_SEASON_ID` literal (their own
+ * module docs -- neither imports it from this forbidden/read-only
+ * `ParticipationTab.tsx` file, since each is its own standalone component),
+ * so this shell's own default continues to line up with both tabs' own
+ * fixture data keyed to that same literal value.
  *
  * -----------------------------------------------------------------------
- * 4. Season scoping (RPT-01: "season-scoped").
- *
- * No season-selection UI exists anywhere yet (no PRD excerpt available to
- * this task describes one, and building it is out of this task's scope --
- * it is not one of this task's two allowed files' stated jobs). This shell
- * passes `ParticipationTab.tsx`'s own disclosed placeholder
- * (`PLACEHOLDER_CURRENT_SEASON_ID`, see that file's module doc #4/"Placeholder
- * current season") through as the default `seasonId`, overridable via this
- * component's own `seasonId` prop for a future season-picker task to wire
- * up without touching this file's guard/tab-scaffold logic.
+ * 3. `loadHoursData`/`loadEventsData` -- new optional injectable seams,
+ *    added for parity with `loadParticipationData`'s already-established
+ *    precedent (T056), not required by T085's own acceptance criteria but a
+ *    direct, mechanical extension of it: `HoursTab`/`EventsTab` each already
+ *    expose their own `loadData` prop (their own `HoursTabProps`/
+ *    `EventsTabProps`), so this shell threads an optional override through
+ *    to each, exactly the same shape `loadParticipationData` already uses
+ *    for `ParticipationTab`. Both default to `undefined`, which each tab's
+ *    own `loadData = default...` prop default then resolves to its own
+ *    fixture-backed default loader -- no real Supabase wiring is added
+ *    anywhere in this file (T085's own explicit scope boundary).
  *
  * -----------------------------------------------------------------------
- * 5. DES-12 four-state reasoning for the Hours/Events placeholder panels:
- *    same as `RosterShell.tsx`'s reasoning for its four dataless tabs --
- *    these two panels perform zero data fetching (T057/T058's job, not
- *    this task's), so only the "empty" bucket is reachable; inventing
- *    loading/error/populated branches with nothing real behind them would
- *    itself be fabricated content (constitution item 13). The Participation
- *    tab (`ParticipationTab.tsx`) DOES perform real data fetching and
- *    models all four DES-12 states -- see that file's own module doc.
+ * 4. Astryx prop sourcing (constitution item 2) -- unchanged from T056 for
+ *    every prop still used below; `EmptyState` is no longer imported or
+ *    rendered anywhere in this file (Hours/Events no longer render
+ *    placeholders), so its citation is removed rather than left describing a
+ *    prop this file no longer uses:
+ *
+ *  - `TabList`/`Tab`/`Heading`/`VStack`: same citations T056 already
+ *    established (`docs/swarm/astryx-api.md` "TabList"/"Stack" Props
+ *    tables; `Tab`/`Heading`'s own subsections are `undefined` doc-
+ *    generation gaps, resolved via `npm run astryx -- component <Name>`,
+ *    same disclosed CLI-cross-check pattern every content page in this
+ *    project uses).
+ *
+ * -----------------------------------------------------------------------
+ * 5. DES-12 four-state reasoning -- T056's original module doc explained why
+ *    the Hours/Events placeholder panels only modeled the "empty" DES-12
+ *    bucket (no real data fetching existed yet for either). That reasoning
+ *    is now obsolete: `HoursTab`/`EventsTab` each perform their own real
+ *    data fetching and model all four DES-12 states internally (see each
+ *    tab's own module doc), the same way `ParticipationTab` already did.
+ *    This shell itself has no DES-12 state of its own to model -- it only
+ *    decides WHICH already-self-contained tab component to render, unchanged
+ *    from how it always treated `ParticipationTab`.
  */
 import { useState, type ReactNode } from 'react';
-import { EmptyState, Heading, Tab, TabList, VStack } from '@astryxdesign/core';
+import { Heading, Tab, TabList, VStack } from '@astryxdesign/core';
 import { RequireRole } from '../../app/guards';
+import { EventsTab, type LoadEventSessionsDataFn } from './EventsTab';
+import { HoursTab, type LoadHoursDataFn } from './HoursTab';
 import {
   ParticipationTab,
   PLACEHOLDER_CURRENT_SEASON_ID,
@@ -120,28 +114,22 @@ const REPORTS_TABS: readonly ReportsTabConfig[] = [
   { value: 'events', label: 'Events' },
 ];
 
-const HOURS_PLACEHOLDER = {
-  title: 'Hours report not built yet',
-  description:
-    'This tab is a placeholder shipped by the /reports shell (T056, RPT-01). The real hours report (RPT-03, sourced from v_student_hours) is built by a separate, currently-Blocked task (T057).',
-};
-
-const EVENTS_PLACEHOLDER = {
-  title: 'Events report not built yet',
-  description:
-    'This tab is a placeholder shipped by the /reports shell (T056, RPT-01). The real events report (RPT-04) is built by a separate, currently-Blocked task (T058).',
-};
-
 export interface ReportsShellProps {
-  /** Overridable for a future season-picker task -- see module doc #4. */
+  /** Overridable for a future season-picker task -- see module doc #2. */
   seasonId?: string;
   /** Threaded through to `ParticipationTab`'s injectable data seam. */
   loadParticipationData?: LoadParticipationDataFn;
+  /** Threaded through to `HoursTab`'s injectable data seam -- module doc #3. */
+  loadHoursData?: LoadHoursDataFn;
+  /** Threaded through to `EventsTab`'s injectable data seam -- module doc #3. */
+  loadEventsData?: LoadEventSessionsDataFn;
 }
 
 export function ReportsShell({
   seasonId = PLACEHOLDER_CURRENT_SEASON_ID,
   loadParticipationData,
+  loadHoursData,
+  loadEventsData,
 }: ReportsShellProps = {}): ReactNode {
   const [activeTab, setActiveTab] = useState<ReportsTabValue>(REPORTS_TABS[0].value);
 
@@ -159,20 +147,8 @@ export function ReportsShell({
         {activeTab === 'participation' && (
           <ParticipationTab seasonId={seasonId} loadData={loadParticipationData} />
         )}
-        {activeTab === 'hours' && (
-          <EmptyState
-            headingLevel={2}
-            title={HOURS_PLACEHOLDER.title}
-            description={HOURS_PLACEHOLDER.description}
-          />
-        )}
-        {activeTab === 'events' && (
-          <EmptyState
-            headingLevel={2}
-            title={EVENTS_PLACEHOLDER.title}
-            description={EVENTS_PLACEHOLDER.description}
-          />
-        )}
+        {activeTab === 'hours' && <HoursTab seasonId={seasonId} loadData={loadHoursData} />}
+        {activeTab === 'events' && <EventsTab seasonId={seasonId} loadData={loadEventsData} />}
       </VStack>
     </RequireRole>
   );
