@@ -65,13 +65,21 @@ deliberately terse going forward.
 **E1, E2, and E3 are all fully complete.** Full evidence for every row above is in
 `verification-log.md` under its `## T0xx` heading.
 
-## Active (2026-07-19, updated after T036/T040/T049/T057/T058 batch)
+## Active (2026-07-19, updated after T036/T040/T045/T049/T050/T057/T058 batch — all 7 closed)
 
-57 tasks Passed. E4/E5 fully complete. E6/E8/E9 nearly complete (T041, T043, T051, T059 all
-Ready, undispatched). T045 (`/calendar`) is In Progress on attempt 2 — attempt 1 was a legitimate
-MAJOR a11y FAIL (non-unique row link text), narrow rework in flight. 13 tasks remain Blocked,
-mostly gated on T045's chain, E10's human migration gates, and E11's final sweeps. See
-`overview.md` for the current tiered priority list.
+58 tasks Passed. E4/E5 fully complete. E6/E7/E8/E9 all nearly complete — six tasks Ready,
+undispatched: T041, T043, T046, T047, T051, T059. 11 tasks remain Blocked, mostly gated on T042
+(needs T041), T060 (needs T046, now Ready), T052/E10's human gates, and E11's final sweeps
+(T066-T069, waiting on the full T053-T060 range). See `overview.md` for the current tiered
+priority list.
+
+- **T045 — `/calendar` page.** PASS (attempt 2). Attempt 1 was a legitimate MAJOR FAIL — every
+  row's `Link` rendered identical undifferentiated "View details" text, a real screen-reader
+  links-list problem the checker found after independently reproducing the central Calendar
+  day-content-prop investigation (genuinely no day-content/dots-render prop exists) and confirming
+  the DES-04/NAV-07 dual-purpose Badge design sound. Attempt 2's fix (distinguishing visible link
+  text per row, a heading-outline fix) independently re-verified as narrowly scoped and
+  regression-free. **T046, T047 unblocked.**
 
 - **T029 — Season management.** PASS (1st attempt, NIT). Checker independently confirmed the real
   `seasons_single_active_idx` partial unique index and the single-payload atomicity contract;

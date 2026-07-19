@@ -14,27 +14,27 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-19, post-T036/T040/T049/T057/T058 batch)
+## Status snapshot (2026-07-19, post-T036/T040/T045/T049/T050/T057/T058 batch — all 7 closed)
 
 75 tasks (T001–T071 + T002a + T002b + T006a + T016a) across epics E1–E11.
-**57 Passed · 4 Ready · 1 In Progress · 13 Blocked.**
+**58 Passed · 6 Ready · 0 In Progress · 11 Blocked.**
 
-- **In Progress now**: T045 (`/calendar` page) attempt 2 — attempt 1 was a legitimate MAJOR FAIL
-  (every row's Link rendered identical undifferentiated "View details" text, a real screen-reader
-  links-list problem); narrow rework in flight (distinguish each row's link text, fix a heading
-  h1→h3 skip on the empty state).
 - **E4 (Roster) — fully complete.** T021–T029 all Passed, 9-for-9 first-attempt PASS.
-- **E5 (Meetings/Check-in) — fully complete.** T036 (End meeting flow) Passed, closing out the epic.
-- **E6 (Outreach) — nearly done.** T038, T039, T040 (attempt 2), T044 Passed. **T041, T043 now
-  Ready** (unblocked by T040). T042 Blocked (needs T041).
-- **E8 (Email) — building out.** T048, T049, T050 Passed. **T051 Ready** (unblocked by T049,
-  T050 already Passed + T011 already Passed).
-- **E9 (Reports/Home) — fully complete except T059/T060.** T053–T058 all Passed (T057, T058 this
-  batch). **T059 (CSV exports) Ready** (unblocked by T058). T060 still Blocked (needs T046).
-- **Two legitimate FAIL→rework→PASS cycles this batch**: T040 (RSVP control — an int32 `setTimeout`
-  overflow silently locking the control for sessions >~25 days out) and T045 (in progress — a
-  non-unique-link-text accessibility regression).
-- Four tasks Ready, undispatched, no packets yet: **T041, T043, T051, T059.**
+- **E5 (Meetings/Check-in) — fully complete.** T030–T036 all Passed.
+- **E6 (Outreach) — nearly done.** T038, T039, T040 (attempt 2), T044 Passed. **T041, T043**
+  Ready (unblocked by T040). T042 Blocked (needs T041).
+- **E7 (Calendar) — open.** T045 (attempt 2) Passed. **T046, T047** Ready (unblocked by T045).
+- **E8 (Email) — building out.** T048, T049, T050 Passed. **T051** Ready (unblocked by T049,
+  T050/T011 already Passed).
+- **E9 (Reports/Home) — fully complete except T060.** T053–T058 all Passed. **T059 (CSV exports)**
+  Ready. T060 still Blocked (needs T046 — now Ready, one hop away).
+- **This dispatch batch's two legitimate FAIL→rework→PASS cycles**: T040 (RSVP control — a real
+  int32 `setTimeout` overflow silently locking the control for sessions >~25 days out) and T045
+  (`/calendar` — a real non-unique row-link-text accessibility regression, every row read identical
+  "View details" to a screen reader). Both fixed with narrow attempt-2 reworks, both re-verified by
+  a narrow re-check that independently reproduced the worker's own regression proof rather than
+  trusting it.
+- Six tasks Ready, undispatched, no packets yet: **T041, T043, T046, T047, T051, T059.**
 
 **T071 (shared Supabase client) Passed, clean, no findings.** The recurring
 cross-cutting gap flagged by six prior tasks is now closed at the
@@ -54,19 +54,20 @@ page/`guards.tsx`.
   (T033, T036 each had one legitimate FAIL→rework→PASS cycle).
 - **E6 (Outreach) — nearly complete.** T038, T039, T040 (attempt 2), T044
   Passed. **T041, T043** Ready, undispatched. T042 Blocked (needs T041).
-- **E7 (Calendar) — T045 In Progress** (attempt 2, narrow rework after a
-  legitimate MAJOR a11y FAIL on attempt 1). T046/T047 Blocked behind it.
+- **E7 (Calendar) — open.** T045 (attempt 2) Passed. **T046, T047** Ready,
+  undispatched.
 - **E8 (Reminders) — T048, T049, T050 Passed.** **T051** Ready, undispatched.
   T052 (human gate) Blocked behind it.
-- **E9 (Reports/Home) — fully complete except T059/T060.** T053–T058 all
-  Passed. **T059** Ready, undispatched. T060 Blocked (needs T046).
+- **E9 (Reports/Home) — fully complete except T060.** T053–T058 all
+  Passed. **T059** Ready, undispatched. T060 Blocked (needs T046, now Ready).
 - **E10 (Migration) — T061, T062 Passed.** T063 is a human gate blocked on
   George's real old-project credentials; T064/T065 blocked behind it.
 - **E11 (Launch sweeps) — Blocked**, waiting on the E6/E7/E8/E9 tail
   (T053–T060) to all Pass first.
 
-Four Ready tasks have no packets built yet: T041, T043, T051, T059 — each
-needs one built (directly or via foreman-planner) before dispatch.
+Six Ready tasks have no packets built yet: T041, T043, T046, T047, T051,
+T059 — each needs one built (directly or via foreman-planner) before
+dispatch.
 
 Two real incidents earlier this session, both handled cleanly — see Known
 Decisions/Current Risks in `state-summary.md` if ever needed: (1) a
@@ -121,14 +122,16 @@ See the T071 detail block in `task-ledger.md` (end of E3) and its
 
 ## Next recommended action
 
-Four tasks are Ready: T041, T043, T051, T059. None currently have worker
-packets pre-built — each needs one built first, either directly or via
-foreman-planner. All are file-disjoint and independently dispatchable in
-parallel once T045's rework lands (T041 depends on T039+T040, both already
-Passed, so it's not blocked by T045).
+Six tasks are Ready: T041, T043, T046, T047, T051, T059. None currently
+have worker packets pre-built — each needs one built first, either
+directly or via foreman-planner. All are file-disjoint and independently
+dispatchable in parallel.
 **T059 (CSV exports) is the highest-leverage pick** — it's the last piece
 of the T053–T060 range all four E11 sweep tasks (T066–T069) are waiting on.
-T041/T043 continue the E6 outreach-detail chain toward T042.
+T046 is close behind — it's the last dependency standing between T060
+(`/settings`) and the same E11 range. T041/T043 continue the E6
+outreach-detail chain toward T042; T047 rounds out E7; T051 continues the
+E8 email pipeline toward its T052 human gate.
 
 Separately, worth deciding when to prioritize: drafting the T016a-pattern
 wiring series that connects T071's new client into `guards.tsx` and the
