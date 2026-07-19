@@ -21,5 +21,7 @@ export const voltTheme = defineTheme({
   tokens: {
     // [light, dark]
     '--color-accent': ['#5B2EE5', '#9B7BFF'],
+    // D005: re-pinned to Astryx's P[10] stop for dark-mode AA contrast.
+    '--color-on-accent': ['#FFFFFF', '#00008D'],
   },
 });

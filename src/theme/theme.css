@@ -215,7 +215,7 @@
     --color-text-accent: var(--color-accent);
     --color-on-dark: #ffffff;
     --color-on-light: #171717;
-    --color-on-accent: light-dark(#FFFFFF, #0000B3);
+    --color-on-accent: light-dark(#FFFFFF, #00008D);
     --color-on-success: light-dark(#ffffff, #171717);
     --color-on-error: light-dark(#ffffff, #171717);
     --color-on-warning: #171717;
