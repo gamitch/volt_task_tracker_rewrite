@@ -38,6 +38,18 @@
 // item 9's `@supabase/supabase-js` allowlist entry.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { computeExpiresAt, validateInviteRequest } from './validation.ts';
+// T048 -- see the EXTENSION POINT comment near the bottom of this file for
+// why these are imported here. `SENDER_ADDRESS` and `renderEmailLayout` are
+// plain, zero-dependency TypeScript (no React/JSX) living under
+// `src/emails/layout/**` so this exact source is importable, byte-unchanged,
+// from both the src/ toolchain and this Deno runtime -- see that module's
+// own header comment for the full reasoning and the residual risk flagged
+// there (unverified against a live Supabase CLI/Docker bundler).
+import { SENDER_ADDRESS } from '../../../src/emails/layout/constants.ts';
+import { buildInviteFixtureBodyHtml, buildInviteFixturePreviewText } from '../../../src/emails/layout/inviteFixtureBody.ts';
+import { renderEmailLayout } from '../../../src/emails/layout/renderEmailLayout.ts';
+import { writeEmailLog, type EmailLogStatus } from './email_log.ts';
+import { resolveSendMode, sendBrandedEmail } from './resend.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -220,6 +232,72 @@ Deno.serve(async (req: Request) => {
   //      pipeline (send-invite itself is not on a cron, but should still log
   //      consistently once T048 defines that table's write contract).
   // Nothing below this comment should need to change for that extension.
+
+  // --- T048: branded Resend send + email_log write -----------------------
+  //
+  // Constitution item 7 (BLOCKER-class): `resolveSendMode()` reads ONLY
+  // `Deno.env.get('RESEND_SEND_MODE')` -- it takes no arguments, so nothing
+  // derived from this request (email/role/student_id) can influence it.
+  // It defaults to 'test' for anything other than the exact literal string
+  // 'production'. `sendBrandedEmail()` never constructs a Resend API call
+  // at all unless `sendMode === 'production'` -- see resend.ts for the full
+  // gate design and Resend-test-mode research citation. Flipping
+  // `RESEND_SEND_MODE` to 'production' anywhere is explicitly NOT this
+  // task's decision -- that is T052's job (a human sign-off gate, "George
+  // reviews T048-T051 test-mode output"), and no code path here defaults to
+  // or silently enables it.
+  const sendMode = resolveSendMode();
+
+  const emailHtml = renderEmailLayout({
+    previewText: buildInviteFixturePreviewText({ role }),
+    bodyHtml: buildInviteFixtureBodyHtml({ role }),
+  });
+
+  const sendResult = await sendBrandedEmail(
+    {
+      to: invite.email,
+      subject: 'You are invited to VOLT Robotics',
+      html: emailHtml,
+      from: SENDER_ADDRESS,
+    },
+    sendMode,
+  );
+
+  // Status vocabulary chosen and documented in email_log.ts: 'sent' |
+  // 'failed' | 'skipped_test_mode'.
+  const emailLogStatus: EmailLogStatus = sendResult.sent
+    ? 'sent'
+    : sendResult.reason === 'skipped_test_mode'
+      ? 'skipped_test_mode'
+      : 'failed';
+
+  if (!sendResult.sent && sendResult.reason !== 'skipped_test_mode') {
+    // No PII (constitution item 6): logs the failure reason/invite_id, not
+    // the recipient's email.
+    console.error('send-invite: branded Resend send did not succeed', {
+      invite_id: invite.id,
+      reason: sendResult.reason,
+    });
+  }
+
+  // EML-03 ground truth: `email_log` has no FK on session_id/profile_id by
+  // design (a delivery log must remain queryable even if the referenced row
+  // is later deleted). Neither is set for an invite send: there is no
+  // meeting session involved, and the invite recipient has no `profiles`
+  // row yet at send time (that row is only created once the invite is
+  // accepted -- see the T019 trigger). `invited_by`/`callerProfile.id`
+  // (the *sender*, not the recipient) is deliberately NOT written into
+  // `profile_id` here: that column represents the email's owner/recipient
+  // in this table's design, not whoever triggered the send, so reusing the
+  // sender's id there would be semantically wrong.
+  await writeEmailLog(adminClient, {
+    to_email: invite.email,
+    template: 'invite',
+    session_id: null,
+    profile_id: null,
+    status: emailLogStatus,
+  });
+  // --- end T048 extension --------------------------------------------------
 
   return jsonResponse(201, {
     invite: {
