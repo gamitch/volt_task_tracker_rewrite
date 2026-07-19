@@ -1812,3 +1812,4 @@ as the acting parent's real profile id, with a `guardian_links`-derived read-sid
 
 Full packets archived at `docs/swarm/archive/T043-worker-packet.md` and
 `docs/swarm/archive/T043-checker-packet.md`.
+[2026-07-19T08:37:51Z] Worker finished. Checker required before completion.
