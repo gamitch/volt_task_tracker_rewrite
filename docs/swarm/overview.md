@@ -14,10 +14,10 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-18, ~night)
+## Status snapshot (2026-07-19, ~night)
 
 73 tasks (T001–T070 + T002a + T006a + T016a) across epics E1–E11.
-**21 Passed · 5 Ready · 1 In Progress · 46 Blocked.**
+**22 Passed · 7 Ready · 0 In Progress · 44 Blocked.**
 
 - **E1 (Scaffold/shell/nav) — fully complete.** T001–T008 all Passed. App has a
   real AppShell/TopNav/SideNav/MobileNav, `/login` is genuinely reachable and
@@ -28,8 +28,11 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
   **T018** (`/accept-invite` screen) and **T019** (invite-acceptance DB
   trigger) are Ready and undispatched — **this is the critical-path unlock**
   for the first real content pages (Roster/Meetings/Outreach all need T019).
-- **E5 — T032** (`checkin` Edge Function) is In Progress (worker done,
-  checker packet built, checker not yet dispatched — Wave 2 of a batch).
+- **E5 — T032** (`checkin` Edge Function) **Passed** (1st attempt, two MINOR
+  follow-ups: MTG-04 manual-override schema gap and in-memory-only rate
+  limiter, both genuinely undoable within the frozen schema). **T034**
+  (Kiosk view) and **T035** (`/checkin` result screen) are now Ready,
+  undispatched. T033/T054 remain Blocked on other deps (T031/T030/T038).
 - **E8 — T048** (Resend integration) Ready, undispatched.
 - **E9 — T056** (`/reports` shell) Ready, undispatched.
 - **E10 — T061** (schema verification + mapping doc) **Passed** (1st attempt,
@@ -40,9 +43,9 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 - **E4, E6, E7, E9 (rest), E11** — all Blocked on T019 or later, not yet
   reachable.
 
-Everything else (all 46 Blocked rows) is waiting transitively on T019 or on
-one of the five Ready/In-Progress tasks above. See `task-ledger.md`'s Deps
-column for exact chains if needed — don't re-derive from memory.
+Everything else (all 44 Blocked rows) is waiting transitively on T019 or on
+one of the seven Ready tasks above. See `task-ledger.md`'s Deps column for
+exact chains if needed — don't re-derive from memory.
 
 ## Standing rules (condensed — full reasoning lives in state-summary.md/dispute-log.md if ever needed)
 
@@ -72,7 +75,7 @@ column for exact chains if needed — don't re-derive from memory.
 
 ## Next recommended action
 
-Dispatch checker for **T032** (Wave 2, packet already built at
-`docs/swarm/active/T032-checker-packet.md`), then **T018 + T019** — T019 is
-the highest-value next task since it unblocks the first real content pages.
-**T062** is also Ready and undispatched.
+Dispatch **T018 + T019** — T019 is the highest-value next task since it
+unblocks the first real content pages (Roster/Meetings/Outreach). T034,
+T035, T048, T056, and T062 are also Ready and undispatched, all
+independently dispatchable in parallel with T018/T019 (file-disjoint).

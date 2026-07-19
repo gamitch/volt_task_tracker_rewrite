@@ -573,3 +573,20 @@ Attempts: 1 (clean first-attempt PASS)
 Follow-up:
 - None. T062 (`scripts/migrate.ts` ETL script) unblocked (Blocked→Ready) as a direct result.
 - Full worker/checker packets archived at `docs/swarm/archive/T061-worker-packet.md` and `docs/swarm/archive/T061-checker-packet.md`.
+
+## T032 — `checkin` Edge Function (HMAC rotating token)
+Verdict: PASS (1st attempt). Severity: MINOR (two follow-ups; no BLOCKER/MAJOR).
+Checker: checker-tests. Files inspected: `supabase/functions/checkin/{index.ts,hmac.ts,grace.ts,liveness.ts,rate_limit.ts,validation.ts,attendance_upsert.ts}` + 6 matching `.test.ts` files, `supabase/migrations/20260717000000_scheduling_attendance.sql`, `20260717000002_rls.sql`.
+Findings:
+- 53 `Deno.test()` cases confirmed via grep across 6 files (hmac 15, liveness 9, validation 10, rate_limit 6, grace 8, attendance_upsert 5). Deno unavailable in the checker's sandbox, so representative tests were ported to Node/tsx and independently re-executed: HMAC bucket math (`floor(unixSeconds/60)`), token/short-code derivation, grace-period boundary (exactly 10:00 after `starts_at` = present, 10:00:01 = late), MTG-11 coach-row preservation, and MTG-09 idempotent duplicate check-in — all passed.
+- `ON CONFLICT DO NOTHING` (vs. the packet's illustrative conditional `WHERE method <> 'coach'`) judged PASS-AS-DESIGNED: unconditional DO NOTHING is a strict superset of "never overwrite a coach row" and additionally prevents a later duplicate QR scan from silently overwriting an earlier check-in's timestamp/status (better satisfies MTG-09's "already checked in at 6:04" behavior); no code path in this function ever performs a legitimate second write.
+- Secret hygiene (constitution item 5, BLOCKER-class) clean: `CHECKIN_HMAC_SECRET` read only via `Deno.env.get`, never hardcoded, logged, or echoed in a response; only two `console.error` calls, logging just `session_id`/`student_id`.
+- D001-method forbidden-file check clean: only `supabase/functions/checkin/**` (15 files) touched, zero changes to `supabase/migrations/**` or `src/**`.
+- Error response shapes (DES-16 spot-check) confirmed consistent (`{ error: { code, message } }`, each message stating what happened + what to do next).
+Attempts: 1 (clean first-attempt PASS)
+Follow-up:
+- MINOR (non-blocking, logged): MTG-04's manual "start check-in early/late" override has no schema column yet (`checkin_opened_at`/`checkin_opened_by` don't exist in the frozen T009–T012 schema) — genuinely undoable within this task's scope, correctly flagged rather than worked around; deferred to a future migration task.
+- MINOR (non-blocking, logged): the 5/min rate limiter is in-memory per-isolate only (no persisted rate-limit table in the frozen schema) — best-effort under multi-instance load rather than globally precise; flagged as a follow-up risk for the foreman.
+- T034 (Kiosk view) and T035 (`/checkin` result screen) unblocked (Blocked→Ready) as a direct result. T033 (deps T031,T032) and T054 (deps T030,T032,T038,T013) remain correctly Blocked — their other dependencies are not yet Passed.
+- Full worker/checker packets archived at `docs/swarm/archive/T032-worker-packet.md` and `docs/swarm/archive/T032-checker-packet.md`.
+[2026-07-18T23:59:45Z] Worker finished. Checker required before completion.

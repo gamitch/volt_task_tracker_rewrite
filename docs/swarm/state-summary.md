@@ -31,15 +31,16 @@ deliberately terse going forward.
 - T016a — Wire LoginPage into router.tsx (corrective task). PASS (1st attempt, clean; 2 earlier attempts hit session-limit interruptions, not quality issues).
 - T017 — `send-invite` Edge Function. PASS (1st attempt, MINOR: no retry idempotency, routed as follow-up).
 - T061 — Schema verification + mapping doc copy (MIG-01/02). PASS (1st attempt, clean). MIG-01 scoped to an honest, checker-reconfirmed blocker report (no live old-project access reachable); MIG-02 (`mapping.md`) confirmed byte-identical to PRD 10.2. T062 unblocked (Blocked→Ready).
+- T032 — `checkin` Edge Function (HMAC rotating token). PASS (1st attempt, two MINOR follow-ups: MTG-04 manual-override schema gap, in-memory-only rate limiter — both genuinely undoable within frozen-schema scope). `ON CONFLICT DO NOTHING` design judged PASS-AS-DESIGNED, stricter than the packet's illustrative SQL. T034, T035 unblocked (Blocked→Ready).
 
 **E1 and E2 are fully complete.** Full evidence for every row above is in
 `verification-log.md` under its `## T0xx` heading.
 
 ## Active
 
-T032: worker done, checker packet built
-(`docs/swarm/active/T032-checker-packet.md`), checker not yet dispatched
-(Wave 2 of a batch, paced deliberately).
+Nothing currently dispatched. Seven Ready/undispatched tasks: T018, T019,
+T034, T035, T048, T056, T062 (see `overview.md` for the current count and
+recommended next action).
 
 ## Known Decisions (condensed — full rulings in dispute-log.md)
 
