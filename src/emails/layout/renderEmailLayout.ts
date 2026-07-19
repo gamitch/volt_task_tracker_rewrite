@@ -50,7 +50,13 @@
 // ignored by clients that strip it, falling back to the inline light-mode
 // styles, which remain fully readable either way) for
 // `prefers-color-scheme: dark` support only.
-import { ACCENT_DARK, ACCENT_LIGHT, MANAGE_PREFERENCES_URL, ON_ACCENT_DARK, ON_ACCENT_LIGHT } from './constants.ts';
+import {
+  ACCENT_DARK,
+  ACCENT_LIGHT,
+  MANAGE_PREFERENCES_URL,
+  ON_ACCENT_DARK,
+  ON_ACCENT_LIGHT,
+} from './constants.ts';
 
 export interface RenderEmailLayoutOptions {
   /**
