@@ -5,8 +5,9 @@ T040
 
 ## Objective
 Build `src/pages/outreach/RsvpControl.tsx` — a standalone, reusable RSVP `SegmentedControl`
-[Sign up|Maybe|Can't go] → writes `rsvps.status`, `responded_by='student'` (OUT-03). Editable until
-session start; helper text per BEH-09 ("You can change this until the event starts").
+[Sign up|Maybe|Can't go] → writes `rsvps.status`, `responded_by` attributed to the student
+themself (OUT-03). Editable until session start; helper text per BEH-09 ("You can change this
+until the event starts").
 
 ## Dependencies (status)
 - T038 (`/outreach` list) — Passed. **Read `OutreachList.tsx` in full (read-only) before writing any
@@ -16,11 +17,8 @@ session start; helper text per BEH-09 ("You can change this until the event star
   match its `RsvpRow`/`rsvps` fixture shape (cited from the real schema at its lines 26 area) rather
   than inventing a different one, so a future wiring task can swap `OutreachList.tsx`'s inline stub
   for your real component with minimal friction.
-- T039 (New/edit outreach event dialog) — **Ready, not yet Passed as of this packet's writing.** If
-  T039 has since Passed by the time you're dispatched, read `OutreachEventDialog.tsx` (read-only)
-  for the real `event_sessions`/session-timing fixture shapes it establishes, and use the same
-  conventions. If it hasn't landed yet, use `OutreachList.tsx`'s existing shapes as ground truth
-  instead — either is acceptable, disclose which you used.
+- T039 (New/edit outreach event dialog) — Passed. Read `OutreachEventDialog.tsx` (read-only) for the
+  real `event_sessions`/session-timing fixture shapes it establishes, and use the same conventions.
 
 ## Allowed Files
 - `src/pages/outreach/RsvpControl.tsx` (new — confirm via `Glob` this doesn't exist yet)
@@ -60,10 +58,15 @@ BEH-09 rule (e.g. "we'll remind you 2 days before" — this project's reminder s
 yet built; state this copy as a **static, honest** confirmation line describing the intended future
 behavior, not a claim that a real reminder is actually scheduled).
 
-**3. `responded_by='student'`** — this component is specifically the student's own RSVP control (not
-the parent's — that's T043's separate `ParentRsvp.tsx`). Hardcode/type this as a constant, don't make
-it a caller-configurable prop that could be misused to submit a different `responded_by` value from
-this component.
+**3. `responded_by` — a real `profiles` foreign key, NOT a literal string.** Read the column
+definition yourself (`20260717000000_scheduling_attendance.sql` lines 65-74): `responded_by` is
+`uuid references public.profiles (id)`, nullable — there is no `'student'`/`'parent'` text value
+anywhere in this column. This component is specifically the student's own RSVP control (not the
+parent's — that's T043's separate `ParentRsvp.tsx`), so your `onRsvpChange`-style callback should
+pass whatever the current student's own profile id is (from your injectable auth/session seam, same
+pattern every other page task in this batch uses) — representing "this student answered for
+themself" via a real id, not a hardcoded role string. Disclose how you represent this given no
+shared Supabase client/auth context is wired in yet.
 
 **4. Reuse `OutreachList.tsx`'s established `RsvpRow`/fixture shape** rather than inventing your own,
 per Dependencies above — this reduces the friction of the eventual wiring task that consolidates the
@@ -71,7 +74,8 @@ two.
 
 ## Acceptance Criteria
 - `SegmentedControl` [Sign up|Maybe|Can't go] correctly mapped to `rsvps.status`
-  (`'going'|'maybe'|'declined'`), `responded_by='student'` always.
+  (`'going'|'maybe'|'declined'`), `responded_by` always attributed to the acting student's own
+  real profile id (never a literal role string).
 - Editable-until-session-start boundary correctly enforced and tested.
 - BEH-09 helper text and next-system-event confirmation present, honest about T051 not existing yet.
 - No box-drawing/bracket characters rendered (constitution item 13).
