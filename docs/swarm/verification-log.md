@@ -2014,3 +2014,65 @@ Full packets archived at `docs/swarm/archive/T060-worker-packet.md` and
 [2026-07-19T11:59:36Z] Worker finished. Checker required before completion.
 [2026-07-19T12:00:11Z] Worker finished. Checker required before completion.
 [2026-07-19T12:00:42Z] Worker finished. Checker required before completion.
+[2026-07-19T12:01:20Z] Worker finished. Checker required before completion.
+
+## T069 — Empty/error state copy audit (DES-12/15/16), Epic E11
+
+**Result: PASS. Severity: MINOR.**
+
+Audit-only task (zero Allowed Files, no new page code). Worker read `verification-log.md` in full
+first per the packet's instruction, then surveyed every page component for DES-12 four-state
+coverage, DES-15 verbatim-copy compliance, and DES-16 apology-language violations.
+
+**Two systemic, codebase-wide findings (new, not previously logged individually):**
+- **Finding A**: DES-12's mandated `Skeleton` loading component is used **zero times** anywhere in
+  `src/` — every one of ~22 screens surveyed uses `Spinner` instead, tracing back to T018's
+  `AcceptInvitePage.tsx` establishing the pattern, uncaught by every subsequent per-screen checker
+  since. `Skeleton` is a real, shipped, documented Astryx component (`astryx-api.md:623`), not a
+  missing-dependency excuse.
+- **Finding B**: DES-12's mandated error-state "retry" action (`Banner status="error"` with a real
+  retry button) is only genuinely implemented in `AcceptInvitePage.tsx` (T018) and functionally
+  equivalent in `CheckinResult.tsx`; every other error Banner across the app has no retry mechanism.
+
+**DES-15 verbatim comparison**: all 5 DES-15-named screens (Meetings/coach, Outreach/student, and
+the three Reports tabs) paraphrase their empty-state copy rather than using the PRD's literal
+verbatim text — 0 of 5 match character-for-character.
+
+**DES-16 sweep**: 0 "sorry"/"oops" hits (clean), but "something went wrong" — the exact lazy-default
+phrase DES-16 warns against — appears 47 times across 30 files.
+
+**No happy-path-only (MAJOR-severity) screens found.** Already-disclosed DES-12 exceptions
+(`NoAccessPage.tsx`/T020, `RosterShell.tsx`/T021) correctly cited, not re-flagged as fresh findings.
+
+**Checker's independent verification (checker-content):**
+- Independently confirmed Finding A exactly (0 `Skeleton` hits repo-wide, 30 `Spinner` hits).
+- Independently confirmed Finding B's substance (retry genuinely exists in exactly 2 places) but
+  found the worker's "~21 other error-Banner screens" figure was an under-substantiated
+  approximation — checker's own count is 30 files (32 total `status="error"` occurrences minus the
+  2 with real retry), or ~21–24 if dialogs/popovers are excluded as non-"screens" (a defensible but
+  unstated scoping choice by the worker). **MINOR**, does not change the verdict.
+- Independently re-derived all 5 DES-15 verbatim-comparison verdicts by reading each file directly —
+  confirmed none match.
+- Independently confirmed the DES-16 sweep counts exactly (0 sorry/oops genuine hits; 47
+  "something went wrong" hits across 30 files, matching the worker's count precisely).
+- Spot-checked 13 additional screens beyond the worker's named sample for happy-path-only risk —
+  confirmed none found.
+- Confirmed the two already-disclosed DES-12 exceptions (T020, T021) cited correctly.
+- Could not run `git status` directly (no Bash access in that checker session); substituted a Glob
+  sweep for stray scratch files (clean) — orchestrator independently ran `git status --short` and
+  confirmed the working tree has no leftover files from this task.
+
+**Follow-up candidates routed, not fixed by this task** (per Allowed Files: None):
+- Systemic: replace `Spinner` with `Skeleton` on fixed-dimension list/table loading states
+  (Finding A) — repo-wide, ~22 screens.
+- Systemic: add a real retry action (`endContent` Button per Astryx's own documented pattern) to
+  error Banners repo-wide (Finding B) — ~21–30 screens depending on scoping.
+- Update DES-15-named screens' empty-state copy to the PRD's literal verbatim text (5 screens);
+  `EventsTab.tsx` flagged as a possible legitimate semantic exception since it lists all sessions,
+  not just completed ones — worth a design call rather than a blind copy swap.
+- Review the 47 "something went wrong" occurrences; each already pairs the phrase with a concrete
+  next step, so this is a wording-quality finding, not a zero-modeling one.
+
+Full worker packet archived at `docs/swarm/archive/T069-worker-packet.md`. No separate
+checker-packet file exists for this audit task (Allowed Files: None; checker's full findings are
+recorded here).
