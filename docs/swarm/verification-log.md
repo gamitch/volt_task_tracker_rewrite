@@ -1759,3 +1759,32 @@ Full packets archived at `docs/swarm/archive/T045-worker-packet.md` and
 [2026-07-19T08:31:23Z] Worker finished. Checker required before completion.
 [2026-07-19T08:32:11Z] Worker finished. Checker required before completion.
 [2026-07-19T08:33:56Z] Worker finished. Checker required before completion.
+
+## T046 — Subscribe popover + reset link (CAL-03)
+
+**Result: PASS (1st attempt). Severity: NIT.**
+
+Worker built `SubscribePopover.tsx`: a real `Popover` with the ICS URL, Copy link, "Add to Google
+Calendar" helper text, and a Reset link revoking the old token via a real `AlertDialog`.
+
+**Checker's independent verification (checker-reviewer):**
+- Confirmed by direct migration read that `calendar_feeds.profile_id` has no uniqueness
+  constraint (only `token` does) — "one active per profile" (CAL-05) is genuinely
+  application-level, not DB-enforced.
+- Confirmed Reset is one coherent callback (`ResetFeedTokenPayload`), never two independently-
+  dispatchable calls; reject-path test confirms the old token stays displayed on failure.
+- **Explicit verdict on the `Promise<CalendarFeedRow>` return-type deviation** from T029/T036's
+  `Promise<void>` payload shape: reasonable and necessary, not a design smell — the new token is
+  DB-generated and cannot be predicted client-side, so returning the new row is the only way to
+  keep the "swap only after resolve" discipline.
+- **Explicit verdict on keeping `AlertDialog`'s documented `'destructive'` default** (vs. T036's
+  override to `'primary'`): correct — Reset genuinely and irreversibly breaks existing calendar-app
+  subscriptions, a materially different consequence from T036's "ending a meeting is normal
+  workflow completion."
+- 11/11 own tests, typecheck/lint/build clean, zero box-drawing/bracket characters.
+
+**T060 unblocked (Blocked→Ready)** — its other two dependencies, T003 and T011, were already
+Passed.
+
+Full packets archived at `docs/swarm/archive/T046-worker-packet.md` and
+`docs/swarm/archive/T046-checker-packet.md`.
