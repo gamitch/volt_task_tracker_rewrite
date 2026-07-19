@@ -1501,3 +1501,34 @@ it), with a real `AlertDialog`-confirmed switch flow and client-side date-range 
 
 Full packets archived at `docs/swarm/archive/T029-worker-packet.md` and
 `docs/swarm/archive/T029-checker-packet.md`.
+
+## T039 — New/edit outreach event dialog + competition flags
+
+**Result: PASS (1st attempt). Severity: NIT.**
+
+Worker built `OutreachEventDialog.tsx`: OUT-02 field order, a real, disclosed resolution of the
+OUT-02-vs-CMP-01 event-type tension, CMP-02 competition-only flag gating sourced from the existing
+ETL's own defaults, and the same `event_sessions.notes` nullability precedent T031 established.
+
+**Checker's independent verification (checker-reviewer):**
+- **OUT-02-vs-CMP-01 tension — independently judged correct.** Read both PRD sections directly:
+  CMP-01 literally names this exact dialog ("New event dialog via a type Selector") as where
+  competitions get created, so treating OUT-02's "category fixed outreach" as a hard constraint
+  would leave CMP-01 unimplementable anywhere in the batch. The dialog offers a real
+  `'outreach'`/`'competition'` Selector, confirmed grep-clean of any third `'meeting'` value.
+- **CMP-02 flag-gating — independently verified against the real ETL source.** Opened
+  `scripts/migrate/transform.ts` directly: `eventTypeMetricDefaults('outreach')` returns
+  `{counts_participation: false, counts_volunteer_hours: true}`, an exact match to the dialog's
+  fixed outreach-type default. `resolveEventTypeFlags` confirmed the sole flag-computation site
+  (no divergent second implementation).
+- `event_sessions.notes: ''` precedent match with T031 confirmed; no migration touched.
+- **The claimed prefill race-condition bug and fix independently confirmed real** — traced every
+  writer of `sessionDetails` state (only `resetForm` and `updateSessionDetail`, no competing
+  `useEffect`), confirming `effectiveSessionDetails`'s `useMemo` derivation genuinely eliminates the
+  described ordering hazard; reproduced the edit-mode test proving prefilled fields survive.
+- 549/549 repo-wide, 45/45 own tests, typecheck/lint/build clean.
+
+**T040 unblocked (Blocked→Ready).** T043 remains Blocked (depends on T040, not T039).
+
+Full packets archived at `docs/swarm/archive/T039-worker-packet.md` and
+`docs/swarm/archive/T039-checker-packet.md`.

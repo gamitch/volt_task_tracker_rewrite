@@ -14,24 +14,20 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-19, post-T025/T026/T027)
+## Status snapshot (2026-07-19, post-T029/T039)
 
 75 tasks (T001–T071 + T002a + T002b + T006a + T016a) across epics E1–E11.
-**49 Passed · 6 Ready · 2 In Progress · 18 Blocked.**
+**51 Passed · 7 Ready · 0 In Progress · 17 Blocked.**
 
-- **In Progress now**: T029 (Season management) and T039 (Outreach event dialog + competition
-  flags) — both workers done (shared commit `569a5d9`), checker packets being built/dispatched.
-  Once T039 Passes, **T040 and T043 unblock**, then T041, then T042 — the last blocked chain in E6.
-- **E4 (Roster) — essentially done.** T021, T022, T023, T024, T025, T026, T027, T028 all Passed;
-  only T029 remains (In Progress). Two legitimate FAIL→rework→PASS cycles this batch (T033, T054,
-  both E5/E9, not E4) — E4 itself went 8-for-8 on first-attempt PASS.
-- **E6 (Outreach) — in progress.** T038, T044 Passed. T039 In Progress. T040–T043 Blocked on T039.
-  T045 Ready (undispatched).
+- **E4 (Roster) — fully complete.** T021–T029 all Passed. Went 9-for-9 on first-attempt PASS.
+- **E6 (Outreach) — in progress.** T038, T039, T044 Passed. **T040 (RSVP control) now Ready**
+  (unblocked by T039). T041–T043 still Blocked — T041 needs T039+T040, T043 needs T040 alone
+  (not T039), T042 needs T041. T045 Ready (undispatched, separate E7 dependency).
 - **E9 (Home dashboards) — fully done.** T053 (Coach/Admin), T054 (Student, attempt 2), T055
-  (Parent) all Passed — the two legitimate FAIL cycles were T033 (E5, constitution item 5 secret
-  leak in a comment) and T054 (E9, Divider-instead-of-Heading a11y regression), both fixed with
-  narrow attempt-2 reworks and re-verified clean.
-- Six tasks Ready, undispatched, no packets yet: **T036, T045, T049, T050, T057, T058.**
+  (Parent) all Passed — the two legitimate FAIL cycles this session were T033 (E5, constitution
+  item 5 secret leak in a comment) and T054 (E9, Divider-instead-of-Heading a11y regression), both
+  fixed with narrow attempt-2 reworks and re-verified clean.
+- Seven tasks Ready, undispatched, no packets yet: **T036, T040, T045, T049, T050, T057, T058.**
 
 **T071 (shared Supabase client) Passed, clean, no findings.** The recurring
 cross-cutting gap flagged by six prior tasks is now closed at the
@@ -46,13 +42,13 @@ page/`guards.tsx`.
   corrective tasks). App has a real AppShell/TopNav/SideNav/MobileNav,
   `/login`→`/accept-invite` auth flow works end to end, dark-mode contrast is
   WCAG AA across the board.
-- **E4 (Roster) — essentially complete.** T021–T028 all Passed; T029 In
-  Progress (checker being dispatched).
+- **E4 (Roster) — fully complete.** T021–T029 all Passed.
 - **E5 (Meetings/Check-in) — fully complete.** T030, T031, T032, T033
   (attempt 2), T034, T035 all Passed. **T036** Ready, undispatched — the
   last E5 task.
-- **E6 (Outreach) — in progress.** T038, T044 Passed. **T039** In Progress.
-  T040–T043 Blocked on T039. T045 Ready, undispatched.
+- **E6 (Outreach) — in progress.** T038, T039, T044 Passed. **T040** Ready,
+  undispatched. T041 Blocked (needs T039+T040), T042 Blocked (needs T041),
+  T043 Blocked (needs T040 only). T045 Ready, undispatched (separate E7 dep).
 - **E7 (Calendar) — Blocked**, waiting on T045 (T046 needs T045; T047 needs
   T045+T010).
 - **E8 (Reminders) — T048 Passed.** T049, T050 Ready, undispatched.
@@ -65,8 +61,8 @@ page/`guards.tsx`.
 - **E11 (Launch sweeps) — Blocked**, waiting on the E6/E7/E8/E9 tail
   (T053–T060) to all Pass first.
 
-Six Ready tasks have no packets built yet: T036, T045, T049, T050, T057,
-T058 — each needs one built (directly or via foreman-planner) before
+Seven Ready tasks have no packets built yet: T036, T040, T045, T049, T050,
+T057, T058 — each needs one built (directly or via foreman-planner) before
 dispatch.
 
 Two real incidents earlier this session, both handled cleanly — see Known
@@ -122,13 +118,15 @@ See the T071 detail block in `task-ledger.md` (end of E3) and its
 
 ## Next recommended action
 
-Seventeen tasks are Ready: T023, T024, T025, T026, T027, T028, T029, T033,
-T039, T044, T045, T049, T050, T054, T055, T057, T058. None currently have
-worker packets pre-built — each needs one built first, either directly or
-via foreman-planner. All are file-disjoint and independently dispatchable
-in parallel if budget allows; pace per session/weekly usage as usual.
-**T033 (live check-in console) is the highest-leverage pick** — the single
-most operationally critical screen in the app.
+Seven tasks are Ready: T036, T040, T045, T049, T050, T057, T058. None
+currently have worker packets pre-built — each needs one built first,
+either directly or via foreman-planner. All are file-disjoint and
+independently dispatchable in parallel if budget allows.
+**T045 (`/calendar` month grid) is the highest-leverage pick** — it starts
+E7 (currently 100% Blocked) and is on the critical path to T060
+(`/settings`) and thence to E11's launch sweeps. T057/T058 (Hours/Events
+tabs) are close behind — they complete the T053–T060 range that all four
+E11 sweep tasks (T066–T069) are waiting on.
 
 Separately, worth deciding when to prioritize: drafting the T016a-pattern
 wiring series that connects T071's new client into `guards.tsx` and the

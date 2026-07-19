@@ -65,13 +65,22 @@ deliberately terse going forward.
 **E1, E2, and E3 are all fully complete.** Full evidence for every row above is in
 `verification-log.md` under its `## T0xx` heading.
 
-## Active (2026-07-19, updated after T025/T026/T027 close-out)
+## Active (2026-07-19, updated after T029/T039 close-out)
 
-49 tasks Passed. T029 (Season management) and T039 (Outreach event dialog) are In Progress — both
-workers done (shared commit `569a5d9`), checker packets being built/dispatched now. Once T039
-Passes, T040/T043 unblock (then T041, then T042) — the last blocked chain in E6. 18 tasks remain
-Blocked, mostly gated on that T039 chain, E7/E8 infra, E9's remaining content pages, the E10 human
-migration gates, and E11's final sweeps. See `overview.md` for the current tiered priority list.
+51 tasks Passed. E4 (Roster) is essentially complete (T021-T029 all Passed). T039 Passed, unblocking
+**T040** (Ready) — T043 remains Blocked (its Depends is T040, not T039). Six tasks Ready and
+undispatched: T036, T040, T045, T049, T050, T057, T058. 17 tasks remain Blocked, mostly gated on
+the T040→T041→T042/T043 chain, E7/E8 infra, E9's remaining content pages, the E10 human migration
+gates, and E11's final sweeps. See `overview.md` for the current tiered priority list.
+
+- **T029 — Season management.** PASS (1st attempt, NIT). Checker independently confirmed the real
+  `seasons_single_active_idx` partial unique index and the single-payload atomicity contract;
+  judged the whole-page `RequireRole` gating choice correct versus T028's embedded-widget pattern.
+- **T039 — Outreach event dialog.** PASS (1st attempt, NIT). Checker independently judged the
+  OUT-02-vs-CMP-01 event-type resolution correct (CMP-01 literally names this dialog as where
+  competitions get created); verified CMP-02 flag defaults against the real ETL's own
+  `eventTypeMetricDefaults`; confirmed the disclosed prefill race-condition bug and its `useMemo`
+  fix are real. **T040 unblocked.**
 
 ## Known Decisions (condensed — full rulings in dispute-log.md)
 
