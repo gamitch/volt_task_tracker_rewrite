@@ -65,13 +65,41 @@ deliberately terse going forward.
 **E1, E2, and E3 are all fully complete.** Full evidence for every row above is in
 `verification-log.md` under its `## T0xx` heading.
 
-## Active (2026-07-19, updated after T036/T040/T045/T049/T050/T057/T058 batch — all 7 closed)
+## Active (2026-07-19, updated after T041/T043/T046/T047/T051/T059 batch — all 6 closed)
 
-58 tasks Passed. E4/E5 fully complete. E6/E7/E8/E9 all nearly complete — six tasks Ready,
-undispatched: T041, T043, T046, T047, T051, T059. 11 tasks remain Blocked, mostly gated on T042
-(needs T041), T060 (needs T046, now Ready), T052/E10's human gates, and E11's final sweeps
-(T066-T069, waiting on the full T053-T060 range). See `overview.md` for the current tiered
-priority list.
+64 tasks Passed. E1-E8 fully Passed for all automatable work. E9 has one task left (T060). E6 has
+one task left (T042). Only two Ready, undispatched tasks remain: T042, T060. 9 tasks remain
+Blocked: T052/T063/T065/T070 (human gates) and T064/T066-T069 (waiting on those gates or on
+T042+T060). See `overview.md` for the current tiered priority list.
+
+- **T051 — `send-reminders` Edge Function + `pg_cron` + dedupe.** PASS (1st attempt, clean).
+  Checker had real Deno available and independently ran the full suite itself (54/54), reproducing
+  the dedupe re-run proof for both key shapes plus its own adversarial
+  non-conflation case. Confirmed the new `_cron.sql` migration is genuinely additive with zero
+  hardcoded secrets (Vault-resolved at invocation). Recommended (not required) escalating a real,
+  disclosed `notification_prefs.digest_enabled`-vs-`weekly_digest` ambiguity to T052's human
+  sign-off. **E8 is now fully Passed for all automatable work** — only T052 (human gate) remains.
+- **T047 — `ics` Edge Function via `ical-generator`.** PASS (1st attempt, clean). Checker had real
+  Deno available and independently ran `deno test`/`deno check` itself (54/54, 0 errors) — stronger
+  verification than the worker's own Node/tsx substitute (Deno CLI unavailable to the worker).
+  Confirmed zero hand-built ICS strings and independently reproduced the parent multi-team-union
+  role-scoping case against the real PRD 8.4 reference SQL.
+- **T046 — Subscribe popover + reset link.** PASS (1st attempt, NIT). Checker independently
+  confirmed `calendar_feeds` has no `profile_id` uniqueness constraint and rendered explicit
+  verdicts approving both the disclosed `Promise<CalendarFeedRow>` return-type deviation and the
+  retained `AlertDialog` `'destructive'` default. **T060 unblocked.**
+- **T043 — Parent RSVP-on-behalf.** PASS (1st attempt, NIT). Checker independently confirmed zero
+  literal `'parent'` string writes to `responded_by` and verified the `guardian_links`
+  cross-reference's honesty (the `'unrecognized'` fallback never fabricates a relationship label);
+  also confirmed the reimplemented lock logic correctly carries T040's int32 `setTimeout` overflow
+  fix rather than reintroducing it.
+- **T041 — Outreach detail `/outreach/:eventId`.** PASS (1st attempt, MINOR). Checker independently
+  reproduced the "No response" roster-minus-rsvps derivation and the DES-12 reveal-nothing proof,
+  and confirmed via the migration that `events` genuinely has no `status` column — concurring the
+  disclosed Edit/Cancel stub-banner scope call was correct, not a shortcut. **T042 unblocked.**
+- **T059 — CSV exports.** PASS (1st attempt, clean — no findings). Checker independently recomputed
+  the `hours_by_student.csv` fixture cross-check from `HoursTab.tsx`'s real formulas and added its
+  own adversarial RFC 4180 escaping cases beyond the worker's own tests.
 
 - **T045 — `/calendar` page.** PASS (attempt 2). Attempt 1 was a legitimate MAJOR FAIL — every
   row's `Link` rendered identical undifferentiated "View details" text, a real screen-reader

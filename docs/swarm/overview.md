@@ -14,27 +14,27 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-19, post-T036/T040/T045/T049/T050/T057/T058 batch — all 7 closed)
+## Status snapshot (2026-07-19, post-T041/T043/T046/T047/T051/T059 batch — all 6 closed)
 
 75 tasks (T001–T071 + T002a + T002b + T006a + T016a) across epics E1–E11.
-**58 Passed · 6 Ready · 0 In Progress · 11 Blocked.**
+**64 Passed · 2 Ready · 0 In Progress · 9 Blocked.**
 
-- **E4 (Roster) — fully complete.** T021–T029 all Passed, 9-for-9 first-attempt PASS.
-- **E5 (Meetings/Check-in) — fully complete.** T030–T036 all Passed.
-- **E6 (Outreach) — nearly done.** T038, T039, T040 (attempt 2), T044 Passed. **T041, T043**
-  Ready (unblocked by T040). T042 Blocked (needs T041).
-- **E7 (Calendar) — open.** T045 (attempt 2) Passed. **T046, T047** Ready (unblocked by T045).
-- **E8 (Email) — building out.** T048, T049, T050 Passed. **T051** Ready (unblocked by T049,
-  T050/T011 already Passed).
-- **E9 (Reports/Home) — fully complete except T060.** T053–T058 all Passed. **T059 (CSV exports)**
-  Ready. T060 still Blocked (needs T046 — now Ready, one hop away).
-- **This dispatch batch's two legitimate FAIL→rework→PASS cycles**: T040 (RSVP control — a real
-  int32 `setTimeout` overflow silently locking the control for sessions >~25 days out) and T045
-  (`/calendar` — a real non-unique row-link-text accessibility regression, every row read identical
-  "View details" to a screen reader). Both fixed with narrow attempt-2 reworks, both re-verified by
-  a narrow re-check that independently reproduced the worker's own regression proof rather than
-  trusting it.
-- Six tasks Ready, undispatched, no packets yet: **T041, T043, T046, T047, T051, T059.**
+- **E1–E8 all fully Passed for every automatable task.** E6's last automatable piece was T042
+  (still Ready — the one remaining outreach task); E7/E8 are both now 100% Passed.
+- **E9 (Reports/Home) — one task from fully complete.** T053–T059 all Passed. **T060 (`/settings`)**
+  Ready (unblocked by T046).
+- **T042 (Mark day complete dialog)** Ready — the last piece of E6, unblocked by T041.
+- **E10 (Migration)** — T061, T062 Passed. T063/T064/T065 remain Blocked, gated on human-supplied
+  old-project credentials and sign-offs (George).
+- **E11 (Launch sweeps)** — T066–T069 remain Blocked, waiting on T042 and T060 (the last two pieces
+  of the T053–T060-equivalent range) before they can start.
+- **Only two Ready tasks left with no packet yet: T042, T060** — once both land, essentially
+  everything left in the ledger is a human gate (T052, T063, T065, T070) or an E11 sweep waiting on
+  them.
+- **This session's four legitimate FAIL→rework→PASS cycles** (across both recent batches): T033
+  (secret-name leak), T054 (Divider-instead-of-Heading), T040 (`setTimeout` int32 overflow), T045
+  (non-unique link text). Every one was fixed with a narrow attempt-2 rework and re-verified by a
+  narrow re-check that independently reproduced the worker's own regression proof.
 
 **T071 (shared Supabase client) Passed, clean, no findings.** The recurring
 cross-cutting gap flagged by six prior tasks is now closed at the
@@ -52,22 +52,26 @@ page/`guards.tsx`.
 - **E4 (Roster) — fully complete.** T021–T029 all Passed.
 - **E5 (Meetings/Check-in) — fully complete.** T030–T036 all Passed
   (T033, T036 each had one legitimate FAIL→rework→PASS cycle).
-- **E6 (Outreach) — nearly complete.** T038, T039, T040 (attempt 2), T044
-  Passed. **T041, T043** Ready, undispatched. T042 Blocked (needs T041).
-- **E7 (Calendar) — open.** T045 (attempt 2) Passed. **T046, T047** Ready,
-  undispatched.
-- **E8 (Reminders) — T048, T049, T050 Passed.** **T051** Ready, undispatched.
-  T052 (human gate) Blocked behind it.
-- **E9 (Reports/Home) — fully complete except T060.** T053–T058 all
-  Passed. **T059** Ready, undispatched. T060 Blocked (needs T046, now Ready).
+- **E6 (Outreach) — one task left.** T038–T041, T043, T044 all Passed.
+  **T042 (Mark day complete dialog)** Ready, undispatched — the last piece.
+- **E7 (Calendar) — fully complete.** T045–T047 all Passed.
+- **E8 (Reminders) — fully complete for all automatable work.** T048–T051
+  all Passed. T052 (human gate) Blocked, externally gated on George's
+  `mail.voltfrc.org` domain verification and sign-off — carries a real,
+  disclosed follow-up question (does `notification_prefs.digest_enabled`
+  need to also gate weekly-digest sends?) for that sign-off to resolve.
+- **E9 (Reports/Home) — one task left.** T053–T059 all Passed. **T060
+  (`/settings`)** Ready, undispatched — the last piece.
 - **E10 (Migration) — T061, T062 Passed.** T063 is a human gate blocked on
   George's real old-project credentials; T064/T065 blocked behind it.
-- **E11 (Launch sweeps) — Blocked**, waiting on the E6/E7/E8/E9 tail
-  (T053–T060) to all Pass first.
+- **E11 (Launch sweeps) — Blocked**, waiting on T042 and T060 (the last two
+  pieces of the T053–T060-equivalent completion range) before any of
+  T066–T069 can start.
 
-Six Ready tasks have no packets built yet: T041, T043, T046, T047, T051,
-T059 — each needs one built (directly or via foreman-planner) before
-dispatch.
+Two Ready tasks have no packets built yet: T042, T060 — each needs one
+built (directly or via foreman-planner) before dispatch. Once both land,
+essentially everything remaining in the ledger is either a human gate
+(T052, T063, T065, T070) or an E11 sweep waiting on them.
 
 Two real incidents earlier this session, both handled cleanly — see Known
 Decisions/Current Risks in `state-summary.md` if ever needed: (1) a
@@ -122,16 +126,13 @@ See the T071 detail block in `task-ledger.md` (end of E3) and its
 
 ## Next recommended action
 
-Six tasks are Ready: T041, T043, T046, T047, T051, T059. None currently
-have worker packets pre-built — each needs one built first, either
-directly or via foreman-planner. All are file-disjoint and independently
-dispatchable in parallel.
-**T059 (CSV exports) is the highest-leverage pick** — it's the last piece
-of the T053–T060 range all four E11 sweep tasks (T066–T069) are waiting on.
-T046 is close behind — it's the last dependency standing between T060
-(`/settings`) and the same E11 range. T041/T043 continue the E6
-outreach-detail chain toward T042; T047 rounds out E7; T051 continues the
-E8 email pipeline toward its T052 human gate.
+Two tasks are Ready: T042, T060. Neither has a worker packet pre-built yet
+— both need one built first, either directly or via foreman-planner. They
+are file-disjoint and dispatchable in parallel.
+**Both are equally high-leverage** — they are the last two pieces standing
+between the current state and E11's launch sweeps (T066–T069) becoming
+dispatchable. T060 (`/settings`) also closes out E9 entirely; T042 (Mark
+day complete dialog) closes out E6 entirely.
 
 Separately, worth deciding when to prioritize: drafting the T016a-pattern
 wiring series that connects T071's new client into `guards.tsx` and the
