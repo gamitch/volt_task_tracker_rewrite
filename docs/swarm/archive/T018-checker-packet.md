@@ -357,3 +357,6 @@ unverified narration, not evidence. Inspect the actual files and generate your o
 evidence via testing, rendering, and command runs. Do not flip `task-ledger.md` yourself — report
 your verdict back; foreman-planner updates the ledger. T018 stays "In Progress" until your verdict
 is returned.
+
+---
+**ARCHIVED** 2026-07-19 — closed out as part of T018 PASS close-out.

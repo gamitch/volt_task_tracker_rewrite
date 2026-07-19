@@ -34,14 +34,16 @@ deliberately terse going forward.
 - T032 — `checkin` Edge Function (HMAC rotating token). PASS (1st attempt, two MINOR follow-ups: MTG-04 manual-override schema gap, in-memory-only rate limiter — both genuinely undoable within frozen-schema scope). `ON CONFLICT DO NOTHING` design judged PASS-AS-DESIGNED, stricter than the packet's illustrative SQL. T034, T035 unblocked (Blocked→Ready).
 - **T019 — DB trigger: invite acceptance → profile/link (critical-path task).** PASS (1st attempt, MINOR: live-GoTrue re-verification follow-up once a real Supabase project exists). Resolved a genuinely tricky "first successful sign-in" signal design (OR of `email_confirmed_at`/`last_sign_in_at` transitions, since T017's `inviteUserByEmail` runs at invite-send time not acceptance time) — checker independently re-ran 6 scenarios + 3 adversarial probes on its own scratch Postgres, rendered an explicit weighed verdict, and concluded no boss-arbiter escalation was needed. **T021, T030, T038 unblocked (Blocked→Ready) — the first real content-page tasks in the entire ledger** (Roster, Meetings, Outreach).
 
-**E1 and E2 are fully complete.** Full evidence for every row above is in
-`verification-log.md` under its `## T0xx` heading.
+- T018 — `/accept-invite` screen. PASS (1st attempt, MINOR copy-nit finding, non-blocking). Two dispute-candidate gaps re-confirmed (router.tsx wiring; invite-data-loading seam, `invites` RLS is staff-only + no `name` column) and routed to the orchestrating session, same class as T016's identical gaps — not blocking. **One incidental cross-cutting MAJOR finding routed to boss-arbiter as D005**: dark-mode `Button variant="primary"` text contrast measures ~4.04:1 (below WCAG AA 4.5:1), a `volt.ts`/Button-level defect inherited unchanged by the already-Passed T016 `/login` page too — not T018's own defect, potentially reopens T002/T016's contrast sign-off. **T020 unblocked (Blocked→Ready) — closes out E3.**
+
+**E1 and E2 are fully complete. E3 is now fully Passed pending T020 (dispatch-ready).** Full evidence
+for every row above is in `verification-log.md` under its `## T0xx` heading.
 
 ## Active
 
-Nothing currently dispatched. Nine Ready/undispatched tasks: T018, T021,
-T030, T034, T035, T038, T048, T056, T062 (see `overview.md` for the current
-count and recommended next action).
+D005 (dark-mode primary-button contrast, cross-cutting) escalated to boss-arbiter — outcome
+pending. Nine Ready/undispatched tasks otherwise: T020, T021, T030, T034, T035, T038, T048, T056,
+T062 (see `overview.md` for the current count and recommended next action).
 
 ## Known Decisions (condensed — full rulings in dispute-log.md)
 
@@ -94,7 +96,26 @@ count and recommended next action).
   (2) Google OAuth client — blocks T015 end-to-end. (3) ~~Resend domain
   verification~~ — done, confirmed. (4) Vercel CNAME — blocks T070.
 - **T018 will need its own router.tsx wiring task** for `AcceptInvitePage`,
-  same shape as T016a — not automatically covered.
+  same shape as T016a — not automatically covered. T018's checker confirmed
+  by direct read that `/accept-invite` is *not* the last such placeholder in
+  `router.tsx` — every page task not yet built (Dashboard, Meetings, Kiosk,
+  Check-in, Outreach, Calendar, Roster, Reports, Settings) still has an
+  inline placeholder there too. Consider a standing convention ("wire the
+  route once its page task Passes") rather than one-off wiring tasks per
+  page, to avoid an ever-growing backlog of T0xxa-style corrective tasks.
+- **No mechanism exists to supply real invite data to `/accept-invite`**:
+  `invites` RLS is `staff_all`-only and the table has no `name` column, so
+  AUTH-03 (the app's only sign-up path) cannot work end-to-end without a new
+  read-only, token-keyed data channel (e.g. an Edge Function). T018's checker
+  recommended scheduling this as its own ledger task rather than an
+  indefinitely-deferred gap, given AUTH-03 is core-path. Not yet scheduled.
+- **D005 (open)**: T018's checker independently measured a real WCAG AA
+  contrast shortfall (~4.04:1, needs 4.5:1) on `Button variant="primary"`'s
+  dark-mode text, inherited unchanged from `volt.ts`'s theme tokens — same
+  button already shipped on the already-Passed T016 `/login` page, and
+  arguably in tension with T002's own "both modes pass WCAG AA" contrast
+  sign-off. Escalated to boss-arbiter (touches DES-03's verbatim-theme
+  requirement); not yet ruled.
 - Loop limit: 3 failed attempts per task before mandatory boss-arbiter
   escalation (constitution "Loop Limit").
 - No task is ever marked complete on worker self-report — every PASS

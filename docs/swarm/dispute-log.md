@@ -506,3 +506,45 @@ escalation under D001 precedent, and its three-way evidence held up fully
 under independent re-verification. Constitution unchanged. Human decision
 not required — the fix is source-verified against the installed library
 and NAV-05's requirement is still met literally.
+
+## D005 - T018 (incidental) Dark-mode `Button variant="primary"` text contrast measures ~4.04:1, below WCAG AA 4.5:1 — cross-cutting, also present in already-Passed T016
+
+Worker position:
+T018's worker did not touch this — the finding was made entirely by T018's checker, incidentally,
+while independently measuring live contrast beyond the packet's explicit checklist. Not raised by
+any worker.
+
+Checker position:
+checker-accessibility (T018 check, attempt 1) ran a pixel-level WCAG contrast measurement (not a
+CSS-computed-style heuristic, which it first ran and discarded after finding it produced a
+provably wrong result on this same page). Finding: the shared `Button variant="primary"` in dark
+mode — navy text (`rgb(0,0,179)` / `#0000B3`) on the dark-mode accent background
+(`rgb(155,123,255)` / `#9B7BFF`, `src/theme/volt.ts`'s dark-mode `--color-accent` token) — measures
+~4.04:1 at 14px/weight-500 (not "large text" under WCAG's definition, which needs only 3:1).
+WCAG AA requires 4.5:1 for normal-size text. All other measured text/banner/button pairs on the
+page passed (7:1–13.6:1). The checker explicitly did not attribute this to T018: `AcceptInvitePage`
+uses the same `Button variant="primary"` component and the same `volt.ts` theme tokens already
+shipped on the already-Passed T016 `/login` page ("Sign in" / "Send reset link" buttons) — the
+defect is in the shared component/theme, not anything T018 wrote, and is outside T018's Allowed
+Files (`src/pages/accept-invite/**` only) to fix. Checker did not fail T018 for this and explicitly
+recommended it be routed as its own cross-cutting follow-up.
+
+Tension flagged, not resolved by the checker: this appears to be in some tension with two earlier
+Passed verdicts:
+1. T002's own acceptance criterion ("both light/dark accent-on-surface pass WCAG AA," DES-06) and
+   its checker's contrast sign-off on `volt.ts` at the time — that check was of accent-on-surface
+   backgrounds, not necessarily button-foreground-text-on-accent-background specifically, so it may
+   not have covered this exact pairing.
+2. T016's already-Passed `/login` screen ships the identical button/theme pairing today, unnoticed
+   until now.
+3. `volt.ts`'s accent hex values are BLOCKER-class verbatim-locked to PRD DES-03 (constitution item
+   3) — a straightforward "just change the accent hex" fix may not be available without either a
+   PRD/DES-03 amendment or a fix scoped to the `Button` component's dark-mode text-color logic
+   instead of the theme token itself. Which lever is correct is a design/architecture call the
+   checker was not positioned to make from within a single task's checker packet.
+
+Boss decision:
+(pending — not yet ruled)
+
+Outcome:
+(pending)
