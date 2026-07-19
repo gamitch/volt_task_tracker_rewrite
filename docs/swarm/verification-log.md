@@ -1571,3 +1571,35 @@ Full packets archived at `docs/swarm/archive/T050-worker-packet.md` and
 [2026-07-19T07:44:28Z] Worker finished. Checker required before completion.
 [2026-07-19T07:44:36Z] Worker finished. Checker required before completion.
 [2026-07-19T07:47:18Z] Worker finished. Checker required before completion.
+
+## T036 — End meeting flow (MTG-13)
+
+**Result: PASS (1st attempt). Severity: NIT. Closes out Epic E5.**
+
+Worker built `EndMeetingDialog.tsx`: an `AlertDialog`-confirmed flow atomically flipping
+`event_sessions.status='completed'`, backfilling `absent` for no-record roster members, and
+closing open check-ins, with post-completion attendance edits relying entirely on the real,
+already-applied `trg_audit_attendance_post_completion` trigger.
+
+**Checker's independent verification (checker-reviewer):**
+- **Central safety check**: opened the migration directly and confirmed the trigger fires exactly
+  as cited (`after update on attendance`, live `event_sessions.status` lookup). Independently
+  grepped the file for any DB call/import — zero real writes, every `audit_log` mention is inside a
+  comment or a `console.warn` string. Safety property holds.
+- Atomicity contract (`EndMeetingPayload` naming all three legs as one shape) confirmed sound by
+  source read; rejection-path test confirmed state stays untouched on a failed call.
+- Pre-confirm-summary design (current-DB-state tally + a separate disclosed sentence for the
+  about-to-change counts) explicitly judged the better of two options, not merely accepted.
+- The disclosed post-completion `onEditAttendance` correction-seam scope addition ruled in-scope —
+  the only way to prove the "trigger handles audit automatically" contract with a real, exercised
+  call site rather than an unused type.
+- `AlertDialog actionVariant="primary"` override (vs. the real documented `'destructive'` default)
+  confirmed a genuine, sound departure — ending a meeting is workflow completion, not data loss.
+- 736/736 repo-wide, 21/21 own tests, typecheck/lint/build clean; `Kiosk.tsx` independently
+  reconfirmed byte-unchanged despite being a forbidden read-only reference file.
+
+**E5 (Meetings/Check-in) is now fully Passed** — T030, T031, T032, T033 (attempt 2), T034, T035,
+T036 all Passed.
+
+Full packets archived at `docs/swarm/archive/T036-worker-packet.md` and
+`docs/swarm/archive/T036-checker-packet.md`.
