@@ -2004,3 +2004,4 @@ all unblocked (Blocked→Ready).**
 
 Full packets archived at `docs/swarm/archive/T060-worker-packet.md` and
 `docs/swarm/archive/T060-checker-packet.md`.
+[2026-07-19T11:37:56Z] Worker finished. Checker required before completion.
