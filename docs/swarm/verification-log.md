@@ -2206,3 +2206,4 @@ check-in tally (`LiveConsole.tsx`) and kiosk view.
 Full worker packet archived at `docs/swarm/archive/T067-worker-packet.md`. No separate
 checker-packet file exists for this audit task (Allowed Files: None; checker's full findings are
 recorded here).
+[2026-07-19T12:08:19Z] Worker finished. Checker required before completion.
