@@ -1533,3 +1533,5 @@ ETL's own defaults, and the same `event_sessions.notes` nullability precedent T0
 Full packets archived at `docs/swarm/archive/T039-worker-packet.md` and
 `docs/swarm/archive/T039-checker-packet.md`.
 [2026-07-19T07:14:29Z] Worker finished. Checker required before completion.
+[2026-07-19T07:26:46Z] Worker finished. Checker required before completion.
+[2026-07-19T07:35:56Z] Worker finished. Checker required before completion.
