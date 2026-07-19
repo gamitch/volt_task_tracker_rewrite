@@ -2953,3 +2953,45 @@ picked up and completed the remaining verification, including live-reproducing t
 **Findings (non-blocking):** no dedicated accessibility-regression test for `AdminToggles`'
 `Heading`/`Switch` semantics surviving future refactors (currently covered only via text-content
 assertions) — follow-up recommended, not filed as blocking.
+
+## ED-1 — Epic design pass: wiring fixture seams to the real Supabase data layer
+
+**Not a task PASS entry — records the boss-architect design pass that scopes the ED-1
+epic**, dispatched after live manual testing against the real production deployment
+confirmed nearly every page renders fixture-backed data even when authenticated against
+the real, empty production database (docs/backlog.html's ED-1 callout).
+
+**Design output:** 14 packets (T086 onward) across 3 slices — Slice A (roster/invites,
+sequenced first to unblock T052's UI smoke test), Slice B (a shared active-season
+resolution mechanism everything season-scoped depends on), Slice C (remaining domains,
+parallelizable once Slices A/B land). Full packet list, dependency graph, and per-area
+traps recorded in the design pass's own output; individual packets get their own
+worker/checker packets and ledger rows as each is dispatched.
+
+**Real facts discovered during the design pass** (not previously known):
+- `ProfileRow.avatarUrl` in `src/lib/supabase/types.ts` is mistyped `string` — the
+  column has been nullable since T019's `20260718000000_invite_trigger.sql` migration.
+- The `checkin` Edge Function only verifies codes; nothing issues the rotating QR/short
+  code LiveConsole/Kiosk need to display — a real extension is needed, not just wiring.
+- `send-invite` cannot resend an invite (the first call creates the `auth.users` row
+  immediately; a second call for the same email always 409s) — resend needs its own
+  Edge Function extension using `auth.admin.generateLink`, not a frontend-only wire.
+- No Supabase Storage bucket exists anywhere in the migrations — avatar upload (SET-01)
+  needs one; may require a manual one-time setup step for George if hosted Supabase
+  rejects `storage.objects` policy DDL from a migration (same posture as the Vault
+  secrets).
+- The `invites` table is unreadable by non-staff under RLS (`staff_all` is the only
+  policy) — `AcceptInvitePage.loadInvite` cannot select the table directly; it must
+  read invite metadata off the authenticated session instead.
+- Student-facing leaderboard names require name-privacy enforcement in a new SQL view,
+  not in TypeScript, or the ROS-08 privacy toggle would be UI-only theater while full
+  names still cross the wire. This absorbs ED-4 (the previously-separate "add the
+  missing privacy column" debt item) into ED-1's P11 packet.
+
+**Constraints carried into every packet:** no re-derived metric arithmetic in
+TypeScript (constitution item 3, BLOCKER); no service-role key or secret client-side
+(item 5, BLOCKER); `src/app/guards.tsx`'s stale Role vocabulary is explicitly
+out-of-scope for every ED-1 packet (routed to ED-5, a dispute if a packet is genuinely
+blocked by it, not a drive-by fix); distinguishing "empty because RLS" from "empty
+because no data" is impossible client-side by design — the rule for every packet is
+role-appropriate empty-state copy plus route guards, not loader-level workarounds.
