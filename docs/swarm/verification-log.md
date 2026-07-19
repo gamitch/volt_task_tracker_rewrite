@@ -2596,3 +2596,42 @@ a pre-existing session, did nothing yet") — replacing the passive user-resolut
 **Both of T073b2's disclosed MAJOR gaps are now resolved (T076 for Gap B, T077 for Gap A).** One new
 MINOR follow-up candidate disclosed: the Google OAuth hard-redirect return-leg auto-navigation gap
 on the invite-accept page, not yet a task.
+[2026-07-19T17:01:25Z] Worker finished. Checker required before completion.
+[2026-07-19T17:02:39Z] Worker finished. Checker required before completion.
+
+## T078 — Update 3 pre-existing tests' stale `RequireRole`-denial assertions (fallout from T076),
+Epic E3
+
+**Result: PASS (1st attempt). Severity: none — clean.**
+
+Fallout from T076 (Passed): `LiveConsole.test.tsx`, `ParentsTab.test.tsx`, and
+`SeasonSettings.test.tsx` each had assertions checking for `NoAccessPage`'s old copy in scenarios
+that are now legitimately role-mismatches. Updated all 4 assertions to check for
+`AccessDeniedPage`'s real title, renamed test descriptions accordingly.
+
+**Real tension found and correctly disclosed, not papered over**: `SeasonSettings.test.tsx`'s
+"unauthenticated viewer" test renders `SeasonSettings` directly under `AuthProvider` with no
+wrapping `RequireAuth` — unlike the real app, where `/settings` is always `RequireAuth`-wrapped
+first. This exercises `RequireRole`'s own documented standalone defensive fallback for `user ===
+null`, a scenario unreachable in production. Since `AccessDeniedPage`'s description ("You're signed
+in and your account is fine...") would be factually wrong for a genuinely unauthenticated visitor,
+the worker resolved this by asserting only the title (never the description) across all four
+tests — genuinely consistent with the existing pattern (every one of these tests already only
+checked a single identifying string), not a special-cased workaround — with the full reasoning
+disclosed in an explicit code comment.
+
+**Checker's independent verification (checker-tests):**
+- Confirmed all 4 assertion/rename changes directly, confirmed no other test in these 3 files was
+  touched.
+- Independently traced the "unauthenticated viewer" test's actual render setup and cross-checked
+  against `router.tsx`'s real `/settings` wrapping, confirming the standalone-fallback
+  characterization is accurate, not a rationalization.
+- **Specifically re-verified no corruption occurred from the earlier concurrent git-stash
+  incident** (T078's worker collided with a temporary in-progress edit from T077's own checker
+  verification methodology): confirmed `git stash list` is empty, confirmed `AcceptInvitePage.tsx`
+  still contains T077's fix intact, confirmed the full working tree matches exactly what
+  T076+T077+T078's combined work should produce.
+- Independently ran the full suite (910/910), typecheck, lint, build, format:check — all clean.
+
+**All 4 stale assertions fixed. The full repo-wide test suite is genuinely green — 910/910,
+zero failures anywhere.**

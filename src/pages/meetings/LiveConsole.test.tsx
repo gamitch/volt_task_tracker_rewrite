@@ -532,15 +532,22 @@ describe('MTG-12 excused gating (defense in depth)', () => {
 
 describe('LiveConsolePage role guard', () => {
   // T073b2: `RequireRole` (`guards.tsx`) no longer redirects a role-denied
-  // viewer to "/" -- it renders `<NoAccessPage />` in place instead (a
-  // real, disclosed behavior change; see that file's own module doc). This
-  // test now asserts the `NoAccessPage` render (its own real
-  // `EmptyState` title) rather than the old redirect target.
-  it('renders NoAccessPage for a non-coach/admin role, not a redirect', async () => {
+  // viewer to "/" -- it renders a screen in place instead (a real, disclosed
+  // behavior change; see that file's own module doc).
+  //
+  // T078: T076 (Passed) subsequently corrected `RequireRole`'s role-mismatch
+  // branch (a resolved `student` account hitting a coach/admin-only page,
+  // exactly this test's scenario) to render `AccessDeniedPage`, not
+  // `NoAccessPage` -- `NoAccessPage` is for AUTH-04's distinct no-profile
+  // case and its "You're not on the roster yet." copy was simply false here
+  // (this account IS on the roster; it just lacks this page's role). This
+  // test now asserts `AccessDeniedPage`'s own real `EmptyState` title
+  // instead of the stale `NoAccessPage` copy it originally targeted.
+  it('renders AccessDeniedPage for a non-coach/admin role, not a redirect', async () => {
     renderPage(STUDENT_USER);
     await flushMicrotasks();
     expect(container.querySelector('[data-testid="redirected-home"]')).toBeNull();
-    expect(container.textContent).toContain("You're not on the roster yet.");
+    expect(container.textContent).toContain("This page isn't part of your role");
     expect(container.textContent).not.toContain('Roster');
   });
 

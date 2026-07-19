@@ -380,28 +380,56 @@ describe('computeCurrentSchoolYearRange (module doc #2 -- real DateRangeInput pr
 
 describe('<SeasonSettings /> admin-only gate', () => {
   // T073b2: `RequireRole` (`guards.tsx`) no longer redirects a role-denied
-  // (or unauthenticated) viewer to "/" -- it renders `<NoAccessPage />` in
-  // place instead (a real, disclosed behavior change; see that file's own
-  // module doc). Both tests below now assert the `NoAccessPage` render
-  // (its own real `EmptyState` title) rather than the old redirect target,
-  // and both now flush microtasks first -- auth resolution (even the
-  // real default `authModule`'s own fail-safe-to-anonymous path for the
-  // unauthenticated case, or the fake `authModule` `LoginAs` injects for
-  // the coach case) is genuinely async now, so `RequireRole` renders
-  // nothing (`isLoading`) until that resolves.
-  it('renders NoAccessPage for an unauthenticated viewer, not a redirect', async () => {
+  // (or unauthenticated) viewer to "/" -- it renders a screen in place
+  // instead (a real, disclosed behavior change; see that file's own module
+  // doc). Both tests below still flush microtasks first -- auth resolution
+  // (even the real default `authModule`'s own fail-safe-to-anonymous path
+  // for the unauthenticated case, or the fake `authModule` `LoginAs`
+  // injects for the coach case) is genuinely async, so `RequireRole`
+  // renders nothing (`isLoading`) until that resolves.
+  //
+  // T078: T076 (Passed) subsequently corrected `RequireRole`'s role-mismatch
+  // branch to render `AccessDeniedPage`, not `NoAccessPage` -- `NoAccessPage`
+  // is for AUTH-04's distinct no-profile case, and both tests below now
+  // assert `AccessDeniedPage`'s own real `EmptyState` title instead of the
+  // stale `NoAccessPage` copy they originally targeted.
+  //
+  // The "unauthenticated viewer" test immediately below is a special case
+  // worth flagging explicitly (not silently papering over). `renderSeason
+  // Settings(null, ...)` renders `<SeasonSettings />` directly under a real
+  // `<AuthProvider>` with NO wrapping `<RequireAuth>` -- unlike the real
+  // app's router, where `/settings` is always wrapped in `<RequireAuth>`
+  // (see `router.tsx`), so `SeasonSettings`'s own internal
+  // `RequireRole(['admin'])` (its own module doc #6) never actually
+  // observes `user === null` in production: `RequireAuth` would already
+  // have redirected a genuinely unauthenticated visitor to `/login` first.
+  // So this test exercises `RequireRole`'s own documented defensive
+  // fallback for being used STANDALONE with no authenticated user
+  // (`guards.tsx`'s own module doc: "it still degrades safely... if used
+  // standalone with no authenticated user") -- a scenario that cannot occur
+  // in the real running app. This matters because `AccessDeniedPage`'s real
+  // description text ("You're signed in and your account is fine...") would
+  // be factually WRONG for a genuinely unauthenticated visitor (there is no
+  // session at all in that case). To avoid asserting on copy known to be
+  // inaccurate for this one contrived, non-production-reachable path, this
+  // test -- like the other three role-guard tests in this file/
+  // `LiveConsole.test.tsx`/`ParentsTab.test.tsx` -- only asserts
+  // `AccessDeniedPage`'s TITLE ("This page isn't part of your role"), never
+  // its description; the title makes no claim about session state, so it
+  // stays accurate even for this edge case.
+  it('renders AccessDeniedPage for an unauthenticated viewer (RequireRole standalone fallback), not a redirect', async () => {
     renderSeasonSettings(null, { loadData: testLoadData });
     await flushMicrotasks();
     expect(document.querySelector('[data-testid="redirected-home"]')).toBeNull();
-    expect(container.textContent).toContain("You're not on the roster yet.");
+    expect(container.textContent).toContain("This page isn't part of your role");
     expect(container.textContent).not.toContain('Season settings');
   });
 
-  it('renders NoAccessPage for a non-admin (coach) viewer, not a redirect', async () => {
+  it('renders AccessDeniedPage for a non-admin (coach) viewer, not a redirect', async () => {
     renderSeasonSettings(COACH_USER, { loadData: testLoadData });
     await flushMicrotasks();
     expect(document.querySelector('[data-testid="redirected-home"]')).toBeNull();
-    expect(container.textContent).toContain("You're not on the roster yet.");
+    expect(container.textContent).toContain("This page isn't part of your role");
     expect(container.textContent).not.toContain('Season settings');
   });
 
