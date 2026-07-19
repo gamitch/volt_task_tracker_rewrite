@@ -1868,3 +1868,28 @@ Full packets archived at `docs/swarm/archive/T041-worker-packet.md` and
 `docs/swarm/archive/T041-checker-packet.md`.
 [2026-07-19T08:40:50Z] Worker finished. Checker required before completion.
 [2026-07-19T08:43:20Z] Worker finished. Checker required before completion.
+
+## T047 — `ics` Edge Function via `ical-generator` (CAL-04/05)
+
+**Result: PASS (1st attempt). Severity: clean — no findings.**
+
+Worker built `supabase/functions/ics/**`: role-scoped, `ical-generator`-only ICS feed generation.
+
+**Checker's independent verification (checker-tests):**
+- Unlike the worker (Deno CLI unavailable, substituted a Node/tsx port), the checker had real Deno
+  available and independently ran `deno test`/`deno check` itself — **54/54 tests pass, 0 typecheck
+  errors** — a stronger verification than the worker's own substitute.
+- **Central safety check**: confirmed by grep zero hand-built `BEGIN:`/`END:V` strings in any
+  production file; confirmed the test-only structural parser (which does contain such literals) is
+  never imported by production code.
+- Independently reproduced the parent multi-team-union role-scoping case and confirmed it matches
+  the PRD 8.4 reference SQL's `my_student_ids()` union exactly.
+- Confirmed not-found and revoked tokens consistently collapse to the identical 401 response and
+  message — no side-channel distinguishing the two cases via body shape or timing.
+- All CAL-04 literal content requirements (`X-WR-CALNAME`, 6h refresh interval, per-session `UID`,
+  `[Meeting|Outreach|Comp]` summary prefix, `STATUS:CANCELLED` inclusion for canceled sessions,
+  30-day-past window) verified against real generated `ical-generator` output.
+- `SUPABASE_SERVICE_ROLE_KEY` confirmed read only via `Deno.env.get`, never hardcoded/logged.
+
+Full packets archived at `docs/swarm/archive/T047-worker-packet.md` and
+`docs/swarm/archive/T047-checker-packet.md`.
