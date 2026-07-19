@@ -1310,3 +1310,26 @@ Full packets archived at `docs/swarm/archive/T028-worker-packet.md` and
 `docs/swarm/archive/T028-checker-packet.md`. Real follow-up: an additive migration to add the
 privacy-persistence column, correctly not added by this UI-only task itself.
 [2026-07-19T06:51:33Z] Worker finished. Checker required before completion.
+[2026-07-19T06:55:49Z] Worker finished. Checker required before completion.
+
+## T023 — Add/edit student dialog (ROS-03)
+
+**Result: PASS (1st attempt). Severity: NIT.**
+
+Worker built `StudentDialog.tsx`: ROS-03's exact field order, BEH-07 button copy, and a resolution
+of the schema-forced "email (optional)" ambiguity consistent with `StudentsTab.tsx`'s established
+precedent, plus its own additional finding (an edit-mode email-field-disable wrinkle).
+
+**Checker's independent verification (checker-reviewer):**
+- **"email (optional)" resolution confirmed consistent** with `StudentsTab.tsx`/T022's own
+  established reading (email supplied at invite-time, never a `students.email` lookup), not a
+  divergent interpretation.
+- **Edit-mode email-disable wrinkle confirmed real and correctly implemented**: disables only when
+  editing an already-accounted student (whose real email lives on a separate `profiles` row, out of
+  reach here), stays enabled for create mode and accountless-student edits — uses `aria-disabled`
+  correctly (not the native `disabled` attribute, since Astryx's `disabledMessage` keeps the field
+  focusable).
+- BEH-07 button copy and blank-goal-override-submits-`null` both re-verified by direct source read.
+
+Full packets archived at `docs/swarm/archive/T023-worker-packet.md` and
+`docs/swarm/archive/T023-checker-packet.md`.
