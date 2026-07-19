@@ -440,6 +440,82 @@ describe('Calendar month navigation re-scopes the chronological list (Trap #1 re
 });
 
 // ---------------------------------------------------------------------------
+// Checker fix #1 (MAJOR): each row's `Link` visible/accessible text must be
+// distinguishable per-row (not a repeated generic "View details" across a
+// screen-reader links-list/rotor), per astryx-api.md's Link Best Practices
+// ("describe the destination", never generic "click here"/"read more" text).
+// ---------------------------------------------------------------------------
+
+describe('row Link text is distinguishable per session (astryx-api.md Link Best Practices)', () => {
+  beforeEach(() => {
+    vi.setSystemTime(new Date('2026-07-19T12:00:00.000Z'));
+  });
+
+  it('two different rows render different link text/accessible names, each including the event title', async () => {
+    renderPage();
+    await flushMicrotasks();
+
+    const links = Array.from(container.querySelectorAll('a'));
+
+    const meetingLink = links.find(
+      (a) => a.getAttribute('href') === '/meetings/session-build-upcoming',
+    );
+    const outreachLink = links.find(
+      (a) => a.getAttribute('href') === '/outreach/event-food-bank-sort',
+    );
+    expect(meetingLink).toBeTruthy();
+    expect(outreachLink).toBeTruthy();
+
+    // Each link's own text distinguishes it by including its row's title.
+    expect(meetingLink!.textContent).toContain('Weekly Build Meeting');
+    expect(outreachLink!.textContent).toContain('Community Food Bank Sort');
+
+    // No longer identical, undifferentiated "View details" text across rows.
+    expect(meetingLink!.textContent).not.toBe(outreachLink!.textContent);
+    expect(meetingLink!.textContent).not.toBe('View details');
+    expect(outreachLink!.textContent).not.toBe('View details');
+  });
+
+  it('every rendered row link still communicates "View details" alongside its distinguishing title', async () => {
+    renderPage();
+    await flushMicrotasks();
+
+    const links = Array.from(container.querySelectorAll('a')).filter((a) =>
+      (a.getAttribute('href') ?? '').match(/^\/(meetings|outreach)\//),
+    );
+    expect(links.length).toBeGreaterThanOrEqual(4);
+    for (const link of links) {
+      expect(link.textContent).toContain('View details');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Checker fix #2 (MINOR): the zero-sessions state's heading outline must not
+// skip h2 (h1 "Calendar" -> h2 EmptyState, matching the populated-state
+// branch's own h1 -> h2 -> h3 pattern).
+// ---------------------------------------------------------------------------
+
+describe('zero-sessions EmptyState heading outline has no skip', () => {
+  beforeEach(() => {
+    vi.setSystemTime(new Date('2026-07-19T12:00:00.000Z'));
+  });
+
+  it('renders h1 "Calendar" followed by an h2 EmptyState heading, never an h3', async () => {
+    renderPage({ loadSessions: () => Promise.resolve({ events: [], sessions: [] }) });
+    await flushMicrotasks();
+
+    const h1 = container.querySelector('h1');
+    expect(h1?.textContent).toBe('Calendar');
+
+    const h2 = container.querySelector('h2');
+    expect(h2?.textContent).toBe('No sessions scheduled yet');
+
+    expect(container.querySelector('h3')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // NAV-08 click-through hrefs (CAL-02)
 // ---------------------------------------------------------------------------
 

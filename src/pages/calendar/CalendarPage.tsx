@@ -625,7 +625,7 @@ function CalendarSessionRowItem({
     <HStack gap={2} vAlign="center">
       <Badge variant={typeBadge.variant} label={typeBadge.label} />
       <Link as={RouterLink} href={detailHrefFor(event, session)} isStandalone>
-        View details
+        View details – {event.title}
       </Link>
     </HStack>
   );
@@ -745,6 +745,7 @@ export function CalendarPage({
 
       {!hasAnySessions ? (
         <EmptyState
+          headingLevel={2}
           title="No sessions scheduled yet"
           description="Meetings, outreach events, and competitions for this season will show up here once they're scheduled."
         />
