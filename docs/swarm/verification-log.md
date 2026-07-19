@@ -711,3 +711,5 @@ Follow-up:
 - `guards.tsx` `RequireRole` render-phase `pushToast` risk logged centrally in `state-summary.md` Known Decisions for whenever that file is next in scope.
 - **T022, T025, T026, T027, T028, T029 unblocked (Blocked→Ready) — the rest of E4's first wave.**
 - Full worker/checker packets archived at `docs/swarm/archive/T021-worker-packet.md` and `docs/swarm/archive/T021-checker-packet.md`.
+[2026-07-19T03:08:01Z] Worker finished. Checker required before completion.
+[2026-07-19T03:12:39Z] Worker finished. Checker required before completion.
