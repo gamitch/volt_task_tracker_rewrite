@@ -1933,3 +1933,29 @@ Full packets archived at `docs/swarm/archive/T051-worker-packet.md` and
 [2026-07-19T11:22:39Z] Worker finished. Checker required before completion.
 [2026-07-19T11:24:54Z] Worker finished. Checker required before completion.
 [2026-07-19T11:25:29Z] Worker finished. Checker required before completion.
+[2026-07-19T11:26:54Z] Worker finished. Checker required before completion.
+
+## T042 — Mark day complete dialog (OUT-05)
+
+**Result: PASS (1st attempt). Severity: NIT. Closes out Epic E6.**
+
+Worker built `MarkDayCompleteDialog.tsx`: attendee checklist pre-checked from `going` RSVPs,
+people-reached/adult-volunteers fields, per-student hours-override, BEH-07-compliant confirm.
+
+**Checker's independent verification (checker-reviewer):**
+- **Central safety check**: hand-traced the real `v_student_hours` SQL and confirmed the worker's
+  structural claim exactly — since this dialog always writes `check_in_at`/`check_out_at` as
+  `null`, the view's tier-2 CASE has a false WHEN with no ELSE, forcing SQL `NULL`, so `coalesce`
+  provably skips it, degenerating to precisely `hours_override ?? session_duration` — the same
+  2-tier expression computed client-side. This is a genuine structural guarantee, not a coincidence
+  the worker got lucky with. Confirmed zero formula reproduction anywhere in executable code.
+- Adult-volunteers additive/delta design explicitly judged correct and safer — commutative across
+  a multi-day event's several session-completions, structurally eliminates the read-modify-
+  overwrite race a cumulative-total model would create; confirmed no prop/UI exposes the event's
+  running total at all.
+- 864/864 repo-wide, 24/24 own tests, typecheck/lint/build clean.
+
+**E6 (Outreach) is now fully Passed.**
+
+Full packets archived at `docs/swarm/archive/T042-worker-packet.md` and
+`docs/swarm/archive/T042-checker-packet.md`.
