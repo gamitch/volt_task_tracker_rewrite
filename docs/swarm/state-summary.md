@@ -32,15 +32,16 @@ deliberately terse going forward.
 - T017 — `send-invite` Edge Function. PASS (1st attempt, MINOR: no retry idempotency, routed as follow-up).
 - T061 — Schema verification + mapping doc copy (MIG-01/02). PASS (1st attempt, clean). MIG-01 scoped to an honest, checker-reconfirmed blocker report (no live old-project access reachable); MIG-02 (`mapping.md`) confirmed byte-identical to PRD 10.2. T062 unblocked (Blocked→Ready).
 - T032 — `checkin` Edge Function (HMAC rotating token). PASS (1st attempt, two MINOR follow-ups: MTG-04 manual-override schema gap, in-memory-only rate limiter — both genuinely undoable within frozen-schema scope). `ON CONFLICT DO NOTHING` design judged PASS-AS-DESIGNED, stricter than the packet's illustrative SQL. T034, T035 unblocked (Blocked→Ready).
+- **T019 — DB trigger: invite acceptance → profile/link (critical-path task).** PASS (1st attempt, MINOR: live-GoTrue re-verification follow-up once a real Supabase project exists). Resolved a genuinely tricky "first successful sign-in" signal design (OR of `email_confirmed_at`/`last_sign_in_at` transitions, since T017's `inviteUserByEmail` runs at invite-send time not acceptance time) — checker independently re-ran 6 scenarios + 3 adversarial probes on its own scratch Postgres, rendered an explicit weighed verdict, and concluded no boss-arbiter escalation was needed. **T021, T030, T038 unblocked (Blocked→Ready) — the first real content-page tasks in the entire ledger** (Roster, Meetings, Outreach).
 
 **E1 and E2 are fully complete.** Full evidence for every row above is in
 `verification-log.md` under its `## T0xx` heading.
 
 ## Active
 
-Nothing currently dispatched. Seven Ready/undispatched tasks: T018, T019,
-T034, T035, T048, T056, T062 (see `overview.md` for the current count and
-recommended next action).
+Nothing currently dispatched. Nine Ready/undispatched tasks: T018, T021,
+T030, T034, T035, T038, T048, T056, T062 (see `overview.md` for the current
+count and recommended next action).
 
 ## Known Decisions (condensed — full rulings in dispute-log.md)
 

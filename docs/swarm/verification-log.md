@@ -597,3 +597,23 @@ Follow-up:
 [2026-07-19T00:48:07Z] Worker finished. Checker required before completion.
 [2026-07-19T00:55:39Z] Worker finished. Checker required before completion.
 [2026-07-19T00:56:27Z] Worker finished. Checker required before completion.
+[2026-07-19T00:59:25Z] Worker finished. Checker required before completion.
+
+## T019 — DB trigger: invite acceptance → profile/link (critical-path task)
+Verdict: PASS (1st attempt). Severity: MINOR (highest finding; two NITs also adjudicated, no BLOCKER/MAJOR).
+Checker: checker-reviewer. Files inspected: `supabase/migrations/20260718000000_invite_trigger.sql`, `20260716000000_identity_roster.sql`, `20260717000000_scheduling_attendance.sql`, `supabase/functions/send-invite/index.ts`.
+Findings:
+- Resolves T009's `profiles.avatar_url` nullability gap (dropped NOT NULL); confirmed the only `insert into profiles` in real source is this trigger, so the change collides with nothing else.
+- `fn_handle_invite_acceptance()` (SECURITY DEFINER, same pattern as T011's audit triggers) + `AFTER UPDATE ON auth.users` trigger, WHEN-gated on the OR of two independent NULL→NOT-NULL transitions (`email_confirmed_at`, `last_sign_in_at`) — chosen because `inviteUserByEmail` (T017) runs at invite-SEND time, so a naive INSERT trigger would fire too early; `encrypted_password` explicitly rejected since OAuth-only accounts never set it.
+- Checker independently stood up its own scratch Postgres (own hand-built minimal `auth.users` schema, own fixtures) and re-ran all 6 scenarios: student invite, parent multi-invite-row (ROS-05), idempotent re-fire (deliberately via the *other* signal than the one that fired first, proving the OR-double-fire case specifically), no-invite no-op, expired-invite no-op, admin invite — plus 3 adversarial probes of its own devising: a role-leak probe (`raw_user_meta_data.role='admin'` with `invites.role='student'` → resulting profile is `student`, confirming metadata role is genuinely ignored), a WHEN-gate probe (an update touching only unrelated columns does not fire the trigger), and a display_name-fallback probe.
+- Explicit, weighed severity verdict on the signal-choice design (not a rubber stamp): false-positive risk judged negligible (any real transition IS a sign-in event; the `status='pending' and expires_at>now()` guard backstops anything unrelated); false-negative risk judged low (both columns would need to be pre-populated at invite-send time for the OR to miss, contradicting `inviteUserByEmail`'s documented starting state); no real concurrency race (per-row AFTER UPDATE serializes on the row lock, `ON CONFLICT DO NOTHING` is an independent backstop). **Explicitly concluded this does NOT warrant boss-arbiter escalation** — no demonstrable failure mode found under any driven scenario; the only residual is unverifiable live-GoTrue behavior, the same already-accepted structural limitation as T015/T017/T032.
+- Constitution item 10 confirmed via content-diff of all 5 pre-existing migrations (identical, additive-only — not a git-authorship check per D001).
+- Role provenance independently grepped and adversarially tested: `invites.role` is the sole write site to `profiles.role`; `raw_user_meta_data` is referenced only for `display_name`, never role.
+- D001-method forbidden-file check clean.
+- Two NITs (already disclosed by the worker, not new findings): `display_name` email-local-part fallback, `guardian_links.relationship='guardian'` literal — both clearly-flagged placeholders, not spec-derived truth, no PRD contradiction.
+Attempts: 1 (clean first-attempt PASS)
+Follow-up:
+- MINOR (non-blocking, logged): once a real Supabase project exists, re-confirm the `WHEN` signal design against live GoTrue behavior for both the password-set and Google OAuth paths — revisit this clause first if live behavior differs from the documented assumption.
+- NIT: replace the `display_name`/`relationship` placeholders once a real source exists upstream.
+- **T021, T030, and T038 unblocked (Blocked→Ready) as a direct result — the first real content-page tasks in the entire ledger** (Roster, Meetings, Outreach). T020 stays Blocked (still needs T018).
+- Full worker/checker packets archived at `docs/swarm/archive/T019-worker-packet.md` and `docs/swarm/archive/T019-checker-packet.md`.

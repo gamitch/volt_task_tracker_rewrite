@@ -14,38 +14,39 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 | Astryx component API ground truth | `astryx-api.md` (grep, don't read whole file) |
 | Archived worker/checker packets for Passed tasks | `archive/T0xx-*.md` |
 
-## Status snapshot (2026-07-19, ~night)
+## Status snapshot (2026-07-19, ~1am)
 
 73 tasks (T001–T070 + T002a + T006a + T016a) across epics E1–E11.
-**22 Passed · 7 Ready · 0 In Progress · 44 Blocked.**
+**23 Passed · 9 Ready · 1 In Progress · 40 Blocked.**
 
 - **E1 (Scaffold/shell/nav) — fully complete.** T001–T008 all Passed. App has a
   real AppShell/TopNav/SideNav/MobileNav, `/login` is genuinely reachable and
   wired into the router.
 - **E2 (Schema/RLS/metrics) — fully complete.** T009–T014 all Passed. Schema,
   RLS policies, metric views, and their fixture tests are all done.
-- **E3 (Auth/invites) — in progress.** T015/T016/T016a/T017 Passed.
-  **T018** (`/accept-invite` screen) and **T019** (invite-acceptance DB
-  trigger) are Ready and undispatched — **this is the critical-path unlock**
-  for the first real content pages (Roster/Meetings/Outreach all need T019).
-- **E5 — T032** (`checkin` Edge Function) **Passed** (1st attempt, two MINOR
-  follow-ups: MTG-04 manual-override schema gap and in-memory-only rate
-  limiter, both genuinely undoable within the frozen schema). **T034**
-  (Kiosk view) and **T035** (`/checkin` result screen) are now Ready,
-  undispatched. T033/T054 remain Blocked on other deps (T031/T030/T038).
+- **E3 (Auth/invites) — T019 Passed, this was the critical-path unlock.**
+  T015/T016/T016a/T017/**T019** all Passed. **T019** (invite-acceptance DB
+  trigger) resolved a genuinely tricky design decision (which `auth.users`
+  column-transition signals mean "first successful sign-in," given invite
+  emails are sent earlier via T017) — checker independently re-ran 6
+  scenarios + 3 adversarial probes on its own scratch Postgres and explicitly
+  concluded no dispute escalation was needed. **T018** (`/accept-invite`
+  screen) is Ready, undispatched — the one remaining piece of the auth chain.
+- **E4 — T021** (`/roster` shell) now Ready — **the first real content-page
+  task in the entire ledger.**
+- **E5 — T030** (`/meetings` list) now Ready (first content page in E5).
+  T032 (`checkin` Edge Function) Passed earlier. T034/T035 also Ready.
+- **E6 — T038** (`/outreach` list) now Ready (first content page in E6).
 - **E8 — T048** (Resend integration) Ready, undispatched.
 - **E9 — T056** (`/reports` shell) Ready, undispatched.
-- **E10 — T061** (schema verification + mapping doc) **Passed** (1st attempt,
-  clean). MIG-01 scoped to an honest, checker-reconfirmed blocker report (no
-  live old-project access reachable); MIG-02 (`mapping.md`) confirmed
-  byte-identical to PRD 10.2. **T062** (ETL script `scripts/migrate.ts`) is
-  now Ready, undispatched.
-- **E4, E6, E7, E9 (rest), E11** — all Blocked on T019 or later, not yet
-  reachable.
+- **E10 — T061 Passed.** T062 (ETL script) Ready, undispatched.
+- **E7, E9 (rest), E11** — still Blocked, waiting on E4/E5/E6's list pages
+  landing first.
 
-Everything else (all 44 Blocked rows) is waiting transitively on T019 or on
-one of the seven Ready tasks above. See `task-ledger.md`'s Deps column for
-exact chains if needed — don't re-derive from memory.
+Worker packets are already pre-built for T018, T034, T035, T048, T056, T062
+(`docs/swarm/active/T0xx-worker-packet.md`) — ready to dispatch without
+another foreman round-trip. T021/T030/T038 (the new unblocks) don't have
+packets yet.
 
 ## Standing rules (condensed — full reasoning lives in state-summary.md/dispute-log.md if ever needed)
 
@@ -75,7 +76,8 @@ exact chains if needed — don't re-derive from memory.
 
 ## Next recommended action
 
-Dispatch **T018 + T019** — T019 is the highest-value next task since it
-unblocks the first real content pages (Roster/Meetings/Outreach). T034,
-T035, T048, T056, and T062 are also Ready and undispatched, all
-independently dispatchable in parallel with T018/T019 (file-disjoint).
+Nine tasks are Ready: T018, T021, T030, T034, T035, T038, T048, T056, T062.
+Worker packets already exist for T018/T034/T035/T048/T056/T062 — dispatch
+those directly. T021/T030/T038 (the new content-page unblocks) need packets
+built first. All nine are file-disjoint and independently dispatchable in
+parallel if budget allows; pace per session/weekly usage as usual.
