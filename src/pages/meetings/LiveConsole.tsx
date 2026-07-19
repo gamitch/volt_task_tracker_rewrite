@@ -269,10 +269,15 @@
  *    used; no hallucinated `variant`.
  *  - `Banner`: `astryx-api.md` lines 2749-2763. `status`, `title`,
  *    `description`, `isDismissable`, `onDismiss` used.
- *  - `Button`: `astryx-api.md` lines 1807-1827. `label`, `variant`,
+ *  - `Button`: `astryx-api.md` lines 1807-1827. `label`, `variant`, `size`,
  *    `onClick` used. Per that doc's own "Don't: use a button for
- *    navigation" line, `Button` is used ONLY for "End meeting" (a real
- *    action); both real navigational links use `Link`, not `Button`.
+ *    navigation" line, `Button` is used ONLY for real actions ("End
+ *    meeting" and, per T072/NFR-06, the QR show/hide toggle -- section 10
+ *    below); both real navigational links use `Link`, not `Button`.
+ *    `aria-expanded` is also passed on the toggle -- a real, doc-confirmed
+ *    `BaseProps`/`React.HTMLAttributes` pass-through prop (`BaseProps.d.ts`:
+ *    "Keeps: event handlers, aria-*, ..."), the same class of prop this file
+ *    already uses `aria-live` on `HStack` for (section 6).
  *  - `Link`: `astryx-api.md` lines 1959-1977. `as`, `href`, `children`
  *    used, with `as={RouterLink}` (react-router-dom's `Link`, aliased) --
  *    the exact `as={Link}` real-client-side-navigation idiom
@@ -317,6 +322,34 @@
  *  - `Spinner`: `astryx-api.md` lines 5832-5840. `label` used.
  *  - `EmptyState`: `astryx-api.md` lines 3991-4001. `title`, `description`
  *    used.
+ *
+ * -----------------------------------------------------------------------
+ * 10. T072 fix -- NFR-06 responsive gap (checker-confirmed BLOCKER, T068).
+ * -----------------------------------------------------------------------
+ *
+ * T068's audit found two concrete NFR-06 gaps ("coach console usable on a
+ * phone (panes stack, QR collapses behind a button)"), both fixed here as a
+ * narrow, surgical follow-up (T072), not a redesign:
+ *   1. The roster `VStack` (module doc section 9's `VStack`/`HStack` prop
+ *      list) now pairs `width={480}` with `maxWidth="100%"`, matching the
+ *      established codebase convention (`LoginPage.tsx`, `NoAccessPage.tsx`,
+ *      `AcceptInvitePage.tsx`, `CheckinResult.tsx`) so it can shrink to fit
+ *      a narrow viewport instead of forcing overflow.
+ *   2. A real `showQr` `useState(true)` toggle now gates `QrPanel`'s
+ *      render (`{showQr && <QrPanel ... />}`), driven by a real Astryx
+ *      `Button` (section 9's `Button` bullet). Toggling genuinely
+ *      un/mounts `QrPanel` -- removing it from the DOM and the
+ *      accessibility tree, not just visually hiding it with CSS -- matching
+ *      this app's `AlertDialog`-style "hidden means removed from the
+ *      accessible DOM" convention. Default is QR-visible, so no existing
+ *      desktop behavior changes beyond the new button appearing; a coach on
+ *      a phone can deliberately collapse the QR panel to reclaim space for
+ *      the roster. Deliberately NOT viewport-conditional (no `matchMedia`):
+ *      this repo's test toolchain is jsdom-only with no real layout engine
+ *      (`clientWidth`/`scrollWidth`/`getBoundingClientRect` always return 0
+ *      here), so a manual always-present toggle is both what NFR-06's
+ *      literal text asks for (a button, not automatic breakpoint behavior)
+ *      and what is actually provable in `LiveConsole.test.tsx`.
  */
 import {
   useEffect,
@@ -841,6 +874,12 @@ export function LiveConsoleBody({
   const [query, setQuery] = useState('');
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [endMeetingStub, setEndMeetingStub] = useState<StubNotice | null>(null);
+  // NFR-06 fix (T072): QR visible by default -- pure addition of a collapse
+  // affordance so a coach on a phone can reclaim screen space for the
+  // roster. `{showQr && <QrPanel .../>}` below genuinely un/mounts the
+  // panel (not CSS-only hiding), matching this app's `AlertDialog`-style
+  // "hidden means removed from the accessible DOM" convention.
+  const [showQr, setShowQr] = useState(true);
   const rowRefs = useRef<Array<HTMLLIElement | null>>([]);
 
   useEffect(() => {
@@ -988,57 +1027,81 @@ export function LiveConsoleBody({
       )}
 
       {loadState.status === 'success' && roster.length > 0 && session !== null && (
-        <HStack gap={6} wrap="wrap" vAlign="start">
-          <QrPanel sessionId={session.id} token={displayToken} />
+        <>
+          {/* NFR-06 fix (T072): a real, keyboard-accessible toggle button
+              (Astryx `Button`, `astryx-api.md` lines 1807-1827 -- a real
+              `<button>`, so Enter/Space activation is free) that genuinely
+              adds/removes `QrPanel` from the DOM below, always rendered
+              (never viewport-conditional, since this repo's jsdom-only test
+              toolchain has no real layout engine to key off of -- module doc
+              section 9). `aria-expanded` is a real `BaseProps`/
+              `React.HTMLAttributes` pass-through prop (`BaseProps.d.ts`:
+              "Keeps: event handlers, aria-*, ..."), the same class of
+              doc-precedented-but-not-table-listed prop this file already
+              uses for `aria-live` on `HStack` (module doc section 6). */}
+          <HStack hAlign="end">
+            <Button
+              label={showQr ? 'Hide QR code' : 'Show QR code'}
+              variant="ghost"
+              size="sm"
+              aria-expanded={showQr}
+              onClick={() => setShowQr((previous) => !previous)}
+              data-testid="qr-toggle-button"
+            />
+          </HStack>
 
-          <VStack gap={4} minHeight={200} width={480}>
-            <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
-              <Heading level={2}>Roster</Heading>
-              <HStack gap={4} vAlign="center" wrap="wrap">
-                <TextInput
-                  label="Search roster"
-                  isLabelHidden
-                  value={query}
-                  onChange={setQuery}
-                  placeholder="Search students..."
-                  hasClear
-                  startIcon="search"
-                />
-                <HStack aria-live="polite" vAlign="center" data-testid="attendance-tally">
-                  <Text type="body" hasTabularNumbers>
-                    {tally.checkedIn}/{tally.total} in
-                  </Text>
+          <HStack gap={6} wrap="wrap" vAlign="start">
+            {showQr && <QrPanel sessionId={session.id} token={displayToken} />}
+
+            <VStack gap={4} minHeight={200} width={480} maxWidth="100%">
+              <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
+                <Heading level={2}>Roster</Heading>
+                <HStack gap={4} vAlign="center" wrap="wrap">
+                  <TextInput
+                    label="Search roster"
+                    isLabelHidden
+                    value={query}
+                    onChange={setQuery}
+                    placeholder="Search students..."
+                    hasClear
+                    startIcon="search"
+                  />
+                  <HStack aria-live="polite" vAlign="center" data-testid="attendance-tally">
+                    <Text type="body" hasTabularNumbers>
+                      {tally.checkedIn}/{tally.total} in
+                    </Text>
+                  </HStack>
                 </HStack>
               </HStack>
-            </HStack>
 
-            {filteredRoster.length === 0 ? (
-              <EmptyState
-                title="No students match your search"
-                description="Try a different name or clear the search box."
-              />
-            ) : (
-              <List hasDividers header="Roster">
-                {filteredRoster.map((entry, index) => (
-                  <RosterRow
-                    key={entry.studentId}
-                    entry={entry}
-                    record={attendanceByStudentId[entry.studentId] ?? null}
-                    index={index}
-                    isFocused={index === focusedIndex}
-                    canSetExcused={canSetExcused}
-                    onFocusRow={setFocusedIndex}
-                    onKeyDownRow={handleRowKeyDown}
-                    onSetStatus={handleSetStatus}
-                    rowRef={(el) => {
-                      rowRefs.current[index] = el;
-                    }}
-                  />
-                ))}
-              </List>
-            )}
-          </VStack>
-        </HStack>
+              {filteredRoster.length === 0 ? (
+                <EmptyState
+                  title="No students match your search"
+                  description="Try a different name or clear the search box."
+                />
+              ) : (
+                <List hasDividers header="Roster">
+                  {filteredRoster.map((entry, index) => (
+                    <RosterRow
+                      key={entry.studentId}
+                      entry={entry}
+                      record={attendanceByStudentId[entry.studentId] ?? null}
+                      index={index}
+                      isFocused={index === focusedIndex}
+                      canSetExcused={canSetExcused}
+                      onFocusRow={setFocusedIndex}
+                      onKeyDownRow={handleRowKeyDown}
+                      onSetStatus={handleSetStatus}
+                      rowRef={(el) => {
+                        rowRefs.current[index] = el;
+                      }}
+                    />
+                  ))}
+                </List>
+              )}
+            </VStack>
+          </HStack>
+        </>
       )}
     </VStack>
   );

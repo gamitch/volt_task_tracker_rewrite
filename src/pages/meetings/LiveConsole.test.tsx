@@ -619,6 +619,102 @@ describe('two-pane layout', () => {
 });
 
 // ---------------------------------------------------------------------------
+// NFR-06 QR show/hide toggle (T072 fix -- checker-confirmed BLOCKER, T068).
+// ---------------------------------------------------------------------------
+
+describe('NFR-06 QR show/hide toggle (T072)', () => {
+  function qrToggleButton(): HTMLElement {
+    const el = container.querySelector('[data-testid="qr-toggle-button"]');
+    expect(el, 'expected a QR toggle button').toBeTruthy();
+    return el as HTMLElement;
+  }
+
+  /** The real, driven proof this is DOM removal, not CSS-only hiding: no
+   * `svg[role="img"]` (the `QRCodeSVG`, per the "two-pane layout" describe
+   * block above) or any node inside it should exist in the tree at all,
+   * not merely be styled invisible. */
+  function qrSvgInDom(): Element | null {
+    return container.querySelector('svg[role="img"]');
+  }
+
+  it('QrPanel is present by default (QR-visible), with the toggle labeled "Hide QR code" and aria-expanded="true"', async () => {
+    renderBody(COACH_USER);
+    await flushMicrotasks();
+
+    expect(qrSvgInDom()).toBeTruthy();
+    expect(container.textContent).toContain('Check-in');
+    expect(container.textContent).toContain('Or enter code:');
+
+    const button = qrToggleButton();
+    expect(button.tagName).toBe('BUTTON');
+    expect(button.textContent?.trim()).toBe('Hide QR code');
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('clicking the toggle genuinely removes QrPanel from the DOM (not CSS-only hiding), and clicking again restores it', async () => {
+    renderBody(COACH_USER);
+    await flushMicrotasks();
+
+    expect(qrSvgInDom()).toBeTruthy();
+
+    const button = qrToggleButton();
+    act(() => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // Genuine DOM removal: no QR SVG node anywhere, and none of QrPanel's
+    // other real content (short code, "Or enter code:", "Open kiosk view")
+    // remains in the tree either -- proving the whole subtree unmounted,
+    // not just the SVG being styled invisible.
+    expect(qrSvgInDom()).toBeNull();
+    expect(container.textContent).not.toContain('Or enter code:');
+    expect(container.textContent).not.toContain('Open kiosk view');
+    // The roster pane is unaffected -- this is a QR-only collapse.
+    expect(row('student-ada')).toBeTruthy();
+
+    const buttonAfterHide = qrToggleButton();
+    expect(buttonAfterHide.textContent?.trim()).toBe('Show QR code');
+    expect(buttonAfterHide.getAttribute('aria-expanded')).toBe('false');
+
+    act(() => {
+      buttonAfterHide.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(qrSvgInDom()).toBeTruthy();
+    expect(container.textContent).toContain('Or enter code:');
+    const buttonAfterShow = qrToggleButton();
+    expect(buttonAfterShow.textContent?.trim()).toBe('Hide QR code');
+    expect(buttonAfterShow.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('the toggle is reachable and activatable via keyboard (real focus + Enter/Space semantics of a native <button>)', async () => {
+    renderBody(COACH_USER);
+    await flushMicrotasks();
+
+    const button = qrToggleButton();
+    // A real native <button> is keyboard-focusable without an explicit
+    // tabIndex and natively activates on Enter/Space -- proven here by
+    // actually moving DOM focus onto it (not merely asserting a tabIndex
+    // attribute) and then dispatching a real click (jsdom's <button> does
+    // not itself simulate the browser's native Enter/Space-to-click
+    // behavior, so the click is dispatched directly at the focused
+    // element, the same pattern this file already uses to prove keyboard
+    // reachability of the "End meeting" button in the "two-pane layout"
+    // describe block above).
+    act(() => {
+      button.focus();
+    });
+    expect(document.activeElement).toBe(button);
+    expect(button.tabIndex).not.toBe(-1);
+
+    act(() => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(qrSvgInDom()).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // DES-12 states + persistence seam default.
 // ---------------------------------------------------------------------------
 

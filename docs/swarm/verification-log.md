@@ -2207,3 +2207,45 @@ Full worker packet archived at `docs/swarm/archive/T067-worker-packet.md`. No se
 checker-packet file exists for this audit task (Allowed Files: None; checker's full findings are
 recorded here).
 [2026-07-19T12:08:19Z] Worker finished. Checker required before completion.
+[2026-07-19T12:51:40Z] Worker finished. Checker required before completion.
+[2026-07-19T12:56:17Z] Worker finished. Checker required before completion.
+
+## T072 — Fix NFR-06 responsive gap on `LiveConsole.tsx` (QR toggle + roster maxWidth), Epic E5
+
+**Result: PASS (1st attempt). Severity: MINOR.**
+
+Follow-up task created directly from T068's checker-confirmed BLOCKER finding. Worker made exactly
+two narrow fixes to `src/pages/meetings/LiveConsole.tsx`:
+- Added `maxWidth="100%"` to the roster `VStack` (line ~994), matching the exact `width`+`maxWidth`
+  pairing already established elsewhere in the codebase (`LoginPage.tsx`, `NoAccessPage.tsx`,
+  `AcceptInvitePage.tsx`, `CheckinResult.tsx`).
+- Added a real, keyboard-accessible QR show/hide toggle: `showQr` state (default `true`, zero
+  behavior change for existing usage), a real Astryx `Button` (`label` reflecting current state,
+  `aria-expanded`), and `QrPanel` changed to a genuine conditional render
+  (`{showQr && <QrPanel .../>}`) — a true DOM mount/unmount, not CSS-only hiding. Not made
+  viewport-conditional, per the packet's explicit instruction (this repo's jsdom-only test
+  toolchain can't exercise a `matchMedia`-gated toggle, and the PRD only asks for the affordance to
+  exist).
+
+**Checker's independent verification (checker-accessibility):**
+- Confirmed both fixes present exactly as claimed by reading the file directly.
+- Independently verified `aria-expanded` is a real, typed, TypeScript-checked prop on Astryx's
+  `Button` (not doc-precedented-but-unlisted, but genuinely part of `ButtonProps` via
+  `BaseProps`→`React.HTMLAttributes`→`AriaAttributes`) by reading the compiled `Button.js`/`.d.ts`
+  source directly and confirming `...props` spreads onto the rendered native `<button>`.
+- Confirmed the button is a genuine focusable native `<button>` (no `tabIndex={-1}`, not a styled
+  `div`).
+- Independently re-ran the 3 new tests and confirmed they assert true DOM presence/absence (SVG
+  node existence, text content), not merely a state variable flipping.
+- Re-ran the full suite (867/867), typecheck, and lint (0 errors) independently — all clean, zero
+  regressions to any of T033's original 31 pre-existing assertions in this file.
+- Confirmed only the 2 Allowed Files were touched; found and flagged a stray untracked
+  `src/docs/swarm/verification-log.md` artifact left by a hook path-resolution quirk (not part of
+  the worker's diff) — removed by the orchestrator before commit.
+
+**MINOR follow-up noted, not blocking**: `astryx-api.md`'s `Button` prop table doesn't explicitly
+list `aria-*` pass-through support even though it's real and type-checked — future workers
+shouldn't have to re-derive this from `BaseProps.d.ts` each time. Routed as a documentation-debt
+note for whoever next touches `astryx-api.md`.
+
+**NFR-06 is now genuinely satisfied on `LiveConsole.tsx`.**
