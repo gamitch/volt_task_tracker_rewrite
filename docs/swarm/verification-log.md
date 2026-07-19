@@ -1567,3 +1567,4 @@ digest, EML-05 cross-family-leakage prevention.
 Full packets archived at `docs/swarm/archive/T050-worker-packet.md` and
 `docs/swarm/archive/T050-checker-packet.md`.
 [2026-07-19T07:41:34Z] Worker finished. Checker required before completion.
+[2026-07-19T07:42:56Z] Worker finished. Checker required before completion.
