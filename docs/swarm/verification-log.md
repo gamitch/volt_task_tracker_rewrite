@@ -1927,3 +1927,4 @@ remains, externally blocked on George's `mail.voltfrc.org` domain verification a
 
 Full packets archived at `docs/swarm/archive/T051-worker-packet.md` and
 `docs/swarm/archive/T051-checker-packet.md`.
+[2026-07-19T08:52:18Z] Worker finished. Checker required before completion.
