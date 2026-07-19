@@ -1959,3 +1959,48 @@ people-reached/adult-volunteers fields, per-student hours-override, BEH-07-compl
 
 Full packets archived at `docs/swarm/archive/T042-worker-packet.md` and
 `docs/swarm/archive/T042-checker-packet.md`.
+[2026-07-19T11:28:41Z] Worker finished. Checker required before completion.
+
+## T060 — `/settings` screen (SET-01/02/03)
+
+**Result: PASS (1st attempt). Severity: MINOR. Closes out Epic E9.**
+
+Worker built `SettingsPage.tsx`: five SET-01 sections in exact literal order, a real
+`Theme`-component doc-gap resolution, a genuinely distinct "Sign out everywhere" action, and a
+per-role Notifications category mapping.
+
+**Checker's independent verification (checker-accessibility):**
+- **Central safety check**: independently reproduced the "Sign out everywhere" seam-before-`logout()`
+  ordering with its own live `AuthProvider`-backed scratch test (not just trusting the worker's own
+  test suite) — confirmed a rejection genuinely blocks `logout()` from firing.
+- Cross-checked the per-role Notifications mapping directly against the PRD's real EML-02 table
+  (not the worker's transcription) — confirmed the coach/admin empty-category-set is a genuine,
+  independently re-derived PRD gap, not a worker error.
+- Independently reproduced the `Theme` component CLI investigation and the "Settings template"
+  CLI-vs-PRD conflict, confirming the resolution matches the real T016 precedent (quoted directly
+  from the archived packet).
+- Confirmed `SubscribePopover` is genuinely imported and rendered, not reimplemented.
+- Confirmed the CI-caught heading-query fix (see below) targets the real DOM boundary — read
+  Astryx's installed `Dialog.js` source directly and confirmed `AlertDialog` mounts its title
+  inside a real native `<dialog>` element regardless of open state.
+- Full manual accessibility read: every interactive element has a real accessible name, every input
+  has a real `<label for>` association, the `id="notifications"` EML-04 anchor target genuinely
+  present, native `<dialog>`/`showModal()` focus handling (no hand-rolled trap), zero hardcoded hex,
+  D005's dark-mode contrast fix confirmed still live.
+- 864/864 repo-wide, 24/24 own tests.
+
+**Post-dispatch CI fix (orchestrator-side, confirmed genuine by the checker)**: a GitHub Actions run
+caught a real test bug — the section-order heading query wasn't scoped to exclude `AlertDialog`
+titles (which Astryx mounts in the DOM even while closed), so "Reset your calendar link?" and "Sign
+out of every device?" leaked into the assertion. Fixed by excluding headings inside a `<dialog>`
+element; verified 864/864 before pushing.
+
+**MINOR follow-up**: the module doc's `avatar_url NOT NULL` Ground Truth citation is stale — a
+later T019 migration (`20260718000000_invite_trigger.sql`) made the column nullable. Routed to
+whichever future task wires real Supabase data into this page.
+
+**E9 (Reports/Home) is now fully Passed. The T053–T060 range is complete — T066, T067, T068, T069
+all unblocked (Blocked→Ready).**
+
+Full packets archived at `docs/swarm/archive/T060-worker-packet.md` and
+`docs/swarm/archive/T060-checker-packet.md`.
