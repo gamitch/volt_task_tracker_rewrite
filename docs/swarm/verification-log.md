@@ -2673,3 +2673,118 @@ destroy. Left completely untouched.
 - Independently confirmed the test-count delta (910→912, exactly +2) via `git stash` isolation.
 - Confirmed a build error the checker also observed was pre-existing/from a concurrently-running
   task's in-flight edit, not caused by this task.
+[2026-07-19T18:00:29Z] Worker finished. Checker required before completion.
+[2026-07-19T18:02:41Z] Worker finished. Checker required before completion.
+[2026-07-19T18:03:07Z] Worker finished. Checker required before completion.
+[2026-07-19T18:03:56Z] Worker finished. Checker required before completion.
+
+## T080 — `EmptyState` heading-level sweep + `CoachHome.tsx` color-mapping fix, Epic E11
+
+**Result: PASS (1st attempt). Severity: MINOR.**
+
+Fallout fix from T067's accessibility audit. All packet-listed heading-level sites fixed with
+verified-correct `headingLevel` values (not blindly copy-pasted); found and correctly fixed two
+additional sites beyond the packet's literal list (`OutreachList.tsx`'s two other empty states,
+`ParentHome.tsx`'s "No linked students yet"); `OutreachDetail.tsx`'s `notFound` branch given a real
+`headingLevel={1}` using its own descriptive title rather than injecting a generic "VOLT" heading
+(judged correct — that pattern is reserved for full-viewport auth-family screens with no natural
+title, per `NoAccessPage.tsx`'s own module doc, and this route renders inside the normal app
+shell). `CoachHome.tsx`'s event-type Badge color mapping corrected to match `CalendarPage.tsx`/
+`EventsTab.tsx` exactly. Chose five individual one-line fixes over extracting a shared
+`SignInRequiredState` component for the duplicated "Sign in to view X" states, since a clean
+extraction would require a new file outside the closed Allowed Files list.
+
+**Checker's independent verification (checker-accessibility):**
+- Spot-checked 6+ heading-level fixes directly against current file content, confirmed each is a
+  genuine direct-sibling-of-h1 case warranting the exact `headingLevel` value used.
+- Specifically confirmed `LiveConsole.tsx`'s search-empty state was correctly left untouched (truly
+  already nested under its own h2, not an oversight).
+- Independently confirmed the two self-found extra sites are genuine, not fabricated.
+- Independently re-derived the Trap #2 shared-component decision — agreed with the practical
+  conclusion, with a minor NIT correction that the packet's "hard constraint" framing slightly
+  overstated one theoretical alternative (a same-package cross-page import), though the actual
+  choice was still correct and proportionate.
+- Confirmed no test files needed changes (no heading-level/badge-color assertions existed to
+  break).
+- **Flagged a real process risk**: this working tree currently has T079/T080/T081/T082/T083 all
+  uncommitted simultaneously with heavily overlapping Allowed Files, making a single stable
+  "everything green at once" verification run impossible — traced every anomaly hit during
+  verification back to a specific *other* task's in-progress edit, none to T080's own scope.
+  Recommends checkpointing/committing before dispatching further overlapping-scope batches.
+
+## T083 — DES-15 verbatim empty-state copy fix, 5 screens, Epic E11
+
+**Result: PASS (1st attempt). Severity: MINOR.**
+
+Fallout fix from T069's copy audit. `MeetingsList.tsx` and `OutreachList.tsx` (student/parent view
+only — the coach view's own distinct, non-DES-15-named copy was correctly left untouched) now match
+the PRD's literal verbatim text character-for-character; `ParticipationTab.tsx` likewise, correctly
+scoped to its `rows.length === 0` branch, not the sibling filtered-empty branch. `HoursTab.tsx` and
+`EventsTab.tsx` deliberately did NOT get the literal verbatim text — the worker traced each tab's
+actual empty-state trigger condition and found the PRD's "no completed sessions" framing would
+misdescribe both (`HoursTab`'s empty state is caused by an empty roster, not zero completed
+sessions; `EventsTab`'s `rows` includes every session status, not just completed ones, per already-
+Passed T058's deliberate design) — kept accurate, reasoned adaptations instead, documented inline.
+
+**Checker's independent verification (checker-content):**
+- Confirmed all three verbatim swaps are byte-identical to the PRD's actual text (grepped
+  `VOLT_Portal_PRD.md` directly, not trusting a recalled quote).
+- Confirmed `OutreachList.tsx`'s coach view was deliberately left with its old copy (test file still
+  asserts the old string, confirming intentional, not forgotten).
+- Independently traced `HoursTab.tsx`'s `buildStudentRows`/`buildTeamGroups` and `EventsTab.tsx`'s
+  `buildDisplayRows` end-to-end and confirmed both trigger-condition claims are technically accurate
+  — the adaptations are correctly reasoned, not a shortcut around the literal-copy work.
+- **Disclosed a real tool limitation**: this checker session had no Bash access (Read/Glob/Grep
+  only, per its role), so it could not itself run `npx vitest`/`typecheck`/`lint`/`build` —
+  compensated with exhaustive direct source reading and found zero discrepancies, but flagged this
+  gap explicitly rather than claiming command verification it didn't perform. Orchestrator
+  independently ran the actual commands afterward to close this gap (see below).
+
+**Held uncommitted pending T081/T082** (heavy file overlap in this shared, actively-edited working
+tree — `ParticipationTab.tsx`/`HoursTab.tsx`/`EventsTab.tsx`/`MeetingsList.tsx` are also in T081's
+Allowed Files). Committed together with T080/T081/T082 once all four settled.
+[2026-07-19T18:07:54Z] Worker finished. Checker required before completion.
+
+## T066 — Playwright persona smoke tests + login + RLS-denial (NFR-02), Epic E11
+
+**Result: PASS. Severity: MAJOR (one genuine, pre-existing, disclosed coverage gap — routed as a
+follow-up recommendation, does not block this task's own PASS).**
+
+Packet was rewritten this session to reflect the just-completed router-wiring series before
+dispatch — its original central blocker ("zero routes wired") was resolved, but a narrower,
+genuine one replaced it: this sandbox has no real Supabase backend and no dev-browser-reachable
+auth-injection mechanism, so a live authenticated E2E test isn't achievable here regardless of
+engineering. Worker independently re-confirmed both halves before writing any test, then built the
+packet's recommended default: real, passing Playwright coverage (72 tests, `desktop`/`mobile` ×
+`light`/`dark`) for every public route and every protected route's live unauthenticated-redirect
+behavior against a real production build and real headless Chromium, plus an honest audit citing
+existing Vitest/RLS-harness coverage for the four persona flows and RLS-denial rather than
+rebuilding them weaker in Playwright.
+
+**Real, unanticipated finding surfaced during the audit**: the packet's own suggested citation for
+P-COACH2 (`ParticipationTab.test.tsx`) doesn't exist. Traced to `docs/swarm/archive/T056-checker-
+packet.md`, which confirms the original "below 70%" verification used a scratch test that was
+deleted, never committed. P-COACH2 has zero persisted automated regression coverage — a real,
+pre-existing gap this task surfaced but cannot fix (`src/pages/**` forbidden here).
+
+**Checker's independent verification (checker-tests):**
+- Independently confirmed the no-real-backend claim and reproduced the live `SupabaseNotConfigured
+  Error`-then-redirect proof itself.
+- **Ran a genuine negative-control check itself** (not just trusting the worker's account): broke
+  an assertion, confirmed a real timeout/not-found failure, restored the file, confirmed byte-
+  identical restoration, confirmed 18/18 passing again — proving the suite isn't fake-green.
+- Independently confirmed `ParticipationTab.test.tsx` genuinely doesn't exist and that T056's own
+  checker record genuinely supports the "scratch test, never committed" account.
+- Spot-checked the DES-16/MTG-11/MTG-08/RLS-denial citations directly, confirmed each genuinely
+  covers what's claimed.
+- Independently reproduced the full 72-test suite twice against a fresh build.
+- Confirmed `package.json`/`package-lock.json` genuinely untouched; confirmed the disclosed
+  `node_modules/playwright` symlink is genuinely gitignored, not a source-controlled change.
+- Gave independent severity judgment: the P-COACH2 gap is real and MAJOR in scope (one of four
+  personas has zero coverage), but is infrastructure-level and pre-existing, not introduced by this
+  task — recommends a follow-up task (either building dev-only test-auth-injection infrastructure,
+  or a colocated `ParticipationTab.test.tsx` following `HoursTab.test.tsx`'s established pattern),
+  not a blocker to this task's own PASS.
+
+**Orchestrator note**: added `test-results/`/`playwright-report/` to `.gitignore` (Playwright's own
+regenerated artifacts, not previously excluded) before committing.
