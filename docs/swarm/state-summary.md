@@ -36,16 +36,19 @@ deliberately terse going forward.
 
 - T018 — `/accept-invite` screen. PASS (1st attempt, MINOR copy-nit finding, non-blocking). Two dispute-candidate gaps re-confirmed (router.tsx wiring; invite-data-loading seam, `invites` RLS is staff-only + no `name` column) and routed to the orchestrating session, same class as T016's identical gaps — not blocking. **One incidental cross-cutting MAJOR finding routed to boss-arbiter as D005**: dark-mode `Button variant="primary"` text contrast measures ~4.04:1 (below WCAG AA 4.5:1), a `volt.ts`/Button-level defect inherited unchanged by the already-Passed T016 `/login` page too — not T018's own defect, potentially reopens T002/T016's contrast sign-off. **T020 unblocked (Blocked→Ready) — closes out E3.**
 - **T002b — D005 corrective task: dark-mode `--color-on-accent` contrast fix.** PASS (1st attempt, clean). Boss-arbiter-authorized one-line `volt.ts` token addition + `theme.css` regeneration, independently pixel-re-measured live on `/login` (4.818:1 dark / 7.078:1 light, both clear WCAG AA). D005 fully closed end-to-end.
+- **T020 — AUTH-04 no-access screen + NFR-02 RLS-denial test.** PASS (1st attempt, clean). Two independent deliverables both verified: the page (schema has no team-contact column anywhere — a genuine schema gap, disclosed via a data seam) and a from-scratch-Postgres RLS test suite the checker independently reran and stress-tested with its own negative control (injected a fake profile for the orphan session, confirmed the suite correctly flips to FAIL, then reverts). **E3 is now fully Passed — the entire auth/invites epic is done.**
 
-**E1 and E2 are fully complete. E3 is now fully Passed pending T020 (dispatch-ready).** Full evidence
-for every row above is in `verification-log.md` under its `## T0xx` heading.
+**E1, E2, and E3 are all fully complete.** Full evidence for every row above is in
+`verification-log.md` under its `## T0xx` heading.
 
 ## Active
 
-Nothing currently dispatched. **T002b Passed 2026-07-19 (1st attempt, clean)** — D005 fully closed
-out end-to-end, live WCAG AA shortfall on `/login` genuinely fixed and independently re-measured by
-the checker (4.818:1 dark / 7.078:1 light). Nine Ready/undispatched tasks: T020, T021, T030, T034,
-T035, T038, T048, T056, T062 (see `overview.md` for the current count and recommended next action).
+T021 (`/roster` shell) is In Progress — worker done, checker-accessibility still verifying (a
+concurrently-dispatched T020 checker deleted some of T021's checker's in-progress scratch/harness
+files mid-run as a "leftover cleanup" false positive; flagged in Current Risks below, watch for a
+disrupted/incomplete T021 checker report as a result). T020 Passed 2026-07-19 (1st attempt, clean).
+Eight Ready/undispatched tasks otherwise: T030, T034, T035, T038, T048, T056, T062 (see
+`overview.md` for the current count and recommended next action).
 
 ## Known Decisions (condensed — full rulings in dispute-log.md)
 
@@ -111,6 +114,21 @@ T035, T038, T048, T056, T062 (see `overview.md` for the current count and recomm
 
 ## Current Risks
 
+- **Concurrent-checker scratch-file collision (2026-07-19, T020/T021).** Two checkers were
+  dispatched in parallel against the same shared worktree (T021's checker-accessibility, still
+  running its own Playwright harness, and T020's checker-tests, dispatched after). T020's checker
+  found T021's checker's in-progress files (`checker-harness-roster.html`,
+  `src/checker-harness-roster-entry.tsx`, `checker-roster-driver.mjs`, `checker-screenshots/`) on
+  disk, assumed they were "leftover from previous checks," and deleted them as part of its own
+  cleanup — while T021's checker was still using them. No task's own PASS verdict is affected (each
+  checker's *reported* evidence was independently gathered before the deletion), but T021's checker
+  may return an incomplete/disrupted report as a result, or may have already re-generated what it
+  needed under different filenames. **Watch for this specifically when T021's checker report
+  lands** — if its evidence looks thin or it reports a file-not-found surprise, treat that as this
+  incident's fallout, not a new defect, and consider re-dispatching. **Standing rule for future
+  parallel dispatches sharing a worktree**: scratch/harness filenames should be prefixed with the
+  task ID (e.g. `T021-checker-harness-*`, not a generic `checker-harness-*`) so a concurrently-
+  running agent can't mistake another task's in-progress files for its own stale leftovers.
 - **No real Supabase auth client anywhere in `src/`**: `guards.tsx`'s
   `login()`/`loginWithGoogle()` are still T005's in-memory placeholder — no
   real `signInWithPassword`/`signInWithOAuth`, no real role lookup. This is

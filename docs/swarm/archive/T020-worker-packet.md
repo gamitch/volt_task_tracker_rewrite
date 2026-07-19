@@ -163,3 +163,6 @@ None. This is attempt 1 for T020 (attempt count: 0).
 - Confirmation any temporary render-harness file and scratch Postgres data were deleted/discarded.
 - `npm run build`/`typecheck`/`lint` output, plus your RLS test suite's own run output.
 - Known risks; whether a dispute is needed.
+
+---
+**ARCHIVED** 2026-07-19 — closed out as part of T020 PASS close-out.
