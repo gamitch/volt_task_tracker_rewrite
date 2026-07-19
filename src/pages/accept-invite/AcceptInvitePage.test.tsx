@@ -318,6 +318,158 @@ describe('<AcceptInvitePage /> Google sign-in', () => {
 });
 
 // ---------------------------------------------------------------------------
+// T079: surviving a GENUINE browser hard redirect via sessionStorage -- the
+// disclosed MINOR gap T077's own checker found (a plain in-memory
+// `googleSignInStarted` `useState` does not survive a real `window.location`
+// round trip, which fully unmounts and remounts this component). These tests
+// simulate that by genuinely unmounting the whole React tree (not just
+// swapping a prop/route) and mounting a BRAND NEW tree in a fresh container,
+// with `sessionStorage` (a real browser API, not React state) left standing
+// in between -- proving the completion signal survives past a real remount,
+// not merely within one render tree's lifetime.
+// ---------------------------------------------------------------------------
+
+describe('<AcceptInvitePage /> Google sign-in survives a hard-redirect remount (T079)', () => {
+  /** Mounts a fresh `<AcceptInvitePage />` tree in a brand-new container/root
+   * (never reusing the outer `container`/`root`), simulating arriving at
+   * `/accept-invite` on a genuinely new page load -- e.g. the browser
+   * returning from a real Google OAuth redirect. Caller is responsible for
+   * unmounting the returned root. */
+  function mountFreshAcceptInvitePage(authModule: AuthModule): { root: Root; el: HTMLDivElement } {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const freshRoot = createRoot(el);
+    act(() => {
+      freshRoot.render(
+        <MemoryRouter initialEntries={['/accept-invite?token=fixture-token']}>
+          <AuthProvider authModule={authModule}>
+            <Routes>
+              <Route
+                path="/accept-invite"
+                element={<AcceptInvitePage loadInvite={async () => PENDING_INVITE} />}
+              />
+              <Route path="/" element={<div data-testid="home-page">Home</div>} />
+            </Routes>
+          </AuthProvider>
+        </MemoryRouter>,
+      );
+    });
+    return { root: freshRoot, el };
+  }
+
+  it(
+    'navigates on a brand-new mount after a simulated hard redirect, when the visitor ' +
+      'genuinely clicked "Continue with Google" before the (simulated) redirect',
+    async () => {
+      // Step 1: the visitor is on the page and clicks "Continue with
+      // Google" -- this is what a real `signInWithGoogle` call would do
+      // right before navigating the browser away.
+      const outboundAuthModule = buildControllableAuthModule({
+        signInWithGoogle: async () => {},
+      });
+      renderAcceptInvitePage(outboundAuthModule);
+      await flushMicrotasks();
+      clickButton(findButtonByText('Continue with Google'));
+      await flushMicrotasks();
+      expect(container.querySelector('[data-testid="home-page"]')).toBeNull();
+
+      // Step 2: simulate the REAL hard redirect -- fully unmount this
+      // component (destroying every in-memory `useState`, including the old
+      // `googleSignInStarted`), exactly like a real page unload would.
+      act(() => {
+        root.unmount();
+      });
+
+      // Step 3: the browser "returns" -- a brand-new tree mounts fresh in a
+      // brand-new container (nothing shared with Step 1/2's tree except
+      // `sessionStorage`, a real browser API). Its `AuthProvider` resolves
+      // an already-valid session immediately on mount, exactly like the real
+      // OAuth callback URL auto-parse this file's module doc describes.
+      const returnAuthModule = buildControllableAuthModule({
+        getInitialSession: async () => buildFakeSession('user-oauth-return', PENDING_INVITE.email),
+        resolveRole: async () => ({ status: 'found', role: 'coach' }),
+      });
+      const { root: returnRoot, el: returnEl } = mountFreshAcceptInvitePage(returnAuthModule);
+      await flushMicrotasks();
+
+      // The fix: despite this being a totally fresh mount with no in-memory
+      // state carried over, the persisted sessionStorage flag lets this page
+      // correctly recognize "this resolved user is the result of a Google
+      // sign-in the visitor genuinely started" and navigate away -- instead
+      // of showing the "Set a password" form again.
+      expect(returnEl.querySelector('[data-testid="home-page"]')).toBeTruthy();
+
+      act(() => {
+        returnRoot.unmount();
+      });
+      returnEl.remove();
+    },
+  );
+
+  it(
+    'the persisted flag is read-and-cleared: a THIRD, unrelated mount with an ' +
+      'already-resolved session does NOT navigate away (no lingering flag)',
+    async () => {
+      // Step 1 + 2 exactly as above: click "Continue with Google", then
+      // simulate the hard redirect via a full unmount.
+      const outboundAuthModule = buildControllableAuthModule({
+        signInWithGoogle: async () => {},
+      });
+      renderAcceptInvitePage(outboundAuthModule);
+      await flushMicrotasks();
+      clickButton(findButtonByText('Continue with Google'));
+      await flushMicrotasks();
+
+      act(() => {
+        root.unmount();
+      });
+
+      // Step 3: the genuine OAuth return-leg mount -- consumes (reads AND
+      // clears) the persisted flag, and correctly navigates (proven by the
+      // test above).
+      const returnAuthModule = buildControllableAuthModule({
+        getInitialSession: async () =>
+          buildFakeSession('user-oauth-return-2', PENDING_INVITE.email),
+        resolveRole: async () => ({ status: 'found', role: 'coach' }),
+      });
+      const { root: returnRoot, el: returnEl } = mountFreshAcceptInvitePage(returnAuthModule);
+      await flushMicrotasks();
+      expect(returnEl.querySelector('[data-testid="home-page"]')).toBeTruthy();
+
+      act(() => {
+        returnRoot.unmount();
+      });
+      returnEl.remove();
+
+      // Step 4: a THIRD, completely unrelated mount (e.g. the visitor later
+      // re-opens the same invite link in the same tab, whose own session is
+      // already active -- the exact T077 Ground Truth scenario). If the T079
+      // flag were left lingering instead of being cleared in Step 3, this
+      // mount would wrongly inherit it and navigate away immediately,
+      // reproducing T077's original premature-navigation bug. It must NOT.
+      const thirdAuthModule = buildControllableAuthModule({
+        getInitialSession: async () => buildFakeSession('invite-user-3', PENDING_INVITE.email),
+        resolveRole: async () => ({ status: 'found', role: 'coach' }),
+      });
+      const { root: thirdRoot, el: thirdEl } = mountFreshAcceptInvitePage(thirdAuthModule);
+      await flushMicrotasks();
+
+      expect(thirdEl.querySelector('[data-testid="home-page"]')).toBeNull();
+      expect(
+        Array.from(thirdEl.querySelectorAll('button')).find(
+          (button) => button.textContent?.trim() === 'Set password',
+        ),
+      ).toBeTruthy();
+
+      act(() => {
+        thirdRoot.unmount();
+      });
+      thirdEl.remove();
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
 // T077: THE premature-navigation race condition this task fixes.
 // ---------------------------------------------------------------------------
 

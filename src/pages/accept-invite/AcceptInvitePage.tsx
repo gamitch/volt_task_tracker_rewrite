@@ -160,6 +160,48 @@
  * "onboarding genuinely completed" signal, set only from the two submit
  * handlers' own success paths, never from the passive session-resolution
  * effect itself).
+ *
+ * -----------------------------------------------------------------------
+ * T079 -- surviving a GENUINE browser hard redirect (follow-up to T077's own
+ * disclosed MINOR gap).
+ *
+ * `googleSignInStarted` above is a plain `useState` boolean. In a real
+ * production browser, `loginWithGoogle` (`signInWithGoogle` under the hood)
+ * performs an actual `window.location` navigation to Google and back -- NOT
+ * a React-internal transition. That's a genuine page unload: every
+ * in-memory `useState` value, including `googleSignInStarted`, is destroyed
+ * and this component remounts from scratch on the return leg. At that
+ * point a resolved `user` (from the OAuth callback the browser just
+ * completed) looks IDENTICAL to "arrived via the invite link with its own
+ * pre-existing session, did nothing yet" -- `googleSignInStarted` is back to
+ * its initial `false`, so the Google-completion effect correctly does not
+ * fire (matching T077's own fix), but this means a real user who genuinely
+ * just finished signing in with Google sees the "Set a password" form again
+ * instead of being navigated to their destination.
+ *
+ * Fix: `markGoogleSignInStarted`/`consumeGoogleSignInStarted` below persist
+ * the same "explicitly started on this page" fact to `sessionStorage`
+ * (survives same-tab navigation/reload, cleared when the tab closes --
+ * appropriate for this short-lived, single-flow signal), using the exact
+ * read-and-clear idiom `../../app/guards`'s own `consumeIntendedUrl()`
+ * already establishes (reused deliberately, not reinvented):
+ *   - `markGoogleSignInStarted()` is called synchronously in
+ *     `handleGoogleSignIn`, at the same point `setGoogleSignInStarted(true)`
+ *     already is (before the `loginWithGoogle` await) -- so it's persisted
+ *     even if the browser navigates away before anything else runs.
+ *   - `googleSignInStarted`'s `useState` is now lazily initialized by
+ *     calling `consumeGoogleSignInStarted()` -- read-and-clear, exactly once
+ *     per mount, the moment this component's state initializes. On a normal
+ *     mount (no flag stored) this is simply `false`, identical to before. On
+ *     the OAuth return-leg remount, it reads back `true` (persisted across
+ *     the hard redirect) and immediately clears the flag, so a LATER,
+ *     unrelated mount of this page never inherits a stale signal.
+ * This does not weaken or replace the `hasCompletedSetup`/
+ * `googleSignInStarted` gating T077 built -- `googleSignInStarted` still
+ * means exactly the same thing ("the visitor explicitly started the Google
+ * flow on this page"), it's just now backed by a storage layer that
+ * survives a real reload, not only a React remount within the same
+ * page-load.
  * -----------------------------------------------------------------------
  */
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
@@ -196,6 +238,55 @@ import type { AcceptInviteData, InviteRole, InviteStatus, LoadInviteFn } from '.
  * needs `guards.tsx`'s in-memory `AuthContextValue` state at all.
  */
 type UpdateUserPasswordFn = (password: string) => Promise<AuthUser>;
+
+/**
+ * T079: `sessionStorage` key persisting "the visitor explicitly clicked
+ * 'Continue with Google' on THIS page" across a genuine browser hard
+ * redirect -- see the module doc's T079 section above for the full
+ * reasoning. Namespaced the same way `../../app/guards`'s own
+ * `INTENDED_URL_STORAGE_KEY` (`'volt.intendedUrl'`) is.
+ */
+const GOOGLE_SIGNIN_STARTED_STORAGE_KEY = 'volt.acceptInvite.googleSignInStarted';
+
+/**
+ * Same defensive guard `../../app/guards`'s own `getStorage()` helper uses:
+ * `sessionStorage` can throw in locked-down/private-browsing contexts.
+ * Falling back to `null` there means this page's hard-redirect-survival
+ * mechanism silently degrades to T077's original in-memory-only behavior
+ * (no crash) rather than persisting the flag.
+ */
+function getGoogleSignInStorage(): Storage | null {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Persists "Google sign-in was explicitly started on this page" so the fact
+ * survives a real page unload/reload. Called synchronously in
+ * `handleGoogleSignIn`, at the exact same point `setGoogleSignInStarted(true)`
+ * already is (see the module doc's T079 section) -- mirrors where the
+ * in-memory signal is set, just also written to durable storage.
+ */
+function markGoogleSignInStarted(): void {
+  getGoogleSignInStorage()?.setItem(GOOGLE_SIGNIN_STARTED_STORAGE_KEY, 'true');
+}
+
+/**
+ * Read-and-clear, exactly the same idiom `../../app/guards`'s own
+ * `consumeIntendedUrl()` already establishes (reused deliberately here, not
+ * reinvented) -- reads the flag and immediately removes it in one step, so a
+ * later, unrelated mount of this page never inherits a stale signal. Called
+ * once, as `googleSignInStarted`'s `useState` lazy initializer.
+ */
+function consumeGoogleSignInStarted(): boolean {
+  const storage = getGoogleSignInStorage();
+  const value = storage?.getItem(GOOGLE_SIGNIN_STARTED_STORAGE_KEY) ?? null;
+  storage?.removeItem(GOOGLE_SIGNIN_STARTED_STORAGE_KEY);
+  return value === 'true';
+}
 
 /** See module doc above -- placeholder-latency disclosure, not a PRD value.
  * Only `defaultLoadInvite`'s own fixture-loading delay still uses this --
@@ -362,7 +453,15 @@ export function AcceptInvitePage({
   // link's own session was already active when this page mounted". A
   // `useState` (not a `useRef`) because it needs to participate in the
   // effect below's dependency array to correctly re-run once it flips.
-  const [googleSignInStarted, setGoogleSignInStarted] = useState(false);
+  //
+  // T079: lazily initialized from `consumeGoogleSignInStarted()` (module doc
+  // T079 section above) instead of a hardcoded `false` -- this is what makes
+  // the signal survive a genuine browser hard redirect, not just a React
+  // remount within the same page-load. On a normal mount (no `sessionStorage`
+  // flag stored) this still evaluates to `false`, identical to before.
+  const [googleSignInStarted, setGoogleSignInStarted] = useState(() =>
+    consumeGoogleSignInStarted(),
+  );
 
   const runLoadInvite = useCallback(() => {
     setInviteLoadState('loading');
@@ -502,6 +601,11 @@ export function AcceptInvitePage({
     // effect only ever acts on it once `user` also resolves, so this alone
     // can never cause a premature navigation.
     setGoogleSignInStarted(true);
+    // T079: also persists the same fact to `sessionStorage` (module doc T079
+    // section above), at the same point the in-memory signal is set -- so it
+    // survives even if `loginWithGoogle` below performs a REAL browser
+    // redirect that destroys this component's in-memory state entirely.
+    markGoogleSignInStarted();
     try {
       // Redirects back to this exact page (path + query string, including
       // `?token=...`) once the OAuth round trip completes -- mirrors
@@ -509,6 +613,9 @@ export function AcceptInvitePage({
       // `subscribeToAuthStateChange` listener picks up the resulting
       // `SIGNED_IN` event on that later mount; the Google-completion effect
       // above then sets `hasCompletedSetup`, and the navigate effect fires.
+      // On a REAL redirect, this happens on a brand-new mount of this same
+      // component -- `googleSignInStarted`'s lazy initializer (above) reads
+      // the persisted flag back in that case.
       const redirectTo = `${window.location.origin}${location.pathname}${location.search}`;
       await loginWithGoogle(redirectTo);
       // No inline action here either -- see the effects above.

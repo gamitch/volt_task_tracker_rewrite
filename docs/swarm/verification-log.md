@@ -2636,3 +2636,40 @@ disclosed in an explicit code comment.
 **All 4 stale assertions fixed. The full repo-wide test suite is genuinely green — 910/910,
 zero failures anywhere.**
 [2026-07-19T17:07:26Z] Worker finished. Checker required before completion.
+[2026-07-19T17:32:45Z] Worker finished. Checker required before completion.
+[2026-07-19T17:44:39Z] Worker finished. Checker required before completion.
+[2026-07-19T17:51:11Z] Worker finished. Checker required before completion.
+[2026-07-19T17:51:31Z] Worker finished. Checker required before completion.
+[2026-07-19T17:52:21Z] Worker finished. Checker required before completion.
+
+## T079 — Fix Google OAuth hard-redirect return-leg on `AcceptInvitePage.tsx`, Epic E3
+
+**Result: PASS (1st attempt). Severity: none — clean.**
+
+Fixes T077's disclosed MINOR gap: `googleSignInStarted`'s React `useState` didn't survive a genuine
+production browser hard redirect (a real OAuth round trip fully remounts the page). Added
+`sessionStorage`-backed persistence, mirroring `guards.tsx`'s own `getStorage()`/
+`consumeIntendedUrl()` idioms exactly: `markGoogleSignInStarted()` called synchronously before the
+`loginWithGoogle` await (unconditional, survives the redirect), `consumeGoogleSignInStarted()`
+read-and-clears in one step, `googleSignInStarted`'s `useState` now lazily initializes from it.
+
+**Investigated, not assumed, whether `LoginPage.tsx` needed the same fix — concluded no, with sound
+reasoning**: its navigate effect has no gating state at all, firing purely off freshly-resolved
+`user`/`isLoading`/`noProfile` on every mount. For `/login` (unlike `/accept-invite`), any resolved
+user genuinely does mean "just signed in" — there's no pre-existing invite-link session to
+distinguish from a completed action, so no in-memory signal exists that a hard redirect could
+destroy. Left completely untouched.
+
+**Checker's independent verification (checker-tests):**
+- Confirmed the `sessionStorage` design matches exactly, including the critical ordering (mark
+  before the await, unconditional, not inside `try`).
+- Independently read `LoginPage.tsx`'s actual current effect and confirmed the investigation's
+  reasoning is sound, not just plausible-sounding — confirmed via `git diff --quiet` it's genuinely
+  untouched.
+- **Specifically verified the two new tests genuinely simulate a hard redirect** (separate
+  `createRoot`/container pairs, not a same-tree re-render) — the single most important thing to
+  check here, since a superficially-similar test could easily fail to actually exercise the
+  `sessionStorage`-survives-unmount property.
+- Independently confirmed the test-count delta (910→912, exactly +2) via `git stash` isolation.
+- Confirmed a build error the checker also observed was pre-existing/from a concurrently-running
+  task's in-flight edit, not caused by this task.
