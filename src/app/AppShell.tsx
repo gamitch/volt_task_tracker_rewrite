@@ -45,6 +45,25 @@
  * `Theme` at the app root, covering every route including the chromeless
  * two.
  *
+ * T123 (PRD v2 UXD-01/UXP-05): `<KpiStrip />` (`../components/kpi/KpiStrip`)
+ * is mounted here as the FIRST child inside `AstryxAppShell`, immediately
+ * before `{children}` -- i.e. inside the shell's own main-content region
+ * (per `astryx-api.md`'s own "AppShell" Props table: "`children`: Main
+ * content area"), NOT as a new `topNav`/`sideNav` slot value (the worker
+ * packet's own Forbidden Files list: "the strip is layout content, not nav
+ * chrome"). This places the strip above every routed page's own content,
+ * on every route this normal branch renders (every route except
+ * `/login`/`/accept-invite`, per the chromeless branch above, which
+ * `KpiStrip` therefore never even mounts on). `KpiStrip` self-gates
+ * staff-only and self-gates every `useActiveSeason()` state (see that
+ * file's own module doc) -- this mount point does not duplicate either
+ * gate. The pre-existing chromeless early-return branch and the
+ * `SeasonProvider` wrapping/mount point (T115-verified structure) are both
+ * left completely unchanged by this edit -- `<KpiStrip />` is added
+ * strictly inside the existing normal branch, and itself consumes
+ * `useActiveSeason()` (so it necessarily renders INSIDE `SeasonProvider`,
+ * which is exactly where it is placed).
+ *
  * T091 (ED-1 Packet P4): `SeasonProvider` (`./SeasonProvider.tsx`) is
  * mounted here, wrapping ONLY the normal `AstryxAppShell`-wrapped branch
  * below -- NOT the chromeless early-return branch above. Full reasoning
@@ -67,6 +86,7 @@ import { SeasonProvider } from './SeasonProvider';
 import { TopNav } from '../components/nav/TopNav';
 import { SideNav } from '../components/nav/SideNav';
 import { MobileNav } from '../components/nav/MobileNav';
+import { KpiStrip } from '../components/kpi/KpiStrip';
 
 export interface AppShellProps {
   children: ReactNode;
@@ -88,6 +108,7 @@ export function AppShell({ children }: AppShellProps): ReactNode {
         sideNav={<SideNav />}
         mobileNav={{ content: <MobileNav /> }}
       >
+        <KpiStrip />
         {children}
       </AstryxAppShell>
     </SeasonProvider>

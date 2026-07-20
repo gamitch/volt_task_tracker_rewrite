@@ -4396,3 +4396,41 @@ half-boundary divergence in the multi-row mirror, unreachable at real session
 counts. Disclosed limitation stands: a dual member with zero metric rows
 shows once under her legacy roster team until the SCH-01 roster-reader
 migration.
+
+---
+
+## T123 (PRD v2 UXP-05) — persistent staff KPI strip
+
+**PASS (1st attempt, MINOR).** The always-visible season stats land: four cards
+(season hours with per-category breakdown, active students with per-team split,
+events logged + most recent, % toward goal) mounted once in `AppShell`'s
+persistent region — staff-only, active-season-scoped, four honest DES-12
+states, and route navigation never refetches (a non-tautological single-call
+test plus the persistent mount guarantee it).
+
+Constitution item 3 held to the letter: the checker compared the migration's
+hours CTE against MET-03's shipped formula character-by-character (identical
+body; only the disclosed regrouping differs), and the TS loader is verbatim
+renames with zero arithmetic. The goal-target semantics — Σ over active
+students of `coalesce(goal_hours_override, default_goal_hours)`, NOT the naive
+count×default — was independently reproduced on the checker's own scratch
+Postgres with its own fixtures (350 vs 400 divergence confirmed once an
+override exists) and judged the correct choice: the naive formula silently
+breaks the moment any override is set. D-3 team counts double-count by
+membership (dual member in both teams' headcounts; distinct total preserved);
+LEFT JOIN keeps zero-member teams as honest zeros; archived/inactive excluded.
+
+`AppShell.tsx`'s diff is exactly one mount line + comment — chromeless branch
+and SeasonProvider structure byte-preserved vs HEAD (no T115 regression). The
+worker's disclosed Astryx doc-mismatch (`role="main"` div, not a literal
+`<main>`) was verified against installed source and correctly worked around.
+All gates green including the build the worker had skipped (checker ran it:
+clean).
+
+Follow-ups: (MINOR, repo-wide) `astryx-api.md`'s `Section` entry is literally
+`undefined` — its real props verified via installed source/tests this time;
+doc should be fixed so future prop-checks have a source. (UX decision for
+George) The strip renders on `/kiosk/:sessionId` — packet-literal and PII-free,
+but a KPI band above a fullscreen QR display is likely unwanted; George to
+decide whether kiosk joins the chromeless list. (Optional) an integration-level
+route-persistence test.
