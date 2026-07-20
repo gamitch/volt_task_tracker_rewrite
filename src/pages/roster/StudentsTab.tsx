@@ -93,17 +93,22 @@
  * decoy) -- proof independent of any one fixture render.
  *
  * -----------------------------------------------------------------------
- * 4. Known Context/Traps #3 -- no shared Supabase client wired in yet.
- *    Deliberate scope, not a gap for this task to solve (same posture as
- *    every prior content page -- `OutreachList.tsx`/T038,
- *    `ParticipationTab.tsx`/T056, `MeetingsList.tsx`/T030).
+ * 4. T089 (ED-1 Packet P2): real load/mutation wiring -- `loadData` no
+ *    longer defaults to fixture data.
  *
- * `loadStudentsTabData` is the injectable `loadData`-style seam
- * (`LoadStudentsTabDataFn`), defaulting to the obviously-fake
- * `defaultLoadStudentsTabData` (fixture data typed against the real schema
- * above). A real caller, once a shared Supabase client exists (a separate,
- * not-yet-dispatched task per every other content page's own disclosure),
- * supplies its own `loadData` prop.
+ * `loadData`/`onCreateStudent`/`onUpdateStudent`/`onSetStudentActive` are
+ * the four injectable seams. All four now default to real implementations
+ * from `../../lib/supabase/loaders/students` (`loadStudentsTabData`,
+ * `createStudent`, `updateStudent`, `setStudentActive` -- see that module's
+ * own doc comment for the full per-table query/mutation reasoning): a real
+ * three-table query (`students`/`teams`/`invites`) and real `insert`/
+ * `update` mutations against `students`. `defaultLoadStudentsTabData`
+ * (fixture data typed against the real schema above) is kept as a named
+ * export, fixture literal unchanged, for tests (and any future caller) that
+ * want fixture behavior explicitly rather than relying on it being the
+ * implicit default -- same "the default changes, the fixture literal
+ * doesn't" posture `InvitesTab.tsx` already established for its own
+ * `loadData`/`onRevoke` (T087).
  *
  * -----------------------------------------------------------------------
  * 5. Known Context/Traps #4 -- ROS-09 Deactivate must be a reversible
@@ -172,29 +177,47 @@
  *     status and roster-active status are independent axes.
  *
  * -----------------------------------------------------------------------
- * 8. Forbidden-file stubs -- disclosed, not silently built as real dialogs
- *    (per this task's own Forbidden Files list).
+ * 8. T089 (ED-1 Packet P2): row-action wiring -- three of the four former
+ *    stubs are now real; "View history" alone remains a disclosed stub.
  *
- *   a. "Edit" -- `StudentDialog.tsx` (T023, Ready-but-not-dispatched,
- *      forbidden here). Shows an inline disclosure `Banner` instead of a
- *      real edit form.
- *   b. "Invite parent" -- `InviteParentDialog.tsx` (T024, same posture).
- *      Same disclosure-`Banner` stub.
- *   c. "Invite" (module doc #2) -- no student-self-invite composition
- *      dialog exists anywhere in this codebase yet (confirmed via grep: the
- *      only "send-invite" hits under `src/`/`supabase/` are the backend
- *      edge function itself and email-rendering plumbing, never a UI
- *      dialog component). Not one of this task's named Forbidden Files
- *      (unlike Edit/Invite parent, it has no dedicated not-yet-built task
- *      referenced in the packet), but building a real email-entry-and-send
- *      flow is out of THIS task's objective text (`Table` + `PowerSearch` +
- *      columns + row `MoreMenu`, not a dialog). Same disclosure-`Banner`
- *      stub as (a)/(b), naming the real gap (no invite-composition UI
- *      exists yet) rather than silently doing nothing or faking a working
- *      send.
- *   d. "View history" -- no per-student detail/history route exists yet
- *      (`router.tsx`, read-only here, has no `/roster/students/:id` route).
- *      Same disclosure-`Banner` stub.
+ *   a. "Edit" -- `StudentDialog.tsx` (T023, already Passed) is now imported
+ *      and rendered for real. `handleEdit` opens it in edit mode
+ *      (`initialData` built from the targeted row via
+ *      `toStudentDialogInitialData` below) instead of showing the old
+ *      `EDIT_STUB_NOTICE` banner (removed, along with its `StubNotice`
+ *      plumbing, per this task's own packet Known Context/Traps #5).
+ *   b. "Invite parent" -- `InviteParentDialog.tsx` (T024, already Passed,
+ *      and already wired to the real `send-invite` Edge Function by T087)
+ *      is now imported and rendered for real. `handleInviteParent` opens it
+ *      for the targeted row instead of showing the old
+ *      `INVITE_PARENT_STUB_NOTICE` banner (removed, same reasoning as (a)).
+ *   c. "Invite" (module doc #2's "if email" condition; only shown when
+ *      `accountStatus === 'no_account'`) -- Known Context/Traps #3's real
+ *      judgment call, investigated and decided for this task (full
+ *      reasoning in this task's own worker output, "Trap #3 investigation
+ *      and decision"): `StudentDialog.tsx`'s own `inviteEmail` field
+ *      (`StudentFormPayload.inviteEmail`, that file's own module doc #1) is
+ *      the real, already-built mechanism for "invite this student by
+ *      email" -- filling it in and submitting the edit form fires a real
+ *      `send-invite` call (role `'student'`) alongside the `students`
+ *      update, via this file's own `handleSubmitStudent` below (Known
+ *      Context/Traps #6). Building a SEPARATE one-off email-entry dialog
+ *      for this menu item would duplicate that already-real mechanism for
+ *      no benefit -- `handleInvite` below therefore does exactly what
+ *      `handleEdit` does (opens the same real `StudentDialog` in edit mode
+ *      for the targeted row), which is precisely the case where
+ *      `StudentDialog`'s own `computeEmailFieldDisabled` leaves the Email
+ *      field enabled (edit mode + `hasAccount: false`, since this menu item
+ *      only ever shows for `accountStatus === 'no_account'`). The old
+ *      `inviteStudentStubNotice` helper is removed; no student-self-invite
+ *      composition dialog is invented anywhere in this file.
+ *   d. "View history" -- STILL a disclosed stub, correctly out of scope:
+ *      no per-student detail/history route exists anywhere in this app yet
+ *      (`router.tsx`, read-only here, has no `/roster/students/:id` route),
+ *      and this task's Allowed Files do not include `router.tsx`. Same
+ *      disclosure-`Banner` stub as before T089 (`viewHistoryStubNotice`,
+ *      `StubNotice`, and the `stubNotice` state are all kept, scoped to
+ *      this one remaining action only).
  *
  * -----------------------------------------------------------------------
  * 9. DES-12 four states (loading / error / empty / populated) -- same
@@ -239,10 +262,13 @@
  *    `onOpenChange`, `title`, `description`, `actionLabel`, `onAction` used.
  *  - `Banner` (used identically to `OutreachList.tsx`/`MeetingsList.tsx`):
  *    `status`, `title`, `description`, `isDismissable`, `onDismiss`.
- *  - `EmptyState`: `title`, `description`, `headingLevel` used (no
- *    `actions` -- there is no "create student" flow named anywhere in this
- *    task's objective text, so inventing a button with nowhere real to go
- *    would be fabricated content).
+ *  - `EmptyState`: `title`, `description`, `headingLevel` used. T089 adds a
+ *    real "create student" flow (see module doc #13 below) -- the top-level
+ *    "Add student" `Button` lives outside `EmptyState`, next to
+ *    `PowerSearch` (same placement `TeamsTab.tsx`'s own "New team" `Button`
+ *    already established for this exact page-level-primary-action pattern),
+ *    not as `EmptyState`'s own `actions` prop, so it stays visible whether
+ *    the roster is empty or not.
  *  - `Skeleton` (T081, "Skeleton" section, lines 621-655): `width`,
  *    `height`, `index` used to preview this screen's predictable `Table`
  *    row/column shape, replacing `Spinner`'s prior use here per Astryx's
@@ -255,6 +281,125 @@
  *  - `Text`: `type`, `color`, `weight` used.
  *  - `VStack`/`HStack` ("Stack" section, lines 350-396): `gap`, `padding`,
  *    `vAlign`, `hAlign`, `wrap` used.
+ *
+ * -----------------------------------------------------------------------
+ * 11. T089 -- Deactivate/Reactivate: a real mutation, with optimistic
+ *     local-state flip + rollback-on-failure (Known Context/Traps #2).
+ *
+ * `withActiveOverride` (module doc #5, unchanged, still pure) remains the
+ * ONLY place the OPTIMISTIC local `isActive` flip happens. `handleReactivate`/
+ * `handleConfirmDeactivate` below now ALSO call `onSetStudentActive` (real
+ * default: `setStudentActive`, `../../lib/supabase/loaders/students`) --
+ * the flip is applied to `rows` immediately (optimistic), then the real
+ * mutation is awaited; on rejection, the exact same `withActiveOverride` call
+ * is used to flip the row back to its pre-optimistic value, and an error
+ * `Banner` (`feedback` state, new in T089) explains what happened using the
+ * rejection's own message. This mirrors `RsvpControl.tsx`'s own
+ * `handleChange` (`previousStatus`/optimistic-set/`catch`-rollback shape),
+ * per this task's own packet steer. Success also surfaces a `feedback`
+ * `Banner` (new in T089) for visible confirmation the real write happened --
+ * same "success Banner + error Banner, dismissable, same `feedback` slot"
+ * pattern `InvitesTab.tsx`'s own Resend/Revoke flows already established.
+ *
+ * -----------------------------------------------------------------------
+ * 12. T089 -- `StudentDialog`'s `teams` prop is real; `season` is
+ *     deliberately still fixture-backed (Known Context/Traps #4).
+ *
+ * `loadedTeams` (new state, populated from `loadState.data.teams` on
+ * successful load -- the REAL, full team list, including `archived`, not
+ * the `rows`-derived `teams` `useMemo` below that only covers teams with at
+ * least one CURRENT student and has no `archived` field) is mapped to
+ * `StudentDialogTeamOption[]` (`dialogTeamOptions`, `id`/`name`/`archived`
+ * verbatim) and passed as `<StudentDialog teams={dialogTeamOptions} />`.
+ * Nothing is excluded here beyond that verbatim map -- `StudentDialog`'s own
+ * `filterSelectableTeams` already excludes archived teams from the
+ * `Selector`'s option list, so this file does not duplicate that filtering.
+ * `season` is NOT passed (the `<StudentDialog>` render below omits it
+ * entirely, so it falls back to that component's own fixture default,
+ * `DEFAULT_SEASON_INFO`) -- a parallel, independently-dispatched packet
+ * (T091) is building the real season-data mechanism and will thread it
+ * through every consumer that needs it, including this dialog; wiring
+ * `season` here now would create a false ordering dependency between two
+ * packets meant to run independently (this task's own packet, Known
+ * Context/Traps #4). Disclosed, not silently left.
+ *
+ * -----------------------------------------------------------------------
+ * 13. T089 -- wiring `StudentDialog`/`InviteParentDialog` into this page for
+ *     the first time (Known Context/Traps #5).
+ *
+ * Neither dialog was ever imported into this file before T089 -- both
+ * `StudentDialog`/`InviteParentDialog` remained genuinely unreachable from
+ * this page, even though both dialogs themselves were already real,
+ * Passed, standalone components. `isAddDialogOpen`/`editTarget` (new state)
+ * together drive ONE rendered `<StudentDialog>` instance, switching between
+ * create/edit purely via whether `initialData` is supplied (`editTarget !==
+ * null ? toStudentDialogInitialData(editTarget) : undefined`) -- the same
+ * single-source-of-truth mode detection `StudentDialog.tsx`'s own
+ * `computeStudentDialogMode` already documents, never a separately-tracked
+ * `mode` flag that could drift out of sync with which data is loaded.
+ * `toStudentDialogInitialData` below is the ONE place a `StudentDisplayRow`
+ * is resolved into `StudentDialogInitialData` -- `hasAccount` is derived as
+ * `accountStatus === 'active'`, matching `StudentDialog.tsx`'s own module
+ * doc #1 definition of that field exactly (`profileId !== null`, i.e. this
+ * file's own "Active" status -- not "Invited", which still has no account).
+ * A real "Add student" `Button` (`variant="primary"`, placed next to
+ * `PowerSearch`, same placement `TeamsTab.tsx`'s own "New team" `Button`
+ * already established) opens the dialog in create mode
+ * (`setIsAddDialogOpen(true)`). `inviteParentTarget` (new state) drives one
+ * rendered `<InviteParentDialog>` instance the same way, opened by the real
+ * `handleInviteParent` (module doc #8b). `onOpenChange={false}` on either
+ * dialog resets all three pieces of state, so closing (via Cancel, a
+ * successful submit, or the backdrop) always leaves this page's own state
+ * consistent with "nothing open".
+ *
+ * -----------------------------------------------------------------------
+ * 14. T089 -- `handleSubmitStudent`: real create/edit mutation, plus the
+ *     Trap #3 invite-on-submit flow (Known Context/Traps #6).
+ *
+ * `handleSubmitStudent` is this file's own `onSubmit` passed to
+ * `<StudentDialog>` (`OnSubmitStudentFn`, that component's own exported
+ * type). It strips `StudentFormPayload.inviteEmail` into a separate
+ * `StudentWritePayload` (the real, editable `students` columns only) and
+ * calls `onCreateStudent`/`onUpdateStudent` (real defaults: `createStudent`/
+ * `updateStudent`, `../../lib/supabase/loaders/students`) depending on
+ * `mode`. Edit mode closes over `editTarget.id` (the dialog's own open-state
+ * for this file, NOT a field on `StudentFormPayload`, which has none --
+ * exactly the "close over the id from the dialog's own open-state" approach
+ * this task's own packet names as the likely answer) -- a defensive
+ * `editTarget === null` guard throws rather than silently no-op-ing, since
+ * `StudentDialog` only ever calls `onSubmit` with `mode === 'edit'` when it
+ * was opened with `initialData`, which this file only ever supplies when
+ * `editTarget !== null`. On success, the freshly-written `StudentRow`
+ * (real DB id/fields, resolved via `.select().single()` inside the loader)
+ * is turned back into a `StudentDisplayRow` via `buildDisplayRows` (reusing
+ * `loadedTeams` and the load's own `loadedInvites`, both new state) and
+ * merged into `rows` (`withCreatedStudent`/`withEditedStudent`, both new
+ * pure, exported, independently-tested functions, same "one pure function
+ * per state transition" discipline `withActiveOverride` already
+ * established).
+ *
+ * Trap #3's real answer (module doc #8c): if `payload.inviteEmail !== null`,
+ * this same handler ALSO calls the real `send-invite` Edge Function directly
+ * (`invokeEdgeFunction` imported from `../../lib/supabase`, T086's helper --
+ * this is a DIFFERENT flow from `InviteParentDialog.tsx`'s own T087 wiring,
+ * which sends `role: 'parent'`; this file sends `{ email, role: 'student',
+ * student_id }`) with the real, just-written student's id, AFTER the
+ * `students` write has already succeeded. On success, `withInvitedStatus`
+ * (new, pure, exported) optimistically flips that row's `accountStatus` to
+ * `'invited'` locally (no full reload needed to see the change reflected).
+ * Disclosed risk (same class T087's own `InviteParentDialog.tsx` module doc
+ * #3 already discloses for ITS sequential multi-request design): if the
+ * `students` write succeeds but the subsequent `send-invite` call fails, the
+ * row already exists in the database (this handler does not/cannot roll
+ * that back), but `handleSubmitStudent` still rejects (so `StudentDialog`'s
+ * own `submitError` `Banner` shows the real failure and the dialog stays
+ * open) -- resubmitting in CREATE mode at that point would attempt to
+ * insert a SECOND `students` row for the same person. There is no
+ * duplicate-row detection anywhere in this file or its allowed loader; see
+ * this task's own worker output "Known risks" for whether this warrants a
+ * dispute (same judgment T087 already made for its own analogous risk: it
+ * does not block this task's deliverable, and is disclosed rather than
+ * silently accepted).
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
@@ -281,6 +426,30 @@ import {
   VisuallyHidden,
   VStack,
 } from '@astryxdesign/core';
+// T089 (ED-1 Packet P2, module doc #13/#14): wiring this page to its own
+// dialogs for the first time. `invokeEdgeFunction` is the Trap #3 real
+// invite-student send (module doc #14) -- a different flow from
+// `InviteParentDialog.tsx`'s own T087 `send-invite` wiring (that dialog
+// sends `role: 'parent'`; this file sends `role: 'student'` directly, not
+// through that dialog).
+import { invokeEdgeFunction, isSupabaseLoaderError } from '../../lib/supabase';
+import {
+  createStudent,
+  loadStudentsTabData,
+  setStudentActive,
+  updateStudent,
+} from '../../lib/supabase/loaders/students';
+import {
+  InviteParentDialog,
+  type StudentOption as InviteParentStudentOption,
+} from './InviteParentDialog';
+import {
+  StudentDialog,
+  type StudentDialogInitialData,
+  type StudentDialogMode,
+  type StudentDialogTeamOption,
+  type StudentFormPayload,
+} from './StudentDialog';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets. Module doc #1.
@@ -299,9 +468,15 @@ export interface StudentRow {
   goalHoursOverride: number | null;
 }
 
+/**
+ * T089: gains `archived` (`teams.archived`, real column) -- module doc #12 --
+ * needed so `StudentDialog`'s real `teams` prop can be built without
+ * inventing a second team type.
+ */
 export interface TeamRow {
   id: string;
   name: string;
+  archived: boolean;
 }
 
 export interface InviteRow {
@@ -338,13 +513,37 @@ export interface StudentsTabLoadResult {
 
 export type LoadStudentsTabDataFn = () => Promise<StudentsTabLoadResult>;
 
+/**
+ * T089 (module doc #14) -- the real, editable `students` columns only
+ * (never `id`/`profile_id`). Deliberately NOT `StudentFormPayload` itself
+ * (`./StudentDialog`, which also carries `inviteEmail` -- a non-column
+ * signal this file strips out before calling `onCreateStudent`/
+ * `onUpdateStudent`, see `toStudentWritePayload` below).
+ */
+export interface StudentWritePayload {
+  displayName: string;
+  teamId: string;
+  gradYear: number | null;
+  isActive: boolean;
+  goalHoursOverride: number | null;
+}
+
+/** T089 (module doc #14) -- resolves the freshly-inserted row. */
+export type CreateStudentFn = (payload: StudentWritePayload) => Promise<StudentRow>;
+
+/** T089 (module doc #14) -- resolves the freshly-updated row. */
+export type UpdateStudentFn = (id: string, payload: StudentWritePayload) => Promise<StudentRow>;
+
+/** T089 (module doc #11) -- the real `students.is_active` mutation. */
+export type SetStudentActiveFn = (id: string, isActive: boolean) => Promise<void>;
+
 // ---------------------------------------------------------------------------
 // Fixture data -- module doc #7. Fabricated names only (constitution item 6).
 // ---------------------------------------------------------------------------
 
 const FIXTURE_TEAMS: readonly TeamRow[] = [
-  { id: 'team-ironclad', name: 'Ironclad' },
-  { id: 'team-voltage', name: 'Voltage' },
+  { id: 'team-ironclad', name: 'Ironclad', archived: false },
+  { id: 'team-voltage', name: 'Voltage', archived: false },
 ];
 
 const FIXTURE_STUDENTS: readonly StudentRow[] = [
@@ -508,6 +707,63 @@ export function withActiveOverride(
   return rows.map((row) => (row.id === studentId ? { ...row, isActive } : row));
 }
 
+/** Module doc #14 -- strips `StudentFormPayload.inviteEmail` (not a
+ * `students` column, see that field's own doc comment on `StudentDialog.tsx`)
+ * before calling `onCreateStudent`/`onUpdateStudent`. */
+export function toStudentWritePayload(payload: StudentFormPayload): StudentWritePayload {
+  return {
+    displayName: payload.displayName,
+    teamId: payload.teamId,
+    gradYear: payload.gradYear,
+    isActive: payload.isActive,
+    goalHoursOverride: payload.goalHoursOverride,
+  };
+}
+
+/** Module doc #13 -- the ONE place a `StudentDisplayRow` is resolved into
+ * `StudentDialog`'s own `initialData` shape. `hasAccount` is derived exactly
+ * as `StudentDialog.tsx`'s own module doc #1 defines it: `profileId !==
+ * null`, i.e. this file's own `'active'` status (NOT `'invited'`, which
+ * still has no account). */
+export function toStudentDialogInitialData(row: StudentDisplayRow): StudentDialogInitialData {
+  return {
+    id: row.id,
+    displayName: row.name,
+    teamId: row.teamId,
+    gradYear: row.gradYear,
+    isActive: row.isActive,
+    goalHoursOverride: row.goalHoursOverride,
+    hasAccount: row.accountStatus === 'active',
+  };
+}
+
+/** Module doc #14 -- appends the newly-created row's display row. Never
+ * mutates any existing row. */
+export function withCreatedStudent(
+  rows: readonly StudentDisplayRow[],
+  created: StudentDisplayRow,
+): StudentDisplayRow[] {
+  return [...rows, created];
+}
+
+/** Module doc #14 -- replaces exactly the edited row, in place. */
+export function withEditedStudent(
+  rows: readonly StudentDisplayRow[],
+  edited: StudentDisplayRow,
+): StudentDisplayRow[] {
+  return rows.map((row) => (row.id === edited.id ? edited : row));
+}
+
+/** Module doc #14 (Trap #3) -- the ONLY place `accountStatus` is
+ * optimistically flipped to `'invited'` after a successful `send-invite`
+ * call for a student row. */
+export function withInvitedStatus(
+  rows: readonly StudentDisplayRow[],
+  studentId: string,
+): StudentDisplayRow[] {
+  return rows.map((row) => (row.id === studentId ? { ...row, accountStatus: 'invited' } : row));
+}
+
 export async function defaultLoadStudentsTabData(): Promise<StudentsTabLoadResult> {
   return { students: FIXTURE_STUDENTS, teams: FIXTURE_TEAMS, invites: FIXTURE_INVITES };
 }
@@ -574,7 +830,7 @@ const SEARCH_FIELD_KEYS = {
   active: 'active',
 } as const;
 
-function buildSearchConfig(teams: readonly TeamRow[]): PowerSearchConfig {
+function buildSearchConfig(teams: readonly Pick<TeamRow, 'id' | 'name'>[]): PowerSearchConfig {
   return {
     name: 'StudentsSearch',
     contentSearchFieldKey: SEARCH_FIELD_KEYS.name,
@@ -667,7 +923,10 @@ function matchesAllFilters(row: StudentDisplayRow, filters: readonly PowerSearch
 }
 
 // ---------------------------------------------------------------------------
-// Row action stubs -- module doc #8.
+// Row action stubs -- module doc #8. T089: only "View history" remains a
+// stub (`EDIT_STUB_NOTICE`/`INVITE_PARENT_STUB_NOTICE`/
+// `inviteStudentStubNotice` are removed -- Edit/Invite parent/Invite are all
+// real now, module docs #8a/#8b/#8c).
 // ---------------------------------------------------------------------------
 
 interface StubNotice {
@@ -675,30 +934,23 @@ interface StubNotice {
   description: string;
 }
 
-const EDIT_STUB_NOTICE: StubNotice = {
-  title: 'Edit dialog not built yet',
-  description:
-    "Editing a student opens the student edit dialog (T023, ROS-02). That dialog hasn't shipped yet, so nothing was changed.",
-};
-
-const INVITE_PARENT_STUB_NOTICE: StubNotice = {
-  title: 'Invite parent dialog not built yet',
-  description:
-    "Inviting a parent opens the parent-invite dialog (T024, ROS-02). That dialog hasn't shipped yet, so no invite was sent.",
-};
-
-function inviteStudentStubNotice(name: string): StubNotice {
-  return {
-    title: 'Invite flow not built yet',
-    description: `Inviting ${name} would open an email-entry dialog that calls the real send-invite function (supabase/functions/send-invite). No such dialog exists in this codebase yet, so no invite was sent.`,
-  };
-}
-
 function viewHistoryStubNotice(name: string): StubNotice {
   return {
     title: 'Student history page not built yet',
     description: `Viewing ${name}'s history would open a per-student detail page. No such route exists yet, so nothing was opened.`,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Feedback banner -- module doc #11. Real success/error messaging for
+// Deactivate/Reactivate, same shape `InvitesTab.tsx`'s own `FeedbackBanner`
+// already established for its Resend/Revoke flows.
+// ---------------------------------------------------------------------------
+
+interface FeedbackBanner {
+  status: 'success' | 'error';
+  title: string;
+  description: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -806,31 +1058,65 @@ function buildColumns(args: BuildColumnsArgs): TableColumn<StudentDisplayRow>[] 
 // ---------------------------------------------------------------------------
 
 const EMPTY_ROWS: StudentDisplayRow[] = [];
+const EMPTY_TEAMS: readonly TeamRow[] = [];
+const EMPTY_INVITES: readonly InviteRow[] = [];
 
 export interface StudentsTabProps {
-  /** Injectable data-loading seam (module doc #4). Defaults to fixture data. */
+  /** Injectable data-loading seam (module doc #4). Defaults to a real query
+   * against `students`/`teams`/`invites` (T089, `loadStudentsTabData`). */
   loadData?: LoadStudentsTabDataFn;
+  /** Injectable create seam (module doc #4/#14). Defaults to a real
+   * `students` insert (T089, `createStudent`). */
+  onCreateStudent?: CreateStudentFn;
+  /** Injectable update seam (module doc #4/#14). Defaults to a real
+   * `students` update (T089, `updateStudent`). */
+  onUpdateStudent?: UpdateStudentFn;
+  /** Injectable deactivate/reactivate seam (module doc #4/#11). Defaults to
+   * a real `students.is_active` mutation (T089, `setStudentActive`). */
+  onSetStudentActive?: SetStudentActiveFn;
 }
 
 export function StudentsTab({
-  loadData = defaultLoadStudentsTabData,
+  loadData = loadStudentsTabData,
+  onCreateStudent = createStudent,
+  onUpdateStudent = updateStudent,
+  onSetStudentActive = setStudentActive,
 }: StudentsTabProps = {}): ReactNode {
   const loadState = useLoadState(loadData, [loadData]);
   const [rows, setRows] = useState<StudentDisplayRow[]>(EMPTY_ROWS);
+  // T089 (module doc #12/#14): the REAL, full team/invite lists from the
+  // most recent successful load -- kept separately from `rows` (the derived
+  // display shape) so `handleSubmitStudent` can rebuild a display row for a
+  // just-created/just-edited student without a full reload, and so
+  // `dialogTeamOptions` (module doc #12) can offer every real team
+  // (including ones with zero current students), not just the
+  // `rows`-derived subset `teams` below covers for `PowerSearch`.
+  const [loadedTeams, setLoadedTeams] = useState<readonly TeamRow[]>(EMPTY_TEAMS);
+  const [loadedInvites, setLoadedInvites] = useState<readonly InviteRow[]>(EMPTY_INVITES);
   const [filters, setFilters] = useState<ReadonlyArray<PowerSearchFilter>>([]);
   const [stubNotice, setStubNotice] = useState<StubNotice | null>(null);
+  const [feedback, setFeedback] = useState<FeedbackBanner | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<StudentDisplayRow | null>(null);
+  // T089 (module doc #13): drives the one rendered `<StudentDialog>`
+  // instance -- create mode when `isAddDialogOpen`, edit mode when
+  // `editTarget !== null`. Both are reset together by the dialog's own
+  // `onOpenChange={false}` below.
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<StudentDisplayRow | null>(null);
+  const [inviteParentTarget, setInviteParentTarget] = useState<StudentDisplayRow | null>(null);
 
   useEffect(() => {
     if (loadState.status === 'success') {
       setRows(
         buildDisplayRows(loadState.data.students, loadState.data.teams, loadState.data.invites),
       );
+      setLoadedTeams(loadState.data.teams);
+      setLoadedInvites(loadState.data.invites);
     }
   }, [loadState]);
 
   const teams = useMemo(() => {
-    const byId = new Map<string, TeamRow>();
+    const byId = new Map<string, { id: string; name: string }>();
     for (const row of rows) {
       byId.set(row.teamId, { id: row.teamId, name: row.teamName });
     }
@@ -844,30 +1130,121 @@ export function StudentsTab({
     [rows, filters],
   );
 
-  function handleEdit(): void {
-    setStubNotice(EDIT_STUB_NOTICE);
+  // Module doc #12: verbatim map, `id`/`name`/`archived` -- `StudentDialog`'s
+  // own `filterSelectableTeams` is the ONLY place archived teams are
+  // excluded, not duplicated here.
+  const dialogTeamOptions: StudentDialogTeamOption[] = useMemo(
+    () => loadedTeams.map((team) => ({ id: team.id, name: team.name, archived: team.archived })),
+    [loadedTeams],
+  );
+
+  function handleEdit(row: StudentDisplayRow): void {
+    setEditTarget(row);
   }
 
+  // Module doc #8c/#14 (Trap #3 decision): "Invite" reuses the same real
+  // edit dialog as "Edit" -- `StudentDialog`'s own `inviteEmail` field is
+  // the real invite-composition mechanism, not a separate one-off dialog.
   function handleInvite(row: StudentDisplayRow): void {
-    setStubNotice(inviteStudentStubNotice(row.name));
+    setEditTarget(row);
   }
 
-  function handleInviteParent(): void {
-    setStubNotice(INVITE_PARENT_STUB_NOTICE);
+  function handleInviteParent(row: StudentDisplayRow): void {
+    setInviteParentTarget(row);
   }
 
   function handleViewHistory(row: StudentDisplayRow): void {
     setStubNotice(viewHistoryStubNotice(row.name));
   }
 
-  function handleReactivate(row: StudentDisplayRow): void {
+  // Module doc #11: optimistic flip + real mutation + rollback-on-failure,
+  // mirrored from `RsvpControl.tsx`'s own `handleChange`.
+  async function handleReactivate(row: StudentDisplayRow): Promise<void> {
     setRows((prev) => withActiveOverride(prev, row.id, true));
+    try {
+      await onSetStudentActive(row.id, true);
+      setFeedback({
+        status: 'success',
+        title: 'Student reactivated',
+        description: `${row.name} is active again and will appear on future expected rosters.`,
+      });
+    } catch (error) {
+      setRows((prev) => withActiveOverride(prev, row.id, false));
+      setFeedback({
+        status: 'error',
+        title: "Couldn't reactivate student",
+        description: isSupabaseLoaderError(error)
+          ? error.message
+          : `Something went wrong reactivating ${row.name}. Try again in a moment.`,
+      });
+    }
   }
 
-  function handleConfirmDeactivate(): void {
+  async function handleConfirmDeactivate(): Promise<void> {
     if (deactivateTarget === null) return;
-    setRows((prev) => withActiveOverride(prev, deactivateTarget.id, false));
+    const target = deactivateTarget;
+    setRows((prev) => withActiveOverride(prev, target.id, false));
     setDeactivateTarget(null);
+    try {
+      await onSetStudentActive(target.id, false);
+      setFeedback({
+        status: 'success',
+        title: 'Student deactivated',
+        description: `${target.name} is marked inactive. Their history and past metrics are preserved.`,
+      });
+    } catch (error) {
+      setRows((prev) => withActiveOverride(prev, target.id, true));
+      setFeedback({
+        status: 'error',
+        title: "Couldn't deactivate student",
+        description: isSupabaseLoaderError(error)
+          ? error.message
+          : `Something went wrong deactivating ${target.name}. Try again in a moment.`,
+      });
+    }
+  }
+
+  // Module doc #14: the real `onSubmit` passed to `<StudentDialog>` --
+  // create/edit mutation, plus the Trap #3 invite-on-submit flow.
+  async function handleSubmitStudent(
+    payload: StudentFormPayload,
+    mode: StudentDialogMode,
+  ): Promise<void> {
+    const writePayload = toStudentWritePayload(payload);
+
+    let studentRow: StudentRow;
+    if (mode === 'create') {
+      studentRow = await onCreateStudent(writePayload);
+    } else {
+      if (editTarget === null) {
+        // Defensive only -- `StudentDialog` only calls `onSubmit` with
+        // `mode === 'edit'` when it was opened with `initialData`, which
+        // this file only ever supplies when `editTarget !== null` (module
+        // doc #13/#14).
+        throw new Error('No student selected to edit.');
+      }
+      studentRow = await onUpdateStudent(editTarget.id, writePayload);
+    }
+
+    let displayRow = buildDisplayRows([studentRow], loadedTeams, loadedInvites)[0];
+
+    if (payload.inviteEmail !== null) {
+      // Module doc #14 (Trap #3): fires AFTER the students write already
+      // succeeded -- see that module doc for the disclosed duplicate-row
+      // risk if this call fails in create mode.
+      await invokeEdgeFunction('send-invite', {
+        email: payload.inviteEmail,
+        role: 'student',
+        student_id: studentRow.id,
+      });
+      displayRow = withInvitedStatus([displayRow], displayRow.id)[0];
+    }
+
+    setRows((prev) =>
+      mode === 'create'
+        ? withCreatedStudent(prev, displayRow)
+        : withEditedStudent(prev, displayRow),
+    );
   }
 
   // Deliberately NOT memoized: every handler below is either a constant
@@ -880,7 +1257,9 @@ export function StudentsTab({
     onInvite: handleInvite,
     onInviteParent: handleInviteParent,
     onDeactivate: (row) => setDeactivateTarget(row),
-    onReactivate: handleReactivate,
+    onReactivate: (row) => {
+      void handleReactivate(row);
+    },
     onViewHistory: handleViewHistory,
   });
 
@@ -931,6 +1310,16 @@ export function StudentsTab({
         />
       )}
 
+      {feedback !== null && (
+        <Banner
+          status={feedback.status}
+          title={feedback.title}
+          description={feedback.description}
+          isDismissable
+          onDismiss={() => setFeedback(null)}
+        />
+      )}
+
       <PowerSearch
         label="Filter students"
         placeholder="Search by name, or filter by team, account status, active…"
@@ -939,6 +1328,10 @@ export function StudentsTab({
         onChange={(newFilters) => setFilters(newFilters)}
         resultCount={filteredRows.length}
       />
+
+      <HStack gap={2} hAlign="end">
+        <Button label="Add student" variant="primary" onClick={() => setIsAddDialogOpen(true)} />
+      </HStack>
 
       {rows.length === 0 ? (
         <EmptyState
@@ -971,7 +1364,45 @@ export function StudentsTab({
         title={`Deactivate ${deactivateTarget?.name ?? ''}?`}
         description="This removes them from future expected rosters and leaderboards. Their history and past metrics are preserved, and they'll still show up here (marked inactive) — you can reactivate them at any time."
         actionLabel="Deactivate"
-        onAction={handleConfirmDeactivate}
+        onAction={() => {
+          void handleConfirmDeactivate();
+        }}
+      />
+
+      {/* Module doc #13: ONE rendered instance, create vs. edit decided
+          purely by whether `initialData` is supplied. */}
+      <StudentDialog
+        isOpen={isAddDialogOpen || editTarget !== null}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) {
+            setIsAddDialogOpen(false);
+            setEditTarget(null);
+          }
+        }}
+        initialData={editTarget !== null ? toStudentDialogInitialData(editTarget) : undefined}
+        teams={dialogTeamOptions}
+        // Module doc #12: `season` is deliberately omitted here -- falls
+        // back to `StudentDialog`'s own fixture default (`DEFAULT_SEASON_INFO`).
+        // T091 (a parallel, independently-dispatched packet) owns real
+        // season-data wiring; threading it through here now would create a
+        // false ordering dependency between the two packets.
+        onSubmit={handleSubmitStudent}
+      />
+
+      <InviteParentDialog
+        isOpen={inviteParentTarget !== null}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setInviteParentTarget(null);
+        }}
+        student={
+          inviteParentTarget !== null
+            ? ({
+                id: inviteParentTarget.id,
+                displayName: inviteParentTarget.name,
+              } satisfies InviteParentStudentOption)
+            : { id: '', displayName: '' }
+        }
+        additionalStudentOptions={rows.map((row) => ({ id: row.id, displayName: row.name }))}
       />
     </VStack>
   );

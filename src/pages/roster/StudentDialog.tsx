@@ -124,13 +124,39 @@
  * task's worker output / test file).
  *
  * -----------------------------------------------------------------------
- * 5. No shared Supabase client wired in yet (Known Context/Traps #5) --
- *    deliberate scope, not a gap for this task to solve. Same posture as
- *    every prior content page (`ScheduleMeetingsDialog.tsx`/T031,
- *    `OutreachList.tsx`/T038, `ParticipationTab.tsx`/T056,
- *    `MeetingsList.tsx`/T030). `onSubmit` defaults to
- *    `defaultOnSubmitStudent`, an obviously-fake stub that only
- *    `console.warn`s the payload it would have persisted.
+ * 5. `onSubmit` still defaults to a fixture-backed stub here -- deliberate,
+ *    not a gap T089 left behind.
+ *
+ * T089 (ED-1 Packet P2) wires this dialog's REAL create/edit mutation, but
+ * that wiring lives in `StudentsTab.tsx`'s own `onSubmit` prop (that file's
+ * own module doc explains why: the real submit handler needs to close over
+ * `editTarget`'s id, since `StudentFormPayload` itself carries no `id`
+ * field -- see this dialog's own module doc #1/Known Context/Traps #6 for
+ * the full reasoning), not in this file. This file's own `onSubmit` prop
+ * still defaults to `defaultOnSubmitStudent` below, an obviously-fake stub
+ * that only `console.warn`s the payload it would have persisted -- correct
+ * for a standalone-rendered `<StudentDialog />` with no caller-supplied
+ * `onSubmit` (e.g. this file's own test suite), same "no shared Supabase
+ * client wired into THIS particular component" posture every prior content
+ * page/dialog took before its own wiring task (`ScheduleMeetingsDialog.tsx`/
+ * T031, `OutreachList.tsx`/T038, `ParticipationTab.tsx`/T056,
+ * `MeetingsList.tsx`/T030).
+ *
+ * T089 bug fix, surfaced by wiring a REAL `onSubmit` in for the first time:
+ * `handleSubmit`'s `catch` block below now checks `isSupabaseLoaderError`
+ * FIRST, exactly mirroring `InviteParentDialog.tsx`'s own T087 fix (that
+ * file's Known Context/Traps #6). `runMutation`/`invokeEdgeFunction`
+ * (`../../lib/supabase`) both reject with a plain `SupabaseLoaderError`
+ * object (`{ code, message, cause }`), NOT an `Error` instance -- before
+ * this fix, `handleSubmit`'s `catch` only checked `error instanceof Error`,
+ * so a real `SupabaseLoaderError` rejection (e.g. a genuine `students`
+ * insert failure, or the real `send-invite` Edge Function's own DES-16
+ * copy) would silently fall through to the generic "Something went wrong
+ * saving this student." fallback, discarding the real, already-DES-16-
+ * compliant message. This bug was invisible until T089 supplied a real
+ * `onSubmit` that can genuinely reject with that shape -- `defaultOnSubmitStudent`
+ * below never rejects at all, so no test against the old default could have
+ * caught it.
  *
  * -----------------------------------------------------------------------
  * 6. Astryx prop sourcing (constitution item 2) -- every prop below,
@@ -194,6 +220,10 @@ import {
   Switch,
   TextInput,
 } from '@astryxdesign/core';
+// T089 bug fix (module doc #5) -- `isSupabaseLoaderError` lets a real
+// `SupabaseLoaderError` rejection's own `.message` win over the generic
+// fallback below, same fix `InviteParentDialog.tsx` already made (T087).
+import { isSupabaseLoaderError } from '../../lib/supabase';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets, plus one
@@ -439,8 +469,16 @@ export function StudentDialog({
       await onSubmit(payload, mode);
       onOpenChange(false);
     } catch (error) {
+      // T089 bug fix (module doc #5): check `isSupabaseLoaderError` FIRST so
+      // its already-DES-16-compliant `.message` wins over the generic
+      // fallback -- `runMutation`/`invokeEdgeFunction` both reject with a
+      // plain `SupabaseLoaderError` object, never an `Error` instance.
       setSubmitError(
-        error instanceof Error ? error.message : 'Something went wrong saving this student.',
+        isSupabaseLoaderError(error)
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'Something went wrong saving this student.',
       );
     } finally {
       setIsSubmitting(false);

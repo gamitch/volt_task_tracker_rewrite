@@ -40,6 +40,16 @@
  * affected tests always proved -- `RosterShell` genuinely wires in
  * `InvitesTab`'s real, populated content -- just via an explicit mock
  * instead of an implicit fixture default.
+ *
+ * T092: T089 did the identical thing one tab over -- `StudentsTab.tsx`'s
+ * default `loadData` was switched from a fixture stub to the real
+ * Supabase-backed `loadStudentsTabData` (`../../lib/supabase/loaders/
+ * students`), which also correctly rejects in this test environment. This
+ * file mocks `loadStudentsTabData` at the same module boundary, identical
+ * shape to T088's `loadInvitesTabData` mock directly above (mock only the
+ * one function needed, re-export everything else via `importOriginal`),
+ * fixing the one test that asserted the OLD `StudentsTab` fixture content
+ * (`'Amara Voss'`) on the initially-active Students tab.
  */
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -50,6 +60,8 @@ import { LoginAsDeferred as LoginAs } from '../../test-utils/authHarness';
 import { RosterShell } from './RosterShell';
 import type { InviteRow, InvitesTabLoadResult } from './InvitesTab';
 import { loadInvitesTabData } from '../../lib/supabase/loaders/invites';
+import type { StudentRow, StudentsTabLoadResult, TeamRow } from './StudentsTab';
+import { loadStudentsTabData } from '../../lib/supabase/loaders/students';
 
 // ---------------------------------------------------------------------------
 // T088: mock `loadInvitesTabData` only -- every other
@@ -81,6 +93,48 @@ const MOCK_INVITE_ROWS: readonly InviteRow[] = [
 ];
 
 const MOCK_INVITES_RESULT: InvitesTabLoadResult = { invites: MOCK_INVITE_ROWS };
+
+// ---------------------------------------------------------------------------
+// T092: mock `loadStudentsTabData` only -- identical pattern to T088's
+// `loadInvitesTabData` mock directly above, one module over. Every other
+// `../../lib/supabase/loaders/students` export (`createStudent`,
+// `updateStudent`, `setStudentActive`, unused by these tests but still
+// real) is re-exported from the real module via `importOriginal`.
+// ---------------------------------------------------------------------------
+vi.mock('../../lib/supabase/loaders/students', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/supabase/loaders/students')>();
+  return { ...actual, loadStudentsTabData: vi.fn() };
+});
+
+const mockedLoadStudentsTabData = vi.mocked(loadStudentsTabData);
+
+// Small, deterministic fixture (same row shape as `StudentsTab.tsx`'s own
+// `FIXTURE_STUDENTS`/`FIXTURE_TEAMS`, not imported since those constants
+// aren't exported) -- covers exactly what the affected test asserts: an
+// "Amara Voss" student row. A real `TeamRow` is included since
+// `StudentsTab.tsx`'s own `buildDisplayRows` resolves each student's
+// `teamId` through the teams list to get `teamName`.
+const MOCK_TEAM_ROWS: readonly TeamRow[] = [
+  { id: 'team-ironclad', name: 'Ironclad', archived: false },
+];
+
+const MOCK_STUDENT_ROWS: readonly StudentRow[] = [
+  {
+    id: 'student-amara-voss',
+    profileId: 'profile-amara-voss',
+    displayName: 'Amara Voss',
+    teamId: 'team-ironclad',
+    gradYear: 2027,
+    isActive: true,
+    goalHoursOverride: null,
+  },
+];
+
+const MOCK_STUDENTS_RESULT: StudentsTabLoadResult = {
+  students: MOCK_STUDENT_ROWS,
+  teams: MOCK_TEAM_ROWS,
+  invites: [],
+};
 
 // ---------------------------------------------------------------------------
 // jsdom gap: `AlertDialog`/`Dialog` render a native `<dialog>` and call
@@ -186,6 +240,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   mockedLoadInvitesTabData.mockReset().mockResolvedValue(MOCK_INVITES_RESULT);
+  mockedLoadStudentsTabData.mockReset().mockResolvedValue(MOCK_STUDENTS_RESULT);
 });
 
 afterEach(() => {

@@ -454,6 +454,59 @@ describe('<StudentDialog /> MET-04 goal override helper copy + archived team exc
 // Validity gating + submit/cancel behavior.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// T089 bug fix (module doc #5): a real `SupabaseLoaderError`-shaped
+// rejection (NOT an `Error` instance) surfaces its own `.message` through
+// this dialog's existing `submitError` Banner unchanged, instead of being
+// swallowed by the generic hand-authored fallback.
+// ---------------------------------------------------------------------------
+
+describe('<StudentDialog /> onSubmit error surface (T089 bug fix, mirrors InviteParentDialog T087 Known Context/Traps #6)', () => {
+  it('shows the exact SupabaseLoaderError.message in the Banner, not the generic fallback', async () => {
+    const supabaseLoaderError = {
+      code: '23505',
+      message: 'That team no longer exists. Refresh and try again.',
+      cause: null,
+    };
+    const onSubmit = vi.fn().mockRejectedValue(supabaseLoaderError);
+    act(() => {
+      root.render(
+        <StudentDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} onSubmit={onSubmit} />,
+      );
+    });
+
+    const nameInput = getFieldControl('Name') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(nameInput, 'Kellan Reyes');
+    });
+    selectOption('Team', 'Ironclad');
+    clickButton(findButtonByText('Add student') as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('That team no longer exists. Refresh and try again.');
+    expect(container.textContent ?? '').not.toContain('Something went wrong saving this student.');
+  });
+
+  it('still falls back to a plain Error instance message (or the generic copy) for non-SupabaseLoaderError rejections', async () => {
+    const onSubmit = vi.fn().mockRejectedValue(new Error('A real Error instance message.'));
+    act(() => {
+      root.render(
+        <StudentDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} onSubmit={onSubmit} />,
+      );
+    });
+
+    const nameInput = getFieldControl('Name') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(nameInput, 'Kellan Reyes');
+    });
+    selectOption('Team', 'Ironclad');
+    clickButton(findButtonByText('Add student') as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('A real Error instance message.');
+  });
+});
+
 describe('<StudentDialog /> validity gating + submit', () => {
   it('confirm button is natively disabled until a name and team are both set', () => {
     act(() => {

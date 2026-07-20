@@ -3186,3 +3186,80 @@ running 1010 tests together, not a real defect.
 `SeasonSettings.test.tsx` can exceed the default 5000ms timeout under full-suite
 concurrent load — recommend a bumped `testTimeout` for that specific test as a small
 follow-up so full-suite runs stay deterministic.
+[2026-07-20T01:11:18Z] Worker finished. Checker required before completion.
+
+## T089 — ED-1 packet P2 (expanded): real Students tab load/mutations + first-time dialog wiring
+
+**Result:** PASS (1st attempt, MINOR)
+
+Investigation before dispatch found the real scope was bigger than originally planned:
+every `StudentsTab.tsx` row action except Deactivate was a pure stub notice —
+`StudentDialog`/`InviteParentDialog` were never even imported into the file, and no
+"Add student" trigger existed at all. This packet covers both real data wiring and
+first-time dialog wiring together. New `src/lib/supabase/loaders/students.ts`: real
+combined load (students + teams + invites), real `setStudentActive` mutation with
+optimistic-flip-and-rollback-on-failure, real `createStudent`/`updateStudent`
+mutations. `StudentsTab.tsx`: new "Add student" trigger opens `StudentDialog` in create
+mode; Edit opens it in edit mode with real pre-filled data; Invite Parent opens the
+real, already-Passed `InviteParentDialog` with real roster-sourced student options;
+`teams` prop now real; `season` prop deliberately still fixture-backed pending T091 (a
+stated, correct scope boundary, not an oversight). Deactivate/Reactivate are now real
+mutations with rollback.
+
+**Trap #3 (invite-student email source) resolved:** rather than building a new one-off
+email-entry UI, the "Invite" row action reuses the same `StudentDialog` in edit mode,
+whose pre-existing (pre-T089) `inviteEmail` field was already designed for exactly this
+per its own module doc. Submitting with a non-null `inviteEmail` fires the real
+`students` update, then a direct `invokeEdgeFunction('send-invite', {role:'student',
+...})` call, then an optimistic local `accountStatus` flip to `'invited'`.
+
+**Real bug found and fixed, same class as T087's:** `StudentDialog.tsx`'s error handler
+had the same `instanceof Error`-before-`isSupabaseLoaderError` ordering bug T087 found
+in `InviteParentDialog.tsx`, masking real DES-16 messages. Fixed identically.
+
+**Checker verification:** independently confirmed the loader's real query/mutation
+shapes against the real `students` schema, confirmed the optimistic-rollback pattern
+genuinely rolls back on rejection (not just claimed), confirmed the Trap #3 judgment by
+reading `StudentDialog.tsx`'s pre-T089 history directly (the `inviteEmail` field really
+was already designed for this, not a post-hoc justification), confirmed the dialog
+wiring is real JSX with real props (not stubs dressed up), confirmed the bug fix matches
+T087's precedent exactly. **A third and final independent re-audit of the concurrent
+git-stash incident** (following T090's and T091's own checkers) confirmed
+`StudentDialog.tsx`/`.test.tsx` genuinely contain the claimed bug-fix code and describe
+block, fully settling the multi-checker stash-corruption investigation with no
+corruption found anywhere across all three tasks. 1009/1010 (the sole failure, in
+`RosterShell.test.tsx`, routed to T092 below). Clean typecheck/lint/build.
+
+**Findings (non-blocking):** the create-mode "student insert succeeds, send-invite call
+fails" sequence has no dedup/rollback for a resubmit — judged an acceptable risk,
+fair analogy to T087's own already-accepted equivalent risk for multi-student parent
+invites.
+
+## T092 — Fix `RosterShell.test.tsx` regression from T089's real-data wiring
+
+**Result:** PASS (1st attempt, clean)
+
+Identical pattern to T088: one test in `RosterShell.test.tsx` asserted `StudentsTab`'s
+OLD fixture text (`'Amara Voss'`), now false since T089 correctly made the default a
+real Supabase query. Fixed by adding a second `vi.mock` block for
+`'../../lib/supabase/loaders/students'`, byte-for-byte mirroring T088's existing
+`loaders/invites` mock structure, with a small local fixture and wired into the file's
+shared `beforeEach` alongside the existing invites mock. Original assertion preserved
+verbatim. `RosterShell.tsx`/`StudentsTab.tsx`/`loaders/students.ts` all genuinely
+untouched.
+
+**Process note:** the worker ran its own `git stash`/`stash pop` mid-task (to test
+whether a `Kiosk.tsx` formatting issue was pre-existing) — the same class of operation
+that caused the earlier incident. Verified immediately by the orchestrator and again
+independently by the checker: this cycle was self-contained and safe (T089 and its own
+checker had already fully finished by this point), left no new orphaned stash, and
+`git stash list` shows only the original pre-existing stash from the earlier, already-
+resolved incident.
+
+**Checker verification:** confirmed the mock/fixture correctness against `StudentsTab.tsx`'s
+real types, confirmed the assertion was preserved byte-identical, confirmed the
+`beforeEach` wiring doesn't disturb T088's existing invites mock, confirmed the stash
+state is safe. `RosterShell.test.tsx`: 14/14. Full suite: 1010/1010. Clean
+typecheck/lint/build; format:check clean except the same pre-existing, untouched
+`Kiosk.tsx` issue every prior checker this session has already confirmed and routed as a
+standalone follow-up.
