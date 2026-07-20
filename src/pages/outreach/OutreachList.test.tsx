@@ -36,6 +36,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthUser } from '../../app/guards';
 import { SeasonProvider, type LoadActiveSeasonFn } from '../../app/SeasonProvider';
@@ -130,17 +131,26 @@ function renderAsUser(
 ): void {
   act(() => {
     root.render(
-      <AuthProvider>
-        <SeasonProvider loadActiveSeason={loadActiveSeason}>
-          {user === null ? (
-            <OutreachList {...props} />
-          ) : (
-            <LoginAs user={user}>
+      // T112 (component module doc #13): `OutreachList` now renders a real
+      // `<Link as={RouterLink} .../>` per row, which needs a real router
+      // context ancestor (`react-router-dom`'s `LinkWithRef` throws
+      // "Cannot destructure property 'basename' of ... useContext(...) as it
+      // is null" otherwise) -- same `MemoryRouter` wrapping
+      // `CalendarPage.test.tsx`'s own harness already established for the
+      // identical reason.
+      <MemoryRouter initialEntries={['/outreach']}>
+        <AuthProvider>
+          <SeasonProvider loadActiveSeason={loadActiveSeason}>
+            {user === null ? (
               <OutreachList {...props} />
-            </LoginAs>
-          )}
-        </SeasonProvider>
-      </AuthProvider>,
+            ) : (
+              <LoginAs user={user}>
+                <OutreachList {...props} />
+              </LoginAs>
+            )}
+          </SeasonProvider>
+        </AuthProvider>
+      </MemoryRouter>,
     );
   });
 }
@@ -877,6 +887,92 @@ describe('<OutreachList /> student/parent view', () => {
     // The milestone tick itself is still shown as reached (a real, current
     // fact), independent of whether the one-time toast fires again.
     expect(container.textContent).toContain('25% reached');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T112 HOTFIX: every event row (coach + student/parent, Upcoming + Past) now
+// exposes a real "View details" navigation `Link` to `/outreach/:eventId`
+// (component module doc #13) -- George's own live-reported dead-end-rows
+// regression. Mirrors `CalendarPage.test.tsx`'s own "row Link text is
+// distinguishable per session" assertions (real `<a href>` elements, real
+// distinguishing per-row text), against this file's own real fixture data.
+// ---------------------------------------------------------------------------
+
+describe('<OutreachList /> T112: "View details" navigation link on every row', () => {
+  it('coach view: every Upcoming AND Past row carries a real `<a href="/outreach/:eventId">` link, distinguishable per row', async () => {
+    renderAsUser(COACH_USER, { loadData: defaultLoadOutreachData });
+    await flushMicrotasks();
+
+    const links = Array.from(container.querySelectorAll('a'));
+
+    // Upcoming: session-food-bank-upcoming (event-food-bank-sort) and
+    // session-park-cleanup-upcoming (event-park-cleanup).
+    const foodBankLink = links.find(
+      (a) => a.getAttribute('href') === '/outreach/event-food-bank-sort',
+    );
+    const parkCleanupLink = links.find(
+      (a) => a.getAttribute('href') === '/outreach/event-park-cleanup',
+    );
+    // Past: session-food-bank-past (event-food-bank-sort, same event id --
+    // both its rows must independently carry the link) and
+    // session-tutoring-canceled (event-tutoring-drive).
+    const tutoringLink = links.find(
+      (a) => a.getAttribute('href') === '/outreach/event-tutoring-drive',
+    );
+
+    expect(foodBankLink).toBeTruthy();
+    expect(parkCleanupLink).toBeTruthy();
+    expect(tutoringLink).toBeTruthy();
+
+    // Both the upcoming AND the past "Community Food Bank Sort" rows must
+    // each carry their own working link to the same event id -- not just one
+    // of the two rows.
+    const foodBankLinks = links.filter(
+      (a) => a.getAttribute('href') === '/outreach/event-food-bank-sort',
+    );
+    expect(foodBankLinks.length).toBe(2);
+
+    // Distinguishable per-row text (astryx-api.md Link Best Practices, same
+    // checker-fixed requirement `CalendarPage.tsx` already satisfies).
+    expect(foodBankLink!.textContent).toContain('View details');
+    expect(foodBankLink!.textContent).toContain('Community Food Bank Sort');
+    expect(parkCleanupLink!.textContent).toContain('Riverside Park Cleanup');
+    expect(tutoringLink!.textContent).toContain('After-School Tutoring Drive');
+
+    // NAV-07: the filtered-out meeting event must never get a link either.
+    expect(links.some((a) => a.getAttribute('href') === '/outreach/event-team-meeting')).toBe(
+      false,
+    );
+  });
+
+  it('student/parent view: every Upcoming AND Past row carries a real `<a href="/outreach/:eventId">` link, distinguishable per row', async () => {
+    renderAsUser(STUDENT_OR_PARENT_USER, { loadData: defaultLoadOutreachData });
+    await flushMicrotasks();
+
+    const links = Array.from(container.querySelectorAll('a'));
+
+    const foodBankLinks = links.filter(
+      (a) => a.getAttribute('href') === '/outreach/event-food-bank-sort',
+    );
+    const parkCleanupLink = links.find(
+      (a) => a.getAttribute('href') === '/outreach/event-park-cleanup',
+    );
+    const tutoringLink = links.find(
+      (a) => a.getAttribute('href') === '/outreach/event-tutoring-drive',
+    );
+
+    // Both the upcoming (editable, SegmentedControl) and past (read-only
+    // status text) "Community Food Bank Sort" rows must each carry their own
+    // link -- the affordance does not depend on RSVP editability.
+    expect(foodBankLinks.length).toBe(2);
+    expect(parkCleanupLink).toBeTruthy();
+    expect(tutoringLink).toBeTruthy();
+
+    expect(foodBankLinks[0].textContent).toContain('View details');
+    expect(foodBankLinks[0].textContent).toContain('Community Food Bank Sort');
+    expect(parkCleanupLink!.textContent).toContain('Riverside Park Cleanup');
+    expect(tutoringLink!.textContent).toContain('After-School Tutoring Drive');
   });
 });
 

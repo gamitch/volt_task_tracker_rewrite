@@ -4080,3 +4080,34 @@ George's next `supabase db push` to close the loop on this estimate; if
 `CREATE POLICY` itself still fails, the documented Supabase fallback is
 creating the four policies via the Storage → Policies dashboard UI instead of
 a SQL migration.
+
+---
+
+## T112 — Outreach list detail-navigation hotfix (live-reported by George)
+
+**PASS (1st attempt, NIT).** George created his first real outreach event and
+found the list rows were dead ends — no path to `/outreach/:eventId`, where
+Edit/Cancel/RSVP visibility (T101) already live. Root cause was the
+stale-reasoning variant of this project's recurring wiring pattern:
+`OutreachList.tsx`'s module doc #8c had deliberately kept event titles
+non-interactive, justified by the detail route "still resolving to an inline
+placeholder div" — true when written, false ever since the route was wired to
+the real `OutreachDetail.tsx`.
+
+Fix mirrors the Calendar page's established precedent exactly (worker read it
+firsthand; checker re-read it and confirmed the characterization): rows stay
+non-interactive `ListItem`s per the documented Astryx constraint, with one real
+`Link as={RouterLink}` ("View details – <title>") in each row's `endContent`,
+using the already-existing-but-unused `routePaths.outreachEvent(eventId)`
+builder (relative in-app path, deliberately not `buildOutreachDetailUrl`'s
+absolute clipboard URL). Both row components serve both Upcoming and Past
+sections in both role views, so two edits reach all four spots — and the checker
+specifically verified the link renders unconditionally, including canceled and
+completed sessions (fixtures exercise both, plus a two-session event whose link
+correctly appears twice). A non-tautological negative test confirms the
+NAV-07-filtered meeting fixture never gets a link.
+
+Module doc #8c amended with a dated correction (history preserved); new doc #13
+records the investigation. 49/49 file tests, 1160/1160 full suite, all gates
+clean. NIT only: tests assert the anchor's href/text, not a navigation spy —
+matches the suite's existing convention, logged as optional hardening.

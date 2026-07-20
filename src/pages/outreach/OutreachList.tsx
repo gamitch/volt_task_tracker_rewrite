@@ -217,14 +217,24 @@
  *       list page (a genuinely separate, larger UI change this task's
  *       packet never asked for). This page's own inline row-level preview
  *       therefore deliberately stays local-only, unchanged by this task.
- *    c. Event titles are plain `Heading`/`ListItem` `label` text, never a
- *       `Link`/`href` to `/outreach/:eventId`. `OutreachDetail.tsx` (T041)
- *       is the real detail page (T101 UPDATE: now real-wired too, see that
- *       file's own module doc); `router.tsx`'s existing `/outreach/:eventId`
- *       route (forbidden/read-only) still resolves to an inline placeholder
- *       div, not this page's own content, so linking there would still be
- *       misleading rather than helpful, and OUT-01's own text never asked
- *       for detail links on the list page. Untouched by this task.
+ *    c. T112 HOTFIX UPDATE: this stub is CLOSED, not still open. Event
+ *       titles were plain `Heading`/`ListItem` `label` text with no
+ *       `Link`/`href` to `/outreach/:eventId`, justified at the time by
+ *       "`router.tsx`'s existing `/outreach/:eventId` route still resolves
+ *       to an inline placeholder div, not this page's own content, so
+ *       linking there would be misleading." That justification went stale
+ *       (false) once T101 wired `/outreach/:eventId` to the real
+ *       `OutreachDetail.tsx` (confirmed by reading `router.tsx` directly,
+ *       read-only import-only file: the route's own `element` is
+ *       `<RequireAuth><OutreachDetail /></RequireAuth>`, not a placeholder)
+ *       -- meaning every event George (or any coach/student/parent) created
+ *       became a dead end on this list page: no way to reach the real
+ *       Edit/Cancel/RSVP-visibility functionality that already lives on that
+ *       page. Fixed here: every row (Upcoming AND Past, coach AND
+ *       student/parent view) now carries a real "View details" `Link` to
+ *       `routePaths.outreachEvent(event.id)` in its `ListItem`'s
+ *       `endContent` -- see module doc #13 for the full precedent
+ *       investigation and shape.
  *    d. `MarkDayCompleteDialog.tsx` (T040) and `Leaderboard.tsx` (T044) are
  *       not referenced, imported, or stubbed anywhere in this file: neither
  *       is part of OUT-01's list-page scope (this task's own objective
@@ -294,7 +304,18 @@
  *    those three used (no `onClick`/`href` -- rows are not interactive,
  *    avoiding the doc's own "Don't place interactive elements inside an
  *    interactive list item" warning by never making the row itself
- *    interactive).
+ *    interactive). T112 HOTFIX UPDATE: this constraint is still honored
+ *    exactly -- the ONE real interactive element each row's `endContent`
+ *    now also carries (alongside the pre-existing `AvatarGroup`/`Badge`/
+ *    `SegmentedControl`) is a `Link` (below), never an `onClick`/`href` on
+ *    the `ListItem` itself. See module doc #13.
+ *  - `Link` (line 1910 section, Props table): `as` (`RouterLink`, matching
+ *    `CalendarPage.tsx`'s/`LiveConsole.tsx`'s/`AdminToggles.tsx`'s own
+ *    established `<Link as={RouterLink} href={...}>` SPA-navigation idiom --
+ *    module doc #13), `href`, `isStandalone` used ("Do: Set isStandalone
+ *    when the link appears outside of inline text", which this one does --
+ *    it lives in a `ListItem`'s `endContent`, not inline body text). T112
+ *    HOTFIX: newly added to this file.
  *  - `Button` (line 1768 section, Props table): `label`, `variant`,
  *    `onClick` used.
  *  - `Heading`: doc's own "Components > Heading" subsection is `undefined`
@@ -398,6 +419,67 @@
  * `viewerStudentId = PLACEHOLDER_CURRENT_STUDENT_ID` (module doc #7) is a
  * separate, already-disclosed gap (which student, not which season) --
  * untouched by this fix, out of scope per this task's own packet.
+ *
+ * -----------------------------------------------------------------------
+ * 13. T112 HOTFIX: navigation affordance to `/outreach/:eventId` on every
+ *     row -- Calendar-precedent investigation, in full (George live-reported
+ *     dead-end event rows; module doc #8c UPDATE closes the stale stub).
+ *
+ * Investigation: `CalendarPage.tsx` (read-only Forbidden File, precedent
+ * reference only, per this task's own Known Context/Traps #1) was read
+ * directly rather than guessed at. Its `CalendarSessionRowItem` renders a
+ * non-interactive `ListItem` (`label`/`description` only, no `onClick`/
+ * `href`) whose `endContent` is an `HStack` containing a type `Badge`
+ * followed by `<Link as={RouterLink} href={detailHrefFor(event, session)}
+ * isStandalone>View details – {event.title}</Link>` -- a real Astryx `Link`
+ * (`@astryxdesign/core`) rendered `as` `react-router-dom`'s own `Link`
+ * (`RouterLink`) for real SPA client-side navigation, not a `Button`/
+ * `onClick={() => navigate(...)}` and not an interactive `ListItem` itself.
+ * For the outreach/competition branch specifically, `detailHrefFor` calls
+ * the already-real `routePaths.outreachEvent(event.id)` helper (`router.tsx`,
+ * import-only per that file's own Forbidden Files carve-out) -- the exact
+ * same helper this file now uses below, for the exact same route.
+ *
+ * Mirrored here EXACTLY, not reinvented: `CoachOutreachRowItem`'s and
+ * `StudentOutreachRowItem`'s own `endContent` (module docs #5/#7 above) now
+ * each end with the identical `<Link as={RouterLink}
+ * href={routePaths.outreachEvent(event.id)} isStandalone>View details –
+ * {event.title}</Link>` element -- same component, same `as`/`href`/
+ * `isStandalone` prop set, same "View details – <title>" text shape (this
+ * file's own `astryx-api.md` "Link Best Practices" cross-check, same as
+ * `CalendarPage.tsx`'s own already-Passed checker-fixed distinguishable-text
+ * requirement -- module doc #10 above), same "non-interactive `ListItem`
+ * row + one real interactive element in `endContent`" shape satisfying the
+ * SAME Astryx `ListItem` constraint this file's own module doc #10 already
+ * documents (`ListItem` resolves only `label`/`description`/`endContent`;
+ * "Don't place interactive elements inside an interactive list item" is
+ * honored by never making the row itself interactive, exactly as
+ * `CalendarPage.tsx`'s own module doc #7/#8 already established for the
+ * identical component).
+ *
+ * Both role variants, both buckets (the packet's own explicit requirement):
+ * `CoachOutreachRowItem` is shared by both `CoachOutreachSection` instances
+ * (`title="Upcoming"` and `title="Past"`, module doc #5 above) and
+ * `StudentOutreachRowItem` is shared by both `StudentOutreachSection`
+ * instances (module doc #7 above) -- each row component's `endContent` now
+ * unconditionally includes the `Link` (previously the coach row's
+ * `AvatarGroup`/`Badge` pair, and by extension its whole `endContent`, was
+ * `undefined` for Past rows; the `Link` is now pulled out of that
+ * conditional so it renders for every row regardless of session status),
+ * meaning the fix reaches all four spots (coach Upcoming, coach Past,
+ * student/parent Upcoming, student/parent Past) through exactly two shared
+ * row components, not four separate edits.
+ *
+ * `routePaths.outreachEvent(eventId)` (relative `/outreach/${eventId}`,
+ * confirmed by reading `router.tsx` directly) is used for this in-app
+ * navigation, deliberately NOT `OutreachDetail.tsx`'s own
+ * `buildOutreachDetailUrl(eventId, origin)` (an absolute
+ * `${origin}/outreach/${eventId}` URL purpose-built for that page's own
+ * "Copy link" clipboard feature, per that file's own module doc #6) -- the
+ * packet's own Known Context/Traps #3 explicitly flags this distinction, and
+ * `CalendarPage.tsx`'s own precedent likewise uses the relative
+ * `routePaths.outreachEvent(...)` path, never an absolute URL, for its
+ * in-app `Link`.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
@@ -410,6 +492,7 @@ import {
   EmptyState,
   Heading,
   HStack,
+  Link,
   List,
   ListItem,
   ProgressBar,
@@ -421,11 +504,17 @@ import {
   VisuallyHidden,
   VStack,
 } from '@astryxdesign/core';
+import { Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../../app/guards';
 // T106 HOTFIX: the same real active-season resolution mechanism
 // `ReportsShell.tsx` already established (module doc #12) -- read-only
 // import, this file is not `SeasonProvider.tsx`'s own module.
 import { useActiveSeason } from '../../app/SeasonProvider';
+// T112 HOTFIX (module docs #8c/#13): `routePaths.outreachEvent` is the SAME
+// already-real, already-wired helper `CalendarPage.tsx` (its own read-only
+// precedent for this task) already uses for its outreach-row `Link` --
+// import-only, `router.tsx` itself remains a forbidden/read-only file.
+import { routePaths } from '../../app/router';
 // T101 (ED-1 Packet P10): real load/create wiring -- module doc #11.
 // `saveOutreachEvent`/`OutreachEventDialog` are this task's own wiring of an
 // ALREADY-BUILT, ALREADY-PASSED standalone dialog into this page for the
@@ -1193,20 +1282,35 @@ function CoachOutreachRowItem({
     </VStack>
   );
 
-  const endContent =
-    session.status === 'scheduled' ? (
-      <HStack gap={2} vAlign="center">
-        {goingStudents.length > 0 && (
-          <AvatarGroup size="small">
-            {visibleStudents.map((student) => (
-              <Avatar key={student.id} name={student.name} size="small" />
-            ))}
-            {overflowCount > 0 && <AvatarGroupOverflow count={overflowCount} />}
-          </AvatarGroup>
-        )}
-        <Badge variant="neutral" label={`${goingStudents.length} going`} />
-      </HStack>
-    ) : undefined;
+  // T112 HOTFIX (module doc #13): every row -- scheduled (Upcoming) AND
+  // completed/canceled (Past) alike -- now always carries a real "View
+  // details" `Link` to this event's own `/outreach/:eventId` detail page,
+  // mirroring `CalendarPage.tsx`'s own `CalendarSessionRowItem` `endContent`
+  // shape exactly (a non-interactive `ListItem` row, with the one real
+  // interactive element living in `endContent`, module doc #10). The
+  // Upcoming-only going-count `AvatarGroup`/`Badge` pair is unchanged and
+  // still only renders for `scheduled` sessions; the `Link` itself renders
+  // unconditionally.
+  const endContent = (
+    <HStack gap={2} vAlign="center">
+      {session.status === 'scheduled' && (
+        <>
+          {goingStudents.length > 0 && (
+            <AvatarGroup size="small">
+              {visibleStudents.map((student) => (
+                <Avatar key={student.id} name={student.name} size="small" />
+              ))}
+              {overflowCount > 0 && <AvatarGroupOverflow count={overflowCount} />}
+            </AvatarGroup>
+          )}
+          <Badge variant="neutral" label={`${goingStudents.length} going`} />
+        </>
+      )}
+      <Link as={RouterLink} href={routePaths.outreachEvent(event.id)} isStandalone>
+        View details – {event.title}
+      </Link>
+    </HStack>
+  );
 
   return <ListItem label={event.title} description={description} endContent={endContent} />;
 }
@@ -1447,20 +1551,33 @@ function StudentOutreachRowItem({
     </Text>
   );
 
-  const endContent = isEditable ? (
-    <SegmentedControl
-      value={status ?? UNANSWERED_RSVP_SEGMENT_VALUE}
-      onChange={(value) => onRsvpChange(session.id, value as RsvpStatus)}
-      label={`Your RSVP for ${event.title} on ${formatSessionDateOnly(session)}`}
-    >
-      {RSVP_ITEMS.map((item) => (
-        <SegmentedControlItem key={item.value} value={item.value} label={item.label} />
-      ))}
-    </SegmentedControl>
-  ) : (
-    <Text type="supporting" color="secondary">
-      {status === null ? 'No response recorded' : `You RSVP'd: ${rsvpStatusLabel(status)}`}
-    </Text>
+  // T112 HOTFIX (module doc #13): every row -- editable (Upcoming) AND
+  // read-only (Past) alike -- now always carries a real "View details"
+  // `Link` to this event's own `/outreach/:eventId` detail page too, same
+  // shape as the coach view's own row above and `CalendarPage.tsx`'s
+  // precedent. The RSVP `SegmentedControl`/read-only status `Text` is
+  // unchanged; the `Link` is simply added alongside it.
+  const endContent = (
+    <HStack gap={2} vAlign="center">
+      {isEditable ? (
+        <SegmentedControl
+          value={status ?? UNANSWERED_RSVP_SEGMENT_VALUE}
+          onChange={(value) => onRsvpChange(session.id, value as RsvpStatus)}
+          label={`Your RSVP for ${event.title} on ${formatSessionDateOnly(session)}`}
+        >
+          {RSVP_ITEMS.map((item) => (
+            <SegmentedControlItem key={item.value} value={item.value} label={item.label} />
+          ))}
+        </SegmentedControl>
+      ) : (
+        <Text type="supporting" color="secondary">
+          {status === null ? 'No response recorded' : `You RSVP'd: ${rsvpStatusLabel(status)}`}
+        </Text>
+      )}
+      <Link as={RouterLink} href={routePaths.outreachEvent(event.id)} isStandalone>
+        View details – {event.title}
+      </Link>
+    </HStack>
   );
 
   return <ListItem label={event.title} description={description} endContent={endContent} />;
