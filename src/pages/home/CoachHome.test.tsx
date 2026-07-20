@@ -900,6 +900,27 @@ describe('<CoachHome /> HOME-04 admin-only "Season setup" card', () => {
     await flushMicrotasks();
     expect(container.textContent).not.toContain('Season setup');
   });
+
+  it('clicking "Go to season setup" navigates to /settings/season (real navigation, not the old stub)', async () => {
+    renderAsUser(ADMIN_USER, { loadData: fixtureLoadData, nowFn: () => FIXTURE_REFERENCE_NOW });
+    await flushMicrotasks();
+    const button = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Go to season setup',
+    );
+    expect(button).toBeTruthy();
+    act(() => {
+      button?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    // T111: this used to show a disclosed stub Banner ("Season setup screen
+    // not built yet") because /settings/season didn't exist. T108 has since
+    // shipped the real route, so clicking now performs a real
+    // navigate(routePaths.settingsSeason) instead -- same
+    // MemoryRouter-has-no-matching-route posture as the "Start check-in"
+    // test above (react-router-dom renders nothing for the new location
+    // rather than throwing; the assertion is that the old stub notice never
+    // appears and the click did not crash).
+    expect(container.textContent).not.toContain('Season setup screen not built yet');
+  });
 });
 
 describe("<CoachHome /> BEH-01 milestone toast on this page's own hours-vs-goal bar", () => {

@@ -4008,3 +4008,75 @@ conflict target.
 `SettingsPage.test.tsx` 45/45 (missing-row-resolves-defaults, upsert call-shape,
 new first-toggle test); full suite 1157/1157; typecheck/lint/build/format:check
 all clean. Only the two Allowed Files touched.
+
+---
+
+## T111 — Fix `CoachHome.tsx`'s "Go to season setup" button (stale stub, live-reported by George)
+
+**PASS (1st attempt, NIT).** Same recurring "component built, sibling never
+wired" pattern as T088/T092/T097/T101/T104/T107 — this time the "sibling" is a
+route (T108) rather than a dialog or loader. `CoachHome.tsx`'s "Go to season
+setup" button predated `/settings/season` existing at all, so it correctly
+showed a stub notice at the time it was written; T108 has since shipped that
+route for real, leaving the button stale. Fixed by swapping its `onClick` from
+`showStub(...)` to `navigate(routePaths.settingsSeason)`, mirroring the same
+file's own already-established `navigate(routePaths.kioskSession(...))`
+pattern a few dozen lines above — no new imports needed, both `useNavigate`
+and `routePaths` were already in scope.
+
+Checker independently confirmed the exact `routePaths.settingsSeason` key value
+against the real `router.tsx`, confirmed `router.tsx`/`SeasonSettings.tsx` both
+genuinely untouched by this worker, confirmed `showStub` itself remains real
+(not dead code — still backing the separate "New outreach event" stub), and
+re-ran the whole-repo grep for any other stale "season setup...not built yet"
+copy itself rather than trusting the worker's search (found none). Full suite
+1158/1158 (one new test). NIT, logged not blocking: the new test asserts the
+old stub text is gone and the click doesn't throw, but doesn't positively
+assert the navigation target via a `navigate` spy — matches this file's
+existing test convention for its sibling check-in button, an optional
+hardening follow-up.
+
+---
+
+## T110 — HOTFIX: `20260720000001_avatar_storage.sql` fails `supabase db push` on a real project
+
+**PASS (1st attempt, NIT).** George ran `supabase db push` against his real,
+live Supabase project and hit a hard failure: `ERROR: must be owner of table
+objects (SQLSTATE 42501)` on `alter table storage.objects enable row level
+security`. Root cause: on every real hosted Supabase project, `storage.objects`
+is owned by a Supabase-managed system role with RLS force-enabled by the
+platform from creation — no project-level role can ever alter that, and the
+statement was never actually necessary in the first place (it only "passed"
+during T105's original verification because that verification ran against a
+hand-built local scratch-Postgres stand-in for the `storage` schema, which
+doesn't replicate real Supabase's ownership model — a genuine gap in how that
+migration was originally verified, now closed).
+
+Fixed by removing the `alter table` statement entirely, replacing it with a
+comment explaining the real root cause, and preserving the bucket insert and
+all four `create policy` statements with byte-identical security semantics
+(checker diffed line-by-line and confirmed only comment/`drop policy if
+exists` lines were added — no `using`/`with check`/`for`/`to` clause on any
+policy changed). Also added `drop policy if exists <name>` immediately before
+each `create policy`, making the migration safely re-runnable; checker
+independently applied the migration twice against its own scratch Postgres
+instance and confirmed clean idempotent re-application with the exact same
+four policies materializing both times.
+
+The one thing that genuinely cannot be verified from this sandbox — whether
+`CREATE POLICY` itself will succeed for the real migration role on George's
+actual project, given Postgres's `CREATE POLICY` and `ALTER TABLE`'s RLS-toggle
+share the same underlying ownership check — was explicitly, honestly assessed
+rather than glossed over. The worker gave ~80-85% confidence, reasoning from
+the well-established, widely-documented Supabase convention that this exact
+migration shape (bucket insert + `create policy`, no `ALTER TABLE ENABLE RLS`)
+is the standard supported pattern. The checker independently concurred with
+this assessment (if anything finding it slightly conservative) and confirmed
+the fix's design is sound regardless: no exception-swallowing was added around
+the `create policy` statements, so if that residual risk does materialize on a
+real re-run, it will surface loudly as a clear new error rather than silently
+leaving the bucket unprotected. Follow-up logged: capture the outcome of
+George's next `supabase db push` to close the loop on this estimate; if
+`CREATE POLICY` itself still fails, the documented Supabase fallback is
+creating the four policies via the Storage → Policies dashboard UI instead of
+a SQL migration.

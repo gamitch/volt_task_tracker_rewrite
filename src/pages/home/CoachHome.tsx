@@ -250,14 +250,22 @@
  *       visible, clickable button; `onClick` shows an inline `Banner`
  *       disclosure, same pattern `OutreachList.tsx`/`MeetingsList.tsx`
  *       already established for their own out-of-scope actions.
- *    b. "Season setup" card's "Go to season setup" button -- `SET-01…03`
- *       settings screens are separate, not-yet-built tasks (confirmed via
- *       `router.tsx`'s own `/settings` route still resolving to an inline
- *       `SettingsPage()` placeholder). Same disclosed-`Banner` stub pattern.
- *    c. `StudentHomeSlot.tsx` (T008) is a Student-Home-scoped component
+ *    b. `StudentHomeSlot.tsx` (T008) is a Student-Home-scoped component
  *       (its own module doc: "reserved for T054's later use") -- not
  *       imported or referenced anywhere in this file, per this task's
  *       Forbidden Files.
+ *
+ * T111 UPDATE: the "Season setup" card's "Go to season setup" button (item
+ * `b` above, formerly) was a disclosed stub only because `/settings/season`
+ * itself didn't exist yet. T108 (already-Passed) has since routed
+ * `/settings/season` to the real, fully-built `SeasonSettings.tsx`, so this
+ * is no longer a stub: `onClick` now does a real
+ * `navigate(routePaths.settingsSeason)`, mirroring module doc #5's
+ * "Start check-in" `useNavigate()`/`routePaths.kioskSession(...)` pattern in
+ * this same file. `router.tsx` remains a forbidden/read-only file here;
+ * `routePaths.settingsSeason` is an import-only reference to its
+ * already-exported constant, same posture module doc #5 already established
+ * for `routePaths.kioskSession`.
  *
  * -----------------------------------------------------------------------
  * 11. DES-12 four states.
@@ -1534,12 +1542,7 @@ export function CoachHome({
                     <Button
                       label="Go to season setup"
                       variant="secondary"
-                      onClick={() =>
-                        showStub(
-                          'Season setup screen not built yet',
-                          "This shortcut opens season setup (SET-01…03). That screen hasn't shipped yet, so nothing changed.",
-                        )
-                      }
+                      onClick={() => navigate(routePaths.settingsSeason)}
                     />
                   </VStack>
                 </Card>

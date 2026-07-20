@@ -85,12 +85,31 @@ insert into storage.buckets (id, name, public)
 values ('avatars', 'avatars', true)
 on conflict (id) do nothing;
 
--- Real Supabase projects already have RLS enabled on `storage.objects` by
--- default; this statement is idempotent/defensive so this migration is
--- self-contained against a project where it somehow is not (e.g. this
--- migration's own scratch-Postgres validation harness, which creates the
--- `storage.objects` stub table fresh with RLS off).
-alter table storage.objects enable row level security;
+-- T110 HOTFIX: the `alter table storage.objects enable row level security;`
+-- statement that previously lived here has been REMOVED. It failed hard
+-- against George's real, live, hosted Supabase project:
+--
+--   ERROR: must be owner of table objects (SQLSTATE 42501)
+--   At statement: 1
+--   alter table storage.objects enable row level security
+--
+-- Root cause: on every real, hosted Supabase project, `storage.objects` is
+-- owned by a Supabase-managed system role and RLS is force-enabled on it by
+-- the platform from project creation -- it can never be altered by the
+-- ordinary migration-applying role, full stop. That is not a bug to work
+-- around; it is the correct, by-design platform posture, and this line was
+-- never actually necessary in the first place. The line only ever passed
+-- during T105's own local verification because that verification ran
+-- against a hand-built scratch-Postgres `storage.objects` STAND-IN table
+-- that this project's own migration files create fresh with RLS off (bare
+-- Postgres has no `storage` schema at all) -- a stub that does not
+-- replicate real Supabase's ownership/force-RLS model, so this failure mode
+-- was invisible until this migration actually ran against a real project.
+-- The standard, documented Supabase Storage-policy migration pattern is
+-- exactly what remains below: `create policy ... on storage.objects`
+-- statements with no preceding `alter table ... enable row level security`,
+-- because that statement only ever makes sense for a schema you fully own
+-- yourself, which `storage.objects` on a hosted project never is.
 
 -- Readable by anyone -- matches the public bucket's own `getPublicUrl()`
 -- contract every existing consumer (`ParentsTab.tsx`, `TopNav.tsx`,
@@ -98,7 +117,11 @@ alter table storage.objects enable row level security;
 -- reads (`.list()`, etc.) in addition to the public CDN URL path (which does
 -- not require a `storage.objects` SELECT policy at all per Supabase's own
 -- documented `getPublicUrl()` RLS requirements: "objects table permissions:
--- none").
+-- none"). `drop policy if exists` immediately before each `create policy`
+-- below (T110 hotfix hygiene) makes this migration safely re-runnable if a
+-- future `supabase db push` needs to retry after a partial failure, without
+-- changing what any policy actually allows.
+drop policy if exists avatars_read on storage.objects;
 create policy avatars_read on storage.objects
   for select
   using (bucket_id = 'avatars');
@@ -111,6 +134,7 @@ create policy avatars_read on storage.objects
 -- avatar object, the one hard requirement this task's packet flags. Scoped
 -- to `to authenticated` (never `anon`) -- an unauthenticated caller has no
 -- `auth.uid()` to scope a folder to at all.
+drop policy if exists avatars_insert_own on storage.objects;
 create policy avatars_insert_own on storage.objects
   for insert to authenticated
   with check (
@@ -123,6 +147,7 @@ create policy avatars_insert_own on storage.objects
 -- reachable) and `with check` (what the replaced row is allowed to look
 -- like afterward) are scoped identically, so this policy alone cannot be
 -- used to move/rename an object into another user's folder either.
+drop policy if exists avatars_update_own on storage.objects;
 create policy avatars_update_own on storage.objects
   for update to authenticated
   using (
@@ -142,6 +167,7 @@ create policy avatars_update_own on storage.objects
 -- so this bucket is never left with an insert/update-only, delete-denied-
 -- for-everyone gap that would silently accumulate orphaned objects with no
 -- owner-initiated way to clean them up.
+drop policy if exists avatars_delete_own on storage.objects;
 create policy avatars_delete_own on storage.objects
   for delete to authenticated
   using (
