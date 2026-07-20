@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 /**
- * T028: tests for `AdminToggles.tsx`.
+ * T028: tests for `AdminToggles.tsx`. T104 (ED-1 Packet P11) UPDATE: adds
+ * coverage for the now-real `loadPrivacySetting`/`onTogglePrivacy` defaults
+ * (`../../lib/supabase/loaders/leaderboard_privacy.ts`) and removes the
+ * now-stale schema-gap-disclosure-`Banner` describe block (that `Banner` no
+ * longer exists in `AdminToggles.tsx` -- module doc #2 UPDATE there).
  *
  * Per this task's Allowed Files ("A colocated `AdminToggles.test.tsx` is
  * acceptable per established precedent") this is a deliberate, disclosed
@@ -20,8 +24,19 @@
  *      user sees nothing, and only an `admin` sees the widget.
  *   3. Real proof the season default-goal shortcut `Link` resolves to
  *      `/settings/season` (module doc #6) -- a real `<a href>`, not a stub.
- *   4. Real proof the schema-gap disclosure `Banner` (module docs #1/#2) is
- *      visible and dismissable.
+ *   4. T104: real proof of `makeLoadPrivacySetting`/`makeTogglePrivacy`
+ *      (`../../lib/supabase/loaders/leaderboard_privacy.ts`) against a
+ *      stubbed `SupabaseClient` -- same DI pattern
+ *      `SeasonSettings.test.tsx`/T091 already established for
+ *      `loaders/seasons.ts`'s own `makeLoadSeasons`/etc. (that module
+ *      likewise has no dedicated test file of its own).
+ *
+ * Every render-level test below now injects `loadPrivacySetting`/
+ * `onTogglePrivacy` explicitly through the component's own seam (same
+ * "inject the fixture explicitly" pattern `SeasonSettings.test.tsx`/T091
+ * already established for its own now-real `loadData`/etc. defaults) --
+ * none rely on the real default any more, since that now performs a real
+ * network call requiring a configured Supabase client.
  *
  * No `@testing-library/react` is installed in this repo (confirmed via
  * `package.json`) -- these tests use the same raw `createRoot`/`act` pattern
@@ -37,9 +52,14 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthUser } from '../../app/guards';
 import { LoginAsDeferred as LoginAs } from '../../test-utils/authHarness';
+import {
+  makeLoadPrivacySetting,
+  makeTogglePrivacy,
+} from '../../lib/supabase/loaders/leaderboard_privacy';
 import { AdminToggles, defaultLoadPrivacySetting, defaultOnTogglePrivacy } from './AdminToggles';
 
 // ---------------------------------------------------------------------------
@@ -127,7 +147,7 @@ describe('<AdminToggles /> admin-only gate (module doc #5)', () => {
   });
 
   it('renders the widget for an admin', async () => {
-    renderToggles(ADMIN_USER);
+    renderToggles(ADMIN_USER, { loadPrivacySetting: defaultLoadPrivacySetting });
     await flushMicrotasks();
     expect(container.textContent).toContain('Show first name + last initial publicly');
   });
@@ -184,7 +204,7 @@ describe('<AdminToggles /> leaderboard privacy Switch (SEC-04, module doc #4)', 
 
 describe('<AdminToggles /> season default-goal shortcut (module doc #6)', () => {
   it('renders a real link to /settings/season', async () => {
-    renderToggles(ADMIN_USER);
+    renderToggles(ADMIN_USER, { loadPrivacySetting: defaultLoadPrivacySetting });
     await flushMicrotasks();
 
     const link = Array.from(container.querySelectorAll('a')).find((a) =>
@@ -196,32 +216,122 @@ describe('<AdminToggles /> season default-goal shortcut (module doc #6)', () => 
 });
 
 // ---------------------------------------------------------------------------
-// Schema-gap disclosure banner -- module docs #1/#2.
+// T104 UPDATE: the schema-gap disclosure Banner describe block that used to
+// live here is REMOVED -- `AdminToggles.tsx`'s own `SCHEMA_GAP_BANNER` no
+// longer exists (module doc #2 UPDATE there): the gap it disclosed is
+// genuinely closed by this same task's migration + real loader below.
 // ---------------------------------------------------------------------------
 
-describe('<AdminToggles /> schema-gap disclosure Banner (module docs #1/#2)', () => {
-  it('is visible by default, disclosing the missing persistence column', async () => {
-    renderToggles(ADMIN_USER);
-    await flushMicrotasks();
+// ---------------------------------------------------------------------------
+// T104: real `loadPrivacySetting`/`onTogglePrivacy` defaults --
+// `makeLoadPrivacySetting`/`makeTogglePrivacy`
+// (`../../lib/supabase/loaders/leaderboard_privacy.ts`), against a stubbed
+// `SupabaseClient`. Same DI pattern `SeasonSettings.test.tsx`/T091 already
+// established for `loaders/seasons.ts`'s own loader-level tests (that
+// module likewise has no dedicated test file of its own).
+// ---------------------------------------------------------------------------
 
-    expect(container.textContent).toContain('Leaderboard privacy setting is not saved yet');
-    expect(container.textContent).toContain('seasons');
+/** Minimal fake `SupabaseClient` supporting exactly the chain
+ * `client.from('seasons').select('leaderboard_privacy_enabled').eq('is_active', true).maybeSingle()`. */
+function makeFakeSelectEqMaybeSingleClient(result: { data: unknown; error: unknown }): {
+  client: SupabaseClient;
+  fromSpy: ReturnType<typeof vi.fn>;
+  selectSpy: ReturnType<typeof vi.fn>;
+  eqSpy: ReturnType<typeof vi.fn>;
+  maybeSingleSpy: ReturnType<typeof vi.fn>;
+} {
+  const maybeSingleSpy = vi.fn().mockResolvedValue(result);
+  const eqSpy = vi.fn(() => ({ maybeSingle: maybeSingleSpy }));
+  const selectSpy = vi.fn(() => ({ eq: eqSpy }));
+  const fromSpy = vi.fn(() => ({ select: selectSpy }));
+  const client = { from: fromSpy } as unknown as SupabaseClient;
+  return { client, fromSpy, selectSpy, eqSpy, maybeSingleSpy };
+}
+
+describe('makeLoadPrivacySetting (T104 real read)', () => {
+  it('queries seasons.leaderboard_privacy_enabled for the currently-active season', async () => {
+    const { client, fromSpy, selectSpy, eqSpy } = makeFakeSelectEqMaybeSingleClient({
+      data: { leaderboard_privacy_enabled: false },
+      error: null,
+    });
+    const load = makeLoadPrivacySetting(() => client);
+
+    const result = await load();
+
+    expect(fromSpy).toHaveBeenCalledWith('seasons');
+    expect(selectSpy).toHaveBeenCalledWith('leaderboard_privacy_enabled');
+    expect(eqSpy).toHaveBeenCalledWith('is_active', true);
+    expect(result).toBe(false);
   });
 
-  it('can be dismissed', async () => {
-    renderToggles(ADMIN_USER);
-    await flushMicrotasks();
+  it('resolves the true SEC-04 default when no season is currently active (data: null, error: null)', async () => {
+    const { client } = makeFakeSelectEqMaybeSingleClient({ data: null, error: null });
+    const load = makeLoadPrivacySetting(() => client);
 
-    expect(container.textContent).toContain('Leaderboard privacy setting is not saved yet');
+    expect(await load()).toBe(true);
+  });
 
-    const dismissButton = Array.from(container.querySelectorAll('button')).find((btn) =>
-      btn.getAttribute('aria-label')?.toLowerCase().includes('dismiss'),
-    );
-    expect(dismissButton, 'expected a dismiss button on the Banner').toBeTruthy();
-    act(() => {
-      dismissButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  it('rejects with the real SupabaseLoaderError on a genuine query error -- no fixture fallback', async () => {
+    const { client } = makeFakeSelectEqMaybeSingleClient({
+      data: null,
+      error: { message: 'permission denied for table seasons', code: '42501' },
     });
+    const load = makeLoadPrivacySetting(() => client);
 
-    expect(container.textContent).not.toContain('Leaderboard privacy setting is not saved yet');
+    await expect(load()).rejects.toMatchObject({ code: '42501', message: expect.any(String) });
+  });
+});
+
+/** Minimal fake `SupabaseClient` supporting exactly the chain
+ * `client.from('seasons').update({...}).eq('is_active', true)`. */
+function makeFakeUpdateEqClient(result: { data: unknown; error: unknown }): {
+  client: SupabaseClient;
+  fromSpy: ReturnType<typeof vi.fn>;
+  updateSpy: ReturnType<typeof vi.fn>;
+  eqSpy: ReturnType<typeof vi.fn>;
+} {
+  const eqSpy = vi.fn().mockResolvedValue(result);
+  const updateSpy = vi.fn(() => ({ eq: eqSpy }));
+  const fromSpy = vi.fn(() => ({ update: updateSpy }));
+  const client = { from: fromSpy } as unknown as SupabaseClient;
+  return { client, fromSpy, updateSpy, eqSpy };
+}
+
+describe('makeTogglePrivacy (T104 real write)', () => {
+  it('updates seasons.leaderboard_privacy_enabled for the currently-active season', async () => {
+    const { client, fromSpy, updateSpy, eqSpy } = makeFakeUpdateEqClient({
+      data: null,
+      error: null,
+    });
+    const toggle = makeTogglePrivacy(() => client);
+
+    await toggle(false);
+
+    expect(fromSpy).toHaveBeenCalledWith('seasons');
+    expect(updateSpy).toHaveBeenCalledWith({ leaderboard_privacy_enabled: false });
+    expect(eqSpy).toHaveBeenCalledWith('is_active', true);
+  });
+
+  it('resolves successfully even when zero rows match (disclosed "no currently-active season" risk)', async () => {
+    // A real Postgrest UPDATE matching zero rows still resolves
+    // `{ data: null, error: null }` -- independently confirmed against a
+    // real scratch-Postgres run for this task (Required Worker Output).
+    const { client } = makeFakeUpdateEqClient({ data: null, error: null });
+    const toggle = makeTogglePrivacy(() => client);
+
+    await expect(toggle(true)).resolves.toBeUndefined();
+  });
+
+  it('rejects with the real SupabaseLoaderError on a genuine mutation error', async () => {
+    const { client } = makeFakeUpdateEqClient({
+      data: null,
+      error: { message: 'permission denied for table seasons', code: '42501' },
+    });
+    const toggle = makeTogglePrivacy(() => client);
+
+    await expect(toggle(false)).rejects.toMatchObject({
+      code: '42501',
+      message: expect.any(String),
+    });
   });
 });

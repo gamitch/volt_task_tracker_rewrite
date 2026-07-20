@@ -59,40 +59,62 @@
  * of finding T009's MINOR follow-ups (`avatar_url`, `notes` nullability)
  * already established a precedent for in this project.
  *
+ * RESOLVED (T104, ED-1 Packet P11): the column now genuinely exists --
+ * `supabase/migrations/20260720000000_leaderboard_privacy.sql` (read-only
+ * reference here). Table placement (`seasons`) was kept exactly as reasoned
+ * above; the COLUMN NAME was independently re-verified and deliberately
+ * DEVIATED to `seasons.leaderboard_privacy_enabled` (not the
+ * `leaderboard_show_full_name` guessed above) -- see that migration file's
+ * own header comment for the full reasoning: this toggle never reveals a
+ * full name in EITHER state (ON = "First L.", OFF = a fully anonymized
+ * label, per module doc #4 below and `Leaderboard.tsx`'s own confirmed
+ * semantics), so a column literally named "show_full_name" would have
+ * misdescribed what it gates. Module doc #3 below (formerly "no shared
+ * Supabase client wired in yet") documents the real wiring this task adds.
+ *
  * -----------------------------------------------------------------------
  * 2. In-UI disclosure of the gap -- a real, visible `Banner`, not just a
- *    code comment.
- *
- * `SCHEMA_GAP_BANNER` below is rendered unconditionally whenever this
- * component is visible to an admin, `status="warning"` (a real, standing
- * limitation admins should know about -- not a transient info/stub notice
- * like `StudentsTab.tsx`'s "not built yet" banners), `isDismissable` so it
- * doesn't permanently clutter the page once read once per session.
+ *    code comment. RESOLVED (T104): this section originally described a
+ *    real, standing `SCHEMA_GAP_BANNER` rendered unconditionally whenever
+ *    this component was visible to an admin; that banner is REMOVED as of
+ *    T104 (module doc #3 UPDATE below) since the gap it disclosed no longer
+ *    exists -- this section is kept, not deleted, so the "was this ever a
+ *    real gap" history stays visible. The `Banner` import/usage below is
+ *    now used only for the pre-existing DES-12 loading-error state (module
+ *    doc #7's Astryx citation), not for this now-closed disclosure.
  *
  * -----------------------------------------------------------------------
- * 3. No shared Supabase client wired in yet -- same disclosed, deliberate
- *    scope every prior content page in this batch has used, one level
- *    deeper here (packet's own framing: "the gap is one level deeper -- no
- *    *column* exists yet, not just no *client*").
+ * 3. T104 (ED-1 Packet P11) UPDATE -- real Supabase wiring. This section
+ *    originally described a fixture-only file with no shared Supabase
+ *    client anywhere in it and no persistence column for that client to
+ *    write to; NEITHER is true anymore, and this section is kept (not
+ *    deleted) so the "was this ever real" history stays visible.
  *
- * `loadPrivacySetting` (`LoadPrivacySettingFn`) and `onTogglePrivacy`
- * (`TogglePrivacyFn`) are both injectable props, defaulting to
- * `defaultLoadPrivacySetting` (resolves `true`, SEC-04's default) and
- * `defaultOnTogglePrivacy` (an in-memory no-op that resolves after a
- * microtask, simulating a real persistence call's async shape without
- * inventing a fake column write). A real caller, once both a shared
- * Supabase client AND the schema gap above are resolved by their own
- * properly-scoped future tasks, supplies its own `loadPrivacySetting`/
- * `onTogglePrivacy` props -- this component's public contract does not
- * change either way.
+ * `loadPrivacySetting`/`onTogglePrivacy` now default to the real
+ * `loadPrivacySetting`/`togglePrivacy` from
+ * `../../lib/supabase/loaders/leaderboard_privacy` (T104) -- a real query/
+ * update against `public.seasons.leaderboard_privacy_enabled`, scoped to
+ * the currently-active season (see that module's own doc comment for the
+ * full reasoning, including the disclosed "no currently-active season"
+ * risk for the write side). The original fixture-backed
+ * `defaultLoadPrivacySetting`/`defaultOnTogglePrivacy` functions below are
+ * KEPT as named exports (same posture `SeasonSettings.tsx`/T091 already
+ * established for its own `defaultLoadSeasons`/etc.) -- tests inject them
+ * explicitly through these same props where fixture behavior is still
+ * useful to exercise, rather than relying on them being the default.
  *
  * -----------------------------------------------------------------------
  * 4. SEC-04 default-ON -- genuinely defaults ON, not OFF.
  *
- * `defaultLoadPrivacySetting` resolves `true` (module doc #3). The `Switch`
- * below is fully controlled by the resolved value (never separately
- * hardcoded), so the real, checker-scrutinized default is provably the
- * fixture's own resolved value, not a UI-only illusion. Toggling is real:
+ * The real default `loadPrivacySetting` (module doc #3 UPDATE) resolves the
+ * currently-active season's real `leaderboard_privacy_enabled` column value
+ * (falling back to `true` only when no season is currently active --
+ * `../../lib/supabase/loaders/leaderboard_privacy.ts`'s own doc comment);
+ * `defaultLoadPrivacySetting` below (kept as a named export, module doc #3
+ * UPDATE) still resolves a fixture `true` for tests that want that
+ * explicitly. The `Switch` below is fully controlled by the resolved value
+ * (never separately hardcoded), so the real, checker-scrutinized default is
+ * provably the resolved value, not a UI-only illusion. Toggling is real:
  * `handleChange` optimistically updates local state and `handlePersist`
  * (passed as `Switch`'s `changeAction`) calls the injectable seam, so the
  * on-screen Switch state and the "would-be persisted" value never drift
@@ -206,6 +228,10 @@ import {
 } from '@astryxdesign/core';
 import { useAuth } from '../../app/guards';
 import { routePaths } from '../../app/router';
+import {
+  loadPrivacySetting as realLoadPrivacySetting,
+  togglePrivacy as realTogglePrivacy,
+} from '../../lib/supabase/loaders/leaderboard_privacy';
 
 // ---------------------------------------------------------------------------
 // Route target -- module doc #6.
@@ -220,29 +246,28 @@ const SEASON_SETTINGS_PATH = `${routePaths.settings}/season`;
 export type LoadPrivacySettingFn = () => Promise<boolean>;
 export type TogglePrivacyFn = (nextValue: boolean) => Promise<void>;
 
-/** SEC-04's stated default: ON (private / initials-only leaderboard display). */
+/**
+ * T104 UPDATE: no longer the component's default `loadPrivacySetting` --
+ * that's now the real `loadPrivacySetting` from
+ * `../../lib/supabase/loaders/leaderboard_privacy` (module doc #3 UPDATE).
+ * Kept as a named export, fixture literal unchanged (SEC-04's stated
+ * default: ON), for tests (and any future caller) that want fixture
+ * behavior explicitly rather than relying on it being the implicit
+ * default.
+ */
 export async function defaultLoadPrivacySetting(): Promise<boolean> {
   return true;
 }
 
 /**
- * In-memory placeholder persistence -- no real column exists yet (module
- * doc #1), so this deliberately does nothing beyond simulating an async
- * round trip. A real caller supplies its own `onTogglePrivacy` once both a
- * shared Supabase client and a persistence column exist.
+ * T104 UPDATE: no longer the component's default `onTogglePrivacy` --
+ * that's now the real `togglePrivacy` from
+ * `../../lib/supabase/loaders/leaderboard_privacy` (module doc #3 UPDATE).
+ * Kept as a named export, unchanged in-memory-no-op behavior, for tests/
+ * future callers that want this fixture explicitly.
  */
 export const defaultOnTogglePrivacy: TogglePrivacyFn = async () => {
   await Promise.resolve();
-};
-
-// ---------------------------------------------------------------------------
-// Schema-gap disclosure banner content -- module docs #1/#2.
-// ---------------------------------------------------------------------------
-
-const SCHEMA_GAP_BANNER = {
-  title: 'Leaderboard privacy setting is not saved yet',
-  description:
-    'ROS-08 expects this toggle to persist a season- or team-scoped setting for a future leaderboard (T044) to read, but no matching column exists on profiles, teams, seasons, or any other table in the current schema (confirmed against every migration in supabase/migrations/). This toggle works, but only holds its value in memory for this session -- it does not survive a page reload until a follow-up migration task adds a real persistence column (most likely on seasons, since privacy plausibly varies per season the same way default_goal_hours already does; teams is a plausible alternative if it should vary per team instead).',
 };
 
 // ---------------------------------------------------------------------------
@@ -287,20 +312,23 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
 // ---------------------------------------------------------------------------
 
 export interface AdminTogglesProps {
-  /** Injectable data-loading seam (module doc #3). Defaults to the SEC-04-ON fixture. */
+  /** Injectable data-loading seam (module doc #3 UPDATE). Defaults to the
+   * real `loadPrivacySetting`
+   * (`../../lib/supabase/loaders/leaderboard_privacy`). */
   loadPrivacySetting?: LoadPrivacySettingFn;
-  /** Injectable persistence seam (module doc #3). Defaults to an in-memory no-op. */
+  /** Injectable persistence seam (module doc #3 UPDATE). Defaults to the
+   * real `togglePrivacy`
+   * (`../../lib/supabase/loaders/leaderboard_privacy`). */
   onTogglePrivacy?: TogglePrivacyFn;
 }
 
 export function AdminToggles({
-  loadPrivacySetting = defaultLoadPrivacySetting,
-  onTogglePrivacy = defaultOnTogglePrivacy,
+  loadPrivacySetting = realLoadPrivacySetting,
+  onTogglePrivacy = realTogglePrivacy,
 }: AdminTogglesProps = {}): ReactNode {
   const { user, isLoading: isAuthLoading } = useAuth();
   const loadState = useLoadState(loadPrivacySetting, [loadPrivacySetting]);
   const [privacyOn, setPrivacyOn] = useState<boolean>(true);
-  const [isGapBannerDismissed, setIsGapBannerDismissed] = useState(false);
 
   useEffect(() => {
     if (loadState.status === 'success') {
@@ -357,16 +385,6 @@ export function AdminToggles({
   return (
     <VStack gap={4} padding={6}>
       <Heading level={2}>Admin settings</Heading>
-
-      {!isGapBannerDismissed && (
-        <Banner
-          status="warning"
-          title={SCHEMA_GAP_BANNER.title}
-          description={SCHEMA_GAP_BANNER.description}
-          isDismissable
-          onDismiss={() => setIsGapBannerDismissed(true)}
-        />
-      )}
 
       <Switch
         label="Show first name + last initial publicly"

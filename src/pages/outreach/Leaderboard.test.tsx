@@ -1,6 +1,17 @@
 // @vitest-environment jsdom
 /**
- * T044: tests for `Leaderboard.tsx`.
+ * T044: tests for `Leaderboard.tsx`. T104 (ED-1 Packet P11) UPDATE: every
+ * render-level test now injects `loadPrivacySetting` explicitly through the
+ * component's own seam (same "inject the fixture explicitly" pattern
+ * `SeasonSettings.test.tsx`/T091 already established for its own now-real
+ * `loadData`/etc. defaults) -- `loadPrivacySetting`'s real default now
+ * performs a real Supabase query
+ * (`../../lib/supabase/loaders/leaderboard_privacy.ts`), so tests that used
+ * to rely on the implicit (fixture) default now inject
+ * `defaultLoadPrivacySetting` explicitly to keep deterministic, network-free
+ * coverage. `loadData` is UNCHANGED (still the real, unmocked fixture
+ * default -- out of scope for T104, module doc #4 UPDATE in
+ * `Leaderboard.tsx`).
  *
  * Per this task's Allowed Files (a colocated test file "is acceptable per
  * established precedent") this is the same class of disclosed addition
@@ -22,7 +33,9 @@
  */
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { makeLoadPrivacySetting } from '../../lib/supabase/loaders/leaderboard_privacy';
 import {
   ANONYMIZED_STUDENT_LABEL,
   defaultLoadLeaderboardData,
@@ -180,6 +193,55 @@ describe('defaultLoadPrivacySetting', () => {
 });
 
 // ---------------------------------------------------------------------------
+// T104: `Leaderboard.tsx`'s own real `loadPrivacySetting` default is the
+// SAME SHARED `makeLoadPrivacySetting`/`loadPrivacySetting`
+// (`../../lib/supabase/loaders/leaderboard_privacy.ts`) `AdminToggles.tsx`
+// also defaults to (module doc #4 UPDATE, and that loader module's own doc
+// comment's shared-vs-separate decision). Full branch coverage of
+// `makeLoadPrivacySetting` (including the genuine-query-error path) already
+// lives in `AdminToggles.test.tsx` -- not duplicated verbatim here; these
+// two tests confirm this SECOND real consumer is genuinely wired to the
+// same function with the same real query/fallback behavior, against a
+// stubbed `SupabaseClient` (same DI pattern as `AdminToggles.test.tsx`).
+// ---------------------------------------------------------------------------
+
+function makeFakeSelectEqMaybeSingleClient(result: { data: unknown; error: unknown }): {
+  client: SupabaseClient;
+  fromSpy: ReturnType<typeof vi.fn>;
+  selectSpy: ReturnType<typeof vi.fn>;
+  eqSpy: ReturnType<typeof vi.fn>;
+} {
+  const maybeSingleSpy = vi.fn().mockResolvedValue(result);
+  const eqSpy = vi.fn(() => ({ maybeSingle: maybeSingleSpy }));
+  const selectSpy = vi.fn(() => ({ eq: eqSpy }));
+  const fromSpy = vi.fn(() => ({ select: selectSpy }));
+  const client = { from: fromSpy } as unknown as SupabaseClient;
+  return { client, fromSpy, selectSpy, eqSpy };
+}
+
+describe('makeLoadPrivacySetting (T104, shared with AdminToggles.tsx)', () => {
+  it('queries seasons.leaderboard_privacy_enabled for the currently-active season', async () => {
+    const { client, fromSpy, selectSpy, eqSpy } = makeFakeSelectEqMaybeSingleClient({
+      data: { leaderboard_privacy_enabled: false },
+      error: null,
+    });
+    const load = makeLoadPrivacySetting(() => client);
+
+    expect(await load()).toBe(false);
+    expect(fromSpy).toHaveBeenCalledWith('seasons');
+    expect(selectSpy).toHaveBeenCalledWith('leaderboard_privacy_enabled');
+    expect(eqSpy).toHaveBeenCalledWith('is_active', true);
+  });
+
+  it('resolves the true SEC-04 default when no season is currently active', async () => {
+    const { client } = makeFakeSelectEqMaybeSingleClient({ data: null, error: null });
+    const load = makeLoadPrivacySetting(() => client);
+
+    expect(await load()).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Component render -- DES-12-style states + the BLOCKER-class privacy proof.
 // ---------------------------------------------------------------------------
 
@@ -198,6 +260,7 @@ describe('Leaderboard render states', () => {
   it('shows an empty state when there are no hours rows for the season', async () => {
     renderLeaderboard({
       loadData: async () => ({ hours: [], students: [] }),
+      loadPrivacySetting: defaultLoadPrivacySetting,
       seasonId: 'season-empty',
     });
     await flushMicrotasks();
@@ -205,7 +268,12 @@ describe('Leaderboard render states', () => {
   });
 
   it('renders the section heading and top-10 list using the default (unmocked) fixture data', async () => {
-    renderLeaderboard();
+    // `loadData` is the real, unmocked fixture default (module doc #4
+    // UPDATE: still out of scope for T104); `loadPrivacySetting` is
+    // injected explicitly (T104 UPDATE: its real default now performs a
+    // real Supabase query, so tests inject the fixture through the seam
+    // instead of relying on the implicit default -- module doc above).
+    renderLeaderboard({ loadPrivacySetting: defaultLoadPrivacySetting });
     await flushMicrotasks();
     expect(container.textContent).toContain('Season Volunteer Leaderboard');
     expect(container.textContent).toContain('Top students by season volunteer hours');
@@ -219,12 +287,14 @@ describe('Leaderboard render states', () => {
 });
 
 describe('Leaderboard SEC-04/ROS-08 privacy proof (BLOCKER-class)', () => {
-  it('ON (the real, unmocked default): renders "First L." and the full last name is provably absent from the entire DOM', async () => {
-    // Deliberately NOT overriding loadPrivacySetting -- this exercises the
-    // component's real default (Leaderboard.tsx module doc #4: defaults to
-    // ON), against the real (unmocked) fixture loader's distinctive-last-
-    // name student.
-    renderLeaderboard();
+  it('ON (via the fixture default, module doc #4 UPDATE): renders "First L." and the full last name is provably absent from the entire DOM', async () => {
+    // T104 UPDATE: `loadPrivacySetting`'s real default now performs a real
+    // Supabase query (module doc above), so this test injects the fixture
+    // default explicitly to exercise the SEC-04 ON default deterministically
+    // -- same "inject the fixture explicitly" pattern this file's own
+    // module doc now establishes throughout. `defaultLoadPrivacySetting`'s
+    // own unit test (below) independently proves it resolves `true`.
+    renderLeaderboard({ loadPrivacySetting: defaultLoadPrivacySetting });
     await flushMicrotasks();
 
     expect(container.textContent).toContain('Zephyrine W.');

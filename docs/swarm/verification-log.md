@@ -3749,3 +3749,60 @@ only, not a T106 defect) that repo-wide suite/typecheck runs fluctuated during
 verification purely due to sibling tasks T103/T104/T105 actively editing files in
 the same shared tree at the time — every such failure traced to those files, none
 to T106's.
+
+---
+
+## T104 (ED-1 Packet P11) — leaderboard-privacy schema gap: new migration + real wiring
+
+**PASS (1st attempt, clean).** Closes a genuine schema gap two already-Passed tasks
+(T028 `AdminToggles.tsx`, T044 `Leaderboard.tsx`) each independently investigated
+and disclosed as a dispute candidate: no persisted column existed anywhere for
+ROS-08's leaderboard-privacy toggle. The new additive migration adds
+`seasons.leaderboard_privacy_enabled boolean not null default true`.
+
+The column name is a documented, evidence-based **deviation** from T028's own
+guessed name (`leaderboard_show_full_name`) — the worker read `AdminToggles.tsx`'s
+actual shipped `Switch` description and `Leaderboard.tsx`'s actual
+`formatDisplayName` directly and found the real semantics: ON renders `"First
+L."` (first name + a single initial, never a full last name), OFF renders a fixed,
+fully-anonymized label, never any part of the real name. A full name is genuinely
+never shown in either state, so a column literally named `show_full_name` would be
+a real, misleading misnomer. Checker independently re-read both files and confirmed
+this reasoning holds against the actual shipped code, not just the worker's
+paraphrase — the same evidence-grounded-deviation standard T102's checker held
+that task's own deviation to.
+
+Checker did not stop at reading the SQL: it built its own live scratch PostgreSQL
+16 cluster (real `seasons` DDL, the actual `is_staff()`/RLS policy definitions,
+the actual migration file applied on top) and independently reproduced all six of
+the worker's claimed session-level RLS behaviors as real, non-superuser
+`authenticated` roles with `auth.uid()` set via GUC: an admin session can write the
+column (persisted); a coach session can too (confirming `is_staff()`'s existing
+admin-or-coach floor extends automatically to the new column, since Postgres RLS
+here is row-level with no column grants anywhere in the schema); a student session
+can read but not write it (a real `UPDATE 0`, RLS-blocked, not merely UI-hidden);
+an insert with the column unspecified defaults to `true`; and a write against zero
+currently-active seasons resolves a real no-op with no error, matching the
+production state at the time of this check.
+
+Column placement (`seasons`, not `teams`) was independently re-verified against
+`seasons.default_goal_hours` as the existing per-period-configurable-value
+precedent and `Leaderboard.tsx`'s own single, unsplit top-10 list per season.
+`AdminToggles.tsx`/`Leaderboard.tsx` share one real `loadPrivacySetting` (both need
+the identical current-active-season value, no caller-specific variation, unlike
+T101's genuinely-different RSVP actors); `togglePrivacy` exists only for
+`AdminToggles.tsx`. The worker deliberately did not import `loaders/seasons.ts`'s
+`loadActiveSeason` because that module's own doc comment restricts it to
+`SeasonProvider.tsx` only — checker confirmed that restriction is real and that the
+new loader instead independently re-queries `is_active = true`, honoring it rather
+than working around it.
+
+typecheck/lint/format:check/build all clean; new tests 15/15 (`AdminToggles`) +
+19/19 (`Leaderboard`), non-tautological (assert the real query args/persisted
+values against a stubbed `SupabaseClient`). Full suite 1154/1156 — the 2 failures
+were independently confirmed to be the same recurring `RosterShell.test.tsx`
+fallout pattern already fixed three times in this project's history (T088, T092,
+T097): a sibling shell renders `AdminToggles` with zero props, and the now-real
+`loadPrivacySetting` default fails against a test environment with no Supabase
+config. `RosterShell.tsx`/`RosterShell.test.tsx` are forbidden files, confirmed
+untouched — a same-shaped follow-up task is recommended, not a T104 defect.

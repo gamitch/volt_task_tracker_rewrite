@@ -78,6 +78,22 @@
  * -- this task does not resolve the missing-column gap, only inherits and
  * discloses it a second time from the consuming side.
  *
+ * RESOLVED (T104, ED-1 Packet P11): the column now genuinely exists as
+ * `seasons.leaderboard_privacy_enabled` (deliberately NOT the
+ * `leaderboard_show_full_name` name speculated above -- see this task's own
+ * migration, `supabase/migrations/20260720000000_leaderboard_privacy.sql`,
+ * for the full re-verified reasoning, including why that guessed name would
+ * have misdescribed a toggle that never reveals a full name in either
+ * state, exactly as this file's own module doc #5 below already
+ * establishes). `loadPrivacySetting` now defaults to the real, SHARED
+ * `loadPrivacySetting` from `../../lib/supabase/loaders/leaderboard_privacy`
+ * -- the SAME function `AdminToggles.tsx` also now defaults to (that
+ * module's own doc comment documents the shared-vs-separate decision in
+ * full) -- so both files read the exact same currently-active season's
+ * real privacy flag. `defaultLoadPrivacySetting` below is KEPT as a named
+ * export, fixture literal unchanged, for tests that want fixture behavior
+ * explicitly.
+ *
  * -----------------------------------------------------------------------
  * 5. Toggle-OFF semantics -- an explicit, disclosed investigation
  *    (Known Context/Traps #3 of this task's packet), CONFIRMED against
@@ -171,6 +187,7 @@ import {
   VisuallyHidden,
   VStack,
 } from '@astryxdesign/core';
+import { loadPrivacySetting as realLoadPrivacySetting } from '../../lib/supabase/loaders/leaderboard_privacy';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase rename of `v_student_hours`'s real column
@@ -359,8 +376,19 @@ export function formatDisplayName(displayName: string, isPrivacyOn: boolean): st
 
 // ---------------------------------------------------------------------------
 // Fixture loaders -- obviously-fake defaults for the injectable seams
-// (module docs #4/#7). Real callers (once a shared Supabase client and a
-// real privacy-setting column/AdminToggles.tsx exist) pass their own.
+// (module docs #4/#7).
+//
+// `defaultLoadLeaderboardData` (`loadData`) remains this component's real
+// default -- OUT OF SCOPE for T104 (that task's own Allowed Files wire only
+// `loadPrivacySetting`, not `loadData`/`seasonId`; this component's own
+// hours/roster data is still fixture-sourced pending a future wiring task,
+// same disclosed limitation as before T104).
+//
+// `defaultLoadPrivacySetting` is T104 UPDATE: no longer the component's
+// default `loadPrivacySetting` -- that's now the real, SHARED
+// `loadPrivacySetting` from `../../lib/supabase/loaders/leaderboard_privacy`
+// (module doc #4 UPDATE). Kept as a named export, fixture literal
+// unchanged, for tests that want fixture behavior explicitly.
 // ---------------------------------------------------------------------------
 
 export async function defaultLoadLeaderboardData(seasonId: string): Promise<LeaderboardLoadResult> {
@@ -428,16 +456,20 @@ function useLeaderboardData(
 
 export interface LeaderboardProps {
   /** Injectable data-loading seam (module doc #7). Defaults to fixture
-   * data. */
+   * data (module doc #4 UPDATE: still out of scope for T104, unlike
+   * `loadPrivacySetting` below). */
   loadData?: LoadLeaderboardDataFn;
-  /** Injectable privacy-setting seam (module doc #4). Defaults to ON. */
+  /** Injectable privacy-setting seam (module doc #4). Defaults to the real,
+   * SHARED `loadPrivacySetting`
+   * (`../../lib/supabase/loaders/leaderboard_privacy`, module doc #4
+   * UPDATE) -- the same function `AdminToggles.tsx` also defaults to. */
   loadPrivacySetting?: LoadPrivacySettingFn;
   seasonId?: string;
 }
 
 export function Leaderboard({
   loadData = defaultLoadLeaderboardData,
-  loadPrivacySetting = defaultLoadPrivacySetting,
+  loadPrivacySetting = realLoadPrivacySetting,
   seasonId = PLACEHOLDER_SEASON_ID,
 }: LeaderboardProps = {}): ReactNode {
   const state = useLeaderboardData(loadData, loadPrivacySetting, seasonId);
