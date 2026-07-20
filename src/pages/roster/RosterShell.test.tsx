@@ -50,6 +50,17 @@
  * one function needed, re-export everything else via `importOriginal`),
  * fixing the one test that asserted the OLD `StudentsTab` fixture content
  * (`'Amara Voss'`) on the initially-active Students tab.
+ *
+ * T097: T094 did the identical thing to the remaining two roster tabs at
+ * once -- `TeamsTab.tsx`'s and `ParentsTab.tsx`'s default `loadData` were
+ * each switched from a fixture stub to a real Supabase-backed loader
+ * (`loadTeamsTabData`/`../../lib/supabase/loaders/teams`,
+ * `loadParentsTabData`/`../../lib/supabase/loaders/parents`), which also
+ * correctly reject in this test environment. This file mocks both at the
+ * same module boundary, identical shape to T088's/T092's mocks directly
+ * above, fixing the two tests that asserted the OLD `TeamsTab`/`ParentsTab`
+ * fixture content (`'Embercore'`/`'Renata Alvarez'`) when those tabs are
+ * selected.
  */
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -62,6 +73,15 @@ import type { InviteRow, InvitesTabLoadResult } from './InvitesTab';
 import { loadInvitesTabData } from '../../lib/supabase/loaders/invites';
 import type { StudentRow, StudentsTabLoadResult, TeamRow } from './StudentsTab';
 import { loadStudentsTabData } from '../../lib/supabase/loaders/students';
+import type { TeamRow as TeamsTabTeamRow, TeamsTabLoadResult } from './TeamsTab';
+import { loadTeamsTabData } from '../../lib/supabase/loaders/teams';
+import type {
+  GuardianLinkRow,
+  ParentProfileRow,
+  ParentsTabLoadResult,
+  StudentRow as ParentsTabStudentRow,
+} from './ParentsTab';
+import { loadParentsTabData } from '../../lib/supabase/loaders/parents';
 
 // ---------------------------------------------------------------------------
 // T088: mock `loadInvitesTabData` only -- every other
@@ -133,6 +153,87 @@ const MOCK_STUDENT_ROWS: readonly StudentRow[] = [
 const MOCK_STUDENTS_RESULT: StudentsTabLoadResult = {
   students: MOCK_STUDENT_ROWS,
   teams: MOCK_TEAM_ROWS,
+  invites: [],
+};
+
+// ---------------------------------------------------------------------------
+// T097: mock `loadTeamsTabData` only -- identical pattern to T088's/T092's
+// mocks above, one module over. Every other
+// `../../lib/supabase/loaders/teams` export (`createTeam`, `updateTeam`,
+// `setTeamArchived`, `hardDeleteTeam`, `setTeamSortOrders`, unused by these
+// tests but still real) is re-exported from the real module via
+// `importOriginal`.
+// ---------------------------------------------------------------------------
+vi.mock('../../lib/supabase/loaders/teams', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/supabase/loaders/teams')>();
+  return { ...actual, loadTeamsTabData: vi.fn() };
+});
+
+const mockedLoadTeamsTabData = vi.mocked(loadTeamsTabData);
+
+// Small, deterministic fixture (same row shape as `TeamsTab.tsx`'s own
+// `FIXTURE_TEAMS`, not imported since that constant isn't exported) --
+// covers exactly what the affected test asserts: an "Embercore" team row.
+const MOCK_TEAMS_TAB_TEAM_ROWS: readonly TeamsTabTeamRow[] = [
+  {
+    id: 'team-embercore',
+    name: 'Embercore',
+    shortName: 'EMBR',
+    program: 'Other',
+    color: 'orange',
+    archived: false,
+    sortOrder: 0,
+  },
+];
+
+const MOCK_TEAMS_RESULT: TeamsTabLoadResult = {
+  teams: MOCK_TEAMS_TAB_TEAM_ROWS,
+  studentTeamLinks: [],
+};
+
+// ---------------------------------------------------------------------------
+// T097: mock `loadParentsTabData` only -- identical pattern to T088's/T092's
+// mocks above, one module over. Every other
+// `../../lib/supabase/loaders/parents` export (`unlinkAllStudents`, unused
+// by these tests but still real) is re-exported from the real module via
+// `importOriginal`.
+// ---------------------------------------------------------------------------
+vi.mock('../../lib/supabase/loaders/parents', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/supabase/loaders/parents')>();
+  return { ...actual, loadParentsTabData: vi.fn() };
+});
+
+const mockedLoadParentsTabData = vi.mocked(loadParentsTabData);
+
+// Small, deterministic fixture (same row shape as `ParentsTab.tsx`'s own
+// `FIXTURE_PARENT_PROFILES`, not imported since that constant isn't
+// exported) -- covers exactly what the affected test asserts: a "Renata
+// Alvarez" parent-profile row.
+const MOCK_PARENT_PROFILE_ROWS: readonly ParentProfileRow[] = [
+  {
+    id: 'profile-renata-alvarez',
+    displayName: 'Renata Alvarez',
+    email: 'renata.alvarez@example.com',
+    avatarUrl: null,
+  },
+];
+
+const MOCK_PARENTS_TAB_STUDENT_ROWS: readonly ParentsTabStudentRow[] = [
+  { id: 'student-elena-park', displayName: 'Elena Park' },
+];
+
+const MOCK_GUARDIAN_LINK_ROWS: readonly GuardianLinkRow[] = [
+  {
+    id: 'link-alvarez-elena',
+    parentProfileId: 'profile-renata-alvarez',
+    studentId: 'student-elena-park',
+  },
+];
+
+const MOCK_PARENTS_RESULT: ParentsTabLoadResult = {
+  parentProfiles: MOCK_PARENT_PROFILE_ROWS,
+  guardianLinks: MOCK_GUARDIAN_LINK_ROWS,
+  students: MOCK_PARENTS_TAB_STUDENT_ROWS,
   invites: [],
 };
 
@@ -241,6 +342,8 @@ beforeEach(() => {
   root = createRoot(container);
   mockedLoadInvitesTabData.mockReset().mockResolvedValue(MOCK_INVITES_RESULT);
   mockedLoadStudentsTabData.mockReset().mockResolvedValue(MOCK_STUDENTS_RESULT);
+  mockedLoadTeamsTabData.mockReset().mockResolvedValue(MOCK_TEAMS_RESULT);
+  mockedLoadParentsTabData.mockReset().mockResolvedValue(MOCK_PARENTS_RESULT);
 });
 
 afterEach(() => {

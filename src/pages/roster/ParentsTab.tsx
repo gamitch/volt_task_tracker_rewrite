@@ -10,6 +10,58 @@
  * eventually fills that slot).
  *
  * -----------------------------------------------------------------------
+ * T094 (ED-1 Packet P5) -- real `profiles`/`guardian_links`/`students`/
+ * `invites` data wiring, and the missing mutation seams this file never
+ * actually had before this task. Investigation before dispatch found that
+ * despite module doc #3/#5 below reading as if Remove/Resend were already
+ * real, both mutated ONLY local `setData`/`setRemovedProfileIds` state --
+ * there was no injectable mutation prop anywhere in this file, and
+ * `loadData` itself defaulted to fixture data (module doc #7 below, now
+ * superseded). Closed here, matching the precedent T089 already established
+ * for `StudentsTab.tsx`. New real seams:
+ *   - `loadData` defaults to `loadParentsTabData`
+ *     (`../../lib/supabase/loaders/parents.ts`, T094): real
+ *     `profiles`(`role='parent'`)/`guardian_links`/`students`/`invites`
+ *     query.
+ *   - `onUnlinkAllStudents`: a real `guardian_links` delete for every row
+ *     belonging to the targeted parent -- the "unlink" half of ROS-04's
+ *     "unlink + deactivate profile" Remove action for a profile-backed
+ *     parent. **Disclosed, NOT worked around (this task's own packet
+ *     Objective, restated here at the one place it matters):** `profiles`
+ *     genuinely has no active/inactive column anywhere in the schema
+ *     (independently re-confirmed here: grepped every `create table
+ *     public.profiles`/`alter table public.profiles` statement across every
+ *     migration file in `supabase/migrations/`, found only `id,
+ *     display_name, email, role, avatar_url, theme_mode, created_at` --
+ *     module doc #3(b) below, unchanged from T025's own original finding).
+ *     The "deactivate profile" half of Remove is NOT persisted anywhere by
+ *     this task -- `removedProfileIds` (module doc #3(b) below) remains
+ *     exactly what it always was: local-only React UI state, never written
+ *     to any real column, because no real column exists to write it to. This
+ *     task is explicitly NOT authorized to add a migration for that gap (a
+ *     future, separate schema decision, same class as ROS-08's
+ *     leaderboard-privacy column, which WAS eventually given its own
+ *     migration in T091's own later P11 packet -- this one has not been and
+ *     is not this packet's call to make).
+ *   - Resend/Remove for an invite-only row reuse T090's already-correct,
+ *     already-Passed `resendInvite`/`revokeInvite`
+ *     (`../../lib/supabase/loaders/invites.ts`) DIRECTLY -- imported, not
+ *     reimplemented. This file's own local `InviteRow` (module doc #1 below)
+ *     gained two fields it never needed for DISPLAY (`expiresAt`/
+ *     `createdAt`) purely so a value of this file's own type is structurally
+ *     assignable everywhere `resendInvite`/`revokeInvite`'s own parameter
+ *     type is expected (both real, already-Passed functions' own parameter
+ *     type -- `InvitesTab.tsx`'s local `InviteRow` -- has exactly this same
+ *     seven-field shape; this file's own `InviteRow` is now field-for-field
+ *     identical, so no cross-file type import is needed for the two to be
+ *     structurally compatible under TypeScript's structural typing). An
+ *     email may have MULTIPLE `role='parent'` invite rows (module doc #3
+ *     above), so `handleResendInvite`/`handleConfirmRemove`'s invite-only
+ *     branch each call the real seam once per matching raw invite row (not
+ *     once per display row), mirroring `setInviteStatusForEmail`'s own
+ *     "every matching invite, not just one" local-state semantics.
+ *
+ * -----------------------------------------------------------------------
  * 1. Ground truth -- real column shapes, read directly from the real
  *    migrations (constitution item 3), NOT invented/renamed with extra
  *    fields:
@@ -152,23 +204,21 @@
  * the accurate framing per ROS-04's own vocabulary, not "delete").
  *
  * -----------------------------------------------------------------------
- * 5. Known Context/Traps #4 -- Resend invite: real, working, stub-style.
+ * 5. Known Context/Traps #4 -- Resend invite: real, working. T094 UPDATE:
+ *    genuinely real now, not stub-style -- see this file's own T094 module
+ *    doc above.
  *
- * Per this task's packet: "a real, working stub-style action against the
- * `invites` row targeting this parent ... same posture as every other
- * not-yet-wired-to-Supabase action in this batch (injectable callback,
- * obviously-fake default)". Unlike the inert `EDIT_LINKS_STUB_NOTICE`
- * (which changes nothing), `handleResendInvite` REALLY mutates local state:
- * `setInviteStatusForEmail(..., 'pending')` flips every `role='parent'`
- * invite row sharing that email back to `'pending'` (working even after a
- * prior `Remove` revoked it -- "resend" is exactly how a coach would undo a
- * lapsed/revoked invite), then shows an info `Banner` disclosing that a
- * real send would call the real `supabase/functions/send-invite` edge
- * function, which this component cannot reach (no shared Supabase client
- * wired in yet -- Known Context/Traps #6, same posture as every prior
- * content page). Resend has no `AlertDialog` -- it is not destructive,
- * matching `AlertDialog`'s own "Don't: use for non-destructive actions"
- * guidance (`astryx-api.md` "AlertDialog" Best Practices), the same
+ * `handleResendInvite` REALLY mutates local state (`setInviteStatusForEmail(
+ * ..., 'pending')`, flipping every `role='parent'` invite row sharing that
+ * email back to `'pending'` -- working even after a prior `Remove` revoked
+ * it, "resend" is exactly how a coach would undo a lapsed/revoked invite)
+ * AND, as of T094, genuinely calls the real `resendInvite`
+ * (`../../lib/supabase/loaders/invites.ts`, T090) for every matching raw
+ * invite row, which itself calls the real `send-invite` Edge Function --
+ * this is no longer merely a local flip with a disclosure banner (the
+ * pre-T094 posture, superseded). Resend has no `AlertDialog` -- it is not
+ * destructive, matching `AlertDialog`'s own "Don't: use for non-destructive
+ * actions" guidance (`astryx-api.md` "AlertDialog" Best Practices), the same
  * Deactivate-vs-Reactivate reasoning `StudentsTab.tsx` already applied.
  *
  * -----------------------------------------------------------------------
@@ -188,14 +238,17 @@
  *
  * -----------------------------------------------------------------------
  * 7. Known Context/Traps #6 -- no shared Supabase client wired in yet.
- *    Deliberate scope, not a gap for this task to solve (same posture as
- *    every prior content page -- `StudentsTab.tsx`/T022,
- *    `OutreachList.tsx`/T038, `ParticipationTab.tsx`/T056).
+ *    SUPERSEDED BY T094 -- kept here only as the original T025 record of
+ *    what this file's scope explicitly excluded at the time; see this file's
+ *    own T094 module doc above for what replaced it.
  *
- * `loadParentsTabData` is the injectable `loadData`-style seam
+ * `loadParentsTabData` was the injectable `loadData`-style seam
  * (`LoadParentsTabDataFn`), defaulting to the obviously-fake
  * `defaultLoadParentsTabData` (fixture data typed against the real schema
- * above, fabricated names only per constitution item 6).
+ * above, fabricated names only per constitution item 6; that fixture
+ * function and its `FIXTURE_*` data are still exported, now only for tests
+ * that want them explicitly, same posture `loaders/invites.ts`'s own T090
+ * doc already established for its own superseded fixture default).
  *
  * -----------------------------------------------------------------------
  * 8. No `PowerSearch` here -- a disclosed scope decision, not an omission.
@@ -322,6 +375,11 @@ import {
   VStack,
 } from '@astryxdesign/core';
 import { RequireRole } from '../../app/guards';
+import { isSupabaseLoaderError } from '../../lib/supabase';
+import { resendInvite, revokeInvite } from '../../lib/supabase/loaders/invites';
+// T094 (ED-1 Packet P5): real `loadData`/`onUnlinkAllStudents` defaults --
+// module doc above.
+import { loadParentsTabData, unlinkAllStudents } from '../../lib/supabase/loaders/parents';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets. Module doc #1.
@@ -334,7 +392,12 @@ export interface ParentProfileRow {
   id: string;
   displayName: string;
   email: string;
-  avatarUrl: string;
+  /** `profiles.avatar_url` is nullable (`../../lib/supabase/types.ts`'s own
+   * `ProfileRow` doc comment: amended to nullable by
+   * `20260718000000_invite_trigger.sql` -- a brand-new profile from the
+   * accept-invite trigger legitimately has no avatar yet). Widened from this
+   * file's pre-T094 non-null `string` to match the real column honestly. */
+  avatarUrl: string | null;
 }
 
 export interface GuardianLinkRow {
@@ -348,12 +411,21 @@ export interface StudentRow {
   displayName: string;
 }
 
+/**
+ * T094: gained `expiresAt`/`createdAt` -- this file's own T094 module doc
+ * above explains why (structural compatibility with `resendInvite`/
+ * `revokeInvite`'s own parameter type, `InvitesTab.tsx`'s local `InviteRow`,
+ * needed to call those real, imported functions directly without a
+ * cross-file type import). Neither field is ever displayed by this file.
+ */
 export interface InviteRow {
   id: string;
   email: string;
   role: ProfileRole;
   studentId: string | null;
   status: InviteStatus;
+  expiresAt: string;
+  createdAt: string;
 }
 
 export interface ParentsTabLoadResult {
@@ -364,6 +436,21 @@ export interface ParentsTabLoadResult {
 }
 
 export type LoadParentsTabDataFn = () => Promise<ParentsTabLoadResult>;
+
+// ---------------------------------------------------------------------------
+// T094: injectable real mutation seams -- see this file's own T094 module
+// doc above and `../../lib/supabase/loaders/parents.ts` for each real
+// implementation.
+// ---------------------------------------------------------------------------
+
+/** Module doc #3(a): the real `guardian_links` delete for every row
+ * belonging to the given parent -- the "unlink" half of Remove. */
+export type UnlinkAllStudentsFn = (parentProfileId: string) => Promise<void>;
+
+/** Reused directly from `../../lib/supabase/loaders/invites.ts` (T090) --
+ * same signature as that file's own `ResendInviteFn`/`RevokeInviteFn`. */
+export type ResendParentInviteFn = (invite: InviteRow) => Promise<InviteRow>;
+export type RevokeParentInviteFn = (invite: InviteRow) => Promise<void>;
 
 // ---------------------------------------------------------------------------
 // Fixture data -- module doc #9. Fabricated names only (constitution item 6).
@@ -419,6 +506,12 @@ const FIXTURE_GUARDIAN_LINKS: readonly GuardianLinkRow[] = [
   },
 ];
 
+// T094: `expiresAt`/`createdAt` are fabricated-but-plausible ISO timestamps
+// (module doc #1 above) -- never displayed by this file, needed only to
+// satisfy `InviteRow`'s now-wider shape.
+const FIXTURE_INVITE_EXPIRES_AT = '2026-08-01T00:00:00.000Z';
+const FIXTURE_INVITE_CREATED_AT = '2026-07-01T00:00:00.000Z';
+
 const FIXTURE_INVITES: readonly InviteRow[] = [
   // Invite-only, pending -- no profile exists yet.
   {
@@ -427,6 +520,8 @@ const FIXTURE_INVITES: readonly InviteRow[] = [
     role: 'parent',
     studentId: 'student-nadia-fell',
     status: 'pending',
+    expiresAt: FIXTURE_INVITE_EXPIRES_AT,
+    createdAt: FIXTURE_INVITE_CREATED_AT,
   },
   // Invite-only, expired -- proves the non-pending invite-status label.
   {
@@ -435,6 +530,8 @@ const FIXTURE_INVITES: readonly InviteRow[] = [
     role: 'parent',
     studentId: 'student-sasha-reyes',
     status: 'expired',
+    expiresAt: FIXTURE_INVITE_EXPIRES_AT,
+    createdAt: FIXTURE_INVITE_CREATED_AT,
   },
   // Decoy 1: re-inviting an ALREADY-registered parent (shares Renata's own
   // email) -- must NOT create a second, duplicate "invite-only" row for her.
@@ -444,6 +541,8 @@ const FIXTURE_INVITES: readonly InviteRow[] = [
     role: 'parent',
     studentId: 'student-owen-brandt',
     status: 'pending',
+    expiresAt: FIXTURE_INVITE_EXPIRES_AT,
+    createdAt: FIXTURE_INVITE_CREATED_AT,
   },
   // Decoy 2: a role='student' self-invite -- must NOT create a phantom
   // "parent" row (role filter proof, module doc #9).
@@ -453,6 +552,8 @@ const FIXTURE_INVITES: readonly InviteRow[] = [
     role: 'student',
     studentId: 'student-nadia-fell',
     status: 'pending',
+    expiresAt: FIXTURE_INVITE_EXPIRES_AT,
+    createdAt: FIXTURE_INVITE_CREATED_AT,
   },
 ];
 
@@ -676,22 +777,26 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
 // Row action stubs / notices -- module docs #3/#5.
 // ---------------------------------------------------------------------------
 
-interface StubNotice {
+/** T094: widened from the pre-T094 `StubNotice` (`'info'`-only) to also carry
+ * `'success'`/`'error'` -- one `Banner` slot now covers the inert Edit-links
+ * disclosure AND real Resend/Remove mutation feedback, same "one feedback
+ * slot, several statuses" shape `StudentsTab.tsx`'s own `FeedbackBanner`
+ * already established. */
+interface FeedbackBanner {
+  status: 'info' | 'success' | 'error';
   title: string;
   description: string;
 }
 
-const EDIT_LINKS_STUB_NOTICE: StubNotice = {
+const EDIT_LINKS_STUB_NOTICE: FeedbackBanner = {
+  status: 'info',
   title: 'Edit-links dialog not built yet',
   description:
     "Editing a parent's linked students opens a real edit-linked-students dialog. No such dialog exists in this codebase yet, and building one is out of this task's own objective text (a Table + row MoreMenu, not a dialog) -- this task's Forbidden Files also explicitly require this to be a disclosure stub, not a real editor. Nothing was changed.",
 };
 
-function resendInviteNotice(email: string): StubNotice {
-  return {
-    title: 'Invite marked pending again',
-    description: `${email}'s invite status was set back to pending in this view. Actually re-sending the invite email would call the real send-invite function (supabase/functions/send-invite), which this page can't reach yet -- no shared Supabase client is wired in (a separate, not-yet-dispatched task, same as every other content page in this batch).`,
-  };
+function mutationErrorDescription(error: unknown, fallback: string): string {
+  return isSupabaseLoaderError(error) ? error.message : fallback;
 }
 
 function removeDialogTitle(row: ParentDisplayRow): string {
@@ -832,8 +937,21 @@ const EMPTY_LOAD_RESULT: ParentsTabLoadResult = {
 };
 
 export interface ParentsTabProps {
-  /** Injectable data-loading seam (module doc #7). Defaults to fixture data. */
+  /** Injectable data-loading seam (module doc #7, T094-superseded). Defaults
+   * to a real query against `profiles`/`guardian_links`/`students`/`invites`
+   * (T094, `loadParentsTabData`). */
   loadData?: LoadParentsTabDataFn;
+  /** Injectable unlink seam (T094, module doc #3(a)). Defaults to a real
+   * `guardian_links` delete (`unlinkAllStudents`). */
+  onUnlinkAllStudents?: UnlinkAllStudentsFn;
+  /** Injectable resend seam (T094, module doc #5). Defaults to T090's real,
+   * already-Passed `resendInvite` (`../../lib/supabase/loaders/invites.ts`),
+   * reused directly. */
+  onResendInvite?: ResendParentInviteFn;
+  /** Injectable revoke seam (T094, module doc #3's invite-only Remove
+   * branch). Defaults to T090's real, already-Passed `revokeInvite`, reused
+   * directly. */
+  onRevokeInvite?: RevokeParentInviteFn;
 }
 
 /**
@@ -845,12 +963,15 @@ export interface ParentsTabProps {
  * directly (module doc #2).
  */
 export function ParentsTabBody({
-  loadData = defaultLoadParentsTabData,
+  loadData = loadParentsTabData,
+  onUnlinkAllStudents = unlinkAllStudents,
+  onResendInvite = resendInvite,
+  onRevokeInvite = revokeInvite,
 }: ParentsTabProps = {}): ReactNode {
   const loadState = useLoadState(loadData, [loadData]);
   const [data, setData] = useState<ParentsTabLoadResult>(EMPTY_LOAD_RESULT);
   const [removedProfileIds, setRemovedProfileIds] = useState<ReadonlySet<string>>(new Set());
-  const [stubNotice, setStubNotice] = useState<StubNotice | null>(null);
+  const [feedback, setFeedback] = useState<FeedbackBanner | null>(null);
   const [removeTarget, setRemoveTarget] = useState<ParentDisplayRow | null>(null);
 
   useEffect(() => {
@@ -872,24 +993,71 @@ export function ParentsTabBody({
   );
 
   function handleEditLinks(): void {
-    setStubNotice(EDIT_LINKS_STUB_NOTICE);
+    setFeedback(EDIT_LINKS_STUB_NOTICE);
   }
 
-  function handleResendInvite(row: ParentDisplayRow): void {
+  /**
+   * T094 (module doc #5): optimistic local flip (`setInviteStatusForEmail`,
+   * unchanged) plus the real `onResendInvite` call for EVERY raw `invites`
+   * row matching this email (an email may have multiple `role='parent'`
+   * invite rows, module doc #3 above -- one per targeted child), plus
+   * rollback-on-failure, same optimistic-update-plus-rollback shape used
+   * everywhere else in this codebase now.
+   */
+  async function handleResendInvite(row: ParentDisplayRow): Promise<void> {
     if (row.inviteEmail === null) return;
     const email = row.inviteEmail;
+    const previousInvites = data.invites;
+    const targets = previousInvites.filter(
+      (invite) => invite.role === 'parent' && invite.email === email,
+    );
     setData((prev) => ({
       ...prev,
       invites: setInviteStatusForEmail(prev.invites, email, 'pending'),
     }));
-    setStubNotice(resendInviteNotice(row.email));
+    try {
+      await Promise.all(targets.map((invite) => onResendInvite(invite)));
+      setFeedback({
+        status: 'success',
+        title: 'Invite resent',
+        description: `A new invite email was sent to ${email}.`,
+      });
+    } catch (error) {
+      setData((prev) => ({ ...prev, invites: previousInvites }));
+      setFeedback({
+        status: 'error',
+        title: "Couldn't resend invite",
+        description: mutationErrorDescription(
+          error,
+          `Something went wrong resending the invite to ${email}. Try again in a moment.`,
+        ),
+      });
+    }
   }
 
-  function handleConfirmRemove(): void {
+  /**
+   * T094 (module doc #3): real scope, per this task's own disclosed schema
+   * gap --
+   *   - Profile-backed parent: real `guardian_links` delete
+   *     (`onUnlinkAllStudents`) for every link belonging to this parent.
+   *     `removedProfileIds`' local "deactivated" marker is unchanged --
+   *     still local-only UI state, never persisted (no real `profiles`
+   *     active/inactive column exists -- this file's own T094 module doc
+   *     above states this explicitly, not silently).
+   *   - Invite-only parent: real `onRevokeInvite` for EVERY raw invite row
+   *     matching this email (module doc #3's multi-invite-per-email case,
+   *     same "every matching row" semantics `handleResendInvite` above
+   *     uses).
+   * Optimistic local flip (unchanged pure functions) plus rollback-on-
+   * failure in both branches.
+   */
+  async function handleConfirmRemove(): Promise<void> {
     const target = removeTarget;
     if (target === null) return;
+    setRemoveTarget(null);
     if (target.hasProfile && target.profileId !== null) {
       const profileId = target.profileId;
+      const previousLinks = data.guardianLinks;
       setData((prev) => ({
         ...prev,
         guardianLinks: unlinkAllStudentsForParent(prev.guardianLinks, profileId),
@@ -899,14 +1067,58 @@ export function ParentsTabBody({
         next.add(profileId);
         return next;
       });
+      try {
+        await onUnlinkAllStudents(profileId);
+        setFeedback({
+          status: 'success',
+          title: 'Parent removed',
+          description: `${target.name} was unlinked from every student.`,
+        });
+      } catch (error) {
+        setData((prev) => ({ ...prev, guardianLinks: previousLinks }));
+        setRemovedProfileIds((prev) => {
+          const next = new Set(prev);
+          next.delete(profileId);
+          return next;
+        });
+        setFeedback({
+          status: 'error',
+          title: "Couldn't remove parent",
+          description: mutationErrorDescription(
+            error,
+            `Something went wrong removing ${target.name}. Try again in a moment.`,
+          ),
+        });
+      }
     } else if (target.inviteEmail !== null) {
       const email = target.inviteEmail;
+      const previousInvites = data.invites;
+      const targets = previousInvites.filter(
+        (invite) => invite.role === 'parent' && invite.email === email,
+      );
       setData((prev) => ({
         ...prev,
         invites: setInviteStatusForEmail(prev.invites, email, 'revoked'),
       }));
+      try {
+        await Promise.all(targets.map((invite) => onRevokeInvite(invite)));
+        setFeedback({
+          status: 'success',
+          title: 'Invite revoked',
+          description: `The pending invite for ${email} was revoked.`,
+        });
+      } catch (error) {
+        setData((prev) => ({ ...prev, invites: previousInvites }));
+        setFeedback({
+          status: 'error',
+          title: "Couldn't revoke invite",
+          description: mutationErrorDescription(
+            error,
+            `Something went wrong revoking the invite for ${email}. Try again in a moment.`,
+          ),
+        });
+      }
     }
-    setRemoveTarget(null);
   }
 
   // Deliberately NOT memoized -- every handler is either a constant closure
@@ -915,7 +1127,9 @@ export function ParentsTabBody({
   // documented for its own `columns`).
   const columns = buildColumns({
     onEditLinks: handleEditLinks,
-    onResendInvite: handleResendInvite,
+    onResendInvite: (row) => {
+      void handleResendInvite(row);
+    },
     onRemove: (row) => setRemoveTarget(row),
   });
 
@@ -956,13 +1170,13 @@ export function ParentsTabBody({
     <VStack gap={4} padding={6}>
       <Heading level={1}>Parents</Heading>
 
-      {stubNotice !== null && (
+      {feedback !== null && (
         <Banner
-          status="info"
-          title={stubNotice.title}
-          description={stubNotice.description}
+          status={feedback.status}
+          title={feedback.title}
+          description={feedback.description}
           isDismissable
-          onDismiss={() => setStubNotice(null)}
+          onDismiss={() => setFeedback(null)}
         />
       )}
 
@@ -991,7 +1205,9 @@ export function ParentsTabBody({
         title={removeTarget !== null ? removeDialogTitle(removeTarget) : ''}
         description={removeTarget !== null ? removeDialogDescription(removeTarget) : ''}
         actionLabel="Remove"
-        onAction={handleConfirmRemove}
+        onAction={() => {
+          void handleConfirmRemove();
+        }}
       />
     </VStack>
   );

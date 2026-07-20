@@ -16,10 +16,23 @@
  * pattern every prior content-page test file already established, including
  * `LiveConsole.test.tsx`'s own `AuthProvider` + `LoginAs` role-login harness
  * for the `ParentsTab` (gated) vs. `ParentsTabBody` (ungated) split.
+ *
+ * T094 (ED-1 Packet P5) additions: real load/mutation wiring
+ * (`loadParentsTabData`/`unlinkAllStudents`, `../../lib/supabase/loaders/
+ * parents`; `resendInvite`/`revokeInvite` reused from `../../lib/supabase/
+ * loaders/invites`) proven against stubbed `SupabaseClient`s (same DI
+ * pattern `StudentsTab.test.tsx`/T089 already established); optimistic-
+ * update-plus-rollback for Remove/Resend. Every pre-existing describe block
+ * below now explicitly passes `loadData: defaultLoadParentsTabData` (per
+ * T087's own precedent: "the default changes, the fixture literal doesn't"
+ * -- this file's own default is now the REAL `loadParentsTabData`, which
+ * this jsdom test environment cannot reach), so none of them depend on
+ * which function is the component's implicit default.
  */
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthUser } from '../../app/guards';
 import { LoginAsDeferred as LoginAs } from '../../test-utils/authHarness';
@@ -35,8 +48,12 @@ import {
   type InviteRow,
   type ParentProfileRow,
   type ParentsTabLoadResult,
+  type ResendParentInviteFn,
+  type RevokeParentInviteFn,
   type StudentRow,
+  type UnlinkAllStudentsFn,
 } from './ParentsTab';
+import { makeLoadParentsTabData, makeUnlinkAllStudents } from '../../lib/supabase/loaders/parents';
 
 // ---------------------------------------------------------------------------
 // jsdom gap: `AlertDialog` renders a native `<dialog>` and calls
@@ -135,6 +152,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// T094: `InviteRow` gained `expiresAt`/`createdAt` (structural compatibility
+// with `resendInvite`/`revokeInvite`'s own parameter type -- this file's own
+// T094 module doc). Never asserted on below; only needed to satisfy the type.
+const TEST_EXPIRES_AT = '2026-08-01T00:00:00.000Z';
+const TEST_CREATED_AT = '2026-07-01T00:00:00.000Z';
+
 // ---------------------------------------------------------------------------
 // Pure functions -- module docs #1/#3/#5/#9.
 // ---------------------------------------------------------------------------
@@ -194,6 +217,8 @@ describe('buildParentDisplayRows', () => {
         role: 'parent',
         studentId: 's1',
         status: 'pending',
+        expiresAt: TEST_EXPIRES_AT,
+        createdAt: TEST_CREATED_AT,
       },
     ];
     const rows = buildParentDisplayRows(profiles, [], students, invites, new Set());
@@ -209,6 +234,8 @@ describe('buildParentDisplayRows', () => {
         role: 'student',
         studentId: 's1',
         status: 'pending',
+        expiresAt: TEST_EXPIRES_AT,
+        createdAt: TEST_CREATED_AT,
       },
     ];
     const rows = buildParentDisplayRows([], [], students, invites, new Set());
@@ -217,8 +244,24 @@ describe('buildParentDisplayRows', () => {
 
   it('groups multiple role=parent invites sharing one email into a single row', () => {
     const invites: InviteRow[] = [
-      { id: 'i1', email: 'shared@example.com', role: 'parent', studentId: 's1', status: 'expired' },
-      { id: 'i2', email: 'shared@example.com', role: 'parent', studentId: 's2', status: 'pending' },
+      {
+        id: 'i1',
+        email: 'shared@example.com',
+        role: 'parent',
+        studentId: 's1',
+        status: 'expired',
+        expiresAt: TEST_EXPIRES_AT,
+        createdAt: TEST_CREATED_AT,
+      },
+      {
+        id: 'i2',
+        email: 'shared@example.com',
+        role: 'parent',
+        studentId: 's2',
+        status: 'pending',
+        expiresAt: TEST_EXPIRES_AT,
+        createdAt: TEST_CREATED_AT,
+      },
     ];
     const rows = buildParentDisplayRows([], [], students, invites, new Set());
     expect(rows).toHaveLength(1);
@@ -260,9 +303,33 @@ describe('unlinkAllStudentsForParent (module doc #3a -- never a partial unlink)'
 describe('setInviteStatusForEmail', () => {
   it('flips only role=parent invites matching the given email', () => {
     const invites: InviteRow[] = [
-      { id: 'i1', email: 'a@example.com', role: 'parent', studentId: 's1', status: 'pending' },
-      { id: 'i2', email: 'a@example.com', role: 'student', studentId: 's1', status: 'pending' },
-      { id: 'i3', email: 'b@example.com', role: 'parent', studentId: 's1', status: 'pending' },
+      {
+        id: 'i1',
+        email: 'a@example.com',
+        role: 'parent',
+        studentId: 's1',
+        status: 'pending',
+        expiresAt: TEST_EXPIRES_AT,
+        createdAt: TEST_CREATED_AT,
+      },
+      {
+        id: 'i2',
+        email: 'a@example.com',
+        role: 'student',
+        studentId: 's1',
+        status: 'pending',
+        expiresAt: TEST_EXPIRES_AT,
+        createdAt: TEST_CREATED_AT,
+      },
+      {
+        id: 'i3',
+        email: 'b@example.com',
+        role: 'parent',
+        studentId: 's1',
+        status: 'pending',
+        expiresAt: TEST_EXPIRES_AT,
+        createdAt: TEST_CREATED_AT,
+      },
     ];
     const result = setInviteStatusForEmail(invites, 'a@example.com', 'revoked');
     expect(result[0].status).toBe('revoked'); // matches: role=parent, email=a
@@ -307,7 +374,7 @@ describe('<ParentsTabBody /> DES-12 states', () => {
 
 describe('<ParentsTabBody /> linked-student AvatarGroup rendering', () => {
   it('renders BOTH avatars for a parent with two linked students (Renata Alvarez)', async () => {
-    renderBody();
+    renderBody({ loadData: defaultLoadParentsTabData });
     await flushMicrotasks();
 
     expect(container.textContent).toContain('Renata Alvarez');
@@ -318,14 +385,14 @@ describe('<ParentsTabBody /> linked-student AvatarGroup rendering', () => {
   });
 
   it('renders "No linked students" for a parent with zero links (Denise Cole)', async () => {
-    renderBody();
+    renderBody({ loadData: defaultLoadParentsTabData });
     await flushMicrotasks();
     expect(container.textContent).toContain('Denise Cole');
     expect(container.textContent).toContain('No linked students');
   });
 
   it('renders an invite-only row using its email (no display name exists yet)', async () => {
-    renderBody();
+    renderBody({ loadData: defaultLoadParentsTabData });
     await flushMicrotasks();
     expect(container.textContent).toContain('harlan.fell@example.com');
     expect(container.textContent).toContain('No account yet');
@@ -338,8 +405,9 @@ describe('<ParentsTabBody /> linked-student AvatarGroup rendering', () => {
 // ---------------------------------------------------------------------------
 
 describe('<ParentsTabBody /> Remove -- profile-backed, multi-linked-student parent', () => {
-  it('unlinks BOTH students and marks the profile Removed, in one confirmed action', async () => {
-    renderBody();
+  it('unlinks BOTH students, calls the real onUnlinkAllStudents once, and marks the profile Removed, in one confirmed action', async () => {
+    const onUnlinkAllStudents = vi.fn<UnlinkAllStudentsFn>().mockResolvedValue(undefined);
+    renderBody({ loadData: defaultLoadParentsTabData, onUnlinkAllStudents });
     await flushMicrotasks();
 
     const menu = openMoreMenuFor('Renata Alvarez');
@@ -353,6 +421,12 @@ describe('<ParentsTabBody /> Remove -- profile-backed, multi-linked-student pare
     expect(document.body.textContent).not.toMatch(/delete/i);
 
     clickButtonWithText('Remove');
+    await flushMicrotasks();
+
+    // T094: the real `guardian_links` delete is called exactly once, for the
+    // whole parent -- never once per link.
+    expect(onUnlinkAllStudents).toHaveBeenCalledTimes(1);
+    expect(onUnlinkAllStudents).toHaveBeenCalledWith('profile-renata-alvarez');
 
     // Row stays visible (matches StudentsTab's reversible-flip visibility
     // posture), both links gone, "Removed" badge/status shown.
@@ -360,16 +434,41 @@ describe('<ParentsTabBody /> Remove -- profile-backed, multi-linked-student pare
     expect(document.querySelector('[role="img"][aria-label="Elena Park"]')).toBeNull();
     expect(document.querySelector('[role="img"][aria-label="Mateo Cruz"]')).toBeNull();
     expect(container.textContent).toContain('Removed');
+    expect(container.textContent).toContain('Parent removed');
 
     // Remove is no longer offered a second time.
     const menuAfter = openMoreMenuFor('Renata Alvarez');
     expect(menuItemTexts(menuAfter)).toEqual(['Edit links']);
   });
+
+  it('T094: rolls back the optimistic unlink and shows an error banner when the real mutation rejects', async () => {
+    const onUnlinkAllStudents = vi
+      .fn<UnlinkAllStudentsFn>()
+      .mockRejectedValue({ code: '42501', message: 'Permission denied.', cause: null });
+    renderBody({ loadData: defaultLoadParentsTabData, onUnlinkAllStudents });
+    await flushMicrotasks();
+
+    clickMenuItem(openMoreMenuFor('Renata Alvarez'), 'Remove');
+    clickButtonWithText('Remove');
+    await flushMicrotasks();
+
+    expect(onUnlinkAllStudents).toHaveBeenCalledWith('profile-renata-alvarez');
+    // Rolled back -- both links restored, not marked Removed.
+    expect(document.querySelector('[role="img"][aria-label="Elena Park"]')).toBeTruthy();
+    expect(document.querySelector('[role="img"][aria-label="Mateo Cruz"]')).toBeTruthy();
+    expect(container.textContent).not.toContain('Removed');
+    expect(container.textContent).toContain("Couldn't remove parent");
+    expect(container.textContent).toContain('Permission denied.');
+    // Remove is still offered (rollback restored the menu item too).
+    const menuAfter = openMoreMenuFor('Renata Alvarez');
+    expect(menuItemTexts(menuAfter)).toEqual(['Edit links', 'Remove']);
+  });
 });
 
 describe('<ParentsTabBody /> Remove -- invite-only row (no profile, no guardian_links yet)', () => {
-  it('revokes the invite (the one real applicable effect), different dialog copy', async () => {
-    renderBody();
+  it('calls the real onRevokeInvite once per matching raw invite row, different dialog copy', async () => {
+    const onRevokeInvite = vi.fn<RevokeParentInviteFn>().mockResolvedValue(undefined);
+    renderBody({ loadData: defaultLoadParentsTabData, onRevokeInvite });
     await flushMicrotasks();
 
     const menu = openMoreMenuFor('harlan.fell@example.com');
@@ -383,7 +482,12 @@ describe('<ParentsTabBody /> Remove -- invite-only row (no profile, no guardian_
     expect(document.body.textContent).not.toContain('deactivates their parent account');
 
     clickButtonWithText('Remove');
+    await flushMicrotasks();
 
+    expect(onRevokeInvite).toHaveBeenCalledTimes(1);
+    expect(onRevokeInvite).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'harlan.fell@example.com', role: 'parent' }),
+    );
     expect(container.textContent).toContain('harlan.fell@example.com');
     expect(container.textContent).toContain('Invite revoked');
 
@@ -391,26 +495,67 @@ describe('<ParentsTabBody /> Remove -- invite-only row (no profile, no guardian_
     const menuAfter = openMoreMenuFor('harlan.fell@example.com');
     expect(menuItemTexts(menuAfter)).toEqual(['Edit links', 'Resend invite']);
   });
+
+  it('T094: rolls back the optimistic revoke and shows an error banner when the real mutation rejects', async () => {
+    const onRevokeInvite = vi
+      .fn<RevokeParentInviteFn>()
+      .mockRejectedValue({ code: '42501', message: 'Permission denied.', cause: null });
+    renderBody({ loadData: defaultLoadParentsTabData, onRevokeInvite });
+    await flushMicrotasks();
+
+    clickMenuItem(openMoreMenuFor('harlan.fell@example.com'), 'Remove');
+    clickButtonWithText('Remove');
+    await flushMicrotasks();
+
+    expect(onRevokeInvite).toHaveBeenCalled();
+    expect(container.textContent).not.toContain('Invite revoked');
+    expect(container.textContent).toContain("Couldn't revoke invite");
+    expect(container.textContent).toContain('Permission denied.');
+  });
 });
 
 // ---------------------------------------------------------------------------
-// Resend invite -- module doc #5 (real, working, not just a stub banner).
+// Resend invite -- module doc #5 (T094: genuinely real now).
 // ---------------------------------------------------------------------------
 
 describe('<ParentsTabBody /> Resend invite', () => {
-  it('really flips an expired invite back to pending, and shows a disclosure banner', async () => {
-    renderBody();
+  it('really flips an expired invite back to pending, calls the real onResendInvite, and shows a success banner', async () => {
+    const onResendInvite = vi
+      .fn<ResendParentInviteFn>()
+      .mockImplementation((invite) => Promise.resolve({ ...invite, status: 'pending' }));
+    renderBody({ loadData: defaultLoadParentsTabData, onResendInvite });
     await flushMicrotasks();
 
     expect(container.textContent).toContain('Invite expired'); // priya.quinn's initial state.
 
     const menu = openMoreMenuFor('priya.quinn@example.com');
     clickMenuItem(menu, 'Resend invite');
+    await flushMicrotasks();
 
+    expect(onResendInvite).toHaveBeenCalledTimes(1);
+    expect(onResendInvite).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'priya.quinn@example.com', role: 'parent' }),
+    );
     expect(container.textContent).toContain('Invited'); // real state flip, not just a banner.
     expect(container.textContent).not.toContain('Invite expired');
-    expect(container.textContent).toContain('Invite marked pending again');
-    expect(container.textContent).toContain('send-invite');
+    expect(container.textContent).toContain('Invite resent');
+  });
+
+  it('T094: rolls back the optimistic flip and shows an error banner when the real resend mutation rejects', async () => {
+    const onResendInvite = vi
+      .fn<ResendParentInviteFn>()
+      .mockRejectedValue({ code: '42501', message: 'Permission denied.', cause: null });
+    renderBody({ loadData: defaultLoadParentsTabData, onResendInvite });
+    await flushMicrotasks();
+
+    clickMenuItem(openMoreMenuFor('priya.quinn@example.com'), 'Resend invite');
+    await flushMicrotasks();
+
+    expect(onResendInvite).toHaveBeenCalled();
+    // Rolled back -- still expired, not pending.
+    expect(container.textContent).toContain('Invite expired');
+    expect(container.textContent).toContain("Couldn't resend invite");
+    expect(container.textContent).toContain('Permission denied.');
   });
 });
 
@@ -420,7 +565,7 @@ describe('<ParentsTabBody /> Resend invite', () => {
 
 describe('<ParentsTabBody /> Edit links stub', () => {
   it('shows a disclosure banner, changes nothing', async () => {
-    renderBody();
+    renderBody({ loadData: defaultLoadParentsTabData });
     await flushMicrotasks();
     clickMenuItem(openMoreMenuFor('Renata Alvarez'), 'Edit links');
     expect(container.textContent).toContain('Edit-links dialog not built yet');
@@ -450,6 +595,13 @@ const STUDENT_USER: AuthUser = {
 // `user === null` render. T073b1 extracted it into
 // `src/test-utils/authHarness.tsx`.
 
+// T094: `<ParentsTab />` with no `loadData` override now defaults to the
+// REAL `loadParentsTabData` (a genuine Supabase call this jsdom test
+// environment can't make) -- explicitly injects the fixture-backed
+// `defaultLoadParentsTabData` here (`ParentsTab`'s own gated wrapper
+// forwards every prop straight through to `ParentsTabBody`), same "inject
+// the fixture explicitly through the seam" pattern this task's packet
+// itself names.
 function renderGatedPage(user: AuthUser | null): void {
   act(() => {
     root.render(
@@ -460,10 +612,10 @@ function renderGatedPage(user: AuthUser | null): void {
               path="/roster"
               element={
                 user === null ? (
-                  <ParentsTab />
+                  <ParentsTab loadData={defaultLoadParentsTabData} />
                 ) : (
                   <LoginAs user={user}>
-                    <ParentsTab />
+                    <ParentsTab loadData={defaultLoadParentsTabData} />
                   </LoginAs>
                 )
               }
@@ -502,5 +654,173 @@ describe('<ParentsTab /> RequireRole guard', () => {
     await flushMicrotasks();
     expect(container.querySelector('[data-testid="redirected-home"]')).toBeNull();
     expect(container.textContent).toContain('Renata Alvarez');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T094: real `loaders/parents.ts` seams -- `makeLoadParentsTabData`,
+// `makeUnlinkAllStudents`. Stubbed `SupabaseClient` only, same DI pattern as
+// `StudentsTab.test.tsx`/T089 -- zero real network calls. `resendInvite`/
+// `revokeInvite` are NOT re-tested here (T090's own `InvitesTab.test.tsx`
+// already covers `loaders/invites.ts` directly; this file only proves
+// `ParentsTab.tsx` calls them, above).
+// ---------------------------------------------------------------------------
+
+describe('loadParentsTabData (T094 real load)', () => {
+  it('queries profiles(role=parent)/guardian_links/students/invites and maps snake_case DB rows to camelCase rows', async () => {
+    const profilesEqSpy = vi.fn(() => ({
+      order: vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'profile-db-1',
+            display_name: 'DB Parent',
+            email: 'db.parent@example.com',
+            avatar_url: null,
+          },
+        ],
+        error: null,
+      }),
+    }));
+    const guardianLinksSelectSpy = vi.fn().mockResolvedValue({
+      data: [{ id: 'link-db-1', parent_profile_id: 'profile-db-1', student_id: 'student-db-1' }],
+      error: null,
+    });
+    const studentsOrderSpy = vi.fn().mockResolvedValue({
+      data: [{ id: 'student-db-1', display_name: 'DB Student' }],
+      error: null,
+    });
+    const invitesOrderSpy = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: 'invite-db-1',
+          email: 'invite@example.com',
+          role: 'parent',
+          student_id: 'student-db-1',
+          invited_by: 'profile-staff-1',
+          status: 'pending',
+          expires_at: '2026-08-01T00:00:00.000Z',
+          created_at: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      error: null,
+    });
+
+    const fromSpy = vi.fn((table: string) => {
+      if (table === 'profiles') return { select: vi.fn(() => ({ eq: profilesEqSpy })) };
+      if (table === 'guardian_links') return { select: guardianLinksSelectSpy };
+      if (table === 'students') return { select: vi.fn(() => ({ order: studentsOrderSpy })) };
+      return { select: vi.fn(() => ({ order: invitesOrderSpy })) };
+    });
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    const load = makeLoadParentsTabData(() => client);
+    const result = await load();
+
+    expect(fromSpy).toHaveBeenCalledWith('profiles');
+    expect(fromSpy).toHaveBeenCalledWith('guardian_links');
+    expect(fromSpy).toHaveBeenCalledWith('students');
+    expect(fromSpy).toHaveBeenCalledWith('invites');
+    // Trap #1: server-side role='parent' filter.
+    expect(profilesEqSpy).toHaveBeenCalledWith('role', 'parent');
+
+    expect(result).toEqual<ParentsTabLoadResult>({
+      parentProfiles: [
+        {
+          id: 'profile-db-1',
+          displayName: 'DB Parent',
+          email: 'db.parent@example.com',
+          avatarUrl: null,
+        },
+      ],
+      guardianLinks: [
+        { id: 'link-db-1', parentProfileId: 'profile-db-1', studentId: 'student-db-1' },
+      ],
+      students: [{ id: 'student-db-1', displayName: 'DB Student' }],
+      invites: [
+        {
+          id: 'invite-db-1',
+          email: 'invite@example.com',
+          role: 'parent',
+          studentId: 'student-db-1',
+          status: 'pending',
+          expiresAt: '2026-08-01T00:00:00.000Z',
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    });
+  });
+
+  it('bridges the "no rows" case for all four tables to empty arrays, not a crash', async () => {
+    const nullResult = { data: null, error: null };
+    const client = {
+      from: vi.fn((table: string) => {
+        if (table === 'profiles') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({ order: vi.fn().mockResolvedValue(nullResult) })),
+            })),
+          };
+        }
+        if (table === 'guardian_links') {
+          return { select: vi.fn().mockResolvedValue(nullResult) };
+        }
+        return { select: vi.fn(() => ({ order: vi.fn().mockResolvedValue(nullResult) })) };
+      }),
+    } as unknown as SupabaseClient;
+
+    const load = makeLoadParentsTabData(() => client);
+    const result = await load();
+
+    expect(result).toEqual({ parentProfiles: [], guardianLinks: [], students: [], invites: [] });
+  });
+
+  it('rejects with the real SupabaseLoaderError when any one of the four queries fails', async () => {
+    const failResult = { data: null, error: { message: 'permission denied', code: '42501' } };
+    const okResult = { data: [], error: null };
+    const client = {
+      from: vi.fn((table: string) => {
+        if (table === 'guardian_links') {
+          return { select: vi.fn().mockResolvedValue(failResult) };
+        }
+        if (table === 'profiles') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({ order: vi.fn().mockResolvedValue(okResult) })),
+            })),
+          };
+        }
+        return { select: vi.fn(() => ({ order: vi.fn().mockResolvedValue(okResult) })) };
+      }),
+    } as unknown as SupabaseClient;
+
+    const load = makeLoadParentsTabData(() => client);
+    await expect(load()).rejects.toMatchObject({ code: '42501', message: expect.any(String) });
+  });
+});
+
+describe('unlinkAllStudents (T094 real mutation, Trap #5)', () => {
+  it('calls guardian_links.delete().eq("parent_profile_id", id) with exactly the targeted parent', async () => {
+    const eqSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+    const deleteSpy = vi.fn(() => ({ eq: eqSpy }));
+    const fromSpy = vi.fn(() => ({ delete: deleteSpy }));
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    const unlink = makeUnlinkAllStudents(() => client);
+    await unlink('profile-1');
+
+    expect(fromSpy).toHaveBeenCalledWith('guardian_links');
+    expect(eqSpy).toHaveBeenCalledWith('parent_profile_id', 'profile-1');
+  });
+
+  it('rejects with the real SupabaseLoaderError on a genuine mutation error', async () => {
+    const eqSpy = vi
+      .fn()
+      .mockResolvedValue({ data: null, error: { message: 'nope', code: '42501' } });
+    const client = {
+      from: vi.fn(() => ({ delete: vi.fn(() => ({ eq: eqSpy })) })),
+    } as unknown as SupabaseClient;
+
+    const unlink = makeUnlinkAllStudents(() => client);
+    await expect(unlink('profile-1')).rejects.toMatchObject({ code: '42501' });
   });
 });

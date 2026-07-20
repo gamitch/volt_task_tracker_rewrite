@@ -3300,3 +3300,74 @@ suite itself** and confirmed 72/72 real passes, including real-browser rendering
 lazy-loaded `/login`/`/accept-invite` forms. Clean typecheck/lint/build; format:check
 clean except the same pre-existing, untouched `Kiosk.tsx` issue every prior checker
 this session has already confirmed and routed as its own standalone follow-up.
+[2026-07-20T02:25:39Z] Worker finished. Checker required before completion.
+
+## T094 — ED-1 packet P5 (expanded): real Teams tab + Parents tab data wiring
+
+**Result:** PASS (1st attempt, NIT)
+
+Same class of gap T089 found for Students: `TeamsTab.tsx`/`ParentsTab.tsx` had
+real-looking interactive UI (Archive/Unarchive/Hard-delete/Move for teams;
+Resend-invite/Remove for parents) that mutated only local React state — nothing had
+ever persisted. New `src/lib/supabase/loaders/teams.ts`: real load (teams + students,
+no `is_active` filter — a student's team membership counts as "history" whether
+active or not, verified against the real schema) plus five new mutation seams added to
+`TeamsTabProps` (`onCreateTeam`, `onUpdateTeam`, `onSetTeamArchived`,
+`onHardDeleteTeam`, `onSetTeamSortOrders` — the old client-side `generateId` prop was
+removed in favor of the real DB-generated id). Archive/Unarchive: optimistic
+flip+rollback. Hard delete: real delete, deliberately not optimistic (no natural undo
+for removing an array element). Reorder: wired for real via two independent
+`runMutation` calls (`Promise.all`, not atomic — a disclosed, low-severity risk since
+`sort_order` has no uniqueness constraint and a full-snapshot rollback covers any
+failure).
+
+New `src/lib/supabase/loaders/parents.ts`: real load (`profiles` filtered
+server-side `role='parent'`, `guardian_links`, `students`, `invites`). Resend Invite
+calls T090's real `resendInvite` directly (no reimplementation) — made possible by
+independently verifying `ParentsTab.tsx`'s local `InviteRow` type is now
+field-for-field structurally identical to `InvitesTab.tsx`'s, so no adapter is needed.
+Remove: real `guardian_links` deletion for a profile-backed parent (new
+`onUnlinkAllStudents` seam); real `revokeInvite` (T090, reused) for an invite-only
+parent.
+
+**Deliberately disclosed, correctly-scoped limitation:** `profiles` genuinely has no
+active/inactive column anywhere in the schema (independently re-confirmed) — no
+migration was added or attempted, matching the packet's explicit instruction. The
+"deactivate profile" half of PRD ROS-04's Remove text remains exactly what T025
+already disclosed and got Passed for: a local-only UI marker, never persisted.
+
+**Checker verification:** independently confirmed all five new Teams mutation seams
+and the new Parents `onUnlinkAllStudents` seam are genuinely present and wired.
+Independently re-verified the `hasStudentsOrHistory` schema claim (grepped every
+migration for `team_id` — exists only on `students`). Independently verified the
+reorder mutation's two-call independence and full-snapshot rollback. Independently
+confirmed the `InviteRow` structural-compatibility claim by reading both type
+declarations side by side and confirming clean, cast-free assignment. Independently
+re-confirmed zero migration files touched and zero active/inactive-shaped column
+exists on `profiles`. **Also served as the second of three independent checker
+audits of the concurrent git-stash incident** (T090's original stash operation,
+this time causing a merge conflict on a different sibling task's file, `MeetingsList.tsx`)
+— confirmed all 6 of T094's own files complete and correct post-recovery, and
+confirmed the `RosterShell.test.tsx` fallout (see T097 below) is real and properly
+routed, not evidence of corruption.
+
+## T097 — Fix `RosterShell.test.tsx` regression from T094's real-data wiring
+
+**Result:** PASS (1st attempt, clean)
+
+Fourth occurrence of the same pattern as T088/T092 (and mirrors T097's own prior
+occurrence numbering — third fix, same file): two tests in `RosterShell.test.tsx`
+asserted `TeamsTab`/`ParentsTab`'s OLD fixture text (`'Embercore'`, `'Renata
+Alvarez'`), now false since T094 correctly made both defaults real. Fixed by adding
+two more sibling `vi.mock` blocks, structurally identical to the two already in the
+file. Required aliasing `TeamRow`/`StudentRow` imports (`TeamsTabTeamRow`,
+`ParentsTabStudentRow`) to avoid colliding with the pre-existing `StudentsTab.tsx`
+imports of the same names already in this file from T092's earlier work — confirmed
+necessary and consistently applied by the checker. Both original assertions preserved
+byte-identical.
+
+**Checker verification:** confirmed the diff is purely additive (0 deletions),
+confirmed the aliasing was genuinely necessary and consistently used, confirmed both
+new mock blocks structurally mirror the two existing ones, confirmed fixture data
+matches each file's real local row-type shapes, confirmed the `beforeEach` wiring
+doesn't disturb the two pre-existing mocks. `RosterShell.test.tsx`: 14/14.

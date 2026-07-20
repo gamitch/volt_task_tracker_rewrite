@@ -11,6 +11,51 @@
  * `StudentsTab.tsx`/T022 already took for its own tab.
  *
  * -----------------------------------------------------------------------
+ * T094 (ED-1 Packet P5) -- real `teams`/`students` data wiring, and the
+ * mutation seams this file never actually had before this task. Investigation
+ * before dispatch found that despite this file's own module docs #2/#5/#6
+ * below reading as if Archive/Hard-delete/Reorder were already real, every
+ * one of them (and Create/Edit) mutated ONLY local `setRows` state -- there
+ * was no injectable mutation prop anywhere in this file, and `loadData`
+ * itself defaulted to fixture data (module doc #7 below, now superseded).
+ * That gap is closed by this task, matching the precedent T089 already
+ * established for `StudentsTab.tsx`. New real seams, all backed by
+ * `../../lib/supabase/loaders/teams.ts` (T094):
+ *   - `loadData` defaults to `loadTeamsTabData` (real `teams`/`students`
+ *     query, module doc #7 below superseded).
+ *   - `onCreateTeam`/`onUpdateTeam`: real `teams` insert/update, each
+ *     resolving the freshly-written row. `generateId` (this file's own
+ *     pre-T094 client-side UUID prop) is REMOVED -- `onCreateTeam` now
+ *     resolves the real, DB-generated `id` directly, same "let the real
+ *     insert return the id" change `loaders/seasons.ts`'s own
+ *     `OnCreateSeasonFn` (T091) already made for `SeasonSettings.tsx`'s
+ *     analogous `makeLocalSeasonId()`.
+ *   - `onSetTeamArchived`: real `teams.archived` mutation, paired with the
+ *     existing optimistic `withArchivedOverride` flip plus rollback on
+ *     rejection (same shape `StudentsTab.tsx`'s own Deactivate/Reactivate
+ *     already established, mirrored from `RsvpControl.tsx`'s own
+ *     `handleChange`).
+ *   - `onHardDeleteTeam`: a real `teams` delete. Deliberately NOT
+ *     optimistic (unlike Archive/Reorder) -- see `handleConfirmHardDelete`'s
+ *     own doc comment below for why an irreversible row removal is awaited
+ *     before the local row is ever removed, rather than removed-then-
+ *     rolled-back-on-failure.
+ *   - `onSetTeamSortOrders`: real `teams.sort_order` persistence, wired for
+ *     real (this task's own Trap #2 decision -- see `loaders/teams.ts`'s own
+ *     module doc for the full reasoning and the disclosed non-atomic-pair
+ *     partial-failure risk). `computeSortOrderSwap` (new pure function
+ *     below) is the one place the two `{id, sortOrder}` pairs a single
+ *     up/down move needs are computed, shared by both the local optimistic
+ *     `moveTeamSortOrder` flip (unchanged in its own external behavior) and
+ *     the real persistence call.
+ * Module docs #2/#5/#6/#7 below are the ORIGINAL T026 documentation and are
+ * left in place for the parts that are still accurate (the Archive-vs-
+ * Hard-delete UX reasoning, the color-swatch-picker reasoning, the
+ * up/down-not-drag-and-drop reasoning) -- only the "mutates local state
+ * only"/"no shared Supabase client wired in yet" claims in doc #7 are now
+ * stale, corrected here rather than silently left to contradict this note.
+ *
+ * -----------------------------------------------------------------------
  * 1. Ground truth -- `teams` column shapes, read directly from the real
  *    migration (constitution item 3), NOT invented/renamed with extra
  *    fields:
@@ -202,22 +247,34 @@
  * `sortOrder`, so the displayed order updates immediately and consistently
  * with what would be written back. The topmost row's "up" button and the
  * bottommost row's "down" button are disabled (boundary, no-op) rather than
- * silently doing nothing on click.
+ * silently doing nothing on click. T094 update: `moveTeamSortOrder`'s own
+ * external signature/behavior is UNCHANGED (still a pure local-state
+ * transform); a new sibling pure function, `computeSortOrderSwap`, now
+ * computes the same "current row / neighbor row" pair as a `{id,
+ * sortOrder}[]` update list, which `handleMove` (component, below) passes to
+ * the new real `onSetTeamSortOrders` seam alongside the existing optimistic
+ * `moveTeamSortOrder` flip -- see T094's own module doc above and
+ * `../../lib/supabase/loaders/teams.ts`'s Trap #2 doc for the full real-
+ * persistence reasoning.
  *
  * -----------------------------------------------------------------------
  * 7. Known Context/Traps #6 -- no shared Supabase client wired in yet.
- *    Deliberate scope, not a gap for this task to solve (same posture as
- *    every prior content page, per this task's own packet).
+ *    SUPERSEDED BY T094 -- kept here only as the original T026 record of
+ *    what this file's scope explicitly excluded at the time; see T094's own
+ *    module doc above for what replaced it.
  *
- * `loadTeamsTabData` is the injectable `loadData`-style seam
+ * `loadTeamsTabData` was the injectable `loadData`-style seam
  * (`LoadTeamsTabDataFn`), defaulting to the obviously-fake
  * `defaultLoadTeamsTabData` (fixture data typed against the real schema
- * above). A real caller, once a shared Supabase client exists (a separate,
- * not-yet-dispatched task per every other content page's own disclosure),
- * supplies its own `loadData` prop. Create/Edit/Archive/Hard-delete all
- * mutate local component state only (`setRows`) -- there is no persistence
- * layer to write through yet, matching every other CRUD-shaped tab built so
- * far in this codebase at this same wiring stage.
+ * above; that fixture function and its `FIXTURE_TEAMS`/
+ * `FIXTURE_STUDENT_TEAM_LINKS` data are still exported, now only for tests
+ * that want them explicitly, same posture `loaders/invites.ts`'s own T090
+ * doc already established for its own superseded fixture default).
+ * Create/Edit/Archive/Hard-delete used to mutate local component state only
+ * (`setRows`) -- there is no longer any part of this file where a real
+ * mutation seam is missing; T094 added all five (`onCreateTeam`/
+ * `onUpdateTeam`/`onSetTeamArchived`/`onHardDeleteTeam`/
+ * `onSetTeamSortOrders`).
  *
  * -----------------------------------------------------------------------
  * 8. Astryx prop sourcing (constitution item 2) -- every prop used below,
@@ -358,6 +415,16 @@ import {
   VisuallyHidden,
   VStack,
 } from '@astryxdesign/core';
+import { isSupabaseLoaderError } from '../../lib/supabase';
+// T094 (ED-1 Packet P5): real `loadData`/mutation defaults -- module doc above.
+import {
+  createTeam,
+  hardDeleteTeam,
+  loadTeamsTabData,
+  setTeamArchived,
+  setTeamSortOrders,
+  updateTeam,
+} from '../../lib/supabase/loaders/teams';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets. Module doc #1.
@@ -412,6 +479,32 @@ export interface TeamFormValues {
   program: Program | null;
   color: string;
 }
+
+// ---------------------------------------------------------------------------
+// T094: injectable real mutation seams -- see T094's own module doc above and
+// `../../lib/supabase/loaders/teams.ts` for each real implementation.
+// ---------------------------------------------------------------------------
+
+/** `sortOrder` is passed alongside `TeamFormValues` on create only -- see
+ * `loaders/teams.ts`'s own `makeCreateTeam` doc comment for why. */
+export type CreateTeamFn = (payload: TeamFormValues, sortOrder: number) => Promise<TeamRow>;
+
+export type UpdateTeamFn = (id: string, payload: TeamFormValues) => Promise<TeamRow>;
+
+/** The ONLY seam that ever writes `teams.archived` -- used for both archive
+ * (`true`) and unarchive (`false`), module doc #2. */
+export type SetTeamArchivedFn = (id: string, archived: boolean) => Promise<void>;
+
+/** A genuine `delete` -- module doc #2's `canHardDelete` gate is enforced
+ * client-side before this is ever called. */
+export type HardDeleteTeamFn = (id: string) => Promise<void>;
+
+/** Module doc #6 (T094 update) / Trap #2: one call per up/down move, carrying
+ * the (at most two) `{id, sortOrder}` pairs `computeSortOrderSwap` below
+ * computed for that move. */
+export type SetTeamSortOrdersFn = (
+  updates: ReadonlyArray<{ id: string; sortOrder: number }>,
+) => Promise<void>;
 
 // ---------------------------------------------------------------------------
 // Fixture data -- module doc #10. Fabricated names only (constitution item 6).
@@ -586,63 +679,90 @@ export function withHardDelete(rows: readonly TeamDisplayRow[], teamId: string):
   return rows.filter((row) => row.id !== teamId);
 }
 
+/**
+ * T094 (Trap #2): the ONE place the "current row / neighbor row" pair for a
+ * single up/down move is computed, as the `{id, sortOrder}` pairs that would
+ * need to be WRITTEN to reproduce that swap for real -- `null` at either
+ * boundary (no neighbor to swap with), never a partial/one-sided result.
+ * `moveTeamSortOrder` below (the pre-existing local-state transform, module
+ * doc #6, unchanged in its own external behavior) and `TeamsTab`'s own
+ * `handleMove` (the new real-persistence call site) both call this, so the
+ * two can never drift apart on which pair a given move actually swaps.
+ */
+export function computeSortOrderSwap(
+  rows: readonly TeamDisplayRow[],
+  teamId: string,
+  direction: 'up' | 'down',
+): ReadonlyArray<{ id: string; sortOrder: number }> | null {
+  const sorted = [...rows].sort((a, b) => a.sortOrder - b.sortOrder);
+  const index = sorted.findIndex((row) => row.id === teamId);
+  if (index === -1) return null;
+
+  const neighborIndex = direction === 'up' ? index - 1 : index + 1;
+  if (neighborIndex < 0 || neighborIndex >= sorted.length) return null;
+
+  const current = sorted[index];
+  const neighbor = sorted[neighborIndex];
+  return [
+    { id: current.id, sortOrder: neighbor.sortOrder },
+    { id: neighbor.id, sortOrder: current.sortOrder },
+  ];
+}
+
 /** Module doc #6: swaps `sortOrder` VALUES with the current neighbor, re-sorts. */
 export function moveTeamSortOrder(
   rows: readonly TeamDisplayRow[],
   teamId: string,
   direction: 'up' | 'down',
 ): TeamDisplayRow[] {
-  const sorted = [...rows].sort((a, b) => a.sortOrder - b.sortOrder);
-  const index = sorted.findIndex((row) => row.id === teamId);
-  if (index === -1) return rows.slice();
+  const swap = computeSortOrderSwap(rows, teamId, direction);
+  if (swap === null) return rows.slice();
 
-  const neighborIndex = direction === 'up' ? index - 1 : index + 1;
-  if (neighborIndex < 0 || neighborIndex >= sorted.length) return rows.slice();
-
-  const current = sorted[index];
-  const neighbor = sorted[neighborIndex];
-
+  const sortOrderById = new Map(swap.map((update) => [update.id, update.sortOrder] as const));
   return rows
-    .map((row) => {
-      if (row.id === current.id) return { ...row, sortOrder: neighbor.sortOrder };
-      if (row.id === neighbor.id) return { ...row, sortOrder: current.sortOrder };
-      return row;
-    })
+    .map((row) =>
+      sortOrderById.has(row.id) ? { ...row, sortOrder: sortOrderById.get(row.id)! } : row,
+    )
     .sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
+/**
+ * T094: appends the real, freshly-inserted row (`onCreateTeam`'s resolved
+ * `TeamRow`, real DB-generated `id`/`sortOrder`) rather than synthesizing an
+ * id/sortOrder locally -- see T094's own module doc above. `archived: false`/
+ * `hasStudentsOrHistory: false` are always true for a just-created row (never
+ * created already archived; a brand-new team has no students/history yet by
+ * construction).
+ */
 export function withCreatedTeam(
   rows: readonly TeamDisplayRow[],
-  values: TeamFormValues,
-  newId: string,
+  created: TeamRow,
 ): TeamDisplayRow[] {
-  const nextSortOrder = rows.length === 0 ? 0 : Math.max(...rows.map((row) => row.sortOrder)) + 1;
-  const created: TeamDisplayRow = {
-    id: newId,
-    name: values.name,
-    shortName: values.shortName,
-    program: values.program,
-    color: values.color,
-    archived: false,
-    sortOrder: nextSortOrder,
-    hasStudentsOrHistory: false,
-  };
-  return [...rows, created].sort((a, b) => a.sortOrder - b.sortOrder);
+  const createdRow: TeamDisplayRow = { ...created, hasStudentsOrHistory: false };
+  return [...rows, createdRow].sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
+/**
+ * T094: merges the real, freshly-updated row (`onUpdateTeam`'s resolved
+ * `TeamRow`) into the targeted display row, preserving that row's own
+ * `hasStudentsOrHistory` (an update never changes team membership, so this
+ * file never recomputes it here) -- `onUpdateTeam` never touches
+ * `archived`/`sortOrder` either (module doc for `UpdateTeamFn`), so spreading
+ * `updated` over the existing row cannot silently drift those two fields.
+ */
 export function withEditedTeam(
   rows: readonly TeamDisplayRow[],
-  teamId: string,
-  values: TeamFormValues,
+  updated: TeamRow,
 ): TeamDisplayRow[] {
-  return rows.map((row) => (row.id === teamId ? { ...row, ...values } : row));
+  return rows.map((row) => (row.id === updated.id ? { ...row, ...updated } : row));
 }
 
 /**
  * `name` uniqueness (real schema: `name text unique`) and required fields
- * (`name`/`short_name`/`color` are all `not null`), checked client-side
- * only -- a disclosed judgment call, not a DB constraint enforcement (no
- * shared Supabase client is wired in here, module doc #7).
+ * (`name`/`short_name`/`color` are all `not null`), checked client-side only
+ * -- a disclosed judgment call, not a substitute for the real DB constraint
+ * (which still applies and would reject a genuine race, surfaced like any
+ * other mutation failure -- see T094's module doc above).
  */
 export function validateTeamForm(
   values: TeamFormValues,
@@ -673,6 +793,11 @@ export function validateTeamForm(
   return errors;
 }
 
+/** T094: superseded as the component's implicit `loadData` default (now
+ * `loadTeamsTabData`, `../../lib/supabase/loaders/teams.ts`) -- kept, still
+ * exported, for tests/future callers that want fixture data explicitly, same
+ * posture `loaders/invites.ts`'s own T090 doc already established for its
+ * own superseded fixture default. */
 export async function defaultLoadTeamsTabData(): Promise<TeamsTabLoadResult> {
   return { teams: FIXTURE_TEAMS, studentTeamLinks: FIXTURE_STUDENT_TEAM_LINKS };
 }
@@ -958,16 +1083,49 @@ function TeamFormDialog({
 
 const EMPTY_ROWS: TeamDisplayRow[] = [];
 
+/**
+ * T094 (module doc #11-equivalent, same shape `StudentsTab.tsx`'s own
+ * `FeedbackBanner` / `InvitesTab.tsx`'s own `FeedbackBanner` already
+ * established): real success/error messaging for every real mutation below.
+ */
+interface FeedbackBanner {
+  status: 'success' | 'error';
+  title: string;
+  description: string;
+}
+
+function mutationErrorDescription(error: unknown, fallback: string): string {
+  return isSupabaseLoaderError(error) ? error.message : fallback;
+}
+
 export interface TeamsTabProps {
-  /** Injectable data-loading seam (module doc #7). Defaults to fixture data. */
+  /** Injectable data-loading seam (module doc #7, T094-superseded). Defaults
+   * to a real query against `teams`/`students` (T094, `loadTeamsTabData`). */
   loadData?: LoadTeamsTabDataFn;
-  /** Injectable id generator, overridable for deterministic tests. */
-  generateId?: () => string;
+  /** Injectable create seam (T094). Defaults to a real `teams` insert
+   * (`createTeam`). */
+  onCreateTeam?: CreateTeamFn;
+  /** Injectable update seam (T094). Defaults to a real `teams` update
+   * (`updateTeam`). */
+  onUpdateTeam?: UpdateTeamFn;
+  /** Injectable archive/unarchive seam (T094, module doc #2). Defaults to a
+   * real `teams.archived` mutation (`setTeamArchived`). */
+  onSetTeamArchived?: SetTeamArchivedFn;
+  /** Injectable hard-delete seam (T094, module doc #2). Defaults to a real
+   * `teams` delete (`hardDeleteTeam`). */
+  onHardDeleteTeam?: HardDeleteTeamFn;
+  /** Injectable reorder-persistence seam (T094, Trap #2). Defaults to a real
+   * `teams.sort_order` mutation (`setTeamSortOrders`). */
+  onSetTeamSortOrders?: SetTeamSortOrdersFn;
 }
 
 export function TeamsTab({
-  loadData = defaultLoadTeamsTabData,
-  generateId = () => `team-${crypto.randomUUID()}`,
+  loadData = loadTeamsTabData,
+  onCreateTeam = createTeam,
+  onUpdateTeam = updateTeam,
+  onSetTeamArchived = setTeamArchived,
+  onHardDeleteTeam = hardDeleteTeam,
+  onSetTeamSortOrders = setTeamSortOrders,
 }: TeamsTabProps = {}): ReactNode {
   const loadState = useLoadState(loadData, [loadData]);
   const [rows, setRows] = useState<TeamDisplayRow[]>(EMPTY_ROWS);
@@ -984,6 +1142,7 @@ export function TeamsTab({
 
   const [archiveTarget, setArchiveTarget] = useState<TeamDisplayRow | null>(null);
   const [hardDeleteTarget, setHardDeleteTarget] = useState<TeamDisplayRow | null>(null);
+  const [feedback, setFeedback] = useState<FeedbackBanner | null>(null);
 
   useEffect(() => {
     if (loadState.status === 'success') {
@@ -1012,7 +1171,17 @@ export function TeamsTab({
     setFormOpen(null);
   }
 
-  function handleSave(): void {
+  /**
+   * T094: real `onCreateTeam`/`onUpdateTeam` call. Deliberately does NOT
+   * close the dialog or touch `rows` until the real mutation resolves (no
+   * optimistic create/edit) -- unlike Archive/Reorder (a flip on an
+   * ALREADY-existing, already-displayed row, safe to show before the write
+   * lands), a create/edit failure here has nothing sensible to roll back TO
+   * in the dialog's own transient form state, so the dialog simply stays
+   * open with an error banner and the user's already-typed values intact,
+   * ready to retry.
+   */
+  async function handleSave(): Promise<void> {
     if (formOpen === null) return;
     const editingTeamId = formOpen.mode === 'edit' ? formOpen.teamId : null;
     const errors = validateTeamForm(formValues, rows, editingTeamId);
@@ -1020,26 +1189,91 @@ export function TeamsTab({
       setFormErrors(errors);
       return;
     }
-    if (formOpen.mode === 'create') {
-      setRows((prev) => withCreatedTeam(prev, formValues, generateId()));
-    } else {
-      setRows((prev) => withEditedTeam(prev, formOpen.teamId, formValues));
+    try {
+      if (formOpen.mode === 'create') {
+        const nextSortOrder =
+          rows.length === 0 ? 0 : Math.max(...rows.map((row) => row.sortOrder)) + 1;
+        const created = await onCreateTeam(formValues, nextSortOrder);
+        setRows((prev) => withCreatedTeam(prev, created));
+        setFeedback({
+          status: 'success',
+          title: 'Team created',
+          description: `${created.name} was added to the roster.`,
+        });
+      } else {
+        const updated = await onUpdateTeam(formOpen.teamId, formValues);
+        setRows((prev) => withEditedTeam(prev, updated));
+        setFeedback({
+          status: 'success',
+          title: 'Team updated',
+          description: `${updated.name}'s details were saved.`,
+        });
+      }
+      closeFormDialog();
+    } catch (error) {
+      setFeedback({
+        status: 'error',
+        title: formOpen.mode === 'create' ? "Couldn't create team" : "Couldn't update team",
+        description: mutationErrorDescription(
+          error,
+          'Something went wrong saving this team. Try again in a moment.',
+        ),
+      });
     }
-    closeFormDialog();
   }
 
   function handleArchiveRequest(row: TeamDisplayRow): void {
     setArchiveTarget(row);
   }
 
-  function handleConfirmArchive(): void {
+  // Module doc #2/T094: optimistic flip + real mutation + rollback-on-
+  // failure, mirrored from `RsvpControl.tsx`'s own `handleChange` (same
+  // shape `StudentsTab.tsx`'s own Deactivate/Reactivate already established).
+  async function handleConfirmArchive(): Promise<void> {
     if (archiveTarget === null) return;
-    setRows((prev) => withArchivedOverride(prev, archiveTarget.id, true));
+    const target = archiveTarget;
+    setRows((prev) => withArchivedOverride(prev, target.id, true));
     setArchiveTarget(null);
+    try {
+      await onSetTeamArchived(target.id, true);
+      setFeedback({
+        status: 'success',
+        title: 'Team archived',
+        description: `${target.name} is archived. Its students, history, and past metrics are preserved.`,
+      });
+    } catch (error) {
+      setRows((prev) => withArchivedOverride(prev, target.id, false));
+      setFeedback({
+        status: 'error',
+        title: "Couldn't archive team",
+        description: mutationErrorDescription(
+          error,
+          `Something went wrong archiving ${target.name}. Try again in a moment.`,
+        ),
+      });
+    }
   }
 
-  function handleUnarchive(row: TeamDisplayRow): void {
+  async function handleUnarchive(row: TeamDisplayRow): Promise<void> {
     setRows((prev) => withArchivedOverride(prev, row.id, false));
+    try {
+      await onSetTeamArchived(row.id, false);
+      setFeedback({
+        status: 'success',
+        title: 'Team unarchived',
+        description: `${row.name} is active again.`,
+      });
+    } catch (error) {
+      setRows((prev) => withArchivedOverride(prev, row.id, true));
+      setFeedback({
+        status: 'error',
+        title: "Couldn't unarchive team",
+        description: mutationErrorDescription(
+          error,
+          `Something went wrong unarchiving ${row.name}. Try again in a moment.`,
+        ),
+      });
+    }
   }
 
   function handleHardDeleteRequest(row: TeamDisplayRow): void {
@@ -1047,18 +1281,63 @@ export function TeamsTab({
     setHardDeleteTarget(row);
   }
 
-  function handleConfirmHardDelete(): void {
+  /**
+   * T094: NOT optimistic, unlike Archive/Reorder above -- a hard delete
+   * genuinely removes a row with no natural "undo" of local state to roll
+   * back to (re-inserting a removed row would require re-synthesizing its
+   * exact prior array position/neighbors, unlike a boolean flip or a
+   * sortOrder swap). The real delete is awaited FIRST; the row is removed
+   * from local state only after it succeeds. A failure (including the real
+   * `students.team_id ... on delete restrict` FK rejecting a race where the
+   * client-side `canHardDelete` gate went stale) leaves the row visible with
+   * an error banner, never silently removed.
+   */
+  async function handleConfirmHardDelete(): Promise<void> {
     if (hardDeleteTarget === null || !canHardDelete(hardDeleteTarget)) return;
-    setRows((prev) => withHardDelete(prev, hardDeleteTarget.id));
+    const target = hardDeleteTarget;
     setHardDeleteTarget(null);
+    try {
+      await onHardDeleteTeam(target.id);
+      setRows((prev) => withHardDelete(prev, target.id));
+      setFeedback({
+        status: 'success',
+        title: 'Team deleted',
+        description: `${target.name} was permanently deleted.`,
+      });
+    } catch (error) {
+      setFeedback({
+        status: 'error',
+        title: "Couldn't delete team",
+        description: mutationErrorDescription(
+          error,
+          `Something went wrong deleting ${target.name}. Try again in a moment.`,
+        ),
+      });
+    }
   }
 
-  function handleMoveUp(row: TeamDisplayRow): void {
-    setRows((prev) => moveTeamSortOrder(prev, row.id, 'up'));
-  }
-
-  function handleMoveDown(row: TeamDisplayRow): void {
-    setRows((prev) => moveTeamSortOrder(prev, row.id, 'down'));
+  // T094 (Trap #2): optimistic local swap (`moveTeamSortOrder`, unchanged)
+  // plus the real persistence call (`onSetTeamSortOrders`, the exact pair
+  // `computeSortOrderSwap` computes for this move) plus rollback-on-failure
+  // -- same optimistic-update-plus-rollback shape as Archive/Unarchive above.
+  async function handleMove(row: TeamDisplayRow, direction: 'up' | 'down'): Promise<void> {
+    const swap = computeSortOrderSwap(rows, row.id, direction);
+    if (swap === null) return; // boundary, no-op (module doc #6).
+    const previousRows = rows;
+    setRows((prev) => moveTeamSortOrder(prev, row.id, direction));
+    try {
+      await onSetTeamSortOrders(swap);
+    } catch (error) {
+      setRows(previousRows);
+      setFeedback({
+        status: 'error',
+        title: "Couldn't reorder teams",
+        description: mutationErrorDescription(
+          error,
+          'Something went wrong reordering teams. Try again in a moment.',
+        ),
+      });
+    }
   }
 
   // Deliberately NOT memoized -- same reasoning `StudentsTab.tsx`/T022
@@ -1069,10 +1348,16 @@ export function TeamsTab({
     rows,
     onEdit: openEditDialog,
     onArchiveRequest: handleArchiveRequest,
-    onUnarchive: handleUnarchive,
+    onUnarchive: (row) => {
+      void handleUnarchive(row);
+    },
     onHardDeleteRequest: handleHardDeleteRequest,
-    onMoveUp: handleMoveUp,
-    onMoveDown: handleMoveDown,
+    onMoveUp: (row) => {
+      void handleMove(row, 'up');
+    },
+    onMoveDown: (row) => {
+      void handleMove(row, 'down');
+    },
   });
 
   if (loadState.status === 'loading') {
@@ -1116,6 +1401,16 @@ export function TeamsTab({
         <Heading level={1}>Teams</Heading>
       </HStack>
 
+      {feedback !== null && (
+        <Banner
+          status={feedback.status}
+          title={feedback.title}
+          description={feedback.description}
+          isDismissable
+          onDismiss={() => setFeedback(null)}
+        />
+      )}
+
       <HStack gap={2} hAlign="end">
         <Button label="New team" variant="primary" onClick={openCreateDialog} />
       </HStack>
@@ -1144,7 +1439,9 @@ export function TeamsTab({
         errors={formErrors}
         onChange={setFormValues}
         onCancel={closeFormDialog}
-        onSave={handleSave}
+        onSave={() => {
+          void handleSave();
+        }}
       />
 
       <AlertDialog
@@ -1155,7 +1452,9 @@ export function TeamsTab({
         title={`Archive ${archiveTarget?.name ?? ''}?`}
         description="This removes the team from future selectors and expected rosters. Its students, history, and past metrics are preserved, and it will still show up here (marked archived) — you can unarchive it at any time."
         actionLabel="Archive"
-        onAction={handleConfirmArchive}
+        onAction={() => {
+          void handleConfirmArchive();
+        }}
       />
 
       <AlertDialog
@@ -1166,7 +1465,9 @@ export function TeamsTab({
         title={`Permanently delete ${hardDeleteTarget?.name ?? ''}?`}
         description="This permanently deletes the team and cannot be undone. This action is only available because the team has no students and no history."
         actionLabel="Delete permanently"
-        onAction={handleConfirmHardDelete}
+        onAction={() => {
+          void handleConfirmHardDelete();
+        }}
       />
     </VStack>
   );
