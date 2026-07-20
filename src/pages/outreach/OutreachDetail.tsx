@@ -271,6 +271,43 @@
  * identical architectural reason (this page's own single top-level
  * `loadState`, unchanged by this task, needed this narrower seam instead of
  * a larger `CoachMeetingsView`/`StudentMeetingsView`-style restructuring).
+ *
+ * -----------------------------------------------------------------------
+ * 11. T117 (PRD v2 UXP-01): coach-managed attendance panel, staff-only
+ *     (Known Context/Traps #5).
+ *
+ * This page previously had NO role derivation of its own (every prior
+ * section rendered identically regardless of viewer role). `useAuth()`
+ * (`../../app/guards.tsx`, read-only import, the same auth context
+ * `OutreachList.tsx`'s own T101 module doc #6 already wired) is now called
+ * unconditionally (React's rules-of-hooks, same posture
+ * `OutreachList.tsx`'s own `useActiveSeason()` call already established),
+ * and `isStaffViewer` uses the identical `user.role === 'coach' || user.role
+ * === 'admin'` check `OutreachList.tsx`'s own `isCoachOrAdminView` already
+ * established (that file's own module doc #6 -- only the two role literals
+ * present in `guards.tsx`'s `Role` union are compared directly; a real
+ * `'student'`/`'parent'` viewer, or nobody signed in at all (`user ===
+ * null`), falls through to `false`). `<AttendancePanel>` (new this task) is
+ * rendered ONLY when `isStaffViewer` -- a non-staff viewer sees this page
+ * completely unchanged from before this task, grep-provable: the
+ * `<AttendancePanel>` JSX is inside a single `isStaffViewer &&` guard, no
+ * other branch references it. `roster`/`sessions`/`teams` (already computed
+ * above for the Signups section) are passed straight through -- structurally
+ * compatible with `AttendancePanel.tsx`'s own independently-reimplemented
+ * `AttendancePanelSession`/`AttendancePanelStudent`/`AttendancePanelTeam`
+ * types (that file's own module doc #1 explains why they are reimplemented
+ * rather than imported from here: this file imports `AttendancePanel`, so
+ * the reverse import would be circular), so no reshaping happens at this
+ * call site. `currentUserProfileId={user.id}` -- `guards.tsx`'s own
+ * `resolveSessionToAuthState` sets `AuthUser.id = session.user.id`, and
+ * `public.profiles.id` (migration `20260716000000_identity_roster.sql` line
+ * 17) is `references auth.users (id)` as its OWN primary key (not a
+ * separate column) -- i.e. `profiles.id` and the signed-in `auth.users.id`
+ * are the SAME value, so the signed-in coach's `user.id` IS their real
+ * `profiles.id`, correctly attributable to `attendance.recorded_by` with no
+ * separate lookup needed (unlike `students.id` vs. `students.profile_id`,
+ * a genuinely different id space `RsvpControl.tsx`'s own module doc #3
+ * already had to disclose).
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
@@ -295,6 +332,10 @@ import {
   type DropdownMenuOption,
 } from '@astryxdesign/core';
 import { isSupabaseLoaderError } from '../../lib/supabase';
+// T117 (PRD v2 UXP-01): role-derivation seam -- module doc #11. Read-only
+// import, same shared auth context `OutreachList.tsx`'s own T101 wiring
+// already uses.
+import { useAuth } from '../../app/guards';
 // T101 (ED-1 Packet P10): real load/edit/cancel wiring -- module doc #10.
 // `saveOutreachEvent`/`cancelOutreachEvent`/`OutreachEventDialog` are this
 // task's own wiring of an ALREADY-BUILT, ALREADY-PASSED standalone dialog
@@ -310,6 +351,9 @@ import {
   type ExistingOutreachEvent,
   type OnSaveOutreachEventFn,
 } from './OutreachEventDialog';
+// T117 (PRD v2 UXP-01): the new coach-managed attendance panel -- module
+// doc #11.
+import { AttendancePanel } from './AttendancePanel';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets. Module doc #1.
@@ -961,6 +1005,11 @@ export function OutreachDetail({
   const { eventId: routeEventId } = useParams<{ eventId: string }>();
   const eventId = eventIdProp ?? routeEventId ?? '';
 
+  // T117 (module doc #11) -- called unconditionally (rules of hooks), same
+  // posture `OutreachList.tsx`'s own `useActiveSeason()` call already
+  // established for this exact reason.
+  const { user } = useAuth();
+
   const loadState = useOutreachDetailLoadState(loadData, eventId);
   // T101 (module doc #10) -- kept in sync with every successful `loadState`
   // (effect below), so a post-edit reload / a post-cancel optimistic flip
@@ -1130,6 +1179,10 @@ export function OutreachDetail({
   const { event, sessions, rsvps, students, teams, profiles } = detailData;
   const roster = resolveEventRoster(event, students);
   const orderedSessions = sortSessionsByStart(sessions);
+  // T117 (module doc #11) -- staff-only gate for the new attendance panel;
+  // every other branch/section on this page is unchanged for a non-staff
+  // viewer.
+  const isStaffViewer = user !== null && (user.role === 'coach' || user.role === 'admin');
   const menuItems: DropdownMenuOption[] = [
     { label: 'Edit', onClick: openEditDialog },
     { label: 'Cancel event', onClick: openCancelConfirm },
@@ -1196,6 +1249,19 @@ export function OutreachDetail({
           ))
         )}
       </VStack>
+
+      {/* T117 (module doc #11) -- staff-only, UXD-06 spacious page-level
+          section (not a modal). Non-staff viewers see this page exactly as
+          before this task -- no branch below this guard ever renders for
+          them. */}
+      {isStaffViewer && user !== null && (
+        <AttendancePanel
+          sessions={sessions}
+          roster={roster}
+          teams={teams}
+          currentUserProfileId={user.id}
+        />
+      )}
 
       <AlertDialog
         isOpen={isCancelConfirmOpen}

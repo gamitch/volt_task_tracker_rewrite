@@ -4291,3 +4291,39 @@ real event opens an empty checklist until a page supplies
 `loadOutreachEventRoster` is built/tested but not yet consumed by the pages;
 product observation that a coach cannot override a student's own response is
 correct-by-rule but currently silent.
+
+---
+
+## T117 (PRD v2 UXP-01) — coach-managed attendance with per-student hours
+
+**PASS (1st attempt, NIT).** The heart of the parity epic: on an outreach
+event's detail page, staff now get an Attendance panel — one card per session
+day, roster checklist grouped by team with color-coded chips, a per-student
+hours field appearing only on checked rows (matching the reference figure's
+own conditional pattern), per-day "N attending · M h" indicators, and an
+event-total badge. Pure frontend on T114's verified `staff_all` policy.
+
+The load-bearing un-mark semantics were verified line-by-line: unchecking a
+coach-entered row deletes it (the reference app's checkbox model); unchecking
+a QR/import-originated row instead upserts `status:'absent'` with the hours
+override cleared, `recorded_by` re-attributed to the acting coach, `method`
+preserved verbatim, and the check-in/out timestamps NEVER in the payload — the
+checker confirmed the PostgREST payload-key `ON CONFLICT DO UPDATE` reasoning
+transfers verbatim from T109's installed-source verification, so the real
+check-in timestamp survives coach edits. The metrics-equivalence claim was
+proven rigorously against BOTH view generations: a deleted row and an
+`'absent'` row are mathematically identical in `v_student_hours` (status
+filter) and `v_student_participation` (expectation derives from the CTE, not
+attendance; all filter counts treat NULL-status and 'absent' identically).
+
+Upsert payload discipline asserted in tests down to `Object.keys` excluding
+the timestamp columns. UXD comparison judged honestly: the attendance density
+of the reference edit-dialog figure is reproduced; Mark-complete/Add-Remove-
+day/people-reached omissions are scope-correct (they live in other
+tasks/files). Every Astryx prop cross-checked valid, including the 9-variant
+team Badge color usage. Role gating: panel renders only for staff; the test
+harness's new `user` parameter defaults to null so every pre-existing test is
+byte-identical in behavior. All five gates green, 1232/1232. NITs logged
+only: one equal-to-default keystroke case writes an explicit override
+(defensible — the coach typed it); the pure-helper export pattern matches the
+repo's established react-refresh baseline.

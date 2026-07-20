@@ -26,16 +26,31 @@
  * `LiveConsole.test.tsx`'s own `MemoryRouter`/`Routes`/`Route` wrapper
  * (needed here too, since this component reads `useParams()`, which only
  * resolves against an actually-matched route).
+ *
+ * -----------------------------------------------------------------------
+ * T117 (PRD v2 UXP-01) UPDATE: adds coverage for the new staff-only
+ * `<AttendancePanel>` wiring (component module doc #11) -- role gating
+ * (no user / student never see it, coach/admin do) plus an end-to-end
+ * data-threading proof (`roster`/`sessions`/`teams`/`currentUserProfileId`
+ * genuinely reach the panel) via a module-level `vi.mock` of
+ * `../../lib/supabase/loaders/attendance` (same `importOriginal` partial-
+ * mock pattern `StudentsTab.test.tsx` already established for
+ * `invokeEdgeFunction`) -- `AttendancePanel.tsx`'s OWN test file
+ * (`AttendancePanel.test.tsx`) is the authority for that component's
+ * internal toggle/hours-edit/un-mark behavior, not duplicated here.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AuthProvider, type AuthUser } from '../../app/guards';
+import { LoginAs } from '../../test-utils/authHarness';
 import {
   makeCancelOutreachEvent,
   makeLoadOutreachDetail,
 } from '../../lib/supabase/loaders/outreach';
+import { loadAttendanceForSessions, upsertAttendance } from '../../lib/supabase/loaders/attendance';
 import {
   buildGoogleMapsUrl,
   buildInitialOutreachEvent,
@@ -53,6 +68,27 @@ import {
   type RsvpRow,
   type TeamOption,
 } from './OutreachDetail';
+
+// T117 (module doc above) -- partial mock so the new `<AttendancePanel>`
+// (rendered with no override props from `OutreachDetail.tsx` -- it has none
+// to give it, by design) never hits a real, unconfigured Supabase client in
+// this test environment. Pure decision functions
+// (`resolveAttendanceWriteMethod`/`resolveUnmarkAction`) are kept REAL via
+// `importOriginal` -- only the three IO functions are replaced. Same
+// `importOriginal` partial-mock + `vi.mocked(...)` convention
+// `StudentsTab.test.tsx` already established for `invokeEdgeFunction`.
+vi.mock('../../lib/supabase/loaders/attendance', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/supabase/loaders/attendance')>();
+  return {
+    ...actual,
+    loadAttendanceForSessions: vi.fn(async () => []),
+    upsertAttendance: vi.fn(),
+    removeAttendance: vi.fn(),
+  };
+});
+
+const mockedLoadAttendanceForSessions = vi.mocked(loadAttendanceForSessions);
+const mockedUpsertAttendance = vi.mocked(upsertAttendance);
 
 // ---------------------------------------------------------------------------
 // jsdom gap: `Dialog`/`AlertDialog` render a native `<dialog>` and call
@@ -92,6 +128,11 @@ afterEach(() => {
     root.unmount();
   });
   container.remove();
+  // T117 -- clears call history only (not the mock factory's own default
+  // "resolves []" implementation) between tests that share this
+  // module-level mock.
+  mockedLoadAttendanceForSessions.mockClear();
+  mockedUpsertAttendance.mockClear();
 });
 
 async function flushMicrotasks(): Promise<void> {
@@ -102,16 +143,48 @@ async function flushMicrotasks(): Promise<void> {
   });
 }
 
+// T117 (PRD v2 UXP-01): `OutreachDetail` now calls `useAuth()`
+// unconditionally (component module doc #11), so every render needs a real
+// `<AuthProvider>` ancestor -- same harness update `OutreachList.test.tsx`'s
+// own T101 wiring already made for this identical reason.
+// `user = null` (the default) intentionally renders NO `<LoginAs>` at all --
+// every PRE-EXISTING test below calls `renderDetail` without a `user`
+// override, so they keep observing the exact same "no attendance panel,
+// nothing role-gated" render this page produced before this task (T117's
+// own new tests, further below, explicitly pass a `coach`/`admin`/`student`
+// `AuthUser` to exercise the new gating).
+const COACH_USER: AuthUser = { id: 'profile-coach-1', email: 'coach@example.com', role: 'coach' };
+const ADMIN_USER: AuthUser = { id: 'profile-admin-1', email: 'admin@example.com', role: 'admin' };
+const STUDENT_USER: AuthUser = {
+  id: 'profile-student-1',
+  email: 'student@example.com',
+  role: 'student',
+};
+
 /** Renders `<OutreachDetail />` inside a real matched `/outreach/:eventId`
  * route so `useParams()` resolves, mirroring `LiveConsole.test.tsx`'s own
  * `renderBody` helper. */
-function renderDetail(eventId: string, props: Parameters<typeof OutreachDetail>[0] = {}): void {
+function renderDetail(
+  eventId: string,
+  props: Parameters<typeof OutreachDetail>[0] = {},
+  user: AuthUser | null = null,
+): void {
   act(() => {
     root.render(
       <MemoryRouter initialEntries={[`/outreach/${eventId}`]}>
-        <Routes>
-          <Route path="/outreach/:eventId" element={<OutreachDetail {...props} />} />
-        </Routes>
+        <AuthProvider>
+          {user === null ? (
+            <Routes>
+              <Route path="/outreach/:eventId" element={<OutreachDetail {...props} />} />
+            </Routes>
+          ) : (
+            <LoginAs user={user}>
+              <Routes>
+                <Route path="/outreach/:eventId" element={<OutreachDetail {...props} />} />
+              </Routes>
+            </LoginAs>
+          )}
+        </AuthProvider>
       </MemoryRouter>,
     );
   });
@@ -771,5 +844,88 @@ describe('cancelOutreachEvent (T101, Trap #4 real mutation)', () => {
     expect(updateSpy).toHaveBeenCalledWith({ status: 'canceled' });
     expect(firstEqSpy).toHaveBeenCalledWith('event_id', 'event-99');
     expect(secondEqSpy).toHaveBeenCalledWith('status', 'scheduled');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T117 (PRD v2 UXP-01): staff-only `<AttendancePanel>` role gating + wiring.
+// ---------------------------------------------------------------------------
+
+/** Locates a labeled input via Astryx `Field`'s real `<label htmlFor>` --
+ * same helper `MarkDayCompleteDialog.test.tsx`/`AttendancePanel.test.tsx`
+ * already established. */
+function getFieldControl(labelText: string): HTMLElement {
+  const labels = Array.from(container.querySelectorAll('label'));
+  const label = labels.find((el) => el.textContent?.trim().startsWith(labelText));
+  if (!label) {
+    throw new Error(
+      `No label found for "${labelText}". Labels present: ${labels.map((l) => l.textContent).join(' | ')}`,
+    );
+  }
+  const forId = label.getAttribute('for');
+  if (!forId) throw new Error(`Label "${labelText}" has no htmlFor`);
+  const control = document.getElementById(forId);
+  if (!control) throw new Error(`No control found for id "${forId}"`);
+  return control;
+}
+
+describe('<AttendancePanel> role gating (Known Context/Traps #5)', () => {
+  it('renders no "Attendance" section at all for an unauthenticated viewer', async () => {
+    renderDetail('event-food-bank-sort', { loadData: defaultLoadOutreachDetail }, null);
+    await flushMicrotasks();
+
+    expect(container.textContent).not.toContain('Attendance');
+    expect(mockedLoadAttendanceForSessions).not.toHaveBeenCalled();
+  });
+
+  it('renders no "Attendance" section for a signed-in student -- page unchanged for non-staff', async () => {
+    renderDetail('event-food-bank-sort', { loadData: defaultLoadOutreachDetail }, STUDENT_USER);
+    await flushMicrotasks();
+
+    expect(container.textContent).not.toContain('Attendance');
+    // Signups section (unchanged, present for every viewer) still renders.
+    expect(container.textContent).toContain('Signups');
+  });
+
+  it('renders the "Attendance" section for a signed-in coach', async () => {
+    renderDetail('event-food-bank-sort', { loadData: defaultLoadOutreachDetail }, COACH_USER);
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('Attendance');
+  });
+
+  it('renders the "Attendance" section for a signed-in admin too', async () => {
+    renderDetail('event-food-bank-sort', { loadData: defaultLoadOutreachDetail }, ADMIN_USER);
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('Attendance');
+  });
+});
+
+describe('<AttendancePanel> data threading (roster/sessions/teams/currentUserProfileId genuinely reach the panel)', () => {
+  it('renders the real fetched roster (grouped by team chips) inside the panel, and attributes a write to the real signed-in coach', async () => {
+    renderDetail('event-food-bank-sort', { loadData: defaultLoadOutreachDetail }, COACH_USER);
+    await flushMicrotasks();
+
+    // `event-food-bank-sort`'s fixture is all-teams (`teamIds: null`) --
+    // every fixture student's real name reaches the panel (module doc #11:
+    // `roster`/`teams` passed straight through, no reshaping).
+    expect(mockedLoadAttendanceForSessions).toHaveBeenCalled();
+    expect(container.textContent).toContain('Amara Chen');
+    expect(container.textContent).toContain('Ravens');
+    expect(container.textContent).toContain('Titans');
+
+    // Checking a student writes `recordedBy` as the REAL signed-in coach's
+    // `user.id` (module doc #11's `profiles.id === auth.users.id` proof),
+    // not a hardcoded placeholder.
+    const amaraCheckbox = getFieldControl('Amara Chen') as HTMLInputElement;
+    act(() => {
+      amaraCheckbox.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    expect(mockedUpsertAttendance).toHaveBeenCalledWith(
+      expect.objectContaining({ recordedBy: COACH_USER.id, method: 'coach' }),
+    );
   });
 });
