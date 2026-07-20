@@ -421,6 +421,49 @@ describe('<CheckinResult />', () => {
 });
 
 // ---------------------------------------------------------------------------
+// T100 (module doc gap #1, pre-approved async widening) -- `getAccessToken`
+// is now `() => Promise<string | null>`; these tests inject a fixture
+// implementation explicitly through that seam (same "inject the fixture
+// explicitly through the seam" pattern every prior ED-1 packet establishes),
+// proving `runCheckin` genuinely `await`s it before calling `checkin`.
+// ---------------------------------------------------------------------------
+
+describe('getAccessToken (T100 async widening)', () => {
+  it('awaits a real async getAccessToken and threads its resolved token into checkin', async () => {
+    const checkin = vi.fn<typeof callCheckin>().mockResolvedValue({
+      ok: true,
+      data: {
+        already_checked_in: false,
+        attendance: { status: 'present', check_in_at: '2026-07-19T18:04:00Z', method: 'qr' },
+      },
+    });
+    const getAccessToken = vi.fn(() => Promise.resolve('real-session-jwt'));
+    renderAt('/checkin?s=session-1&t=abc123', { checkin, getAccessToken });
+    await flushMicrotasks();
+
+    expect(getAccessToken).toHaveBeenCalledTimes(1);
+    expect(checkin).toHaveBeenCalledWith(
+      { sessionId: 'session-1', token: 'abc123', code: undefined },
+      'real-session-jwt',
+      undefined,
+    );
+    expect(container.textContent).toContain("You're in");
+  });
+
+  it('a rejecting getAccessToken falls through to the generic error state (never crashes, never calls checkin)', async () => {
+    const checkin = vi.fn<typeof callCheckin>();
+    const getAccessToken = vi.fn(() => Promise.reject(new Error('token lookup failed')));
+    expect(() =>
+      renderAt('/checkin?s=session-1&t=abc123', { checkin, getAccessToken }),
+    ).not.toThrow();
+    await flushMicrotasks();
+
+    expect(checkin).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Something went wrong checking you in. Try again.');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // prefers-reduced-motion -- real window.matchMedia toggle, not a visual claim
 // ---------------------------------------------------------------------------
 

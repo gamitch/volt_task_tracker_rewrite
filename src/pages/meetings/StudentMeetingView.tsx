@@ -140,10 +140,20 @@
  * tests in `StudentMeetingView.test.tsx` (4-entry and 8-capped-to-5 cases).
  *
  * -----------------------------------------------------------------------
- * 5. No shared Supabase client wired in -- same posture as every prior
- *    content page (`MeetingsList.tsx`, `ParticipationTab.tsx`, etc.):
- *    injectable `loadData`-style seams (`LoadConsistencyStripDataFn`,
- *    `LoadLinkedStudentsFn`) defaulting to obviously-fake fixture data.
+ * 5. T100 (ED-1 Packet P9) update: a shared Supabase client now exists
+ *    (T071) and both injectable `loadData`-style seams
+ *    (`LoadConsistencyStripDataFn`, `LoadLinkedStudentsFn`) default to REAL
+ *    queries (`../../lib/supabase/loaders/checkin.ts`'s
+ *    `loadConsistencyStripData`/`loadLinkedStudents`) rather than fixture
+ *    data -- see module doc #9 below for the full T100 wiring detail. The
+ *    fixture-producing `defaultLoadConsistencyStripData`/
+ *    `defaultLoadLinkedStudents` functions below are KEPT AS-IS (same
+ *    "fixture default renamed to a distinct export, real default takes over
+ *    the runtime prop default" pattern `MeetingsList.tsx`'s own T096 already
+ *    established for its own `defaultLoadCoachMeetingsData`/
+ *    `defaultLoadStudentMeetingsData`) -- still directly imported by
+ *    `StudentMeetingView.test.tsx` and still fully exercised there,
+ *    unchanged.
  *
  * -----------------------------------------------------------------------
  * 6. Parent variant -- plural linked students, one strip per student
@@ -168,15 +178,53 @@
  * `variant="own"` (the default) covers the single-student case (a student
  * viewing their own strip, or this widget being dropped into
  * `MeetingsList.tsx`'s own placeholder slot for that same student). This
- * component intentionally does NOT call `useAuth()` to infer which variant
- * to render -- `guards.tsx`'s `Role` union still lacks `student`/`parent`
- * (the same gap `MeetingsList.tsx`'s module doc #5 already disclosed, and
- * `AuthUser` still has no `students.id`/`guardian_links` linkage, the same
- * gap module doc #6 there disclosed), so any inference here would be
- * exactly as provisional as `MeetingsList.tsx`'s own and would duplicate
- * that disclosed gap rather than resolve it. A future wiring task (which
- * will have real role/linkage data by the time it exists) passes `variant`
- * explicitly instead.
+ * component still does NOT call `useAuth()` to infer WHICH VARIANT to
+ * render -- that choice (module doc #9 below) is unchanged by T100 and
+ * still stays with the caller.
+ *
+ * -----------------------------------------------------------------------
+ * 9. T100 (ED-1 Packet P9): real `studentId` resolution for `variant="own"`
+ *    (worker packet Trap #1) -- REUSES `MeetingsList.tsx`'s own already-Passed
+ *    (T096) `resolveCurrentStudentId` (`../../lib/supabase/loaders/meetings.ts`)
+ *    directly, rather than writing a second implementation of the identical
+ *    "which student/parent is this session's own" resolution logic that
+ *    file's own module doc #6 already documents in full (student ->
+ *    `students.profile_id = auth.uid()`; parent -> `guardian_links`'s
+ *    EARLIEST-linked child) -- not re-derived here.
+ *
+ *    Wired the SAME way T096 wired it into `MeetingsList`: a new injectable
+ *    `resolveStudentId` prop (default `resolveCurrentStudentId`), only ever
+ *    invoked when the caller does NOT supply an explicit `studentId` --
+ *    every existing fixture-driven test/caller that already passes
+ *    `studentId` explicitly is completely unaffected (`OwnStudentConsistencyStrip`
+ *    below never even mounts the resolution branch in that case).
+ *    `PLACEHOLDER_CONSISTENCY_STUDENT_ID` is KEPT as a named export (same
+ *    "narrowed role" T096 already established for `MeetingsList.tsx`'s own
+ *    `PLACEHOLDER_CURRENT_STUDENT_ID`) but is no longer this component's own
+ *    runtime default for an unresolved `studentId` -- it now exists solely
+ *    as a fixture-identifying literal for callers/tests that want it.
+ *
+ *    `useAuth()` (`../../app/guards`) IS now called, but ONLY inside
+ *    `ResolvedOwnStudentConsistencyStrip` below -- a component that only
+ *    ever mounts when `variant="own"` AND no explicit `studentId` was
+ *    supplied. Calling it unconditionally at `StudentMeetingView`'s own top
+ *    level (mirroring `MeetingsList.tsx`'s own posture, which always sits
+ *    behind `RequireAuth`) would break every one of this file's own
+ *    PRE-EXISTING tests, none of which wrap this standalone, reusable
+ *    widget in an `<AuthProvider>` -- gating the hook to only the branch
+ *    that genuinely needs it (a distinct child component, not a conditional
+ *    hook call inside one component body -- valid per React's Rules of
+ *    Hooks) keeps every pre-existing explicit-`studentId` test/caller
+ *    working with zero required test-harness changes, exactly this task's
+ *    own packet instruction. A signed-out viewer reaching the resolution
+ *    branch (`user === null`) gets a real "sign in" `EmptyState`, mirroring
+ *    `MeetingsList.tsx`'s own top-level signed-out state.
+ *
+ *    `variant="linked"` is untouched by this reasoning -- `LoadLinkedStudentsFn`
+ *    takes no `viewer` argument at all (module doc #6); its own real default
+ *    (`../../lib/supabase/loaders/checkin.ts`'s `loadLinkedStudents`) resolves
+ *    "which parent is this" from the real Supabase session internally,
+ *    never from a `useAuth()` call in this file.
  *
  * -----------------------------------------------------------------------
  * 7. DES-12 four states, reached independently per rendered strip.
@@ -223,8 +271,9 @@
  *    those two used below.
  *  - `Banner`: "Banner" Props table. `status`, `title`, `description` used.
  *  - `EmptyState`: "EmptyState" Props table. `title` (required),
- *    `description` used (the `variant="linked"`/zero-linked-students case
- *    only).
+ *    `description` used -- the `variant="linked"`/zero-linked-students case,
+ *    and (T100, module doc #9) the `variant="own"` resolution branch's own
+ *    "no student linked yet" / "sign in" states.
  *  - `Skeleton` (T081): "Skeleton" section, lines 621-655. `width`,
  *    `height`, `index` used, replacing `Spinner`'s prior use in both loading
  *    branches per Astryx's own guidance (known-dimension content).
@@ -250,6 +299,13 @@ import {
   VisuallyHidden,
   VStack,
 } from '@astryxdesign/core';
+import { useAuth } from '../../app/guards';
+import {
+  loadConsistencyStripData as loadConsistencyStripDataFromSupabase,
+  loadLinkedStudents as loadLinkedStudentsFromSupabase,
+} from '../../lib/supabase/loaders/checkin';
+import { resolveCurrentStudentId } from '../../lib/supabase/loaders/meetings';
+import type { CurrentViewerIdentity, ResolveCurrentStudentIdFn } from './MeetingsList';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real columns. See module doc #1/#2.
@@ -317,8 +373,11 @@ export type LoadConsistencyStripDataFn = (studentId: string) => Promise<Consiste
 export type LoadLinkedStudentsFn = () => Promise<LinkedStudentSummary[]>;
 
 // ---------------------------------------------------------------------------
-// Placeholder identifiers -- module doc #6 (same disclosed-gap class as
-// `MeetingsList.tsx`'s own `PLACEHOLDER_CURRENT_STUDENT_ID`).
+// Placeholder identifiers -- module doc #6/#9. T100: KEPT (same narrowed-role
+// treatment `MeetingsList.tsx`'s own `PLACEHOLDER_CURRENT_STUDENT_ID` already
+// received from T096) but no longer this component's own runtime default for
+// an unresolved `studentId` -- exists solely as a fixture-identifying literal
+// now.
 // ---------------------------------------------------------------------------
 
 export const PLACEHOLDER_CONSISTENCY_STUDENT_ID = 'student-consistency-placeholder-viewer';
@@ -837,7 +896,124 @@ function ParentConsistencyStrips({
 }
 
 // ---------------------------------------------------------------------------
-// Top-level component -- module doc #0/#6.
+// `variant="own"` `studentId` resolution -- module doc #9, Trap #1. Mirrors
+// `MeetingsList.tsx`'s own `ResolvedStudentMeetingsView`/
+// `StudentMeetingsViewContainer` shape exactly, reusing the SAME
+// `resolveCurrentStudentId` that file's own T096 already built and Passed.
+// `useAuth()` lives ONLY inside `ResolvedOwnStudentConsistencyStrip` below --
+// see module doc #9 for why this is a distinct child component rather than a
+// conditional hook call.
+// ---------------------------------------------------------------------------
+
+interface ResolvedStudentConsistencyStripCardProps {
+  viewer: CurrentViewerIdentity;
+  resolveStudentId: ResolveCurrentStudentIdFn;
+  loadData: LoadConsistencyStripDataFn;
+}
+
+function ResolvedStudentConsistencyStripCard({
+  viewer,
+  resolveStudentId,
+  loadData,
+}: ResolvedStudentConsistencyStripCardProps): ReactNode {
+  const loadState = useLoadState(
+    () => resolveStudentId(viewer),
+    [resolveStudentId, viewer.id, viewer.role],
+  );
+
+  if (loadState.status === 'loading') {
+    return (
+      <VStack gap={3} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          Finding your student record…
+        </VisuallyHidden>
+        <Skeleton width={100} height={20} index={0} />
+        <Skeleton width={220} height={16} index={1} />
+      </VStack>
+    );
+  }
+
+  if (loadState.status === 'error') {
+    return (
+      <Banner
+        status="error"
+        title="Couldn't find your student record"
+        description="Something went wrong looking up which student this is for you. Try refreshing the page."
+        endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
+      />
+    );
+  }
+
+  if (loadState.data === null) {
+    return (
+      <EmptyState
+        title="No student account linked yet"
+        description="We couldn't find a student record linked to your account yet. Once one is linked, your meeting consistency will show up here."
+      />
+    );
+  }
+
+  return <StudentConsistencyStripCard studentId={loadState.data} loadData={loadData} />;
+}
+
+interface ResolvedOwnStudentConsistencyStripProps {
+  resolveStudentId: ResolveCurrentStudentIdFn;
+  loadData: LoadConsistencyStripDataFn;
+}
+
+/** The ONLY place in this file `useAuth()` is called (module doc #9) --
+ * mounted exclusively by `OwnStudentConsistencyStrip` below, and only when
+ * no explicit `studentId` was supplied. */
+function ResolvedOwnStudentConsistencyStrip({
+  resolveStudentId,
+  loadData,
+}: ResolvedOwnStudentConsistencyStripProps): ReactNode {
+  const { user } = useAuth();
+
+  if (user === null) {
+    return (
+      <EmptyState
+        title="Sign in to view your meeting consistency"
+        description="You need to be signed in to see this."
+      />
+    );
+  }
+
+  return (
+    <ResolvedStudentConsistencyStripCard
+      viewer={{ id: user.id, role: user.role }}
+      resolveStudentId={resolveStudentId}
+      loadData={loadData}
+    />
+  );
+}
+
+interface OwnStudentConsistencyStripProps {
+  studentId: string | undefined;
+  resolveStudentId: ResolveCurrentStudentIdFn;
+  loadData: LoadConsistencyStripDataFn;
+}
+
+/** Module doc #9 -- an explicit `studentId` (every pre-existing test/caller)
+ * renders `StudentConsistencyStripCard` directly, exactly as before this
+ * task, and never touches `useAuth()`; `undefined` (the new real-world
+ * default) routes through `ResolvedOwnStudentConsistencyStrip`'s own real
+ * resolution. */
+function OwnStudentConsistencyStrip({
+  studentId,
+  resolveStudentId,
+  loadData,
+}: OwnStudentConsistencyStripProps): ReactNode {
+  if (studentId !== undefined) {
+    return <StudentConsistencyStripCard studentId={studentId} loadData={loadData} />;
+  }
+  return (
+    <ResolvedOwnStudentConsistencyStrip resolveStudentId={resolveStudentId} loadData={loadData} />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Top-level component -- module doc #0/#6/#9.
 // ---------------------------------------------------------------------------
 
 export interface StudentMeetingViewProps {
@@ -846,25 +1022,37 @@ export interface StudentMeetingViewProps {
    * wiring task drops into `MeetingsList.tsx`'s placeholder slot for the
    * current viewer. `'linked'`: one strip per linked student -- the shape
    * `ParentHome.tsx` (T055)'s per-student card would use. This component
-   * does not infer which to use from `useAuth()` (module doc #6) -- the
-   * caller decides.
+   * does not infer WHICH VARIANT to render from `useAuth()` (module doc #6)
+   * -- the caller decides.
    */
   variant?: 'own' | 'linked';
-  /** Used only when `variant === 'own'`. Defaults to a disclosed placeholder
-   * (module doc #6, same class of gap `MeetingsList.tsx` already carries). */
+  /**
+   * Used only when `variant === 'own'`. When omitted (the real-world
+   * default), this is resolved for real via `resolveStudentId` (module doc
+   * #9) instead of falling back to a placeholder -- supplying it explicitly
+   * (as every fixture-driven caller/test does) bypasses that resolution
+   * entirely, unchanged behavior.
+   */
   studentId?: string;
-  /** Per-student strip data seam. Defaults to fixture data (module doc #5). */
+  /** Per-student strip data seam. Defaults to a real query
+   * (`../../lib/supabase/loaders/checkin.ts`, module doc #5/#9). */
   loadStripData?: LoadConsistencyStripDataFn;
-  /** Used only when `variant === 'linked'`. Defaults to fixture data
-   * representing three linked students (module doc #5/#6). */
+  /** Used only when `variant === 'linked'`. Defaults to a real query, same
+   * module (module doc #5/#9). */
   loadLinkedStudents?: LoadLinkedStudentsFn;
+  /** Used only when `variant === 'own'` and `studentId` is NOT supplied
+   * (module doc #9). Defaults to `MeetingsList.tsx`'s own already-Passed
+   * (T096) `resolveCurrentStudentId`, reused directly rather than
+   * reimplemented. */
+  resolveStudentId?: ResolveCurrentStudentIdFn;
 }
 
 export function StudentMeetingView({
   variant = 'own',
-  studentId = PLACEHOLDER_CONSISTENCY_STUDENT_ID,
-  loadStripData = defaultLoadConsistencyStripData,
-  loadLinkedStudents = defaultLoadLinkedStudents,
+  studentId,
+  loadStripData = loadConsistencyStripDataFromSupabase,
+  loadLinkedStudents = loadLinkedStudentsFromSupabase,
+  resolveStudentId = resolveCurrentStudentId,
 }: StudentMeetingViewProps = {}): ReactNode {
   if (variant === 'linked') {
     return (
@@ -877,7 +1065,11 @@ export function StudentMeetingView({
 
   return (
     <Section padding={4}>
-      <StudentConsistencyStripCard studentId={studentId} loadData={loadStripData} />
+      <OwnStudentConsistencyStrip
+        studentId={studentId}
+        resolveStudentId={resolveStudentId}
+        loadData={loadStripData}
+      />
     </Section>
   );
 }

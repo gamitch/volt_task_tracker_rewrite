@@ -3587,3 +3587,54 @@ NIT only: worker's self-reported test/suite counts drifted from the checker's ow
 freshly-run numbers, fully explained by concurrent sibling-task progress in the
 shared tree between the worker's own last run and the checker's — logged for ledger
 accuracy, not a rework item.
+
+---
+
+## T100 (ED-1 Packet P9) — real student check-in path (`StudentMeetingView` + `CheckinResult`)
+
+**PASS (1st attempt, clean).** Checker independently confirmed the worker reused
+T096's already-Passed `resolveCurrentStudentId` rather than reimplementing it: a
+genuine value import from `src/lib/supabase/loaders/meetings.ts` (forbidden, read-
+only) plus a type-only import from `MeetingsList.tsx`, no second implementation
+found on grep. The resolver is wired as an injectable `resolveStudentId` prop,
+invoked only when `studentId` is `undefined`, and deliberately isolated inside a new
+`ResolvedOwnStudentConsistencyStrip` child component — the sole `useAuth()` call
+site in the file — so every pre-existing test that supplies `studentId` explicitly
+still needs no `<AuthProvider>` wrapper and is unaffected.
+
+Both real load seams verified against the actual query code, not just the worker's
+description: `LoadConsistencyStripDataFn` queries `event_sessions`/`attendance`/
+`v_student_participation` and delegates the join/derivation logic to the page's own
+already-tested `buildConsistencyStripData` (no re-derivation); `LoadLinkedStudentsFn`
+resolves the parent from the session, queries `guardian_links` ordered by
+`created_at`, joins to `students`, and returns the full list (not just the first, as
+the packet required for the `variant === 'linked'` case). Both are exercised
+non-tautologically against a stubbed `SupabaseClient` (asserting exact query args and
+joined output shape, not just "was called").
+
+`CheckinResult.tsx`'s `getAccessToken` widening to `() => Promise<string | null>`
+confirmed as specified: the real default calls `client.auth.getSession()`, the one
+call site in `runCheckin` correctly awaits it, and the pre-existing `checkin` prop's
+wiring to `callCheckin` is confirmed byte-for-byte untouched (only module-doc comment
+edits nearby). The deliberate "swallow every token-fetch failure to `null`, never
+reject" departure from `createLoader`'s usual convention was checked for soundness
+and confirmed documented in both `loaders/checkin.ts`'s and `CheckinResult.tsx`'s own
+module docs — a `null` token means no `Authorization` header, which surfaces the
+Edge Function's own real 401 through the existing honest error-render path, rather
+than masking it behind a generic client-side rejection.
+
+The new circular value import between `loaders/checkin.ts` and
+`StudentMeetingView.tsx` (each imports from the other) was checked against the T096
+`MeetingsList.tsx`/`loaders/meetings.ts` precedent it claims to mirror: safe because
+the shared function is a hoisted `function` declaration referenced only lazily inside
+returned async closures, empirically confirmed via a clean build and 62/62 passing
+tests exercising both modules together with no TDZ/runtime failure.
+
+62/62 T100 tests pass (26 `CheckinResult` + 36 `StudentMeetingView`). typecheck/
+lint/build/format:check all clean for T100's 5 files; remaining repo-wide failures at
+check time were confined to sibling task T101's own in-progress Outreach files.
+
+NIT only: the loader-level swallow-to-null branches (config-missing, `getSession()`
+error/throw) are exercised only indirectly via the component seam, not with a
+dedicated `loaders/checkin.test.ts` unit test — outside T100's Allowed Files as
+written, logged as an optional follow-up, not a rework item.

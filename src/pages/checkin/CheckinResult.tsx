@@ -43,27 +43,36 @@
  *   { error: { code: string, message: string } }
  *
  * -----------------------------------------------------------------------
- * TWO known, explicitly-flagged gaps -- full detail in this task's worker
- * output, summarized here for anyone reading this file later:
+ * ONE remaining known, explicitly-flagged gap -- full detail in this task's
+ * worker output, summarized here for anyone reading this file later. A
+ * SECOND gap that used to be documented here (no real Supabase auth
+ * session/JWT existed anywhere in `src/`) was closed by T100 (ED-1 Packet
+ * P9) -- see immediately below.
  *
- * 1. NO REAL SUPABASE AUTH SESSION/JWT EXISTS ANYWHERE IN `src/` YET
- *    (confirmed via grep: zero hits for `createClient`/`supabase-js` under
- *    `src/`; same gap T016/T018 hit -- `guards.tsx`'s `AuthUser` has no
- *    token field at all, only `{ id, email, role }`). `callCheckin` below
- *    IS a real, typed `fetch()` call shaped exactly like the contract
- *    above (real method/headers/body), fully exercised in
- *    `CheckinResult.test.tsx` against a mocked `fetch` covering every
- *    response branch -- but there is no real bearer JWT to prove a real
- *    end-to-end call against a live deployed function. `defaultGetAccessToken`
- *    below returns `null` -- an honest reflection of that gap, not a
- *    silently-papered-over placeholder: a `null` token means the request is
- *    sent with NO `Authorization` header, which the real deployed function
- *    will reject with a real 401 `UNAUTHENTICATED` ("Sign in and try
- *    again.") -- handled by this component's ordinary error-rendering path,
- *    not a special no-op case. Once a real Supabase JS client/session lands
- *    in this repo, wire its access token through the `getAccessToken` prop
- *    seam (mirrors `AcceptInvitePage.tsx`'s `loadInvite` prop seam for an
- *    analogous data-loading gap).
+ * 1. T100 (ED-1 Packet P9): REAL `getAccessToken`, ASYNC SIGNATURE
+ *    (pre-approved widening). A real, shared Supabase client now exists
+ *    (`../../lib/supabase/client.ts`, T071) and `guards.tsx`'s own
+ *    `AuthProvider` is wired to a real, async, two-step Supabase auth flow
+ *    (T073b2) -- so the ORIGINAL version of this gap ("no real session/JWT
+ *    exists anywhere in `src/` yet") no longer holds. `getAccessToken`'s
+ *    type is widened from the old synchronous `() => string | null` to
+ *    `GetAccessTokenFn = () => Promise<string | null>` (real session tokens
+ *    are retrieved asynchronously, `client.auth.getSession()`) -- every call
+ *    site below now `await`s it. The real default,
+ *    `../../lib/supabase/loaders/checkin.ts`'s `getAccessToken` (built by
+ *    `makeGetAccessToken`), calls that exact `client.auth.getSession()` call
+ *    and resolves `access_token` when a real session exists.
+ *
+ *    A narrower version of the same honest gap remains, disclosed rather
+ *    than hidden: that real default still resolves `null` (never rejects)
+ *    when Supabase is unconfigured OR `getSession()` itself fails for any
+ *    reason -- see `loaders/checkin.ts`'s own module doc for the full
+ *    reasoning already established there. `callCheckin` below is unchanged
+ *    by this task and still handles a `null` token exactly as it always
+ *    has: the request is sent with NO `Authorization` header, and the real
+ *    deployed function's own real 401 `UNAUTHENTICATED` ("Sign in and try
+ *    again.") response is handled by this component's ordinary
+ *    error-rendering path, not a special no-op case.
  *
  * 2. THE DES-01 "RUNNING TALLY" ('14th in tonight') HAS NO DATA SOURCE IN
  *    THE ACTUAL, ALREADY-PASSED BACKEND CONTRACT. DES-01's wireframe shows
@@ -132,6 +141,7 @@ import {
   Timestamp,
   VStack,
 } from '@astryxdesign/core';
+import { getAccessToken as loadAccessTokenFromSupabase } from '../../lib/supabase/loaders/checkin';
 
 // ---------------------------------------------------------------------------
 // Contract types -- mirror `supabase/functions/checkin/attendance_upsert.ts`
@@ -175,6 +185,13 @@ export interface CheckinCredential {
 
 export type CheckinCallResult =
   { ok: true; data: CheckinResponsePayload } | { ok: false; error: CheckinErrorInfo };
+
+/** T100 (module doc gap #1, pre-approved widening) -- was
+ * `() => string | null` (synchronous). Real session tokens are retrieved
+ * asynchronously (`client.auth.getSession()`), so this seam's return type is
+ * now a `Promise`. Exported so `../../lib/supabase/loaders/checkin.ts`'s real
+ * default implementation can type-check against this exact shape. */
+export type GetAccessTokenFn = () => Promise<string | null>;
 
 export interface CallCheckinConfig {
   /** Defaults to `VITE_SUPABASE_URL` (see `.env.example`). */
@@ -475,25 +492,19 @@ type ResultState =
   | { status: 'already-in'; attendance: AttendanceInfo }
   | { status: 'error'; error: CheckinErrorInfo };
 
-/**
- * See module doc gap #1. Returning `null` is the honest current state, not
- * a bug masked by a fallback.
- */
-function defaultGetAccessToken(): string | null {
-  return null;
-}
-
 export interface CheckinResultProps {
   /** Seam for tests (and, later, swapping in a real implementation) -- defaults to the real `callCheckin`. */
   checkin?: typeof callCheckin;
-  /** Seam for tests / future real-auth wiring -- see module doc gap #1. */
-  getAccessToken?: () => string | null;
+  /** Seam for tests / real-auth wiring -- see module doc gap #1 (T100,
+   * pre-approved async widening). Defaults to a real session lookup
+   * (`../../lib/supabase/loaders/checkin.ts`'s `getAccessToken`). */
+  getAccessToken?: GetAccessTokenFn;
   config?: CallCheckinConfig;
 }
 
 export function CheckinResult({
   checkin = callCheckin,
-  getAccessToken = defaultGetAccessToken,
+  getAccessToken = loadAccessTokenFromSupabase,
   config,
 }: CheckinResultProps = {}): ReactNode {
   const [searchParams] = useSearchParams();
@@ -509,8 +520,16 @@ export function CheckinResult({
       return;
     }
     setState({ status: 'loading' });
-    checkin(credential, getAccessToken(), config)
-      .then((result) => {
+    // T100 (module doc gap #1): `getAccessToken` is now async -- `await`ed
+    // here, the one call site in this file. Any rejection (an
+    // `getAccessToken` override that itself throws, e.g. a test double)
+    // falls through to the same generic catch below as a `checkin()`
+    // rejection always has -- the real default (`loaders/checkin.ts`'s
+    // `getAccessToken`) never rejects (see that module's own doc).
+    void (async () => {
+      try {
+        const accessToken = await getAccessToken();
+        const result = await checkin(credential, accessToken, config);
         if (!result.ok) {
           setState({ status: 'error', error: result.error });
           return;
@@ -520,8 +539,7 @@ export function CheckinResult({
             ? { status: 'already-in', attendance: result.data.attendance }
             : { status: 'success', attendance: result.data.attendance },
         );
-      })
-      .catch(() => {
+      } catch {
         setState({
           status: 'error',
           error: {
@@ -529,7 +547,8 @@ export function CheckinResult({
             message: 'Something went wrong checking you in. Try again.',
           },
         });
-      });
+      }
+    })();
   }, [searchParamsKey, checkin, getAccessToken, config]);
 
   useEffect(() => {

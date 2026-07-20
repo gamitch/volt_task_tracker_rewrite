@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 /**
- * T037: tests for `StudentMeetingView.tsx`.
+ * T037: tests for `StudentMeetingView.tsx`. T100 (ED-1 Packet P9) adds real
+ * `loaders/checkin.ts` seam-level tests (stubbed `SupabaseClient`, same DI
+ * pattern `MeetingsList.test.tsx`'s own T096 loader-level tests already
+ * established -- that module has no dedicated test file of its own, per this
+ * task's own Allowed Files) plus real `resolveStudentId`/`useAuth()`
+ * resolution-flow tests for `variant="own"`, mirroring
+ * `MeetingsList.test.tsx`'s own T096 `resolveStudentId` test shape exactly.
  *
  * Per this task's Allowed Files (packet explicitly permits a colocated
  * `StudentMeetingView.test.tsx` "per established precedent") this is a
@@ -15,9 +21,16 @@
  * the same raw `createRoot`/`act` pattern `MeetingsList.test.tsx` already
  * established.
  */
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AuthProvider, type AuthUser } from '../../app/guards';
+import {
+  makeLoadConsistencyStripData,
+  makeLoadLinkedStudents,
+} from '../../lib/supabase/loaders/checkin';
+import { LoginAs } from '../../test-utils/authHarness';
 import {
   buildConsistencyStripData,
   ConsistencyStrip,
@@ -31,6 +44,7 @@ import {
   type ConsistencyStripData,
   type LinkedStudentSummary,
 } from './StudentMeetingView';
+import type { ResolveCurrentStudentIdFn } from './MeetingsList';
 
 // ---------------------------------------------------------------------------
 // Render harness -- mirrors `MeetingsList.test.tsx`.
@@ -290,6 +304,149 @@ describe('defaultLoadLinkedStudents fixture', () => {
 });
 
 // ---------------------------------------------------------------------------
+// T100: real `loaders/checkin.ts` seams -- `makeLoadConsistencyStripData`,
+// `makeLoadLinkedStudents`. Stubbed `SupabaseClient` only, same DI pattern
+// `MeetingsList.test.tsx`'s own T096 loader-level tests already established
+// -- `loaders/checkin.ts` has no dedicated test file of its own, per this
+// task's own Allowed Files list.
+// ---------------------------------------------------------------------------
+
+describe('loadConsistencyStripData (T100 real load)', () => {
+  it('scopes attendance/participation queries to the given studentId and reuses buildConsistencyStripData', async () => {
+    const sessionsOrderSpy = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: 'sess-1',
+          session_date: '2026-06-24',
+          starts_at: '2026-06-24T23:00:00.000Z',
+          status: 'completed',
+        },
+      ],
+      error: null,
+    });
+    const attendanceEqSpy = vi.fn().mockResolvedValue({
+      data: [{ session_id: 'sess-1', student_id: 'student-42', status: 'present' }],
+      error: null,
+    });
+    const participationLimitSpy = vi.fn().mockResolvedValue({
+      data: [
+        {
+          student_id: 'student-42',
+          team_id: 'team-1',
+          season_id: 'season-1',
+          expected_ct: 1,
+          present_ct: 1,
+          late_ct: 0,
+          excused_ct: 0,
+          participation_pct: 100,
+        },
+      ],
+      error: null,
+    });
+
+    const fromSpy = vi.fn((table: string) => {
+      if (table === 'event_sessions') return { select: vi.fn(() => ({ order: sessionsOrderSpy })) };
+      if (table === 'attendance') return { select: vi.fn(() => ({ eq: attendanceEqSpy })) };
+      if (table === 'v_student_participation') {
+        return { select: vi.fn(() => ({ eq: vi.fn(() => ({ limit: participationLimitSpy })) })) };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    const load = makeLoadConsistencyStripData(() => client);
+    const result = await load('student-42');
+
+    expect(attendanceEqSpy).toHaveBeenCalledWith('student_id', 'student-42');
+    expect(result).toEqual({
+      entries: [{ sessionId: 'sess-1', sessionDate: '2026-06-24', status: 'present' }],
+      participation: {
+        studentId: 'student-42',
+        teamId: 'team-1',
+        seasonId: 'season-1',
+        expectedCt: 1,
+        presentCt: 1,
+        lateCt: 0,
+        excusedCt: 0,
+        participationPct: 100,
+      },
+    });
+  });
+});
+
+describe('loadLinkedStudents (T100 real load)', () => {
+  it('resolves an empty list when there is no real session (never crashes)', async () => {
+    const client = {
+      auth: { getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }) },
+    } as unknown as SupabaseClient;
+
+    const load = makeLoadLinkedStudents(() => client);
+    const result = await load();
+    expect(result).toEqual([]);
+  });
+
+  it('resolves an empty list for a signed-in parent with zero guardian_links rows', async () => {
+    const client = {
+      auth: {
+        getSession: vi.fn().mockResolvedValue({
+          data: { session: { user: { id: 'profile-parent-1' } } },
+          error: null,
+        }),
+      },
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: [], error: null }) })),
+        })),
+      })),
+    } as unknown as SupabaseClient;
+
+    const load = makeLoadLinkedStudents(() => client);
+    const result = await load();
+    expect(result).toEqual([]);
+  });
+
+  it('joins guardian_links to students client-side, earliest-linked first, real display names threaded through', async () => {
+    const guardianOrderSpy = vi.fn().mockResolvedValue({
+      data: [{ student_id: 'student-a' }, { student_id: 'student-b' }],
+      error: null,
+    });
+    const studentsInSpy = vi.fn().mockResolvedValue({
+      data: [
+        { id: 'student-a', display_name: 'Ada' },
+        { id: 'student-b', display_name: 'Bea' },
+      ],
+      error: null,
+    });
+    const fromSpy = vi.fn((table: string) => {
+      if (table === 'guardian_links') {
+        return { select: vi.fn(() => ({ eq: vi.fn(() => ({ order: guardianOrderSpy })) })) };
+      }
+      if (table === 'students') return { select: vi.fn(() => ({ in: studentsInSpy })) };
+      throw new Error(`unexpected table: ${table}`);
+    });
+    const client = {
+      auth: {
+        getSession: vi.fn().mockResolvedValue({
+          data: { session: { user: { id: 'profile-parent-2' } } },
+          error: null,
+        }),
+      },
+      from: fromSpy,
+    } as unknown as SupabaseClient;
+
+    const load = makeLoadLinkedStudents(() => client);
+    const result = await load();
+
+    expect(guardianOrderSpy).toHaveBeenCalledWith('created_at', { ascending: true });
+    expect(studentsInSpy).toHaveBeenCalledWith('id', ['student-a', 'student-b']);
+    expect(result).toEqual([
+      { studentId: 'student-a', displayName: 'Ada' },
+      { studentId: 'student-b', displayName: 'Bea' },
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // <ConsistencyStrip /> -- DES-05 color mapping, all four statuses, rendered
 // directly against synthetic props (independent of the fixture data above).
 // ---------------------------------------------------------------------------
@@ -419,6 +576,101 @@ describe('<StudentMeetingView variant="own" />', () => {
         loadStripData={defaultLoadConsistencyStripData}
       />,
     );
+    await flushMicrotasks();
+    expect(statusDotVariants()).toHaveLength(4);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T100 (module doc #9, Trap #1): `variant="own"` real `studentId` resolution
+// -- reuses `MeetingsList.tsx`'s own already-Passed (T096) `resolveStudentId`
+// seam type. None of these tests pass an explicit `studentId` (the
+// real-world case); each injects a fast `resolveStudentId` fake through the
+// seam (same "inject the fixture explicitly" pattern every ED-1 packet
+// establishes) so they never hit the real, network-backed default. Mirrors
+// `MeetingsList.test.tsx`'s own T096 `resolveStudentId` test shape.
+// ---------------------------------------------------------------------------
+
+const STUDENT_OR_PARENT_USER: AuthUser = {
+  id: 'user-student',
+  email: 'student@example.com',
+  role: 'student',
+};
+
+function fakeResolveStudentId(studentId: string | null): ResolveCurrentStudentIdFn {
+  return () => Promise.resolve(studentId);
+}
+
+function renderAsUser(user: AuthUser, node: ReactElement): void {
+  render(
+    <AuthProvider>
+      <LoginAs user={user}>{node}</LoginAs>
+    </AuthProvider>,
+  );
+}
+
+describe('<StudentMeetingView variant="own" /> real studentId resolution (T100)', () => {
+  it('an explicit studentId bypasses resolution entirely -- no AuthProvider required, unchanged pre-existing behavior', async () => {
+    render(
+      <StudentMeetingView
+        studentId="student-jordan-fixture"
+        loadStripData={defaultLoadConsistencyStripData}
+      />,
+    );
+    await flushMicrotasks();
+    expect(statusDotVariants()).toHaveLength(5);
+  });
+
+  it('signed-out viewer (no studentId supplied) renders a real "sign in" EmptyState, not a crash', async () => {
+    render(
+      <AuthProvider>
+        <StudentMeetingView />
+      </AuthProvider>,
+    );
+    await flushMicrotasks();
+    expect(container.textContent).toContain('Sign in to view your meeting consistency');
+  });
+
+  it("resolveStudentId's own loading state renders before the strip card mounts", async () => {
+    renderAsUser(
+      STUDENT_OR_PARENT_USER,
+      <StudentMeetingView resolveStudentId={() => new Promise<string | null>(() => {})} />,
+    );
+    // T073b2: auth resolution (even via the fake `authModule` `LoginAs` uses)
+    // is genuinely async -- a flush is needed before the authenticated body
+    // (and its own resolution loading state) mounts. Same reasoning
+    // `MeetingsList.test.tsx`'s own T096 analogous test documents.
+    await flushMicrotasks();
+    expect(container.textContent).toContain('Finding your student record');
+  });
+
+  it("resolveStudentId's own error state renders a real error Banner with Retry", async () => {
+    renderAsUser(
+      STUDENT_OR_PARENT_USER,
+      <StudentMeetingView resolveStudentId={() => Promise.reject(new Error('boom'))} />,
+    );
+    await flushMicrotasks();
+    expect(container.textContent).toContain("Couldn't find your student record");
+  });
+
+  it('resolveStudentId resolving null renders a real "no student linked" EmptyState, not a crash', async () => {
+    renderAsUser(
+      STUDENT_OR_PARENT_USER,
+      <StudentMeetingView resolveStudentId={fakeResolveStudentId(null)} />,
+    );
+    await flushMicrotasks();
+    expect(container.textContent).toContain('No student account linked yet');
+  });
+
+  it('resolveStudentId resolving a real id renders the strip scoped to that id (fixture data threaded through)', async () => {
+    renderAsUser(
+      STUDENT_OR_PARENT_USER,
+      <StudentMeetingView
+        resolveStudentId={fakeResolveStudentId('student-morgan-fixture')}
+        loadStripData={defaultLoadConsistencyStripData}
+      />,
+    );
+    await flushMicrotasks();
     await flushMicrotasks();
     expect(statusDotVariants()).toHaveLength(4);
   });
