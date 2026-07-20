@@ -77,16 +77,35 @@
  *     public pages...") rules out leaving it unauthenticated. `KioskPage`
  *     does not self-gate (per its own module doc), so this route keeps the
  *     external `RequireAuth` + `RequireRole(['coach', 'admin'])` wrap.
- *   - `/meetings/live/:sessionId`, `/roster`, `/reports`: protected by
- *     `RequireAuth` only at this router level -- `LiveConsolePage`,
- *     `RosterShell`, and `ReportsShell` each already nest `guards.tsx`'s
- *     `RequireRole(['coach', 'admin'])` internally (per their own module
- *     docs), so no external `RequireRole` is added here (would double-gate).
+ *   - `/meetings/live/:sessionId`, `/roster`, `/reports`, `/settings/season`:
+ *     protected by `RequireAuth` only at this router level -- `LiveConsolePage`,
+ *     `RosterShell`, `ReportsShell`, and (T108) `SeasonSettings` each already
+ *     nest `guards.tsx`'s `RequireRole` internally (per their own module
+ *     docs; `SeasonSettings`'s own module doc #6 wraps `RequireRole(['admin'])`
+ *     around every one of its return branches), so no external `RequireRole`
+ *     is added here (would double-gate).
  *   - Everything else: requires authentication (`RequireAuth`) only.
  *   - `/settings`: `RequireAuth` only (T074 bug fix -- PRD Section 7 lists
  *     this route's role as `all`, and the real `SettingsPage` has no
  *     internal role-gating; the previous `RequireRole(['admin'])` wrap here
  *     was incorrect and has been removed).
+ *
+ * T108 (this task, HIGH PRIORITY bootstrap fix): added the missing
+ * `/settings/season` route -- `SeasonSettings.tsx` (T029 UI, T091 real data
+ * wiring) was fully built and already-Passed but never wired into this
+ * table, so the "No active season yet" empty states on Reports/Outreach/
+ * Meetings (and `AdminToggles.tsx`'s own `/settings/season` link, T028) all
+ * pointed at a dead route. `SeasonSettings.tsx` has both a named export
+ * (`SeasonSettings`) and a `export default SeasonSettings`, so its `lazy()`
+ * call below needs no `SettingsPage`-style adapter. Role gating: see the
+ * route protection matrix bullet above -- `SeasonSettings` self-gates via an
+ * internal `RequireRole(['admin'])` (its own module doc #6 explains why it
+ * follows `RosterShell.tsx`'s whole-page precedent rather than
+ * `AdminToggles.tsx`'s embedded-widget one), so this route matches the
+ * established "don't double-gate a self-gating page" convention already set
+ * by `/meetings/live/:sessionId`, `/roster`, and `/reports` above, NOT the
+ * `/settings` bug-fix precedent (that one applies only because the real
+ * `SettingsPage` has no internal role-gating at all).
  */
 import { lazy, Suspense, type ReactNode } from 'react';
 import { Route, Routes } from 'react-router-dom';
@@ -110,6 +129,7 @@ const OutreachDetail = lazy(() => import('../pages/outreach/OutreachDetail'));
 const CalendarPage = lazy(() => import('../pages/calendar/CalendarPage'));
 const RosterShell = lazy(() => import('../pages/roster/RosterShell'));
 const ReportsShell = lazy(() => import('../pages/reports/ReportsShell'));
+const SeasonSettings = lazy(() => import('../pages/settings/SeasonSettings'));
 // `SettingsPage.tsx` has no `export default` (named export only) -- adapt it
 // to the shape `React.lazy` requires instead of guessing it matches the
 // other 12 pages' default-export shape.
@@ -152,6 +172,7 @@ export const routePaths = {
   roster: '/roster',
   reports: '/reports',
   settings: '/settings',
+  settingsSeason: '/settings/season',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -263,6 +284,24 @@ export function AppRoutes(): ReactNode {
           element={
             <RequireAuth>
               <SettingsPage />
+            </RequireAuth>
+          }
+        />
+
+        {/* Protected -- T108: `RequireAuth` only at this router level, no
+            external `RequireRole`. `SeasonSettings` (SET-04, admin-only)
+            already nests `guards.tsx`'s `RequireRole(['admin'])` internally
+            around every one of its own return branches (own module doc
+            #6), the same "self-gating page component" posture
+            `/meetings/live/:sessionId`, `/roster`, and `/reports` already
+            established above for `LiveConsolePage`/`RosterShell`/
+            `ReportsShell` -- adding a second, external `RequireRole` here
+            would double-gate for no benefit. */}
+        <Route
+          path="/settings/season"
+          element={
+            <RequireAuth>
+              <SeasonSettings />
             </RequireAuth>
           }
         />

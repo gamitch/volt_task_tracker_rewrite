@@ -3939,3 +3939,38 @@ all three forbidden files), ran the specific previously-failing tests directly (
 passing, 70ms/93ms), the full `RosterShell.test.tsx` file (14/14), the full repo
 suite (1156/1156, zero regressions), and typecheck/lint/build/format:check (all
 clean).
+
+---
+
+## T108 — CRITICAL bootstrap fix: route `/settings/season`
+
+**PASS (1st attempt, clean).** Root cause of George's live-tested "app is not
+usable" report: every season-scoped page (Reports/Outreach/Meetings) correctly
+directs an admin to "Season settings" to create and activate the first season, but
+`SeasonSettings.tsx` — fully built (T029) and wired to real data (T091), both
+already Passed — was never given a route. `AdminToggles.tsx` even already links to
+`/settings/season`. One-file fix to `router.tsx`: lazy import (no default-export
+adapter needed — the component exports both named and default, verified), a
+`routePaths.settingsSeason` entry, and a `<Route>` wrapped in `RequireAuth` only.
+
+The one judgment call — no external `RequireRole(['admin'])` at the router — was
+independently verified as safe, not taken on the worker's word: the checker read
+`SeasonSettings.tsx` directly and confirmed all three of its return branches
+(loading, error, success) are each internally wrapped in `<RequireRole
+allowedRoles={['admin']}>`, with no un-gated early return, so a non-admin hitting
+the route gets the standard redirect in every state. This matches the router's own
+documented convention (`/meetings/live`, `/roster`, `/reports` — self-gating pages
+take `RequireAuth`-only externally to avoid double-gating) and is correctly
+distinguished from the T074 `/settings` case (that page has no internal gating by
+design, roles `all`). Build verified the new route code-splits into its own lazy
+chunk with the main entry still under the NFR-04 budget; `AdminToggles`'s
+existing link target now resolves. Full suite 1157/1157; typecheck/lint/
+format:check clean (the one `react-refresh` warning on `routePaths` confirmed
+pre-existing on base, not a T108 regression).
+
+Process note: the checker used a brief `git stash`/pop cycle for its base-version
+lint comparison — a violation of the standing no-stash rule in this shared tree.
+Orchestrator independently confirmed afterward that `git stash list` contains only
+the two long-known orphaned entries from earlier waves and that the concurrent
+T109 task's uncommitted files were undamaged (its 45/45 tests still pass).
+Logged as a process reminder for future checker dispatch prompts; no data loss.
