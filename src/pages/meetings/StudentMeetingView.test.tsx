@@ -20,6 +20,14 @@
  * No `@testing-library/react` is installed in this repo -- these tests use
  * the same raw `createRoot`/`act` pattern `MeetingsList.test.tsx` already
  * established.
+ *
+ * T120 (T116 checker-verified consumer-risk finding #3, `loaders/checkin.ts`
+ * Trap #4): `queryParticipationForStudent` no longer `.limit(1)`s, and
+ * `aggregateParticipationForStudent` is new -- the existing
+ * `loadConsistencyStripData` seam test's participation mock is updated below
+ * to drop the `.limit(...)` call from its stub chain (matches the loader's
+ * new query shape), and new dual-member-specific tests are added for both
+ * the loader seam and `aggregateParticipationForStudent` directly.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { act, type ReactElement } from 'react';
@@ -27,6 +35,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthUser } from '../../app/guards';
 import {
+  aggregateParticipationForStudent,
   makeLoadConsistencyStripData,
   makeLoadLinkedStudents,
 } from '../../lib/supabase/loaders/checkin';
@@ -328,7 +337,7 @@ describe('loadConsistencyStripData (T100 real load)', () => {
       data: [{ session_id: 'sess-1', student_id: 'student-42', status: 'present' }],
       error: null,
     });
-    const participationLimitSpy = vi.fn().mockResolvedValue({
+    const participationEqSpy = vi.fn().mockResolvedValue({
       data: [
         {
           student_id: 'student-42',
@@ -347,8 +356,12 @@ describe('loadConsistencyStripData (T100 real load)', () => {
     const fromSpy = vi.fn((table: string) => {
       if (table === 'event_sessions') return { select: vi.fn(() => ({ order: sessionsOrderSpy })) };
       if (table === 'attendance') return { select: vi.fn(() => ({ eq: attendanceEqSpy })) };
+      // T120 (Trap #4): no more `.limit(...)` in the real query chain -- the
+      // participation query now fetches every matching row so
+      // `aggregateParticipationForStudent` has the full set (dual-member
+      // fix, see the dedicated `describe` block below for multi-row cases).
       if (table === 'v_student_participation') {
-        return { select: vi.fn(() => ({ eq: vi.fn(() => ({ limit: participationLimitSpy })) })) };
+        return { select: vi.fn(() => ({ eq: participationEqSpy })) };
       }
       throw new Error(`unexpected table: ${table}`);
     });
@@ -358,6 +371,7 @@ describe('loadConsistencyStripData (T100 real load)', () => {
     const result = await load('student-42');
 
     expect(attendanceEqSpy).toHaveBeenCalledWith('student_id', 'student-42');
+    expect(participationEqSpy).toHaveBeenCalledWith('student_id', 'student-42');
     expect(result).toEqual({
       entries: [{ sessionId: 'sess-1', sessionDate: '2026-06-24', status: 'present' }],
       participation: {
@@ -371,6 +385,181 @@ describe('loadConsistencyStripData (T100 real load)', () => {
         participationPct: 100,
       },
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // T120 (T116 checker-verified consumer-risk finding #3): dual-member
+  // aggregation, both at the loader-seam level (real query -> real
+  // aggregation -> real `buildConsistencyStripData` join) and directly
+  // against `aggregateParticipationForStudent`'s own pure logic.
+  // -------------------------------------------------------------------------
+
+  it('aggregates a dual member\'s multiple team rows (same season) into one honestly-summed participation figure, not last-team-wins', async () => {
+    const sessionsOrderSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const attendanceEqSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    // Dual member: 8/10 present on team-falcons (80.0%), 3/10 present on
+    // team-comets (30.0%) -- SAME season. A `studentId`-only `.find()` over
+    // this raw array (the pre-T120 bug, one layer up in
+    // `buildConsistencyStripData`) would arbitrarily surface whichever row
+    // sorts first (80.0% OR 30.0%, neither of which is the honest combined
+    // total); a naive per-row average would give 55.0%, also wrong (not the
+    // view's own counter-sum-then-round shape). The correct honest total,
+    // reapplying the view's own expression over SUMMED counters:
+    // round(100 * (8+3) / max((10+10)-(0+0), 1), 1) = round(100*11/20, 1) = 55.0.
+    // (Deliberately coincides numerically with the naive average here ONLY
+    // because both teams have equal expected_ct=10/excused_ct=0 -- the
+    // dedicated `aggregateParticipationForStudent` unit tests below use
+    // asymmetric counts specifically to distinguish the two.)
+    const participationEqSpy = vi.fn().mockResolvedValue({
+      data: [
+        {
+          student_id: 'student-dual',
+          team_id: 'team-falcons',
+          season_id: 'season-1',
+          expected_ct: 10,
+          present_ct: 8,
+          late_ct: 0,
+          excused_ct: 0,
+          participation_pct: 80.0,
+        },
+        {
+          student_id: 'student-dual',
+          team_id: 'team-comets',
+          season_id: 'season-1',
+          expected_ct: 10,
+          present_ct: 3,
+          late_ct: 0,
+          excused_ct: 0,
+          participation_pct: 30.0,
+        },
+      ],
+      error: null,
+    });
+
+    const fromSpy = vi.fn((table: string) => {
+      if (table === 'event_sessions') return { select: vi.fn(() => ({ order: sessionsOrderSpy })) };
+      if (table === 'attendance') return { select: vi.fn(() => ({ eq: attendanceEqSpy })) };
+      if (table === 'v_student_participation') {
+        return { select: vi.fn(() => ({ eq: participationEqSpy })) };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    const load = makeLoadConsistencyStripData(() => client);
+    const result = await load('student-dual');
+
+    expect(result.participation).not.toBeNull();
+    expect(result.participation?.expectedCt).toBe(20);
+    expect(result.participation?.presentCt).toBe(11);
+    expect(result.participation?.participationPct).toBe(55.0);
+  });
+
+  it('resolves participation: null when a student has zero rows across every team (unchanged absence case)', async () => {
+    const sessionsOrderSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const attendanceEqSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const participationEqSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const fromSpy = vi.fn((table: string) => {
+      if (table === 'event_sessions') return { select: vi.fn(() => ({ order: sessionsOrderSpy })) };
+      if (table === 'attendance') return { select: vi.fn(() => ({ eq: attendanceEqSpy })) };
+      if (table === 'v_student_participation') {
+        return { select: vi.fn(() => ({ eq: participationEqSpy })) };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    const load = makeLoadConsistencyStripData(() => client);
+    const result = await load('student-no-rows');
+    expect(result.participation).toBeNull();
+  });
+});
+
+describe('aggregateParticipationForStudent (T120 pure unit tests)', () => {
+  it('returns null for an empty row set (the "no completed sessions" absence case)', () => {
+    expect(aggregateParticipationForStudent([])).toBeNull();
+  });
+
+  it('passes a single-row (non-dual-member) student through with the SAME counters and pct, unmodified', () => {
+    const row = {
+      student_id: 'student-solo',
+      team_id: 'team-falcons',
+      season_id: 'season-1',
+      expected_ct: 10,
+      present_ct: 7,
+      late_ct: 1,
+      excused_ct: 1,
+      participation_pct: 77.8,
+    };
+    // Verbatim passthrough (checkin.ts's own `seasonRows.length === 1` early
+    // return) -- not merely equal in value, the SAME object reference, so
+    // this is provably zero recomputation, not a no-op recompute that
+    // happens to match.
+    expect(aggregateParticipationForStudent([row])).toBe(row);
+  });
+
+  it('sums counters across a dual member\'s two team rows and recomputes pct via the view\'s own expression -- excused-shrinks-denominator case', () => {
+    // team-a: expected 10, present 6, excused 2 -> denom (10-2)=8
+    // team-b: expected 5,  present 3, excused 0 -> denom (5-0)=5
+    // summed: expected 15, present 9, excused 2 -> denom max(15-2,1)=13
+    // round(100*9/13, 1) = round(69.23..., 1) = 69.2
+    const result = aggregateParticipationForStudent([
+      {
+        student_id: 'student-dual-2',
+        team_id: 'team-a',
+        season_id: 'season-1',
+        expected_ct: 10,
+        present_ct: 6,
+        late_ct: 0,
+        excused_ct: 2,
+        participation_pct: 75.0,
+      },
+      {
+        student_id: 'student-dual-2',
+        team_id: 'team-b',
+        season_id: 'season-1',
+        expected_ct: 5,
+        present_ct: 3,
+        late_ct: 0,
+        excused_ct: 0,
+        participation_pct: 60.0,
+      },
+    ]);
+    expect(result?.expected_ct).toBe(15);
+    expect(result?.present_ct).toBe(9);
+    expect(result?.excused_ct).toBe(2);
+    expect(result?.participation_pct).toBe(69.2);
+  });
+
+  it('only aggregates rows within one (the first-seen) season, ignoring a different season\'s rows entirely -- pre-existing season ambiguity stays disclosed, not conflated with the team fix', () => {
+    const result = aggregateParticipationForStudent([
+      {
+        student_id: 'student-multi-season',
+        team_id: 'team-a',
+        season_id: 'season-current',
+        expected_ct: 10,
+        present_ct: 5,
+        late_ct: 0,
+        excused_ct: 0,
+        participation_pct: 50.0,
+      },
+      {
+        student_id: 'student-multi-season',
+        team_id: 'team-a',
+        season_id: 'season-past',
+        expected_ct: 100,
+        present_ct: 100,
+        late_ct: 0,
+        excused_ct: 0,
+        participation_pct: 100.0,
+      },
+    ]);
+    // Only the first row's season (season-current) is aggregated -- the
+    // season-past row's 100/100 must NOT leak into the total.
+    expect(result?.season_id).toBe('season-current');
+    expect(result?.expected_ct).toBe(10);
+    expect(result?.present_ct).toBe(5);
+    expect(result?.participation_pct).toBe(50.0);
   });
 });
 

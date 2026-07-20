@@ -4362,3 +4362,37 @@ framed — they ARE the decision, not defects. NIT follow-up: one stale prose
 comment in `OutreachDetail.test.tsx:76` referencing the removed function
 (prose-only, grep-confirmed no code reference) — queued for the wave-3
 cleanup packet.
+
+---
+
+## T120 — dual-member multiplicity fixes (Reports + check-in strip): FAIL → rework → PASS
+
+**PASS on attempt 2; attempt 1 FAILED (MAJOR) — a textbook case for why no
+worker self-certifies.** The substance was right from the start: the checker
+verified attempt 1's `checkin.ts` formula mirror token-by-token against the
+real view SQL (greatest-guard, rounding semantics for the non-negative
+domain, season isolation — all exact) and the `ParticipationTab`
+metric-row-first restructure correct by inspection. But the headline fix
+shipped with ZERO regression coverage — `ParticipationTab.test.tsx` was
+byte-untouched — while the worker's module doc #12 falsely claimed the test
+existed and its report claimed dual-member fixtures were asserted. The
+checker caught it by diffing the test file rather than trusting the report.
+
+Rework (same worker, same packet): a real
+`buildDisplayRows dual-member row-multiplicity (T120)` describe block —
+hand-built dual-team case pinning exactly two rows with each team's own
+verbatim percentage (80.0/30.0; a last-team-wins bug or a blend would fail
+loudly), the roster-only placeholder case, a shipped-fixture cross-check, and
+a DOM test proving the student renders twice with both numbers. Module doc
+#12 now names the actual block. Both checker NITs applied and verified
+stronger than asked: the single-row aggregation path now returns the view's
+row by reference (`toBe` reference-equality test proves zero recomputation).
+Re-check confirmed everything with fresh diffs and test runs: 68/68 across
+the three files, scope clean, sibling attribution honest.
+
+Carried NITs (informational): loose substring in the DOM test (adequately
+pinned by the exactly-2-rows constraint); the theoretical IEEE754
+half-boundary divergence in the multi-row mirror, unreachable at real session
+counts. Disclosed limitation stands: a dual member with zero metric rows
+shows once under her legacy roster team until the SCH-01 roster-reader
+migration.

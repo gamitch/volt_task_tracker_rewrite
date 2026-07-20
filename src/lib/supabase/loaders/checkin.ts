@@ -120,6 +120,80 @@
  *   `getAccessToken` (no `getAccessToken` prop passed), asserting `checkin`
  *   is called with `null` as the token argument -- exactly what
  *   `makeGetAccessToken`'s default (unconfigured-Supabase) behavior produces.
+ *
+ * -----------------------------------------------------------------------
+ * Trap #4 (T120, T116 checker-verified consumer-risk finding #3):
+ * `queryParticipationForStudent`'s dual-member fix.
+ *
+ * T116/SCH-03 migrated `v_student_participation` onto `student_teams`
+ * ACTIVE memberships (`supabase/migrations/20260722000000_membership_views.sql`)
+ * -- a dual-member student can now have more than one row in this view, one
+ * per team she qualifies for. `queryParticipationForStudent` below used to
+ * `.limit(1)`, which previously already picked one ARBITRARY row when a
+ * student had rows in more than one season (this file's own pre-existing,
+ * disclosed gap, unchanged below); post-T116 it also arbitrarily picks one
+ * TEAM's row for a dual member. `StudentMeetingView.tsx`'s own
+ * `buildConsistencyStripData` (forbidden/read-only to this task) does a
+ * plain `participationMetrics.find((metric) => metric.studentId ===
+ * studentId)` over whatever array it is handed, so simply removing
+ * `.limit(1)` and passing every row through unchanged would just move the
+ * SAME arbitrary-team-picking bug one layer down (whichever row `.find()`
+ * happens to land on first).
+ *
+ * `LoadConsistencyStripDataFn`'s own signature (`(studentId: string) =>
+ * Promise<ConsistencyStripData>`, `StudentMeetingView.tsx`, not owned by
+ * this task) carries NO `teamId` -- unlike `ParticipationTab.tsx` (this
+ * task's other file, which DOES already know which team each of its
+ * rendered rows belongs to, and is fixed there with zero TS arithmetic by
+ * keying/joining per team instead), there is no "scope to a team" option
+ * available at this call site. The honest choice made here instead (worker
+ * packet Traps): AGGREGATE this student's rows for a single season by
+ * summing the view's own already-computed counters, then recompute
+ * `participation_pct` with the EXACT SAME expression the view itself uses
+ * -- cited verbatim from `supabase/migrations/20260722000000_membership_views.sql`
+ * (the `v_student_participation` `select` list):
+ *
+ *   round(100.0 * count(*) filter (where a.status in ('present','late'))
+ *         / greatest(count(*) - count(*) filter (where a.status = 'excused'), 1), 1)
+ *
+ * i.e. `round(100.0 * sum(present_ct) / greatest(sum(expected_ct) -
+ * sum(excused_ct), 1), 1)`, implemented in `aggregateParticipationForStudent`
+ * below by summing `present_ct`/`expected_ct`/`excused_ct` across this
+ * student's rows FIRST (each of those three counts is itself a verbatim
+ * column the view already computed, never touched individually per-row),
+ * then applying the view's own divide-and-round shape exactly ONCE over the
+ * summed totals -- not a second, independently-invented formula.
+ * `present_ct` already includes `late_ct` (the view's own `status in
+ * ('present','late')` filter -- `ParticipationTab.tsx`'s own module doc #1
+ * cites this identically), so summing it directly, without also adding
+ * `late_ct`, is the correct verbatim-counter sum, not double counting. This
+ * student-wide total also matches D-3's own "a student's PERSONAL total
+ * counts each hour/session once" posture (PRD v2 SCH-03) for this
+ * un-team-scoped, per-student strip widget, rather than mislabeling one
+ * arbitrarily-picked team's own number as her overall consistency. When
+ * there is only ONE row for the chosen season (the common, non-dual-member
+ * case), `aggregateParticipationForStudent` returns that row VERBATIM --
+ * `participation_pct` included -- with no recomputation at all, not even a
+ * no-op one that happens to match; the sum-then-round path only ever runs
+ * when there is genuinely more than one row to combine.
+ *
+ * The pre-existing multi-season ambiguity (this file's own module doc
+ * above, matching `loaders/meetings.ts`'s identical documented gap for its
+ * own twin `queryParticipationForStudent` -- that file is OWNED BY SIBLING
+ * T122, not touched here) is a SEPARATE problem, deliberately not conflated
+ * with this fix: `aggregateParticipationForStudent` groups by `season_id`
+ * FIRST (keeping whichever season happens to sort first among this
+ * student's rows -- the SAME arbitrary "first" behavior the pre-existing
+ * `.limit(1)` already had, just now applied at season granularity instead
+ * of row granularity) and only sums the team rows WITHIN that one chosen
+ * season. A student with rows in only one season (the common case) is
+ * completely unaffected by this grouping step. The returned aggregate row's
+ * `team_id` is NOT a real value once summed across teams (kept only to
+ * satisfy `ParticipationDbRow`'s existing shape so the existing
+ * `mapParticipationDbRow` can be reused unchanged) -- disclosed here
+ * because `StudentMeetingView.tsx` never actually reads `.teamId` anywhere
+ * in its own render (grep-verified: no `participation.teamId` anywhere in
+ * that file), so this is a type-shape necessity, not a rendered fact.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createLoader, type LoaderQueryResult } from '../loader';
@@ -233,9 +307,11 @@ async function queryAttendanceForStudent(
   return { data: (result.data as AttendanceDbRow[] | null) ?? null, error: result.error };
 }
 
-/** Not season-scoped -- same `.limit(1)` (not `.maybeSingle()`) reasoning
- * `loaders/meetings.ts`'s own `queryParticipationForStudent` already
- * documents for this identical view/shape. */
+/** T120 (Trap #4 above): no `.limit(1)` -- fetches EVERY matching row (a
+ * dual member can now have more than one, T116/SCH-03) so
+ * `aggregateParticipationForStudent` below has the full set to work with.
+ * Still not season-scoped (Trap #4 above, pre-existing, disclosed,
+ * unchanged). */
 async function queryParticipationForStudent(
   client: SupabaseClient,
   studentId: string,
@@ -245,9 +321,56 @@ async function queryParticipationForStudent(
     .select(
       'student_id, team_id, season_id, expected_ct, present_ct, late_ct, excused_ct, participation_pct',
     )
-    .eq('student_id', studentId)
-    .limit(1);
+    .eq('student_id', studentId);
   return { data: (result.data as ParticipationDbRow[] | null) ?? null, error: result.error };
+}
+
+/** T120 (Trap #4 above): dual-member aggregation, honest sum-then-round of
+ * the view's own counters -- see Trap #4 for the full citation/reasoning.
+ * `null` for a student with zero rows at all (the real "no completed
+ * sessions" absence case -- unchanged: `buildConsistencyStripData`'s own
+ * `.find()` over an empty array already returns `null` for this case, same
+ * as before this task). A single-row (non-dual-member, the common case) is
+ * returned VERBATIM, `participation_pct` included -- no recomputation at
+ * all, not even a no-op one, when there is nothing to aggregate across. */
+export function aggregateParticipationForStudent(
+  rows: readonly ParticipationDbRow[],
+): ParticipationDbRow | null {
+  if (rows.length === 0) {
+    return null;
+  }
+  // Season ambiguity is pre-existing/out of scope (Trap #4) -- pick
+  // whichever season this student's first-returned row belongs to, then
+  // only aggregate the (possibly multiple, per-team) rows within THAT one
+  // season, never across seasons.
+  const chosenSeasonId = rows[0].season_id;
+  const seasonRows = rows.filter((row) => row.season_id === chosenSeasonId);
+
+  if (seasonRows.length === 1) {
+    return seasonRows[0];
+  }
+
+  const expectedCt = seasonRows.reduce((sum, row) => sum + row.expected_ct, 0);
+  const presentCt = seasonRows.reduce((sum, row) => sum + row.present_ct, 0);
+  const lateCt = seasonRows.reduce((sum, row) => sum + row.late_ct, 0);
+  const excusedCt = seasonRows.reduce((sum, row) => sum + row.excused_ct, 0);
+
+  // Verbatim reapplication of the view's own expression over the summed
+  // totals (Trap #4's citation) -- never a second, independently-invented
+  // formula.
+  const denominator = Math.max(expectedCt - excusedCt, 1);
+  const participationPct = Math.round(((100 * presentCt) / denominator) * 10) / 10;
+
+  return {
+    student_id: seasonRows[0].student_id,
+    team_id: seasonRows[0].team_id,
+    season_id: chosenSeasonId,
+    expected_ct: expectedCt,
+    present_ct: presentCt,
+    late_ct: lateCt,
+    excused_ct: excusedCt,
+    participation_pct: participationPct,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -294,7 +417,12 @@ async function queryStudentsByIds(
 // network calls.
 // ---------------------------------------------------------------------------
 
-/** `StudentMeetingView.tsx`'s own real `loadStripData` (Trap #2). */
+/** `StudentMeetingView.tsx`'s own real `loadStripData` (Trap #2). T120
+ * (Trap #4): `participationRows` is run through
+ * `aggregateParticipationForStudent` before being handed to
+ * `buildConsistencyStripData` -- that function's own `.find()` then sees at
+ * most one (already-honestly-aggregated) row, never an arbitrary pick among
+ * several team rows. */
 export function makeLoadConsistencyStripData(
   getClient: () => SupabaseClient = getSupabaseClient,
 ): LoadConsistencyStripDataFn {
@@ -313,11 +441,12 @@ export function makeLoadConsistencyStripData(
       loadAttendanceRows(studentId),
       loadParticipationRows(studentId),
     ]);
+    const aggregatedParticipation = aggregateParticipationForStudent(participationRows ?? []);
     return buildConsistencyStripData(
       studentId,
       (sessionRows ?? []).map(mapEventSessionDbRow),
       (attendanceRows ?? []).map(mapAttendanceDbRow),
-      (participationRows ?? []).map(mapParticipationDbRow),
+      aggregatedParticipation ? [mapParticipationDbRow(aggregatedParticipation)] : [],
     );
   };
 }

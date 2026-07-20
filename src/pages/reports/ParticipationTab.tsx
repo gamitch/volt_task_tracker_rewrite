@@ -220,6 +220,64 @@
  * output, not merely asserted here.
  *
  * -----------------------------------------------------------------------
+ * 12. T120 (dual-member row-multiplicity fix, T116 checker-verified
+ *     consumer-risk finding #1): `buildDisplayRows` below no longer joins
+ *     roster-first.
+ *
+ * T116/SCH-03 migrated `v_student_participation`'s `expected` CTE from the
+ * legacy single-FK `students.team_id` onto `student_teams` ACTIVE
+ * memberships (`supabase/migrations/20260722000000_membership_views.sql`,
+ * cited there in full) -- a dual-member student can now have MORE THAN ONE
+ * row in this view within the same season, one per team she qualifies for.
+ * This tab already renders one independent `<Table>` per team (module doc
+ * #5, `groupedByTeam` below) -- the correct fix is therefore to treat each
+ * metric row's own `(studentId, teamId)` pair as ALREADY the correct,
+ * unique key (the view's own `group by x.student_id, x.team_id,
+ * x.season_id` guarantees this) and turn the join into ONE DISPLAY ROW PER
+ * METRIC ROW (metric-row-first), not the previous roster-first "one row per
+ * student" shape that could only ever surface a single team's numbers for a
+ * dual member -- keyed by `studentId` alone, the old `Map` silently let the
+ * LAST metric row processed win for BOTH of that student's teams
+ * (last-team-wins AND the other team's own group table showed nothing for
+ * her at all). The `student-priya-desai` fixture
+ * below (Falcons 80.0% / Comets 30.0%) exists specifically to prove
+ * neither failure mode: she appears in BOTH teams' `<Table>`s, each with
+ * its OWN team's real numbers, never blended or overwritten --
+ * `ParticipationTab.test.tsx`'s own `describe('buildDisplayRows
+ * dual-member row-multiplicity (T120)', ...)` block asserts this directly
+ * against `buildDisplayRows`'s own output (both a hand-built minimal
+ * fixture and the shipped `FIXTURE_STUDENTS`/`FIXTURE_METRICS` data below),
+ * not just the DOM -- that same `describe` block also asserts the
+ * roster-only "no metric row on any team" placeholder case stays exactly
+ * one row. The `ParticipationTab render` describe block's own dedicated
+ * T120 test additionally proves the same two-rows-with-their-own-numbers
+ * property at the rendered-DOM level.
+ *
+ * The "no completed sessions" absence case (module doc #1: a student with
+ * zero rows in the view for a season gets a "-" placeholder, not a
+ * fabricated 0%) still needs the roster (`students` -- today's legacy
+ * `team_id` single-team roster query, `reports.ts`'s own module doc #4/#5,
+ * SCH-01's own explicit "team_id remains the legacy/primary-team read path
+ * until every reader migrates" framing, not something this task's narrow
+ * packet re-opens): any roster student with NO metric row at all (checked
+ * by `studentId` only, across every team) still gets exactly one
+ * placeholder row, rendered under her roster's own (legacy/primary) team --
+ * unchanged from before for a single-team student, and a disclosed,
+ * pre-existing limitation for a dual-member student who has literally zero
+ * completed sessions on EITHER team (she still only shows once, under her
+ * legacy primary team, since the roster this function receives does not
+ * yet carry her second membership at all when she has no metric row to
+ * reveal it) -- not a regression this task introduces, and not a case any
+ * real metric row exists for to be silently dropped by it. A dual member
+ * with a real metric row on AT LEAST ONE team is fully fixed (the common,
+ * checker-verifiable case); one with real activity on BOTH teams is fully
+ * fixed on both. `reports.ts` required NO changes for this fix --
+ * `queryParticipationMetrics` there already fetches every matching
+ * `v_student_participation` row for the season (no `.limit`), so both of a
+ * dual member's rows were already reaching this function; only the join
+ * shape inside this file needed to change.
+ *
+ * -----------------------------------------------------------------------
  * 10. "Below 70%" boundary decision (worker packet Known Context/Traps #3):
  *     STRICT `<`, not `<=`. PRD's literal wording is "below 70%", which
  *     reads as strict less-than; a student at exactly 70.0% is doing
@@ -354,6 +412,12 @@ const FIXTURE_STUDENTS: readonly FixtureStudent[] = [
   { id: 'student-maya-chen', name: 'Maya Chen', teamId: 'team-comets' },
   { id: 'student-zoe-martinez', name: 'Zoe Martinez', teamId: 'team-comets' },
   { id: 'student-diego-ramirez', name: 'Diego Ramirez', teamId: 'team-comets' },
+  // Dual member (SCH-01) -- her roster entry's own `teamId` (Falcons, her
+  // legacy/primary team per today's `students.team_id` read path) is used
+  // ONLY as a fallback if she ever had zero metric rows on any team; her two
+  // REAL metric rows below (one per team, T120 module doc #12) are what
+  // actually drive her two display rows.
+  { id: 'student-priya-desai', name: 'Priya Desai', teamId: 'team-falcons' },
 ];
 
 /**
@@ -425,6 +489,37 @@ const FIXTURE_METRICS: readonly ParticipationMetricRow[] = [
     participationPct: 57.1,
   },
   // student-noah-bennett has NO row here -- the expected_ct=0 case.
+
+  // Priya Desai (dual member, module doc #12 -- T120 fix): TWO metric rows,
+  // one per team, deliberately DIFFERENT numbers so a test that renders both
+  // proves neither last-team-win (the old `studentId`-only keyed Map bug)
+  // nor a blended/summed value (this task's own Traps: never re-derive/sum
+  // the participation formula in TS) -- each team must show exactly its own
+  // row's own already-computed participationPct, untouched.
+  // Falcons: 8/10 present -> 80.0%.
+  {
+    studentId: 'student-priya-desai',
+    teamId: 'team-falcons',
+    seasonId: PLACEHOLDER_CURRENT_SEASON_ID,
+    expectedCt: 10,
+    presentCt: 8,
+    lateCt: 0,
+    excusedCt: 0,
+    participationPct: 80.0,
+  },
+  // Comets: 3/10 present -> 30.0% (BELOW 70%; deliberately far from the
+  // Falcons row's 80.0% so a summed/averaged/last-wins bug would produce a
+  // visibly wrong number instead of an accidentally-matching one).
+  {
+    studentId: 'student-priya-desai',
+    teamId: 'team-comets',
+    seasonId: PLACEHOLDER_CURRENT_SEASON_ID,
+    expectedCt: 10,
+    presentCt: 3,
+    lateCt: 0,
+    excusedCt: 0,
+    participationPct: 30.0,
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -433,11 +528,23 @@ const FIXTURE_METRICS: readonly ParticipationMetricRow[] = [
 // ---------------------------------------------------------------------------
 
 /**
- * Plain LEFT JOIN of the student roster against the metric view's rows --
- * module doc #1. Performs zero MET-01 arithmetic: every metric field is
- * either copied verbatim from a matching `ParticipationMetricRow` or `null`
- * when no such row exists (the expected_ct=0 / "no completed sessions"
- * case).
+ * Metric-row-first join of the metric view's rows against the student
+ * roster (module doc #1, module doc #12 -- T120 dual-member fix). Performs
+ * zero MET-01 arithmetic: every metric field is either copied verbatim from
+ * a `ParticipationMetricRow` or `null` when no such row exists for a
+ * student on ANY team (the expected_ct=0 / "no completed sessions" case).
+ *
+ * One display row is produced PER METRIC ROW (not per roster student) --
+ * since T116/SCH-03 a dual-member student can have more than one metric row
+ * within a season (one per active membership team), and this tab already
+ * renders one independent `<Table>` per team (`groupedByTeam` below), so
+ * each of her metric rows must reach its OWN team's table with its OWN
+ * numbers, never merged or overwritten (module doc #12). Roster students
+ * with no metric row on any team still get exactly one "-" placeholder row,
+ * rendered under their roster's own (legacy/primary) `teamId` -- unchanged
+ * absence-case behavior for a single-team student (module doc #1), and
+ * module doc #12's disclosed limitation for a dual member with zero
+ * completed sessions on either team.
  */
 export function buildDisplayRows(
   students: readonly FixtureStudent[],
@@ -445,23 +552,41 @@ export function buildDisplayRows(
   metrics: readonly ParticipationMetricRow[],
 ): ParticipationDisplayRow[] {
   const teamNameById = new Map(teams.map((team) => [team.id, team.name] as const));
-  const metricByStudentId = new Map(metrics.map((metric) => [metric.studentId, metric] as const));
+  const studentById = new Map(students.map((student) => [student.id, student] as const));
+  const studentIdsWithAnyMetricRow = new Set(metrics.map((metric) => metric.studentId));
 
-  return students.map((student) => {
-    const metric = metricByStudentId.get(student.id) ?? null;
+  const metricDrivenRows: ParticipationDisplayRow[] = metrics.map((metric) => {
+    const student = studentById.get(metric.studentId);
     return {
+      studentId: metric.studentId,
+      studentName: student?.name ?? metric.studentId,
+      teamId: metric.teamId,
+      teamName: teamNameById.get(metric.teamId) ?? metric.teamId,
+      seasonId: metric.seasonId,
+      expectedCt: metric.expectedCt,
+      presentCt: metric.presentCt,
+      lateCt: metric.lateCt,
+      excusedCt: metric.excusedCt,
+      participationPct: metric.participationPct,
+    };
+  });
+
+  const absentRosterRows: ParticipationDisplayRow[] = students
+    .filter((student) => !studentIdsWithAnyMetricRow.has(student.id))
+    .map((student) => ({
       studentId: student.id,
       studentName: student.name,
       teamId: student.teamId,
       teamName: teamNameById.get(student.teamId) ?? student.teamId,
-      seasonId: metric?.seasonId ?? PLACEHOLDER_CURRENT_SEASON_ID,
-      expectedCt: metric?.expectedCt ?? null,
-      presentCt: metric?.presentCt ?? null,
-      lateCt: metric?.lateCt ?? null,
-      excusedCt: metric?.excusedCt ?? null,
-      participationPct: metric?.participationPct ?? null,
-    };
-  });
+      seasonId: PLACEHOLDER_CURRENT_SEASON_ID,
+      expectedCt: null,
+      presentCt: null,
+      lateCt: null,
+      excusedCt: null,
+      participationPct: null,
+    }));
+
+  return [...metricDrivenRows, ...absentRosterRows];
 }
 
 /**

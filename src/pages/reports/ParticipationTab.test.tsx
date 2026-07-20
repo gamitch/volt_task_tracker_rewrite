@@ -30,6 +30,7 @@ import {
   ParticipationTab,
   PLACEHOLDER_CURRENT_SEASON_ID,
   type ParticipationDisplayRow,
+  type ParticipationMetricRow,
 } from './ParticipationTab';
 
 // ---------------------------------------------------------------------------
@@ -103,6 +104,109 @@ describe('ParticipationTab render', () => {
     const rows = Array.from(container.querySelectorAll('tr'));
     const noahRow = rows.find((row) => row.textContent?.includes('Noah Bennett'));
     expect(noahRow?.textContent).toContain('—');
+  });
+
+  it('T120: renders a dual-team member (Priya Desai) TWICE -- once in each of her two teams\' tables, each with its own participation % -- never once, never blended', async () => {
+    render({ seasonId: PLACEHOLDER_CURRENT_SEASON_ID });
+    await flushMicrotasks();
+    const rows = Array.from(container.querySelectorAll('tr'));
+    const priyaRows = rows.filter((row) => row.textContent?.includes('Priya Desai'));
+    expect(priyaRows).toHaveLength(2);
+    expect(priyaRows.some((row) => row.textContent?.includes('80'))).toBe(true);
+    expect(priyaRows.some((row) => row.textContent?.includes('30'))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T120 (T116 checker-verified consumer-risk finding #1): `buildDisplayRows`
+// dual-member row-multiplicity fix -- direct proof against the pure join
+// function itself, not just the DOM above. This is the "no last-team-wins,
+// no blending" guard module doc #12 describes; these are the tests that
+// make that doc comment's claim true.
+// ---------------------------------------------------------------------------
+
+describe('buildDisplayRows dual-member row-multiplicity (T120)', () => {
+  it("produces two independent display rows for a dual-team student, each carrying its OWN team's verbatim participationPct -- proves neither last-team-wins nor blending/averaging", () => {
+    const students = [{ id: 'student-priya-desai', name: 'Priya Desai', teamId: 'team-falcons' }];
+    const teams = [
+      { id: 'team-falcons', name: 'Falcons' },
+      { id: 'team-comets', name: 'Comets' },
+    ];
+    const metrics: ParticipationMetricRow[] = [
+      {
+        studentId: 'student-priya-desai',
+        teamId: 'team-falcons',
+        seasonId: PLACEHOLDER_CURRENT_SEASON_ID,
+        expectedCt: 10,
+        presentCt: 8,
+        lateCt: 0,
+        excusedCt: 0,
+        participationPct: 80.0,
+      },
+      {
+        studentId: 'student-priya-desai',
+        teamId: 'team-comets',
+        seasonId: PLACEHOLDER_CURRENT_SEASON_ID,
+        expectedCt: 10,
+        presentCt: 3,
+        lateCt: 0,
+        excusedCt: 0,
+        participationPct: 30.0,
+      },
+    ];
+
+    const rows = buildDisplayRows(students, teams, metrics);
+    const priyaRows = rows.filter((row) => row.studentId === 'student-priya-desai');
+    expect(priyaRows).toHaveLength(2);
+
+    const falconsRow = priyaRows.find((row) => row.teamId === 'team-falcons');
+    const cometsRow = priyaRows.find((row) => row.teamId === 'team-comets');
+
+    // Each row's OWN numbers, untouched -- a last-team-wins bug would make
+    // BOTH rows show 30.0 (or both 80.0, order-dependent); a blend/average
+    // bug would show 55.0 on one or both. Neither happens here.
+    expect(falconsRow).toMatchObject({
+      teamName: 'Falcons',
+      expectedCt: 10,
+      presentCt: 8,
+      participationPct: 80.0,
+    });
+    expect(cometsRow).toMatchObject({
+      teamName: 'Comets',
+      expectedCt: 10,
+      presentCt: 3,
+      participationPct: 30.0,
+    });
+  });
+
+  it('gives a roster-only student (zero metric rows on any team) exactly ONE placeholder row, rendered under their legacy/primary team, never a fabricated 0%', () => {
+    const students = [{ id: 'student-noah-bennett', name: 'Noah Bennett', teamId: 'team-falcons' }];
+    const teams = [{ id: 'team-falcons', name: 'Falcons' }];
+    const metrics: ParticipationMetricRow[] = [];
+
+    const rows = buildDisplayRows(students, teams, metrics);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      studentId: 'student-noah-bennett',
+      teamId: 'team-falcons',
+      teamName: 'Falcons',
+      expectedCt: null,
+      presentCt: null,
+      lateCt: null,
+      excusedCt: null,
+      participationPct: null,
+    });
+  });
+
+  it('cross-checks the same dual-member proof against the shipped default fixture data (FIXTURE_STUDENTS/FIXTURE_METRICS), not just a hand-built minimal case', async () => {
+    const rows = await defaultLoadParticipationData(PLACEHOLDER_CURRENT_SEASON_ID);
+    const priyaRows = rows.filter((row) => row.studentId === 'student-priya-desai');
+    expect(priyaRows).toHaveLength(2);
+
+    const falconsRow = priyaRows.find((row) => row.teamId === 'team-falcons');
+    const cometsRow = priyaRows.find((row) => row.teamId === 'team-comets');
+    expect(falconsRow?.participationPct).toBe(80.0);
+    expect(cometsRow?.participationPct).toBe(30.0);
   });
 });
 
