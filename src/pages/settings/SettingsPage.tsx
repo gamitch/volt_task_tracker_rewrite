@@ -260,42 +260,59 @@
  * not assumed.
  *
  * -----------------------------------------------------------------------
- * 8. Avatar upload -- real `FileInput`, UI-only, no Storage bucket exists.
+ * 8. Avatar upload -- T105: real `FileInput`, now backed by a real Storage
+ *    bucket (updated from this file's original T060 disclosure, which is
+ *    now stale and has been removed -- this section replaces it).
  * -----------------------------------------------------------------------
  *
- * Confirmed directly: no migration anywhere in `supabase/migrations/**`
- * references `storage.buckets`, and no `src/lib/supabase/**` storage helper
- * exists (both this task's read-only Forbidden Files, cross-checked, not
- * taken on the packet's word). `onUploadAvatar` below is an injectable
- * `(file: File) => Promise<{avatarUrl: string}>` seam, defaulting to an
- * obviously-fake stub that fabricates a placeholder URL from the file's own
- * name (module doc #9) -- disclosed as a UI-only control today, same posture
- * as every prior data-seam gap in this batch. `FileInput`'s own documented
- * `accept`/`maxSize` props (`astryx-api.md` lines 4095-4118) are used with
- * real values (`accept="image/*"`, `maxSize={5 * 1024 * 1024}`, i.e. 5 MB)
- * -- NOT sourced from any migration or PRD line (none specifies a limit;
- * disclosed as a reasonable, disclosed UI default, not a cited spec fact).
+ * `../../lib/supabase/loaders/settings.ts`'s `uploadAvatar` (T105) is this
+ * file's real default `onUploadAvatar`: a genuine upload to the `avatars`
+ * Storage bucket (`supabase/migrations/20260720000001_avatar_storage.sql`,
+ * new, additive-only, this same task) under the caller's own
+ * `{auth.uid()}/...` folder, RLS-scoped so no other caller can write into
+ * it, followed by a real `profiles.avatar_url` UPDATE. See that migration's
+ * own header comment for the full bucket-visibility (public vs. private)
+ * investigation and RLS-policy reasoning -- not repeated here. `FileInput`'s
+ * own documented `accept`/`maxSize` props (`astryx-api.md` lines 4095-4118)
+ * are still used with the same real values (`accept="image/*"`,
+ * `maxSize={5 * 1024 * 1024}`, i.e. 5 MB) T060 originally chose -- NOT
+ * sourced from any migration or PRD line (none specifies a limit; disclosed
+ * as a reasonable UI default, not a cited spec fact), unchanged by this task.
  *
- * Ground Truth also notes `profiles.avatar_url` is `text NOT NULL` (no
- * default) -- every real row therefore always carries SOME non-empty
- * string value already (a real signup-flow concern -- what a brand-new
- * profile's `avatar_url` gets seeded to -- is out of scope for this task,
- * not solved here). This file's own fixture (`FIXTURE_PROFILE` below) uses
- * an obviously-fake, non-empty placeholder URL to accurately reflect that
- * NOT NULL constraint, rather than an empty string a real row could never
- * actually have.
+ * `profiles.avatar_url` (Ground Truth) was originally `text NOT NULL`, but
+ * `supabase/migrations/20260718000000_invite_trigger.sql` (lines 44-45,
+ * landed before this task, read-only reference) later widened it to
+ * NULLABLE for the invite-acceptance case (a brand-new profile legitimately
+ * has no avatar yet). `SettingsProfile.avatarUrl` below is widened to
+ * `string | null` to match the real column honestly (T105) -- the same
+ * "widen the type when wiring real data" decision `src/pages/roster/
+ * ParentsTab.tsx`'s own already-Passed T094 wiring already made for this
+ * exact column, cited as this task's direct precedent. The one `<Avatar
+ * src={...}>` usage below falls back to `undefined` for a `null` value
+ * (`Avatar`'s own documented `src` prop already accepts `undefined`,
+ * falling back to initials -- same idiom `ParentsTab.tsx` already uses).
  *
  * -----------------------------------------------------------------------
- * 9. No shared Supabase client wired in (Known Context/Traps #9) -- same
- *    posture as every prior content page in this batch.
+ * 9. T105: real Supabase client wired in -- updated from this file's
+ *    original T060 disclosure ("no shared Supabase client wired in"),
+ *    which is now stale and has been removed.
  * -----------------------------------------------------------------------
  *
  * `loadSettingsData`/`onUpdateProfile`/`onUploadAvatar`/`onChangeTheme`/
- * `onToggleNotificationPref`/`onSignOutEverywhere` are all injectable props,
- * each defaulting to an obviously-fake stub (`default*`) that either
- * resolves fixture data or `console.warn`s the payload it would have sent.
- * No `src/lib/supabase/**` import exists anywhere in this file (that
- * directory is read-only/reference-only per this task's Forbidden Files).
+ * `onToggleNotificationPref`/`onSignOutEverywhere` are all still injectable
+ * props (unchanged shape), but now default to the REAL implementations
+ * exported by `../../lib/supabase/loaders/settings.ts` (T105) -- real
+ * `profiles`/`notification_prefs` reads/writes, a real Storage upload
+ * (module doc #8 above), and a real global-scope Supabase Auth sign-out
+ * (module doc #3). The original T060 fixture/`console.warn`-stub
+ * implementations (`defaultLoadSettingsData`/`defaultOnUpdateProfile`/etc.,
+ * below) are KEPT as named exports -- same "no longer the default, kept for
+ * tests/future callers that want this fixture explicitly" precedent `
+ * SeasonSettings.tsx`'s own T091 wiring already established for its
+ * equivalent `defaultOnCreateSeason`/`defaultOnUpdateSeason`/
+ * `defaultOnSetActiveSeason` -- their own doc comments/`console.warn` text
+ * are updated below to say so accurately, rather than left claiming "not
+ * wired anywhere" now that they no longer are the default.
  *
  * -----------------------------------------------------------------------
  * 10. Calendar feed -- T046's `SubscribePopover` imported and rendered
@@ -426,6 +443,14 @@ import {
 } from '@astryxdesign/core';
 import { useAuth, pushToast } from '../../app/guards';
 import { SubscribePopover } from '../calendar/SubscribePopover';
+import {
+  changeTheme,
+  loadSettingsData as loadSettingsDataReal,
+  signOutEverywhere,
+  toggleNotificationPref,
+  updateProfile,
+  uploadAvatar,
+} from '../../lib/supabase/loaders/settings';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of the real `profiles` /
@@ -451,9 +476,10 @@ export interface SettingsProfile extends Record<string, unknown> {
   displayName: string;
   email: string;
   role: ProfileRole;
-  /** `profiles.avatar_url`, `text not null` (module doc #8) -- always a
-   * real, non-empty string on a genuine row. */
-  avatarUrl: string;
+  /** `profiles.avatar_url` -- nullable (widened by
+   * `20260718000000_invite_trigger.sql`; module doc #8) -- `null` for a
+   * brand-new profile that hasn't uploaded an avatar yet. */
+  avatarUrl: string | null;
   themeMode: ThemeMode;
 }
 
@@ -631,6 +657,14 @@ const FIXTURE_NOTIFICATION_PREFS: NotificationPrefsRow = {
   digestEnabled: true,
 };
 
+/**
+ * T105: no longer the component's default `loadSettingsData` (that's now
+ * `loadSettingsData` from `../../lib/supabase/loaders/settings`, module doc
+ * #9) -- kept as a named export, fixture literal unchanged, for tests (and
+ * any future caller) that want fixture behavior explicitly rather than
+ * relying on it being the implicit default. Same precedent
+ * `SeasonSettings.tsx`'s own `defaultLoadSeasons` (T091) already established.
+ */
 export async function defaultLoadSettingsData(): Promise<SettingsData> {
   return {
     profile: { ...FIXTURE_PROFILE },
@@ -638,19 +672,30 @@ export async function defaultLoadSettingsData(): Promise<SettingsData> {
   };
 }
 
+/**
+ * T105: no longer the component's default `onUpdateProfile` (that's now
+ * `updateProfile`, module doc #9) -- kept as a named export for tests/future
+ * callers that want this fixture explicitly.
+ */
 export const defaultOnUpdateProfile: OnUpdateProfileFn = async (payload) => {
   console.warn(
-    '[SettingsPage] No Supabase client wired in yet (module doc #9) -- this stub only logs ' +
-      'the profiles UPDATE payload that would have been sent.',
+    '[SettingsPage] defaultOnUpdateProfile: fixture-only stub (module doc #9) -- logs the ' +
+      'profiles UPDATE payload a real update would have sent instead of actually updating ' +
+      'anything.',
     payload,
   );
 };
 
+/**
+ * T105: no longer the component's default `onUploadAvatar` (that's now
+ * `uploadAvatar`, module doc #8/#9) -- kept as a named export for tests/
+ * future callers that want this fixture explicitly.
+ */
 export const defaultOnUploadAvatar: OnUploadAvatarFn = async (file) => {
   console.warn(
-    '[SettingsPage] No Supabase Storage bucket exists yet (module doc #8) -- this stub only ' +
-      'fabricates a placeholder avatar URL from the selected file, it never actually uploads ' +
-      'anything.',
+    '[SettingsPage] defaultOnUploadAvatar: fixture-only stub (module doc #8/#9) -- fabricates ' +
+      'a placeholder avatar URL from the selected file instead of actually uploading it to the ' +
+      'real "avatars" Storage bucket.',
     file.name,
   );
   return {
@@ -658,27 +703,44 @@ export const defaultOnUploadAvatar: OnUploadAvatarFn = async (file) => {
   };
 };
 
+/**
+ * T105: no longer the component's default `onChangeTheme` (that's now
+ * `changeTheme`, module doc #9) -- kept as a named export for tests/future
+ * callers that want this fixture explicitly.
+ */
 export const defaultOnChangeTheme: OnChangeThemeFn = async (payload) => {
   console.warn(
-    '[SettingsPage] No Supabase client wired in yet (module doc #9) -- this stub only logs ' +
-      'the profiles.theme_mode UPDATE payload that would have been sent.',
+    '[SettingsPage] defaultOnChangeTheme: fixture-only stub (module doc #9) -- logs the ' +
+      'profiles.theme_mode UPDATE payload a real update would have sent instead of actually ' +
+      'updating anything.',
     payload,
   );
 };
 
+/**
+ * T105: no longer the component's default `onToggleNotificationPref`
+ * (that's now `toggleNotificationPref`, module doc #9) -- kept as a named
+ * export for tests/future callers that want this fixture explicitly.
+ */
 export const defaultOnToggleNotificationPref: OnToggleNotificationPrefFn = async (payload) => {
   console.warn(
-    '[SettingsPage] No Supabase client wired in yet (module doc #9) -- this stub only logs ' +
-      'the notification_prefs UPDATE payload that would have been sent.',
+    '[SettingsPage] defaultOnToggleNotificationPref: fixture-only stub (module doc #9) -- logs ' +
+      'the notification_prefs UPDATE payload a real update would have sent instead of actually ' +
+      'updating anything.',
     payload,
   );
 };
 
+/**
+ * T105: no longer the component's default `onSignOutEverywhere` (that's now
+ * `signOutEverywhere`, module doc #4/#9) -- kept as a named export for
+ * tests/future callers that want this fixture explicitly.
+ */
 export const defaultOnSignOutEverywhere: OnSignOutEverywhereFn = async () => {
   console.warn(
-    '[SettingsPage] No Supabase client wired in yet (module doc #9) -- this stub only logs ' +
-      'that a real global-scope sign-out (e.g. supabase.auth.signOut({scope: "global"})) ' +
-      'would have been called here. This is DISTINCT from guards.tsx’s logout() -- module doc #3.',
+    '[SettingsPage] defaultOnSignOutEverywhere: fixture-only stub (module doc #9) -- logs that ' +
+      'a real global-scope sign-out would have been called here instead of actually calling ' +
+      'one. This is DISTINCT from guards.tsx’s logout() -- module doc #3.',
   );
 };
 
@@ -724,30 +786,35 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
 // ---------------------------------------------------------------------------
 
 export interface SettingsPageProps {
-  /** Injectable data-loading seam (module doc #9). Defaults to fixture data. */
+  /** Injectable data-loading seam (module doc #9). Defaults to the real
+   * `loadSettingsData` (`../../lib/supabase/loaders/settings`). */
   loadSettingsData?: LoadSettingsDataFn;
-  /** Injectable profile-save seam (module doc #9). Defaults to a `console.warn` stub. */
+  /** Injectable profile-save seam (module doc #9). Defaults to the real
+   * `updateProfile`. */
   onUpdateProfile?: OnUpdateProfileFn;
-  /** Injectable avatar-upload seam (module doc #8). Defaults to a fake-URL stub. */
+  /** Injectable avatar-upload seam (module doc #8/#9). Defaults to the real
+   * `uploadAvatar`. */
   onUploadAvatar?: OnUploadAvatarFn;
-  /** Injectable theme-persist seam (module doc #6). Defaults to a `console.warn` stub. */
+  /** Injectable theme-persist seam (module doc #6/#9). Defaults to the real
+   * `changeTheme`. */
   onChangeTheme?: OnChangeThemeFn;
-  /** Injectable per-category persist seam (module doc #4). Defaults to a `console.warn` stub. */
+  /** Injectable per-category persist seam (module doc #4/#9). Defaults to the
+   * real `toggleNotificationPref`. */
   onToggleNotificationPref?: OnToggleNotificationPrefFn;
   /**
    * Injectable, DISTINCT-from-`logout()` global sign-out seam (module doc
-   * #3). Defaults to a `console.warn` stub.
+   * #3/#4/#9). Defaults to the real `signOutEverywhere`.
    */
   onSignOutEverywhere?: OnSignOutEverywhereFn;
 }
 
 export function SettingsPage({
-  loadSettingsData = defaultLoadSettingsData,
-  onUpdateProfile = defaultOnUpdateProfile,
-  onUploadAvatar = defaultOnUploadAvatar,
-  onChangeTheme = defaultOnChangeTheme,
-  onToggleNotificationPref = defaultOnToggleNotificationPref,
-  onSignOutEverywhere = defaultOnSignOutEverywhere,
+  loadSettingsData = loadSettingsDataReal,
+  onUpdateProfile = updateProfile,
+  onUploadAvatar = uploadAvatar,
+  onChangeTheme = changeTheme,
+  onToggleNotificationPref = toggleNotificationPref,
+  onSignOutEverywhere = signOutEverywhere,
 }: SettingsPageProps = {}): ReactNode {
   const loadState = useLoadState(loadSettingsData, [loadSettingsData]);
   const { logout } = useAuth();
@@ -991,10 +1058,14 @@ export function SettingsPage({
                   )}
 
                   <HStack gap={3} vAlign="center">
-                    <Avatar src={profile.avatarUrl} name={profile.displayName} size="large" />
+                    <Avatar
+                      src={profile.avatarUrl ?? undefined}
+                      name={profile.displayName}
+                      size="large"
+                    />
                     <FileInput
                       label="Avatar"
-                      description="PNG, JPG, or GIF, up to 5 MB. Not yet backed by real storage -- module doc #8."
+                      description="PNG, JPG, or GIF, up to 5 MB."
                       value={avatarFile}
                       onChange={(files) => setAvatarFile(Array.isArray(files) ? null : files)}
                       changeAction={handleAvatarChangeAction}

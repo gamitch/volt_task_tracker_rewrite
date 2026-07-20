@@ -31,6 +31,18 @@
  *   6. Real proof of `id="notifications"` matching `MANAGE_PREFERENCES_PATH`.
  *   7. Pure-function proof for `getNotificationCategoriesForRole`,
  *      `isValidThemeMode`, `buildUpdateProfilePayload`.
+ *   8. T105: real proof of `../../lib/supabase/loaders/settings.ts`'s
+ *      `makeLoadSettingsData`/`makeUpdateProfile`/`makeChangeTheme`/
+ *      `makeToggleNotificationPref`/`makeUploadAvatar`/
+ *      `makeSignOutEverywhere` against a stubbed `SupabaseClient` -- same
+ *      "loader-level tests live in the page's own test file" precedent
+ *      `SeasonSettings.test.tsx`'s own T091 `makeLoadSeasons`/
+ *      `makeCreateSeason`/`makeUpdateSeason` block already established (that
+ *      module likewise has no dedicated test file of its own). The Storage
+ *      upload path (`client.storage.from('avatars').upload(...)`) is stubbed
+ *      the same way every prior loader test in this project stubs
+ *      `SupabaseClient` table methods -- no real network/Storage call runs
+ *      in `vitest`.
  *
  * jsdom gaps: `AlertDialog` renders a native `<dialog>` via `showModal()`
  * (not implemented by this repo's installed jsdom) -- the same guarded,
@@ -47,9 +59,18 @@
  */
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import type { AuthSession, SupabaseClient } from '@supabase/supabase-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, useAuth } from '../../app/guards';
 import { MANAGE_PREFERENCES_PATH } from '../../emails/layout/constants';
+import {
+  makeChangeTheme,
+  makeLoadSettingsData,
+  makeSignOutEverywhere,
+  makeToggleNotificationPref,
+  makeUpdateProfile,
+  makeUploadAvatar,
+} from '../../lib/supabase/loaders/settings';
 import {
   buildUpdateProfilePayload,
   getNotificationCategoriesForRole,
@@ -572,5 +593,488 @@ describe('<SettingsPage /> Profile section', () => {
     await flushMicrotasks();
 
     expect(calls).toEqual([{ displayName: 'Casey N.' }]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T105 (ED-1 Packet P12): real data-layer wiring seams --
+// `../../lib/supabase/loaders/settings.ts`'s `makeLoadSettingsData`/
+// `makeUpdateProfile`/`makeChangeTheme`/`makeToggleNotificationPref`/
+// `makeUploadAvatar`/`makeSignOutEverywhere`. Stubbed `SupabaseClient` only,
+// same DI pattern as `SeasonSettings.test.tsx`'s own T091 loader-level block
+// (module doc #8 above) -- no real network/Storage/Auth call runs here.
+// ---------------------------------------------------------------------------
+
+function buildFakeSession(userId: string): AuthSession {
+  return {
+    access_token: `fake-access-token-${userId}`,
+    refresh_token: `fake-refresh-token-${userId}`,
+    expires_in: 3600,
+    token_type: 'bearer',
+    user: {
+      id: userId,
+      email: `${userId}@example.com`,
+      app_metadata: {},
+      user_metadata: {},
+      aud: 'authenticated',
+      created_at: new Date(0).toISOString(),
+    },
+  } as AuthSession;
+}
+
+const TEST_USER_ID = 'profile-real-user-1';
+
+/** Stubs `client.auth.getSession()` plus `client.from('profiles')
+ * .select(...).eq('id', ...).maybeSingle()` and `client.from
+ * ('notification_prefs').select(...).eq('profile_id', ...).maybeSingle()` --
+ * exactly the two chains `makeLoadSettingsData` uses. */
+function buildFakeLoadSettingsClient(options: {
+  session?: AuthSession | null;
+  profileRow?: Record<string, unknown> | null;
+  profileError?: { message: string; code?: string } | null;
+  prefsRow?: Record<string, unknown> | null;
+  prefsError?: { message: string; code?: string } | null;
+}): { client: SupabaseClient; fromSpy: ReturnType<typeof vi.fn> } {
+  const {
+    session = buildFakeSession(TEST_USER_ID),
+    profileRow = null,
+    profileError = null,
+    prefsRow = null,
+    prefsError = null,
+  } = options;
+  const getSession = vi.fn().mockResolvedValue({ data: { session }, error: null });
+
+  const fromSpy = vi.fn((table: string) => {
+    if (table === 'profiles') {
+      const maybeSingle = vi.fn().mockResolvedValue({ data: profileRow, error: profileError });
+      const eq = vi.fn().mockReturnValue({ maybeSingle });
+      const select = vi.fn().mockReturnValue({ eq });
+      return { select };
+    }
+    if (table === 'notification_prefs') {
+      const maybeSingle = vi.fn().mockResolvedValue({ data: prefsRow, error: prefsError });
+      const eq = vi.fn().mockReturnValue({ maybeSingle });
+      const select = vi.fn().mockReturnValue({ eq });
+      return { select };
+    }
+    throw new Error(`buildFakeLoadSettingsClient: unexpected table "${table}"`);
+  });
+
+  const client = { auth: { getSession }, from: fromSpy } as unknown as SupabaseClient;
+  return { client, fromSpy };
+}
+
+describe('makeLoadSettingsData (T105 real load)', () => {
+  it('maps snake_case profiles + notification_prefs DB rows to the camelCase SettingsData shape', async () => {
+    const { client } = buildFakeLoadSettingsClient({
+      profileRow: {
+        id: TEST_USER_ID,
+        display_name: 'Jordan Rivera',
+        email: 'jordan.rivera@example.com',
+        role: 'parent',
+        avatar_url: 'https://example.test/storage/v1/object/public/avatars/x/1.png',
+        theme_mode: 'dark',
+      },
+      prefsRow: {
+        profile_id: TEST_USER_ID,
+        invite: true,
+        signup_confirm: true,
+        event_reminder_48h: false,
+        event_reminder_3h: true,
+        meeting_reminder_3h: false,
+        weekly_digest: true,
+        digest_enabled: true,
+      },
+    });
+    const load = makeLoadSettingsData(() => client);
+
+    const result = await load();
+
+    expect(result).toEqual({
+      profile: {
+        id: TEST_USER_ID,
+        displayName: 'Jordan Rivera',
+        email: 'jordan.rivera@example.com',
+        role: 'parent',
+        avatarUrl: 'https://example.test/storage/v1/object/public/avatars/x/1.png',
+        themeMode: 'dark',
+      },
+      notificationPrefs: {
+        profileId: TEST_USER_ID,
+        invite: true,
+        signupConfirm: true,
+        eventReminder48h: false,
+        eventReminder3h: true,
+        meetingReminder3h: false,
+        weeklyDigest: true,
+        digestEnabled: true,
+      },
+    });
+  });
+
+  it('passes a null avatar_url through as null, never coerced to a placeholder string', async () => {
+    const { client } = buildFakeLoadSettingsClient({
+      profileRow: {
+        id: TEST_USER_ID,
+        display_name: 'Casey Nguyen',
+        email: 'casey.nguyen@example.com',
+        role: 'student',
+        avatar_url: null,
+        theme_mode: 'system',
+      },
+      prefsRow: {
+        profile_id: TEST_USER_ID,
+        invite: true,
+        signup_confirm: true,
+        event_reminder_48h: true,
+        event_reminder_3h: true,
+        meeting_reminder_3h: true,
+        weekly_digest: true,
+        digest_enabled: true,
+      },
+    });
+    const load = makeLoadSettingsData(() => client);
+
+    const result = await load();
+
+    expect(result.profile.avatarUrl).toBeNull();
+  });
+
+  it('falls back to "system" for an invalid/legacy theme_mode value, never crashing or passing it through raw', async () => {
+    const { client } = buildFakeLoadSettingsClient({
+      profileRow: {
+        id: TEST_USER_ID,
+        display_name: 'Casey Nguyen',
+        email: 'casey.nguyen@example.com',
+        role: 'student',
+        avatar_url: null,
+        theme_mode: 'not-a-real-mode',
+      },
+      prefsRow: {
+        profile_id: TEST_USER_ID,
+        invite: true,
+        signup_confirm: true,
+        event_reminder_48h: true,
+        event_reminder_3h: true,
+        meeting_reminder_3h: true,
+        weekly_digest: true,
+        digest_enabled: true,
+      },
+    });
+    const load = makeLoadSettingsData(() => client);
+
+    const result = await load();
+
+    expect(result.profile.themeMode).toBe('system');
+  });
+
+  it('rejects with a plain Error when there is no active session, never falling back to fixture data', async () => {
+    const { client } = buildFakeLoadSettingsClient({ session: null });
+    const load = makeLoadSettingsData(() => client);
+
+    await expect(load()).rejects.toThrow('No active session was found');
+  });
+
+  it('rejects when the profiles row is missing (module doc #11 assumption violated)', async () => {
+    const { client } = buildFakeLoadSettingsClient({
+      profileRow: null,
+      prefsRow: { profile_id: TEST_USER_ID },
+    });
+    const load = makeLoadSettingsData(() => client);
+
+    await expect(load()).rejects.toThrow('No profile was found');
+  });
+
+  it('rejects when the notification_prefs row is missing', async () => {
+    const { client } = buildFakeLoadSettingsClient({
+      profileRow: {
+        id: TEST_USER_ID,
+        display_name: 'Casey Nguyen',
+        email: 'casey.nguyen@example.com',
+        role: 'student',
+        avatar_url: null,
+        theme_mode: 'system',
+      },
+      prefsRow: null,
+    });
+    const load = makeLoadSettingsData(() => client);
+
+    await expect(load()).rejects.toThrow('No notification preferences were found');
+  });
+
+  it('rejects with the real SupabaseLoaderError on a genuine profiles query error', async () => {
+    const { client } = buildFakeLoadSettingsClient({
+      profileError: { message: 'permission denied for table profiles', code: '42501' },
+    });
+    const load = makeLoadSettingsData(() => client);
+
+    await expect(load()).rejects.toMatchObject({ code: '42501' });
+  });
+});
+
+/** Stubs `client.auth.getSession()` plus `client.from('profiles')
+ * .update({...}).eq('id', ...)` -- exactly the chain `makeUpdateProfile`/
+ * `makeChangeTheme` use. */
+function buildFakeProfileUpdateClient(options: {
+  session?: AuthSession | null;
+  error?: { message: string; code?: string } | null;
+}): {
+  client: SupabaseClient;
+  fromSpy: ReturnType<typeof vi.fn>;
+  updateSpy: ReturnType<typeof vi.fn>;
+  eqSpy: ReturnType<typeof vi.fn>;
+} {
+  const { session = buildFakeSession(TEST_USER_ID), error = null } = options;
+  const getSession = vi.fn().mockResolvedValue({ data: { session }, error: null });
+  const eqSpy = vi.fn().mockResolvedValue({ data: null, error });
+  const updateSpy = vi.fn(() => ({ eq: eqSpy }));
+  const fromSpy = vi.fn(() => ({ update: updateSpy }));
+  const client = { auth: { getSession }, from: fromSpy } as unknown as SupabaseClient;
+  return { client, fromSpy, updateSpy, eqSpy };
+}
+
+describe('makeUpdateProfile (T105 real update)', () => {
+  it("resolves the caller's own id from the session and updates only display_name for that row", async () => {
+    const { client, fromSpy, updateSpy, eqSpy } = buildFakeProfileUpdateClient({});
+    const update = makeUpdateProfile(() => client);
+
+    await update({ displayName: 'Casey N.' });
+
+    expect(fromSpy).toHaveBeenCalledWith('profiles');
+    expect(updateSpy).toHaveBeenCalledWith({ display_name: 'Casey N.' });
+    expect(eqSpy).toHaveBeenCalledWith('id', TEST_USER_ID);
+  });
+
+  it('rejects with a plain Error when there is no active session', async () => {
+    const { client } = buildFakeProfileUpdateClient({ session: null });
+    const update = makeUpdateProfile(() => client);
+
+    await expect(update({ displayName: 'X' })).rejects.toThrow('No active session was found');
+  });
+
+  it('rejects with the real SupabaseLoaderError on a genuine update error', async () => {
+    const { client } = buildFakeProfileUpdateClient({
+      error: { message: 'permission denied', code: '42501' },
+    });
+    const update = makeUpdateProfile(() => client);
+
+    await expect(update({ displayName: 'X' })).rejects.toMatchObject({ code: '42501' });
+  });
+});
+
+describe('makeChangeTheme (T105 real update)', () => {
+  it("resolves the caller's own id from the session and updates only theme_mode for that row", async () => {
+    const { client, fromSpy, updateSpy, eqSpy } = buildFakeProfileUpdateClient({});
+    const changeThemeFn = makeChangeTheme(() => client);
+
+    await changeThemeFn({ themeMode: 'dark' } satisfies ChangeThemePayload);
+
+    expect(fromSpy).toHaveBeenCalledWith('profiles');
+    expect(updateSpy).toHaveBeenCalledWith({ theme_mode: 'dark' });
+    expect(eqSpy).toHaveBeenCalledWith('id', TEST_USER_ID);
+  });
+});
+
+/** Stubs exactly `client.from('notification_prefs').update({...}).eq
+ * ('profile_id', ...)` -- `makeToggleNotificationPref` needs no `client.auth`
+ * call at all (module doc #2 of `../../lib/supabase/loaders/settings.ts`) --
+ * this client deliberately has NO `auth` key, so any accidental call to it
+ * would throw and fail the test, proving the no-session-lookup claim. */
+function buildFakeTogglePrefClient(options: {
+  error?: { message: string; code?: string } | null;
+}): {
+  client: SupabaseClient;
+  fromSpy: ReturnType<typeof vi.fn>;
+  updateSpy: ReturnType<typeof vi.fn>;
+  eqSpy: ReturnType<typeof vi.fn>;
+} {
+  const { error = null } = options;
+  const eqSpy = vi.fn().mockResolvedValue({ data: null, error });
+  const updateSpy = vi.fn(() => ({ eq: eqSpy }));
+  const fromSpy = vi.fn(() => ({ update: updateSpy }));
+  const client = { from: fromSpy } as unknown as SupabaseClient;
+  return { client, fromSpy, updateSpy, eqSpy };
+}
+
+describe('makeToggleNotificationPref (T105 real update)', () => {
+  it('maps each NotificationPrefKey to its real snake_case column and trusts the caller-supplied profileId directly (no session lookup)', async () => {
+    const cases: [ToggleNotificationPrefPayload, Record<string, unknown>][] = [
+      [{ profileId: 'p1', key: 'signupConfirm', value: false }, { signup_confirm: false }],
+      [{ profileId: 'p2', key: 'eventReminder48h', value: true }, { event_reminder_48h: true }],
+      [{ profileId: 'p3', key: 'meetingReminder3h', value: false }, { meeting_reminder_3h: false }],
+      [{ profileId: 'p4', key: 'weeklyDigest', value: false }, { weekly_digest: false }],
+      [{ profileId: 'p5', key: 'digestEnabled', value: true }, { digest_enabled: true }],
+    ];
+
+    for (const [payload, expectedUpdate] of cases) {
+      const { client, fromSpy, updateSpy, eqSpy } = buildFakeTogglePrefClient({});
+      const toggle = makeToggleNotificationPref(() => client);
+
+      await toggle(payload);
+
+      expect(fromSpy).toHaveBeenCalledWith('notification_prefs');
+      expect(updateSpy).toHaveBeenCalledWith(expectedUpdate);
+      expect(eqSpy).toHaveBeenCalledWith('profile_id', payload.profileId);
+    }
+  });
+
+  it('rejects with the real SupabaseLoaderError on a genuine update error', async () => {
+    const { client } = buildFakeTogglePrefClient({
+      error: { message: 'permission denied', code: '42501' },
+    });
+    const toggle = makeToggleNotificationPref(() => client);
+
+    await expect(
+      toggle({ profileId: TEST_USER_ID, key: 'signupConfirm', value: true }),
+    ).rejects.toMatchObject({ code: '42501' });
+  });
+});
+
+/** Stubs `client.auth.getSession()`, `client.storage.from('avatars')
+ * .upload(...)`/`.getPublicUrl(...)`, and `client.from('profiles')
+ * .update({...}).eq('id', ...)` -- exactly the three calls `makeUploadAvatar`
+ * makes. No real network/Storage call runs (Known Context/Traps #5). */
+function buildFakeUploadAvatarClient(options: {
+  session?: AuthSession | null;
+  uploadError?: { message: string; name?: string } | null;
+  publicUrl?: string;
+  updateError?: { message: string; code?: string } | null;
+}): {
+  client: SupabaseClient;
+  storageFromSpy: ReturnType<typeof vi.fn>;
+  uploadSpy: ReturnType<typeof vi.fn>;
+  getPublicUrlSpy: ReturnType<typeof vi.fn>;
+  tableFromSpy: ReturnType<typeof vi.fn>;
+  updateSpy: ReturnType<typeof vi.fn>;
+  eqSpy: ReturnType<typeof vi.fn>;
+} {
+  const {
+    session = buildFakeSession(TEST_USER_ID),
+    uploadError = null,
+    publicUrl = 'https://example.test/storage/v1/object/public/avatars/x/123.png',
+    updateError = null,
+  } = options;
+
+  const getSession = vi.fn().mockResolvedValue({ data: { session }, error: null });
+
+  const uploadSpy = vi
+    .fn()
+    .mockResolvedValue(
+      uploadError
+        ? { data: null, error: uploadError }
+        : { data: { id: 'obj-1', path: 'x', fullPath: 'avatars/x' }, error: null },
+    );
+  const getPublicUrlSpy = vi.fn().mockReturnValue({ data: { publicUrl } });
+  const storageFromSpy = vi.fn(() => ({ upload: uploadSpy, getPublicUrl: getPublicUrlSpy }));
+
+  const eqSpy = vi.fn().mockResolvedValue({ data: null, error: updateError });
+  const updateSpy = vi.fn(() => ({ eq: eqSpy }));
+  const tableFromSpy = vi.fn(() => ({ update: updateSpy }));
+
+  const client = {
+    auth: { getSession },
+    storage: { from: storageFromSpy },
+    from: tableFromSpy,
+  } as unknown as SupabaseClient;
+
+  return { client, storageFromSpy, uploadSpy, getPublicUrlSpy, tableFromSpy, updateSpy, eqSpy };
+}
+
+describe('makeUploadAvatar (T105 real upload)', () => {
+  it('uploads under {userId}/{timestamp}{extension}, upserts, resolves the public URL, and writes profiles.avatar_url', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+    const { client, storageFromSpy, uploadSpy, getPublicUrlSpy, tableFromSpy, updateSpy, eqSpy } =
+      buildFakeUploadAvatarClient({
+        publicUrl:
+          'https://example.test/storage/v1/object/public/avatars/profile-real-user-1/1700000000000.png',
+      });
+    const upload = makeUploadAvatar(() => client);
+    const file = new File(['fake-bytes'], 'my-photo.png', { type: 'image/png' });
+
+    const result = await upload(file);
+
+    const expectedPath = `${TEST_USER_ID}/1700000000000.png`;
+    expect(storageFromSpy).toHaveBeenCalledWith('avatars');
+    expect(uploadSpy).toHaveBeenCalledWith(expectedPath, file, {
+      upsert: true,
+      contentType: 'image/png',
+    });
+    expect(getPublicUrlSpy).toHaveBeenCalledWith(expectedPath);
+    expect(tableFromSpy).toHaveBeenCalledWith('profiles');
+    expect(updateSpy).toHaveBeenCalledWith({
+      avatar_url:
+        'https://example.test/storage/v1/object/public/avatars/profile-real-user-1/1700000000000.png',
+    });
+    expect(eqSpy).toHaveBeenCalledWith('id', TEST_USER_ID);
+    expect(result).toEqual({
+      avatarUrl:
+        'https://example.test/storage/v1/object/public/avatars/profile-real-user-1/1700000000000.png',
+    });
+  });
+
+  it('never includes the original filename in the uploaded object path (SEC-02: no PII in URLs)', async () => {
+    const { client, uploadSpy } = buildFakeUploadAvatarClient({});
+    const upload = makeUploadAvatar(() => client);
+    const file = new File(['fake-bytes'], 'jordan-rivera-headshot.jpg', { type: 'image/jpeg' });
+
+    await upload(file);
+
+    const uploadedPath = uploadSpy.mock.calls[0]?.[0] as string;
+    expect(uploadedPath).not.toContain('jordan-rivera-headshot');
+    expect(uploadedPath.startsWith(`${TEST_USER_ID}/`)).toBe(true);
+    expect(uploadedPath.endsWith('.jpg')).toBe(true);
+  });
+
+  it('propagates a raw Storage upload error unwrapped, never calling getPublicUrl or updating profiles', async () => {
+    const { client, getPublicUrlSpy, updateSpy } = buildFakeUploadAvatarClient({
+      uploadError: { message: 'The resource already exists', name: 'Duplicate' },
+    });
+    const upload = makeUploadAvatar(() => client);
+    const file = new File(['fake-bytes'], 'photo.png', { type: 'image/png' });
+
+    await expect(upload(file)).rejects.toMatchObject({ message: 'The resource already exists' });
+    expect(getPublicUrlSpy).not.toHaveBeenCalled();
+    expect(updateSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects with a plain Error when there is no active session, never uploading anything', async () => {
+    const { client, storageFromSpy } = buildFakeUploadAvatarClient({ session: null });
+    const upload = makeUploadAvatar(() => client);
+    const file = new File(['fake-bytes'], 'photo.png', { type: 'image/png' });
+
+    await expect(upload(file)).rejects.toThrow('No active session was found');
+    expect(storageFromSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects with the real SupabaseLoaderError when the profiles.avatar_url write itself fails', async () => {
+    const { client } = buildFakeUploadAvatarClient({
+      updateError: { message: 'permission denied', code: '42501' },
+    });
+    const upload = makeUploadAvatar(() => client);
+    const file = new File(['fake-bytes'], 'photo.png', { type: 'image/png' });
+
+    await expect(upload(file)).rejects.toMatchObject({ code: '42501' });
+  });
+});
+
+describe('makeSignOutEverywhere (T105 real global-scope sign-out)', () => {
+  it('calls client.auth.signOut({ scope: "global" }) -- distinct from a bare signOut()', async () => {
+    const signOut = vi.fn().mockResolvedValue({ error: null });
+    const client = { auth: { signOut } } as unknown as SupabaseClient;
+    const signOutFn = makeSignOutEverywhere(() => client);
+
+    await signOutFn();
+
+    expect(signOut).toHaveBeenCalledWith({ scope: 'global' });
+    expect(signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('propagates a raw AuthError unwrapped on failure', async () => {
+    const authError = { message: 'network error', name: 'AuthError' };
+    const signOut = vi.fn().mockResolvedValue({ error: authError });
+    const client = { auth: { signOut } } as unknown as SupabaseClient;
+    const signOutFn = makeSignOutEverywhere(() => client);
+
+    await expect(signOutFn()).rejects.toBe(authError);
   });
 });

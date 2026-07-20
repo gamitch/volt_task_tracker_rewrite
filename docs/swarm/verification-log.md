@@ -3856,3 +3856,63 @@ Edge Function in this repo already carries. The 2 previously-observed suite
 failures were confirmed to belong to concurrently-editing sibling task T104's
 in-progress `AdminToggles.tsx` (not this task's scope), and have since resolved
 once T104 stabilized.
+
+---
+
+## T105 (ED-1 Packet P12) — real `SettingsPage` data/mutations + new avatar Storage bucket
+
+**PASS (1st attempt, NIT).** Profile (`display_name`), Appearance (`theme_mode`),
+and Notifications (`notification_prefs`) sections are ordinary real Postgrest
+reads/writes — every backing column already existed. `onSignOutEverywhere` is a
+real `client.auth.signOut({ scope: 'global' })` call; checker confirmed it is
+still awaited FIRST, with `guards.tsx`'s local `logout()` called SECOND as a
+distinct, separate step — the file's pre-existing two-step flow is unchanged,
+`guards.tsx` itself untouched.
+
+The genuinely new piece — a Storage bucket for avatar upload, since none existed
+anywhere in this schema — was chosen PUBLIC. The worker's justification: an
+already-Passed, forbidden file (`ParentsTab.tsx`) binds `profiles.avatar_url`
+directly as a raw image `src` with no signed-URL-refresh mechanism anywhere in the
+codebase (checker independently grepped the whole repo for `createSignedUrl`/
+`signedUrl`: zero hits), so a private bucket's short-lived signed URLs would
+silently break that existing consumer once they expired. The checker did catch one
+inaccuracy in the migration's own supporting comment: it also cites
+`src/components/nav/TopNav.tsx` as binding `avatarUrl` as a raw `src`, but that
+file actually renders `<Avatar name={user.email} />` (initials only, no
+`avatarUrl` reference anywhere) — the decision itself is unaffected and holds on
+`ParentsTab.tsx` alone, so this is logged as a prose-accuracy NIT, not a rework
+item. The path-construction mitigation for a public bucket (`{auth.uid()}/
+{timestamp}{extension}`, deliberately stripping the original filename) was
+confirmed genuinely implemented, not just described.
+
+The RLS soundness claim was independently reproduced, not trusted from prose: the
+checker built its own real PostgreSQL 16 instance, applied the migration verbatim
+(including a hand-built `storage.buckets`/`storage.objects`/`storage.foldername()`
+stand-in, since bare Postgres lacks Supabase's Storage extension), and ran all 11
+claimed session-level scenarios as real non-superuser `authenticated`/`anon`
+roles: own-folder insert/update/delete all succeed; cross-user insert/update
+(including an attempted move into another user's folder)/delete are all denied or
+resolve a real no-op; an anonymous session can read (public bucket) but is denied
+every write attempt, even under broad table grants. All 11 matched the expected
+outcome.
+
+The disclosed PRD tension — SEC-04's "no photos in v1" for students (minors)
+against SET-01/T060's own already-Passed avatar-upload UI — was independently
+confirmed real by reading both PRD passages directly, and correctly left
+disclosed-but-unresolved rather than force-decided: T060 already built and shipped
+the UI this task was scoped to wire, not to re-litigate. Flagged for a product/boss
+decision on whether student-role avatar upload should be gated.
+
+typecheck/lint/format:check all clean; `SettingsPage.test.tsx` 44/44 (24 new,
+non-tautological against a stubbed `SupabaseClient`/Storage mock). The 2
+previously-observed full-suite failures were confirmed to belong to sibling task
+T104's `RosterShell.test.tsx` fallout (already resolved once T104 landed), not
+T105's own files.
+
+**This closes out the ED-1 epic.** All fourteen wiring packets (P0-P13, tasks
+T086-T105, plus hotfix T106) are now Passed — every page in this app that was
+originally scoped against fixture data now reads and writes real Supabase data,
+with every genuine schema/infrastructure gap along the way (leaderboard privacy,
+avatar storage, live check-in token minting, the accept-invite RLS trap, and
+others) closed by a real, checker-verified migration or Edge Function rather than
+worked around.
