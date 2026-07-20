@@ -10,7 +10,16 @@
 // `jsr:`/`deno.land` import so this test file has zero external network
 // dependency -- it type-checks and runs fully offline.
 import assert from 'node:assert/strict';
-import { computeExpiresAt, isValidEmail, isValidRole, isValidUuid, validateInviteRequest } from './validation.ts';
+import {
+  computeExpiresAt,
+  evaluateResendEligibility,
+  isResendRequestBody,
+  isValidEmail,
+  isValidRole,
+  isValidUuid,
+  validateInviteRequest,
+  validateResendInviteRequest,
+} from './validation.ts';
 
 function assertFalse(value: unknown, msg?: string): void {
   assert.equal(Boolean(value), false, msg);
@@ -178,4 +187,90 @@ Deno.test('validateInviteRequest treats an empty-string student_id as absent (ad
   const result = validateInviteRequest({ email: 'admin@example.com', role: 'admin', student_id: '' });
   assert(result.ok);
   if (result.ok) assertEquals(result.value.student_id, null);
+});
+
+// ---------------------------------------------------------------------------
+// T090 -- ED-1 Packet P3 resend branch: isResendRequestBody /
+// validateResendInviteRequest / evaluateResendEligibility.
+// ---------------------------------------------------------------------------
+
+Deno.test('isResendRequestBody: true only for a body with a truthy invite_id', () => {
+  assert(isResendRequestBody({ invite_id: '123e4567-e89b-12d3-a456-426614174000' }));
+  assertFalse(isResendRequestBody({ email: 'a@b.com', role: 'coach' }));
+  assertFalse(isResendRequestBody({ invite_id: '' }));
+  assertFalse(isResendRequestBody({ invite_id: null }));
+  assertFalse(isResendRequestBody(null));
+  assertFalse(isResendRequestBody('not an object'));
+  assertFalse(isResendRequestBody([1, 2, 3]));
+});
+
+Deno.test('isResendRequestBody: a body with BOTH invite_id and email/role still counts as a resend request (invite_id wins)', () => {
+  assert(
+    isResendRequestBody({
+      invite_id: '123e4567-e89b-12d3-a456-426614174000',
+      email: 'a@b.com',
+      role: 'coach',
+    }),
+  );
+});
+
+Deno.test('validateResendInviteRequest: rejects a non-object body', () => {
+  const result = validateResendInviteRequest('not an object');
+  assert(!result.ok);
+  if (!result.ok) assertEquals(result.error.code, 'INVALID_BODY');
+});
+
+Deno.test('validateResendInviteRequest: rejects a missing invite_id', () => {
+  const result = validateResendInviteRequest({});
+  assert(!result.ok);
+  if (!result.ok) assertEquals(result.error.code, 'INVALID_INVITE_ID');
+});
+
+Deno.test('validateResendInviteRequest: rejects a malformed (non-uuid) invite_id', () => {
+  const result = validateResendInviteRequest({ invite_id: 'not-a-uuid' });
+  assert(!result.ok);
+  if (!result.ok) assertEquals(result.error.code, 'INVALID_INVITE_ID');
+});
+
+Deno.test('validateResendInviteRequest: accepts a well-formed invite_id', () => {
+  const result = validateResendInviteRequest({ invite_id: '123e4567-e89b-12d3-a456-426614174000' });
+  assert(result.ok);
+  if (result.ok) {
+    assertEquals(result.value, { invite_id: '123e4567-e89b-12d3-a456-426614174000' });
+  }
+});
+
+Deno.test('evaluateResendEligibility: a pending invite is eligible', () => {
+  const result = evaluateResendEligibility({ status: 'pending' });
+  assertEquals(result, { ok: true });
+});
+
+Deno.test('evaluateResendEligibility: a nonexistent invite (null) is rejected as INVITE_NOT_FOUND', () => {
+  const result = evaluateResendEligibility(null);
+  assert(!result.ok);
+  if (!result.ok) assertEquals(result.error.code, 'INVITE_NOT_FOUND');
+});
+
+Deno.test('evaluateResendEligibility: an expired invite is rejected with copy steering toward a new invite', () => {
+  const result = evaluateResendEligibility({ status: 'expired' });
+  assert(!result.ok);
+  if (!result.ok) {
+    assertEquals(result.error.code, 'INVITE_NOT_PENDING');
+    assert(
+      /new invite/i.test(result.error.message),
+      `expected expired-invite copy to steer toward sending a new invite, got: "${result.error.message}"`,
+    );
+  }
+});
+
+Deno.test('evaluateResendEligibility: an accepted invite is rejected (nothing left to resend)', () => {
+  const result = evaluateResendEligibility({ status: 'accepted' });
+  assert(!result.ok);
+  if (!result.ok) assertEquals(result.error.code, 'INVITE_NOT_PENDING');
+});
+
+Deno.test('evaluateResendEligibility: a revoked invite is rejected (would silently un-cancel it)', () => {
+  const result = evaluateResendEligibility({ status: 'revoked' });
+  assert(!result.ok);
+  if (!result.ok) assertEquals(result.error.code, 'INVITE_NOT_PENDING');
 });

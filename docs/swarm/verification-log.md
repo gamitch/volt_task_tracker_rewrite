@@ -3104,3 +3104,85 @@ real behavior, confirmed both target assertions unchanged from their original st
 confirmed scope containment (only this one file, `+49/-0` lines). Full suite: 961/961.
 Clean typecheck/lint/build; format:check clean for the changed file (the pre-existing
 `Kiosk.tsx` issue correctly left out of scope, matching T087's own disclosure).
+
+## T090 — ED-1 packet P3: `send-invite` resend mode + wire `InvitesTab.onResend`
+
+**Result:** PASS (1st attempt, clean on own deliverable)
+
+Added a real resend branch to the deployed `send-invite` Edge Function: an optional
+`invite_id` field in the request body triggers a distinct path (positioned strictly
+after the existing auth/staff gate, so resend can't bypass authorization) that looks up
+the invite, verifies `status === 'pending'` (distinct DES-16 copy per non-pending
+status — expired steers toward sending a new invite, accepted/revoked explain why
+resend doesn't apply), extends `expires_at` by another 14 days, and sends a fresh email
+via `auth.admin.generateLink({type:'invite',...})` (since `inviteUserByEmail` can't be
+re-invoked) reusing the existing T048 branded-email/`email_log` machinery verbatim — no
+duplication. Frontend: `loaders/invites.ts` gained `resendInvite` with its own row-mapper
+(the resend response genuinely omits `invited_by`, which the existing send/load mapper's
+type requires — a second mapper was the correct call, not redundancy).
+`InvitesTab.onResend` now defaults to it.
+
+**Checker verification:** confirmed the send path is byte-for-byte unmodified (pure
+addition), confirmed the branch point is genuinely after the staff gate (a real security
+property), confirmed the `adminClient`-construction move is structural-only, confirmed
+`generateLink`'s usage matches the installed `@supabase/auth-js` types, confirmed the
+second-mapper justification by checking both response shapes directly. 43/43 deno tests,
+27/27 `InvitesTab.test.tsx` (including 3 new resend tests), clean typecheck/build.
+
+**Process note — a real incident, fully investigated:** mid-task the worker ran `git
+stash`/`git stash pop` in this heavily concurrent shared working tree (also hosting
+T089/T091's in-progress work), transiently reverting sibling files. It recovered by
+force-checking-out specific files from the stash. The checker's own audit found this
+recovery left 3 files byte-identical to the pre-incident (~00:07) snapshot:
+`AppShell.tsx` (T091's), `StudentDialog.tsx`/`StudentDialog.test.tsx` (T089's) — meaning
+any edits those sibling tasks made to exactly those files in the incident window could
+have been silently discarded. T091's own checker (dispatched with explicit awareness of
+this) independently confirmed `AppShell.tsx` was fully and correctly applied, no
+residue. T089 (still in progress at the time) was alerted directly via `SendMessage` to
+re-verify `StudentDialog.tsx`/`.test.tsx` against its own intended state before
+reporting — its own close-out will confirm this explicitly. `stash@{0}` was kept intact
+throughout as a safety net and remains so pending T089's confirmation.
+
+## T091 — ED-1 packet P4: `SeasonProvider` + real `SeasonSettings` CRUD/activate + real `ReportsShell` season threading
+
+**Result:** PASS (1st attempt, MINOR — one load-induced test flake, not a logic defect)
+
+New `SeasonProvider`/`useActiveSeason()` (modeled directly on the existing
+`AuthProvider`/`useAuth()` pattern): a four-state context (`loading | ready | none |
+error`) plus `refresh()`, mounted in `AppShell.tsx` wrapping only the chrome-rendered
+branch (not the `/login`/`/accept-invite` chromeless branch — a deliberate, source-
+verified decision, not a default). Honestly handles the real production database's
+current zero-seasons state as a first-class `'none'` outcome, not an error.
+`loaders/seasons.ts` implements the two-step `setActiveSeason` mutation the DB's
+single-active-season unique index forces (deactivate old, then activate new), with the
+partial-failure window (deactivate succeeds, activate fails, leaving zero active
+seasons) explicitly disclosed and tested — recoverable via the existing T082 retry
+`Banner`, no silent data loss. `SeasonSettings.tsx` wired to real CRUD/activate,
+including a necessary seam-signature change (`OnCreateSeasonFn` now returns the real
+DB-generated `SeasonRow` instead of `void`, replacing the old `makeLocalSeasonId()`
+placeholder) — verified as a clean, fully-migrated change with no orphaned old-signature
+consumers. `ReportsShell.tsx` now sources its default `seasonId` from the real hook,
+with a distinct render for each of the four states and an explicit `seasonId` prop still
+overriding outright (tested).
+
+**Checker verification — including a targeted audit of the stash incident's aftermath**
+(this task owned 2 of the 3 files flagged as at-risk by T090's checker):
+`AppShell.tsx` confirmed fully and correctly applied — `SeasonProvider` import present,
+wraps only the chrome branch, chromeless branch genuinely untouched. `SeasonSettings.tsx`
+confirmed fully applied — all four seams real, `refresh()` called only on activate
+success, never on failure. No half-applied or reverted state found; the stash incident
+left no residue in this task's work. Independently confirmed `SeasonProvider.tsx` is the
+only file importing `loadActiveSeason` directly (epic-wide rule). Confirmed the two-step
+mutation ordering, the dual-`SeasonRow`-type reasoning (local `Table`-constrained type in
+`SeasonSettings.tsx` vs. the canonical shared type in `SeasonProvider.tsx`, no
+interop-boundary bug), and that `SeasonProvider.test.tsx` genuinely covers both the
+zero-seasons state and the partial-failure window, not just the happy path. Full suite:
+1008/1010 — the 2 failures are T089's still-in-progress `RosterShell.test.tsx` (unrelated,
+zero references to season code under `src/pages/roster/`) and one `SeasonSettings.test.tsx`
+timeout that passed in isolation (66/66 when run alone) — a concurrency/load artifact of
+running 1010 tests together, not a real defect.
+
+**Findings (non-blocking):** the `AlertDialog`-interaction test in
+`SeasonSettings.test.tsx` can exceed the default 5000ms timeout under full-suite
+concurrent load — recommend a bumped `testTimeout` for that specific test as a small
+follow-up so full-suite runs stay deterministic.

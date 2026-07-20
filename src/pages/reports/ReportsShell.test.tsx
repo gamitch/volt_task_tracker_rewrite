@@ -1,12 +1,17 @@
 // @vitest-environment jsdom
 /**
- * T085: tests for `ReportsShell.tsx`.
+ * T085: tests for `ReportsShell.tsx`. T091 (ED-1 Packet P4) UPDATE: adds
+ * coverage for the shell's own new `useActiveSeason()` wiring (module doc #2
+ * in `ReportsShell.tsx`) -- every render below now also wraps in a scoped
+ * fake `<SeasonProvider>` (module doc below), since `ReportsShell` calls
+ * `useActiveSeason()` unconditionally now, even when an explicit `seasonId`
+ * prop is also supplied.
  *
- * `ReportsShell.tsx` never had its own test file before this task (T056's
+ * `ReportsShell.tsx` never had its own test file before T085 (T056's
  * original shell + `ParticipationTab` wiring shipped with no colocated test,
  * and `HoursTab`/`EventsTab` -- T057/T058 -- were each built afterward as
  * their own standalone components with their own test files, never touching
- * this shell). This file proves this task's own acceptance criteria directly
+ * this shell). This file proves each task's own acceptance criteria directly
  * against the real, composed page:
  *
  *   (a) Hours and Events, when selected, render their REAL components with
@@ -16,23 +21,44 @@
  *       included too, as the established precedent this task followed.
  *   (b) the pre-existing `RequireRole` guard and `TabList` tab-switching
  *       mechanism (both untouched by this task) still work.
+ *   (c) T091: the shell's default `seasonId` genuinely comes from
+ *       `useActiveSeason()` now (all four states rendered correctly, `'none'`
+ *       as an honest empty state never a crash/fallback), and an explicit
+ *       `seasonId` prop still overrides the hook's value outright.
  *
  * Uses the same raw `createRoot`/`act` pattern (no `@testing-library/react`
  * installed in this repo) and the same `AuthProvider` + `LoginAsDeferred`
  * role-login harness every other gated content page's test file in this
  * project already established.
+ *
+ * T091: `src/test-utils/**` is a forbidden/read-only directory for this
+ * task, so (same posture `SeasonSettings.test.tsx`'s own module doc already
+ * takes) the fake `<SeasonProvider>` wiring below is defined locally in this
+ * file rather than extracted to a shared harness. `DEFAULT_READY_SEASON_ID`
+ * intentionally reuses `ParticipationTab.tsx`'s own exported
+ * `PLACEHOLDER_CURRENT_SEASON_ID` LITERAL VALUE (imported directly, not
+ * guessed/retyped) as the harness's default resolved active season id --
+ * `ParticipationTab`/`HoursTab`/`EventsTab` each independently key their own
+ * fixture-backed default `loadData` to that exact literal (each file's own
+ * module doc, unchanged by this task), so reusing it here means every
+ * pre-existing "renders the real fixture row" assertion below keeps working
+ * unchanged when no test overrides the resolved season id explicitly.
  */
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AuthProvider, type AuthUser } from '../../app/guards';
+import { SeasonProvider, type LoadActiveSeasonFn } from '../../app/SeasonProvider';
+import type { SeasonRow } from '../../lib/supabase/types';
 import { LoginAsDeferred as LoginAs } from '../../test-utils/authHarness';
+import { PLACEHOLDER_CURRENT_SEASON_ID } from './ParticipationTab';
 import { ReportsShell } from './ReportsShell';
 
 // ---------------------------------------------------------------------------
 // Render harness -- mirrors `RosterShell.test.tsx`'s own harness (same
-// project-wide `AuthProvider` + `LoginAsDeferred` pattern).
+// project-wide `AuthProvider` + `LoginAsDeferred` pattern), extended (T091)
+// with a scoped fake `<SeasonProvider>`.
 // ---------------------------------------------------------------------------
 
 let container: HTMLDivElement;
@@ -42,29 +68,48 @@ const ADMIN_USER: AuthUser = { id: 'user-admin', email: 'admin@example.com', rol
 const COACH_USER: AuthUser = { id: 'user-coach', email: 'coach@example.com', role: 'coach' };
 const PARENT_USER: AuthUser = { id: 'user-parent', email: 'parent@example.com', role: 'parent' };
 
+const DEFAULT_READY_SEASON: SeasonRow = {
+  id: PLACEHOLDER_CURRENT_SEASON_ID,
+  name: 'Fixture Season',
+  startsOn: '2025-08-01',
+  endsOn: '2026-06-30',
+  defaultGoalHours: 100,
+  isActive: true,
+  createdAt: '2025-08-01T00:00:00.000Z',
+};
+
+/** T091 harness default: an immediately-`'ready'` season matching the
+ * fixture id every tab's own default `loadData` already keys to (module doc
+ * above). Tests that care about a different `useActiveSeason()` state pass
+ * their own `loadActiveSeason` override. */
+const DEFAULT_LOAD_ACTIVE_SEASON: LoadActiveSeasonFn = async () => DEFAULT_READY_SEASON;
+
 function renderReportsShell(
   user: AuthUser | null,
   props: Parameters<typeof ReportsShell>[0] = {},
+  loadActiveSeason: LoadActiveSeasonFn = DEFAULT_LOAD_ACTIVE_SEASON,
 ): void {
   act(() => {
     root.render(
       <MemoryRouter initialEntries={['/reports']}>
         <AuthProvider>
-          <Routes>
-            <Route
-              path="/reports"
-              element={
-                user === null ? (
-                  <ReportsShell {...props} />
-                ) : (
-                  <LoginAs user={user}>
+          <SeasonProvider loadActiveSeason={loadActiveSeason}>
+            <Routes>
+              <Route
+                path="/reports"
+                element={
+                  user === null ? (
                     <ReportsShell {...props} />
-                  </LoginAs>
-                )
-              }
-            />
-            <Route path="/" element={<div data-testid="redirected-home" />} />
-          </Routes>
+                  ) : (
+                    <LoginAs user={user}>
+                      <ReportsShell {...props} />
+                    </LoginAs>
+                  )
+                }
+              />
+              <Route path="/" element={<div data-testid="redirected-home" />} />
+            </Routes>
+          </SeasonProvider>
         </AuthProvider>
       </MemoryRouter>,
     );
@@ -277,5 +322,78 @@ describe('<ReportsShell /> tab scaffold regression check (unchanged from T056)',
     });
 
     expect(document.activeElement).toBe(hoursTabButton);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T091 (ED-1 Packet P4): `useActiveSeason()` wiring -- module doc #2's four
+// states, and the explicit-`seasonId`-prop override precedence.
+// ---------------------------------------------------------------------------
+
+describe('<ReportsShell /> useActiveSeason() wiring (T091)', () => {
+  it('renders a loading state (no TabList) while useActiveSeason() is still `loading`', async () => {
+    renderReportsShell(COACH_USER, {}, () => new Promise(() => {}));
+    await flushMicrotasks();
+    expect(container.textContent).toContain('Loading the active season');
+    expect(document.querySelector('button[data-tab-value]')).toBeNull();
+  });
+
+  it('renders an honest "No active season yet" empty state (no TabList) for the real `\'none\'` case -- zero seasons in the database', async () => {
+    renderReportsShell(COACH_USER, {}, async () => null);
+    await flushMicrotasks();
+    expect(container.textContent).toContain('No active season yet');
+    expect(document.querySelector('button[data-tab-value]')).toBeNull();
+    // Never a crash, never silently falling back to fixture tab content.
+    expect(container.textContent).not.toContain('Ava Thompson');
+  });
+
+  it("renders the real SupabaseLoaderError message (no TabList) for the `'error'` case", async () => {
+    renderReportsShell(COACH_USER, {}, async () => {
+      throw { code: '42501', message: 'Permission denied.', cause: null };
+    });
+    await flushMicrotasks();
+    expect(container.textContent).toContain("Couldn't load the active season");
+    expect(container.textContent).toContain('Permission denied.');
+    expect(document.querySelector('button[data-tab-value]')).toBeNull();
+  });
+
+  it("renders the real tabs, scoped to the real active season id, for the `'ready'` case (no explicit seasonId prop)", async () => {
+    let participationSeasonIdSeen: string | null = null;
+    renderReportsShell(
+      COACH_USER,
+      {
+        loadParticipationData: async (id: string) => {
+          participationSeasonIdSeen = id;
+          return [];
+        },
+      },
+      async () => ({ ...DEFAULT_READY_SEASON, id: 'season-real-active-id' }),
+    );
+    await flushMicrotasks();
+
+    expect(document.querySelector('button[data-tab-value]')).not.toBeNull();
+    expect(participationSeasonIdSeen).toBe('season-real-active-id');
+  });
+
+  it("an explicit seasonId prop overrides useActiveSeason() outright, even when the hook is not `'ready'`", async () => {
+    let participationSeasonIdSeen: string | null = null;
+    renderReportsShell(
+      COACH_USER,
+      {
+        seasonId: 'season-explicit-override',
+        loadParticipationData: async (id: string) => {
+          participationSeasonIdSeen = id;
+          return [];
+        },
+      },
+      // The hook itself never resolves `'ready'` here (stays `'none'`) --
+      // the explicit prop must still win and render real tab content.
+      async () => null,
+    );
+    await flushMicrotasks();
+
+    expect(document.querySelector('button[data-tab-value]')).not.toBeNull();
+    expect(container.textContent).not.toContain('No active season yet');
+    expect(participationSeasonIdSeen).toBe('season-explicit-override');
   });
 });

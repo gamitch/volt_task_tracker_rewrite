@@ -44,11 +44,26 @@
  * need those providers. `App.tsx` wraps `AppShell` in `LayerProvider` and
  * `Theme` at the app root, covering every route including the chromeless
  * two.
+ *
+ * T091 (ED-1 Packet P4): `SeasonProvider` (`./SeasonProvider.tsx`) is
+ * mounted here, wrapping ONLY the normal `AstryxAppShell`-wrapped branch
+ * below -- NOT the chromeless early-return branch above. Full reasoning
+ * (verified directly against this file and `App.tsx`, not assumed) lives in
+ * `SeasonProvider.tsx`'s own module doc ("Mount point" section); restated
+ * briefly here since it is this file's own edit: `/login`/`/accept-invite`
+ * are pre-auth entry points with no season-scoped content and no
+ * necessarily-real session yet (this file's own doc comment above, "pre-auth
+ * public entry points"), so they never attempt a season load at all.
+ * `App.tsx`'s own provider-order doc comment (and its actual JSX) confirms
+ * `AuthProvider` already wraps `AppShell` -- so `SeasonProvider`, mounted
+ * inside this file's normal branch, ends up nested inside `AuthProvider`'s
+ * tree without this file needing to import or depend on auth state itself.
  */
 import type { ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { AppShell as AstryxAppShell } from '@astryxdesign/core';
 import { routePaths } from './router';
+import { SeasonProvider } from './SeasonProvider';
 import { TopNav } from '../components/nav/TopNav';
 import { SideNav } from '../components/nav/SideNav';
 import { MobileNav } from '../components/nav/MobileNav';
@@ -67,12 +82,14 @@ export function AppShell({ children }: AppShellProps): ReactNode {
   }
 
   return (
-    <AstryxAppShell
-      topNav={<TopNav />}
-      sideNav={<SideNav />}
-      mobileNav={{ content: <MobileNav /> }}
-    >
-      {children}
-    </AstryxAppShell>
+    <SeasonProvider>
+      <AstryxAppShell
+        topNav={<TopNav />}
+        sideNav={<SideNav />}
+        mobileNav={{ content: <MobileNav /> }}
+      >
+        {children}
+      </AstryxAppShell>
+    </SeasonProvider>
   );
 }

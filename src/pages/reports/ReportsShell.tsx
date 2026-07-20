@@ -65,11 +65,12 @@
  *    anywhere in this file (T085's own explicit scope boundary).
  *
  * -----------------------------------------------------------------------
- * 4. Astryx prop sourcing (constitution item 2) -- unchanged from T056 for
- *    every prop still used below; `EmptyState` is no longer imported or
- *    rendered anywhere in this file (Hours/Events no longer render
- *    placeholders), so its citation is removed rather than left describing a
- *    prop this file no longer uses:
+ * 4. Astryx prop sourcing (constitution item 2) -- T091 adds `Banner`/
+ *    `EmptyState`/`Skeleton`/`VisuallyHidden`/`Button` for the new
+ *    no-`seasonId`-resolved state block (module doc #2); every prop cited
+ *    below for those is grepped verbatim against the SAME Props tables
+ *    `SeasonSettings.tsx`/`ParticipationTab.tsx` already cite for identical
+ *    usage, not re-derived independently:
  *
  *  - `TabList`/`Tab`/`Heading`/`VStack`: same citations T056 already
  *    established (`docs/swarm/astryx-api.md` "TabList"/"Stack" Props
@@ -77,28 +78,50 @@
  *    generation gaps, resolved via `npm run astryx -- component <Name>`,
  *    same disclosed CLI-cross-check pattern every content page in this
  *    project uses).
+ *  - `Banner` ("Banner" Props table): `status`, `title`, `description`,
+ *    `endContent` used for the `'error'` state (retry via
+ *    `useActiveSeason().refresh()`).
+ *  - `EmptyState` ("EmptyState" Props table): `title`, `description` used
+ *    for the `'none'` state -- no `actions` (unlike `SeasonSettings.tsx`'s
+ *    own `EmptyState`, this page has no create-a-season flow of its own;
+ *    SET-04 owns that at `/settings/season`).
+ *  - `Skeleton`/`VisuallyHidden` (T081 pattern, same as
+ *    `ParticipationTab.tsx`/`SeasonSettings.tsx`'s own loading states):
+ *    `width`/`height` on `Skeleton`; `VisuallyHidden`'s `as`/`role="status"`
+ *    carries the loading announcement.
+ *  - `Button` ("Button" Props table): `label`, `variant`, `onClick` used
+ *    only inside the error `Banner`'s `endContent` (Retry).
  *
  * -----------------------------------------------------------------------
- * 5. DES-12 four-state reasoning -- T056's original module doc explained why
- *    the Hours/Events placeholder panels only modeled the "empty" DES-12
- *    bucket (no real data fetching existed yet for either). That reasoning
- *    is now obsolete: `HoursTab`/`EventsTab` each perform their own real
- *    data fetching and model all four DES-12 states internally (see each
- *    tab's own module doc), the same way `ParticipationTab` already did.
- *    This shell itself has no DES-12 state of its own to model -- it only
- *    decides WHICH already-self-contained tab component to render, unchanged
- *    from how it always treated `ParticipationTab`.
+ * 5. DES-12 four-state reasoning -- T091 UPDATE. T056's original module doc
+ *    explained why the Hours/Events placeholder panels only modeled the
+ *    "empty" DES-12 bucket (no real data fetching existed yet for either).
+ *    That reasoning stays obsolete for the THREE TABS themselves:
+ *    `ParticipationTab`/`HoursTab`/`EventsTab` each still perform their own
+ *    real data fetching and model all four DES-12 states internally (see
+ *    each tab's own module doc). What's new in T091 is that THIS SHELL now
+ *    has its own DES-12 state to model too -- not about tab DATA, but about
+ *    which SEASON to scope the tabs to (module doc #2's four
+ *    `useActiveSeason()` states) -- rendered as the one state block replacing
+ *    the whole `TabList` + tab area described in module doc #2 above.
  */
 import { useState, type ReactNode } from 'react';
-import { Heading, Tab, TabList, VStack } from '@astryxdesign/core';
+import {
+  Banner,
+  Button,
+  EmptyState,
+  Heading,
+  Skeleton,
+  Tab,
+  TabList,
+  VisuallyHidden,
+  VStack,
+} from '@astryxdesign/core';
+import { useActiveSeason } from '../../app/SeasonProvider';
 import { RequireRole } from '../../app/guards';
 import { EventsTab, type LoadEventSessionsDataFn } from './EventsTab';
 import { HoursTab, type LoadHoursDataFn } from './HoursTab';
-import {
-  ParticipationTab,
-  PLACEHOLDER_CURRENT_SEASON_ID,
-  type LoadParticipationDataFn,
-} from './ParticipationTab';
+import { ParticipationTab, type LoadParticipationDataFn } from './ParticipationTab';
 
 type ReportsTabValue = 'participation' | 'hours' | 'events';
 
@@ -115,7 +138,11 @@ const REPORTS_TABS: readonly ReportsTabConfig[] = [
 ];
 
 export interface ReportsShellProps {
-  /** Overridable for a future season-picker task -- see module doc #2. */
+  /**
+   * Overridable for tests/a future season-picker task -- module doc #2.
+   * When omitted (`undefined`, the default), this shell sources the value
+   * from `useActiveSeason()` instead of a fixture placeholder.
+   */
   seasonId?: string;
   /** Threaded through to `ParticipationTab`'s injectable data seam. */
   loadParticipationData?: LoadParticipationDataFn;
@@ -126,32 +153,94 @@ export interface ReportsShellProps {
 }
 
 export function ReportsShell({
-  seasonId = PLACEHOLDER_CURRENT_SEASON_ID,
+  seasonId: seasonIdProp,
   loadParticipationData,
   loadHoursData,
   loadEventsData,
 }: ReportsShellProps = {}): ReactNode {
+  // Called unconditionally (React's rules-of-hooks) even when `seasonIdProp`
+  // is supplied and will end up overriding this hook's own value -- module
+  // doc #2.
+  const activeSeason = useActiveSeason();
   const [activeTab, setActiveTab] = useState<ReportsTabValue>(REPORTS_TABS[0].value);
+
+  // Module doc #2's override precedence: the explicit prop wins outright
+  // when supplied; only falls back to the hook when it was not.
+  const resolvedSeasonId =
+    seasonIdProp ?? (activeSeason.status === 'ready' ? activeSeason.season.id : null);
 
   return (
     <RequireRole allowedRoles={['coach', 'admin']}>
       <VStack gap={6} padding={6}>
         <Heading level={1}>Reports</Heading>
 
-        <TabList value={activeTab} onChange={(value) => setActiveTab(value as ReportsTabValue)}>
-          {REPORTS_TABS.map((tab) => (
-            <Tab key={tab.value} value={tab.value} label={tab.label} />
-          ))}
-        </TabList>
+        {resolvedSeasonId === null ? (
+          <ReportsSeasonState state={activeSeason} />
+        ) : (
+          <>
+            <TabList value={activeTab} onChange={(value) => setActiveTab(value as ReportsTabValue)}>
+              {REPORTS_TABS.map((tab) => (
+                <Tab key={tab.value} value={tab.value} label={tab.label} />
+              ))}
+            </TabList>
 
-        {activeTab === 'participation' && (
-          <ParticipationTab seasonId={seasonId} loadData={loadParticipationData} />
+            {activeTab === 'participation' && (
+              <ParticipationTab seasonId={resolvedSeasonId} loadData={loadParticipationData} />
+            )}
+            {activeTab === 'hours' && (
+              <HoursTab seasonId={resolvedSeasonId} loadData={loadHoursData} />
+            )}
+            {activeTab === 'events' && (
+              <EventsTab seasonId={resolvedSeasonId} loadData={loadEventsData} />
+            )}
+          </>
         )}
-        {activeTab === 'hours' && <HoursTab seasonId={seasonId} loadData={loadHoursData} />}
-        {activeTab === 'events' && <EventsTab seasonId={seasonId} loadData={loadEventsData} />}
       </VStack>
     </RequireRole>
   );
+}
+
+/**
+ * Module docs #2/#5: the one state block rendered in place of the whole
+ * `TabList` + tab area when no `seasonId` was resolved (no explicit prop AND
+ * `useActiveSeason()` is not `'ready'`). `state.status === 'ready'` never
+ * reaches this component (the caller only renders it for the other three
+ * statuses) -- the exhaustive `switch` below still covers it defensively
+ * (renders nothing) rather than asserting it can't happen, so a future
+ * caller mistake fails safe instead of crashing.
+ */
+function ReportsSeasonState({ state }: { state: ReturnType<typeof useActiveSeason> }): ReactNode {
+  switch (state.status) {
+    case 'loading':
+      return (
+        <VStack gap={3} aria-busy="true">
+          <VisuallyHidden as="div" role="status">
+            Loading the active season…
+          </VisuallyHidden>
+          <Skeleton width={240} height={28} />
+          <Skeleton width={400} height={16} index={1} />
+        </VStack>
+      );
+    case 'none':
+      return (
+        <EmptyState
+          headingLevel={2}
+          title="No active season yet"
+          description="An admin needs to create and activate a season in Season settings before reports can be scoped to it."
+        />
+      );
+    case 'error':
+      return (
+        <Banner
+          status="error"
+          title="Couldn't load the active season"
+          description={state.error.message}
+          endContent={<Button variant="ghost" label="Retry" onClick={state.refresh} />}
+        />
+      );
+    case 'ready':
+      return null;
+  }
 }
 
 export default ReportsShell;

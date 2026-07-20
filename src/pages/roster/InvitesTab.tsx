@@ -183,37 +183,44 @@
  * supplies its own `onResend` prop.
  *
  * -----------------------------------------------------------------------
- * 7. T087 (ED-1 Packet P1): `loadData`/`onRevoke` are now wired to the real
- *    Supabase data layer -- `onResend` deliberately is NOT (see #7b).
+ * 7. T087 (ED-1 Packet P1) / T090 (ED-1 Packet P3): `loadData`, `onRevoke`,
+ *    AND (as of T090) `onResend` are now all wired to the real Supabase data
+ *    layer.
  *
  * `loadData`/`onResend`/`onRevoke` are the three injectable seams
  * (`LoadInvitesTabDataFn`/`ResendInviteFn`/`RevokeInviteFn`).
- * `loadData`/`onRevoke` now default to `loadInvitesTabData`/`revokeInvite`
- * from `../../lib/supabase/loaders/invites` (T087) -- a real query against
+ * `loadData`/`onRevoke` default to `loadInvitesTabData`/`revokeInvite` from
+ * `../../lib/supabase/loaders/invites` (T087) -- a real query against
  * `invites` and a real `status = 'revoked'` mutation, respectively (see
  * that module's own doc comment for the full Trap #1/#3/#4 reasoning).
- * `onResend` still defaults to the fixture-backed `defaultOnResendInvite`
- * below (#7b) -- this is correct, not incomplete. Tests inject the old
- * fixture-backed `defaultLoadInvitesTabData`/`defaultOnRevokeInvite`
+ * `onResend` now ALSO defaults to that same file's `resendInvite` (T090,
+ * #7b below) -- a real call to `send-invite`'s new resend branch, no longer
+ * fixture-backed. Tests inject the old fixture-backed
+ * `defaultLoadInvitesTabData`/`defaultOnRevokeInvite`/`defaultOnResendInvite`
  * explicitly through these same seams where fixture behavior is still
  * useful to exercise, rather than relying on them being the default (T087
- * Required Worker Output).
+ * Required Worker Output, still true for T090's own new default).
  *
  * -----------------------------------------------------------------------
- * 7b. Resend is deliberately NOT wired in T087 -- do not mistake this for
- *     an oversight.
+ * 7b. T090 (ED-1 Packet P3): Resend is now genuinely wired -- superseding
+ *     T087's own "deliberately NOT wired" note (kept below for history, not
+ *     deleted, since it explains WHY it took two packets).
  *
  * `send-invite`'s first call creates the `auth.users` row immediately via
  * `inviteUserByEmail` (`supabase/functions/send-invite/index.ts`,
  * read-only reference, not called here); calling it again for the same
- * email always returns a real 409 `ALREADY_INVITED`. There is, today, no
- * real resend path -- that requires a separate Edge Function extension not
- * yet built (P3, a later ED-1 packet). Wiring `onResend` to `send-invite`
- * now would be actively wrong (every resend would genuinely fail), not
- * merely premature, so `onResend` keeps its obviously-fake fixture default
- * (`defaultOnResendInvite`) unchanged, and the Resend button's visible
- * behavior is untouched -- only its own future data seam is out of scope
- * here.
+ * email always returns a real 409 `ALREADY_INVITED` -- this was T087's own
+ * blocker for wiring `onResend` for real. T090 (a separate, later Edge
+ * Function extension, this task's own Objective) added a genuinely
+ * different `invite_id`-based resend branch to that same function
+ * (`generateLink()` + a fresh branded email, not a second
+ * `inviteUserByEmail` call), so `onResend` now defaults to
+ * `resendInvite` (`../../lib/supabase/loaders/invites`, T090) instead of
+ * the fixture `defaultOnResendInvite` below -- the exact same swap T087
+ * already made for `onRevoke`. `defaultOnResendInvite` itself is untouched
+ * (still exported, still used explicitly by tests/callers that want
+ * fixture behavior), same posture as `defaultOnRevokeInvite`/
+ * `defaultLoadInvitesTabData` above.
  *
  * -----------------------------------------------------------------------
  * 8. Fixture data (constitution item 6: no PII, fabricated names/emails
@@ -330,8 +337,9 @@ import {
   VisuallyHidden,
   VStack,
 } from '@astryxdesign/core';
-// T087 (ED-1 Packet P1): real `loadData`/`onRevoke` defaults -- module doc #7.
-import { loadInvitesTabData, revokeInvite } from '../../lib/supabase/loaders/invites';
+// T087 (ED-1 Packet P1) / T090 (ED-1 Packet P3): real `loadData`/`onRevoke`/
+// `onResend` defaults -- module doc #7.
+import { loadInvitesTabData, resendInvite, revokeInvite } from '../../lib/supabase/loaders/invites';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets. Module doc #1.
@@ -697,9 +705,9 @@ export interface InvitesTabProps {
   /** Injectable data-loading seam (module doc #7). Defaults to a real query
    * against `invites` (T087, `loadInvitesTabData`). */
   loadData?: LoadInvitesTabDataFn;
-  /** Injectable Resend seam (module doc #6/#7b). Defaults to a
-   * fixture-backed fake -- deliberately NOT wired to a real Edge Function
-   * call in T087; see module doc #7b for why. */
+  /** Injectable Resend seam (module doc #6/#7b). Defaults to a real
+   * `send-invite` resend call (T090, `resendInvite`) -- see module doc #7b
+   * for why this could not be wired for real until this task. */
   onResend?: ResendInviteFn;
   /** Injectable Revoke seam (module doc #4). Defaults to a real
    * `status = 'revoked'` mutation (T087, `revokeInvite`). */
@@ -708,13 +716,9 @@ export interface InvitesTabProps {
 
 export function InvitesTab({
   loadData = loadInvitesTabData,
-  // T087 (ED-1 Packet P1): deliberately still fixture-backed -- see module
-  // doc #7b (Trap #2). Resend has no real backend path yet: `send-invite`'s
-  // first call already creates the `auth.users` row, so calling it again
-  // for the same email always fails with a real 409 `ALREADY_INVITED`. A
-  // real resend mechanism is P3's job (a separate, not-yet-built Edge
-  // Function extension), not this packet's.
-  onResend = defaultOnResendInvite,
+  // T090 (ED-1 Packet P3): now a real `send-invite` resend call -- see
+  // module doc #7b for the full "why not until now" history.
+  onResend = resendInvite,
   onRevoke = revokeInvite,
 }: InvitesTabProps = {}): ReactNode {
   const loadState = useLoadState(loadData, [loadData]);

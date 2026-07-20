@@ -31,7 +31,7 @@
  */
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { FunctionsHttpError, type SupabaseClient } from '@supabase/supabase-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildDisplayRows,
@@ -44,7 +44,11 @@ import {
   type InviteRow,
   type InvitesTabLoadResult,
 } from './InvitesTab';
-import { makeLoadInvitesTabData, makeRevokeInvite } from '../../lib/supabase/loaders/invites';
+import {
+  makeLoadInvitesTabData,
+  makeResendInvite,
+  makeRevokeInvite,
+} from '../../lib/supabase/loaders/invites';
 
 // ---------------------------------------------------------------------------
 // jsdom gap: `AlertDialog` renders a native `<dialog>` and calls
@@ -643,6 +647,116 @@ describe('revokeInvite (T087 real mutation, packet Known Context/Traps #4)', () 
 
     await expect(revoke(REVOKE_TARGET)).rejects.toMatchObject({
       code: '42501',
+      message: expect.any(String),
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T090 (ED-1 Packet P3): real `onResend` seam --
+// `../../lib/supabase/loaders/invites`'s `makeResendInvite`. Same "stubbed
+// transport, zero real network calls" posture as `src/lib/supabase/
+// functions.test.ts` (T086) -- `resendInvite` is built on `invokeEdgeFunction`,
+// not a raw table query, so the fake client here supports `auth.getSession`
+// + `functions.invoke` (not `from`/`update` like `makeFakeUpdateClient` above).
+// ---------------------------------------------------------------------------
+
+const ACTIVE_SESSION = { access_token: 'fake-token' };
+
+function makeFakeFunctionsClient(overrides: {
+  invoke?: (name: string, options: { body: unknown }) => Promise<{ data: unknown; error: unknown }>;
+}): { client: SupabaseClient; invokeSpy: ReturnType<typeof vi.fn> } {
+  const invokeSpy =
+    (overrides.invoke as ReturnType<typeof vi.fn> | undefined) ??
+    vi.fn().mockResolvedValue({ data: null, error: null });
+  const client = {
+    auth: {
+      getSession: () => Promise.resolve({ data: { session: ACTIVE_SESSION }, error: null }),
+    },
+    functions: { invoke: invokeSpy },
+  } as unknown as SupabaseClient;
+  return { client, invokeSpy };
+}
+
+const RESEND_TARGET: InviteRow = {
+  id: 'invite-to-resend',
+  email: 'resend.me@example.com',
+  role: 'student',
+  studentId: 'student-resend-me',
+  status: 'pending',
+  expiresAt: '2026-07-20T00:00:00.000Z',
+  createdAt: '2026-07-06T00:00:00.000Z',
+};
+
+describe('resendInvite (T090 real resend, packet Known Context/Traps #5)', () => {
+  it('calls send-invite with { invite_id: invite.id }, unwraps the response, and maps snake_case -> InviteRow', async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      data: {
+        invite: {
+          id: 'invite-to-resend',
+          email: 'resend.me@example.com',
+          role: 'student',
+          student_id: 'student-resend-me',
+          status: 'pending',
+          expires_at: '2026-08-03T00:00:00.000Z',
+          created_at: '2026-07-06T00:00:00.000Z',
+        },
+      },
+      error: null,
+    });
+    const { client } = makeFakeFunctionsClient({ invoke });
+    const resend = makeResendInvite(() => client);
+
+    const result = await resend(RESEND_TARGET);
+
+    expect(invoke).toHaveBeenCalledWith('send-invite', { body: { invite_id: 'invite-to-resend' } });
+    expect(result).toEqual({
+      id: 'invite-to-resend',
+      email: 'resend.me@example.com',
+      role: 'student',
+      studentId: 'student-resend-me',
+      status: 'pending',
+      expiresAt: '2026-08-03T00:00:00.000Z',
+      createdAt: '2026-07-06T00:00:00.000Z',
+    });
+  });
+
+  it('rejects with the real SupabaseLoaderError on a non-pending invite (INVITE_NOT_PENDING from the Edge Function)', async () => {
+    const httpError = new FunctionsHttpError({
+      json: () =>
+        Promise.resolve({
+          error: {
+            code: 'INVITE_NOT_PENDING',
+            message: 'This invite was revoked and cannot be resent. Send a new invite instead.',
+          },
+        }),
+    });
+    const invoke = vi.fn().mockResolvedValue({ data: null, error: httpError });
+    const { client } = makeFakeFunctionsClient({ invoke });
+    const resend = makeResendInvite(() => client);
+
+    await expect(resend(RESEND_TARGET)).rejects.toMatchObject({
+      code: 'INVITE_NOT_PENDING',
+      message: 'This invite was revoked and cannot be resent. Send a new invite instead.',
+    });
+  });
+
+  it('rejects with the real SupabaseLoaderError on a nonexistent invite_id (INVITE_NOT_FOUND from the Edge Function)', async () => {
+    const httpError = new FunctionsHttpError({
+      json: () =>
+        Promise.resolve({
+          error: {
+            code: 'INVITE_NOT_FOUND',
+            message: 'That invite could not be found. Refresh the invites list and try again.',
+          },
+        }),
+    });
+    const invoke = vi.fn().mockResolvedValue({ data: null, error: httpError });
+    const { client } = makeFakeFunctionsClient({ invoke });
+    const resend = makeResendInvite(() => client);
+
+    await expect(resend(RESEND_TARGET)).rejects.toMatchObject({
+      code: 'INVITE_NOT_FOUND',
       message: expect.any(String),
     });
   });

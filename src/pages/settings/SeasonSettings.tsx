@@ -148,20 +148,27 @@
  * resolved here.
  *
  * -----------------------------------------------------------------------
- * 5. No shared Supabase client wired in (Known Context/Traps #5) -- same
- *    posture as every prior content page (`StudentsTab.tsx`/T022,
- *    `ScheduleMeetingsDialog.tsx`/T031, `OutreachList.tsx`, etc.).
+ * 5. T091 (ED-1 Packet P4) UPDATE -- real Supabase wiring. This section
+ *    originally described a fixture-only file with no shared Supabase
+ *    client anywhere in it; that is no longer true and this section is kept
+ *    (not deleted) so the "was this ever real" history stays visible.
  *
- * `loadData`/`onCreateSeason`/`onUpdateSeason`/`onSetActiveSeason` are all
- * injectable props, each defaulting to an obviously-fake stub
- * (`defaultLoad*`/`defaultOn*`) that only returns/echoes fixture data or
- * `console.warn`s the payload it would have sent. No `src/lib/supabase/**`
- * import exists anywhere in this file (that directory is read-only/
- * reference-only per this task's Forbidden Files). Because the create-stub
- * never returns a real DB-generated id, `makeLocalSeasonId` below produces a
- * temporary local id for the newly-created row's optimistic list entry only
- * -- a disclosed stand-in a future wiring task's real INSERT (which DOES
- * return a real `id`) replaces, not a schema decision.
+ * `loadData`/`onCreateSeason`/`onUpdateSeason`/`onSetActiveSeason` now
+ * default to the real `loadSeasons`/`createSeason`/`updateSeason`/
+ * `setActiveSeason` from `../../lib/supabase/loaders/seasons` (T091) -- a
+ * real query/insert/update against `public.seasons`, respectively (see that
+ * module's own doc comment for the full Trap #1/#3 reasoning, including the
+ * two-step activate mutation's disclosed partial-failure risk). The original
+ * fixture-backed `defaultLoad*`/`defaultOn*` functions below are KEPT as
+ * named exports (same posture `InvitesTab.tsx`/T087 already established for
+ * its own `defaultLoadInvitesTabData`/`defaultOnRevokeInvite`) -- tests
+ * inject them explicitly through these same props where fixture behavior is
+ * still useful to exercise, rather than relying on them being the default.
+ * `makeLocalSeasonId` below is likewise KEPT (used only by
+ * `defaultOnCreateSeason`'s fixture path now) -- the real `onCreateSeason`
+ * (`createSeason`) returns the actual DB-generated `id` from its
+ * `.insert(...).select().single()`, which `handleSubmitForm` below now uses
+ * directly instead of ever calling `makeLocalSeasonId()` for a real create.
  *
  * -----------------------------------------------------------------------
  * 6. Admin-only gating (Acceptance Criteria: "same posture as T028") --
@@ -273,6 +280,25 @@
  *    `hasTabularNumbers`, `color` used.
  *  - `HStack`/`VStack` ("Stack" section, lines 350-372 / 374-396): `gap`,
  *    `padding`, `vAlign`, `hAlign`, `wrap` used.
+ *
+ * -----------------------------------------------------------------------
+ * 9. T091 (ED-1 Packet P4): `useActiveSeason().refresh()` after a successful
+ *    activate -- module doc #1's atomicity contract lives entirely in
+ *    `../../lib/supabase/loaders/seasons.ts` now (see that file's own
+ *    doc); this file's own job is only to call it and, on success, tell the
+ *    shared `SeasonProvider` (`../../app/SeasonProvider.tsx`) its cached
+ *    active season may now be stale. Without this call, a coach/admin
+ *    viewing e.g. `/reports` in the SAME browser session as the admin who
+ *    just switched seasons here would keep seeing the OLD active season
+ *    until a full page reload -- `SeasonProvider`'s own `loadActiveSeason`
+ *    effect only re-runs on mount or via this explicit `refresh()`, by
+ *    design (module doc there). Called only in `handleConfirmSetActive`'s
+ *    success branch, never on failure (module doc #1's own risk disclosure:
+ *    a failed/partial switch should NOT tell every consumer "go re-check",
+ *    since the real active-season row genuinely may not have changed, or
+ *    may now be in the zero-active-seasons partial-failure state -- the
+ *    existing T082 retry Banner, not a forced provider refresh, is this
+ *    file's own mechanism for that case).
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
@@ -305,6 +331,13 @@ import {
   type DateRange,
 } from '@astryxdesign/core';
 import { RequireRole } from '../../app/guards';
+import { useActiveSeason } from '../../app/SeasonProvider';
+import {
+  createSeason,
+  loadSeasons,
+  setActiveSeason,
+  updateSeason,
+} from '../../lib/supabase/loaders/seasons';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase rename of the real `seasons` columns (module
@@ -333,7 +366,12 @@ export interface CreateSeasonPayload {
   defaultGoalHours: number;
 }
 
-export type OnCreateSeasonFn = (payload: CreateSeasonPayload) => Promise<void>;
+/**
+ * T091: returns the CREATED row (with its real, DB-generated `id`), not
+ * `void` -- see module doc #5's T091 update. `handleSubmitForm` below uses
+ * this returned row directly for the new row's list entry.
+ */
+export type OnCreateSeasonFn = (payload: CreateSeasonPayload) => Promise<SeasonRow>;
 
 export interface UpdateSeasonPayload extends CreateSeasonPayload {
   id: string;
@@ -494,41 +532,69 @@ export function computeActivateConfirmCopy(
 }
 
 /**
- * Module doc #5: a temporary local id for a newly-created row's optimistic
- * list entry, since `defaultOnCreateSeason` never returns a real
- * DB-generated id. Not a schema/id-generation decision -- a disclosed
- * stand-in a future wiring task's real INSERT replaces.
+ * T091: no longer used by the real `onCreateSeason` (`createSeason`,
+ * `../../lib/supabase/loaders/seasons.ts`, which returns the real
+ * DB-generated `id` from its own `.insert(...).select().single()`) -- kept
+ * ONLY for `defaultOnCreateSeason`'s fixture path below (module doc #5's
+ * T091 update), since a fixture has no real database to generate an id.
  */
 export function makeLocalSeasonId(): string {
   return `season-local-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/**
+ * T091: no longer the component's default `loadData` (that's now
+ * `loadSeasons` from `../../lib/supabase/loaders/seasons`, module doc #5) --
+ * kept as a named export, fixture literal unchanged, for tests (and any
+ * future caller) that want fixture behavior explicitly rather than relying
+ * on it being the implicit default.
+ */
 export async function defaultLoadSeasons(): Promise<SeasonRow[]> {
   return [...FIXTURE_SEASONS];
 }
 
+/**
+ * T091: no longer the component's default `onCreateSeason` (that's now
+ * `createSeason`, module doc #5) -- kept as a named export for tests/future
+ * callers that want this fixture explicitly. Returns a fabricated row using
+ * `makeLocalSeasonId()` (module doc above), mirroring the shape the real
+ * `createSeason` would have returned.
+ */
 export const defaultOnCreateSeason: OnCreateSeasonFn = async (payload) => {
   console.warn(
-    '[SeasonSettings] No Supabase client wired in yet (module doc #5) -- ' +
-      'this stub only logs the seasons INSERT payload that would have been sent.',
+    '[SeasonSettings] defaultOnCreateSeason: fixture-only stub (module doc #5) -- ' +
+      'logs the seasons INSERT payload a real create would have sent instead of ' +
+      'actually inserting anything.',
     payload,
   );
+  return { id: makeLocalSeasonId(), ...payload, isActive: false };
 };
 
+/**
+ * T091: no longer the component's default `onUpdateSeason` (that's now
+ * `updateSeason`, module doc #5) -- kept as a named export for tests/future
+ * callers that want this fixture explicitly.
+ */
 export const defaultOnUpdateSeason: OnUpdateSeasonFn = async (payload) => {
   console.warn(
-    '[SeasonSettings] No Supabase client wired in yet (module doc #5) -- ' +
-      'this stub only logs the seasons UPDATE payload that would have been sent.',
+    '[SeasonSettings] defaultOnUpdateSeason: fixture-only stub (module doc #5) -- ' +
+      'logs the seasons UPDATE payload a real update would have sent instead of ' +
+      'actually updating anything.',
     payload,
   );
 };
 
+/**
+ * T091: no longer the component's default `onSetActiveSeason` (that's now
+ * `setActiveSeason`, module doc #5) -- kept as a named export for tests/
+ * future callers that want this fixture explicitly.
+ */
 export const defaultOnSetActiveSeason: OnSetActiveSeasonFn = async (payload) => {
   console.warn(
-    '[SeasonSettings] No Supabase client wired in yet (module doc #5) -- ' +
-      'this stub only logs the deactivate-old+activate-new payload a real ' +
-      'transaction would have applied atomically (module doc #1, ' +
-      'seasons_single_active_idx).',
+    '[SeasonSettings] defaultOnSetActiveSeason: fixture-only stub (module doc #5) -- ' +
+      'logs the deactivate-old+activate-new payload a real two-step mutation ' +
+      "(`../../lib/supabase/loaders/seasons.ts`'s `setActiveSeason`) would have " +
+      'sent instead of actually applying anything.',
     payload,
   );
 };
@@ -631,26 +697,35 @@ function buildColumns(args: BuildColumnsArgs): TableColumn<SeasonRow>[] {
 const EMPTY_ROWS: SeasonRow[] = [];
 
 export interface SeasonSettingsProps {
-  /** Injectable data-loading seam (module doc #5). Defaults to fixture data. */
+  /** Injectable data-loading seam (module doc #5). Defaults to the real
+   * `loadSeasons` (`../../lib/supabase/loaders/seasons`). */
   loadData?: LoadSeasonsFn;
-  /** Injectable create seam (module doc #5). Defaults to a `console.warn` stub. */
+  /** Injectable create seam (module doc #5). Defaults to the real
+   * `createSeason`. */
   onCreateSeason?: OnCreateSeasonFn;
-  /** Injectable update seam (module doc #5). Defaults to a `console.warn` stub. */
+  /** Injectable update seam (module doc #5). Defaults to the real
+   * `updateSeason`. */
   onUpdateSeason?: OnUpdateSeasonFn;
   /**
-   * Injectable atomic switch seam (module doc #1). Defaults to a
-   * `console.warn` stub. See `SetActiveSeasonPayload` for the
-   * deactivate-old + activate-new contract.
+   * Injectable atomic switch seam (module doc #1). Defaults to the real
+   * `setActiveSeason` -- see `../../lib/supabase/loaders/seasons.ts`'s own
+   * doc comment for the disclosed two-step-mutation partial-failure risk.
+   * See `SetActiveSeasonPayload` for the deactivate-old + activate-new
+   * contract.
    */
   onSetActiveSeason?: OnSetActiveSeasonFn;
 }
 
 export function SeasonSettings({
-  loadData = defaultLoadSeasons,
-  onCreateSeason = defaultOnCreateSeason,
-  onUpdateSeason = defaultOnUpdateSeason,
-  onSetActiveSeason = defaultOnSetActiveSeason,
+  loadData = loadSeasons,
+  onCreateSeason = createSeason,
+  onUpdateSeason = updateSeason,
+  onSetActiveSeason = setActiveSeason,
 }: SeasonSettingsProps = {}): ReactNode {
+  // T091 module doc #9: only `refresh()` is used here -- this page renders
+  // its own season list from `loadData`/`rows` below, not from
+  // `useActiveSeason()`'s own `status`/`season`.
+  const { refresh: refreshActiveSeason } = useActiveSeason();
   const loadState = useLoadState(loadData, [loadData]);
   const [rows, setRows] = useState<SeasonRow[]>(EMPTY_ROWS);
 
@@ -712,8 +787,10 @@ export function SeasonSettings({
       if (editingSeason === null) {
         const payload = buildCreateSeasonPayload(formValues);
         if (payload === null) return;
-        await onCreateSeason(payload);
-        const newRow: SeasonRow = { id: makeLocalSeasonId(), ...payload, isActive: false };
+        // T091: the real DB-generated row (with its real `id`), not a local
+        // placeholder id (module doc #5's T091 update, module doc above
+        // `makeLocalSeasonId`).
+        const newRow = await onCreateSeason(payload);
         setRows((prev) => [...prev, newRow]);
       } else {
         const payload = buildUpdateSeasonPayload(editingSeason.id, formValues);
@@ -783,6 +860,11 @@ export function SeasonSettings({
       setActivateTarget(null);
       setActivateError(null);
       setLastFailedActivateTarget(null);
+      // T091 module doc #9: tell the shared SeasonProvider its cached active
+      // season is stale now that the switch genuinely succeeded -- success
+      // path only (see that module doc for why failure deliberately does
+      // NOT also call this).
+      refreshActiveSeason();
     } catch (error) {
       setActivateTarget(null);
       setLastFailedActivateTarget(target);
