@@ -4327,3 +4327,38 @@ byte-identical in behavior. All five gates green, 1232/1232. NITs logged
 only: one equal-to-default keystroke case writes an explicit override
 (defensible — the coach typed it); the pure-helper export pattern matches the
 repo's established react-refresh baseline.
+
+---
+
+## T119 (PRD v2 D-7) — coach ultimate authority: self-authored protection removed
+
+**PASS (1st attempt, NIT).** George's direct override of shipped T117/T118
+behavior ("As coach I am ultimate authority and should be able to overwrite an
+RSVP or check-ins"), recorded as PRD v2 D-7 and implemented exactly: the RSVP
+fan-out's delete filter is now author-agnostic (`'going'` + unchecked — a
+student's own 'going' is deleted like any other), the upsert loop fans out
+unconditionally (a self-authored 'declined'/'maybe' is overwritten to 'going'
+with `responded_by` reassigned to the acting coach; the `selfAuthoredKeys`
+machinery is gone), and the attendance uncheck is a plain DELETE for every
+`method` — `resolveUnmarkAction` and the setAbsent branch removed entirely.
+
+What D-7 deliberately keeps was verified to have survived: declined/maybe rows
+are still untouched by a mere uncheck ("not expected" ≠ "they answered no");
+`resolveAttendanceWriteMethod` still preserves QR/import provenance on
+checked-row hour edits; `responded_by`/`recorded_by` attribution still written
+(feed visibility, not veto); the timestamps-never-in-payload upsert discipline
+untouched.
+
+The checker confirmed the test inversions are genuine pins with exact
+ID/payload assertions — self-authored 'going' deletion, self-declined
+overwrite with coach attribution, declined/maybe untouched, and hard-delete
+for both 'qr' and 'import' rows — not mere removal of the old assertions.
+Module docs in all three files carry dated AMENDED/SUPERSEDED notes preserving
+the original reasoning as history. `OutreachEventDialog.tsx` confirmed
+genuinely unchanged (the logic lives in the loader). All five gates green,
+1233/1233. The disclosed data-destruction consequences (QR provenance lost on
+uncheck; students' own answers overwritable) were assessed as accurately
+framed — they ARE the decision, not defects. NIT follow-up: one stale prose
+comment in `OutreachDetail.test.tsx:76` referencing the removed function
+(prose-only, grep-confirmed no code reference) — queued for the wave-3
+cleanup packet.

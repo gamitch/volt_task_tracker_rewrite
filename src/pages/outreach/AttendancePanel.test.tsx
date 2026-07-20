@@ -27,7 +27,6 @@ import {
   makeRemoveAttendance,
   makeUpsertAttendance,
   resolveAttendanceWriteMethod,
-  resolveUnmarkAction,
   type AttendanceRow,
 } from '../../lib/supabase/loaders/attendance';
 import {
@@ -171,19 +170,12 @@ function makeRow(overrides: Partial<AttendanceRow>): AttendanceRow {
 // Pure functions.
 // ---------------------------------------------------------------------------
 
-describe('resolveAttendanceWriteMethod / resolveUnmarkAction (Trap #2 decisions)', () => {
+describe('resolveAttendanceWriteMethod (Trap #2 decision -- checked-row write LABEL, unchanged by T119/D-7)', () => {
   it('a real qr/import row keeps its provenance on write; anything else becomes/stays coach', () => {
     expect(resolveAttendanceWriteMethod('qr')).toBe('qr');
     expect(resolveAttendanceWriteMethod('import')).toBe('import');
     expect(resolveAttendanceWriteMethod('coach')).toBe('coach');
     expect(resolveAttendanceWriteMethod(null)).toBe('coach');
-  });
-
-  it('un-mark deletes a coach-originated (or nonexistent) row, but preserves a real qr/import row as absent', () => {
-    expect(resolveUnmarkAction('coach')).toBe('delete');
-    expect(resolveUnmarkAction(null)).toBe('delete');
-    expect(resolveUnmarkAction('qr')).toBe('setAbsent');
-    expect(resolveUnmarkAction('import')).toBe('setAbsent');
   });
 });
 
@@ -516,7 +508,7 @@ describe('<AttendancePanel /> checking a student with no existing row (module do
   });
 });
 
-describe('<AttendancePanel /> Trap #2 -- un-marking (unchecking) an attended student', () => {
+describe('<AttendancePanel /> Trap #2 -- un-marking (unchecking) an attended student (T119/D-7: plain DELETE for every method)', () => {
   it('a coach-originated row is DELETED on uncheck, not upserted', async () => {
     const onRemoveAttendance = vi.fn().mockResolvedValue(undefined);
     const onUpsertAttendance = vi.fn();
@@ -540,13 +532,9 @@ describe('<AttendancePanel /> Trap #2 -- un-marking (unchecking) an attended stu
     expect((getFieldControl('Amara Chen') as HTMLInputElement).checked).toBe(false);
   });
 
-  it('a real qr-originated row is preserved as absent on uncheck (history kept), never deleted', async () => {
-    const onRemoveAttendance = vi.fn();
-    const onUpsertAttendance = vi
-      .fn()
-      .mockResolvedValue(
-        makeRow({ method: 'qr', status: 'absent', checkInAt: '2026-08-02T14:05:00.000Z' }),
-      );
+  it('T119/D-7 inversion: a real qr-originated row is HARD-DELETED on uncheck too, never demoted to absent', async () => {
+    const onRemoveAttendance = vi.fn().mockResolvedValue(undefined);
+    const onUpsertAttendance = vi.fn();
     renderPanel({
       loadAttendance: async () => [
         makeRow({
@@ -565,16 +553,37 @@ describe('<AttendancePanel /> Trap #2 -- un-marking (unchecking) an attended stu
     clickElement(amaraCheckbox);
     await flushMicrotasks();
 
-    expect(onRemoveAttendance).not.toHaveBeenCalled();
-    expect(onUpsertAttendance).toHaveBeenCalledWith({
+    // T117's `resolveUnmarkAction`/`setAbsent` branch is removed (T119/D-7:
+    // "coach attendance corrections MAY remove QR-originated check-in rows
+    // outright") -- a real qr row is now DELETED exactly like a coach row,
+    // never upserted to `status: 'absent'`.
+    expect(onRemoveAttendance).toHaveBeenCalledWith({
       sessionId: 'session-1',
       studentId: 'student-amara',
-      status: 'absent',
-      hoursOverride: null,
-      method: 'qr', // preserved, never rewritten to 'coach'
-      recordedBy: COACH_PROFILE_ID, // re-attributed to the acting coach
     });
+    expect(onUpsertAttendance).not.toHaveBeenCalled();
     expect((getFieldControl('Amara Chen') as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('T119/D-7 inversion: a real import-originated row is also HARD-DELETED on uncheck', async () => {
+    const onRemoveAttendance = vi.fn().mockResolvedValue(undefined);
+    const onUpsertAttendance = vi.fn();
+    renderPanel({
+      loadAttendance: async () => [makeRow({ method: 'import', status: 'present' })],
+      onUpsertAttendance,
+      onRemoveAttendance,
+    });
+    await flushMicrotasks();
+
+    const amaraCheckbox = getFieldControl('Amara Chen') as HTMLInputElement;
+    clickElement(amaraCheckbox);
+    await flushMicrotasks();
+
+    expect(onRemoveAttendance).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      studentId: 'student-amara',
+    });
+    expect(onUpsertAttendance).not.toHaveBeenCalled();
   });
 
   it('rolls back the checked display and shows an inline error when the mutation rejects', async () => {

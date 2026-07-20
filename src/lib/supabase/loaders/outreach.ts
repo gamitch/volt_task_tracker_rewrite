@@ -243,6 +243,21 @@
  * 7. T118 (UXP-02) -- "Expected attendees" roster checklist fan-out, added
  *    to `makeSaveOutreachEvent`'s existing create/edit sequence.
  *
+ *    AMENDED 2026-07-20 (T119, PRD v2 section 0 decision D-7 -- George's
+ *    direct product-owner override, verbatim: "As coach I am ultimate
+ *    authority and should be able to overwrite an RSVP or check-ins."): the
+ *    "self-authored protection" rule this doc entry originally described
+ *    below (never delete, never overwrite, a student's own `responded_by
+ *    === student_id` row) is REMOVED. `selfAuthoredKeys` and every check
+ *    against it are gone from `computeExpectedAttendeeRsvpPlan`. The
+ *    paragraphs immediately below are KEPT AS THE ORIGINAL T118 RECORD of
+ *    what this reasoning was (repo convention, see `TeamsTab.tsx`/
+ *    `ParentsTab.tsx`'s own "SUPERSEDED BY" notes for precedent) -- they no
+ *    longer describe this file's actual behavior. The new, simplified D-7
+ *    rules (one rule -- "the checklist wins" -- instead of a provenance
+ *    matrix) are documented directly on `computeExpectedAttendeeRsvpPlan`
+ *    itself, below.
+ *
  * RSVP DDL (re-confirmed directly against
  * `supabase/migrations/20260717000000_scheduling_attendance.sql` lines
  * 67-76 for this task): `rsvps.status text not null check (status in
@@ -952,11 +967,28 @@ export interface ExpectedAttendeeRsvpPlan {
 }
 
 /**
- * Trap #2, literal + one disclosed extension (module doc 7 above has the
- * full reasoning): a self-authored row (`responded_by === student_id`) is
- * NEVER a deletion candidate and NEVER an upsert (overwrite) candidate --
- * both directions are protected, not only the literal "unchecking deletes"
- * path the packet's own text names.
+ * T119 (PRD v2 D-7, George's direct 2026-07-20 override -- module doc 7's
+ * "AMENDED" note above has the full history): the coach is the ultimate
+ * authority over RSVPs. ONE rule, no provenance matrix ("the checklist
+ * wins"):
+ *   - CHECKED student -> upsert `status: 'going'` for every final session
+ *     id, REGARDLESS of any existing row's prior author or status. A
+ *     student's own self-authored `'declined'`/`'maybe'`/`'going'` row is
+ *     overwritten to `'going'` just like a staff-entered one; `responded_by`
+ *     becomes the acting coach's id. `selfAuthoredKeys` (T118's protection
+ *     mechanism) is gone -- there is no longer any row this fan-out skips.
+ *   - UNCHECKED student -> DELETE that student's `status === 'going'` rows
+ *     across the given sessions, REGARDLESS of who authored them (a
+ *     self-authored `'going'` row is deleted exactly like a staff-entered
+ *     one).
+ *   - A row whose status is `'declined'`/`'maybe'` is left COMPLETELY
+ *     UNTOUCHED by an uncheck (D-7's own text: "not expected" is not the
+ *     same fact as "they answered no" -- an uncheck only ever clears a
+ *     PLANNED (`'going'`) attendance entry, it never mutates a student's
+ *     actual declined/maybe answer). This part of the rule is unchanged from
+ *     T118 -- it was never a self-authored-protection rule, it is a status
+ *     filter (`row.status === 'going'`) that applies identically regardless
+ *     of author.
  */
 export function computeExpectedAttendeeRsvpPlan(
   existingRsvps: readonly RsvpDbRow[],
@@ -964,26 +996,14 @@ export function computeExpectedAttendeeRsvpPlan(
   expectedStudentIds: readonly string[],
 ): ExpectedAttendeeRsvpPlan {
   const checkedSet = new Set(expectedStudentIds);
-  const selfAuthoredKeys = new Set(
-    existingRsvps
-      .filter((row) => row.responded_by !== null && row.responded_by === row.student_id)
-      .map((row) => `${row.session_id}:${row.student_id}`),
-  );
 
   const idsToDelete = existingRsvps
-    .filter(
-      (row) =>
-        row.status === 'going' &&
-        row.responded_by !== null &&
-        row.responded_by !== row.student_id &&
-        !checkedSet.has(row.student_id),
-    )
+    .filter((row) => row.status === 'going' && !checkedSet.has(row.student_id))
     .map((row) => row.id);
 
   const rowsToUpsert: Array<{ sessionId: string; studentId: string }> = [];
   for (const sessionId of sessionIds) {
     for (const studentId of checkedSet) {
-      if (selfAuthoredKeys.has(`${sessionId}:${studentId}`)) continue;
       rowsToUpsert.push({ sessionId, studentId });
     }
   }

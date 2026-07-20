@@ -31,36 +31,62 @@
  * 2. TRAP #2 -- un-mark semantics (worker packet Known Context/Traps #2),
  *    THE central design decision of this file.
  *
- *    `resolveAttendanceWriteMethod` / `resolveUnmarkAction` below are the
- *    ONE place these decisions are made -- pure, exported, directly tested
+ *    AMENDED 2026-07-20 (T119, PRD v2 section 0 decision D-7 -- George's
+ *    direct product-owner override, verbatim: "As coach I am ultimate
+ *    authority and should be able to overwrite an RSVP or check-ins."): the
+ *    "setAbsent" branch this doc entry originally described below (demoting
+ *    a real `'qr'`/`'import'` row to `status: 'absent'` instead of deleting
+ *    it, to preserve `check_in_at` as history) is REMOVED. `resolveUnmark
+ *    Action`/`UnmarkAction` (T117's pure decision function/type for that
+ *    branch) no longer exist in this file -- un-marking a student now
+ *    performs a plain DELETE for every `method` (`'coach'`, `'qr'`,
+ *    `'import'`) alike; the caller (`AttendancePanel.tsx`'s `handleToggle`)
+ *    calls `onRemoveAttendance` unconditionally on uncheck, no branch. The
+ *    paragraphs immediately below are KEPT AS THE ORIGINAL T117 RECORD of
+ *    what this reasoning was (repo convention, see `TeamsTab.tsx`/
+ *    `ParentsTab.tsx`'s own "SUPERSEDED BY" notes for precedent) -- they no
+ *    longer describe this file's actual behavior; a coach's attendance
+ *    correction MAY now remove a QR-originated check-in row outright,
+ *    per D-7.
+ *
+ *    `resolveAttendanceWriteMethod` below is the ONE place the CHECKED-row
+ *    write-method decision is made -- pure, exported, directly tested
  *    without a fake `SupabaseClient` (same "pure decision logic, separately
  *    testable from the DB-driving wrapper" shape
  *    `supabase/functions/checkin/attendance_upsert.ts` (read-only,
- *    T032/MTG-09/MTG-11) already established for this exact table).
+ *    T032/MTG-09/MTG-11) already established for this exact table). This
+ *    part is UNCHANGED by D-7 (module doc's own "3. Keep what D-7 keeps" in
+ *    the T119 worker packet): it is provenance LABELING on a row a coach is
+ *    actively editing while it stays checked (e.g. adjusting hours on an
+ *    already-checked-in student), not a veto over deleting/overwriting
+ *    anything -- D-7 only overrides veto power, not attribution.
  *
- *    DECISION (documented, not silent): unchecking an attended student
- *    DELETES the row when its existing `method` is `'coach'` (or no row
- *    exists at all -- a defensive no-op) -- this matches the reference
- *    app's plain checkbox model (packet's own wording) and is verified safe
- *    against both metric views below. When the existing row's `method` is
- *    `'qr'` or `'import'` (i.e. it carries real external provenance --
- *    someone actually scanned in, or a row was imported), unchecking
- *    instead UPSERTS `status: 'absent'`, clears `hours_override` to `null`,
- *    and re-attributes `recorded_by` to the acting coach, while the upsert
- *    payload never includes `check_in_at`/`check_out_at` at all -- so
+ *    ORIGINAL T117 RECORD (superseded un-mark reasoning, kept for history):
+ *    unchecking an attended student DELETED the row when its existing
+ *    `method` was `'coach'` (or no row existed at all -- a defensive
+ *    no-op) -- this matched the reference app's plain checkbox model
+ *    (packet's own wording) and was verified safe against both metric
+ *    views below. When the existing row's `method` was `'qr'` or
+ *    `'import'` (i.e. it carried real external provenance -- someone
+ *    actually scanned in, or a row was imported), unchecking instead
+ *    UPSERTED `status: 'absent'`, cleared `hours_override` to `null`, and
+ *    re-attributed `recorded_by` to the acting coach, while the upsert
+ *    payload never included `check_in_at`/`check_out_at` at all -- so
  *    Postgrest's `ON CONFLICT DO UPDATE SET (...)` (built only from the
- *    keys actually present in the payload) leaves those two columns
+ *    keys actually present in the payload) left those two columns
  *    untouched, preserving the real check-in timestamp as honest history
  *    (packet's own explicit example: "keep check_in_at, update
  *    hours_override/status, set recorded_by to the coach"). `method` itself
- *    is likewise preserved verbatim on this path (never rewritten to
- *    `'coach'`) -- the packet's own example list never says to touch
+ *    was likewise preserved verbatim on this path (never rewritten to
+ *    `'coach'`) -- the packet's own example list never said to touch
  *    `method`, and provenance ("how did this student's presence first get
- *    captured") is a fact about the past that a later coach edit to
- *    status/hours does not change.
+ *    captured") was treated as a fact about the past that a later coach
+ *    edit to status/hours did not change.
  *
  *    Verified against both metric views this table feeds
- *    (`supabase/migrations/20260717000003_metric_views.sql`, read-only):
+ *    (`supabase/migrations/20260717000003_metric_views.sql`, read-only) --
+ *    this metrics-safety analysis remains true of the NEW plain-DELETE rule
+ *    too, since DELETE was already one of the two branches proven safe here:
  *      - `v_student_hours` sums `... where a.status in ('present','late')`.
  *        A DELETED row and a `status = 'absent'` row are BOTH simply absent
  *        from that sum -- mathematically identical outcomes.
@@ -70,21 +96,22 @@
  *        `present_ct`/`late_ct`/`excused_ct` while both still count toward
  *        `expected_ct` -- again mathematically identical for this view's
  *        math. DELETE is therefore metrics-safe in every case this file
- *        chooses it for.
+ *        now chooses it for.
  *
- *    `checkin` Edge Function interaction (disclosed, not a blocker): that
- *    function's own `applyUpsertIgnoreDuplicates`
+ *    `checkin` Edge Function interaction (disclosed, not a blocker,
+ *    STRENGTHENED by D-7): that function's own `applyUpsertIgnoreDuplicates`
  *    (`supabase/functions/checkin/attendance_upsert.ts`, read-only) treats
  *    "no existing row for (session_id, student_id)" as "this student has
- *    never checked in" -- so if a coach DELETES a `method: 'coach'` row
- *    (the only case this file ever deletes) and that same student later
- *    scans a QR code for the same session, the scan is honestly treated as
- *    their first-ever check-in for that session, which is correct: the
- *    coach's delete means "this coach-entered record was a mistake, it
- *    never should have existed", not "this student's real physical
- *    check-in history should be forgotten" -- the latter case (a REAL prior
- *    QR/import row) is exactly the one this file never deletes, per the
- *    decision above.
+ *    never checked in" -- so if a coach DELETES ANY row for this session/
+ *    student (now including a real `'qr'`/`'import'` row, per D-7) and that
+ *    same student later scans a QR code for the same session, the scan is
+ *    honestly treated as their first-ever check-in for that session. Under
+ *    D-7 this is the correct, intended outcome for every `method`: the
+ *    coach is the ultimate authority and a deletion means "this record
+ *    should not stand", full stop -- there is no longer a distinction
+ *    between "this coach-entered record was a mistake" and "this student's
+ *    real physical check-in history should be forgotten" for the purposes
+ *    of who may delete it.
  *
  * -----------------------------------------------------------------------
  * 3. Upsert key -- the packet's own banked DDL fact, applied literally.
@@ -172,7 +199,14 @@ function mapAttendanceDbRowToAttendanceRow(row: AttendanceDbRow): AttendanceRow 
 }
 
 // ---------------------------------------------------------------------------
-// Trap #2 -- pure decision functions. Module doc #2.
+// Trap #2 -- pure decision function. Module doc #2.
+//
+// T119 (PRD v2 D-7): `resolveUnmarkAction`/`UnmarkAction` (T117's un-mark
+// branch decision) are REMOVED from this file -- un-marking is no longer a
+// decision at all, it is an unconditional DELETE (`makeRemoveAttendance`
+// below) for every `method`. Only `resolveAttendanceWriteMethod` (the
+// CHECKED-row write-method LABEL, unchanged by D-7 per module doc #2)
+// remains here.
 // ---------------------------------------------------------------------------
 
 /**
@@ -185,18 +219,6 @@ export function resolveAttendanceWriteMethod(
   existingMethod: AttendanceMethod | null,
 ): AttendanceMethod {
   return existingMethod === 'qr' || existingMethod === 'import' ? existingMethod : 'coach';
-}
-
-export type UnmarkAction = 'delete' | 'setAbsent';
-
-/**
- * Un-mark (uncheck) decision -- module doc #2. `'delete'` for a purely
- * coach-originated row (or no row at all, a defensive no-op case);
- * `'setAbsent'` (upsert, preserving `check_in_at`/`method`) for a row with
- * real `'qr'`/`'import'` provenance.
- */
-export function resolveUnmarkAction(existingMethod: AttendanceMethod | null): UnmarkAction {
-  return existingMethod === 'qr' || existingMethod === 'import' ? 'setAbsent' : 'delete';
 }
 
 // ---------------------------------------------------------------------------

@@ -1113,7 +1113,7 @@ describe('computeExpectedAttendeeRsvpPlan (Trap #2 load-bearing rule)', () => {
     ]);
   });
 
-  it('Trap #2, literal: unchecking a student deletes ONLY a staff-entered planned RSVP', () => {
+  it('T119/D-7: unchecking a student deletes a staff-entered planned RSVP', () => {
     const existing = [
       rsvpRow({
         id: 'rsvp-staff',
@@ -1127,7 +1127,7 @@ describe('computeExpectedAttendeeRsvpPlan (Trap #2 load-bearing rule)', () => {
     expect(plan.idsToDelete).toEqual(['rsvp-staff']);
   });
 
-  it('Trap #2, literal: unchecking a student NEVER deletes their own self-authored RSVP', () => {
+  it('T119/D-7 inversion: unchecking a student DELETES their own self-authored "going" RSVP too (coach is ultimate authority)', () => {
     const existing = [
       rsvpRow({
         id: 'rsvp-self',
@@ -1137,23 +1137,30 @@ describe('computeExpectedAttendeeRsvpPlan (Trap #2 load-bearing rule)', () => {
       }),
     ];
     // student-self-rsvpd is not in the checked set (unchecked/never checked).
+    // T117's protection (never delete a self-authored row) is REMOVED by
+    // PRD v2 D-7 -- this is now deleted exactly like a staff-entered row.
     const plan = computeExpectedAttendeeRsvpPlan(existing, ['session-1'], []);
-    expect(plan.idsToDelete).toEqual([]);
+    expect(plan.idsToDelete).toEqual(['rsvp-self']);
   });
 
-  it('extended rule: re-checking a student never overwrites their own self-authored row', () => {
+  it('T119/D-7 inversion: re-checking a student OVERWRITES their own self-declined row to "going" (responded_by becomes the coach)', () => {
     const existing = [
       rsvpRow({
         id: 'rsvp-self',
         sessionId: 'session-1',
         studentId: 'student-self-rsvpd',
+        status: 'declined',
         respondedBy: 'student-self-rsvpd',
       }),
     ];
-    // student-self-rsvpd IS checked in the UI -- still must not be upserted
-    // (would overwrite responded_by from self to the coach).
+    // student-self-rsvpd IS checked in the UI -- T117's protection (never
+    // overwrite a self-authored row) is REMOVED by D-7: this student's own
+    // 'declined' answer is now fanned out to 'going' just like any other
+    // checked student.
     const plan = computeExpectedAttendeeRsvpPlan(existing, ['session-1'], ['student-self-rsvpd']);
-    expect(plan.rowsToUpsert).toEqual([]);
+    expect(plan.rowsToUpsert).toEqual([
+      { sessionId: 'session-1', studentId: 'student-self-rsvpd' },
+    ]);
     expect(plan.idsToDelete).toEqual([]);
   });
 
@@ -1179,7 +1186,7 @@ describe('computeExpectedAttendeeRsvpPlan (Trap #2 load-bearing rule)', () => {
     ]);
   });
 
-  it('never deletes a non-"going" row (e.g. a declined RSVP) even if staff-entered and unchecked', () => {
+  it('never deletes a non-"going" row (e.g. a declined RSVP) even if staff-entered and unchecked -- unchanged by D-7', () => {
     const existing = [
       rsvpRow({
         id: 'rsvp-declined',
@@ -1187,6 +1194,27 @@ describe('computeExpectedAttendeeRsvpPlan (Trap #2 load-bearing rule)', () => {
         studentId: 'student-declined',
         status: 'declined',
         respondedBy: 'profile-coach-1',
+      }),
+    ];
+    const plan = computeExpectedAttendeeRsvpPlan(existing, ['session-1'], []);
+    expect(plan.idsToDelete).toEqual([]);
+  });
+
+  it('D-7 preserved: a student\'s own self-authored "declined"/"maybe" row is also left untouched by an uncheck (not "expected" != "they answered no")', () => {
+    const existing = [
+      rsvpRow({
+        id: 'rsvp-self-declined',
+        sessionId: 'session-1',
+        studentId: 'student-self-declined',
+        status: 'declined',
+        respondedBy: 'student-self-declined', // self-authored.
+      }),
+      rsvpRow({
+        id: 'rsvp-self-maybe',
+        sessionId: 'session-1',
+        studentId: 'student-self-maybe',
+        status: 'maybe',
+        respondedBy: 'student-self-maybe', // self-authored.
       }),
     ];
     const plan = computeExpectedAttendeeRsvpPlan(existing, ['session-1'], []);
@@ -1351,7 +1379,7 @@ describe('saveOutreachEvent (T118 RSVP fan-out phase)', () => {
     );
   });
 
-  it('EDIT: unchecking a student deletes only their staff-entered planned RSVP, never a self-authored one', async () => {
+  it('T119/D-7 inversion -- EDIT: unchecking a student deletes BOTH staff-entered AND self-authored "going" planned RSVPs, but leaves a self-authored "declined" row untouched', async () => {
     const eventUpdateEqSpy = vi.fn().mockResolvedValue({ data: null, error: null });
     const eventUpdateSpy = vi.fn(() => ({ eq: eventUpdateEqSpy }));
     const existingSessionsEqSpy = vi.fn().mockResolvedValue({
@@ -1373,11 +1401,26 @@ describe('saveOutreachEvent (T118 RSVP fan-out phase)', () => {
           created_at: '2026-07-01T00:00:00.000Z',
         },
         {
-          id: 'rsvp-self-authored',
+          // T117's protection (never delete a self-authored 'going' row) is
+          // REMOVED by D-7 -- this row is now deleted exactly like the
+          // staff-entered one above.
+          id: 'rsvp-self-authored-going',
           session_id: 'session-existing-1',
           student_id: 'student-unchecked-self',
           status: 'going',
           responded_by: 'student-unchecked-self',
+          updated_at: '2026-07-01T00:00:00.000Z',
+          created_at: '2026-07-01T00:00:00.000Z',
+        },
+        {
+          // D-7 preserved: a self-authored 'declined' row is left untouched
+          // by an uncheck regardless of author -- "not expected" isn't "they
+          // answered no".
+          id: 'rsvp-self-authored-declined',
+          session_id: 'session-existing-1',
+          student_id: 'student-unchecked-self-declined',
+          status: 'declined',
+          responded_by: 'student-unchecked-self-declined',
           updated_at: '2026-07-01T00:00:00.000Z',
           created_at: '2026-07-01T00:00:00.000Z',
         },
@@ -1438,10 +1481,14 @@ describe('saveOutreachEvent (T118 RSVP fan-out phase)', () => {
       respondedBy: 'profile-coach-new',
     });
 
-    // Only the staff-entered row is deleted -- the self-authored row's id
-    // never appears.
+    // Both 'going' rows are deleted, staff-entered AND self-authored alike;
+    // the self-authored 'declined' row's id never appears (D-7: an uncheck
+    // never touches a declined/maybe answer).
     expect(rsvpsDeleteSpy).toHaveBeenCalledTimes(1);
-    expect(rsvpsDeleteInSpy).toHaveBeenCalledWith('id', ['rsvp-staff-entered']);
+    expect(rsvpsDeleteInSpy).toHaveBeenCalledWith('id', [
+      'rsvp-staff-entered',
+      'rsvp-self-authored-going',
+    ]);
     // Nothing to upsert (nothing checked).
     expect(rsvpsUpsertSpy).not.toHaveBeenCalled();
   });

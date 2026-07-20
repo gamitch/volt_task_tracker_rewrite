@@ -59,11 +59,22 @@
  *
  * -----------------------------------------------------------------------
  * 4. TRAP #2 -- un-mark / QR-edit semantics are OWNED by
- *    `../../lib/supabase/loaders/attendance.ts` (`resolveAttendanceWriteMethod`/
- *    `resolveUnmarkAction`, that file's own module doc #2 has the full
- *    decision writeup + metric-view safety proof) -- this component only
- *    CALLS those pure decisions (`handleToggle` below) with the currently
- *    loaded row's `method`, it does not re-derive the policy itself.
+ *    `../../lib/supabase/loaders/attendance.ts` (`resolveAttendanceWriteMethod`,
+ *    that file's own module doc #2 has the full decision writeup +
+ *    metric-view safety proof) -- this component only CALLS that pure
+ *    decision (`handleToggle` below, on the CHECK path only) with the
+ *    currently loaded row's `method`, it does not re-derive the policy
+ *    itself.
+ *
+ *    AMENDED 2026-07-20 (T119, PRD v2 D-7 -- George's direct product-owner
+ *    override, "As coach I am ultimate authority ... should be able to
+ *    overwrite ... check-ins."): the un-mark (uncheck) path no longer
+ *    branches on `method` at all. `resolveUnmarkAction` (T117's `'delete'`
+ *    vs. `'setAbsent'` decision) is REMOVED from `loaders/attendance.ts`;
+ *    `handleToggle` below now calls `onRemoveAttendance` (plain DELETE)
+ *    unconditionally on uncheck, for a `'coach'`, `'qr'`, or `'import'` row
+ *    alike -- a coach's attendance correction MAY now remove a real
+ *    QR-originated check-in row outright, per D-7.
  *
  * -----------------------------------------------------------------------
  * 5. Persistence model: save on toggle / save on hours blur (packet's own
@@ -193,9 +204,7 @@ import {
   loadAttendanceForSessions,
   removeAttendance,
   resolveAttendanceWriteMethod,
-  resolveUnmarkAction,
   upsertAttendance,
-  type AttendanceMethod,
   type AttendanceRow,
   type LoadAttendanceForSessionsFn,
   type RemoveAttendanceFn,
@@ -547,8 +556,10 @@ export function AttendancePanel({
   }
 
   // Module doc #5/#4 -- checkbox toggle: optimistic flip + real mutation
-  // (delegating the un-mark/QR-history decision to `loaders/attendance.ts`'s
-  // own pure functions, module doc #4) + rollback-on-failure.
+  // (CHECK: delegates the write-method LABEL decision to
+  // `loaders/attendance.ts`'s own `resolveAttendanceWriteMethod`, module doc
+  // #4. UNCHECK: T119/D-7 -- plain, unconditional DELETE for every `method`,
+  // no branch) + rollback-on-failure.
   async function handleToggle(
     session: AttendancePanelSession,
     student: AttendancePanelStudent,
@@ -571,27 +582,16 @@ export function AttendancePanel({
         });
         setAttendanceByKey((prev) => ({ ...prev, [key]: saved }));
       } else {
-        const action = resolveUnmarkAction(existing?.method ?? null);
-        if (action === 'delete') {
-          await onRemoveAttendance({ sessionId: session.id, studentId: student.id });
-          setAttendanceByKey((prev) => {
-            if (!(key in prev)) return prev;
-            const next = { ...prev };
-            delete next[key];
-            return next;
-          });
-        } else {
-          const preservedMethod: AttendanceMethod = existing?.method ?? 'coach';
-          const saved = await onUpsertAttendance({
-            sessionId: session.id,
-            studentId: student.id,
-            status: 'absent',
-            hoursOverride: null,
-            method: preservedMethod,
-            recordedBy: currentUserProfileId,
-          });
-          setAttendanceByKey((prev) => ({ ...prev, [key]: saved }));
-        }
+        // T119/D-7: plain DELETE regardless of `method` -- the coach is the
+        // ultimate authority; a real qr/import row is no longer protected
+        // from removal.
+        await onRemoveAttendance({ sessionId: session.id, studentId: student.id });
+        setAttendanceByKey((prev) => {
+          if (!(key in prev)) return prev;
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
       }
       setHoursDraftByKey((prev) => {
         if (!(key in prev)) return prev;
