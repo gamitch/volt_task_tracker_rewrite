@@ -47,13 +47,143 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthUser } from '../../app/guards';
 import { SeasonProvider, type LoadActiveSeasonFn } from '../../app/SeasonProvider';
 import type { SeasonRow } from '../../lib/supabase/types';
 import { LoginAsDeferred as LoginAs } from '../../test-utils/authHarness';
-import { PLACEHOLDER_CURRENT_SEASON_ID } from './ParticipationTab';
+import { PLACEHOLDER_CURRENT_SEASON_ID, type ParticipationDisplayRow } from './ParticipationTab';
+import type { HoursLoadResult } from './HoursTab';
+import type { EventSessionDisplayRow } from './EventsTab';
+import {
+  loadEventSessionsData,
+  loadHoursData,
+  loadParticipationData,
+} from '../../lib/supabase/loaders/reports';
 import { ReportsShell } from './ReportsShell';
+
+// ---------------------------------------------------------------------------
+// T098: `ParticipationTab.tsx`/`HoursTab.tsx`/`EventsTab.tsx`'s default
+// `loadData` was switched (T095) from a fixture stub to the real
+// Supabase-backed loaders (`loadParticipationData`/`loadHoursData`/
+// `loadEventSessionsData`, all three from
+// `../../lib/supabase/loaders/reports`), which correctly reject in this test
+// environment (Supabase unconfigured). This file renders `<ReportsShell />`
+// with no `loadParticipationData`/`loadHoursData`/`loadEventsData` props on
+// its three "real tab wiring" tests (matching `ReportsShell.tsx`'s own
+// correct zero-explicit-loadData-by-default design, a forbidden file here),
+// so it cannot inject a fixture through props there. Instead it mocks all
+// three loaders at the single shared module boundary (they all live in one
+// file), mirroring the intent `RosterShell.test.tsx` already established
+// one-mock-per-loader-module for `InvitesTab`/`StudentsTab`/`TeamsTab`/
+// `ParentsTab` -- here all three needed functions happen to share one module
+// file, so one `vi.mock` block covers all three rather than three separate
+// blocks.
+//
+// UNLIKE the `RosterShell.test.tsx` precedent (Known Context/Traps #1), this
+// mock factory deliberately does NOT call `importOriginal()`/spread `...
+// actual`. `../../lib/supabase/loaders/reports.ts` (forbidden/read-only)
+// itself imports the real, RUNTIME `buildDisplayRows` function from BOTH
+// `ParticipationTab.tsx` and `EventsTab.tsx` (its own module doc #2) to reuse
+// their join logic -- a genuine circular import (reports.ts -> {Participation
+// Tab,EventsTab}.tsx -> reports.ts) that none of the roster loaders have
+// (`loaders/invites.ts`/`students.ts`/`teams.ts`/`parents.ts` only import
+// *types* from their own tab files, never runtime values, per direct
+// inspection -- no equivalent cycle there). Empirically (this task's own
+// worker output; a `vi.fn()`'s `.mock.calls` count directly proved this),
+// calling `importOriginal()` here forces Vitest to walk that real, circular
+// module graph mid-mock-resolution, and depending on unpredictable import-
+// order timing `ParticipationTab.tsx`'s/`EventsTab.tsx`'s own top-level
+// `import { loadParticipationData }`/`import { loadEventSessionsData } from
+// '../../lib/supabase/loaders/reports'` can end up bound to the REAL
+// (network-calling, `SupabaseNotConfiguredError`-rejecting) function instead
+// of this file's mock, even though the identical-looking `HoursTab.tsx` case
+// (no circular import, `../loaders/reports.ts` has no equivalent
+// `buildDisplayRows`-style reuse from `HoursTab.tsx` -- its own module doc
+// #2) was never affected. Since no test in this file needs any OTHER export
+// from `loaders/reports.ts` (only these three functions are ever imported
+// from it anywhere in this app -- grep-provable), the mock factory below
+// returns a fully synthetic module object instead, sidestepping the real
+// module graph (and its circular reentrancy hazard) entirely.
+// ---------------------------------------------------------------------------
+vi.mock('../../lib/supabase/loaders/reports', () => {
+  return {
+    loadParticipationData: vi.fn(),
+    loadHoursData: vi.fn(),
+    loadEventSessionsData: vi.fn(),
+  };
+});
+
+const mockedLoadParticipationData = vi.mocked(loadParticipationData);
+const mockedLoadHoursData = vi.mocked(loadHoursData);
+const mockedLoadEventSessionsData = vi.mocked(loadEventSessionsData);
+
+// Small, deterministic fixture (same row shape as `ParticipationTab.tsx`'s
+// own `FIXTURE_STUDENTS`/`FIXTURE_TEAMS`/`FIXTURE_METRICS`, not imported
+// since those constants aren't exported) -- covers exactly what the affected
+// test asserts: an "Ava Thompson" student row.
+const MOCK_PARTICIPATION_ROWS: ParticipationDisplayRow[] = [
+  {
+    studentId: 'student-ava-thompson',
+    studentName: 'Ava Thompson',
+    teamId: 'team-falcons',
+    teamName: 'Falcons',
+    seasonId: PLACEHOLDER_CURRENT_SEASON_ID,
+    expectedCt: 10,
+    presentCt: 9,
+    lateCt: 0,
+    excusedCt: 0,
+    participationPct: 90.0,
+  },
+];
+
+// Small, deterministic fixture (same row shape as `HoursTab.tsx`'s own
+// `FIXTURE_STUDENTS`/`FIXTURE_TEAMS`, not imported since those constants
+// aren't exported) -- covers exactly what the affected test asserts: a
+// "Jordan Blake" student row alongside the always-rendered "Season totals"
+// heading. `events`/`sessions`/`rsvps`/`studentHours` are deliberately empty
+// -- `buildStudentRows`/`buildSeasonTotals` (`HoursTab.tsx`, forbidden/
+// read-only) both tolerate empty arrays, producing an honest `0`-hours row
+// rather than a crash.
+const MOCK_HOURS_RESULT: HoursLoadResult = {
+  seasonId: PLACEHOLDER_CURRENT_SEASON_ID,
+  defaultGoalHours: 100,
+  students: [
+    {
+      id: 'student-jordan-blake',
+      name: 'Jordan Blake',
+      teamId: 'team-hawks',
+      goalHoursOverride: null,
+    },
+  ],
+  teams: [{ id: 'team-hawks', name: 'Hawks' }],
+  studentHours: [],
+  events: [],
+  sessions: [],
+  rsvps: [],
+};
+
+// Small, deterministic fixture (same row shape as `EventsTab.tsx`'s own
+// `FIXTURE_EVENTS`/`FIXTURE_SESSIONS`, not imported since this loader mock
+// returns the final `EventSessionDisplayRow[]` shape directly, not the raw
+// rows those fixtures model) -- covers exactly what the affected test
+// asserts: a "Weekly Team Meeting" session row.
+const MOCK_EVENTS_RESULT: EventSessionDisplayRow[] = [
+  {
+    sessionId: 'session-weekly-team-meeting-1',
+    eventId: 'event-weekly-team-meeting',
+    eventTitle: 'Weekly Team Meeting',
+    type: 'meeting',
+    sessionDate: '2026-01-05',
+    status: 'completed',
+    attendance: { presentCt: 0, lateCt: 0, excusedCt: 0, absentCt: 0 },
+    signups: null,
+    hoursAwarded: null,
+    peopleReached: null,
+    adultVolunteersCount: 0,
+    adultVolunteerHours: 0,
+  },
+];
 
 // ---------------------------------------------------------------------------
 // Render harness -- mirrors `RosterShell.test.tsx`'s own harness (same
@@ -136,6 +266,9 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
+  mockedLoadParticipationData.mockReset().mockResolvedValue(MOCK_PARTICIPATION_ROWS);
+  mockedLoadHoursData.mockReset().mockResolvedValue(MOCK_HOURS_RESULT);
+  mockedLoadEventSessionsData.mockReset().mockResolvedValue(MOCK_EVENTS_RESULT);
 });
 
 afterEach(() => {

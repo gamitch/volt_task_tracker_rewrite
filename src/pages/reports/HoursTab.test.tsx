@@ -21,9 +21,11 @@
  * doc #8), so no `AuthProvider`/role-login harness is needed here, unlike
  * `StudentHome.test.tsx`.
  */
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { makeLoadHoursData } from '../../lib/supabase/loaders/reports';
 import {
   buildSeasonTotals,
   buildStudentRows,
@@ -49,9 +51,19 @@ import {
 let container: HTMLDivElement;
 let root: Root;
 
+/**
+ * T095: `HoursTab`'s own default `loadData` is now the REAL Supabase-backed
+ * `loadHoursData` (`../../lib/supabase/loaders/reports`), not fixture data
+ * -- see `HoursTab.tsx`'s own module doc #12. This harness explicitly
+ * defaults `loadData` to `defaultLoadHoursData` (the fixture generator,
+ * unchanged) so every render test below keeps exercising the SAME
+ * deterministic fixture numbers it always has, with zero real network
+ * calls -- any test that wants different behavior (the reject case, an
+ * explicit override) still overrides `loadData` via its own `props`.
+ */
 function render(props: Parameters<typeof HoursTab>[0]): void {
   act(() => {
-    root.render(<HoursTab {...props} />);
+    root.render(<HoursTab loadData={defaultLoadHoursData} {...props} />);
   });
 }
 
@@ -396,5 +408,236 @@ describe('HoursTab render', () => {
     render({ seasonId: PLACEHOLDER_CURRENT_SEASON_ID });
     await flushMicrotasks();
     expect(container.textContent).not.toContain('Sign in to view');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T095: real `loaders/reports.ts` seam -- `makeLoadHoursData`. Stubbed
+// `SupabaseClient` only, same DI pattern `StudentsTab.test.tsx`'s own
+// `loadStudentsTabData` tests already established -- zero real network
+// calls.
+// ---------------------------------------------------------------------------
+
+function buildFakeHoursClient(db: {
+  season: Record<string, unknown> | null;
+  students: Record<string, unknown>[];
+  teams: Record<string, unknown>[];
+  studentHours: Record<string, unknown>[];
+  events: Record<string, unknown>[];
+  sessions: Record<string, unknown>[];
+  rsvps: Record<string, unknown>[];
+}): { client: SupabaseClient; fromSpy: ReturnType<typeof vi.fn> } {
+  const fromSpy = vi.fn((table: string) => {
+    switch (table) {
+      case 'seasons':
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi.fn().mockResolvedValue({ data: db.season, error: null }),
+            })),
+          })),
+        };
+      case 'students':
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              order: vi.fn().mockResolvedValue({ data: db.students, error: null }),
+            })),
+          })),
+        };
+      case 'teams':
+        return {
+          select: vi.fn(() => ({
+            order: vi.fn().mockResolvedValue({ data: db.teams, error: null }),
+          })),
+        };
+      case 'v_student_hours':
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn().mockResolvedValue({ data: db.studentHours, error: null }),
+          })),
+        };
+      case 'events':
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn().mockResolvedValue({ data: db.events, error: null }),
+          })),
+        };
+      case 'event_sessions':
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn().mockResolvedValue({ data: db.sessions, error: null }),
+          })),
+        };
+      case 'rsvps':
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn().mockResolvedValue({ data: db.rsvps, error: null }),
+          })),
+        };
+      default:
+        throw new Error(`buildFakeHoursClient: unexpected table "${table}"`);
+    }
+  });
+  return { client: { from: fromSpy } as unknown as SupabaseClient, fromSpy };
+}
+
+describe('loadHoursData (T095 real load)', () => {
+  it('queries seasons/students/teams/v_student_hours/events/event_sessions/rsvps and maps snake_case DB rows to the HoursLoadResult contract (no re-derived arithmetic on confirmedHours)', async () => {
+    const { client, fromSpy } = buildFakeHoursClient({
+      season: { default_goal_hours: 80 },
+      students: [
+        {
+          id: 'student-1',
+          display_name: 'DB Student',
+          team_id: 'team-1',
+          goal_hours_override: null,
+        },
+      ],
+      teams: [{ id: 'team-1', name: 'DB Team' }],
+      studentHours: [{ student_id: 'student-1', season_id: 'season-1', confirmed_hours: 12.5 }],
+      events: [
+        {
+          id: 'event-1',
+          season_id: 'season-1',
+          type: 'outreach',
+          team_ids: null,
+          counts_volunteer_hours: true,
+          adult_volunteers_count: 2,
+          adult_volunteer_hours: 4,
+        },
+      ],
+      sessions: [
+        {
+          id: 'session-1',
+          event_id: 'event-1',
+          starts_at: '2026-01-01T00:00:00.000Z',
+          ends_at: '2026-01-01T02:00:00.000Z',
+          status: 'completed',
+          people_reached: 10,
+        },
+      ],
+      rsvps: [{ id: 'rsvp-1', session_id: 'session-1', student_id: 'student-1', status: 'going' }],
+    });
+
+    const load = makeLoadHoursData(() => client);
+    const result = await load('season-1');
+
+    expect(fromSpy).toHaveBeenCalledWith('seasons');
+    expect(fromSpy).toHaveBeenCalledWith('students');
+    expect(fromSpy).toHaveBeenCalledWith('teams');
+    expect(fromSpy).toHaveBeenCalledWith('v_student_hours');
+    expect(fromSpy).toHaveBeenCalledWith('events');
+    expect(fromSpy).toHaveBeenCalledWith('event_sessions');
+    expect(fromSpy).toHaveBeenCalledWith('rsvps');
+
+    expect(result).toEqual<HoursLoadResult>({
+      seasonId: 'season-1',
+      defaultGoalHours: 80,
+      students: [
+        { id: 'student-1', name: 'DB Student', teamId: 'team-1', goalHoursOverride: null },
+      ],
+      teams: [{ id: 'team-1', name: 'DB Team' }],
+      // Verbatim rename, not recomputed -- 12.5 is a direct copy of the
+      // fake `v_student_hours` row's own `confirmed_hours` value.
+      studentHours: [{ studentId: 'student-1', seasonId: 'season-1', confirmedHours: 12.5 }],
+      events: [
+        {
+          id: 'event-1',
+          seasonId: 'season-1',
+          type: 'outreach',
+          teamIds: null,
+          countsVolunteerHours: true,
+          adultVolunteersCount: 2,
+          adultVolunteerHours: 4,
+        },
+      ],
+      sessions: [
+        {
+          id: 'session-1',
+          eventId: 'event-1',
+          startsAt: '2026-01-01T00:00:00.000Z',
+          endsAt: '2026-01-01T02:00:00.000Z',
+          status: 'completed',
+          peopleReached: 10,
+        },
+      ],
+      rsvps: [{ id: 'rsvp-1', sessionId: 'session-1', studentId: 'student-1', status: 'going' }],
+    });
+  });
+
+  it('short-circuits event_sessions/rsvps queries when the season has zero events (never calls `.in()` with an empty id array)', async () => {
+    const { client, fromSpy } = buildFakeHoursClient({
+      season: { default_goal_hours: 80 },
+      students: [],
+      teams: [],
+      studentHours: [],
+      events: [],
+      sessions: [],
+      rsvps: [],
+    });
+    const load = makeLoadHoursData(() => client);
+    const result = await load('season-empty');
+
+    expect(fromSpy).not.toHaveBeenCalledWith('event_sessions');
+    expect(fromSpy).not.toHaveBeenCalledWith('rsvps');
+    expect(result.events).toEqual([]);
+    expect(result.sessions).toEqual([]);
+    expect(result.rsvps).toEqual([]);
+  });
+
+  it('falls back to defaultGoalHours 0 (never throws) when no matching season row exists', async () => {
+    const { client } = buildFakeHoursClient({
+      season: null,
+      students: [],
+      teams: [],
+      studentHours: [],
+      events: [],
+      sessions: [],
+      rsvps: [],
+    });
+    const load = makeLoadHoursData(() => client);
+    const result = await load('season-missing');
+    expect(result.defaultGoalHours).toBe(0);
+  });
+
+  it('rejects with the real SupabaseLoaderError when a query fails', async () => {
+    const fromSpy = vi.fn((table: string) => {
+      if (table === 'seasons') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi
+                .fn()
+                .mockResolvedValue({ data: null, error: { message: 'denied', code: '42501' } }),
+            })),
+          })),
+        };
+      }
+      if (table === 'students') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: [], error: null }) })),
+          })),
+        };
+      }
+      if (table === 'v_student_hours' || table === 'events') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+          })),
+        };
+      }
+      if (table === 'teams') {
+        return {
+          select: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: [], error: null }) })),
+        };
+      }
+      throw new Error(`unexpected table ${table}`);
+    });
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    const load = makeLoadHoursData(() => client);
+    await expect(load('season-1')).rejects.toMatchObject({ code: '42501' });
   });
 });

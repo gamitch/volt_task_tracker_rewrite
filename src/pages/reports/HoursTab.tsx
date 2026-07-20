@@ -270,6 +270,21 @@
  *  - `VStack`/`HStack` ("Stack" section): `gap`, `wrap` used.
  *  - `proportional`/`pixel`: sizing helpers, same usage `ParticipationTab.tsx`
  *    already established for `Table` column `width`.
+ *
+ * -----------------------------------------------------------------------
+ * 12. T095 (ED-1 Packet P6): real load wiring -- `loadData` no longer
+ *     defaults to fixture data.
+ *
+ * `loadData` now defaults to `loadHoursData`, imported from
+ * `../../lib/supabase/loaders/reports` -- a real multi-table query
+ * (`seasons`/`students`/`teams`/`v_student_hours`/`events`/`event_sessions`/
+ * `rsvps`) shaped into this file's own `HoursLoadResult` contract; module
+ * doc #1's own confirmed-hours passthrough discipline still holds (see that
+ * loader module's own doc comment for the full column-by-column citation).
+ * `defaultLoadHoursData` (fixture data, unchanged) is kept as a named
+ * export for tests that want fixture behavior explicitly, same posture
+ * `ParticipationTab.tsx` (T095) and `StudentsTab.tsx` (T089) already
+ * established for their own sibling `loadData` seams.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
@@ -293,6 +308,7 @@ import {
   proportional,
   type TableColumn,
 } from '@astryxdesign/core';
+import { loadHoursData } from '../../lib/supabase/loaders/reports';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets. Module docs
@@ -1069,7 +1085,7 @@ export interface HoursTabProps {
   loadData?: LoadHoursDataFn;
 }
 
-export function HoursTab({ seasonId, loadData = defaultLoadHoursData }: HoursTabProps): ReactNode {
+export function HoursTab({ seasonId, loadData = loadHoursData }: HoursTabProps): ReactNode {
   const loadState = useHoursData(seasonId, loadData);
   const data = loadState.status === 'success' ? loadState.data : EMPTY_HOURS_DATA;
 

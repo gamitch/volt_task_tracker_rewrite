@@ -307,6 +307,25 @@
  * (`session-c1`) -- the exact case finding #4(c) describes. Full
  * hand-computed walkthrough reported in this task's worker output, not
  * merely asserted here.
+ *
+ * -----------------------------------------------------------------------
+ * 12. T095 (ED-1 Packet P6): real load wiring -- `loadData` no longer
+ *     defaults to fixture data.
+ *
+ * `loadData` now defaults to `loadEventSessionsData`, imported from
+ * `../../lib/supabase/loaders/reports` -- a real per-season query across
+ * `events`/`event_sessions`/`attendance`/`rsvps` (ALL session statuses,
+ * matching finding #1/#2's already-established design; no `.eq('status',
+ * ...)` filter anywhere in that loader) reusing THIS file's own exported
+ * `buildDisplayRows`/`computeAttendeeHours`/`computeSessionHoursAwarded`/
+ * `summarizeAttendance`/`summarizeSignups` (module doc #4's own
+ * constitution-item-3 reasoning still holds -- the loader never
+ * re-implements this file's own hours-awarded fallback logic a second
+ * time, it calls these exact functions). `defaultLoadEventSessionsData`
+ * (fixture data, unchanged) is kept as a named export for tests that want
+ * fixture behavior explicitly, same posture `ParticipationTab.tsx`/
+ * `HoursTab.tsx` (T095) already established for their own sibling
+ * `loadData` seams.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
@@ -324,6 +343,7 @@ import {
   proportional,
   type TableColumn,
 } from '@astryxdesign/core';
+import { loadEventSessionsData } from '../../lib/supabase/loaders/reports';
 
 // ---------------------------------------------------------------------------
 // Types -- see module doc #1/#3/#4.
@@ -995,7 +1015,7 @@ export interface EventsTabProps {
 
 export function EventsTab({
   seasonId,
-  loadData = defaultLoadEventSessionsData,
+  loadData = loadEventSessionsData,
 }: EventsTabProps): ReactNode {
   const loadState = useEventSessionsData(seasonId, loadData);
   const columns = useMemo(() => buildColumns(), []);

@@ -18,9 +18,11 @@
  * unlike those two files' tests, no `AuthProvider`/role wrapping is needed
  * here at all.
  */
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { makeLoadEventSessionsData } from '../../lib/supabase/loaders/reports';
 import {
   buildDisplayRows,
   computeAttendeeHours,
@@ -268,8 +270,18 @@ describe('formatSessionDate -- NFR-09 America/Chicago rendering', () => {
 
 describe('EventsTab component -- DES-12 four states', () => {
   it('renders a loading Skeleton (T081: table has predictable dimensions), then the populated Table with real values from every fixture session', async () => {
+    // T095: `EventsTab`'s own default `loadData` is now the REAL
+    // Supabase-backed `loadEventSessionsData` (see `EventsTab.tsx`'s own
+    // module doc #12) -- `loadData` is passed explicitly here so this test
+    // keeps exercising the same deterministic fixture data it always has,
+    // with zero real network calls.
     act(() => {
-      root.render(<EventsTab seasonId={PLACEHOLDER_CURRENT_SEASON_ID} />);
+      root.render(
+        <EventsTab
+          seasonId={PLACEHOLDER_CURRENT_SEASON_ID}
+          loadData={defaultLoadEventSessionsData}
+        />,
+      );
     });
     expect(container.textContent).toContain('Loading events data');
 
@@ -339,5 +351,198 @@ describe('EventsTab component -- DES-12 four states', () => {
   it('defaultLoadEventSessionsData returns a season-scoped, empty array for an unknown season id (no cross-season leakage)', async () => {
     const rows = await defaultLoadEventSessionsData('season-does-not-exist');
     expect(rows).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T095: real `loaders/reports.ts` seam -- `makeLoadEventSessionsData`.
+// Stubbed `SupabaseClient` only, same DI pattern `StudentsTab.test.tsx`'s
+// own `loadStudentsTabData` tests already established -- zero real network
+// calls.
+// ---------------------------------------------------------------------------
+
+function buildFakeEventsClient(db: {
+  events: Record<string, unknown>[];
+  sessions: Record<string, unknown>[];
+  attendance: Record<string, unknown>[];
+  rsvps: Record<string, unknown>[];
+}): { client: SupabaseClient; fromSpy: ReturnType<typeof vi.fn> } {
+  const fromSpy = vi.fn((table: string) => {
+    switch (table) {
+      case 'events':
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn().mockResolvedValue({ data: db.events, error: null }),
+          })),
+        };
+      case 'event_sessions':
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn().mockResolvedValue({ data: db.sessions, error: null }),
+          })),
+        };
+      case 'attendance':
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn().mockResolvedValue({ data: db.attendance, error: null }),
+          })),
+        };
+      case 'rsvps':
+        return {
+          select: vi.fn(() => ({ in: vi.fn().mockResolvedValue({ data: db.rsvps, error: null }) })),
+        };
+      default:
+        throw new Error(`buildFakeEventsClient: unexpected table "${table}"`);
+    }
+  });
+  return { client: { from: fromSpy } as unknown as SupabaseClient, fromSpy };
+}
+
+describe('loadEventSessionsData (T095 real load)', () => {
+  it("queries events/event_sessions/attendance/rsvps, maps snake_case DB rows, and reuses this file's own buildDisplayRows join (one row per session, not per event)", async () => {
+    const { client, fromSpy } = buildFakeEventsClient({
+      events: [
+        {
+          id: 'event-db-1',
+          season_id: 'season-1',
+          type: 'outreach',
+          title: 'DB Outreach Event',
+          counts_volunteer_hours: true,
+          adult_volunteers_count: 2,
+          adult_volunteer_hours: 4,
+        },
+      ],
+      sessions: [
+        {
+          id: 'session-db-1',
+          event_id: 'event-db-1',
+          session_date: '2026-07-11',
+          starts_at: '2026-07-11T09:00:00.000Z',
+          ends_at: '2026-07-11T12:00:00.000Z', // 3h
+          status: 'completed',
+          people_reached: 42,
+        },
+        // A second, still-`scheduled` session for the same event -- proves
+        // the loader returns ALL session statuses, not only `completed`
+        // (T058's already-Passed design, this task's own acceptance
+        // criteria).
+        {
+          id: 'session-db-2',
+          event_id: 'event-db-1',
+          session_date: '2026-07-18',
+          starts_at: '2026-07-18T09:00:00.000Z',
+          ends_at: '2026-07-18T12:00:00.000Z',
+          status: 'scheduled',
+          people_reached: null,
+        },
+      ],
+      attendance: [
+        {
+          session_id: 'session-db-1',
+          student_id: 'student-db-1',
+          status: 'present',
+          check_in_at: null,
+          check_out_at: null,
+          hours_override: null,
+        },
+      ],
+      rsvps: [{ session_id: 'session-db-1', student_id: 'student-db-1', status: 'going' }],
+    });
+
+    const load = makeLoadEventSessionsData(() => client);
+    const result = await load('season-1');
+
+    expect(fromSpy).toHaveBeenCalledWith('events');
+    expect(fromSpy).toHaveBeenCalledWith('event_sessions');
+    expect(fromSpy).toHaveBeenCalledWith('attendance');
+    expect(fromSpy).toHaveBeenCalledWith('rsvps');
+
+    // Reuses `EventsTab.tsx`'s own `buildDisplayRows`/`computeSessionHoursAwarded`
+    // directly -- cross-checked against calling those exact exported
+    // functions on the equivalent camelCase input.
+    const expected = buildDisplayRows(
+      [
+        {
+          id: 'event-db-1',
+          seasonId: 'season-1',
+          type: 'outreach',
+          title: 'DB Outreach Event',
+          countsVolunteerHours: true,
+          adultVolunteersCount: 2,
+          adultVolunteerHours: 4,
+        },
+      ],
+      [
+        {
+          id: 'session-db-1',
+          eventId: 'event-db-1',
+          sessionDate: '2026-07-11',
+          startsAt: '2026-07-11T09:00:00.000Z',
+          endsAt: '2026-07-11T12:00:00.000Z',
+          status: 'completed',
+          peopleReached: 42,
+        },
+        {
+          id: 'session-db-2',
+          eventId: 'event-db-1',
+          sessionDate: '2026-07-18',
+          startsAt: '2026-07-18T09:00:00.000Z',
+          endsAt: '2026-07-18T12:00:00.000Z',
+          status: 'scheduled',
+          peopleReached: null,
+        },
+      ],
+      [
+        {
+          sessionId: 'session-db-1',
+          studentId: 'student-db-1',
+          status: 'present',
+          checkInAt: null,
+          checkOutAt: null,
+          hoursOverride: null,
+        },
+      ],
+      [{ sessionId: 'session-db-1', studentId: 'student-db-1', status: 'going' }],
+    );
+    expect(result).toEqual(expected);
+    expect(result).toHaveLength(2);
+    // Explicit, worker-packet-required proof: BOTH statuses reached the
+    // final result, not just `completed`.
+    expect(result.map((row) => row.status).sort()).toEqual(['completed', 'scheduled']);
+  });
+
+  it('short-circuits event_sessions/attendance/rsvps queries when the season has zero events (never calls `.in()` with an empty id array)', async () => {
+    const { client, fromSpy } = buildFakeEventsClient({
+      events: [],
+      sessions: [],
+      attendance: [],
+      rsvps: [],
+    });
+    const load = makeLoadEventSessionsData(() => client);
+    const result = await load('season-empty');
+
+    expect(fromSpy).not.toHaveBeenCalledWith('event_sessions');
+    expect(fromSpy).not.toHaveBeenCalledWith('attendance');
+    expect(fromSpy).not.toHaveBeenCalledWith('rsvps');
+    expect(result).toEqual([]);
+  });
+
+  it('rejects with the real SupabaseLoaderError when the events query fails', async () => {
+    const fromSpy = vi.fn((table: string) => {
+      if (table === 'events') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi
+              .fn()
+              .mockResolvedValue({ data: null, error: { message: 'denied', code: '42501' } }),
+          })),
+        };
+      }
+      throw new Error(`unexpected table ${table}`);
+    });
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    const load = makeLoadEventSessionsData(() => client);
+    await expect(load('season-1')).rejects.toMatchObject({ code: '42501' });
   });
 });

@@ -3427,3 +3427,62 @@ standalone follow-up.
 rollback/transaction safety to `createMeetings`' two-step insert; support genuinely
 multi-student parents on `/meetings` (a `ParentHome`-style multi-card rearchitect,
 explicitly out of this packet's scope).
+
+## T095 — ED-1 packet P6: real Reports tabs data (Participation/Hours/Events)
+
+**Result:** PASS (1st attempt, NIT)
+
+Read-only reporting packet, no mutations. New `src/lib/supabase/loaders/reports.ts`:
+`loadParticipationData`/`loadHoursData`/`loadEventSessionsData`, all strict passthrough
+against `v_student_participation`/`v_student_hours` (constitution item 3, BLOCKER —
+zero re-derived arithmetic, grep-confirmed). `HoursTab` combines six raw sources
+(seasons, students, teams, the hours view, events, event_sessions, rsvps) with a
+genuine sequential dependency (events → sessions → rsvps), guarded against empty
+`.in()` calls. `EventsTab` returns all session statuses (scheduled/completed/canceled,
+not just completed — matching T058's already-established design, verified by a
+dedicated test), reusing the page's own existing display-building helpers rather than
+reimplementing hours-awarded fallback logic. Investigated `events.team_ids` filtering
+and correctly found none of the three loaders need it — Hours/Events are season-wide
+per their own already-documented module docs, Participation's team-reconciliation
+lives inside the SQL view itself.
+
+**Checker verification:** independently confirmed the passthrough discipline via grep,
+independently verified the sequential-query dependency and empty-array guards,
+independently confirmed `EventsTab`'s all-statuses claim by reading the actual query
+(no status filter) and its dedicated test, independently confirmed the
+team-filtering-not-needed claim against each page's own real module-doc citations
+(not just the worker's assertion), confirmed absent-row handling is honest (`null`
+via `??`, never a fabricated 0%/0h row). 147/150 targeted run — the 3 failures
+(disclosed, expected, routed to T098) are exclusively in the forbidden
+`ReportsShell.test.tsx`.
+
+## T098 — Fix `ReportsShell.test.tsx` regression from T095's real-data wiring
+
+**Result:** PASS (1st attempt, clean)
+
+Same class as T088/T092/T097, first application to this specific test file (which had
+no existing mock blocks yet). While applying the established
+`vi.mock(..., importOriginal)` template, the worker discovered and correctly diagnosed
+a genuinely different structural hazard: unlike the roster loaders (which import only
+TYPES from their tab files), `loaders/reports.ts` imports a real RUNTIME function
+(`buildDisplayRows`) from both `ParticipationTab.tsx` and `EventsTab.tsx`, which
+themselves import `loadParticipationData`/`loadEventSessionsData` back from
+`loaders/reports.ts` at module scope — a genuine circular import. Calling
+`importOriginal()` inside the mock forces Vitest to walk that real cycle mid-resolution,
+and depending on import-order timing, the tab files' own top-level bindings ended up
+pointing at the REAL function instead of the mock (empirically caught via
+`mock.calls.length === 0` while the UI still showed a real network-error banner). Fixed
+by using a fully synthetic mock factory (no `importOriginal()` at all, since no test in
+this file needs any other export from that module) — sidestepping the cycle entirely
+rather than papering over a timing race.
+
+**Checker verification — the most rigorous check of this entire wave:** independently
+confirmed the circular-import claim by reading the actual import statements in both
+directions, confirmed the roster loaders genuinely don't have the same cycle (type-only
+imports), and **actually reproduced the bug live**: temporarily reverted to the
+`importOriginal()` pattern, ran the tests, watched the exact predicted failure occur
+(`EventsTab` test fails with a real "Couldn't load events data" error, proving the mock
+was never called), then restored the fix and confirmed all 16 tests pass again,
+repeated 3 consecutive times with no flakiness. Full suite: 1068/1068. This closes the
+current ED-1 wave (T086–T099 in progress) with the sole remaining item being T099
+(the live invite-email content bug), unrelated to this wave's data-wiring work.

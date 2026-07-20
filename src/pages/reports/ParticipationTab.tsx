@@ -228,6 +228,20 @@
  *     used identically by the PowerSearch "below-%-threshold" field and the
  *     "below 70%" quick-filter chip, so the decision is enforced in exactly
  *     one place, not duplicated.
+ *
+ * -----------------------------------------------------------------------
+ * 11. T095 (ED-1 Packet P6): real load wiring -- `loadData` no longer
+ *     defaults to fixture data.
+ *
+ * `loadData` now defaults to `loadParticipationData`, imported from
+ * `../../lib/supabase/loaders/reports` -- a real `v_student_participation`
+ * query (strict passthrough only, module doc #1's own no-re-derivation
+ * discipline still holds; see that loader module's own doc comment for the
+ * full column-by-column citation and RLS finding). `defaultLoadParticipationData`
+ * (fixture data, unchanged) is kept as a named export for tests (and any
+ * future caller) that want fixture behavior explicitly, same "the default
+ * changes, the fixture literal doesn't" posture `StudentsTab.tsx` (T089)
+ * already established.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
@@ -253,6 +267,7 @@ import {
   type PowerSearchFilter,
   type TableColumn,
 } from '@astryxdesign/core';
+import { loadParticipationData } from '../../lib/supabase/loaders/reports';
 
 // ---------------------------------------------------------------------------
 // Types -- see module doc #1.
@@ -702,7 +717,7 @@ export interface ParticipationTabProps {
 
 export function ParticipationTab({
   seasonId,
-  loadData = defaultLoadParticipationData,
+  loadData = loadParticipationData,
 }: ParticipationTabProps): ReactNode {
   const loadState = useParticipationData(seasonId, loadData);
   const [filters, setFilters] = useState<ReadonlyArray<PowerSearchFilter>>([]);
