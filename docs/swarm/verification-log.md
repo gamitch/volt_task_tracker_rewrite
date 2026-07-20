@@ -3704,3 +3704,48 @@ in the session remain in `git stash list`, both superseded by already-committed,
 already-passed work — flagged for a maintainer to `git stash drop` at their
 discretion, not actioned automatically here since dropping a stash is an
 irreversible operation outside this task's scope.
+
+---
+
+## T106 (HOTFIX) — `OutreachList.tsx` real active-season resolution
+
+**PASS (1st attempt, clean).** This was a live regression George hit directly
+while testing `/outreach` in the dev server, immediately after T101 landed: real
+`loadOutreachData` (T101, already-Passed) receives `OutreachList`'s `seasonId`,
+which previously defaulted to a hardcoded, non-UUID placeholder string. That
+default was harmless against fixture data but became a real error the moment the
+real loader went live — Postgres rejects a non-UUID value against a `uuid`-typed
+column outright, surfacing as "Couldn't load outreach events" on every render.
+
+The worker ported `ReportsShell.tsx`'s own already-Passed active-season-resolution
+pattern directly rather than inventing a new one: `useActiveSeason()` called
+unconditionally, `resolvedSeasonId = seasonIdProp ?? (activeSeason.status ===
+'ready' ? activeSeason.season.id : null)`, with a new `OutreachSeasonState` block
+(a structural port of `ReportsShell`'s own `ReportsSeasonState`) covering the
+loading/none/error/no-season cases.
+
+The checker did not stop at "the tests pass" — it traced the actual component
+control flow to verify the fix's central claim is structurally true, not just
+incidentally true today: the real `useLoadState(() => loadData(seasonId), ...)`
+call now lives exclusively inside a new child component, `OutreachListLoaded`,
+which the parent only ever mounts once `resolvedSeasonId` is non-null. There is no
+code path by which the production, no-props `<OutreachList />` mount (confirmed at
+`router.tsx`) can reach the real loader with a null or placeholder id — it is
+genuinely impossible, not merely untested. The coach create-event reload path
+(`reloadOutreachData`) was confirmed to close over the same resolved id the
+initial load used, so it can't regress to the placeholder either.
+`PLACEHOLDER_SEASON_ID` was confirmed still genuinely referenced by the exported
+fixture loader (`defaultLoadOutreachData`) rather than being dead code — only its
+use as `OutreachList`'s own default prop value was removed. The
+already-disclosed, separate `viewerStudentId`/`PLACEHOLDER_CURRENT_STUDENT_ID` gap
+was confirmed untouched, correctly out of this hotfix's scope.
+
+47/47 `OutreachList.test.tsx` tests pass, including 5 new tests that explicitly
+assert the real loader is never called at all while the active season is
+loading/none/error, and — once a real UUID-shaped season resolves — is called
+with that real id and explicitly *not* the old placeholder string. T106's own two
+files are clean on typecheck/lint/format:check; the checker noted (informational
+only, not a T106 defect) that repo-wide suite/typecheck runs fluctuated during
+verification purely due to sibling tasks T103/T104/T105 actively editing files in
+the same shared tree at the time — every such failure traced to those files, none
+to T106's.

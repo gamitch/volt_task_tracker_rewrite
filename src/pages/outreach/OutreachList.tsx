@@ -340,6 +340,64 @@
  *     `MeetingsList.tsx`'s own T096 wiring of `ScheduleMeetingsDialog`
  *     already established for the identical reason (no second teams-loading
  *     mechanism is part of this task's own Allowed Files scope).
+ *
+ * -----------------------------------------------------------------------
+ * 12. T106 HOTFIX: real active-season resolution, mirroring
+ *     `ReportsShell.tsx`'s (T091/T095/T098, already-Passed) established
+ *     pattern exactly -- closes a live regression George hit testing
+ *     `/outreach` in the dev server.
+ *
+ * Before this fix, `OutreachList`'s own `seasonId` prop defaulted straight to
+ * `PLACEHOLDER_SEASON_ID` (`'season-placeholder-current'`, not a valid
+ * `uuid`) and was passed directly into the real `loadOutreachData` (module
+ * doc #11's own T101 default), which runs a real Postgrest
+ * `.eq('season_id', seasonId)` query against a `uuid`-typed column --
+ * Postgres rejects that query outright (never even reaching RLS/filtering),
+ * which the page's own error-state Banner surfaced generically as "Couldn't
+ * load outreach events." T101's own worker packet explicitly scoped
+ * `seasonId` resolution as out of scope and disclosed the risk, but its own
+ * assumption that an unresolved/placeholder id would just "legitimately
+ * return empty data" turned out to be wrong once verified against real
+ * Postgrest behavior -- it is a hard query error, not an empty-data degrade.
+ *
+ * Fix: `OutreachList` now calls `useActiveSeason()` unconditionally (same
+ * rules-of-hooks posture `ReportsShell.tsx` already established) and
+ * resolves `resolvedSeasonId = seasonIdProp ?? (activeSeason.status ===
+ * 'ready' ? activeSeason.season.id : null)` -- the identical precedence
+ * `ReportsShell.tsx`'s own module doc #2 uses (an explicit prop always wins;
+ * the hook is only consulted when no prop was supplied). Whenever
+ * `resolvedSeasonId` is `null` (the hook is `'loading'`/`'none'`/`'error'`
+ * and no explicit prop was given), this component renders
+ * `OutreachSeasonState` -- a direct structural port of `ReportsShell.tsx`'s
+ * own `ReportsSeasonState` (same `Banner`/`EmptyState`/`Skeleton`/
+ * `VisuallyHidden` DES-12 four-state shape) -- INSTEAD of ever calling the
+ * real `loadData`/`loadOutreachData`. The real per-event/session/RSVP data
+ * load (this file's own pre-existing `OutreachListLoaded`, formerly inlined
+ * directly in `OutreachList` itself) is now a separate child component that
+ * only ever mounts once a real, non-null `seasonId` has been resolved -- so
+ * its own `useLoadState(() => loadData(seasonId), ...)` call can never fire
+ * with a null/placeholder id, satisfying React's rules-of-hooks the same way
+ * `ReportsShell.tsx` does (delegating the data-fetching hook to a
+ * conditionally-rendered child, rather than gating the hook call itself).
+ *
+ * `reloadOutreachData()` (module doc #11's own coach-create-event reload
+ * path) now lives inside `OutreachListLoaded` and closes over that same
+ * component's own `seasonId` prop -- i.e. the SAME resolved id the initial
+ * load used, never the raw caller-supplied prop or the placeholder, so a
+ * coach creating an event during a real season reloads against that same
+ * real season.
+ *
+ * `PLACEHOLDER_SEASON_ID` itself: investigated, not assumed -- it remains
+ * used (unchanged) as `FIXTURE_EVENTS`/`FIXTURE_GOAL_CONFIG`'s own fixture
+ * `seasonId` value, which `defaultLoadOutreachData` (the fixture loader,
+ * still exported for tests/callers that want to inject it explicitly) keys
+ * its filtering to. It is NOT dead code -- only its former use as
+ * `OutreachList`'s own real-loader-facing default was the bug, and that use
+ * is what this fix removes.
+ *
+ * `viewerStudentId = PLACEHOLDER_CURRENT_STUDENT_ID` (module doc #7) is a
+ * separate, already-disclosed gap (which student, not which season) --
+ * untouched by this fix, out of scope per this task's own packet.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
@@ -364,6 +422,10 @@ import {
   VStack,
 } from '@astryxdesign/core';
 import { useAuth } from '../../app/guards';
+// T106 HOTFIX: the same real active-season resolution mechanism
+// `ReportsShell.tsx` already established (module doc #12) -- read-only
+// import, this file is not `SeasonProvider.tsx`'s own module.
+import { useActiveSeason } from '../../app/SeasonProvider';
 // T101 (ED-1 Packet P10): real load/create wiring -- module doc #11.
 // `saveOutreachEvent`/`OutreachEventDialog` are this task's own wiring of an
 // ALREADY-BUILT, ALREADY-PASSED standalone dialog into this page for the
@@ -451,6 +513,15 @@ export interface HoursBreakdown {
 // ---------------------------------------------------------------------------
 
 export const PLACEHOLDER_CURRENT_STUDENT_ID = 'student-placeholder-current-viewer';
+/**
+ * T106 UPDATE (module doc #12): no longer `OutreachList`'s own default
+ * `seasonId` (that was this hotfix's own root cause -- a non-UUID string
+ * reaching a real Postgrest `uuid`-typed `.eq()` query). Still genuinely
+ * used, unchanged, as `FIXTURE_EVENTS`/`FIXTURE_GOAL_CONFIG`'s own fixture
+ * `seasonId` value below, which `defaultLoadOutreachData` (the fixture
+ * loader, still exported for tests/callers that inject it explicitly) keys
+ * its own filtering to -- not dead code.
+ */
 const PLACEHOLDER_SEASON_ID = 'season-placeholder-current';
 
 // ---------------------------------------------------------------------------
@@ -1535,32 +1606,78 @@ function StudentParentOutreachView({
 }
 
 // ---------------------------------------------------------------------------
-// Top-level component -- module docs #6/#7/#9.
+// Real-active-season state block -- module doc #12 (T106 hotfix). A direct
+// structural port of `ReportsShell.tsx`'s own `ReportsSeasonState`: the one
+// state block rendered in place of the coach/student view for every case
+// where `resolvedSeasonId` is `null` (no explicit prop AND `useActiveSeason()`
+// is not `'ready'`). `state.status === 'ready'` never reaches this component
+// (the caller only renders it for the other three statuses) -- the
+// exhaustive `switch` below still covers it defensively (renders nothing)
+// rather than asserting it can't happen, so a future caller mistake fails
+// safe instead of crashing.
 // ---------------------------------------------------------------------------
 
-export interface OutreachListProps {
-  /** Injectable data-loading seam (Known Context/Traps #1). T101: defaults
-   * to a real query (`loadOutreachData`, `../../lib/supabase/loaders/
-   * outreach.ts`); `defaultLoadOutreachData` (fixture) remains exported for
-   * callers/tests that want to inject it explicitly. */
-  loadData?: LoadOutreachDataFn;
-  seasonId?: string;
-  /** Which student the student/parent view is currently scoped to (module
-   * doc #7). */
-  viewerStudentId?: string;
-  /** T101 (module doc #11). Defaults to a real `events`/`event_sessions`
-   * insert, passed straight through to `<OutreachEventDialog
-   * onSaveEvent={...} />` in the coach view. */
-  onSaveEvent?: OnSaveOutreachEventFn;
+function OutreachSeasonState({ state }: { state: ReturnType<typeof useActiveSeason> }): ReactNode {
+  switch (state.status) {
+    case 'loading':
+      return (
+        <VStack gap={3} aria-busy="true">
+          <VisuallyHidden as="div" role="status">
+            Loading the active season…
+          </VisuallyHidden>
+          <Skeleton width={240} height={28} />
+          <Skeleton width={400} height={16} index={1} />
+        </VStack>
+      );
+    case 'none':
+      return (
+        <EmptyState
+          headingLevel={1}
+          title="No active season yet"
+          description="An admin needs to create and activate a season in Season settings before outreach events can be scoped to it."
+        />
+      );
+    case 'error':
+      return (
+        <Banner
+          status="error"
+          title="Couldn't load the active season"
+          description={state.error.message}
+          endContent={<Button variant="ghost" label="Retry" onClick={state.refresh} />}
+        />
+      );
+    case 'ready':
+      return null;
+  }
 }
 
-export function OutreachList({
-  loadData = loadOutreachData,
-  seasonId = PLACEHOLDER_SEASON_ID,
-  viewerStudentId = PLACEHOLDER_CURRENT_STUDENT_ID,
-  onSaveEvent = saveOutreachEvent,
-}: OutreachListProps = {}): ReactNode {
-  const { user } = useAuth();
+// ---------------------------------------------------------------------------
+// Real-data-loaded body -- module docs #6/#7/#9/#11, T106 UPDATE (module doc
+// #12): split out of `OutreachList` itself so this component (and its own
+// `useLoadState`/`overrideData` hooks) only ever mounts once a real,
+// resolved, non-placeholder `seasonId` is known -- `OutreachList` never
+// renders this component while `resolvedSeasonId` is `null`, so `loadData`
+// can never be called with a null/placeholder id.
+// ---------------------------------------------------------------------------
+
+interface OutreachListLoadedProps {
+  loadData: LoadOutreachDataFn;
+  /** Always a real, resolved season id -- module doc #12. Never the
+   * placeholder/null case; `OutreachList` only mounts this component once
+   * `resolvedSeasonId !== null`. */
+  seasonId: string;
+  viewerStudentId: string;
+  onSaveEvent: OnSaveOutreachEventFn;
+  isCoachOrAdminView: boolean;
+}
+
+function OutreachListLoaded({
+  loadData,
+  seasonId,
+  viewerStudentId,
+  onSaveEvent,
+  isCoachOrAdminView,
+}: OutreachListLoadedProps): ReactNode {
   const loadState = useLoadState(() => loadData(seasonId), [loadData, seasonId]);
   // T101 (module doc #11) -- lets the coach view reload this page's own
   // already-successfully-loaded data in place (after creating an event)
@@ -1573,26 +1690,13 @@ export function OutreachList({
     }
   }, [loadState]);
 
+  // T106 UPDATE (module doc #12) -- closes over this component's own
+  // `seasonId` prop, which is ALWAYS the same real, resolved id the initial
+  // load used (never the raw caller-supplied prop or the placeholder), so a
+  // coach creating an event reloads against that same real season.
   async function reloadOutreachData(): Promise<void> {
     const fresh = await loadData(seasonId);
     setOverrideData(fresh);
-  }
-
-  // Module doc #6 -- only the two role literals present in guards.tsx's
-  // stale `Role` union are compared directly; everything else (including a
-  // real 'student'/'parent' value) falls through to the student/parent view.
-  const isCoachOrAdminView = user !== null && (user.role === 'coach' || user.role === 'admin');
-
-  if (user === null) {
-    return (
-      <VStack gap={4} padding={6}>
-        <EmptyState
-          headingLevel={1}
-          title="Sign in to view outreach"
-          description="You need to be signed in to see this page."
-        />
-      </VStack>
-    );
   }
 
   if (loadState.status === 'loading') {
@@ -1672,6 +1776,89 @@ export function OutreachList({
         />
       )}
     </VStack>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Top-level component -- module docs #6/#7/#9/#12.
+// ---------------------------------------------------------------------------
+
+export interface OutreachListProps {
+  /** Injectable data-loading seam (Known Context/Traps #1). T101: defaults
+   * to a real query (`loadOutreachData`, `../../lib/supabase/loaders/
+   * outreach.ts`); `defaultLoadOutreachData` (fixture) remains exported for
+   * callers/tests that want to inject it explicitly. */
+  loadData?: LoadOutreachDataFn;
+  /**
+   * T106 UPDATE (module doc #12): overridable for tests/an explicit caller --
+   * same precedent `ReportsShell.tsx`'s own `seasonId` prop already
+   * established. When omitted (`undefined`, the default -- no longer a
+   * hardcoded placeholder), this component sources the value from
+   * `useActiveSeason()` instead.
+   */
+  seasonId?: string;
+  /** Which student the student/parent view is currently scoped to (module
+   * doc #7). */
+  viewerStudentId?: string;
+  /** T101 (module doc #11). Defaults to a real `events`/`event_sessions`
+   * insert, passed straight through to `<OutreachEventDialog
+   * onSaveEvent={...} />` in the coach view. */
+  onSaveEvent?: OnSaveOutreachEventFn;
+}
+
+export function OutreachList({
+  loadData = loadOutreachData,
+  seasonId: seasonIdProp,
+  viewerStudentId = PLACEHOLDER_CURRENT_STUDENT_ID,
+  onSaveEvent = saveOutreachEvent,
+}: OutreachListProps = {}): ReactNode {
+  const { user } = useAuth();
+  // T106 UPDATE (module doc #12): called unconditionally (React's
+  // rules-of-hooks), even when `seasonIdProp` is supplied and will end up
+  // overriding this hook's own value -- same posture `ReportsShell.tsx`
+  // already established.
+  const activeSeason = useActiveSeason();
+
+  if (user === null) {
+    return (
+      <VStack gap={4} padding={6}>
+        <EmptyState
+          headingLevel={1}
+          title="Sign in to view outreach"
+          description="You need to be signed in to see this page."
+        />
+      </VStack>
+    );
+  }
+
+  // Module doc #12's override precedence: the explicit prop wins outright
+  // when supplied; only falls back to the hook when it was not -- the same
+  // precedent `ReportsShell.tsx`'s own module doc #2 established. Never call
+  // the real `loadData` with a `null` or placeholder id.
+  const resolvedSeasonId =
+    seasonIdProp ?? (activeSeason.status === 'ready' ? activeSeason.season.id : null);
+
+  if (resolvedSeasonId === null) {
+    return (
+      <VStack gap={4} padding={6}>
+        <OutreachSeasonState state={activeSeason} />
+      </VStack>
+    );
+  }
+
+  // Module doc #6 -- only the two role literals present in guards.tsx's
+  // stale `Role` union are compared directly; everything else (including a
+  // real 'student'/'parent' value) falls through to the student/parent view.
+  const isCoachOrAdminView = user.role === 'coach' || user.role === 'admin';
+
+  return (
+    <OutreachListLoaded
+      loadData={loadData}
+      seasonId={resolvedSeasonId}
+      viewerStudentId={viewerStudentId}
+      onSaveEvent={onSaveEvent}
+      isCoachOrAdminView={isCoachOrAdminView}
+    />
   );
 }
 

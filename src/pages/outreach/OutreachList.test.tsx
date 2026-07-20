@@ -2,7 +2,8 @@
 /**
  * T038: tests for `OutreachList.tsx`. T101 (ED-1 Packet P10) extends this
  * file with real-load/real-create-dialog coverage (module doc #11 of the
- * component file).
+ * component file). T106 (HOTFIX) extends it again with `useActiveSeason()`
+ * wiring coverage (module doc #12 of the component file).
  *
  * Per this task's Allowed Files (`OutreachList.tsx` only) this test file is
  * a deliberate, disclosed addition beyond the literal Allowed Files list --
@@ -19,12 +20,26 @@
  * pattern `CheckinResult.test.tsx`/`MeetingsList.test.tsx` already
  * established, including `MeetingsList.test.tsx`'s `AuthProvider` +
  * `LoginAs` role-login harness.
+ *
+ * T106 UPDATE: `OutreachList` now calls `useActiveSeason()` unconditionally
+ * (component module doc #12), so every render below must be wrapped in a
+ * real `<SeasonProvider>` -- the same fake-`<SeasonProvider>`-wrapping
+ * harness update `ReportsShell.test.tsx` already made for its own identical
+ * T091 wiring (`src/test-utils/**` is a forbidden/read-only directory for
+ * this hotfix too, so this wiring is defined locally here, same posture).
+ * `DEFAULT_READY_SEASON`'s `id` intentionally reuses the exact
+ * `'season-placeholder-current'` literal `defaultLoadOutreachData`'s own
+ * fixture data (`FIXTURE_EVENTS`/`FIXTURE_GOAL_CONFIG`) is keyed to, so every
+ * pre-existing assertion below that renders fixture data keeps passing
+ * unchanged when no test overrides the resolved season id explicitly.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthUser } from '../../app/guards';
+import { SeasonProvider, type LoadActiveSeasonFn } from '../../app/SeasonProvider';
+import type { SeasonRow } from '../../lib/supabase/types';
 import { makeLoadOutreachData, makeSaveOutreachEvent } from '../../lib/supabase/loaders/outreach';
 import { LoginAs } from '../../test-utils/authHarness';
 
@@ -91,17 +106,40 @@ const STUDENT_OR_PARENT_USER: AuthUser = {
   role: 'student',
 };
 
-function renderAsUser(user: AuthUser | null, props: Parameters<typeof OutreachList>[0] = {}): void {
+// T106 (component module doc #12): `OutreachList` now calls
+// `useActiveSeason()` unconditionally, so every render needs a real
+// `<SeasonProvider>` ancestor. `id` reuses `defaultLoadOutreachData`'s own
+// fixture `seasonId` literal (module doc above) so existing fixture-data
+// assertions keep passing unchanged by default.
+const DEFAULT_READY_SEASON: SeasonRow = {
+  id: 'season-placeholder-current',
+  name: 'Fixture Season',
+  startsOn: '2025-08-01',
+  endsOn: '2026-06-30',
+  defaultGoalHours: 100,
+  isActive: true,
+  createdAt: '2025-08-01T00:00:00.000Z',
+};
+
+const DEFAULT_LOAD_ACTIVE_SEASON: LoadActiveSeasonFn = async () => DEFAULT_READY_SEASON;
+
+function renderAsUser(
+  user: AuthUser | null,
+  props: Parameters<typeof OutreachList>[0] = {},
+  loadActiveSeason: LoadActiveSeasonFn = DEFAULT_LOAD_ACTIVE_SEASON,
+): void {
   act(() => {
     root.render(
       <AuthProvider>
-        {user === null ? (
-          <OutreachList {...props} />
-        ) : (
-          <LoginAs user={user}>
+        <SeasonProvider loadActiveSeason={loadActiveSeason}>
+          {user === null ? (
             <OutreachList {...props} />
-          </LoginAs>
-        )}
+          ) : (
+            <LoginAs user={user}>
+              <OutreachList {...props} />
+            </LoginAs>
+          )}
+        </SeasonProvider>
       </AuthProvider>,
     );
   });
@@ -839,6 +877,88 @@ describe('<OutreachList /> student/parent view', () => {
     // The milestone tick itself is still shown as reached (a real, current
     // fact), independent of whether the one-time toast fires again.
     expect(container.textContent).toContain('25% reached');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T106 HOTFIX: `useActiveSeason()` wiring -- component module doc #12's four
+// states, the explicit-`seasonId`-prop override precedence, and (Required
+// Worker Output) direct proof that `loadData` is only ever called with a
+// real UUID-shaped season id resolved from `useActiveSeason()`, never with
+// the old `PLACEHOLDER_SEASON_ID` literal.
+// ---------------------------------------------------------------------------
+
+describe('<OutreachList /> useActiveSeason() wiring (T106 hotfix)', () => {
+  it('renders a loading state for the active season itself (not the outreach-data loading state) while useActiveSeason() is still `loading`, and never calls loadData', async () => {
+    const loadData = vi.fn(() => new Promise<OutreachLoadResult>(() => {}));
+    renderAsUser(COACH_USER, { loadData }, () => new Promise(() => {}));
+    await flushMicrotasks();
+    expect(container.textContent).toContain('Loading the active season');
+    expect(container.textContent).not.toContain('Loading outreach events');
+    expect(loadData).not.toHaveBeenCalled();
+  });
+
+  it('renders an honest "No active season yet" state for the real `\'none\'` case -- zero seasons in the database -- and never calls loadData', async () => {
+    const loadData = vi.fn(() =>
+      Promise.resolve(defaultLoadOutreachData('season-placeholder-current')),
+    );
+    renderAsUser(COACH_USER, { loadData }, async () => null);
+    await flushMicrotasks();
+    expect(container.textContent).toContain('No active season yet');
+    expect(loadData).not.toHaveBeenCalled();
+  });
+
+  it("renders the real SupabaseLoaderError message for the `'error'` case, and never calls loadData", async () => {
+    const loadData = vi.fn(() =>
+      Promise.resolve(defaultLoadOutreachData('season-placeholder-current')),
+    );
+    renderAsUser(COACH_USER, { loadData }, async () => {
+      throw { code: '42501', message: 'Permission denied.', cause: null };
+    });
+    await flushMicrotasks();
+    expect(container.textContent).toContain("Couldn't load the active season");
+    expect(container.textContent).toContain('Permission denied.');
+    expect(loadData).not.toHaveBeenCalled();
+  });
+
+  it("calls loadData with the real, resolved UUID-shaped active season id (never the old placeholder string) once useActiveSeason() is `'ready'`, with no explicit seasonId prop", async () => {
+    const REAL_UUID_SEASON_ID = '3fa2c1c4-9b3a-4a0a-8b3e-5a2b7a6c9d10';
+    let seasonIdSeenByLoadData: string | null = null;
+    const loadData = vi.fn(async (id: string) => {
+      seasonIdSeenByLoadData = id;
+      return defaultLoadOutreachData(id);
+    });
+    renderAsUser(COACH_USER, { loadData }, async () => ({
+      ...DEFAULT_READY_SEASON,
+      id: REAL_UUID_SEASON_ID,
+    }));
+    await flushMicrotasks();
+
+    expect(loadData).toHaveBeenCalledTimes(1);
+    expect(loadData).toHaveBeenCalledWith(REAL_UUID_SEASON_ID);
+    expect(seasonIdSeenByLoadData).toBe(REAL_UUID_SEASON_ID);
+    // The old hardcoded placeholder must never be the id passed to loadData.
+    expect(seasonIdSeenByLoadData).not.toBe('season-placeholder-current');
+  });
+
+  it("an explicit seasonId prop overrides useActiveSeason() outright, even when the hook is not `'ready'`, and loadData is called with the prop value", async () => {
+    let seasonIdSeenByLoadData: string | null = null;
+    const loadData = vi.fn(async (id: string) => {
+      seasonIdSeenByLoadData = id;
+      return defaultLoadOutreachData(id);
+    });
+    renderAsUser(
+      COACH_USER,
+      { loadData, seasonId: 'season-explicit-override' },
+      // The hook itself never resolves `'ready'` here (stays `'none'`) --
+      // the explicit prop must still win and render real data.
+      async () => null,
+    );
+    await flushMicrotasks();
+
+    expect(container.textContent).not.toContain('No active season yet');
+    expect(loadData).toHaveBeenCalledWith('season-explicit-override');
+    expect(seasonIdSeenByLoadData).toBe('season-explicit-override');
   });
 });
 
