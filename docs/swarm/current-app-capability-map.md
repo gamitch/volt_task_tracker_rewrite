@@ -1,7 +1,7 @@
 # Current App Capability Map — volt-timetracker.lovable.app
 
 Surveyed live via automated browser on 2026-07-20 (public app, no login, read-only
-navigation — no data was created or modified). This document is the ground-truth
+navigation — no data was created or modified). A richer HTML companion with embedded screenshots and the full capability matrix lives at `docs/swarm/current-app-capability-map.html` (self-contained, open in any browser) — keep the two in sync. This document is the ground-truth
 reference for scoping the coach-workflow parity epic in the VOLT Team Portal
 rewrite. Screenshots archived in the session scratchpad; key findings inlined
 here so this doc stands alone.
