@@ -4111,3 +4111,33 @@ Module doc #8c amended with a dated correction (history preserved); new doc #13
 records the investigation. 49/49 file tests, 1160/1160 full suite, all gates
 clean. NIT only: tests assert the anchor's href/text, not a navigation spy —
 matches the suite's existing convention, logged as optional hardening.
+
+---
+
+## T115 (PRD v2 SCH-02) — TopNav shows the real active season
+
+**PASS (1st attempt, NIT).** The "placeholder active season" label George saw on
+every page is gone. The load-bearing investigation — whether `TopNav` sits
+inside `SeasonProvider`'s context subtree — was independently verified by the
+checker against `AppShell.tsx`'s actual JSX: `<TopNav />` is passed as the
+Astryx AppShell's `topNav` prop *inside* `<SeasonProvider>`, and element-as-prop
+preserves context position, so no provider hoist was needed and `AppShell.tsx`
+is correctly untouched (the packet's conditional file, condition not met). The
+chromeless routes early-return before TopNav ever mounts.
+
+Control choice verified against Astryx's own documented guidance: the API doc
+literally advises against a Selector for fewer than three options, and under
+D-2 (George's single-combined-season decision) there is only ever one — so the
+worker built a non-interactive season display instead of a one-option dropdown,
+with historical switching explicitly deferred to `/settings/season` per §8
+simplicity. All four states are honest: skeleton while loading, muted "No
+active season" (never a fabricated year), a compact error badge with a real
+Retry wired to `refresh()` (a sound scaled-down interpretation of the
+ReportsShell precedent for a fixed-height nav slot), and the real season name
+when ready. Role gating byte-identical (admin/coach only). Every Astryx prop
+used was spot-verified against the API doc, including `Badge variant="error"`
+and the Button `children`-plus-`label` a11y pattern (checked against installed
+source). Repo-wide grep confirmed the old placeholder literal survives only in
+prose comments/test assertions; 9/9 new tests, full suite 1169/1169, all five
+gates clean. NIT only: one module-doc prop-accounting comment omits the
+Button's `children` usage — cosmetic, logged, no task.
