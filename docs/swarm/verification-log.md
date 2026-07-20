@@ -4256,3 +4256,38 @@ the assertion rather than the view — the correct direction.
 All five gates: T116's SQL-only change is clean; every observed failure traced
 to sibling T117/T118 mid-flight files, attributed honestly by both worker and
 checker.
+
+---
+
+## T118 (PRD v2 UXP-02) — expected-attendees checklist → planned RSVPs
+
+**PASS (1st attempt, NIT).** `OutreachEventDialog` gains the reference app's
+"Expected attendees" roster checklist (one Astryx `CheckboxList` per selected
+team, real `<label htmlFor>` per student — a11y verified against installed
+source; All/Clear scoped to the visible roster), and `saveOutreachEvent` fans
+checked students out to one planned RSVP per session (`status:'going'`,
+`responded_by` = the acting coach, upsert on `(session_id, student_id)`),
+re-reading final session ids through the existing `loadExistingSessions` so
+T101's never-delete-removed-days reconciliation is preserved untouched.
+
+The load-bearing protection rules were verified adversarially, not just by
+reading the happy path: deletion candidates must be `'going'` AND
+staff-entered AND no-longer-checked; a student's self-authored RSVP is
+excluded from BOTH the delete and the upsert side (the worker's disclosed
+symmetric extension — so a coach checking a student who self-declined
+persists nothing for them, preserving the student's own answer); rows with
+null `responded_by` (imports) can be claimed by a coach's check but never
+deleted by an uncheck. DDL findings verified against the real migrations
+(status vocabulary, nullable `responded_by`, unique key, `staff_all` covering
+the new DELETE). Backward compatibility proven: omitting the new optional
+payload fields skips reconciliation with zero RSVP calls, and the pre-existing
+suites pass unmodified. 1232/1232 tests across 55 files; all five gates green
+(the worker's earlier honest report of a build failure was sibling T117's
+then-half-written file, since resolved).
+
+Follow-ups logged, not fixed here: edit-mode roster prefill unwired (editing a
+real event opens an empty checklist until a page supplies
+`expectedStudentIds` derived from existing 'going' RSVPs); the new real
+`loadOutreachEventRoster` is built/tested but not yet consumed by the pages;
+product observation that a coach cannot override a student's own response is
+correct-by-rule but currently silent.

@@ -258,6 +258,148 @@
  *  - `HStack`/`VStack` ("Stack" section, `HStack`/`VStack` subsections):
  *    `gap`, `vAlign`, `wrap` used.
  *  - `Text` (line 829 section, Props table): `type="supporting"` used.
+ *
+ * -----------------------------------------------------------------------
+ * 11. T118 (UXP-02) -- "Expected attendees" roster checklist + planned-RSVP
+ *     fan-out. New scope on top of T039's original OUT-02 field set.
+ *
+ * 11a. RSVP DDL findings (read directly, not assumed, per this task's own
+ * packet Trap #1) -- `supabase/migrations/20260717000000_scheduling_
+ * attendance.sql` lines 67-76: `rsvps` has `status text not null check
+ * (status in ('going', 'maybe', 'declined'))`, `responded_by uuid
+ * references public.profiles (id) on delete restrict` (nullable), and
+ * `unique (session_id, student_id)` -- exactly the conflict target
+ * `submitRsvpChange` (`../../lib/supabase/loaders/outreach.ts`) already
+ * upserts on. "Planned RSVP" = `status = 'going'` (the only status this
+ * checklist ever writes -- checking someone off never writes `'maybe'`/
+ * `'declined'`, module doc below). `supabase/migrations/
+ * 20260717000002_rls.sql` lines 197-199: `staff_all` on `rsvps` is `for all
+ * ... using (is_staff()) with check (is_staff())` -- covers INSERT/UPDATE/
+ * DELETE for staff, already verified real (T114/SCH-04), so the loader's new
+ * delete-of-stale-staff-entered-rows step (module doc 11d below) needs no
+ * new policy.
+ *
+ * 11b. Field placement -- "Expected attendees" is NOT part of OUT-02's own
+ * literal field-order list (module doc at the top of this file quotes it in
+ * full; it predates UXP-02). Placed AFTER "Team scope" and BEFORE "Share to
+ * calendar feed": the checklist's own roster is scoped to whichever teams
+ * are currently selected (Known Context/Traps #4 of this task's packet --
+ * "scoped to the dialog's selected teams"), so it must render after that
+ * value is already resolved; the capability map's own "New event form"
+ * description (`docs/swarm/current-app-capability-map.md` line 65) also
+ * lists "Expected attendees" near the end of the form, after "Adult
+ * volunteers count". This is an additive field, not a reordering of any
+ * existing OUT-02 field -- the exact top-level field-order test
+ * (`OutreachEventDialog.test.tsx`) is updated to include it: the section's
+ * own TEAM-level group headers ("Ravens"/"Titans") do NOT add `<label>`
+ * entries (module doc 11c explains why), but each individual roster row
+ * DOES -- `CheckboxListItem` composes a real `CheckboxInput` internally
+ * (`isLabelHidden: true` only visually hides it via CSS, the `<label
+ * htmlFor>` element itself is still real and present, same accessible-name
+ * discipline every other checkbox/radio control in this design system
+ * already follows) -- confirmed directly against the fixture's own default
+ * roster (`DEFAULT_STUDENTS`, module doc 11e) when this task's own test
+ * first ran red. The default (all-teams-selected) state therefore inserts
+ * four individual student labels between "Team scope" and "Share to
+ * calendar feed" -- a real, disclosed, deliberately-updated expectation, not
+ * a pre-existing gap papered over.
+ *
+ * 11c. "Team chip groups" -- no dedicated `Chip`/`Badge`/`Tag` component
+ * exists anywhere in `docs/swarm/astryx-api.md` (grepped live for this task,
+ * zero matches). One `CheckboxList` per team, its own `label` prop set to
+ * the team's name, is the group-header treatment this same file already
+ * established for "Repeat on" (module doc #10's own Astryx citation) -- and
+ * per `CheckboxList`'s real implementation
+ * (`node_modules/@astryxdesign/core/dist/CheckboxList/CheckboxList.js`,
+ * `Field`'s `isGroupLabel: true`), that GROUP label renders a `<span>`, NOT
+ * a `<label htmlFor>` (`FieldLabel.js` line 57:
+ * `const LabelElement = isGroupLabel ? 'span' : 'label'`) -- so team NAMES
+ * never appear in the exact top-level `<label>` order test, same as
+ * "Repeat on"/"Schedule mode" already don't (module doc 11b above has the
+ * correction for the individual ITEM labels, which do appear). Every
+ * `CheckboxList` in this section shares ONE `value`/`onChange` pair
+ * (`expectedStudentIds` state) -- verified correct against
+ * `CheckboxListItem.js`'s own toggle logic
+ * (`ctx.onChange?.([...ctx.value, value], value)`), which always operates on
+ * the FULL array the enclosing `CheckboxList` was given, not a value
+ * filtered to that group's own children -- so toggling one team's student
+ * never drops another team's already-checked picks.
+ *
+ * 11d. Trap #2 rules, as implemented (worker packet's own load-bearing
+ * text, quoted): "unchecking removes only staff-entered planned RSVPs,
+ * NEVER a student's own RSVP." The real reconciliation math lives in
+ * `../../lib/supabase/loaders/outreach.ts`'s own new, independently-tested
+ * pure function `computeExpectedAttendeeRsvpPlan` (that file's own module
+ * doc has the full writeup); THIS file's only job is producing the two
+ * payload fields that function needs:
+ *   - `expectedStudentIds`: the checklist's checked ids, SANITIZED at
+ *     submit time (`resolveExpectedAttendeeIds` below) against whichever
+ *     roster rows are currently VISIBLE (active + on a currently-selected
+ *     team) -- a student hidden by a team-scope change is dropped from the
+ *     submitted set rather than silently carried through unioned with
+ *     whatever is on screen.
+ *   - `respondedBy`: `currentUserProfileId` (new injectable prop, same
+ *     auth-seam pattern `RsvpControl.tsx`'s `currentUserProfileId`/
+ *     `MarkDayCompleteDialog.tsx`'s `currentUserProfileId` already
+ *     established), defaulting to `PLACEHOLDER_CURRENT_COACH_PROFILE_ID`
+ *     below -- deliberately the SAME literal value
+ *     `MarkDayCompleteDialog.tsx`'s own `PLACEHOLDER_CURRENT_COACH_PROFILE_ID`
+ *     uses (`'profile-placeholder-current-coach'`), since both dialogs are
+ *     coach-only surfaces attributing a write to the identical real-world
+ *     actor (unlike `RsvpControl.tsx`'s own placeholder, which is a
+ *     student/parent viewer and deliberately uses a DIFFERENT literal per
+ *     that file's own module doc #7). Declared locally in this file (not
+ *     imported from `MarkDayCompleteDialog.tsx`) -- same "no cross-dialog
+ *     import" convention every sibling dialog in this directory already
+ *     follows.
+ *   Both fields are OPTIONAL on `SaveOutreachEventPayload` (never
+ *   `undefined` when the payload actually comes from THIS component's own
+ *   `handleSubmit`, which always populates them) specifically so pre-
+ *   existing loader-level tests that construct a bare `{event, sessions}`
+ *   payload literal (`OutreachList.test.tsx`/`OutreachDetail.test.tsx`,
+ *   both out of this task's own Allowed Files) keep compiling and passing
+ *   unchanged -- `makeSaveOutreachEvent`'s own module doc documents the
+ *   corresponding `undefined` = "skip roster reconciliation entirely"
+ *   backward-compatibility guard on the read side.
+ *
+ * 11e. Roster source (Known Context/Traps #4) -- `students` is a new,
+ * OPTIONAL prop defaulting to `DEFAULT_STUDENTS`, a standalone fabricated
+ * fixture (constitution item 6) -- same "independent duplicate, not a
+ * shared import" precedent this file's own `DEFAULT_TEAMS` already
+ * established (module doc above `DEFAULT_TEAMS`'s own declaration:
+ * `OutreachList.tsx`'s fixtures are a forbidden/read-only file here). The
+ * REAL reuse of `loaders/students.ts` this task's packet asks for
+ * ("reuse exportable pieces of loaders/students.ts... rather than
+ * duplicating mapping logic") lives in `../../lib/supabase/loaders/
+ * outreach.ts`'s own new `makeLoadOutreachEventRoster`/
+ * `loadOutreachEventRoster`, which wraps that file's own already-real
+ * `makeLoadStudentsTabData` (T089) rather than re-querying/re-mapping the
+ * `students` table here -- a ready, real default for this component's
+ * `students` prop that NO page wires in yet (`OutreachList.tsx`/
+ * `OutreachDetail.tsx` page-level wiring is out of this task's own Allowed
+ * Files, same disclosed-scope posture `submitRsvpChange`/`markDayComplete`
+ * already had before their own later wiring tasks landed).
+ *
+ * 11f. Edit-mode prefill -- `ExistingOutreachEvent` gains one new OPTIONAL
+ * field, `expectedStudentIds?: readonly string[]`. Optional specifically so
+ * `OutreachDetail.tsx`'s own `buildInitialOutreachEvent` (forbidden file,
+ * unmodified by this task, concurrently being touched by sibling T117) does
+ * not need to supply it to keep type-checking -- an edit-mode open with no
+ * `expectedStudentIds` on `initialEvent` simply prefills an empty checklist
+ * (a real, disclosed, honest gap: this page doesn't yet resolve "who
+ * currently has a planned RSVP" into this prop; a future wiring task would
+ * derive it from that event's real `rsvps` rows, status `'going'`, same
+ * shape `resolveExpectedAttendeeIds` already expects).
+ *
+ * 11g. Non-atomicity disclosure (Trap #3) -- the RSVP reconciliation this
+ * task adds is one MORE sequential, non-transactional Postgrest step tacked
+ * onto `makeSaveOutreachEvent`'s already-disclosed create/edit sequence
+ * (that file's own module doc 7 has the full writeup) -- no new transaction
+ * is invented; a failure partway through
+ * (event/sessions written, RSVP fan-out rejected) leaves the event/sessions
+ * committed with a stale/incomplete roster, surfaced to the coach as the
+ * same real, unmasked `SupabaseLoaderError` `handleSubmit`'s existing
+ * `catch` block already renders in the submit-error `Banner`.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
@@ -310,6 +452,17 @@ export interface OutreachTeamOption {
   name: string;
 }
 
+/** T118 (UXP-02) module doc 11e -- roster row shape for the "Expected
+ * attendees" checklist. `isActive` is carried through explicitly (not
+ * assumed) so `groupActiveRosterByTeam` below is provably filtering it, not
+ * silently trusting every row it's handed to already be active. */
+export interface OutreachRosterStudent {
+  id: string;
+  name: string;
+  teamId: string;
+  isActive: boolean;
+}
+
 export interface OutreachSessionDetail {
   startTime: ISOTimeString | undefined;
   endTime: ISOTimeString | undefined;
@@ -346,6 +499,15 @@ export interface CreateOutreachSessionPayload {
 export interface SaveOutreachEventPayload {
   event: CreateOutreachEventPayload;
   sessions: CreateOutreachSessionPayload[];
+  /** T118 (UXP-02) module doc 11d -- checked-roster student ids, already
+   * sanitized against the currently-visible roster (`resolveExpectedAttendeeIds`
+   * below). `undefined` only for callers that never supply roster info at
+   * all (back-compat, module doc 11d); this component's own `handleSubmit`
+   * always populates it (an empty array when nothing is checked). */
+  expectedStudentIds?: readonly string[];
+  /** T118 (UXP-02) module doc 11d -- the acting coach's real `profiles.id`,
+   * written verbatim to `rsvps.responded_by` for every fanned-out row. */
+  respondedBy?: string;
 }
 
 export type OnSaveOutreachEventFn = (payload: SaveOutreachEventPayload) => Promise<void>;
@@ -373,6 +535,11 @@ export interface ExistingOutreachEvent {
   adultVolunteerHours: number;
   shareToCalendarFeed: boolean;
   sessions: readonly ExistingOutreachEventSession[];
+  /** T118 (UXP-02) module doc 11f -- optional (back-compat, see that module
+   * doc) prefill for the "Expected attendees" checklist: the student ids
+   * that currently have a planned (`status='going'`) RSVP for this event.
+   * Absent/`undefined` prefills an empty checklist. */
+  expectedStudentIds?: readonly string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -388,6 +555,23 @@ const DEFAULT_TEAMS: readonly OutreachTeamOption[] = [
   { id: 'team-ravens', name: 'Ravens' },
   { id: 'team-titans', name: 'Titans' },
 ];
+
+/** T118 (UXP-02) module doc 11e -- standalone fabricated roster fixture
+ * (constitution item 6), same "independent duplicate, not a shared import"
+ * precedent `DEFAULT_TEAMS` above already established. */
+const DEFAULT_STUDENTS: readonly OutreachRosterStudent[] = [
+  { id: 'student-ravens-1', name: 'Riley Chen', teamId: 'team-ravens', isActive: true },
+  { id: 'student-ravens-2', name: 'Jordan Blake', teamId: 'team-ravens', isActive: true },
+  { id: 'student-titans-1', name: 'Sam Okafor', teamId: 'team-titans', isActive: true },
+  { id: 'student-titans-2', name: 'Casey Nguyen', teamId: 'team-titans', isActive: true },
+];
+
+/** T118 (UXP-02) module doc 11d -- same literal value
+ * `MarkDayCompleteDialog.tsx`'s own `PLACEHOLDER_CURRENT_COACH_PROFILE_ID`
+ * uses, deliberately (both are coach-only surfaces attributing a write to
+ * the same real-world actor); declared locally, not imported (module doc
+ * 11d). */
+export const PLACEHOLDER_CURRENT_COACH_PROFILE_ID = 'profile-placeholder-current-coach';
 
 // Module doc #6 -- BEH-07 smart default, daytime (distinct from
 // ScheduleMeetingsDialog's evening default), stand-in for "creator's
@@ -658,6 +842,41 @@ export function resolveTeamScope(
   return allSelected ? null : [...selectedTeamIds];
 }
 
+/** T118 (UXP-02) module doc 11c/11e -- active-students-scoped-to-selected-
+ * teams grouping for the "Expected attendees" checklist. Skips a team
+ * entirely when it has zero active students (UXD-05(b): an empty group
+ * yields its own space rather than rendering a header over nothing). */
+export function groupActiveRosterByTeam(
+  students: readonly OutreachRosterStudent[],
+  teams: readonly OutreachTeamOption[],
+  selectedTeamIds: readonly string[],
+): Array<{ team: OutreachTeamOption; students: OutreachRosterStudent[] }> {
+  const selectedSet = new Set(selectedTeamIds);
+  const groups: Array<{ team: OutreachTeamOption; students: OutreachRosterStudent[] }> = [];
+  for (const team of teams) {
+    if (!selectedSet.has(team.id)) continue;
+    const teamStudents = students.filter(
+      (student) => student.isActive && student.teamId === team.id,
+    );
+    if (teamStudents.length === 0) continue;
+    groups.push({ team, students: teamStudents });
+  }
+  return groups;
+}
+
+/** T118 (UXP-02) module doc 11d -- sanitizes a checked-id list against
+ * whichever roster ids are currently visible (used both for the payload's
+ * `expectedStudentIds` at submit time and for computing the "All"/"Clear"
+ * shortcuts' own target set). A student hidden by a team-scope change is
+ * dropped, never silently carried through. */
+export function resolveExpectedAttendeeIds(
+  checkedIds: readonly string[],
+  visibleRosterIds: readonly string[],
+): string[] {
+  const visibleSet = new Set(visibleRosterIds);
+  return checkedIds.filter((id) => visibleSet.has(id));
+}
+
 /** BEH-07 (module doc #4) -- the ONLY place the confirm button's label is
  * produced. Never a bare "Create event"/"Save changes"/"Submit"/"OK" alone
  * -- always states the computed session count. */
@@ -687,6 +906,12 @@ export interface OutreachEventDialogProps {
   onOpenChange: (isOpen: boolean) => void;
   /** Defaults to `DEFAULT_TEAMS` (fixture, module-level doc). */
   teams?: readonly OutreachTeamOption[];
+  /** T118 (UXP-02) module doc 11e -- defaults to `DEFAULT_STUDENTS`
+   * (fixture, module-level doc). */
+  students?: readonly OutreachRosterStudent[];
+  /** T118 (UXP-02) module doc 11d -- defaults to
+   * `PLACEHOLDER_CURRENT_COACH_PROFILE_ID`. */
+  currentUserProfileId?: string;
   /** Defaults to `defaultOnSaveEvent` (module doc #9). */
   onSaveEvent?: OnSaveOutreachEventFn;
   /** Present => "edit" mode, pre-filled from this existing event + its
@@ -698,6 +923,8 @@ export function OutreachEventDialog({
   isOpen,
   onOpenChange,
   teams = DEFAULT_TEAMS,
+  students = DEFAULT_STUDENTS,
+  currentUserProfileId = PLACEHOLDER_CURRENT_COACH_PROFILE_ID,
   onSaveEvent = defaultOnSaveEvent,
   initialEvent,
 }: OutreachEventDialogProps): ReactNode {
@@ -724,6 +951,8 @@ export function OutreachEventDialog({
   const [sessionDetails, setSessionDetails] = useState<Record<string, OutreachSessionDetail>>({});
 
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>(allTeamIds);
+  // T118 (UXP-02) -- "Expected attendees" checklist state.
+  const [expectedStudentIds, setExpectedStudentIds] = useState<string[]>([]);
   const [adultVolunteersCount, setAdultVolunteersCount] = useState<number>(0);
   const [adultVolunteerHours, setAdultVolunteerHours] = useState<number>(0);
   const [shareToCalendarFeed, setShareToCalendarFeed] = useState(true);
@@ -764,6 +993,10 @@ export function OutreachEventDialog({
       }
       setSessionDetails(details);
       setSelectedTeamIds(initialEvent.teamIds ?? allTeamIds);
+      // T118 (UXP-02) module doc 11f -- optional, back-compat prefill.
+      setExpectedStudentIds(
+        initialEvent.expectedStudentIds !== undefined ? [...initialEvent.expectedStudentIds] : [],
+      );
       setAdultVolunteersCount(initialEvent.adultVolunteersCount);
       setAdultVolunteerHours(initialEvent.adultVolunteerHours);
       setShareToCalendarFeed(initialEvent.shareToCalendarFeed);
@@ -784,6 +1017,7 @@ export function OutreachEventDialog({
       setCustomDatePicker(undefined);
       setSessionDetails({});
       setSelectedTeamIds(allTeamIds);
+      setExpectedStudentIds([]);
       setAdultVolunteersCount(0);
       setAdultVolunteerHours(0);
       setShareToCalendarFeed(true);
@@ -840,6 +1074,24 @@ export function OutreachEventDialog({
     countsVolunteerHours: competitionCountsVolunteerHours,
   });
 
+  // T118 (UXP-02) module doc 11c/11e -- roster scoped to currently-selected
+  // teams, grouped for the checklist below.
+  const rosterGroups = useMemo(
+    () => groupActiveRosterByTeam(students, teams, selectedTeamIds),
+    [students, teams, selectedTeamIds],
+  );
+  const visibleRosterIds = useMemo(
+    () => rosterGroups.flatMap((group) => group.students.map((student) => student.id)),
+    [rosterGroups],
+  );
+  // T118 (UXP-02) module doc 11d -- sanitized against the currently-visible
+  // roster; this is what's actually shown as "checked" (a stale pick for a
+  // now-hidden student never displays as checked) and what gets submitted.
+  const effectiveExpectedStudentIds = useMemo(
+    () => resolveExpectedAttendeeIds(expectedStudentIds, visibleRosterIds),
+    [expectedStudentIds, visibleRosterIds],
+  );
+
   const isValid = title.trim() !== '' && sessionsPayload.length > 0;
   const confirmLabel = computeConfirmLabel(isEditMode, sessionsPayload.length);
 
@@ -878,6 +1130,9 @@ export function OutreachEventDialog({
         shareToCalendarFeed,
       },
       sessions: sessionsPayload,
+      // T118 (UXP-02) module doc 11d -- always populated by this component.
+      expectedStudentIds: effectiveExpectedStudentIds,
+      respondedBy: currentUserProfileId,
     };
     try {
       await onSaveEvent(payload);
@@ -900,6 +1155,16 @@ export function OutreachEventDialog({
 
   function removeCustomDate(date: string): void {
     setCustomDates((prev) => prev.filter((d) => d !== date));
+  }
+
+  // T118 (UXP-02) module doc 11b -- "All"/"Clear" shortcuts, full-replace
+  // (not additive-union), scoped to whichever roster is currently visible.
+  function selectAllVisibleRoster(): void {
+    setExpectedStudentIds(visibleRosterIds);
+  }
+
+  function clearVisibleRoster(): void {
+    setExpectedStudentIds([]);
   }
 
   return (
@@ -1146,6 +1411,56 @@ export function OutreachEventDialog({
                 hasSelectAll
                 triggerDisplay="labels"
               />
+
+              {/* T118 (UXP-02) module doc 11b -- placed after Team scope
+                  (the roster is scoped to it) and before Share to calendar
+                  feed, matching the capability map's own "New event form"
+                  ordering. Module doc 11c -- one CheckboxList per team acts
+                  as the "team chip" group (no dedicated Chip component
+                  exists in this design system). */}
+              <VStack gap={2}>
+                <HStack gap={2} vAlign="center" wrap="wrap">
+                  <Text type="supporting">
+                    Expected attendees ({effectiveExpectedStudentIds.length} of{' '}
+                    {visibleRosterIds.length})
+                  </Text>
+                  <Button
+                    label="All"
+                    variant="ghost"
+                    size="sm"
+                    onClick={selectAllVisibleRoster}
+                    isDisabled={visibleRosterIds.length === 0}
+                  />
+                  <Button
+                    label="Clear"
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearVisibleRoster}
+                    isDisabled={effectiveExpectedStudentIds.length === 0}
+                  />
+                </HStack>
+                {rosterGroups.length === 0 ? (
+                  <Text type="supporting">No active students on the selected team(s) yet.</Text>
+                ) : (
+                  rosterGroups.map((group) => (
+                    <CheckboxList
+                      key={group.team.id}
+                      label={group.team.name}
+                      value={effectiveExpectedStudentIds}
+                      onChange={setExpectedStudentIds}
+                      hasDividers
+                    >
+                      {group.students.map((student) => (
+                        <CheckboxListItem
+                          key={student.id}
+                          label={student.name}
+                          value={student.id}
+                        />
+                      ))}
+                    </CheckboxList>
+                  ))
+                )}
+              </VStack>
 
               <Switch
                 label="Share to calendar feed"

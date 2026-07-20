@@ -10,6 +10,16 @@
  * Output" (CMP-02 flag visibility gating, the BEH-07/disabled-state
  * behavior, and the `notes` nullability precedent).
  *
+ * T118 (UXP-02) ADDITION: the "Expected attendees" checklist's own pure
+ * functions/UI/submit-payload tests, plus loader-level tests for
+ * `makeSaveOutreachEvent`'s new RSVP fan-out (`../../lib/supabase/loaders/
+ * outreach.ts`, module doc 7) -- same "import the real loader default
+ * directly and drive it with a fake `SupabaseClient`" precedent
+ * `MarkDayCompleteDialog.test.tsx`'s own `makeMarkDayComplete` tests already
+ * established, reused here since `OutreachList.test.tsx`/
+ * `OutreachDetail.test.tsx` (this repo's usual home for `saveOutreachEvent`
+ * tests) are both out of this task's own Allowed Files.
+ *
  * No `@testing-library/react` is installed in this repo (confirmed via
  * `package.json`) -- these tests use the same raw `createRoot`/`act` pattern
  * `ScheduleMeetingsDialog.test.tsx` established, plus its `getFieldControl`
@@ -29,6 +39,7 @@
  */
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildOutreachSessionsPayload,
@@ -39,13 +50,22 @@ import {
   generateMultiDaySessionDates,
   generateRecurringSessionDates,
   generateSingleSessionDates,
+  groupActiveRosterByTeam,
   OutreachEventDialog,
+  PLACEHOLDER_CURRENT_COACH_PROFILE_ID,
   resolveEventTypeFlags,
+  resolveExpectedAttendeeIds,
   resolveTeamScope,
   syncSessionDetails,
   type ExistingOutreachEvent,
+  type OutreachRosterStudent,
   type SaveOutreachEventPayload,
 } from './OutreachEventDialog';
+import {
+  computeExpectedAttendeeRsvpPlan,
+  makeLoadOutreachEventRoster,
+  makeSaveOutreachEvent,
+} from '../../lib/supabase/loaders/outreach';
 import type { ISOTimeString } from '@astryxdesign/core';
 
 /** Test-only cast for the branded `ISOTimeString` type -- every literal used
@@ -432,6 +452,70 @@ describe('resolveTeamScope', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// T118 (UXP-02) -- "Expected attendees" roster pure functions.
+// ---------------------------------------------------------------------------
+
+const TEAM_A = { id: 'team-a', name: 'Alpha' };
+const TEAM_B = { id: 'team-b', name: 'Beta' };
+const ROSTER: readonly OutreachRosterStudent[] = [
+  { id: 'student-1', name: 'Amara', teamId: 'team-a', isActive: true },
+  { id: 'student-2', name: 'Beto', teamId: 'team-a', isActive: false }, // inactive -- excluded.
+  { id: 'student-3', name: 'Cleo', teamId: 'team-b', isActive: true },
+];
+
+describe('groupActiveRosterByTeam (Known Context/Traps #4)', () => {
+  it('groups active students by team, scoped to selected teams, in team order', () => {
+    const groups = groupActiveRosterByTeam(ROSTER, [TEAM_A, TEAM_B], ['team-a', 'team-b']);
+    expect(groups).toEqual([
+      { team: TEAM_A, students: [ROSTER[0]] },
+      { team: TEAM_B, students: [ROSTER[2]] },
+    ]);
+  });
+
+  it('excludes inactive students', () => {
+    const groups = groupActiveRosterByTeam(ROSTER, [TEAM_A], ['team-a']);
+    expect(groups[0].students.map((s) => s.id)).toEqual(['student-1']);
+  });
+
+  it('skips a team with zero active students rather than rendering an empty group', () => {
+    const rosterWithNoBeta: readonly OutreachRosterStudent[] = [
+      { id: 'student-1', name: 'Amara', teamId: 'team-a', isActive: true },
+    ];
+    const groups = groupActiveRosterByTeam(
+      rosterWithNoBeta,
+      [TEAM_A, TEAM_B],
+      ['team-a', 'team-b'],
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0].team).toEqual(TEAM_A);
+  });
+
+  it('omits a team entirely when it is not in the selected-teams scope', () => {
+    const groups = groupActiveRosterByTeam(ROSTER, [TEAM_A, TEAM_B], ['team-a']);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].team).toEqual(TEAM_A);
+  });
+});
+
+describe('resolveExpectedAttendeeIds (Trap #2 sanitization)', () => {
+  it('keeps only ids present in the currently-visible roster', () => {
+    expect(resolveExpectedAttendeeIds(['student-1', 'student-3'], ['student-1'])).toEqual([
+      'student-1',
+    ]);
+  });
+
+  it('drops a hidden pick (e.g. a team-scope change hid that student)', () => {
+    expect(resolveExpectedAttendeeIds(['student-1', 'student-9'], ['student-1'])).toEqual([
+      'student-1',
+    ]);
+  });
+
+  it('returns an empty array when nothing is checked', () => {
+    expect(resolveExpectedAttendeeIds([], ['student-1'])).toEqual([]);
+  });
+});
+
 describe('computeConfirmLabel (BEH-07 / Known Context/Traps #4)', () => {
   it('never renders a bare "Create event"/"Save changes"/"Submit"/"OK" -- always states the computed session count', () => {
     expect(computeConfirmLabel(false, 0)).toBe('Create event — 0 sessions');
@@ -459,7 +543,14 @@ describe('<OutreachEventDialog /> field order (OUT-02 / constitution item 13)', 
     // elements (module doc #10 / precedent established in
     // ScheduleMeetingsDialog.test.tsx), so they are correctly absent here.
     // No session-detail rows render yet (no date picked), matching module
-    // doc #6.
+    // doc #6. T118 (UXP-02) module doc 11b/11c -- the "Expected attendees"
+    // checklist's own TEAM group headers ("Ravens"/"Titans") are real group
+    // labels too (same `isGroupLabel` treatment), absent here for the same
+    // reason -- but each individual roster row IS a real `<label htmlFor>`
+    // (`CheckboxListItem` composes a real, only-visually-hidden
+    // `CheckboxInput` label), so the default (all-teams-selected) fixture
+    // roster's four student names appear between "Team scope" and "Share to
+    // calendar feed".
     expect(labelTexts).toEqual([
       'Title ∙ Required',
       'Description ∙ Optional',
@@ -470,6 +561,10 @@ describe('<OutreachEventDialog /> field order (OUT-02 / constitution item 13)', 
       'Adult volunteers',
       'Adult volunteer hours',
       'Team scope',
+      'Riley Chen',
+      'Jordan Blake',
+      'Sam Okafor',
+      'Casey Nguyen',
       'Share to calendar feed',
     ]);
   });
@@ -827,5 +922,582 @@ describe('<OutreachEventDialog /> edit mode (module doc #8)', () => {
     expect(payload.sessions.map((s) => s.sessionDate)).toEqual(['2026-08-02', '2026-08-09']);
     expect(payload.sessions[0].peopleReached).toBe(100);
     expect(payload.sessions[1].peopleReached).toBeNull();
+  });
+
+  it('T118 (module doc 11f) prefills the checklist from initialEvent.expectedStudentIds', () => {
+    act(() => {
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          initialEvent={{ ...EXISTING_EVENT, expectedStudentIds: ['student-ravens-1'] }}
+        />,
+      );
+    });
+    const checkbox = getFieldControl('Riley Chen') as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+    const otherCheckbox = getFieldControl('Jordan Blake') as HTMLInputElement;
+    expect(otherCheckbox.checked).toBe(false);
+  });
+
+  it('T118 (module doc 11f) prefills an empty checklist when initialEvent.expectedStudentIds is absent', () => {
+    act(() => {
+      root.render(
+        <OutreachEventDialog isOpen onOpenChange={() => {}} initialEvent={EXISTING_EVENT} />,
+      );
+    });
+    const checkbox = getFieldControl('Riley Chen') as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T118 (UXP-02) -- "Expected attendees" checklist UI + submit payload.
+// ---------------------------------------------------------------------------
+
+describe('<OutreachEventDialog /> "Expected attendees" checklist (UXP-02)', () => {
+  it('renders the default fixture roster grouped by team, scoped to the currently-selected teams', () => {
+    act(() => {
+      root.render(<OutreachEventDialog isOpen onOpenChange={() => {}} />);
+    });
+    expect(document.body.textContent).toContain('Riley Chen');
+    expect(document.body.textContent).toContain('Jordan Blake');
+    expect(document.body.textContent).toContain('Sam Okafor');
+    expect(document.body.textContent).toContain('Casey Nguyen');
+    expect(document.body.textContent).toContain('Expected attendees (0 of 4)');
+  });
+
+  it('checking a roster item updates the visible count', () => {
+    act(() => {
+      root.render(<OutreachEventDialog isOpen onOpenChange={() => {}} />);
+    });
+    clickButton(getFieldControl('Riley Chen'));
+    expect(document.body.textContent).toContain('Expected attendees (1 of 4)');
+  });
+
+  it('"All" checks every currently-visible roster student; "Clear" unchecks all of them', () => {
+    act(() => {
+      root.render(<OutreachEventDialog isOpen onOpenChange={() => {}} />);
+    });
+    clickButton(findButtonByText('All') as HTMLButtonElement);
+    expect(document.body.textContent).toContain('Expected attendees (4 of 4)');
+    expect((getFieldControl('Riley Chen') as HTMLInputElement).checked).toBe(true);
+    expect((getFieldControl('Casey Nguyen') as HTMLInputElement).checked).toBe(true);
+
+    clickButton(findButtonByText('Clear') as HTMLButtonElement);
+    expect(document.body.textContent).toContain('Expected attendees (0 of 4)');
+    expect((getFieldControl('Riley Chen') as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('submits expectedStudentIds (sanitized to the visible roster) and respondedBy on Create', async () => {
+    const onSaveEvent = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(<OutreachEventDialog isOpen onOpenChange={() => {}} onSaveEvent={onSaveEvent} />);
+    });
+    const titleInput = getFieldControl('Title') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(titleInput, 'Community Food Bank Sort');
+    });
+    const dateInput = getFieldControl('Date') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(dateInput, '2026-07-22');
+    });
+    clickButton(getFieldControl('Riley Chen'));
+    clickButton(getFieldControl('Sam Okafor'));
+
+    clickButton(findButtonByText('Create event — 1 session') as HTMLButtonElement);
+    await flushMicrotasks();
+
+    const payload = onSaveEvent.mock.calls[0][0] as SaveOutreachEventPayload;
+    expect(payload.expectedStudentIds).toEqual(['student-ravens-1', 'student-titans-1']);
+    expect(payload.respondedBy).toBe(PLACEHOLDER_CURRENT_COACH_PROFILE_ID);
+  });
+
+  it('submits an empty expectedStudentIds array (not undefined) when nothing is checked', async () => {
+    const onSaveEvent = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(<OutreachEventDialog isOpen onOpenChange={() => {}} onSaveEvent={onSaveEvent} />);
+    });
+    const titleInput = getFieldControl('Title') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(titleInput, 'Community Food Bank Sort');
+    });
+    const dateInput = getFieldControl('Date') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(dateInput, '2026-07-22');
+    });
+    clickButton(findButtonByText('Create event — 1 session') as HTMLButtonElement);
+    await flushMicrotasks();
+
+    const payload = onSaveEvent.mock.calls[0][0] as SaveOutreachEventPayload;
+    expect(payload.expectedStudentIds).toEqual([]);
+  });
+
+  it('honors a custom currentUserProfileId prop as respondedBy', async () => {
+    const onSaveEvent = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          onSaveEvent={onSaveEvent}
+          currentUserProfileId="profile-coach-real"
+        />,
+      );
+    });
+    const titleInput = getFieldControl('Title') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(titleInput, 'X');
+    });
+    const dateInput = getFieldControl('Date') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(dateInput, '2026-07-22');
+    });
+    clickButton(findButtonByText('Create event — 1 session') as HTMLButtonElement);
+    await flushMicrotasks();
+    const payload = onSaveEvent.mock.calls[0][0] as SaveOutreachEventPayload;
+    expect(payload.respondedBy).toBe('profile-coach-real');
+  });
+
+  it('scopes the visible roster to the currently-selected teams via the injectable students/teams props', () => {
+    const teams = [
+      { id: 'team-a', name: 'Alpha' },
+      { id: 'team-b', name: 'Beta' },
+    ];
+    const students: readonly OutreachRosterStudent[] = [
+      { id: 'student-a', name: 'Ann', teamId: 'team-a', isActive: true },
+      { id: 'student-b', name: 'Bo', teamId: 'team-b', isActive: true },
+    ];
+    act(() => {
+      root.render(
+        <OutreachEventDialog isOpen onOpenChange={() => {}} teams={teams} students={students} />,
+      );
+    });
+    // Default team scope = every team selected -- both visible.
+    expect(document.body.textContent).toContain('Ann');
+    expect(document.body.textContent).toContain('Bo');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T118 (UXP-02) Trap #2 -- `computeExpectedAttendeeRsvpPlan`
+// (`../../lib/supabase/loaders/outreach.ts`), the pure reconciliation-math
+// function, exercised directly with no fake Supabase client.
+// ---------------------------------------------------------------------------
+
+describe('computeExpectedAttendeeRsvpPlan (Trap #2 load-bearing rule)', () => {
+  function rsvpRow(overrides: {
+    id: string;
+    sessionId: string;
+    studentId: string;
+    status?: 'going' | 'maybe' | 'declined';
+    respondedBy: string | null;
+  }) {
+    return {
+      id: overrides.id,
+      session_id: overrides.sessionId,
+      student_id: overrides.studentId,
+      status: overrides.status ?? 'going',
+      responded_by: overrides.respondedBy,
+      updated_at: '2026-07-01T00:00:00.000Z',
+      created_at: '2026-07-01T00:00:00.000Z',
+    };
+  }
+
+  it('fans a checked student out to every final session id', () => {
+    const plan = computeExpectedAttendeeRsvpPlan([], ['session-1', 'session-2'], ['student-1']);
+    expect(plan.idsToDelete).toEqual([]);
+    expect(plan.rowsToUpsert).toEqual([
+      { sessionId: 'session-1', studentId: 'student-1' },
+      { sessionId: 'session-2', studentId: 'student-1' },
+    ]);
+  });
+
+  it('Trap #2, literal: unchecking a student deletes ONLY a staff-entered planned RSVP', () => {
+    const existing = [
+      rsvpRow({
+        id: 'rsvp-staff',
+        sessionId: 'session-1',
+        studentId: 'student-staff-checked',
+        respondedBy: 'profile-coach-1', // staff-entered (responded_by !== student_id).
+      }),
+    ];
+    // student-staff-checked is no longer in the checked set -- unchecked.
+    const plan = computeExpectedAttendeeRsvpPlan(existing, ['session-1'], []);
+    expect(plan.idsToDelete).toEqual(['rsvp-staff']);
+  });
+
+  it('Trap #2, literal: unchecking a student NEVER deletes their own self-authored RSVP', () => {
+    const existing = [
+      rsvpRow({
+        id: 'rsvp-self',
+        sessionId: 'session-1',
+        studentId: 'student-self-rsvpd',
+        respondedBy: 'student-self-rsvpd', // self-authored: responded_by === student_id.
+      }),
+    ];
+    // student-self-rsvpd is not in the checked set (unchecked/never checked).
+    const plan = computeExpectedAttendeeRsvpPlan(existing, ['session-1'], []);
+    expect(plan.idsToDelete).toEqual([]);
+  });
+
+  it('extended rule: re-checking a student never overwrites their own self-authored row', () => {
+    const existing = [
+      rsvpRow({
+        id: 'rsvp-self',
+        sessionId: 'session-1',
+        studentId: 'student-self-rsvpd',
+        respondedBy: 'student-self-rsvpd',
+      }),
+    ];
+    // student-self-rsvpd IS checked in the UI -- still must not be upserted
+    // (would overwrite responded_by from self to the coach).
+    const plan = computeExpectedAttendeeRsvpPlan(existing, ['session-1'], ['student-self-rsvpd']);
+    expect(plan.rowsToUpsert).toEqual([]);
+    expect(plan.idsToDelete).toEqual([]);
+  });
+
+  it('does not delete a staff-entered row for a student who is still checked', () => {
+    const existing = [
+      rsvpRow({
+        id: 'rsvp-staff',
+        sessionId: 'session-1',
+        studentId: 'student-staff-checked',
+        respondedBy: 'profile-coach-1',
+      }),
+    ];
+    const plan = computeExpectedAttendeeRsvpPlan(
+      existing,
+      ['session-1'],
+      ['student-staff-checked'],
+    );
+    expect(plan.idsToDelete).toEqual([]);
+    // Still fanned out (idempotent upsert) -- same acting coach or a
+    // different one both simply overwrite the staff-entered row.
+    expect(plan.rowsToUpsert).toEqual([
+      { sessionId: 'session-1', studentId: 'student-staff-checked' },
+    ]);
+  });
+
+  it('never deletes a non-"going" row (e.g. a declined RSVP) even if staff-entered and unchecked', () => {
+    const existing = [
+      rsvpRow({
+        id: 'rsvp-declined',
+        sessionId: 'session-1',
+        studentId: 'student-declined',
+        status: 'declined',
+        respondedBy: 'profile-coach-1',
+      }),
+    ];
+    const plan = computeExpectedAttendeeRsvpPlan(existing, ['session-1'], []);
+    expect(plan.idsToDelete).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T118 (UXP-02) module doc 7 -- loader-level tests for `makeSaveOutreachEvent`'s
+// new RSVP fan-out phase. Same "inject a fake SupabaseClient chain" pattern
+// `MarkDayCompleteDialog.test.tsx`'s own `makeMarkDayComplete` tests
+// established.
+// ---------------------------------------------------------------------------
+
+describe('saveOutreachEvent (T118 RSVP fan-out phase)', () => {
+  it('is entirely skipped (zero rsvps-table calls) when expectedStudentIds is undefined (back-compat)', async () => {
+    const seasonMaybeSingleSpy = vi
+      .fn()
+      .mockResolvedValue({ data: { id: 'season-active-1' }, error: null });
+    const eventSingleSpy = vi
+      .fn()
+      .mockResolvedValue({ data: { id: 'event-created-1' }, error: null });
+    const eventInsertSpy = vi.fn(() => ({ select: vi.fn(() => ({ single: eventSingleSpy })) }));
+    const sessionsInsertSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+
+    const fromSpy = vi.fn((table: string) => {
+      if (table === 'seasons') {
+        return {
+          select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: seasonMaybeSingleSpy })) })),
+        };
+      }
+      if (table === 'events') return { insert: eventInsertSpy };
+      if (table === 'event_sessions') return { insert: sessionsInsertSpy };
+      throw new Error(`unexpected table: ${table}`);
+    });
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    const save = makeSaveOutreachEvent(() => client);
+    await save({
+      event: {
+        title: 'Food Bank Sort',
+        description: '',
+        locationName: 'X',
+        address: '',
+        type: 'outreach',
+        countsParticipation: false,
+        countsVolunteerHours: true,
+        teamIds: null,
+        adultVolunteersCount: 0,
+        adultVolunteerHours: 0,
+        shareToCalendarFeed: true,
+      },
+      sessions: [
+        {
+          sessionDate: '2026-08-01',
+          startsAt: '2026-08-01T14:00:00.000Z',
+          endsAt: '2026-08-01T16:00:00.000Z',
+          notes: '',
+          peopleReached: null,
+        },
+      ],
+      // expectedStudentIds/respondedBy deliberately omitted.
+    });
+
+    expect(fromSpy).not.toHaveBeenCalledWith('rsvps');
+  });
+
+  it('CREATE: fans checked students out to every newly-created session as planned (going) RSVPs', async () => {
+    const seasonMaybeSingleSpy = vi
+      .fn()
+      .mockResolvedValue({ data: { id: 'season-active-1' }, error: null });
+    const eventSingleSpy = vi
+      .fn()
+      .mockResolvedValue({ data: { id: 'event-created-1' }, error: null });
+    const eventInsertSpy = vi.fn(() => ({ select: vi.fn(() => ({ single: eventSingleSpy })) }));
+    const sessionsInsertSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+    const existingSessionsEqSpy = vi.fn().mockResolvedValue({
+      data: [
+        { id: 'session-created-1', session_date: '2026-08-01' },
+        { id: 'session-created-2', session_date: '2026-08-08' },
+      ],
+      error: null,
+    });
+    const rsvpsInSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const rsvpsUpsertSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+
+    const fromSpy = vi.fn((table: string) => {
+      if (table === 'seasons') {
+        return {
+          select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: seasonMaybeSingleSpy })) })),
+        };
+      }
+      if (table === 'events') return { insert: eventInsertSpy };
+      if (table === 'event_sessions') {
+        return {
+          insert: sessionsInsertSpy,
+          select: vi.fn(() => ({ eq: existingSessionsEqSpy })),
+        };
+      }
+      if (table === 'rsvps') {
+        return { select: vi.fn(() => ({ in: rsvpsInSpy })), upsert: rsvpsUpsertSpy };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    const save = makeSaveOutreachEvent(() => client);
+    await save({
+      event: {
+        title: 'Food Bank Sort',
+        description: '',
+        locationName: 'X',
+        address: '',
+        type: 'outreach',
+        countsParticipation: false,
+        countsVolunteerHours: true,
+        teamIds: null,
+        adultVolunteersCount: 0,
+        adultVolunteerHours: 0,
+        shareToCalendarFeed: true,
+      },
+      sessions: [
+        {
+          sessionDate: '2026-08-01',
+          startsAt: '2026-08-01T14:00:00.000Z',
+          endsAt: '2026-08-01T16:00:00.000Z',
+          notes: '',
+          peopleReached: null,
+        },
+        {
+          sessionDate: '2026-08-08',
+          startsAt: '2026-08-08T14:00:00.000Z',
+          endsAt: '2026-08-08T16:00:00.000Z',
+          notes: '',
+          peopleReached: null,
+        },
+      ],
+      expectedStudentIds: ['student-1'],
+      respondedBy: 'profile-coach-1',
+    });
+
+    expect(rsvpsInSpy).toHaveBeenCalledWith('session_id', [
+      'session-created-1',
+      'session-created-2',
+    ]);
+    expect(rsvpsUpsertSpy).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          session_id: 'session-created-1',
+          student_id: 'student-1',
+          status: 'going',
+          responded_by: 'profile-coach-1',
+        }),
+        expect.objectContaining({
+          session_id: 'session-created-2',
+          student_id: 'student-1',
+          status: 'going',
+          responded_by: 'profile-coach-1',
+        }),
+      ],
+      { onConflict: 'session_id,student_id' },
+    );
+  });
+
+  it('EDIT: unchecking a student deletes only their staff-entered planned RSVP, never a self-authored one', async () => {
+    const eventUpdateEqSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+    const eventUpdateSpy = vi.fn(() => ({ eq: eventUpdateEqSpy }));
+    const existingSessionsEqSpy = vi.fn().mockResolvedValue({
+      data: [{ id: 'session-existing-1', session_date: '2026-08-01' }],
+      error: null,
+    });
+    const sessionUpdateEqSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+    const sessionUpdateSpy = vi.fn(() => ({ eq: sessionUpdateEqSpy }));
+    const sessionsInsertSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+    const rsvpsInSpy = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: 'rsvp-staff-entered',
+          session_id: 'session-existing-1',
+          student_id: 'student-unchecked-staff',
+          status: 'going',
+          responded_by: 'profile-coach-old',
+          updated_at: '2026-07-01T00:00:00.000Z',
+          created_at: '2026-07-01T00:00:00.000Z',
+        },
+        {
+          id: 'rsvp-self-authored',
+          session_id: 'session-existing-1',
+          student_id: 'student-unchecked-self',
+          status: 'going',
+          responded_by: 'student-unchecked-self',
+          updated_at: '2026-07-01T00:00:00.000Z',
+          created_at: '2026-07-01T00:00:00.000Z',
+        },
+      ],
+      error: null,
+    });
+    const rsvpsDeleteInSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+    const rsvpsDeleteSpy = vi.fn(() => ({ in: rsvpsDeleteInSpy }));
+    const rsvpsUpsertSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+
+    const fromSpy = vi.fn((table: string) => {
+      if (table === 'events') return { update: eventUpdateSpy };
+      if (table === 'event_sessions') {
+        return {
+          select: vi.fn(() => ({ eq: existingSessionsEqSpy })),
+          update: sessionUpdateSpy,
+          insert: sessionsInsertSpy,
+        };
+      }
+      if (table === 'rsvps') {
+        return {
+          select: vi.fn(() => ({ in: rsvpsInSpy })),
+          delete: rsvpsDeleteSpy,
+          upsert: rsvpsUpsertSpy,
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    const save = makeSaveOutreachEvent(() => client);
+    await save({
+      event: {
+        id: 'event-existing-1',
+        title: 'Food Bank Sort (updated)',
+        description: '',
+        locationName: 'X',
+        address: '',
+        type: 'outreach',
+        countsParticipation: false,
+        countsVolunteerHours: true,
+        teamIds: null,
+        adultVolunteersCount: 0,
+        adultVolunteerHours: 0,
+        shareToCalendarFeed: true,
+      },
+      sessions: [
+        {
+          sessionDate: '2026-08-01',
+          startsAt: '2026-08-01T15:00:00.000Z',
+          endsAt: '2026-08-01T17:00:00.000Z',
+          notes: '',
+          peopleReached: 50,
+        },
+      ],
+      // Neither previously-RSVP'd student is checked anymore.
+      expectedStudentIds: [],
+      respondedBy: 'profile-coach-new',
+    });
+
+    // Only the staff-entered row is deleted -- the self-authored row's id
+    // never appears.
+    expect(rsvpsDeleteSpy).toHaveBeenCalledTimes(1);
+    expect(rsvpsDeleteInSpy).toHaveBeenCalledWith('id', ['rsvp-staff-entered']);
+    // Nothing to upsert (nothing checked).
+    expect(rsvpsUpsertSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T118 (UXP-02) Known Context/Traps #4 -- `makeLoadOutreachEventRoster`,
+// the ready-but-unwired roster loader that reuses `loaders/students.ts`.
+// ---------------------------------------------------------------------------
+
+describe('loadOutreachEventRoster (T118 Trap #4 -- reuses loaders/students.ts)', () => {
+  it('filters to isActive students only and reshapes to OutreachRosterStudent', async () => {
+    const studentsOrderSpy = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: 'student-1',
+          profile_id: null,
+          display_name: 'Amara',
+          team_id: 'team-ravens',
+          grad_year: null,
+          is_active: true,
+          goal_hours_override: null,
+          created_at: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          id: 'student-2',
+          profile_id: null,
+          display_name: 'Beto',
+          team_id: 'team-ravens',
+          grad_year: null,
+          is_active: false,
+          goal_hours_override: null,
+          created_at: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      error: null,
+    });
+    const fromSpy = vi.fn((table: string) => {
+      if (table === 'students') return { select: vi.fn(() => ({ order: studentsOrderSpy })) };
+      if (table === 'teams')
+        return {
+          select: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: [], error: null }) })),
+        };
+      if (table === 'invites')
+        return {
+          select: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: [], error: null }) })),
+        };
+      throw new Error(`unexpected table: ${table}`);
+    });
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    const loadRoster = makeLoadOutreachEventRoster(() => client);
+    const roster = await loadRoster();
+
+    expect(roster).toEqual([
+      { id: 'student-1', name: 'Amara', teamId: 'team-ravens', isActive: true },
+    ]);
   });
 });

@@ -238,6 +238,80 @@
  * called off), mirroring `loaders/meetings.ts`'s own
  * `makeCancelMeetingSession` "the ONE place this column is ever written"
  * discipline, scoped to a whole event's sessions instead of a single one.
+ *
+ * -----------------------------------------------------------------------
+ * 7. T118 (UXP-02) -- "Expected attendees" roster checklist fan-out, added
+ *    to `makeSaveOutreachEvent`'s existing create/edit sequence.
+ *
+ * RSVP DDL (re-confirmed directly against
+ * `supabase/migrations/20260717000000_scheduling_attendance.sql` lines
+ * 67-76 for this task): `rsvps.status text not null check (status in
+ * ('going', 'maybe', 'declined'))`, `responded_by uuid references
+ * public.profiles (id) on delete restrict` (nullable), `unique (session_id,
+ * student_id)`. "Planned RSVP" = `status = 'going'` -- the only status this
+ * feature ever writes. `staff_all` on `rsvps`
+ * (`supabase/migrations/20260717000002_rls.sql` lines 197-199) is `for all
+ * ... using (is_staff()) with check (is_staff())` -- covers the new DELETE
+ * this feature performs (SCH-04/T114-verified, already cited above), no new
+ * policy needed.
+ *
+ * `computeExpectedAttendeeRsvpPlan` below is the ONE place this
+ * reconciliation is computed -- a pure function, independent of any
+ * Supabase client, exercised directly by this file's own colocated tests
+ * (`OutreachEventDialog.test.tsx`, this task's own Allowed Files) without a
+ * fake-client harness. Load-bearing rule (worker packet Trap #2, quoted
+ * literally): "unchecking removes only staff-entered planned RSVPs, NEVER a
+ * student's own RSVP." Implemented as:
+ *   - DELETE candidates: existing rows that are BOTH `status === 'going'`
+ *     AND staff-entered (`responded_by !== null && responded_by !==
+ *     student_id`) AND no longer in the checked set. A self-authored row
+ *     (`responded_by === student_id`) is NEVER a deletion candidate, full
+ *     stop -- this is the literal Trap #2 rule.
+ *   - UPSERT candidates (fan-out): one `{status: 'going', responded_by}`
+ *     row per (checked student x every final session id) pair -- "RSVPs key
+ *     on SESSIONS, not events" (Trap #2's own text) -- EXCEPT pairs whose
+ *     existing row is already self-authored, which are skipped (left
+ *     completely untouched). This is a disclosed, deliberate EXTENSION
+ *     beyond the packet's literal deletion-only wording, applied for
+ *     internal consistency: overwriting a student's own `responded_by` with
+ *     the coach's id on the WRITE side would erase that row's
+ *     self-attribution (UXP-10's future activity feed reads `responded_by`
+ *     to label a row `self` vs staff-entered) just as effectively as
+ *     deleting it on the delete side, even though the row's `id` and
+ *     `status` might otherwise survive unchanged -- "never destroy a
+ *     student's own RSVP" is read as covering both directions, not only the
+ *     literal delete path. Flagged here for Foreman/Boss review as a
+ *     judgment call, not silently applied.
+ *
+ * `makeSaveOutreachEvent` wires this in as a THIRD phase, after the
+ * existing event+sessions writes (create OR edit) complete: it re-reads the
+ * event's final session ids (`loadExistingSessions`, the same loader the
+ * EDIT reconciliation above already uses -- re-used here for BOTH create
+ * and edit, so `insertSessions`'s own insert query is never modified to add
+ * a `.select('id')` return leg, which would have changed its Postgrest call
+ * shape for every caller, including this file's own pre-existing loader-
+ * level tests in `OutreachList.test.tsx`/`OutreachDetail.test.tsx` -- both
+ * out of this task's Allowed Files and therefore never touched), then loads
+ * every existing `rsvps` row already attached to those sessions, computes
+ * the plan, and performs the delete (if anything to delete) then the upsert
+ * (if anything to upsert). This step is ENTIRELY SKIPPED (zero extra
+ * network calls) when `payload.expectedStudentIds`/`payload.respondedBy`
+ * are `undefined` -- deliberate backward compatibility (`OutreachEventDialog.
+ * tsx`'s own module doc 11d has the full reasoning) so this file's own
+ * pre-existing tests that construct a bare `{event, sessions}` payload
+ * literal keep passing completely unchanged; the real `OutreachEventDialog`
+ * always supplies both fields (an empty array is a valid, meaningful
+ * "nothing currently checked" instruction that still runs the DELETE half
+ * of the reconciliation, clearing any now-stale staff-entered planned
+ * RSVPs).
+ *
+ * Trap #3 (non-atomicity) extended: this is one more sequential,
+ * non-transactional Postgrest step tacked onto the already-disclosed
+ * create/edit sequence -- a rejection here (e.g. an RLS `with check`
+ * failure) leaves the event/sessions already committed with a stale/
+ * incomplete roster, surfacing as the same real `SupabaseLoaderError`
+ * `OutreachEventDialog.tsx`'s existing submit-error `Banner` already
+ * renders.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createLoader, runMutation, type LoaderQueryResult } from '../loader';
@@ -263,8 +337,13 @@ import type {
 } from '../../../pages/outreach/OutreachDetail';
 import type {
   OnSaveOutreachEventFn,
+  OutreachRosterStudent,
   SaveOutreachEventPayload,
 } from '../../../pages/outreach/OutreachEventDialog';
+// T118 (UXP-02) module doc 7 -- reuses `loaders/students.ts`'s own already-
+// real `makeLoadStudentsTabData` (T089) rather than duplicating its raw
+// `students` query/mapping here.
+import { makeLoadStudentsTabData } from './students';
 
 // ---------------------------------------------------------------------------
 // Raw DB row shapes (snake_case, exactly as Postgrest returns them). Cited
@@ -861,6 +940,57 @@ export const markDayComplete: MarkDayCompleteFn = makeMarkDayComplete();
 // create (`OutreachList.tsx`) and edit (`OutreachDetail.tsx`). Module doc #5.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// T118 (UXP-02) module doc 7 -- the ONE pure function computing the
+// expected-attendees RSVP reconciliation plan (Trap #2). Independent of any
+// Supabase client -- exercised directly by `OutreachEventDialog.test.tsx`.
+// ---------------------------------------------------------------------------
+
+export interface ExpectedAttendeeRsvpPlan {
+  idsToDelete: string[];
+  rowsToUpsert: Array<{ sessionId: string; studentId: string }>;
+}
+
+/**
+ * Trap #2, literal + one disclosed extension (module doc 7 above has the
+ * full reasoning): a self-authored row (`responded_by === student_id`) is
+ * NEVER a deletion candidate and NEVER an upsert (overwrite) candidate --
+ * both directions are protected, not only the literal "unchecking deletes"
+ * path the packet's own text names.
+ */
+export function computeExpectedAttendeeRsvpPlan(
+  existingRsvps: readonly RsvpDbRow[],
+  sessionIds: readonly string[],
+  expectedStudentIds: readonly string[],
+): ExpectedAttendeeRsvpPlan {
+  const checkedSet = new Set(expectedStudentIds);
+  const selfAuthoredKeys = new Set(
+    existingRsvps
+      .filter((row) => row.responded_by !== null && row.responded_by === row.student_id)
+      .map((row) => `${row.session_id}:${row.student_id}`),
+  );
+
+  const idsToDelete = existingRsvps
+    .filter(
+      (row) =>
+        row.status === 'going' &&
+        row.responded_by !== null &&
+        row.responded_by !== row.student_id &&
+        !checkedSet.has(row.student_id),
+    )
+    .map((row) => row.id);
+
+  const rowsToUpsert: Array<{ sessionId: string; studentId: string }> = [];
+  for (const sessionId of sessionIds) {
+    for (const studentId of checkedSet) {
+      if (selfAuthoredKeys.has(`${sessionId}:${studentId}`)) continue;
+      rowsToUpsert.push({ sessionId, studentId });
+    }
+  }
+
+  return { idsToDelete, rowsToUpsert };
+}
+
 function toEventInsertPayload(event: SaveOutreachEventPayload['event']) {
   return {
     type: event.type,
@@ -936,7 +1066,7 @@ export function makeSaveOutreachEvent(
     getClient,
   );
 
-  async function createOutreachEvent(payload: SaveOutreachEventPayload): Promise<void> {
+  async function createOutreachEvent(payload: SaveOutreachEventPayload): Promise<string> {
     const activeSeason = await loadActiveSeasonId();
     if (activeSeason === null) {
       throw new Error(
@@ -951,6 +1081,10 @@ export function makeSaveOutreachEvent(
       // is left with a real "outreach" event row with zero sessions.
       await insertSessions({ eventId: createdEvent.id, sessions: payload.sessions });
     }
+    // T118 (UXP-02) module doc 7 -- `createdEvent.id` is now also needed by
+    // the RSVP-reconciliation phase below; `insertSessions`'s own query
+    // shape is deliberately left unchanged (module doc 7 explains why).
+    return createdEvent.id;
   }
 
   // Module doc #5 EDIT path -- reconciles by `sessionDate` (never deletes an
@@ -983,12 +1117,82 @@ export function makeSaveOutreachEvent(
     }
   }
 
-  return async (payload: SaveOutreachEventPayload): Promise<void> => {
-    if (payload.event.id === undefined) {
-      await createOutreachEvent(payload);
-      return;
+  // T118 (UXP-02) module doc 7 -- RSVP reconciliation phase. `loadRsvps`
+  // reuses the exact same `queryRsvpsForSessions` query function
+  // `makeLoadOutreachData`/`makeLoadOutreachDetail` above already use (not
+  // duplicated).
+  const loadRsvpsForEventSessions = createLoader<readonly string[], RsvpDbRow[]>(
+    queryRsvpsForSessions,
+    getClient,
+  );
+  const upsertExpectedAttendeeRsvps = runMutation<
+    { rows: readonly { sessionId: string; studentId: string }[]; respondedBy: string },
+    void
+  >(
+    (client, args) =>
+      client.from('rsvps').upsert(
+        args.rows.map((row) => ({
+          session_id: row.sessionId,
+          student_id: row.studentId,
+          status: 'going',
+          responded_by: args.respondedBy,
+          updated_at: new Date().toISOString(),
+        })),
+        { onConflict: 'session_id,student_id' },
+      ),
+    getClient,
+  );
+  const deleteRsvpsByIds = runMutation<readonly string[], void>(
+    (client, ids) =>
+      client
+        .from('rsvps')
+        .delete()
+        .in('id', [...ids]),
+    getClient,
+  );
+
+  // Module doc 7 -- shared by CREATE and EDIT; re-reads the event's final
+  // session ids via `loadExistingSessions` (already defined above for the
+  // EDIT path) rather than threading a return value through
+  // `insertSessions`'s own unmodified mutation.
+  async function reconcileExpectedAttendeeRsvps(
+    eventId: string,
+    expectedStudentIds: readonly string[],
+    respondedBy: string,
+  ): Promise<void> {
+    const sessionRows = (await loadExistingSessions(eventId)) ?? [];
+    const sessionIds = sessionRows.map((row) => row.id);
+    if (sessionIds.length === 0) return;
+
+    const existingRsvps = (await loadRsvpsForEventSessions(sessionIds)) ?? [];
+    const plan = computeExpectedAttendeeRsvpPlan(existingRsvps, sessionIds, expectedStudentIds);
+
+    if (plan.idsToDelete.length > 0) {
+      await deleteRsvpsByIds(plan.idsToDelete);
     }
-    await updateOutreachEvent(payload.event.id, payload);
+    if (plan.rowsToUpsert.length > 0) {
+      await upsertExpectedAttendeeRsvps({ rows: plan.rowsToUpsert, respondedBy });
+    }
+  }
+
+  return async (payload: SaveOutreachEventPayload): Promise<void> => {
+    let eventId: string;
+    if (payload.event.id === undefined) {
+      eventId = await createOutreachEvent(payload);
+    } else {
+      eventId = payload.event.id;
+      await updateOutreachEvent(eventId, payload);
+    }
+
+    // Module doc 7 -- deliberately gated on BOTH fields being present
+    // (back-compat guard, `OutreachEventDialog.tsx`'s own module doc 11d).
+    if (payload.expectedStudentIds !== undefined && payload.respondedBy !== undefined) {
+      await reconcileExpectedAttendeeRsvps(
+        eventId,
+        payload.expectedStudentIds,
+        payload.respondedBy,
+      );
+    }
   };
 }
 
@@ -1024,3 +1228,45 @@ export function makeCancelOutreachEvent(
 
 /** `OutreachDetail.tsx`'s own real default `onCancelEvent`. */
 export const cancelOutreachEvent: CancelOutreachEventFn = makeCancelOutreachEvent();
+
+// ---------------------------------------------------------------------------
+// T118 (UXP-02) module doc 7 / Known Context/Traps #4 -- a real, ready
+// roster loader for `OutreachEventDialog.tsx`'s new `students` prop. NOT
+// wired into any page by this task (`OutreachList.tsx`/`OutreachDetail.tsx`
+// page-level wiring is out of this task's own Allowed Files) -- same
+// disclosed-scope posture `submitRsvpChange`/`markDayComplete` above already
+// had before their own later wiring tasks landed.
+// ---------------------------------------------------------------------------
+
+export type LoadOutreachEventRosterFn = () => Promise<OutreachRosterStudent[]>;
+
+/**
+ * Reuses `loaders/students.ts`'s own already-real `makeLoadStudentsTabData`
+ * (T089, real `students` query + row mapping) rather than duplicating that
+ * table's query/mapping here (packet Trap #4: "reuse exportable pieces of
+ * loaders/students.ts... rather than duplicating mapping logic"). Filters to
+ * `isActive` only -- "Active students grouped by team chips" -- and reshapes
+ * `StudentRow` (`id`/`displayName`/`teamId`/`isActive`, `StudentsTab.tsx`'s
+ * own local type) into `OutreachEventDialog.tsx`'s own `OutreachRosterStudent`
+ * shape (`id`/`name`/`teamId`/`isActive`).
+ */
+export function makeLoadOutreachEventRoster(
+  getClient: () => SupabaseClient = getSupabaseClient,
+): LoadOutreachEventRosterFn {
+  const loadStudentsTab = makeLoadStudentsTabData(getClient);
+  return async (): Promise<OutreachRosterStudent[]> => {
+    const data = await loadStudentsTab();
+    return data.students
+      .filter((student) => student.isActive)
+      .map((student) => ({
+        id: student.id,
+        name: student.displayName,
+        teamId: student.teamId,
+        isActive: student.isActive,
+      }));
+  };
+}
+
+/** Ready real default -- not yet wired to `OutreachEventDialog`'s own
+ * `students` prop by any page (module doc above). */
+export const loadOutreachEventRoster: LoadOutreachEventRosterFn = makeLoadOutreachEventRoster();
