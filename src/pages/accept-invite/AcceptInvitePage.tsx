@@ -51,9 +51,19 @@
  * 2. Invite-data-loading seam: see `./types.ts`'s module doc in full. In
  *    short, `invites` RLS (`staff_all` only) forbids the read this page
  *    would need to perform, so "invitee name + role" is supplied via the
- *    `loadInvite` prop / `LoadInviteFn` seam below, not a live Supabase
- *    query. `defaultLoadInvite` in this file is an obviously-fake
- *    placeholder, not a real data source.
+ *    `loadInvite` prop / `LoadInviteFn` seam below. T102 (ED-1 Packet P13)
+ *    closes this gap for real: `loadInvite` now defaults to
+ *    `../../lib/supabase/loaders/accept.ts`'s `loadInvite` (imported below
+ *    as `realLoadInvite`), which reads the authenticated session's own
+ *    `user_metadata` (set by `send-invite`'s `inviteUserByEmail` call) plus
+ *    `profiles.display_name`, never `invites` directly -- see that module's
+ *    own doc comment for the full Trap #1/#2 investigation (why `invites`
+ *    is never queried, and why `status` can only ever honestly resolve
+ *    `'pending'` from a real session). `defaultLoadInvite` below is now
+ *    demoted to a named-exported fixture (same "no longer the implicit
+ *    default, kept for tests/disclosure" pattern `loaders/invites.ts`'s own
+ *    `defaultLoadInvitesTabData` already established) -- not the component's
+ *    default `loadInvite` anymore.
  *
  * 3. `guards.tsx`'s `Role` union previously (`'admin' | 'staff' |
  *    'volunteer' | 'coach'`, a stale T005 placeholder per that file's own
@@ -221,6 +231,7 @@ import {
 import { consumeIntendedUrl, useAuth } from '../../app/guards';
 import { updateUserPassword as defaultUpdateUserPassword } from '../../lib/supabase/auth';
 import type { AuthUser } from '../../lib/supabase/auth';
+import { loadInvite as realLoadInvite } from '../../lib/supabase/loaders/accept';
 import type { AcceptInviteData, InviteRole, InviteStatus, LoadInviteFn } from './types';
 
 /**
@@ -325,11 +336,13 @@ function withArticle(label: string): string {
 }
 
 /**
- * Fixture invite used by `defaultLoadInvite` below. Only meaningful if
- * this component is ever rendered without a `loadInvite` prop supplied
- * (e.g. before a real data-loading seam exists) -- see module doc gap #2.
+ * Fixture invite used by `defaultLoadInvite` below. T102: no longer wired
+ * as this component's implicit default (see module doc gap #2) -- kept as a
+ * named export, fixture literal unchanged, for tests (and any future
+ * caller) that want fixture behavior explicitly rather than a real
+ * `loadInvite` prop.
  */
-const DEFAULT_PLACEHOLDER_INVITE: AcceptInviteData = {
+export const DEFAULT_PLACEHOLDER_INVITE: AcceptInviteData = {
   name: 'Jordan Rivera',
   email: 'jordan.rivera@example.com',
   role: 'coach',
@@ -337,13 +350,15 @@ const DEFAULT_PLACEHOLDER_INVITE: AcceptInviteData = {
 };
 
 /**
- * Placeholder, obviously-fake default implementation of `LoadInviteFn` --
- * see `./types.ts` module doc and this file's module doc gap #2. Does NOT
- * call Supabase. Exists only so this component has *something* to call by
- * default; real callers (a future task's real seam, or a verification
- * harness) should pass their own `loadInvite` prop.
+ * Placeholder, obviously-fake implementation of `LoadInviteFn` -- see
+ * `./types.ts` module doc and this file's module doc gap #2. Does NOT call
+ * Supabase. T102: no longer this component's implicit default (that's now
+ * `realLoadInvite`, `../../lib/supabase/loaders/accept.ts`'s real `loadInvite`)
+ * -- kept as a named export for tests/disclosure, same pattern
+ * `loaders/invites.ts`'s own `defaultLoadInvitesTabData` already
+ * established.
  */
-async function defaultLoadInvite(token: string | null): Promise<AcceptInviteData> {
+export async function defaultLoadInvite(token: string | null): Promise<AcceptInviteData> {
   // `token` is intentionally unused -- this placeholder always returns the
   // same fixture invite regardless of what token (if any) was supplied.
   // A real implementation would use it to look up the actual invite.
@@ -366,10 +381,12 @@ interface FormBannerError {
 
 export interface AcceptInvitePageProps {
   /**
-   * Data-loading seam (see `./types.ts`). Defaults to the obviously-fake
-   * `defaultLoadInvite` placeholder when not supplied -- pass a real
-   * implementation (or fixture data, e.g. from a verification harness)
-   * here.
+   * Data-loading seam (see `./types.ts`). T102: defaults to the real
+   * `../../lib/supabase/loaders/accept.ts`'s `loadInvite` (session
+   * `user_metadata` + `profiles.display_name`, never `invites` directly --
+   * see that module's own doc comment for the full Trap #1/#2 investigation)
+   * when not supplied; tests pass a fake/fixture here instead of reaching a
+   * real backend.
    */
   loadInvite?: LoadInviteFn;
   /**
@@ -415,7 +432,7 @@ function getInviteStatusError(status: InviteStatus): FormBannerError | null {
 }
 
 export function AcceptInvitePage({
-  loadInvite = defaultLoadInvite,
+  loadInvite = realLoadInvite,
   updateUserPassword = defaultUpdateUserPassword,
 }: AcceptInvitePageProps = {}): ReactNode {
   const { loginWithGoogle, user, isLoading, noProfile } = useAuth();

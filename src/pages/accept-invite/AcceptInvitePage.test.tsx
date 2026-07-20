@@ -31,13 +31,27 @@
  * No `@testing-library/react` is installed in this repo (confirmed via
  * `package.json`) -- these tests use the same raw `createRoot`/`act`
  * pattern every other test file in this project already established.
+ *
+ * T102 (ED-1 Packet P13) addition: the `loadInvite (T102 real load, Trap
+ * #1/#2)` describe block at the bottom of this file tests
+ * `../../lib/supabase/loaders/accept.ts`'s `makeLoadInvite` directly against
+ * a stubbed `SupabaseClient` (never a real backend), same DI pattern
+ * `InvitesTab.test.tsx`'s `loadInvitesTabData` suite and
+ * `src/lib/supabase/loader.test.ts` already establish. Every test ABOVE that
+ * block is unchanged by T102 -- they all already inject their own
+ * `loadInvite` prop explicitly (see `renderAcceptInvitePage`'s default
+ * above), so swapping this page's own implicit `loadInvite` default
+ * (`defaultLoadInvite` -> the real `loadInvite`, see `AcceptInvitePage.tsx`'s
+ * module doc) does not affect them.
  */
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthModule } from '../../app/guards';
 import type { AuthChangeEvent, AuthSession, AuthUser } from '../../lib/supabase/auth';
+import { makeLoadInvite } from '../../lib/supabase/loaders/accept';
 import { AcceptInvitePage } from './AcceptInvitePage';
 import type { AcceptInviteData } from './types';
 
@@ -529,4 +543,154 @@ describe('<AcceptInvitePage /> premature navigation (T077)', () => {
       expect(findButtonByText('Set password')).toBeTruthy();
     },
   );
+});
+
+// ---------------------------------------------------------------------------
+// T102 (ED-1 Packet P13): `loadInvite` real load -- `../../lib/supabase/
+// loaders/accept.ts`'s `makeLoadInvite`, against a stubbed `SupabaseClient`
+// only (never a real backend). See that module's own doc comment for the
+// full Trap #1/#2 investigation this suite proves: `invites` is NEVER
+// queried (grep this file's `fromSpy` assertions below -- only `'profiles'`
+// is ever passed to `.from(...)`), and `status` only ever resolves
+// `'pending'` on success.
+// ---------------------------------------------------------------------------
+
+/** Real-shaped fake session whose `user.user_metadata` is caller-supplied --
+ * unlike this file's own `buildFakeSession` above (always empty metadata),
+ * these tests need to control `role`/`full_name`/`name` directly. */
+function buildFakeSessionWithMetadata(
+  id: string,
+  email: string | undefined,
+  userMetadata: Record<string, unknown>,
+): AuthSession {
+  return {
+    access_token: `fake-access-token-${id}`,
+    refresh_token: `fake-refresh-token-${id}`,
+    expires_in: 3600,
+    token_type: 'bearer',
+    user: {
+      id,
+      email,
+      app_metadata: {},
+      user_metadata: userMetadata,
+      aud: 'authenticated',
+      created_at: new Date(0).toISOString(),
+    },
+  } as AuthSession;
+}
+
+/** Stubs exactly the two chains `makeLoadInvite` uses:
+ * `client.auth.getSession()` (via `../../lib/supabase/auth.ts`'s
+ * `getInitialSession`) and `client.from('profiles').select('display_name')
+ * .eq('id', ...).maybeSingle().overrideTypes(...)` (same stub shape
+ * `auth.test.ts`'s own `buildFakeProfilesClient` already establishes for the
+ * identical chain). Nothing else on the client is ever touched -- in
+ * particular, `.from('invites')` is never called (Trap #1), asserted
+ * directly in the tests below via `fromSpy`. */
+function buildFakeAcceptClient(options: {
+  session: AuthSession | null;
+  profileRow?: { display_name: string } | null;
+  profileError?: { message: string; code?: string } | null;
+}): { client: SupabaseClient; fromSpy: ReturnType<typeof vi.fn> } {
+  const { session, profileRow = null, profileError = null } = options;
+  const getSession = vi.fn().mockResolvedValue({ data: { session }, error: null });
+  const overrideTypes = vi.fn().mockResolvedValue({ data: profileRow, error: profileError });
+  const maybeSingle = vi.fn().mockReturnValue({ overrideTypes });
+  const eq = vi.fn().mockReturnValue({ maybeSingle });
+  const select = vi.fn().mockReturnValue({ eq });
+  const fromSpy = vi.fn().mockReturnValue({ select });
+  const client = { auth: { getSession }, from: fromSpy } as unknown as SupabaseClient;
+  return { client, fromSpy };
+}
+
+describe('loadInvite (T102 real load, Trap #1/#2)', () => {
+  it('resolves { name, email, role, status: "pending" } from session.user_metadata + profiles.display_name -- never queries invites', async () => {
+    const session = buildFakeSessionWithMetadata('invite-user-real', 'riley.nguyen@example.com', {
+      role: 'student',
+      student_id: 'student-1',
+      invite_id: 'invite-1',
+    });
+    const { client, fromSpy } = buildFakeAcceptClient({
+      session,
+      profileRow: { display_name: 'Riley Nguyen' },
+    });
+    const load = makeLoadInvite(() => client);
+
+    const result = await load('some-token');
+
+    expect(result).toEqual({
+      name: 'Riley Nguyen',
+      email: 'riley.nguyen@example.com',
+      role: 'student',
+      status: 'pending',
+    });
+    expect(fromSpy).toHaveBeenCalledWith('profiles');
+    expect(fromSpy).not.toHaveBeenCalledWith('invites');
+  });
+
+  it('derives a fallback name from user_metadata.full_name when no profiles row exists yet', async () => {
+    const session = buildFakeSessionWithMetadata('invite-user-2', 'jordan.rivera@example.com', {
+      role: 'coach',
+      full_name: 'Jordan Rivera',
+    });
+    const { client } = buildFakeAcceptClient({ session, profileRow: null });
+    const load = makeLoadInvite(() => client);
+
+    const result = await load(null);
+
+    expect(result).toEqual({
+      name: 'Jordan Rivera',
+      email: 'jordan.rivera@example.com',
+      role: 'coach',
+      status: 'pending',
+    });
+  });
+
+  it("falls back to the local part of the email when no profiles row and no full_name/name metadata exist (mirrors the DB trigger's own formula)", async () => {
+    const session = buildFakeSessionWithMetadata('invite-user-3', 'taylor.morgan@example.com', {
+      role: 'parent',
+    });
+    const { client } = buildFakeAcceptClient({ session, profileRow: null });
+    const load = makeLoadInvite(() => client);
+
+    const result = await load(null);
+
+    expect(result.name).toBe('taylor.morgan');
+  });
+
+  it("rejects when no session is resolved (Supabase's own auth layer already rejected an invalid/expired/used link)", async () => {
+    const { client } = buildFakeAcceptClient({ session: null });
+    const load = makeLoadInvite(() => client);
+
+    await expect(load('bad-token')).rejects.toThrow();
+  });
+
+  it('rejects when the session has no recognizable role in user_metadata', async () => {
+    const session = buildFakeSessionWithMetadata('invite-user-4', 'no.role@example.com', {});
+    const { client } = buildFakeAcceptClient({ session });
+    const load = makeLoadInvite(() => client);
+
+    await expect(load(null)).rejects.toThrow();
+  });
+
+  it('rejects when the session has no email', async () => {
+    const session = buildFakeSessionWithMetadata('invite-user-5', undefined, { role: 'admin' });
+    const { client } = buildFakeAcceptClient({ session });
+    const load = makeLoadInvite(() => client);
+
+    await expect(load(null)).rejects.toThrow();
+  });
+
+  it('propagates a genuine profiles query error (not silently swallowed into a fallback name)', async () => {
+    const session = buildFakeSessionWithMetadata('invite-user-6', 'sam.lee@example.com', {
+      role: 'student',
+    });
+    const { client } = buildFakeAcceptClient({
+      session,
+      profileError: { message: 'permission denied for table profiles', code: '42501' },
+    });
+    const load = makeLoadInvite(() => client);
+
+    await expect(load(null)).rejects.toMatchObject({ code: '42501' });
+  });
 });

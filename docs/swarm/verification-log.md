@@ -3537,3 +3537,53 @@ prior checker this session has already routed as its own standalone follow-up.
 regex to isolate the resend call site rather than anchoring on a unique nearby marker
 — currently correct (only two call sites exist, in a stable order) but could silently
 drift if reordered; recommended hardening, not filed as blocking.
+
+---
+
+## T102 (ED-1 Packet P13) — real `AcceptInvitePage` invite lookup + `NoAccessPage` contact investigation
+
+**PASS (1st attempt, clean).** Checker independently re-derived this task's single
+most load-bearing claim against the actual SQL rather than trusting the worker's
+self-report: the worker's `loadInvite` (new `src/lib/supabase/loaders/accept.ts`)
+deliberately avoids treating "a `profiles` row already exists for this user" as
+terminal evidence of `status: 'accepted'`, deviating from the worker packet's own
+illustrative suggestion. Checker read `supabase/migrations/20260718000000_invite_trigger.sql`
+in full and confirmed the trigger fires on `auth.users` `email_confirmed_at`/
+`last_sign_in_at` transitioning NULL→NOT NULL — i.e. invite-**link-click** time, not
+password-set/Google-completion time — meaning a `profiles` row already exists for the
+extremely common "just clicked the link, about to set a password" case. Had the
+worker followed the packet's own illustrative example literally, every legitimate
+first-time invitee would have been incorrectly blocked from the account-setup form in
+production. This is exactly the class of finding the constitution's independent-
+verification requirement exists to catch.
+
+Also verified: `loadInvite` never queries `invites` directly (grep-confirmed only
+comment references), correctly sourcing `role`/`student_id`/`email` from the
+session's own `user_metadata` via the already-exported `getInitialSession()`; `name`
+resolves from `profiles.display_name` (RLS `profiles_read using(true)`, safe for a
+non-staff invitee, unlike `invites`' `staff_all`-only policy); the fallback name
+formula (`full_name` → `name` → email-local-part) matches
+`fn_handle_invite_acceptance`'s server-side formula semantically, verified clause by
+clause. `status` honestly resolves only `'pending'` on a successful session read
+(`'expired'/'revoked'/'accepted'` are genuinely undecidable client-side without
+`invites` read access); the pre-existing four-case `getInviteStatusError` switch is
+left intact for fixture-injected test scenarios. `NoAccessPage`'s Trap #3: real
+`profiles` query for `role='admin'` limit 2, uses the real `display_name` only when
+exactly one admin exists, else the pre-existing honest fallback copy; a disclosed
+sign-out-vs-query race (unawaited `logout()` effect vs. the new `loadData` effect,
+no ordering) is left as pre-existing out-of-scope architecture rather than
+speculatively fixed.
+
+25/25 new tests across the two touched test files (7 `loadInvite` + 5
+`loadNoAccessData` + baseline `NoAccessPage` render tests), independently confirmed
+non-tautological (assert `fromSpy` called with `'profiles'` and explicitly NOT
+`'invites'`, exact fallback-name-formula cases, real 42501-class error propagation,
+one/zero/two-or-more-admin branches). `npm run typecheck`/`lint`/`format:check`/
+`build` all clean for T102's 5 files; remaining repo-wide failures at check time were
+confined to sibling tasks T100/T101's own in-progress files (same shared working
+tree, disjoint scope, correctly not touched).
+
+NIT only: worker's self-reported test/suite counts drifted from the checker's own
+freshly-run numbers, fully explained by concurrent sibling-task progress in the
+shared tree between the worker's own last run and the checker's — logged for ledger
+accuracy, not a rework item.

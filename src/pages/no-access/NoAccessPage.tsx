@@ -45,8 +45,82 @@
  *    a missing Edge Function/RLS fix, and it is compounded by a "which
  *    team?" ambiguity specific to this screen (its caller by definition has
  *    no team association at all). `loadData`/`LoadNoAccessDataFn` below is
- *    the designed seam; `defaultLoadNoAccessData` is an obviously-fake
- *    placeholder, not a real data source.
+ *    the designed seam. T102 (ED-1 Packet P13) partially closes this gap --
+ *    see the "T102 -- Trap #3 investigation" section immediately below for
+ *    the full reasoning and the exact boundary of what is now real vs. what
+ *    remains an honest fallback.
+ * -----------------------------------------------------------------------
+ *
+ * -----------------------------------------------------------------------
+ * T102 (ED-1 Packet P13) -- Trap #3 investigation: is there a real,
+ * meaningful substitute for "team contact" at all?
+ *
+ * The packet's own suggestion: query `profiles` for any row with
+ * `role = 'admin'` and use its `display_name`, since "contact your coach or
+ * team admin" is already this page's own fallback framing, and a real
+ * admin's real name is a meaningfully better version of the same idea, not
+ * a different concept. Investigated below; the schema/RLS side of that
+ * suggestion checks out, but a second, independent ambiguity (already
+ * flagged in `./types.ts`'s own module doc, restated and resolved here)
+ * determines exactly how far this can honestly go.
+ *
+ * RLS check: `public.profiles`' `profiles_read` policy
+ * (`supabase/migrations/20260717000002_rls.sql`, read-only reference) is
+ * `for select to authenticated using (true)` -- ANY authenticated session,
+ * including this page's own caller (signed-in but with no matching
+ * `profiles`/`students`/`guardian_links` row at all -- the exact AUTH-04
+ * case), can read every `profiles` row, `role` included. There is no
+ * Trap-#1-style RLS block here (unlike `invites`' `staff_all`-only policy)
+ * -- a query for `role = 'admin'` genuinely returns real data for this
+ * caller, not a silent false-empty.
+ *
+ * The real, independent blocker is the ambiguity `./types.ts`'s own module
+ * doc already names: nothing in the schema designates any one admin as
+ * "the" contact -- `profiles` has no `is_primary`/`is_lead` flag, no
+ * per-team admin assignment, nothing. A team with two or more admins
+ * (entirely plausible -- a head coach and an assistant, say) gives this
+ * page no principled way to prefer one over the other; picking one
+ * arbitrarily (e.g. "just take the first row returned") would be inventing
+ * a disambiguation rule the schema has no real concept of, exactly the
+ * "fake single-contact concept" the packet warns against fabricating.
+ *
+ * DECISION (a middle path between the packet's two named outcomes, chosen
+ * because it is honestly derivable without inventing anything): query
+ * `profiles` for `role = 'admin'` rows. If EXACTLY ONE exists, its
+ * `display_name` is unambiguously "the" admin -- no disambiguation was
+ * needed, so using it is a real, meaningful, non-fabricated answer, not a
+ * guess. If ZERO or TWO-OR-MORE exist, there genuinely is no way to name
+ * one admin as "the" contact (zero: literally nothing to name; two-or-more:
+ * the exact ambiguity above), so this falls back to the pre-existing,
+ * honest, disclosed `FALLBACK_CONTACT_NAME` string -- never an arbitrary
+ * pick. This is `makeLoadNoAccessData`/`loadNoAccessData` below; the
+ * previous fixture (`defaultLoadNoAccessData`) is kept as a named export
+ * for tests/disclosure, no longer this component's implicit default, same
+ * "demoted fixture" pattern `../accept-invite/AcceptInvitePage.tsx`'s own
+ * T102 change and `../roster/InvitesTab.tsx`'s T087 change already
+ * established.
+ *
+ * DISCLOSED RISK: this page's own "Sign-out timing" decision below fires
+ * `logout()` on mount, in a SEPARATE effect from the contact-name lookup,
+ * with no explicit ordering/await between them. In a real browser, both
+ * network calls fire close together; if the client-side sign-out
+ * invalidates/clears the session before the `profiles` query's own request
+ * lands, that query would run unauthenticated and (per `profiles_read`'s
+ * `to authenticated` scoping) return zero rows -- indistinguishable, from
+ * this page's perspective, from "no admin profiles exist" (both fall back
+ * to `FALLBACK_CONTACT_NAME` via the same code path, never a crash or a
+ * stuck loading state, per the "Loading"/"Error" reasoning below). This
+ * means the real admin name may in practice often lose this race and never
+ * actually display, degrading silently to the same fallback every visit --
+ * a real, disclosed risk, not a correctness bug (the fallback framing is
+ * itself accurate copy, "contact your coach or team admin," so degrading to
+ * it is never wrong, only less specific than it could be). Deliberately NOT
+ * fixed by reordering/gating the two effects against each other in this
+ * task: the sign-out-on-mount timing itself is `NoAccessPage.tsx`'s own
+ * pre-existing, already-decided architecture (see "Sign-out timing
+ * decision" below, predates this task and is out of this packet's scope to
+ * revisit), and its own reasoning already explicitly accepts that the
+ * contact-name fetch's success is not security-relevant and may be sacrificed.
  * -----------------------------------------------------------------------
  *
  * Sign-out timing decision (this task's Acceptance Criterion 1: "decide and
@@ -93,8 +167,11 @@
  *     stakes of that specific missing detail are relative to what this
  *     screen actually guarantees (the sign-out and the independent RLS
  *     denial), and given there is nothing actionable a "Retry" would even
- *     offer (no real backend implementation exists to retry against yet;
- *     see gap #2 above).
+ *     offer (this screen has no button/affordance at all -- see the CLI
+ *     cross-check note above -- so there is nowhere to surface one even
+ *     now that T102 wires a real, sometimes-rejecting query behind this
+ *     seam; see the T102 Trap #3 section above for that query and its own
+ *     disclosed race-condition risk).
  *   - Populated/success: the ONE render this screen ever shows -- the
  *     `EmptyState` inside a `Card`, for this screen's entire lifetime, with
  *     `contactName` filled in from either the seam's resolved value or its
@@ -102,7 +179,10 @@
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { Card, Center, EmptyState, Heading, VStack } from '@astryxdesign/core';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { useAuth } from '../../app/guards';
+import { getSupabaseClient } from '../../lib/supabase/client';
+import { createLoader, type LoaderQueryResult } from '../../lib/supabase/loader';
 import type { LoadNoAccessDataFn, NoAccessData } from './types';
 
 /**
@@ -115,31 +195,86 @@ import type { LoadNoAccessDataFn, NoAccessData } from './types';
 const FALLBACK_CONTACT_NAME = 'your coach or team admin';
 
 /**
- * Placeholder, obviously-fake default implementation of
- * `LoadNoAccessDataFn` -- see `./types.ts` module doc and this file's
- * module doc gap #2. Does NOT call Supabase (no real mechanism exists
- * anywhere in the schema to call -- see gap #2). Exists only so this
- * component has *something* to call by default; real callers (a future
- * task's real seam, once the underlying schema gap is resolved, or a
- * verification harness) should pass their own `loadData` prop.
+ * Placeholder, obviously-fake implementation of `LoadNoAccessDataFn` -- see
+ * `./types.ts` module doc and this file's module doc gap #2. Does NOT call
+ * Supabase. T102: no longer this component's implicit default (that's now
+ * `loadNoAccessData` below) -- kept as a named export for tests/disclosure,
+ * same "demoted fixture" pattern this task's own
+ * `../accept-invite/AcceptInvitePage.tsx` change and `../roster/InvitesTab.tsx`'s
+ * (T087) `defaultLoadInvitesTabData` already established.
  */
-async function defaultLoadNoAccessData(): Promise<NoAccessData> {
+export async function defaultLoadNoAccessData(): Promise<NoAccessData> {
   return { contactName: FALLBACK_CONTACT_NAME };
 }
 
+/** Minimal raw projection of `public.profiles` -- only `display_name`, the
+ * one field `queryAdminProfiles`/`makeLoadNoAccessData` below need. */
+interface AdminContactDbRow {
+  display_name: string;
+}
+
+/**
+ * T102 -- Trap #3's real query: every `profiles` row with `role = 'admin'`
+ * (see module doc's "T102 -- Trap #3 investigation" section above for the
+ * full RLS/ambiguity reasoning). `.limit(2)` is a deliberate micro-
+ * optimization, not a correctness requirement: `makeLoadNoAccessData` below
+ * only ever needs to know whether the count is exactly one, zero, or "two
+ * or more" -- a second row is already enough to prove "two or more" without
+ * fetching every admin row that exists.
+ */
+async function queryAdminProfiles(
+  client: SupabaseClient,
+): Promise<LoaderQueryResult<AdminContactDbRow[]>> {
+  const result = await client
+    .from('profiles')
+    .select('display_name')
+    .eq('role', 'admin')
+    .order('created_at', { ascending: true })
+    .limit(2);
+  return { data: (result.data as AdminContactDbRow[] | null) ?? null, error: result.error };
+}
+
+/**
+ * `getClient` is injectable (defaults to the shared singleton), same
+ * convention every `loaders/*.ts` file in this codebase already established,
+ * so tests can supply a stubbed transport with zero real network calls --
+ * see `NoAccessPage.test.tsx`'s `loadNoAccessData (T102 real load, Trap #3)`
+ * block.
+ */
+export function makeLoadNoAccessData(
+  getClient: () => SupabaseClient = getSupabaseClient,
+): LoadNoAccessDataFn {
+  const loadAdminProfiles = createLoader<void, AdminContactDbRow[]>(queryAdminProfiles, getClient);
+  return async (): Promise<NoAccessData> => {
+    const admins = (await loadAdminProfiles()) ?? [];
+    // T102 Trap #3 decision: only an UNAMBIGUOUS single admin counts as a
+    // real "the contact" answer -- zero or two-or-more both fall back to
+    // the honest, disclosed FALLBACK_CONTACT_NAME rather than guessing (see
+    // module doc above for the full reasoning).
+    const contactName = admins.length === 1 ? admins[0].display_name : FALLBACK_CONTACT_NAME;
+    return { contactName };
+  };
+}
+
+/** Default `loadData` for `NoAccessPage` (T102) -- real `profiles` query,
+ * degrading to `FALLBACK_CONTACT_NAME` whenever no single admin can be
+ * unambiguously named (see module doc "T102 -- Trap #3 investigation"
+ * above), and via this page's own pre-existing silent-rejection handling
+ * (below) on any genuine query/transport failure too. */
+export const loadNoAccessData: LoadNoAccessDataFn = makeLoadNoAccessData();
+
 export interface NoAccessPageProps {
   /**
-   * Data-loading seam (see `./types.ts`). Defaults to the obviously-fake
-   * `defaultLoadNoAccessData` placeholder when not supplied -- pass a real
-   * implementation (or fixture data, e.g. from a verification harness)
-   * here.
+   * Data-loading seam (see `./types.ts`). T102: defaults to the real
+   * `loadNoAccessData` above (a `profiles` query for an unambiguous single
+   * admin, see module doc "T102 -- Trap #3 investigation") when not
+   * supplied; tests pass a fake/fixture here instead of reaching a real
+   * backend.
    */
   loadData?: LoadNoAccessDataFn;
 }
 
-export function NoAccessPage({
-  loadData = defaultLoadNoAccessData,
-}: NoAccessPageProps = {}): ReactNode {
+export function NoAccessPage({ loadData = loadNoAccessData }: NoAccessPageProps = {}): ReactNode {
   const { logout } = useAuth();
   const [contactName, setContactName] = useState(FALLBACK_CONTACT_NAME);
 
