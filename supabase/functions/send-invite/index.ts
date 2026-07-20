@@ -40,6 +40,7 @@ import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import {
   computeExpiresAt,
   evaluateResendEligibility,
+  INVITE_EXPIRY_DAYS,
   isResendRequestBody,
   validateInviteRequest,
   validateResendInviteRequest,
@@ -52,8 +53,14 @@ import {
 // own header comment for the full reasoning and the residual risk flagged
 // there (unverified against a live Supabase CLI/Docker bundler).
 import { SENDER_ADDRESS } from '../../../src/emails/layout/constants.ts';
-import { buildInviteFixtureBodyHtml, buildInviteFixturePreviewText } from '../../../src/emails/layout/inviteFixtureBody.ts';
 import { renderEmailLayout } from '../../../src/emails/layout/renderEmailLayout.ts';
+// T099 -- swaps T048's throwaway `inviteFixtureBody.ts` fixture for T049's
+// real, already-Passed "invite" template (`src/emails/templates/invite.tsx`).
+// Imported with the literal `.tsx` extension, matching the exact pattern
+// `send-reminders/index.ts` already uses for its own four template imports
+// from this same `src/emails/templates/**` directory under the Deno runtime
+// (verified by reading that file before making this change).
+import { buildInviteBodyHtml, buildInvitePreviewText } from '../../../src/emails/templates/invite.tsx';
 import { writeEmailLog, type EmailLogStatus } from './email_log.ts';
 import { resolveSendMode, sendBrandedEmail } from './resend.ts';
 
@@ -81,22 +88,44 @@ function errorResponse(status: number, code: string, message: string): Response 
 // T090 -- ED-1 Packet P3: resend branch orchestration.
 //
 // `buildResendInviteBodyHtml` is a resend-specific email body -- deliberately
-// NOT `buildInviteFixtureBodyHtml` (imported above, still used unchanged by
-// the send path below): that fixture has no `actionLink` slot, and
-// `src/emails/layout/inviteFixtureBody.ts` is a forbidden file for this task
-// (its own T048 packet owns it). Unlike the send path -- where Supabase's own
-// default `inviteUserByEmail` email already carries the real invite link, so
-// this task's branded Resend email never needed to embed one -- a resend has
-// no second "Supabase default" email going out (`inviteUserByEmail` cannot be
-// called again for the same address, which is this whole task's premise), so
-// the ONLY real, working invite link the recipient gets this time is the
-// fresh one from `generateLink()` below. It must be embedded here.
-function buildResendInviteBodyHtml(params: { role: string; actionLink: string }): string {
+// NOT T049's `buildInviteBodyHtml` (imported above, used unchanged by the
+// send path below): that template's copy is written for a first-time invite
+// ("You're invited...") and has no `actionLink` slot. Unlike the send path --
+// where Supabase's own default `inviteUserByEmail` email already carries the
+// real invite link, so this task's branded Resend email never needed to
+// embed one -- a resend has no second "Supabase default" email going out
+// (`inviteUserByEmail` cannot be called again for the same address, which is
+// this whole task's premise), so the ONLY real, working invite link the
+// recipient gets this time is the fresh one from `generateLink()` below. It
+// must be embedded here.
+//
+// T099: this function's closing line used to be a leftover copy of T048's
+// placeholder disclaimer sentence, wired in by mistake when T090 wrote this
+// function (this function itself was always real, non-fixture code -- the
+// stray sentence was just never replaced). `expiresInDays` is now a real,
+// explicit param -- `handleResendInvite` below always has a freshly computed
+// `expires_at` in scope by the time it calls this (AUTH-06: a resend resets
+// the expiry to a new 14-day window from now, see that function's own
+// comment above its `computeExpiresAt()` call), so this closing line reports
+// the real, current expiry rather than repeating T049's own default/fallback
+// value out of context.
+function buildResendInviteBodyHtml(params: { role: string; actionLink: string; expiresInDays: number }): string {
   return `
     <p style="margin:0 0 16px;">You've been invited to join <strong>VOLT Robotics</strong>'s team portal as a <strong>${params.role}</strong>.</p>
     <p style="margin:0 0 16px;"><a href="${params.actionLink}" style="color:#5b21b6;">Accept your invite</a> to finish setting up your account. This link replaces any earlier invite email you may have received.</p>
-    <p style="margin:0; color:#6b6480; font-size:13px;">(This is a placeholder message reusing T048's shared-layout fixture pattern -- T049 owns the real invite template content.)</p>
+    <p style="margin:0; color:#6b6480; font-size:13px;">This new invite link expires in ${params.expiresInDays} days.</p>
   `;
+}
+
+// T099: resend-specific preview text, alongside `buildResendInviteBodyHtml`
+// above. T049's `buildInvitePreviewText` ("You're invited to join...") was
+// written for a first-time invite; reusing it verbatim on a resend would
+// read as though this were the recipient's first invite email, which is
+// inaccurate (they already received -- and likely missed or lost -- an
+// earlier one). This mirrors the "link replaces any earlier invite email"
+// framing `buildResendInviteBodyHtml` already established above.
+function buildResendInvitePreviewText(params: { role: string }): string {
+  return `Your invite to join VOLT Robotics as a ${params.role} has been resent.`;
 }
 
 /**
@@ -203,8 +232,12 @@ async function handleResendInvite(body: Record<string, unknown>, adminClient: Su
   const sendMode = resolveSendMode();
 
   const emailHtml = renderEmailLayout({
-    previewText: buildInviteFixturePreviewText({ role: updatedInvite.role }),
-    bodyHtml: buildResendInviteBodyHtml({ role: updatedInvite.role, actionLink: linkData.properties.action_link }),
+    previewText: buildResendInvitePreviewText({ role: updatedInvite.role }),
+    bodyHtml: buildResendInviteBodyHtml({
+      role: updatedInvite.role,
+      actionLink: linkData.properties.action_link,
+      expiresInDays: INVITE_EXPIRY_DAYS,
+    }),
   });
 
   const sendResult = await sendBrandedEmail(
@@ -312,9 +345,15 @@ Deno.serve(async (req: Request) => {
   // profiles_read RLS policy is `for select to authenticated using (true)`
   // (supabase/migrations/20260717000002_rls.sql), so the caller-JWT client can
   // read its own row without needing the service-role client for this lookup.
+  //
+  // T099: `display_name` added to this same, already-necessary select (no
+  // extra round trip -- `profiles.display_name` is `not null`, per
+  // `supabase/migrations/20260716000000_identity_roster.sql` line 18) so the
+  // send path below has a real `inviterName` for T049's invite template,
+  // instead of investigating a separate lookup that doesn't need to exist.
   const { data: callerProfile, error: profileError } = await callerClient
     .from('profiles')
-    .select('id, role')
+    .select('id, role, display_name')
     .eq('id', callerId)
     .maybeSingle();
 
@@ -471,9 +510,16 @@ Deno.serve(async (req: Request) => {
   // or silently enables it.
   const sendMode = resolveSendMode();
 
+  // T099: real T049 template, not T048's fixture. `inviterName` uses the
+  // caller's own `display_name` (now selected above alongside `id`/`role`,
+  // no extra query) -- real, not omitted/guessed. `expiresInDays` is passed
+  // explicitly as `INVITE_EXPIRY_DAYS`, the same constant `computeExpiresAt`
+  // itself used to derive `expiresAt` above, per the template's own doc
+  // comment's stated preference for not relying on its internal default
+  // silently staying in sync with this file's real expiry logic.
   const emailHtml = renderEmailLayout({
-    previewText: buildInviteFixturePreviewText({ role }),
-    bodyHtml: buildInviteFixtureBodyHtml({ role }),
+    previewText: buildInvitePreviewText({ role, inviterName: callerProfile.display_name }),
+    bodyHtml: buildInviteBodyHtml({ role, inviterName: callerProfile.display_name, expiresInDays: INVITE_EXPIRY_DAYS }),
   });
 
   const sendResult = await sendBrandedEmail(

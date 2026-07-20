@@ -3486,3 +3486,54 @@ was never called), then restored the fix and confirmed all 16 tests pass again,
 repeated 3 consecutive times with no flakiness. Full suite: 1068/1068. This closes the
 current ED-1 wave (T086–T099 in progress) with the sole remaining item being T099
 (the live invite-email content bug), unrelated to this wave's data-wiring work.
+[2026-07-20T02:50:33Z] Worker finished. Checker required before completion.
+
+## T099 — URGENT: fix placeholder text in real invite emails
+
+**Result:** PASS (1st attempt, MINOR)
+
+George's real T052 production smoke test surfaced a live bug: invite emails sent via
+the deployed app showed literal internal placeholder text ("This is a placeholder
+message from T048's shared-layout fixture -- T049 owns the real invite template
+content") to a real recipient. Root cause: T049 (Passed, much earlier) built the real
+invite email template (`src/emails/templates/invite.tsx`) specifically to replace
+T048's throwaway fixture, and T049's own checker flagged at the time that
+`send-invite/index.ts` was never switched over — but no task's file scope covered both
+files at once, so the swap was never made. Fixed at all three call sites: the main send
+path (now calls the real `buildInviteBodyHtml`/`buildInvitePreviewText`, with a real
+`inviterName` sourced by widening an already-existing `profiles` query — zero extra
+round trip — and a real `expiresInDays` sourced from the same `INVITE_EXPIRY_DAYS`
+constant `computeExpiresAt()` itself uses), the resend path's preview text (a new,
+resend-specific framing rather than reusing first-time-invite copy, since a resend
+recipient already got an earlier email), and `buildResendInviteBodyHtml` (T090's own
+function, which had the same placeholder sentence copied verbatim into otherwise-real
+code — fixed with a real closing line using the same expiry value the resend handler
+already computes).
+
+**Checker verification (checker-content, Read/Glob/Grep only, explicitly disclosed its
+execution-access limitation):** independently confirmed the placeholder string is
+genuinely gone (grep, zero hits in shipped code), confirmed the `display_name
+not null` and `INVITE_EXPIRY_DAYS` claims against the real migration/`validation.ts`,
+confirmed the resend expiry "guaranteed to match by construction" claim by tracing the
+actual handler code, confirmed the old fixture file is genuinely still in use elsewhere
+(not dead code, correctly left untouched), confirmed zero stray scratch files remained.
+Explicitly flagged that the numeric test/build claims (53/53 deno tests, 2 pre-existing
+type errors, 1068/1068 vitest, etc.) were worker-self-reported and recommended
+independent execution-verification given the production-facing urgency.
+
+**Orchestrator independently closed that gap** (same posture as T083 earlier this
+session): ran `deno test` (53/53, matching exactly), `deno lint` (1 pre-existing
+`no-import-prefix` warning, matching), and — for the `deno check` claim specifically —
+verified via a genuinely isolated `git worktree` checkout at the pre-T099 commit
+(symlinking in `node_modules` after an initial false-negative from a missing
+dependency) that the 2 `TS2345`/`EmailLogWriter` type errors are truly pre-existing,
+not introduced by this fix. Ran the full frontend suite: `npm run typecheck` clean,
+`npm run lint` 0 errors/286 pre-existing warnings, `npx vitest run` 1068/1068,
+`npm run build` clean (bundle still well under the NFR-04 budget), `npm run
+format:check` clean except the same pre-existing, untouched `Kiosk.tsx` issue every
+prior checker this session has already routed as its own standalone follow-up.
+
+**Findings (non-blocking):** one test in the new file uses a positional first-match
+regex to isolate the resend call site rather than anchoring on a unique nearby marker
+— currently correct (only two call sites exist, in a stable order) but could silently
+drift if reordered; recommended hardening, not filed as blocking.
