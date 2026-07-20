@@ -3263,3 +3263,40 @@ state is safe. `RosterShell.test.tsx`: 14/14. Full suite: 1010/1010. Clean
 typecheck/lint/build; format:check clean except the same pre-existing, untouched
 `Kiosk.tsx` issue every prior checker this session has already confirmed and routed as a
 standalone follow-up.
+[2026-07-20T01:31:43Z] Worker finished. Checker required before completion.
+
+## T093 — URGENT: fix live CI bundle-size gate failure (NFR-04)
+
+**Result:** PASS (1st attempt, NIT)
+
+PR #1's CI failed on commit `b98c84e`: typecheck/lint/test/build all passed cleanly, but
+the initial route JS gzipped to 311,051 bytes against a 307,200-byte (300 KB) budget.
+`router.tsx` statically imported all 13 page components into one eager bundle; fixed by
+converting every route to `React.lazy(() => import(...))` behind a single shared
+`Suspense` boundary wrapping the whole `<Routes>` tree. `SettingsPage.tsx` needed a
+`.then()` adapter (it has no default export, verified directly, not guessed) — every
+other route uses a plain `lazy(() => import(...))`. A real, accessible `RouteLoadingFallback`
+(Astryx's `Spinner` with a visible label) replaces the blank-screen flash a `null`
+fallback would produce during route transitions — deliberately different from T085's
+`fallback={null}` precedent, which was only defensible for a small below-fold widget.
+`RequireAuth`/`RequireRole` guard nesting around each route is byte-for-byte unchanged.
+
+**Result: 311,051 → 198,091 bytes gzipped — 109 KB (~35.5%) of real headroom under
+budget, not a bare pass.** Worker went beyond the packet's required checks and actually
+ran the real Playwright e2e suite (72/72 passed across 4 browser projects), proving the
+lazy-loading works in a real browser, not just jsdom.
+
+**Checker verification:** independently re-derived every load-bearing claim from
+scratch. Confirmed all 13 exports' actual shapes (12 plain defaults, `SettingsPage`
+genuinely named-only). Confirmed the Suspense boundary is singular and correctly placed
+by reading the raw diff (only re-indentation inside each `<Route>`, zero guard-logic
+changes). Verified the `Spinner` accessibility claim against the actual installed
+Astryx source (`role="status"` + resolved `aria-label` render unconditionally when
+`label` is set). **Independently reproduced the exact CI gzip-sum gate script**,
+stashing the fix to confirm the before-number (311,051, matching the live CI failure
+exactly) and the after-number (198,091, matching the worker's claim exactly).
+1010/1010 unit tests, zero test files modified. **Independently ran the Playwright
+suite itself** and confirmed 72/72 real passes, including real-browser rendering of the
+lazy-loaded `/login`/`/accept-invite` forms. Clean typecheck/lint/build; format:check
+clean except the same pre-existing, untouched `Kiosk.tsx` issue every prior checker
+this session has already confirmed and routed as its own standalone follow-up.

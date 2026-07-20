@@ -19,6 +19,55 @@
  * `RequireRole`) -- every real role gets a valid dashboard, so there is no
  * "wrong role" case to exclude here.
  *
+ * T093 (this task, URGENT CI-failure fix): every page import below was
+ * converted from a static (eager) import to `React.lazy(() => import(...))`.
+ * `router.tsx` previously statically imported all 13 page components into
+ * one eager entry chunk; cumulative feature growth (the ED-1 data-wiring
+ * epic wiring real Supabase usage into most pages) pushed that chunk over
+ * the NFR-04 300 KB gzip budget by ~3.8 KB (live CI failure, PR #1 commit
+ * `b98c84e`). This is the exact `React.lazy` + `Suspense` pattern T085
+ * already used (and had checker-accessibility-verified) for one component,
+ * `AdminToggles.tsx` in `RosterShell.tsx` -- see that file's module doc #6
+ * for the precedent this follows.
+ *
+ * Export-shape check (not guessed -- every page file was read directly):
+ * every page component below has BOTH a named export and a `export default`
+ * (the `/login`/`/accept-invite` barrel `index.ts` files each re-export
+ * `default` from their real page file too), so a plain
+ * `lazy(() => import('...'))` resolves correctly for all of them -- EXCEPT
+ * `SettingsPage.tsx`, which has no `export default` at all (named export
+ * only), so its `lazy()` call uses the
+ * `.then((m) => ({ default: m.SettingsPage }))` adapter to satisfy
+ * `React.lazy`'s "module must have a `default` export" contract.
+ *
+ * `Suspense` boundary: ONE boundary wraps the entire `<Routes>` tree below
+ * (not one per `<Route>`). Reasoning: `<Routes>` only ever renders a single
+ * matched route's element at a time, so a single shared boundary already
+ * covers every possible route transition with no loss of granularity versus
+ * per-route boundaries -- it just avoids repeating the same
+ * `<Suspense fallback={...}>` wrapper 13 times for identical behavior.
+ * `RequireAuth`/`RequireRole` wrapping is unchanged from before this task
+ * (still nested exactly as it was per-route, still wraps the guard logic
+ * around what component renders) -- the lazy `<Suspense>` boundary sits
+ * OUTSIDE `<Routes>` itself, so guard evaluation (which does not depend on
+ * the lazy chunk having loaded) is unaffected by the loading state below.
+ *
+ * Fallback content: unlike T085's `AdminToggles` precedent (`fallback={null}`
+ * -- defensible there only because that was a small below-fold widget where
+ * nothing was ever in that slot before, so a brief empty window is
+ * invisible), a top-level ROUTE transition is user-visible navigation -- a
+ * `null` fallback here would read as a jarring blank-screen flash, and a
+ * screen-reader user gets no signal at all that navigation is in progress.
+ * `RouteLoadingFallback` below renders a real Astryx `Spinner` with a visible
+ * `label` (`Spinner` is the project's established DES-12 loading primitive
+ * per every other screen in `src/pages/**`, see `docs/swarm/astryx-api.md`
+ * "Spinner" section). `Spinner`'s own implementation
+ * (`node_modules/@astryxdesign/core/src/Spinner/Spinner.tsx`) already
+ * renders `role="status"` plus a resolved `aria-label` (falling back to
+ * "Loading" if unset) on its root element whenever a `label` is given, so no
+ * extra `aria-busy`/`VisuallyHidden` wrapper is needed here -- the
+ * accessible loading signal is built into the primitive itself.
+ *
  * Route protection matrix (NAV-06):
  *   - `/login`, `/accept-invite`: public (these ARE the auth entry points).
  *   - `/kiosk/:sessionId`: protected, restricted to `coach`/`admin`. PRD
@@ -39,22 +88,51 @@
  *     internal role-gating; the previous `RequireRole(['admin'])` wrap here
  *     was incorrect and has been removed).
  */
-import type { ReactNode } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { Route, Routes } from 'react-router-dom';
+import { Spinner, VStack } from '@astryxdesign/core';
 import { RequireAuth, RequireRole } from './guards';
-import { LoginPage } from '../pages/login';
-import { AcceptInvitePage } from '../pages/accept-invite';
-import { DashboardPage } from '../pages/home/DashboardPage';
-import { MeetingsList } from '../pages/meetings/MeetingsList';
-import LiveConsolePage from '../pages/meetings/LiveConsole';
-import { KioskPage } from '../pages/meetings/Kiosk';
-import { CheckinResult } from '../pages/checkin/CheckinResult';
-import { OutreachList } from '../pages/outreach/OutreachList';
-import { OutreachDetail } from '../pages/outreach/OutreachDetail';
-import { CalendarPage } from '../pages/calendar/CalendarPage';
-import { RosterShell } from '../pages/roster/RosterShell';
-import { ReportsShell } from '../pages/reports/ReportsShell';
-import { SettingsPage } from '../pages/settings/SettingsPage';
+
+// ---------------------------------------------------------------------------
+// Lazy page imports (T093) -- see module doc above for the export-shape
+// check and the `SettingsPage` adapter's reasoning.
+// ---------------------------------------------------------------------------
+
+const LoginPage = lazy(() => import('../pages/login'));
+const AcceptInvitePage = lazy(() => import('../pages/accept-invite'));
+const DashboardPage = lazy(() => import('../pages/home/DashboardPage'));
+const MeetingsList = lazy(() => import('../pages/meetings/MeetingsList'));
+const LiveConsolePage = lazy(() => import('../pages/meetings/LiveConsole'));
+const KioskPage = lazy(() => import('../pages/meetings/Kiosk'));
+const CheckinResult = lazy(() => import('../pages/checkin/CheckinResult'));
+const OutreachList = lazy(() => import('../pages/outreach/OutreachList'));
+const OutreachDetail = lazy(() => import('../pages/outreach/OutreachDetail'));
+const CalendarPage = lazy(() => import('../pages/calendar/CalendarPage'));
+const RosterShell = lazy(() => import('../pages/roster/RosterShell'));
+const ReportsShell = lazy(() => import('../pages/reports/ReportsShell'));
+// `SettingsPage.tsx` has no `export default` (named export only) -- adapt it
+// to the shape `React.lazy` requires instead of guessing it matches the
+// other 12 pages' default-export shape.
+const SettingsPage = lazy(() =>
+  import('../pages/settings/SettingsPage').then((module) => ({
+    default: module.SettingsPage,
+  })),
+);
+
+/**
+ * T093: the single `Suspense` fallback covering every route transition (see
+ * module doc above for why this differs from T085's `fallback={null}`
+ * precedent). A real `Spinner` with a visible label -- `Spinner` already
+ * carries `role="status"` + a resolved `aria-label` internally, so this is a
+ * fully accessible loading signal on its own, no extra wrapper needed.
+ */
+function RouteLoadingFallback(): ReactNode {
+  return (
+    <VStack gap={4} hAlign="center" padding={10}>
+      <Spinner label="Loading page…" />
+    </VStack>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Route path constants (for reuse by future nav/link code, e.g. T006)
@@ -87,106 +165,108 @@ export const routePaths = {
  */
 export function AppRoutes(): ReactNode {
   return (
-    <Routes>
-      {/* Public routes -- these are the auth entry points themselves. */}
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/accept-invite" element={<AcceptInvitePage />} />
+    <Suspense fallback={<RouteLoadingFallback />}>
+      <Routes>
+        {/* Public routes -- these are the auth entry points themselves. */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/accept-invite" element={<AcceptInvitePage />} />
 
-      {/* Protected + role-guarded: coach/admin only (PRD Section 7 + SEC-04). */}
-      <Route
-        path="/kiosk/:sessionId"
-        element={
-          <RequireAuth>
-            <RequireRole allowedRoles={['coach', 'admin']}>
-              <KioskPage />
-            </RequireRole>
-          </RequireAuth>
-        }
-      />
+        {/* Protected + role-guarded: coach/admin only (PRD Section 7 + SEC-04). */}
+        <Route
+          path="/kiosk/:sessionId"
+          element={
+            <RequireAuth>
+              <RequireRole allowedRoles={['coach', 'admin']}>
+                <KioskPage />
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
 
-      {/* Protected routes -- require authentication. */}
-      <Route
-        path="/"
-        element={
-          <RequireAuth>
-            <DashboardPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/meetings"
-        element={
-          <RequireAuth>
-            <MeetingsList />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/meetings/live/:sessionId"
-        element={
-          <RequireAuth>
-            <LiveConsolePage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/checkin"
-        element={
-          <RequireAuth>
-            <CheckinResult />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/outreach"
-        element={
-          <RequireAuth>
-            <OutreachList />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/outreach/:eventId"
-        element={
-          <RequireAuth>
-            <OutreachDetail />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/calendar"
-        element={
-          <RequireAuth>
-            <CalendarPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/roster"
-        element={
-          <RequireAuth>
-            <RosterShell />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/reports"
-        element={
-          <RequireAuth>
-            <ReportsShell />
-          </RequireAuth>
-        }
-      />
+        {/* Protected routes -- require authentication. */}
+        <Route
+          path="/"
+          element={
+            <RequireAuth>
+              <DashboardPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/meetings"
+          element={
+            <RequireAuth>
+              <MeetingsList />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/meetings/live/:sessionId"
+          element={
+            <RequireAuth>
+              <LiveConsolePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/checkin"
+          element={
+            <RequireAuth>
+              <CheckinResult />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/outreach"
+          element={
+            <RequireAuth>
+              <OutreachList />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/outreach/:eventId"
+          element={
+            <RequireAuth>
+              <OutreachDetail />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/calendar"
+          element={
+            <RequireAuth>
+              <CalendarPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/roster"
+          element={
+            <RequireAuth>
+              <RosterShell />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <RequireAuth>
+              <ReportsShell />
+            </RequireAuth>
+          }
+        />
 
-      {/* Protected -- T074: `RequireRole(['admin'])` removed, see module doc. */}
-      <Route
-        path="/settings"
-        element={
-          <RequireAuth>
-            <SettingsPage />
-          </RequireAuth>
-        }
-      />
-    </Routes>
+        {/* Protected -- T074: `RequireRole(['admin'])` removed, see module doc. */}
+        <Route
+          path="/settings"
+          element={
+            <RequireAuth>
+              <SettingsPage />
+            </RequireAuth>
+          }
+        />
+      </Routes>
+    </Suspense>
   );
 }
