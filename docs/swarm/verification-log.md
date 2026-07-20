@@ -4219,3 +4219,40 @@ no `'self'` value — UXP-03's self-write policy remains a genuinely-new later
 migration); the spine amended (UXP-01/02 unblocked immediately as pure
 frontend work); both capability-map files corrected where they misattributed
 the gap to RLS.
+
+---
+
+## T116 (PRD v2 SCH-03) — metric views migrate to membership-based D-3 semantics
+
+**PASS (1st attempt, NIT).** One additive migration re-creates
+`v_student_participation` with expectation derived from `student_teams` active
+memberships (`left_on is null`) and adds `v_team_hours` (sum of members'
+`v_student_hours` through active memberships — George's D-3 double-count rule).
+`v_student_hours` deliberately untouched (personal totals were already
+once-per-hour by construction); `v_team_participation` deliberately not
+re-created (pure downstream aggregate — inheritance verified empirically by
+both worker and checker, not assumed).
+
+The BLOCKER-class check — that the aggregation formulas didn't silently drift —
+was done by byte-diffing the SELECT-through-GROUP-BY block against the original:
+identical; the only edits are in the `expected` CTE's membership join. The
+checker then built its own scratch Postgres with its own fixtures (not the
+worker's script) and confirmed every D-3 property: a dual member's hours appear
+in BOTH teams' `v_team_hours` rows and once personally; a lapsed membership
+drops from team rollups and participation entirely while personal hours
+survive; one participation row per active membership team; and the original
+formula regressions (excused-shrinks-denominator, hours_override-wins) hold.
+
+The worker's consumer-risk report was spot-checked claim-by-claim and found
+precisely accurate — three real follow-ups now on the books: `ParticipationTab`
+keys its metric map by `studentId` alone (a dual member's second team row
+silently overwrites the first), and `loaders/meetings.ts` +
+`loaders/checkin.ts` both use `.limit(1)` participation queries that now pick
+an arbitrary team for dual members. Plus: wire `v_team_hours` into UXP-06's
+Hours-by-team widget when that packet lands. The worker also self-caught an
+arithmetic error in its own fixture expectations mid-verification and fixed
+the assertion rather than the view — the correct direction.
+
+All five gates: T116's SQL-only change is clean; every observed failure traced
+to sibling T117/T118 mid-flight files, attributed honestly by both worker and
+checker.
