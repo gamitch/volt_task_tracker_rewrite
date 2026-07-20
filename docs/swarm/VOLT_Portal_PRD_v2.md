@@ -134,11 +134,14 @@ judge information density honestly, not just verify elements exist.
   session of an event (each getting the same treatment as the existing per-day
   Mark Day Complete, including people-reached entry where applicable), with a
   clear per-day summary in the confirmation.
-- **UXP-08 · Event location (B6).** Additive `events.location` (free text now;
-  a venues table only if reuse demands it later). Shown in: create/edit forms,
-  event rows (UXD-02), detail pages, ICS `LOCATION` (the
-  `supabase/functions/ics/location.ts` seam), and reminder-email templates.
-  Email-template changes stay behind `RESEND_SEND_MODE` (constitution item 16).
+- **UXP-08 · Event location (B6) — RESOLVED AT PLANNING, no standalone task.**
+  Planning-pass verification (2026-07-20) found the backlog's B6 premise stale:
+  `events.location_name` + `events.address` already exist (`not null`, v1
+  schema), the event dialogs already collect them, detail pages show them, and
+  the ICS (`location.ts`) and reminder-email seams already exist. No migration,
+  no venues table (§7 item resolved). Remaining obligation folds into UXP-04:
+  event ROWS must display location per UXD-02, and UXP-04's checker verifies
+  ICS/email actually emit it end-to-end.
 - **UXP-09 · Event create/edit re-layout** per UXD-06, folding in UXP-01/02
   surfaces. Existing dialogs (`OutreachEventDialog`, `ScheduleMeetingsDialog`)
   may be retired or wrapped — architect's note: prefer one shared event-editor
