@@ -4141,3 +4141,40 @@ source). Repo-wide grep confirmed the old placeholder literal survives only in
 prose comments/test assertions; 9/9 new tests, full suite 1169/1169, all five
 gates clean. NIT only: one module-doc prop-accounting comment omits the
 Button's `children` usage — cosmetic, logged, no task.
+
+---
+
+## T113 (PRD v2 SCH-01) — `student_teams` membership junction + backfill
+
+**PASS (1st attempt, NIT).** The B2 foundation: a student can now belong to more
+than one team. One additive migration creating `student_teams` (PK
+`(student_id, team_id)`, `joined_on`/`left_on` dates, cascade-on-student /
+restrict-on-team FKs) with a same-migration backfill from `students.team_id`
+(which stays untouched as the legacy read path until SCH-03+ migrate readers).
+The deliberate absence of an `on conflict` guard on the backfill was assessed
+and accepted on its merits: migrations run once, and a genuine double-apply
+should fail loudly on the PK rather than be silently masked.
+
+The load-bearing RLS judgment — mirroring `teams` (`staff_all` writes +
+`read_all` select) rather than `students` (PII-gated) — was independently
+assessed, including a real leak analysis against the shipped RLS file: a
+non-staff session reading the junction learns only opaque UUID pairs and
+dates; minors' display names remain gated by `students`' own policies, and no
+existing join path re-exposes them. The worker's honest mid-task
+self-correction is noteworthy: it caught itself asserting an unverifiable
+claim about Postgres view/RLS owner-vs-invoker semantics and rewrote the
+migration comment to show `read_all` is the correct choice under either
+mechanism, stating the uncertainty plainly instead of papering over it.
+
+Checker verification was a full independent reproduction, not transcript
+review: its own scratch PostgreSQL 16 cluster, the real migration chain, its
+own fixtures — confirming the 1:1 backfill, PK duplicate rejection, dual
+membership working (the actual B2 goal), restrict/cascade behavior isolated to
+the junction's own FKs, and six RLS session tests (staff write OK;
+student/parent/orphan read OK, all writes blocked). Both new sibling
+migrations apply cleanly in chain order. All five frontend gates clean
+(SQL-only change). NITs logged, none blocking: the junction's `read_all`
+additionally exposes anonymous team-size aggregates (revisit one line when
+SCH-03 views land); the shared `supabase/tests/` harness needs a hardening
+pass to apply the modern chain without hand-scaffolding (process note, not a
+T113 defect).
