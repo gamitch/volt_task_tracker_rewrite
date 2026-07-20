@@ -34,17 +34,21 @@
  * which is indeed already correct).
  *
  * -----------------------------------------------------------------------
- * THE critical architecture gap this task cannot resolve within
- * `Kiosk.tsx` alone -- read in full before touching the QR/code code below
+ * T103 (ED-1 Packet P8) -- both previously-disclosed gaps below are now
+ * CLOSED. Kept in full (not deleted) because the ground-truth HMAC
+ * derivation scheme and the historical reasoning both remain load-bearing
+ * for understanding `loaders/kiosk.ts` and `supabase/functions/
+ * checkin-token/index.ts` (the new Edge Function this task added).
  * -----------------------------------------------------------------------
- * The QR token and short code this screen must display are HMAC-SHA256
- * outputs keyed by a server-only secret that must never appear in frontend
- * code or any client bundle (constitution item 5, BLOCKER-class -- this
- * component deliberately never types that secret's literal env-var name
- * anywhere in this file, including in comments, so a grep for it across
- * `src/` stays clean). The exact derivation scheme, cited verbatim from
- * `supabase/functions/checkin/hmac.ts`'s header comment (read-only
- * reference; that whole directory is forbidden to edit here) is:
+ * GAP #1 (now closed) -- the live QR token and short code this screen
+ * displays are HMAC-SHA256 outputs keyed by a server-only secret that must
+ * never appear in frontend code or any client bundle (constitution item 5,
+ * BLOCKER-class -- this component deliberately never types that secret's
+ * literal env-var name anywhere in this file, including in comments, so a
+ * grep for it across `src/` stays clean). The exact derivation scheme,
+ * cited verbatim from `supabase/functions/checkin/hmac.ts`'s header
+ * comment (read-only reference; that whole directory remains forbidden to
+ * edit) is:
  *
  *   1. `bucket = floor(unixSeconds / 60)` -- a 60-second time bucket
  *      anchored to the Unix epoch (not to the session's `starts_at`).
@@ -58,85 +62,52 @@
  *      `ABCDEFGHIJKLMNOPQRSTUVWXYZ23456789` (6 uppercase chars; note O
  *      and I ARE included -- only the digits 0/1 are excluded).
  *   6. QR encodes `https://portal.voltfrc.org/checkin?s=<sessionId>&t=<token>`
- *      (PRD MTG-06).
+ *      (PRD MTG-06) -- `buildCheckinUrl` below, exported specifically so
+ *      `loaders/kiosk.ts` can build the same URL from a real minted token
+ *      without re-deriving this shape a second time.
  *   7. Client-side display refresh cadence: ~45 seconds -- independent of
  *      the 60s server-side bucket; a display refresh, not a security
  *      boundary (the server accepts the current AND previous bucket
  *      regardless of when the display last refreshed).
  *
  * Computing step 3 requires the secret, which per constitution item 5 can
- * NEVER exist in `src/` -- so this page structurally cannot derive the real
- * token/short code itself. `checkin`'s Edge Function (T032, already built)
- * only *validates* a presented token/code; it has no endpoint that *mints*
- * one for a given `sessionId`, and there is currently NO Edge Function
- * anywhere in this repo that can safely hand this screen a display-ready
- * token/code without exposing the secret. This is GAP #1 below -- a real,
- * unresolved infrastructure gap, not solvable inside this file's Allowed
- * Files (a new/extended Edge Function is out of scope here; `supabase/
- * functions/checkin/**` is a forbidden directory for this task).
+ * NEVER exist in `src/` -- this page still structurally cannot derive the
+ * real token/short code itself, which is exactly why T103 added a new,
+ * dedicated Edge Function (`supabase/functions/checkin-token/index.ts`) --
+ * a coach/admin's authenticated browser session calls it, and it mints
+ * step 3's digest server-side (reusing, read-only, `checkin/hmac.ts`'s own
+ * `tokenFor`/`shortCodeFor`/`bucketFor` -- see that new function's own
+ * module doc for the full cross-directory-import investigation), returning
+ * only the already-derived token/short code, never the secret itself.
+ * `loaders/kiosk.ts`'s `loadKioskDisplayToken` (this page's real default
+ * `loadDisplayToken`, wired in below) calls that function and maps its
+ * response into this page's own `KioskDisplayToken` shape.
  *
- * What this file does instead, per the worker packet's explicit
- * instruction not to fabricate a fake network call or silently invent a
- * workaround: builds the COMPLETE real UI -- real `qrcode.react` QR
- * rendering (`QRCodeSVG`, the constitution-item-9-allowlisted dependency;
- * no hand-rolled QR encoding anywhere in this file), a real short-code
- * display, a real `aria-live="polite"` tally region, and a real ~45s
- * client-side refresh cadence (`usePolling` below, independently testable
- * with fake timers regardless of what the loader returns) -- wired against
- * an explicit, obviously-a-placeholder data-fetching seam
- * (`useKioskDisplayToken`/`useKioskTally`, mirroring the exact `loadData`
- * prop-injection pattern `NoAccessPage.tsx`/T020 already established in
- * this codebase). The QR/short-code seam's SHIPPED default
- * (`fixtureLoadKioskDisplayToken`) returns clearly-fixture-labeled,
- * obviously-fake values (`FIXTURE_QR_TOKEN`/`FIXTURE_SHORT_CODE` below --
- * neither is valid hex nor a value the real alphabet-mapping algorithm
- * could ever produce from a real digest) so the QR-rendering pipeline
- * itself is genuinely exercised end-to-end, paired with a permanent,
- * non-dismissable `Banner` disclosing that this is fixture data, not a
- * live token -- exactly the packet's "clearly-fixture-labeled data from a
- * local stub" option, not the "make it look production-real" one it
- * explicitly forbids.
+ * The `useKioskDisplayToken`/`useKioskTally`/`useKioskSessionTitle` seams
+ * below (mirroring the exact `loadData` prop-injection pattern
+ * `NoAccessPage.tsx`/T020 already established in this codebase) are
+ * unchanged in shape by T103 -- only their SHIPPED DEFAULTS moved from the
+ * fixture/`null`-returning stubs below (`fixtureLoadKioskDisplayToken`/
+ * `notWiredLoadKioskTally`/`notWiredLoadKioskSessionTitle`, all three still
+ * exported, unchanged, for tests and any future harness that wants an
+ * explicit stub -- same "the fixture function itself is untouched and
+ * still exported for tests" precedent `loaders/invites.ts`'s own module doc
+ * already establishes for its analogous fixture/real-default swap) to the
+ * real `loaders/kiosk.ts` functions.
  *
  * -----------------------------------------------------------------------
- * GAP #2 -- the live tally, treated deliberately DIFFERENTLY from GAP #1
+ * GAP #2 (now closed) -- the live tally and session title.
  * -----------------------------------------------------------------------
  * `attendance`'s RLS is `staff_all` (full access) + `own_or_linked_read`
- * (own rows only). Since this route is coach/admin-only, a real
- * implementation of `useKioskTally` COULD legitimately read a full
- * per-session checked-in/expected count once a real Supabase client
- * exists -- there is no RLS gap on this specific screen. The only reason
- * this cannot be wired live today is that no shared Supabase client exists
- * anywhere in `src/` yet (grep-confirmed below: zero hits for
- * `createClient`/`supabase-js` under `src/`). This is a fundamentally
- * different, much shallower gap than GAP #1 (a missing shared client, not
- * a missing secure endpoint), so it is flagged separately here.
- *
- * Precisely BECAUSE this gap is "just" a missing client (not a missing
- * secure primitive), this file deliberately does NOT fabricate plausible-
- * looking placeholder integers for the tally (e.g. "0 of 0" or "12 of 18")
- * the way GAP #1's fixture QR/code do -- two bare numbers on a real kiosk
- * screen are far more likely to be mistaken for a genuine live count than
- * an already-gibberish-looking QR/short code is. Instead,
- * `notWiredLoadKioskTally` (the shipped default `useKioskTally` loader)
- * resolves to `null`, and the tally's `aria-live="polite"` region renders
- * an explicit "Live count not available yet" message in that case instead
- * of any number.
- *
- * The same "missing shared client, not fabricated" treatment is applied to
- * the page's session-title heading (`useKioskSessionTitle`, a small
- * natural extension of this same gap, not a third distinct one): its
- * default loader also resolves to `null`, and the heading falls back to a
- * generic, non-specific page-purpose label ("Meeting Check-In") rather
- * than a fabricated-sounding specific meeting name.
- *
- * Recommendation for the foreman/boss (the worker packet is explicit this
- * is a recommendation, not a decision made here): schedule (a) a small
- * new/extended Edge Function for GAP #1 (token/short-code minting for a
- * given `sessionId`, returning ONLY the current bucket's token/code, never
- * the secret itself) and (b) a separate shared-Supabase-client task for
- * GAP #2 -- the latter is also blocking `useKioskSessionTitle` here and is
- * already independently needed by T035/T056 and eventually T033/T053-T060
- * per this task's worker packet.
+ * (own rows only). Since this route is coach/admin-only, `useKioskTally`
+ * can legitimately read a full per-session checked-in/expected count --
+ * there was never an RLS gap on this specific screen, only a missing
+ * shared Supabase client anywhere in `src/` (now built, T071/T086/etc.).
+ * `loaders/kiosk.ts`'s `loadKioskTally`/`loadKioskSessionTitle` (this
+ * page's real default `loadTally`/`loadSessionTitle`, wired in below)
+ * supply the real counts/title; see that file's own module doc for the
+ * exact query shapes (active-roster team-scoping, `present`/`late`
+ * "checked-in" definition, etc.).
  *
  * -----------------------------------------------------------------------
  * Astryx prop sourcing (constitution item 2) -- every prop below cross-
@@ -182,10 +153,12 @@
  *    against that).
  *  - `Banner`: `astryx-api.md` lines 2694-2772 (Props table). `status`
  *    (`'warning'`, required), `title` (required), `description` are used;
- *    `isDismissable` is deliberately omitted/left `false` -- these are
- *    standing engineering-gap disclosures meant to stay visible for as
- *    long as the underlying gap is real, not a transient message a viewer
- *    should be able to dismiss away.
+ *    `isDismissable` is deliberately omitted/left `false`. T103 removed the
+ *    two standing "fixture data"/"not wired" engineering-gap disclosure
+ *    `Banner`s this file used to render permanently (both gaps are now
+ *    closed, per the module doc above) -- the one remaining `Banner` below
+ *    ("No session selected") is a genuine, still-real DES-12 empty/error
+ *    state for a missing route param, not a stale disclosure.
  *
  * -----------------------------------------------------------------------
  * DES-12 four-state mapping
@@ -196,20 +169,24 @@
  *    renders already ARE this state's honest visual (see Empty below),
  *    and a spinner would flicker uselessly given a resolve time measured
  *    in microseconds against an in-memory stub today.
- *  - Empty: `token === null` (GAP #1's fixture loader is written to
- *    always resolve non-null, but a future *real* loader legitimately
- *    could resolve `null`, e.g. before the session opens for check-in) or
- *    `tally === null` (GAP #2's shipped default, always) or
- *    `sessionTitle === null` (same) -- each rendered as its own explicit,
- *    honest "not available" message in its own region, never silence and
- *    never a fabricated number/token standing in for missing data.
- *  - Error: seam rejections are caught and folded into the same `null` /
- *    "not available" empty-state rendering as a genuinely-empty resolve --
- *    there is no user-triggered retry action anywhere on this screen (it
- *    is a passive, unattended shop-TV display, not an interactive form),
- *    so a distinct error banner with nothing actionable to offer would add
- *    noise without adding capability; the polling loop itself already
- *    retries automatically every ~45s regardless of state.
+ *  - Empty: `token === null` (a real `checkin-token` response never
+ *    resolves `null` on success, but the session/event may legitimately
+ *    not exist, e.g. a stale/mistyped kiosk URL -- `SESSION_NOT_FOUND`
+ *    folds into this same state via the Error bucket below) or
+ *    `tally === null`/`sessionTitle === null` (`loaders/kiosk.ts`'s real
+ *    loaders resolve `null` when the session/event cannot be found, module
+ *    doc above) -- each rendered as its own explicit, honest "not
+ *    available" message in its own region, never silence and never a
+ *    fabricated number/token standing in for missing data.
+ *  - Error: seam rejections (a real network/auth/authorization failure from
+ *    `checkin-token`, or a transport error from a table read) are caught
+ *    and folded into the same `null` / "not available" empty-state
+ *    rendering as a genuinely-empty resolve -- there is no user-triggered
+ *    retry action anywhere on this screen (it is a passive, unattended
+ *    shop-TV display, not an interactive form), so a distinct error banner
+ *    with nothing actionable to offer would add noise without adding
+ *    capability; the polling loop itself already retries automatically
+ *    every ~45s regardless of state.
  *  - Populated/success: `token`/`tally`/`sessionTitle` all non-null --
  *    renders the real QR/short-code/tally-number/title content.
  */
@@ -217,6 +194,20 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { Banner, Center, Heading, HStack, Text, VStack } from '@astryxdesign/core';
+// T103: real defaults for this page's three seams (module doc above). This
+// import is circular with `loaders/kiosk.ts` (that file imports
+// `buildCheckinUrl`/`KIOSK_REFRESH_INTERVAL_SECONDS`/types back from this
+// same file) -- the same "two files import from each other, safe because
+// nothing is called at module-evaluation time" pattern already established
+// and working between `MeetingsList.tsx`/`loaders/meetings.ts` and
+// `StudentMeetingView.tsx`/`loaders/checkin.ts` (both read-only references
+// here). Every value used below is only ever called lazily, inside a
+// function body invoked well after both modules finish evaluating.
+import {
+  loadKioskDisplayToken as loadKioskDisplayTokenFromSupabase,
+  loadKioskSessionTitle as loadKioskSessionTitleFromSupabase,
+  loadKioskTally as loadKioskTallyFromSupabase,
+} from '../../lib/supabase/loaders/kiosk';
 
 // ---------------------------------------------------------------------------
 // Ground-truth constants (PRD MTG-06 / hmac.ts's header comment -- cited in
@@ -228,17 +219,23 @@ import { Banner, Center, Heading, HStack, Text, VStack } from '@astryxdesign/cor
 export const KIOSK_REFRESH_INTERVAL_SECONDS = 45;
 export const KIOSK_REFRESH_INTERVAL_MS = KIOSK_REFRESH_INTERVAL_SECONDS * 1000;
 
-/** hmac.ts step 6 (see module doc): the QR payload's URL shape. */
-function buildCheckinUrl(sessionId: string, token: string): string {
+/** hmac.ts step 6 (see module doc): the QR payload's URL shape. Exported
+ * (T103) so `loaders/kiosk.ts`'s real `loadKioskDisplayToken` can build the
+ * same URL from a real minted token without re-deriving this shape a
+ * second time -- the only place this URL shape is constructed anywhere in
+ * this codebase. */
+export function buildCheckinUrl(sessionId: string, token: string): string {
   return `https://portal.voltfrc.org/checkin?s=${encodeURIComponent(sessionId)}&t=${encodeURIComponent(token)}`;
 }
 
 // ---------------------------------------------------------------------------
-// Data-fetching seams -- GAP #1 (token) / GAP #2 (tally, session title).
-// See module doc above for the full reasoning behind each default.
+// Data-fetching seams -- GAP #1 (token) / GAP #2 (tally, session title),
+// both closed by T103. See module doc above for the full reasoning behind
+// each real default (`loaders/kiosk.ts`) and each fixture stub below (still
+// exported, for tests/harness use).
 // ---------------------------------------------------------------------------
 
-/** What a real token-minting endpoint (GAP #1, not yet built) would return. */
+/** What the real `checkin-token`-backed loader (GAP #1) returns. */
 export interface KioskDisplayToken {
   qrUrl: string;
   shortCode: string;
@@ -246,14 +243,14 @@ export interface KioskDisplayToken {
 }
 export type KioskDisplayTokenLoader = (sessionId: string) => Promise<KioskDisplayToken | null>;
 
-/** What a real per-session attendance count (GAP #2) would return. */
+/** What the real per-session attendance count (GAP #2) returns. */
 export interface KioskTallyState {
   checkedIn: number;
   expected: number;
 }
 export type KioskTallyLoader = (sessionId: string) => Promise<KioskTallyState | null>;
 
-/** What a real per-session title lookup (GAP #2) would return. */
+/** What the real per-session title lookup (GAP #2) returns. */
 export interface KioskSessionTitle {
   title: string;
 }
@@ -269,12 +266,17 @@ const FIXTURE_QR_TOKEN = 'FIXTURE-NOT-A-REAL-CHECKIN-TOKEN';
 const FIXTURE_SHORT_CODE = 'PLACEH';
 
 /**
- * Shipped default `KioskDisplayTokenLoader` -- see module doc GAP #1. Does
- * NOT call any HTTP endpoint (none exists yet that could safely answer
- * this). Real callers (once a minting Edge Function exists) or a
- * verification harness should pass their own loader.
+ * T103: no longer the shipped default (see `loaders/kiosk.ts`'s real
+ * `loadKioskDisplayToken`, wired in below) -- kept, exported, and unchanged
+ * for tests/harness use, the same "the fixture function itself is
+ * untouched and still exported for tests" precedent `loaders/invites.ts`'s
+ * own module doc already establishes for its analogous fixture/real-default
+ * swap. Does NOT call any HTTP endpoint; a verification harness that wants
+ * a deterministic, offline stub should pass this explicitly.
  */
-async function fixtureLoadKioskDisplayToken(sessionId: string): Promise<KioskDisplayToken | null> {
+export async function fixtureLoadKioskDisplayToken(
+  sessionId: string,
+): Promise<KioskDisplayToken | null> {
   return {
     qrUrl: buildCheckinUrl(sessionId, FIXTURE_QR_TOKEN),
     shortCode: FIXTURE_SHORT_CODE,
@@ -283,24 +285,27 @@ async function fixtureLoadKioskDisplayToken(sessionId: string): Promise<KioskDis
 }
 
 /**
- * Shipped default `KioskTallyLoader` -- see module doc GAP #2. Always
- * resolves `null` ("not available") rather than fabricating plausible-
- * looking attendance numbers. Real callers (once a shared Supabase client
- * exists) or a verification harness should pass their own loader.
+ * T103: no longer the shipped default (see `loaders/kiosk.ts`'s real
+ * `loadKioskTally`, wired in below) -- kept, exported, and unchanged for
+ * tests/harness use (same precedent as `fixtureLoadKioskDisplayToken`
+ * above). Always resolves `null` ("not available") rather than fabricating
+ * plausible-looking attendance numbers.
  */
-async function notWiredLoadKioskTally(): Promise<KioskTallyState | null> {
+export async function notWiredLoadKioskTally(): Promise<KioskTallyState | null> {
   return null;
 }
 
 /**
- * Shipped default `KioskSessionTitleLoader` -- see module doc GAP #2.
- * Always resolves `null`; the component falls back to a generic label.
- * (Deliberately takes no `sessionId` parameter -- a function with fewer
- * parameters than `KioskSessionTitleLoader` declares is still a valid
- * implementation of it; the loader never needs the id since it always
- * resolves `null` regardless.)
+ * T103: no longer the shipped default (see `loaders/kiosk.ts`'s real
+ * `loadKioskSessionTitle`, wired in below) -- kept, exported, and unchanged
+ * for tests/harness use (same precedent as `fixtureLoadKioskDisplayToken`
+ * above). Always resolves `null`; the component falls back to a generic
+ * label. (Deliberately takes no `sessionId` parameter -- a function with
+ * fewer parameters than `KioskSessionTitleLoader` declares is still a
+ * valid implementation of it; the loader never needs the id since it
+ * always resolves `null` regardless.)
  */
-async function notWiredLoadKioskSessionTitle(): Promise<KioskSessionTitle | null> {
+export async function notWiredLoadKioskSessionTitle(): Promise<KioskSessionTitle | null> {
   return null;
 }
 
@@ -309,7 +314,11 @@ async function notWiredLoadKioskSessionTitle(): Promise<KioskSessionTitle | null
 // testable (e.g. with fake timers) regardless of what `load` resolves to.
 // ---------------------------------------------------------------------------
 
-function usePolling<T>(sessionId: string, load: (sessionId: string) => Promise<T | null>, intervalMs: number): T | null {
+function usePolling<T>(
+  sessionId: string,
+  load: (sessionId: string) => Promise<T | null>,
+  intervalMs: number,
+): T | null {
   const [value, setValue] = useState<T | null>(null);
   // Keeps the effect below from needing `load` in its dependency array (so
   // passing a fresh inline default function on every render never resets
@@ -345,26 +354,30 @@ function usePolling<T>(sessionId: string, load: (sessionId: string) => Promise<T
   return value;
 }
 
-/** ~45s-refreshing QR/short-code seam (MTG-06). See module doc GAP #1. */
+/** ~45s-refreshing QR/short-code seam (MTG-06). GAP #1 -- T103 real default
+ * (`loaders/kiosk.ts`'s `loadKioskDisplayToken`, calling the new
+ * `checkin-token` Edge Function). See module doc GAP #1. */
 export function useKioskDisplayToken(
   sessionId: string,
-  loadDisplayToken: KioskDisplayTokenLoader = fixtureLoadKioskDisplayToken,
+  loadDisplayToken: KioskDisplayTokenLoader = loadKioskDisplayTokenFromSupabase,
 ): KioskDisplayToken | null {
   return usePolling(sessionId, loadDisplayToken, KIOSK_REFRESH_INTERVAL_MS);
 }
 
-/** ~45s-refreshing tally seam. See module doc GAP #2. */
+/** ~45s-refreshing tally seam. GAP #2 -- T103 real default
+ * (`loaders/kiosk.ts`'s `loadKioskTally`). See module doc GAP #2. */
 export function useKioskTally(
   sessionId: string,
-  loadTally: KioskTallyLoader = notWiredLoadKioskTally,
+  loadTally: KioskTallyLoader = loadKioskTallyFromSupabase,
 ): KioskTallyState | null {
   return usePolling(sessionId, loadTally, KIOSK_REFRESH_INTERVAL_MS);
 }
 
-/** ~45s-refreshing session-title seam. See module doc GAP #2. */
+/** ~45s-refreshing session-title seam. GAP #2 -- T103 real default
+ * (`loaders/kiosk.ts`'s `loadKioskSessionTitle`). See module doc GAP #2. */
 export function useKioskSessionTitle(
   sessionId: string,
-  loadSessionTitle: KioskSessionTitleLoader = notWiredLoadKioskSessionTitle,
+  loadSessionTitle: KioskSessionTitleLoader = loadKioskSessionTitleFromSupabase,
 ): KioskSessionTitle | null {
   return usePolling(sessionId, loadSessionTitle, KIOSK_REFRESH_INTERVAL_MS);
 }
@@ -374,11 +387,17 @@ export function useKioskSessionTitle(
 // ---------------------------------------------------------------------------
 
 export interface KioskPageProps {
-  /** GAP #1 seam override -- defaults to the obviously-fake fixture stub. */
+  /** GAP #1 seam override -- defaults to the real `checkin-token`-backed
+   * loader (T103). Tests/harnesses that want a deterministic offline stub
+   * should pass `fixtureLoadKioskDisplayToken` explicitly. */
   loadDisplayToken?: KioskDisplayTokenLoader;
-  /** GAP #2 seam override -- defaults to the "not wired" `null` stub. */
+  /** GAP #2 seam override -- defaults to the real Supabase-backed loader
+   * (T103). Tests/harnesses that want a deterministic "not available" stub
+   * should pass `notWiredLoadKioskTally` explicitly. */
   loadTally?: KioskTallyLoader;
-  /** GAP #2 seam override -- defaults to the "not wired" `null` stub. */
+  /** GAP #2 seam override -- defaults to the real Supabase-backed loader
+   * (T103). Tests/harnesses that want a deterministic "not available" stub
+   * should pass `notWiredLoadKioskSessionTitle` explicitly. */
   loadSessionTitle?: KioskSessionTitleLoader;
 }
 
@@ -403,28 +422,23 @@ export function KioskPage({
   if (!sessionId) {
     return (
       <Center axis="both" height="100vh" width="100%">
-        <Banner status="warning" title="No session selected" description="This kiosk URL is missing a session id." />
+        <Banner
+          status="warning"
+          title="No session selected"
+          description="This kiosk URL is missing a session id."
+        />
       </Center>
     );
   }
 
   const tallyText =
-    tally === null ? 'Live count not available yet' : `${tally.checkedIn} of ${tally.expected} checked in`;
+    tally === null
+      ? 'Live count not available yet'
+      : `${tally.checkedIn} of ${tally.expected} checked in`;
 
   return (
     <Center axis="both" height="100vh" width="100%">
       <VStack gap={8} hAlign="center" padding={8} maxWidth={960}>
-        <Banner
-          status="warning"
-          title="Check-in QR/code below use fixture data"
-          description="No Edge Function exists yet that can safely mint a live token/short code without exposing the server-only signing secret to the browser (constitution item 5). The QR and code shown here are clearly-labeled placeholder fixture values, not a real, scannable check-in token."
-        />
-        <Banner
-          status="warning"
-          title="Live tally not wired"
-          description="attendance's RLS would allow a coach/admin-only real count once a shared Supabase client exists in src/ -- this is not an access-control gap, only a missing client (no createClient/supabase-js usage exists anywhere in src/ yet). No fabricated numbers are shown below."
-        />
-
         <Heading level={1}>{sessionTitle?.title ?? FALLBACK_SESSION_TITLE}</Heading>
 
         <HStack gap={10} hAlign="center" vAlign="center" wrap="wrap">

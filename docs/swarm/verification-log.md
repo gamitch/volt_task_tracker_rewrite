@@ -3806,3 +3806,53 @@ T097): a sibling shell renders `AdminToggles` with zero props, and the now-real
 `loadPrivacySetting` default fails against a test environment with no Supabase
 config. `RosterShell.tsx`/`RosterShell.test.tsx` are forbidden files, confirmed
 untouched — a same-shaped follow-up task is recommended, not a T104 defect.
+
+---
+
+## T103 (ED-1 Packet P8) — real Kiosk tally/session-title + new `checkin-token` Edge Function
+
+**PASS (1st attempt, clean).** `Kiosk.tsx` had two disclosed gaps: GAP #2 (live
+tally/session-title) closes as an ordinary real Supabase read, same shape as every
+prior ED-1 wiring task — both stale "fixture data"/"not wired" disclosure banners
+removed. GAP #1 (the live rotating QR token/short code) is a genuinely different
+class of gap: the signing secret cannot reach the browser, so it required a new
+server-side Edge Function.
+
+The riskiest design decision — importing `tokenFor`/`shortCodeFor`/`bucketFor`
+cross-directory from `checkin/hmac.ts` (read-only, confirmed unmodified) rather
+than duplicating the HMAC derivation scheme — was independently re-verified by the
+checker, not taken on the worker's word: it ran `deno check`/`deno test` itself
+against the real files (10/10 passing) and separately confirmed the worker's cited
+precedent is real (`send-invite/index.ts` genuinely imports across an even wider
+boundary, into `src/emails/layout/renderEmailLayout.ts`, and that pattern was
+already checker-accepted as a non-dispute-worthy residual risk at T048).
+
+The most security-relevant question — whether a coach could mint a live check-in
+token for a session belonging to a team they don't coach — was independently
+traced through the actual schema rather than accepted from the worker's own
+investigation: `profiles` has no `team_id`/`team_ids` column, and no
+`coach_teams`-style junction table exists anywhere in `supabase/migrations/**`.
+`is_staff()` (used by every `staff_all` RLS policy in this schema) is
+unconditional on team. A coach/admin's authorization is therefore structurally
+global by design in this data model — the same property every other staff-gated
+table in this app already has — so the new function correctly does not fabricate a
+per-team comparison that could never actually reject a real staff caller. This is
+disclosed honestly in the function's own module doc, not silently glossed over,
+and flagged as a product follow-up only if per-coach team scoping is ever desired
+at the data-model level (not a regression this task introduced).
+
+Authorization otherwise mirrors `send-invite/index.ts`'s established discipline:
+role is looked up fresh from the caller's own `profiles` row via the caller-JWT
+client, never trusted from the request body, with a 403 returned before the
+service-role client is even constructed. Secret hygiene confirmed:
+`CHECKIN_HMAC_SECRET` is read only via `Deno.env.get`, never logged, never
+returned in any response body (the response is exactly `{ token, shortCode,
+bucketExpiresAt }`).
+
+Frontend typecheck/lint/format:check/build all clean; `Kiosk.test.tsx` 13/13.
+Edge Function `deno check`/`deno test` (10/10)/`deno lint` all clean, with the
+same single pre-existing `no-import-prefix` warning class every `npm:`-importing
+Edge Function in this repo already carries. The 2 previously-observed suite
+failures were confirmed to belong to concurrently-editing sibling task T104's
+in-progress `AdminToggles.tsx` (not this task's scope), and have since resolved
+once T104 stabilized.
