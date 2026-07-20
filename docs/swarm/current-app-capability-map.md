@@ -97,13 +97,16 @@ gold-plating).
 
 Current app: coach-records-attendance + student self-reports (both honor-system,
 both retroactive-friendly). VOLT today: student/parent RSVP (authenticated) +
-live QR/short-code check-in, with no coach-side "add student to event" (RLS on
-`rsvps` only permits own/linked writes) and no retroactive self-report.
+live QR/short-code check-in, with no coach-side "add student to event" UI (the
+RLS has always permitted staff writes via `staff_all` — T114 corrected this
+doc's earlier claim) and no retroactive self-report.
 
 ## Capability gaps in VOLT (ranked, from George's live testing + this survey)
 
 1. **Coach-managed attendance with per-student hours** (edit-dialog parity) —
-   needs a staff-write policy decision on `rsvps`/`attendance` first.
+   pure UI work: T114 (PRD v2) proved staff writes on `rsvps`/`attendance` have
+   existed since v1 (`staff_all`); the earlier "needs a policy decision" note
+   here was wrong.
 2. **Expected-attendees at event creation** (coach pre-marks planned RSVPs).
 3. **Dense event rows + expand-in-place + inline Edit/× on lists.**
 4. **Dashboard analytics parity**: per-student goal projection, signup activity

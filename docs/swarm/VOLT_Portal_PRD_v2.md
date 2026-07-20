@@ -181,16 +181,25 @@ judge information density honestly, not just verify elements exist.
   B's rollup, and 10h (not 20h) in their personal total. Metric views updated
   to join through `student_teams`; a future "unique program-wide hours" view
   (B8, grants that must not double-count) is explicitly deferred, not blocked.
-- **SCH-04 · Staff attendance/RSVP write policies.** New additive RLS policies
-  permitting `is_staff()` users to insert/update/delete `rsvps` and
-  `attendance` rows for any student (enabling UXP-01/02), alongside the
-  existing own/linked policies (which continue to power UXP-03 and existing
-  RSVP flows). The `attendance` table's deliberate v1 posture ("no client
-  writes; Edge Function only") is being consciously amended by this PRD —
-  worker packets must cite this section, and the checker must verify the new
-  policies against a real scratch Postgres with session-level tests
-  (T104/T105/T012/T014 precedent), including negative tests (student cannot
-  write another student's rows; parent cannot write unlinked rows).
+- **SCH-04 · Staff attendance/RSVP write policies — RESOLVED AT BUILD, no
+  migration (T114, 2026-07-20).** This section's original premise was wrong,
+  discovered by T114's worker and independently confirmed by its checker with
+  scratch-Postgres session tests: `20260717000002_rls.sql` has carried
+  `staff_all` (`for all … using (is_staff()) with check (is_staff())`) on
+  BOTH `rsvps` and `attendance` since v1 — staff could always write any
+  student's rows. The famous "no client writes; Edge Function only" comment
+  on `attendance` is scoped to student/parent sessions only, and that
+  non-staff posture remains fully intact (verified by negative tests). The
+  coach-can't-add-a-student problem was purely missing UI, never missing
+  policy — UXP-01/02 are unblocked as pure frontend work. A redundant
+  named-policy migration was written, proven a no-op, and dropped per §8
+  simplicity (checker-concurred). Banked DDL facts for UXP-01's packet:
+  `attendance.method` check-constraint already allows `'coach'`;
+  `hours_override numeric` (nullable) and `recorded_by` (nullable FK to
+  profiles) exist as-is. The one genuinely NEW policy this PRD still owes is
+  the student/parent self-write for UXP-03's retroactive check-off (no
+  `'self'` method value exists either) — that lands as its own additive
+  migration with UXP-03, with full positive/negative scratch verification.
 
 ## 4. Data-model & view deltas (all additive; constitution item 10)
 
@@ -222,12 +231,13 @@ change to email sending mode (George-only, T052), Vercel go-live (T070).
 1. **Constitution/process unchanged.** Packet format, independent checkers,
    additive-only migrations, scratch-Postgres RLS verification, Astryx-only UI,
    motivation ethics — all as-is. Task IDs continue from the ledger.
-2. **Spine:** SCH-01 (membership junction) → SCH-04 (policies) → SCH-03
-   (views, D-3 semantics) → SCH-02 (real season display, UI-only) + UXP-08
-   (location) → UXP-01/02 (attendance core) → UXP-09 (forms) → UXP-04
-   (lists) → UXP-05/06/10 (KPI/dashboard/feed) → UXP-03 (self check-off) →
-   UXP-07 (bulk complete). Schema first; UX parity surfaces consume it.
-   (D-2 removed the old first step — no seasons migration exists anymore.)
+2. **Spine (amended after wave 1):** SCH-01 (membership junction, LANDED) →
+   SCH-03 (views, D-3 semantics) → UXP-01/02 (attendance core — unblocked
+   immediately, SCH-04 resolved as already-existing policy) → UXP-09 (forms)
+   → UXP-04 (lists) → UXP-05/06/10 (KPI/dashboard/feed) → UXP-03 (self
+   check-off, includes its own self-write policy migration) → UXP-07 (bulk
+   complete). SCH-02 (season display) and the old SCH-04/UXP-08 steps are
+   done/resolved. Schema first; UX parity surfaces consume it.
 3. **Reference-standard checking:** every UXD-tagged packet names the
    capability-map figure it must be compared against; checkers judge density
    and layout against it explicitly.

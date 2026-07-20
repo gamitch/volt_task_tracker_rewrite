@@ -126,7 +126,7 @@ team assignment, active flag, per-student goal override; add-student via header 
 <div class="tablewrap">
 <table>
 <tr><th>Capability</th><th>Current app</th><th>VOLT portal today</th><th>Notes</th></tr>
-<tr><td>Coach records attendance + per-student hours</td><td class="yes">Yes</td><td class="no">No</td><td>Blocked by RLS: only own/linked RSVP writes. The #1 gap.</td></tr>
+<tr><td>Coach records attendance + per-student hours</td><td class="yes">Yes</td><td class="no">No</td><td>Pure UI gap — T114 (PRD v2) proved staff writes have existed since v1 (<code>staff_all</code>); this cell previously misattributed it to RLS. Still the #1 gap.</td></tr>
 <tr><td>Expected attendees at event creation</td><td class="yes">Yes</td><td class="no">No</td><td>Coach pre-marks planned RSVPs from a roster checklist.</td></tr>
 <tr><td>Retroactive student self-report</td><td class="yes">Yes</td><td class="no">No</td><td>VOLT check-in is live-only (QR/short code).</td></tr>
 <tr><td>Dense list rows + expand-in-place + inline edit</td><td class="yes">Yes</td><td class="no">No</td><td>VOLT rows: title, time, one badge, a details link.</td></tr>
@@ -147,8 +147,8 @@ team assignment, active flag, per-student goal override; add-student via header 
 
 <h2 id="gaps">10. Ranked gaps in VOLT (from live testing + this survey)</h2>
 <ol>
-<li><strong>Coach-managed attendance with per-student hours</strong> — requires the staff-write RLS
-policy decision on <code>rsvps</code>/<code>attendance</code> first; everything else stacks on it.</li>
+<li><strong>Coach-managed attendance with per-student hours</strong> — pure frontend work — T114 (PRD v2)
+proved the staff-write policies have existed since v1; everything else stacks on it.</li>
 <li><strong>Expected-attendees at creation</strong> (planned RSVPs from a roster checklist).</li>
 <li><strong>Dense event rows + expand-in-place + inline Edit/×.</strong></li>
 <li><strong>Dashboard analytics parity</strong>: goal projection, activity feed, stat tiles,

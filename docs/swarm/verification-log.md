@@ -4178,3 +4178,44 @@ additionally exposes anonymous team-size aggregates (revisit one line when
 SCH-03 views land); the shared `supabase/tests/` harness needs a hardening
 pass to apply the modern chain without hand-scaffolding (process note, not a
 T113 defect).
+
+---
+
+## T114 (PRD v2 SCH-04) — staff attendance/RSVP policies: premise corrected, no schema change
+
+**PASS — with the rare outcome that the correct deliverable was a correction,
+not a migration.** The worker read the real shipped RLS file before writing
+anything (exactly what its packet demanded) and discovered the task's premise
+was false: `20260717000002_rls.sql` has carried `staff_all` (`for all …
+using (is_staff()) with check (is_staff())`) on BOTH `rsvps` and `attendance`
+since v1 — staff could always write any student's rows. The much-cited "no
+client writes; Edge Function only" comment on `attendance` is, read in
+context, scoped to student/parent sessions only. The PRD's SCH-04 rationale,
+and the capability map's "blocked by RLS" framing of George's
+coach-can't-add-students report, were both wrong: it was purely a missing-UI
+gap. (The error traces to over-generalizing T101's checker notes about the
+own/linked policies into "the only write path" — a lesson in enumerating ALL
+policies on a table before characterizing its posture.)
+
+The worker still implemented the requested migration and proved, via a
+three-run ablation (full stack / pre-existing `staff_all` alone / new policy
+alone, 12 session-test scenarios each, all passing identically), that it was
+redundant today and self-sufficient in isolation — then flagged the
+discrepancy as a known risk instead of unilaterally resolving it,
+constitution-perfect behavior. The checker independently confirmed everything
+with its own scratch cluster and session tests (staff writes succeed WITHOUT
+the new migration; all negative cases still denied; parent linked-write still
+allowed), verified the RLS file byte-identical to HEAD, and independently
+recommended drop-and-correct: a second identical permissive grant adds zero
+capability, invites future misreading, and its only durability benefit
+materializes in a hypothetical (`staff_all` being narrowed) that would itself
+be BLOCKER-review territory. The architect adopted that disposition per PRD
+§8 ("keep things simple").
+
+Actions taken: redundant migration deleted (never committed); PRD v2 SCH-04
+rewritten as resolved-at-build with the banked DDL facts UXP-01 needs
+(`method` already allows `'coach'`; `hours_override`/`recorded_by` exist;
+no `'self'` value — UXP-03's self-write policy remains a genuinely-new later
+migration); the spine amended (UXP-01/02 unblocked immediately as pure
+frontend work); both capability-map files corrected where they misattributed
+the gap to RLS.
