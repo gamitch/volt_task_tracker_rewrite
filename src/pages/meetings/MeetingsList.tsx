@@ -112,39 +112,120 @@
  * student/parent variant.
  *
  * -----------------------------------------------------------------------
- * 6. No student/profile linkage on `AuthUser` yet -- a real gap, disclosed
- *    and stood in for, not silently assumed.
+ * 6. T096 (ED-1 Packet P7): `PLACEHOLDER_CURRENT_STUDENT_ID` resolution --
+ *    `AuthUser` (`guards.tsx`) still carries only `{id, email, role}`, no
+ *    direct `students.id` field, but this task DOES resolve a real
+ *    `students.id` from that identity instead of leaving it a placeholder
+ *    (Trap #4 of this task's own worker packet -- full reasoning restated
+ *    here, since this is a genuinely new resolution problem, not a reused
+ *    hook):
  *
- * `AuthUser` (`guards.tsx`) carries only `{id, email, role}` -- no
- * `students.id` linkage for a `student`-role user, and no `guardian_links`
- * lookup for a `parent`-role user (who may have multiple linked students,
- * needing a selector this task does not build). `PLACEHOLDER_CURRENT_STUDENT_ID`
- * below is a disclosed stand-in for "the one student this viewer is
- * currently looking at", the same class of gap `ParticipationTab.tsx`/T056
- * documented for `PLACEHOLDER_CURRENT_SEASON_ID` (a real implementation
- * would resolve this from `students.profile_id = auth.uid()` for a student,
- * or a `guardian_links` row + selector for a parent, once a shared Supabase
- * client exists -- Known Context/Traps #1).
+ *    - Logged-in STUDENT: `students.profile_id = auth.uid()` is a direct,
+ *      unambiguous 1:1 lookup -- exactly one (or zero, for a not-yet-linked
+ *      account) row.
+ *    - Logged-in PARENT: `guardian_links.parent_profile_id = auth.uid()` can
+ *      match MULTIPLE rows (one per linked child) -- but `StudentMeetingsView`
+ *      below (unchanged by this task) still only ever accepts ONE
+ *      `studentId: string`, not a list, and this task's own Allowed Files
+ *      (`MeetingsList.tsx` + a new `loaders/meetings.ts`) do not extend to
+ *      redesigning this route into ParentHome.tsx's own multi-card-per-child
+ *      architecture (`ParentHome.tsx`'s module doc #4) -- that would be a
+ *      genuinely new, much larger UI (N independent cards, N independent
+ *      loads) this task's packet never asks for and Trap #4 explicitly warns
+ *      against inventing. Investigated `ParentHome.tsx` (an already-real-wired
+ *      parent-facing surface) for precedent per Trap #4's own instruction:
+ *      its OWN precedent for "which parent is this" is to NOT attempt any
+ *      `guardian_links`-keyed-by-`auth.uid()` resolution at all (that file's
+ *      own module doc #7: "this page does not attempt to resolve 'which
+ *      parent is signed in' from `useAuth()`"), because at the time that page
+ *      was built no shared Supabase client existed yet to do so. That
+ *      specific limiting reason no longer applies to THIS task (a real client
+ *      now exists, and Trap #4 explicitly directs a real
+ *      `guardian_links.parent_profile_id = auth.uid()` lookup) -- so the
+ *      precedent actually followed here is narrower than "don't resolve at
+ *      all": resolve for real, but stay honest about the one-student-only
+ *      limitation `MeetingsList`'s own pre-existing (not-this-task's)
+ *      `studentId: string` signature already imposes, the same way
+ *      `ParentHome.tsx` stays honest about ITS OWN pre-existing gap rather
+ *      than silently faking a resolution. `resolveCurrentStudentId`
+ *      (`../../lib/supabase/loaders/meetings.ts`) resolves a parent to their
+ *      EARLIEST-linked child only (`guardian_links` ordered by `created_at`
+ *      ascending, first row) -- a disclosed, minimal, real answer for a
+ *      single-student parent (the common case), with a known limitation for a
+ *      genuinely multi-student parent (documented in this task's own worker
+ *      output "Known risks", not silently accepted as correct for that case).
+ *    - Coach/admin: `resolveCurrentStudentId` is never called at all (the
+ *      `isCoachOrAdminView` branch below renders `CoachMeetingsView`
+ *      instead), but returns `null` defensively rather than throwing if it
+ *      ever were.
+ *
+ *    `resolveStudentId` (new injectable prop on `MeetingsListProps`, default
+ *    `resolveCurrentStudentId`) is only ever invoked when a caller does NOT
+ *    supply an explicit `studentId` prop -- an explicit `studentId` (as every
+ *    existing test in `MeetingsList.test.tsx` before this task already
+ *    passes) bypasses resolution entirely and is used as-is, unchanged
+ *    behavior. `PLACEHOLDER_CURRENT_STUDENT_ID` is KEPT as a named export
+ *    (per this task's own Known Context/Traps #5 -- `MeetingsList.test.tsx`
+ *    still imports and uses it) but its role changes: it is no longer this
+ *    component's own runtime default for an unresolved `studentId` (that
+ *    placeholder default is removed below); it now exists solely as the
+ *    fixture literal identifying "the current viewer" inside `FIXTURE_*`
+ *    data below, for tests/callers that want fixture data rendered
+ *    explicitly.
  *
  * -----------------------------------------------------------------------
- * 7. Deliberate stubs (per Forbidden Files -- disclosed, not silently
- *    built as if real):
+ * 7. T096 (ED-1 Packet P7): real load/mutation/dialog wiring -- three of the
+ *    four former stubs are now real; "Edit" alone remains a disclosed stub
+ *    (with new, accurate copy, since the underlying reason changed -- see
+ *    (b) below).
  *
  *    a. "Schedule meetings" button (coach view) -- `ScheduleMeetingsDialog.tsx`
- *       is T031's (currently Blocked) deliverable, a forbidden file here.
- *       The button is real, visible, and clickable, but its `onClick`
- *       shows an inline `Banner` disclosing that the real scheduling dialog
- *       is not built yet, rather than silently doing nothing or faking a
- *       dialog.
- *    b. Row "Edit" menu item (coach view) -- editing a meeting's fields
- *       almost certainly reuses T031's same field set (MTG-02); this task
- *       does not invent a second, competing edit form. `onClick` shows the
- *       same disclosure `Banner` as (a), scoped to the specific session.
- *    c. Row "Cancel" menu item + `AlertDialog` (coach view) -- built FOR
- *       REAL (not a stub): confirming sets that row's local `status` to
- *       `'canceled'` (DES-11), same as PRD MTG-01's literal "Cancel
- *       session -- AlertDialog"; only the persistence layer is fixture-only
- *       (Known Context/Traps #1 -- no Supabase client wiring in this task).
+ *       (T031, already Passed, already built, already has its own real
+ *       injectable `onCreateMeetings` seam) is now imported and rendered for
+ *       real by `CoachMeetingsView` below, in CREATE mode. `onClick` opens
+ *       the real dialog (`isScheduleDialogOpen` state) instead of showing a
+ *       stub `Banner`. `handleCreateMeetingsSubmit` below wires the dialog's
+ *       own `onCreateMeetings` prop to a real default
+ *       (`createMeetings`, `../../lib/supabase/loaders/meetings.ts`) that
+ *       inserts one real `events` row (type `meeting`) + one real
+ *       `event_sessions` row per computed date, then reloads this page's own
+ *       `rows` from `loadData()` so the newly-scheduled meeting(s) appear
+ *       without a manual refresh (a full reload, not a client-side merge --
+ *       recomputing `CoachMeetingRow`'s own `teamScopeLabel`/
+ *       `attendanceSummary` fields client-side would duplicate
+ *       `buildCoachMeetingRows`' real DB-driven joins for no benefit).
+ *    b. Row "Edit" menu item (coach view) -- Trap #3 of this task's own
+ *       worker packet directed investigating whether
+ *       `ScheduleMeetingsDialog.tsx` genuinely supports an "edit an existing
+ *       meeting" mode before assuming it does. It does NOT: its own props
+ *       (`ScheduleMeetingsDialogProps`) have no `initialData`/"meeting to
+ *       edit" field of any kind, its `resetForm()` always resets to the same
+ *       hardcoded pristine defaults (never a passed-in existing row), and its
+ *       own `CreateMeetingsPayload` shape (`{event, sessions}`, always a
+ *       BRAND-NEW `events` insert + N BRAND-NEW `event_sessions` inserts) is
+ *       purpose-built for creating a whole new recurring-meeting SERIES, not
+ *       mutating one already-scheduled session's fields in place -- there is
+ *       no code path in that file that could ever target an existing row for
+ *       an UPDATE. Forcing "Edit" onto this dialog would mean either (i)
+ *       silently creating a SECOND competing series alongside the original
+ *       whenever "Edit" is used (wrong -- corrupts the schedule) or (ii)
+ *       inventing new dialog behavior (an `initialData` prop, an edit-mode
+ *       branch in its own submit handler) inside `ScheduleMeetingsDialog.tsx`
+ *       itself, a forbidden/read-only file for this task. Per the packet's
+ *       own explicit instruction for exactly this finding, "Edit" is left as
+ *       a clearly-labeled, HONEST stub instead -- new, accurate copy (NOT the
+ *       old "dialog not built yet" text, since the dialog genuinely IS built
+ *       now; the real remaining gap is narrower and different: "this
+ *       particular dialog has no edit mode to open").
+ *    c. Row "Cancel" menu item + `AlertDialog` (coach view) -- was already
+ *       real-LOOKING before this task (a genuine `AlertDialog`, DES-11), but
+ *       only ever flipped local `rows` state; this task pairs it with a real
+ *       `event_sessions.status = 'canceled'` mutation
+ *       (`onCancelSession`, default `cancelMeetingSession`,
+ *       `../../lib/supabase/loaders/meetings.ts`), optimistic-update +
+ *       rollback-on-failure, mirroring `StudentsTab.tsx`'s own
+ *       `handleConfirmDeactivate` (T089) shape exactly per this task's own
+ *       packet steer.
  *    d. "Consistency strip"-shaped area (student/parent view) -- BEH-06's
  *       "last 5 completed meetings as `StatusDot`s" widget is T037's
  *       ("Student/parent meeting view + consistency strip", currently
@@ -154,7 +235,7 @@
  *       usage and no fabricated "last 5" data anywhere -- it does build the
  *       plain, real Upcoming/Past history rows MTG-14 itself requires (own
  *       status per session), which is a distinct, narrower deliverable than
- *       T037's summary widget on top of it.
+ *       T037's summary widget on top of it. Untouched by this task.
  *
  * -----------------------------------------------------------------------
  * 8. DES-12 four states, reachable independently per role variant (Known
@@ -255,7 +336,25 @@ import {
   VStack,
   type DropdownMenuOption,
 } from '@astryxdesign/core';
-import { useAuth } from '../../app/guards';
+import { useAuth, type Role } from '../../app/guards';
+import { isSupabaseLoaderError } from '../../lib/supabase';
+// T096 (ED-1 Packet P7): real load/mutation/studentId-resolution wiring --
+// module doc #6/#7. `createMeetings`/`ScheduleMeetingsDialog` (module doc
+// #7a) are this task's own wiring of an ALREADY-BUILT, ALREADY-PASSED
+// standalone dialog into this page for the first time; nothing inside
+// `ScheduleMeetingsDialog.tsx` itself is modified (forbidden/read-only file).
+import {
+  cancelMeetingSession,
+  createMeetings,
+  loadCoachMeetingsData,
+  loadStudentMeetingsData,
+  resolveCurrentStudentId,
+} from '../../lib/supabase/loaders/meetings';
+import {
+  ScheduleMeetingsDialog,
+  type CreateMeetingsPayload,
+  type OnCreateMeetingsFn,
+} from './ScheduleMeetingsDialog';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real columns. See module doc #1/#3.
@@ -371,8 +470,30 @@ export interface StudentMeetingsData {
 
 export type LoadStudentMeetingsDataFn = (studentId: string) => Promise<StudentMeetingsData>;
 
+/** T096 (module doc #7c) -- the real `event_sessions.status = 'canceled'` mutation seam. */
+export type CancelMeetingSessionFn = (sessionId: string) => Promise<void>;
+
+/**
+ * T096 (module doc #6, Trap #4) -- the minimal identity shape
+ * `resolveCurrentStudentId` needs: `AuthUser.id` (== `auth.uid()` ==
+ * `profiles.id`) and `AuthUser.role`, never the full `AuthUser`/`AuthContextValue`
+ * (this file has no other use for e.g. `email`).
+ */
+export interface CurrentViewerIdentity {
+  id: string;
+  role: Role;
+}
+
+/** T096 (module doc #6, Trap #4) -- resolves the real `students.id` this
+ * viewer's student/parent view should be scoped to; `null` when none can be
+ * resolved (no linked student yet). */
+export type ResolveCurrentStudentIdFn = (viewer: CurrentViewerIdentity) => Promise<string | null>;
+
 // ---------------------------------------------------------------------------
-// Placeholder identifiers -- module doc #6.
+// Placeholder identifiers -- module doc #6. `PLACEHOLDER_CURRENT_STUDENT_ID`
+// is KEPT (T096 does not remove it -- `MeetingsList.test.tsx` still imports
+// it) but is no longer this component's own runtime default for an
+// unresolved `studentId`; see module doc #6 for its narrowed role.
 // ---------------------------------------------------------------------------
 
 export const PLACEHOLDER_CURRENT_STUDENT_ID = 'student-placeholder-current-viewer';
@@ -886,15 +1007,42 @@ function CoachMeetingsSection({
   );
 }
 
-export interface CoachMeetingsViewProps {
-  loadData: LoadCoachMeetingsDataFn;
+/** T096 (module doc #7c) -- real success/error messaging for Cancel and
+ * Schedule, same "success Banner + error Banner, dismissable, same
+ * `feedback` slot" pattern `StudentsTab.tsx`'s own `FeedbackBanner` (T089)
+ * already established. */
+interface FeedbackBanner {
+  status: 'success' | 'error';
+  title: string;
+  description: string;
 }
 
-function CoachMeetingsView({ loadData }: CoachMeetingsViewProps): ReactNode {
+export interface CoachMeetingsViewProps {
+  loadData: LoadCoachMeetingsDataFn;
+  /** T096 (module doc #7c). Defaults to a real `event_sessions.status =
+   * 'canceled'` mutation (`cancelMeetingSession`,
+   * `../../lib/supabase/loaders/meetings.ts`). */
+  onCancelSession: CancelMeetingSessionFn;
+  /** T096 (module doc #7a). Passed straight through to
+   * `<ScheduleMeetingsDialog onCreateMeetings={...} />`; defaults to a real
+   * `events`/`event_sessions` insert (`createMeetings`, same loader module). */
+  onCreateMeetings: OnCreateMeetingsFn;
+}
+
+function CoachMeetingsView({
+  loadData,
+  onCancelSession,
+  onCreateMeetings,
+}: CoachMeetingsViewProps): ReactNode {
   const loadState = useLoadState(loadData, [loadData]);
   const [rows, setRows] = useState<CoachMeetingRow[]>([]);
   const [stubNotice, setStubNotice] = useState<StubNotice | null>(null);
   const [cancelTarget, setCancelTarget] = useState<CoachMeetingRow | null>(null);
+  // T096 (module doc #7a) -- drives the one rendered `<ScheduleMeetingsDialog>`
+  // instance, in CREATE mode only (module doc #7b: this dialog has no edit
+  // mode to open at all).
+  const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
+  const [feedback, setFeedback] = useState<FeedbackBanner | null>(null);
 
   useEffect(() => {
     if (loadState.status === 'success') {
@@ -904,29 +1052,82 @@ function CoachMeetingsView({ loadData }: CoachMeetingsViewProps): ReactNode {
 
   const { upcoming, past } = useMemo(() => partitionByStatus(rows), [rows]);
 
-  function showScheduleStub(): void {
-    setStubNotice({
-      title: 'Scheduling dialog not built yet',
-      description:
-        "This action opens the meeting-scheduling dialog (T031, MTG-02). That dialog hasn't shipped yet, so nothing was scheduled.",
-    });
+  function openScheduleDialog(): void {
+    setIsScheduleDialogOpen(true);
   }
 
+  // T096 (module doc #7b, Trap #3 finding) -- `ScheduleMeetingsDialog.tsx`
+  // has no `initialData`/"meeting to edit" prop of any kind and its own
+  // `CreateMeetingsPayload` shape always creates a brand-new
+  // `events`/`event_sessions` series; it genuinely cannot edit one
+  // already-scheduled session in place. Honest, accurate stub copy -- NOT
+  // the old "dialog not built yet" text, since the dialog IS built now.
   function showEditStub(row: CoachMeetingRow): void {
     setStubNotice({
-      title: 'Edit dialog not built yet',
-      description: `Editing "${row.title}" would open the same scheduling dialog (T031, MTG-02) in edit mode. That dialog hasn't shipped yet, so nothing was changed.`,
+      title: "Editing an existing meeting isn't supported yet",
+      description: `"${row.title}" can't be edited in place. The real scheduling dialog (T031, MTG-02) only knows how to create a brand-new meeting series -- it has no way to load an already-scheduled session's fields, so opening it here would create a second, competing series instead of changing this one. Cancel this meeting and schedule a new one if its details need to change.`,
     });
   }
 
-  function handleConfirmCancel(): void {
+  // T096 (module doc #7c) -- real mutation, optimistic update + rollback on
+  // failure, mirroring `StudentsTab.tsx`'s own `handleConfirmDeactivate`
+  // (T089) shape.
+  async function handleConfirmCancel(): Promise<void> {
     if (cancelTarget === null) return;
+    const target = cancelTarget;
     setRows((prev) =>
       prev.map((row) =>
-        row.sessionId === cancelTarget.sessionId ? { ...row, status: 'canceled' } : row,
+        row.sessionId === target.sessionId ? { ...row, status: 'canceled' } : row,
       ),
     );
     setCancelTarget(null);
+    try {
+      await onCancelSession(target.sessionId);
+      setFeedback({
+        status: 'success',
+        title: 'Meeting canceled',
+        description: `"${target.title}" is marked canceled. No attendance will be recorded for it.`,
+      });
+    } catch (error) {
+      setRows((prev) =>
+        prev.map((row) =>
+          row.sessionId === target.sessionId ? { ...row, status: target.status } : row,
+        ),
+      );
+      setFeedback({
+        status: 'error',
+        title: "Couldn't cancel meeting",
+        description: isSupabaseLoaderError(error)
+          ? error.message
+          : `Something went wrong canceling "${target.title}". Try again in a moment.`,
+      });
+    }
+  }
+
+  // T096 (module doc #7a) -- real `onCreateMeetings` wiring. Reloads `rows`
+  // from `loadData()` on success (a full reload, not a client-side merge --
+  // see module doc #7a for why).
+  async function handleCreateMeetingsSubmit(payload: CreateMeetingsPayload): Promise<void> {
+    await onCreateMeetings(payload);
+    const sessionCount = payload.sessions.length;
+    try {
+      const fresh = await loadData();
+      setRows(fresh.rows);
+      setFeedback({
+        status: 'success',
+        title: 'Meetings scheduled',
+        description: `${sessionCount} meeting${sessionCount === 1 ? '' : 's'} scheduled.`,
+      });
+    } catch {
+      // The create itself already succeeded (this catch only guards the
+      // follow-up reload) -- disclosed, not fatal: `rows` just won't reflect
+      // the new meeting(s) until the next successful load/retry.
+      setFeedback({
+        status: 'success',
+        title: 'Meetings scheduled',
+        description: `${sessionCount} meeting${sessionCount === 1 ? '' : 's'} scheduled. Refresh the page to see ${sessionCount === 1 ? 'it' : 'them'} in the list below.`,
+      });
+    }
   }
 
   if (loadState.status === 'loading') {
@@ -971,11 +1172,21 @@ function CoachMeetingsView({ loadData }: CoachMeetingsViewProps): ReactNode {
     <VStack gap={6}>
       <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
         <Heading level={1}>Meetings</Heading>
-        <Button label="Schedule meetings" variant="primary" onClick={showScheduleStub} />
+        <Button label="Schedule meetings" variant="primary" onClick={openScheduleDialog} />
       </HStack>
 
       {stubNotice !== null && (
         <StubBanner notice={stubNotice} onDismiss={() => setStubNotice(null)} />
+      )}
+
+      {feedback !== null && (
+        <Banner
+          status={feedback.status}
+          title={feedback.title}
+          description={feedback.description}
+          isDismissable
+          onDismiss={() => setFeedback(null)}
+        />
       )}
 
       {!hasAnyMeetings ? (
@@ -988,7 +1199,7 @@ function CoachMeetingsView({ loadData }: CoachMeetingsViewProps): ReactNode {
           title="No meetings scheduled."
           description="Set up your weekly build meetings once and check-in takes care of itself."
           actions={
-            <Button label="Schedule meetings" variant="primary" onClick={showScheduleStub} />
+            <Button label="Schedule meetings" variant="primary" onClick={openScheduleDialog} />
           }
         />
       ) : (
@@ -1018,7 +1229,25 @@ function CoachMeetingsView({ loadData }: CoachMeetingsViewProps): ReactNode {
         title={`Cancel "${cancelTarget?.title ?? ''}"?`}
         description="This marks the session canceled. Students won't be expected to attend, and no attendance will be recorded for it."
         actionLabel="Cancel meeting"
-        onAction={handleConfirmCancel}
+        onAction={() => {
+          void handleConfirmCancel();
+        }}
+      />
+
+      {/* T096 (module doc #7a) -- `ScheduleMeetingsDialog.tsx` (T031,
+          already Passed, already built) wired into this page for the first
+          time, in CREATE mode only (module doc #7b: this dialog has no edit
+          mode). `teams` is deliberately NOT overridden here -- it falls back
+          to that component's own already-disclosed fixture team list (same
+          "still fixture-backed" posture `StudentsTab.tsx`'s own module doc
+          #12 already established for `StudentDialog`'s `season` prop); this
+          task's own Allowed Files do not include a second teams-loading
+          mechanism for scheduling specifically, and inventing one would be
+          scope creep beyond wiring the dialog itself. */}
+      <ScheduleMeetingsDialog
+        isOpen={isScheduleDialogOpen}
+        onOpenChange={setIsScheduleDialogOpen}
+        onCreateMeetings={handleCreateMeetingsSubmit}
       />
     </VStack>
   );
@@ -1181,22 +1410,128 @@ function StudentMeetingsView({ studentId, loadData }: StudentMeetingsViewProps):
 }
 
 // ---------------------------------------------------------------------------
+// Student/parent `studentId` resolution wrapper -- module doc #6, Trap #4.
+// Only ever mounted when the caller does NOT supply an explicit `studentId`
+// prop; an explicit `studentId` bypasses this entirely (unchanged behavior
+// for every pre-existing `MeetingsList.test.tsx` case that already passes
+// one).
+// ---------------------------------------------------------------------------
+
+interface ResolvedStudentMeetingsViewProps {
+  viewer: CurrentViewerIdentity;
+  resolveStudentId: ResolveCurrentStudentIdFn;
+  loadData: LoadStudentMeetingsDataFn;
+}
+
+function ResolvedStudentMeetingsView({
+  viewer,
+  resolveStudentId,
+  loadData,
+}: ResolvedStudentMeetingsViewProps): ReactNode {
+  const loadState = useLoadState(
+    () => resolveStudentId(viewer),
+    [resolveStudentId, viewer.id, viewer.role],
+  );
+
+  if (loadState.status === 'loading') {
+    return (
+      <VStack gap={3} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          Finding your student record…
+        </VisuallyHidden>
+        <Skeleton width={100} height={20} index={0} />
+        <Skeleton width={220} height={16} index={1} />
+      </VStack>
+    );
+  }
+
+  if (loadState.status === 'error') {
+    return (
+      <Banner
+        status="error"
+        title="Couldn't find your student record"
+        description="Something went wrong looking up which student this is for you. Try refreshing the page."
+        endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
+      />
+    );
+  }
+
+  if (loadState.data === null) {
+    return (
+      <EmptyState
+        headingLevel={1}
+        title="No student account linked yet"
+        description="We couldn't find a student record linked to your account yet. Once one is linked, your meetings will show up here."
+      />
+    );
+  }
+
+  return <StudentMeetingsView studentId={loadState.data} loadData={loadData} />;
+}
+
+interface StudentMeetingsViewContainerProps {
+  viewer: CurrentViewerIdentity;
+  explicitStudentId: string | undefined;
+  resolveStudentId: ResolveCurrentStudentIdFn;
+  loadData: LoadStudentMeetingsDataFn;
+}
+
+/** Module doc #6 -- an explicit `studentId` (every pre-existing test case)
+ * renders `StudentMeetingsView` directly, exactly as before this task;
+ * `undefined` (the new real-world default) routes through
+ * `ResolvedStudentMeetingsView`'s own real `resolveStudentId` load state. */
+function StudentMeetingsViewContainer({
+  viewer,
+  explicitStudentId,
+  resolveStudentId,
+  loadData,
+}: StudentMeetingsViewContainerProps): ReactNode {
+  if (explicitStudentId !== undefined) {
+    return <StudentMeetingsView studentId={explicitStudentId} loadData={loadData} />;
+  }
+  return (
+    <ResolvedStudentMeetingsView
+      viewer={viewer}
+      resolveStudentId={resolveStudentId}
+      loadData={loadData}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Top-level component -- module doc #5/#6.
 // ---------------------------------------------------------------------------
 
 export interface MeetingsListProps {
-  /** Coach/admin view seam. Defaults to fixture data (Known Context/Traps #1). */
+  /** Coach/admin view seam. Defaults to a real query
+   * (`../../lib/supabase/loaders/meetings.ts`). */
   loadCoachData?: LoadCoachMeetingsDataFn;
-  /** Student/parent view seam. Defaults to fixture data. */
+  /** Student/parent view seam. Defaults to a real query, same module. */
   loadStudentData?: LoadStudentMeetingsDataFn;
-  /** Which student the student/parent view is currently scoped to (module doc #6). */
+  /** T096 (module doc #7c). Defaults to a real mutation, same module. */
+  onCancelSession?: CancelMeetingSessionFn;
+  /** T096 (module doc #7a). Defaults to a real mutation, same module. */
+  onCreateMeetings?: OnCreateMeetingsFn;
+  /** T096 (module doc #6, Trap #4). Defaults to a real resolution, same
+   * module. Only ever invoked when `studentId` below is NOT supplied. */
+  resolveStudentId?: ResolveCurrentStudentIdFn;
+  /**
+   * Which student the student/parent view is currently scoped to (module
+   * doc #6). When omitted (the real-world default), this is resolved for
+   * real via `resolveStudentId` instead of falling back to a placeholder --
+   * supplying it explicitly (as every fixture-driven caller/test does)
+   * bypasses that resolution entirely.
+   */
   studentId?: string;
 }
 
 export function MeetingsList({
-  loadCoachData = defaultLoadCoachMeetingsData,
-  loadStudentData = defaultLoadStudentMeetingsData,
-  studentId = PLACEHOLDER_CURRENT_STUDENT_ID,
+  loadCoachData = loadCoachMeetingsData,
+  loadStudentData = loadStudentMeetingsData,
+  onCancelSession = cancelMeetingSession,
+  onCreateMeetings = createMeetings,
+  resolveStudentId = resolveCurrentStudentId,
+  studentId,
 }: MeetingsListProps = {}): ReactNode {
   const { user } = useAuth();
 
@@ -1220,9 +1555,18 @@ export function MeetingsList({
   return (
     <VStack gap={6} padding={6}>
       {isCoachOrAdminView ? (
-        <CoachMeetingsView loadData={loadCoachData} />
+        <CoachMeetingsView
+          loadData={loadCoachData}
+          onCancelSession={onCancelSession}
+          onCreateMeetings={onCreateMeetings}
+        />
       ) : (
-        <StudentMeetingsView studentId={studentId} loadData={loadStudentData} />
+        <StudentMeetingsViewContainer
+          viewer={{ id: user.id, role: user.role }}
+          explicitStudentId={studentId}
+          resolveStudentId={resolveStudentId}
+          loadData={loadStudentData}
+        />
       )}
     </VStack>
   );

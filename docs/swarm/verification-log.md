@@ -3371,3 +3371,59 @@ confirmed the aliasing was genuinely necessary and consistently used, confirmed 
 new mock blocks structurally mirror the two existing ones, confirmed fixture data
 matches each file's real local row-type shapes, confirmed the `beforeEach` wiring
 doesn't disturb the two pre-existing mocks. `RosterShell.test.tsx`: 14/14.
+[2026-07-20T02:29:58Z] Worker finished. Checker required before completion.
+
+## T096 — ED-1 packet P7 (expanded): real Meetings data + Cancel mutation + `ScheduleMeetingsDialog` wiring
+
+**Result:** PASS (1st attempt, MINOR)
+
+Same recurring class of gap found several times this epic: `MeetingsList.tsx`'s
+"Schedule" and "Edit" actions were pure stub notices even though
+`ScheduleMeetingsDialog.tsx` already existed, was already built, and already had a
+real `onCreateMeetings` seam — nobody had wired the two together. New
+`src/lib/supabase/loaders/meetings.ts` (557 lines): real coach/student loads, a real
+`cancelMeetingSession` mutation (`event_sessions.status='canceled'`, replacing the old
+local-state-only flip), a real `createMeetings` mutation wired to
+`ScheduleMeetingsDialog`'s existing seam, and a new `resolveCurrentStudentId` function
+replacing the `PLACEHOLDER_CURRENT_STUDENT_ID` fixture constant.
+
+**Trap #3 (Edit-mode feasibility) resolved correctly, not skipped:** investigated
+`ScheduleMeetingsDialog.tsx` directly and found it has no `initialData`/edit-target
+concept anywhere — `resetForm()` always resets to hardcoded blank defaults, and its
+payload shape always drives brand-new inserts with no UPDATE code path. Forcing Edit
+onto it would create a competing duplicate series. Correctly left Edit as a
+stub, but rewrote its copy from the old, now-literally-false "dialog not built yet" to
+an accurate explanation of the real limitation.
+
+**Trap #4 (`studentId` resolution) resolved, no reusable pattern existed to skip:**
+student → `students.profile_id = auth.uid()`; parent → earliest-linked child via
+`guardian_links`, disclosed as a real, scope-bounded limitation (`MeetingsList`'s
+pre-existing signature only accepts one `studentId`, unlike a multi-card
+architecture) — confirmed via direct inspection that `ParentHome.tsx` itself never
+had a working multi-student resolution to reuse either (a separate, pre-existing,
+already-disclosed gap).
+
+**Checker verification — the third and final independent audit of the concurrent
+git-stash incident** (T090's original stash operation caused a real merge conflict on
+this task's own `MeetingsList.tsx` during T094's `stash pop`): confirmed all three
+of T096's files are complete, coherent, and contain everything claimed — no
+truncation, no dangling references, no lost content. This closes the multi-task stash
+investigation with zero corruption found anywhere across T094, T095, or T096.
+Independently confirmed the Edit-mode and `studentId` findings by reading the actual
+forbidden-to-the-worker `ScheduleMeetingsDialog.tsx`/`ParentHome.tsx` files directly.
+Independently assessed all four disclosed risks (multi-student limitation, unwired
+`teams` prop on `ScheduleMeetingsDialog`, `createMeetings` partial-failure window,
+`.limit(1)` vs `.maybeSingle()`) and judged each a genuine, acceptable, disclosed
+MINOR — including tracing through the actual UX consequence of the still-fixture
+`teams` prop (fails safely with a visible error, not silent corruption). Full suite:
+1068/1068 (zero failures — T098's concurrent fix had already resolved the sibling
+`ReportsShell` fallout in the shared tree by the time this check ran). Clean
+typecheck/lint/build; format:check clean except the same pre-existing, untouched
+`Kiosk.tsx` issue every prior checker this session has already routed as its own
+standalone follow-up.
+
+**Findings (non-blocking, follow-up recommended):** wire real team data into
+`ScheduleMeetingsDialog`'s `teams` prop now that T094 provides it; add
+rollback/transaction safety to `createMeetings`' two-step insert; support genuinely
+multi-student parents on `/meetings` (a `ParentHome`-style multi-card rearchitect,
+explicitly out of this packet's scope).
