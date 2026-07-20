@@ -153,10 +153,22 @@
  * `Timestamp`.
  *
  * -----------------------------------------------------------------------
- * 7. No shared Supabase client wired in (Forbidden Files: `src/lib/supabase/**`)
- *    -- deliberate scope, not a gap for this task to solve, same posture as
- *    every prior content page's injectable persistence seam
- *    (`RsvpControl.tsx`'s `onRsvpChange`/`defaultOnRsvpChange`).
+ * 7. T101 (ED-1 Packet P10) UPDATE: `onRsvpChange` now defaults to the SAME
+ *    real `rsvps` upsert `RsvpControl.tsx` uses.
+ *
+ * `onRsvpChange` now defaults to `submitRsvpChange`
+ * (`../../lib/supabase/loaders/outreach.ts`) -- the identical real function
+ * `RsvpControl.tsx`'s own default now also uses (that loader module's own
+ * Trap #2 module doc has the full "one shared function, not two" decision
+ * writeup: `RsvpChangeParams` here and there are field-for-field identical,
+ * and the real RLS policy on `rsvps` already covers both "student
+ * self-RSVP" and "parent RSVP-on-behalf" via a single `my_student_ids()`
+ * union, so there is no genuine per-actor difference at the write layer).
+ * This component still writes `responded_by = currentUserProfileId` (the
+ * ACTING PARENT's own profile id, module doc #1 -- unchanged), never the
+ * student's. `defaultOnRsvpChange` (below) is KEPT as a named export for
+ * callers/tests that want an explicit no-network, log-only stub, but is no
+ * longer this component's own runtime default.
  *
  * -----------------------------------------------------------------------
  * 8. Optimistic local selection + rollback on failure -- same idiom
@@ -206,6 +218,9 @@ import {
   Timestamp,
   VStack,
 } from '@astryxdesign/core';
+// T101 (ED-1 Packet P10): real `onRsvpChange` default, shared with
+// `RsvpControl.tsx` -- module doc #7.
+import { submitRsvpChange } from '../../lib/supabase/loaders/outreach';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets, matching
@@ -468,8 +483,11 @@ export interface ParentRsvpProps {
    * real `profiles.id`, attributed to `responded_by` on write. Defaults to a
    * disclosed placeholder `profiles.id`. */
   currentUserProfileId?: string;
-  /** Injectable persistence seam (module doc #7). Defaults to a stub that
-   * only logs. */
+  /** Injectable persistence seam (module doc #7). T101: defaults to a real
+   * `rsvps` upsert (`submitRsvpChange`, `../../lib/supabase/loaders/
+   * outreach.ts`, shared with `RsvpControl.tsx`); `defaultOnRsvpChange`
+   * (log-only) remains exported for callers/tests that want to inject it
+   * explicitly. */
   onRsvpChange?: OnRsvpChangeFn;
   /** Injectable clock seam so the session-start lock boundary is
    * deterministically testable (module doc #5). Defaults to the real system
@@ -485,7 +503,7 @@ export function ParentRsvp({
   currentRsvp,
   guardianLinks,
   currentUserProfileId = PLACEHOLDER_CURRENT_PARENT_PROFILE_ID,
-  onRsvpChange = defaultOnRsvpChange,
+  onRsvpChange = submitRsvpChange,
   now = defaultNow,
 }: ParentRsvpProps): ReactNode {
   const isEditable = useSessionRsvpLock(session, now);

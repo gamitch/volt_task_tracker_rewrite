@@ -14,9 +14,11 @@
  * `package.json`) -- these tests use the same raw `createRoot`/`act`
  * pattern every other sibling test file in this batch already established.
  */
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { makeSubmitRsvpChange } from '../../lib/supabase/loaders/outreach';
 import {
   buildRsvpConfirmationCopy,
   isRsvpEditable,
@@ -461,5 +463,55 @@ describe('RsvpControl -- constitution item 13', () => {
 
     expect(container.textContent ?? '').not.toMatch(/[─-╿]/); // box-drawing range
     expect(container.textContent ?? '').not.toMatch(/\[.*\|.*\]/); // "[a|b|c]" wireframe style
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T101 (ED-1 Packet P10): loader-level test for the REAL `onRsvpChange`
+// default (`submitRsvpChange`, `../../lib/supabase/loaders/outreach.ts`,
+// Trap #2 -- shared with `ParentRsvp.tsx`'s own default). Same "inject a
+// fake SupabaseClient chain" pattern `loaders/meetings.ts`'s own tests
+// (`MeetingsList.test.tsx`) already established.
+// ---------------------------------------------------------------------------
+
+describe('submitRsvpChange (T101 real onRsvpChange default)', () => {
+  it('upserts rsvps keyed on (session_id, student_id), writing responded_by verbatim', async () => {
+    const upsertSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+    const fromSpy = vi.fn(() => ({ upsert: upsertSpy }));
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    const submit = makeSubmitRsvpChange(() => client);
+    await submit({
+      sessionId: 'session-1',
+      studentId: 'student-1',
+      status: 'going',
+      respondedBy: 'profile-student-1',
+    });
+
+    expect(fromSpy).toHaveBeenCalledWith('rsvps');
+    expect(upsertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        session_id: 'session-1',
+        student_id: 'student-1',
+        status: 'going',
+        responded_by: 'profile-student-1',
+      }),
+      { onConflict: 'session_id,student_id' },
+    );
+  });
+
+  it('rejects with the real SupabaseLoaderError on a genuine RLS/Postgrest error (e.g. 42501)', async () => {
+    const client = {
+      from: vi.fn(() => ({
+        upsert: vi
+          .fn()
+          .mockResolvedValue({ data: null, error: { message: 'denied', code: '42501' } }),
+      })),
+    } as unknown as SupabaseClient;
+
+    const submit = makeSubmitRsvpChange(() => client);
+    await expect(
+      submit({ sessionId: 's', studentId: 'stu', status: 'going', respondedBy: 'p' }),
+    ).rejects.toMatchObject({ code: '42501' });
   });
 });

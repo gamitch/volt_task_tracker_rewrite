@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 /**
- * T038: tests for `OutreachList.tsx`.
+ * T038: tests for `OutreachList.tsx`. T101 (ED-1 Packet P10) extends this
+ * file with real-load/real-create-dialog coverage (module doc #11 of the
+ * component file).
  *
  * Per this task's Allowed Files (`OutreachList.tsx` only) this test file is
  * a deliberate, disclosed addition beyond the literal Allowed Files list --
@@ -18,11 +20,33 @@
  * established, including `MeetingsList.test.tsx`'s `AuthProvider` +
  * `LoginAs` role-login harness.
  */
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthUser } from '../../app/guards';
+import { makeLoadOutreachData, makeSaveOutreachEvent } from '../../lib/supabase/loaders/outreach';
 import { LoginAs } from '../../test-utils/authHarness';
+
+// ---------------------------------------------------------------------------
+// jsdom gap: `Dialog` renders a native `<dialog>` and calls
+// `HTMLDialogElement.prototype.showModal()`, which this repo's installed
+// jsdom does not implement -- same gap `MeetingsList.test.tsx` (T096)
+// already hit and locally polyfilled; this is the first time THIS file
+// renders a real `Dialog` (`OutreachEventDialog`, T101), so the same local
+// override is needed here too.
+// ---------------------------------------------------------------------------
+if (
+  typeof HTMLDialogElement !== 'undefined' &&
+  typeof HTMLDialogElement.prototype.showModal !== 'function'
+) {
+  HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement): void {
+    this.setAttribute('open', '');
+  };
+  HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement): void {
+    this.removeAttribute('open');
+  };
+}
 import {
   OutreachList,
   buildUpcomingPast,
@@ -583,7 +607,7 @@ describe('<OutreachList /> coach view', () => {
     expect(container.textContent).not.toContain('Clubhouse');
   });
 
-  it('"New outreach event" shows the disclosed stub notice, not silent/fake behavior', async () => {
+  it('T101: "New outreach event" opens the real OutreachEventDialog (module doc #11), not a stub', async () => {
     renderAsUser(COACH_USER, { loadData: defaultLoadOutreachData });
     await flushMicrotasks();
 
@@ -594,7 +618,75 @@ describe('<OutreachList /> coach view', () => {
     act(() => {
       newEventButtons[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(container.textContent).toContain('Event creation dialog not built yet');
+    // The real dialog's own DialogHeader title, in CREATE mode.
+    expect(document.body.textContent).toContain('New outreach event');
+    // The old stub copy must never appear anywhere anymore (grep-provable
+    // proof this is genuinely wired, not still a disclosure Banner).
+    expect(container.textContent).not.toContain('Event creation dialog not built yet');
+  });
+
+  it('T101: creating an outreach event via the real dialog calls the injected onSaveEvent and reloads the list', async () => {
+    const onSaveEvent = vi.fn().mockResolvedValue(undefined);
+    let loadCount = 0;
+    async function countingLoadData(seasonId: string): Promise<OutreachLoadResult> {
+      loadCount += 1;
+      return defaultLoadOutreachData(seasonId);
+    }
+
+    renderAsUser(COACH_USER, { loadData: countingLoadData, onSaveEvent });
+    await flushMicrotasks();
+    expect(loadCount).toBe(1);
+
+    const newEventButtons = Array.from(container.querySelectorAll('button')).filter((btn) =>
+      btn.textContent?.includes('New outreach event'),
+    );
+    act(() => {
+      newEventButtons[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const labels = Array.from(document.querySelectorAll('label'));
+    const titleLabel = labels.find((el) => el.textContent?.trim().startsWith('Title'));
+    const titleInput = document.getElementById(
+      titleLabel?.getAttribute('for') ?? '',
+    ) as HTMLInputElement;
+    const dateLabel = labels.find((el) => el.textContent?.trim().startsWith('Date'));
+    const dateInput = document.getElementById(
+      dateLabel?.getAttribute('for') ?? '',
+    ) as HTMLInputElement;
+
+    function setNativeInputValue(input: HTMLInputElement, value: string): void {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value',
+      )?.set;
+      setter?.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    act(() => {
+      setNativeInputValue(titleInput, 'Winter Coat Drive');
+      setNativeInputValue(dateInput, '2026-08-15');
+    });
+
+    const createButton = Array.from(document.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'Create event — 1 session',
+    );
+    expect(createButton).toBeTruthy();
+    await act(async () => {
+      createButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await flushMicrotasks();
+
+    expect(onSaveEvent).toHaveBeenCalledTimes(1);
+    expect(onSaveEvent.mock.calls[0][0]).toMatchObject({
+      event: { title: 'Winter Coat Drive' },
+    });
+    // The list reloaded (module doc #11) -- a second real `loadData` call,
+    // not a client-side merge.
+    expect(loadCount).toBe(2);
+    expect(container.textContent).toContain('Outreach event created');
   });
 
   it('BEH-01: the team goal bar fires milestone toasts once confirmed hours cross them (first render only)', async () => {
@@ -747,5 +839,300 @@ describe('<OutreachList /> student/parent view', () => {
     // The milestone tick itself is still shown as reached (a real, current
     // fact), independent of whether the one-time toast fires again.
     expect(container.textContent).toContain('25% reached');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T101 (ED-1 Packet P10): real loader-level tests for
+// `../../lib/supabase/loaders/outreach.ts`'s `makeLoadOutreachData`/
+// `makeSaveOutreachEvent` -- same "inject a fake SupabaseClient chain"
+// pattern `loaders/meetings.ts`'s own tests (`MeetingsList.test.tsx`)
+// already established.
+// ---------------------------------------------------------------------------
+
+describe('loadOutreachData (T101 real load)', () => {
+  it('filters events by season_id server-side, joins sessions/rsvps by id, and resolves a real per-student goal from students.goal_hours_override / seasons.default_goal_hours', async () => {
+    const eventsEqSpy = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: 'event-1',
+          season_id: 'season-1',
+          type: 'outreach',
+          title: 'Food Bank',
+          description: '',
+          location_name: 'X',
+          address: '',
+          team_ids: null,
+          counts_participation: false,
+          counts_volunteer_hours: true,
+          adult_volunteers_count: 0,
+          adult_volunteer_hours: 0,
+          created_by: null,
+        },
+      ],
+      error: null,
+    });
+    const sessionsInSpy = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: 'session-1',
+          event_id: 'event-1',
+          session_date: '2026-08-01',
+          starts_at: '2026-08-01T14:00:00.000Z',
+          ends_at: '2026-08-01T16:00:00.000Z',
+          status: 'scheduled',
+          people_reached: null,
+          notes: '',
+        },
+      ],
+      error: null,
+    });
+    const rsvpsInSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const studentsOrderSpy = vi.fn().mockResolvedValue({
+      data: [
+        { id: 'student-1', display_name: 'Amara', team_id: 'team-ravens', goal_hours_override: 5 },
+      ],
+      error: null,
+    });
+    const seasonMaybeSingleSpy = vi
+      .fn()
+      .mockResolvedValue({ data: { id: 'season-1', default_goal_hours: 100 }, error: null });
+
+    const fromSpy = vi.fn((table: string) => {
+      if (table === 'events') return { select: vi.fn(() => ({ eq: eventsEqSpy })) };
+      if (table === 'event_sessions') return { select: vi.fn(() => ({ in: sessionsInSpy })) };
+      if (table === 'rsvps') return { select: vi.fn(() => ({ in: rsvpsInSpy })) };
+      if (table === 'students') return { select: vi.fn(() => ({ order: studentsOrderSpy })) };
+      if (table === 'seasons') {
+        return {
+          select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: seasonMaybeSingleSpy })) })),
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    const load = makeLoadOutreachData(() => client);
+    const result = await load('season-1');
+
+    expect(eventsEqSpy).toHaveBeenCalledWith('season_id', 'season-1');
+    expect(sessionsInSpy).toHaveBeenCalledWith('event_id', ['event-1']);
+    expect(rsvpsInSpy).toHaveBeenCalledWith('session_id', ['session-1']);
+    expect(result.events).toHaveLength(1);
+    expect(result.sessions).toHaveLength(1);
+    // The student's own explicit override (5) wins over the season default
+    // (100) -- both real columns, module doc #2 of the loader file.
+    expect(result.goalConfig.individualGoalHoursByStudentId['student-1']).toBe(5);
+  });
+
+  it('falls back to the season default_goal_hours when a student has no goal_hours_override', async () => {
+    const nullEmpty = { data: [], error: null };
+    const fromSpy = vi.fn((table: string) => {
+      if (table === 'events')
+        return { select: vi.fn(() => ({ eq: vi.fn().mockResolvedValue(nullEmpty) })) };
+      if (table === 'students') {
+        return {
+          select: vi.fn(() => ({
+            order: vi.fn().mockResolvedValue({
+              data: [
+                { id: 'student-1', display_name: 'Amara', team_id: 't', goal_hours_override: null },
+              ],
+              error: null,
+            }),
+          })),
+        };
+      }
+      if (table === 'seasons') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: 'season-1', default_goal_hours: 42 },
+                error: null,
+              }),
+            })),
+          })),
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    const load = makeLoadOutreachData(() => client);
+    const result = await load('season-1');
+    expect(result.goalConfig.individualGoalHoursByStudentId['student-1']).toBe(42);
+  });
+});
+
+describe('saveOutreachEvent (T101, Trap #5 real onSaveEvent default)', () => {
+  it('CREATE: resolves the active season, then inserts one events row + one event_sessions row per session', async () => {
+    const seasonMaybeSingleSpy = vi
+      .fn()
+      .mockResolvedValue({ data: { id: 'season-active-1' }, error: null });
+    const eventSingleSpy = vi
+      .fn()
+      .mockResolvedValue({ data: { id: 'event-created-1' }, error: null });
+    const eventInsertSpy = vi.fn(() => ({ select: vi.fn(() => ({ single: eventSingleSpy })) }));
+    const sessionsInsertSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+
+    const fromSpy = vi.fn((table: string) => {
+      if (table === 'seasons') {
+        return {
+          select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: seasonMaybeSingleSpy })) })),
+        };
+      }
+      if (table === 'events') return { insert: eventInsertSpy };
+      if (table === 'event_sessions') return { insert: sessionsInsertSpy };
+      throw new Error(`unexpected table: ${table}`);
+    });
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    const save = makeSaveOutreachEvent(() => client);
+    await save({
+      event: {
+        title: 'Food Bank Sort',
+        description: '',
+        locationName: 'X',
+        address: '',
+        type: 'outreach',
+        countsParticipation: false,
+        countsVolunteerHours: true,
+        teamIds: null,
+        adultVolunteersCount: 0,
+        adultVolunteerHours: 0,
+        shareToCalendarFeed: true,
+      },
+      sessions: [
+        {
+          sessionDate: '2026-08-01',
+          startsAt: '2026-08-01T14:00:00.000Z',
+          endsAt: '2026-08-01T16:00:00.000Z',
+          notes: '',
+          peopleReached: null,
+        },
+      ],
+    });
+
+    expect(eventInsertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        season_id: 'season-active-1',
+        type: 'outreach',
+        title: 'Food Bank Sort',
+      }),
+    );
+    expect(sessionsInsertSpy).toHaveBeenCalledWith([
+      expect.objectContaining({ event_id: 'event-created-1', session_date: '2026-08-01' }),
+    ]);
+  });
+
+  it('rejects with a real, disclosed error (never a fabricated season_id) when no season is active', async () => {
+    const client = {
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+          })),
+        })),
+      })),
+    } as unknown as SupabaseClient;
+
+    const save = makeSaveOutreachEvent(() => client);
+    await expect(
+      save({
+        event: {
+          title: 'X',
+          description: '',
+          locationName: '',
+          address: '',
+          type: 'outreach',
+          countsParticipation: false,
+          countsVolunteerHours: true,
+          teamIds: null,
+          adultVolunteersCount: 0,
+          adultVolunteerHours: 0,
+          shareToCalendarFeed: true,
+        },
+        sessions: [],
+      }),
+    ).rejects.toThrow(/no active season/i);
+  });
+
+  it('EDIT: updates the events row, updates sessions matching an existing session_date in place, and inserts brand-new dates -- never deletes', async () => {
+    const eventUpdateEqSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+    const eventUpdateSpy = vi.fn(() => ({ eq: eventUpdateEqSpy }));
+    const existingSessionsEqSpy = vi.fn().mockResolvedValue({
+      data: [{ id: 'session-existing-1', session_date: '2026-08-01' }],
+      error: null,
+    });
+    const sessionUpdateEqSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+    const sessionUpdateSpy = vi.fn(() => ({ eq: sessionUpdateEqSpy }));
+    const sessionsInsertSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+
+    let sessionsSelectCall = 0;
+    const fromSpy = vi.fn((table: string) => {
+      if (table === 'events') return { update: eventUpdateSpy };
+      if (table === 'event_sessions') {
+        sessionsSelectCall += 1;
+        return {
+          select: vi.fn(() => ({ eq: existingSessionsEqSpy })),
+          update: sessionUpdateSpy,
+          insert: sessionsInsertSpy,
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    const save = makeSaveOutreachEvent(() => client);
+    await save({
+      event: {
+        id: 'event-existing-1',
+        title: 'Food Bank Sort (updated)',
+        description: '',
+        locationName: 'X',
+        address: '',
+        type: 'outreach',
+        countsParticipation: false,
+        countsVolunteerHours: true,
+        teamIds: null,
+        adultVolunteersCount: 0,
+        adultVolunteerHours: 0,
+        shareToCalendarFeed: true,
+      },
+      sessions: [
+        // Matches the existing session_date -- updated in place (its real
+        // id is preserved, never deleted/recreated).
+        {
+          sessionDate: '2026-08-01',
+          startsAt: '2026-08-01T15:00:00.000Z',
+          endsAt: '2026-08-01T17:00:00.000Z',
+          notes: '',
+          peopleReached: 50,
+        },
+        // A brand-new date -- inserted.
+        {
+          sessionDate: '2026-08-08',
+          startsAt: '2026-08-08T14:00:00.000Z',
+          endsAt: '2026-08-08T16:00:00.000Z',
+          notes: '',
+          peopleReached: null,
+        },
+      ],
+    });
+
+    expect(eventUpdateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Food Bank Sort (updated)' }),
+    );
+    expect(eventUpdateEqSpy).toHaveBeenCalledWith('id', 'event-existing-1');
+    expect(sessionUpdateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ starts_at: '2026-08-01T15:00:00.000Z', people_reached: 50 }),
+    );
+    expect(sessionUpdateEqSpy).toHaveBeenCalledWith('id', 'session-existing-1');
+    expect(sessionsInsertSpy).toHaveBeenCalledWith([
+      expect.objectContaining({ event_id: 'event-existing-1', session_date: '2026-08-08' }),
+    ]);
+    // Never a delete call anywhere in this reconciliation (module doc #5's
+    // own genuine FK-restrict finding).
+    expect(sessionsSelectCall).toBeGreaterThan(0);
   });
 });

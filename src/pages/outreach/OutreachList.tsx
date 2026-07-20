@@ -193,13 +193,10 @@
  * 8. Deliberate stubs (per Forbidden Files -- disclosed, not silently built
  *    as if real):
  *
- *    a. "New outreach event" button (coach view) -- `OutreachEventDialog.tsx`
- *       is T039's (currently Blocked) deliverable, a forbidden file here.
- *       The button is real, visible, and clickable, but its `onClick` shows
- *       an inline `Banner` disclosing that the real event-creation dialog is
- *       not built yet, rather than silently doing nothing or faking a
- *       dialog. Same pattern `MeetingsList.tsx`'s "Schedule meetings"
- *       stub already established.
+ *    a. T101 UPDATE (ED-1 Packet P10): "New outreach event" (coach view) is
+ *       NO LONGER a stub -- see module doc #11 below. `OutreachEventDialog.tsx`
+ *       (T039) was already built and already Passed; this task wires it into
+ *       this page for the first time, in CREATE mode.
  *    b. Per-row RSVP `SegmentedControl` (student/parent view, Upcoming rows
  *       only) -- built FOR REAL as an OUT-01/OUT-03 *preview* per the
  *       packet's own instruction ("row-level RSVP controls only to the
@@ -210,23 +207,32 @@
  *       anywhere in this file (Known Context/Traps #1, same as every other
  *       content page so far). The fuller, validated, server-persisted RSVP
  *       flow -- especially the parent-facing multi-student version --
- *       belongs to `RsvpControl.tsx`/`ParentRsvp.tsx` (T040/T042, Forbidden
- *       Files, currently Blocked), neither of which is built or imported
- *       here.
+ *       belongs to `RsvpControl.tsx`/`ParentRsvp.tsx` (T040/T042). T101
+ *       UPDATE: those two files' own default `onRsvpChange` is now wired to
+ *       a real `rsvps` upsert (`../../lib/supabase/loaders/outreach.ts`,
+ *       module doc #11) -- but this file still does NOT import/render
+ *       either of them here; the packet's own Objective lists "real RSVP
+ *       mutations (RsvpControl/ParentRsvp)" as wiring THOSE TWO components'
+ *       own default, not as new integration work pulling them into this
+ *       list page (a genuinely separate, larger UI change this task's
+ *       packet never asked for). This page's own inline row-level preview
+ *       therefore deliberately stays local-only, unchanged by this task.
  *    c. Event titles are plain `Heading`/`ListItem` `label` text, never a
- *       `Link`/`href` to `/outreach/:eventId`. `OutreachDetail.tsx` (T041,
- *       Forbidden Files, currently Blocked) is the real detail page;
- *       `router.tsx`'s existing `/outreach/:eventId` route (confirmed by
- *       reading that forbidden/read-only file directly) still resolves to
- *       an inline placeholder div ("Outreach Event (placeholder) -
- *       eventId: ..."), not real detail content, so linking there would be
- *       misleading rather than helpful. Not a silently-dropped feature --
- *       OUT-01's own text never asked for detail links on the list page.
+ *       `Link`/`href` to `/outreach/:eventId`. `OutreachDetail.tsx` (T041)
+ *       is the real detail page (T101 UPDATE: now real-wired too, see that
+ *       file's own module doc); `router.tsx`'s existing `/outreach/:eventId`
+ *       route (forbidden/read-only) still resolves to an inline placeholder
+ *       div, not this page's own content, so linking there would still be
+ *       misleading rather than helpful, and OUT-01's own text never asked
+ *       for detail links on the list page. Untouched by this task.
  *    d. `MarkDayCompleteDialog.tsx` (T040) and `Leaderboard.tsx` (T044) are
  *       not referenced, imported, or stubbed anywhere in this file: neither
  *       is part of OUT-01's list-page scope (this task's own objective
- *       text), and both are separate Forbidden/Blocked tasks' deliverables.
- *       Not an oversight -- explicitly out of scope here.
+ *       text). T101 UPDATE: `MarkDayCompleteDialog.tsx`'s own default
+ *       `onMarkComplete` is now wired to a real mutation (same loader
+ *       module, module doc #11) but remains standalone/not imported here,
+ *       same reasoning as (b) above. `Leaderboard.tsx` is P11's own separate
+ *       scope, untouched.
  *
  * -----------------------------------------------------------------------
  * 9. DES-12 four states, reachable independently for both role variants.
@@ -300,6 +306,40 @@
  *    `color` used.
  *  - `VStack`/`HStack` ("Stack" section, `VStack`/`HStack` subsections):
  *    `gap`, `padding`, `hAlign`, `vAlign`, `wrap`, `justify` used.
+ *
+ * -----------------------------------------------------------------------
+ * 11. T101 (ED-1 Packet P10): real load + real "New outreach event" wiring
+ *     -- `loadData` now defaults to `loadOutreachData`
+ *     (`../../lib/supabase/loaders/outreach.ts`, a real query), and the
+ *     "New outreach event" button (coach view) now opens the real,
+ *     already-built `OutreachEventDialog.tsx` (T039) in CREATE mode
+ *     (`isEventDialogOpen` state) instead of showing a stub `Banner`.
+ *     `handleSaveEventSubmit` wires the dialog's own `onSaveEvent` prop to a
+ *     real default (`saveOutreachEvent`, same loader module) that inserts
+ *     one real `events` row (type `outreach`, or `competition` per that
+ *     dialog's own CMP-01 type `Selector`) + one real `event_sessions` row
+ *     per session, then reloads this page's own data from `loadData(seasonId)`
+ *     so the newly-created event appears without a manual refresh (a full
+ *     reload, not a client-side merge, same "recomputing derived fields
+ *     client-side would duplicate the loader's own DB-driven joins for no
+ *     benefit" reasoning `MeetingsList.tsx`'s own T096 module doc #7a
+ *     already established). `overrideData`/`reloadOutreachData` below are the
+ *     mechanism that lets this page reload its own already-successfully-
+ *     loaded data in place, without re-triggering the `loading` DES-12 state
+ *     (a full top-level re-render through `loadState` would flash the
+ *     Skeleton loading state again, which `MeetingsList.tsx`'s own
+ *     `CoachMeetingsView`/`StudentMeetingsView` split avoids by owning their
+ *     `loadData` calls independently -- `OutreachList.tsx`'s own single
+ *     top-level `loadState`/dual-view-props architecture, unchanged by this
+ *     task, needed this narrower `overrideData` seam instead of that larger
+ *     restructuring).
+ *
+ *     `teams` (`OutreachEventDialog`'s own prop) is deliberately NOT
+ *     overridden here -- it falls back to that component's own already-
+ *     disclosed fixture team list, same "still fixture-backed" posture
+ *     `MeetingsList.tsx`'s own T096 wiring of `ScheduleMeetingsDialog`
+ *     already established for the identical reason (no second teams-loading
+ *     mechanism is part of this task's own Allowed Files scope).
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
@@ -324,6 +364,13 @@ import {
   VStack,
 } from '@astryxdesign/core';
 import { useAuth } from '../../app/guards';
+// T101 (ED-1 Packet P10): real load/create wiring -- module doc #11.
+// `saveOutreachEvent`/`OutreachEventDialog` are this task's own wiring of an
+// ALREADY-BUILT, ALREADY-PASSED standalone dialog into this page for the
+// first time; nothing inside `OutreachEventDialog.tsx` itself is modified
+// (forbidden/read-only file).
+import { loadOutreachData, saveOutreachEvent } from '../../lib/supabase/loaders/outreach';
+import { OutreachEventDialog, type OnSaveOutreachEventFn } from './OutreachEventDialog';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets. Module doc #1.
@@ -1031,13 +1078,8 @@ function GoalProgressBar({
 }
 
 // ---------------------------------------------------------------------------
-// Coach view -- module docs #2/#5/#8a/#9.
+// Coach view -- module docs #2/#5/#8a/#9/#11.
 // ---------------------------------------------------------------------------
-
-interface StubNotice {
-  title: string;
-  description: string;
-}
 
 function CoachOutreachRowItem({
   session,
@@ -1144,6 +1186,23 @@ interface CoachOutreachViewProps {
   rsvps: readonly RsvpRow[];
   students: readonly OutreachStudentFixture[];
   goalConfig: OutreachGoalConfig;
+  /** T101 (module doc #11). Defaults to a real `events`/`event_sessions`
+   * insert, passed straight through to `<OutreachEventDialog
+   * onSaveEvent={...} />`. */
+  onSaveEvent: OnSaveOutreachEventFn;
+  /** T101 (module doc #11). Reloads this page's own already-loaded data in
+   * place after a successful create, without re-triggering the top-level
+   * `loading` DES-12 state. */
+  onReload: () => Promise<void>;
+}
+
+/** T101 (module doc #11) -- real success/error messaging for event
+ * creation, same "success Banner + error Banner, dismissable" pattern
+ * `MeetingsList.tsx`'s own `FeedbackBanner` (T096) already established. */
+interface FeedbackBanner {
+  status: 'success' | 'error';
+  title: string;
+  description: string;
 }
 
 function CoachOutreachView({
@@ -1153,8 +1212,9 @@ function CoachOutreachView({
   rsvps,
   students,
   goalConfig,
+  onSaveEvent,
+  onReload,
 }: CoachOutreachViewProps): ReactNode {
-  const [stubNotice, setStubNotice] = useState<StubNotice | null>(null);
   const { upcoming, past } = useMemo(() => buildUpcomingPast(sessions, events), [sessions, events]);
   const studentIds = useMemo(() => students.map((student) => student.id), [students]);
   const teamHours = useMemo(
@@ -1170,12 +1230,41 @@ function CoachOutreachView({
     [sessions, rsvps, studentIds],
   );
 
-  function showNewEventStub(): void {
-    setStubNotice({
-      title: 'Event creation dialog not built yet',
-      description:
-        "This action opens the new-outreach-event dialog (T039, OUT-01/OUT-02). That dialog hasn't shipped yet, so no event was created.",
-    });
+  // T101 (module doc #11) -- drives the one rendered
+  // `<OutreachEventDialog>` instance, in CREATE mode only (this view never
+  // renders an edit-mode instance; that lives on `OutreachDetail.tsx`).
+  const [isEventDialogOpen, setIsEventDialogOpen] = useState(false);
+  const [feedback, setFeedback] = useState<FeedbackBanner | null>(null);
+
+  function openEventDialog(): void {
+    setIsEventDialogOpen(true);
+  }
+
+  // T101 (module doc #11) -- real `onSaveEvent` wiring. Reloads this page's
+  // own data via `onReload()` on success (a full reload, not a client-side
+  // merge -- module doc #11).
+  async function handleSaveEventSubmit(
+    payload: Parameters<OnSaveOutreachEventFn>[0],
+  ): Promise<void> {
+    await onSaveEvent(payload);
+    try {
+      await onReload();
+      setFeedback({
+        status: 'success',
+        title: 'Outreach event created',
+        description: `"${payload.event.title}" was created with ${payload.sessions.length} session${payload.sessions.length === 1 ? '' : 's'}.`,
+      });
+    } catch {
+      // The create itself already succeeded (this catch only guards the
+      // follow-up reload) -- disclosed, not fatal, same posture
+      // `MeetingsList.tsx`'s own T096 `handleCreateMeetingsSubmit` already
+      // established.
+      setFeedback({
+        status: 'success',
+        title: 'Outreach event created',
+        description: `"${payload.event.title}" was created. Refresh the page to see it in the list below.`,
+      });
+    }
   }
 
   const hasAnyOutreach = sessions.length > 0;
@@ -1187,16 +1276,16 @@ function CoachOutreachView({
           <Heading level={1}>Outreach</Heading>
           <Badge variant="neutral" label={`${unansweredCount} pending RSVPs`} />
         </VStack>
-        <Button label="New outreach event" variant="primary" onClick={showNewEventStub} />
+        <Button label="New outreach event" variant="primary" onClick={openEventDialog} />
       </HStack>
 
-      {stubNotice !== null && (
+      {feedback !== null && (
         <Banner
-          status="info"
-          title={stubNotice.title}
-          description={stubNotice.description}
+          status={feedback.status}
+          title={feedback.title}
+          description={feedback.description}
           isDismissable
-          onDismiss={() => setStubNotice(null)}
+          onDismiss={() => setFeedback(null)}
         />
       )}
 
@@ -1206,7 +1295,7 @@ function CoachOutreachView({
           title="No outreach events yet"
           description="Outreach events for this season will show up here once they're scheduled."
           actions={
-            <Button label="New outreach event" variant="primary" onClick={showNewEventStub} />
+            <Button label="New outreach event" variant="primary" onClick={openEventDialog} />
           }
         />
       ) : (
@@ -1235,6 +1324,16 @@ function CoachOutreachView({
           />
         </>
       )}
+
+      {/* T101 (module doc #11) -- `OutreachEventDialog.tsx` (T039, already
+          Passed, already built) wired into this page for the first time, in
+          CREATE mode only (no `initialEvent` prop). `teams` deliberately
+          NOT overridden -- module doc #11. */}
+      <OutreachEventDialog
+        isOpen={isEventDialogOpen}
+        onOpenChange={setIsEventDialogOpen}
+        onSaveEvent={handleSaveEventSubmit}
+      />
     </>
   );
 }
@@ -1440,22 +1539,44 @@ function StudentParentOutreachView({
 // ---------------------------------------------------------------------------
 
 export interface OutreachListProps {
-  /** Injectable data-loading seam (Known Context/Traps #1). Defaults to
-   * fixture data. */
+  /** Injectable data-loading seam (Known Context/Traps #1). T101: defaults
+   * to a real query (`loadOutreachData`, `../../lib/supabase/loaders/
+   * outreach.ts`); `defaultLoadOutreachData` (fixture) remains exported for
+   * callers/tests that want to inject it explicitly. */
   loadData?: LoadOutreachDataFn;
   seasonId?: string;
   /** Which student the student/parent view is currently scoped to (module
    * doc #7). */
   viewerStudentId?: string;
+  /** T101 (module doc #11). Defaults to a real `events`/`event_sessions`
+   * insert, passed straight through to `<OutreachEventDialog
+   * onSaveEvent={...} />` in the coach view. */
+  onSaveEvent?: OnSaveOutreachEventFn;
 }
 
 export function OutreachList({
-  loadData = defaultLoadOutreachData,
+  loadData = loadOutreachData,
   seasonId = PLACEHOLDER_SEASON_ID,
   viewerStudentId = PLACEHOLDER_CURRENT_STUDENT_ID,
+  onSaveEvent = saveOutreachEvent,
 }: OutreachListProps = {}): ReactNode {
   const { user } = useAuth();
   const loadState = useLoadState(() => loadData(seasonId), [loadData, seasonId]);
+  // T101 (module doc #11) -- lets the coach view reload this page's own
+  // already-successfully-loaded data in place (after creating an event)
+  // without re-triggering the top-level `loading` DES-12 state.
+  const [overrideData, setOverrideData] = useState<OutreachLoadResult | null>(null);
+
+  useEffect(() => {
+    if (loadState.status === 'success') {
+      setOverrideData(loadState.data);
+    }
+  }, [loadState]);
+
+  async function reloadOutreachData(): Promise<void> {
+    const fresh = await loadData(seasonId);
+    setOverrideData(fresh);
+  }
 
   // Module doc #6 -- only the two role literals present in guards.tsx's
   // stale `Role` union are compared directly; everything else (including a
@@ -1513,13 +1634,19 @@ export function OutreachList({
     );
   }
 
+  // T101 (module doc #11) -- `overrideData` (kept in sync with every
+  // successful `loadState` via the effect above) is preferred when present,
+  // so a post-create reload (`reloadOutreachData`) is reflected immediately;
+  // it is always populated by the time this line is reached (the effect
+  // runs before this render's return commits) but falls back to
+  // `loadState.data` defensively for the very first successful render.
+  const data = overrideData ?? loadState.data;
+
   // Module doc #2 -- the only place events are filtered by type; every
   // session below is reached exclusively through an outreach event id.
-  const outreachEvents = filterOutreachEvents(loadState.data.events);
+  const outreachEvents = filterOutreachEvents(data.events);
   const outreachEventIds = new Set(outreachEvents.map((event) => event.id));
-  const outreachSessions = loadState.data.sessions.filter((session) =>
-    outreachEventIds.has(session.eventId),
-  );
+  const outreachSessions = data.sessions.filter((session) => outreachEventIds.has(session.eventId));
 
   return (
     <VStack gap={6} padding={6}>
@@ -1528,9 +1655,11 @@ export function OutreachList({
           seasonId={seasonId}
           events={outreachEvents}
           sessions={outreachSessions}
-          rsvps={loadState.data.rsvps}
-          students={loadState.data.students}
-          goalConfig={loadState.data.goalConfig}
+          rsvps={data.rsvps}
+          students={data.students}
+          goalConfig={data.goalConfig}
+          onSaveEvent={onSaveEvent}
+          onReload={reloadOutreachData}
         />
       ) : (
         <StudentParentOutreachView
@@ -1538,8 +1667,8 @@ export function OutreachList({
           viewerStudentId={viewerStudentId}
           events={outreachEvents}
           sessions={outreachSessions}
-          initialRsvps={loadState.data.rsvps}
-          goalConfig={loadState.data.goalConfig}
+          initialRsvps={data.rsvps}
+          goalConfig={data.goalConfig}
         />
       )}
     </VStack>

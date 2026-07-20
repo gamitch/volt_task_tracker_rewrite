@@ -18,9 +18,11 @@
  * helper resolves a real `<label htmlFor>` -> `<input type="checkbox">` pair
  * for `CheckboxListItem`, not just plain `NumberInput`/`TextInput`).
  */
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { makeMarkDayComplete } from '../../lib/supabase/loaders/outreach';
 import {
   buildAttendanceWriteRows,
   computeInitialAttendedStudentIds,
@@ -519,5 +521,123 @@ describe('<MarkDayCompleteDialog /> submit payload + irreversibility guard (modu
     ).toBe(false);
     expect(findButtonByText('Close')).toBeDefined();
     expect(container.textContent).toContain("can't be marked complete from here");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T101 (ED-1 Packet P10): loader-level tests for the REAL `onMarkComplete`
+// default (`markDayComplete`, `../../lib/supabase/loaders/outreach.ts`,
+// module doc #4). Same "inject a fake SupabaseClient chain" pattern
+// `loaders/meetings.ts`'s own tests (`MeetingsList.test.tsx`) already
+// established.
+// ---------------------------------------------------------------------------
+
+describe('markDayComplete (T101 real onMarkComplete default)', () => {
+  it('updates event_sessions (status=completed, people_reached) and upserts the attendance rows', async () => {
+    const sessionUpdateEqSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+    const sessionUpdateSpy = vi.fn(() => ({ eq: sessionUpdateEqSpy }));
+    const attendanceUpsertSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+
+    const fromSpy = vi.fn((table: string) => {
+      if (table === 'event_sessions') return { update: sessionUpdateSpy };
+      if (table === 'attendance') return { upsert: attendanceUpsertSpy };
+      throw new Error(`unexpected table: ${table}`);
+    });
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    const markComplete = makeMarkDayComplete(() => client);
+    await markComplete({
+      sessionId: 'session-1',
+      peopleReached: 42,
+      attendance: [
+        {
+          sessionId: 'session-1',
+          studentId: 'student-1',
+          status: 'present',
+          checkInAt: null,
+          checkOutAt: null,
+          hoursOverride: null,
+          method: 'coach',
+          recordedBy: 'profile-coach-1',
+        },
+      ],
+      adultVolunteersCountThisSession: 0,
+      adultVolunteerHoursThisSession: 0,
+      recordedBy: 'profile-coach-1',
+    });
+
+    expect(sessionUpdateSpy).toHaveBeenCalledWith({ status: 'completed', people_reached: 42 });
+    expect(sessionUpdateEqSpy).toHaveBeenCalledWith('id', 'session-1');
+    expect(attendanceUpsertSpy).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          session_id: 'session-1',
+          student_id: 'student-1',
+          status: 'present',
+          check_in_at: null,
+          check_out_at: null,
+          hours_override: null,
+          method: 'coach',
+          recorded_by: 'profile-coach-1',
+        }),
+      ],
+      { onConflict: 'session_id,student_id' },
+    );
+    // No adult-volunteer delta -- the additive events read-modify-write is
+    // skipped entirely (module doc #4(c)).
+    expect(fromSpy).not.toHaveBeenCalledWith('events');
+  });
+
+  it('performs the disclosed non-atomic additive events adult-volunteer update only when a delta is nonzero', async () => {
+    const sessionUpdateSpy = vi.fn(() => ({
+      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+    }));
+    const sessionEventIdMaybeSingleSpy = vi
+      .fn()
+      .mockResolvedValue({ data: { event_id: 'event-1' }, error: null });
+    const eventTotalsMaybeSingleSpy = vi.fn().mockResolvedValue({
+      data: { adult_volunteers_count: 2, adult_volunteer_hours: 6 },
+      error: null,
+    });
+    const eventUpdateEqSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+    const eventUpdateSpy = vi.fn(() => ({ eq: eventUpdateEqSpy }));
+
+    let eventSessionsSelectCall = 0;
+    const fromSpy = vi.fn((table: string) => {
+      if (table === 'event_sessions') {
+        eventSessionsSelectCall += 1;
+        if (eventSessionsSelectCall === 1) return { update: sessionUpdateSpy };
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({ maybeSingle: sessionEventIdMaybeSingleSpy })),
+          })),
+        };
+      }
+      if (table === 'events') {
+        return {
+          select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: eventTotalsMaybeSingleSpy })) })),
+          update: eventUpdateSpy,
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    const markComplete = makeMarkDayComplete(() => client);
+    await markComplete({
+      sessionId: 'session-1',
+      peopleReached: null,
+      attendance: [],
+      adultVolunteersCountThisSession: 4,
+      adultVolunteerHoursThisSession: 12,
+      recordedBy: 'profile-coach-1',
+    });
+
+    // Additive -- 2+4=6, 6+12=18, never a raw overwrite of the delta alone.
+    expect(eventUpdateSpy).toHaveBeenCalledWith({
+      adult_volunteers_count: 6,
+      adult_volunteer_hours: 18,
+    });
+    expect(eventUpdateEqSpy).toHaveBeenCalledWith('id', 'event-1');
   });
 });

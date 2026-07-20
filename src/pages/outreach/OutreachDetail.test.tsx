@@ -27,15 +27,22 @@
  * (needed here too, since this component reads `useParams()`, which only
  * resolves against an actually-matched route).
  */
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  makeCancelOutreachEvent,
+  makeLoadOutreachDetail,
+} from '../../lib/supabase/loaders/outreach';
+import {
   buildGoogleMapsUrl,
+  buildInitialOutreachEvent,
   buildOutreachDetailUrl,
   copyTextToClipboard,
   defaultLoadOutreachDetail,
+  formatChicagoWallTime,
   formatScopeLabel,
   groupSessionSignups,
   OutreachDetail,
@@ -46,6 +53,26 @@ import {
   type RsvpRow,
   type TeamOption,
 } from './OutreachDetail';
+
+// ---------------------------------------------------------------------------
+// jsdom gap: `Dialog`/`AlertDialog` render a native `<dialog>` and call
+// `HTMLDialogElement.prototype.showModal()`, which this repo's installed
+// jsdom does not implement -- same gap `MeetingsList.test.tsx` (T096)
+// already hit and locally polyfilled; this is the first time THIS file
+// renders a real `Dialog`/`AlertDialog` (`OutreachEventDialog`/T101's own
+// cancel confirmation), so the same local override is needed here too.
+// ---------------------------------------------------------------------------
+if (
+  typeof HTMLDialogElement !== 'undefined' &&
+  typeof HTMLDialogElement.prototype.showModal !== 'function'
+) {
+  HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement): void {
+    this.setAttribute('open', '');
+  };
+  HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement): void {
+    this.removeAttribute('open');
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Render harness -- mirrors LiveConsole.test.tsx / RsvpControl.test.tsx.
@@ -207,6 +234,10 @@ describe('resolveEventRoster -- events.team_ids NULL/array semantics', () => {
         address: '',
         teamIds: null,
         createdBy: null,
+        countsParticipation: false,
+        countsVolunteerHours: true,
+        adultVolunteersCount: 0,
+        adultVolunteerHours: 0,
       },
       STUDENTS,
     );
@@ -225,6 +256,10 @@ describe('resolveEventRoster -- events.team_ids NULL/array semantics', () => {
         address: '',
         teamIds: ['team-ravens'],
         createdBy: null,
+        countsParticipation: false,
+        countsVolunteerHours: true,
+        adultVolunteersCount: 0,
+        adultVolunteerHours: 0,
       },
       STUDENTS,
     );
@@ -416,55 +451,325 @@ describe('"Copy link" action', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 7. Edit/Cancel MoreMenu stubs -- disclosure Banner, never a real dialog.
+// 7. T101 (ED-1 Packet P10): Edit/Cancel are now REAL, not stubs.
 // ---------------------------------------------------------------------------
 
-describe('Edit/Cancel MoreMenu -- disclosure stubs, per Forbidden Files', () => {
-  it('"Edit" shows a disclosure Banner, not the real OutreachEventDialog', async () => {
+function findMoreMenuButton(): HTMLButtonElement | undefined {
+  return Array.from(container.querySelectorAll('button')).find((btn) =>
+    btn.getAttribute('aria-label')?.startsWith('Actions for Community Food Bank Sort'),
+  );
+}
+
+function clickMenuItem(label: string): void {
+  const item = Array.from(document.querySelectorAll('[role="menuitem"], button')).find(
+    (el) => el.textContent?.trim() === label,
+  );
+  expect(item).toBeTruthy();
+  act(() => {
+    item?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+}
+
+describe('Edit -- real OutreachEventDialog wiring (Trap #5)', () => {
+  it('opens the real OutreachEventDialog in EDIT mode, pre-filled from the fetched event', async () => {
     renderDetail('event-food-bank-sort', { loadData: defaultLoadOutreachDetail });
     await flushMicrotasks();
 
-    const moreMenuButton = Array.from(container.querySelectorAll('button')).find((btn) =>
-      btn.getAttribute('aria-label')?.startsWith('Actions for Community Food Bank Sort'),
-    );
-    expect(moreMenuButton).toBeTruthy();
     act(() => {
-      moreMenuButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      findMoreMenuButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    clickMenuItem('Edit');
 
-    const editItem = Array.from(document.querySelectorAll('[role="menuitem"], button')).find(
-      (el) => el.textContent?.trim() === 'Edit',
-    );
-    expect(editItem).toBeTruthy();
-    act(() => {
-      editItem?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(container.textContent).toContain('Edit dialog not built yet');
+    // The real dialog's own DialogHeader title, in EDIT mode (not "New
+    // outreach event") -- proves this is genuinely the same T039 dialog,
+    // not the old stub Banner ("Edit dialog not built yet" must never
+    // appear anywhere anymore).
+    expect(document.body.textContent).toContain('Edit outreach event');
+    expect(document.body.textContent).not.toContain('Edit dialog not built yet');
+    // Pre-filled from the real fetched event.
+    const titleInput = document.querySelector('input[value="Community Food Bank Sort"]');
+    expect(titleInput).toBeTruthy();
   });
 
-  it('"Cancel event" shows a disclosure Banner, no real event_sessions mutation', async () => {
-    renderDetail('event-food-bank-sort', { loadData: defaultLoadOutreachDetail });
+  it('submitting the real edit dialog calls the injected onSaveEvent with the existing event id and reloads the page', async () => {
+    const onSaveEvent = vi.fn().mockResolvedValue(undefined);
+    let loadCount = 0;
+    async function countingLoadData(eventId: string): Promise<OutreachDetailData | null> {
+      loadCount += 1;
+      return defaultLoadOutreachDetail(eventId);
+    }
+
+    renderDetail('event-food-bank-sort', { loadData: countingLoadData, onSaveEvent });
+    await flushMicrotasks();
+    expect(loadCount).toBe(1);
+
+    act(() => {
+      findMoreMenuButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    clickMenuItem('Edit');
+
+    const saveButton = Array.from(document.querySelectorAll('button')).find((btn) =>
+      btn.textContent?.trim().startsWith('Save changes'),
+    );
+    expect(saveButton).toBeTruthy();
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
     await flushMicrotasks();
 
-    const moreMenuButton = Array.from(container.querySelectorAll('button')).find((btn) =>
-      btn.getAttribute('aria-label')?.startsWith('Actions for Community Food Bank Sort'),
-    );
-    act(() => {
-      moreMenuButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(onSaveEvent).toHaveBeenCalledTimes(1);
+    expect(onSaveEvent.mock.calls[0][0]).toMatchObject({
+      event: { id: 'event-food-bank-sort', title: 'Community Food Bank Sort' },
     });
+    expect(loadCount).toBe(2); // real reload, not a client-side merge
+    expect(container.textContent).toContain('Event updated');
+  });
+});
 
-    const cancelItem = Array.from(document.querySelectorAll('[role="menuitem"], button')).find(
-      (el) => el.textContent?.trim() === 'Cancel event',
-    );
-    expect(cancelItem).toBeTruthy();
+describe('Cancel event -- real, event-level mutation (Trap #4)', () => {
+  it('opens a real AlertDialog, then calls the injected onCancelEvent and optimistically flips scheduled sessions to canceled', async () => {
+    const onCancelEvent = vi.fn().mockResolvedValue(undefined);
+    renderDetail('event-food-bank-sort', { loadData: defaultLoadOutreachDetail, onCancelEvent });
+    await flushMicrotasks();
+
     act(() => {
-      cancelItem?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      findMoreMenuButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    clickMenuItem('Cancel event');
 
-    expect(container.textContent).toContain('Cancel action not built yet');
-    // Sessions remain 'scheduled' -- still findable via their formatted
-    // date text, never silently flipped to canceled.
+    // Real DES-11 AlertDialog confirmation, not an immediate mutation.
+    expect(document.body.textContent).toContain('Cancel "Community Food Bank Sort"?');
+    expect(onCancelEvent).not.toHaveBeenCalled();
+
+    const confirmButton = Array.from(document.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'Cancel event' && btn !== findMoreMenuButton(),
+    );
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+    await flushMicrotasks();
+
+    expect(onCancelEvent).toHaveBeenCalledWith('event-food-bank-sort');
+    expect(container.textContent).toContain('Event canceled');
+    // Both of this event's scheduled sessions are now shown as canceled
+    // (optimistic flip -- module doc #10).
+    expect(container.textContent).toContain('— canceled');
+    // Old stub copy must never appear anymore.
+    expect(container.textContent).not.toContain('Cancel action not built yet');
+  });
+
+  it('rolls back the optimistic flip and shows an error Banner when the mutation rejects', async () => {
+    const onCancelEvent = vi.fn().mockRejectedValue(new Error('network down'));
+    renderDetail('event-food-bank-sort', { loadData: defaultLoadOutreachDetail, onCancelEvent });
+    await flushMicrotasks();
+
+    act(() => {
+      findMoreMenuButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    clickMenuItem('Cancel event');
+
+    const confirmButton = Array.from(document.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'Cancel event' && btn !== findMoreMenuButton(),
+    );
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain("Couldn't cancel event");
+    // Rolled back -- sessions are still scheduled, not shown as canceled.
     expect(container.textContent).not.toContain('— canceled');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T101 (ED-1 Packet P10): pure-function + loader-level tests.
+// ---------------------------------------------------------------------------
+
+describe('formatChicagoWallTime', () => {
+  it('converts a UTC ISO datetime to zero-padded HH:MM Chicago wall-clock time', () => {
+    // 2026-08-02T14:00:00.000Z = 9:00 AM America/Chicago (CDT, UTC-5).
+    expect(formatChicagoWallTime('2026-08-02T14:00:00.000Z')).toBe('09:00');
+    expect(formatChicagoWallTime('2026-08-02T17:00:00.000Z')).toBe('12:00');
+  });
+});
+
+describe('buildInitialOutreachEvent (Trap #5)', () => {
+  it("reshapes a real fetched OutreachDetailEvent/sessions pair into OutreachEventDialog.tsx's own ExistingOutreachEvent shape", () => {
+    const initial = buildInitialOutreachEvent(
+      {
+        id: 'event-1',
+        seasonId: 'season-1',
+        type: 'outreach',
+        title: 'Food Bank Sort',
+        description: 'desc',
+        locationName: 'Loc',
+        address: 'Addr',
+        teamIds: ['team-ravens'],
+        createdBy: null,
+        countsParticipation: false,
+        countsVolunteerHours: true,
+        adultVolunteersCount: 4,
+        adultVolunteerHours: 12,
+      },
+      [
+        {
+          id: 'session-1',
+          eventId: 'event-1',
+          sessionDate: '2026-08-02',
+          startsAt: '2026-08-02T14:00:00.000Z',
+          endsAt: '2026-08-02T17:00:00.000Z',
+          status: 'scheduled',
+          peopleReached: null,
+          notes: '',
+        },
+      ],
+    );
+    expect(initial).toMatchObject({
+      id: 'event-1',
+      title: 'Food Bank Sort',
+      type: 'outreach',
+      countsParticipation: false,
+      countsVolunteerHours: true,
+      teamIds: ['team-ravens'],
+      adultVolunteersCount: 4,
+      adultVolunteerHours: 12,
+      shareToCalendarFeed: true,
+      sessions: [
+        { sessionDate: '2026-08-02', startTime: '09:00', endTime: '12:00', peopleReached: null },
+      ],
+    });
+  });
+
+  it('collapses a non-competition type to "outreach" -- the dialog\'s own type Selector has no other option', () => {
+    const initial = buildInitialOutreachEvent(
+      {
+        id: 'event-1',
+        seasonId: 'season-1',
+        type: 'competition',
+        title: 'T',
+        description: '',
+        locationName: '',
+        address: '',
+        teamIds: null,
+        createdBy: null,
+        countsParticipation: false,
+        countsVolunteerHours: false,
+        adultVolunteersCount: 0,
+        adultVolunteerHours: 0,
+      },
+      [],
+    );
+    expect(initial.type).toBe('competition');
+  });
+});
+
+describe('loadOutreachDetail (T101 real load)', () => {
+  it('resolves null (not found/inaccessible) when the event maybeSingle finds no row -- RLS-honest per module doc #5', async () => {
+    const client = {
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+          })),
+        })),
+      })),
+    } as unknown as SupabaseClient;
+
+    const load = makeLoadOutreachDetail(() => client);
+    const result = await load('event-nope');
+    expect(result).toBeNull();
+  });
+
+  it('fetches event/sessions/rsvps/students/teams/profile and reshapes them into OutreachDetailData', async () => {
+    const eventMaybeSingleSpy = vi.fn().mockResolvedValue({
+      data: {
+        id: 'event-1',
+        season_id: 'season-1',
+        type: 'outreach',
+        title: 'Food Bank',
+        description: '',
+        location_name: 'X',
+        address: '',
+        team_ids: null,
+        counts_participation: false,
+        counts_volunteer_hours: true,
+        adult_volunteers_count: 0,
+        adult_volunteer_hours: 0,
+        created_by: 'profile-1',
+      },
+      error: null,
+    });
+    const sessionsOrderSpy = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: 'session-1',
+          event_id: 'event-1',
+          session_date: '2026-08-01',
+          starts_at: '2026-08-01T14:00:00.000Z',
+          ends_at: '2026-08-01T16:00:00.000Z',
+          status: 'scheduled',
+          people_reached: null,
+          notes: '',
+        },
+      ],
+      error: null,
+    });
+    const rsvpsInSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const studentsOrderSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const teamsOrderSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const profileMaybeSingleSpy = vi
+      .fn()
+      .mockResolvedValue({ data: { id: 'profile-1', display_name: 'Jordan Owens' }, error: null });
+
+    const fromSpy = vi.fn((table: string) => {
+      if (table === 'events') {
+        return {
+          select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: eventMaybeSingleSpy })) })),
+        };
+      }
+      if (table === 'event_sessions')
+        return { select: vi.fn(() => ({ eq: vi.fn(() => ({ order: sessionsOrderSpy })) })) };
+      if (table === 'rsvps') return { select: vi.fn(() => ({ in: rsvpsInSpy })) };
+      if (table === 'students') return { select: vi.fn(() => ({ order: studentsOrderSpy })) };
+      if (table === 'teams') return { select: vi.fn(() => ({ order: teamsOrderSpy })) };
+      if (table === 'profiles') {
+        return {
+          select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: profileMaybeSingleSpy })) })),
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    const load = makeLoadOutreachDetail(() => client);
+    const result = await load('event-1');
+
+    expect(result).not.toBeNull();
+    expect(result?.event.title).toBe('Food Bank');
+    expect(result?.sessions).toHaveLength(1);
+    expect(result?.profiles).toEqual([{ id: 'profile-1', name: 'Jordan Owens' }]);
+  });
+});
+
+describe('cancelOutreachEvent (T101, Trap #4 real mutation)', () => {
+  it('flips only currently-scheduled sessions for the event to canceled', async () => {
+    const secondEqSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+    const firstEqSpy = vi.fn(() => ({ eq: secondEqSpy }));
+    const updateSpy = vi.fn(() => ({ eq: firstEqSpy }));
+    const fromSpy = vi.fn(() => ({ update: updateSpy }));
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    const cancel = makeCancelOutreachEvent(() => client);
+    await cancel('event-99');
+
+    expect(fromSpy).toHaveBeenCalledWith('event_sessions');
+    expect(updateSpy).toHaveBeenCalledWith({ status: 'canceled' });
+    expect(firstEqSpy).toHaveBeenCalledWith('event_id', 'event-99');
+    expect(secondEqSpy).toHaveBeenCalledWith('status', 'scheduled');
   });
 });

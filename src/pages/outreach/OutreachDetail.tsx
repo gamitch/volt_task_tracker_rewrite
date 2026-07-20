@@ -143,25 +143,19 @@
  * it is exported specifically so this task's test file can spy on it.
  *
  * -----------------------------------------------------------------------
- * 8. Edit/Cancel `MoreMenu` stubs -- obvious disclosure `Banner`s, per this
- *    task's own Forbidden Files (`OutreachEventDialog.tsx`, T039, is a
- *    read-only sibling file here -- NOT imported/opened by this page, even
- *    though it already ships a real edit form; opening it from here would
- *    be new, undisclosed cross-task coupling this task was not asked to
- *    build). Both `showEditStub`/`showCancelStub` below only ever set a
- *    dismissable, clearly-labeled info `Banner` -- no real `events`/
- *    `event_sessions` mutation happens anywhere in this file (grep-provable:
- *    no `.update(`/`.upsert(` call exists). Matches `MeetingsList.tsx`'s own
- *    `showEditStub` precedent exactly for the "Edit" case; "Cancel" is
- *    ALSO a stub here (the safer default this task's packet explicitly
- *    sanctions), even though a real `event_sessions.status='canceled'` flip
- *    would be simple, because this page's own Cancel action is naturally
- *    event-level (the whole `MoreMenu`, not a per-session row menu, per
- *    OUT-04's own "edit/cancel via MoreMenu" wording) and a real event-wide
- *    cancel semantics (cancel every session? Which one?) was not specified
- *    precisely enough by this task's own packet to build without inventing
- *    behavior -- flagged as a disclosed judgment call, not a silently
- *    skipped requirement.
+ * 8. T101 UPDATE (ED-1 Packet P10): Edit/Cancel `MoreMenu` items are NO
+ *    LONGER stubs -- see module doc #10 below for the full real wiring.
+ *    `OutreachEventDialog.tsx` (T039) was already built and already Passed;
+ *    this task wires it into this page for the first time, in EDIT mode
+ *    (Trap #5's own investigation found it genuinely supports editing an
+ *    existing event -- the opposite finding from T096's
+ *    `ScheduleMeetingsDialog.tsx` investigation). "Cancel event" is now a
+ *    real, event-level `event_sessions.status = 'canceled'` mutation
+ *    (module doc #10) -- this task's own packet explicitly resolved the
+ *    ambiguity the earlier task's disclosed judgment call above had flagged
+ *    ("cancel every session? which one?"): every currently-`'scheduled'`
+ *    session for the event, leaving already-`'completed'` sessions
+ *    untouched.
  *
  * -----------------------------------------------------------------------
  * 9. Astryx prop sourcing (constitution item 2) -- every prop used below,
@@ -186,6 +180,12 @@
  *    `onClick` used.
  *  - `Banner` (line 2694 section, Props table): `status`, `title`,
  *    `description`, `isDismissable`, `onDismiss` used.
+ *  - `AlertDialog` (T101, "AlertDialog" Props table, same citation
+ *    `MeetingsList.tsx`'s own T096 cancel wiring already established):
+ *    `isOpen`, `onOpenChange`, `title`, `description`, `actionLabel`,
+ *    `onAction` (all required) used; `actionVariant` left at its documented
+ *    `'destructive'` default (canceling an outreach event is a
+ *    destructive-shaped action).
  *  - `EmptyState` (line 3954 section, Props table): `title` (required),
  *    `description` used.
  *  - `Skeleton` (T081, "Skeleton" section, lines 621-655): `width`,
@@ -219,10 +219,63 @@
  *    `color` used.
  *  - `VStack`/`HStack` ("Stack" section, `VStack`/`HStack` subsections):
  *    `gap`, `padding`, `hAlign`, `vAlign`, `wrap` used.
+ *
+ * -----------------------------------------------------------------------
+ * 10. T101 (ED-1 Packet P10): real load + real Edit/Cancel wiring.
+ *
+ * `loadData` now defaults to `loadOutreachDetail`
+ * (`../../lib/supabase/loaders/outreach.ts`, a real query resolving `null`
+ * for a genuinely nonexistent OR RLS-inaccessible event -- module doc #5's
+ * exact contract, unchanged).
+ *
+ * "Edit" opens the real, already-built `OutreachEventDialog.tsx` (T039) in
+ * EDIT mode (`isEventDialogOpen` state). Trap #5's own investigation (this
+ * task's own worker output has the full writeup) found -- by reading that
+ * dialog's actual source, not by assuming the same finding T096 made for
+ * `ScheduleMeetingsDialog.tsx` just because the situation rhymes -- that it
+ * genuinely DOES support editing an existing event: its own
+ * `OutreachEventDialogProps.initialEvent?: ExistingOutreachEvent` prop, when
+ * present, pre-fills every field (loading existing sessions into "Custom
+ * dates" mode) and its own `SaveOutreachEventPayload.event.id` carries the
+ * existing event's id through to `onSaveEvent`. `buildInitialOutreachEvent`
+ * above is the ONE place a real fetched `OutreachDetailEvent`/
+ * `OutreachDetailSession[]` pair is reshaped into that dialog's own
+ * `ExistingOutreachEvent` shape -- including a genuine UTC-to-Chicago-
+ * wall-clock conversion (`formatChicagoWallTime`, the inverse of that
+ * dialog's own `chicagoWallTimeToUtcIso`, independently reimplemented here
+ * since that function isn't exported) for each session's `startTime`/
+ * `endTime`. `handleSaveEventSubmit` wires the dialog's own `onSaveEvent`
+ * prop to a real default (`saveOutreachEvent`, same loader module, module
+ * doc #5 of that file for the full create-vs-edit reconciliation writeup)
+ * and reloads this page's own data (`reloadDetail`) on success.
+ *
+ * "Cancel event" opens a real `AlertDialog` (DES-11) confirming an
+ * event-level cancel, then calls a real mutation (`onCancelEvent`, default
+ * `cancelOutreachEvent`, same loader module) that flips every currently-
+ * `'scheduled'` session for this event to `'canceled'` -- optimistic local
+ * flip + rollback-on-failure, mirroring `MeetingsList.tsx`'s own
+ * `handleConfirmCancel` (T096) shape exactly, per this task's own packet
+ * steer. This resolves the earlier task's own disclosed "cancel semantics
+ * were ambiguous" judgment call (module doc #8 above): the packet's own Trap
+ * #4 explicitly specifies "flip `event_sessions.status` to `'canceled'`",
+ * scoped here to every still-scheduled session of the event (already-
+ * completed sessions are left untouched, preserving their real attendance
+ * history).
+ *
+ * `data`/`reloadDetail` (this file's own local state, kept in sync with
+ * every successful `loadState` via a `useEffect`) is the mechanism that lets
+ * this page reload/optimistically-mutate its own already-successfully-
+ * loaded data in place, without re-triggering the top-level `loading`
+ * DES-12 state -- same reasoning `OutreachList.tsx`'s own T101
+ * `overrideData`/`reloadOutreachData` seam already established for the
+ * identical architectural reason (this page's own single top-level
+ * `loadState`, unchanged by this task, needed this narrower seam instead of
+ * a larger `CoachMeetingsView`/`StudentMeetingsView`-style restructuring).
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import {
+  AlertDialog,
   Banner,
   Button,
   EmptyState,
@@ -241,6 +294,22 @@ import {
   VStack,
   type DropdownMenuOption,
 } from '@astryxdesign/core';
+import { isSupabaseLoaderError } from '../../lib/supabase';
+// T101 (ED-1 Packet P10): real load/edit/cancel wiring -- module doc #10.
+// `saveOutreachEvent`/`cancelOutreachEvent`/`OutreachEventDialog` are this
+// task's own wiring of an ALREADY-BUILT, ALREADY-PASSED standalone dialog
+// into this page for the first time; nothing inside `OutreachEventDialog.tsx`
+// itself is modified (forbidden/read-only file).
+import {
+  cancelOutreachEvent,
+  loadOutreachDetail,
+  saveOutreachEvent,
+} from '../../lib/supabase/loaders/outreach';
+import {
+  OutreachEventDialog,
+  type ExistingOutreachEvent,
+  type OnSaveOutreachEventFn,
+} from './OutreachEventDialog';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets. Module doc #1.
@@ -279,6 +348,16 @@ export interface OutreachDetailEvent {
   teamIds: string[] | null;
   /** `events.created_by` is a nullable `profiles` FK (module doc #1). */
   createdBy: string | null;
+  /** T101 (module doc #10) -- four real `events` columns this type did not
+   * previously carry, added specifically so `buildInitialOutreachEvent`
+   * below can pre-fill a real edit-mode `OutreachEventDialog` without
+   * inventing values. Same "page-local type grows one new field for a real
+   * need" precedent `loaders/students.ts`'s own module doc already
+   * established for `StudentsTab.tsx`'s local `TeamRow.archived`. */
+  countsParticipation: boolean;
+  countsVolunteerHours: boolean;
+  adultVolunteersCount: number;
+  adultVolunteerHours: number;
 }
 
 export interface OutreachDetailSession {
@@ -361,6 +440,12 @@ const FIXTURE_EVENTS: readonly OutreachDetailEvent[] = [
     address: '100 Riverside Dr, Suite #4',
     teamIds: null, // all teams
     createdBy: 'profile-coach-owens',
+    // T101 -- CMP-02's real outreach defaults (matches
+    // `OutreachEventDialog.tsx`'s own `OUTREACH_FIXED_FLAGS`).
+    countsParticipation: false,
+    countsVolunteerHours: true,
+    adultVolunteersCount: 4,
+    adultVolunteerHours: 12,
   },
   {
     id: 'event-park-cleanup',
@@ -372,6 +457,10 @@ const FIXTURE_EVENTS: readonly OutreachDetailEvent[] = [
     address: '250 Parkway Ave',
     teamIds: ['team-ravens'], // module doc #3 -- team-scoped roster proof.
     createdBy: null, // module doc's "Unknown creator" fallback proof.
+    countsParticipation: false,
+    countsVolunteerHours: true,
+    adultVolunteersCount: 0,
+    adultVolunteerHours: 0,
   },
 ];
 
@@ -661,6 +750,69 @@ export function formatSessionDateTime(session: OutreachDetailSession): string {
   return `${formatSessionDateOnly(session)} · ${startText}–${endText}`;
 }
 
+/** T101 (module doc #10) -- `starts_at`/`ends_at` (UTC) -> zero-padded
+ * `"HH:MM"` Chicago wall-clock time, the exact shape
+ * `OutreachEventDialog.tsx`'s own `ExistingOutreachEventSession.startTime`/
+ * `endTime` (and `createISOTimeString`) expect. `formatToParts` (not a plain
+ * locale-formatted string) is used deliberately -- the same defensive
+ * pattern `OutreachEventDialog.tsx`'s own `getTimeZoneOffsetMinutes` already
+ * established -- so this never depends on `en-US`'s exact separator/spacing
+ * conventions for a 24-hour clock. */
+const CHICAGO_24H_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+  timeZone: CHICAGO_TIME_ZONE,
+});
+
+export function formatChicagoWallTime(isoDateTime: string): string {
+  const parts = CHICAGO_24H_TIME_FORMATTER.formatToParts(new Date(isoDateTime));
+  const hour = parts.find((part) => part.type === 'hour')?.value ?? '00';
+  const minute = parts.find((part) => part.type === 'minute')?.value ?? '00';
+  return `${hour}:${minute}`;
+}
+
+/** T101 (module doc #10, Trap #5) -- the ONE place a real fetched
+ * `OutreachDetailEvent`/`OutreachDetailSession[]` pair is reshaped into
+ * `OutreachEventDialog.tsx`'s own real `ExistingOutreachEvent` edit-mode
+ * shape. */
+export function buildInitialOutreachEvent(
+  event: OutreachDetailEvent,
+  sessions: readonly OutreachDetailSession[],
+): ExistingOutreachEvent {
+  return {
+    id: event.id,
+    title: event.title,
+    description: event.description,
+    locationName: event.locationName,
+    address: event.address,
+    // `OutreachEventDialog.tsx`'s own type Selector only ever offers
+    // 'outreach'/'competition' (that file's own module doc #1 -- 'meeting'
+    // is deliberately excluded there). This route is only ever navigated to
+    // for a real outreach/competition event in practice; any other real
+    // `events.type` value collapses to 'outreach' here, a disclosed,
+    // defensible fallback rather than a crash.
+    type: event.type === 'competition' ? 'competition' : 'outreach',
+    countsParticipation: event.countsParticipation,
+    countsVolunteerHours: event.countsVolunteerHours,
+    teamIds: event.teamIds,
+    adultVolunteersCount: event.adultVolunteersCount,
+    adultVolunteerHours: event.adultVolunteerHours,
+    // No backing `events` column exists for this UI-only field
+    // (`OutreachEventDialog.tsx`'s own module doc #7) -- defaults to `true`
+    // (that dialog's own "on by default" semantics) since the event's
+    // actual prior value can never be known. Disclosed, not fabricated as a
+    // real fetched value.
+    shareToCalendarFeed: true,
+    sessions: sessions.map((session) => ({
+      sessionDate: session.sessionDate,
+      startTime: formatChicagoWallTime(session.startsAt),
+      endTime: formatChicagoWallTime(session.endsAt),
+      peopleReached: session.peopleReached,
+    })),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Generic DES-12 load-state hook -- extended with a `notFound` bucket
 // (module doc #5) beyond the loading/error/success trio every sibling page
@@ -764,13 +916,17 @@ function SessionSignupList({
   );
 }
 
-interface StubNotice {
+/** T101 (module doc #10) -- real success/error messaging for Edit and
+ * Cancel, same "success Banner + error Banner, dismissable" pattern
+ * `MeetingsList.tsx`'s own `FeedbackBanner` (T096) already established. */
+interface FeedbackBanner {
+  status: 'success' | 'error';
   title: string;
   description: string;
 }
 
 // ---------------------------------------------------------------------------
-// Component. Module docs #5/#6/#8.
+// Component. Module docs #5/#6/#8/#10.
 // ---------------------------------------------------------------------------
 
 export interface OutreachDetailProps {
@@ -781,42 +937,128 @@ export interface OutreachDetailProps {
    * (Forbidden Files), so `useParams` only resolves when a test/future
    * caller renders this component inside an actually-matched route. */
   eventId?: string;
-  /** Injectable data-loading seam (module doc #7). Defaults to fixture
-   * data. `null` = not found/inaccessible (module doc #5). */
+  /** Injectable data-loading seam (module doc #7). T101: defaults to a real
+   * query (`loadOutreachDetail`, `../../lib/supabase/loaders/outreach.ts`);
+   * `defaultLoadOutreachDetail` (fixture) remains exported for callers/tests
+   * that want to inject it explicitly. `null` = not found/inaccessible
+   * (module doc #5). */
   loadData?: LoadOutreachDetailFn;
+  /** T101 (module doc #10). Defaults to a real `events`/`event_sessions`
+   * insert/update, passed straight through to `<OutreachEventDialog
+   * onSaveEvent={...} />` in EDIT mode. */
+  onSaveEvent?: OnSaveOutreachEventFn;
+  /** T101 (module doc #10, Trap #4). Defaults to a real, event-level
+   * `event_sessions.status = 'canceled'` mutation. */
+  onCancelEvent?: (eventId: string) => Promise<void>;
 }
 
 export function OutreachDetail({
   eventId: eventIdProp,
-  loadData = defaultLoadOutreachDetail,
+  loadData = loadOutreachDetail,
+  onSaveEvent = saveOutreachEvent,
+  onCancelEvent = cancelOutreachEvent,
 }: OutreachDetailProps = {}): ReactNode {
   const { eventId: routeEventId } = useParams<{ eventId: string }>();
   const eventId = eventIdProp ?? routeEventId ?? '';
 
   const loadState = useOutreachDetailLoadState(loadData, eventId);
-  const [stubNotice, setStubNotice] = useState<StubNotice | null>(null);
+  // T101 (module doc #10) -- kept in sync with every successful `loadState`
+  // (effect below), so a post-edit reload / a post-cancel optimistic flip
+  // can be reflected immediately without re-triggering the top-level
+  // `loading` DES-12 state.
+  const [data, setData] = useState<OutreachDetailData | null>(null);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+  // T101 (module doc #10) -- drives the one rendered
+  // `<OutreachEventDialog>` instance, in EDIT mode (Trap #5: that dialog
+  // genuinely supports editing an existing event, unlike T096's
+  // `ScheduleMeetingsDialog.tsx` finding).
+  const [isEventDialogOpen, setIsEventDialogOpen] = useState(false);
+  const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
+  const [feedback, setFeedback] = useState<FeedbackBanner | null>(null);
 
-  function showEditStub(): void {
-    setStubNotice({
-      title: 'Edit dialog not built yet',
-      description:
-        "This action opens the outreach event dialog (T039, OUT-02) in edit mode. That flow isn't wired into this page yet, so nothing was changed.",
-    });
+  useEffect(() => {
+    if (loadState.status === 'success') {
+      setData(loadState.data);
+    }
+  }, [loadState]);
+
+  async function reloadDetail(): Promise<void> {
+    const fresh = await loadData(eventId);
+    setData(fresh);
   }
 
-  function showCancelStub(): void {
-    setStubNotice({
-      title: 'Cancel action not built yet',
-      description:
-        "Canceling this event would flip its sessions to 'canceled' (event_sessions.status). That action isn't wired into this page yet, so nothing was canceled.",
-    });
+  function openEditDialog(): void {
+    setIsEventDialogOpen(true);
+  }
+
+  function openCancelConfirm(): void {
+    setIsCancelConfirmOpen(true);
+  }
+
+  // T101 (module doc #10, Trap #5) -- real `onSaveEvent` wiring (edit mode).
+  // Reloads this page's own data via `reloadDetail()` on success (a full
+  // reload, not a client-side merge -- same reasoning `MeetingsList.tsx`'s
+  // own T096 `handleCreateMeetingsSubmit` already established, since
+  // recomputing this page's own derived fields -- roster/signup groupings --
+  // client-side would duplicate the loader's own DB-driven joins for no
+  // benefit).
+  async function handleSaveEventSubmit(
+    payload: Parameters<OnSaveOutreachEventFn>[0],
+  ): Promise<void> {
+    await onSaveEvent(payload);
+    try {
+      await reloadDetail();
+      setFeedback({
+        status: 'success',
+        title: 'Event updated',
+        description: `"${payload.event.title}" was updated.`,
+      });
+    } catch {
+      // The save itself already succeeded (this catch only guards the
+      // follow-up reload) -- disclosed, not fatal.
+      setFeedback({
+        status: 'success',
+        title: 'Event updated',
+        description: `"${payload.event.title}" was updated. Refresh the page to see the changes.`,
+      });
+    }
+  }
+
+  // T101 (module doc #10, Trap #4) -- real, event-level cancel mutation,
+  // optimistic update + rollback on failure, mirroring `MeetingsList.tsx`'s
+  // own `handleConfirmCancel` (T096) shape.
+  async function handleConfirmCancel(): Promise<void> {
+    if (data === null) return;
+    const target = data;
+    const optimisticSessions = target.sessions.map((session) =>
+      session.status === 'scheduled' ? { ...session, status: 'canceled' as const } : session,
+    );
+    setData({ ...target, sessions: optimisticSessions });
+    setIsCancelConfirmOpen(false);
+    try {
+      await onCancelEvent(target.event.id);
+      setFeedback({
+        status: 'success',
+        title: 'Event canceled',
+        description: `"${target.event.title}"'s remaining scheduled sessions are marked canceled. Already-completed sessions are untouched.`,
+      });
+    } catch (error) {
+      setData(target); // rollback
+      setFeedback({
+        status: 'error',
+        title: "Couldn't cancel event",
+        description: isSupabaseLoaderError(error)
+          ? error.message
+          : `Something went wrong canceling "${target.event.title}". Try again in a moment.`,
+      });
+    }
   }
 
   function handleCopyLink(): void {
     if (loadState.status !== 'success') return;
+    const current = data ?? loadState.data;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const url = buildOutreachDetailUrl(loadState.data.event.id, origin);
+    const url = buildOutreachDetailUrl(current.event.id, origin);
     setCopiedUrl(url);
     copyTextToClipboard(url).catch(() => {
       // Best-effort only -- module doc #6: no OS-level clipboard write can
@@ -879,12 +1121,18 @@ export function OutreachDetail({
     );
   }
 
-  const { event, sessions, rsvps, students, teams, profiles } = loadState.data;
+  // T101 (module doc #10) -- `data` (kept in sync by the effect above) is
+  // preferred when present so a post-edit reload / post-cancel optimistic
+  // flip is reflected immediately; falls back to `loadState.data`
+  // defensively for the very first successful render (before the effect has
+  // committed).
+  const detailData = data ?? loadState.data;
+  const { event, sessions, rsvps, students, teams, profiles } = detailData;
   const roster = resolveEventRoster(event, students);
   const orderedSessions = sortSessionsByStart(sessions);
   const menuItems: DropdownMenuOption[] = [
-    { label: 'Edit', onClick: showEditStub },
-    { label: 'Cancel event', onClick: showCancelStub },
+    { label: 'Edit', onClick: openEditDialog },
+    { label: 'Cancel event', onClick: openCancelConfirm },
   ];
 
   return (
@@ -899,13 +1147,13 @@ export function OutreachDetail({
 
       {event.description !== '' && <Text type="supporting">{event.description}</Text>}
 
-      {stubNotice !== null && (
+      {feedback !== null && (
         <Banner
-          status="info"
-          title={stubNotice.title}
-          description={stubNotice.description}
+          status={feedback.status}
+          title={feedback.title}
+          description={feedback.description}
           isDismissable
-          onDismiss={() => setStubNotice(null)}
+          onDismiss={() => setFeedback(null)}
         />
       )}
 
@@ -948,6 +1196,34 @@ export function OutreachDetail({
           ))
         )}
       </VStack>
+
+      <AlertDialog
+        isOpen={isCancelConfirmOpen}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setIsCancelConfirmOpen(false);
+        }}
+        title={`Cancel "${event.title}"?`}
+        description="This marks every still-scheduled session for this event canceled. Already-completed sessions are left untouched, and no attendance will be recorded for the canceled ones."
+        actionLabel="Cancel event"
+        onAction={() => {
+          void handleConfirmCancel();
+        }}
+      />
+
+      {/* T101 (module doc #10, Trap #5) -- `OutreachEventDialog.tsx` (T039,
+          already Passed, already built, genuinely supports edit mode) wired
+          into this page for the first time, in EDIT mode
+          (`initialEvent` pre-fills every field from the real fetched
+          event/sessions -- `buildInitialOutreachEvent`). `teams`
+          deliberately NOT overridden, same "still fixture-backed" posture
+          `OutreachList.tsx`'s own T101 wiring already established for the
+          identical reason. */}
+      <OutreachEventDialog
+        isOpen={isEventDialogOpen}
+        onOpenChange={setIsEventDialogOpen}
+        onSaveEvent={handleSaveEventSubmit}
+        initialEvent={buildInitialOutreachEvent(event, sessions)}
+      />
     </VStack>
   );
 }

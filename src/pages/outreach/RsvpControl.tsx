@@ -171,16 +171,27 @@
  * reminder-related API -- grep-provable).
  *
  * -----------------------------------------------------------------------
- * 6. No shared Supabase client wired in (Forbidden Files: `src/lib/supabase/**`
- *    read-only reference only) -- deliberate scope, not a gap for this task
- *    to solve.
+ * 6. T101 (ED-1 Packet P10) UPDATE: `onRsvpChange` now defaults to a REAL
+ *    `rsvps` upsert.
  *
- * The real `rsvps` upsert is an injectable `onRsvpChange: (params) =>
- * Promise<void>` prop, defaulting to `defaultOnRsvpChange`, an
- * obviously-fake stub that only `console.warn`s the params it would have
- * persisted -- same posture as every prior content page's injectable
- * persistence seam (`OutreachList.tsx`'s `loadData`,
- * `OutreachEventDialog.tsx`'s `onSaveEvent`).
+ * `onRsvpChange` now defaults to `submitRsvpChange`
+ * (`../../lib/supabase/loaders/outreach.ts`) -- a real `rsvps` upsert keyed
+ * on the real `unique (session_id, student_id)` constraint, writing
+ * `responded_by = currentUserProfileId` verbatim. That loader module's own
+ * Trap #2 module doc has the full "shared with `ParentRsvp.tsx`, not two
+ * separate functions" decision writeup: the underlying write is identical
+ * for both call sites (a single RLS policy already covers both "student
+ * self-RSVP" and "parent RSVP-on-behalf" via `my_student_ids()`'s own
+ * union), so ONE real function serves both files' own independently-declared
+ * `OnRsvpChangeFn` types via plain structural typing -- no reshaping, no
+ * cast, at this call site. A rejected write (a real `42501`-class RLS
+ * failure, or any other genuine Postgrest error) is never retried/swallowed
+ * here -- `handleChange` below (module doc #7, unchanged) already catches
+ * it, rolls back `displayedStatus`, and renders `error.message` in a
+ * `Banner`. `defaultOnRsvpChange` (below) is KEPT as a named export (harness
+ * code/future callers that explicitly want a no-network, log-only stub can
+ * still reach for it by name), but it is no longer this component's own
+ * runtime default.
  *
  * -----------------------------------------------------------------------
  * 7. Optimistic local selection + rollback on failure.
@@ -219,6 +230,8 @@
  */
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Banner, SegmentedControl, SegmentedControlItem, Text, VStack } from '@astryxdesign/core';
+// T101 (ED-1 Packet P10): real `onRsvpChange` default -- module doc #6.
+import { submitRsvpChange } from '../../lib/supabase/loaders/outreach';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets, matching
@@ -429,8 +442,10 @@ export interface RsvpControlProps {
   /** Injectable auth/session seam (module doc #3). Defaults to a disclosed
    * placeholder `profiles.id`. */
   currentUserProfileId?: string;
-  /** Injectable persistence seam (module doc #6). Defaults to a stub that
-   * only logs. */
+  /** Injectable persistence seam (module doc #6). T101: defaults to a real
+   * `rsvps` upsert (`submitRsvpChange`, `../../lib/supabase/loaders/
+   * outreach.ts`); `defaultOnRsvpChange` (log-only) remains exported for
+   * callers/tests that want to inject it explicitly. */
   onRsvpChange?: OnRsvpChangeFn;
   /** Injectable clock seam so the session-start lock boundary is
    * deterministically testable (module doc #4). Defaults to the real
@@ -444,7 +459,7 @@ export function RsvpControl({
   eventTitle,
   currentRsvp,
   currentUserProfileId = PLACEHOLDER_CURRENT_USER_PROFILE_ID,
-  onRsvpChange = defaultOnRsvpChange,
+  onRsvpChange = submitRsvpChange,
   now = defaultNow,
 }: RsvpControlProps): ReactNode {
   const isEditable = useSessionRsvpLock(session, now);

@@ -3638,3 +3638,69 @@ NIT only: the loader-level swallow-to-null branches (config-missing, `getSession
 error/throw) are exercised only indirectly via the component seam, not with a
 dedicated `loaders/checkin.test.ts` unit test — outside T100's Allowed Files as
 written, logged as an optional follow-up, not a rework item.
+
+---
+
+## T101 (ED-1 Packet P10, expanded) — real Outreach data + mutations + `OutreachEventDialog` wiring
+
+**PASS (1st attempt on the merits; one disclosed-and-self-corrected process incident,
+no rework required).**
+
+**Process incident, given elevated scrutiny given its potential severity:** the
+worker self-disclosed running `git stash --keep-index` in the shared working tree —
+a direct violation of the standing no-stash rule repeated in every worker dispatch
+prompt this session — then immediately caught its own mistake and ran `git stash
+pop`. The checker did not accept this claim at face value. It independently ran
+`git stash list` (found two entries, both pre-dating T101 — leftover WIP from the
+T094–T096 and T089–T092 waves, already superseded by since-committed-and-passed
+work, containing zero outreach files), confirmed T100's sibling files
+(`CheckinResult.tsx`/`StudentMeetingView.tsx`) are byte-identical to what's already
+committed at `141bc93` with no pending modifications, and found zero `.orig`/`.bak`/
+`.rej` conflict artifacts anywhere in the tree. Verdict: genuinely no data loss or
+corruption occurred; the worker's catch-and-correct was the right recovery
+behavior even though the initial action broke a standing rule. Logged as a process
+NIT for future worker-prompt reinforcement, not a blocker.
+
+**Feature claims, all independently verified:**
+- New `loaders/outreach.ts` (1026 lines) exports real `loadOutreachData`,
+  `loadOutreachDetail`, `submitRsvpChange`, `markDayComplete`, `saveOutreachEvent`,
+  `cancelOutreachEvent`.
+- RSVP shared-function decision (Trap #2) checked against the actual `rsvps` RLS
+  migration: `own_or_linked_write`/`own_or_linked_update` both gate through
+  `my_student_ids()`, which already unions a caller's own student id with every
+  guardian-linked student id — so one real upsert genuinely serves both the
+  student-self (`RsvpControl`) and parent-on-behalf (`ParentRsvp`) cases, matching
+  the worker's reasoning exactly.
+- `OutreachEventDialog` edit-mode investigation (Trap #5) checked against the actual
+  dialog file: `initialEvent?: ExistingOutreachEvent`, `isEditMode`, and
+  `SaveOutreachEventPayload.event.id` are all real and genuinely support edit,
+  unlike T096's finding for `ScheduleMeetingsDialog`. Both create (`OutreachList`)
+  and edit (`OutreachDetail`) are wired to the same real `saveOutreachEvent`.
+- A genuine FK-constraint discovery, checked against the actual migration:
+  `rsvps.session_id`/`attendance.session_id` are both `on delete restrict` against
+  `event_sessions`, so a naive delete-and-recreate on edit would throw once any
+  session has RSVPs/attendance. The real reconciliation instead matches existing
+  sessions by `session_date` (update in place, preserving `id`), inserts new dates,
+  and never deletes removed dates — a disclosed, correct-under-the-constraint
+  limitation, not an oversight.
+- Cancel (`event_sessions.status → 'canceled'`, real optimistic flip + rollback,
+  mirroring T096's `MeetingsList` precedent) and Mark Day Complete (real three-write
+  mutation: session status/`people_reached`, attendance upsert, and a disclosed
+  non-atomic read-then-write for the `events` adult-volunteer delta) both verified
+  against the actual mutation code.
+- Disclosed risks confirmed accurate: `OutreachList`'s `seasonId` remains
+  `PLACEHOLDER_SEASON_ID` (out of scope); edit reconciliation never deletes a
+  removed session day (by design, per the FK finding above); `shareToCalendarFeed`
+  has no backing column (pre-existing T039 gap, untouched); `RsvpControl`/
+  `ParentRsvp`/`MarkDayCompleteDialog` deliberately kept standalone rather than
+  newly imported into the list/detail pages, per the packet's literal scope.
+
+`npm run typecheck`/`lint` (0 errors)/`format:check` (clean except the same
+pre-existing, untouched `Kiosk.tsx` every prior checker has already routed
+separately)/`build` all clean; `npm run test` 1112/1112 passing across 52 files.
+
+Follow-up (repo hygiene, not T101's fault): two orphaned stashes from much earlier
+in the session remain in `git stash list`, both superseded by already-committed,
+already-passed work — flagged for a maintainer to `git stash drop` at their
+discretion, not actioned automatically here since dropping a stash is an
+irreversible operation outside this task's scope.

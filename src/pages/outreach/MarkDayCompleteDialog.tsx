@@ -252,27 +252,35 @@
  * not-pre-checked row.
  *
  * -----------------------------------------------------------------------
- * 7. No shared Supabase client wired in (Forbidden Files:
- *    `src/lib/supabase/**` read-only reference only) -- deliberate scope,
- *    same posture as every prior content page/dialog in this batch.
+ * 7. T101 (ED-1 Packet P10) UPDATE: `onMarkComplete` now defaults to a REAL
+ *    mutation.
  *
- * The real `event_sessions` status flip + `attendance` inserts + `events`
+ * The real `event_sessions` status flip + `attendance` upserts + `events`
  * additive adult-volunteer update (module doc #3) are represented as a
- * single injectable `onMarkComplete: (payload) => Promise<void>` prop,
- * defaulting to `defaultOnMarkComplete`, an obviously-fake stub that only
- * `console.warn`s the payload it would have persisted -- same posture as
- * `RsvpControl.tsx`'s `onRsvpChange`/`ScheduleMeetingsDialog.tsx`'s
- * `onCreateMeetings`. `currentUserProfileId` (attributed to
- * `attendance.recorded_by`, a real `profiles.id`, module doc #1) is a
- * SEPARATE injectable prop defaulting to a disclosed, obviously-fake
- * placeholder (`PLACEHOLDER_CURRENT_COACH_PROFILE_ID`) -- the same
+ * single injectable `onMarkComplete: (payload) => Promise<void>` prop, now
+ * defaulting to `markDayComplete` (`../../lib/supabase/loaders/outreach.ts`)
+ * -- that loader module's own module doc #4 has the full three-write
+ * writeup, including the disclosed non-atomic read-modify-write for the
+ * `events` adult-volunteer delta (Postgrest has no atomic `SET column =
+ * column + $delta` expression without an RPC, which is out of this task's
+ * Allowed Files). `defaultOnMarkComplete` (below) is KEPT as a named export
+ * for callers/tests that want an explicit no-network, log-only stub, but is
+ * no longer this component's own runtime default. `currentUserProfileId`
+ * (attributed to `attendance.recorded_by`, a real `profiles.id`, module doc
+ * #1) is a SEPARATE injectable prop defaulting to a disclosed, obviously-
+ * fake placeholder (`PLACEHOLDER_CURRENT_COACH_PROFILE_ID`) -- the same
  * auth-seam pattern `RsvpControl.tsx`'s own `currentUserProfileId`/
  * `PLACEHOLDER_CURRENT_USER_PROFILE_ID` already established, deliberately
  * given a different literal placeholder string here (this dialog's
  * `recorded_by` is always a COACH's own profile id, never a student's own
  * `responded_by`, a different real-world attribution even though both
  * ultimately resolve to the same `profiles.id` column) so the two files'
- * placeholders are never accidentally interchangeable.
+ * placeholders are never accidentally interchangeable. This dialog remains
+ * standalone (not imported/rendered by `OutreachDetail.tsx`) -- same
+ * reasoning `OutreachList.tsx`'s own T101 module doc #8b already states for
+ * `RsvpControl.tsx`/`ParentRsvp.tsx`: the packet's own Objective asks for
+ * "a real Mark-Day-Complete mutation", wiring THIS component's own default,
+ * not new page-level integration work.
  *
  * -----------------------------------------------------------------------
  * 8. Astryx prop sourcing (constitution item 2) -- every prop used below,
@@ -333,6 +341,8 @@ import {
   Text,
   VStack,
 } from '@astryxdesign/core';
+// T101 (ED-1 Packet P10): real `onMarkComplete` default -- module doc #7.
+import { markDayComplete } from '../../lib/supabase/loaders/outreach';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets. Module doc #1.
@@ -628,8 +638,10 @@ export interface MarkDayCompleteDialogProps {
   /** Injectable auth seam (module doc #7). Defaults to a disclosed
    * placeholder `profiles.id`. */
   currentUserProfileId?: string;
-  /** Injectable persistence seam (module doc #7). Defaults to a stub that
-   * only logs. */
+  /** Injectable persistence seam (module doc #7). T101: defaults to a real
+   * mutation (`markDayComplete`, `../../lib/supabase/loaders/outreach.ts`);
+   * `defaultOnMarkComplete` (log-only) remains exported for callers/tests
+   * that want to inject it explicitly. */
   onMarkComplete?: OnMarkDayCompleteFn;
 }
 
@@ -641,7 +653,7 @@ export function MarkDayCompleteDialog({
   roster = DEFAULT_ROSTER,
   rsvps = DEFAULT_RSVPS,
   currentUserProfileId = PLACEHOLDER_CURRENT_COACH_PROFILE_ID,
-  onMarkComplete = defaultOnMarkComplete,
+  onMarkComplete = markDayComplete,
 }: MarkDayCompleteDialogProps): ReactNode {
   // Module doc #5(ii) -- only a scheduled session can be (re-)completed from
   // this dialog.
