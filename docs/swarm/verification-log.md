@@ -3974,3 +3974,37 @@ Orchestrator independently confirmed afterward that `git stash list` contains on
 the two long-known orphaned entries from earlier waves and that the concurrent
 T109 task's uncommitted files were undamaged (its 45/45 tests still pass).
 Logged as a process reminder for future checker dispatch prompts; no data loss.
+[2026-07-20T12:39:08Z] Worker finished. Checker required before completion.
+
+---
+
+## T109 — fix `loadSettingsData` hard-fail on missing `notification_prefs` row
+
+**PASS (1st attempt, clean).** Root cause of George's live-tested "/settings
+couldn't load" report: `loadSettingsData` threw when the user's
+`notification_prefs` row was missing — and nothing anywhere in the system ever
+creates that row (the invite trigger creates only `profiles`), so every real user
+failed. Read-side fix: a missing prefs row now resolves a synthesized
+all-defaults row, checker-verified to match every one of the seven columns' real
+`not null default true` declarations in the actual migration (no silent
+misrepresentation possible); a missing `profiles` row still fails loud,
+unchanged. Write-side fix: `toggleNotificationPref` switched from a
+zero-row-matching UPDATE to a partial-payload upsert
+(`onConflict: 'profile_id'`).
+
+The load-bearing correctness property — that the partial-payload upsert can never
+clobber a user's other customized prefs on later toggles — was verified by the
+checker against the actual installed `@supabase/postgrest-js` source, not just
+documentation: a single-object payload sends no `columns` param, so PostgREST
+derives the column list solely from the payload keys, generating `ON CONFLICT DO
+UPDATE SET` for ONLY the toggled column. On first insert the other six columns
+fall back to their genuine DB defaults, exactly matching the read side's
+synthesized row; on update, untouched columns are never written. RLS
+(`self_all`, `for all ... with check (profile_id = auth.uid())`) confirmed to
+permit the INSERT half for the caller's own id and reject mismatches, against
+the actual policy file. `profile_id`'s `unique` constraint confirmed a valid
+conflict target.
+
+`SettingsPage.test.tsx` 45/45 (missing-row-resolves-defaults, upsert call-shape,
+new first-toggle test); full suite 1157/1157; typecheck/lint/build/format:check
+all clean. Only the two Allowed Files touched.

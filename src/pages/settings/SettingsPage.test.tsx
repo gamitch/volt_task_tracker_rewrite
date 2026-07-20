@@ -785,7 +785,7 @@ describe('makeLoadSettingsData (T105 real load)', () => {
     await expect(load()).rejects.toThrow('No profile was found');
   });
 
-  it('rejects when the notification_prefs row is missing', async () => {
+  it('T109: resolves default notification prefs (all column defaults) when the notification_prefs row is missing, never rejecting -- this is every real user today, since nothing anywhere ever creates this row', async () => {
     const { client } = buildFakeLoadSettingsClient({
       profileRow: {
         id: TEST_USER_ID,
@@ -799,7 +799,18 @@ describe('makeLoadSettingsData (T105 real load)', () => {
     });
     const load = makeLoadSettingsData(() => client);
 
-    await expect(load()).rejects.toThrow('No notification preferences were found');
+    const result = await load();
+
+    expect(result.notificationPrefs).toEqual({
+      profileId: TEST_USER_ID,
+      invite: true,
+      signupConfirm: true,
+      eventReminder48h: true,
+      eventReminder3h: true,
+      meetingReminder3h: true,
+      weeklyDigest: true,
+      digestEnabled: true,
+    });
   });
 
   it('rejects with the real SupabaseLoaderError on a genuine profiles query error', async () => {
@@ -875,29 +886,28 @@ describe('makeChangeTheme (T105 real update)', () => {
   });
 });
 
-/** Stubs exactly `client.from('notification_prefs').update({...}).eq
- * ('profile_id', ...)` -- `makeToggleNotificationPref` needs no `client.auth`
- * call at all (module doc #2 of `../../lib/supabase/loaders/settings.ts`) --
- * this client deliberately has NO `auth` key, so any accidental call to it
- * would throw and fail the test, proving the no-session-lookup claim. */
+/** T109: stubs exactly `client.from('notification_prefs').upsert({...}, {
+ * onConflict: 'profile_id' })` -- `makeToggleNotificationPref` needs no
+ * `client.auth` call at all (module doc #2 of
+ * `../../lib/supabase/loaders/settings.ts`) -- this client deliberately has
+ * NO `auth` key, so any accidental call to it would throw and fail the test,
+ * proving the no-session-lookup claim. */
 function buildFakeTogglePrefClient(options: {
   error?: { message: string; code?: string } | null;
 }): {
   client: SupabaseClient;
   fromSpy: ReturnType<typeof vi.fn>;
-  updateSpy: ReturnType<typeof vi.fn>;
-  eqSpy: ReturnType<typeof vi.fn>;
+  upsertSpy: ReturnType<typeof vi.fn>;
 } {
   const { error = null } = options;
-  const eqSpy = vi.fn().mockResolvedValue({ data: null, error });
-  const updateSpy = vi.fn(() => ({ eq: eqSpy }));
-  const fromSpy = vi.fn(() => ({ update: updateSpy }));
+  const upsertSpy = vi.fn().mockResolvedValue({ data: null, error });
+  const fromSpy = vi.fn(() => ({ upsert: upsertSpy }));
   const client = { from: fromSpy } as unknown as SupabaseClient;
-  return { client, fromSpy, updateSpy, eqSpy };
+  return { client, fromSpy, upsertSpy };
 }
 
-describe('makeToggleNotificationPref (T105 real update)', () => {
-  it('maps each NotificationPrefKey to its real snake_case column and trusts the caller-supplied profileId directly (no session lookup)', async () => {
+describe('makeToggleNotificationPref (T105 real update, T109 upsert fix)', () => {
+  it('upserts (onConflict: profile_id) sending only profile_id + the real snake_case toggled column, trusting the caller-supplied profileId directly (no session lookup)', async () => {
     const cases: [ToggleNotificationPrefPayload, Record<string, unknown>][] = [
       [{ profileId: 'p1', key: 'signupConfirm', value: false }, { signup_confirm: false }],
       [{ profileId: 'p2', key: 'eventReminder48h', value: true }, { event_reminder_48h: true }],
@@ -906,19 +916,21 @@ describe('makeToggleNotificationPref (T105 real update)', () => {
       [{ profileId: 'p5', key: 'digestEnabled', value: true }, { digest_enabled: true }],
     ];
 
-    for (const [payload, expectedUpdate] of cases) {
-      const { client, fromSpy, updateSpy, eqSpy } = buildFakeTogglePrefClient({});
+    for (const [payload, expectedColumn] of cases) {
+      const { client, fromSpy, upsertSpy } = buildFakeTogglePrefClient({});
       const toggle = makeToggleNotificationPref(() => client);
 
       await toggle(payload);
 
       expect(fromSpy).toHaveBeenCalledWith('notification_prefs');
-      expect(updateSpy).toHaveBeenCalledWith(expectedUpdate);
-      expect(eqSpy).toHaveBeenCalledWith('profile_id', payload.profileId);
+      expect(upsertSpy).toHaveBeenCalledWith(
+        { profile_id: payload.profileId, ...expectedColumn },
+        { onConflict: 'profile_id' },
+      );
     }
   });
 
-  it('rejects with the real SupabaseLoaderError on a genuine update error', async () => {
+  it('rejects with the real SupabaseLoaderError on a genuine upsert error', async () => {
     const { client } = buildFakeTogglePrefClient({
       error: { message: 'permission denied', code: '42501' },
     });
@@ -927,6 +939,25 @@ describe('makeToggleNotificationPref (T105 real update)', () => {
     await expect(
       toggle({ profileId: TEST_USER_ID, key: 'signupConfirm', value: true }),
     ).rejects.toMatchObject({ code: '42501' });
+  });
+
+  it("T109: against a profile with no existing notification_prefs row, the upsert alone persists the toggled value -- no more silent zero-row UPDATE no-op on a user's first toggle", async () => {
+    const { client, fromSpy, upsertSpy } = buildFakeTogglePrefClient({});
+    const toggle = makeToggleNotificationPref(() => client);
+
+    await toggle({ profileId: TEST_USER_ID, key: 'weeklyDigest', value: false });
+
+    // Only profile_id + the toggled column are sent -- on INSERT (no
+    // existing row), every other column falls back to its own real Postgres
+    // `not null default true` (confirmed against
+    // 20260717000001_support_audit.sql), so this single upsert call is
+    // sufficient to persist a full defaults-plus-one-toggle row, matching
+    // `loadSettingsData`'s own synthesized default row for the same case.
+    expect(fromSpy).toHaveBeenCalledWith('notification_prefs');
+    expect(upsertSpy).toHaveBeenCalledWith(
+      { profile_id: TEST_USER_ID, weekly_digest: false },
+      { onConflict: 'profile_id' },
+    );
   });
 });
 

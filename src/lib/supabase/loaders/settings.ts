@@ -20,6 +20,28 @@
  * doc comment) are read/written directly, one row each, for the CALLER'S OWN
  * id -- never any other profile's.
  *
+ * T109 fix (HIGH PRIORITY, live-reported by George): NOTHING anywhere ever
+ * inserts a `notification_prefs` row for a profile -- `fn_handle_invite_
+ * acceptance` (the invite trigger, `20260718000000_invite_trigger.sql`)
+ * creates only `profiles`, no migration backfills `notification_prefs`, and
+ * no app code inserted one either. So EVERY real user's `notification_prefs`
+ * query returns zero rows, and the pre-T109 `loadSettingsData` threw on that
+ * (`'No notification preferences were found for your account.'`), making
+ * `/settings` unusable for every real user. Since every one of the table's
+ * seven boolean columns is `not null default true` (confirmed by reading
+ * `20260717000001_support_audit.sql` lines 32-43 directly, not assumed --
+ * see `DEFAULT_NOTIFICATION_PREFS` below), a missing row is semantically
+ * IDENTICAL to a row of those seven defaults, so `loadSettingsData` now
+ * synthesizes that default row instead of throwing (see `loadSettingsData`'s
+ * own body below). The missing-`profiles`-row case is UNCHANGED and still throws --
+ * that case genuinely indicates the invite trigger never ran, a real bug
+ * worth surfacing loudly. `toggleNotificationPref` is switched from a plain
+ * UPDATE (which silently zero-row-no-ops against a nonexistent row, the same
+ * class of bug T104 already disclosed for `togglePrivacy`) to a genuine
+ * UPSERT so a user's very first toggle actually persists -- see that
+ * function's own doc comment below for the full RLS + column-default
+ * reasoning.
+ *
  * RLS already scopes every one of these writes correctly (`
  * 20260717000002_rls.sql`, read-only reference, not reimplemented here):
  *   - `profiles_self_update` (lines 42-45): `using (id = auth.uid())` --
@@ -247,6 +269,23 @@ function mapProfileDbRowToSettingsProfile(row: ProfileDbRow): SettingsProfile {
   };
 }
 
+/** T109: column defaults straight from `notification_prefs`'s own migration
+ * (`20260717000001_support_audit.sql`, lines 32-43) -- every one of the
+ * seven boolean columns is declared `not null default true`, confirmed by
+ * reading the actual migration rather than assumed. A profile with no
+ * `notification_prefs` row yet (every real user today -- see module doc
+ * above) is therefore semantically identical to a row of these seven
+ * defaults. */
+const DEFAULT_NOTIFICATION_PREFS: Omit<NotificationPrefsRow, 'profileId'> = {
+  invite: true,
+  signupConfirm: true,
+  eventReminder48h: true,
+  eventReminder3h: true,
+  meetingReminder3h: true,
+  weeklyDigest: true,
+  digestEnabled: true,
+};
+
 function mapNotificationPrefsDbRowToRow(row: NotificationPrefsDbRow): NotificationPrefsRow {
   return {
     profileId: row.profile_id,
@@ -310,21 +349,29 @@ export function makeLoadSettingsData(
       loadNotificationPrefs(userId),
     ]);
 
-    // SettingsPage.tsx's own module doc #11: this page assumes a `profiles`
-    // row AND a `notification_prefs` row already exist for the current
-    // viewer by the time it renders -- a missing row here is a genuine,
-    // fail-loud error (routed into the page's existing DES-12 error Banner
-    // state), never bridged to fixture data.
+    // SettingsPage.tsx's own module doc #11 assumes a `profiles` row already
+    // exists for the current viewer by the time it renders -- a missing
+    // `profiles` row is a genuine, fail-loud error (routed into the page's
+    // existing DES-12 error Banner state), never bridged to fixture data:
+    // the invite trigger (`fn_handle_invite_acceptance`) should always have
+    // created it, so its absence means something is genuinely wrong.
     if (profileRow === null) {
       throw new Error('No profile was found for your account.');
     }
-    if (prefsRow === null) {
-      throw new Error('No notification preferences were found for your account.');
-    }
+
+    // T109: a missing `notification_prefs` row is NOT an error -- see module
+    // doc above. Nothing anywhere ever inserts this row today, so treating a
+    // null result as fail-loud broke `/settings` for every real user.
+    // Synthesize the column-default row instead (`DEFAULT_NOTIFICATION_PREFS`
+    // above), identical to what a fresh row would actually contain.
+    const notificationPrefs: NotificationPrefsRow =
+      prefsRow === null
+        ? { profileId: userId, ...DEFAULT_NOTIFICATION_PREFS }
+        : mapNotificationPrefsDbRowToRow(prefsRow);
 
     return {
       profile: mapProfileDbRowToSettingsProfile(profileRow),
-      notificationPrefs: mapNotificationPrefsDbRowToRow(prefsRow),
+      notificationPrefs,
     };
   };
 }
@@ -389,20 +436,54 @@ const NOTIFICATION_PREF_COLUMN: Record<NotificationPrefKey, string> = {
  * #2). Unlike the three seams above, this one needs no `resolveCurrentUserId`
  * call -- the caller-supplied `payload.profileId` (SettingsPage.tsx's own
  * already-loaded `profile.id`) is trusted directly, matching
- * `notification_prefs`'s own RLS `self_all` policy's `with check (profile_id
- * = auth.uid())` -- a mismatched id here would simply be rejected by RLS
- * (0 rows updated, surfaced as `runMutation`'s normal error path), never
- * silently applied to the wrong row.
+ * `notification_prefs`'s own RLS `self_all` policy (`20260717000002_rls.sql`,
+ * lines 240-243: `for all to authenticated using (profile_id = auth.uid())
+ * with check (profile_id = auth.uid())`, read directly rather than assumed)
+ * -- `for all` covers select/insert/update/delete under that identical
+ * using/with-check condition, so a caller-supplied `profileId` that doesn't
+ * match the caller's own `auth.uid()` is REJECTED outright by RLS on the
+ * INSERT half of the upsert below (a real, surfaced error -- not the old
+ * silent zero-row UPDATE no-op).
+ *
+ * T109 fix: switched from a plain UPDATE keyed on `profile_id` to an UPSERT
+ * (`onConflict: 'profile_id'`). Against a profile with no existing
+ * `notification_prefs` row -- every real user today, per module doc above --
+ * a bare UPDATE matches zero rows and silently no-ops (the same class of bug
+ * T104 already disclosed for `togglePrivacy`), so a user's very first toggle
+ * never actually persisted even though the UI showed it as changed.
+ *
+ * The upsert payload deliberately sends ONLY `profile_id` plus the one
+ * toggled column -- never the other six columns -- for two reasons, both
+ * confirmed directly against `notification_prefs`'s own migration
+ * (`20260717000001_support_audit.sql`, lines 32-43, `not null default
+ * true` on every one of the seven boolean columns):
+ *   - On INSERT (no existing row, the first-toggle case): every column
+ *     omitted from the payload falls back to its own real Postgres column
+ *     default (`true`), so the resulting row ends up "all seven column
+ *     defaults plus the one toggled value" -- exactly matching what
+ *     `loadSettingsData`'s own synthesized `DEFAULT_NOTIFICATION_PREFS` row
+ *     above already assumes a fresh row would contain.
+ *   - On UPDATE (conflict on `profile_id`, an existing row): PostgREST's
+ *     generated `ON CONFLICT (profile_id) DO UPDATE SET ...` only assigns
+ *     the columns actually present in the request body, so every OTHER
+ *     already-customized pref on that row is left untouched. Sending the
+ *     full seven-column defaults object on every call instead (an
+ *     alternative considered and rejected) would have CLOBBERED any
+ *     previously toggled-off pref back to `true` on every subsequent,
+ *     unrelated toggle -- a real data-loss bug this narrower payload avoids.
  */
 export function makeToggleNotificationPref(
   getClient: () => SupabaseClient = getSupabaseClient,
 ): OnToggleNotificationPrefFn {
   return runMutation<ToggleNotificationPrefPayload, void>(
     (client, payload) =>
-      client
-        .from('notification_prefs')
-        .update({ [NOTIFICATION_PREF_COLUMN[payload.key]]: payload.value })
-        .eq('profile_id', payload.profileId),
+      client.from('notification_prefs').upsert(
+        {
+          profile_id: payload.profileId,
+          [NOTIFICATION_PREF_COLUMN[payload.key]]: payload.value,
+        },
+        { onConflict: 'profile_id' },
+      ),
     getClient,
   );
 }
