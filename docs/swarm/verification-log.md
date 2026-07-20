@@ -3916,3 +3916,26 @@ with every genuine schema/infrastructure gap along the way (leaderboard privacy,
 avatar storage, live check-in token minting, the accept-invite RLS trap, and
 others) closed by a real, checker-verified migration or Edge Function rather than
 worked around.
+
+---
+
+## T107 — Fix `RosterShell.test.tsx` regression from T104's real-data wiring
+
+**PASS (1st attempt, clean).** Fifth occurrence of the T088/T092/T097 pattern:
+`RosterShell.tsx` renders `AdminToggles` with zero props, and T104's real
+`loadPrivacySetting` default broke the `AdminToggles gating` describe block's two
+tests (timing out against the test environment's missing Supabase config) — this
+was confirmed live as a real GitHub Actions CI failure on the PR before this task
+was dispatched, not just a local observation. Fixed the same minimal way as every
+prior instance: added a fifth sibling `vi.mock('../../lib/supabase/loaders/
+leaderboard_privacy', ...)` block matching the four already in the file
+(`invites`/`students`/`teams`/`parents`), stubbing `loadPrivacySetting` to resolve
+`true` immediately (SEC-04's default-ON), leaving `togglePrivacy` re-exported real
+via `importOriginal` since neither affected test exercises the persist path.
+
+Checker independently confirmed `RosterShell.tsx`, `AdminToggles.tsx`, and
+`loaders/leaderboard_privacy.ts` are all genuinely untouched (`git diff` empty for
+all three forbidden files), ran the specific previously-failing tests directly (now
+passing, 70ms/93ms), the full `RosterShell.test.tsx` file (14/14), the full repo
+suite (1156/1156, zero regressions), and typecheck/lint/build/format:check (all
+clean).

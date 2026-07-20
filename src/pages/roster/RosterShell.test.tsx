@@ -61,6 +61,17 @@
  * above, fixing the two tests that asserted the OLD `TeamsTab`/`ParentsTab`
  * fixture content (`'Embercore'`/`'Renata Alvarez'`) when those tabs are
  * selected.
+ *
+ * T107: T104 did the identical thing one more time, this time to
+ * `AdminToggles.tsx`'s own `loadPrivacySetting`/`togglePrivacy` defaults --
+ * switched from fixture stand-ins (`defaultLoadPrivacySetting`/
+ * `defaultOnTogglePrivacy`) to the real Supabase-backed
+ * `loadPrivacySetting`/`../../lib/supabase/loaders/leaderboard_privacy`,
+ * which also correctly rejects/hangs in this test environment. This file
+ * mocks `loadPrivacySetting` at the same module boundary, identical shape
+ * to T088's/T092's/T097's mocks above, fixing the two `AdminToggles
+ * gating` tests below that previously timed out waiting for the real,
+ * unconfigured Supabase call.
  */
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -82,6 +93,7 @@ import type {
   StudentRow as ParentsTabStudentRow,
 } from './ParentsTab';
 import { loadParentsTabData } from '../../lib/supabase/loaders/parents';
+import { loadPrivacySetting } from '../../lib/supabase/loaders/leaderboard_privacy';
 
 // ---------------------------------------------------------------------------
 // T088: mock `loadInvitesTabData` only -- every other
@@ -238,6 +250,26 @@ const MOCK_PARENTS_RESULT: ParentsTabLoadResult = {
 };
 
 // ---------------------------------------------------------------------------
+// T107: mock `loadPrivacySetting` only -- identical pattern to T088's/T092's/
+// T097's mocks above, one module over. `togglePrivacy` (the other
+// `../../lib/supabase/loaders/leaderboard_privacy` export, unused by these
+// tests since neither exercises the `Switch`'s persist action) is
+// re-exported from the real module via `importOriginal`.
+// ---------------------------------------------------------------------------
+vi.mock('../../lib/supabase/loaders/leaderboard_privacy', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../lib/supabase/loaders/leaderboard_privacy')>();
+  return { ...actual, loadPrivacySetting: vi.fn() };
+});
+
+const mockedLoadPrivacySetting = vi.mocked(loadPrivacySetting);
+
+// SEC-04's stated default (ON) -- matches `AdminToggles.tsx`'s own
+// `defaultLoadPrivacySetting` fixture literal, resolved here through the
+// mocked real seam instead.
+const MOCK_PRIVACY_SETTING = true;
+
+// ---------------------------------------------------------------------------
 // jsdom gap: `AlertDialog`/`Dialog` render a native `<dialog>` and call
 // `HTMLDialogElement.prototype.showModal()`, which this repo's installed
 // jsdom does not implement -- same gap `ParentsTab.test.tsx`/`StudentsTab
@@ -344,6 +376,7 @@ beforeEach(() => {
   mockedLoadStudentsTabData.mockReset().mockResolvedValue(MOCK_STUDENTS_RESULT);
   mockedLoadTeamsTabData.mockReset().mockResolvedValue(MOCK_TEAMS_RESULT);
   mockedLoadParentsTabData.mockReset().mockResolvedValue(MOCK_PARENTS_RESULT);
+  mockedLoadPrivacySetting.mockReset().mockResolvedValue(MOCK_PRIVACY_SETTING);
 });
 
 afterEach(() => {
