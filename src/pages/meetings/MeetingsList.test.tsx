@@ -20,6 +20,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthUser } from '../../app/guards';
 import {
+  aggregateParticipationRows,
   makeCancelMeetingSession,
   makeCreateMeetings,
   makeLoadCoachMeetingsData,
@@ -30,14 +31,19 @@ import { LoginAs } from '../../test-utils/authHarness';
 import {
   MeetingsList,
   buildCoachMeetingRows,
+  buildDateRangeLabel,
+  buildRecurrenceChips,
   buildStudentMeetingsData,
   defaultLoadCoachMeetingsData,
   defaultLoadStudentMeetingsData,
   formatDuration,
+  formatHoursLabel,
   formatTimeRangeWithDuration,
   formatWeekdayDate,
   partitionByStatus,
+  partitionCoachMeetingRows,
   PLACEHOLDER_CURRENT_STUDENT_ID,
+  summarizeCoachMeetingRow,
   type CoachMeetingsData,
   type ResolveCurrentStudentIdFn,
   type StudentMeetingsData,
@@ -205,6 +211,45 @@ describe('formatDuration / formatTimeRangeWithDuration (BEH-08)', () => {
   });
 });
 
+describe('formatHoursLabel (T122 module doc #10b)', () => {
+  it('renders a whole-hour value without a decimal', () => {
+    expect(formatHoursLabel(2)).toBe('2h');
+    expect(formatHoursLabel(0)).toBe('0h');
+  });
+
+  it('renders a fractional value rounded to one decimal', () => {
+    expect(formatHoursLabel(1.5)).toBe('1.5h');
+    expect(formatHoursLabel(1.449)).toBe('1.4h');
+  });
+});
+
+describe('buildRecurrenceChips / buildDateRangeLabel (T122 module doc #10b)', () => {
+  it('groups by weekday in first-seen order for a multi-session set', () => {
+    const sessions = [
+      { sessionDate: '2026-07-06' }, // Mon
+      { sessionDate: '2026-07-09' }, // Thu
+      { sessionDate: '2026-07-13' }, // Mon
+    ];
+    expect(buildRecurrenceChips(sessions)).toEqual(['MON (2)', 'THU (1)']);
+  });
+
+  it('returns no chips for a single session', () => {
+    expect(buildRecurrenceChips([{ sessionDate: '2026-07-06' }])).toEqual([]);
+  });
+
+  it('returns no chips and an empty date range label for zero sessions', () => {
+    expect(buildRecurrenceChips([])).toEqual([]);
+    expect(buildDateRangeLabel([])).toBe('');
+  });
+
+  it('date range label is a single date for one session, a range for multiple', () => {
+    expect(buildDateRangeLabel([{ sessionDate: '2026-07-22' }])).toBe('Wed, Jul 22');
+    expect(
+      buildDateRangeLabel([{ sessionDate: '2026-07-22' }, { sessionDate: '2026-07-08' }]),
+    ).toBe('Wed, Jul 8 – Wed, Jul 22'); // sorted ascending regardless of input order
+  });
+});
+
 describe('partitionByStatus', () => {
   it('splits scheduled into upcoming and completed/canceled into past, sorted', () => {
     const rows = [
@@ -219,51 +264,85 @@ describe('partitionByStatus', () => {
   });
 });
 
-describe('buildCoachMeetingRows (NAV-07)', () => {
+// T122 (module doc #10a): a single reusable multi-session fixture event used
+// by several tests below -- three sessions on the SAME weekday (one
+// scheduled, one completed, one canceled), so `buildRecurrenceChips` has a
+// genuine 3-count chip to prove and `summarizeCoachMeetingRow` has all three
+// statuses to aggregate across in one event.
+const MULTI_SESSION_EVENT = {
+  id: 'e1',
+  seasonId: 's1',
+  type: 'meeting' as const,
+  title: 'M',
+  teamIds: null,
+  countsParticipation: true,
+  locationName: 'Robotics Lab',
+  address: '123 Main St',
+};
+const MULTI_SESSION_SESSIONS = [
+  {
+    id: 'sess-scheduled',
+    eventId: 'e1',
+    sessionDate: '2026-07-22', // Wed
+    startsAt: '2026-07-22T23:00:00.000Z',
+    endsAt: '2026-07-23T01:00:00.000Z', // 2h
+    status: 'scheduled' as const,
+  },
+  {
+    id: 'sess-completed',
+    eventId: 'e1',
+    sessionDate: '2026-07-15', // Wed
+    startsAt: '2026-07-15T23:00:00.000Z',
+    endsAt: '2026-07-16T01:00:00.000Z', // 2h
+    status: 'completed' as const,
+  },
+  {
+    id: 'sess-canceled',
+    eventId: 'e1',
+    sessionDate: '2026-07-08', // Wed
+    startsAt: '2026-07-08T23:00:00.000Z',
+    endsAt: '2026-07-09T01:00:00.000Z', // 2h
+    status: 'canceled' as const,
+  },
+];
+
+describe('buildCoachMeetingRows (NAV-07, T122 module doc #10a)', () => {
   it('excludes outreach-typed events entirely', async () => {
     const { rows } = await defaultLoadCoachMeetingsData();
     expect(rows.some((r) => r.title === 'Community Food Drive')).toBe(false);
     expect(rows.length).toBeGreaterThan(0);
   });
 
-  it('computes an attendance summary only for completed sessions', () => {
+  it('groups sessions into ONE row per event (not one row per session)', () => {
+    const rows = buildCoachMeetingRows([MULTI_SESSION_EVENT], MULTI_SESSION_SESSIONS, [], []);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].eventId).toBe('e1');
+    expect(rows[0].locationName).toBe('Robotics Lab');
+    expect(rows[0].sessions.map((s) => s.sessionId)).toEqual([
+      'sess-canceled',
+      'sess-completed',
+      'sess-scheduled',
+    ]); // sorted ascending by startsAt
+  });
+
+  it('an event with zero sessions produces no row', () => {
+    const rows = buildCoachMeetingRows([{ ...MULTI_SESSION_EVENT, id: 'e-empty' }], [], [], []);
+    expect(rows).toHaveLength(0);
+  });
+
+  it('computes a per-session attendance summary only for completed sessions', () => {
     const rows = buildCoachMeetingRows(
-      [
-        {
-          id: 'e1',
-          seasonId: 's1',
-          type: 'meeting',
-          title: 'M',
-          teamIds: null,
-          countsParticipation: true,
-        },
-      ],
-      [
-        {
-          id: 'sess-scheduled',
-          eventId: 'e1',
-          sessionDate: '2026-07-22',
-          startsAt: '2026-07-22T23:00:00.000Z',
-          endsAt: '2026-07-23T01:00:00.000Z',
-          status: 'scheduled',
-        },
-        {
-          id: 'sess-completed',
-          eventId: 'e1',
-          sessionDate: '2026-07-15',
-          startsAt: '2026-07-15T23:00:00.000Z',
-          endsAt: '2026-07-16T01:00:00.000Z',
-          status: 'completed',
-        },
-      ],
+      [MULTI_SESSION_EVENT],
+      MULTI_SESSION_SESSIONS,
       [],
       [
         { sessionId: 'sess-completed', studentId: 'stu-1', status: 'present' },
         { sessionId: 'sess-completed', studentId: 'stu-2', status: 'late' },
       ],
     );
-    const scheduled = rows.find((r) => r.sessionId === 'sess-scheduled');
-    const completed = rows.find((r) => r.sessionId === 'sess-completed');
+    const sessions = rows[0].sessions;
+    const scheduled = sessions.find((s) => s.sessionId === 'sess-scheduled');
+    const completed = sessions.find((s) => s.sessionId === 'sess-completed');
     expect(scheduled?.attendanceSummary).toBeNull();
     expect(completed?.attendanceSummary).toEqual({
       presentCt: 1,
@@ -272,22 +351,130 @@ describe('buildCoachMeetingRows (NAV-07)', () => {
       absentCt: 0,
     });
   });
+
+  it('computes real per-session expected counts from going RSVPs, and attendee names for completed sessions', () => {
+    const rows = buildCoachMeetingRows(
+      [MULTI_SESSION_EVENT],
+      MULTI_SESSION_SESSIONS,
+      [],
+      [
+        { sessionId: 'sess-completed', studentId: 'stu-1', status: 'present' },
+        { sessionId: 'sess-completed', studentId: 'stu-2', status: 'late' },
+        { sessionId: 'sess-completed', studentId: 'stu-3', status: 'absent' },
+        // Present, but no matching row in `students` below -- proves the
+        // honest "Unknown student" fallback, never a silent drop.
+        { sessionId: 'sess-completed', studentId: 'stu-unmatched', status: 'present' },
+      ],
+      [
+        { sessionId: 'sess-scheduled', studentId: 'stu-1', status: 'going' },
+        { sessionId: 'sess-scheduled', studentId: 'stu-2', status: 'going' },
+        { sessionId: 'sess-scheduled', studentId: 'stu-3', status: 'declined' },
+      ],
+      [
+        { id: 'stu-1', displayName: 'Zoe Ann' },
+        { id: 'stu-2', displayName: 'Amir Lee' },
+      ],
+    );
+    const sessions = rows[0].sessions;
+    const scheduled = sessions.find((s) => s.sessionId === 'sess-scheduled');
+    const completed = sessions.find((s) => s.sessionId === 'sess-completed');
+    // Only 'going' counted, not 'declined'.
+    expect(scheduled?.expectedCt).toBe(2);
+    // Attendee names sorted alphabetically; 'absent' is excluded entirely;
+    // the unmatched present student falls back to an honest placeholder,
+    // never a silent drop.
+    expect(completed?.attendeeNames).toEqual(['Amir Lee', 'Unknown student', 'Zoe Ann']);
+    // Scheduled sessions have no attendance yet -- no names.
+    expect(scheduled?.attendeeNames).toEqual([]);
+  });
+});
+
+describe('summarizeCoachMeetingRow (T122 module doc #10b)', () => {
+  it('sums planned hours across non-canceled sessions and logged hours across completed sessions only', () => {
+    const rows = buildCoachMeetingRows([MULTI_SESSION_EVENT], MULTI_SESSION_SESSIONS, [], []);
+    const summary = summarizeCoachMeetingRow(rows[0].sessions);
+    // planned = scheduled (2h) + completed (2h) = 4h; canceled excluded.
+    expect(summary.plannedHours).toBe(4);
+    // logged = completed only = 2h.
+    expect(summary.loggedHours).toBe(2);
+    expect(summary.canceledCt).toBe(1);
+  });
+
+  it('builds recurrence chips grouped by weekday, and a date range label', () => {
+    const rows = buildCoachMeetingRows([MULTI_SESSION_EVENT], MULTI_SESSION_SESSIONS, [], []);
+    const summary = summarizeCoachMeetingRow(rows[0].sessions);
+    // All three sessions fall on a Wednesday -- UXD-02's own worked example
+    // shape ("MON (18) · THU (18)"), here a single "WED (3)" chip.
+    expect(summary.recurrenceChips).toEqual(['WED (3)']);
+    expect(summary.dateRangeLabel).toBe('Wed, Jul 8 – Wed, Jul 22');
+  });
+
+  it('produces no recurrence chips for a single-session event (the date range line covers it alone)', () => {
+    const rows = buildCoachMeetingRows([MULTI_SESSION_EVENT], [MULTI_SESSION_SESSIONS[0]], [], []);
+    const summary = summarizeCoachMeetingRow(rows[0].sessions);
+    expect(summary.recurrenceChips).toEqual([]);
+    expect(summary.dateRangeLabel).toBe('Wed, Jul 22');
+  });
+
+  it('sums expected/attended counts across every session (cumulative, not unique headcount)', () => {
+    const rows = buildCoachMeetingRows(
+      [MULTI_SESSION_EVENT],
+      MULTI_SESSION_SESSIONS,
+      [],
+      [
+        { sessionId: 'sess-completed', studentId: 'stu-1', status: 'present' },
+        { sessionId: 'sess-completed', studentId: 'stu-2', status: 'late' },
+      ],
+      [
+        { sessionId: 'sess-scheduled', studentId: 'stu-1', status: 'going' },
+        { sessionId: 'sess-scheduled', studentId: 'stu-2', status: 'going' },
+        { sessionId: 'sess-scheduled', studentId: 'stu-3', status: 'going' },
+      ],
+      [],
+    );
+    const summary = summarizeCoachMeetingRow(rows[0].sessions);
+    expect(summary.expectedCt).toBe(3); // scheduled session's 'going' RSVPs
+    expect(summary.attendedCt).toBe(2); // completed session's present+late
+  });
+
+  it('hasUpcomingSession is true when ANY session is still scheduled, sortStartsAt picks the nearest upcoming one', () => {
+    const rows = buildCoachMeetingRows([MULTI_SESSION_EVENT], MULTI_SESSION_SESSIONS, [], []);
+    const summary = summarizeCoachMeetingRow(rows[0].sessions);
+    expect(summary.hasUpcomingSession).toBe(true);
+    expect(summary.sortStartsAt).toBe('2026-07-22T23:00:00.000Z');
+  });
+
+  it('hasUpcomingSession is false once every session is completed/canceled, sortStartsAt picks the latest one', () => {
+    const pastOnly = MULTI_SESSION_SESSIONS.filter((s) => s.status !== 'scheduled');
+    const rows = buildCoachMeetingRows([MULTI_SESSION_EVENT], pastOnly, [], []);
+    const summary = summarizeCoachMeetingRow(rows[0].sessions);
+    expect(summary.hasUpcomingSession).toBe(false);
+    expect(summary.sortStartsAt).toBe('2026-07-15T23:00:00.000Z'); // sess-completed, latest of the two
+  });
+});
+
+describe('partitionCoachMeetingRows (T122 module doc #10c)', () => {
+  it('buckets a row into Upcoming when it has ANY scheduled session, even alongside past ones', () => {
+    const rows = buildCoachMeetingRows([MULTI_SESSION_EVENT], MULTI_SESSION_SESSIONS, [], []);
+    const { upcoming, past } = partitionCoachMeetingRows(rows);
+    expect(upcoming.map((r) => r.eventId)).toEqual(['e1']);
+    expect(past).toEqual([]);
+  });
+
+  it('buckets a row into Past once every one of its sessions is completed/canceled', () => {
+    const pastOnly = MULTI_SESSION_SESSIONS.filter((s) => s.status !== 'scheduled');
+    const rows = buildCoachMeetingRows([MULTI_SESSION_EVENT], pastOnly, [], []);
+    const { upcoming, past } = partitionCoachMeetingRows(rows);
+    expect(upcoming).toEqual([]);
+    expect(past.map((r) => r.eventId)).toEqual(['e1']);
+  });
 });
 
 describe('buildStudentMeetingsData (constitution item 3)', () => {
   it('never computes participationPct -- copies it verbatim from the metric row', () => {
     const data = buildStudentMeetingsData(
       'stu-1',
-      [
-        {
-          id: 'e1',
-          seasonId: 's1',
-          type: 'meeting',
-          title: 'M',
-          teamIds: null,
-          countsParticipation: true,
-        },
-      ],
+      [{ ...MULTI_SESSION_EVENT }],
       [],
       [],
       [
@@ -378,6 +565,37 @@ describe('<MeetingsList /> coach view', () => {
     expect(container.textContent).not.toContain('Community Food Drive');
   });
 
+  // T122 (UXD-02 density standard) -- date/recurrence chips, location,
+  // planned/logged hours, expected/attended counts all render on the row.
+  it('renders UXD-02 dense-row fields: recurrence chip, date range, location, planned/logged hours, expected/attended', async () => {
+    renderAsUser(COACH_USER, { loadCoachData: defaultLoadCoachMeetingsData });
+    await flushMicrotasks();
+
+    // "Weekly Build Meeting" has 3 sessions, all on Wednesdays.
+    expect(container.textContent).toContain('WED (3)');
+    expect(container.textContent).toContain('Wed, Jul 8 – Wed, Jul 22');
+    expect(container.textContent).toContain('Robotics Lab');
+    // planned = scheduled (2h) + completed (2h) = 4h (canceled excluded);
+    // logged = completed only = 2h.
+    expect(container.textContent).toContain('4h planned · 2h logged');
+    // expected = session-upcoming-build's 5 'going' RSVPs; attended =
+    // session-past-build-completed's 3 present + 1 late.
+    expect(container.textContent).toContain('Expected 5 · Attended 4');
+
+    // "Ravens Strategy Session" has 2 sessions, both on Saturdays.
+    expect(container.textContent).toContain('SAT (2)');
+    expect(container.textContent).toContain('Ravens Team Room');
+    expect(container.textContent).toContain('3h planned · 1.5h logged');
+    expect(container.textContent).toContain('Expected 2 · Attended 3');
+
+    // UXD-03: expander trigger + per-session detail (attendee names) both
+    // present -- Collapsible content is always in the DOM (Astryx's own
+    // implementation, see this file's own module doc), so no click needed.
+    expect(container.textContent).toContain('Session details (3)');
+    expect(container.textContent).toContain('Session details (2)');
+    expect(container.textContent).toContain('Attended: Alex Rivera, Bailey Chen, Casey Nguyen');
+  });
+
   // T096: "Schedule meetings" now opens the real `ScheduleMeetingsDialog`
   // (T031, already Passed) instead of showing the old "dialog not built yet"
   // stub -- that dialog genuinely IS built now (module doc #7a).
@@ -426,14 +644,23 @@ describe('<MeetingsList /> coach view', () => {
         : Promise.resolve({
             rows: [
               {
-                sessionId: 'session-new',
+                eventId: 'event-new',
                 title: 'Team meeting',
-                sessionDate: '2026-07-22',
-                startsAt: '2026-07-22T23:00:00.000Z',
-                endsAt: '2026-07-23T01:00:00.000Z',
-                status: 'scheduled' as const,
+                locationName: 'Robotics Lab',
                 teamScopeLabel: 'All teams',
-                attendanceSummary: null,
+                sessions: [
+                  {
+                    sessionId: 'session-new',
+                    sessionDate: '2026-07-22',
+                    startsAt: '2026-07-22T23:00:00.000Z',
+                    endsAt: '2026-07-23T01:00:00.000Z',
+                    status: 'scheduled' as const,
+                    durationHours: 2,
+                    expectedCt: 0,
+                    attendanceSummary: null,
+                    attendeeNames: [],
+                  },
+                ],
               },
             ],
           });
@@ -492,45 +719,45 @@ describe('<MeetingsList /> coach view', () => {
     expect(container.textContent).not.toContain('not built yet');
   });
 
-  it('Cancel via MoreMenu + AlertDialog (DES-11) really calls the injected onCancelSession mutation', async () => {
+  // T122 (module doc #10d) -- Cancel moved from the row's own MoreMenu into
+  // a plain per-session `Button` inside that row's expander (`Collapsible`
+  // content is always in the DOM -- see Astryx's own `Collapsible.tsx`,
+  // `display: none` toggled via CSS, not conditional rendering -- so this
+  // button is findable without simulating an expand click, same posture
+  // `ScheduleMeetingsDialog`'s "always mounted" `<dialog>` already
+  // established for this test file).
+  it('Cancel (inline, per-session) + AlertDialog (DES-11) really calls the injected onCancelSession mutation', async () => {
     const onCancelSession = vi.fn().mockResolvedValue(undefined);
     renderAsUser(COACH_USER, { loadCoachData: defaultLoadCoachMeetingsData, onCancelSession });
     await flushMicrotasks();
 
-    const moreMenuButton = Array.from(container.querySelectorAll('button')).find((btn) =>
-      btn.getAttribute('aria-label')?.startsWith('Actions for Weekly Build Meeting'),
-    );
-    expect(moreMenuButton).toBeTruthy();
-    act(() => {
-      moreMenuButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
+    // "Weekly Build Meeting" has exactly one still-scheduled session
+    // (session-upcoming-build, 2026-07-22, a Wednesday).
+    const cancelButton = findButtonByText('Cancel Wed, Jul 22 session');
+    expect(cancelButton).toBeTruthy();
+    clickButton(cancelButton as HTMLButtonElement);
 
-    const cancelMenuItem = Array.from(document.querySelectorAll('[role="menuitem"], button')).find(
-      (el) => el.textContent?.trim() === 'Cancel meeting',
-    );
-    expect(cancelMenuItem).toBeTruthy();
-    act(() => {
-      cancelMenuItem?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(document.body.textContent).toContain('Cancel "Weekly Build Meeting"?');
+    expect(document.body.textContent).toContain('Cancel "Weekly Build Meeting" on Wed, Jul 22?');
 
     const confirmButton = Array.from(document.querySelectorAll('button')).find(
-      (btn) => btn.textContent?.trim() === 'Cancel meeting',
+      (btn) => btn.textContent?.trim() === 'Cancel session',
     );
     expect(confirmButton).toBeTruthy();
-    act(() => {
-      confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
+    clickButton(confirmButton as HTMLButtonElement);
     await flushMicrotasks();
 
-    // Optimistic update: the formerly-Upcoming session now shows a Canceled
-    // badge in Past.
+    // Optimistic update: the formerly-scheduled session now shows a
+    // Canceled badge + copy inside its row's expander.
     expect(container.textContent).toContain('Canceled — no attendance recorded.');
     // The real mutation seam was genuinely called, with the target session's id.
     expect(onCancelSession).toHaveBeenCalledTimes(1);
     expect(onCancelSession).toHaveBeenCalledWith('session-upcoming-build');
-    expect(container.textContent).toContain('Meeting canceled');
+    expect(container.textContent).toContain('Meeting session canceled');
+    // The Cancel button for that now-canceled session is gone (only
+    // `scheduled` sessions render one) -- the Ravens session's own Cancel
+    // button is untouched.
+    expect(findButtonByText('Cancel Wed, Jul 22 session')).toBeUndefined();
+    expect(findButtonByText('Cancel Sat, Jul 25 session')).toBeTruthy();
   });
 
   it('Cancel rolls back the optimistic update and shows an error Banner when the mutation rejects', async () => {
@@ -538,38 +765,16 @@ describe('<MeetingsList /> coach view', () => {
     renderAsUser(COACH_USER, { loadCoachData: defaultLoadCoachMeetingsData, onCancelSession });
     await flushMicrotasks();
 
-    const moreMenuButton = Array.from(container.querySelectorAll('button')).find((btn) =>
-      btn.getAttribute('aria-label')?.startsWith('Actions for Weekly Build Meeting'),
-    );
-    act(() => {
-      moreMenuButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    const cancelMenuItem = Array.from(document.querySelectorAll('[role="menuitem"], button')).find(
-      (el) => el.textContent?.trim() === 'Cancel meeting',
-    );
-    act(() => {
-      cancelMenuItem?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
+    const cancelButton = findButtonByText('Cancel Wed, Jul 22 session');
+    clickButton(cancelButton as HTMLButtonElement);
     const confirmButton = Array.from(document.querySelectorAll('button')).find(
-      (btn) => btn.textContent?.trim() === 'Cancel meeting',
+      (btn) => btn.textContent?.trim() === 'Cancel session',
     );
-    act(() => {
-      confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
+    clickButton(confirmButton as HTMLButtonElement);
     await flushMicrotasks();
 
-    // Rolled back -- the target session is back in Upcoming with its
-    // MoreMenu restored (only `scheduled` rows render one; the FIXTURE data
-    // also has an unrelated, ALREADY-canceled "Weekly Build Meeting" past
-    // session -- module doc #7c's rollback target is the UPCOMING one, so
-    // this asserts on its own MoreMenu reappearing, not on the shared
-    // "Canceled — no attendance recorded." copy text, which the unrelated
-    // fixture row also legitimately renders).
-    expect(
-      Array.from(container.querySelectorAll('button')).some(
-        (btn) => btn.getAttribute('aria-label') === 'Actions for Weekly Build Meeting',
-      ),
-    ).toBe(true);
+    // Rolled back -- the session's own Cancel button reappears.
+    expect(findButtonByText('Cancel Wed, Jul 22 session')).toBeTruthy();
     expect(container.textContent).toContain("Couldn't cancel meeting");
   });
 });
@@ -710,7 +915,7 @@ describe('<MeetingsList /> student/parent view', () => {
 // ---------------------------------------------------------------------------
 
 describe('loadCoachMeetingsData (T096 real load)', () => {
-  it('queries events/event_sessions/teams/attendance and produces the same rows buildCoachMeetingRows would', async () => {
+  it('queries events/event_sessions/teams/attendance/rsvps/students and produces the same rows buildCoachMeetingRows would', async () => {
     const eventsSelectSpy = vi.fn().mockResolvedValue({
       data: [
         {
@@ -720,6 +925,8 @@ describe('loadCoachMeetingsData (T096 real load)', () => {
           title: 'DB Meeting',
           team_ids: null,
           counts_participation: true,
+          location_name: 'DB Location',
+          address: '1 DB Way',
         },
         {
           id: 'event-2',
@@ -728,6 +935,8 @@ describe('loadCoachMeetingsData (T096 real load)', () => {
           title: 'DB Outreach -- must never appear',
           team_ids: null,
           counts_participation: false,
+          location_name: '',
+          address: '',
         },
       ],
       error: null,
@@ -747,12 +956,23 @@ describe('loadCoachMeetingsData (T096 real load)', () => {
     });
     const teamsOrderSpy = vi.fn().mockResolvedValue({ data: [], error: null });
     const attendanceSelectSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    // T122 (module doc #10a) -- new rsvps/students queries.
+    const rsvpsSelectSpy = vi.fn().mockResolvedValue({
+      data: [{ session_id: 'session-1', student_id: 'stu-1', status: 'going' }],
+      error: null,
+    });
+    const studentsSelectSpy = vi.fn().mockResolvedValue({
+      data: [{ id: 'stu-1', display_name: 'DB Student' }],
+      error: null,
+    });
 
     const fromSpy = vi.fn((table: string) => {
       if (table === 'events') return { select: eventsSelectSpy };
       if (table === 'event_sessions') return { select: vi.fn(() => ({ order: sessionsOrderSpy })) };
       if (table === 'teams') return { select: vi.fn(() => ({ order: teamsOrderSpy })) };
       if (table === 'attendance') return { select: attendanceSelectSpy };
+      if (table === 'rsvps') return { select: rsvpsSelectSpy };
+      if (table === 'students') return { select: studentsSelectSpy };
       throw new Error(`unexpected table: ${table}`);
     });
     const client = { from: fromSpy } as unknown as SupabaseClient;
@@ -764,19 +984,28 @@ describe('loadCoachMeetingsData (T096 real load)', () => {
     expect(fromSpy).toHaveBeenCalledWith('event_sessions');
     expect(fromSpy).toHaveBeenCalledWith('teams');
     expect(fromSpy).toHaveBeenCalledWith('attendance');
+    expect(fromSpy).toHaveBeenCalledWith('rsvps');
+    expect(fromSpy).toHaveBeenCalledWith('students');
 
     // NAV-07 -- the outreach event's title never appears (module doc #2's
     // filter, applied by the reused `buildCoachMeetingRows`, not re-derived
     // in the loader).
     expect(result.rows).toHaveLength(1);
-    expect(result.rows[0]).toMatchObject({ sessionId: 'session-1', title: 'DB Meeting' });
+    expect(result.rows[0]).toMatchObject({
+      eventId: 'event-1',
+      title: 'DB Meeting',
+      locationName: 'DB Location',
+    });
+    expect(result.rows[0].sessions).toHaveLength(1);
+    expect(result.rows[0].sessions[0]).toMatchObject({ sessionId: 'session-1', expectedCt: 1 });
   });
 
-  it('bridges the "no rows" case for all four tables to an empty rows array, not a crash', async () => {
+  it('bridges the "no rows" case for all six tables to an empty rows array, not a crash', async () => {
     const nullResult = { data: null, error: null };
-    // `events`/`attendance` `await` the `.select()` result directly (no
-    // `.order()` chain); `event_sessions`/`teams` chain `.select().order()`.
-    // A single thenable-plus-`.order()` stub satisfies both shapes.
+    // `events`/`attendance`/`rsvps`/`students` `await` the `.select()`
+    // result directly (no `.order()` chain); `event_sessions`/`teams` chain
+    // `.select().order()`. A single thenable-plus-`.order()` stub satisfies
+    // both shapes.
     const selectResult = {
       then: (resolve: (value: typeof nullResult) => void) => resolve(nullResult),
       order: vi.fn().mockResolvedValue(nullResult),
@@ -791,19 +1020,20 @@ describe('loadCoachMeetingsData (T096 real load)', () => {
   });
 });
 
-describe('loadStudentMeetingsData (T096 real load)', () => {
-  it('scopes attendance/participation queries to the given studentId', async () => {
+describe('loadStudentMeetingsData (T096 real load; T122 .limit(1) fix)', () => {
+  it('scopes attendance/participation queries to the given studentId, no .limit() on the participation query anymore', async () => {
     const eventsSelectSpy = vi.fn().mockResolvedValue({ data: [], error: null });
     const sessionsOrderSpy = vi.fn().mockResolvedValue({ data: [], error: null });
     const attendanceEqSpy = vi.fn().mockResolvedValue({ data: [], error: null });
-    const participationLimitSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const participationEqSpy = vi.fn().mockResolvedValue({ data: [], error: null });
 
     const fromSpy = vi.fn((table: string) => {
       if (table === 'events') return { select: eventsSelectSpy };
       if (table === 'event_sessions') return { select: vi.fn(() => ({ order: sessionsOrderSpy })) };
       if (table === 'attendance') return { select: vi.fn(() => ({ eq: attendanceEqSpy })) };
       if (table === 'v_student_participation') {
-        return { select: vi.fn(() => ({ eq: vi.fn(() => ({ limit: participationLimitSpy })) })) };
+        // T122: `.limit(1)` REMOVED -- `.eq(...)` is awaited directly now.
+        return { select: vi.fn(() => ({ eq: participationEqSpy })) };
       }
       throw new Error(`unexpected table: ${table}`);
     });
@@ -813,6 +1043,159 @@ describe('loadStudentMeetingsData (T096 real load)', () => {
     await load('student-42');
 
     expect(attendanceEqSpy).toHaveBeenCalledWith('student_id', 'student-42');
+    expect(participationEqSpy).toHaveBeenCalledWith('student_id', 'student-42');
+  });
+
+  // T122's own ".limit(1)" fix decision, end-to-end: a dual-member student's
+  // TWO real `v_student_participation` rows (T116's own migration doc: one
+  // per membership-team) are summed, not arbitrarily reduced to one team.
+  it('a dual-member student with two v_student_participation rows gets an aggregated participation figure, not an arbitrary single team', async () => {
+    const eventsSelectSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const sessionsOrderSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const attendanceEqSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    // FRC team: 5 expected, 5 present (100%). FTC team: 5 expected, 0
+    // present, 0 excused (0%). T120's own twin decision's "no-arithmetic"
+    // option does not apply here (no team in context at this call site --
+    // this file's own module doc #10g / `loaders/meetings.ts`'s own module
+    // doc), so this is the aggregate path.
+    const participationEqSpy = vi.fn().mockResolvedValue({
+      data: [
+        {
+          student_id: 'student-dual',
+          team_id: 'team-frc',
+          season_id: 'season-1',
+          expected_ct: 5,
+          present_ct: 5,
+          late_ct: 0,
+          excused_ct: 0,
+          participation_pct: 100,
+        },
+        {
+          student_id: 'student-dual',
+          team_id: 'team-ftc',
+          season_id: 'season-1',
+          expected_ct: 5,
+          present_ct: 0,
+          late_ct: 0,
+          excused_ct: 0,
+          participation_pct: 0,
+        },
+      ],
+      error: null,
+    });
+
+    const fromSpy = vi.fn((table: string) => {
+      if (table === 'events') return { select: eventsSelectSpy };
+      if (table === 'event_sessions') return { select: vi.fn(() => ({ order: sessionsOrderSpy })) };
+      if (table === 'attendance') return { select: vi.fn(() => ({ eq: attendanceEqSpy })) };
+      if (table === 'v_student_participation') {
+        return { select: vi.fn(() => ({ eq: participationEqSpy })) };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    const load = makeLoadStudentMeetingsData(() => client);
+    const data = await load('student-dual');
+
+    // Summed: expected 10, present 5 -> round(100*5/10, 1) = 50.0 -- NOT
+    // 100% (FRC only) or 0% (FTC only), either of which `.limit(1)` could
+    // have silently produced depending on row order.
+    expect(data.participation).toMatchObject({
+      studentId: 'student-dual',
+      expectedCt: 10,
+      presentCt: 5,
+      participationPct: 50,
+    });
+  });
+});
+
+describe('aggregateParticipationRows (T122 .limit(1) fix decision)', () => {
+  it('returns null for zero rows', () => {
+    expect(aggregateParticipationRows([])).toBeNull();
+  });
+
+  it('passes a single row through unchanged (the common, non-dual-member case)', () => {
+    const row = {
+      student_id: 's1',
+      team_id: 't1',
+      season_id: 'season-1',
+      expected_ct: 7,
+      present_ct: 4,
+      late_ct: 1,
+      excused_ct: 0,
+      participation_pct: 57.1,
+    };
+    expect(aggregateParticipationRows([row])).toEqual(row);
+  });
+
+  it("sums counters across every row and recomputes participation_pct using the view's own expression", () => {
+    // Dual-member fixture: team A perfect attendance (4 expected, 4
+    // present -- `present_ct` already includes late per the view's own
+    // `status in ('present','late')` filter, `late_ct` is a breakdown of
+    // it, never additive on top), team B one excused absence (denominator
+    // shrinks) -- matches `20260717000003_metric_views.sql`'s NFR-03
+    // "excused-shrinks-denominator" fixture class, applied across two rows
+    // instead of one.
+    const result = aggregateParticipationRows([
+      {
+        student_id: 's1',
+        team_id: 'team-a',
+        season_id: 'season-1',
+        expected_ct: 4,
+        present_ct: 4,
+        late_ct: 0,
+        excused_ct: 0,
+        participation_pct: 100,
+      },
+      {
+        student_id: 's1',
+        team_id: 'team-b',
+        season_id: 'season-1',
+        expected_ct: 4,
+        present_ct: 2, // includes 1 late (late_ct below)
+        late_ct: 1,
+        excused_ct: 1,
+        participation_pct: 66.7, // round(100*2/(4-1),1) for THIS row alone
+      },
+    ]);
+    // Summed: expected 8, present 6 (4+2), late 1, excused 1.
+    // round(100 * 6 / greatest(8 - 1, 1), 1) = round(600/7, 1) = 85.7.
+    expect(result).toMatchObject({
+      expected_ct: 8,
+      present_ct: 6,
+      late_ct: 1,
+      excused_ct: 1,
+      participation_pct: 85.7,
+    });
+  });
+
+  it("never double-counts: a dual member's 10h-equivalent expected/present sums exactly (D-3 personal-total posture applied to participation)", () => {
+    // 10 expected / 10 present split evenly across two teams (5+5 each) --
+    // the aggregate must read exactly 10/10 (100%), not 20/20 or 5/5.
+    const result = aggregateParticipationRows([
+      {
+        student_id: 's1',
+        team_id: 'team-a',
+        season_id: 'season-1',
+        expected_ct: 5,
+        present_ct: 5,
+        late_ct: 0,
+        excused_ct: 0,
+        participation_pct: 100,
+      },
+      {
+        student_id: 's1',
+        team_id: 'team-b',
+        season_id: 'season-1',
+        expected_ct: 5,
+        present_ct: 5,
+        late_ct: 0,
+        excused_ct: 0,
+        participation_pct: 100,
+      },
+    ]);
+    expect(result).toMatchObject({ expected_ct: 10, present_ct: 10, participation_pct: 100 });
   });
 });
 

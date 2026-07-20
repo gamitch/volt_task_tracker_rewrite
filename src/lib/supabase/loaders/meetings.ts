@@ -41,8 +41,9 @@
  * inside `MeetingsList.tsx`) since `session_id` is that table's own foreign
  * key into `event_sessions.id`, never ambiguous across events.
  *
- * Student/parent view: `queryAttendanceForStudent`/`queryParticipationForStudent`
- * below both filter `.eq('student_id', studentId)` explicitly -- a defense-
+ * Student/parent view: `queryAttendanceForStudent`/`queryParticipationRowsForStudent`
+ * (T122-renamed; see this file's own T122 module doc below) below both
+ * filter `.eq('student_id', studentId)` explicitly -- a defense-
  * in-depth filter on top of `attendance`'s own `own_or_linked_read` RLS
  * policy (same migration file, lines 230-232: `student_id in (select
  * my_student_ids())`), which already restricts a student/parent session to
@@ -118,6 +119,38 @@
  *      T089 module doc #14 already accepts for its own sequential
  *      students-write-then-send-invite design (this task's own worker output
  *      "Known risks" restates this for checker visibility).
+ *
+ * -----------------------------------------------------------------------
+ * T122 (PRD v2 UXP-04, "meetings half"): row-density rework wiring +
+ * dual-member `.limit(1)` fix. Full reasoning lives on `MeetingsList.tsx`'s
+ * own module doc #10 (not re-derived here); this file's own share of it:
+ *
+ *   a. `queryEvents` now also selects `location_name`/`address` (real,
+ *      already-existing `not null` columns -- UXP-08's own resolution note,
+ *      `mapEventDbRow` below) so the coach view's dense rows can show a real
+ *      location (UXD-02 "where"), not a fabricated one.
+ *   b. Two NEW real batched queries this task adds -- `queryRsvps` (full
+ *      `rsvps` table, same "bounded by that table's own `staff_all` RLS
+ *      policy" posture `queryAttendance` above already established) and
+ *      `queryStudents` (full `students` table, `id`/`display_name` only --
+ *      same shape/posture `loaders/students.ts` already established for a
+ *      full-roster read) -- feed `buildCoachMeetingRows`'s two new
+ *      parameters (expected-attendee counts from real RSVP rows, attendee
+ *      display names from real student rows). Neither re-derives a metric
+ *      view formula (constitution item 3): `queryRsvps`' rows are only ever
+ *      COUNTED (`status === 'going'`, a plain filter+length, the same class
+ *      of computation `PastAttendanceSummary` already does per module doc
+ *      #3), never percentaged.
+ *   c. `queryParticipationForStudent` -- RENAMED
+ *      `queryParticipationRowsForStudent` (it can now genuinely return MORE
+ *      THAN ONE row for a dual member, so the old singular name is no longer
+ *      accurate) -- drops `.limit(1)` (T116 consumer finding #2's arbitrary-
+ *      team-for-dual-members bug) and instead fetches EVERY
+ *      `v_student_participation` row for this student (one per team
+ *      membership, T116's own migration doc). `aggregateParticipationRows`
+ *      (below) sums those rows' own already-computed counters and reapplies
+ *      the view's own `participation_pct` expression verbatim -- see that
+ *      function's own doc for the full decision record and citation.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createLoader, runMutation, type LoaderQueryResult } from '../loader';
@@ -154,6 +187,11 @@ interface EventDbRow {
   title: string;
   team_ids: string[] | null;
   counts_participation: boolean;
+  // T122 (module doc above, item a) -- real, already-existing columns
+  // (`not null` per the schema, UXP-08's own resolution note), now selected
+  // for the coach view's dense rows (UXD-02 "where").
+  location_name: string;
+  address: string;
 }
 
 interface EventSessionDbRow {
@@ -174,6 +212,25 @@ interface AttendanceDbRow {
   session_id: string;
   student_id: string;
   status: AttendanceStatus;
+}
+
+/** T122 (module doc above, item b). Cited column-for-column against
+ * `supabase/migrations/20260717000000_scheduling_attendance.sql`'s own
+ * `rsvps` table (`session_id`, `student_id`, `status` -- the check
+ * constraint's real `'going' | 'maybe' | 'declined'` vocabulary, used
+ * verbatim, never an invented value). */
+interface RsvpDbRow {
+  session_id: string;
+  student_id: string;
+  status: 'going' | 'maybe' | 'declined';
+}
+
+/** T122 (module doc above, item b). Only the two columns this task's rows
+ * need -- `students.id`/`display_name`, same "select only what this screen
+ * renders" discipline every other row shape in this file already follows. */
+interface StudentDbRow {
+  id: string;
+  display_name: string;
 }
 
 /** `v_student_participation`'s seven real columns -- see
@@ -223,6 +280,8 @@ function mapEventDbRow(row: EventDbRow) {
     title: row.title,
     teamIds: row.team_ids,
     countsParticipation: row.counts_participation,
+    locationName: row.location_name,
+    address: row.address,
   };
 }
 
@@ -245,6 +304,16 @@ function mapAttendanceDbRow(row: AttendanceDbRow) {
   return { sessionId: row.session_id, studentId: row.student_id, status: row.status };
 }
 
+/** T122 (module doc above, item b). */
+function mapRsvpDbRow(row: RsvpDbRow) {
+  return { sessionId: row.session_id, studentId: row.student_id, status: row.status };
+}
+
+/** T122 (module doc above, item b). */
+function mapStudentDbRow(row: StudentDbRow) {
+  return { id: row.id, displayName: row.display_name };
+}
+
 function mapParticipationDbRow(row: ParticipationDbRow) {
   return {
     studentId: row.student_id,
@@ -265,7 +334,8 @@ function mapParticipationDbRow(row: ParticipationDbRow) {
 async function queryEvents(client: SupabaseClient): Promise<LoaderQueryResult<EventDbRow[]>> {
   const result = await client
     .from('events')
-    .select('id, season_id, type, title, team_ids, counts_participation');
+    // T122 (module doc above, item a) -- `location_name`/`address` added.
+    .select('id, season_id, type, title, team_ids, counts_participation, location_name, address');
   return { data: (result.data as EventDbRow[] | null) ?? null, error: result.error };
 }
 
@@ -295,6 +365,21 @@ async function queryAttendance(
   return { data: (result.data as AttendanceDbRow[] | null) ?? null, error: result.error };
 }
 
+/** T122 (module doc above, item b) -- coach view, full table, same
+ * `staff_all`-RLS-bounded posture `queryAttendance` above already
+ * established (`supabase/migrations/20260717000002_rls.sql` lines 197-199). */
+async function queryRsvps(client: SupabaseClient): Promise<LoaderQueryResult<RsvpDbRow[]>> {
+  const result = await client.from('rsvps').select('session_id, student_id, status');
+  return { data: (result.data as RsvpDbRow[] | null) ?? null, error: result.error };
+}
+
+/** T122 (module doc above, item b) -- coach view, full roster (`id`,
+ * `display_name` only), same `staff_all`-RLS-bounded posture. */
+async function queryStudents(client: SupabaseClient): Promise<LoaderQueryResult<StudentDbRow[]>> {
+  const result = await client.from('students').select('id, display_name');
+  return { data: (result.data as StudentDbRow[] | null) ?? null, error: result.error };
+}
+
 /** Student/parent view -- explicit `student_id` filter, defense-in-depth on
  * top of `attendance`'s own `own_or_linked_read` RLS policy (module doc
  * above). */
@@ -310,19 +395,27 @@ async function queryAttendanceForStudent(
 }
 
 /**
- * Not season-scoped, matching `MeetingsList.tsx`'s own deliberately
+ * T122 fix (T116 consumer finding #2, this task's own ".limit(1)" fix
+ * decision -- full record in this task's own worker output): RENAMED from
+ * the old `queryParticipationForStudent` (plural "Rows" -- it can now
+ * genuinely return more than one row) and `.limit(1)` is REMOVED. The old
+ * `.limit(1)` picked an ARBITRARY one of a dual member's per-team
+ * `v_student_participation` rows (T116's migration doc,
+ * `20260722000000_membership_views.sql`: one row per (student, membership-
+ * team)) -- silently showing e.g. only her FRC team's participation and
+ * dropping her FTC team's entirely, or vice versa, depending on whatever
+ * order Postgrest happened to return rows in.
+ *
+ * Still not season-scoped, matching `MeetingsList.tsx`'s own deliberately
  * season-unaware `studentId`-only `LoadStudentMeetingsDataFn` signature
- * (that file's own Forbidden Files instruction). If more than one
- * `v_student_participation` row exists for this student across multiple
- * seasons, this resolves whichever row Postgrest returns first (no explicit
- * `order` -- there is no timestamp column on this view to order by) --
- * `.maybeSingle()` is deliberately NOT used here (it would reject with a
- * "multiple rows" Postgrest error in that multi-season case); `.limit(1)`
- * instead. A real fix would need `MeetingsList` to accept a season scope,
- * which is out of this task's scope (disclosed in this task's own worker
- * output "Known risks").
+ * (that file's own Forbidden Files instruction) -- if a student has
+ * multiple seasons' worth of rows too, they are summed together the same as
+ * multiple teams' rows are (disclosed in this task's own worker output
+ * "Known risks", same pre-existing limitation the old `.limit(1)` code's own
+ * comment already disclosed, now inherited by the aggregate instead of
+ * silently dropped).
  */
-async function queryParticipationForStudent(
+async function queryParticipationRowsForStudent(
   client: SupabaseClient,
   studentId: string,
 ): Promise<LoaderQueryResult<ParticipationDbRow[]>> {
@@ -331,9 +424,68 @@ async function queryParticipationForStudent(
     .select(
       'student_id, team_id, season_id, expected_ct, present_ct, late_ct, excused_ct, participation_pct',
     )
-    .eq('student_id', studentId)
-    .limit(1);
+    .eq('student_id', studentId);
   return { data: (result.data as ParticipationDbRow[] | null) ?? null, error: result.error };
+}
+
+/**
+ * T122's `.limit(1)` fix decision (this task's own worker output has the
+ * full record): `MeetingsList`'s student/parent view has NO team parameter
+ * anywhere in its own type signatures (`LoadStudentMeetingsDataFn =
+ * (studentId: string) => ...`; that file's own Forbidden Files instruction
+ * keeps this route deliberately season/team-UNAWARE, same reason
+ * `makeCreateMeetings`'s own season lookup lives in THIS loader rather than
+ * as a page-level hook) -- so T120's twin decision's "team-scope if the call
+ * site has a team" branch genuinely does not apply here (there is no team in
+ * context to scope to). This is the documented fallback: aggregate.
+ *
+ * Sums the view's own already-computed counters (`expected_ct`,
+ * `present_ct`, `late_ct`, `excused_ct`) across every row this student has,
+ * then recomputes `participation_pct` using the SAME expression the view
+ * itself uses, byte-for-byte -- cited directly from
+ * `supabase/migrations/20260722000000_membership_views.sql`:
+ *   round(100.0 * present_ct / greatest(expected_ct - excused_ct, 1), 1)
+ * This is NOT a new/invented formula (constitution item 3 forbids that) --
+ * it is the view's own arithmetic, applied to summed inputs instead of one
+ * row's inputs. `v_team_participation` (same migration file) already
+ * establishes this exact pattern for the analogous student-rollup-into-team
+ * direction: it SUMs `v_student_participation`'s own counters across
+ * students and reapplies this identical expression, never re-deriving a new
+ * one. This function does the identical operation across a dual member's
+ * OWN rows instead of across students -- same class of aggregate, same
+ * source expression, cited the same way.
+ *
+ * `team_id` on the returned row is populated from the FIRST row purely to
+ * satisfy `ParticipationDbRow`'s existing shape -- `MeetingsList.tsx` never
+ * renders `StudentParticipationMetric.teamId` anywhere (grep-provable: only
+ * `participationPct` is read from that shape, in `StudentMeetingsView`), so
+ * this field carries no real "the" team meaning for an aggregate row and is
+ * disclosed as such here rather than silently implying one.
+ */
+export function aggregateParticipationRows(
+  rows: readonly ParticipationDbRow[],
+): ParticipationDbRow | null {
+  if (rows.length === 0) return null;
+  if (rows.length === 1) return rows[0];
+  const expectedCt = rows.reduce((sum, row) => sum + row.expected_ct, 0);
+  const presentCt = rows.reduce((sum, row) => sum + row.present_ct, 0);
+  const lateCt = rows.reduce((sum, row) => sum + row.late_ct, 0);
+  const excusedCt = rows.reduce((sum, row) => sum + row.excused_ct, 0);
+  // View's own expression, cited above -- `greatest(x, 1)` -> `Math.max(x, 1)`,
+  // `round(x, 1)` -> `Math.round(x * 10) / 10` (both non-negative here, so
+  // this matches Postgres `round`'s round-half-away-from-zero behavior).
+  const denominator = Math.max(expectedCt - excusedCt, 1);
+  const participationPct = Math.round(((100.0 * presentCt) / denominator) * 10) / 10;
+  return {
+    student_id: rows[0].student_id,
+    team_id: rows[0].team_id,
+    season_id: rows[0].season_id,
+    expected_ct: expectedCt,
+    present_ct: presentCt,
+    late_ct: lateCt,
+    excused_ct: excusedCt,
+    participation_pct: participationPct,
+  };
 }
 
 async function queryStudentIdByProfileId(
@@ -379,7 +531,8 @@ async function queryActiveSeasonId(
 // network calls.
 // ---------------------------------------------------------------------------
 
-/** Coach view real load (Trap #1). */
+/** Coach view real load (Trap #1; T122 module doc above item b adds
+ * `rsvps`/`students`). */
 export function makeLoadCoachMeetingsData(
   getClient: () => SupabaseClient = getSupabaseClient,
 ): LoadCoachMeetingsDataFn {
@@ -387,19 +540,26 @@ export function makeLoadCoachMeetingsData(
   const loadSessionRows = createLoader<void, EventSessionDbRow[]>(querySessions, getClient);
   const loadTeamRows = createLoader<void, TeamDbRow[]>(queryTeams, getClient);
   const loadAttendanceRows = createLoader<void, AttendanceDbRow[]>(queryAttendance, getClient);
+  const loadRsvpRows = createLoader<void, RsvpDbRow[]>(queryRsvps, getClient);
+  const loadStudentRows = createLoader<void, StudentDbRow[]>(queryStudents, getClient);
   return async (): Promise<CoachMeetingsData> => {
-    const [eventRows, sessionRows, teamRows, attendanceRows] = await Promise.all([
-      loadEventRows(),
-      loadSessionRows(),
-      loadTeamRows(),
-      loadAttendanceRows(),
-    ]);
+    const [eventRows, sessionRows, teamRows, attendanceRows, rsvpRows, studentRows] =
+      await Promise.all([
+        loadEventRows(),
+        loadSessionRows(),
+        loadTeamRows(),
+        loadAttendanceRows(),
+        loadRsvpRows(),
+        loadStudentRows(),
+      ]);
     return {
       rows: buildCoachMeetingRows(
         (eventRows ?? []).map(mapEventDbRow),
         (sessionRows ?? []).map(mapSessionDbRow),
         (teamRows ?? []).map(mapTeamDbRow),
         (attendanceRows ?? []).map(mapAttendanceDbRow),
+        (rsvpRows ?? []).map(mapRsvpDbRow),
+        (studentRows ?? []).map(mapStudentDbRow),
       ),
     };
   };
@@ -408,7 +568,8 @@ export function makeLoadCoachMeetingsData(
 /** `MeetingsList.tsx`'s own default `loadCoachData` -- real query. */
 export const loadCoachMeetingsData: LoadCoachMeetingsDataFn = makeLoadCoachMeetingsData();
 
-/** Student/parent view real load (Trap #1). */
+/** Student/parent view real load (Trap #1; T122 module doc above item c --
+ * dual-member aggregation replaces the old `.limit(1)` arbitrary pick). */
 export function makeLoadStudentMeetingsData(
   getClient: () => SupabaseClient = getSupabaseClient,
 ): LoadStudentMeetingsDataFn {
@@ -419,7 +580,7 @@ export function makeLoadStudentMeetingsData(
     getClient,
   );
   const loadParticipationRows = createLoader<string, ParticipationDbRow[]>(
-    queryParticipationForStudent,
+    queryParticipationRowsForStudent,
     getClient,
   );
   return async (studentId: string): Promise<StudentMeetingsData> => {
@@ -429,12 +590,13 @@ export function makeLoadStudentMeetingsData(
       loadAttendanceRows(studentId),
       loadParticipationRows(studentId),
     ]);
+    const aggregatedParticipation = aggregateParticipationRows(participationRows ?? []);
     return buildStudentMeetingsData(
       studentId,
       (eventRows ?? []).map(mapEventDbRow),
       (sessionRows ?? []).map(mapSessionDbRow),
       (attendanceRows ?? []).map(mapAttendanceDbRow),
-      (participationRows ?? []).map(mapParticipationDbRow),
+      aggregatedParticipation === null ? [] : [mapParticipationDbRow(aggregatedParticipation)],
     );
   };
 }

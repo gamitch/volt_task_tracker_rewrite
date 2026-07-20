@@ -4434,3 +4434,44 @@ George) The strip renders on `/kiosk/:sessionId` — packet-literal and PII-free
 but a KPI band above a fullscreen QR display is likely unwanted; George to
 decide whether kiosk joins the chromeless list. (Optional) an integration-level
 route-persistence test.
+
+## T122 — UXP-04 meetings: dense rows + expander + meetings.ts dual-member fix
+- Date: 2026-07-20
+- Worker: worker-implementer (attempt 1)
+- Checker: checker-reviewer
+- Verdict: **PASS** (NIT)
+- Integrity sweep (mandated — worker disclosed a `git stash`/pop violation):
+  `git stash list` shows exactly the two known pre-existing July orphans and
+  nothing newer; no stash contains meetings/outreach/kpi/dashboard content.
+  All sibling deliverables (T121 OutreachList/Detail/outreach.ts, T123 KPI
+  files, T124 CoachHome/dashboard files) present, intact, and compiling
+  (whole-tree `tsc --noEmit` exit 0). No `.orig/.bak/.rej` or conflict
+  markers. **No data loss from the stash incident.**
+- Density rework verified against the reference "Events tab" figure: one
+  `ListItem` per meeting series with weekday recurrence chips (`MON (3)`),
+  date range, location, planned/logged duration, and a real Astryx
+  `Collapsible` (renders `<button>` with `aria-expanded`/`aria-controls`,
+  verified in installed source) revealing per-session rows with per-session
+  Cancel. Student-view render path untouched (doc-comment-only diff). T096
+  hoisted-function circular-import pattern preserved.
+- Hours honesty judged: meetings are created with
+  `counts_volunteer_hours: false` (verified at meetings.ts:682 +
+  metric_views join), so row "hours" are plain scheduled-duration sums —
+  disclosed in the module doc; not volunteer-credit math. Constitution
+  item 3 not implicated.
+- `.limit(1)` fix: call site has no team param, so aggregate path —
+  sums the view's own counters and reapplies its pct expression
+  token-identical to membership_views SQL (`round(100.0*present/greatest
+  (expected-excused,1),1)`); single-row case is reference passthrough,
+  consistent with T120's checkin.ts twin. Dual-member fixture is
+  non-tautological (100%/0% inputs → 50% output).
+- Cancel mutation byte-unchanged (`update({status:'canceled'})`);
+  optimistic per-session flip with rollback verified.
+- Gates (checker-run): typecheck PASS, lint 0 errors, tests 1329/1329,
+  build PASS. Format gate red only on two T120-committed files
+  (StudentMeetingView.test.tsx, ParticipationTab.test.tsx) — outside
+  T122 scope; T122's files pass prettier cleanly.
+- Follow-ups: (NIT) coach label "Nh planned · Nh logged" could say
+  "scheduled"/"meeting time" to avoid volunteer-hours vocabulary
+  collision; (MINOR, T120 debt) `prettier --write` the two committed
+  T120 test files so the format gate is green tree-wide.

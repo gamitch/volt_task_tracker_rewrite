@@ -2,13 +2,16 @@
  * T030: `/meetings` list page (MTG-01 coach view / MTG-14 student+parent view).
  *
  * Coach (`coach`/`admin`) view: `Section` "Upcoming" / `Section` "Past" lists
- * of **meeting-type** sessions only (NAV-07 -- never outreach/competition),
- * each row showing date+weekday, computed time range+duration (BEH-08),
- * team scope, a status `Badge`, and (Past rows only) an attendance summary.
- * A page-level "Schedule meetings" action and a per-row `MoreMenu`
- * (Edit, Cancel via `AlertDialog`, DES-11) round out MTG-01's literal text
- * (PRD line 272: "Actions: Schedule meetings, per-row MoreMenu (Edit,
- * Cancel session -- AlertDialog)").
+ * of **meeting-type** EVENTS only (NAV-07 -- never outreach/competition; one
+ * row per recurring-meeting SERIES, not per session -- T122 module doc #10
+ * below), each row showing recurrence chips + a date range (UXD-02 "when"),
+ * location (UXD-02 "where", UXP-08), planned/logged hours, expected/attended
+ * counts (UXD-02 "how much"/"who"), a per-row `MoreMenu` (Edit) and an
+ * in-place expander (UXD-03) revealing every one of the event's own sessions
+ * with their own inline Cancel action (DES-11 `AlertDialog`) -- MTG-01's
+ * literal text (PRD line 272: "Actions: Schedule meetings, per-row MoreMenu
+ * (Edit, Cancel session -- AlertDialog)") plus T122's own density rework
+ * (module doc #10).
  *
  * Student/parent view (MTG-14, PRD line 288: "`/meetings` for students =
  * their own history (status per session) + participation %. ... Read-only.")
@@ -316,6 +319,135 @@
  *    `gap`, `padding`, `hAlign`, `vAlign`, `wrap` used.
  *  - `Text`: "Text" Props table. `type` (`'supporting'`), `color`,
  *    `hasTabularNumbers` used.
+ *  - `Collapsible` (T122, new to this file): "Collapsible" Props table.
+ *    `trigger`, `children`, `defaultIsOpen` used; its own documented Anatomy
+ *    ("Trigger: the always-visible button that toggles the content... Shows
+ *    a label and a chevron indicator") makes it a real `<button>`-driven
+ *    expander for free -- keyboard-operable (Enter/Space, focus) with no
+ *    extra ARIA wiring needed on this file's part (this task's own "expander
+ *    keyboard-accessible" Trap). Never nested inside an interactive
+ *    `ListItem` (module doc #10 below) -- only inside a non-interactive
+ *    one's `description` slot, alongside `MoreMenu`'s own established
+ *    precedent (T112) for interactive content in that slot.
+ *
+ * -----------------------------------------------------------------------
+ * 10. T122 (PRD v2 UXP-04, "meetings half" of the row-density rework;
+ *     capability map "Events tab" figure is the binding reference) --
+ *     coach-view rows are RESTRUCTURED from one-row-per-SESSION to
+ *     one-row-per-EVENT (recurring-meeting SERIES), with an in-place
+ *     expander (UXD-03) revealing each session. Full decision record
+ *     (density comparison against the reference figure, the `.limit(1)`
+ *     fix) is in this task's own worker output; the parts that affect this
+ *     file's own shape:
+ *
+ *     a. `CoachMeetingRow` is now `{ eventId, title, locationName,
+ *        teamScopeLabel, sessions: CoachMeetingSessionDetail[] }` --
+ *        `sessions` holds the SAME per-session facts the old flat row used
+ *        to carry (`sessionId`, `sessionDate`, `startsAt`, `endsAt`,
+ *        `status`, `attendanceSummary`), plus three NEW per-session facts
+ *        this task adds: `durationHours` (plain `endsAt - startsAt`
+ *        arithmetic -- the same subtraction `formatDuration` already did,
+ *        factored into one shared `computeDurationMinutes` helper so there
+ *        is exactly one duration formula in this file, not two),
+ *        `expectedCt` (a real RSVP `status === 'going'` COUNT for that
+ *        session -- a plain filter+length, the same class of computation
+ *        `PastAttendanceSummary` already does per module doc #3, never a
+ *        percentage), and `attendeeNames` (real `students.display_name`
+ *        values for that session's present/late attendance rows, completed
+ *        sessions only -- empty for a scheduled session, since no attendance
+ *        exists yet to name).
+ *     b. `summarizeCoachMeetingRow(sessions)` is a NEW pure function
+ *        (exported, directly testable) that derives everything the row-level
+ *        summary line needs from `sessions` alone -- UXD-02's own worked
+ *        example ("MON (18) · THU (18)") is `buildRecurrenceChips`'s literal
+ *        target shape (grouped by weekday, first-seen order, empty for a
+ *        single-session event since a chip adds nothing for a one-off
+ *        meeting -- the date range line covers that case alone);
+ *        `buildDateRangeLabel` reuses `formatWeekdayDate` verbatim (BEH-08,
+ *        module doc #4 -- still the ONLY weekday-date formatter in this
+ *        file); "planned hours" sums EVERY non-canceled session's own
+ *        `durationHours`, "logged hours" sums only COMPLETED sessions' --
+ *        both are plain scheduled-DURATION sums, never a re-derivation of
+ *        `v_student_hours`'/`v_student_participation`'s own hours/percentage
+ *        formulas (constitution item 3). Disclosed, deliberate scope
+ *        decision (this task's own worker output has the full reasoning):
+ *        meetings are created with `counts_volunteer_hours: false`
+ *        (`loaders/meetings.ts`'s own `makeCreateMeetings`, T096, unchanged
+ *        by this task) -- they never feed `v_student_hours` at all, so
+ *        there is no metric-view-backed "volunteer hours credited" figure
+ *        for a meeting row to show even if this task wanted one; "planned/
+ *        logged hours" here means SCHEDULED MEETING TIME (how long this
+ *        series is scheduled for vs. how much of it has actually happened),
+ *        a real, honestly-labeled, non-metric figure, not a stand-in for
+ *        volunteer-hours credit. "Expected"/"attended" counts are summed
+ *        across every one of the event's own sessions (cumulative
+ *        person-sessions across the whole series, e.g. an 18-Monday series
+ *        with 20 students expected each week sums to 360) -- the same
+ *        cumulative-count idiom `PastAttendanceSummary` already established
+ *        per-session, applied across a row's own sessions instead of within
+ *        one; per-session (non-cumulative) counts remain visible in the
+ *        expander for exactly this reason.
+ *     c. Upcoming/Past partitioning for these grouped rows can no longer
+ *        reuse the old per-session `partitionByStatus` (a row can now hold
+ *        BOTH completed and still-scheduled sessions at once, e.g. a
+ *        weekly meeting three weeks in) -- `partitionCoachMeetingRows`
+ *        (NEW, exported) buckets a row into Upcoming when ANY of its own
+ *        sessions is still `'scheduled'`, else Past; sorted by the nearest
+ *        upcoming session ascending (Upcoming) / the most recent session
+ *        descending (Past) -- disclosed design decision: an ongoing weekly
+ *        meeting with both past and future sessions stays in Upcoming until
+ *        its LAST session is completed/canceled, matching how a coach would
+ *        actually think of "is this meeting still going." `partitionByStatus`
+ *        itself is UNCHANGED and still used by `StudentMeetingsView` below
+ *        (module doc #7d / Known Context/Traps -- the student/parent view
+ *        keeps its own existing per-session-row shape verbatim, per this
+ *        task's own packet: "Student view: keep its existing shape").
+ *     d. Row-level Cancel (module doc #7c, T096) MOVES from the row's own
+ *        `MoreMenu` into each SESSION inside the expander (a plain `Button`,
+ *        not a second `MoreMenu`, since a session only ever has the one
+ *        action) -- semantically more correct than before (you cancel one
+ *        OCCURRENCE, never a whole recurring series in one action), and the
+ *        underlying mutation this task was told to "keep" (`onCancelSession`
+ *        / `cancelMeetingSession`, `loaders/meetings.ts`, unchanged target
+ *        shape: `(sessionId: string) => Promise<void>`) and its optimistic-
+ *        update-with-rollback pattern are preserved byte-for-byte, only its
+ *        UI trigger location moves. The row's own `MoreMenu` now carries
+ *        only "Edit" (module doc #7b's stub reasoning is UNCHANGED and now
+ *        reads MORE naturally: editing a whole meeting SERIES was always
+ *        the real ask `ScheduleMeetingsDialog.tsx` cannot do, not editing
+ *        one session).
+ *     e. Location (`event.locationName`) is a real, already-existing column
+ *        (UXP-08's own resolution note: `events.location_name`/`address`
+ *        are `not null` in the v1 schema; this task is the first to surface
+ *        them on this page) -- `loaders/meetings.ts`'s own `queryEvents`
+ *        now selects both; the `FixtureEvent` fixture rows below gain real
+ *        (fabricated per constitution item 6) location strings so the dense
+ *        row has something honest to show without a live DB.
+ *     f. UXD-05(b) fix (space rules): `CoachMeetingsSection`/
+ *        `StudentHistorySection`'s own per-section `EmptyState` (e.g. "no
+ *        upcoming meetings, three past ones") now passes `isCompact` --
+ *        previously full-size regardless of whether the SIBLING section on
+ *        the same page had real rows, which is exactly UXD-05(b)'s named
+ *        violation ("a section with no rows yields its space; it does not
+ *        center a message in half a viewport"). The page-level "zero
+ *        meetings at all" `EmptyState` (both views) stays full-size --
+ *        there is genuinely no other content on the page in that case, so
+ *        `isCompact` would not apply per that prop's own documented purpose
+ *        ("reduced spacing for constrained content areas"). UXD-05(a)/(c)
+ *        reviewed against this page and found not applicable: no duplicated
+ *        heading for one concept exists here (unlike the named Outreach
+ *        anti-example), and no stacked full-width-bar pattern exists here
+ *        for the tile pattern to replace (the single participation
+ *        `ProgressBar` in the student view is one bar, not a stack).
+ *     g. `.limit(1)` dual-member fix (`loaders/meetings.ts`
+ *        `queryParticipationRowsForStudent`/`aggregateParticipationRows`) --
+ *        this file's own consuming code (`buildStudentMeetingsData`'s
+ *        `participationMetrics.find(...)`) is UNCHANGED: the loader now
+ *        hands it an array with AT MOST one (already-aggregated) row
+ *        instead of an arbitrary single row, so the existing `.find` still
+ *        finds exactly the right thing with zero changes needed here. Full
+ *        decision record lives in `loaders/meetings.ts`'s own module doc and
+ *        this task's own worker output.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
@@ -323,6 +455,7 @@ import {
   Badge,
   Banner,
   Button,
+  Collapsible,
   EmptyState,
   Heading,
   HStack,
@@ -391,6 +524,10 @@ interface FixtureEvent {
   title: string;
   teamIds: readonly string[] | null;
   countsParticipation: boolean;
+  /** T122 (module doc #10e) -- real, already-existing `events` columns
+   * (`not null`, UXP-08's own resolution note). */
+  locationName: string;
+  address: string;
 }
 
 interface FixtureEventSession {
@@ -408,6 +545,23 @@ interface FixtureAttendanceRecord {
   status: AttendanceStatus;
 }
 
+/** T122 (module doc #10a) -- verbatim camelCase rename of `rsvps`'s real
+ * columns (`session_id`, `student_id`, `status`), cited directly from
+ * `supabase/migrations/20260717000000_scheduling_attendance.sql`'s own
+ * `rsvps` table / check constraint. */
+interface FixtureRsvpRecord {
+  sessionId: string;
+  studentId: string;
+  status: 'going' | 'maybe' | 'declined';
+}
+
+/** T122 (module doc #10a) -- the two `students` columns this file's own
+ * attendee-name rendering needs. */
+interface FixtureStudent {
+  id: string;
+  displayName: string;
+}
+
 /** Plain per-session tally (module doc #3 -- NOT a percentage). */
 export interface PastAttendanceSummary {
   presentCt: number;
@@ -416,16 +570,39 @@ export interface PastAttendanceSummary {
   absentCt: number;
 }
 
-export interface CoachMeetingRow {
+/** T122 (module doc #10a) -- one of a `CoachMeetingRow`'s own sessions,
+ * shown in that row's in-place expander (UXD-03). */
+export interface CoachMeetingSessionDetail {
   sessionId: string;
-  title: string;
   sessionDate: string;
   startsAt: string;
   endsAt: string;
   status: SessionStatus;
-  teamScopeLabel: string;
-  /** Populated for `status === 'completed'` rows only; `null` otherwise. */
+  /** Plain scheduled-duration arithmetic (module doc #10b) -- never a
+   * metric-view formula. */
+  durationHours: number;
+  /** Real RSVP `status === 'going'` COUNT for this session (module doc
+   * #10a) -- a plain filter+length, not a percentage. */
+  expectedCt: number;
+  /** Populated for `status === 'completed'` sessions only; `null` otherwise
+   * (module doc #3, unchanged). */
   attendanceSummary: PastAttendanceSummary | null;
+  /** Real `students.display_name` values for this session's present/late
+   * attendance rows (module doc #10a) -- empty for a non-completed session
+   * (no attendance exists yet to name). */
+  attendeeNames: readonly string[];
+}
+
+/** T122 (module doc #10a) -- now one row per meeting EVENT (recurring
+ * series), not per session; `sessions` (below) carries the per-session
+ * facts the expander (UXD-03) renders. */
+export interface CoachMeetingRow {
+  eventId: string;
+  title: string;
+  locationName: string;
+  teamScopeLabel: string;
+  /** Sorted ascending by `startsAt`. */
+  sessions: CoachMeetingSessionDetail[];
 }
 
 export interface CoachMeetingsData {
@@ -516,6 +693,9 @@ const FIXTURE_EVENTS: readonly FixtureEvent[] = [
     title: 'Weekly Build Meeting',
     teamIds: null, // null = all teams (module doc #1)
     countsParticipation: true,
+    // T122 (module doc #10e) -- real column, fabricated value.
+    locationName: 'Robotics Lab',
+    address: '123 Main St, Springfield, IL',
   },
   {
     id: 'event-ravens-strategy',
@@ -524,6 +704,8 @@ const FIXTURE_EVENTS: readonly FixtureEvent[] = [
     title: 'Ravens Strategy Session',
     teamIds: ['team-ravens'],
     countsParticipation: true,
+    locationName: 'Ravens Team Room',
+    address: '456 Oak Ave, Springfield, IL',
   },
   // Deliberately type: 'outreach' -- proves NAV-07 filtering (module doc #2).
   // This event's own session ("Community Food Drive") must NEVER appear
@@ -535,6 +717,8 @@ const FIXTURE_EVENTS: readonly FixtureEvent[] = [
     title: 'Community Food Drive',
     teamIds: null,
     countsParticipation: false,
+    locationName: 'Community Center',
+    address: '789 Elm St, Springfield, IL',
   },
 ];
 
@@ -612,6 +796,32 @@ const FIXTURE_ATTENDANCE: readonly FixtureAttendanceRecord[] = [
   { sessionId: 'session-past-ravens-completed', studentId: 'student-g', status: 'present' },
 ];
 
+/** T122 (module doc #10a) -- fabricated display names (constitution item 6)
+ * for `FIXTURE_ATTENDANCE`'s own student ids, so the coach view's expander
+ * has real attendee names to show instead of "Unknown student". */
+const FIXTURE_STUDENTS: readonly FixtureStudent[] = [
+  { id: 'student-placeholder-current-viewer', displayName: 'Alex Rivera' },
+  { id: 'student-b', displayName: 'Bailey Chen' },
+  { id: 'student-c', displayName: 'Casey Nguyen' },
+  { id: 'student-d', displayName: 'Drew Patel' },
+  { id: 'student-e', displayName: 'Emerson Diaz' },
+  { id: 'student-f', displayName: 'Frankie Lopez' },
+  { id: 'student-g', displayName: 'Gray Kim' },
+];
+
+/** T122 (module doc #10a) -- `'going'` RSVPs for the two still-scheduled
+ * sessions, feeding `CoachMeetingSessionDetail.expectedCt` /
+ * `CoachMeetingRowSummary.expectedCt`. */
+const FIXTURE_RSVPS: readonly FixtureRsvpRecord[] = [
+  { sessionId: 'session-upcoming-build', studentId: 'student-b', status: 'going' },
+  { sessionId: 'session-upcoming-build', studentId: 'student-c', status: 'going' },
+  { sessionId: 'session-upcoming-build', studentId: 'student-d', status: 'going' },
+  { sessionId: 'session-upcoming-build', studentId: 'student-e', status: 'going' },
+  { sessionId: 'session-upcoming-build', studentId: 'student-f', status: 'going' },
+  { sessionId: 'session-upcoming-ravens', studentId: 'student-b', status: 'going' },
+  { sessionId: 'session-upcoming-ravens', studentId: 'student-g', status: 'going' },
+];
+
 /**
  * Fabricated row shaped exactly like `v_student_participation`'s real output
  * (module doc #3) -- `participationPct` is what the view's own SQL would
@@ -662,31 +872,71 @@ function meetingEventIdsOf(events: readonly FixtureEvent[]): Set<string> {
   return new Set(events.filter((event) => event.type === 'meeting').map((event) => event.id));
 }
 
+/** T122 (module doc #10a) -- now groups by EVENT (one row per recurring
+ * meeting series), not per session; `rsvps`/`students` are new, OPTIONAL
+ * (default `[]`) parameters so every pre-existing call site that doesn't
+ * pass them (none in this file after this task, but kept optional for a
+ * minimal, additive signature change) still type-checks. An event with zero
+ * real sessions produces no row (nothing to show). */
 export function buildCoachMeetingRows(
   events: readonly FixtureEvent[],
   sessions: readonly FixtureEventSession[],
   teams: readonly FixtureTeam[],
   attendance: readonly FixtureAttendanceRecord[],
+  rsvps: readonly FixtureRsvpRecord[] = [],
+  students: readonly FixtureStudent[] = [],
 ): CoachMeetingRow[] {
   const meetingEventIds = meetingEventIdsOf(events);
-  const eventById = new Map(events.map((event) => [event.id, event] as const));
+  const meetingEvents = events.filter((event) => meetingEventIds.has(event.id));
+  const studentNameById = new Map(students.map((student) => [student.id, student.displayName]));
 
-  return sessions
-    .filter((session) => meetingEventIds.has(session.eventId))
-    .map((session) => {
-      const event = eventById.get(session.eventId);
+  const rows: CoachMeetingRow[] = [];
+  for (const event of meetingEvents) {
+    const eventSessions = sessions
+      .filter((session) => session.eventId === event.id)
+      .slice()
+      .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+    if (eventSessions.length === 0) continue;
+
+    const sessionDetails: CoachMeetingSessionDetail[] = eventSessions.map((session) => {
+      const expectedCt = rsvps.filter(
+        (rsvp) => rsvp.sessionId === session.id && rsvp.status === 'going',
+      ).length;
+      const attendanceSummary =
+        session.status === 'completed' ? summarizeAttendance(session.id, attendance) : null;
+      const attendeeNames =
+        session.status === 'completed'
+          ? attendance
+              .filter(
+                (record) =>
+                  record.sessionId === session.id &&
+                  (record.status === 'present' || record.status === 'late'),
+              )
+              .map((record) => studentNameById.get(record.studentId) ?? 'Unknown student')
+              .sort((a, b) => a.localeCompare(b))
+          : [];
       return {
         sessionId: session.id,
-        title: event?.title ?? 'Untitled meeting',
         sessionDate: session.sessionDate,
         startsAt: session.startsAt,
         endsAt: session.endsAt,
         status: session.status,
-        teamScopeLabel: teamScopeLabel(event?.teamIds ?? null, teams),
-        attendanceSummary:
-          session.status === 'completed' ? summarizeAttendance(session.id, attendance) : null,
+        durationHours: sessionDurationHours(session.startsAt, session.endsAt),
+        expectedCt,
+        attendanceSummary,
+        attendeeNames,
       };
     });
+
+    rows.push({
+      eventId: event.id,
+      title: event.title,
+      locationName: event.locationName,
+      teamScopeLabel: teamScopeLabel(event.teamIds, teams),
+      sessions: sessionDetails,
+    });
+  }
+  return rows;
 }
 
 export interface PartitionedRows<T> {
@@ -694,7 +944,9 @@ export interface PartitionedRows<T> {
   past: T[];
 }
 
-/** `scheduled` -> Upcoming; `completed`/`canceled` -> Past. Sorted by start time. */
+/** `scheduled` -> Upcoming; `completed`/`canceled` -> Past. Sorted by start time.
+ * UNCHANGED (module doc #10c) -- still used by `StudentMeetingsView`'s own
+ * per-session rows. */
 export function partitionByStatus<T extends { status: SessionStatus; startsAt: string }>(
   rows: readonly T[],
 ): PartitionedRows<T> {
@@ -704,6 +956,90 @@ export function partitionByStatus<T extends { status: SessionStatus; startsAt: s
   const past = rows
     .filter((row) => row.status !== 'scheduled')
     .sort((a, b) => b.startsAt.localeCompare(a.startsAt));
+  return { upcoming, past };
+}
+
+/** T122 (module doc #10b) -- everything a `CoachMeetingRow`'s summary line
+ * needs, derived purely from its own `sessions`. Exported for direct
+ * testing. */
+export interface CoachMeetingRowSummary {
+  /** UXD-02 recurrence chips, e.g. `["MON (3)", "THU (2)"]`. Empty for a
+   * single-session event (the date range line covers that case alone). */
+  recurrenceChips: string[];
+  /** e.g. "Sat, Jul 25" (single session) or "Sat, Jul 25 – Thu, Aug 13"
+   * (multi-session), BEH-08's own weekday-date format. */
+  dateRangeLabel: string;
+  /** Sum of every non-canceled session's own `durationHours`. */
+  plannedHours: number;
+  /** Sum of every COMPLETED session's own `durationHours`. */
+  loggedHours: number;
+  /** Sum of every session's own `expectedCt` (cumulative across the whole
+   * series -- module doc #10b). */
+  expectedCt: number;
+  /** Sum of every completed session's present+late count (cumulative). */
+  attendedCt: number;
+  /** True when at least one of this row's sessions is still `'scheduled'`. */
+  hasUpcomingSession: boolean;
+  /** Sort key: nearest-upcoming session's `startsAt` when
+   * `hasUpcomingSession`, else the LATEST session's `startsAt`. */
+  sortStartsAt: string;
+  canceledCt: number;
+}
+
+export function summarizeCoachMeetingRow(
+  sessions: readonly CoachMeetingSessionDetail[],
+): CoachMeetingRowSummary {
+  const nonCanceled = sessions.filter((session) => session.status !== 'canceled');
+  const completed = sessions.filter((session) => session.status === 'completed');
+  const scheduled = sessions.filter((session) => session.status === 'scheduled');
+  const canceled = sessions.filter((session) => session.status === 'canceled');
+
+  const plannedHours = nonCanceled.reduce((sum, session) => sum + session.durationHours, 0);
+  const loggedHours = completed.reduce((sum, session) => sum + session.durationHours, 0);
+  const expectedCt = sessions.reduce((sum, session) => sum + session.expectedCt, 0);
+  const attendedCt = completed.reduce(
+    (sum, session) =>
+      sum +
+      (session.attendanceSummary
+        ? session.attendanceSummary.presentCt + session.attendanceSummary.lateCt
+        : 0),
+    0,
+  );
+
+  const hasUpcomingSession = scheduled.length > 0;
+  const sortedAscending = sessions.slice().sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  const sortStartsAt = hasUpcomingSession
+    ? (scheduled.slice().sort((a, b) => a.startsAt.localeCompare(b.startsAt))[0]?.startsAt ?? '')
+    : (sortedAscending[sortedAscending.length - 1]?.startsAt ?? '');
+
+  return {
+    recurrenceChips: buildRecurrenceChips(sessions),
+    dateRangeLabel: buildDateRangeLabel(sessions),
+    plannedHours,
+    loggedHours,
+    expectedCt,
+    attendedCt,
+    hasUpcomingSession,
+    sortStartsAt,
+    canceledCt: canceled.length,
+  };
+}
+
+/** T122 (module doc #10c) -- Upcoming/Past bucketing for grouped event rows
+ * (a per-session `partitionByStatus` no longer applies -- see that
+ * function's own updated doc). */
+export function partitionCoachMeetingRows(
+  rows: readonly CoachMeetingRow[],
+): PartitionedRows<CoachMeetingRow> {
+  const withSummary = rows.map((row) => ({ row, summary: summarizeCoachMeetingRow(row.sessions) }));
+  const upcoming = withSummary
+    .filter(({ summary }) => summary.hasUpcomingSession)
+    .sort((a, b) => a.summary.sortStartsAt.localeCompare(b.summary.sortStartsAt))
+    .map(({ row }) => row);
+  const past = withSummary
+    .filter(({ summary }) => !summary.hasUpcomingSession)
+    .sort((a, b) => b.summary.sortStartsAt.localeCompare(a.summary.sortStartsAt))
+    .map(({ row }) => row);
   return { upcoming, past };
 }
 
@@ -754,6 +1090,8 @@ export async function defaultLoadCoachMeetingsData(): Promise<CoachMeetingsData>
       FIXTURE_SESSIONS,
       FIXTURE_TEAMS,
       FIXTURE_ATTENDANCE,
+      FIXTURE_RSVPS,
+      FIXTURE_STUDENTS,
     ),
   };
 }
@@ -790,6 +1128,13 @@ const CLOCK_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
   timeZone: CHICAGO_TIME_ZONE,
 });
 
+/** T122 (module doc #10b) -- UXD-02's own "MON (18) · THU (18)" worked
+ * example needs a bare weekday abbreviation, upper-cased below. */
+const WEEKDAY_ABBR_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short',
+  timeZone: CHICAGO_TIME_ZONE,
+});
+
 /** `session_date` ('YYYY-MM-DD') -> a real calendar date, parsed without a
  * local-timezone day-shift (BEH-08 needs the literal stored date). */
 function parseDateOnly(isoDate: string): Date {
@@ -802,16 +1147,66 @@ export function formatWeekdayDate(sessionDate: string): string {
   return WEEKDAY_DATE_FORMATTER.format(parseDateOnly(sessionDate));
 }
 
+/** T122 (module doc #10a/#10b) -- the ONE shared duration-in-minutes
+ * computation `formatDuration` (unchanged worked output) and
+ * `sessionDurationHours` (new) both build on, so there is exactly one
+ * duration formula in this file, not two. */
+function computeDurationMinutes(startsAt: string, endsAt: string): number {
+  return Math.round((new Date(endsAt).getTime() - new Date(startsAt).getTime()) / 60000);
+}
+
 /** e.g. "2h", "1h 30m", "45m" (BEH-08's computed-duration requirement). */
 export function formatDuration(startsAt: string, endsAt: string): string {
-  const totalMinutes = Math.round(
-    (new Date(endsAt).getTime() - new Date(startsAt).getTime()) / 60000,
-  );
+  const totalMinutes = computeDurationMinutes(startsAt, endsAt);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   if (hours === 0) return `${minutes}m`;
   if (minutes === 0) return `${hours}h`;
   return `${hours}h ${minutes}m`;
+}
+
+/** T122 (module doc #10a) -- a session's scheduled duration as a plain
+ * number of hours (`CoachMeetingSessionDetail.durationHours`), built on the
+ * SAME `computeDurationMinutes` `formatDuration` uses above -- never a
+ * second duration formula. */
+function sessionDurationHours(startsAt: string, endsAt: string): number {
+  return computeDurationMinutes(startsAt, endsAt) / 60;
+}
+
+/** e.g. "2h", "1.5h", "0h" -- plain number formatting, not a metric. */
+export function formatHoursLabel(hours: number): string {
+  const rounded = Math.round(hours * 10) / 10;
+  return Number.isInteger(rounded) ? `${rounded}h` : `${rounded.toFixed(1)}h`;
+}
+
+/** T122 (module doc #10b) -- UXD-02's own worked example: `["MON (18)",
+ * "THU (18)"]`, grouped by weekday in first-seen order, from this event's
+ * real `session_date` values (plain counting, not a metric-view formula).
+ * Empty for a single-session event -- `buildDateRangeLabel` below covers
+ * that case alone; a one-entry chip ("SAT (1)") would add nothing. */
+export function buildRecurrenceChips(sessions: readonly { sessionDate: string }[]): string[] {
+  if (sessions.length <= 1) return [];
+  const countByWeekday = new Map<string, number>();
+  const order: string[] = [];
+  for (const session of sessions) {
+    const weekday = WEEKDAY_ABBR_FORMATTER.format(parseDateOnly(session.sessionDate)).toUpperCase();
+    if (!countByWeekday.has(weekday)) order.push(weekday);
+    countByWeekday.set(weekday, (countByWeekday.get(weekday) ?? 0) + 1);
+  }
+  return order.map((weekday) => `${weekday} (${countByWeekday.get(weekday)})`);
+}
+
+/** T122 (module doc #10b) -- e.g. "Sat, Jul 25" (single session) or
+ * "Sat, Jul 25 – Thu, Aug 13" (multi-session), reusing `formatWeekdayDate`
+ * verbatim (BEH-08, module doc #4 -- still the ONLY weekday-date formatter
+ * in this file). */
+export function buildDateRangeLabel(sessions: readonly { sessionDate: string }[]): string {
+  if (sessions.length === 0) return '';
+  const sorted = sessions.slice().sort((a, b) => a.sessionDate.localeCompare(b.sessionDate));
+  const first = formatWeekdayDate(sorted[0].sessionDate);
+  if (sorted.length === 1) return first;
+  const last = formatWeekdayDate(sorted[sorted.length - 1].sessionDate);
+  return `${first} – ${last}`;
 }
 
 /** Splits a formatted "6:00 PM"-shaped string into its numeric time and
@@ -925,44 +1320,132 @@ function StubBanner({
   );
 }
 
+/** T122 (module doc #10d) -- one of a `CoachMeetingRow`'s own sessions,
+ * rendered inside that row's `Collapsible` expander (UXD-03). Carries the
+ * ONLY per-session Cancel action left in this file (module doc #10d --
+ * moved here from the old row-level `MoreMenu`, same underlying mutation/
+ * optimistic-update pattern, unchanged). */
+function CoachMeetingSessionRow({
+  eventId,
+  eventTitle,
+  session,
+  onCancelRequest,
+}: {
+  eventId: string;
+  eventTitle: string;
+  session: CoachMeetingSessionDetail;
+  onCancelRequest: (
+    eventId: string,
+    eventTitle: string,
+    session: CoachMeetingSessionDetail,
+  ) => void;
+}): ReactNode {
+  const statusBadge = SESSION_STATUS_BADGE[session.status];
+
+  return (
+    <HStack gap={3} vAlign="start" wrap="wrap" padding={2}>
+      <VStack gap={0.5}>
+        <Text type="supporting">
+          {`${formatWeekdayDate(session.sessionDate)} · ${formatTimeRangeWithDuration(session.startsAt, session.endsAt)}`}
+        </Text>
+        {session.status === 'scheduled' && (
+          <Text type="supporting" hasTabularNumbers>
+            {`Expected ${session.expectedCt}`}
+          </Text>
+        )}
+        {session.attendanceSummary !== null && (
+          <Text type="supporting">{formatPastAttendanceSummary(session.attendanceSummary)}</Text>
+        )}
+        {session.status === 'completed' && (
+          <Text type="supporting">
+            {session.attendeeNames.length > 0
+              ? `Attended: ${session.attendeeNames.join(', ')}`
+              : 'No attendees recorded.'}
+          </Text>
+        )}
+        {session.status === 'canceled' && (
+          <Text type="supporting">Canceled &mdash; no attendance recorded.</Text>
+        )}
+      </VStack>
+      <HStack gap={2} vAlign="center">
+        <Badge variant={statusBadge.variant} label={statusBadge.label} />
+        {session.status === 'scheduled' && (
+          <Button
+            variant="ghost"
+            // Includes the session's own date so a multi-session row's
+            // several Cancel buttons are each unambiguous (both visually
+            // and to assistive tech), unlike a bare "Cancel session".
+            label={`Cancel ${formatWeekdayDate(session.sessionDate)} session`}
+            onClick={() => onCancelRequest(eventId, eventTitle, session)}
+          />
+        )}
+      </HStack>
+    </HStack>
+  );
+}
+
+/** T122 (module doc #10) -- one row per meeting SERIES (UXD-02 density
+ * standard): recurrence chips + date range ("when"), location ("where"),
+ * planned/logged hours ("how much"), expected/attended counts ("who"), a
+ * row-level "Edit" `MoreMenu` (module doc #10d), and an in-place
+ * `Collapsible` expander (UXD-03) revealing every session with its own
+ * inline Cancel. */
 function CoachMeetingRowItem({
   row,
   onEdit,
-  onCancel,
+  onCancelRequest,
 }: {
   row: CoachMeetingRow;
   onEdit: (row: CoachMeetingRow) => void;
-  onCancel: (row: CoachMeetingRow) => void;
+  onCancelRequest: (
+    eventId: string,
+    eventTitle: string,
+    session: CoachMeetingSessionDetail,
+  ) => void;
 }): ReactNode {
-  const statusBadge = SESSION_STATUS_BADGE[row.status];
+  const summary = useMemo(() => summarizeCoachMeetingRow(row.sessions), [row.sessions]);
 
-  const menuItems: DropdownMenuOption[] = [
-    { label: 'Edit', onClick: () => onEdit(row) },
-    { label: 'Cancel meeting', onClick: () => onCancel(row) },
-  ];
+  const menuItems: DropdownMenuOption[] = [{ label: 'Edit', onClick: () => onEdit(row) }];
 
   const description = (
-    <VStack gap={0.5}>
+    <VStack gap={1}>
+      {summary.recurrenceChips.length > 0 && (
+        <HStack gap={1} wrap="wrap">
+          {summary.recurrenceChips.map((chip) => (
+            <Badge key={chip} variant="neutral" label={chip} />
+          ))}
+        </HStack>
+      )}
+      <Text type="supporting">{summary.dateRangeLabel}</Text>
       <Text type="supporting">
-        {formatWeekdayDate(row.sessionDate)} ·{' '}
-        {formatTimeRangeWithDuration(row.startsAt, row.endsAt)}
+        {`${row.locationName.trim().length > 0 ? row.locationName : 'No location set'} · ${row.teamScopeLabel}`}
       </Text>
-      <Text type="supporting">{row.teamScopeLabel}</Text>
-      {row.attendanceSummary !== null && (
-        <Text type="supporting">{formatPastAttendanceSummary(row.attendanceSummary)}</Text>
-      )}
-      {row.status === 'canceled' && (
-        <Text type="supporting">Canceled &mdash; no attendance recorded.</Text>
-      )}
+      <Text type="supporting" hasTabularNumbers>
+        {`${formatHoursLabel(summary.plannedHours)} planned · ${formatHoursLabel(summary.loggedHours)} logged`}
+      </Text>
+      <Text type="supporting" hasTabularNumbers>
+        {`Expected ${summary.expectedCt} · Attended ${summary.attendedCt}`}
+      </Text>
+      <Collapsible trigger={`Session details (${row.sessions.length})`} defaultIsOpen={false}>
+        <VStack gap={2} padding={2}>
+          {row.sessions.map((session) => (
+            <CoachMeetingSessionRow
+              key={session.sessionId}
+              eventId={row.eventId}
+              eventTitle={row.title}
+              session={session}
+              onCancelRequest={onCancelRequest}
+            />
+          ))}
+        </VStack>
+      </Collapsible>
     </VStack>
   );
 
   const endContent = (
     <HStack gap={2} vAlign="center">
-      <Badge variant={statusBadge.variant} label={statusBadge.label} />
-      {row.status === 'scheduled' && (
-        <MoreMenu items={menuItems} label={`Actions for ${row.title}`} />
-      )}
+      {summary.canceledCt > 0 && <Badge variant="error" label={`${summary.canceledCt} canceled`} />}
+      <MoreMenu items={menuItems} label={`Actions for ${row.title}`} />
     </HStack>
   );
 
@@ -974,13 +1457,17 @@ function CoachMeetingsSection({
   rows,
   emptyDescription,
   onEdit,
-  onCancel,
+  onCancelRequest,
 }: {
   title: string;
   rows: CoachMeetingRow[];
   emptyDescription: string;
   onEdit: (row: CoachMeetingRow) => void;
-  onCancel: (row: CoachMeetingRow) => void;
+  onCancelRequest: (
+    eventId: string,
+    eventTitle: string,
+    session: CoachMeetingSessionDetail,
+  ) => void;
 }): ReactNode {
   return (
     <VStack gap={3}>
@@ -990,15 +1477,18 @@ function CoachMeetingsSection({
           headingLevel={3}
           title={`No ${title.toLowerCase()} meetings`}
           description={emptyDescription}
+          // T122 (module doc #10f, UXD-05(b)) -- compact: this is a
+          // SUB-section of the page, never the only content on it.
+          isCompact
         />
       ) : (
         <List hasDividers header={`${title} meetings`}>
           {rows.map((row) => (
             <CoachMeetingRowItem
-              key={row.sessionId}
+              key={row.eventId}
               row={row}
               onEdit={onEdit}
-              onCancel={onCancel}
+              onCancelRequest={onCancelRequest}
             />
           ))}
         </List>
@@ -1029,6 +1519,14 @@ export interface CoachMeetingsViewProps {
   onCreateMeetings: OnCreateMeetingsFn;
 }
 
+/** T122 (module doc #10d) -- Cancel now targets one SESSION within one
+ * EVENT row, not a whole flat row. */
+interface CancelTarget {
+  eventId: string;
+  eventTitle: string;
+  session: CoachMeetingSessionDetail;
+}
+
 function CoachMeetingsView({
   loadData,
   onCancelSession,
@@ -1037,7 +1535,7 @@ function CoachMeetingsView({
   const loadState = useLoadState(loadData, [loadData]);
   const [rows, setRows] = useState<CoachMeetingRow[]>([]);
   const [stubNotice, setStubNotice] = useState<StubNotice | null>(null);
-  const [cancelTarget, setCancelTarget] = useState<CoachMeetingRow | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
   // T096 (module doc #7a) -- drives the one rendered `<ScheduleMeetingsDialog>`
   // instance, in CREATE mode only (module doc #7b: this dialog has no edit
   // mode to open at all).
@@ -1050,7 +1548,9 @@ function CoachMeetingsView({
     }
   }, [loadState]);
 
-  const { upcoming, past } = useMemo(() => partitionByStatus(rows), [rows]);
+  // T122 (module doc #10c) -- `partitionByStatus` no longer applies to
+  // grouped event rows; see `partitionCoachMeetingRows`'s own doc.
+  const { upcoming, past } = useMemo(() => partitionCoachMeetingRows(rows), [rows]);
 
   function openScheduleDialog(): void {
     setIsScheduleDialogOpen(true);
@@ -1071,27 +1571,48 @@ function CoachMeetingsView({
 
   // T096 (module doc #7c) -- real mutation, optimistic update + rollback on
   // failure, mirroring `StudentsTab.tsx`'s own `handleConfirmDeactivate`
-  // (T089) shape.
+  // (T089) shape. T122 (module doc #10d) -- the optimistic flip/rollback now
+  // targets one SESSION nested inside its EVENT row, not a flat row; the
+  // mutation itself (`onCancelSession(sessionId)`) is byte-for-byte
+  // unchanged.
   async function handleConfirmCancel(): Promise<void> {
     if (cancelTarget === null) return;
     const target = cancelTarget;
     setRows((prev) =>
       prev.map((row) =>
-        row.sessionId === target.sessionId ? { ...row, status: 'canceled' } : row,
+        row.eventId === target.eventId
+          ? {
+              ...row,
+              sessions: row.sessions.map((session) =>
+                session.sessionId === target.session.sessionId
+                  ? { ...session, status: 'canceled' }
+                  : session,
+              ),
+            }
+          : row,
       ),
     );
     setCancelTarget(null);
     try {
-      await onCancelSession(target.sessionId);
+      await onCancelSession(target.session.sessionId);
       setFeedback({
         status: 'success',
-        title: 'Meeting canceled',
-        description: `"${target.title}" is marked canceled. No attendance will be recorded for it.`,
+        title: 'Meeting session canceled',
+        description: `"${target.eventTitle}" on ${formatWeekdayDate(target.session.sessionDate)} is marked canceled. No attendance will be recorded for it.`,
       });
     } catch (error) {
       setRows((prev) =>
         prev.map((row) =>
-          row.sessionId === target.sessionId ? { ...row, status: target.status } : row,
+          row.eventId === target.eventId
+            ? {
+                ...row,
+                sessions: row.sessions.map((session) =>
+                  session.sessionId === target.session.sessionId
+                    ? { ...session, status: target.session.status }
+                    : session,
+                ),
+              }
+            : row,
         ),
       );
       setFeedback({
@@ -1099,7 +1620,7 @@ function CoachMeetingsView({
         title: "Couldn't cancel meeting",
         description: isSupabaseLoaderError(error)
           ? error.message
-          : `Something went wrong canceling "${target.title}". Try again in a moment.`,
+          : `Something went wrong canceling "${target.eventTitle}". Try again in a moment.`,
       });
     }
   }
@@ -1209,14 +1730,18 @@ function CoachMeetingsView({
             rows={upcoming}
             emptyDescription="No meetings are currently scheduled."
             onEdit={showEditStub}
-            onCancel={(row) => setCancelTarget(row)}
+            onCancelRequest={(eventId, eventTitle, session) =>
+              setCancelTarget({ eventId, eventTitle, session })
+            }
           />
           <CoachMeetingsSection
             title="Past"
             rows={past}
             emptyDescription="Completed and canceled meetings will show up here."
             onEdit={showEditStub}
-            onCancel={(row) => setCancelTarget(row)}
+            onCancelRequest={(eventId, eventTitle, session) =>
+              setCancelTarget({ eventId, eventTitle, session })
+            }
           />
         </>
       )}
@@ -1226,9 +1751,13 @@ function CoachMeetingsView({
         onOpenChange={(isOpen) => {
           if (!isOpen) setCancelTarget(null);
         }}
-        title={`Cancel "${cancelTarget?.title ?? ''}"?`}
+        title={
+          cancelTarget !== null
+            ? `Cancel "${cancelTarget.eventTitle}" on ${formatWeekdayDate(cancelTarget.session.sessionDate)}?`
+            : ''
+        }
         description="This marks the session canceled. Students won't be expected to attend, and no attendance will be recorded for it."
-        actionLabel="Cancel meeting"
+        actionLabel="Cancel session"
         onAction={() => {
           void handleConfirmCancel();
         }}
@@ -1299,6 +1828,9 @@ function StudentHistorySection({
           headingLevel={3}
           title={`No ${title.toLowerCase()} meetings`}
           description={emptyDescription}
+          // T122 (module doc #10f, UXD-05(b)) -- compact: this is a
+          // SUB-section of the page, never the only content on it.
+          isCompact
         />
       ) : (
         <List hasDividers header={`${title} meetings`}>
