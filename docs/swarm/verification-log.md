@@ -4475,3 +4475,48 @@ route-persistence test.
   "scheduled"/"meeting time" to avoid volunteer-hours vocabulary
   collision; (MINOR, T120 debt) `prettier --write` the two committed
   T120 test files so the format gate is green tree-wide.
+
+## T124 — UXP-06/10: coach dashboard analytics parity + activity feed
+- Date: 2026-07-20
+- Worker: worker-implementer (attempt 1)
+- Checker: checker-reviewer
+- Verdict: **PASS** (NIT)
+- Formula-drift check (constitution item 3): no drift. `v_event_student_hours`
+  reuses `v_student_hours`'s coalesce(hours_override, clamped-checkin,
+  session-length) chain byte-identical (only the group-by grain differs);
+  planned-hours duration matches the view's session-length branch verbatim;
+  `v_season_attendance_rate`'s no-excused-subtraction divergence from
+  `v_student_participation` is deliberate and disclosed in the view header
+  (the file's established disclosed-distinct convention), not silent
+  duplication. No tracking tables (D-7 honored).
+- D-3 split verified by reading: team-scoped views join `student_teams`
+  (dual members double-count per team); personal views (`v_student_planned_hours`,
+  `v_student_goal_projection`) have no membership join (count once);
+  `v_season_attendance_rate` single-counts dual members via
+  `select distinct`. Checker hand-reproduced five fixture scenarios
+  including a 66.7% attendance-rate worked example.
+- Loader is strict passthrough: no mutations, no arithmetic on numeric
+  fields (grep-verified); busiest-day pick is sort/slice in the component
+  (T044 class); the one UI sum (confirmed+planned percent) matches the
+  shipped `hoursVsGoalPercent` idiom and is disclosed.
+- Motivation-ethics (BLOCKER-class): PASS. Annotations are facts only
+  ("On track" / "Nh short"); Below-goal filter is plain triage with no
+  rank numbers or peer shaming; feed has no read-receipts; coach-only
+  rendering enforced by DashboardPage role dispatch (verified).
+- Judgment calls accepted: single ProgressBar + facts line matches
+  Astryx's own "don't stack bars" best practice (checker pulled the
+  component JSON); new widgets season-wide per D-2/D-3 with the
+  pre-existing team-scoped grid untouched; "Recent signups" superseded
+  by the strictly-richer activity feed (Self badges verified rendering).
+- Feed derivation honest: `responded_by`/`recorded_by` vs
+  `students.profile_id`; dropped-vs-declined updated_at heuristic
+  disclosed with clock-skew epsilon; D-7 hard-delete feed limitation
+  disclosed; no tracking tables.
+- Gates (checker-run): typecheck 0, lint 0 errors, prettier clean (TS
+  scope), CoachHome 83/83, siblings 500/500, build clean, CI bundle gate
+  replicated 197,380 B gz < 307,200 budget.
+- Follow-ups: (NIT) `v_planned_rsvp_hours` counts scheduled-but-past
+  sessions as "planned" — tighten the header comment or add a
+  `starts_at >= now()` guard in a future cleanup; (NIT, repo-wide)
+  react-refresh lint warnings could be silenced by splitting pure
+  helpers into sibling modules.

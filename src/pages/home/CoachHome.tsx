@@ -361,6 +361,144 @@
  *    anywhere in this app yet (confirmed via grep, same as `OutreachList.tsx`
  *    already found) -- `<Toast>` is rendered directly in normal document
  *    flow, same as that file.
+ *
+ * -----------------------------------------------------------------------
+ * 13. T124 (PRD v2 UXP-06/UXP-10, UXD-07 "Dashboard analytics parity") --
+ *     secondary stat tiles, per-student goal projection, hours-by-team,
+ *     top-events-by-hours, and a replacement activity feed. This section
+ *     documents the additions; sections 1-12 above describe the
+ *     PRE-EXISTING (T053) page this task adds onto, untouched.
+ *
+ * (a) Binding reference + scope decision. The capability map's "Dashboard"
+ *     figure (`docs/swarm/current-app-capability-map.html` line 75's
+ *     screenshot, decoded and viewed directly for this task) shows these
+ *     five widgets as ONE combined-program view -- team badges appear
+ *     PER-ROW inside a single goal-projection list (not two separately
+ *     team-scoped lists), "Hours by team" is explicitly a cross-team
+ *     comparison, and "Top events" carries no team dimension at all. This
+ *     is consistent with D-2's own framing ("P3 + GG = VOLT ... reporting
+ *     will handle the team metrics") and D-3's "personal numbers count
+ *     once" half. All five new widgets below are therefore SEASON-scoped
+ *     only, never filtered by this file's existing
+ *     `PLACEHOLDER_CURRENT_TEAM_ID` (module doc #8) -- a disclosed,
+ *     deliberate divergence from the PRE-EXISTING primary KPI grid / Next
+ *     up / check-in / season-setup card, which remain team-scoped and
+ *     UNCHANGED by this task (Required Output's own "keep the existing
+ *     next-up/check-in/season-setup cards" instruction). See
+ *     `supabase/migrations/20260723000001_dashboard_views.sql`'s own header
+ *     comment for the same reasoning stated from the SQL side.
+ *
+ * (b) Constitution item 3 -- `../../lib/supabase/loaders/dashboard.ts`'s own
+ *     module doc #1 documents the nine new SQL views (nine, since T116's
+ *     `v_team_hours` is consumed unmodified, no tenth view for "hours by
+ *     team" per the worker packet's explicit instruction) that own every
+ *     percentage/sum/average/day-of-week-bucketing computation below. Every
+ *     pure function in THIS file that touches dashboard data is a
+ *     sort/slice/filter/format transform over those already-computed
+ *     numbers (T044's `Leaderboard.tsx` precedent), with exactly ONE
+ *     disclosed exception matching an ALREADY-ESTABLISHED idiom in this
+ *     same file: `goalProjectionPercent`/`goalProjectionShortHours` divide
+ *     two already-real, already-SQL-sourced numbers
+ *     (`confirmedHours + plannedHours` vs. `goalHours`, both straight off
+ *     `v_student_goal_projection`), the identical "UI-side percent math, no
+ *     metric-view equivalent to duplicate" idiom this file's own
+ *     `hoursVsGoalPercent` (module doc #4) already established for the
+ *     PRE-EXISTING team-hours-goal bar -- not a second SQL view for a
+ *     trivial division, not a re-derivation of anything already computed.
+ *
+ * (c) Astryx doc-vs-PRD tension, disclosed (constitution item 13/2): UXD-07's
+ *     literal text asks for a "stacked confirmed + planned vs. goal line"
+ *     bar. `ProgressBar`'s own doc (cross-checked live via
+ *     `npm run astryx -- component ProgressBar --json` for this task)
+ *     explicitly states, in its own "Best Practices": "Don't: Use multiple
+ *     progress bars stacked together for the same operation; use one bar
+ *     with a value label instead" -- there is no two-segment/stacked-fill
+ *     prop anywhere in the real, installed component. Per constitution item
+ *     13 (templates/components are used as-is, never invented past their
+ *     real prop surface), `GoalProjectionRow` below renders exactly ONE real
+ *     `ProgressBar` per student (`value = confirmedHours`, `max = goalHours`
+ *     -- the same "confirmed vs. goal" semantics `HoursTab.tsx`'s own
+ *     already-shipped per-student `ProgressBar` uses, read read-only for
+ *     this task as the closest in-repo precedent), plus a plain `Text` line
+ *     stating the full fact set the figure's own annotation shows
+ *     (`"{confirmed}h confirmed + {planned}h planned = {total}h / {goal}h ·
+ *     {percent}% · {status}"`). This conveys every fact UXD-07 requires
+ *     (confirmed, planned, goal, on-track/short) through real, doc-verified
+ *     components, without fabricating a stacked-fill bar the installed
+ *     library does not support -- a disclosed, judgment-call substitution
+ *     for the PRD's literal visual wording, not a silent scope-drop of the
+ *     underlying DATA requirement (every number the figure shows is
+ *     present). "Hours by team" and "Top events by student hours" are
+ *     comparison-style bars, not "vs. goal" bars, and do not hit this same
+ *     Don't -- each renders ONE real `ProgressBar` per row scaled against
+ *     the largest value in its own list (a disclosed, presentation-only
+ *     `Math.max` over already-fetched numbers, never a displayed metric
+ *     itself -- see `maxOf` below), matching the figure's own bar-chart
+ *     pattern faithfully.
+ *
+ * (d) Activity feed (UXP-10) REPLACES the PRE-EXISTING "Recent signups"
+ *     section (module doc #9's old `buildRecentSignups`/`RecentSignupEntry`/
+ *     `RSVP_VERB`, all REMOVED by this task), not added alongside it.
+ *     UXP-10's own feed is a strict superset of what "Recent signups" did
+ *     (future-outreach RSVP changes only, no self/staff label, no
+ *     attendance/check-off entries) -- keeping both would be exactly the
+ *     "duplicated ... for one concept" anti-pattern UXD-05(a) names,
+ *     applied to two list SECTIONS instead of two headings for the same
+ *     single metric. The Required Output's own "keep the existing
+ *     next-up/check-in/season-setup cards" list deliberately does not name
+ *     Recent signups, read as a disclosed, deliberate omission rather than
+ *     an oversight, given UXP-10's explicit, much broader requirement.
+ *
+ * (e) Self-vs-staff origin (Trap #2, BLOCKER-class motivation-ethics
+ *     posture) -- `isSelfOriginated` below compares `rsvps.responded_by` /
+ *     `attendance.recorded_by` (a real `profiles.id`) against that
+ *     student's OWN `students.profile_id` (nullable -- a student with no
+ *     account yet can never self-originate a row, correctly falls through
+ *     to "staff"). This is a plain equality check on two already-fetched
+ *     foreign-key ids (not metric math, module doc (b) above) -- the same
+ *     category of raw-row comparison this file's own PRE-EXISTING
+ *     `isEventInTeamScope` already performs. Only a real "Self" `Badge` is
+ *     ever rendered (module doc's own figure reading: the reference app
+ *     shows a "Self" badge and no visually-distinct "Staff" badge at all) --
+ *     never a ranking, a name-and-shame framing, or any read-receipt
+ *     (constitution motivation-ethics rule, BLOCKER-class, users are
+ *     minors): `buildActivityFeed` renders WHAT happened and WHEN, never WHO
+ *     is behind on hours relative to a peer, and there is no per-entry "seen
+ *     by" or acknowledgment affordance anywhere in this file.
+ *
+ * (f) Hard-delete feed limitation (Trap #3, D-7) -- disclosed a THIRD time
+ *     here (also in the migration's own header and `dashboard.ts`'s own
+ *     module doc #2): `attendance.ts`'s real `makeRemoveAttendance` and the
+ *     event-edit checklist's own RSVP-uncheck path (D-7, "the checklist
+ *     wins") are unconditional DELETEs with no history left behind. This
+ *     file does NOT add a tracking table or a status-transition column to
+ *     recover that history (worker packet's explicit instruction) --
+ *     `buildActivityFeed` is built from CURRENT `rsvps`/`attendance` rows
+ *     only, so a coach-driven removal is honestly invisible (never
+ *     fabricated as a "dropped" entry). A student/parent's OWN self-service
+ *     RSVP change (`RsvpControl.tsx`/OUT-03, a real status UPDATE, never a
+ *     delete) remains genuinely feed-visible: `wasRsvpChanged` below uses
+ *     the row's own `createdAt` vs. `updatedAt` gap (with a small clock-skew
+ *     epsilon -- `loaders/outreach.ts`'s real upsert calls, read read-only
+ *     for this task, confirmed `updated_at` is explicitly set on every write
+ *     while `created_at` is left to the column's own `default now()`, so a
+ *     genuine value CHANGE bumps `updated_at` measurably past `created_at`,
+ *     while a first-ever write leaves the two only microseconds apart) to
+ *     distinguish an honest "dropped" (was something else, now
+ *     `'declined'`) from an honest "declined" (the student's very first
+ *     response was already `'declined'` -- never actually "dropped"
+ *     anything). Both are real, distinct, disclosed labels; neither is
+ *     guessed.
+ *
+ * (g) Goal source (Trap #4) -- `v_student_goal_projection`'s own `goal_hours`
+ *     column is `coalesce(students.goal_hours_override,
+ *     seasons.default_goal_hours)`, both real columns (migration heading 9)
+ *     -- `StudentGoalProjectionEntry.goalHours` is a verbatim passthrough,
+ *     never recomputed here. "Planned" is future `'going'` RSVP hours,
+ *     computed once in `v_planned_rsvp_hours` (migration heading 1) and
+ *     read here via `v_student_goal_projection`'s own `planned_hours`
+ *     column -- this file never touches `rsvps`/`event_sessions` directly
+ *     for this number.
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -379,6 +517,8 @@ import {
   List,
   ListItem,
   ProgressBar,
+  SegmentedControl,
+  SegmentedControlItem,
   Skeleton,
   Text,
   Toast,
@@ -387,6 +527,17 @@ import {
 } from '@astryxdesign/core';
 import { useAuth } from '../../app/guards';
 import { routePaths } from '../../app/router';
+import {
+  loadDashboardData,
+  type ActivityFeedSource,
+  type DashboardData,
+  type EventStudentHoursEntry,
+  type FeedRsvpRow,
+  type LoadDashboardDataFn,
+  type SeasonDayOfWeekSessions,
+  type StudentGoalProjectionEntry,
+  type TeamHoursEntry,
+} from '../../lib/supabase/loaders/dashboard';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real columns/views. Module docs #3/#4.
@@ -993,60 +1144,228 @@ export function formatRelativeTime(iso: string, nowMs: number): string {
   return `${days}d ago`;
 }
 
-const RSVP_VERB: Record<RsvpStatus, string> = {
-  going: 'signed up for',
-  maybe: 'marked maybe for',
-  declined: "can't make it to",
-};
+// ---------------------------------------------------------------------------
+// T124 activity feed (UXP-10) -- REPLACES the old `buildRecentSignups`/
+// `RecentSignupEntry`/`RSVP_VERB` above (module doc #13(d)). Built from
+// `dashboard.ts`'s raw `ActivityFeedSource` rows -- a plain join/format, no
+// metric-view formula (module doc #13(b)).
+// ---------------------------------------------------------------------------
 
-export interface RecentSignupEntry {
-  rsvpId: string;
-  message: string;
-  updatedAt: string;
+export const ACTIVITY_FEED_DEFAULT_LIMIT = 10;
+
+/**
+ * Trap #2/module doc #13(e): a plain equality check on two already-fetched
+ * `profiles.id` values, never a re-derivation of anything. `null` on either
+ * side (no linked account, or an import-era row with no `responded_by`/
+ * `recorded_by`) is always "not self" -- a row can only be self-originated
+ * when BOTH the actor id and the student's own profile id are real and
+ * equal.
+ */
+export function isSelfOriginated(
+  actorProfileId: string | null,
+  studentProfileId: string | null,
+): boolean {
+  return (
+    actorProfileId !== null && studentProfileId !== null && actorProfileId === studentProfileId
+  );
 }
 
 /**
- * Last `limit` RSVP changes for FUTURE (`status === 'scheduled'`), OUTREACH-
- * type, team-scoped sessions only (module doc's own literal PRD text),
- * newest first. Copy format is the PRD's own literal worked example
- * ("Ada signed up for STEM Fair · 2h ago") -- name + verb + event title +
- * relative time, joined with " · ".
+ * Module doc #13(f): distinguishes a genuine "dropped" (the row changed
+ * after creation, e.g. `'going' -> 'declined'`) from a first-ever response
+ * that was already `'declined'`. `loaders/outreach.ts`'s real upsert calls
+ * (read-only reference) always set `updated_at` explicitly while leaving
+ * `created_at` to the column's own `default now()` -- on a genuine INSERT
+ * the two land only milliseconds apart; `epsilonMs` (2s) absorbs that clock
+ * skew without misreading a real same-second edit as "unchanged".
  */
-export function buildRecentSignups(
-  rsvps: readonly HomeRsvpRow[],
-  sessions: readonly HomeSessionRow[],
-  events: readonly HomeEventRow[],
-  students: readonly HomeStudentRow[],
-  teamId: string,
-  nowMs: number,
-  limit = 10,
-): RecentSignupEntry[] {
-  const sessionById = new Map(sessions.map((session) => [session.id, session] as const));
-  const eventById = new Map(events.map((event) => [event.id, event] as const));
-  const studentById = new Map(students.map((student) => [student.id, student] as const));
+export function wasRsvpChanged(row: FeedRsvpRow, epsilonMs = 2000): boolean {
+  return new Date(row.updatedAt).getTime() - new Date(row.createdAt).getTime() > epsilonMs;
+}
 
-  const eligible = rsvps.filter((rsvp) => {
+/** `event_sessions.session_date` is a plain SQL `date` (no time-of-day) --
+ * formatted with an explicit `timeZone: 'UTC'` so the displayed calendar day
+ * never shifts with the viewer's local timezone (a `date`-only string parsed
+ * by `Date` is UTC-midnight; formatting in a negative-UTC-offset local zone
+ * would otherwise silently roll it back a day). */
+export function formatSessionDateLabel(sessionDate: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(sessionDate));
+}
+
+export interface ActivityFeedEntry {
+  id: string;
+  studentId: string;
+  message: string;
+  dateLabel: string;
+  timeAgoLabel: string;
+  /** Sort key only -- never rendered directly. */
+  timestamp: string;
+  isSelf: boolean;
+}
+
+/**
+ * Every RSVP row (`'going'`/`'maybe'`/`'declined'`) plus every `'present'`/
+ * `'late'` attendance row (module doc #13(a): "checked off" -- `'excused'`/
+ * `'absent'` attendance rows are coach corrections, not a student "checking
+ * off" anything, and are deliberately excluded), newest first by the row's
+ * own `updatedAt`. `limit`/`"show all"` is the CALLER's job (a plain
+ * `.slice`, T044 precedent) -- this function returns every eligible entry.
+ */
+export function buildActivityFeed(source: ActivityFeedSource, nowMs: number): ActivityFeedEntry[] {
+  const sessionById = new Map(source.sessions.map((session) => [session.id, session] as const));
+  const eventById = new Map(source.events.map((event) => [event.id, event] as const));
+  const studentById = new Map(source.students.map((student) => [student.id, student] as const));
+
+  const entries: ActivityFeedEntry[] = [];
+
+  for (const rsvp of source.rsvps) {
     const session = sessionById.get(rsvp.sessionId);
-    if (!session || session.status !== 'scheduled') return false; // future only
-    const event = eventById.get(session.eventId);
-    if (!event || event.type !== 'outreach') return false; // outreach only
-    return isEventInTeamScope(event, teamId); // team scope
-  });
-
-  return eligible
-    .slice()
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, limit)
-    .map((rsvp) => {
-      const session = sessionById.get(rsvp.sessionId)!;
-      const event = eventById.get(session.eventId)!;
-      const studentName = studentById.get(rsvp.studentId)?.displayName ?? 'Someone';
-      return {
-        rsvpId: rsvp.id,
-        message: `${studentName} ${RSVP_VERB[rsvp.status]} ${event.title} · ${formatRelativeTime(rsvp.updatedAt, nowMs)}`,
-        updatedAt: rsvp.updatedAt,
-      };
+    const event = session ? eventById.get(session.eventId) : undefined;
+    if (!session || !event) continue; // orphaned row (should not happen) -- skip, never guess
+    const student = studentById.get(rsvp.studentId);
+    const studentName = student?.displayName ?? 'Someone';
+    let verb: string;
+    if (rsvp.status === 'going') verb = 'signed up for';
+    else if (rsvp.status === 'maybe') verb = 'marked maybe for';
+    else verb = wasRsvpChanged(rsvp) ? 'dropped' : 'declined';
+    entries.push({
+      id: `rsvp-${rsvp.id}`,
+      studentId: rsvp.studentId,
+      message: `${studentName} ${verb} ${event.title}`,
+      dateLabel: formatSessionDateLabel(session.sessionDate),
+      timeAgoLabel: formatRelativeTime(rsvp.updatedAt, nowMs),
+      timestamp: rsvp.updatedAt,
+      isSelf: isSelfOriginated(rsvp.respondedBy, student?.profileId ?? null),
     });
+  }
+
+  for (const record of source.attendance) {
+    if (record.status !== 'present' && record.status !== 'late') continue;
+    const session = sessionById.get(record.sessionId);
+    const event = session ? eventById.get(session.eventId) : undefined;
+    if (!session || !event) continue;
+    const student = studentById.get(record.studentId);
+    const studentName = student?.displayName ?? 'Someone';
+    entries.push({
+      id: `attendance-${record.id}`,
+      studentId: record.studentId,
+      message: `${studentName} checked off ${event.title}`,
+      dateLabel: formatSessionDateLabel(session.sessionDate),
+      timeAgoLabel: formatRelativeTime(record.updatedAt, nowMs),
+      timestamp: record.updatedAt,
+      isSelf: isSelfOriginated(record.recordedBy, student?.profileId ?? null),
+    });
+  }
+
+  return entries.slice().sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+}
+
+// ---------------------------------------------------------------------------
+// T124 secondary stat tiles / hours-by-team / top-events / goal-projection --
+// every function below is sort/slice/filter/format ONLY (module doc #13(b));
+// the nine new SQL views already computed every number these touch.
+// ---------------------------------------------------------------------------
+
+const DAY_OF_WEEK_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
+
+/** ISO day-of-week (1=Monday..7=Sunday, `v_season_day_of_week_sessions`'s own
+ * convention) -> a three-letter display label. A pure format transform, not
+ * a re-derivation of the count itself. */
+export function formatDayOfWeekLabel(dayOfWeek: number): string {
+  return DAY_OF_WEEK_LABELS[dayOfWeek - 1] ?? '—';
+}
+
+/** Sort + take the max (T044 precedent) -- `null` when the season has no
+ * sessions at all yet (absence, not a fabricated day). Ties break on the
+ * LOWEST `dayOfWeek` (Monday-first) for a stable, deterministic pick. */
+export function pickBusiestDay(
+  rows: readonly SeasonDayOfWeekSessions[],
+): SeasonDayOfWeekSessions | null {
+  if (rows.length === 0) return null;
+  const sorted = rows
+    .slice()
+    .sort((a, b) => b.sessionCount - a.sessionCount || a.dayOfWeek - b.dayOfWeek);
+  return sorted[0];
+}
+
+/** Presentation-only `Math.max` for bar-chart relative scaling (module doc
+ * #13(c)) -- never a displayed metric itself, only a `ProgressBar` `max`. */
+export function maxOf(values: readonly number[]): number {
+  return values.length === 0 ? 0 : Math.max(...values);
+}
+
+/** Descending by `confirmedHours`, ties broken by team name (T044
+ * precedent: sort/slice over an already-computed number). */
+export function sortTeamHoursDescending(rows: readonly TeamHoursEntry[]): TeamHoursEntry[] {
+  return rows
+    .slice()
+    .sort((a, b) => b.confirmedHours - a.confirmedHours || a.teamName.localeCompare(b.teamName));
+}
+
+/** Descending by `totalHours`. */
+export function sortEventsByHoursDescending(
+  rows: readonly EventStudentHoursEntry[],
+): EventStudentHoursEntry[] {
+  return rows.slice().sort((a, b) => b.totalHours - a.totalHours);
+}
+
+/**
+ * Module doc #13(b)/#4 (`hoursVsGoalPercent` precedent): a plain percent of
+ * two already-real numbers, capped at a sane display ceiling never applied
+ * to the underlying facts. `goalHours <= 0` guards the same way
+ * `hoursVsGoalPercent` already does.
+ */
+export function goalProjectionPercent(row: StudentGoalProjectionEntry): number {
+  if (row.goalHours <= 0) return 0;
+  return round1(((row.confirmedHours + row.plannedHours) / row.goalHours) * 100);
+}
+
+/** `max(0, goal - confirmed - planned)` -- the annotation's "N h short"
+ * half. `0` (not negative) once the goal is met or exceeded. */
+export function goalProjectionShortHours(row: StudentGoalProjectionEntry): number {
+  return Math.max(0, round1(row.goalHours - row.confirmedHours - row.plannedHours));
+}
+
+/**
+ * Motivation-ethics BLOCKER-class posture (module doc #13(e), constitution):
+ * states a fact, never guilt/urgency copy. "On track" once confirmed+planned
+ * meets or exceeds goal; otherwise the exact remaining hours, nothing more.
+ */
+export function formatGoalProjectionAnnotation(row: StudentGoalProjectionEntry): string {
+  const shortHours = goalProjectionShortHours(row);
+  return shortHours <= 0 ? 'On track' : `${shortHours}h short`;
+}
+
+export type GoalProjectionFilter = 'all' | 'belowGoal';
+
+/** Coach-facing triage, never a ranking/shame framing (Trap #2) -- a plain
+ * boolean split on the same already-computed short-hours fact every row
+ * already shows, not a new comparison between students. */
+export function filterGoalProjectionRows(
+  rows: readonly StudentGoalProjectionEntry[],
+  filter: GoalProjectionFilter,
+): StudentGoalProjectionEntry[] {
+  if (filter === 'all') return rows.slice();
+  return rows.filter((row) => goalProjectionShortHours(row) > 0);
+}
+
+/** Descending by projected percent (highest-first, matching the reference
+ * figure's own row order), ties broken by name for stability. */
+export function sortGoalProjectionRows(
+  rows: readonly StudentGoalProjectionEntry[],
+): StudentGoalProjectionEntry[] {
+  return rows
+    .slice()
+    .sort(
+      (a, b) =>
+        goalProjectionPercent(b) - goalProjectionPercent(a) ||
+        a.displayName.localeCompare(b.displayName),
+    );
 }
 
 /** HOME-04 gate condition (module doc #6). */
@@ -1082,6 +1401,270 @@ export async function defaultLoadCoachHomeData(seasonId: string): Promise<CoachH
     teamParticipation: FIXTURE_TEAM_PARTICIPATION.find((row) => row.seasonId === seasonId) ?? null,
     studentHours: FIXTURE_STUDENT_HOURS.filter((row) => row.seasonId === seasonId),
     seasonSetupStatus: FIXTURE_SEASON_SETUP_STATUS,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// T124 dashboard fixtures (module doc #13) -- fabricated names only
+// (constitution item 6), dual-member-aware: "Dana Voss" plays the same
+// verification role here `dashboard_views.sql`'s own scratch-Postgres
+// fixtures (this task's worker output) prove at the SQL layer -- she
+// contributes to BOTH `team-titans` and `PLACEHOLDER_CURRENT_TEAM_ID`'s
+// `FIXTURE_TEAM_HOURS` totals below (D-3 team-scoped double-count), while
+// her OWN `FIXTURE_GOAL_PROJECTION` row appears exactly ONCE, personal,
+// single-counted (D-3's other half) -- this fixture set is a component-level
+// ECHO of that already-verified SQL behavior, not a second proof of it.
+// ---------------------------------------------------------------------------
+
+const FIXTURE_DASHBOARD_ROSTER_STATS: NonNullable<DashboardData['rosterStats']> = {
+  seasonId: PLACEHOLDER_SEASON_ID,
+  activeStudentCount: 5,
+  avgHoursPerActiveStudent: 3.7,
+  studentsAtGoalCount: 1,
+};
+
+const FIXTURE_DASHBOARD_ATTENDANCE_RATE: NonNullable<DashboardData['attendanceRate']> = {
+  seasonId: PLACEHOLDER_SEASON_ID,
+  expectedCt: 20,
+  presentCt: 14,
+  attendanceRatePct: 70,
+};
+
+const FIXTURE_DASHBOARD_SESSION_DAYS: NonNullable<DashboardData['sessionDays']> = {
+  seasonId: PLACEHOLDER_SEASON_ID,
+  sessionDaysLogged: 12,
+};
+
+const FIXTURE_DASHBOARD_UPCOMING_COMMITTED_HOURS: NonNullable<
+  DashboardData['upcomingCommittedHours']
+> = {
+  seasonId: PLACEHOLDER_SEASON_ID,
+  committedHours30d: 19,
+};
+
+const FIXTURE_DASHBOARD_DAY_OF_WEEK_SESSIONS: readonly SeasonDayOfWeekSessions[] = [
+  { seasonId: PLACEHOLDER_SEASON_ID, dayOfWeek: 1, sessionCount: 4 }, // Mon
+  { seasonId: PLACEHOLDER_SEASON_ID, dayOfWeek: 6, sessionCount: 7 }, // Sat -- busiest
+  { seasonId: PLACEHOLDER_SEASON_ID, dayOfWeek: 3, sessionCount: 2 }, // Wed
+];
+
+// Dana Voss's confirmed hours (10h) are already summed INTO both totals
+// below, once per team, per D-3 -- 42 (Ravens) and 28 (Titans) each include
+// her contribution; her own personal total stays 10h regardless (see her
+// single `FIXTURE_GOAL_PROJECTION` row further down).
+const FIXTURE_DASHBOARD_TEAM_HOURS: readonly TeamHoursEntry[] = [
+  {
+    teamId: PLACEHOLDER_CURRENT_TEAM_ID,
+    teamName: 'Ravens',
+    seasonId: PLACEHOLDER_SEASON_ID,
+    confirmedHours: 42,
+  },
+  {
+    teamId: 'team-titans',
+    teamName: 'Titans',
+    seasonId: PLACEHOLDER_SEASON_ID,
+    confirmedHours: 28,
+  },
+];
+
+const FIXTURE_DASHBOARD_TOP_EVENTS: readonly EventStudentHoursEntry[] = [
+  {
+    eventId: 'event-summer-stem-camp',
+    seasonId: PLACEHOLDER_SEASON_ID,
+    title: 'Summer STEM Camp',
+    startsOn: '2026-06-01',
+    endsOn: '2026-06-03',
+    studentCount: 6,
+    totalHours: 30,
+  },
+  {
+    eventId: 'event-food-bank-sort',
+    seasonId: PLACEHOLDER_SEASON_ID,
+    title: 'Community Food Bank Sort',
+    startsOn: '2026-07-05',
+    endsOn: '2026-07-05',
+    studentCount: 4,
+    totalHours: 16,
+  },
+];
+
+const FIXTURE_DASHBOARD_GOAL_PROJECTION: readonly StudentGoalProjectionEntry[] = [
+  // Dual-member (see block comment above) -- ON TRACK (156%).
+  {
+    studentId: 'student-dana-voss',
+    seasonId: PLACEHOLDER_SEASON_ID,
+    displayName: 'Dana Voss',
+    teamId: PLACEHOLDER_CURRENT_TEAM_ID,
+    teamName: 'Ravens',
+    goalHours: 90,
+    confirmedHours: 64.5,
+    plannedHours: 76,
+  },
+  // Below goal -- 84h short (real-number annotation, no urgency copy).
+  {
+    studentId: 'student-amara-webb',
+    seasonId: PLACEHOLDER_SEASON_ID,
+    displayName: 'Amara Webb',
+    teamId: PLACEHOLDER_CURRENT_TEAM_ID,
+    teamName: 'Ravens',
+    goalHours: 90,
+    confirmedHours: 6,
+    plannedHours: 0,
+  },
+  // Below goal, different team -- 27.25h short.
+  {
+    studentId: 'student-nina-ortiz',
+    seasonId: PLACEHOLDER_SEASON_ID,
+    displayName: 'Nina Ortiz',
+    teamId: 'team-titans',
+    teamName: 'Titans',
+    goalHours: 90,
+    confirmedHours: 22.75,
+    plannedHours: 40,
+  },
+];
+
+const FIXTURE_DASHBOARD_ACTIVITY_FEED_SOURCE: ActivityFeedSource = {
+  events: [
+    {
+      id: 'event-food-bank-sort',
+      seasonId: PLACEHOLDER_SEASON_ID,
+      title: 'Community Food Bank Sort',
+      type: 'outreach',
+    },
+    {
+      id: 'event-weekly-build',
+      seasonId: PLACEHOLDER_SEASON_ID,
+      title: 'Weekly Build Meeting',
+      type: 'meeting',
+    },
+  ],
+  sessions: [
+    {
+      id: 'session-food-bank-upcoming',
+      eventId: 'event-food-bank-sort',
+      sessionDate: '2026-07-19',
+      startsAt: '2026-07-19T14:00:00.000Z',
+    },
+    {
+      id: 'session-build-completed-past',
+      eventId: 'event-weekly-build',
+      sessionDate: '2026-07-15',
+      startsAt: '2026-07-15T23:00:00.000Z',
+    },
+  ],
+  rsvps: [
+    // Amara, self, first-ever response, going -- "signed up for".
+    {
+      id: 'rsvp-amara-going',
+      sessionId: 'session-food-bank-upcoming',
+      studentId: 'student-amara-webb',
+      status: 'going',
+      respondedBy: 'profile-amara',
+      createdAt: '2026-07-19T10:00:00.000Z',
+      updatedAt: '2026-07-19T10:00:00.000Z',
+    },
+    // Dana, self -- was going, changed to declined -- "dropped".
+    {
+      id: 'rsvp-dana-dropped',
+      sessionId: 'session-food-bank-upcoming',
+      studentId: 'student-dana-voss',
+      status: 'declined',
+      respondedBy: 'profile-dana',
+      createdAt: '2026-07-10T10:00:00.000Z',
+      updatedAt: '2026-07-19T09:00:00.000Z',
+    },
+    // Cole -- no linked account (`profileId: null`) -- staff-entered on the
+    // coach's expected-attendees checklist -- always non-self.
+    {
+      id: 'rsvp-cole-going',
+      sessionId: 'session-build-completed-past',
+      studentId: 'student-cole-jennings',
+      status: 'going',
+      respondedBy: 'profile-coach',
+      createdAt: '2026-07-14T09:00:00.000Z',
+      updatedAt: '2026-07-14T09:00:00.000Z',
+    },
+    // Amara -- first-ever response was ALREADY declined (never "dropped"
+    // anything) -- "declined", not "dropped" (module doc #13(f)).
+    {
+      id: 'rsvp-amara-declined-build',
+      sessionId: 'session-build-completed-past',
+      studentId: 'student-amara-webb',
+      status: 'declined',
+      respondedBy: 'profile-amara',
+      createdAt: '2026-07-13T08:00:00.000Z',
+      updatedAt: '2026-07-13T08:00:00.000Z',
+    },
+  ],
+  attendance: [
+    // Dana checks herself off -- self, "checked off".
+    {
+      id: 'attendance-dana-present',
+      sessionId: 'session-build-completed-past',
+      studentId: 'student-dana-voss',
+      status: 'present',
+      recordedBy: 'profile-dana',
+      createdAt: '2026-07-16T00:00:00.000Z',
+      updatedAt: '2026-07-16T00:00:00.000Z',
+    },
+    // Coach records Cole present -- staff, "checked off".
+    {
+      id: 'attendance-cole-present',
+      sessionId: 'session-build-completed-past',
+      studentId: 'student-cole-jennings',
+      status: 'present',
+      recordedBy: 'profile-coach',
+      createdAt: '2026-07-16T00:05:00.000Z',
+      updatedAt: '2026-07-16T00:05:00.000Z',
+    },
+    // Amara marked ABSENT -- must never appear as a "checked off" entry
+    // (module doc's own "present/late only" rule).
+    {
+      id: 'attendance-amara-absent',
+      sessionId: 'session-build-completed-past',
+      studentId: 'student-amara-webb',
+      status: 'absent',
+      recordedBy: 'profile-coach',
+      createdAt: '2026-07-16T00:06:00.000Z',
+      updatedAt: '2026-07-16T00:06:00.000Z',
+    },
+  ],
+  students: [
+    { id: 'student-amara-webb', displayName: 'Amara Webb', profileId: 'profile-amara' },
+    { id: 'student-cole-jennings', displayName: 'Cole Jennings', profileId: null },
+    { id: 'student-dana-voss', displayName: 'Dana Voss', profileId: 'profile-dana' },
+  ],
+};
+
+/** Fixture default for the injectable `loadDashboardData` seam -- mirrors
+ * `defaultLoadCoachHomeData` above's own "obviously-fake fixture, filtered
+ * by `seasonId`" convention. `CoachHome.tsx`'s own prop default is the REAL
+ * `loadDashboardData` from `dashboard.ts` (module doc #13); this fixture is
+ * for tests/dev-preview to opt into explicitly, same as
+ * `ParticipationTab.tsx`'s own `defaultLoadParticipationData` precedent. */
+export async function defaultLoadDashboardData(seasonId: string): Promise<DashboardData> {
+  return {
+    seasonId,
+    rosterStats:
+      FIXTURE_DASHBOARD_ROSTER_STATS.seasonId === seasonId ? FIXTURE_DASHBOARD_ROSTER_STATS : null,
+    attendanceRate:
+      FIXTURE_DASHBOARD_ATTENDANCE_RATE.seasonId === seasonId
+        ? FIXTURE_DASHBOARD_ATTENDANCE_RATE
+        : null,
+    sessionDays:
+      FIXTURE_DASHBOARD_SESSION_DAYS.seasonId === seasonId ? FIXTURE_DASHBOARD_SESSION_DAYS : null,
+    upcomingCommittedHours:
+      FIXTURE_DASHBOARD_UPCOMING_COMMITTED_HOURS.seasonId === seasonId
+        ? FIXTURE_DASHBOARD_UPCOMING_COMMITTED_HOURS
+        : null,
+    dayOfWeekSessions: FIXTURE_DASHBOARD_DAY_OF_WEEK_SESSIONS.filter(
+      (row) => row.seasonId === seasonId,
+    ),
+    teamHours: FIXTURE_DASHBOARD_TEAM_HOURS.filter((row) => row.seasonId === seasonId),
+    topEvents: FIXTURE_DASHBOARD_TOP_EVENTS.filter((row) => row.seasonId === seasonId),
+    goalProjection: FIXTURE_DASHBOARD_GOAL_PROJECTION.filter((row) => row.seasonId === seasonId),
+    activityFeedSource: FIXTURE_DASHBOARD_ACTIVITY_FEED_SOURCE,
   };
 }
 
@@ -1239,6 +1822,106 @@ function NextUpRowItem({ row }: { row: NextUpRow }): ReactNode {
   );
 }
 
+// ---------------------------------------------------------------------------
+// T124 row components (module doc #13) -- every value rendered below is
+// already-computed (a view column or a sort/slice/format pure function
+// above); no arithmetic happens in JSX.
+// ---------------------------------------------------------------------------
+
+function ActivityFeedRowItem({ entry }: { entry: ActivityFeedEntry }): ReactNode {
+  return (
+    <ListItem
+      label={entry.message}
+      description={
+        <Text type="supporting">
+          {entry.dateLabel} · {entry.timeAgoLabel}
+        </Text>
+      }
+      endContent={entry.isSelf ? <Badge variant="neutral" label="Self" /> : undefined}
+    />
+  );
+}
+
+function TeamHoursRowItem({
+  entry,
+  maxHours,
+}: {
+  entry: TeamHoursEntry;
+  maxHours: number;
+}): ReactNode {
+  return (
+    <ListItem
+      label={entry.teamName}
+      description={
+        <ProgressBar
+          label={`${entry.teamName} hours`}
+          isLabelHidden
+          value={entry.confirmedHours}
+          max={maxHours > 0 ? maxHours : 1}
+        />
+      }
+      endContent={<Text type="supporting">{`${entry.confirmedHours}h`}</Text>}
+    />
+  );
+}
+
+function TopEventRowItem({
+  entry,
+  maxHours,
+}: {
+  entry: EventStudentHoursEntry;
+  maxHours: number;
+}): ReactNode {
+  const dateRange =
+    entry.startsOn === entry.endsOn ? entry.startsOn : `${entry.startsOn} → ${entry.endsOn}`;
+  return (
+    <ListItem
+      label={entry.title}
+      description={
+        <VStack gap={1}>
+          <Text type="supporting">{`${dateRange} · ${entry.studentCount} students`}</Text>
+          <ProgressBar
+            label={`${entry.title} hours`}
+            isLabelHidden
+            value={entry.totalHours}
+            max={maxHours > 0 ? maxHours : 1}
+          />
+        </VStack>
+      }
+      endContent={<Text type="supporting">{`${entry.totalHours}h`}</Text>}
+    />
+  );
+}
+
+/** Motivation-ethics BLOCKER-class posture (module doc #13(e)): the
+ * annotation states a fact ("N h short"/"On track"), never guilt/urgency
+ * copy -- see `formatGoalProjectionAnnotation` above, the ONLY place this
+ * text is composed. */
+function GoalProjectionRowItem({ row }: { row: StudentGoalProjectionEntry }): ReactNode {
+  const percent = goalProjectionPercent(row);
+  const annotation = formatGoalProjectionAnnotation(row);
+  const totalHours = round1(row.confirmedHours + row.plannedHours);
+  return (
+    <ListItem
+      label={row.displayName}
+      startContent={<Badge variant="teal" label={row.teamName} />}
+      description={
+        <VStack gap={1}>
+          <ProgressBar
+            label={`${row.displayName} hours vs. goal`}
+            isLabelHidden
+            value={row.confirmedHours}
+            max={row.goalHours > 0 ? row.goalHours : 1}
+          />
+          <Text type="supporting">
+            {`${row.confirmedHours}h confirmed + ${row.plannedHours}h planned = ${totalHours}h / ${row.goalHours}h · ${percent}% · ${annotation}`}
+          </Text>
+        </VStack>
+      }
+    />
+  );
+}
+
 interface StubNotice {
   title: string;
   description: string;
@@ -1251,8 +1934,18 @@ interface StubNotice {
 export interface CoachHomeProps {
   /** Injectable data-loading seam (module doc #9). Defaults to fixture data. */
   loadData?: LoadCoachHomeDataFn;
+  /** Injectable seam for T124's new season-wide analytics (module doc #13).
+   * Defaults to the REAL Supabase-backed `loadDashboardData`
+   * (`../../lib/supabase/loaders/dashboard`), same "prop defaults to the
+   * real loader" convention `ParticipationTab.tsx`'s own `loadData` prop
+   * already established -- pass `defaultLoadDashboardData` explicitly (as
+   * this file's own tests do) for fixture behavior. */
+  loadDashboardData?: LoadDashboardDataFn;
   seasonId?: string;
-  /** Which team this Coach/Admin Home is scoped to (module doc #8). */
+  /** Which team this Coach/Admin Home is scoped to (module doc #8) --
+   * scopes ONLY the pre-existing primary KPI grid / Next up / Recent-feed
+   * team filter / check-in / season-setup card. T124's new season-wide
+   * widgets (module doc #13(a)) deliberately ignore this prop. */
   teamId?: string;
   /** Injectable clock for the 60-minute check-in boundary / 7-day window /
    * relative-time formatting (module doc #5). Defaults to the real clock. */
@@ -1261,6 +1954,7 @@ export interface CoachHomeProps {
 
 export function CoachHome({
   loadData = defaultLoadCoachHomeData,
+  loadDashboardData: loadDashboardDataProp = loadDashboardData,
   seasonId = PLACEHOLDER_SEASON_ID,
   teamId = PLACEHOLDER_CURRENT_TEAM_ID,
   nowFn = () => new Date(),
@@ -1268,7 +1962,13 @@ export function CoachHome({
   const { user } = useAuth();
   const navigate = useNavigate();
   const loadState = useLoadState(() => loadData(seasonId), [loadData, seasonId]);
+  const dashboardState = useLoadState(
+    () => loadDashboardDataProp(seasonId),
+    [loadDashboardDataProp, seasonId],
+  );
   const [stubNotice, setStubNotice] = useState<StubNotice | null>(null);
+  const [goalProjectionFilter, setGoalProjectionFilter] = useState<GoalProjectionFilter>('all');
+  const [showAllActivity, setShowAllActivity] = useState(false);
 
   const nowMs = nowFn().getTime();
 
@@ -1366,19 +2066,36 @@ export function CoachHome({
     nowMs,
   );
   const nextUp = buildNextUp(data.sessions, data.events, data.rsvps, teamId, nowMs);
-  const recentSignups = buildRecentSignups(
-    data.rsvps,
-    data.sessions,
-    data.events,
-    data.students,
-    teamId,
-    nowMs,
-  );
   const checkInSession = selectCheckInSession(data.sessions, data.events, teamId, nowMs);
   const showSeasonSetupCard =
     user.role === 'admin' && isSeasonMissingSetup(data.teams, data.seasonSetupStatus);
 
   const hoursPercent = hoursVsGoalPercent(confirmedHours, goalHours);
+
+  // T124 (module doc #13) -- the new season-wide analytics have their OWN
+  // independent DES-12 load state (`dashboardState`), scoped to just the
+  // sections built from it, so a slow/failed dashboard-analytics fetch
+  // never blocks the rest of an already-successfully-loaded page (UXD-05(b)
+  // spirit: a section with no data yet yields its own space, not the whole
+  // viewport).
+  const dashboardData: DashboardData | null =
+    dashboardState.status === 'success' ? dashboardState.data : null;
+  const busiestDay = dashboardData ? pickBusiestDay(dashboardData.dayOfWeekSessions) : null;
+  const sortedTeamHours = dashboardData ? sortTeamHoursDescending(dashboardData.teamHours) : [];
+  const maxTeamHours = maxOf(sortedTeamHours.map((row) => row.confirmedHours));
+  const sortedTopEvents = dashboardData ? sortEventsByHoursDescending(dashboardData.topEvents) : [];
+  const maxEventHours = maxOf(sortedTopEvents.map((row) => row.totalHours));
+  const sortedGoalProjection = dashboardData
+    ? sortGoalProjectionRows(
+        filterGoalProjectionRows(dashboardData.goalProjection, goalProjectionFilter),
+      )
+    : [];
+  const activityFeedEntries = dashboardData
+    ? buildActivityFeed(dashboardData.activityFeedSource, nowMs)
+    : [];
+  const visibleActivityFeedEntries = showAllActivity
+    ? activityFeedEntries
+    : activityFeedEntries.slice(0, ACTIVITY_FEED_DEFAULT_LIMIT);
 
   return (
     <Layout
@@ -1494,6 +2211,111 @@ export function CoachHome({
 
             <Divider />
 
+            {/* T124 secondary stat tiles (UXD-07, module doc #13). Own
+                DES-12 states, scoped to just this section (module doc's
+                own "independent load state" note above) -- a slow/failed
+                fetch here never blocks the primary KPI grid or Next up. */}
+            {dashboardState.status === 'loading' && (
+              <Grid columns={{ minWidth: 200, repeat: 'fit' }} gap={4}>
+                {[0, 1, 2, 3, 4, 5].map((card) => (
+                  <VStack key={card} gap={2} padding={4}>
+                    <Skeleton width={120} height={14} index={20 + card * 2} />
+                    <Skeleton width={60} height={20} index={21 + card * 2} />
+                  </VStack>
+                ))}
+              </Grid>
+            )}
+            {dashboardState.status === 'error' && (
+              <Banner
+                status="error"
+                title="Couldn't load dashboard analytics"
+                description="Secondary stat tiles, goal projection, hours by team, top events, and the activity feed couldn't load. Try refreshing the page."
+                endContent={<Button variant="ghost" label="Retry" onClick={dashboardState.retry} />}
+              />
+            )}
+            {dashboardData && (
+              <Grid columns={{ minWidth: 200, repeat: 'fit' }} gap={4}>
+                <KpiCard
+                  label="Avg hours / active student"
+                  value={
+                    dashboardData.rosterStats
+                      ? `${dashboardData.rosterStats.avgHoursPerActiveStudent}h`
+                      : '—'
+                  }
+                  secondary={
+                    <Text type="supporting" color="secondary">
+                      Default goal {data.defaultGoalHours}h
+                    </Text>
+                  }
+                />
+                <KpiCard
+                  label="Students at goal"
+                  value={
+                    dashboardData.rosterStats
+                      ? String(dashboardData.rosterStats.studentsAtGoalCount)
+                      : '—'
+                  }
+                  secondary={
+                    <Text type="supporting" color="secondary">
+                      {dashboardData.rosterStats
+                        ? `of ${dashboardData.rosterStats.activeStudentCount} active`
+                        : 'No active roster yet'}
+                    </Text>
+                  }
+                />
+                <KpiCard
+                  label="Session days logged"
+                  value={
+                    dashboardData.sessionDays
+                      ? String(dashboardData.sessionDays.sessionDaysLogged)
+                      : '—'
+                  }
+                  secondary={
+                    <Text type="supporting" color="secondary">
+                      Completed only
+                    </Text>
+                  }
+                />
+                <KpiCard
+                  label="Attendance rate"
+                  value={
+                    dashboardData.attendanceRate
+                      ? `${dashboardData.attendanceRate.attendanceRatePct}%`
+                      : '—'
+                  }
+                  secondary={
+                    <Text type="supporting" color="secondary">
+                      Of active roster per session
+                    </Text>
+                  }
+                />
+                <KpiCard
+                  label="Upcoming commitment"
+                  value={
+                    dashboardData.upcomingCommittedHours
+                      ? `${dashboardData.upcomingCommittedHours.committedHours30d}h`
+                      : '0h'
+                  }
+                  secondary={
+                    <Text type="supporting" color="secondary">
+                      Planned in next 30 days
+                    </Text>
+                  }
+                />
+                <KpiCard
+                  label="Busiest day"
+                  value={busiestDay ? formatDayOfWeekLabel(busiestDay.dayOfWeek) : '—'}
+                  secondary={
+                    <Text type="supporting" color="secondary">
+                      By offered sessions
+                    </Text>
+                  }
+                />
+              </Grid>
+            )}
+
+            <Divider />
+
             <VStack gap={3}>
               <Heading level={2}>Next up</Heading>
               {nextUp.length === 0 ? (
@@ -1513,18 +2335,118 @@ export function CoachHome({
 
             <Divider />
 
+            {/* T124 activity feed (UXP-10, module doc #13(d)) -- replaces
+                the old team-scoped "Recent signups" section. Signup/drop/
+                checked-off entries with Self origin labels, "Show all". */}
             <VStack gap={3}>
-              <Heading level={2}>Recent signups</Heading>
-              {recentSignups.length === 0 ? (
+              <Heading level={2}>Activity feed</Heading>
+              {dashboardData === null ? (
                 <EmptyState
                   headingLevel={3}
-                  title="No recent signups"
-                  description="RSVP changes for upcoming outreach events will show up here."
+                  title="No activity yet"
+                  description="Signups, drops, and check-offs will show up here."
+                />
+              ) : visibleActivityFeedEntries.length === 0 ? (
+                <EmptyState
+                  headingLevel={3}
+                  title="No activity yet"
+                  description="Signups, drops, and check-offs will show up here."
                 />
               ) : (
-                <List hasDividers header="Recent signups">
-                  {recentSignups.map((entry) => (
-                    <ListItem key={entry.rsvpId} label={entry.message} />
+                <>
+                  <List hasDividers header="Activity feed">
+                    {visibleActivityFeedEntries.map((entry) => (
+                      <ActivityFeedRowItem key={entry.id} entry={entry} />
+                    ))}
+                  </List>
+                  {!showAllActivity && activityFeedEntries.length > ACTIVITY_FEED_DEFAULT_LIMIT && (
+                    <Button
+                      label="Show all"
+                      variant="ghost"
+                      onClick={() => setShowAllActivity(true)}
+                    />
+                  )}
+                </>
+              )}
+            </VStack>
+
+            <Divider />
+
+            {/* T124 hours by team (UXP-06, module doc #13). Consumes T116's
+                `v_team_hours` unmodified -- season-wide, every team. */}
+            <VStack gap={3}>
+              <Heading level={2}>Hours by team</Heading>
+              {sortedTeamHours.length === 0 ? (
+                <EmptyState
+                  headingLevel={3}
+                  title="No team hours yet"
+                  description="Confirmed hours will appear here once attendance is recorded this season."
+                />
+              ) : (
+                <List hasDividers header="Hours by team">
+                  {sortedTeamHours.map((entry) => (
+                    <TeamHoursRowItem key={entry.teamId} entry={entry} maxHours={maxTeamHours} />
+                  ))}
+                </List>
+              )}
+            </VStack>
+
+            <Divider />
+
+            {/* T124 per-student goal projection (UXD-07, module doc #13).
+                Motivation-ethics BLOCKER-class: annotations state facts,
+                the Below-goal filter is coach-facing triage, never a
+                ranking/shame framing (Trap #2). */}
+            <VStack gap={3}>
+              <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
+                <Heading level={2}>Goal projection · confirmed + planned</Heading>
+                <SegmentedControl
+                  label="Goal projection filter"
+                  value={goalProjectionFilter}
+                  onChange={(value) => setGoalProjectionFilter(value as GoalProjectionFilter)}
+                >
+                  <SegmentedControlItem value="all" label="All" />
+                  <SegmentedControlItem value="belowGoal" label="Below goal" />
+                </SegmentedControl>
+              </HStack>
+              {sortedGoalProjection.length === 0 ? (
+                <EmptyState
+                  headingLevel={3}
+                  title={
+                    goalProjectionFilter === 'belowGoal'
+                      ? 'No one is below goal'
+                      : 'No projection yet'
+                  }
+                  description={
+                    goalProjectionFilter === 'belowGoal'
+                      ? 'Every active student is projected to reach their season goal.'
+                      : 'Confirmed and planned hours will appear here once recorded this season.'
+                  }
+                />
+              ) : (
+                <List hasDividers header="Goal projection">
+                  {sortedGoalProjection.map((row) => (
+                    <GoalProjectionRowItem key={row.studentId} row={row} />
+                  ))}
+                </List>
+              )}
+            </VStack>
+
+            <Divider />
+
+            {/* T124 top events by student hours (UXP-06, module doc #13). */}
+            <VStack gap={3}>
+              <Heading level={2}>Top events by student hours</Heading>
+              {sortedTopEvents.length === 0 ? (
+                <EmptyState
+                  headingLevel={3}
+                  title="No events with hours yet"
+                  description="Events that award volunteer hours will show up here once attendance is recorded."
+                />
+              ) : (
+                <List hasDividers header="Top events by student hours">
+                  {sortedTopEvents.map((entry) => (
+                    <TopEventRowItem key={entry.eventId} entry={entry} maxHours={maxEventHours} />
                   ))}
                 </List>
               )}

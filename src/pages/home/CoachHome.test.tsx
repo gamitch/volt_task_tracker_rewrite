@@ -24,27 +24,43 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthUser } from '../../app/guards';
 import { LoginAs } from '../../test-utils/authHarness';
+import type { ActivityFeedSource, FeedRsvpRow } from '../../lib/supabase/loaders/dashboard';
 import {
+  ACTIVITY_FEED_DEFAULT_LIMIT,
   attendanceRatePercent,
+  buildActivityFeed,
   buildLastCompletedMeetingSummary,
   buildNextUp,
-  buildRecentSignups,
   CoachHome,
   countUpcomingSessionsInNextDays,
   crossedMilestones,
   defaultLoadCoachHomeData,
+  defaultLoadDashboardData,
+  filterGoalProjectionRows,
   FIXTURE_REFERENCE_NOW,
+  formatDayOfWeekLabel,
+  formatGoalProjectionAnnotation,
   formatRelativeTime,
+  formatSessionDateLabel,
+  goalProjectionPercent,
+  goalProjectionShortHours,
   hasMilestoneToastFired,
   hoursVsGoalPercent,
   isEventInTeamScope,
   isSeasonMissingSetup,
+  isSelfOriginated,
   isSessionCheckInEligible,
   markMilestoneToastFired,
+  maxOf,
+  pickBusiestDay,
   PLACEHOLDER_CURRENT_TEAM_ID,
   selectCheckInSession,
+  sortEventsByHoursDescending,
+  sortGoalProjectionRows,
+  sortTeamHoursDescending,
   sumConfirmedHours,
   sumGoalHours,
+  wasRsvpChanged,
   type CoachHomeData,
   type HomeEventRow,
   type HomeRsvpRow,
@@ -502,140 +518,384 @@ describe('formatRelativeTime', () => {
   });
 });
 
-describe('buildRecentSignups (PRD literal copy format: name + verb + title + relative time)', () => {
-  const teamId = 'team-a';
-  const students: HomeStudentRow[] = [
-    { id: 'ada', displayName: 'Ada Lovelace', teamId, isActive: true, goalHoursOverride: null },
-  ];
-  const events: HomeEventRow[] = [
-    { id: 'e-outreach', seasonId: 's1', type: 'outreach', title: 'STEM Fair', teamIds: [teamId] },
-    { id: 'e-meeting', seasonId: 's1', type: 'meeting', title: 'Weekly Build', teamIds: [teamId] },
-    {
-      id: 'e-outreach-other-team',
-      seasonId: 's1',
-      type: 'outreach',
-      title: 'Other Team Drive',
-      teamIds: ['team-b'],
-    },
-  ];
+// ---------------------------------------------------------------------------
+// T124: activity feed (UXP-10) -- self-vs-staff, dropped-vs-declined,
+// present/late-only "checked off", sorted newest-first.
+// ---------------------------------------------------------------------------
 
-  it('matches the PRD worked example format exactly for a "going" RSVP', () => {
-    const sessions: HomeSessionRow[] = [
+describe('isSelfOriginated', () => {
+  it('true only when both ids are real and equal', () => {
+    expect(isSelfOriginated('profile-a', 'profile-a')).toBe(true);
+  });
+  it('false when the ids differ (staff-entered)', () => {
+    expect(isSelfOriginated('profile-coach', 'profile-a')).toBe(false);
+  });
+  it('false when the student has no linked account (profileId null)', () => {
+    expect(isSelfOriginated('profile-coach', null)).toBe(false);
+  });
+  it('false when the actor id itself is null', () => {
+    expect(isSelfOriginated(null, 'profile-a')).toBe(false);
+  });
+});
+
+describe('wasRsvpChanged', () => {
+  function rsvp(createdAt: string, updatedAt: string): FeedRsvpRow {
+    return {
+      id: 'r1',
+      sessionId: 's1',
+      studentId: 'st1',
+      status: 'declined',
+      respondedBy: null,
+      createdAt,
+      updatedAt,
+    };
+  }
+  it('false when created/updated are the same instant (first-ever response)', () => {
+    expect(wasRsvpChanged(rsvp('2026-07-01T00:00:00.000Z', '2026-07-01T00:00:00.000Z'))).toBe(
+      false,
+    );
+  });
+  it('false within the clock-skew epsilon (sub-2s gap from a real INSERT)', () => {
+    expect(wasRsvpChanged(rsvp('2026-07-01T00:00:00.000Z', '2026-07-01T00:00:01.500Z'))).toBe(
+      false,
+    );
+  });
+  it('true when updated is measurably later than created (a real change)', () => {
+    expect(wasRsvpChanged(rsvp('2026-07-01T00:00:00.000Z', '2026-07-10T00:00:00.000Z'))).toBe(true);
+  });
+});
+
+describe('formatSessionDateLabel', () => {
+  it('formats a plain date-only string as weekday + month + day, UTC-pinned', () => {
+    expect(formatSessionDateLabel('2026-03-07')).toBe('Sat, Mar 7');
+  });
+});
+
+describe('buildActivityFeed', () => {
+  const source: ActivityFeedSource = {
+    events: [
+      { id: 'e-outreach', seasonId: 's1', title: 'Food Bank Sort', type: 'outreach' },
+      { id: 'e-meeting', seasonId: 's1', title: 'Weekly Build', type: 'meeting' },
+    ],
+    sessions: [
       {
         id: 'sess-1',
         eventId: 'e-outreach',
-        startsAt: new Date(REF_NOW_MS + 86_400_000).toISOString(),
-        endsAt: '',
-        status: 'scheduled',
+        sessionDate: '2026-07-19',
+        startsAt: '2026-07-19T14:00:00.000Z',
       },
-    ];
-    const rsvps: HomeRsvpRow[] = [
       {
-        id: 'r1',
+        id: 'sess-2',
+        eventId: 'e-meeting',
+        sessionDate: '2026-07-15',
+        startsAt: '2026-07-15T23:00:00.000Z',
+      },
+    ],
+    rsvps: [
+      // Self, first-ever response, going -- "signed up for".
+      {
+        id: 'r-going-self',
         sessionId: 'sess-1',
         studentId: 'ada',
         status: 'going',
-        updatedAt: new Date(REF_NOW_MS - 2 * 60 * 60_000).toISOString(),
+        respondedBy: 'profile-ada',
+        createdAt: '2026-07-19T10:00:00.000Z',
+        updatedAt: '2026-07-19T10:00:00.000Z',
       },
-    ];
-    const entries = buildRecentSignups(rsvps, sessions, events, students, teamId, REF_NOW_MS);
-    expect(entries).toHaveLength(1);
-    expect(entries[0].message).toBe('Ada Lovelace signed up for STEM Fair · 2h ago');
-  });
-
-  it('excludes RSVPs on non-outreach (meeting) sessions', () => {
-    const sessions: HomeSessionRow[] = [
+      // Self, WAS going, now declined -- "dropped".
       {
-        id: 'sess-meeting',
-        eventId: 'e-meeting',
-        startsAt: new Date(REF_NOW_MS + 86_400_000).toISOString(),
-        endsAt: '',
-        status: 'scheduled',
+        id: 'r-dropped-self',
+        sessionId: 'sess-1',
+        studentId: 'bea',
+        status: 'declined',
+        respondedBy: 'profile-bea',
+        createdAt: '2026-07-01T00:00:00.000Z',
+        updatedAt: '2026-07-18T00:00:00.000Z',
       },
-    ];
-    const rsvps: HomeRsvpRow[] = [
+      // First-ever response was already declined -- "declined", not "dropped".
       {
-        id: 'r1',
-        sessionId: 'sess-meeting',
-        studentId: 'ada',
+        id: 'r-declined-first',
+        sessionId: 'sess-1',
+        studentId: 'cole',
+        status: 'declined',
+        respondedBy: 'profile-cole',
+        createdAt: '2026-07-19T08:00:00.000Z',
+        updatedAt: '2026-07-19T08:00:00.000Z',
+      },
+      // Staff-entered (responded_by = coach, not the student's own profile).
+      {
+        id: 'r-going-staff',
+        sessionId: 'sess-2',
+        studentId: 'dee',
         status: 'going',
-        updatedAt: new Date(REF_NOW_MS).toISOString(),
+        respondedBy: 'profile-coach',
+        createdAt: '2026-07-14T00:00:00.000Z',
+        updatedAt: '2026-07-14T00:00:00.000Z',
       },
-    ];
-    expect(buildRecentSignups(rsvps, sessions, events, students, teamId, REF_NOW_MS)).toHaveLength(
-      0,
-    );
-  });
-
-  it('excludes RSVPs on non-future (completed) sessions', () => {
-    const sessions: HomeSessionRow[] = [
+      // 'maybe' -- "marked maybe for".
       {
-        id: 'sess-past',
-        eventId: 'e-outreach',
-        startsAt: new Date(REF_NOW_MS - 86_400_000).toISOString(),
-        endsAt: '',
-        status: 'completed',
-      },
-    ];
-    const rsvps: HomeRsvpRow[] = [
-      {
-        id: 'r1',
-        sessionId: 'sess-past',
+        id: 'r-maybe',
+        sessionId: 'sess-1',
         studentId: 'ada',
-        status: 'going',
-        updatedAt: new Date(REF_NOW_MS).toISOString(),
+        status: 'maybe',
+        respondedBy: 'profile-ada',
+        createdAt: '2026-07-19T11:00:00.000Z',
+        updatedAt: '2026-07-19T11:00:00.000Z',
       },
-    ];
-    expect(buildRecentSignups(rsvps, sessions, events, students, teamId, REF_NOW_MS)).toHaveLength(
-      0,
-    );
-  });
-
-  it('excludes RSVPs on out-of-team-scope outreach sessions', () => {
-    const sessions: HomeSessionRow[] = [
+    ],
+    attendance: [
+      // Self check-off -- present -- "checked off".
       {
-        id: 'sess-other-team',
-        eventId: 'e-outreach-other-team',
-        startsAt: new Date(REF_NOW_MS + 86_400_000).toISOString(),
-        endsAt: '',
-        status: 'scheduled',
-      },
-    ];
-    const rsvps: HomeRsvpRow[] = [
-      {
-        id: 'r1',
-        sessionId: 'sess-other-team',
+        id: 'a-present-self',
+        sessionId: 'sess-2',
         studentId: 'ada',
-        status: 'going',
-        updatedAt: new Date(REF_NOW_MS).toISOString(),
+        status: 'present',
+        recordedBy: 'profile-ada',
+        createdAt: '2026-07-16T00:00:00.000Z',
+        updatedAt: '2026-07-16T00:00:00.000Z',
       },
-    ];
-    expect(buildRecentSignups(rsvps, sessions, events, students, teamId, REF_NOW_MS)).toHaveLength(
-      0,
-    );
+      // Staff-recorded late -- "checked off", not self.
+      {
+        id: 'a-late-staff',
+        sessionId: 'sess-2',
+        studentId: 'bea',
+        status: 'late',
+        recordedBy: 'profile-coach',
+        createdAt: '2026-07-16T00:01:00.000Z',
+        updatedAt: '2026-07-16T00:01:00.000Z',
+      },
+      // Absent -- must NEVER appear (present/late only).
+      {
+        id: 'a-absent',
+        sessionId: 'sess-2',
+        studentId: 'cole',
+        status: 'absent',
+        recordedBy: 'profile-coach',
+        createdAt: '2026-07-16T00:02:00.000Z',
+        updatedAt: '2026-07-16T00:02:00.000Z',
+      },
+    ],
+    students: [
+      { id: 'ada', displayName: 'Ada Lovelace', profileId: 'profile-ada' },
+      { id: 'bea', displayName: 'Bea Cross', profileId: 'profile-bea' },
+      { id: 'cole', displayName: 'Cole Jennings', profileId: 'profile-cole' },
+      { id: 'dee', displayName: 'Dee Park', profileId: null },
+    ],
+  };
+
+  const entries = buildActivityFeed(source, REF_NOW_MS);
+
+  it('excludes absent attendance rows entirely (present/late only)', () => {
+    expect(entries.some((e) => e.id === 'attendance-a-absent')).toBe(false);
+    // 5 rsvps + 3 attendance rows - 1 excluded ('absent') = 7.
+    expect(entries).toHaveLength(7);
   });
 
-  it('sorts newest first and caps at the requested limit', () => {
-    const sessions: HomeSessionRow[] = [
+  it('labels a self-originated first-ever "going" RSVP as "signed up for"', () => {
+    const entry = entries.find((e) => e.id === 'rsvp-r-going-self')!;
+    expect(entry.message).toBe('Ada Lovelace signed up for Food Bank Sort');
+    expect(entry.isSelf).toBe(true);
+  });
+
+  it('labels a self RSVP that changed to declined as "dropped"', () => {
+    const entry = entries.find((e) => e.id === 'rsvp-r-dropped-self')!;
+    expect(entry.message).toBe('Bea Cross dropped Food Bank Sort');
+    expect(entry.isSelf).toBe(true);
+  });
+
+  it('labels a first-ever declined RSVP as "declined", never "dropped"', () => {
+    const entry = entries.find((e) => e.id === 'rsvp-r-declined-first')!;
+    expect(entry.message).toBe('Cole Jennings declined Food Bank Sort');
+  });
+
+  it('a staff-entered RSVP (responded_by = coach) is never self, even "going"', () => {
+    const entry = entries.find((e) => e.id === 'rsvp-r-going-staff')!;
+    expect(entry.message).toBe('Dee Park signed up for Weekly Build');
+    expect(entry.isSelf).toBe(false);
+  });
+
+  it('a student with no linked account can never be self-originated', () => {
+    const entry = entries.find((e) => e.id === 'rsvp-r-going-staff')!;
+    expect(entry.isSelf).toBe(false); // dee.profileId is null
+  });
+
+  it('"maybe" is labeled "marked maybe for"', () => {
+    const entry = entries.find((e) => e.id === 'rsvp-r-maybe')!;
+    expect(entry.message).toBe('Ada Lovelace marked maybe for Food Bank Sort');
+  });
+
+  it('present/late attendance rows are labeled "checked off", self vs. staff correctly', () => {
+    const self = entries.find((e) => e.id === 'attendance-a-present-self')!;
+    expect(self.message).toBe('Ada Lovelace checked off Weekly Build');
+    expect(self.isSelf).toBe(true);
+    const staff = entries.find((e) => e.id === 'attendance-a-late-staff')!;
+    expect(staff.message).toBe('Bea Cross checked off Weekly Build');
+    expect(staff.isSelf).toBe(false);
+  });
+
+  it('sorts newest-first by updatedAt', () => {
+    const timestamps = entries.map((e) => e.timestamp);
+    const sorted = [...timestamps].sort((a, b) => b.localeCompare(a));
+    expect(timestamps).toEqual(sorted);
+  });
+});
+
+describe('ACTIVITY_FEED_DEFAULT_LIMIT', () => {
+  it('is 10 (the show-all threshold)', () => {
+    expect(ACTIVITY_FEED_DEFAULT_LIMIT).toBe(10);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T124: secondary stat tiles / hours-by-team / top-events -- sort/slice/
+// format only, no arithmetic on already-computed view outputs.
+// ---------------------------------------------------------------------------
+
+describe('formatDayOfWeekLabel / pickBusiestDay', () => {
+  it('maps ISO day-of-week 1-7 to Mon..Sun', () => {
+    expect(formatDayOfWeekLabel(1)).toBe('Mon');
+    expect(formatDayOfWeekLabel(6)).toBe('Sat');
+    expect(formatDayOfWeekLabel(7)).toBe('Sun');
+  });
+
+  it('picks the highest session_count row', () => {
+    const rows = [
+      { seasonId: 's1', dayOfWeek: 1, sessionCount: 4 },
+      { seasonId: 's1', dayOfWeek: 6, sessionCount: 7 },
+      { seasonId: 's1', dayOfWeek: 3, sessionCount: 2 },
+    ];
+    expect(pickBusiestDay(rows)?.dayOfWeek).toBe(6);
+  });
+
+  it('returns null for an empty season (absence, not a fabricated day)', () => {
+    expect(pickBusiestDay([])).toBeNull();
+  });
+});
+
+describe('maxOf', () => {
+  it('returns the largest value, 0 for an empty list', () => {
+    expect(maxOf([3, 9, 1])).toBe(9);
+    expect(maxOf([])).toBe(0);
+  });
+});
+
+describe('sortTeamHoursDescending / sortEventsByHoursDescending', () => {
+  it('sorts teams by confirmedHours descending', () => {
+    const rows = [
+      { teamId: 't1', teamName: 'Ravens', seasonId: 's1', confirmedHours: 10 },
+      { teamId: 't2', teamName: 'Titans', seasonId: 's1', confirmedHours: 42 },
+    ];
+    expect(sortTeamHoursDescending(rows).map((r) => r.teamId)).toEqual(['t2', 't1']);
+  });
+
+  it('sorts events by totalHours descending', () => {
+    const rows = [
       {
-        id: 'sess-1',
-        eventId: 'e-outreach',
-        startsAt: new Date(REF_NOW_MS + 86_400_000).toISOString(),
-        endsAt: '',
-        status: 'scheduled',
+        eventId: 'e1',
+        seasonId: 's1',
+        title: 'A',
+        startsOn: '2026-01-01',
+        endsOn: '2026-01-01',
+        studentCount: 2,
+        totalHours: 5,
+      },
+      {
+        eventId: 'e2',
+        seasonId: 's1',
+        title: 'B',
+        startsOn: '2026-01-02',
+        endsOn: '2026-01-02',
+        studentCount: 3,
+        totalHours: 30,
       },
     ];
-    const rsvps: HomeRsvpRow[] = Array.from({ length: 12 }, (_, i) => ({
-      id: `r${i}`,
-      sessionId: 'sess-1',
-      studentId: 'ada',
-      status: 'going' as const,
-      updatedAt: new Date(REF_NOW_MS - i * 60_000).toISOString(), // r0 is newest
-    }));
-    const entries = buildRecentSignups(rsvps, sessions, events, students, teamId, REF_NOW_MS, 10);
-    expect(entries).toHaveLength(10);
-    expect(entries[0].rsvpId).toBe('r0');
-    expect(entries[9].rsvpId).toBe('r9');
+    expect(sortEventsByHoursDescending(rows).map((r) => r.eventId)).toEqual(['e2', 'e1']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T124: goal projection -- motivation-ethics BLOCKER-class fact-stating
+// annotations, Below-goal filter (coach triage, not a ranking).
+// ---------------------------------------------------------------------------
+
+describe('goalProjectionPercent / goalProjectionShortHours / formatGoalProjectionAnnotation', () => {
+  it('on-track row (>=100%) has zero short hours and reads "On track"', () => {
+    const row = {
+      studentId: 's1',
+      seasonId: 'season-1',
+      displayName: 'Tori',
+      teamId: 't1',
+      teamName: 'P3',
+      goalHours: 90,
+      confirmedHours: 64.5,
+      plannedHours: 76,
+    };
+    expect(goalProjectionPercent(row)).toBe(156.1);
+    expect(goalProjectionShortHours(row)).toBe(0);
+    expect(formatGoalProjectionAnnotation(row)).toBe('On track');
+  });
+
+  it('below-goal row states the exact remaining hours, no urgency copy', () => {
+    const row = {
+      studentId: 's2',
+      seasonId: 'season-1',
+      displayName: 'Sabreen',
+      teamId: 't1',
+      teamName: 'P3',
+      goalHours: 90,
+      confirmedHours: 0,
+      plannedHours: 72,
+    };
+    expect(goalProjectionShortHours(row)).toBe(18);
+    expect(formatGoalProjectionAnnotation(row)).toBe('18h short');
+  });
+
+  it('goalHours <= 0 guards to 0% (same idiom as hoursVsGoalPercent)', () => {
+    const row = {
+      studentId: 's3',
+      seasonId: 'season-1',
+      displayName: 'X',
+      teamId: 't1',
+      teamName: 'P3',
+      goalHours: 0,
+      confirmedHours: 5,
+      plannedHours: 5,
+    };
+    expect(goalProjectionPercent(row)).toBe(0);
+  });
+});
+
+describe('filterGoalProjectionRows / sortGoalProjectionRows', () => {
+  const rows = [
+    {
+      studentId: 'on-track',
+      seasonId: 's1',
+      displayName: 'Tori',
+      teamId: 't1',
+      teamName: 'P3',
+      goalHours: 90,
+      confirmedHours: 64.5,
+      plannedHours: 76,
+    },
+    {
+      studentId: 'below',
+      seasonId: 's1',
+      displayName: 'Sabreen',
+      teamId: 't1',
+      teamName: 'P3',
+      goalHours: 90,
+      confirmedHours: 0,
+      plannedHours: 72,
+    },
+  ];
+
+  it('"all" keeps every row; "belowGoal" keeps only students short of goal', () => {
+    expect(filterGoalProjectionRows(rows, 'all')).toHaveLength(2);
+    expect(filterGoalProjectionRows(rows, 'belowGoal').map((r) => r.studentId)).toEqual(['below']);
+  });
+
+  it('sorts by projected percent descending', () => {
+    expect(sortGoalProjectionRows(rows).map((r) => r.studentId)).toEqual(['on-track', 'below']);
   });
 });
 
@@ -783,7 +1043,7 @@ describe('<CoachHome /> DES-12 states', () => {
     expect(container.textContent).toContain("Couldn't load Home");
   });
 
-  it('populated state renders the four KPI labels, Next up, and Recent signups', async () => {
+  it('populated state renders the four primary KPI labels and Next up', async () => {
     window.localStorage.clear();
     renderAsUser(COACH_USER, { loadData: fixtureLoadData, nowFn: () => FIXTURE_REFERENCE_NOW });
     await flushMicrotasks();
@@ -801,17 +1061,162 @@ describe('<CoachHome /> DES-12 states', () => {
     expect(container.textContent).toContain('Regionals Qualifier');
     // Titans-scoped session must never appear (team-scope exclusion).
     expect(container.textContent).not.toContain('Titans Strategy Session');
+  });
+});
 
-    expect(container.textContent).toContain('Recent signups');
-    expect(container.textContent).toContain(
-      'Priya Patel marked maybe for Community Food Bank Sort · 45m ago',
+// ---------------------------------------------------------------------------
+// T124: the new season-wide dashboard sections -- own DES-12 state, secondary
+// stat tiles, activity feed (replacing "Recent signups"), hours by team,
+// goal projection, top events.
+// ---------------------------------------------------------------------------
+
+function fixtureLoadDashboardData(): ReturnType<typeof defaultLoadDashboardData> {
+  return defaultLoadDashboardData(PLACEHOLDER_SEASON_ID_FOR_TESTS);
+}
+
+describe('<CoachHome /> T124 dashboard-analytics section DES-12 states', () => {
+  it('loading state renders skeleton tiles without crashing (own independent load state)', async () => {
+    renderAsUser(COACH_USER, {
+      loadData: fixtureLoadData,
+      loadDashboardData: () => new Promise(() => {}),
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+    // The rest of the page (unaffected by the dashboard section's own
+    // pending state) still renders normally.
+    expect(container.textContent).toContain('Next up');
+  });
+
+  it('error state shows a scoped Banner, never blocking the rest of the page', async () => {
+    renderAsUser(COACH_USER, {
+      loadData: fixtureLoadData,
+      loadDashboardData: () => Promise.reject(new Error('boom')),
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+    expect(container.textContent).toContain("Couldn't load dashboard analytics");
+    // The rest of the page still rendered successfully.
+    expect(container.textContent).toContain('Next up');
+  });
+
+  it('the real default loadDashboardData (no Supabase configured in tests) fails safely -- Banner, not a crash', async () => {
+    renderAsUser(COACH_USER, { loadData: fixtureLoadData, nowFn: () => FIXTURE_REFERENCE_NOW });
+    await flushMicrotasks();
+    expect(container.textContent).toContain("Couldn't load dashboard analytics");
+  });
+});
+
+describe('<CoachHome /> T124 secondary stat tiles', () => {
+  it('renders all six tile labels and the fixture values', async () => {
+    renderAsUser(COACH_USER, {
+      loadData: fixtureLoadData,
+      loadDashboardData: fixtureLoadDashboardData,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+    expect(container.textContent).toContain('Avg hours / active student');
+    expect(container.textContent).toContain('3.7h');
+    expect(container.textContent).toContain('Students at goal');
+    expect(container.textContent).toContain('Session days logged');
+    expect(container.textContent).toContain('12');
+    expect(container.textContent).toContain('Attendance rate');
+    expect(container.textContent).toContain('70%');
+    expect(container.textContent).toContain('Upcoming commitment');
+    expect(container.textContent).toContain('19h');
+    expect(container.textContent).toContain('Busiest day');
+    expect(container.textContent).toContain('Sat'); // dayOfWeek 6, highest sessionCount
+  });
+});
+
+describe('<CoachHome /> T124 activity feed', () => {
+  it('replaces "Recent signups" -- renders Activity feed with self/staff-correct entries', async () => {
+    renderAsUser(COACH_USER, {
+      loadData: fixtureLoadData,
+      loadDashboardData: fixtureLoadDashboardData,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+    expect(container.textContent).toContain('Activity feed');
+    expect(container.textContent).not.toContain('Recent signups');
+    expect(container.textContent).toContain('Amara Webb signed up for Community Food Bank Sort');
+    expect(container.textContent).toContain('Dana Voss dropped Community Food Bank Sort');
+    // Absent attendance row must never surface as a "checked off" entry.
+    expect(container.textContent).not.toContain('Amara Webb checked off');
+    // Self badge present at least once (Dana's/Amara's self-originated rows).
+    const selfBadges = Array.from(container.querySelectorAll('*')).filter(
+      (el) => el.textContent === 'Self' && el.children.length === 0,
     );
-    expect(container.textContent).toContain(
-      'Amara Webb signed up for Community Food Bank Sort · 2h ago',
+    expect(selfBadges.length).toBeGreaterThan(0);
+  });
+});
+
+describe('<CoachHome /> T124 hours by team', () => {
+  it('renders every team, sorted by hours descending', async () => {
+    renderAsUser(COACH_USER, {
+      loadData: fixtureLoadData,
+      loadDashboardData: fixtureLoadDashboardData,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+    expect(container.textContent).toContain('Hours by team');
+    expect(container.textContent).toContain('Ravens');
+    expect(container.textContent).toContain('42h');
+    expect(container.textContent).toContain('Titans');
+    expect(container.textContent).toContain('28h');
+    const ravensIndex = container.textContent!.indexOf('Ravens');
+    const titansIndex = container.textContent!.indexOf(
+      'Titans',
+      container.textContent!.indexOf('Hours by team'),
     );
-    // Wrong type/not-future/wrong-team RSVPs must never appear.
-    expect(container.textContent).not.toContain('Cole Jennings signed up for Weekly Build Meeting');
-    expect(container.textContent).not.toContain('Nina Ortiz signed up for Titans Bake Sale');
+    expect(ravensIndex).toBeLessThan(titansIndex);
+  });
+});
+
+describe('<CoachHome /> T124 goal projection', () => {
+  it('renders the fact-stating annotation and the Below-goal filter narrows the list', async () => {
+    renderAsUser(COACH_USER, {
+      loadData: fixtureLoadData,
+      loadDashboardData: fixtureLoadDashboardData,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+    expect(container.textContent).toContain('Goal projection');
+    // "Dana Voss" alone also appears in the (unrelated) Activity feed
+    // fixture below -- the ProgressBar's own accessible label
+    // ("{name} hours vs. goal", `GoalProjectionRowItem`) is unique to a
+    // rendered goal-projection ROW, so it is the assertion target here.
+    expect(container.textContent).toContain('Dana Voss hours vs. goal');
+    expect(container.textContent).toContain('On track');
+    expect(container.textContent).toContain('Amara Webb hours vs. goal');
+    expect(container.textContent).toContain('84h short');
+
+    const belowGoalButton = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Below goal',
+    );
+    expect(belowGoalButton).toBeTruthy();
+    act(() => {
+      belowGoalButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+    // Dana (on track) drops out of the Below-goal view; Amara (below) stays.
+    expect(container.textContent).not.toContain('Dana Voss hours vs. goal');
+    expect(container.textContent).toContain('Amara Webb hours vs. goal');
+  });
+});
+
+describe('<CoachHome /> T124 top events by student hours', () => {
+  it('renders every event, sorted by hours descending', async () => {
+    renderAsUser(COACH_USER, {
+      loadData: fixtureLoadData,
+      loadDashboardData: fixtureLoadDashboardData,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+    expect(container.textContent).toContain('Top events by student hours');
+    expect(container.textContent).toContain('Summer STEM Camp');
+    expect(container.textContent).toContain('30h');
+    expect(container.textContent).toContain('Community Food Bank Sort');
+    expect(container.textContent).toContain('16h');
   });
 });
 
