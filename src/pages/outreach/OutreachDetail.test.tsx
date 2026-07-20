@@ -57,6 +57,7 @@ import {
   buildOutreachDetailUrl,
   copyTextToClipboard,
   defaultLoadOutreachDetail,
+  deriveExpectedStudentIds,
   formatChicagoWallTime,
   formatScopeLabel,
   groupSessionSignups,
@@ -64,6 +65,7 @@ import {
   resolveCreatorName,
   resolveEventRoster,
   type OutreachDetailData,
+  type OutreachDetailSession,
   type RosterStudent,
   type RsvpRow,
   type TeamOption,
@@ -72,9 +74,12 @@ import {
 // T117 (module doc above) -- partial mock so the new `<AttendancePanel>`
 // (rendered with no override props from `OutreachDetail.tsx` -- it has none
 // to give it, by design) never hits a real, unconfigured Supabase client in
-// this test environment. Pure decision functions
-// (`resolveAttendanceWriteMethod`/`resolveUnmarkAction`) are kept REAL via
-// `importOriginal` -- only the three IO functions are replaced. Same
+// this test environment. T121 item (c) fix: `resolveUnmarkAction` does not
+// exist in `../../lib/supabase/loaders/attendance.ts` (grep-confirmed --
+// that file's only exported pure decision function is
+// `resolveAttendanceWriteMethod`); the stale reference to it here has been
+// removed. Pure decision functions (`resolveAttendanceWriteMethod`) are kept
+// REAL via `importOriginal` -- only the three IO functions are replaced. Same
 // `importOriginal` partial-mock + `vi.mocked(...)` convention
 // `StudentsTab.test.tsx` already established for `invokeEdgeFunction`.
 vi.mock('../../lib/supabase/loaders/attendance', async (importOriginal) => {
@@ -701,6 +706,29 @@ describe('buildInitialOutreachEvent (Trap #5)', () => {
           notes: '',
         },
       ],
+      // T121 item (b) -- a real `going` rsvp for session-1 (student-going)
+      // and a `declined` one (student-declined, must NOT appear in
+      // `expectedStudentIds`) -- proves the new prefill derivation.
+      [
+        {
+          id: 'rsvp-1',
+          sessionId: 'session-1',
+          studentId: 'student-going',
+          status: 'going',
+          respondedBy: 'student-going',
+          updatedAt: '',
+          createdAt: '',
+        },
+        {
+          id: 'rsvp-2',
+          sessionId: 'session-1',
+          studentId: 'student-declined',
+          status: 'declined',
+          respondedBy: 'student-declined',
+          updatedAt: '',
+          createdAt: '',
+        },
+      ],
     );
     expect(initial).toMatchObject({
       id: 'event-1',
@@ -716,6 +744,8 @@ describe('buildInitialOutreachEvent (Trap #5)', () => {
         { sessionDate: '2026-08-02', startTime: '09:00', endTime: '12:00', peopleReached: null },
       ],
     });
+    // T121 item (b) -- prefilled from real `going` RSVPs only.
+    expect(initial.expectedStudentIds).toEqual(['student-going']);
   });
 
   it('collapses a non-competition type to "outreach" -- the dialog\'s own type Selector has no other option', () => {
@@ -736,8 +766,77 @@ describe('buildInitialOutreachEvent (Trap #5)', () => {
         adultVolunteerHours: 0,
       },
       [],
+      [],
     );
     expect(initial.type).toBe('competition');
+    expect(initial.expectedStudentIds).toEqual([]);
+  });
+});
+
+describe('deriveExpectedStudentIds (T121 item (b))', () => {
+  it('returns distinct student ids with a going RSVP on any of the given sessions, never declined/maybe', () => {
+    const sessions: OutreachDetailSession[] = [
+      {
+        id: 'session-1',
+        eventId: 'event-1',
+        sessionDate: '2026-08-02',
+        startsAt: '2026-08-02T14:00:00.000Z',
+        endsAt: '2026-08-02T17:00:00.000Z',
+        status: 'scheduled',
+        peopleReached: null,
+        notes: '',
+      },
+      {
+        id: 'session-2',
+        eventId: 'event-1',
+        sessionDate: '2026-08-09',
+        startsAt: '2026-08-09T14:00:00.000Z',
+        endsAt: '2026-08-09T17:00:00.000Z',
+        status: 'scheduled',
+        peopleReached: null,
+        notes: '',
+      },
+    ];
+    const rsvps: RsvpRow[] = [
+      {
+        id: 'r1',
+        sessionId: 'session-1',
+        studentId: 'stu-a',
+        status: 'going',
+        respondedBy: 'stu-a',
+        updatedAt: '',
+        createdAt: '',
+      },
+      {
+        id: 'r2',
+        sessionId: 'session-2',
+        studentId: 'stu-a',
+        status: 'going',
+        respondedBy: 'stu-a',
+        updatedAt: '',
+        createdAt: '',
+      },
+      {
+        id: 'r3',
+        sessionId: 'session-1',
+        studentId: 'stu-b',
+        status: 'maybe',
+        respondedBy: 'stu-b',
+        updatedAt: '',
+        createdAt: '',
+      },
+      {
+        id: 'r4',
+        sessionId: 'session-2',
+        studentId: 'stu-c',
+        status: 'declined',
+        respondedBy: 'stu-c',
+        updatedAt: '',
+        createdAt: '',
+      },
+    ];
+    // stu-a appears once (deduped across two sessions); stu-b/stu-c excluded.
+    expect(deriveExpectedStudentIds(sessions, rsvps)).toEqual(['stu-a']);
   });
 });
 

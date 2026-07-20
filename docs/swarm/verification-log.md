@@ -4520,3 +4520,49 @@ route-persistence test.
   `starts_at >= now()` guard in a future cleanup; (NIT, repo-wide)
   react-refresh lint warnings could be silenced by splitting pure
   helpers into sibling modules.
+
+## T121 — UXP-04 outreach: dense rows + expand-in-place + T118 wiring follow-ups
+- Date: 2026-07-20
+- Worker: worker-implementer (attempts: 2)
+- Checker: checker-reviewer (same checker both passes)
+- Verdict: **PASS on attempt 2** (NIT). Attempt 1 **FAILED (MAJOR)**.
+- Attempt-1 MAJOR: past-bucket "Attended" stat was `distinctGoingStudentIds`
+  over completed sessions — RSVP intent rendered under the label "Attended";
+  the `attendance` table was never queried, despite the packet trap
+  explicitly requiring attendance counts. The worker's own test codified
+  the wrong semantics. Undisclosed deviation → FAIL; architect chose the
+  honest-data fix (real attendance query), not a relabel.
+- Rework verified with fresh diffs:
+  - One batched `queryAttendanceForSessions` (`.in('session_id', ids)`,
+    `session_id/student_id/status`), parallel with the rsvps query via
+    Promise.all — no fan-out, seasonId (T106) intact.
+  - `distinctAttendedStudentIds` counts present/late only; citation
+    checked against `metric_views.sql` line 18 (`where a.status in
+    ('present','late')`) — matches verbatim. Raw distinct-student tally,
+    not the view's hours expression → constitution item 3 holds.
+  - End-to-end threading verified: loader → CoachOutreachView →
+    CoachOutreachSection → CoachOutreachEventRow → computeEventRowStats;
+    rendered "Attended" is attendance-sourced. Upcoming "Expected"
+    (RSVP intent) correctly unchanged.
+  - Tests non-tautological: 5-going/3-attended divergence (walk-in
+    counted, explicit absent excluded, no-row excluded) asserts 3 NOT 5;
+    zero-RSVP `session-canned-drive` fixture renders "Attended 2
+    students" through the full coach view; loader test pins exactly one
+    attendance query; old intent-as-attended assertion gone.
+- NITs from attempt 1 both fixed and verified: module doc no longer
+  claims `ListItem.label` is string-only (installed .d.ts says
+  ReactNode; badge-in-description reframed as a design choice); roster
+  failure path now `RosterLoadState` union → dialog gets a real `[]`
+  (DEFAULT_STUDENTS fixture unreachable), page-side "Couldn't load the
+  student roster" Banner with working Retry; `OutreachEventDialog.tsx`
+  re-verified byte-unchanged.
+- First-pass verified items not regressed: D-7 author-agnostic plan
+  logic untouched (grep-clean diff), UXD-05 single-heading/zero-
+  progressbar fix intact, edit-mode `expectedStudentIds` prefill intact,
+  OutreachDetail diffstats unchanged from attempt 1.
+- Gates (checker-run): tsc 0; eslint 0 errors (339 warnings — +1, see
+  NIT); vitest 1333/1333 (+4 net new); build 0; prettier clean on all
+  five files.
+- Follow-ups: (NIT) remove the now-unused eslint-disable directive at
+  `OutreachList.tsx:1117` (auto-fixable) to return the warning count to
+  the 338 baseline.

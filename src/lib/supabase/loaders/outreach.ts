@@ -333,6 +333,7 @@ import { createLoader, runMutation, type LoaderQueryResult } from '../loader';
 import { getSupabaseClient } from '../client';
 import type {
   LoadOutreachDataFn,
+  OutreachAttendanceRow,
   OutreachEventRow,
   OutreachGoalConfig,
   OutreachLoadResult,
@@ -403,6 +404,24 @@ interface RsvpDbRow {
   created_at: string;
 }
 
+/**
+ * CHECKER FIX (rework of T121, MAJOR) -- real `public.attendance` row shape,
+ * cited directly from `supabase/migrations/20260717000000_scheduling_
+ * attendance.sql` lines 82-95: `status text not null check (status in
+ * ('present', 'late', 'excused', 'absent'))`. Only the three columns
+ * `OutreachList.tsx`'s own row-level "Attended" stat needs -- this loader
+ * does not need `check_in_at`/`check_out_at`/`hours_override`/`method`/
+ * `recorded_by` for that purpose (unlike `loaders/attendance.ts`'s own
+ * `AttendanceDbRow`, a forbidden/read-only file for this task, which needs
+ * the full row shape for its own edit/write surfaces -- this is a narrower,
+ * independent read-only mapper for a different consumer).
+ */
+interface AttendanceDbRow {
+  session_id: string;
+  student_id: string;
+  status: 'present' | 'late' | 'excused' | 'absent';
+}
+
 interface StudentDbRow {
   id: string;
   display_name: string;
@@ -452,13 +471,35 @@ interface EventVolunteerTotalsDbRow {
 // `OutreachList.tsx`/`OutreachDetail.tsx` already expect.
 // ---------------------------------------------------------------------------
 
+/**
+ * T121 (UXP-04 outreach half / UXD-02 row density + prefill support): grows
+ * to map the FULL already-fetched `EventDbRow` (this file's own
+ * `queryEventsBySeason` already selects every one of these columns -- no new
+ * query, no new fan-out) into `OutreachList.tsx`'s own `OutreachEventRow`,
+ * which itself grew the matching new fields (component module doc, this
+ * task). Two real, disclosed uses: (a) UXD-02 dense rows surface
+ * `locationName`/`address` (the packet's own "LOCATION -- already real
+ * columns -- surface them" instruction); (b) `OutreachList.tsx`'s own new
+ * inline "Edit" action (opening `OutreachEventDialog` in edit mode straight
+ * from a list row, without navigating to `OutreachDetail.tsx` first) needs
+ * every field `ExistingOutreachEvent` requires to prefill honestly, and this
+ * mapper is the ONE place that data is available server-side without a
+ * second query.
+ */
 function mapEventDbRowToOutreachEventRow(row: EventDbRow): OutreachEventRow {
   return {
     id: row.id,
     seasonId: row.season_id,
     type: row.type,
     title: row.title,
+    description: row.description,
     locationName: row.location_name,
+    address: row.address,
+    teamIds: row.team_ids,
+    countsParticipation: row.counts_participation,
+    countsVolunteerHours: row.counts_volunteer_hours,
+    adultVolunteersCount: row.adult_volunteers_count,
+    adultVolunteerHours: row.adult_volunteer_hours,
   };
 }
 
@@ -483,6 +524,17 @@ function mapRsvpDbRowToListRsvpRow(row: RsvpDbRow): ListRsvpRow {
     respondedBy: row.responded_by,
     updatedAt: row.updated_at,
     createdAt: row.created_at,
+  };
+}
+
+/** CHECKER FIX (rework of T121, MAJOR) -- real `attendance` row -> the
+ * narrow `OutreachAttendanceRow` shape `OutreachList.tsx`'s own
+ * `distinctAttendedStudentIds` consumes. */
+function mapAttendanceDbRowToOutreachAttendanceRow(row: AttendanceDbRow): OutreachAttendanceRow {
+  return {
+    sessionId: row.session_id,
+    studentId: row.student_id,
+    status: row.status,
   };
 }
 
@@ -610,6 +662,24 @@ async function queryRsvpsForSessions(
   return { data: (result.data as RsvpDbRow[] | null) ?? null, error: result.error };
 }
 
+/**
+ * CHECKER FIX (rework of T121, MAJOR) -- ONE real, batched `attendance`
+ * query, `.in('session_id', ...)` against every session id already in
+ * hand -- the SAME shape `queryRsvpsForSessions` immediately above already
+ * established for this exact "join every child row for a set of session
+ * ids in one round trip" pattern. No N-per-event fan-out.
+ */
+async function queryAttendanceForSessions(
+  client: SupabaseClient,
+  sessionIds: readonly string[],
+): Promise<LoaderQueryResult<AttendanceDbRow[]>> {
+  const result = await client
+    .from('attendance')
+    .select('session_id, student_id, status')
+    .in('session_id', [...sessionIds]);
+  return { data: (result.data as AttendanceDbRow[] | null) ?? null, error: result.error };
+}
+
 async function queryAllStudents(
   client: SupabaseClient,
 ): Promise<LoaderQueryResult<StudentDbRow[]>> {
@@ -720,6 +790,15 @@ export function makeLoadOutreachData(
     getClient,
   );
   const loadRsvps = createLoader<readonly string[], RsvpDbRow[]>(queryRsvpsForSessions, getClient);
+  // CHECKER FIX (rework of T121, MAJOR) -- ONE more batched loader, same
+  // `.in('session_id', ...)` shape `loadRsvps` immediately above already
+  // uses; fetched in parallel with it below (both depend only on
+  // `sessionIds`, already resolved by that point) -- no new round trip
+  // beyond this single additional query.
+  const loadAttendance = createLoader<readonly string[], AttendanceDbRow[]>(
+    queryAttendanceForSessions,
+    getClient,
+  );
   const loadStudents = createLoader<void, StudentDbRow[]>(queryAllStudents, getClient);
   const loadSeasonGoal = createLoader<string, SeasonGoalDbRow>(querySeasonGoal, getClient);
 
@@ -733,7 +812,10 @@ export function makeLoadOutreachData(
       loadSeasonGoal(seasonId),
     ]);
     const sessionIds = (sessionRows ?? []).map((session) => session.id);
-    const rsvpRows = sessionIds.length > 0 ? ((await loadRsvps(sessionIds)) ?? []) : [];
+    const [rsvpRows, attendanceRows] =
+      sessionIds.length > 0
+        ? await Promise.all([loadRsvps(sessionIds), loadAttendance(sessionIds)])
+        : [[], []];
 
     const students = studentRows ?? [];
     const goalConfig: OutreachGoalConfig = {
@@ -744,7 +826,8 @@ export function makeLoadOutreachData(
     return {
       events: eventRows.map(mapEventDbRowToOutreachEventRow),
       sessions: (sessionRows ?? []).map(mapSessionDbRowToOutreachSessionRow),
-      rsvps: rsvpRows.map(mapRsvpDbRowToListRsvpRow),
+      rsvps: (rsvpRows ?? []).map(mapRsvpDbRowToListRsvpRow),
+      attendance: (attendanceRows ?? []).map(mapAttendanceDbRowToOutreachAttendanceRow),
       students: students.map(mapStudentDbRowToOutreachStudentFixture),
       goalConfig,
     };

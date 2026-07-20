@@ -344,12 +344,15 @@ import { useAuth } from '../../app/guards';
 import {
   cancelOutreachEvent,
   loadOutreachDetail,
+  loadOutreachEventRoster,
   saveOutreachEvent,
+  type LoadOutreachEventRosterFn,
 } from '../../lib/supabase/loaders/outreach';
 import {
   OutreachEventDialog,
   type ExistingOutreachEvent,
   type OnSaveOutreachEventFn,
+  type OutreachRosterStudent,
 } from './OutreachEventDialog';
 // T117 (PRD v2 UXP-01): the new coach-managed attendance panel -- module
 // doc #11.
@@ -816,13 +819,43 @@ export function formatChicagoWallTime(isoDateTime: string): string {
   return `${hour}:${minute}`;
 }
 
+/**
+ * T121 item (b) (UXP-04 outreach half) -- distinct student ids with an
+ * existing `status='going'` RSVP on ANY of the given sessions. The ONE
+ * place this page derives the "Expected attendees" checklist prefill from
+ * real RSVP rows it already loads (this page's own `rsvps`, already fetched
+ * by `loadOutreachDetail` -- no new query). Not scoped to still-`scheduled`
+ * sessions only -- the packet's own wording is "the event's existing
+ * 'going' RSVPs", unqualified by session status, matching
+ * `OutreachList.tsx`'s own identical `deriveExpectedStudentIds` (that
+ * file's own Allowed Files, independently reimplemented here per this
+ * module's own "not imported across `OutreachList.tsx`/`OutreachDetail.tsx`"
+ * convention, module doc #1).
+ */
+export function deriveExpectedStudentIds(
+  sessions: readonly OutreachDetailSession[],
+  rsvps: readonly RsvpRow[],
+): string[] {
+  const sessionIds = new Set(sessions.map((session) => session.id));
+  const ids = new Set<string>();
+  for (const rsvp of rsvps) {
+    if (rsvp.status === 'going' && sessionIds.has(rsvp.sessionId)) ids.add(rsvp.studentId);
+  }
+  return [...ids];
+}
+
 /** T101 (module doc #10, Trap #5) -- the ONE place a real fetched
  * `OutreachDetailEvent`/`OutreachDetailSession[]` pair is reshaped into
  * `OutreachEventDialog.tsx`'s own real `ExistingOutreachEvent` edit-mode
- * shape. */
+ * shape. T121 item (b) UPDATE: now also takes this event's own `rsvps` so
+ * `expectedStudentIds` can be prefilled from real data instead of being left
+ * `undefined` (which the dialog treats as "prefill an empty checklist" --
+ * honest for a brand-new event, but wrong for an event students have
+ * already RSVP'd to). */
 export function buildInitialOutreachEvent(
   event: OutreachDetailEvent,
   sessions: readonly OutreachDetailSession[],
+  rsvps: readonly RsvpRow[],
 ): ExistingOutreachEvent {
   return {
     id: event.id,
@@ -854,6 +887,7 @@ export function buildInitialOutreachEvent(
       endTime: formatChicagoWallTime(session.endsAt),
       peopleReached: session.peopleReached,
     })),
+    expectedStudentIds: deriveExpectedStudentIds(sessions, rsvps),
   };
 }
 
@@ -994,6 +1028,12 @@ export interface OutreachDetailProps {
   /** T101 (module doc #10, Trap #4). Defaults to a real, event-level
    * `event_sessions.status = 'canceled'` mutation. */
   onCancelEvent?: (eventId: string) => Promise<void>;
+  /** T121 item (a) (UXP-04 outreach half) -- real roster loader default
+   * (T118's `loadOutreachEventRoster`, previously built/tested but
+   * unconsumed by any page), wired into this page's own edit-mode
+   * `OutreachEventDialog` `students` prop, replacing that dialog's own
+   * `DEFAULT_STUDENTS` fixture fallback. */
+  loadRoster?: LoadOutreachEventRosterFn;
 }
 
 export function OutreachDetail({
@@ -1001,6 +1041,7 @@ export function OutreachDetail({
   loadData = loadOutreachDetail,
   onSaveEvent = saveOutreachEvent,
   onCancelEvent = cancelOutreachEvent,
+  loadRoster = loadOutreachEventRoster,
 }: OutreachDetailProps = {}): ReactNode {
   const { eventId: routeEventId } = useParams<{ eventId: string }>();
   const eventId = eventIdProp ?? routeEventId ?? '';
@@ -1024,12 +1065,40 @@ export function OutreachDetail({
   const [isEventDialogOpen, setIsEventDialogOpen] = useState(false);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackBanner | null>(null);
+  // T121 item (a) -- best-effort roster fetch for the edit-mode dialog's
+  // "Expected attendees" checklist. Deliberately named `eventDialogRoster`,
+  // NOT `roster` -- this component's own pre-existing `roster` local
+  // (module doc #3's `resolveEventRoster(event, students)`, further below)
+  // is a DIFFERENT, team-scoped `RosterStudent[]` shape used for the
+  // Going/Maybe/Can't-go/No-response signup buckets and `AttendancePanel`;
+  // this is `OutreachEventDialog`'s own unrelated `OutreachRosterStudent[]`
+  // checklist shape (T118). A rejection (e.g. Supabase isn't configured in
+  // this environment/test) leaves `eventDialogRoster` at its initial
+  // `undefined`, so `OutreachEventDialog` falls back to its own
+  // `DEFAULT_STUDENTS` fixture -- never a broken edit flow.
+  const [eventDialogRoster, setEventDialogRoster] = useState<
+    readonly OutreachRosterStudent[] | undefined
+  >(undefined);
 
   useEffect(() => {
     if (loadState.status === 'success') {
       setData(loadState.data);
     }
   }, [loadState]);
+
+  useEffect(() => {
+    let isMounted = true;
+    loadRoster()
+      .then((rosterData) => {
+        if (isMounted) setEventDialogRoster(rosterData);
+      })
+      .catch(() => {
+        // Disclosed soft-fail -- see the `eventDialogRoster` state doc above.
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [loadRoster]);
 
   async function reloadDetail(): Promise<void> {
     const fresh = await loadData(eventId);
@@ -1280,15 +1349,19 @@ export function OutreachDetail({
           already Passed, already built, genuinely supports edit mode) wired
           into this page for the first time, in EDIT mode
           (`initialEvent` pre-fills every field from the real fetched
-          event/sessions -- `buildInitialOutreachEvent`). `teams`
+          event/sessions/rsvps -- `buildInitialOutreachEvent`, T121 item (b)
+          UPDATE: now also prefills `expectedStudentIds`). `teams`
           deliberately NOT overridden, same "still fixture-backed" posture
           `OutreachList.tsx`'s own T101 wiring already established for the
-          identical reason. */}
+          identical reason. T121 item (a): `students`/`currentUserProfileId`
+          now wired to the real roster loader / signed-in coach id. */}
       <OutreachEventDialog
         isOpen={isEventDialogOpen}
         onOpenChange={setIsEventDialogOpen}
         onSaveEvent={handleSaveEventSubmit}
-        initialEvent={buildInitialOutreachEvent(event, sessions)}
+        initialEvent={buildInitialOutreachEvent(event, sessions, rsvps)}
+        students={eventDialogRoster}
+        currentUserProfileId={user?.id}
       />
     </VStack>
   );

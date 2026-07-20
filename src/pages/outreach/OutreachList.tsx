@@ -64,6 +64,23 @@
  * outreach days -- out of this list page's scope, not re-derived here).
  * Session duration (`sessionHours`) is `ends_at - starts_at` in hours.
  *
+ * SUPERSEDED BY T121 (UXP-04 outreach half / UXD-05 item (d)): the
+ * paragraph below is KEPT AS THE ORIGINAL RECORD of the T038-era rendering
+ * decision (repo convention, see `TeamsTab.tsx`/`ParentsTab.tsx`'s own
+ * "SUPERSEDED BY" notes for precedent) -- it no longer describes this
+ * file's actual rendering. `GoalProgressBar` (below) no longer renders any
+ * `ProgressBar` at all: George live-reported the resulting TWO stacked bars
+ * (one per paragraph below) as a literal instance of Astryx's own "Don't:
+ * Use multiple progress bars stacked together for the same operation" rule,
+ * layered under a THIRD/FOURTH redundant "Team season goal" text repetition
+ * -- exactly UXD-05's own named anti-example. `GoalProgressBar`'s own
+ * updated doc comment (this file, `T121 item (d)`) has the current,
+ * accurate design: one heading + a grouped stat-tile row (confirmed/
+ * planned/goal/%-of-goal), zero `ProgressBar`s. BEH-02 (confirmed/planned
+ * never summed) is UNCHANGED by this -- still enforced exactly as this
+ * module doc's own opening paragraph (above) describes, just rendered as
+ * tiles instead of bars.
+ *
  * `ProgressBar` (astryx-api.md "ProgressBar" Props table) has no
  * multi-segment/stacked-fill prop -- confirmed directly against its own
  * Props table, which only exposes a single `value`/`max` pair per bar. So
@@ -263,14 +280,21 @@
  *     cross-checked against `docs/swarm/astryx-api.md` directly (line
  *     numbers as of this task's read):
  *
- *  - `ProgressBar` (line 5416 section, Props table): `label` (required),
- *    `value`, `max`, `variant` (`'accent'`/`'neutral'`), `hasValueLabel`,
- *    `formatValueLabel` used.
- *  - `AvatarGroup` (line 2631 section, Props table): `children`, `size`
- *    used. `AvatarGroupOverflow`'s own subsection is `undefined`;
- *    `npm run astryx -- component AvatarGroupOverflow` (run live for this
- *    task) resolves `count` (required) + `children` -- only `count` used.
- *  - `Avatar` (line 419 section, Props table): `name`, `size` used.
+ *  - T121 UPDATE: `ProgressBar`/`AvatarGroup`/`AvatarGroupOverflow`/`Avatar`
+ *    are NO LONGER imported or rendered anywhere in this file (module doc
+ *    #3's own "SUPERSEDED BY T121" note has the full reasoning for
+ *    `ProgressBar`'s removal; the `AvatarGroup`/`Avatar` pair was the
+ *    former per-session "N going" summary, replaced by the new per-EVENT
+ *    row's `Expected`/`Attended` stat tile plus the expander's own going-
+ *    student name list -- `CoachOutreachEventRow`/`CoachSessionDetail`
+ *    below). Kept here as a disclosed removal record, not silently dropped.
+ *  - T121 UPDATE: `AlertDialog` (line 2473 section, Props table): `isOpen`,
+ *    `onOpenChange`, `title`, `description`, `actionLabel`, `onAction` used
+ *    (all required except `title`/`description`, which this file always
+ *    supplies) -- the SAME citation `OutreachDetail.tsx`'s own pre-existing
+ *    "Cancel event" confirmation already established; item (c)'s new
+ *    inline row-level Cancel confirmation reuses this component, not a new
+ *    one.
  *  - `SegmentedControl` (line 5575 section, Props table): `value`
  *    (required), `onChange` (required), `label` (required) used.
  *    `SegmentedControlItem`'s own subsection is `undefined`;
@@ -483,9 +507,7 @@
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  Avatar,
-  AvatarGroup,
-  AvatarGroupOverflow,
+  AlertDialog,
   Badge,
   Banner,
   Button,
@@ -495,7 +517,6 @@ import {
   Link,
   List,
   ListItem,
-  ProgressBar,
   SegmentedControl,
   SegmentedControlItem,
   Skeleton,
@@ -520,8 +541,20 @@ import { routePaths } from '../../app/router';
 // ALREADY-BUILT, ALREADY-PASSED standalone dialog into this page for the
 // first time; nothing inside `OutreachEventDialog.tsx` itself is modified
 // (forbidden/read-only file).
-import { loadOutreachData, saveOutreachEvent } from '../../lib/supabase/loaders/outreach';
-import { OutreachEventDialog, type OnSaveOutreachEventFn } from './OutreachEventDialog';
+import {
+  cancelOutreachEvent,
+  loadOutreachData,
+  loadOutreachEventRoster,
+  saveOutreachEvent,
+  type CancelOutreachEventFn,
+  type LoadOutreachEventRosterFn,
+} from '../../lib/supabase/loaders/outreach';
+import {
+  OutreachEventDialog,
+  type ExistingOutreachEvent,
+  type OnSaveOutreachEventFn,
+  type OutreachRosterStudent,
+} from './OutreachEventDialog';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets. Module doc #1.
@@ -536,7 +569,26 @@ export interface OutreachEventRow {
   seasonId: string;
   type: EventType;
   title: string;
+  /** T121 (UXP-04 outreach half / UXD-02 dense rows + edit-mode prefill).
+   * Grown from `{id, seasonId, type, title, locationName}` -- every new
+   * field below is a real, already-fetched `events` column (module doc of
+   * `../../lib/supabase/loaders/outreach.ts`'s updated
+   * `mapEventDbRowToOutreachEventRow`), added for two real, disclosed
+   * reasons: (a) UXD-02's "where" requirement needs BOTH `locationName` AND
+   * `address` surfaced on the row, not just `locationName`; (b) this file's
+   * new inline "Edit" row action opens `OutreachEventDialog` in edit mode
+   * directly from a list row (no navigation to `OutreachDetail.tsx` first),
+   * which needs every one of `ExistingOutreachEvent`'s fields to prefill
+   * honestly (see `buildInitialOutreachEventFromRow` below). */
+  description: string;
   locationName: string;
+  address: string;
+  /** `null` = all teams (matches `events.team_ids` NULL semantics). */
+  teamIds: string[] | null;
+  countsParticipation: boolean;
+  countsVolunteerHours: boolean;
+  adultVolunteersCount: number;
+  adultVolunteerHours: number;
 }
 
 export interface OutreachSessionRow {
@@ -557,6 +609,24 @@ export interface RsvpRow {
   respondedBy: string | null;
   updatedAt: string;
   createdAt: string;
+}
+
+/**
+ * CHECKER FIX (rework of T121): real `attendance` row shape -- distinct from
+ * `RsvpRow` (RSVP is INTENT to attend, recorded before/at signup time;
+ * `attendance` is the actual, staff/QR-recorded outcome, per
+ * `supabase/migrations/20260717000000_scheduling_attendance.sql` lines
+ * 82-95: `status text not null check (status in ('present', 'late',
+ * 'excused', 'absent'))`). Only the fields this file's own row-level
+ * "Attended" stat needs (`sessionId`, `studentId`, `status`) -- never
+ * conflated with `RsvpRow`'s own `'going'|'maybe'|'declined'` vocabulary.
+ */
+export type AttendanceStatus = 'present' | 'late' | 'excused' | 'absent';
+
+export interface OutreachAttendanceRow {
+  sessionId: string;
+  studentId: string;
+  status: AttendanceStatus;
 }
 
 export interface OutreachStudentFixture {
@@ -581,6 +651,11 @@ export interface OutreachLoadResult {
   events: readonly OutreachEventRow[];
   sessions: readonly OutreachSessionRow[];
   rsvps: readonly RsvpRow[];
+  /** CHECKER FIX (rework of T121) -- real `attendance` rows, one real
+   * batched query (`loaders/outreach.ts`'s updated `makeLoadOutreachData`),
+   * the ONE source this file's row-level "Attended" stat is now computed
+   * from (never RSVP intent -- module doc on `computeEventRowStats`). */
+  attendance: readonly OutreachAttendanceRow[];
   students: readonly OutreachStudentFixture[];
   goalConfig: OutreachGoalConfig;
 }
@@ -642,21 +717,67 @@ const FIXTURE_EVENTS: readonly OutreachEventRow[] = [
     seasonId: PLACEHOLDER_SEASON_ID,
     type: 'outreach',
     title: 'Community Food Bank Sort',
+    description: 'Sorting and packing donated groceries for weekend distribution.',
     locationName: 'Riverside Food Bank',
+    address: '100 Riverside Dr',
+    teamIds: null,
+    countsParticipation: false,
+    countsVolunteerHours: true,
+    adultVolunteersCount: 2,
+    adultVolunteerHours: 6,
   },
   {
     id: 'event-park-cleanup',
     seasonId: PLACEHOLDER_SEASON_ID,
     type: 'outreach',
     title: 'Riverside Park Cleanup',
+    description: 'Litter pickup and trail maintenance along the riverside path.',
     locationName: 'Riverside Park',
+    address: '250 Parkway Ave',
+    teamIds: null,
+    countsParticipation: false,
+    countsVolunteerHours: true,
+    adultVolunteersCount: 0,
+    adultVolunteerHours: 0,
   },
   {
     id: 'event-tutoring-drive',
     seasonId: PLACEHOLDER_SEASON_ID,
     type: 'outreach',
     title: 'After-School Tutoring Drive',
+    description: 'Homework help for elementary students after school.',
     locationName: 'Lincoln Elementary',
+    address: '500 Lincoln Ave',
+    teamIds: null,
+    countsParticipation: false,
+    countsVolunteerHours: true,
+    adultVolunteersCount: 1,
+    adultVolunteerHours: 2,
+  },
+  // CHECKER FIX (rework of T121, MAJOR) -- a purely-additive event/session
+  // (no `rsvps` reference it at all) whose ONLY signal is real `attendance`
+  // rows (`FIXTURE_ATTENDANCE` below): proves "Attended" is computed from
+  // real attendance, never RSVP intent, at the full page-render level (not
+  // just a unit test) -- if this regressed back to RSVP-derived counting,
+  // this event's own row would show "Attended0 students" instead of the
+  // real "Attended2 students". Deliberately contributes ZERO `going` RSVPs
+  // (module doc's own "sum of raw counts... watch query fan-out" note is
+  // satisfied trivially -- no new query shape either way), so it cannot
+  // perturb any existing RSVP-derived hours/milestone assertion elsewhere
+  // in this file's own test suite.
+  {
+    id: 'event-canned-drive',
+    seasonId: PLACEHOLDER_SEASON_ID,
+    type: 'outreach',
+    title: 'Canned Food Drive',
+    description: 'Neighborhood canned-food collection walk (no advance signup).',
+    locationName: 'Downtown Community Center',
+    address: '77 Center St',
+    teamIds: null,
+    countsParticipation: false,
+    countsVolunteerHours: true,
+    adultVolunteersCount: 0,
+    adultVolunteerHours: 0,
   },
   // Deliberately type: 'meeting' -- proves NAV-07 filtering (module doc #2).
   // This event's own session ("Weekly Team Meeting") must NEVER appear
@@ -666,7 +787,14 @@ const FIXTURE_EVENTS: readonly OutreachEventRow[] = [
     seasonId: PLACEHOLDER_SEASON_ID,
     type: 'meeting',
     title: 'Weekly Team Meeting',
+    description: 'Weekly in-person planning meeting.',
     locationName: 'Clubhouse',
+    address: '10 Clubhouse Rd',
+    teamIds: null,
+    countsParticipation: false,
+    countsVolunteerHours: false,
+    adultVolunteersCount: 0,
+    adultVolunteerHours: 0,
   },
 ];
 
@@ -706,6 +834,19 @@ const FIXTURE_SESSIONS: readonly OutreachSessionRow[] = [
     endsAt: '2026-06-02T00:00:00.000Z', // 7:00 PM America/Chicago -- 2h, but canceled
     status: 'canceled',
     peopleReached: null,
+  },
+  // CHECKER FIX (rework of T121, MAJOR) -- `event-canned-drive`'s own
+  // session, deliberately referenced by NO `rsvps` row at all (see that
+  // event's own fixture doc above); its "Attended" figure comes entirely
+  // from `FIXTURE_ATTENDANCE` below.
+  {
+    id: 'session-canned-drive',
+    eventId: 'event-canned-drive',
+    sessionDate: '2026-06-20',
+    startsAt: '2026-06-20T21:00:00.000Z', // 4:00 PM America/Chicago (CDT)
+    endsAt: '2026-06-20T23:00:00.000Z', // 6:00 PM America/Chicago -- 2h
+    status: 'completed',
+    peopleReached: 45,
   },
   // Meeting session -- module doc #2. Must never render anywhere.
   {
@@ -823,6 +964,41 @@ const FIXTURE_RSVPS: readonly RsvpRow[] = [
     updatedAt: '2026-05-20T09:00:00.000Z',
     createdAt: '2026-05-20T09:00:00.000Z',
   },
+];
+
+/**
+ * CHECKER FIX (rework of T121, MAJOR) -- real `attendance` fixture rows,
+ * deliberately DIVERGENT from `FIXTURE_RSVPS` above so a regression back to
+ * RSVP-derived "attended" counting fails loudly (both directions):
+ *
+ * `session-food-bank-past` (completed): `FIXTURE_RSVPS` has THREE `going`
+ * rows for it (Amara, Cole, the current viewer -- rsvp-1/2/4). Real
+ * attendance for that same session is DIFFERENT on both ends:
+ *   - Amara: `present` -- matches her RSVP.
+ *   - Cole: `absent` -- he RSVP'd `going` but the real record shows he did
+ *     NOT attend (never counted).
+ *   - Priya: `present` -- she RSVP'd `declined` (rsvp-3) yet actually
+ *     walked in and attended anyway (a real, counted attendee despite never
+ *     having RSVP'd `going`).
+ *   - The viewer (rsvp-4, `going`): NO `attendance` row at all -- never
+ *     counted (a `going` RSVP alone is not attendance).
+ * Real attended count = {Amara, Priya} = 2, NOT the RSVP-`going` count of 3
+ * -- and the specific two students differ from any two of the three
+ * RSVP-`going` students, so no accidental "still just picks 2 of the same
+ * 3 names" false pass is possible.
+ *
+ * `session-canned-drive` (completed, `event-canned-drive`): referenced by
+ * ZERO `rsvps` rows at all (module doc on that event's own fixture entry).
+ * Amara (`present`) and Devon (`late`) both have real attendance despite
+ * neither ever RSVPing -- proves "Attended" can be non-zero even when
+ * RSVP-`going` is exactly zero, the strongest possible divergence proof.
+ */
+const FIXTURE_ATTENDANCE: readonly OutreachAttendanceRow[] = [
+  { sessionId: 'session-food-bank-past', studentId: 'student-amara-webb', status: 'present' },
+  { sessionId: 'session-food-bank-past', studentId: 'student-cole-jennings', status: 'absent' },
+  { sessionId: 'session-food-bank-past', studentId: 'student-priya-patel', status: 'present' },
+  { sessionId: 'session-canned-drive', studentId: 'student-amara-webb', status: 'present' },
+  { sessionId: 'session-canned-drive', studentId: 'student-devon-marsh', status: 'late' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -1001,6 +1177,7 @@ export async function defaultLoadOutreachData(seasonId: string): Promise<Outreac
     events: FIXTURE_EVENTS.filter((event) => event.seasonId === seasonId),
     sessions: FIXTURE_SESSIONS,
     rsvps: FIXTURE_RSVPS,
+    attendance: FIXTURE_ATTENDANCE,
     students: FIXTURE_STUDENTS,
     goalConfig:
       FIXTURE_GOAL_CONFIG.seasonId === seasonId
@@ -1045,6 +1222,323 @@ export function formatSessionDateTime(session: OutreachSessionRow): string {
   const startText = CLOCK_TIME_FORMATTER.format(new Date(session.startsAt));
   const endText = CLOCK_TIME_FORMATTER.format(new Date(session.endsAt));
   return `${formatSessionDateOnly(session)} · ${startText}–${endText}`;
+}
+
+// ---------------------------------------------------------------------------
+// T121 (UXP-04 outreach half / UXD-02): dense per-EVENT row formatting --
+// date range + per-day ("weekday") recurrence chips, per the packet's own
+// "MON (18) · THU (18)" example and the capability map "Events tab" figure.
+// ---------------------------------------------------------------------------
+
+/** Short (no weekday, no year) date -- used for the row's own date-range
+ * summary, distinct from `formatSessionDateOnly` (which keeps its weekday
+ * prefix; still used for the expanded per-session detail rows and the
+ * student RSVP `aria-label`s, unchanged). */
+const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  timeZone: CHICAGO_TIME_ZONE,
+});
+
+export function formatShortDate(session: OutreachSessionRow): string {
+  return SHORT_DATE_FORMATTER.format(parseDateOnly(session.sessionDate));
+}
+
+/** UXD-02 "date/range" -- a single date for a one-session event, or a
+ * `first → last` range for a multi-session event. `sessions` is expected
+ * pre-sorted ascending by `startsAt` (every caller below sorts before
+ * calling). */
+export function formatEventDateRangeLabel(sessions: readonly OutreachSessionRow[]): string {
+  if (sessions.length === 0) return 'No sessions scheduled yet.';
+  const first = sessions[0];
+  const last = sessions[sessions.length - 1];
+  return sessions.length === 1
+    ? formatShortDate(first)
+    : `${formatShortDate(first)} → ${formatShortDate(last)}`;
+}
+
+export interface WeekdayChip {
+  key: string;
+  label: string;
+  count: number;
+}
+
+const WEEKDAY_ABBREVIATIONS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'] as const;
+
+/** UXD-02 "recurrence chips like 'MON (18) · THU (18)'" -- one chip per
+ * distinct weekday among the event's own sessions, ordered by each
+ * weekday's first chronological occurrence (never alphabetical/day-index
+ * order, which would misrepresent an event that, say, starts on a Friday),
+ * count = how many of the event's sessions fall on that weekday. Real
+ * `event_sessions.session_date` values only -- never a fabricated/assumed
+ * recurrence pattern. */
+export function buildWeekdayChips(sessions: readonly OutreachSessionRow[]): WeekdayChip[] {
+  const order: string[] = [];
+  const counts = new Map<string, number>();
+  for (const session of sessions) {
+    const weekday = WEEKDAY_ABBREVIATIONS[parseDateOnly(session.sessionDate).getUTCDay()];
+    if (!counts.has(weekday)) order.push(weekday);
+    counts.set(weekday, (counts.get(weekday) ?? 0) + 1);
+  }
+  return order.map((weekday) => ({
+    key: weekday,
+    label: `${weekday} (${counts.get(weekday)})`,
+    count: counts.get(weekday) ?? 0,
+  }));
+}
+
+/** T101's `buildInitialOutreachEvent` (`OutreachDetail.tsx`) own inverse
+ * conversion, independently reimplemented here rather than imported --
+ * same "independently reimplemented, not imported across
+ * `OutreachList.tsx`/`OutreachDetail.tsx`" convention this file's own
+ * NFR-09 date formatters above already followed (module doc), even though
+ * both files are this task's own Allowed Files: they remain two
+ * structurally-separate pages by this codebase's established convention. */
+const CHICAGO_24H_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+  timeZone: CHICAGO_TIME_ZONE,
+});
+
+function formatChicagoWallTime(isoDateTime: string): string {
+  const parts = CHICAGO_24H_TIME_FORMATTER.formatToParts(new Date(isoDateTime));
+  const hour = parts.find((part) => part.type === 'hour')?.value ?? '00';
+  const minute = parts.find((part) => part.type === 'minute')?.value ?? '00';
+  return `${hour}:${minute}`;
+}
+
+/**
+ * T121 item (b) -- edit-mode "Expected attendees" checklist prefill: the
+ * distinct student ids with an existing `status='going'` RSVP on ANY of the
+ * event's own sessions (not scoped to still-`scheduled` sessions only --
+ * the packet's own wording is "the event's existing 'going' RSVPs",
+ * unqualified by session status, and this is also the exact set
+ * `OutreachEventDialog.tsx`'s own create-time checklist would have written
+ * had the event been created today with today's answers).
+ */
+export function deriveExpectedStudentIds(
+  sessions: readonly OutreachSessionRow[],
+  rsvps: readonly RsvpRow[],
+): string[] {
+  const sessionIds = new Set(sessions.map((session) => session.id));
+  const ids = new Set<string>();
+  for (const rsvp of rsvps) {
+    if (rsvp.status === 'going' && sessionIds.has(rsvp.sessionId)) ids.add(rsvp.studentId);
+  }
+  return [...ids];
+}
+
+/**
+ * T121 item (b) -- the ONE place a real `OutreachEventRow` (this file's own
+ * event shape, now grown -- module doc) + its own sessions/rsvps are
+ * reshaped into `OutreachEventDialog.tsx`'s `ExistingOutreachEvent` edit-mode
+ * shape, for this file's OWN new inline "Edit" row action (opening the
+ * dialog directly from a list row, without navigating to
+ * `OutreachDetail.tsx` first). Structurally mirrors that file's own
+ * `buildInitialOutreachEvent` (same field-for-field mapping), independently
+ * reimplemented per this module's own convention above.
+ */
+export function buildInitialOutreachEventFromRow(
+  event: OutreachEventRow,
+  sessions: readonly OutreachSessionRow[],
+  rsvps: readonly RsvpRow[],
+): ExistingOutreachEvent {
+  return {
+    id: event.id,
+    title: event.title,
+    description: event.description,
+    locationName: event.locationName,
+    address: event.address,
+    // OutreachEventDialog.tsx's own type Selector only ever offers
+    // 'outreach'/'competition' -- this page's own `filterOutreachEvents`
+    // (module doc #2) already guarantees every row reaching this function
+    // has `type: 'outreach'`, so the 'competition' branch is unreachable in
+    // practice today but kept for the same honest, defensible fallback
+    // `OutreachDetail.tsx`'s own identical line already established.
+    type: event.type === 'competition' ? 'competition' : 'outreach',
+    countsParticipation: event.countsParticipation,
+    countsVolunteerHours: event.countsVolunteerHours,
+    teamIds: event.teamIds,
+    adultVolunteersCount: event.adultVolunteersCount,
+    adultVolunteerHours: event.adultVolunteerHours,
+    // No backing `events` column exists for this UI-only field (same
+    // disclosed "on by default" fallback `OutreachDetail.tsx`'s own
+    // `buildInitialOutreachEvent` already established).
+    shareToCalendarFeed: true,
+    sessions: sessions.map((session) => ({
+      sessionDate: session.sessionDate,
+      startTime: formatChicagoWallTime(session.startsAt),
+      endTime: formatChicagoWallTime(session.endsAt),
+      peopleReached: session.peopleReached,
+    })),
+    expectedStudentIds: deriveExpectedStudentIds(sessions, rsvps),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// T121 (UXP-04 outreach half / UXD-02/03): per-EVENT row stats -- expected/
+// attended counts, people reached, and the event's own group hours (BEH-02,
+// reusing `computeGroupHours` above VERBATIM -- never a re-derived formula,
+// per this task's own Traps note).
+// ---------------------------------------------------------------------------
+
+export interface EnrichedOutreachEvent {
+  event: OutreachEventRow;
+  /** Ascending by `startsAt`. */
+  sessions: OutreachSessionRow[];
+}
+
+/**
+ * Event-level analogue of `buildUpcomingPast` above (which stays exported
+ * and unit-tested unchanged, at session granularity) -- UXD-02/03 call for
+ * ONE dense row per EVENT, not one row per session. "Upcoming" = the event
+ * has at least one still-`scheduled` session (even if some of its other
+ * sessions already ran); "Past" = every session is `completed`/`canceled`.
+ * An event with zero sessions yet is omitted from both buckets (nothing
+ * real to show a date/hours/count for).
+ */
+export function buildEventGroups(
+  events: readonly OutreachEventRow[],
+  sessions: readonly OutreachSessionRow[],
+): { upcoming: EnrichedOutreachEvent[]; past: EnrichedOutreachEvent[] } {
+  const sessionsByEvent = new Map<string, OutreachSessionRow[]>();
+  for (const session of sessions) {
+    const list = sessionsByEvent.get(session.eventId);
+    if (list) list.push(session);
+    else sessionsByEvent.set(session.eventId, [session]);
+  }
+  const upcoming: EnrichedOutreachEvent[] = [];
+  const past: EnrichedOutreachEvent[] = [];
+  for (const event of events) {
+    const eventSessions = (sessionsByEvent.get(event.id) ?? [])
+      .slice()
+      .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+    if (eventSessions.length === 0) continue;
+    const hasScheduled = eventSessions.some((session) => session.status === 'scheduled');
+    (hasScheduled ? upcoming : past).push({ event, sessions: eventSessions });
+  }
+  upcoming.sort((a, b) => {
+    const aNext = a.sessions.find((session) => session.status === 'scheduled') ?? a.sessions[0];
+    const bNext = b.sessions.find((session) => session.status === 'scheduled') ?? b.sessions[0];
+    return aNext.startsAt.localeCompare(bNext.startsAt);
+  });
+  past.sort((a, b) => {
+    const aLast = a.sessions[a.sessions.length - 1];
+    const bLast = b.sessions[b.sessions.length - 1];
+    return bLast.startsAt.localeCompare(aLast.startsAt);
+  });
+  return { upcoming, past };
+}
+
+/** Distinct student ids with a `going` RSVP on any of the given session
+ * ids -- the raw-count building block for the "expected" (scheduled
+ * sessions) row stat. CHECKER FIX (rework of T121): no longer used for
+ * "attended" -- RSVP is intent, not a real attendance record (see
+ * `distinctAttendedStudentIds` below). A "sum of raw counts", per this
+ * task's own Traps note -- never a re-derived metric-view formula. */
+export function distinctGoingStudentIds(
+  sessionIds: readonly string[],
+  rsvps: readonly RsvpRow[],
+): Set<string> {
+  const idSet = new Set(sessionIds);
+  const going = new Set<string>();
+  for (const rsvp of rsvps) {
+    if (rsvp.status === 'going' && idSet.has(rsvp.sessionId)) going.add(rsvp.studentId);
+  }
+  return going;
+}
+
+/**
+ * CHECKER FIX (rework of T121, MAJOR) -- distinct student ids with a REAL
+ * `attendance` row (`status in ('present', 'late')`) on any of the given
+ * session ids. The `('present', 'late')` predicate is cited VERBATIM from
+ * the shipped `v_student_hours` view (`where a.status in ('present',
+ * 'late')`, `supabase/migrations/20260717000003_metric_views.sql` line 18)
+ * -- the same real, already-approved definition of "counts as attended"
+ * this codebase's own metric views already use, not an invented threshold.
+ * `'excused'`/`'absent'` are real, recorded outcomes but never count as
+ * attended (an excused absence is still an absence). This is the ONE
+ * source `computeEventRowStats`'s own "attended" stat is built from -- a
+ * raw distinct-id count over already-loaded rows, never a re-derived
+ * metric-view formula (this task's own Traps note): the view itself sums
+ * HOURS with a more elaborate `coalesce`/check-in-check-out expression this
+ * function does not reproduce; this function only counts DISTINCT
+ * STUDENTS, a strictly simpler raw tally the view doesn't itself expose. */
+export function distinctAttendedStudentIds(
+  sessionIds: readonly string[],
+  attendance: readonly OutreachAttendanceRow[],
+): Set<string> {
+  const idSet = new Set(sessionIds);
+  const attended = new Set<string>();
+  for (const record of attendance) {
+    if ((record.status === 'present' || record.status === 'late') && idSet.has(record.sessionId)) {
+      attended.add(record.studentId);
+    }
+  }
+  return attended;
+}
+
+/** `null` when no session in the group has ever recorded a
+ * `people_reached` value (never a fabricated 0 for "not yet recorded" --
+ * distinct from a real, logged 0). */
+export function sumPeopleReached(sessions: readonly OutreachSessionRow[]): number | null {
+  const withValues = sessions.filter((session) => session.peopleReached !== null);
+  if (withValues.length === 0) return null;
+  return withValues.reduce((sum, session) => sum + (session.peopleReached ?? 0), 0);
+}
+
+export interface EventRowStats {
+  dateRangeLabel: string;
+  weekdayChips: WeekdayChip[];
+  scheduledSessions: OutreachSessionRow[];
+  completedSessions: OutreachSessionRow[];
+  /** "Who's expected" -- RSVP intent (`going`) on still-`scheduled`
+   * sessions. Real attendance cannot exist yet for a session that hasn't
+   * happened, so RSVP intent is the correct, only-available source here --
+   * unchanged by the checker's rework, which is scoped to the PAST-bucket
+   * "attended" stat only (see `attendedCount` below). */
+  expectedCount: number;
+  /** CHECKER FIX (rework of T121, MAJOR) -- real distinct-student count from
+   * the `attendance` table (`status in ('present','late')`,
+   * `distinctAttendedStudentIds` above), NOT RSVP `going` intent. A student
+   * who RSVP'd `going` but never actually attended (marked `absent`/
+   * `excused`, or simply has no `attendance` row at all) is NOT counted; a
+   * walk-in who never RSVP'd but has a real `present`/`late` `attendance`
+   * row on a completed session of this event IS counted. */
+  attendedCount: number;
+  reached: number | null;
+  /** BEH-02: confirmed/planned hours across the WHOLE roster for this
+   * event's own sessions -- `computeGroupHours` (module doc #3), called
+   * verbatim, never re-derived. */
+  hours: HoursBreakdown;
+}
+
+export function computeEventRowStats(
+  sessions: readonly OutreachSessionRow[],
+  rsvps: readonly RsvpRow[],
+  attendance: readonly OutreachAttendanceRow[],
+  allStudentIds: readonly string[],
+): EventRowStats {
+  const scheduledSessions = sessions.filter((session) => session.status === 'scheduled');
+  const completedSessions = sessions.filter((session) => session.status === 'completed');
+  return {
+    dateRangeLabel: formatEventDateRangeLabel(sessions),
+    weekdayChips: buildWeekdayChips(sessions),
+    scheduledSessions,
+    completedSessions,
+    expectedCount: distinctGoingStudentIds(
+      scheduledSessions.map((session) => session.id),
+      rsvps,
+    ).size,
+    // CHECKER FIX (rework of T121, MAJOR): real attendance, not RSVP intent.
+    attendedCount: distinctAttendedStudentIds(
+      completedSessions.map((session) => session.id),
+      attendance,
+    ).size,
+    reached: sumPeopleReached(completedSessions),
+    hours: computeGroupHours(allStudentIds, sessions, rsvps),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1174,6 +1668,32 @@ interface GoalProgressBarProps {
   goalHours: number;
 }
 
+/**
+ * T121 item (d) -- UXD-05 fix. BEFORE: a `Heading` reading "{label}" (e.g.
+ * "Team season goal"), immediately followed by a `Text` reading "Season
+ * goal: {goalHours} hrs" (repeating the same concept), immediately followed
+ * by TWO stacked `ProgressBar`s whose own `label` props ("{label}: confirmed
+ * hours" / "{label}: planned hours") are VISIBLE captions by default
+ * (Astryx's own `ProgressBar` doc: "Do: Always provide a label, even if
+ * hidden" -- i.e. visible unless `isLabelHidden`, which this file never set)
+ * -- the literal triple/quadruple repetition of "Team season goal" the
+ * packet names as UXD-05's own anti-example, on top of a SEPARATE Astryx
+ * "Don't: Use multiple progress bars stacked together for the same
+ * operation; use one bar with a value label instead" violation (this
+ * section's own `ProgressBar` Best Practices, `astryx-api.md`).
+ *
+ * AFTER: exactly ONE `Heading` for the concept, and confirmed/planned/goal/
+ * %-of-goal rendered as a compact ROW of grouped stat tiles (UXD-05(c):
+ * "Grouped stat tiles over stacked full-width bars where the reference app
+ * demonstrates the tile pattern" -- the capability map's own KPI-tile area
+ * is exactly this pattern) instead of any `ProgressBar` at all -- zero bars,
+ * so the Astryx stacked-bars anti-pattern above cannot recur either. BEH-02
+ * is still honored exactly (confirmed/planned remain two SEPARATE tiles,
+ * never summed into one number -- grep-provable: no `confirmedHours +
+ * plannedHours` expression exists anywhere in this file, unchanged). The
+ * milestone-tick row below (Badge/Text) is unchanged -- it was already a
+ * compact, non-duplicating tile-like row, not part of this bug.
+ */
 function GoalProgressBar({
   goalBarId,
   seasonId,
@@ -1190,7 +1710,6 @@ function GoalProgressBar({
     goalHours,
   );
   const percent = confirmedPercent(confirmedHours, goalHours);
-  const safeMax = goalHours > 0 ? goalHours : 1;
 
   return (
     <VStack gap={2}>
@@ -1205,23 +1724,40 @@ function GoalProgressBar({
         />
       ))}
       <Heading level={2}>{label}</Heading>
-      <Text type="supporting">Season goal: {goalHours} hrs</Text>
-      <ProgressBar
-        label={`${label}: confirmed hours`}
-        value={confirmedHours}
-        max={safeMax}
-        variant="accent"
-        hasValueLabel
-        formatValueLabel={(value) => `${value} hrs confirmed`}
-      />
-      <ProgressBar
-        label={`${label}: planned hours`}
-        value={plannedHours}
-        max={safeMax}
-        variant="neutral"
-        hasValueLabel
-        formatValueLabel={(value) => `${value} hrs planned`}
-      />
+      <HStack gap={5} wrap="wrap">
+        <VStack gap={0}>
+          <Text type="label" color="secondary">
+            Confirmed
+          </Text>
+          <Text type="body" weight="semibold" hasTabularNumbers>
+            {confirmedHours} hrs confirmed
+          </Text>
+        </VStack>
+        <VStack gap={0}>
+          <Text type="label" color="secondary">
+            Planned
+          </Text>
+          <Text type="body" weight="semibold" hasTabularNumbers>
+            {plannedHours} hrs planned
+          </Text>
+        </VStack>
+        <VStack gap={0}>
+          <Text type="label" color="secondary">
+            Goal
+          </Text>
+          <Text type="body" weight="semibold" hasTabularNumbers>
+            {goalHours} hrs
+          </Text>
+        </VStack>
+        <VStack gap={0}>
+          <Text type="label" color="secondary">
+            % of goal
+          </Text>
+          <Text type="body" weight="semibold" hasTabularNumbers>
+            {Math.round(percent)}%
+          </Text>
+        </VStack>
+      </HStack>
       <HStack justify="between" wrap="wrap" gap={2}>
         {GOAL_MILESTONES.map((milestone) =>
           percent >= milestone ? (
@@ -1241,70 +1777,162 @@ function GoalProgressBar({
 // Coach view -- module docs #2/#5/#8a/#9/#11.
 // ---------------------------------------------------------------------------
 
-function CoachOutreachRowItem({
-  session,
+/**
+ * T121 (UXP-04 outreach half / UXD-02/03/04): dense per-EVENT coach row --
+ * replaces the former per-SESSION `CoachOutreachRowItem`. Answers UXD-02's
+ * "when/what/where/how much/who" without navigation (date range + weekday
+ * chips, title + category badge, location, planned/logged hours,
+ * expected/attended counts + reached), carries inline Edit/Cancel actions
+ * (UXD-04) plus a "+" expander (UXD-03) revealing per-session detail in
+ * place. `ListItem` itself stays non-interactive (no `onClick`/`href`) --
+ * every interactive element (expander toggle, Edit, Cancel, the pre-existing
+ * T112 "View details" `Link`) lives together in `endContent`, as SIBLINGS,
+ * not nested inside another interactive element -- honoring the same
+ * Astryx "Don't place interactive elements inside an interactive list item"
+ * constraint this file's own module doc #10 already established (the
+ * warning is about nesting inside an ALREADY-interactive row, not about
+ * multiple sibling controls in one non-interactive row's `endContent`).
+ * Each interactive control's accessible name is suffixed with the event's
+ * own title (an en dash, matching the pre-existing "View details – {title}"
+ * convention) so multiple rows' otherwise-identical "Edit"/"Cancel"/expander
+ * buttons stay distinguishable to assistive tech (UXD-09), the same
+ * discipline this file's own module doc #13 already established for `Link`.
+ *
+ * CHECKER FIX (rework of T121, NIT #5) -- corrected claim: the category
+ * `Badge` lives in `description` (below the title), not glued next to it.
+ * The original worker output justified this as an Astryx CONSTRAINT
+ * ("`ListItem.label` is `string`-only"), sourced from the `npm run astryx
+ * -- component ListItem` CLI cross-check -- that CLI output is STALE/WRONG
+ * against the actually-installed package: the real
+ * `node_modules/@astryxdesign/core/dist/List/ListItem.d.ts` declares
+ * `label: ReactNode` (not `string`), so a title+badge `ReactNode` COULD be
+ * passed as `label` directly. Constitution item 2's own text already warns
+ * the CLI is "a cross-check, not a source" for exactly this reason -- the
+ * installed `.d.ts` should have been the authority, and wasn't checked here
+ * the first time. This file's own layout (badge in `description`, not in
+ * `label`) is kept as-is (already checker-accepted) -- it is a DESIGN
+ * CHOICE (keeping `label` a plain title string for `ListItem`'s own
+ * automatic single-line-truncation behavior, documented on `label`/
+ * `description` in that same `.d.ts`: "Accepts a plain string (single-line
+ * truncation applied automatically) or a ReactNode... no truncation
+ * constraints applied" -- a `ReactNode` label loses that truncation
+ * safety net for a long event title), not a hard API constraint.
+ */
+function CoachOutreachEventRow({
   event,
+  sessions,
   rsvps,
+  attendance,
   students,
+  bucket,
+  onEdit,
+  onCancel,
 }: {
-  session: OutreachSessionRow;
   event: OutreachEventRow;
+  sessions: readonly OutreachSessionRow[];
   rsvps: readonly RsvpRow[];
+  /** CHECKER FIX (rework of T121, MAJOR) -- real attendance rows, the ONE
+   * source `stats.attendedCount` is computed from. */
+  attendance: readonly OutreachAttendanceRow[];
   students: readonly OutreachStudentFixture[];
+  bucket: 'upcoming' | 'past';
+  onEdit: (event: OutreachEventRow, sessions: readonly OutreachSessionRow[]) => void;
+  onCancel: (event: OutreachEventRow) => void;
 }): ReactNode {
-  const goingStudents = useMemo(() => {
-    const goingIds = new Set(
-      rsvps
-        .filter((rsvp) => rsvp.sessionId === session.id && rsvp.status === 'going')
-        .map((rsvp) => rsvp.studentId),
-    );
-    return students.filter((student) => goingIds.has(student.id));
-  }, [rsvps, students, session.id]);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const allStudentIds = useMemo(() => students.map((student) => student.id), [students]);
+  const stats = useMemo(
+    () => computeEventRowStats(sessions, rsvps, attendance, allStudentIds),
+    [sessions, rsvps, attendance, allStudentIds],
+  );
+  const studentNameById = useMemo(
+    () => new Map(students.map((student) => [student.id, student.name] as const)),
+    [students],
+  );
 
-  const visibleStudents = goingStudents.slice(0, 3);
-  const overflowCount = Math.max(0, goingStudents.length - visibleStudents.length);
+  const canCancel = stats.scheduledSessions.length > 0;
+  const hoursValue = bucket === 'upcoming' ? stats.hours.plannedHours : stats.hours.confirmedHours;
+  const countValue = bucket === 'upcoming' ? stats.expectedCount : stats.attendedCount;
 
   const description = (
-    <VStack gap={0.5}>
-      <Text type="supporting">
-        {formatSessionDateTime(session)} — {event.locationName}
-      </Text>
-      {session.status !== 'scheduled' &&
-        (session.status === 'canceled' ? (
-          <Text type="supporting">Canceled — no attendance recorded.</Text>
-        ) : (
-          <Text type="supporting">
-            {session.peopleReached !== null
-              ? `${session.peopleReached} people reached`
-              : 'No attendance summary recorded yet.'}
-          </Text>
+    <VStack gap={1}>
+      <HStack gap={2} wrap="wrap" vAlign="center">
+        <Badge
+          variant="neutral"
+          label={event.type === 'competition' ? 'Competition' : 'Outreach'}
+        />
+        <Text type="supporting">{stats.dateRangeLabel}</Text>
+        {stats.weekdayChips.map((chip) => (
+          <Badge key={chip.key} variant="neutral" label={chip.label} />
         ))}
+      </HStack>
+      <Text type="supporting">
+        {event.locationName}
+        {event.address !== '' ? ` · ${event.address}` : ''}
+      </Text>
+      {isExpanded && (
+        <VStack gap={2}>
+          {sessions.map((session) => (
+            <CoachSessionDetail
+              key={session.id}
+              session={session}
+              rsvps={rsvps}
+              studentNameById={studentNameById}
+            />
+          ))}
+        </VStack>
+      )}
     </VStack>
   );
 
-  // T112 HOTFIX (module doc #13): every row -- scheduled (Upcoming) AND
-  // completed/canceled (Past) alike -- now always carries a real "View
-  // details" `Link` to this event's own `/outreach/:eventId` detail page,
-  // mirroring `CalendarPage.tsx`'s own `CalendarSessionRowItem` `endContent`
-  // shape exactly (a non-interactive `ListItem` row, with the one real
-  // interactive element living in `endContent`, module doc #10). The
-  // Upcoming-only going-count `AvatarGroup`/`Badge` pair is unchanged and
-  // still only renders for `scheduled` sessions; the `Link` itself renders
-  // unconditionally.
   const endContent = (
-    <HStack gap={2} vAlign="center">
-      {session.status === 'scheduled' && (
-        <>
-          {goingStudents.length > 0 && (
-            <AvatarGroup size="small">
-              {visibleStudents.map((student) => (
-                <Avatar key={student.id} name={student.name} size="small" />
-              ))}
-              {overflowCount > 0 && <AvatarGroupOverflow count={overflowCount} />}
-            </AvatarGroup>
-          )}
-          <Badge variant="neutral" label={`${goingStudents.length} going`} />
-        </>
+    <HStack gap={4} vAlign="center" wrap="wrap">
+      <VStack gap={0}>
+        <Text type="label" color="secondary">
+          {bucket === 'upcoming' ? 'Planned' : 'Logged'}
+        </Text>
+        <Text type="body" weight="semibold" hasTabularNumbers>
+          {hoursValue}h
+        </Text>
+      </VStack>
+      <VStack gap={0}>
+        <Text type="label" color="secondary">
+          {bucket === 'upcoming' ? 'Expected' : 'Attended'}
+        </Text>
+        <Text type="body" weight="semibold" hasTabularNumbers>
+          {countValue} students
+        </Text>
+        {bucket === 'past' && stats.reached !== null && (
+          <Text type="supporting">Reached {stats.reached}</Text>
+        )}
+      </VStack>
+      <Button
+        label={
+          isExpanded
+            ? `Hide session details – ${event.title}`
+            : `Show session details – ${event.title}`
+        }
+        size="sm"
+        variant="ghost"
+        onClick={() => setIsExpanded((previous) => !previous)}
+      />
+      <Button
+        label={`Edit – ${event.title}`}
+        size="sm"
+        variant="secondary"
+        onClick={() => onEdit(event, sessions)}
+      >
+        Edit
+      </Button>
+      {canCancel && (
+        <Button
+          label={`Cancel – ${event.title}`}
+          size="sm"
+          variant="destructive"
+          onClick={() => onCancel(event)}
+        >
+          Cancel
+        </Button>
       )}
       <Link as={RouterLink} href={routePaths.outreachEvent(event.id)} isStandalone>
         View details – {event.title}
@@ -1315,23 +1943,72 @@ function CoachOutreachRowItem({
   return <ListItem label={event.title} description={description} endContent={endContent} />;
 }
 
+/** UXD-03 expand-in-place per-session detail -- date/time/hours + RSVP
+ * (`going`) names, or the honest canceled/attendance-summary copy. Text
+ * preserved verbatim from the former per-session row (module doc above) so
+ * this is purely a relocation into the expander, not a copy change. */
+function CoachSessionDetail({
+  session,
+  rsvps,
+  studentNameById,
+}: {
+  session: OutreachSessionRow;
+  rsvps: readonly RsvpRow[];
+  studentNameById: ReadonlyMap<string, string>;
+}): ReactNode {
+  const goingNames = rsvps
+    .filter((rsvp) => rsvp.sessionId === session.id && rsvp.status === 'going')
+    .map((rsvp) => studentNameById.get(rsvp.studentId))
+    .filter((name): name is string => name !== undefined);
+
+  return (
+    <VStack gap={0.5}>
+      <Text type="supporting">
+        {formatSessionDateTime(session)} · {sessionHours(session)}h
+      </Text>
+      {session.status === 'canceled' ? (
+        <Text type="supporting">Canceled — no attendance recorded.</Text>
+      ) : goingNames.length > 0 ? (
+        <Text type="supporting">Going: {goingNames.join(', ')}</Text>
+      ) : (
+        <Text type="supporting">No RSVPs yet.</Text>
+      )}
+      {session.status === 'completed' && (
+        <Text type="supporting">
+          {session.peopleReached !== null
+            ? `${session.peopleReached} people reached`
+            : 'No attendance summary recorded yet.'}
+        </Text>
+      )}
+    </VStack>
+  );
+}
+
 function CoachOutreachSection({
   title,
-  enrichedSessions,
+  bucket,
+  enrichedEvents,
   rsvps,
+  attendance,
   students,
   emptyDescription,
+  onEdit,
+  onCancel,
 }: {
   title: string;
-  enrichedSessions: readonly EnrichedOutreachSession[];
+  bucket: 'upcoming' | 'past';
+  enrichedEvents: readonly EnrichedOutreachEvent[];
   rsvps: readonly RsvpRow[];
+  attendance: readonly OutreachAttendanceRow[];
   students: readonly OutreachStudentFixture[];
   emptyDescription: string;
+  onEdit: (event: OutreachEventRow, sessions: readonly OutreachSessionRow[]) => void;
+  onCancel: (event: OutreachEventRow) => void;
 }): ReactNode {
   return (
     <VStack gap={3}>
       <Heading level={2}>{title}</Heading>
-      {enrichedSessions.length === 0 ? (
+      {enrichedEvents.length === 0 ? (
         <EmptyState
           headingLevel={3}
           title={`No ${title.toLowerCase()} outreach events`}
@@ -1339,13 +2016,17 @@ function CoachOutreachSection({
         />
       ) : (
         <List hasDividers header={`${title} outreach events`}>
-          {enrichedSessions.map(({ session, event }) => (
-            <CoachOutreachRowItem
-              key={session.id}
-              session={session}
+          {enrichedEvents.map(({ event, sessions }) => (
+            <CoachOutreachEventRow
+              key={event.id}
               event={event}
+              sessions={sessions}
               rsvps={rsvps}
+              attendance={attendance}
               students={students}
+              bucket={bucket}
+              onEdit={onEdit}
+              onCancel={onCancel}
             />
           ))}
         </List>
@@ -1359,16 +2040,37 @@ interface CoachOutreachViewProps {
   events: readonly OutreachEventRow[];
   sessions: readonly OutreachSessionRow[];
   rsvps: readonly RsvpRow[];
+  /** CHECKER FIX (rework of T121, MAJOR) -- real attendance rows (one
+   * batched `loaders/outreach.ts` query), the ONE source each row's own
+   * "Attended" stat is computed from. */
+  attendance: readonly OutreachAttendanceRow[];
   students: readonly OutreachStudentFixture[];
   goalConfig: OutreachGoalConfig;
   /** T101 (module doc #11). Defaults to a real `events`/`event_sessions`
-   * insert, passed straight through to `<OutreachEventDialog
-   * onSaveEvent={...} />`. */
+   * insert/update, passed straight through to `<OutreachEventDialog
+   * onSaveEvent={...} />` -- T121 UPDATE: now genuinely used for BOTH create
+   * (no `initialEvent`) AND edit (row-level "Edit" action, `initialEvent`
+   * built by `buildInitialOutreachEventFromRow`), same single dialog
+   * instance. */
   onSaveEvent: OnSaveOutreachEventFn;
   /** T101 (module doc #11). Reloads this page's own already-loaded data in
-   * place after a successful create, without re-triggering the top-level
-   * `loading` DES-12 state. */
+   * place after a successful create/edit/cancel, without re-triggering the
+   * top-level `loading` DES-12 state. */
   onReload: () => Promise<void>;
+  /** T121 item (c) -- real, event-level cancel (`OutreachDetail.tsx`'s own
+   * already-built, already-tested `cancelOutreachEvent` mutation, reused
+   * verbatim -- this file adds no new mutation of its own). */
+  onCancelEvent: CancelOutreachEventFn;
+  /** T121 item (a) -- real roster loader (T118, `loadOutreachEventRoster`,
+   * built/tested but previously unconsumed by any page) wired into this
+   * view's own create/edit `OutreachEventDialog` `students` prop, replacing
+   * that dialog's own `DEFAULT_STUDENTS` fixture fallback. */
+  loadRoster: LoadOutreachEventRosterFn;
+  /** The acting coach's real `profiles.id`, threaded down from
+   * `OutreachList`'s own `useAuth()` -- written verbatim to
+   * `rsvps.responded_by` for every "Expected attendees" checklist row this
+   * view's dialog fans out (T118 D-7). */
+  viewerProfileId: string;
 }
 
 /** T101 (module doc #11) -- real success/error messaging for event
@@ -1385,12 +2087,16 @@ function CoachOutreachView({
   events,
   sessions,
   rsvps,
+  attendance,
   students,
   goalConfig,
   onSaveEvent,
   onReload,
+  onCancelEvent,
+  loadRoster,
+  viewerProfileId,
 }: CoachOutreachViewProps): ReactNode {
-  const { upcoming, past } = useMemo(() => buildUpcomingPast(sessions, events), [sessions, events]);
+  const { upcoming, past } = useMemo(() => buildEventGroups(events, sessions), [events, sessions]);
   const studentIds = useMemo(() => students.map((student) => student.id), [students]);
   const teamHours = useMemo(
     () => computeGroupHours(studentIds, sessions, rsvps),
@@ -1406,43 +2112,151 @@ function CoachOutreachView({
   );
 
   // T101 (module doc #11) -- drives the one rendered
-  // `<OutreachEventDialog>` instance, in CREATE mode only (this view never
-  // renders an edit-mode instance; that lives on `OutreachDetail.tsx`).
+  // `<OutreachEventDialog>` instance. T121 UPDATE: `editingTarget` (null =
+  // create mode) lets this SAME instance now also serve the new row-level
+  // "Edit" action, instead of edit mode living only on `OutreachDetail.tsx`.
   const [isEventDialogOpen, setIsEventDialogOpen] = useState(false);
+  const [editingTarget, setEditingTarget] = useState<{
+    event: OutreachEventRow;
+    sessions: readonly OutreachSessionRow[];
+  } | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<OutreachEventRow | null>(null);
   const [feedback, setFeedback] = useState<FeedbackBanner | null>(null);
+  // CHECKER FIX (rework of T121, NIT #6): a real, honest DES-12 load-state
+  // for the roster fetch -- BEFORE this fix, a rejection (e.g. Supabase
+  // isn't configured) left `roster` at its initial `undefined`, which
+  // `OutreachEventDialog` (its own `students` prop default) silently
+  // treated as "use my own `DEFAULT_STUDENTS` fixture" -- i.e. a coach
+  // could open the checklist and see FAKE sample students ("Riley Chen",
+  // "Sam Okafor", ...) with no indication anything failed. NOW: a failed
+  // fetch resolves to `{ status: 'error' }`, which (a) passes a real EMPTY
+  // array (never `undefined`) as `students`, so the dialog can never fall
+  // back to its own fixture, and (b) surfaces an honest error `Banner`
+  // (below, in this component's own render -- `OutreachEventDialog.tsx`
+  // stays forbidden/read-only, so this notice lives on the PAGE side, not
+  // injected into the dialog) with a real `Retry` action, same DES-12
+  // Banner+Retry shape this file's own top-level data-load error state
+  // already established.
+  type RosterLoadState =
+    | { status: 'loading' }
+    | { status: 'ready'; students: readonly OutreachRosterStudent[] }
+    | { status: 'error' };
+  const [rosterState, setRosterState] = useState<RosterLoadState>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action to force the effect below to
+  // re-run -- same `retryToken` idiom this file's own top-level
+  // `useLoadState` already established (module doc there).
+  const [rosterRetryToken, setRosterRetryToken] = useState(0);
 
-  function openEventDialog(): void {
+  useEffect(() => {
+    let isMounted = true;
+    setRosterState({ status: 'loading' });
+    loadRoster()
+      .then((data) => {
+        if (isMounted) setRosterState({ status: 'ready', students: data });
+      })
+      .catch(() => {
+        if (isMounted) setRosterState({ status: 'error' });
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [loadRoster, rosterRetryToken]);
+
+  function retryRosterLoad(): void {
+    setRosterRetryToken((token) => token + 1);
+  }
+
+  // `undefined` only while genuinely still loading (a brief, transient
+  // state -- `OutreachEventDialog`'s own fixture fallback is a defensible,
+  // short-lived placeholder here, unlike the disclosed FAILURE case above).
+  // `'ready'` -> the real roster. `'error'` -> a real, honest EMPTY array,
+  // never the dialog's own fixture.
+  const rosterForDialog =
+    rosterState.status === 'ready'
+      ? rosterState.students
+      : rosterState.status === 'error'
+        ? []
+        : undefined;
+
+  function openCreateDialog(): void {
+    setEditingTarget(null);
     setIsEventDialogOpen(true);
+  }
+
+  function openEditDialog(
+    event: OutreachEventRow,
+    eventSessions: readonly OutreachSessionRow[],
+  ): void {
+    setEditingTarget({ event, sessions: eventSessions });
+    setIsEventDialogOpen(true);
+  }
+
+  function requestCancelEvent(event: OutreachEventRow): void {
+    setCancelTarget(event);
   }
 
   // T101 (module doc #11) -- real `onSaveEvent` wiring. Reloads this page's
   // own data via `onReload()` on success (a full reload, not a client-side
-  // merge -- module doc #11).
+  // merge -- module doc #11). T121 UPDATE: branches success copy on whether
+  // `payload.event.id` is present (edit) or not (create).
   async function handleSaveEventSubmit(
     payload: Parameters<OnSaveOutreachEventFn>[0],
   ): Promise<void> {
+    const isEdit = payload.event.id !== undefined;
     await onSaveEvent(payload);
     try {
       await onReload();
       setFeedback({
         status: 'success',
-        title: 'Outreach event created',
-        description: `"${payload.event.title}" was created with ${payload.sessions.length} session${payload.sessions.length === 1 ? '' : 's'}.`,
+        title: isEdit ? 'Outreach event updated' : 'Outreach event created',
+        description: isEdit
+          ? `"${payload.event.title}" was updated.`
+          : `"${payload.event.title}" was created with ${payload.sessions.length} session${payload.sessions.length === 1 ? '' : 's'}.`,
       });
     } catch {
-      // The create itself already succeeded (this catch only guards the
+      // The save itself already succeeded (this catch only guards the
       // follow-up reload) -- disclosed, not fatal, same posture
       // `MeetingsList.tsx`'s own T096 `handleCreateMeetingsSubmit` already
       // established.
       setFeedback({
         status: 'success',
-        title: 'Outreach event created',
-        description: `"${payload.event.title}" was created. Refresh the page to see it in the list below.`,
+        title: isEdit ? 'Outreach event updated' : 'Outreach event created',
+        description: `"${payload.event.title}" was ${isEdit ? 'updated' : 'created'}. Refresh the page to see the changes.`,
+      });
+    }
+  }
+
+  // T121 item (c) -- real, event-level cancel (mirrors
+  // `OutreachDetail.tsx`'s own `handleConfirmCancel` shape: confirm, mutate,
+  // reload, honest error Banner on failure).
+  async function handleConfirmCancel(): Promise<void> {
+    if (cancelTarget === null) return;
+    const target = cancelTarget;
+    setCancelTarget(null);
+    try {
+      await onCancelEvent(target.id);
+      await onReload();
+      setFeedback({
+        status: 'success',
+        title: 'Event canceled',
+        description: `"${target.title}"'s remaining scheduled sessions are marked canceled. Already-completed sessions are untouched.`,
+      });
+    } catch {
+      setFeedback({
+        status: 'error',
+        title: "Couldn't cancel event",
+        description: `Something went wrong canceling "${target.title}". Try again in a moment.`,
       });
     }
   }
 
   const hasAnyOutreach = sessions.length > 0;
+  // T121 item (b) -- edit-mode prefill, including `expectedStudentIds`
+  // derived from the event's own existing `going` RSVPs.
+  const initialEvent =
+    editingTarget !== null
+      ? buildInitialOutreachEventFromRow(editingTarget.event, editingTarget.sessions, rsvps)
+      : undefined;
 
   return (
     <>
@@ -1451,7 +2265,7 @@ function CoachOutreachView({
           <Heading level={1}>Outreach</Heading>
           <Badge variant="neutral" label={`${unansweredCount} pending RSVPs`} />
         </VStack>
-        <Button label="New outreach event" variant="primary" onClick={openEventDialog} />
+        <Button label="New outreach event" variant="primary" onClick={openCreateDialog} />
       </HStack>
 
       {feedback !== null && (
@@ -1464,13 +2278,26 @@ function CoachOutreachView({
         />
       )}
 
+      {/* CHECKER FIX (rework of T121, NIT #6) -- honest, page-side notice
+          for a roster-load failure (module doc on `rosterState` above). */}
+      {rosterState.status === 'error' && (
+        <Banner
+          status="error"
+          title="Couldn't load the student roster"
+          description={
+            'Creating or editing an outreach event will show an empty "Expected attendees" checklist until this is retried.'
+          }
+          endContent={<Button variant="ghost" label="Retry" onClick={retryRosterLoad} />}
+        />
+      )}
+
       {!hasAnyOutreach ? (
         <EmptyState
           headingLevel={2}
           title="No outreach events yet"
           description="Outreach events for this season will show up here once they're scheduled."
           actions={
-            <Button label="New outreach event" variant="primary" onClick={openEventDialog} />
+            <Button label="New outreach event" variant="primary" onClick={openCreateDialog} />
           }
         />
       ) : (
@@ -1485,29 +2312,62 @@ function CoachOutreachView({
           />
           <CoachOutreachSection
             title="Upcoming"
-            enrichedSessions={upcoming}
+            bucket="upcoming"
+            enrichedEvents={upcoming}
             rsvps={rsvps}
+            attendance={attendance}
             students={students}
             emptyDescription="No outreach events are currently scheduled."
+            onEdit={openEditDialog}
+            onCancel={requestCancelEvent}
           />
           <CoachOutreachSection
             title="Past"
-            enrichedSessions={past}
+            bucket="past"
+            enrichedEvents={past}
             rsvps={rsvps}
+            attendance={attendance}
             students={students}
             emptyDescription="Completed and canceled outreach events will show up here."
+            onEdit={openEditDialog}
+            onCancel={requestCancelEvent}
           />
         </>
       )}
 
+      {/* T121 item (c) -- real event-level cancel confirmation, same copy
+          `OutreachDetail.tsx`'s own precedent already established. */}
+      <AlertDialog
+        isOpen={cancelTarget !== null}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setCancelTarget(null);
+        }}
+        title={cancelTarget !== null ? `Cancel "${cancelTarget.title}"?` : 'Cancel event?'}
+        description="This marks every still-scheduled session for this event canceled. Already-completed sessions are left untouched, and no attendance will be recorded for the canceled ones."
+        actionLabel="Cancel event"
+        onAction={() => {
+          void handleConfirmCancel();
+        }}
+      />
+
       {/* T101 (module doc #11) -- `OutreachEventDialog.tsx` (T039, already
-          Passed, already built) wired into this page for the first time, in
-          CREATE mode only (no `initialEvent` prop). `teams` deliberately
-          NOT overridden -- module doc #11. */}
+          Passed, already built) wired into this page. T121 UPDATE: now
+          genuinely serves BOTH create (`initialEvent` undefined) and edit
+          (`initialEvent` from a row's own "Edit" action) through this same
+          instance, plus the real roster (`students`) and acting-coach id
+          (`currentUserProfileId`) this task wires in. `teams` deliberately
+          NOT overridden -- module doc #11 (unchanged, out of this task's own
+          Allowed Files). */}
       <OutreachEventDialog
         isOpen={isEventDialogOpen}
-        onOpenChange={setIsEventDialogOpen}
+        onOpenChange={(isOpen) => {
+          setIsEventDialogOpen(isOpen);
+          if (!isOpen) setEditingTarget(null);
+        }}
         onSaveEvent={handleSaveEventSubmit}
+        initialEvent={initialEvent}
+        students={rosterForDialog}
+        currentUserProfileId={viewerProfileId}
       />
     </>
   );
@@ -1532,7 +2392,111 @@ function rsvpStatusLabel(status: RsvpStatus): string {
   return RSVP_ITEMS.find((item) => item.value === status)?.label ?? status;
 }
 
-function StudentOutreachRowItem({
+/**
+ * T121 (UXP-04 outreach half / UXD-02/03): dense per-EVENT student/parent
+ * row -- replaces the former per-SESSION `StudentOutreachRowItem`. Unlike
+ * the coach row (which defaults collapsed), this row defaults EXPANDED:
+ * UXD-04's "no dead ends: every entity offers its next action within one
+ * interaction" means the viewer's own RSVP control (this row's primary
+ * action) must be reachable without first clicking a "+" toggle. The
+ * toggle itself still exists (a viewer may collapse a long multi-session
+ * event down to just its date/location summary) -- UXD-03's expand-in-place
+ * mechanism is genuinely present and functional, just defaulted open here
+ * for the reason above, not defaulted closed like the coach view's own row
+ * (whose primary actions -- Edit/Cancel -- live in `endContent`, not behind
+ * the expander).
+ */
+function StudentOutreachEventRow({
+  event,
+  sessions,
+  rsvps,
+  viewerStudentId,
+  onRsvpChange,
+}: {
+  event: OutreachEventRow;
+  sessions: readonly OutreachSessionRow[];
+  rsvps: readonly RsvpRow[];
+  viewerStudentId: string;
+  onRsvpChange: (sessionId: string, status: RsvpStatus) => void;
+}): ReactNode {
+  const [isExpanded, setIsExpanded] = useState(true);
+  // The student/parent row only ever reads `stats.dateRangeLabel`/
+  // `stats.weekdayChips` below -- it never renders `attendedCount` (that
+  // stat is coach-only, module doc on `EventRowStats.attendedCount`), so no
+  // real `attendance` array is threaded down to this component at all
+  // (out of this checker-fix's own scope, per its own "only the PAST-bucket
+  // Attended semantics change" instruction) -- an empty array is passed
+  // here deliberately, not a placeholder standing in for missing data.
+  const stats = useMemo(
+    () => computeEventRowStats(sessions, rsvps, [], [viewerStudentId]),
+    [sessions, rsvps, viewerStudentId],
+  );
+
+  const description = (
+    <VStack gap={1}>
+      <HStack gap={2} wrap="wrap" vAlign="center">
+        <Badge
+          variant="neutral"
+          label={event.type === 'competition' ? 'Competition' : 'Outreach'}
+        />
+        <Text type="supporting">{stats.dateRangeLabel}</Text>
+        {stats.weekdayChips.map((chip) => (
+          <Badge key={chip.key} variant="neutral" label={chip.label} />
+        ))}
+      </HStack>
+      <Text type="supporting">
+        {event.locationName}
+        {event.address !== '' ? ` · ${event.address}` : ''}
+      </Text>
+      {isExpanded && (
+        <VStack gap={2}>
+          {sessions.map((session) => (
+            <StudentSessionDetail
+              key={session.id}
+              session={session}
+              event={event}
+              status={
+                rsvps.find(
+                  (rsvp) => rsvp.sessionId === session.id && rsvp.studentId === viewerStudentId,
+                )?.status ?? null
+              }
+              onRsvpChange={onRsvpChange}
+            />
+          ))}
+        </VStack>
+      )}
+    </VStack>
+  );
+
+  // T112 HOTFIX (module doc #13): every row -- Upcoming AND Past alike --
+  // still always carries a real "View details" `Link`, unchanged shape.
+  const endContent = (
+    <HStack gap={3} vAlign="center" wrap="wrap">
+      <Button
+        label={
+          isExpanded
+            ? `Hide session details – ${event.title}`
+            : `Show session details – ${event.title}`
+        }
+        size="sm"
+        variant="ghost"
+        onClick={() => setIsExpanded((previous) => !previous)}
+      />
+      <Link as={RouterLink} href={routePaths.outreachEvent(event.id)} isStandalone>
+        View details – {event.title}
+      </Link>
+    </HStack>
+  );
+
+  return <ListItem label={event.title} description={description} endContent={endContent} />;
+}
+
+/** UXD-03 expand-in-place per-session detail (student/parent view): date/
+ * time/hours + either the viewer's own editable RSVP `SegmentedControl`
+ * (still-`scheduled` sessions) or the read-only recorded-status `Text`
+ * (past sessions) -- text/behavior preserved verbatim from the former
+ * per-session row, purely relocated. */
+function StudentSessionDetail({
   session,
   event,
   status,
@@ -1545,20 +2509,11 @@ function StudentOutreachRowItem({
 }): ReactNode {
   const isEditable = session.status === 'scheduled';
 
-  const description = (
-    <Text type="supporting">
-      {formatSessionDateTime(session)} — {event.locationName}
-    </Text>
-  );
-
-  // T112 HOTFIX (module doc #13): every row -- editable (Upcoming) AND
-  // read-only (Past) alike -- now always carries a real "View details"
-  // `Link` to this event's own `/outreach/:eventId` detail page too, same
-  // shape as the coach view's own row above and `CalendarPage.tsx`'s
-  // precedent. The RSVP `SegmentedControl`/read-only status `Text` is
-  // unchanged; the `Link` is simply added alongside it.
-  const endContent = (
-    <HStack gap={2} vAlign="center">
+  return (
+    <VStack gap={0.5}>
+      <Text type="supporting">
+        {formatSessionDateTime(session)} · {sessionHours(session)}h
+      </Text>
       {isEditable ? (
         <SegmentedControl
           value={status ?? UNANSWERED_RSVP_SEGMENT_VALUE}
@@ -1574,25 +2529,20 @@ function StudentOutreachRowItem({
           {status === null ? 'No response recorded' : `You RSVP'd: ${rsvpStatusLabel(status)}`}
         </Text>
       )}
-      <Link as={RouterLink} href={routePaths.outreachEvent(event.id)} isStandalone>
-        View details – {event.title}
-      </Link>
-    </HStack>
+    </VStack>
   );
-
-  return <ListItem label={event.title} description={description} endContent={endContent} />;
 }
 
 function StudentOutreachSection({
   title,
-  enrichedSessions,
+  enrichedEvents,
   viewerStudentId,
   rsvps,
   onRsvpChange,
   emptyDescription,
 }: {
   title: string;
-  enrichedSessions: readonly EnrichedOutreachSession[];
+  enrichedEvents: readonly EnrichedOutreachEvent[];
   viewerStudentId: string;
   rsvps: readonly RsvpRow[];
   onRsvpChange: (sessionId: string, status: RsvpStatus) => void;
@@ -1601,7 +2551,7 @@ function StudentOutreachSection({
   return (
     <VStack gap={3}>
       <Heading level={2}>{title}</Heading>
-      {enrichedSessions.length === 0 ? (
+      {enrichedEvents.length === 0 ? (
         <EmptyState
           headingLevel={3}
           title={`No ${title.toLowerCase()} outreach events`}
@@ -1609,16 +2559,13 @@ function StudentOutreachSection({
         />
       ) : (
         <List hasDividers header={`${title} outreach events`}>
-          {enrichedSessions.map(({ session, event }) => (
-            <StudentOutreachRowItem
-              key={session.id}
-              session={session}
+          {enrichedEvents.map(({ event, sessions }) => (
+            <StudentOutreachEventRow
+              key={event.id}
               event={event}
-              status={
-                rsvps.find(
-                  (rsvp) => rsvp.sessionId === session.id && rsvp.studentId === viewerStudentId,
-                )?.status ?? null
-              }
+              sessions={sessions}
+              rsvps={rsvps}
+              viewerStudentId={viewerStudentId}
               onRsvpChange={onRsvpChange}
             />
           ))}
@@ -1651,7 +2598,7 @@ function StudentParentOutreachView({
     setRsvps(initialRsvps);
   }, [initialRsvps]);
 
-  const { upcoming, past } = useMemo(() => buildUpcomingPast(sessions, events), [sessions, events]);
+  const { upcoming, past } = useMemo(() => buildEventGroups(events, sessions), [events, sessions]);
   const myHours = useMemo(
     () => computeStudentHours(viewerStudentId, sessions, rsvps),
     [viewerStudentId, sessions, rsvps],
@@ -1702,7 +2649,7 @@ function StudentParentOutreachView({
           />
           <StudentOutreachSection
             title="Upcoming"
-            enrichedSessions={upcoming}
+            enrichedEvents={upcoming}
             viewerStudentId={viewerStudentId}
             rsvps={rsvps}
             onRsvpChange={handleRsvpChange}
@@ -1710,7 +2657,7 @@ function StudentParentOutreachView({
           />
           <StudentOutreachSection
             title="Past"
-            enrichedSessions={past}
+            enrichedEvents={past}
             viewerStudentId={viewerStudentId}
             rsvps={rsvps}
             onRsvpChange={handleRsvpChange}
@@ -1786,6 +2733,14 @@ interface OutreachListLoadedProps {
   viewerStudentId: string;
   onSaveEvent: OnSaveOutreachEventFn;
   isCoachOrAdminView: boolean;
+  /** T121 item (c). */
+  onCancelEvent: CancelOutreachEventFn;
+  /** T121 item (a). */
+  loadRoster: LoadOutreachEventRosterFn;
+  /** T121 item (b)/(a) -- the signed-in coach's real `profiles.id`, always
+   * non-null here (`OutreachList` only mounts this component once
+   * `user !== null`). */
+  viewerProfileId: string;
 }
 
 function OutreachListLoaded({
@@ -1794,6 +2749,9 @@ function OutreachListLoaded({
   viewerStudentId,
   onSaveEvent,
   isCoachOrAdminView,
+  onCancelEvent,
+  loadRoster,
+  viewerProfileId,
 }: OutreachListLoadedProps): ReactNode {
   const loadState = useLoadState(() => loadData(seasonId), [loadData, seasonId]);
   // T101 (module doc #11) -- lets the coach view reload this page's own
@@ -1877,10 +2835,14 @@ function OutreachListLoaded({
           events={outreachEvents}
           sessions={outreachSessions}
           rsvps={data.rsvps}
+          attendance={data.attendance}
           students={data.students}
           goalConfig={data.goalConfig}
           onSaveEvent={onSaveEvent}
           onReload={reloadOutreachData}
+          onCancelEvent={onCancelEvent}
+          loadRoster={loadRoster}
+          viewerProfileId={viewerProfileId}
         />
       ) : (
         <StudentParentOutreachView
@@ -1919,8 +2881,19 @@ export interface OutreachListProps {
   viewerStudentId?: string;
   /** T101 (module doc #11). Defaults to a real `events`/`event_sessions`
    * insert, passed straight through to `<OutreachEventDialog
-   * onSaveEvent={...} />` in the coach view. */
+   * onSaveEvent={...} />` in the coach view -- T121 UPDATE: now also used
+   * for row-level edits (module doc #11 update on `CoachOutreachView`). */
   onSaveEvent?: OnSaveOutreachEventFn;
+  /** T121 item (c) -- real, event-level cancel default
+   * (`cancelOutreachEvent`, `../../lib/supabase/loaders/outreach.ts`, the
+   * SAME already-built, already-tested mutation `OutreachDetail.tsx` already
+   * uses for its own "Cancel event" action). */
+  onCancelEvent?: CancelOutreachEventFn;
+  /** T121 item (a) -- real roster loader default (T118's
+   * `loadOutreachEventRoster`, previously built/tested but unconsumed by
+   * any page), wired into the coach view's `OutreachEventDialog` `students`
+   * prop. */
+  loadRoster?: LoadOutreachEventRosterFn;
 }
 
 export function OutreachList({
@@ -1928,6 +2901,8 @@ export function OutreachList({
   seasonId: seasonIdProp,
   viewerStudentId = PLACEHOLDER_CURRENT_STUDENT_ID,
   onSaveEvent = saveOutreachEvent,
+  onCancelEvent = cancelOutreachEvent,
+  loadRoster = loadOutreachEventRoster,
 }: OutreachListProps = {}): ReactNode {
   const { user } = useAuth();
   // T106 UPDATE (module doc #12): called unconditionally (React's
@@ -1975,6 +2950,9 @@ export function OutreachList({
       viewerStudentId={viewerStudentId}
       onSaveEvent={onSaveEvent}
       isCoachOrAdminView={isCoachOrAdminView}
+      onCancelEvent={onCancelEvent}
+      loadRoster={loadRoster}
+      viewerProfileId={user.id}
     />
   );
 }
