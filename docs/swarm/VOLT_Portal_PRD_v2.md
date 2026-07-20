@@ -31,8 +31,8 @@ Do not re-litigate these in worker packets; cite `D-n`.
 | ID | Question | Default (binding unless vetoed) | Rationale |
 |---|---|---|---|
 | **D-1** | Scope of this swarm | **UX parity epic + schema foundations (B2 + B3) + venues (B6 folded in)**. FLL/student-coaches (B4), mentors (B5), Impact export (B8) deferred to the next swarm. | B2/B3 are "before data accumulates" decisions; UX parity is George's stated priority; venues is S-sized and required for row-density parity (current-app rows show location). B4/B5 build *on* B2/B3 — sequencing them later avoids a design pass against a moving schema. |
-| **D-2** | Season scoping (B3) | **Per program** (`FRC`, `FTC`, `Other` now; `FLL` arrives with B4). One active season per program; e.g. "25-26 FTC" and "25-26 FRC" active simultaneously. | Matches FIRST's structure and George's "'25-26' nomenclature for all seasons" note. Per-team goal variance is already handled by `students.goal_hours_override`. Per-team seasons would multiply admin work every year for no identified need. |
-| **D-3** | Dual-membership hours (B2) | **Credit where earned + combined student total.** Hours attach to the (team, session) where earned; each team's reports count only its own sessions; the student's personal view and future Impact/grant exports show the combined figure. Never double-counted into two teams' totals. | Keeps per-team reports honest, states a dual-member student's real contribution, and gives B8 the number it will need. |
+| **D-2** | Season scoping (B3) | **DECIDED BY GEORGE (2026-07-20, overriding the architect's per-program default): ONE single combined season for all teams** — e.g. "2026-27" spanning FRC + FTC + FLL activity. His words: "I do not want to manage seasons for 1 FRC, 2 FTC, 5 FLL teams. One season for all and reporting will handle the team metrics." | Zero season-admin overhead for a volunteer-run program. **Schema consequence: the existing single-globally-active-season constraint is already correct as built — B3 requires NO schema change.** What remains in scope is UI only: wiring the still-placeholder TopNav season display to the real active season. Per-team/program breakdowns are a reporting concern within the one season, never a season-model concern. |
+| **D-3** | Dual-membership hours (B2) | **DECIDED BY GEORGE (2026-07-20, overriding the architect's credit-where-earned default): DOUBLE-COUNT by membership.** A student's hours credit to **every team they belong to** — "the hours a student spends on outreach on FTC WILL ALSO count for FRC because they are on both. P3 + GG = VOLT." | George's explicit framing: "we are just a team, not a compliance-driven business — keep things simple." This is also the *simpler* build: hours belong to the student; a team's rollup is the sum over its members' hours, no session-to-team attribution logic anywhere. Team totals intentionally overlap for dual members. One honest-reporting note carried to B8's future export: a program-wide "unique hours" figure (for grants that must not double-count) is derivable from the same data later; nothing in this swarm blocks it. |
 | **D-4** | Attendance model | **All three paths:** (a) coach-managed attendance with per-student hours (primary, edit-dialog parity), (b) retroactive check-off by authenticated students, (c) existing live QR/kiosk check-in. | This is how the teams demonstrably operate today (capability map, student `/me` flow + coach edit dialog). QR-only failed George's live test on day one. |
 | **D-5** | Are student self-reports trusted or approved? | **Trusted-but-visible.** A student's retroactive check-off takes effect immediately, is labeled `self` in the record and the activity feed, and a coach can amend or remove it from the same attendance UI. No approval queue. | Matches the current app's model (Self badges on the dashboard feed) and the constitution's no-surveillance posture; an approval queue adds coach workload the teams never asked for. Coach edit-ability is the integrity backstop. |
 | **D-6** | Identity floor | **Unchanged from v1: authentication stays.** No honor-system name-picker is ported. The retroactive path (D-4b) requires a signed-in student/parent account; students too young to hold accounts are covered by the coach-managed path (D-4a). | The current app's world-readable minors' data is the single worst thing this rewrite exists to fix. Parity means workflow parity, never identity-model parity. |
@@ -159,21 +159,25 @@ judge information density honestly, not just verify elements exist.
   reader migrates (tracked as an explicit follow-up list in the epic, not
   silently forever). Rosters show team chips; a student appears on each of
   their teams' rosters; invite flow can attach a student to ≥1 team.
-- **SCH-02 · Per-program seasons (B3, D-2).** Additive `seasons.program` with
-  the same value set as `teams.program`; replace the global
-  one-active-season partial unique index with a per-program one (new index +
-  drop old in one additive migration — index swaps are not shipped-migration
-  edits). `SeasonProvider`/season resolution becomes per-program; the TopNav
-  season control (still a hardcoded placeholder today) becomes the real
-  program-aware season picker and is **in scope**. Every page keeps its
-  `seasonId` threading; only the selection source changes. Reports/leaderboard/
-  goal queries resolve the season for the team-in-context's program.
-- **SCH-03 · Hours crediting (D-3).** Attendance/hours remain keyed to the
-  session (whose event belongs to team(s)); per-team metric views count only
-  that team's sessions; new combined-per-student view provides the cross-team
-  total for personal views and future exports. Double-counting is a
-  checker-verifiable failure (a dual-member fixture student must sum correctly
-  in both team reports and the combined view).
+- **SCH-02 · Single-season model confirmed; real season display (B3, D-2).**
+  Per George's decision, the schema's existing single-globally-active-season
+  constraint is **correct as built — no migration**. Remaining scope is UI
+  only: the TopNav season control (still a hardcoded "placeholder active
+  season" string today) displays the real active season from
+  `useActiveSeason()`; season create/activate stays where it is
+  (`/settings/season`). Season naming convention in copy/examples: the shared
+  year form ("2026-27"). Every page's existing `seasonId` threading is already
+  right for this model.
+- **SCH-03 · Hours crediting (D-3): membership-based, double-counted by
+  design.** A student's hours belong to the student; a team's rollup is the
+  sum over its current members' hours (via SCH-01's junction), regardless of
+  which team's session earned them. Dual-member students therefore appear in
+  full in each of their teams' totals — intentional, per George. The student's
+  personal total counts each hour once. Checker-verifiable fixtures: a
+  dual-member student's 10h appears as 10h in team A's rollup, 10h in team
+  B's rollup, and 10h (not 20h) in their personal total. Metric views updated
+  to join through `student_teams`; a future "unique program-wide hours" view
+  (B8, grants that must not double-count) is explicitly deferred, not blocked.
 - **SCH-04 · Staff attendance/RSVP write policies.** New additive RLS policies
   permitting `is_staff()` users to insert/update/delete `rsvps` and
   `attendance` rows for any student (enabling UXP-01/02), alongside the
@@ -188,13 +192,14 @@ judge information density honestly, not just verify elements exist.
 ## 4. Data-model & view deltas (all additive; constitution item 10)
 
 Migrations (names indicative): `student_teams` junction + backfill (SCH-01);
-`seasons.program` + per-program active index swap (SCH-02); `events.location`
-(UXP-08); staff-write RLS policies on `rsvps`/`attendance` (SCH-04); RSVP
-status-transition support if hard-deletes currently erase feed history
-(UXP-10 — investigate before writing; prefer `status` over delete).
+`events.location` (UXP-08); staff-write RLS policies on `rsvps`/`attendance`
+(SCH-04); RSVP status-transition support if hard-deletes currently erase feed
+history (UXP-10 — investigate before writing; prefer `status` over delete).
+No seasons migration — D-2 confirmed the shipped single-active-season model.
 New/updated SQL views (sole source of metric math): per-program-season scoping
-for `v_student_participation`/`v_student_hours`; combined per-student
-cross-team hours (SCH-03); dashboard aggregates for UXD-07 (avg hours/active
+for `v_student_participation`/`v_student_hours` joining through
+`student_teams` with D-3's membership-based double-count semantics (SCH-03);
+dashboard aggregates for UXD-07 (avg hours/active
 student, students-at-goal, attendance rate, busiest day, upcoming committed
 hours, top events, goal projection inputs). Traps carried forward: never edit a
 shipped migration; check-constraint changes need add-new-drop-old in one
@@ -214,11 +219,12 @@ change to email sending mode (George-only, T052), Vercel go-live (T070).
 1. **Constitution/process unchanged.** Packet format, independent checkers,
    additive-only migrations, scratch-Postgres RLS verification, Astryx-only UI,
    motivation ethics — all as-is. Task IDs continue from the ledger.
-2. **Spine:** SCH-02 (seasons) → SCH-01 (membership) → SCH-04 (policies) →
-   SCH-03 (views) → UXP-08 (location) → UXP-01/02 (attendance core) →
-   UXP-09 (forms) → UXP-04 (lists) → UXP-05/06/10 (KPI/dashboard/feed) →
-   UXP-03 (self check-off) → UXP-07 (bulk complete). Schema first; UX parity
-   surfaces consume it.
+2. **Spine:** SCH-01 (membership junction) → SCH-04 (policies) → SCH-03
+   (views, D-3 semantics) → SCH-02 (real season display, UI-only) + UXP-08
+   (location) → UXP-01/02 (attendance core) → UXP-09 (forms) → UXP-04
+   (lists) → UXP-05/06/10 (KPI/dashboard/feed) → UXP-03 (self check-off) →
+   UXP-07 (bulk complete). Schema first; UX parity surfaces consume it.
+   (D-2 removed the old first step — no seasons migration exists anymore.)
 3. **Reference-standard checking:** every UXD-tagged packet names the
    capability-map figure it must be compared against; checkers judge density
    and layout against it explicitly.
@@ -228,11 +234,22 @@ change to email sending mode (George-only, T052), Vercel go-live (T070).
    applies them via `supabase db push` with the T110-style honest-risk
    briefing.
 
-## 7. Open items for George (beyond the D-register defaults)
+## 7. Open items for George
 
-1. Confirm or veto D-1 … D-6.
-2. UXP-08: free-text location now, or the small venues table immediately
+1. ~~D-2, D-3~~ — **decided by George 2026-07-20** (single season; membership
+   double-count), applied throughout this document.
+2. D-1, D-4, D-5, D-6 — architect defaults stand unless vetoed.
+3. UXP-08: free-text location now, or the small venues table immediately
    (five recurring venues suggests a dropdown-with-add would serve)? Default:
    free text now, venues table only when reuse pain appears.
-3. Activity feed retention: default is "current season" visibility. Veto if
+4. Activity feed retention: default is "current season" visibility. Veto if
    you want all-time.
+
+## 8. Guiding principle (George, verbatim intent)
+
+"We are just a team, not a compliance-driven business with strict rules and
+regulations. Keep things simple." Packet authors and checkers should weigh this
+whenever a design choice trades simplicity for rigor the program never asked
+for — the constitution's hard floors (privacy of minors, additive migrations,
+motivation ethics, no secrets client-side) are exempt from this principle;
+everything else bends toward simple.
