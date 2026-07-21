@@ -48,3 +48,7 @@ venv/
 
 # Swarm archive (can grow large — archive locally, don't commit)
 docs/swarm/archive/
+
+# Playwright test artifacts (regenerated on every run)
+test-results/
+playwright-report/
