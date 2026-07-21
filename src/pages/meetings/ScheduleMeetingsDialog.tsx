@@ -193,6 +193,50 @@
  *  - `HStack`/`VStack`: "Stack" section, `HStack`/`VStack` subsections.
  *    `gap`, `hAlign`, `vAlign`, `wrap` used.
  *  - `Text`: "Text" Props table. `type="supporting"` used.
+ *
+ * -----------------------------------------------------------------------
+ * 9. T125 (UXP-09, PRD UXD-06 "Form layout standard") -- full-height
+ *    sectioned re-layout. PURE LAYOUT change: zero handler/state/payload
+ *    logic touched below (every function above this component is
+ *    byte-identical to the pre-T125 version; only the returned JSX tree
+ *    changed).
+ *
+ * The single flat `<FormLayout>` this dialog used to render every field
+ * into is replaced by `<EventFormLayout>` + `<EventFormSection>`
+ * (`../../components/forms/EventFormLayout.tsx`, shared with
+ * `OutreachEventDialog.tsx`/T125's other half -- that file's own module doc
+ * has the full Astryx-sourcing writeup for `Section`/`Heading`) inside a
+ * `<Dialog variant="fullscreen">` (that file's module doc #1 -- a real,
+ * non-hallucinated "full-height panel" Astryx `Dialog` variant, cross-
+ * checked against `docs/swarm/astryx-api.md`'s own "# Dialog" Props table
+ * and `node_modules/@astryxdesign/core/dist/Dialog/Dialog.d.ts`). Sections,
+ * in DOM/tab order (constitution item 13's MTG-02 field order is
+ * UNCHANGED -- every field below still appears in the exact same relative
+ * sequence it always did; sections only add heading wrappers around
+ * contiguous runs of that same order, never reorder anything):
+ *   - "Basics": title, team scope. This dialog has no `type`/status-badge
+ *     field (module doc, top of file: MTG-02 always creates `type
+ *     'meeting'` events) -- unlike `OutreachEventDialog.tsx`'s "Basics"
+ *     section, so it is a thinner section here, by design (this task's own
+ *     packet: "adapt to each dialog's real fields").
+ *   - "Location": the single `Location` field. Kept as its own section
+ *     (unlike `OutreachEventDialog.tsx`, which folds its 2-field location
+ *     group into "Basics" for field-order reasons -- see that file's own
+ *     module doc 12) since it sits alone between "Basics" and "Schedule" in
+ *     MTG-02's literal order and needs no adjacent field to share a
+ *     section with.
+ *   - "Schedule": schedule mode `SegmentedControl`, its per-mode inputs,
+ *     and the shared start/end `TimeInput`s.
+ *   - "Notes" (`hasDivider={false}`, the last section): the `notes`
+ *     `TextArea`.
+ * This dialog has no UXP-01/02 attendance-roster or hours/goal fields (it
+ * only ever creates `type 'meeting'` events -- module doc, top of file), so
+ * neither a "Teams & attendees" roster-checklist section nor an "Hours &
+ * goal" section applies here; this task's own packet explicitly scopes
+ * those two named sections to "adapt to each dialog's real fields."
+ * The submit-error `Banner` renders after all sections, inside
+ * `EventFormLayout`'s own centered column, exactly where it rendered inside
+ * the old flat `FormLayout` (last child).
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
@@ -204,7 +248,6 @@ import {
   DateRangeInput,
   Dialog,
   DialogHeader,
-  FormLayout,
   HStack,
   Layout,
   LayoutContent,
@@ -224,6 +267,9 @@ import {
   type ISODateString,
   type ISOTimeString,
 } from '@astryxdesign/core';
+// T125 (UXP-09 / UXD-06) module doc 9 -- shared full-height sectioned-form
+// primitives, consumed by both this file and `OutreachEventDialog.tsx`.
+import { EventFormLayout, EventFormSection } from '../../components/forms/EventFormLayout';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase shapes of the real `events`/`event_sessions`
@@ -608,127 +654,144 @@ export function ScheduleMeetingsDialog({
   }
 
   return (
-    <Dialog isOpen={isOpen} onOpenChange={onOpenChange} purpose="form">
+    // T125 module doc 9 -- `variant="fullscreen"` is the real, non-
+    // hallucinated Astryx "full-height panel" (`EventFormLayout.tsx`'s own
+    // module doc #1 has the full sourcing writeup).
+    <Dialog isOpen={isOpen} onOpenChange={onOpenChange} purpose="form" variant="fullscreen">
       <Layout
         header={<DialogHeader title="Schedule meetings" onOpenChange={onOpenChange} />}
         content={
           <LayoutContent>
-            <FormLayout>
-              {/* Field order per MTG-02 / constitution item 13 (module doc,
-                  top of file): title, team scope, location, schedule mode,
-                  date/time pickers, notes -- exact, not a suggestion. */}
-              <TextInput
-                label="Title"
-                value={title}
-                onChange={setTitle}
-                isRequired
-                placeholder="Team meeting"
-              />
+            {/* T125 module doc 9 -- field order per MTG-02 / constitution
+                item 13 (module doc, top of file) is UNCHANGED: title, team
+                scope, location, schedule mode, date/time pickers, notes --
+                exact, not a suggestion. Sections below only add labeled
+                headings around contiguous runs of that same order (see
+                module doc 9 for the disclosed grouping). */}
+            <EventFormLayout>
+              <EventFormSection title="Basics" description="What this meeting is and who it's for.">
+                <TextInput
+                  label="Title"
+                  value={title}
+                  onChange={setTitle}
+                  isRequired
+                  placeholder="Team meeting"
+                />
 
-              <MultiSelector
-                label="Team scope"
-                options={teams.map((team) => ({ value: team.id, label: team.name }))}
-                value={selectedTeamIds}
-                onChange={setSelectedTeamIds}
-                hasSelectAll
-                triggerDisplay="labels"
-              />
+                <MultiSelector
+                  label="Team scope"
+                  options={teams.map((team) => ({ value: team.id, label: team.name }))}
+                  value={selectedTeamIds}
+                  onChange={setSelectedTeamIds}
+                  hasSelectAll
+                  triggerDisplay="labels"
+                />
+              </EventFormSection>
 
-              <TextInput
-                label="Location"
-                value={location}
-                onChange={setLocation}
-                placeholder="e.g. Robotics Lab"
-              />
+              <EventFormSection title="Location" description="Where the meeting happens.">
+                <TextInput
+                  label="Location"
+                  value={location}
+                  onChange={setLocation}
+                  placeholder="e.g. Robotics Lab"
+                />
+              </EventFormSection>
 
-              <SegmentedControl
-                value={mode}
-                onChange={(value) => setMode(value as ScheduleMode)}
-                label="Schedule mode"
+              <EventFormSection
+                title="Schedule"
+                description="Pick when this meeting happens, and its start/end times."
               >
-                <SegmentedControlItem value="single" label="Single" />
-                <SegmentedControlItem value="weekly" label="Weekly recurring" />
-                <SegmentedControlItem value="custom" label="Custom dates" />
-              </SegmentedControl>
+                <SegmentedControl
+                  value={mode}
+                  onChange={(value) => setMode(value as ScheduleMode)}
+                  label="Schedule mode"
+                >
+                  <SegmentedControlItem value="single" label="Single" />
+                  <SegmentedControlItem value="weekly" label="Weekly recurring" />
+                  <SegmentedControlItem value="custom" label="Custom dates" />
+                </SegmentedControl>
 
-              {mode === 'single' && (
-                <DateInput label="Date" value={singleDate} onChange={setSingleDate} isRequired />
-              )}
+                {mode === 'single' && (
+                  <DateInput label="Date" value={singleDate} onChange={setSingleDate} isRequired />
+                )}
 
-              {mode === 'weekly' && (
-                <>
-                  <DateRangeInput
-                    label="Date range"
-                    value={recurringRange}
-                    onChange={setRecurringRange}
-                    presets={RECURRING_RANGE_PRESETS}
-                  />
-                  <CheckboxList
-                    label="Repeat on"
-                    value={recurringWeekdays}
-                    onChange={setRecurringWeekdays}
-                    hasDividers
-                  >
-                    {WEEKDAY_OPTIONS.map((option) => (
-                      <CheckboxListItem
-                        key={option.value}
-                        label={option.label}
-                        value={option.value}
-                      />
-                    ))}
-                  </CheckboxList>
-                </>
-              )}
-
-              {mode === 'custom' && (
-                <VStack gap={2}>
-                  <HStack gap={2} vAlign="end" wrap="wrap">
-                    <DateInput
-                      label="Add a date"
-                      value={customDatePicker}
-                      onChange={setCustomDatePicker}
+                {mode === 'weekly' && (
+                  <>
+                    <DateRangeInput
+                      label="Date range"
+                      value={recurringRange}
+                      onChange={setRecurringRange}
+                      presets={RECURRING_RANGE_PRESETS}
                     />
-                    <Button
-                      label="Add date"
-                      variant="secondary"
-                      onClick={addCustomDate}
-                      isDisabled={customDatePicker === undefined}
-                    />
-                  </HStack>
-                  {customDates.length === 0 ? (
-                    <Text type="supporting">No custom dates added yet.</Text>
-                  ) : (
-                    <List hasDividers header="Picked dates">
-                      {customDates.map((date) => (
-                        <ListItem
-                          key={date}
-                          label={date}
-                          endContent={
-                            <Button
-                              label={`Remove ${date}`}
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeCustomDate(date)}
-                            />
-                          }
+                    <CheckboxList
+                      label="Repeat on"
+                      value={recurringWeekdays}
+                      onChange={setRecurringWeekdays}
+                      hasDividers
+                    >
+                      {WEEKDAY_OPTIONS.map((option) => (
+                        <CheckboxListItem
+                          key={option.value}
+                          label={option.label}
+                          value={option.value}
                         />
                       ))}
-                    </List>
-                  )}
-                </VStack>
-              )}
+                    </CheckboxList>
+                  </>
+                )}
 
-              <HStack gap={2} wrap="wrap">
-                <TimeInput
-                  label="Start time"
-                  value={startTime}
-                  onChange={setStartTime}
-                  isRequired
-                />
-                <TimeInput label="End time" value={endTime} onChange={setEndTime} isRequired />
-              </HStack>
+                {mode === 'custom' && (
+                  <VStack gap={2}>
+                    <HStack gap={2} vAlign="end" wrap="wrap">
+                      <DateInput
+                        label="Add a date"
+                        value={customDatePicker}
+                        onChange={setCustomDatePicker}
+                      />
+                      <Button
+                        label="Add date"
+                        variant="secondary"
+                        onClick={addCustomDate}
+                        isDisabled={customDatePicker === undefined}
+                      />
+                    </HStack>
+                    {customDates.length === 0 ? (
+                      <Text type="supporting">No custom dates added yet.</Text>
+                    ) : (
+                      <List hasDividers header="Picked dates">
+                        {customDates.map((date) => (
+                          <ListItem
+                            key={date}
+                            label={date}
+                            endContent={
+                              <Button
+                                label={`Remove ${date}`}
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeCustomDate(date)}
+                              />
+                            }
+                          />
+                        ))}
+                      </List>
+                    )}
+                  </VStack>
+                )}
 
-              <TextArea label="Notes" value={notes} onChange={setNotes} isOptional rows={3} />
+                <HStack gap={2} wrap="wrap">
+                  <TimeInput
+                    label="Start time"
+                    value={startTime}
+                    onChange={setStartTime}
+                    isRequired
+                  />
+                  <TimeInput label="End time" value={endTime} onChange={setEndTime} isRequired />
+                </HStack>
+              </EventFormSection>
+
+              <EventFormSection title="Notes" hasDivider={false}>
+                <TextArea label="Notes" value={notes} onChange={setNotes} isOptional rows={3} />
+              </EventFormSection>
 
               {submitError !== null && (
                 <Banner
@@ -737,7 +800,7 @@ export function ScheduleMeetingsDialog({
                   description={submitError}
                 />
               )}
-            </FormLayout>
+            </EventFormLayout>
           </LayoutContent>
         }
         footer={

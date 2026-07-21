@@ -4566,3 +4566,44 @@ route-persistence test.
 - Follow-ups: (NIT) remove the now-unused eslint-disable directive at
   `OutreachList.tsx:1117` (auto-fixable) to return the warning count to
   the 338 baseline.
+[2026-07-21T01:49:11Z] Worker finished. Checker required before completion.
+
+## T125 — UXP-09: event create/edit form re-layout per UXD-06
+- Date: 2026-07-21
+- Worker: worker-implementer (1st attempt)
+- Checker: checker-reviewer
+- Verdict: **PASS** (NIT)
+- Architect decision honored: both `OutreachEventDialog` and
+  `ScheduleMeetingsDialog` re-laid into full-height (`Dialog
+  variant="fullscreen"`) sectioned panels via new shared
+  `src/components/forms/EventFormLayout.tsx` (`EventFormLayout` +
+  `EventFormSection`, real semantic `Heading` + `Section`), rather than
+  merged into one editor — preserves the checker-verified T101/T118/T119
+  logic untouched.
+- Test-file integrity independently verified as the strict standard:
+  `OutreachEventDialog.test.tsx` / `ScheduleMeetingsDialog.test.tsx` are
+  byte-unchanged (zero git diff) and their 103 tests pass unmodified
+  against the new markup — "untouched tests still green," not "tests
+  edited to match."
+- Logic preservation verified by diffing everything above each file's
+  `return`: mutation handlers, `computeExpectedAttendeeRsvpPlan`,
+  `resolveExpectedAttendeeIds`, `buildOutreachSessionsPayload`,
+  reconciliation, and prefill are byte-identical. Field order verified
+  unchanged against `git show HEAD` — sections wrap contiguous runs of
+  each dialog's pre-existing OUT-02/MTG-02 order (constitution item 13);
+  the Basics-absorbs-Location (outreach) vs. standalone-Location
+  (meetings) asymmetry is forced by each dialog's real field sequence,
+  not an inconsistency.
+- Astryx props (`Dialog variant`, `Section variant/dividers`,
+  `Heading level`, `VStack`, `Text type`) checked against installed
+  source since astryx-api.md marks Section/Heading undefined — all real,
+  no invented props. A11y: native `<dialog>`/focus-trap preserved
+  (fullscreen only changes CSS sizing); headings are real elements.
+- Checker corrected one worker misattribution: the eslint warning delta
+  (339→343) is sibling-file noise, not `EventFormLayout.tsx` (which is
+  itself warning-clean) — noted here so it doesn't propagate.
+- Gates (checker-run): tsc 0; eslint 0 errors; targeted 103/103, full
+  suite 1354/1354 (58 files); build OK (`EventFormLayout` its own 6.88kB
+  chunk); prettier clean.
+- Follow-up: none blocking; the warning-attribution correction above is
+  informational only.

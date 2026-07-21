@@ -202,7 +202,17 @@
  *     live for this task):
  *
  *  - `Dialog` (line 2344 section, Props table): `isOpen`, `onOpenChange`,
- *    `children`, `purpose` ("form") used.
+ *    `children`, `purpose` ("form") used. T125 module doc 12 additionally
+ *    uses `variant="fullscreen"` (same Props table row: "fullscreen: Takes
+ *    up the entire viewport") for the UXD-06 full-height panel.
+ *  - `Section` (T125 module doc 12 / `EventFormLayout.tsx`'s own module doc
+ *    #3 -- "# Layout" section, own `### Section` Components subsection is
+ *    `undefined`, cross-checked via `node_modules/@astryxdesign/core/dist/
+ *    Section/Section.d.ts`): `variant`, `dividers` used.
+ *  - `Heading` (T125 module doc 12 / `EventFormLayout.tsx`'s own module doc
+ *    #3 -- "# Text" section, own `### Heading` Components subsection is
+ *    `undefined`, cross-checked via `node_modules/@astryxdesign/core/dist/
+ *    Heading/Heading.d.ts`): `level` used.
  *  - `DialogHeader`: doc's own "Components > DialogHeader" subsection is
  *    `undefined` (same disclosed gap `ScheduleMeetingsDialog.tsx`/T031 and
  *    every other dialog/page in this batch already hit) -- props taken from
@@ -400,6 +410,46 @@
  * committed with a stale/incomplete roster, surfaced to the coach as the
  * same real, unmasked `SupabaseLoaderError` `handleSubmit`'s existing
  * `catch` block already renders in the submit-error `Banner`.
+ *
+ * -----------------------------------------------------------------------
+ * 12. T125 (UXP-09 / UXD-06) -- full-height sectioned re-layout. PURE LAYOUT
+ *     change: zero handler/state/payload logic touched below (every
+ *     function above this component is byte-identical to the pre-T125
+ *     version; only the returned JSX tree changed).
+ *
+ * The single flat `<FormLayout>` this dialog used to render every field into
+ * is replaced by `<EventFormLayout>` + `<EventFormSection>`
+ * (`../../components/forms/EventFormLayout.tsx`, this task's own shared
+ * primitive, module doc there has the full Astryx-sourcing writeup) inside a
+ * `<Dialog variant="fullscreen">` (that file's module doc #1 -- a real,
+ * non-hallucinated "full-height panel" Astryx variant). Sections, in DOM/tab
+ * order (constitution item 13's OUT-02 field order is UNCHANGED -- every
+ * field below still appears in the exact same relative sequence it always
+ * did; sections only add heading wrappers around contiguous runs of that
+ * same order, never reorder anything):
+ *   - "Basics": title, description, location name + address, event type,
+ *     competition flags. Disclosed grouping choice: this task's own packet
+ *     suggests "Location" as a separate section in its general template,
+ *     but OUT-02's literal field order interleaves location BETWEEN
+ *     description and event type -- splitting it into its own section would
+ *     require either reordering fields (which constitution item 13
+ *     forbids without a dispute) or a second, oddly-positioned "Basics"
+ *     section after Location. Folding location into "Basics" avoids both
+ *     while still giving every field a labeled home, per the packet's own
+ *     "adapt to each dialog's real fields" instruction.
+ *   - "Schedule": schedule mode `SegmentedControl`, its per-mode inputs,
+ *     and the per-session start/end/people-reached rows.
+ *   - "Hours & goal": adult volunteers count + hours.
+ *   - "Teams & attendees": team scope `MultiSelector` + the "Expected
+ *     attendees" roster checklist -- this task's own packet: "the UXP-02
+ *     roster checklist gets a full-width labeled section -- it is the
+ *     worst-crowded region today." `hasDivider={false}` is NOT set here
+ *     (a "Calendar" section follows it).
+ *   - "Calendar" (`hasDivider={false}`, the last section): "Share to
+ *     calendar feed."
+ * The submit-error `Banner` renders after all sections, inside
+ * `EventFormLayout`'s own centered column, exactly where it rendered inside
+ * the old flat `FormLayout` (last child).
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
@@ -411,7 +461,6 @@ import {
   DateRangeInput,
   Dialog,
   DialogHeader,
-  FormLayout,
   HStack,
   Layout,
   LayoutContent,
@@ -434,6 +483,9 @@ import {
   type ISODateString,
   type ISOTimeString,
 } from '@astryxdesign/core';
+// T125 (UXP-09 / UXD-06) module doc 12 -- shared full-height sectioned-form
+// primitives, consumed by both this file and `ScheduleMeetingsDialog.tsx`.
+import { EventFormLayout, EventFormSection } from '../../components/forms/EventFormLayout';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase shapes of the real `events`/`event_sessions`
@@ -1168,7 +1220,10 @@ export function OutreachEventDialog({
   }
 
   return (
-    <Dialog isOpen={isOpen} onOpenChange={onOpenChange} purpose="form">
+    // T125 module doc 12 -- `variant="fullscreen"` is the real, non-
+    // hallucinated Astryx "full-height panel" (`EventFormLayout.tsx`'s own
+    // module doc #1 has the full sourcing writeup).
+    <Dialog isOpen={isOpen} onOpenChange={onOpenChange} purpose="form" variant="fullscreen">
       <Layout
         header={
           <DialogHeader
@@ -1178,301 +1233,331 @@ export function OutreachEventDialog({
         }
         content={
           <LayoutContent>
-            <FormLayout>
-              {/* Field order per OUT-02 / constitution item 13 (module doc,
-                  top of file): title -> description -> location name +
-                  address -> type -> schedule mode -> per-session times +
-                  expected people reached -> adult volunteers -> team scope
-                  -> share to calendar feed -- exact, not a suggestion. */}
-              <TextInput
-                label="Title"
-                value={title}
-                onChange={setTitle}
-                isRequired
-                placeholder="e.g. Community Food Bank Sort"
-              />
-
-              <TextArea
-                label="Description"
-                value={description}
-                onChange={setDescription}
-                isOptional
-                rows={3}
-              />
-
-              <HStack gap={2} wrap="wrap">
-                <TextInput
-                  label="Location name"
-                  value={locationName}
-                  onChange={setLocationName}
-                  placeholder="e.g. Riverside Food Bank"
-                />
-                <TextInput
-                  label="Address"
-                  value={address}
-                  onChange={setAddress}
-                  placeholder="e.g. 100 Riverside Dr"
-                />
-              </HStack>
-
-              {/* Module doc #1 -- the resolved central spec tension: a real
-                  type Selector, default 'outreach', that can also create
-                  'competition' events per CMP-01. */}
-              <Selector
-                label="Event type"
-                options={[
-                  { value: 'outreach', label: 'Outreach' },
-                  { value: 'competition', label: 'Competition' },
-                ]}
-                value={type}
-                onChange={(value) => setType(value as OutreachDialogEventType)}
-              />
-
-              {/* Module doc #2 -- CMP-02: these flags are only ever shown as
-                  editable controls for type === 'competition'. */}
-              {type === 'competition' && (
-                <VStack gap={2}>
-                  <Switch
-                    label="Counts toward participation %"
-                    value={competitionCountsParticipation}
-                    onChange={(checked) => setCompetitionCountsParticipation(checked)}
-                    description="Off by default for competitions (CMP-02); turn on to opt this event into MET-01/02."
-                  />
-                  <Switch
-                    label="Counts toward volunteer hours"
-                    value={competitionCountsVolunteerHours}
-                    onChange={(checked) => setCompetitionCountsVolunteerHours(checked)}
-                    description="Off by default for competitions (CMP-02); turn on to opt this event into MET-03/04."
-                  />
-                </VStack>
-              )}
-
-              <SegmentedControl
-                value={mode}
-                onChange={(value) => setMode(value as OutreachScheduleMode)}
-                label="Schedule mode"
+            {/* T125 module doc 12 -- field order per OUT-02 / constitution
+                item 13 (module doc, top of file) is UNCHANGED: title ->
+                description -> location name + address -> type -> schedule
+                mode -> per-session times + expected people reached -> adult
+                volunteers -> team scope -> expected attendees -> share to
+                calendar feed -- exact, not a suggestion. Sections below only
+                add labeled headings around contiguous runs of that same
+                order (see module doc 12 for the disclosed grouping). */}
+            <EventFormLayout>
+              <EventFormSection
+                title="Basics"
+                description="What this event is called and where it happens."
               >
-                <SegmentedControlItem value="single" label="Single" />
-                <SegmentedControlItem value="multiDay" label="Multi-day" />
-                <SegmentedControlItem value="recurring" label="Recurring" />
-                <SegmentedControlItem value="custom" label="Custom dates" />
-              </SegmentedControl>
-
-              {mode === 'single' && (
-                <DateInput label="Date" value={singleDate} onChange={setSingleDate} isRequired />
-              )}
-
-              {mode === 'multiDay' && (
-                <DateRangeInput
-                  label="Date range"
-                  value={multiDayRange}
-                  onChange={setMultiDayRange}
-                  presets={MULTI_DAY_RANGE_PRESETS}
+                <TextInput
+                  label="Title"
+                  value={title}
+                  onChange={setTitle}
+                  isRequired
+                  placeholder="e.g. Community Food Bank Sort"
                 />
-              )}
 
-              {mode === 'recurring' && (
-                <>
-                  <DateRangeInput
-                    label="Date range"
-                    value={recurringRange}
-                    onChange={setRecurringRange}
-                    presets={RECURRING_RANGE_PRESETS}
+                <TextArea
+                  label="Description"
+                  value={description}
+                  onChange={setDescription}
+                  isOptional
+                  rows={3}
+                />
+
+                <HStack gap={2} wrap="wrap">
+                  <TextInput
+                    label="Location name"
+                    value={locationName}
+                    onChange={setLocationName}
+                    placeholder="e.g. Riverside Food Bank"
                   />
-                  <CheckboxList
-                    label="Repeat on"
-                    value={recurringWeekdays}
-                    onChange={setRecurringWeekdays}
-                    hasDividers
-                  >
-                    {WEEKDAY_OPTIONS.map((option) => (
-                      <CheckboxListItem
-                        key={option.value}
-                        label={option.label}
-                        value={option.value}
-                      />
-                    ))}
-                  </CheckboxList>
-                </>
-              )}
-
-              {mode === 'custom' && (
-                <VStack gap={2}>
-                  <HStack gap={2} vAlign="end" wrap="wrap">
-                    <DateInput
-                      label="Add a date"
-                      value={customDatePicker}
-                      onChange={setCustomDatePicker}
-                    />
-                    <Button
-                      label="Add date"
-                      variant="secondary"
-                      onClick={addCustomDate}
-                      isDisabled={customDatePicker === undefined}
-                    />
-                  </HStack>
-                  {customDates.length === 0 ? (
-                    <Text type="supporting">No custom dates added yet.</Text>
-                  ) : (
-                    <List hasDividers header="Picked dates">
-                      {customDates.map((date) => (
-                        <ListItem
-                          key={date}
-                          label={date}
-                          endContent={
-                            <Button
-                              label={`Remove ${date}`}
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeCustomDate(date)}
-                            />
-                          }
-                        />
-                      ))}
-                    </List>
-                  )}
-                </VStack>
-              )}
-
-              {/* Module doc #6 -- "per-session start/end times, expected
-                  people-reached placeholder per day": one row per currently
-                  selected date. Session-detail labels are suffixed with the
-                  date so each row's controls have a unique, testable label
-                  (ordinary parenthetical prose, not a wireframe artifact --
-                  see module doc #4). */}
-              {sessionDates.length === 0 ? (
-                <Text type="supporting">Pick at least one date above to set its times.</Text>
-              ) : (
-                <VStack gap={3}>
-                  <Text type="supporting">
-                    Session details ({sessionDates.length}{' '}
-                    {sessionDates.length === 1 ? 'session' : 'sessions'})
-                  </Text>
-                  {sessionDates.map((date) => {
-                    const detail = effectiveSessionDetails[date];
-                    return (
-                      <VStack key={date} gap={2}>
-                        <Text type="supporting">{date}</Text>
-                        <HStack gap={2} wrap="wrap">
-                          <TimeInput
-                            label={`Start time (${date})`}
-                            value={detail?.startTime}
-                            onChange={(value) => updateSessionDetail(date, { startTime: value })}
-                            isRequired
-                          />
-                          <TimeInput
-                            label={`End time (${date})`}
-                            value={detail?.endTime}
-                            onChange={(value) => updateSessionDetail(date, { endTime: value })}
-                            isRequired
-                          />
-                          <NumberInput
-                            label={`Expected people reached (${date})`}
-                            value={detail?.peopleReached ?? null}
-                            onChange={(value: number | null) =>
-                              updateSessionDetail(date, { peopleReached: value })
-                            }
-                            isOptional
-                            hasClear
-                            min={0}
-                            isIntegerOnly
-                          />
-                        </HStack>
-                      </VStack>
-                    );
-                  })}
-                </VStack>
-              )}
-
-              <HStack gap={2} wrap="wrap">
-                <NumberInput
-                  label="Adult volunteers"
-                  value={adultVolunteersCount}
-                  onChange={setAdultVolunteersCount}
-                  min={0}
-                  isIntegerOnly
-                  units="volunteers"
-                />
-                <NumberInput
-                  label="Adult volunteer hours"
-                  value={adultVolunteerHours}
-                  onChange={setAdultVolunteerHours}
-                  min={0}
-                  step={0.5}
-                  units="hrs"
-                />
-              </HStack>
-
-              <MultiSelector
-                label="Team scope"
-                options={teams.map((team) => ({ value: team.id, label: team.name }))}
-                value={selectedTeamIds}
-                onChange={setSelectedTeamIds}
-                hasSelectAll
-                triggerDisplay="labels"
-              />
-
-              {/* T118 (UXP-02) module doc 11b -- placed after Team scope
-                  (the roster is scoped to it) and before Share to calendar
-                  feed, matching the capability map's own "New event form"
-                  ordering. Module doc 11c -- one CheckboxList per team acts
-                  as the "team chip" group (no dedicated Chip component
-                  exists in this design system). */}
-              <VStack gap={2}>
-                <HStack gap={2} vAlign="center" wrap="wrap">
-                  <Text type="supporting">
-                    Expected attendees ({effectiveExpectedStudentIds.length} of{' '}
-                    {visibleRosterIds.length})
-                  </Text>
-                  <Button
-                    label="All"
-                    variant="ghost"
-                    size="sm"
-                    onClick={selectAllVisibleRoster}
-                    isDisabled={visibleRosterIds.length === 0}
-                  />
-                  <Button
-                    label="Clear"
-                    variant="ghost"
-                    size="sm"
-                    onClick={clearVisibleRoster}
-                    isDisabled={effectiveExpectedStudentIds.length === 0}
+                  <TextInput
+                    label="Address"
+                    value={address}
+                    onChange={setAddress}
+                    placeholder="e.g. 100 Riverside Dr"
                   />
                 </HStack>
-                {rosterGroups.length === 0 ? (
-                  <Text type="supporting">No active students on the selected team(s) yet.</Text>
-                ) : (
-                  rosterGroups.map((group) => (
+
+                {/* Module doc #1 -- the resolved central spec tension: a real
+                    type Selector, default 'outreach', that can also create
+                    'competition' events per CMP-01. */}
+                <Selector
+                  label="Event type"
+                  options={[
+                    { value: 'outreach', label: 'Outreach' },
+                    { value: 'competition', label: 'Competition' },
+                  ]}
+                  value={type}
+                  onChange={(value) => setType(value as OutreachDialogEventType)}
+                />
+
+                {/* Module doc #2 -- CMP-02: these flags are only ever shown
+                    as editable controls for type === 'competition'. */}
+                {type === 'competition' && (
+                  <VStack gap={2}>
+                    <Switch
+                      label="Counts toward participation %"
+                      value={competitionCountsParticipation}
+                      onChange={(checked) => setCompetitionCountsParticipation(checked)}
+                      description="Off by default for competitions (CMP-02); turn on to opt this event into MET-01/02."
+                    />
+                    <Switch
+                      label="Counts toward volunteer hours"
+                      value={competitionCountsVolunteerHours}
+                      onChange={(checked) => setCompetitionCountsVolunteerHours(checked)}
+                      description="Off by default for competitions (CMP-02); turn on to opt this event into MET-03/04."
+                    />
+                  </VStack>
+                )}
+              </EventFormSection>
+
+              <EventFormSection
+                title="Schedule"
+                description="Pick when this event happens, then set each day's times."
+              >
+                <SegmentedControl
+                  value={mode}
+                  onChange={(value) => setMode(value as OutreachScheduleMode)}
+                  label="Schedule mode"
+                >
+                  <SegmentedControlItem value="single" label="Single" />
+                  <SegmentedControlItem value="multiDay" label="Multi-day" />
+                  <SegmentedControlItem value="recurring" label="Recurring" />
+                  <SegmentedControlItem value="custom" label="Custom dates" />
+                </SegmentedControl>
+
+                {mode === 'single' && (
+                  <DateInput label="Date" value={singleDate} onChange={setSingleDate} isRequired />
+                )}
+
+                {mode === 'multiDay' && (
+                  <DateRangeInput
+                    label="Date range"
+                    value={multiDayRange}
+                    onChange={setMultiDayRange}
+                    presets={MULTI_DAY_RANGE_PRESETS}
+                  />
+                )}
+
+                {mode === 'recurring' && (
+                  <>
+                    <DateRangeInput
+                      label="Date range"
+                      value={recurringRange}
+                      onChange={setRecurringRange}
+                      presets={RECURRING_RANGE_PRESETS}
+                    />
                     <CheckboxList
-                      key={group.team.id}
-                      label={group.team.name}
-                      value={effectiveExpectedStudentIds}
-                      onChange={setExpectedStudentIds}
+                      label="Repeat on"
+                      value={recurringWeekdays}
+                      onChange={setRecurringWeekdays}
                       hasDividers
                     >
-                      {group.students.map((student) => (
+                      {WEEKDAY_OPTIONS.map((option) => (
                         <CheckboxListItem
-                          key={student.id}
-                          label={student.name}
-                          value={student.id}
+                          key={option.value}
+                          label={option.label}
+                          value={option.value}
                         />
                       ))}
                     </CheckboxList>
-                  ))
+                  </>
                 )}
-              </VStack>
 
-              <Switch
-                label="Share to calendar feed"
-                value={shareToCalendarFeed}
-                onChange={(checked) => setShareToCalendarFeed(checked)}
-                description="Include this event's sessions in VOLT's subscribable ICS calendar feed."
-              />
+                {mode === 'custom' && (
+                  <VStack gap={2}>
+                    <HStack gap={2} vAlign="end" wrap="wrap">
+                      <DateInput
+                        label="Add a date"
+                        value={customDatePicker}
+                        onChange={setCustomDatePicker}
+                      />
+                      <Button
+                        label="Add date"
+                        variant="secondary"
+                        onClick={addCustomDate}
+                        isDisabled={customDatePicker === undefined}
+                      />
+                    </HStack>
+                    {customDates.length === 0 ? (
+                      <Text type="supporting">No custom dates added yet.</Text>
+                    ) : (
+                      <List hasDividers header="Picked dates">
+                        {customDates.map((date) => (
+                          <ListItem
+                            key={date}
+                            label={date}
+                            endContent={
+                              <Button
+                                label={`Remove ${date}`}
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeCustomDate(date)}
+                              />
+                            }
+                          />
+                        ))}
+                      </List>
+                    )}
+                  </VStack>
+                )}
+
+                {/* Module doc #6 -- "per-session start/end times, expected
+                    people-reached placeholder per day": one row per
+                    currently selected date. Session-detail labels are
+                    suffixed with the date so each row's controls have a
+                    unique, testable label (ordinary parenthetical prose,
+                    not a wireframe artifact -- see module doc #4). */}
+                {sessionDates.length === 0 ? (
+                  <Text type="supporting">Pick at least one date above to set its times.</Text>
+                ) : (
+                  <VStack gap={3}>
+                    <Text type="supporting">
+                      Session details ({sessionDates.length}{' '}
+                      {sessionDates.length === 1 ? 'session' : 'sessions'})
+                    </Text>
+                    {sessionDates.map((date) => {
+                      const detail = effectiveSessionDetails[date];
+                      return (
+                        <VStack key={date} gap={2}>
+                          <Text type="supporting">{date}</Text>
+                          <HStack gap={2} wrap="wrap">
+                            <TimeInput
+                              label={`Start time (${date})`}
+                              value={detail?.startTime}
+                              onChange={(value) => updateSessionDetail(date, { startTime: value })}
+                              isRequired
+                            />
+                            <TimeInput
+                              label={`End time (${date})`}
+                              value={detail?.endTime}
+                              onChange={(value) => updateSessionDetail(date, { endTime: value })}
+                              isRequired
+                            />
+                            <NumberInput
+                              label={`Expected people reached (${date})`}
+                              value={detail?.peopleReached ?? null}
+                              onChange={(value: number | null) =>
+                                updateSessionDetail(date, { peopleReached: value })
+                              }
+                              isOptional
+                              hasClear
+                              min={0}
+                              isIntegerOnly
+                            />
+                          </HStack>
+                        </VStack>
+                      );
+                    })}
+                  </VStack>
+                )}
+              </EventFormSection>
+
+              <EventFormSection
+                title="Hours & goal"
+                description="Adult volunteers helping run this event."
+              >
+                <HStack gap={2} wrap="wrap">
+                  <NumberInput
+                    label="Adult volunteers"
+                    value={adultVolunteersCount}
+                    onChange={setAdultVolunteersCount}
+                    min={0}
+                    isIntegerOnly
+                    units="volunteers"
+                  />
+                  <NumberInput
+                    label="Adult volunteer hours"
+                    value={adultVolunteerHours}
+                    onChange={setAdultVolunteerHours}
+                    min={0}
+                    step={0.5}
+                    units="hrs"
+                  />
+                </HStack>
+              </EventFormSection>
+
+              {/* T118 (UXP-02) module doc 11b -- Team scope, then the
+                  "Expected attendees" roster checklist (scoped to it) --
+                  this task's own packet: "the UXP-02 roster checklist gets
+                  a full-width labeled section -- it is the worst-crowded
+                  region today." Module doc 11c -- one CheckboxList per team
+                  acts as the "team chip" group (no dedicated Chip component
+                  exists in this design system). */}
+              <EventFormSection
+                title="Teams & attendees"
+                description="Which teams this event is for, and who's expected to attend."
+              >
+                <MultiSelector
+                  label="Team scope"
+                  options={teams.map((team) => ({ value: team.id, label: team.name }))}
+                  value={selectedTeamIds}
+                  onChange={setSelectedTeamIds}
+                  hasSelectAll
+                  triggerDisplay="labels"
+                />
+
+                <VStack gap={2}>
+                  <HStack gap={2} vAlign="center" wrap="wrap">
+                    <Text type="supporting">
+                      Expected attendees ({effectiveExpectedStudentIds.length} of{' '}
+                      {visibleRosterIds.length})
+                    </Text>
+                    <Button
+                      label="All"
+                      variant="ghost"
+                      size="sm"
+                      onClick={selectAllVisibleRoster}
+                      isDisabled={visibleRosterIds.length === 0}
+                    />
+                    <Button
+                      label="Clear"
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearVisibleRoster}
+                      isDisabled={effectiveExpectedStudentIds.length === 0}
+                    />
+                  </HStack>
+                  {rosterGroups.length === 0 ? (
+                    <Text type="supporting">No active students on the selected team(s) yet.</Text>
+                  ) : (
+                    rosterGroups.map((group) => (
+                      <CheckboxList
+                        key={group.team.id}
+                        label={group.team.name}
+                        value={effectiveExpectedStudentIds}
+                        onChange={setExpectedStudentIds}
+                        hasDividers
+                      >
+                        {group.students.map((student) => (
+                          <CheckboxListItem
+                            key={student.id}
+                            label={student.name}
+                            value={student.id}
+                          />
+                        ))}
+                      </CheckboxList>
+                    ))
+                  )}
+                </VStack>
+              </EventFormSection>
+
+              <EventFormSection
+                title="Calendar"
+                description="Control whether this event's sessions show up on VOLT's public calendar feed."
+                hasDivider={false}
+              >
+                <Switch
+                  label="Share to calendar feed"
+                  value={shareToCalendarFeed}
+                  onChange={(checked) => setShareToCalendarFeed(checked)}
+                  description="Include this event's sessions in VOLT's subscribable ICS calendar feed."
+                />
+              </EventFormSection>
 
               {submitError !== null && (
                 <Banner status="error" title="Couldn't save this event" description={submitError} />
               )}
-            </FormLayout>
+            </EventFormLayout>
           </LayoutContent>
         }
         footer={
