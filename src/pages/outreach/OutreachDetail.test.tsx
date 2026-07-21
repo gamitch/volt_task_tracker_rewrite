@@ -38,6 +38,20 @@
  * `invokeEdgeFunction`) -- `AttendancePanel.tsx`'s OWN test file
  * (`AttendancePanel.test.tsx`) is the authority for that component's
  * internal toggle/hours-edit/un-mark behavior, not duplicated here.
+ *
+ * -----------------------------------------------------------------------
+ * T127 (PRD v2 UXP-07) UPDATE: adds coverage for the new staff-only
+ * "Mark event complete" `MoreMenu` item + `<MarkEventCompleteDialog>` wiring
+ * (component module doc #12) -- role gating (no user / student never see
+ * the item, coach/admin do), and an end-to-end proof that confirming the
+ * dialog drives the real `markDayComplete` mutation once per remaining
+ * session and reloads this page's own data. Same `importOriginal`
+ * partial-mock pattern the `attendance` loader mock above already
+ * established, applied here to `../../lib/supabase/loaders/outreach`'s own
+ * `markDayComplete` export (the exact shared mutation
+ * `MarkEventCompleteDialog.tsx`'s own module doc #1 documents driving) --
+ * `MarkEventCompleteDialog.test.tsx` is the authority for that component's
+ * own internal partial-failure/summary behavior, not duplicated here.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { act } from 'react';
@@ -49,6 +63,7 @@ import { LoginAs } from '../../test-utils/authHarness';
 import {
   makeCancelOutreachEvent,
   makeLoadOutreachDetail,
+  markDayComplete,
 } from '../../lib/supabase/loaders/outreach';
 import { loadAttendanceForSessions, upsertAttendance } from '../../lib/supabase/loaders/attendance';
 import {
@@ -95,6 +110,27 @@ vi.mock('../../lib/supabase/loaders/attendance', async (importOriginal) => {
 const mockedLoadAttendanceForSessions = vi.mocked(loadAttendanceForSessions);
 const mockedUpsertAttendance = vi.mocked(upsertAttendance);
 
+// T127 (module doc above) -- same `importOriginal` partial-mock convention,
+// applied here so `<MarkEventCompleteDialog>`'s own default
+// `onMarkSessionComplete` (baked to `markDayComplete` at that file's own
+// import time, module doc #12) never hits a real, unconfigured Supabase
+// client in this test environment. Every other real export of this module
+// (`loadOutreachDetail`, `makeLoadOutreachDetail`, `cancelOutreachEvent`,
+// `makeCancelOutreachEvent`, `saveOutreachEvent`, etc.) stays real -- this
+// file's own pre-existing tests always pass explicit `loadData`/
+// `onSaveEvent`/`onCancelEvent` props anyway, so only `markDayComplete`
+// (which `OutreachDetail.tsx` never overrides, by design -- module doc #12)
+// needs mocking.
+vi.mock('../../lib/supabase/loaders/outreach', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/supabase/loaders/outreach')>();
+  return {
+    ...actual,
+    markDayComplete: vi.fn(async () => {}),
+  };
+});
+
+const mockedMarkDayComplete = vi.mocked(markDayComplete);
+
 // ---------------------------------------------------------------------------
 // jsdom gap: `Dialog`/`AlertDialog` render a native `<dialog>` and call
 // `HTMLDialogElement.prototype.showModal()`, which this repo's installed
@@ -138,6 +174,11 @@ afterEach(() => {
   // module-level mock.
   mockedLoadAttendanceForSessions.mockClear();
   mockedUpsertAttendance.mockClear();
+  // T127 -- same clear-only convention; individual tests that need a
+  // rejection use `mockRejectedValueOnce`/`mockResolvedValueOnce`, which
+  // `mockClear` (not `mockReset`) leaves the default resolved-undefined
+  // implementation intact for.
+  mockedMarkDayComplete.mockClear();
 });
 
 async function flushMicrotasks(): Promise<void> {
@@ -1026,5 +1067,149 @@ describe('<AttendancePanel> data threading (roster/sessions/teams/currentUserPro
     expect(mockedUpsertAttendance).toHaveBeenCalledWith(
       expect.objectContaining({ recordedBy: COACH_USER.id, method: 'coach' }),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T127 (PRD v2 UXP-07): "Mark event complete" staff-only trigger + real
+// per-session mutation reuse (component module doc #12).
+// ---------------------------------------------------------------------------
+
+function findMarkEventCompleteMenuItem(): Element | undefined {
+  return Array.from(document.querySelectorAll('[role="menuitem"], button')).find(
+    (el) => el.textContent?.trim() === 'Mark event complete',
+  );
+}
+
+describe('"Mark event complete" MoreMenu item -- staff-only (packet Objective)', () => {
+  it('is absent for an unauthenticated viewer', async () => {
+    renderDetail('event-food-bank-sort', { loadData: defaultLoadOutreachDetail }, null);
+    await flushMicrotasks();
+    act(() => {
+      findMoreMenuButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(findMarkEventCompleteMenuItem()).toBeUndefined();
+  });
+
+  it('is absent for a signed-in student -- page unchanged for non-staff', async () => {
+    renderDetail('event-food-bank-sort', { loadData: defaultLoadOutreachDetail }, STUDENT_USER);
+    await flushMicrotasks();
+    act(() => {
+      findMoreMenuButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(findMarkEventCompleteMenuItem()).toBeUndefined();
+    // Edit/Cancel event -- unaffected by this task -- still present.
+    expect(
+      Array.from(document.querySelectorAll('[role="menuitem"], button')).some(
+        (el) => el.textContent?.trim() === 'Edit',
+      ),
+    ).toBe(true);
+  });
+
+  it('is present, and opens the real MarkEventCompleteDialog, for a signed-in coach', async () => {
+    renderDetail('event-food-bank-sort', { loadData: defaultLoadOutreachDetail }, COACH_USER);
+    await flushMicrotasks();
+    act(() => {
+      findMoreMenuButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const item = findMarkEventCompleteMenuItem();
+    expect(item).toBeTruthy();
+    act(() => {
+      item?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // Real dialog title + both real fixture sessions' dates (module doc
+    // #12: `sessions` passed straight through, no reshaping).
+    expect(container.textContent).toContain('Mark event complete');
+    expect(container.textContent).toContain('Aug 2');
+    expect(container.textContent).toContain('Aug 9');
+    expect(container.textContent).toContain('Mark 2 sessions complete');
+  });
+
+  it('is present for a signed-in admin too', async () => {
+    renderDetail('event-food-bank-sort', { loadData: defaultLoadOutreachDetail }, ADMIN_USER);
+    await flushMicrotasks();
+    act(() => {
+      findMoreMenuButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(findMarkEventCompleteMenuItem()).toBeTruthy();
+  });
+});
+
+describe('"Mark event complete" confirm -> real markDayComplete mutation + page reload (module doc #12)', () => {
+  it('calls the real markDayComplete mutation once per remaining session and reloads this page’s own data', async () => {
+    mockedMarkDayComplete.mockResolvedValue(undefined);
+    let loadCount = 0;
+    async function countingLoadData(eventId: string): Promise<OutreachDetailData | null> {
+      loadCount += 1;
+      return defaultLoadOutreachDetail(eventId);
+    }
+
+    renderDetail('event-food-bank-sort', { loadData: countingLoadData }, COACH_USER);
+    await flushMicrotasks();
+    expect(loadCount).toBe(1);
+
+    act(() => {
+      findMoreMenuButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    act(() => {
+      findMarkEventCompleteMenuItem()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const confirmButton = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'Mark 2 sessions complete',
+    );
+    expect(confirmButton).toBeTruthy();
+    act(() => {
+      confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+    await flushMicrotasks();
+
+    // Both of event-food-bank-sort's real scheduled sessions -- never a
+    // parallel/re-derived mutation (module doc #12 / that dialog's own
+    // module doc #1).
+    expect(mockedMarkDayComplete).toHaveBeenCalledTimes(2);
+    const calledSessionIds = mockedMarkDayComplete.mock.calls.map((call) => call[0].sessionId);
+    expect(calledSessionIds).toEqual(['session-food-bank-day1', 'session-food-bank-day2']);
+    expect(
+      mockedMarkDayComplete.mock.calls.every((call) => call[0].recordedBy === COACH_USER.id),
+    ).toBe(true);
+
+    // Real refetch (partial-failure-honesty seam, module doc #12), not a
+    // client-only optimistic guess -- `loadData` was called again.
+    expect(loadCount).toBe(2);
+    expect(container.textContent).toContain('Event marked complete');
+  });
+
+  it('reports a partial failure honestly when one session’s write rejects, without blocking the other', async () => {
+    mockedMarkDayComplete.mockImplementation(async (payload) => {
+      if (payload.sessionId === 'session-food-bank-day2') {
+        throw new Error('RLS denied this write');
+      }
+    });
+
+    renderDetail('event-food-bank-sort', { loadData: defaultLoadOutreachDetail }, COACH_USER);
+    await flushMicrotasks();
+
+    act(() => {
+      findMoreMenuButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    act(() => {
+      findMarkEventCompleteMenuItem()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const confirmButton = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'Mark 2 sessions complete',
+    );
+    act(() => {
+      confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+    await flushMicrotasks();
+
+    expect(mockedMarkDayComplete).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain('Done — marked complete');
+    expect(container.textContent).toContain('Failed — RLS denied this write');
+    expect(container.textContent).toContain("Some sessions couldn't be marked complete");
   });
 });

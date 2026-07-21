@@ -4655,3 +4655,49 @@ route-persistence test.
   hold for quote-normalization — future packets touching apostrophe
   strings should phrase this as "prettier --check passes / no string
   value changed" instead.
+[2026-07-21T01:51:24Z] Worker finished. Checker required before completion.
+
+## T127 — UXP-07: mark whole event complete (bulk day completion)
+- Date: 2026-07-21
+- Worker: worker-implementer (1st attempt)
+- Checker: checker-reviewer
+- Verdict: **PASS** (MINOR product follow-up + NIT)
+- Reuse verified genuine, not re-derived (Trap #1): new
+  `MarkEventCompleteDialog` imports `markDayComplete` from
+  `loaders/outreach.ts` — the exact function `MarkDayCompleteDialog`
+  already drives — and builds each per-session payload via
+  `computeInitialAttendedStudentIds`/`buildAttendanceWriteRows` IMPORTED
+  from `MarkDayCompleteDialog.tsx` (confirmed exported, matching
+  signatures), never reimplemented. `MarkDayCompleteDialog.*` and
+  `loaders/outreach.ts` confirmed zero diff.
+- Disclosed scope-narrowing (no per-session attendee checklist; always
+  0/0 adult-volunteer deltas — loader skips that additive write when
+  both are 0, a safe no-op) judged reasonable and consistent with the
+  packet's own literal bulk-surface description; logged as a MINOR
+  product-decision follow-up (full parity vs. ratify as-is), not a
+  defect.
+- Partial-failure design verified by reading `handleConfirm`: sequential
+  (not `Promise.all`), every session attempted regardless of earlier
+  failure, incremental per-row status, no optimistic pre-write banner,
+  `onFinished`→real `reloadDetail()` refetch, dialog blocks close
+  mid-batch.
+- Skip logic verified: `partitionEventSessions` splits on
+  `status==='scheduled'`; only `remaining` enters the write loop;
+  `skipped` renders read-only "Already handled (skipped, not
+  re-processed)".
+- Staff gating verified: menu item behind `isStaffViewer`, same
+  role check pattern as the existing AttendancePanel gate.
+- People-reached conditionality mirrored exactly (the per-day dialog
+  shows it unconditionally; bulk does too — not invented).
+- Constitution item 3: zero metric math (only integer outcome counts +
+  string join for the summary banner). Neutral copy verified.
+- Gates (checker-run): tsc 0; eslint 0 errors (19 pre-existing
+  react-refresh warnings, matching MarkDayCompleteDialog's own
+  established pattern); target 55/55, full suite 1354/1354 (58 files);
+  build OK; prettier clean.
+- Follow-ups: (MINOR/product, for George) ratify bulk-complete as
+  people-reached-only, or extend to full per-session attendee/adult-hours
+  parity later; (NIT) the react-refresh warning pattern on both
+  MarkDayCompleteDialog and MarkEventCompleteDialog could be cleared by
+  splitting exported pure helpers into a non-component module — cosmetic,
+  project-wide, not blocking.

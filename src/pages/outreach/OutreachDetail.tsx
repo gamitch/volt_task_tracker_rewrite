@@ -308,6 +308,33 @@
  * separate lookup needed (unlike `students.id` vs. `students.profile_id`,
  * a genuinely different id space `RsvpControl.tsx`'s own module doc #3
  * already had to disclose).
+ *
+ * -----------------------------------------------------------------------
+ * 12. T127 (PRD v2 UXP-07): "Mark event complete" bulk action, staff-only,
+ *     on this page and only this page (packet Objective, verbatim).
+ *
+ * `isMarkEventCompleteDialogOpen` drives the one rendered
+ * `<MarkEventCompleteDialog>` instance (`./MarkEventCompleteDialog.tsx`,
+ * this task's own new sibling file -- see that file's own module doc for
+ * the full reuse-evidence/partial-failure design writeup). The trigger is a
+ * new `"Mark event complete"` `MoreMenu` item, pushed onto `menuItems`
+ * ONLY when `isStaffViewer` (module doc #11's own role check, reused
+ * unchanged) -- a non-staff viewer's `MoreMenu` is unaffected, grep-provable:
+ * the push is inside a single `if (isStaffViewer)` guard, no other branch
+ * references this item. `sessions`/`roster`/`rsvps` (already computed above
+ * for the Signups section / `AttendancePanel`) are passed straight through
+ * -- `MarkEventCompleteDialog` accepts the SAME `MarkDayCompleteSession`/
+ * `RosterStudent`/`RsvpRow` shapes `MarkDayCompleteDialog.tsx` already
+ * defines (imported by that file, not reshaped here), and this page's own
+ * `OutreachDetailSession`/`RosterStudent`/`RsvpRow` types (module doc #1)
+ * are structurally identical field-for-field, so no cast/remap is needed at
+ * this call site (grep-provable: no `as unknown as`/manual field-mapping
+ * function introduced for this wiring). `onFinished={reloadDetail}` is the
+ * partial-failure-honesty seam (that dialog's own module doc #3): once the
+ * bulk batch finishes (fully or partially), this page refetches its own
+ * data so the Signups/`AttendancePanel` sections reflect the real
+ * `event_sessions.status`/`people_reached`/`attendance` writes, never a
+ * client-only optimistic guess.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
@@ -357,6 +384,12 @@ import {
 // T117 (PRD v2 UXP-01): the new coach-managed attendance panel -- module
 // doc #11.
 import { AttendancePanel } from './AttendancePanel';
+// T127 (PRD v2 UXP-07): "Mark event complete" bulk action -- module doc #12.
+// Not given its own injectable override prop here, same posture
+// `AttendancePanel` above already established (module doc #11): the dialog's
+// own `onMarkSessionComplete` prop already defaults to the real
+// `markDayComplete` mutation internally.
+import { MarkEventCompleteDialog } from './MarkEventCompleteDialog';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets. Module doc #1.
@@ -1064,6 +1097,9 @@ export function OutreachDetail({
   // `ScheduleMeetingsDialog.tsx` finding).
   const [isEventDialogOpen, setIsEventDialogOpen] = useState(false);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
+  // T127 (module doc #12) -- drives the one rendered
+  // `<MarkEventCompleteDialog>` instance.
+  const [isMarkEventCompleteDialogOpen, setIsMarkEventCompleteDialogOpen] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackBanner | null>(null);
   // T121 item (a) -- best-effort roster fetch for the edit-mode dialog's
   // "Expected attendees" checklist. Deliberately named `eventDialogRoster`,
@@ -1111,6 +1147,11 @@ export function OutreachDetail({
 
   function openCancelConfirm(): void {
     setIsCancelConfirmOpen(true);
+  }
+
+  // T127 (module doc #12).
+  function openMarkEventCompleteDialog(): void {
+    setIsMarkEventCompleteDialogOpen(true);
   }
 
   // T101 (module doc #10, Trap #5) -- real `onSaveEvent` wiring (edit mode).
@@ -1256,6 +1297,10 @@ export function OutreachDetail({
     { label: 'Edit', onClick: openEditDialog },
     { label: 'Cancel event', onClick: openCancelConfirm },
   ];
+  // T127 (module doc #12) -- staff-only, this page only (packet Objective).
+  if (isStaffViewer) {
+    menuItems.push({ label: 'Mark event complete', onClick: openMarkEventCompleteDialog });
+  }
 
   return (
     <VStack gap={6} padding={6}>
@@ -1331,6 +1376,23 @@ export function OutreachDetail({
           currentUserProfileId={user.id}
         />
       )}
+
+      {/* T127 (module doc #12) -- "Mark event complete" bulk action,
+          staff-only trigger (the `MoreMenu` item above), same
+          `sessions`/`roster`/`rsvps` this page already fetched/derived for
+          the Signups section, no reshaping needed (module doc #12). */}
+      <MarkEventCompleteDialog
+        isOpen={isMarkEventCompleteDialogOpen}
+        onOpenChange={setIsMarkEventCompleteDialogOpen}
+        eventTitle={event.title}
+        sessions={sessions}
+        roster={roster}
+        rsvps={rsvps}
+        currentUserProfileId={user?.id}
+        onFinished={() => {
+          void reloadDetail();
+        }}
+      />
 
       <AlertDialog
         isOpen={isCancelConfirmOpen}
