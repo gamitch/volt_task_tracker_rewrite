@@ -504,6 +504,64 @@
  * `CalendarPage.tsx`'s own precedent likewise uses the relative
  * `routePaths.outreachEvent(...)` path, never an absolute URL, for its
  * in-app `Link`.
+ *
+ * -----------------------------------------------------------------------
+ * 14. T126 (PRD v2 UXP-03): retroactive student/parent check-off entry
+ *     point -- "student past-event rows in `OutreachList` open a small
+ *     day-picker confirmation" (packet's own minimum-bar wording).
+ *
+ * `StudentOutreachEventRow` (student/parent view) grows an `allowSelfCheckoff`
+ * prop, passed `true` ONLY by the "Past" `StudentOutreachSection` instance
+ * (the "Upcoming" instance passes `false` -- a day that hasn't happened yet
+ * can't be self-checked-off, same "past events only" gate
+ * `SelfCheckoffDialog.tsx`'s own `filterEligibleSelfCheckoffSessions`
+ * independently re-enforces at the session-status level). When
+ * `allowSelfCheckoff` is true AND the event has at least one `'completed'`
+ * session, the row's `endContent` grows one more neutral, named-action
+ * `Button` ("Mark attendance") that calls `onOpenSelfCheckoff(event,
+ * sessions)`.
+ *
+ * `SelfCheckoffDialog.tsx` (this task's own new component,
+ * `src/pages/outreach/`) is rendered as a SINGLE SHARED instance owned by
+ * `StudentParentOutreachView` itself (`selfCheckoffTarget` state -- `null` =
+ * closed, otherwise the target row's own `{event, sessions}`), NOT one
+ * `Dialog` instance per row nested inside the `<List>` -- mirrors
+ * `CoachOutreachView`'s own pre-existing `AlertDialog`/`OutreachEventDialog`
+ * pattern above exactly (one dialog instance, `cancelTarget`/`editingTarget`
+ * state selects which row it targets), and avoids an invalid DOM shape a
+ * per-row `<Dialog>` (Astryx's own `Dialog` renders a real `<dialog>`
+ * element directly at its tree position, no portal) would otherwise create
+ * as a stray non-`<li>` child of `<List>`'s own `<ul>`. `viewerProfileId`
+ * (already resolved by `OutreachList`'s own top-level `user.id`, module doc
+ * #6 -- previously threaded only to `CoachOutreachView`) now ALSO threads
+ * down to `StudentParentOutreachView`, supplying the shared dialog's own
+ * `currentUserProfileId` (`attendance.recorded_by` for every row it writes
+ * -- module doc on that file: a student checking off themselves, or a
+ * parent checking off their linked student, per PRD v2 UXP-03's own "or
+ * parent for a linked student" wording).
+ *
+ * This is purely additive wiring -- no existing prop/behavior on
+ * `StudentOutreachEventRow`/`StudentOutreachSection`/
+ * `StudentParentOutreachView` changes shape or meaning, only grows one or
+ * two more (default-free, always-supplied-by-this-file's-own-callers)
+ * props each. `SelfCheckoffDialog.tsx`'s own module doc has the full RLS/
+ * hours-math/coach-visibility writeup; this file only opens/closes it and
+ * supplies already-fetched display data, matching this page's own
+ * established "dialog owns its data seam, page owns open/closed state"
+ * convention (`OutreachEventDialog` above, `MarkDayCompleteDialog.tsx`/
+ * `AttendancePanel.tsx` on `OutreachDetail.tsx`, none of which this file
+ * re-derives).
+ *
+ * RIDER (NIT from T121's own checker follow-up, verified against a live
+ * `npx eslint . --report-unused-disable-directives` run for this task):
+ * that follow-up's OWN line number (`OutreachList.tsx:1117`) does not
+ * match this file's real unused-directive location -- the actual
+ * now-unused `eslint-disable-next-line react-hooks/exhaustive-deps`
+ * directive lives in `src/pages/home/ParentHome.tsx:1117`, a file outside
+ * this task's Allowed Files. Not fixed here (see this task's own worker
+ * output "known risks" for the full disclosure); `OutreachList.tsx`'s own
+ * single pre-existing disable directive (`useLoadState`, module doc above)
+ * remains genuinely load-bearing and unchanged.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
@@ -555,6 +613,9 @@ import {
   type OnSaveOutreachEventFn,
   type OutreachRosterStudent,
 } from './OutreachEventDialog';
+// T126 (PRD v2 UXP-03) -- module doc #14. This task's own new dialog/
+// component, `src/pages/outreach/`.
+import { SelfCheckoffDialog } from './SelfCheckoffDialog';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets. Module doc #1.
@@ -2411,15 +2472,29 @@ function StudentOutreachEventRow({
   sessions,
   rsvps,
   viewerStudentId,
+  allowSelfCheckoff,
   onRsvpChange,
+  onOpenSelfCheckoff,
 }: {
   event: OutreachEventRow;
   sessions: readonly OutreachSessionRow[];
   rsvps: readonly RsvpRow[];
   viewerStudentId: string;
+  /** T126 (module doc #14) -- `true` only for the "Past" section instance;
+   * a still-upcoming event never offers self check-off. */
+  allowSelfCheckoff: boolean;
   onRsvpChange: (sessionId: string, status: RsvpStatus) => void;
+  /** T126 (module doc #14) -- opens the ONE shared `SelfCheckoffDialog`
+   * instance (owned by `StudentParentOutreachView`, same "one shared
+   * dialog instance, row picks the target" convention `CoachOutreachView`'s
+   * own `AlertDialog`/`OutreachEventDialog` above already established --
+   * NOT a per-row `Dialog` instance nested inside this `<List>`, which
+   * would put an invalid `<dialog>` element directly under a `<ul>`). */
+  onOpenSelfCheckoff: (event: OutreachEventRow, sessions: readonly OutreachSessionRow[]) => void;
 }): ReactNode {
   const [isExpanded, setIsExpanded] = useState(true);
+  const hasCompletedSession = sessions.some((session) => session.status === 'completed');
+  const showSelfCheckoffButton = allowSelfCheckoff && hasCompletedSession;
   // The student/parent row only ever reads `stats.dateRangeLabel`/
   // `stats.weekdayChips` below -- it never renders `attendedCount` (that
   // stat is coach-only, module doc on `EventRowStats.attendedCount`), so no
@@ -2470,6 +2545,9 @@ function StudentOutreachEventRow({
 
   // T112 HOTFIX (module doc #13): every row -- Upcoming AND Past alike --
   // still always carries a real "View details" `Link`, unchanged shape.
+  // T126 (module doc #14): one more neutral, named-action `Button` for
+  // eligible Past rows, opening the shared `SelfCheckoffDialog` scoped to
+  // this row's own event/sessions.
   const endContent = (
     <HStack gap={3} vAlign="center" wrap="wrap">
       <Button
@@ -2482,6 +2560,14 @@ function StudentOutreachEventRow({
         variant="ghost"
         onClick={() => setIsExpanded((previous) => !previous)}
       />
+      {showSelfCheckoffButton && (
+        <Button
+          label={`Mark attendance – ${event.title}`}
+          size="sm"
+          variant="secondary"
+          onClick={() => onOpenSelfCheckoff(event, sessions)}
+        />
+      )}
       <Link as={RouterLink} href={routePaths.outreachEvent(event.id)} isStandalone>
         View details – {event.title}
       </Link>
@@ -2537,15 +2623,20 @@ function StudentOutreachSection({
   title,
   enrichedEvents,
   viewerStudentId,
+  allowSelfCheckoff,
   rsvps,
   onRsvpChange,
+  onOpenSelfCheckoff,
   emptyDescription,
 }: {
   title: string;
   enrichedEvents: readonly EnrichedOutreachEvent[];
   viewerStudentId: string;
+  /** T126 (module doc #14) -- `true` only for the "Past" section. */
+  allowSelfCheckoff: boolean;
   rsvps: readonly RsvpRow[];
   onRsvpChange: (sessionId: string, status: RsvpStatus) => void;
+  onOpenSelfCheckoff: (event: OutreachEventRow, sessions: readonly OutreachSessionRow[]) => void;
   emptyDescription: string;
 }): ReactNode {
   return (
@@ -2566,7 +2657,9 @@ function StudentOutreachSection({
               sessions={sessions}
               rsvps={rsvps}
               viewerStudentId={viewerStudentId}
+              allowSelfCheckoff={allowSelfCheckoff}
               onRsvpChange={onRsvpChange}
+              onOpenSelfCheckoff={onOpenSelfCheckoff}
             />
           ))}
         </List>
@@ -2578,6 +2671,9 @@ function StudentOutreachSection({
 interface StudentParentOutreachViewProps {
   seasonId: string;
   viewerStudentId: string;
+  /** T126 (module doc #14) -- `attendance.recorded_by` for any self
+   * check-off written from this view. */
+  viewerProfileId: string;
   events: readonly OutreachEventRow[];
   sessions: readonly OutreachSessionRow[];
   initialRsvps: readonly RsvpRow[];
@@ -2587,12 +2683,21 @@ interface StudentParentOutreachViewProps {
 function StudentParentOutreachView({
   seasonId,
   viewerStudentId,
+  viewerProfileId,
   events,
   sessions,
   initialRsvps,
   goalConfig,
 }: StudentParentOutreachViewProps): ReactNode {
   const [rsvps, setRsvps] = useState<readonly RsvpRow[]>(initialRsvps);
+  // T126 (module doc #14) -- ONE shared `SelfCheckoffDialog` instance for
+  // this whole view (matches `CoachOutreachView`'s own shared-dialog-plus-
+  // target-state convention above); `null` = closed, non-null = which
+  // event/sessions the currently-open dialog is scoped to.
+  const [selfCheckoffTarget, setSelfCheckoffTarget] = useState<{
+    event: OutreachEventRow;
+    sessions: readonly OutreachSessionRow[];
+  } | null>(null);
 
   useEffect(() => {
     setRsvps(initialRsvps);
@@ -2651,20 +2756,42 @@ function StudentParentOutreachView({
             title="Upcoming"
             enrichedEvents={upcoming}
             viewerStudentId={viewerStudentId}
+            allowSelfCheckoff={false}
             rsvps={rsvps}
             onRsvpChange={handleRsvpChange}
+            onOpenSelfCheckoff={(event, eventSessions) =>
+              setSelfCheckoffTarget({ event, sessions: eventSessions })
+            }
             emptyDescription="You have no upcoming outreach events."
           />
           <StudentOutreachSection
             title="Past"
             enrichedEvents={past}
             viewerStudentId={viewerStudentId}
+            allowSelfCheckoff
             rsvps={rsvps}
             onRsvpChange={handleRsvpChange}
+            onOpenSelfCheckoff={(event, eventSessions) =>
+              setSelfCheckoffTarget({ event, sessions: eventSessions })
+            }
             emptyDescription="Your past outreach participation will show up here."
           />
         </>
       )}
+
+      {/* T126 (module doc #14) -- the one shared `SelfCheckoffDialog`
+          instance for this whole view, scoped to whichever row's own
+          "Mark attendance" action set `selfCheckoffTarget`. */}
+      <SelfCheckoffDialog
+        isOpen={selfCheckoffTarget !== null}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setSelfCheckoffTarget(null);
+        }}
+        eventTitle={selfCheckoffTarget?.event.title}
+        studentId={viewerStudentId}
+        sessions={selfCheckoffTarget?.sessions ?? []}
+        currentUserProfileId={viewerProfileId}
+      />
     </>
   );
 }
@@ -2848,6 +2975,7 @@ function OutreachListLoaded({
         <StudentParentOutreachView
           seasonId={seasonId}
           viewerStudentId={viewerStudentId}
+          viewerProfileId={viewerProfileId}
           events={outreachEvents}
           sessions={outreachSessions}
           initialRsvps={data.rsvps}

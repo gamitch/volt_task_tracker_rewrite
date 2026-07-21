@@ -4701,3 +4701,57 @@ route-persistence test.
   MarkDayCompleteDialog and MarkEventCompleteDialog could be cleared by
   splitting exported pure helpers into a non-component module — cosmetic,
   project-wide, not blocking.
+
+## T126 — UXP-03: retroactive student/parent check-off + self-write migration
+- Date: 2026-07-21
+- Worker: worker-implementer (1st attempt)
+- Checker: checker-reviewer (highest-scrutiny pass — RLS security)
+- Verdict: **PASS** (MINOR + NIT)
+- Migration `20260724000000_self_checkoff.sql`: constraint name verified
+  live (not guessed) as `attendance_method_check`, dropped and re-added
+  widened to include `'self'`; shipped `20260717000000` byte-unchanged.
+  New `self_insert` (student_id in my_student_ids() AND method='self'
+  AND recorded_by=auth.uid()) and `self_delete` (same scope AND
+  method='self' only) policies; no update policy (delete+re-insert by
+  design); `staff_all`/`own_or_linked_read` untouched.
+- Checker independently reproduced the FULL positive/negative matrix
+  against a real non-superuser role on a live scratch Postgres (same
+  T104-precedent technique, not superuser bypass): student self-insert
+  OK; parent self-insert for linked student OK; insert method='coach'/
+  'qr' BLOCKED; insert for unrelated student BLOCKED; recorded_by !=
+  auth.uid() BLOCKED; DELETE of a pre-existing coach row is a correct
+  silent no-op (0 rows, RLS-invisible, not an error); staff_all fully
+  unaffected; invalid method literal rejected by the widened constraint.
+  **No negative case allowed an unauthorized write or delete.**
+  Default-hours claim verified: NULL hours_override/check-in-out on a
+  self row correctly falls through `v_student_hours`'s existing
+  session-length fallback tier — zero new hours math (constitution
+  item 3).
+- UI (`SelfCheckoffDialog` + `loaders/selfCheckoff.ts`): locked
+  (non-self) days render checked+disabled "Already recorded"; only
+  self days removable, mirroring the RLS truth exactly; insert payload
+  hard-codes hours_override/check-in/out null. Neutral copy verified
+  (constitution item 17 — no nagging/urgency, tested explicitly).
+  Shared single-dialog-instance pattern (mirrors CoachOutreachView's
+  existing convention, avoids an invalid `<dialog>` under `<List>`'s
+  `<ul>`) confirmed sound. `loaders/attendance.ts`/`loaders/outreach.ts`
+  confirmed untouched. T124's activity feed and T117's AttendancePanel
+  confirmed to pick up 'self' rows correctly with zero edits to either
+  file (plain equality/no method allowlist in both).
+- Rider claim confirmed precisely: the real unused eslint-disable
+  directive is at `ParentHome.tsx:1117`, not `OutreachList.tsx:1117` as
+  the packet stated — correctly left untouched (outside T126's Allowed
+  Files; doesn't fail the standard lint gate, only
+  `--report-unused-disable-directives`).
+- Gates (checker-run, all numbers reproduced independently): tsc 0;
+  eslint 0 errors / 351 warnings (new warnings match the established
+  sibling-dialog react-refresh pattern); prettier clean; vitest 1385/1385
+  (59 files); build succeeds.
+- Follow-ups: (MINOR) multi-day events with one still-scheduled session
+  don't offer self-checkoff for an already-completed day until the
+  whole event is past (event-level bucketing in `buildEventGroups`) —
+  consider session-level entry point in a future task; (NIT) fix the
+  real unused directive at `ParentHome.tsx:1117` in a task that owns
+  that file; (NIT) confirm the automated verification-log completion
+  markers are expected harness behavior, not worker edits (they are —
+  standing housekeeping item every close-out already reverts).

@@ -1452,6 +1452,100 @@ describe('<OutreachList /> student/parent view', () => {
 });
 
 // ---------------------------------------------------------------------------
+// T126 (PRD v2 UXP-03): the "Mark attendance" self-check-off entry point on
+// student/parent Past rows, and the shared `SelfCheckoffDialog` it opens.
+// Per this task's Allowed Files, this is a deliberate, disclosed addition
+// to this ALREADY-Allowed test file (same posture every prior task's own
+// additions to this file already established, e.g. T106/T112/T121's own
+// describe blocks below).
+// ---------------------------------------------------------------------------
+
+describe('<OutreachList /> T126: student/parent "Mark attendance" self check-off entry point', () => {
+  it('a Past-bucket event with a completed session shows a "Mark attendance" action; an Upcoming-bucket event does not, even if it also has a completed session', async () => {
+    renderAsUser(STUDENT_OR_PARENT_USER, { loadData: defaultLoadOutreachData });
+    await flushMicrotasks();
+
+    // "Canned Food Drive" (event-canned-drive) has exactly one session,
+    // already `completed`, no still-`scheduled` session at all -- it is
+    // entirely in the Past bucket (buildEventGroups). Its own row must
+    // carry a real "Mark attendance" Button.
+    const cannedDriveButton = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'Mark attendance – Canned Food Drive',
+    );
+    expect(cannedDriveButton).toBeTruthy();
+
+    // "Community Food Bank Sort" (event-food-bank-sort) has BOTH a
+    // completed session (session-food-bank-past) AND a still-`scheduled`
+    // one (session-food-bank-upcoming) -- `buildEventGroups` puts the
+    // WHOLE event in the Upcoming bucket (hasScheduled wins). Even though
+    // this event genuinely has a completed day, its Upcoming-bucket row
+    // must NOT offer self check-off (module doc #14: `allowSelfCheckoff`
+    // is a section-level gate, not merely "does this row have a completed
+    // session").
+    const foodBankButton = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'Mark attendance – Community Food Bank Sort',
+    );
+    expect(foodBankButton).toBeUndefined();
+
+    // "Riverside Park Cleanup" -- Upcoming, zero completed sessions at all
+    // -- likewise no button (the ordinary, uninteresting case).
+    const parkCleanupButton = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'Mark attendance – Riverside Park Cleanup',
+    );
+    expect(parkCleanupButton).toBeUndefined();
+  });
+
+  it('clicking "Mark attendance" opens the shared SelfCheckoffDialog scoped to that row\'s own event/sessions', async () => {
+    renderAsUser(STUDENT_OR_PARENT_USER, { loadData: defaultLoadOutreachData });
+    await flushMicrotasks();
+
+    expect(container.querySelectorAll('dialog[open]').length).toBe(0);
+
+    const cannedDriveButton = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'Mark attendance – Canned Food Drive',
+    );
+    act(() => {
+      cannedDriveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    // The Dialog's own header (title + event-title subtitle) confirms it
+    // opened scoped to the RIGHT row, not some other event.
+    expect(container.textContent).toContain('Mark attendance');
+    expect(container.textContent).toContain('Canned Food Drive');
+
+    // Only ONE shared dialog instance exists for the whole view (module doc
+    // #14) -- opening it from "Canned Food Drive" must never simultaneously
+    // show a second dialog scoped to a different event.
+    const dialogs = container.querySelectorAll('dialog[open]');
+    expect(dialogs.length).toBe(1);
+  });
+
+  it('the dialog closes back via its own Cancel action', async () => {
+    renderAsUser(STUDENT_OR_PARENT_USER, { loadData: defaultLoadOutreachData });
+    await flushMicrotasks();
+
+    const cannedDriveButton = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'Mark attendance – Canned Food Drive',
+    );
+    act(() => {
+      cannedDriveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+    expect(container.querySelectorAll('dialog[open]').length).toBe(1);
+
+    const cancelButton = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'Cancel',
+    );
+    act(() => {
+      cancelButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+    expect(container.querySelectorAll('dialog[open]').length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // T112 HOTFIX: every event row (coach + student/parent, Upcoming + Past) now
 // exposes a real "View details" navigation `Link` to `/outreach/:eventId`
 // (component module doc #13) -- George's own live-reported dead-end-rows
