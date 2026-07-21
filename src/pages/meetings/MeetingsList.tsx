@@ -1421,7 +1421,7 @@ function CoachMeetingRowItem({
         {`${row.locationName.trim().length > 0 ? row.locationName : 'No location set'} · ${row.teamScopeLabel}`}
       </Text>
       <Text type="supporting" hasTabularNumbers>
-        {`${formatHoursLabel(summary.plannedHours)} planned · ${formatHoursLabel(summary.loggedHours)} logged`}
+        {`${formatHoursLabel(summary.plannedHours)} scheduled · ${formatHoursLabel(summary.loggedHours)} held`}
       </Text>
       <Text type="supporting" hasTabularNumbers>
         {`Expected ${summary.expectedCt} · Attended ${summary.attendedCt}`}

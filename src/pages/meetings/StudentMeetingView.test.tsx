@@ -394,7 +394,7 @@ describe('loadConsistencyStripData (T100 real load)', () => {
   // against `aggregateParticipationForStudent`'s own pure logic.
   // -------------------------------------------------------------------------
 
-  it('aggregates a dual member\'s multiple team rows (same season) into one honestly-summed participation figure, not last-team-wins', async () => {
+  it("aggregates a dual member's multiple team rows (same season) into one honestly-summed participation figure, not last-team-wins", async () => {
     const sessionsOrderSpy = vi.fn().mockResolvedValue({ data: [], error: null });
     const attendanceEqSpy = vi.fn().mockResolvedValue({ data: [], error: null });
     // Dual member: 8/10 present on team-falcons (80.0%), 3/10 present on
@@ -498,7 +498,7 @@ describe('aggregateParticipationForStudent (T120 pure unit tests)', () => {
     expect(aggregateParticipationForStudent([row])).toBe(row);
   });
 
-  it('sums counters across a dual member\'s two team rows and recomputes pct via the view\'s own expression -- excused-shrinks-denominator case', () => {
+  it("sums counters across a dual member's two team rows and recomputes pct via the view's own expression -- excused-shrinks-denominator case", () => {
     // team-a: expected 10, present 6, excused 2 -> denom (10-2)=8
     // team-b: expected 5,  present 3, excused 0 -> denom (5-0)=5
     // summed: expected 15, present 9, excused 2 -> denom max(15-2,1)=13
@@ -531,7 +531,7 @@ describe('aggregateParticipationForStudent (T120 pure unit tests)', () => {
     expect(result?.participation_pct).toBe(69.2);
   });
 
-  it('only aggregates rows within one (the first-seen) season, ignoring a different season\'s rows entirely -- pre-existing season ambiguity stays disclosed, not conflated with the team fix', () => {
+  it("only aggregates rows within one (the first-seen) season, ignoring a different season's rows entirely -- pre-existing season ambiguity stays disclosed, not conflated with the team fix", () => {
     const result = aggregateParticipationForStudent([
       {
         student_id: 'student-multi-season',

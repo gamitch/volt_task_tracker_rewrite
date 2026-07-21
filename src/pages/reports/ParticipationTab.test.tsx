@@ -106,7 +106,7 @@ describe('ParticipationTab render', () => {
     expect(noahRow?.textContent).toContain('—');
   });
 
-  it('T120: renders a dual-team member (Priya Desai) TWICE -- once in each of her two teams\' tables, each with its own participation % -- never once, never blended', async () => {
+  it("T120: renders a dual-team member (Priya Desai) TWICE -- once in each of her two teams' tables, each with its own participation % -- never once, never blended", async () => {
     render({ seasonId: PLACEHOLDER_CURRENT_SEASON_ID });
     await flushMicrotasks();
     const rows = Array.from(container.querySelectorAll('tr'));

@@ -2590,7 +2590,7 @@ function Layout({ children, sidebar }) {
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `children` | `ReactNode` | — | Main content area, rendered inside a <main> element. |
+| `children` | `ReactNode` | — | Main content area. **[VOLT project annotation — T128, verified against the installed `@astryxdesign/core` shipped source (`node_modules/@astryxdesign/core/src/AppShell/AppShell.tsx` + `src/Layout/LayoutContent.tsx`), not vendor prose. The vendor text originally claimed this renders "inside a `<main>` element"; the installed source renders it as a plain `<div role="main">` (AppShell passes `role="main"` to `LayoutContent`, which is `<div role={role} ...>` — never a semantic HTML5 `<main>` tag). Corrected here per T123's own finding (`src/app/AppShell.test.tsx` module doc).]** |
 | `contentPadding` | `0 | 0.5 | 1 | 1.5 | 2 | 3 | 4 | 5 | 6 | 8 | 10` | `0` | Padding for the main content area. Set based on the dominant content pattern: 4 (16px) for forms/settings/text, 0 for dashboards/maps/tables. Override individual sections with Section. |
 | `topNav` | `ReactNode` | — | Top navigation slot, typically TopNav. |
 | `sideNav` | `ReactNode` | — | Side navigation slot, typically SideNav. |

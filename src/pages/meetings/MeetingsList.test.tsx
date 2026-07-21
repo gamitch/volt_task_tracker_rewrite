@@ -576,8 +576,9 @@ describe('<MeetingsList /> coach view', () => {
     expect(container.textContent).toContain('Wed, Jul 8 – Wed, Jul 22');
     expect(container.textContent).toContain('Robotics Lab');
     // planned = scheduled (2h) + completed (2h) = 4h (canceled excluded);
-    // logged = completed only = 2h.
-    expect(container.textContent).toContain('4h planned · 2h logged');
+    // logged = completed only = 2h. Rendered as "scheduled"/"held" (T128
+    // NIT: "logged" collided with volunteer hours-logged vocabulary).
+    expect(container.textContent).toContain('4h scheduled · 2h held');
     // expected = session-upcoming-build's 5 'going' RSVPs; attended =
     // session-past-build-completed's 3 present + 1 late.
     expect(container.textContent).toContain('Expected 5 · Attended 4');
@@ -585,7 +586,7 @@ describe('<MeetingsList /> coach view', () => {
     // "Ravens Strategy Session" has 2 sessions, both on Saturdays.
     expect(container.textContent).toContain('SAT (2)');
     expect(container.textContent).toContain('Ravens Team Room');
-    expect(container.textContent).toContain('3h planned · 1.5h logged');
+    expect(container.textContent).toContain('3h scheduled · 1.5h held');
     expect(container.textContent).toContain('Expected 2 · Attended 3');
 
     // UXD-03: expander trigger + per-session detail (attendee names) both

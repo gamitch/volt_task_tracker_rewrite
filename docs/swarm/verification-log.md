@@ -4607,3 +4607,51 @@ route-persistence test.
   chunk); prettier clean.
 - Follow-up: none blocking; the warning-attribution correction above is
   informational only.
+
+## T128 — wave-3 debt batch: format gate, label wording, doc accuracy, planned-hours guard
+- Date: 2026-07-21
+- Worker: worker-implementer (1st attempt)
+- Checker: checker-reviewer
+- Verdict: **PASS** (NIT x2)
+- Item 1 (format gate): `StudentMeetingView.test.tsx` /
+  `ParticipationTab.test.tsx` reformatted — diff is prettier's
+  quote-style normalization on apostrophe-bearing `it(...)` titles
+  (single→double quote), string VALUES byte-identical; `git diff -w` is
+  not literally empty (quote chars aren't whitespace) but the change is
+  formatting-only, disclosed precisely rather than misclaimed. Both
+  files' own tests pass; `prettier --check` clean on them. Tree-wide
+  `format:check` residual red is fully attributable to a concurrent
+  sibling's untracked files (selfCheckoff.ts/SelfCheckoffDialog.tsx),
+  not T128.
+- Item 2 (label wording): single-line change at MeetingsList.tsx:1424,
+  "planned · ... logged" → "scheduled · ... held"; two pinning
+  assertions updated; neutral/factual copy (constitution item 17).
+- Item 3 (astryx-api.md): packet premise partially false — only the
+  AppShell `children` row claimed a `<main>` landmark (no "Section"
+  occurrence existed, grep-confirmed by both worker and checker); fixed
+  against installed source (`AppShell.tsx` → `LayoutContent` renders
+  `<div role="main">`, never a semantic `<main>`). No invented Section
+  fix; other doc stub entries correctly left out of scope.
+- Item 4 (planned-hours future guard) — highest scrutiny: shipped
+  `20260723000001_dashboard_views.sql` byte-unchanged; new view body
+  differs from shipped by exactly the one added
+  `and es.starts_at >= now()` predicate, PROVEN not just by inspection
+  but because Postgres's `create or replace view` itself requires an
+  identical column list to succeed. Dependents grep-confirmed:
+  `v_student_planned_hours` and `v_season_upcoming_committed_hours`
+  select directly from it; `v_student_goal_projection` is a genuine
+  second-hop dependent via `v_student_planned_hours`. Live scratch-DB
+  before/after reproduction: a student whose only RSVP is a
+  past-scheduled session shows a phantom 2h before the guard, vanishes
+  after (coalesces to 0, no phantom row); `v_season_upcoming_committed_hours`
+  unaffected. `loaders/dashboard.ts` confirmed using explicit column
+  lists (never `select('*')`) — zero TS changes needed.
+- Gates (checker-run): tsc 0; eslint 0 errors (351 pre-existing
+  warnings); vitest 1354/1354 (58 files); build OK; format:check green
+  on T128's own files (residual repo-wide red is sibling-owned).
+- Follow-ups: (NIT) ensure the self-checkoff sibling's checker gates on
+  formatting its two untracked files before the wave closes; (NIT) the
+  packet's Item-1 acceptance wording ("diff -w empty") doesn't literally
+  hold for quote-normalization — future packets touching apostrophe
+  strings should phrase this as "prettier --check passes / no string
+  value changed" instead.
