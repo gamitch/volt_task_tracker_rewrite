@@ -125,6 +125,24 @@ it. The merge-first step is cheap insurance.
 Worktree isolation stays. It is the only reason the stale base affected one
 task instead of corrupting the shared tree.
 
+## Environment facts (verified, not assumed)
+
+**All 15 migrations are applied to George's remote Supabase project**, verified
+2026-07-28 by `supabase migration list` against the repo's
+`supabase/migrations/` — 15 local files, 15 remote entries, identical
+timestamps, ending at `20260724000001_planned_hours_future_guard`.
+
+Recorded because earlier session notes claimed "six unapplied migrations" and
+that claim was repeated without checking. It was stale: it predated George
+running `supabase db push`. Nothing in this container can see his remote
+project, so **any statement about applied migrations must come from
+`supabase migration list`, run by George from inside the repo, or be labelled
+unverified.**
+
+Note that `migration list` run from outside the repo shows an empty Local
+column — the CLI finds no `supabase/migrations/` directory. That is not a
+missing-migration signal.
+
 ## Timeline
 
 *(appended as work completes)*
