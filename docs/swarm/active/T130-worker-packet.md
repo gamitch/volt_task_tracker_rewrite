@@ -1,123 +1,189 @@
-# Worker Packet: T130
+# Worker Packet: T130 (rev. 2 — after premise check)
 
 ## Task ID
-T130 — Wave 5 / W5-P2: migrate `OutreachList` coach rows to Astryx `Table`
-(UXC-02, 03, 04, 07, 13, 14). **This is wave 5's proving ground — T131's
-rollout to Meetings/Calendar/student surfaces depends on the pattern you
-establish here.**
+T130 — Wave 5 / W5-P2: migrate `OutreachList` **coach** rows to Astryx `Table`
+(UXC-02, 03, 04, 07, 13, 14). **Wave 5's proving ground — T131's rollout
+inherits your pattern.**
+
+> **rev. 2** removed four blockers found by the premise check: a prescription
+> that silently reversed T112 and broke 5 green tests, two Table plugins that
+> constitution item 2 forbids, an icon-only expander that breaks a green test,
+> and an impossible `textOverflow` instruction. Read the marked sections.
 
 ## Objective
-Read `docs/swarm/VOLT_UX_Craft_PRD_v3.md` (v3.1) §2.0 (F-1/F-2/F-3) and §2
-(UXC-02/03/04/07/13/14) first. **Open the two binding figures with the Read
-tool** — it renders images:
+Read `docs/swarm/VOLT_UX_Craft_PRD_v3.md` §2.0 (F-1/F-2/F-3) and §2
+(UXC-02/03/04/07/13/14). **Open both binding figures with the Read tool** — it
+renders images:
 - `docs/swarm/figures/ux-craft/old-events-tab.webp` — the craft standard
 - `docs/swarm/figures/ux-craft/new-outreach-expanded.webp` — what ships today
 
 Rework the **coach** view of `src/pages/outreach/OutreachList.tsx` from
-`List`/`ListItem` onto Astryx `Table`, so every stat and action column starts at
-the same x on every row. Today they drift per-row because the title block sizes
-itself ("Planned" at ≈543px on one row, ≈487px on the next).
+`List`/`ListItem` onto Astryx `Table`, so stat and action columns start at the
+same x on every row. Today they drift because `Item`'s end slots are
+`flex: 0 0 auto` — intrinsically sized by content
+(`node_modules/@astryxdesign/core/src/Item/Item.tsx:268,272`). No prop reaches
+that layout; `Grid` is equal-width-only; `StackItem` is `'static'|'fill'`.
+`Table` resolves widths once and applies them to every row.
 
-### Why `Table` and not a CSS grid (F-1 — do not re-litigate)
-`ListItem` wraps `Item`, a three-slot flexbox (`start | content(flex:1) | end`)
-whose end caps are `flex: 0 0 auto` — intrinsically sized by their contents
-(`node_modules/@astryxdesign/core/src/Item/Item.tsx:156-275`). No prop reaches
-that layout. `Grid` is equal-width-only; `StackItem` is `'static'|'fill'` only.
-`Table` resolves column widths once and applies them to every row.
+**Do NOT write custom CSS or `xstyle`** — StyleX is compile-time, this app has
+no StyleX plugin, and `stylex.create()` throws at runtime (F-2, verified).
 
-**Do NOT write custom CSS or `xstyle` for this.** `xstyle` is typed everywhere
-but unusable — StyleX is compile-time and this app has no StyleX plugin, so
-`stylex.create()` throws (F-2).
+### Structure — Section + one Table per group (NOT the Table plugins)
+`useTableGroupedRows` and `useTableRowExpansion` are real in installed source
+but have **zero occurrences in `docs/swarm/astryx-api.md`**. Constitution item 2
+is in force: *"A prop absent from that file is presumed hallucinated → MAJOR."*
+**Two passed tasks already adjudicated this exact question and ruled them out of
+bounds** — `ParticipationTab.tsx:130-137` and `EventsTab.tsx:217-226`. A packet
+cannot override the constitution, so:
 
-### The pattern to follow (in-repo precedent, read both)
-- `src/pages/roster/StudentsTab.tsx:998-1049` — `Table` with `pixel()`,
-  `proportional()`, `renderCell` returning `Badge`/`Text`/`IconButton`
-- `src/pages/reports/ParticipationTab.tsx:305-327` — imports and column types
+Use the precedent those two tasks established: **one `Section` per group
+(Upcoming / Past), each containing a real `Heading level={2}` and one
+independent `<Table>`.** See `ParticipationTab.tsx:137-147` for the exact shape.
+
+- This also resolves the heading question: **you own the coach section headings
+  now** (T129 was descoped from `CoachOutreachSection`). Each Section keeps one
+  real `Heading` — a `Table` has no `header` prop, and its scroll wrapper
+  hardcodes `role="group" aria-label="Table"`, so deleting the heading would
+  leave the section unnamed.
+- **Caveat:** two `Table`s resolve widths independently. Share one
+  `buildColumns()` factory and use explicit `pixel()`/`proportional()` widths so
+  both groups resolve identically. Otherwise Upcoming and Past will not align
+  with each other.
+
+### Row expansion — plain `useState`, no plugin
+Compute the rendered row list yourself: when a row is expanded, splice its
+session-detail rows into the `data` array beneath it (same row type, discriminated
+by a `kind` field your `renderCell`s switch on). This needs no plugin and no
+`colSpan`. The free-text "Going: Priya, Devon" line (`OutreachList.tsx:2033`)
+renders as the child row's **title-column** content.
 
 ### Columns
 `[expander] [date + weekday chips] [title + location] [planned/logged]
 [expected/attended] [actions]`. Stats `align="end"`; title column
-`proportional()` and flexing with `textOverflow="truncate"`; expander and
-actions `pixel()`.
+`proportional()`; expander and actions `pixel()`.
 
-### Section grouping and expansion
-- Upcoming/Past sections via `useTableGroupedRows`.
-- Row expander via `useTableRowExpansion`. **Known gap (F-1):** expansion is
-  *inherited-columns* mode — child rows reuse the parent's columns; there is no
-  `renderExpandedContent`. Per-session detail (date, time, hours, attendance)
-  maps to those columns cleanly. The free-text "Going: Priya, Devon" line does
-  **not**. Decide: give it its own column, or use children mode with
-  `TableCell colSpan` (which forfeits width resolution). **Disclose which you
-  chose and why** — this is the one place the primitive may not fit, and T131
-  inherits your decision.
+**Truncation:** use `<Text maxLines={1}>` (or 2) **inside** the title column's
+`renderCell`. Do **not** use `textOverflow="truncate"` — it is a **Table-level**
+prop (`Table.tsx:98`) and `types.ts:573-574` states verbatim: *"Only affects
+cells using the default renderer (no `renderCell`)."* Your title column uses
+`renderCell`, so it would be a guaranteed no-op. `Text.maxLines` also gives a
+free hover tooltip when truncated (`Text.tsx:239-251`) and is documented in
+`astryx-api.md`; in-repo precedent at `KpiStrip.tsx:328`.
 
-### UXC-03 — shared stat cell
-Build one shared three-tier `renderCell` helper (micro-label caps/dim, value
-semibold with `hasTabularNumbers`, optional secondary line) and use it for every
-stat column. T131 and W5-P4 will import it, so put it somewhere reusable and
-name it accordingly.
+### UXC-03 — extract the stat cell, don't build one
+The three-tier shape already exists three times. **Extract and reuse**, so
+T131 and W5-P4 inherit exactly what is already on screen:
+- `OutreachList.tsx:1789-1795` — `Text type="label" color="secondary"` /
+  `Text type="body" weight="semibold" hasTabularNumbers`
+- `OutreachList.tsx:1959-1968` — same plus the optional third line
+  (`Text type="supporting"` "Reached {n}")
+- `KpiStrip.tsx:313-330`, `CoachHome.tsx:1786-1791` — label / value / secondary
 
-### UXC-04 — compact affordances
-Expander: icon-only chevron. Edit: `IconButton` or short chip. Cancel: compact ×
-with destructive styling. Details: a short "Details" link. **No visible control
-label may contain an event title** — today every row reads "Show session details
-— Community Food Bank Sort" and "View details — Community Food Bank Sort". The
-title moves into the accessible name (`aria-label="Edit Riverside Park
-Cleanup"`), preserving the screen-reader disambiguation the current design was
-buying with visible words.
+Put the extracted component under `src/components/` and name it for reuse.
+
+### UXC-04 — ONLY the expander violates
+**Corrected scope.** `Edit` (`OutreachList.tsx:1980-1986`) and `Cancel`
+(`:1988-1996`) **already comply**: visible text is "Edit"/"Cancel", the title is
+already in `label`. **Leave them alone**, and preserve their `aria-label`
+strings **byte-for-byte including the en dash `–`** —
+`OutreachList.test.tsx:1212` and `:1254` pin `'Edit – Community Food Bank Sort'`
+and `'Cancel – Riverside Park Cleanup'` exactly.
+
+**`View details – {title}` stays verbatim** (`:1997-1999`). Do **not** shorten
+it to "Details" or move the title into `aria-label`. That would reverse T112
+(Passed), break `OutreachList.test.tsx:1592-1595` and `:1625`, and violate
+`astryx-api.md`'s Link Best Practices, which state that setting `label` on a
+text link *"prevents assistive technology from reading the actual link
+content"* and that generic text like "read more" is forbidden.
+
+**The expander is the one genuine violation** (`:1970-1979`): it is a `Button`
+with `label="Show session details – {title}"` and no children, so the label is
+also the visible text. Fix it the way Edit/Cancel already do it — keep `label`
+byte-identical, add short visible children (e.g. `Sessions (3)`), so the title
+survives in the accessible name only.
+
+**Pre-authorized test change:** `OutreachList.test.tsx:1024` asserts
+`btn.textContent?.startsWith('Show session details')`. Amend it to assert on the
+accessible name (`aria-label`/`label`) instead, in this same change. Name it in
+your report.
 
 ### UXC-07 — density and separation
-Collapsed coach rows **≤72px measured** at 1440px. (The old "≥8 rows visible"
-criterion was dropped: this page ships 5 event fixtures, so it was
-unverifiable.) Use `Table`'s own `density`/`dividers`/`isStriped` props; default
-to bordered row-cards matching the reference figure. No expander control may
-out-weigh a row title in font size or weight.
+Collapsed coach rows **≤72px** at 1440px. Use `Table`'s `density`/`dividers`/
+`isStriped`; default to bordered row-cards matching the reference figure. No
+expander control may out-weigh a row title in font size or weight.
 
-### UXC-13 — responsive (MAJOR)
-NFR-06 mandates 375→1440 and T068's sweep already passed — column grids are the
-likeliest thing to regress it. State and implement small-screen behavior: which
-columns drop or collapse below 768px, how a row reads on a phone. **Ship
-screenshots at 375px and 1440px.** No horizontal page scroll at 375px; no
+Note: this page renders **4** coach outreach events (5 fixtures exist;
+`event-team-meeting` is excluded by NAV-07).
+
+### UXC-13 / UXC-14 — responsive and dark theme
+State and implement small-screen behavior below 768px (which columns drop or
+collapse, how a row reads on a phone). No horizontal page scroll at 375px; no
 control below a 44px touch target.
 
-### UXC-14 — dark theme
-Capture your surfaces in **both** themes and add the dark figures to
+**How to capture screenshots** (the route is `RequireAuth`-guarded and there is
+no session-injection seam for a real browser — `playwright.config.ts` documents
+this): build a **throwaway preview entry** — a `src/preview.throwaway.tsx` +
+`preview.throwaway.html` pair that mounts `<OutreachList loadData={defaultLoadOutreachData}
+seasonId="season-placeholder-current" />` inside `MemoryRouter` + `LoginAs`
+(`src/test-utils/authHarness.tsx`) + `LayerProvider`/`Theme`/`AppShell`, run
+`vite` against it, and screenshot with the chromium at
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome`. **Delete both throwaway
+files before you finish — they must never be committed.** This exact approach
+produced the figures already in `docs/swarm/figures/ux-craft/`.
+
+Capture before/after at 1440px and 375px in both themes; add the new figures to
 `docs/swarm/figures/ux-craft/`.
 
 ## Allowed Files
 - `src/pages/outreach/OutreachList.tsx`, `OutreachList.test.tsx`
-- new shared stat-cell component + test (put it under `src/components/`)
+- new shared stat-cell component + test under `src/components/`
 - `docs/swarm/figures/ux-craft/**` (your new screenshots only)
 
 ## Forbidden Files
-- The **student/parent** view in `OutreachList.tsx` — leave its render path
-  alone this packet (T131 handles student surfaces).
-- `OutreachEventDialog.tsx`, `OutreachDetail.tsx`, `SelfCheckoffDialog.tsx`,
-  `MarkEventCompleteDialog.tsx`, all meetings files, `CalendarPage.tsx`, all
-  home files, `src/lib/supabase/**`, `supabase/**`, `docs/swarm/**` except the
-  figures dir, `.claude/**`.
+- The **student/parent** view in `OutreachList.tsx` (T129 owns its heading;
+  T131 owns its rows).
+- `AttendancePanel.tsx`, `RsvpControl.tsx`, `MarkDayCompleteDialog.tsx`,
+  `MarkEventCompleteDialog.tsx`, `ParentRsvp.tsx`, `SelfCheckoffDialog.tsx`,
+  `OutreachEventDialog.tsx`, `OutreachDetail.tsx`, all meetings files,
+  `CalendarPage.tsx`, all home files, `src/lib/supabase/**`, `supabase/**`,
+  `docs/swarm/**` except the figures dir, `.claude/**`.
 
 ## Traps
-1. **Zero data-layer changes.** This is presentation only. `loadOutreachData`
-   and every loader stay untouched; no metric math moves into TS (constitution
-   item 3).
-2. **Preserve verified behavior.** `OutreachList.tsx` carries T106's `seasonId`
-   resolution, T119's D-7 author-agnostic RSVP logic, T121's real-attendance
-   Attended column, and T126's self-checkoff entry point. Restructuring rows
-   must not alter any of it. The checker will diff the non-render code paths.
-3. **T121's UXD-05 fix must survive**: exactly one "Team season goal" heading.
-   Its test asserts zero `role="progressbar"` on this page — **leave that alone**;
-   restoring the bar is W5-P4's job (UXC-08), not yours.
-4. Astryx props verified against installed source (the api doc has been wrong
-   twice). Keyboard-accessible expander; both themes; contrast per UXD-09.
-5. Sibling T129 is editing headings and copy in this same file concurrently.
-   **T129 owns headings/copy; you own row structure.** Attribute noise honestly;
-   never `git stash`.
+1. **Zero data-layer changes.** Presentation only. No loader edits, no metric
+   math in TS (constitution item 3).
+2. **Preserve verified behavior in this file** — the checker will diff the
+   non-render code paths for each:
+   - **T106** `seasonId` resolution (module doc #12; code at 2800/2895/3036)
+   - **T101** real load + `onSaveEvent`/`saveOutreachEvent` create/edit path (doc #11)
+   - **T112** the per-row "View details" `Link` (doc #13) — see UXC-04
+   - **T121** real-attendance Attended column (`distinctAttendedStudentIds`;
+     tests at 626/673)
+   - **T126** self-checkoff entry point (doc #14; code 2483-2693)
+   - **BEH-01** milestone-toast localStorage dedupe keyed by `seasonId` +
+     `goalBarId` (docs #4, lines 104-105)
+   - **BEH-02** confirmed and planned hours never summed (doc #3)
+   - **NAV-07** outreach-only filtering (doc #2; asserted at tests 1033-1035)
+   *(T119's D-7 logic is NOT in this file — it lives in `AttendancePanel.tsx`
+   and the loaders. Do not go looking for it here.)*
+3. **T121's UXD-05 fix must survive**: exactly one "Team season goal" heading,
+   and `OutreachList.test.tsx:1294` asserts zero `role="progressbar"` on this
+   page. **Leave that alone** — restoring the bar is W5-P4's job (UXC-08).
+4. Astryx props from `astryx-api.md`; where it is silent, stop and flag rather
+   than assuming installed source wins (see the Structure section — that is
+   exactly what took the plugins off the table).
+5. Only **two** test assertions are pre-authorized for change: the expander at
+   `:1024`. Everything else in that file must stay green. `OutreachList.test.tsx`
+   is **67/67 passing** right now — that is your baseline.
+6. Sibling T129 edits the **student** section of this file concurrently.
+   Attribute noise honestly; never `git stash`.
 
 ## Required Output
-Full diff; the column definitions with their width choices; the row-expansion
-decision and its rationale (F-1 gap); before/after screenshots at 1440px **and**
-375px in both themes, with the measured collapsed row height and evidence of
-zero column x-drift; proof the four verified behaviors in Trap 2 are unchanged;
-gate output (tsc, eslint 0 errors, full vitest, build, prettier); risks;
-disclosed judgment calls.
+Full diff; column definitions with width choices and the shared `buildColumns()`
+factory; the expansion implementation; proof of column alignment — assert every
+`<td>` in a column carries an identical resolved width across all rows (jsdom
+returns zeros for geometry, so this structural assertion is the measurable
+form); measured collapsed row height from the preview rig; before/after
+screenshots at 1440px and 375px in both themes; explicit proof each of Trap 2's
+eight behaviors is unchanged; confirmation the throwaway preview files were
+deleted; gate output (tsc, eslint 0 errors, full vitest, build, prettier);
+risks; disclosed judgment calls.
