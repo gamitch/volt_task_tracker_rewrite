@@ -56,37 +56,85 @@ every ListItem prop in this file is already an installed-source deviation.
 (`astryx-api.md:1961-1977`) but verified real at the lines above. D004
 precedent; T131 shipped both and Passed.
 
-### 2. UXC-01 — one heading per section
+### 2. UXC-01 — label the section the way T129 already proved
 
-`:812-817` renders `<Heading level={2}>Sessions in {month}</Heading>`, and
-`:829` renders `<List hasDividers header="Chronological session list">`. That
-is two headings for one section.
+**Revision 2 replaces this section entirely.** Revision 1 told you to drop the
+`List`'s `header` and keep the `Heading`. That is wrong, and it is wrong in a
+way this project has already paid for once.
 
-**Drop the `List`'s `header` prop.** Keep the `Heading` — it carries the
-meaningful, state-dependent text ("Sessions on Tuesday, July 14" vs "Sessions
-in July").
+`VOLT_UX_Craft_PRD_v3.md:76` authorizes exactly three fixes for UXC-01:
+**(a)** keep `List header`, drop the outer `Heading`; **(b)** wrap in a labelled
+region; **(c)** migrate to `Table`. "Drop `header`, keep `Heading`" is the
+reverse of (a) and is none of the three. Constitution item 1: PRD requirement
+IDs outrank packet text.
 
-This is safe here, and you must state why in your output, because the general
-rule cuts the other way: T129 established that `List header` renders **only in
-the non-empty branch**, so dropping it can strip a section's accessible name in
-the empty state. On this page the empty branch is a separate `EmptyState` with
-its own `title` (`:823-827`) and the `Heading` at `:812` renders
-unconditionally either way — so nothing loses its name. Verify that claim in the
-DOM rather than trusting this packet.
+Why it fails mechanically: `List.tsx:169` sets
+`aria-labelledby={header != null ? headerId : undefined}` on the
+`<ul role="list">`. The `header` prop is the list's **only** programmatic
+accessible name. And you cannot re-label it — `List`'s signature
+(`List.tsx:143-155`) destructures a closed prop set with no rest spread, so
+`aria-label`/`aria-labelledby` passed to `List` are silently discarded.
+`astryx-api.md:4568` says the opposite of revision 1: "**Do:** Provide a header
+to label the list."
+
+`task-ledger.md:150` records **T129 failing attempt 1 on exactly this** —
+"removing the `List header` *lost* the accessible name rather than relocating
+it". Attempt 2 shipped `<div role="group">` at all 11 sites.
+
+**Ship remedy (b), copying T129's pattern:**
+
+1. Give the `Heading` at `:812-816` a stable `useId`-derived id. Keep its text —
+   it carries the meaningful state-dependent copy ("Sessions on Tuesday, July
+   14" vs "Sessions in July").
+2. Wrap the `List`/`EmptyState` ternary (`:822-834`) in
+   `<div role="group" aria-labelledby={headingId}>`.
+3. **Then** drop the `List`'s `header` prop.
+
+Use `<div role="group">`, **not** `Section` — `Section` applies an unconditional
+full-bleed negative margin and renders a role-less `<div>`, on which
+`aria-labelledby` is name-prohibited under ARIA. T129 hit both. The in-repo
+pattern and its green tests are `OutreachList.tsx` (student sections) and
+`OutreachList.test.tsx:1520-1587`, which includes an empty-branch case. Copy it;
+do not re-derive it.
+
+**Correcting a false premise from revision 1.** It claimed the `Heading` at
+`:812` "renders unconditionally". It does not — it sits **inside** the
+`!hasAnySessions` ternary opened at `:775` and closed at `:837`. When the season
+has zero sessions, the whole block (Calendar, legend, filter, heading, list) is
+replaced by a *different* `EmptyState` at `:776-780`, which carries its own
+`headingLevel={2}` title. So there are **two** empty states on this page, not
+one: the outer zero-session branch (`:776`) and the inner no-match branch
+(`:823`). Your accessible-name proof must cover both.
+
+Also drop revision 1's "two headings" framing: `List` renders `header` in a
+plain `<div id={headerId}>` (`List.tsx:197`), not a heading element. There is
+exactly one `<h2>` on the page today. The defect is a *duplicated label*, not a
+duplicated heading level.
 
 ### 3. UXC-06 — stop the full-bleed stretch
 
 Two things stretch edge-to-edge on a wide viewport: the filter
-`SegmentedControl` (`:800-807`) and the month `Calendar`'s day tracks.
+`SegmentedControl` (`:800-808`) and the month `Calendar`'s day tracks.
 
 Cap the page content at **~1120px** and centre it, per UXC-06. The
 `SegmentedControl` should size to its four options rather than filling the row.
 
-Escalation ladder is component → theme token → custom CSS (PRD v3.1 F-2;
-`xstyle` does not work in this app — no StyleX plugin, `stylex.create()` throws
-at runtime). `style` is not documented on these components but is verified to be
-merged in installed source and shipped by T130/T131 — authorized here on the
-same D004 basis. Prefer a container-level cap over per-component width props.
+**Both are rung-1 component props — no escalation, no `style`.** Revision 1
+pre-authorized `style` under D004; that was an unnecessary escalation past a
+documented prop, and constitution item 11 forbids it.
+
+- **`maxWidth`** is documented on `Stack`/`VStack` (`astryx-api.md:363`, `:387`)
+  and on `Center` (`:83`, `:139`) — "Numbers are treated as pixels". Installed
+  source confirms it emits real inline sizing (`Stack.tsx:115`, `:272-273`;
+  `Center.tsx:85`). `<VStack maxWidth={1120}>` *is* the container-level cap.
+- The `SegmentedControl` is not the thing that is wrong — its own root is
+  already `inline-flex`/hug (`SegmentedControl.tsx:89-95`). It is being
+  **stretched** by the parent `VStack`'s default `vAlign="stretch"`. Wrap it in
+  `<HStack hAlign="start">` (documented) and the stretch stops.
+
+Only if measurement shows these insufficient may you escalate, and then you must
+say what you measured. `xstyle` remains unusable (PRD v3.1 F-2 — no StyleX
+plugin, `stylex.create()` throws).
 
 ## Already done — do NOT redo
 
@@ -134,18 +182,26 @@ re-litigate it or try to eject the component.
    non-inheriting colour, so the hover `color-mix` never reaches the glyphs.
    Known, vendor-side, out of scope. The hover underline and focus ring are the
    live affordances. Do not report it as a defect or try to fix it.
-5. Do not certify your own work.
+5. **`CalendarPage.test.tsx:287-291` forbids any hex literal in `innerHTML`**
+   (`expect(container.innerHTML).not.toMatch(/#[0-9a-fA-F]{3,6}/)`). Any hex you
+   introduce in the UXC-06 work fails it. Use tokens and documented props.
+6. Do not certify your own work.
 
 ## Acceptance Criteria
 
 1. Every session row's event title is a real `<a>` pointing at the correct
    per-type route, with **no** `aria-label`, accessible name equal to the title.
 2. `View details – ` no longer appears anywhere in `CalendarPage.tsx`.
-3. Rendered title weight, size, colour and truncation measured; row height
-   unchanged from before.
-4. Exactly one `<h2>`-level name for the session-list section. Prove in the DOM
-   that the section still has an accessible name in **both** the populated and
-   empty states.
+3. Rendered title weight, size and colour measured and unchanged. **Row height
+   within 2px of before** — swapping a bare text node for a baseline-aligned
+   `inline-flex` anchor can shift the pitch slightly; report the measurement
+   rather than working around it. Truncation cannot be exercised by any existing
+   fixture (no title is long enough); prove the mechanism with a **synthetic
+   long title** in the rig, as T131's checker did.
+4. The `<div role="group">`'s `aria-labelledby` resolves to the visible `<h2>`,
+   asserted in **all three** branches: populated, the inner no-match empty state
+   (`:823`), and the outer zero-session empty state (`:776`). Mirror
+   `OutreachList.test.tsx:1520-1587`. The `List` must no longer carry `header`.
 5. At 1440px: content capped at ~1120px and centred; the `SegmentedControl` no
    longer spans the full width. Report the measured content width.
 6. At 375px: no page-level horizontal scroll

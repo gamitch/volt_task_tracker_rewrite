@@ -16,8 +16,10 @@ that one file is the contention point for the rest of wave 5:
 
 ## 1. Extract the viewport hook
 
-`getIsNarrowViewport` (`:2067-2073`) and `useIsNarrowViewport` (`:2074-2081`)
-move verbatim to a new `src/hooks/useIsNarrowViewport.ts`. There is currently
+`NARROW_VIEWPORT_QUERY` (`:2065`), `getIsNarrowViewport` (`:2067-2072`) and
+`useIsNarrowViewport` (`:2074-2095`) move verbatim to a new
+`src/hooks/useIsNarrowViewport.ts`. **All three** — the constant is what both
+functions read, and revision 1 omitted it. There is currently
 exactly **one** copy — you are preventing a second, not deduplicating two.
 
 - Export both; `OutreachList.tsx` imports `useIsNarrowViewport` (its only
@@ -26,16 +28,32 @@ exactly **one** copy — you are preventing a second, not deduplicating two.
   real `matchMedia` subscription rather than a one-shot read
   (`OutreachList.tsx:1982`). Do not drop that; the next reader needs it.
 - `src/hooks/` does not exist yet. Create it.
-- **Pin the 768px breakpoint in a test.** Today nothing does. A test that
-  asserts the boundary behaviour at 767/768/769 belongs with the hook, in
-  `src/hooks/useIsNarrowViewport.test.ts`.
+- **Pin the 768px breakpoint — but understand what is actually pinnable.**
+  `src/test-setup.ts:14-25` installs a `matchMedia` stub whose `matches` is
+  hardcoded `false`, and jsdom evaluates no media queries at all. You therefore
+  **cannot** assert "a 768px viewport behaves narrow". What you can assert is
+  that the hook asks for the right query: supply a `vi.stubGlobal` `matchMedia`
+  that parses the query string, then pin 767/768/769 against it. Say plainly in
+  your output that this pins the query, not a real viewport. A test that stubs
+  `matches` directly and asserts the hook returns it is a tautology — do not
+  ship one.
+- Name the test file `.tsx` if you need JSX. There is no
+  `@testing-library/react` in `package.json`; this repo's hook tests render a
+  probe component with raw `react-dom/client` (precedent:
+  `CheckinResult.test.tsx:470-513`). Adding `renderHook` would need a new
+  dependency under constitution item 9 — don't.
 
 ## 2. Student/parent rows: title becomes the link
 
-The student/parent renderer is at `:3160-3191` — `endContent` `:3165-3189`,
-the link `:3185-3187`, and `return <ListItem label={event.title} … />` at
-`:3191`. Today its rows still read `View details – {event.title}` while the
-coach rows on the same page do not.
+The student/parent renderer is `StudentOutreachEventRow` — JSDoc `:3171-3184`,
+function `:3185-3293`, `endContent` `:3266-3290`, the `Link` **`:3286-3288`**,
+and `return <ListItem label={event.title} … />` at **`:3292`**. Today its rows
+still read `View details – {event.title}` while the coach rows on the same page
+do not.
+
+*(Revision 1 cited `:3160-3191`/`:3185-3187`/`:3191`. Those came from
+`VOLT_UX_Craft_PRD_v3.md:79`, which records pre-T131 positions — roughly 101
+lines stale. Verified against the file for revision 2.)*
 
 Apply T131's resolution: **delete the `Link` from `endContent`, and pass the
 title as a link through `ListItem`'s `label`.**
@@ -65,7 +83,8 @@ truncation silently stops working. `color="primary"` is required because
 title turns purple.
 
 No `label`, `aria-label`, or `tooltip` on the link. Its accessible name must be
-the title text (`astryx-api.md:1952`, `:1954`).
+the title text (`astryx-api.md:1952`; the no-`aria-label`-on-text-links rule is
+`:1955` — `:1954` is the separate no-generic-text rule).
 
 **Pre-authorized deviations (do not dispute):**
 - `ListItem.label` accepts `ReactNode`, verified in installed source
@@ -74,11 +93,20 @@ the title text (`astryx-api.md:1952`, `:1954`).
   **every** ListItem prop already in this file is an installed-source
   deviation — this is established practice here, not a new escalation.
 - `Link`'s `weight`/`maxLines`/`color` are absent from the `# Link` props table
-  (`astryx-api.md:1961-1977`) but verified real at the lines above. D004
-  precedent; T131 shipped them and Passed.
+  (`astryx-api.md:1963-1977`; `:1961` is the section blurb) but verified real at
+  the lines above. D004 precedent; T131 shipped them and Passed. Note `color`
+  **is** already half-attested at `:1992` (the Link Theming table, `data-color`
+  ← `color`), so the annotation below corrects an internal inconsistency rather
+  than adding six unknowns.
 
 Leave the two `Button`s in `endContent` (expander, "Mark attendance") exactly
-as they are — their `label`s are pinned by T126's tests.
+as they are — `:1607`/`:1620`/`:1627` pin the `Mark attendance – …` text and
+`:1042`/`:1066` pin the expander's `aria-label`.
+
+**Disclosed residual gap, deliberately not fixed here:** that Button's *visible*
+text repeats the row title, which UXC-04 (`PRD:79`) forbids. Fixing it would
+break `:1607` and is out of scope. Record it as a follow-up; do not fix it, and
+do not let a finding on it fail your work.
 
 **Weight check.** `ListItem` renders through `Item`, a three-slot flex. Confirm
 the linked label still truncates and does not change the row's height or
@@ -86,9 +114,14 @@ alignment. If it does, report the measurement rather than working around it.
 
 ## 3. Carried follow-ups from T131's check
 
-- **`:3173`** (inside the `endContent` JSDoc) describes coach-row actions as
-  living in `endContent`. They have been in a `Table` since T130. Correct it.
-- **Annotate `astryx-api.md`'s `# Link` props table** (`:1961-1977`) with the
+- **`:3182`** (in `StudentOutreachEventRow`'s JSDoc) says the coach row's
+  "primary actions -- Edit/Cancel -- live in `endContent`". They have been in a
+  `Table` since T130. Correct it. *(Revision 1 cited `:3173`, a different
+  sentence.)*
+- **`:3261-3262`** sits directly above the code you are editing and claims every
+  row "still always carries a real 'View details' `Link`, unchanged shape".
+  Your change falsifies it. Correct it too.
+- **Annotate `astryx-api.md`'s `# Link` props table** (`:1963-1977`) with the
   real `type`/`size`/`weight`/`color`/`display`/`maxLines` props, each marked as
   verified against installed source with the line reference, so the next task
   does not need a D004 escalation. Follow the annotation style T128 already
@@ -102,7 +135,7 @@ alignment. If it does, report the measurement rather than working around it.
 - `src/pages/outreach/OutreachList.tsx`
 - `src/pages/outreach/OutreachList.test.tsx`
 - `src/hooks/useIsNarrowViewport.ts` (new)
-- `src/hooks/useIsNarrowViewport.test.ts` (new)
+- `src/hooks/useIsNarrowViewport.test.ts` **or** `.test.tsx` (new)
 - `docs/swarm/astryx-api.md` — **only** the `# Link` props table annotation
 - `docs/swarm/active/T132-worker-output.md` (create)
 
@@ -122,10 +155,12 @@ alignment. If it does, report the measurement rather than working around it.
 
 1. **The coach and student/parent halves of this file look alike and are not.**
    Coach rows render through `Table` columns; student/parent rows render through
-   `ListItem`. `OutreachList.test.tsx:1726` (coach) was amended by T131 and now
-   asserts the title. `:1762` (student/parent) still asserts
-   `toContain('View details')` — **that is the one you are changing now.** After
-   your change it should assert the title, exactly as `:1726` does.
+   `ListItem`. `OutreachList.test.tsx:1729` (coach) was amended by T131 and now
+   asserts `toBe('Community Food Bank Sort')` — `:1726` is T131's *comment*, not
+   the assertion. `:1762` (student/parent) still asserts
+   `toContain('View details')` — **that is the one you are changing now**, and
+   the premise gate confirmed by actually running it that it is the only test
+   that breaks. After your change it should assert the title, as `:1729` does.
 2. **`ListItem.label` is not the same insertion point as a `Table` cell.** T131
    wrapped a `Text` inside a cell; you are replacing a `label` value. Verify the
    rendered result rather than assuming parity.
@@ -145,14 +180,24 @@ alignment. If it does, report the measurement rather than working around it.
 2. The 768px boundary is pinned by a real test (767 / 768 / 769).
 3. Student/parent rows: the event title is a real `<a href="/outreach/:eventId">`
    with **no** `aria-label`, accessible name equal to the title.
-4. `View details – ` no longer appears anywhere in `OutreachList.tsx`.
+4. `View details – ` no longer appears in the **rendered JSX or rendered DOM**.
+   It still appears in ten module-doc comments (`:255, :259, :465, :479, :495,
+   :498, :1969, :2226, :2362, :2367`) — the historical record, including T131's
+   own note of the authorization for this reversal. **Do not delete them.** A
+   whole-file grep is the wrong test here.
 5. Rendered title weight, size, colour and truncation match the coach rows at
    rest (weight 600, 14px, the `primary` token, single-line ellipsis).
 6. Row height and alignment unchanged vs before — measured, not assumed.
-7. `:3173`'s stale `endContent` description is corrected.
+7. Both stale comments corrected: `:3182` and `:3261-3262`.
 8. `astryx-api.md`'s `# Link` props table lists the six typography props with
    installed-source line references.
-9. The two new regression tests exist and fail against pre-T131 code.
+9. The two new regression tests exist and genuinely discriminate — prove it by
+   running them against the pre-T131 file
+   (`git show 6c8591d^:src/pages/outreach/OutreachList.tsx`), where the title was
+   not a link and the column was `pixel(420)`. Note `buildCoachOutreachColumns`
+   is **not exported** (`:2457`) and the actions column has `header: ''`, so
+   either export it or locate the `<th>` positionally; `columnUtils.ts:106`
+   writes `style.width = '128px'` inline, which jsdom can read.
 10. `npx tsc --noEmit`, `npx eslint .`, `npx vite build`,
     `npm run format:check` clean.
 11. `npx vitest run` green. Baseline **1414 / 61 files**. Expected delta: the
