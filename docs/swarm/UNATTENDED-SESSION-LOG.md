@@ -125,6 +125,27 @@ it. The merge-first step is cheap insurance.
 Worktree isolation stays. It is the only reason the stale base affected one
 task instead of corrupting the shared tree.
 
+## Second standing dispatch rule added 2026-07-28 — pin the packet revision
+
+**Every dispatch prompt must name the packet's commit SHA**, and the worker must
+verify its checked-out packet matches before writing any output.
+
+T135 exposed the race. Its worker merged the branch at `23a38fa` (packet
+revision 2) and started work; revision 3 landed at `1336134` **after** that
+merge, and revision 3 is the commit that changed the central design ruling from
+`MeetingsList` to `CoachMeetingsView`. The worker shipped `CoachMeetingsView`
+anyway, on its own reasoning — the right answer — while its output doc claimed
+"implemented exactly per Revision 2". Outcome correct, provenance wrong.
+
+The merge-first rule fixes stale *code*; it does nothing about a packet still
+being revised while a worker reads it. The next task may not reason its way to
+the right answer from superseded text.
+
+Also from T135's check, worth fixing when convenient: the `SubagentStop` hook
+appends to `docs/swarm/verification-log.md` at EOF, and every concurrent
+worktree does the same, so any two worktrees merging manufacture an EOF
+conflict. Point the hook at a per-agent file instead.
+
 ## Environment facts (verified, not assumed)
 
 **All 15 migrations are applied to George's remote Supabase project**, verified
