@@ -61,6 +61,24 @@ between a TS cast for a clip, or accepting no truncation, or asking the vendor.
 **Not decided. Both packets now instruct workers to measure and report rather
 than chase an ellipsis.**
 
+**D-2 — `/roster` cannot be captured with real data, and this will recur.**
+`RosterShell`/`StudentsTab` expose no injectable loader seam, and there is no
+`.env` in this environment, so any roster screenshot shows a
+Supabase-not-configured error rather than the table. T134 shipped that as the
+canonical `new-roster.webp` and its checker correctly failed it; the original
+figure is being restored. Every future task needing a roster capture hits this
+identically. **Options for George:** add an injectable loader seam to
+`RosterShell`/`StudentsTab` (mirrors the pattern every other page already has),
+or drop roster captures from the wave. Not decided.
+
+**D-3 — archived worker outputs leave the repository.** `.gitignore` ignores
+`docs/swarm/archive/`, so when a task's packet and output are archived, any
+disclosure recorded only in the worker output is deleted from the repo. This is
+deliberate (the archive is large), but it means **a caveat about a shipped
+artifact must live somewhere else** — the ledger, the verification log, or
+beside the artifact. Surfaced by T134's checker. Worth a constitution note, but
+constitution edits are deferred.
+
 *(appended as they arise)*
 
 ---
