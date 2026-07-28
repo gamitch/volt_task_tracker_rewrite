@@ -46,8 +46,12 @@ venv/
 .claude/session/
 .claude/cache/
 
-# Swarm archive (can grow large — archive locally, don't commit)
-docs/swarm/archive/
+# Swarm archive IS committed (decision D-3, 2026-07-28). It was excluded on
+# the assumption it "can grow large"; measured, it is 2.1 MB of markdown across
+# 200 files — smaller than docs/swarm/figures/ (2.3 MB) and ~3% of .git.
+# Excluding it silently deleted every caveat a worker recorded only in its
+# output doc, at the moment the task was archived, while the artifact the
+# caveat was about stayed in the repo.
 
 # Playwright test artifacts (regenerated on every run)
 test-results/
