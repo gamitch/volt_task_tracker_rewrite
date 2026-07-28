@@ -1723,7 +1723,10 @@ describe('<OutreachList /> T112: "View details" navigation link on every row', (
 
     // Distinguishable per-row text (astryx-api.md Link Best Practices, same
     // checker-fixed requirement `CalendarPage.tsx` already satisfies).
-    expect(foodBankLink!.textContent).toContain('View details');
+    // T131: the standalone "View details – {title}" action text moved off
+    // this link and onto the title itself -- the link's accessible name is
+    // now exactly the event title (no more "View details – " prefix).
+    expect(foodBankLink!.textContent).toBe('Community Food Bank Sort');
     expect(foodBankLink!.textContent).toContain('Community Food Bank Sort');
     expect(parkCleanupLink!.textContent).toContain('Riverside Park Cleanup');
     expect(tutoringLink!.textContent).toContain('After-School Tutoring Drive');

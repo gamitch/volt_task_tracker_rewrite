@@ -248,10 +248,17 @@
  *       became a dead end on this list page: no way to reach the real
  *       Edit/Cancel/RSVP-visibility functionality that already lives on that
  *       page. Fixed here: every row (Upcoming AND Past, coach AND
- *       student/parent view) now carries a real "View details" `Link` to
- *       `routePaths.outreachEvent(event.id)` in its `ListItem`'s
- *       `endContent` -- see module doc #13 for the full precedent
- *       investigation and shape.
+ *       student/parent view) carries a real `Link` to
+ *       `routePaths.outreachEvent(event.id)` -- see module doc #13 for the
+ *       full precedent investigation and shape. T131 UPDATE: on the coach
+ *       `Table` surface specifically, that `Link` no longer lives in a
+ *       separate "View details – {title}" action; it now IS the event
+ *       title itself (`CoachEventTitleCell`, below), reached the same way
+ *       (`routePaths.outreachEvent(event.id)`, real `<a href>`, real SPA
+ *       navigation). The student/parent `ListItem` surface is untouched by
+ *       T131 and still carries the standalone "View details – {title}"
+ *       `Link` in its `endContent` exactly as this paragraph originally
+ *       described.
  *    d. `MarkDayCompleteDialog.tsx` (T040) and `Leaderboard.tsx` (T044) are
  *       not referenced, imported, or stubbed anywhere in this file: neither
  *       is part of OUT-01's list-page scope (this task's own objective
@@ -464,9 +471,9 @@
  * import-only per that file's own Forbidden Files carve-out) -- the exact
  * same helper this file now uses below, for the exact same route.
  *
- * Mirrored here EXACTLY, not reinvented: `CoachOutreachRowItem`'s and
- * `StudentOutreachRowItem`'s own `endContent` (module docs #5/#7 above) now
- * each end with the identical `<Link as={RouterLink}
+ * Mirrored here at the time, not reinvented: `CoachOutreachRowItem`'s and
+ * `StudentOutreachRowItem`'s own `endContent` (module docs #5/#7 above) each
+ * ended with the identical `<Link as={RouterLink}
  * href={routePaths.outreachEvent(event.id)} isStandalone>View details –
  * {event.title}</Link>` element -- same component, same `as`/`href`/
  * `isStandalone` prop set, same "View details – <title>" text shape (this
@@ -480,6 +487,19 @@
  * honored by never making the row itself interactive, exactly as
  * `CalendarPage.tsx`'s own module doc #7/#8 already established for the
  * identical component).
+ *
+ * T131 UPDATE (supersedes the "identical" claim above for the coach side
+ * only): the coach view's own row surface was migrated off `ListItem` onto
+ * a `Table` by T121/T130 (module doc on `CoachEventTitleCell`/
+ * `CoachEventActions` below is now the coach-side source of truth, not this
+ * paragraph). On that `Table`, the standalone "View details – {title}"
+ * `Link` element described above was replaced: the link now renders directly
+ * on the title cell (`CoachEventTitleCell`), with the title text itself as
+ * its accessible name, and the separate "View details – {title}" text is
+ * gone from the coach surface entirely. The student/parent side still uses
+ * `ListItem`/`StudentOutreachRowItem` and still renders the "View details –
+ * {title}" `Link` exactly as this paragraph originally described --
+ * untouched by T131.
  *
  * Both role variants, both buckets (the packet's own explicit requirement):
  * `CoachOutreachRowItem` is shared by both `CoachOutreachSection` instances
@@ -580,6 +600,8 @@ import {
   EmptyState,
   Heading,
   HStack,
+  Icon,
+  IconButton,
   Link,
   List,
   ListItem,
@@ -1943,9 +1965,16 @@ function GoalProgressBar({
  * real. `aria-expanded` itself is always present (`false`/`true`), which
  * alone is sufficient for AT to know the control is a disclosure toggle
  * even in the collapsed state.
- * "View details – {title}" and Edit/Cancel are UNCHANGED (UXC-04's own
- * explicit exemption for the Link; Edit/Cancel already complied) --
- * verbatim `label`s, verbatim visible text, verbatim en dash.
+ * T131 SUPERSEDES the UXC-04 exemption this paragraph used to cite: the
+ * standalone "View details – {title}" `Link` in the coach actions column is
+ * gone (George authorized the reversal 2026-07-28, see this file's own
+ * git history / the T131 packet's "Authorization for the reversal"). Its
+ * `href`/keyboard path moves onto the event title itself
+ * (`CoachEventTitleCell`, below), not the actions cluster. Edit keeps its
+ * verbatim `label`/visible text; Cancel keeps its verbatim `label`
+ * (`Cancel – {title}`, en dash preserved) but is now an `IconButton` (a `×`
+ * glyph, not visible "Cancel" text) -- see `CoachEventActions`'s own module
+ * doc below for the current shape.
  *
  * UXC-13 (responsive, escalation pre-authorized by the packet): Astryx
  * exports no breakpoint hook (zero `useMediaQuery`/`useBreakpoint` in
@@ -2161,12 +2190,12 @@ export function CoachSessionDetail({
   );
 }
 
-/** UXC-02/07: dense event-row title-column content -- title (`Text
- * maxLines`, never `textOverflow="truncate"` -- that is a TABLE-level prop
- * that is a documented no-op for `renderCell` columns, `types.ts:573-574`:
- * "Only affects cells using the default renderer (no `renderCell`)") +
- * location line. Verbatim content/shape from the pre-T130 `ListItem` row's
- * own `label` (title) -- same title, same "{location} · {address}" shape.
+/** UXC-02/07: dense event-row title-column content -- title + location line.
+ * Location line stays a plain `Text maxLines` (never `textOverflow="truncate"`
+ * -- that is a TABLE-level prop that is a documented no-op for `renderCell`
+ * columns, `types.ts:573-574`: "Only affects cells using the default
+ * renderer (no `renderCell`)"), verbatim "{location} · {address}" shape,
+ * unchanged by T131.
  *
  * UXC-07 fix (measured, not assumed): the category `Badge` is NOT inlined
  * next to the title here (unlike the first draft of this column, kept only
@@ -2181,13 +2210,35 @@ export function CoachSessionDetail({
  * this is also where the pre-T130 row already grouped it (module doc on
  * `CoachEventDateCell`), not a new placement. The title column now has its
  * own full column width for the title text alone; measured back down to
- * 42px of content (title + location, single line each) in the same probe. */
+ * 42px of content (title + location, single line each) in the same probe.
+ *
+ * T131 UPDATE: the title itself is no longer a plain `Text` -- it is now a
+ * real `Link` (`as={RouterLink}`, `href={routePaths.outreachEvent(event.id)}`)
+ * carrying the former standalone "View details – {title}" action's keyboard
+ * path directly on the title (module doc #13/#8c above, T131 packet §1).
+ * `weight="semibold"`/`maxLines={1}`/`color="primary"` reproduce today's
+ * pre-T131 `<Text type="body" weight="semibold" maxLines={1}>` rendering
+ * exactly, including colour: `Text.tsx:165,226` resolve `body`'s default
+ * colour to `'primary'`, which is what `color="primary"` pins here --
+ * `Link`'s own prop default (`'accent'`, `Link.tsx:297`) would otherwise
+ * repaint every title purple. No `label`/`aria-label` is set: the title
+ * text is already the accessible name (`astryx-api.md:1952,1954`), and is
+ * per-row distinguishing, so a generic label would only make things worse,
+ * not better. The location line stays a non-interactive `Text` under the
+ * link, unchanged. */
 function CoachEventTitleCell({ event }: { event: OutreachEventRow }): ReactNode {
   return (
     <VStack gap={0.5}>
-      <Text type="body" weight="semibold" maxLines={1}>
+      <Link
+        as={RouterLink}
+        href={routePaths.outreachEvent(event.id)}
+        isStandalone
+        weight="semibold"
+        maxLines={1}
+        color="primary"
+      >
         {event.title}
-      </Text>
+      </Link>
       <Text type="supporting" maxLines={1}>
         {event.locationName}
         {event.address !== '' ? ` · ${event.address}` : ''}
@@ -2241,14 +2292,23 @@ function CoachEventDateCell({
 }
 
 /** UXC-13 -- CHECKER FIX (post-T130 review, MAJOR, module doc above): a
- * real 44px minimum touch target via the documented `style` prop
- * (`astryx-api.md`'s FormField Props table documents `style`; `Button.tsx`
- * merges it in via `mergeProps`, which spreads the consumer `style` AFTER
- * the StyleX-driven `height`, so `minHeight` here genuinely wins -- CSS
- * clamps the used height to `max(specified height, min-height)`). `size`
- * itself stays `"sm"` on every button below -- only the hit box grows, not
- * the visible glyph/label/padding. Shared by every button this file's
- * coach `Table` renders (desktop AND the mobile card column, since
+ * real 44px minimum touch target via the `style` prop. CORRECTED CITATION
+ * (T131): `style` is NOT documented on `# Button`/`# IconButton` -- there is
+ * no `FormField` section in `astryx-api.md` at all, and `style` appears in
+ * exactly 7 props tables there (Field, Carousel, CodeBlock, Kbd, Markdown,
+ * Overlay, Thumbnail), none of them Button/IconButton. This is a pre-
+ * authorized undocumented-prop deviation (constitution item 2's D004
+ * installed-source precedent, T131 packet Trap 4), not a documented one:
+ * verified directly in installed source instead -- `Button.tsx:545`
+ * destructures `style`, `:652-657` merges it via `mergeProps`, which spreads
+ * the consumer `style` AFTER the StyleX-driven `height` (`mergeProps.ts:84-
+ * 89`), so `minHeight` here genuinely wins (CSS clamps the used height to
+ * `max(specified height, min-height)`); `IconButton.tsx:51` spreads
+ * `...props` (including `style`) into `Button`, so the same deviation
+ * covers the `IconButton` `×` below too. `size` itself stays `"sm"` on
+ * every button below -- only the hit box grows, not the visible glyph/
+ * label/padding. Shared by every button this file's coach `Table` renders
+ * (desktop AND the mobile card column, since
  * `CoachExpanderButton`/`CoachEventActions` are shared components). */
 const MIN_TOUCH_TARGET_STYLE: CSSProperties = { minHeight: '44px' };
 
@@ -2290,10 +2350,32 @@ function CoachExpanderButton({
   );
 }
 
-/** UXC-04 (unchanged): Edit/Cancel/"View details" -- verbatim `label`s,
- * verbatim visible text (packet's own "Corrected scope" -- only the
- * expander violated UXC-04). Shared by the desktop actions column and the
- * mobile card column. */
+/** T131 (reverses part of T112, supersedes the UXC-04 "View details" text
+ * exemption -- George authorized 2026-07-28, `VOLT_UX_Craft_PRD_v3.md`
+ * UXC-04 row / commit `b959b90`, T131 packet "Authorization for the
+ * reversal"): the compact reference-app action-cluster shape
+ * (`old-events-tab.webp`) -- a short `Edit` chip + a destructive `×`
+ * `IconButton`, no more standalone "View details – {title}" text. That
+ * link's keyboard path to `/outreach/:eventId` did not disappear; it moved
+ * onto the title (`CoachEventTitleCell`, above).
+ *
+ * `Edit` -- unchanged: `Button`, `size="sm"`, `variant="secondary"`,
+ * verbatim `label`/visible text.
+ *
+ * `×` -- was a `variant="destructive"` `Button` with visible "Cancel" text;
+ * now a `variant="destructive"` `IconButton` (`icon="close"`, a documented
+ * semantic name, `astryx-api.md:585,608`) with the SAME verbatim
+ * `label={`Cancel – ${title}`}` (three green tests depend on the exact
+ * string, T131 packet Trap 3) -- `IconButton`'s `label` is required and
+ * becomes the `aria-label` (`astryx-api.md:4267`), and per
+ * `astryx-api.md:4261` an icon-only control also needs a `tooltip` since
+ * `label` alone never reaches sighted users; `tooltip="Cancel event"` is
+ * pinned (no test depends on its exact text). The `canCancel` gate is
+ * unchanged. Both `Edit` and `×` keep the real 44px `style` touch target
+ * (module doc on `MIN_TOUCH_TARGET_STYLE` above; `IconButton.tsx:51`
+ * spreads `style` through to the underlying `Button`).
+ *
+ * Shared by the desktop actions column and the mobile card column. */
 function CoachEventActions({
   row,
   onEdit,
@@ -2316,19 +2398,16 @@ function CoachEventActions({
         Edit
       </Button>
       {canCancel && (
-        <Button
+        <IconButton
           label={`Cancel – ${row.event.title}`}
-          size="sm"
+          icon={<Icon icon="close" size="sm" />}
           variant="destructive"
+          size="sm"
+          tooltip="Cancel event"
           style={MIN_TOUCH_TARGET_STYLE}
           onClick={() => onCancel(row.event)}
-        >
-          Cancel
-        </Button>
+        />
       )}
-      <Link as={RouterLink} href={routePaths.outreachEvent(row.event.id)} isStandalone>
-        View details – {row.event.title}
-      </Link>
     </HStack>
   );
 }
@@ -2472,30 +2551,31 @@ function buildCoachOutreachColumns({
       // truncate real titles -- an explicit `minWidth` makes the trade-off
       // visible instead.
       //
-      // Disclosed trade-off (measured, not assumed): the real per-column
-      // single-line minimums below (this column's included) sum to
-      // slightly MORE than the `Table`'s own real available width at
-      // 1440px (its scroll wrapper's `clientWidth`, `Table.tsx:160-161`,
-      // measured 1132px for this route's real content-area layout) -- an
-      // earlier pass instead squeezed everything into exactly 1132px, and
-      // measured worse on every other axis for it (title truncated, date
-      // wrapped, actions wrapped, rows over 72px). This pass prioritizes
-      // (a) real 44px touch targets, (b) UXC-07's 72px row-height ceiling,
-      // (c) a fully readable, non-truncated title, and (d) byte-identical
-      // widths between the Upcoming/Past tables, over avoiding a real,
-      // measured ~42px (measured) of `Table`-INTERNAL horizontal scroll at 1440px
-      // specifically -- `Table`'s own scroll wrapper (`overflowX: auto`)
-      // is the documented mechanism for exactly this ("Scroll wrapper...
-      // handles an overflowing table", `Table.tsx`'s own anatomy), not a
-      // workaround. This does NOT affect UXC-13's own hard requirement,
-      // which is specifically "no h-scroll at 375px" -- at 375px this
-      // desktop column set is not used at all (`buildCoachOutreachColumns`'s
-      // own `isNarrow` branch, module doc above), so this trade-off cannot
-      // reach the 375px case. Measured (preview rig, real Chromium): zero
-      // page-level scroll either way (`document.documentElement.
-      // scrollWidth` stays exactly at the viewport width, both 1440px and
-      // 375px) -- only the `Table`'s own internal scroll region is
-      // affected, at 1440px only, and only by ~42px (measured: scroll wrapper clientWidth 1132px, scrollWidth 1174px).
+      // T131 UPDATE (supersedes the trade-off this comment used to record):
+      // that trade-off is resolved, not merely re-described. The old
+      // `actions` column floor (420px, driven by the now-removed "View
+      // details – {title}" text -- see that column's own comment below) was
+      // the reason the per-column single-line minimums summed to slightly
+      // MORE than the `Table`'s own real available width at 1440px (its
+      // scroll wrapper's `clientWidth`, `Table.tsx:160-161`, measured
+      // 1132px for this route's real content-area layout, previously
+      // ~1174px of combined column minimums -- a real, measured ~42px of
+      // `Table`-internal horizontal scroll with text clipped mid-word).
+      // With `actions` shrunk (T131, that column's own comment below), the
+      // reclaimed width flows here automatically -- `title` is
+      // `proportional()`, so it absorbs whatever the fixed-`pixel` columns
+      // around it no longer claim -- and the sum no longer exceeds the
+      // Table's real available width. Measured (preview rig, real
+      // Chromium, 1440px): the `Table`'s own scroll wrapper now measures
+      // `scrollWidth <= clientWidth` (see this task's own worker output for
+      // the exact before/after numbers) -- no more `Table`-internal
+      // horizontal scroll, and the title is not truncated. This still does
+      // not touch UXC-13's own hard requirement ("no h-scroll at 375px"):
+      // at 375px this desktop column set is not used at all
+      // (`buildCoachOutreachColumns`'s own `isNarrow` branch, module doc
+      // above), and page-level scroll (`document.documentElement.
+      // scrollWidth` vs. viewport width) was already, and remains, zero at
+      // both 1440px and 375px.
       key: 'title',
       header: 'Event',
       width: proportional(2, { minWidth: 224 }),
@@ -2546,24 +2626,36 @@ function buildCoachOutreachColumns({
       },
     },
     {
-      // CHECKER FIX (post-T130 review, MAJOR -- module doc above): widened
-      // from 320px so Edit + Cancel (each now a real 44px touch target,
-      // not visually wider, only taller) + the full, UXC-04-exempt "View
-      // details – {title}" text fit on ONE line instead of the `Link`
-      // wrapping to its own second line -- measured (preview rig, real
-      // Chromium): the widest real fixture combination (Edit + Cancel +
-      // "View details – Community Food Bank Sort") needs 378px of content
-      // (48+68+262) plus two 8px gaps (394px) plus 16px of real cell
-      // padding (410px); 420px keeps a small real margin (see the
-      // `key: 'title'` column's own comment above for the disclosed
-      // trade-off this makes against the table's own available width at
-      // 1440px). Wrapping to two lines was what pushed collapsed rows to
-      // 81px, over UXC-07's 72px ceiling -- fitting on one line brings it
-      // back under (see this task's own worker output "gate output" for
-      // the exact re-measured numbers).
+      // T131 (reverses the CHECKER FIX / post-T130 module doc this comment
+      // used to describe): shrunk from 420px. The 420px floor existed only
+      // to hold Edit + Cancel + the full "View details – {title}" text on
+      // one line; that text is gone (T131 packet §2 -- Cancel is now an
+      // icon-only `×`, and "View details" moved onto the title,
+      // `CoachEventTitleCell`'s own module doc above). New floor: Edit 48px
+      // (measured natural width) + `HStack gap={2}` (8px) + the `×`
+      // `IconButton` 44px (square: `Button.tsx:103-108` sets `aspectRatio:
+      // 1/1` and zero `paddingInline`/`paddingBlock` for `isIconOnly`, so
+      // its 44px `minHeight` touch target becomes 44px wide too) + 16px of
+      // real cell padding (8px each side, compact density,
+      // `TableCell.tsx:70-75`) = 116px. Shipped at 128px, not the bare
+      // 116px floor and not 120px either: `CoachEventActions`'s own `HStack`
+      // has `wrap="wrap"` (below), so a near-zero margin is a real wrap
+      // risk, and a wrap is exactly what pushed collapsed rows to 81px in
+      // T130 (see the `key: 'title'` column's own comment above). The slack
+      // this frees is given back to the `title` column automatically --
+      // `title` is `proportional()`, so it absorbs whatever the fixed-`pixel`
+      // columns around it no longer claim (measured: the `Event` `<th>` grew
+      // from 224px to 474px). Measured (preview rig, real Chromium, 1440px):
+      // the `Table`'s scroll wrapper now measures `scrollWidth === clientWidth`
+      // == 1132px on both Upcoming and Past tables (was clientWidth 1132px /
+      // scrollWidth 1174px before this task -- no more internal horizontal
+      // scroll; see this task's own worker output for the full measurement
+      // log). Collapsed rows measured 52.5-53px (Upcoming) and 52.5-69px
+      // (Past, the 69px row has an extra "Reached N" secondary stat line) --
+      // well under UXC-07's 72px ceiling.
       key: 'actions',
       header: '',
-      width: pixel(420),
+      width: pixel(128),
       renderCell: (row) =>
         row.kind === 'event' ? (
           <CoachEventActions row={row} onEdit={onEdit} onCancel={onCancel} />
