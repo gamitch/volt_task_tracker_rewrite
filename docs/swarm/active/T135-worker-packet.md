@@ -1,7 +1,23 @@
 # Worker Packet: T135 — MeetingsList coach rows → Astryx `Table` (UXC-02/03/07)
 
-Wave 5, packet W5-P4. The largest remaining wave-5 task. Depends on **T132**
-(the extracted `useIsNarrowViewport` hook). Runs after Wave A lands.
+Wave 5, packet W5-P4. The largest remaining wave-5 task.
+**Revision 2 (2026-07-28)** — refreshed after Wave A landed. `MeetingsList.tsx`
+itself is unchanged since revision 1, so every citation below still holds; what
+changed is the world around it.
+
+## FIRST — merge the working branch
+
+Your worktree is created from `main`, not from the branch this work lives on.
+Before anything else:
+
+```
+git fetch origin
+git merge origin/claude/swarm-plan-zl575z
+```
+
+Report the result. **If it conflicts, stop and report** rather than resolving.
+A sibling task lost a full cycle to a stale worktree base — it was handed a tree
+where a dependency had never shipped, and only caught it because it checked.
 
 ## Objective
 
@@ -110,11 +126,31 @@ placement a defect ("floating canceled badge").
 
 ## 4. Narrow viewport
 
-Import `useIsNarrowViewport` from `src/hooks/` (T132 extracted it there —
-**do not copy it**). Below 768px, collapse every column into one stacked card
+Import `useIsNarrowViewport` from `src/hooks/useIsNarrowViewport.ts`. **T132
+has landed, so this file genuinely exists** — along with `NARROW_VIEWPORT_QUERY`
+and `getIsNarrowViewport`. Import it; **do not copy it**. Below 768px, collapse every column into one stacked card
 column, exactly as `buildCoachOutreachColumns`'s `isNarrow` branch does. The
 fixed columns sum to well over 375px, so without this the page scrolls
 horizontally, which UXC-13 forbids.
+
+## Standing rulings that apply here — do not re-litigate
+
+**Do NOT make the meeting title a link.** The other three row surfaces
+(coach outreach, student/parent outreach, calendar) now carry linked titles
+under UXC-04, so a checker may flag this screen as inconsistent. It is
+deliberate: PRD NAV-08 specifies `/meetings/:sessionId` as a "meeting detail
+page", **that route does not exist** (`router.tsx` has 14 routes, none of them
+this, and no catch-all), and no meeting-detail component exists. Linking the
+title here would point at a blank page. The title cell renders plain text.
+
+**D-1 (2026-07-28, George):** absent text truncation on a linked title is
+accepted behaviour project-wide, not a defect. This should not arise here —
+`Table` cells are not `ListItem` label slots — but if it does, measure, report,
+and move on. Do not propose a `labelLines` cast.
+
+**D008 (2026-07-28):** a linked row title is canonically `weight` 600 / 14px /
+`--color-text-primary`. Relevant only if you restyle the title cell; the
+existing `ListItem` label was already semibold, so match it.
 
 ## Allowed Files
 
@@ -201,11 +237,12 @@ horizontally, which UXC-13 forbids.
 12. **Captures at 1440px and 375px, light and dark**, as `.webp` (UXC-13/14).
 13. `npx tsc --noEmit`, `npx eslint .`, `npx vite build`,
     `npm run format:check` clean.
-14. `npx vitest run` green. Baseline is **1414 across 61 files** — plus
-    whatever T132 and T134 added, which you inherit; report the number you
-    start from before changing anything. The permitted deltas are exactly the
-    assertions named in Traps 1–3. Any other test that changes is a
-    regression — report it, don't silence it. Zero `.skip`/`.only`/`.todo`.
+14. `npx vitest run` green. Baseline after the merge is **1440 across 62
+    files** — confirm that is what you start from, and say so if it is not.
+    You are amending assertions, not adding tests, so the expected **end** count
+    is also **1440 / 62**. The permitted deltas are exactly the assertions named
+    in Traps 1–3. Any other test that changes is a regression — report it, don't
+    silence it. Zero `.skip`/`.only`/`.todo`.
 
 ## Relevant Constitution Excerpt
 
