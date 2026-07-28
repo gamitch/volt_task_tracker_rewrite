@@ -486,6 +486,10 @@ import {
 // T125 (UXP-09 / UXD-06) module doc 12 -- shared full-height sectioned-form
 // primitives, consumed by both this file and `ScheduleMeetingsDialog.tsx`.
 import { EventFormLayout, EventFormSection } from '../../components/forms/EventFormLayout';
+// T129/UXC-11: shared friendly-date formatter (raw ISO `YYYY-MM-DD` strings
+// replaced below) -- seeded from `CoachHome.tsx`'s own `formatSessionDateLabel`
+// UTC-midnight handling, not re-derived.
+import { formatFriendlyDate } from '../../lib/format/dates';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase shapes of the real `events`/`event_sessions`
@@ -1298,13 +1302,13 @@ export function OutreachEventDialog({
                       label="Counts toward participation %"
                       value={competitionCountsParticipation}
                       onChange={(checked) => setCompetitionCountsParticipation(checked)}
-                      description="Off by default for competitions (CMP-02); turn on to opt this event into MET-01/02."
+                      description="Off by default for competitions. Turn this on if this competition should count toward participation percentage."
                     />
                     <Switch
                       label="Counts toward volunteer hours"
                       value={competitionCountsVolunteerHours}
                       onChange={(checked) => setCompetitionCountsVolunteerHours(checked)}
-                      description="Off by default for competitions (CMP-02); turn on to opt this event into MET-03/04."
+                      description="Off by default for competitions. Turn this on if this competition should count toward volunteer hours."
                     />
                   </VStack>
                 )}
@@ -1385,10 +1389,10 @@ export function OutreachEventDialog({
                         {customDates.map((date) => (
                           <ListItem
                             key={date}
-                            label={date}
+                            label={formatFriendlyDate(date)}
                             endContent={
                               <Button
-                                label={`Remove ${date}`}
+                                label={`Remove ${formatFriendlyDate(date)}`}
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => removeCustomDate(date)}
@@ -1419,22 +1423,22 @@ export function OutreachEventDialog({
                       const detail = effectiveSessionDetails[date];
                       return (
                         <VStack key={date} gap={2}>
-                          <Text type="supporting">{date}</Text>
+                          <Text type="supporting">{formatFriendlyDate(date)}</Text>
                           <HStack gap={2} wrap="wrap">
                             <TimeInput
-                              label={`Start time (${date})`}
+                              label={`Start time (${formatFriendlyDate(date)})`}
                               value={detail?.startTime}
                               onChange={(value) => updateSessionDetail(date, { startTime: value })}
                               isRequired
                             />
                             <TimeInput
-                              label={`End time (${date})`}
+                              label={`End time (${formatFriendlyDate(date)})`}
                               value={detail?.endTime}
                               onChange={(value) => updateSessionDetail(date, { endTime: value })}
                               isRequired
                             />
                             <NumberInput
-                              label={`Expected people reached (${date})`}
+                              label={`Expected people reached (${formatFriendlyDate(date)})`}
                               value={detail?.peopleReached ?? null}
                               onChange={(value: number | null) =>
                                 updateSessionDetail(date, { peopleReached: value })

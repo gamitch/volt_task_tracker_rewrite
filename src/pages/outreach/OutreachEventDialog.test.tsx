@@ -585,10 +585,12 @@ describe('<OutreachEventDialog /> field order (OUT-02 / constitution item 13)', 
     const adultVolunteersIndex = labelTexts.indexOf('Adult volunteers');
     expect(dateIndex).toBeGreaterThanOrEqual(0);
     expect(adultVolunteersIndex).toBeGreaterThan(dateIndex);
+    // T129/UXC-11: per-session labels now use the friendly date formatter
+    // (`formatFriendlyDate`), not the raw ISO string.
     expect(labelTexts.slice(dateIndex + 1, adultVolunteersIndex)).toEqual([
-      'Start time (2026-07-22) ∙ Required',
-      'End time (2026-07-22) ∙ Required',
-      'Expected people reached (2026-07-22) ∙ Optional',
+      'Start time (Wed, Jul 22) ∙ Required',
+      'End time (Wed, Jul 22) ∙ Required',
+      'Expected people reached (Wed, Jul 22) ∙ Optional',
     ]);
   });
 });
@@ -736,12 +738,14 @@ describe('<OutreachEventDialog /> disabled/enabled confirm button (Known Context
     expect(confirmButton).toBeDefined();
     expect(confirmButton?.disabled).toBe(false);
 
-    clickButton(findButtonByText('Remove 2026-07-22') as HTMLButtonElement);
+    // T129/UXC-11: the "Remove" button label now uses the friendly date
+    // formatter (`formatFriendlyDate`), not the raw ISO string.
+    clickButton(findButtonByText('Remove Wed, Jul 22') as HTMLButtonElement);
     confirmButton = findButtonByText('Create event — 1 session');
     expect(confirmButton).toBeDefined();
     expect(confirmButton?.disabled).toBe(false);
 
-    clickButton(findButtonByText('Remove 2026-07-29') as HTMLButtonElement);
+    clickButton(findButtonByText('Remove Wed, Jul 29') as HTMLButtonElement);
     expect(findButtonByText('Create event — 0 sessions')?.disabled).toBe(true);
   });
 

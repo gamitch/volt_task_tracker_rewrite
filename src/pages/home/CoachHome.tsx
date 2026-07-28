@@ -500,7 +500,7 @@
  *     column -- this file never touches `rsvps`/`event_sessions` directly
  *     for this number.
  */
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Badge,
@@ -527,6 +527,7 @@ import {
 } from '@astryxdesign/core';
 import { useAuth } from '../../app/guards';
 import { routePaths } from '../../app/router';
+import { formatFriendlyDateRange } from '../../lib/format/dates';
 import {
   loadDashboardData,
   type ActivityFeedSource,
@@ -1872,8 +1873,10 @@ function TopEventRowItem({
   entry: EventStudentHoursEntry;
   maxHours: number;
 }): ReactNode {
-  const dateRange =
-    entry.startsOn === entry.endsOn ? entry.startsOn : `${entry.startsOn} → ${entry.endsOn}`;
+  // T129/UXC-11: raw ISO `YYYY-MM-DD` strings replaced with the shared
+  // friendly formatter (`src/lib/format/dates.ts`, seeded from this file's
+  // own `formatSessionDateLabel` UTC-midnight handling above).
+  const dateRange = formatFriendlyDateRange(entry.startsOn, entry.endsOn);
   return (
     <ListItem
       label={entry.title}
@@ -1969,6 +1972,24 @@ export function CoachHome({
   const [stubNotice, setStubNotice] = useState<StubNotice | null>(null);
   const [goalProjectionFilter, setGoalProjectionFilter] = useState<GoalProjectionFilter>('all');
   const [showAllActivity, setShowAllActivity] = useState(false);
+
+  // T129/UXC-01: stable ids for the section `Heading`s below, so each
+  // section's alternating List/EmptyState can be given the heading as its
+  // accessible name via `aria-labelledby` on a wrapping
+  // `<div role="group">` (rather than the `List`'s own `header` prop, which
+  // would print the title twice). CHECKER FIX (rework of T129, MAJOR): the
+  // wrapper was originally a `Section`, but `Section` applies an
+  // unconditional full-bleed negative-margin band (`Section.tsx`
+  // `nestedStyles.outer`) that bled past the padded `LayoutContent` this
+  // page renders inside, AND renders a bare, role-less `<div>` that cannot
+  // support `aria-labelledby` under ARIA. A plain `<div role="group">`
+  // fixes both: no added margin/padding, and a role that genuinely supports
+  // a computed accessible name.
+  const nextUpHeadingId = useId();
+  const activityFeedHeadingId = useId();
+  const hoursByTeamHeadingId = useId();
+  const goalProjectionHeadingId = useId();
+  const topEventsHeadingId = useId();
 
   const nowMs = nowFn().getTime();
 
@@ -2129,8 +2150,8 @@ export function CoachHome({
                   variant="secondary"
                   onClick={() =>
                     showStub(
-                      'Event creation dialog not built yet',
-                      "This action opens the new-outreach-event dialog (T039, OUT-01/OUT-02). That dialog hasn't shipped yet, so no event was created.",
+                      "This shortcut isn't wired up yet",
+                      'This button doesn\'t open the event form from here. Go to the Outreach page and use "New outreach event" there instead.',
                     )
                   }
                 />
@@ -2317,20 +2338,24 @@ export function CoachHome({
             <Divider />
 
             <VStack gap={3}>
-              <Heading level={2}>Next up</Heading>
-              {nextUp.length === 0 ? (
-                <EmptyState
-                  headingLevel={3}
-                  title="Nothing scheduled"
-                  description="Your team's next meetings, outreach events, and competitions will show up here."
-                />
-              ) : (
-                <List hasDividers header="Next up">
-                  {nextUp.map((row) => (
-                    <NextUpRowItem key={row.sessionId} row={row} />
-                  ))}
-                </List>
-              )}
+              <Heading level={2} id={nextUpHeadingId}>
+                Next up
+              </Heading>
+              <div role="group" aria-labelledby={nextUpHeadingId}>
+                {nextUp.length === 0 ? (
+                  <EmptyState
+                    headingLevel={3}
+                    title="Nothing scheduled"
+                    description="Your team's next meetings, outreach events, and competitions will show up here."
+                  />
+                ) : (
+                  <List hasDividers>
+                    {nextUp.map((row) => (
+                      <NextUpRowItem key={row.sessionId} row={row} />
+                    ))}
+                  </List>
+                )}
+              </div>
             </VStack>
 
             <Divider />
@@ -2339,35 +2364,40 @@ export function CoachHome({
                 the old team-scoped "Recent signups" section. Signup/drop/
                 checked-off entries with Self origin labels, "Show all". */}
             <VStack gap={3}>
-              <Heading level={2}>Activity feed</Heading>
-              {dashboardData === null ? (
-                <EmptyState
-                  headingLevel={3}
-                  title="No activity yet"
-                  description="Signups, drops, and check-offs will show up here."
-                />
-              ) : visibleActivityFeedEntries.length === 0 ? (
-                <EmptyState
-                  headingLevel={3}
-                  title="No activity yet"
-                  description="Signups, drops, and check-offs will show up here."
-                />
-              ) : (
-                <>
-                  <List hasDividers header="Activity feed">
-                    {visibleActivityFeedEntries.map((entry) => (
-                      <ActivityFeedRowItem key={entry.id} entry={entry} />
-                    ))}
-                  </List>
-                  {!showAllActivity && activityFeedEntries.length > ACTIVITY_FEED_DEFAULT_LIMIT && (
-                    <Button
-                      label="Show all"
-                      variant="ghost"
-                      onClick={() => setShowAllActivity(true)}
-                    />
-                  )}
-                </>
-              )}
+              <Heading level={2} id={activityFeedHeadingId}>
+                Activity feed
+              </Heading>
+              <div role="group" aria-labelledby={activityFeedHeadingId}>
+                {dashboardData === null ? (
+                  <EmptyState
+                    headingLevel={3}
+                    title="No activity yet"
+                    description="Signups, drops, and check-offs will show up here."
+                  />
+                ) : visibleActivityFeedEntries.length === 0 ? (
+                  <EmptyState
+                    headingLevel={3}
+                    title="No activity yet"
+                    description="Signups, drops, and check-offs will show up here."
+                  />
+                ) : (
+                  <VStack gap={3}>
+                    <List hasDividers>
+                      {visibleActivityFeedEntries.map((entry) => (
+                        <ActivityFeedRowItem key={entry.id} entry={entry} />
+                      ))}
+                    </List>
+                    {!showAllActivity &&
+                      activityFeedEntries.length > ACTIVITY_FEED_DEFAULT_LIMIT && (
+                        <Button
+                          label="Show all"
+                          variant="ghost"
+                          onClick={() => setShowAllActivity(true)}
+                        />
+                      )}
+                  </VStack>
+                )}
+              </div>
             </VStack>
 
             <Divider />
@@ -2375,20 +2405,24 @@ export function CoachHome({
             {/* T124 hours by team (UXP-06, module doc #13). Consumes T116's
                 `v_team_hours` unmodified -- season-wide, every team. */}
             <VStack gap={3}>
-              <Heading level={2}>Hours by team</Heading>
-              {sortedTeamHours.length === 0 ? (
-                <EmptyState
-                  headingLevel={3}
-                  title="No team hours yet"
-                  description="Confirmed hours will appear here once attendance is recorded this season."
-                />
-              ) : (
-                <List hasDividers header="Hours by team">
-                  {sortedTeamHours.map((entry) => (
-                    <TeamHoursRowItem key={entry.teamId} entry={entry} maxHours={maxTeamHours} />
-                  ))}
-                </List>
-              )}
+              <Heading level={2} id={hoursByTeamHeadingId}>
+                Hours by team
+              </Heading>
+              <div role="group" aria-labelledby={hoursByTeamHeadingId}>
+                {sortedTeamHours.length === 0 ? (
+                  <EmptyState
+                    headingLevel={3}
+                    title="No team hours yet"
+                    description="Confirmed hours will appear here once attendance is recorded this season."
+                  />
+                ) : (
+                  <List hasDividers>
+                    {sortedTeamHours.map((entry) => (
+                      <TeamHoursRowItem key={entry.teamId} entry={entry} maxHours={maxTeamHours} />
+                    ))}
+                  </List>
+                )}
+              </div>
             </VStack>
 
             <Divider />
@@ -2399,7 +2433,9 @@ export function CoachHome({
                 ranking/shame framing (Trap #2). */}
             <VStack gap={3}>
               <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
-                <Heading level={2}>Goal projection · confirmed + planned</Heading>
+                <Heading level={2} id={goalProjectionHeadingId}>
+                  Goal projection · confirmed + planned
+                </Heading>
                 <SegmentedControl
                   label="Goal projection filter"
                   value={goalProjectionFilter}
@@ -2409,47 +2445,53 @@ export function CoachHome({
                   <SegmentedControlItem value="belowGoal" label="Below goal" />
                 </SegmentedControl>
               </HStack>
-              {sortedGoalProjection.length === 0 ? (
-                <EmptyState
-                  headingLevel={3}
-                  title={
-                    goalProjectionFilter === 'belowGoal'
-                      ? 'No one is below goal'
-                      : 'No projection yet'
-                  }
-                  description={
-                    goalProjectionFilter === 'belowGoal'
-                      ? 'Every active student is projected to reach their season goal.'
-                      : 'Confirmed and planned hours will appear here once recorded this season.'
-                  }
-                />
-              ) : (
-                <List hasDividers header="Goal projection">
-                  {sortedGoalProjection.map((row) => (
-                    <GoalProjectionRowItem key={row.studentId} row={row} />
-                  ))}
-                </List>
-              )}
+              <div role="group" aria-labelledby={goalProjectionHeadingId}>
+                {sortedGoalProjection.length === 0 ? (
+                  <EmptyState
+                    headingLevel={3}
+                    title={
+                      goalProjectionFilter === 'belowGoal'
+                        ? 'No one is below goal'
+                        : 'No projection yet'
+                    }
+                    description={
+                      goalProjectionFilter === 'belowGoal'
+                        ? 'Every active student is projected to reach their season goal.'
+                        : 'Confirmed and planned hours will appear here once recorded this season.'
+                    }
+                  />
+                ) : (
+                  <List hasDividers>
+                    {sortedGoalProjection.map((row) => (
+                      <GoalProjectionRowItem key={row.studentId} row={row} />
+                    ))}
+                  </List>
+                )}
+              </div>
             </VStack>
 
             <Divider />
 
             {/* T124 top events by student hours (UXP-06, module doc #13). */}
             <VStack gap={3}>
-              <Heading level={2}>Top events by student hours</Heading>
-              {sortedTopEvents.length === 0 ? (
-                <EmptyState
-                  headingLevel={3}
-                  title="No events with hours yet"
-                  description="Events that award volunteer hours will show up here once attendance is recorded."
-                />
-              ) : (
-                <List hasDividers header="Top events by student hours">
-                  {sortedTopEvents.map((entry) => (
-                    <TopEventRowItem key={entry.eventId} entry={entry} maxHours={maxEventHours} />
-                  ))}
-                </List>
-              )}
+              <Heading level={2} id={topEventsHeadingId}>
+                Top events by student hours
+              </Heading>
+              <div role="group" aria-labelledby={topEventsHeadingId}>
+                {sortedTopEvents.length === 0 ? (
+                  <EmptyState
+                    headingLevel={3}
+                    title="No events with hours yet"
+                    description="Events that award volunteer hours will show up here once attendance is recorded."
+                  />
+                ) : (
+                  <List hasDividers>
+                    {sortedTopEvents.map((entry) => (
+                      <TopEventRowItem key={entry.eventId} entry={entry} maxHours={maxEventHours} />
+                    ))}
+                  </List>
+                )}
+              </div>
             </VStack>
 
             {showSeasonSetupCard && (

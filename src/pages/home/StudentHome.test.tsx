@@ -763,6 +763,77 @@ describe('StudentHome DES-12 states', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// T129/UXC-01: one heading per section. The `List`'s own `header` prop was
+// removed from both "Next up" and "Sign-up opportunities" (it used to print
+// the section title a second time, per `List.tsx:194-201`); each `Heading`
+// now carries a `useId`-generated id, and a `<div role="group">` wrapping
+// the List/EmptyState ternary carries `aria-labelledby={headingId}` --
+// present in BOTH branches, so the region's accessible name survives even
+// when there is no `List` to attach a `header` to.
+//
+// CHECKER FIX (rework of T129, MAJOR): see `CoachHome.test.tsx`'s own
+// comment for the full rationale -- the wrapper was originally an Astryx
+// `Section` (full-bleed negative margin + no nameable role); it is now a
+// plain `<div role="group">`, and the query below includes `role="group"`
+// so a regression back to a role-less wrapper fails the lookup itself.
+// ---------------------------------------------------------------------------
+describe('<StudentHome /> T129 UXC-01 -- exactly one heading per section, List/EmptyState region takes its accessible name from the Heading', () => {
+  function resolveAriaLabelledbyTarget(headingText: string): {
+    headingId: string;
+    resolvedText: string | null;
+  } {
+    const heading = Array.from(container.querySelectorAll('h2')).find(
+      (h) => h.textContent === headingText,
+    );
+    expect(heading).toBeTruthy();
+    const headingId = heading!.id;
+    expect(headingId).toBeTruthy();
+    const labelledEl = container.querySelector(`[role="group"][aria-labelledby="${headingId}"]`);
+    expect(labelledEl).toBeTruthy();
+    expect(labelledEl!.getAttribute('role')).toBe('group');
+    const resolvedId = labelledEl!.getAttribute('aria-labelledby')!;
+    const resolvedEl = document.getElementById(resolvedId);
+    return { headingId, resolvedText: resolvedEl?.textContent ?? null };
+  }
+
+  const SECTION_TITLES = ['Next up', 'Sign-up opportunities'] as const;
+
+  it('populated branch: both sections resolve aria-labelledby back to their own Heading, and each title prints exactly once', async () => {
+    renderAsUser(STUDENT_USER, {
+      loadData: defaultLoadStudentHomeData,
+      studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
+      teamId: PLACEHOLDER_CURRENT_TEAM_ID,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+
+    for (const title of SECTION_TITLES) {
+      const { resolvedText } = resolveAriaLabelledbyTarget(title);
+      expect(resolvedText).toBe(title);
+      const leafMatches = Array.from(container.querySelectorAll('*')).filter(
+        (el) => el.children.length === 0 && el.textContent === title,
+      );
+      expect(leafMatches.length).toBe(1);
+    }
+  });
+
+  it('empty branch: aria-labelledby still resolves to the Heading for both sections, even with no List rendered', async () => {
+    const loadData = async (): Promise<StudentHomeData> => buildDataFixture({});
+    renderAsUser(STUDENT_USER, { loadData, nowFn: () => FIXTURE_REFERENCE_NOW });
+    await flushMicrotasks();
+
+    // Confirm the EmptyState branch is really the one rendered.
+    expect(container.textContent).toContain('Nothing scheduled');
+    expect(container.textContent).toContain("You're all caught up");
+
+    for (const title of SECTION_TITLES) {
+      const { resolvedText } = resolveAriaLabelledbyTarget(title);
+      expect(resolvedText).toBe(title);
+    }
+  });
+});
+
 describe("StudentHome inline Sign up / Can't go (real local-state update, not persisted)", () => {
   it('clicking "Sign up" removes the opportunity from Sign-up opportunities', async () => {
     const loadData = async (): Promise<StudentHomeData> =>

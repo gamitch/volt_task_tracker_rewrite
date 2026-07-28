@@ -449,7 +449,7 @@
  *        decision record lives in `loaders/meetings.ts`'s own module doc and
  *        this task's own worker output.
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import {
   AlertDialog,
   Badge,
@@ -1469,30 +1469,44 @@ function CoachMeetingsSection({
     session: CoachMeetingSessionDetail,
   ) => void;
 }): ReactNode {
+  // T129/UXC-01: stable id for this section's `Heading`, so the alternating
+  // List/EmptyState below gets the heading as its accessible name via
+  // `aria-labelledby` on a wrapping `<div role="group">`, instead of the
+  // `List`'s own `header` prop (which duplicates the visible title and
+  // vanishes in the empty branch). This component renders twice (Upcoming,
+  // Past), so each call gets its own id. CHECKER FIX (rework of T129,
+  // MAJOR): see `CoachHome.tsx`'s own module doc for why the wrapper is a
+  // plain `<div role="group">`, not `Section` (full-bleed margin + no
+  // nameable role).
+  const headingId = useId();
   return (
     <VStack gap={3}>
-      <Heading level={2}>{title}</Heading>
-      {rows.length === 0 ? (
-        <EmptyState
-          headingLevel={3}
-          title={`No ${title.toLowerCase()} meetings`}
-          description={emptyDescription}
-          // T122 (module doc #10f, UXD-05(b)) -- compact: this is a
-          // SUB-section of the page, never the only content on it.
-          isCompact
-        />
-      ) : (
-        <List hasDividers header={`${title} meetings`}>
-          {rows.map((row) => (
-            <CoachMeetingRowItem
-              key={row.eventId}
-              row={row}
-              onEdit={onEdit}
-              onCancelRequest={onCancelRequest}
-            />
-          ))}
-        </List>
-      )}
+      <Heading level={2} id={headingId}>
+        {title}
+      </Heading>
+      <div role="group" aria-labelledby={headingId}>
+        {rows.length === 0 ? (
+          <EmptyState
+            headingLevel={3}
+            title={`No ${title.toLowerCase()} meetings`}
+            description={emptyDescription}
+            // T122 (module doc #10f, UXD-05(b)) -- compact: this is a
+            // SUB-section of the page, never the only content on it.
+            isCompact
+          />
+        ) : (
+          <List hasDividers>
+            {rows.map((row) => (
+              <CoachMeetingRowItem
+                key={row.eventId}
+                row={row}
+                onEdit={onEdit}
+                onCancelRequest={onCancelRequest}
+              />
+            ))}
+          </List>
+        )}
+      </div>
     </VStack>
   );
 }
@@ -1565,7 +1579,7 @@ function CoachMeetingsView({
   function showEditStub(row: CoachMeetingRow): void {
     setStubNotice({
       title: "Editing an existing meeting isn't supported yet",
-      description: `"${row.title}" can't be edited in place. The real scheduling dialog (T031, MTG-02) only knows how to create a brand-new meeting series -- it has no way to load an already-scheduled session's fields, so opening it here would create a second, competing series instead of changing this one. Cancel this meeting and schedule a new one if its details need to change.`,
+      description: `"${row.title}" can't be edited in place. The scheduling tool only knows how to create a brand-new meeting series -- it has no way to load an already-scheduled session's fields, so opening it here would create a second, competing series instead of changing this one. Cancel this meeting and schedule a new one if its details need to change.`,
     });
   }
 
@@ -1820,25 +1834,33 @@ function StudentHistorySection({
   rows: StudentMeetingHistoryRow[];
   emptyDescription: string;
 }): ReactNode {
+  // T129/UXC-01: stable id for this section's `Heading` (see
+  // `CoachMeetingsSection` above for the full rationale; this component
+  // also renders twice -- Upcoming, Past -- each call gets its own id).
+  const headingId = useId();
   return (
     <VStack gap={3}>
-      <Heading level={2}>{title}</Heading>
-      {rows.length === 0 ? (
-        <EmptyState
-          headingLevel={3}
-          title={`No ${title.toLowerCase()} meetings`}
-          description={emptyDescription}
-          // T122 (module doc #10f, UXD-05(b)) -- compact: this is a
-          // SUB-section of the page, never the only content on it.
-          isCompact
-        />
-      ) : (
-        <List hasDividers header={`${title} meetings`}>
-          {rows.map((row) => (
-            <StudentHistoryRowItem key={row.sessionId} row={row} />
-          ))}
-        </List>
-      )}
+      <Heading level={2} id={headingId}>
+        {title}
+      </Heading>
+      <div role="group" aria-labelledby={headingId}>
+        {rows.length === 0 ? (
+          <EmptyState
+            headingLevel={3}
+            title={`No ${title.toLowerCase()} meetings`}
+            description={emptyDescription}
+            // T122 (module doc #10f, UXD-05(b)) -- compact: this is a
+            // SUB-section of the page, never the only content on it.
+            isCompact
+          />
+        ) : (
+          <List hasDividers>
+            {rows.map((row) => (
+              <StudentHistoryRowItem key={row.sessionId} row={row} />
+            ))}
+          </List>
+        )}
+      </div>
     </VStack>
   );
 }
@@ -1930,9 +1952,8 @@ function StudentMeetingsView({ studentId, loadData }: StudentMeetingsViewProps):
           <VStack gap={1}>
             <Heading level={2}>Recent attendance</Heading>
             <Text type="supporting">
-              A visual "last 5 meetings" consistency strip (BEH-06) ships with T037 (Student/parent
-              meeting view + consistency strip), which is not part of this task. Your full history
-              is listed above in the meantime.
+              A visual "last 5 meetings" view isn't built yet. Your full history is listed above in
+              the meantime.
             </Text>
           </VStack>
         </>

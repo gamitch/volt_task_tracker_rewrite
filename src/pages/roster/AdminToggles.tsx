@@ -388,7 +388,7 @@ export function AdminToggles({
 
       <Switch
         label="Show first name + last initial publicly"
-        description="Controls whether leaderboard and kiosk surfaces display students' full first name plus last initial, or a fully anonymized identifier. Defaults to on (SEC-04)."
+        description="Controls whether the leaderboard and kiosk screens show students' full first name plus last initial, or a fully anonymized identifier. Defaults to on."
         value={privacyOn}
         onChange={handleChange}
         changeAction={handlePersist}
@@ -401,7 +401,7 @@ export function AdminToggles({
         <Icon icon="chevronRight" size="sm" color="secondary" />
       </HStack>
       <Text type="supporting" color="secondary">
-        Opens season settings (T029).
+        Opens season settings.
       </Text>
     </VStack>
   );

@@ -1220,6 +1220,128 @@ describe('<CoachHome /> T124 top events by student hours', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// T129/UXC-01: one heading per section. The `List`'s own `header` prop was
+// removed from all five sections below (it used to print the section title
+// a second time, per `List.tsx:194-201`); each section's `Heading` now
+// carries a `useId`-generated id, and a `<div role="group">` wrapping the
+// List/EmptyState ternary carries `aria-labelledby={headingId}` -- present
+// in BOTH branches, so the region's accessible name survives even when
+// there is no `List` to attach a `header` to.
+//
+// CHECKER FIX (rework of T129, MAJOR): the wrapper was originally an
+// Astryx `Section`, which (a) applies a full-bleed negative-margin band
+// unconditionally regardless of `padding`, bleeding past this page's
+// padded `LayoutContent`, and (b) renders a bare `<div>` with no role, so
+// `aria-labelledby` was ARIA-name-prohibited (a `role="generic"` element
+// does not support naming). Both are fixed by using a plain
+// `<div role="group">` instead. jsdom has no accessible-name computation
+// or CSS layout, so the practical proof here is two-fold: (1) resolve the
+// aria-labelledby attribute of the specifically `role="group"` element to
+// its target and assert that element's textContent is the heading's own
+// text (proves the name, not just the markup); (2) the `role="group"`
+// selector itself is part of the query, so a regression back to a
+// role-less wrapper (or any other non-nameable element) fails the lookup
+// outright instead of silently passing.
+// ---------------------------------------------------------------------------
+describe('<CoachHome /> T129 UXC-01 -- exactly one heading per section, List/EmptyState region takes its accessible name from the Heading', () => {
+  function resolveAriaLabelledbyTarget(headingText: string): {
+    headingId: string;
+    resolvedText: string | null;
+  } {
+    const heading = Array.from(container.querySelectorAll('h2')).find(
+      (h) => h.textContent === headingText,
+    );
+    expect(heading).toBeTruthy();
+    const headingId = heading!.id;
+    expect(headingId).toBeTruthy();
+    // `role="group"` is part of the selector itself -- a wrapper that lost
+    // its nameable role (e.g. a regression back to a bare `Section`/`div`)
+    // fails this lookup, not just a later assertion.
+    const labelledEl = container.querySelector(`[role="group"][aria-labelledby="${headingId}"]`);
+    expect(labelledEl).toBeTruthy();
+    expect(labelledEl!.getAttribute('role')).toBe('group');
+    const resolvedId = labelledEl!.getAttribute('aria-labelledby')!;
+    const resolvedEl = document.getElementById(resolvedId);
+    return { headingId, resolvedText: resolvedEl?.textContent ?? null };
+  }
+
+  const SECTION_TITLES = [
+    'Next up',
+    'Activity feed',
+    'Hours by team',
+    'Top events by student hours',
+  ] as const;
+  const GOAL_PROJECTION_TITLE = 'Goal projection · confirmed + planned';
+
+  it('populated branch: every section resolves aria-labelledby back to its own Heading, and each title prints exactly once', async () => {
+    renderAsUser(COACH_USER, {
+      loadData: fixtureLoadData,
+      loadDashboardData: fixtureLoadDashboardData,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+
+    for (const title of SECTION_TITLES) {
+      const { resolvedText } = resolveAriaLabelledbyTarget(title);
+      expect(resolvedText).toBe(title);
+      // Exactly one leaf element carries this exact text -- proves the
+      // `List header` (which used to duplicate it) is gone.
+      const leafMatches = Array.from(container.querySelectorAll('*')).filter(
+        (el) => el.children.length === 0 && el.textContent === title,
+      );
+      expect(leafMatches.length).toBe(1);
+    }
+
+    // The Goal projection Heading keeps its fuller BEH-02 wording; its
+    // region still resolves back to that same Heading.
+    const { resolvedText: goalResolved } = resolveAriaLabelledbyTarget(GOAL_PROJECTION_TITLE);
+    expect(goalResolved).toBe(GOAL_PROJECTION_TITLE);
+  });
+
+  it('empty branch: aria-labelledby still resolves to the Heading for every section, even with no List rendered', async () => {
+    renderAsUser(COACH_USER, {
+      loadData: async (seasonId: string) => {
+        const base = await defaultLoadCoachHomeData(seasonId);
+        return { ...base, sessions: [], events: [], rsvps: [] };
+      },
+      loadDashboardData: async (seasonId: string) => {
+        const base = await defaultLoadDashboardData(seasonId);
+        return {
+          ...base,
+          teamHours: [],
+          topEvents: [],
+          goalProjection: [],
+          activityFeedSource: {
+            events: [],
+            sessions: [],
+            rsvps: [],
+            attendance: [],
+            students: [],
+          },
+        };
+      },
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+
+    // Confirm we are really exercising the EmptyState branch (not a load
+    // failure, which would render a different Banner instead).
+    expect(container.textContent).toContain('Nothing scheduled');
+    expect(container.textContent).toContain('No activity yet');
+    expect(container.textContent).toContain('No team hours yet');
+    expect(container.textContent).toContain('No projection yet');
+    expect(container.textContent).toContain('No events with hours yet');
+
+    for (const title of SECTION_TITLES) {
+      const { resolvedText } = resolveAriaLabelledbyTarget(title);
+      expect(resolvedText).toBe(title);
+    }
+    const { resolvedText: goalResolvedEmpty } = resolveAriaLabelledbyTarget(GOAL_PROJECTION_TITLE);
+    expect(goalResolvedEmpty).toBe(GOAL_PROJECTION_TITLE);
+  });
+});
+
 describe('<CoachHome /> "Start check-in" visibility', () => {
   it('shows "Start check-in" when a team meeting is live', async () => {
     renderAsUser(COACH_USER, { loadData: fixtureLoadData, nowFn: () => FIXTURE_REFERENCE_NOW });
@@ -1275,7 +1397,12 @@ describe('<CoachHome /> "New outreach event" stub disclosure', () => {
     act(() => {
       button?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(container.textContent).toContain('Event creation dialog not built yet');
+    // T129/UXC-10: `OutreachEventDialog` genuinely shipped and is wired
+    // into `OutreachList` (T101) -- this Home-page shortcut still doesn't
+    // open it directly, so the disclosed copy says that honestly instead
+    // of the old (now-false) "dialog not built yet" claim.
+    expect(container.textContent).toContain("This shortcut isn't wired up yet");
+    expect(container.textContent).toContain('Go to the Outreach page');
   });
 });
 

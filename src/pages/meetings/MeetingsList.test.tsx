@@ -597,6 +597,96 @@ describe('<MeetingsList /> coach view', () => {
     expect(container.textContent).toContain('Attended: Alex Rivera, Bailey Chen, Casey Nguyen');
   });
 
+  // -------------------------------------------------------------------------
+  // T129/UXC-01: one heading per section. `CoachMeetingsSection`'s own
+  // `List`'s `header` prop was removed (it used to print "Upcoming
+  // meetings"/"Past meetings" a second time, per `List.tsx:194-201`); its
+  // `Heading` now carries a `useId`-generated id, and a
+  // `<div role="group">` wrapping the List/EmptyState ternary carries
+  // `aria-labelledby={headingId}` -- present in BOTH branches, so the
+  // region's accessible name survives even when there is no `List` to
+  // attach a `header` to.
+  //
+  // CHECKER FIX (rework of T129, MAJOR): the wrapper was originally an
+  // Astryx `Section`, which applies a full-bleed negative-margin band
+  // unconditionally and renders a bare, role-less `<div>` that cannot
+  // support `aria-labelledby` under ARIA. A plain `<div role="group">`
+  // fixes both; the query below includes `role="group"` so a regression
+  // back to a role-less wrapper fails the lookup itself, not just a later
+  // assertion.
+  // -------------------------------------------------------------------------
+  describe('T129 UXC-01 -- exactly one heading per Upcoming/Past section', () => {
+    function resolveAriaLabelledbyTarget(headingText: string): {
+      headingId: string;
+      resolvedText: string | null;
+    } {
+      const heading = Array.from(container.querySelectorAll('h2')).find(
+        (h) => h.textContent === headingText,
+      );
+      expect(heading).toBeTruthy();
+      const headingId = heading!.id;
+      expect(headingId).toBeTruthy();
+      const labelledEl = container.querySelector(`[role="group"][aria-labelledby="${headingId}"]`);
+      expect(labelledEl).toBeTruthy();
+      expect(labelledEl!.getAttribute('role')).toBe('group');
+      const resolvedId = labelledEl!.getAttribute('aria-labelledby')!;
+      const resolvedEl = document.getElementById(resolvedId);
+      return { headingId, resolvedText: resolvedEl?.textContent ?? null };
+    }
+
+    it('populated branch: both "Upcoming" and "Past" resolve aria-labelledby back to their own Heading, printed exactly once', async () => {
+      renderAsUser(COACH_USER, { loadCoachData: defaultLoadCoachMeetingsData });
+      await flushMicrotasks();
+
+      for (const title of ['Upcoming', 'Past']) {
+        const { resolvedText } = resolveAriaLabelledbyTarget(title);
+        expect(resolvedText).toBe(title);
+        const leafMatches = Array.from(container.querySelectorAll('*')).filter(
+          (el) => el.children.length === 0 && el.textContent === title,
+        );
+        expect(leafMatches.length).toBe(1);
+      }
+    });
+
+    it('empty branch: "Upcoming" has no scheduled sessions -- its aria-labelledby still resolves to its Heading, even with no List rendered ("Past" stays populated in the same render)', async () => {
+      const pastOnlyRow: CoachMeetingsData = {
+        rows: [
+          {
+            eventId: 'event-past-only',
+            title: 'Archived Strategy Session',
+            locationName: 'Robotics Lab',
+            teamScopeLabel: 'All teams',
+            sessions: [
+              {
+                sessionId: 'session-past-only',
+                sessionDate: '2026-01-05',
+                startsAt: '2026-01-05T18:00:00.000Z',
+                endsAt: '2026-01-05T20:00:00.000Z',
+                status: 'completed',
+                durationHours: 2,
+                expectedCt: 0,
+                attendanceSummary: { presentCt: 0, lateCt: 0, excusedCt: 0, absentCt: 0 },
+                attendeeNames: [],
+              },
+            ],
+          },
+        ],
+      };
+      renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(pastOnlyRow) });
+      await flushMicrotasks();
+
+      // Confirm "Upcoming" really is the EmptyState branch (per its own
+      // `emptyDescription`), not a load failure.
+      expect(container.textContent).toContain('No meetings are currently scheduled.');
+      expect(container.textContent).toContain('Archived Strategy Session');
+
+      for (const title of ['Upcoming', 'Past']) {
+        const { resolvedText } = resolveAriaLabelledbyTarget(title);
+        expect(resolvedText).toBe(title);
+      }
+    });
+  });
+
   // T096: "Schedule meetings" now opens the real `ScheduleMeetingsDialog`
   // (T031, already Passed) instead of showing the old "dialog not built yet"
   // stub -- that dialog genuinely IS built now (module doc #7a).
@@ -884,10 +974,11 @@ describe('<MeetingsList /> student/parent view', () => {
     expect(container.querySelector('[aria-label^="Actions for"]')).toBeNull();
     expect(container.textContent).not.toContain('Schedule meetings');
 
-    // Consistency-strip placeholder disclosure (module doc #7d) -- no
-    // StatusDot usage, clearly labeled as a future T037 deliverable.
-    expect(container.textContent).toContain('T037');
-    expect(container.textContent).toContain('consistency strip');
+    // T129/UXC-10: the "last 5 meetings" disclosure (module doc #7d) no
+    // longer names the internal ticket -- plain, honest "not built yet"
+    // copy instead (no StatusDot usage).
+    expect(container.textContent).toContain('A visual "last 5 meetings" view isn\'t built yet');
+    expect(container.textContent).not.toContain('T037');
 
     // NAV-07: outreach content must never appear here either.
     expect(container.textContent).not.toContain('Community Food Drive');
@@ -901,6 +992,96 @@ describe('<MeetingsList /> student/parent view', () => {
     await flushMicrotasks();
     expect(container.textContent).toContain('—');
     expect(container.textContent).not.toMatch(/\d+%/);
+  });
+
+  // -------------------------------------------------------------------------
+  // T129/UXC-01: one heading per section. `StudentHistorySection`'s own
+  // `List`'s `header` prop was removed (it used to print "Upcoming
+  // meetings"/"Past meetings" a second time, per `List.tsx:194-201`); its
+  // `Heading` now carries a `useId`-generated id, and a
+  // `<div role="group">` wrapping the List/EmptyState ternary carries
+  // `aria-labelledby={headingId}` -- present in BOTH branches, so the
+  // region's accessible name survives even when there is no `List` to
+  // attach a `header` to. See `CoachMeetingsSection`'s own T129 describe
+  // block above (CHECKER FIX, rework of T129, MAJOR) for why the wrapper
+  // is a plain `<div role="group">`, not `Section`.
+  // -------------------------------------------------------------------------
+  describe('T129 UXC-01 -- exactly one heading per Upcoming/Past section', () => {
+    function resolveAriaLabelledbyTarget(headingText: string): {
+      headingId: string;
+      resolvedText: string | null;
+    } {
+      const heading = Array.from(container.querySelectorAll('h2')).find(
+        (h) => h.textContent === headingText,
+      );
+      expect(heading).toBeTruthy();
+      const headingId = heading!.id;
+      expect(headingId).toBeTruthy();
+      const labelledEl = container.querySelector(`[role="group"][aria-labelledby="${headingId}"]`);
+      expect(labelledEl).toBeTruthy();
+      expect(labelledEl!.getAttribute('role')).toBe('group');
+      const resolvedId = labelledEl!.getAttribute('aria-labelledby')!;
+      const resolvedEl = document.getElementById(resolvedId);
+      return { headingId, resolvedText: resolvedEl?.textContent ?? null };
+    }
+
+    it('populated branch: both "Upcoming" and "Past" resolve aria-labelledby back to their own Heading, printed exactly once', async () => {
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
+        loadStudentData: defaultLoadStudentMeetingsData,
+      });
+      await flushMicrotasks();
+
+      for (const title of ['Upcoming', 'Past']) {
+        const { resolvedText } = resolveAriaLabelledbyTarget(title);
+        expect(resolvedText).toBe(title);
+        const leafMatches = Array.from(container.querySelectorAll('*')).filter(
+          (el) => el.children.length === 0 && el.textContent === title,
+        );
+        expect(leafMatches.length).toBe(1);
+      }
+    });
+
+    it('empty branch: "Upcoming" has no scheduled sessions -- its aria-labelledby still resolves to its Heading, even with no List rendered ("Past" stays populated in the same render)', async () => {
+      const pastOnlyData: StudentMeetingsData = {
+        history: [
+          {
+            sessionId: 'session-history-past-only',
+            title: 'Archived Weekly Meeting',
+            sessionDate: '2026-01-05',
+            startsAt: '2026-01-05T18:00:00.000Z',
+            endsAt: '2026-01-05T20:00:00.000Z',
+            status: 'completed',
+            myAttendanceStatus: 'present',
+          },
+        ],
+        participation: {
+          studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
+          teamId: 'team-placeholder-current-viewer',
+          seasonId: 'season-placeholder-current',
+          expectedCt: 1,
+          presentCt: 1,
+          lateCt: 0,
+          excusedCt: 0,
+          participationPct: 100,
+        },
+      };
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
+        loadStudentData: () => Promise.resolve(pastOnlyData),
+      });
+      await flushMicrotasks();
+
+      // Confirm "Upcoming" really is the EmptyState branch (per its own
+      // `emptyDescription`), not a load failure.
+      expect(container.textContent).toContain('You have no upcoming meetings scheduled.');
+      expect(container.textContent).toContain('Archived Weekly Meeting');
+
+      for (const title of ['Upcoming', 'Past']) {
+        const { resolvedText } = resolveAriaLabelledbyTarget(title);
+        expect(resolvedText).toBe(title);
+      }
+    });
   });
 });
 

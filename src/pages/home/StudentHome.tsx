@@ -285,7 +285,7 @@
  *    `'supporting'`) used.
  *  - `VStack`/`HStack` ("Stack" section): `gap`, `padding`, `vAlign` used.
  */
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import {
   Badge,
   Banner,
@@ -1143,6 +1143,17 @@ export function StudentHome({
   const [rsvps, setRsvps] = useState<readonly HomeRsvpRow[]>([]);
   const opportunitiesSectionRef = useRef<HTMLDivElement | null>(null);
 
+  // T129/UXC-01: stable ids for the "Next up" / "Sign-up opportunities"
+  // `Heading`s, so each section's alternating List/EmptyState gets the
+  // heading as its accessible name via `aria-labelledby` on a wrapping
+  // `<div role="group">`, instead of the `List`'s own `header` prop (which
+  // duplicates the visible title and disappears entirely in the empty
+  // branch). CHECKER FIX (rework of T129, MAJOR): see `CoachHome.tsx`'s own
+  // module doc for why the wrapper is a plain `<div role="group">`, not
+  // `Section` (full-bleed margin + no nameable role).
+  const nextUpHeadingId = useId();
+  const opportunitiesHeadingId = useId();
+
   useEffect(() => {
     if (loadState.status === 'success') {
       setRsvps(loadState.data.rsvps);
@@ -1280,43 +1291,51 @@ export function StudentHome({
 
       <Divider />
       <VStack gap={3}>
-        <Heading level={2}>Next up</Heading>
-        {nextUp.length === 0 ? (
-          <EmptyState
-            headingLevel={3}
-            title="Nothing scheduled"
-            description="Your team's next meetings, and the outreach events you're going to, will show up here."
-          />
-        ) : (
-          <List hasDividers header="Next up">
-            {nextUp.map((row) => (
-              <NextUpRowItem key={row.sessionId} row={row} onCantGo={handleRsvpChange} />
-            ))}
-          </List>
-        )}
+        <Heading level={2} id={nextUpHeadingId}>
+          Next up
+        </Heading>
+        <div role="group" aria-labelledby={nextUpHeadingId}>
+          {nextUp.length === 0 ? (
+            <EmptyState
+              headingLevel={3}
+              title="Nothing scheduled"
+              description="Your team's next meetings, and the outreach events you're going to, will show up here."
+            />
+          ) : (
+            <List hasDividers>
+              {nextUp.map((row) => (
+                <NextUpRowItem key={row.sessionId} row={row} onCantGo={handleRsvpChange} />
+              ))}
+            </List>
+          )}
+        </div>
       </VStack>
 
       <Divider />
       <div ref={opportunitiesSectionRef} tabIndex={-1}>
         <VStack gap={3}>
-          <Heading level={2}>Sign-up opportunities</Heading>
-          {opportunities.length === 0 ? (
-            <EmptyState
-              headingLevel={3}
-              title="You're all caught up"
-              description="Outreach events awaiting your response will show up here."
-            />
-          ) : (
-            <List hasDividers header="Sign-up opportunities">
-              {opportunities.map((row) => (
-                <SignupOpportunityRowItem
-                  key={row.sessionId}
-                  row={row}
-                  onRespond={handleRsvpChange}
-                />
-              ))}
-            </List>
-          )}
+          <Heading level={2} id={opportunitiesHeadingId}>
+            Sign-up opportunities
+          </Heading>
+          <div role="group" aria-labelledby={opportunitiesHeadingId}>
+            {opportunities.length === 0 ? (
+              <EmptyState
+                headingLevel={3}
+                title="You're all caught up"
+                description="Outreach events awaiting your response will show up here."
+              />
+            ) : (
+              <List hasDividers>
+                {opportunities.map((row) => (
+                  <SignupOpportunityRowItem
+                    key={row.sessionId}
+                    row={row}
+                    onRespond={handleRsvpChange}
+                  />
+                ))}
+              </List>
+            )}
+          </div>
         </VStack>
       </div>
     </VStack>

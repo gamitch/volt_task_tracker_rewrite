@@ -105,12 +105,15 @@
  * non-dismissable `Banner` disclosing this is fixture data -- never made to
  * look production-real.
  *
- * The same "missing shared client, not fabricated" treatment
- * `Kiosk.tsx`'s GAP #2 established for ITS live tally applies here to BOTH
- * this console's live roster/attendance data (Known Context/Traps #1 --
- * no `createClient`/`supabase-js` usage anywhere in `src/` yet, grep-
- * confirmed) and its Realtime subscription (section 3 below) -- disclosed
- * via a second permanent Banner, with `defaultLoadLiveConsoleData` and
+ * The same "missing wiring, not fabricated" treatment `Kiosk.tsx`'s GAP #2
+ * established for ITS live tally applies here to BOTH this console's live
+ * roster/attendance data and its Realtime subscription (section 3 below).
+ * T071 shipped a real shared Supabase client (`src/lib/supabase/client.ts`,
+ * `getSupabaseClient`/`createClient`) -- the client itself is no longer
+ * missing -- but nothing in this file calls it: no Realtime channel
+ * subscription exists here yet, so roster/attendance changes made on this
+ * screen do not sync live to other tabs or devices. Disclosed via a second
+ * permanent Banner, with `defaultLoadLiveConsoleData` and
  * `notWiredSetAttendanceStatus` shipping honest fixture/no-op defaults
  * rather than fabricated network calls.
  *
@@ -357,6 +360,7 @@
  */
 import {
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -773,8 +777,8 @@ function QrPanel({
       <Heading level={2}>Check-in</Heading>
       <Banner
         status="warning"
-        title="QR/code below use fixture data"
-        description="No Edge Function exists yet that can safely mint a live token/short code without exposing the server-only signing secret to the browser (constitution item 5). These values are clearly-labeled placeholders, not a real, scannable check-in token."
+        title="This QR code and check-in code aren't live yet"
+        description="Scanning or entering them won't check anyone in. A real, working code isn't ready yet."
       />
       {token === null ? (
         <Text type="supporting">QR not available yet.</Text>
@@ -893,6 +897,15 @@ export function LiveConsoleBody({
   // "hidden means removed from the accessible DOM" convention.
   const [showQr, setShowQr] = useState(true);
   const rowRefs = useRef<Array<HTMLLIElement | null>>([]);
+  // T129/UXC-01: stable id for the "Roster" `Heading`, so the alternating
+  // List/EmptyState below gets the heading as its accessible name via
+  // `aria-labelledby` on a wrapping `<div role="group">`, instead of the
+  // `List`'s own `header` prop (which duplicates the visible title and
+  // vanishes in the empty branch). CHECKER FIX (rework of T129, MAJOR): see
+  // `CoachHome.tsx`'s own module doc for why the wrapper is a plain
+  // `<div role="group">`, not `Section` (full-bleed margin + no nameable
+  // role).
+  const rosterHeadingId = useId();
 
   useEffect(() => {
     if (loadState.status === 'success') {
@@ -987,7 +1000,7 @@ export function LiveConsoleBody({
     setEndMeetingStub({
       title: 'End-meeting summary not built yet',
       description:
-        "This opens the end-of-meeting summary dialog (T036). That dialog hasn't shipped yet, so this meeting has not been ended.",
+        "This would open the end-of-meeting summary screen. It hasn't been built yet, so this meeting has not been ended.",
     });
   }
 
@@ -1017,8 +1030,8 @@ export function LiveConsoleBody({
 
       <Banner
         status="warning"
-        title="Live sync not wired"
-        description="attendance's RLS would allow a coach/admin-only real roster + Realtime feed once a shared Supabase client exists in src/ -- this is not an access-control gap, only a missing client (no createClient/supabase-js usage exists anywhere in src/ yet). Attendance changes made on this screen are local to this browser tab only."
+        title="Attendance updates aren't shared live yet"
+        description="Changes made here only show up in this browser tab. Other coaches, and the check-in kiosk, won't see them update in real time yet."
       />
 
       {loadState.status === 'loading' && (
@@ -1084,7 +1097,9 @@ export function LiveConsoleBody({
 
             <VStack gap={4} minHeight={200} width={480} maxWidth="100%">
               <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
-                <Heading level={2}>Roster</Heading>
+                <Heading level={2} id={rosterHeadingId}>
+                  Roster
+                </Heading>
                 <HStack gap={4} vAlign="center" wrap="wrap">
                   <TextInput
                     label="Search roster"
@@ -1103,31 +1118,33 @@ export function LiveConsoleBody({
                 </HStack>
               </HStack>
 
-              {filteredRoster.length === 0 ? (
-                <EmptyState
-                  title="No students match your search"
-                  description="Try a different name or clear the search box."
-                />
-              ) : (
-                <List hasDividers header="Roster">
-                  {filteredRoster.map((entry, index) => (
-                    <RosterRow
-                      key={entry.studentId}
-                      entry={entry}
-                      record={attendanceByStudentId[entry.studentId] ?? null}
-                      index={index}
-                      isFocused={index === focusedIndex}
-                      canSetExcused={canSetExcused}
-                      onFocusRow={setFocusedIndex}
-                      onKeyDownRow={handleRowKeyDown}
-                      onSetStatus={handleSetStatus}
-                      rowRef={(el) => {
-                        rowRefs.current[index] = el;
-                      }}
-                    />
-                  ))}
-                </List>
-              )}
+              <div role="group" aria-labelledby={rosterHeadingId}>
+                {filteredRoster.length === 0 ? (
+                  <EmptyState
+                    title="No students match your search"
+                    description="Try a different name or clear the search box."
+                  />
+                ) : (
+                  <List hasDividers>
+                    {filteredRoster.map((entry, index) => (
+                      <RosterRow
+                        key={entry.studentId}
+                        entry={entry}
+                        record={attendanceByStudentId[entry.studentId] ?? null}
+                        index={index}
+                        isFocused={index === focusedIndex}
+                        canSetExcused={canSetExcused}
+                        onFocusRow={setFocusedIndex}
+                        onKeyDownRow={handleRowKeyDown}
+                        onSetStatus={handleSetStatus}
+                        rowRef={(el) => {
+                          rowRefs.current[index] = el;
+                        }}
+                      />
+                    ))}
+                  </List>
+                )}
+              </div>
             </VStack>
           </HStack>
         </>

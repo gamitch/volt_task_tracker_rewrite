@@ -614,17 +614,16 @@ const NOTIFICATION_CATEGORY_COPY: Record<
   digestEnabled: {
     label: 'Enable digest emails',
     description:
-      'Master toggle for weekly digest emails, distinct from the Weekly digest category ' +
-      'above (a real, still-open ambiguity between these two columns -- see this file’s ' +
-      'module doc #4).',
+      'A separate on/off control for weekly digest emails, alongside the Weekly digest ' +
+      "option above. Exactly how the two interact hasn't been finalized yet, so turning " +
+      'this off is the more reliable way to stop weekly digest emails.',
   },
 };
 
 const NO_CATEGORIES_TITLE = 'No notification categories apply to your role yet';
 const NO_CATEGORIES_DESCRIPTION =
-  "EML-02's own trigger/recipient table doesn't name coach or admin as a recipient for any " +
-  'current email template (invitee, student, parent are the only named recipients) -- a ' +
-  'real, cited PRD-level gap, not an oversight in this page.';
+  "None of this app's emails are sent to coaches or admins right now -- only to invitees, " +
+  "students, and parents. That's expected; there's nothing to configure here yet.";
 
 // ---------------------------------------------------------------------------
 // Fixture data (constitution item 6: fabricated names only, no PII). Exists
@@ -1136,8 +1135,7 @@ export function SettingsPage({
                     <RadioListItem label="Dark" value="dark" />
                   </RadioList>
                   <Text type="supporting" color="secondary">
-                    This sets your saved preference. Live theme switching in the running app is a
-                    separate, not-yet-wired step -- module doc #2.
+                    This saves your choice. It doesn't change how the app looks right now.
                   </Text>
                 </VStack>
               </Section>
