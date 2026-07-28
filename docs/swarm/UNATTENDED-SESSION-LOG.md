@@ -74,13 +74,28 @@ identically. **Options for George:** add an injectable loader seam to
 `RosterShell`/`StudentsTab` (mirrors the pattern every other page already has),
 or drop roster captures from the wave. Not decided.
 
-**D-3 — archived worker outputs leave the repository.** `.gitignore` ignores
-`docs/swarm/archive/`, so when a task's packet and output are archived, any
-disclosure recorded only in the worker output is deleted from the repo. This is
-deliberate (the archive is large), but it means **a caveat about a shipped
-artifact must live somewhere else** — the ledger, the verification log, or
-beside the artifact. Surfaced by T134's checker. Worth a constitution note, but
-constitution edits are deferred.
+**D-3 — DECIDED 2026-07-28 by George: commit the archive.**
+
+`docs/swarm/archive/` was gitignored on the assumption it "can grow large".
+Measured: **2.1 MB of markdown across 200 files** — smaller than
+`docs/swarm/figures/` (2.3 MB) and ~3% of `.git`. The premise was wrong.
+
+The cost was real: every packet and worker output moves there on completion, so
+a caveat recorded only in a worker output was deleted from the repo at the
+moment the task archived, while the artifact it described stayed. T134 surfaced
+it.
+
+**The actual state was worse than "excluded":** 156 of 200 files were already
+tracked (committed before the ignore rule existed) and 44 were not. The archive
+looked present while a fifth of it silently was not.
+
+Committed in `0a90e11` after scanning for secrets and PII per constitution
+items 5 and 6 — zero secret values, zero real email addresses.
+
+**Standing consequence:** worker outputs are now durable. Caveats no longer
+need hand-carrying into the ledger, though anything that must change *behaviour*
+(like D-1's "checkers must not flag this") still belongs in the PRD, where
+checkers actually read.
 
 *(appended as they arise)*
 
