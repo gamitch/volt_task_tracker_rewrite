@@ -611,6 +611,8 @@ function detailHrefFor(event: CalendarEventRow, session: CalendarSessionRow): st
 // Session row -- module docs #1/#3/#7/#8.
 // ---------------------------------------------------------------------------
 
+const LABEL_LINES = { labelLines: 1 };
+
 function CalendarSessionRowItem({
   session,
   event,
@@ -630,13 +632,28 @@ function CalendarSessionRowItem({
   const endContent = (
     <HStack gap={2} vAlign="center">
       <Badge variant={typeBadge.variant} label={typeBadge.label} />
-      <Link as={RouterLink} href={detailHrefFor(event, session)} isStandalone>
-        View details – {event.title}
-      </Link>
     </HStack>
   );
 
-  return <ListItem label={event.title} description={description} endContent={endContent} />;
+  return (
+    <ListItem
+      {...(LABEL_LINES as object)}
+      label={
+        <Link
+          as={RouterLink}
+          href={detailHrefFor(event, session)}
+          isStandalone
+          weight="semibold"
+          maxLines={1}
+          color="primary"
+        >
+          {event.title}
+        </Link>
+      }
+      description={description}
+      endContent={endContent}
+    />
+  );
 }
 
 // ---------------------------------------------------------------------------
