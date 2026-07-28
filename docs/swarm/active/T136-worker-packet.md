@@ -19,7 +19,8 @@ Report the result. **If it conflicts, stop and report** rather than resolving.
 ## Scope
 
 The PRD bundles UXC-05, UXC-06 and UXC-08 into P4. This packet builds and proves
-the primitives; **T136b** rolls them out.
+the primitives; **T138** rolls them out. (T137 is the calendar dead-link fix,
+D009.)
 
 **In scope:** the two data-viz colour tokens, one shared bar component, and
 UXC-08's goal strip.
@@ -96,9 +97,25 @@ percentage computed independently against the goal. The component never adds the
 two.
 
 **Reuse `confirmedPercent` (`OutreachList.tsx:1207`)** — exported, already clamps
-to 100, already handles `goal <= 0`, already covered by tests. Pass percentages
-*in*; that makes "no arithmetic in the bar" trivially provable and satisfies
-constitution item 3 by construction.
+to 100, already handles `goal <= 0`, already covered by tests. It is a generic
+`(a/b)*100` clamp, so **`confirmedPercent(plannedHours, goalHours)` is the
+correct source for the planned percentage too.** Call both from **inside
+`GoalProgressBar` (`:1803-1879`)** — Allowed Files restrict this file to
+`:1777-1879`, `:3` and `:1763`, so you may not add a `plannedPercent` helper
+beside `:1207` or rename that function.
+
+**The prop contract, pinned so worker and checker target the same thing:**
+`GoalBar` takes `confirmedPct` and `plannedPct` as numbers, plus a
+**pre-formatted `valueText` string** built in `GoalProgressBar` (which is where
+the hour figures live). `aria-valuenow` carries the **confirmed percentage**,
+with `aria-valuemin={0}` and `aria-valuemax={100}`.
+
+**What "no arithmetic" means, precisely.** The prohibition is on **hours**
+arithmetic — specifically `confirmedHours + plannedHours`, the expression
+`:55-58` makes grep-provably absent and BEH-02 forbids. **Percentage-domain
+clamping is expected and required**, e.g.
+`width: min(plannedPct, 100 - confirmedPct)`. Trap 1 says "hours arithmetic" for
+this reason; §2 and Trap 1 agree.
 
 **Overflow is real and you must specify it.** Coach BEH-01's fixture
 (`OutreachList.test.tsx:1354-1358`) shrinks goals so confirmed is **9** and
@@ -109,14 +126,24 @@ the rendered widths so the fills never exceed 100% combined, and ensure
 
 **ARIA — complete shape, not just the role:**
 - `role="progressbar"` with `aria-valuenow`, `aria-valuemin`, `aria-valuemax`.
-- **`aria-valuenow` carries the confirmed value only.** The element can express
-  one number, and confirmed is the fact; planned is a projection.
+- **`aria-valuenow` carries the confirmed value only.** This is not taste — the
+  app already made the same ruling for itself at `OutreachList.tsx:96-99`:
+  milestone crossing is computed from confirmed hours only, because "planned
+  hours are provisional, so they never contribute to 'reaching' a milestone".
+  Same honesty rule, and constitution item 17.
 - **An accessible name is required.** Point `aria-labelledby` at the existing
   `<Heading level={2}>{label}</Heading>` (`OutreachList.tsx:1832`) via `useId`.
-  This mirrors Astryx's own bar (`ProgressBar.js:213`) and the `role="group"`
-  precedent T129 established (`OutreachList.test.tsx:1520-1543`). Do **not** add
-  a second labelling element — that risks the one-heading assertion at `:1340`.
-- `aria-valuetext` reads a human sentence covering both segments.
+  This mirrors Astryx's own bar (`ProgressBar.js:213`), and **the identical
+  pattern already ships twice in this very file** — copy the JSX at
+  `OutreachList.tsx:2766` and `:3405` (`<Heading level={2} id={headingId}>` +
+  `aria-labelledby={headingId}`), proven live by T129's test at
+  `OutreachList.test.tsx:1520-1543`. `Heading` spreads `...props` onto the
+  element (`Heading.js:142`), so `id` reaches the DOM. Do **not** add a second
+  labelling element — that risks the one-heading assertion at `:1340`.
+- **`aria-valuetext` must name the planned segment explicitly** — e.g. "9 of 52
+  hours confirmed; 7 more planned". When present it is announced *instead of*
+  the numeric value, so a large planned segment that is visible but unannounced
+  would be the real accessibility defect.
 - Not focusable. It is a status indicator, not a control — no `tabIndex`.
 
 ## 3. UXC-08 — the goal strip, and what it reverses
@@ -221,7 +248,7 @@ edit-dialog test. The real range is `:1328-1347`.)*
   extend to replacing it.
 - Everything in `OutreachList.tsx` outside the ranges named above — the coach
   `Table` (T131), the `ListItem` student/parent rows (T132), the shared hook.
-- `src/pages/meetings/**` — T135 may still be in flight.
+- `src/pages/meetings/**` — T135 landed there; out of scope for this task.
 - `supabase/**`.
 - `docs/swarm/constitution.md`, `task-ledger.md`, `verification-log.md`,
   `dispute-log.md`, `.claude/**`.
@@ -250,7 +277,9 @@ edit-dialog test. The real range is `:1328-1347`.)*
 2. **Measured contrast, reported with method, in both themes:**
    - each fill against the track: **≥3:1** (WCAG 2.1 SC 1.4.11, non-text
      contrast — *not* 4.5:1, which is the text threshold and was revision 1's
-     error);
+     error). **The track is `--color-background-muted`** — `theme.css:496`
+     already remaps it for `.astryx-progressbar`, so worker and checker measure
+     the same pair;
    - **confirmed against planned: ≥3:1.** Two adjacent segments that pass
      individually against the track can still be indistinguishable from each
      other. This is the check that actually matters on a two-tone bar.
@@ -261,7 +290,8 @@ edit-dialog test. The real range is `:1328-1347`.)*
    one on the student/parent outreach view** — measured separately. Each carries
    a resolvable accessible name via `aria-labelledby` to its existing heading,
    valid `aria-valuenow`/`min`/`max` with `valuenow ≤ valuemax`, an
-   `aria-valuetext` covering both segments, and no `tabIndex`.
+   `aria-valuetext` that **names the planned segment explicitly**, and no
+   `tabIndex`.
 5. The overflow case (confirmed 9 + planned 7 vs goal 15) renders without the
    fills exceeding the track and without invalid ARIA. Asserted in
    `GoalBar.test.tsx`.
@@ -275,7 +305,7 @@ edit-dialog test. The real range is `:1328-1347`.)*
    eight figures. This is a colour deliverable; dark theme is not optional.
 10. `npx tsc --noEmit` clean; `npx vite build` clean; `npm run format:check`
     clean; `npx eslint .` reports **zero errors and no new warnings**
-    (baseline: 0 errors / 352 warnings — do not chase the pre-existing ones).
+    (baseline: **0 errors / 353 warnings** — do not chase the pre-existing ones).
 11. `npx vitest run` green. Baseline after your merge is **1440 across 62
     files** — confirm and say so if it differs. You are **adding**
     `GoalBar.test.tsx`, so state the expected end count explicitly. The only
