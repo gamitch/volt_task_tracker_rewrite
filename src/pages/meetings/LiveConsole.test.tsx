@@ -818,6 +818,39 @@ describe('DES-12 states', () => {
     await flushMicrotasks();
     expect(container.textContent).toContain('No students on this roster');
   });
+
+  // -------------------------------------------------------------------
+  // T134 (UXC-12): the `<h1>` is now unconditional across all three DES-12
+  // states below -- pinning that there is exactly one `<h1>` in each, with
+  // the `FALLBACK_SESSION_TITLE` fallback text in the two states where
+  // `session` is still `null`.
+  // -------------------------------------------------------------------
+  it('T134 (UXC-12): renders exactly one <h1>, with fallback text, in the loading state', () => {
+    renderBody(COACH_USER, {
+      loadData: () => new Promise(() => {}), // never resolves
+    });
+    const headings = container.querySelectorAll('h1');
+    expect(headings).toHaveLength(1);
+    expect(headings[0].textContent).toBe('Meeting Check-In');
+  });
+
+  it('T134 (UXC-12): renders exactly one <h1>, with fallback text, in the error state', async () => {
+    renderBody(COACH_USER, {
+      loadData: () => Promise.reject(new Error('boom')),
+    });
+    await flushMicrotasks();
+    const headings = container.querySelectorAll('h1');
+    expect(headings).toHaveLength(1);
+    expect(headings[0].textContent).toBe('Meeting Check-In');
+  });
+
+  it('T134 (UXC-12): renders exactly one <h1>, with the real session title, in the populated state', async () => {
+    renderBody(COACH_USER, { loadData: defaultLoadLiveConsoleData });
+    await flushMicrotasks();
+    const headings = container.querySelectorAll('h1');
+    expect(headings).toHaveLength(1);
+    expect(headings[0].textContent).toBe('Tuesday Build Meeting');
+  });
 });
 
 describe('persistence seam default', () => {

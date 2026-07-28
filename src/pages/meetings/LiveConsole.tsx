@@ -12,14 +12,13 @@
  * 3 below.
  *
  * -----------------------------------------------------------------------
- * 1. Router reachability + role guard (packet Forbidden Files note) --
- *    same *reachability-only* gap class `Kiosk.tsx`/T034 and
- *    `RosterShell.tsx`/T021 already documented, re-confirmed live for this
- *    route rather than assumed.
+ * 1. Role guard (packet Forbidden Files note) -- reachability is NOT a gap
+ *    here (see below); only the role restriction needs this component's own
+ *    nested guard.
  * -----------------------------------------------------------------------
  *
  * `src/app/router.tsx` (forbidden to edit, "import-only" per this task's
- * packet) wires `/meetings/live/:sessionId` (lines ~155-162) with
+ * packet) wires `/meetings/live/:sessionId` (`:225`, element at `:228`) with
  * `RequireAuth` only -- confirmed by reading that file directly -- no
  * `RequireRole`, unlike its sibling `/kiosk/:sessionId` route. Since this
  * console is coach/admin-only (MTG-05's own text: "coach"), this component
@@ -39,13 +38,28 @@
  * `import { routePaths } from '../../app/router'` idiom `SideNav.tsx` and
  * `MobileNav.tsx` already established, not a new import pattern.
  *
- * `router.tsx`'s own `/meetings/live/:sessionId` route still renders its
- * inline `MeetingLiveSessionPage()` placeholder, not an import of this file
- * -- the same *reachability* gap (distinct from the role-guard gap just
- * described, which genuinely is fixed here) every not-yet-built route has,
- * per T018's checker finding cited by every sibling task's own module doc.
- * Swapping that placeholder for a real import requires editing router.tsx,
- * a forbidden file here.
+ * That same route's `element` (`:225`/`:228`) genuinely imports and renders
+ * THIS file's default export (T074 wired it; `router.tsx:124` lazy-imports
+ * it) -- this component is actually reachable at `/meetings/live/:sessionId`
+ * in the running app; there is no reachability gap to disclose here. An
+ * earlier draft of this comment (superseded) claimed router.tsx still
+ * rendered an inline placeholder at this route; that was stale even before
+ * T134 and has been corrected.
+ *
+ * T134 (UXC-12): until this task, this route rendered inside the full app
+ * chrome (`AppShell.tsx`'s chromeless check only matched exact static
+ * paths, never a parameterised route) even though PRD 7.1/4.2 describe this
+ * page as a fullscreen projection surface. `AppShell.tsx` now pattern-matches
+ * this route (via `matchPath`) into its chromeless set, so this page renders
+ * with no top nav / side nav / KPI strip, same as `/login`/`/accept-invite`.
+ * That also means this page no longer inherits `SeasonProvider` or
+ * `role="main"`/skip-link from the chrome (see `AppShell.tsx`'s own module
+ * doc, and T134's worker output for the recorded reasoning) -- this
+ * component does not consume `useActiveSeason()`, so the lost provider
+ * changes nothing this file relies on. T134 also made this file's `<h1>`
+ * (section 9's `Heading` bullet) unconditional across all three DES-12
+ * states, since the chrome's own landmarks/heading structure are gone and
+ * this page previously had no heading at all in its loading/error states.
  *
  * `guards.tsx`'s exported `Role` union now matches AUTH-05's real
  * `admin | coach | student | parent` vocabulary exactly (fixed by T073a;
@@ -265,7 +279,15 @@
  *      | `level` | `1 | 2 | 3 | 4 | 5 | 6` | -- | Heading level... (required) |
  *      | `children` | `ReactNode` | -- | Heading content. (required) |
  *    Only `level` and `children` used below; levels never skip (h1 session
- *    title, then two sibling h2s: "Check-in" and "Roster").
+ *    title, then two sibling h2s: "Check-in" and "Roster"). T134 (UXC-12):
+ *    the `<h1>` is now unconditional across all three DES-12 states
+ *    (previously only rendered in the `session !== null` branch, leaving
+ *    loading/error with no heading at all -- newly a real gap once the
+ *    chrome's own landmarks/heading structure disappeared on this now-
+ *    chromeless route). Its text falls back to
+ *    `FALLBACK_SESSION_TITLE = 'Meeting Check-In'` when `session` is `null`,
+ *    mirroring `Kiosk.tsx`'s own `sessionTitle?.title ?? FALLBACK_SESSION_TITLE`
+ *    in-repo precedent rather than inventing new fallback copy.
  *  - `Text`: `astryx-api.md` lines 858-878. `type` (`'supporting' |
  *    'label' | 'code' | 'display-2'`), `size`, `hasTabularNumbers`, `color`
  *    used; no hallucinated `variant`.
@@ -859,6 +881,12 @@ function RosterRow({
 // tested directly against this component).
 // ---------------------------------------------------------------------------
 
+/** T134 (UXC-12, module doc section 9's `Heading` bullet): fallback `<h1>`
+ * text for the loading/error states, where `session` is `null`. Mirrors
+ * `Kiosk.tsx`'s own `FALLBACK_SESSION_TITLE` in-repo precedent rather than
+ * inventing new copy. */
+const FALLBACK_SESSION_TITLE = 'Meeting Check-In';
+
 export interface LiveConsoleBodyProps {
   loadData?: LoadLiveConsoleDataFn;
   loadDisplayToken?: LoadLiveConsoleDisplayTokenFn;
@@ -1013,14 +1041,18 @@ export function LiveConsoleBody({
             Back to meetings
           </Link>
         </HStack>
-        {session !== null && (
-          <VStack gap={0} hAlign="center">
-            <Heading level={1}>{session.title}</Heading>
+        <VStack gap={0} hAlign="center">
+          {/* T134 (UXC-12, module doc section 9): unconditional across all
+              three DES-12 states -- previously only rendered when
+              `session !== null`, leaving loading/error with no `<h1>` at
+              all anywhere on the page. */}
+          <Heading level={1}>{session?.title ?? FALLBACK_SESSION_TITLE}</Heading>
+          {session !== null && (
             <Text type="supporting">
               {formatSessionTimeRange(session.startsAt, session.endsAt)}
             </Text>
-          </VStack>
-        )}
+          )}
+        </VStack>
         <Button label="End meeting" variant="secondary" onClick={handleEndMeetingClick} />
       </HStack>
 

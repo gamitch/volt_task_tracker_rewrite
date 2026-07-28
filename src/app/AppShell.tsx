@@ -52,8 +52,9 @@
  * content area"), NOT as a new `topNav`/`sideNav` slot value (the worker
  * packet's own Forbidden Files list: "the strip is layout content, not nav
  * chrome"). This places the strip above every routed page's own content,
- * on every route this normal branch renders (every route except
- * `/login`/`/accept-invite`, per the chromeless branch above, which
+ * on every route this normal branch renders (every route NOT matched by
+ * `CHROMELESS_PATTERNS` below -- as of T134: `/login`, `/accept-invite`,
+ * `/kiosk/:sessionId`, `/meetings/live/:sessionId` -- which
  * `KpiStrip` therefore never even mounts on). `KpiStrip` self-gates
  * staff-only and self-gates every `useActiveSeason()` state (see that
  * file's own module doc) -- this mount point does not duplicate either
@@ -79,7 +80,7 @@
  * tree without this file needing to import or depend on auth state itself.
  */
 import type { ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
+import { matchPath, useLocation } from 'react-router-dom';
 import { AppShell as AstryxAppShell } from '@astryxdesign/core';
 import { routePaths } from './router';
 import { SeasonProvider } from './SeasonProvider';
@@ -92,10 +93,39 @@ export interface AppShellProps {
   children: ReactNode;
 }
 
+/**
+ * T134 (UXC-12): the chromeless route set, matched by PATTERN (`matchPath`),
+ * not exact string equality -- `/kiosk/:sessionId` and
+ * `/meetings/live/:sessionId` are parameterised routes that could never
+ * match the old `location.pathname === '/some/static/path'` check. Static
+ * paths (`/login`, `/accept-invite`) still match themselves as patterns, so
+ * they keep working unchanged.
+ *
+ * `matchPath` is case-insensitive by default (e.g. `/KIOSK/abc` matches
+ * `/kiosk/:sessionId`) -- this is consistent with how `<Routes>` itself
+ * resolves the same URL (react-router-dom's matching is case-insensitive by
+ * default throughout), so it is correct, not a bug to work around.
+ *
+ * Trap: do NOT use `startsWith`/prefix matching here. `/meetings` is itself
+ * a routed, chrome-bearing page (`router.tsx:217`), and `/settings` is a
+ * prefix of the also-chrome-bearing `/settings/season` (`router.tsx:301`) --
+ * a prefix check would incorrectly strip chrome from both. `matchPath`
+ * anchors on the full pattern shape (segment-by-segment), so it does not
+ * have this problem: `matchPath('/meetings', '/meetings/live/xyz')` does not
+ * match, and neither pattern here is a prefix of `/settings*`.
+ */
+const CHROMELESS_PATTERNS = [
+  routePaths.login,
+  routePaths.acceptInvite,
+  '/kiosk/:sessionId',
+  '/meetings/live/:sessionId',
+];
+
 export function AppShell({ children }: AppShellProps): ReactNode {
   const location = useLocation();
-  const isChromeless =
-    location.pathname === routePaths.login || location.pathname === routePaths.acceptInvite;
+  const isChromeless = CHROMELESS_PATTERNS.some(
+    (pattern) => matchPath(pattern, location.pathname) !== null,
+  );
 
   if (isChromeless) {
     return <>{children}</>;

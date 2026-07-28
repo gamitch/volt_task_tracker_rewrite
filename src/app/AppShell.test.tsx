@@ -152,4 +152,76 @@ describe('<AppShell /> (T006 chrome wrapper; T123 KpiStrip mount point)', () => 
     expect(main?.textContent).not.toContain("Couldn't load the active season");
     expect(main?.textContent).toContain(PAGE_MARKER_TEXT);
   });
+
+  // -------------------------------------------------------------------
+  // T134 (UXC-12): the chromeless check is now a PATTERN match
+  // (`matchPath`/`CHROMELESS_PATTERNS`), not exact string equality, so the
+  // two parameterised projection routes -- previously unmatchable no matter
+  // what the URL was -- now correctly go chromeless too.
+  // -------------------------------------------------------------------
+  describe('T134 chromeless pattern matching (UXC-12)', () => {
+    it('renders /kiosk/:sessionId chromeless -- no TopNav/SideNav, no role="main", no KpiStrip', async () => {
+      renderAt(routePaths.kioskSession('session-abc-123'), COACH_USER);
+      await flushMicrotasks();
+      expect(container.textContent).toContain(PAGE_MARKER_TEXT);
+      expect(container.querySelector('[role="main"]')).toBeNull();
+      expect(container.textContent).not.toContain('VOLT');
+      expect(container.textContent).not.toContain("Couldn't load the active season");
+    });
+
+    it('renders /meetings/live/:sessionId chromeless -- no TopNav/SideNav, no role="main", no KpiStrip', async () => {
+      renderAt(routePaths.meetingLiveSession('session-xyz-789'), COACH_USER);
+      await flushMicrotasks();
+      expect(container.textContent).toContain(PAGE_MARKER_TEXT);
+      expect(container.querySelector('[role="main"]')).toBeNull();
+      expect(container.textContent).not.toContain('VOLT');
+      expect(container.textContent).not.toContain("Couldn't load the active season");
+    });
+
+    it('/login and /accept-invite remain chromeless (regression, still matched as static patterns)', () => {
+      renderAt(routePaths.login, null);
+      expect(container.querySelector('[role="main"]')).toBeNull();
+      renderAt(routePaths.acceptInvite, null);
+      expect(container.querySelector('[role="main"]')).toBeNull();
+    });
+
+    // Traps #2/#3: `/meetings` is itself a routed, chrome-bearing page, and
+    // is a PREFIX of `/meetings/live/:sessionId` -- a naive `startsWith`
+    // would wrongly strip its chrome. `/settings` is a prefix of
+    // `/settings/season` -- same trap. `/outreach/:eventId` is the other
+    // parameterised route in the app and is exactly what a sloppy pattern
+    // list (e.g. one that matches any single extra path segment) would catch
+    // by accident -- it must keep its chrome. All ten of these must still
+    // render full chrome.
+    const ORDINARY_CHROME_BEARING_PATHS: ReadonlyArray<[string, string]> = [
+      ['/ (dashboard)', routePaths.dashboard],
+      ['/meetings', routePaths.meetings],
+      ['/outreach/:eventId', routePaths.outreachEvent('event-42')],
+      ['/outreach', routePaths.outreach],
+      ['/calendar', routePaths.calendar],
+      ['/checkin', routePaths.checkin],
+      ['/roster', routePaths.roster],
+      ['/reports', routePaths.reports],
+      ['/settings', routePaths.settings],
+      ['/settings/season', routePaths.settingsSeason],
+    ];
+
+    it.each(ORDINARY_CHROME_BEARING_PATHS)(
+      'still renders full chrome (TopNav + role="main") on %s',
+      async (_label, path) => {
+        renderAt(path, COACH_USER);
+        await flushMicrotasks();
+        expect(container.textContent).toContain('VOLT');
+        const main = container.querySelector('[role="main"]');
+        expect(main).not.toBeNull();
+        expect(main?.textContent).toContain(PAGE_MARKER_TEXT);
+      },
+    );
+
+    it('matchPath is case-insensitive by default (documented, not a bug): /KIOSK/abc still matches /kiosk/:sessionId', async () => {
+      renderAt('/KIOSK/session-abc-123', COACH_USER);
+      await flushMicrotasks();
+      expect(container.querySelector('[role="main"]')).toBeNull();
+    });
+  });
 });

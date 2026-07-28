@@ -3,35 +3,43 @@
  * TV/iPad screen showing a rotating QR code + 6-character short code + a
  * live numeric tally ("12 of 18 checked in"). This is a PUBLIC-FACING
  * shared display (PRD SEC-04/ROS-08): it must never render a student name,
- * email address, or any other PII -- only the page's own generic heading,
- * the QR, the short code, and a numeric tally are ever rendered.
+ * email address, or any other PII. Beyond the page's own generic heading,
+ * the QR, the short code, and a numeric tally, T134 (UXC-12) also added a
+ * single low-prominence escape link back to `/meetings` -- a real route the
+ * page can reach, never PII -- since AppShell going chromeless on this route
+ * removed the only way off this screen otherwise (see T134's own reasoning
+ * below and in `src/app/AppShell.tsx`).
  *
  * -----------------------------------------------------------------------
  * Router reachability (read-only-confirmed, not this task's job to change)
  * -----------------------------------------------------------------------
- * `src/app/router.tsx`'s `/kiosk/:sessionId` route (lines ~127-136) already
- * wraps its element in `RequireAuth` + `RequireRole(['coach', 'admin'])`,
- * matching PRD Section 7's route table exactly -- confirmed by reading that
- * file (read-only; it is a forbidden file for this task). That guard is
- * correct and this component intentionally does NOT re-guard itself (unlike
- * e.g. `RosterShell.tsx`/T021, which had to nest its own `RequireRole`
- * because ITS route had no role guard at all yet -- not the case here).
+ * `src/app/router.tsx`'s `/kiosk/:sessionId` route (`:197`, element at
+ * `:201`) wraps its element in `RequireAuth` + `RequireRole(['coach',
+ * 'admin'])`, matching PRD Section 7's route table exactly -- confirmed by
+ * reading that file (read-only; it is a forbidden file for this task). That
+ * guard is correct and this component intentionally does NOT re-guard
+ * itself (unlike e.g. `RosterShell.tsx`/T021, which had to nest its own
+ * `RequireRole` because ITS route had no role guard at all yet -- not the
+ * case here).
  *
- * However, that same route's `element` still renders router.tsx's own
- * inline `KioskSessionPage()` placeholder function (`<div>Kiosk
- * (placeholder) - sessionId: {sessionId}</div>`), not an import of this
- * file -- confirmed by reading router.tsx directly. So while the ROLE GUARD
- * is already correct (nothing to fix there), this component is still not
- * actually reachable at `/kiosk/:sessionId` in the running app: swapping
- * the inline placeholder for `import { KioskPage } from
- * '../pages/meetings/Kiosk'` requires editing `router.tsx`, which is a
- * forbidden file for this task. This is the same *reachability-only* gap
- * `RosterShell.tsx`/T021 documented for `/roster` (itself citing T018's
- * checker finding that this applies to every not-yet-built route) -- a
- * distinct, narrower issue than a missing/wrong role guard, which is why it
- * does not contradict the worker packet's "no router-wiring gap to flag
- * here" framing (that framing is specifically about the guard/role matrix,
- * which is indeed already correct).
+ * That same route's `element` genuinely imports and renders THIS file's
+ * `KioskPage` (T074 wired it; `router.tsx:125` lazy-imports it) -- this
+ * component is actually reachable at `/kiosk/:sessionId` in the running app.
+ * An earlier draft of this comment (superseded) claimed router.tsx still
+ * rendered an inline placeholder here; that was stale even before T134 and
+ * has been corrected.
+ *
+ * T134 (UXC-12): until this task, this route rendered inside the full app
+ * chrome (`AppShell.tsx`'s chromeless check only matched exact static
+ * paths, never a parameterised route) even though PRD 7.1/4.2 describe this
+ * page as a fullscreen projection surface. `AppShell.tsx` now pattern-matches
+ * this route (via `matchPath`) into its chromeless set, so this page renders
+ * with no top nav / side nav / KPI strip, same as `/login`/`/accept-invite`.
+ * That also means this page no longer inherits `SeasonProvider` or
+ * `role="main"`/skip-link from the chrome (see `AppShell.tsx`'s own module
+ * doc, and T134's worker output for the recorded reasoning) -- this
+ * component does not consume `useActiveSeason()` at all, so losing that
+ * provider changes nothing this file relies on.
  *
  * -----------------------------------------------------------------------
  * T103 (ED-1 Packet P8) -- both previously-disclosed gaps below are now
@@ -159,6 +167,18 @@
  *    closed, per the module doc above) -- the one remaining `Banner` below
  *    ("No session selected") is a genuine, still-real DES-12 empty/error
  *    state for a missing route param, not a stale disclosure.
+ *  - `Link` (T134, `astryx-api.md` lines 1959-1977, Props table): `as`,
+ *    `href`, `isStandalone`, `children` used for the new escape link back to
+ *    `/meetings` -- `as={RouterLink}` (react-router-dom's `Link`, aliased)
+ *    is the exact real-client-side-navigation idiom `LiveConsole.tsx`/
+ *    `SideNav.tsx`/`MobileNav.tsx` already established. `isStandalone`
+ *    ("Applies base font sizing") is set because, unlike `LiveConsole.tsx`'s
+ *    own "Back to meetings" link (which sits inside that page's header
+ *    `HStack`, ambient body-text context), this link is a bare `VStack`
+ *    child with no ambient `Text` sizing context of its own -- the same
+ *    "Do: Set isStandalone when the link appears standalone" precedent
+ *    `CalendarPage.tsx`/`OutreachList.tsx`/`AccessDeniedPage.tsx` already
+ *    establish for links in the same structural position.
  *
  * -----------------------------------------------------------------------
  * DES-12 four-state mapping
@@ -191,9 +211,14 @@
  *    renders the real QR/short-code/tally-number/title content.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link as RouterLink, useParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { Banner, Center, Heading, HStack, Text, VStack } from '@astryxdesign/core';
+import { Banner, Center, Heading, HStack, Link, Text, VStack } from '@astryxdesign/core';
+// T134 (UXC-12): `routePaths` (router.tsx's own exported route-path table),
+// for this page's new escape link back to `/meetings` -- the same
+// `import { routePaths } from '../../app/router'` idiom `LiveConsole.tsx`
+// already established for its own real links.
+import { routePaths } from '../../app/router';
 // T103: real defaults for this page's three seams (module doc above). This
 // import is circular with `loaders/kiosk.ts` (that file imports
 // `buildCheckinUrl`/`KIOSK_REFRESH_INTERVAL_SECONDS`/types back from this
@@ -472,6 +497,18 @@ export function KioskPage({
         </HStack>
 
         <Text type="supporting">No student names are shown on this screen.</Text>
+
+        {/* T134 (UXC-12): this route now renders chromeless (AppShell.tsx),
+            so the app's nav is no longer reachable from here -- this is the
+            page's only way off itself. Kept visually quiet (small,
+            standalone) since this is projected on a wall, but present:
+            the same URL is also reachable by a signed-in coach on a laptop,
+            who does need a way back. Same `as={RouterLink}` idiom
+            `LiveConsole.tsx:1012-1014`'s "Back to meetings" link already
+            establishes. */}
+        <Link as={RouterLink} href={routePaths.meetings} isStandalone>
+          Back to meetings
+        </Link>
       </VStack>
     </Center>
   );
