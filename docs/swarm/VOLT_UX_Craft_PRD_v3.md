@@ -1,102 +1,145 @@
-# VOLT Portal — UX Craft PRD v3 (Wave 5) — agent companion
+# VOLT Portal — UX Craft PRD v3.1 (Wave 5) — agent companion
 
-Status: **awaiting George's review — do not dispatch packets until he approves.**
-Author: Fable (architect), 2026-07-21.
+Drafted 2026-07-21 by Fable (architect). **Revised 2026-07-21 after an
+independent review by Opus 5** that fact-checked every defect claim against the
+code and audited the installed Astryx source for feasibility.
+Status: **approved by George — ready to dispatch.**
 
-The full PRD — with every embedded screenshot — is
-`docs/swarm/VOLT_UX_Craft_PRD_v3.html` (self-contained; open in a browser).
+Full PRD with embedded screenshots: `docs/swarm/VOLT_UX_Craft_PRD_v3.html`.
 This file is the compact index for packet authors and checkers.
+
+## What changed in v3.1 (read this before using any v3 notes)
+
+- **UXC-02/03/04/07 re-specified**: migrate rows to Astryx **`Table`**, NOT a
+  custom CSS grid. See F-1.
+- **UXC-01's fix corrected**: dropping `List header` for `aria-label` does not
+  work — `List` silently drops ARIA props (D-G). Would have been an a11y
+  regression.
+- **UXC-09 (toasts) WITHDRAWN** — both stated facts were false.
+- **D-F (roster fixture seams) WITHDRAWN** — claim was inverted; seams exist.
+- **D-C (calendar dots) re-scoped** — vendor-blocked, not an app omission.
+- **UXC-10 scope ~10×** — ten rendered jargon strings, not one.
+- **UXC-08 must disclose** that it reverses part of T121 and amends a green test.
+- **UXC-13 (responsive) and UXC-14 (dark theme) added** — both were missing.
+- **W5-P5 rescoped**: `/reports` and `/settings` layouts are constitutionally
+  frozen (George's decision 1).
+- **Three feasibility constraints (F-1..F-3) stated up front** so packets don't
+  stall in dispute.
 
 ## The figures ARE the requirements evidence
 
-All figures exist as loose files in `docs/swarm/figures/ux-craft/`:
+Loose files in `docs/swarm/figures/ux-craft/`: `old-*.webp` = reference app
+(binding craft standard — chiefly `old-events-tab.webp`,
+`old-dashboard-full.webp`, `old-student-view.webp`); `new-*.webp` = portal
+surveyed live 2026-07-21 (1440×900, light theme).
 
-- `old-*.webp` — the reference app (volt-timetracker.lovable.app), the binding
-  craft standard. Most important: `old-events-tab.webp` (list craft),
-  `old-dashboard-full.webp` (module composition), `old-student-view.webp`
-  (student card grid).
-- `new-*.webp` — the portal surveyed live on 2026-07-21 (real components in
-  real chrome, fixture data, 1440×900 light theme). One per routed screen.
+**Workers and checkers must open the relevant figures with the Read tool** and
+judge at the mechanism level. "Directionally matching" is NOT a passing grade.
+Ignore fixture-data magnitude and light-vs-dark palette; judge structure.
 
-**Workers and checkers must open the relevant figures with the Read tool**
-(it renders images) and judge against them at the mechanism level.
-"Directionally matching" is NOT a passing grade in wave 5; the acceptance
-criteria below are the bar. Fixture-data magnitudes and light-vs-dark
-palette are explicitly out of scope — judge structure. Every requirement
-must hold in BOTH themes.
+## Feasibility constraints — binding, verified against installed source
 
-## Verdict (one paragraph)
+**F-1 · `Table` is the only primitive that can align columns across rows.**
+`ListItem` wraps `Item`, a 3-slot flex (`start | content(flex:1) | end`) with
+`flex: 0 0 auto` end caps (`src/Item/Item.tsx:156-275`) — no prop reaches it, so
+sibling rows *cannot* align. `Grid` is equal-width only; `StackItem` is
+`'static'|'fill'` only. `Table` supports `pixel()`/`proportional()` widths,
+per-column `align`, `renderCell: (item) => ReactNode`, `useTableGroupedRows`,
+`useTableRowExpansion`. **In-repo precedents: `StudentsTab.tsx:998-1049`,
+`ParticipationTab.tsx:305-327`.**
+*Known gap:* row expansion is inherited-columns only (no
+`renderExpandedContent`). Per-session detail fits; free-text ("Going: …") needs
+its own column or children-mode `colSpan` (which forfeits width resolution).
+Decide per surface and disclose.
 
-George is right: the old app is the better visual instrument today. The new
-portal wins on data correctness, permissions, a11y semantics, and honest
-states; it loses on layout craft. Wave 5 closes that gap. No new features.
-The five mechanisms behind the old app's superiority (PRD §1): M1 fixed
-column grids · M2 column-locked three-tier type · M3 compact affordances ·
-M4 card separation + density · M5 color as encoding.
+**F-2 · `xstyle` does not work here.** StyleX is compile-time and the app has no
+StyleX plugin (`vite.config.ts` = `[react()]`); `stylex.create()` throws at
+runtime. Effective DES-21 ladder is **component → theme token → custom CSS**.
+`className`/`style` are merged (`src/utils/mergeProps.ts:62-107`); the sanctioned
+CSS surface is the `astryx-*` class + `data-*` contract (precedent:
+`src/theme/theme.css:492-522`).
 
-## Global requirements (binding; severity = review outcome if violated)
+**F-3 · `ProgressBar` cannot segment, tick, or mark a goal.** One scalar `value`,
+one fill div (`ProgressBar.tsx:283,350-358`); its doc forbids stacked bars.
+Recoloring the fill IS supported (5 semantic variants or theme CSS on
+`.astryx-progressbar-fill[data-variant]`).
+**Architect ruling (pre-approved, do not dispute):** one small custom bar
+component — track, one or two fills, optional ticks — is approved under DES-21's
+final rung **for UXC-05 and UXC-08 only**. Presentation only, no metric math, one
+shared module, contrast verified in both themes. `Badge` needs no escalation (14
+variants incl. 10 hue families).
+
+## Global requirements
 
 | ID | Rule | Severity |
 |---|---|---|
-| UXC-01 | Exactly one heading per section — kill the app-wide `Heading` + List-`header` duplication; keep screen-reader names via aria attributes | MAJOR |
-| UXC-02 | Coach event/meeting rows on ONE shared CSS-grid template; zero x-drift of stat/action columns across rows | MAJOR |
-| UXC-03 | One shared three-tier stat cell (micro-label / value / secondary) used by all rows and tiles | with UXC-02 |
-| UXC-04 | Compact affordances; visible control text NEVER repeats the row title (title goes in aria-label only) | MAJOR |
-| UXC-05 | One semantic color system: confirmed=green, planned=purple, goal tick; type badges (outreach green / meeting blue-purple / competition orange); per-team hues; zero default-blue bars left | MAJOR |
-| UXC-06 | Content max-width ~1120px (forms stay 720); no full-bleed controls; bars capped ~480px or column width | MINOR |
-| UXC-07 | Density: collapsed coach rows ≤~72px, ≥8 rows visible at 1440×900; ONE separation system app-wide; expander never out-weighs titles | with UXC-02 |
-| UXC-08 | Goal/milestone strips are real bar components (track+fill+ticks+labels), never floating text | MAJOR |
-| UXC-09 | Toasts auto-dismiss, fixed corner, never overlap content | MINOR |
-| UXC-10 | ZERO internal jargon in user-facing copy (found live: "module doc #2" in Settings) | BLOCKER |
-| UXC-11 | Friendly date formatting everywhere (no raw `YYYY-MM-DD`) | MINOR |
-| UXC-12 | Kiosk + live console become chromeless routes (pending George's confirm) | MAJOR |
+| UXC-01 | One heading per section. **Do NOT use `aria-label` on a headerless `List`** (silently dropped — D-G). Use: (a) keep `List header`, drop the outer `Heading`; (b) wrap in a labelled region; or (c) migrate to `Table`. | MAJOR |
+| UXC-02 | Coach event/meeting rows migrate `List`→**`Table`** with `pixel()`/`proportional()` tracks, grouped sections, expander. Zero x-drift. *Basis: PRD v1 §7.1 compact rows.* | MAJOR |
+| UXC-03 | One shared three-tier `renderCell` stat helper (micro-label / value w/ `hasTabularNumbers` / secondary) across rows and tiles | with UXC-02 |
+| UXC-04 | Compact affordances; visible control text NEVER repeats the row title (title → `aria-label` only) | MAJOR |
+| UXC-05 | One semantic color system in `volt.ts`: confirmed=green, planned=purple, goal tick; type badges via Astryx hue variants; per-team hues; zero default-accent bars | MAJOR |
+| UXC-06 | Content max-width ~1120px (forms stay 720); no full-bleed bars/controls; dashboard modules pair two-up via `Grid`. **Excludes `/reports` + `/settings`.** *Basis: PRD v1 §4.2 two-column Coach Home.* | MINOR |
+| UXC-07 | Collapsed coach rows **≤72px measured** (not "≥8 rows" — only 5 fixtures exist); ONE separation system (default: bordered row-cards); expander never out-weighs titles | with UXC-02 |
+| UXC-08 | Goal/milestone strip is a real bar (F-3 custom component). **Must disclose it reverses T121 and amends `OutreachList.test.tsx:1279-1298`; exactly ONE bar.** *Basis: PRD v1 §7.1 `▓▓▓▓▓▓░░░░ 812 / 1,500 h`.* | MAJOR |
+| ~~UXC-09~~ | ~~Toast discipline~~ — **WITHDRAWN, claim false** (5s auto-hide present; not position:fixed) | — |
+| UXC-10 | ZERO internal jargon in user-facing copy — **10 sites** (see below); update `MeetingsList.test.tsx:889` which asserts `'T037'` renders | BLOCKER |
+| UXC-11 | Friendly dates everywhere (no raw `YYYY-MM-DD`) | MINOR |
+| UXC-12 | Kiosk + live console chromeless. `AppShell.tsx:96-102` matches by `===` so params never match — needs pattern matching. *Basis: PRD v1 §7.1 "fullscreen", §4.2 wireframe.* | MAJOR |
+| UXC-13 | **NEW.** Responsive behavior specified per layout requirement; ship 375px + 1440px shots; no h-scroll at 375px; 44px touch targets; T068 sweep re-run | MAJOR |
+| UXC-14 | **NEW.** Dark-theme captures for every touched surface added to the figures dir | MINOR |
 
-Full text + acceptance criteria per requirement: PRD HTML §2.
+UXC-10's ten sites: `SettingsPage.tsx:1139` · `LiveConsole.tsx:776-777, 990,
+1020-1021` · `MeetingsList.tsx:1568, 1932-1935` · `AdminToggles.tsx:391, 403-405`
+· `OutreachEventDialog.tsx:1301, 1307`.
 
-## Per-screen findings index (details + figures in HTML §3)
+## Per-screen findings (details + figures in HTML §3)
 
-- **OutreachList (coach)** — worst offender: UXC-01/02/04/07/08. Figure
+- **OutreachList (coach)** — centerpiece: UXC-01/02/04/07/08.
   `new-outreach-expanded.webp` vs `old-events-tab.webp`.
-- **MeetingsList** — UXC-01/02/03/07; inverted expander-vs-title hierarchy;
-  floating canceled badge. `new-meetings.webp`.
-- **CoachHome** — UXC-01/05/06/09; two-tone projection bars + goal tick +
-  right-aligned numeric column (see `old-dashboard-full.webp`); module
-  pairing; tile-grid orphan; scope captions. `new-coach.webp`,
-  `new-coach-modules.webp`.
-- **Reports** — tables are the app's best pattern (keep); consolidate the
-  scattered filter/sort controls into one toolbar; toast overlap.
-  `new-reports.webp`, `new-reports-hours.webp`.
-- **Calendar** — day cells show NO session markers (D-C, real gap); verbose
-  links; doubled heading; grid width. `new-calendar.webp`.
-- **Leaderboard** — restore bars/%-of-goal/team badges (D-E, anonymization
-  unchanged). `new-leaderboard.webp`.
-- **StudentHome / ParentHome** — UXC-01/05/06; legible consistency chips;
-  consider old app's card grid for student past events
-  (`old-student-view.webp`). `new-student.webp`, `new-parent.webp`.
-- **StudentMeetingView (strip page)** — unframed fragments at top edge;
-  needs a page frame or folding into meetings. `new-student-meetings.webp`.
-- **OutreachDetail** — minor: RSVP column equalization, drop fake-input
-  underlines, width cap. `new-outreach-detail.webp`.
-- **Settings** — BLOCKER copy leak ("module doc #2") + full-bleed width.
-  `new-settings.webp`.
-- **LiveConsole / Kiosk** — chromeless (UXC-12); stale dev banners (D-B:
-  claims no supabase client exists — false since T071); kiosk QR
-  placeholder is the known Edge-Function dependency (D-D, out of scope).
-  `new-live-console.webp`, `new-kiosk.webp`.
-- **Fine as-is**: Login; T125 edit form (only UXC-11 applies); Reports
-  tables. Roster surveyed empty (no fixture seams — D-F, P6 adds them).
+- **MeetingsList** — UXC-01/02/03/07; inverted expander hierarchy; floating
+  canceled badge. `new-meetings.webp`.
+- **CoachHome** — UXC-01/05/06; two-tone projection bar + goal tick + right
+  numeric column (`old-dashboard-full.webp`); module pairing; tile-grid orphan;
+  scope captions. (Toast finding withdrawn.)
+- **Reports** — the model to copy, not a target: it looks right *because* it is a
+  template-as-is route using `Table`. **No work this wave.**
+- **Calendar** — day dots dropped (vendor-blocked); legend/list workaround +
+  UXC-04/01/06 only. `new-calendar.webp`.
+- **Leaderboard** — bars/%-of-goal/team badges, approved. `new-leaderboard.webp`.
+- **Student/Parent home** — UXC-01/05/06; legible consistency chips; card-grid
+  worth considering (also the best UXC-13 answer). `old-student-view.webp`.
+- **StudentMeetingView** — needs a page frame. `new-student-meetings.webp`.
+- **OutreachDetail** — RSVP column equalization, drop fake-input underlines,
+  width cap.
+- **Settings** — **copy fix only** (UXC-10); layout frozen.
+- **LiveConsole / Kiosk** — chromeless (UXC-12); banner copy stale *and*
+  jargon-laden, but its conclusion is still true (genuinely fixture-wired) —
+  fix the reason, keep the warning.
+- **Fine as-is**: Login; T125 edit form (UXC-11 only); Reports tables; **Roster**
+  (seams exist — re-capture, no code change).
 
-## Packet map (P1..P6 — see HTML §5 for scope detail)
+## Packet map
 
-P1 mechanical sweep (UXC-01/09/10/11) → P2 shared craft components proving
-on OutreachList (UXC-02/03/04/07/08) → P3 rollout to meetings/calendar/
-student surfaces → P4 dashboard+leaderboard composition (UXC-05/06) →
-P5 page frames + calendar dots → P6 chromeless projection routes + banner
-copy + roster seams. P2 blocks P3/P4. Task IDs will continue from the
-ledger (next: T129).
+P1 sweep (UXC-01/10/11) → **P2 proving ground: OutreachList → `Table`**
+(UXC-02/03/04/07/13/14) → P3 rollout to meetings/calendar/student surfaces →
+P4 color system + custom bar + dashboard/leaderboard composition
+(UXC-05/06/08/14) → P5 page frames on non-frozen routes → P6 chromeless
+projection routes + banner copy + roster re-capture.
+P2 blocks P3. **P2 must prove the `Table` path at 1440px and 375px (zero
+x-drift, working expansion) before P3/P4 rely on it** — F-1's expansion gap is
+the one place the primitive may not fit. Next task ID: T129.
 
-## Open for George (HTML §6)
+## Decisions & open items
 
-1. Approve/amend this PRD. 2. UXC-12 confirm (recommend yes). 3. Leaderboard
-bars confirm. 4. Separation system: bordered cards (default) vs zebra.
-5. (Carried) bulk-complete parity decision.
+**Decided by George (2026-07-21):** (1) `/reports` and `/settings` template
+layouts stay untouched — wave 5 drops that work, keeps the Settings copy fix.
+(2) Leaderboard bars + % of goal approved; recorded as an explicit constitution
+item-17 ruling (facts only, no streaks/scarcity/guilt; SEC-04 unchanged) —
+checkers should not re-litigate.
+
+**Open:** (3) separation system — bordered row-cards (default) vs zebra.
+(4) carried: bulk "Mark event complete" parity. (5) two process amendments the
+review recommends: PRD v1 §7.1's "never ASCII fidelity" checker instruction is
+what let density drift unchecked — amend for wave-5 surfaces; and constitution
+item 2 (`astryx-api.md` as sole prop source) is stale — make installed source
+authoritative when the doc is silent or wrong (precedent: D004, T125, T128).
