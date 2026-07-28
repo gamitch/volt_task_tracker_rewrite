@@ -95,22 +95,24 @@ So:
   `Edit`, `label={`Edit – ${row.title}`}`). One item behind a menu is a menu
   that should not exist.
 
-  > **⚠ PENDING HUMAN AUTHORIZATION — do not implement this bullet until the
-  > orchestrator confirms.** `VOLT_Portal_PRD.md:280` (MTG-01) specifies a
-  > "per-row `MoreMenu` (Edit, Cancel session — `AlertDialog`)". Removing it is
-  > a PRD deviation, and constitution item 1 puts PRD requirement IDs above
-  > packet text — conflicts are disputes, never improvised around. T131 obtained
-  > explicit authorization for the equivalent outreach change (commit
-  > `b959b90`); this packet had none. T122 already moved Cancel out of the menu
-  > (disclosed, certified), which is what leaves it holding a single item.
+  > **AUTHORIZED (2026-07-28, George).** `VOLT_Portal_PRD.md:280` (MTG-01)
+  > specifies a "per-row `MoreMenu` (Edit, Cancel session — `AlertDialog`)".
+  > Removing it is a PRD deviation, and constitution item 1 puts PRD requirement
+  > IDs above packet text — so it needed a ruling, which it now has, recorded
+  > alongside MTG-01 in the PRD itself. Rationale: T122 already moved Cancel out
+  > to per-session buttons (disclosed, certified), leaving the menu holding
+  > exactly one item. Same resolution T131 shipped on the outreach rows under
+  > commit `b959b90`.
   >
-  > **Consequence either way:** `it('Edit shows an honest stub…')` at `:791`
-  > looks up `aria-label^="Actions for Weekly Build Meeting"` (`:795-797`). If
-  > the `MoreMenu` goes, that lookup returns `undefined`, the optional-chained
-  > dispatch at `:799` swallows it silently, and the generic `Edit`-text search
-  > at `:801-803` finds the new chip — so **the test passes while asserting an
-  > affordance that no longer exists.** A dead test is worse than a failing one.
-  > Amend it explicitly; do not leave it green by accident.
+  > **You must amend `it('Edit shows an honest stub…')` at `:791`.** It looks up
+  > `aria-label^="Actions for Weekly Build Meeting"` (`:795-797`). Once the
+  > `MoreMenu` is gone that returns `undefined`, the optional-chained dispatch at
+  > `:799` swallows it silently, and the generic `Edit`-text search at `:801-803`
+  > finds your new chip — so **the test would pass while asserting an affordance
+  > that no longer exists.** Rewrite it to find the Edit chip directly. A dead
+  > test is worse than a failing one. This is a **tenth** authorized assertion
+  > change, on top of Trap 1's nine.
+
 - **Cancel stays inside the expanded session rows**, exactly where it is today
   (`CoachMeetingSessionRow`, `:1328-1385`), with its existing verbatim label
   `` `Cancel ${formatWeekdayDate(session.sessionDate)} session` `` — three

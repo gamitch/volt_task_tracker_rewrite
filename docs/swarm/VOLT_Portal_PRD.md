@@ -277,6 +277,13 @@ export const voltTheme = defineTheme({
 
 **Scheduling**
 
+> **AUTHORIZED DEVIATION (2026-07-28, George) — the per-row `MoreMenu` below is
+> replaced by a plain `Edit` chip.** T122 moved "Cancel session" out of the menu
+> to per-session buttons inside the row expander (disclosed and certified),
+> leaving the menu holding a single item. T135 removes the menu; Cancel stays
+> per-session. Mirrors the resolution T131 shipped on the outreach rows
+> (commit `b959b90`). Everything else in MTG-01 stands.
+
 - **MTG-01** `/meetings` (coach): `Section` "Upcoming" and `Section` "Past" lists of **meeting sessions** (`Item` rows: date, time range, team scope, status `Badge`, attendance summary for past). Actions: **Schedule meetings**, per-row `MoreMenu` (Edit, Cancel session — `AlertDialog`).
 - **MTG-02** **Schedule meetings** `Dialog purpose="form"`: title (default "Team meeting"), team scope (`MultiSelector` of teams, default all), location, schedule mode (`SegmentedControl`: Single | Weekly recurring | Custom dates — parity with the current app), date/time pickers (`DateInput`/`TimeInput`, `DateRangeInput` for recurring range, weekday `CheckboxList` for recurring), notes. Creates one `events` row (type `meeting`) + one `event_sessions` row per date. Nothing is created until **Create meetings** is clicked; the button is disabled until title + at least one valid date exist.
 - **MTG-03** Meetings do not use RSVP. Expected attendees = active roster of the scoped team(s) as of the session date.
