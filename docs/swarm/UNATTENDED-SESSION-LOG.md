@@ -83,6 +83,30 @@ constitution edits are deferred.
 
 ---
 
+## Standing dispatch rule added 2026-07-28
+
+**Every worker dispatched with `isolation: "worktree"` must merge the working
+branch before doing anything else**, and report the result:
+
+```
+git fetch origin
+git merge origin/claude/swarm-plan-zl575z
+```
+
+The `Agent` tool creates worktrees from the repository's default branch
+(`main`), not from the branch the session is working on, and it exposes no way
+to choose the base. T132's worker was therefore handed a tree in which T131 had
+never shipped: it saw the coach rows still carrying a separate "View details"
+link and an actions column at `pixel(420)`, and correctly reported that two of
+its acceptance criteria described behaviour that did not exist.
+
+The worker caught this itself and refused to work around it. That is the
+mechanism working — but it cost a full cycle, and the next one might not catch
+it. The merge-first step is cheap insurance.
+
+Worktree isolation stays. It is the only reason the stale base affected one
+task instead of corrupting the shared tree.
+
 ## Timeline
 
 *(appended as work completes)*
