@@ -2,7 +2,7 @@
 name: boss-architect
 description: Defines project standards, creates the constitution, makes architectural decisions, reviews disputes, and performs final acceptance. Do not use for routine coding.
 tools: Read, Write, Edit, Glob, Grep, Bash, Agent
-model: opus
+model: fable
 ---
 
 You are the Boss Architect.

@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VOLT Team Portal — Product Backlog &amp; Grooming Guide</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1a1a2e; --muted: #5a5a72; --card: #f6f6fa;
+    --border: #d8d8e4; --accent: #5B2EE5; --accent-soft: #ece6fb;
+    --p0: #b3261e; --p1: #b26a00; --p2: #2e6b30; --p3: #4a5568;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15151f; --fg: #e8e8f0; --muted: #a0a0b8; --card: #1e1e2c;
+      --border: #34344a; --accent: #a48aff; --accent-soft: #2a2342;
+      --p0: #ff8a80; --p1: #ffcc80; --p2: #a5d6a7; --p3: #b0bec5;
+    }
+  }
+  body { margin: 0; padding: 2rem 1rem 6rem; background: var(--bg); color: var(--fg);
+         font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; line-height: 1.25; margin: 0 0 .25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 .75rem; padding-bottom: .3rem;
+       border-bottom: 2px solid var(--accent); }
+  h3 { font-size: 1.1rem; margin: 1.75rem 0 .5rem; }
+  h4 { font-size: .95rem; margin: 1rem 0 .35rem; text-transform: uppercase;
+       letter-spacing: .04em; color: var(--muted); }
+  p, li { max-width: 75ch; }
+  code { background: var(--card); border: 1px solid var(--border); border-radius: 4px;
+         padding: .1em .35em; font-size: .85em; }
+  .subtitle { color: var(--muted); margin-bottom: 1.5rem; }
+  .badge { display: inline-block; font-size: .72rem; font-weight: 700; padding: .15em .55em;
+           border-radius: 99px; vertical-align: middle; margin-left: .5rem;
+           border: 1.5px solid currentColor; }
+  .P0 { color: var(--p0); } .P1 { color: var(--p1); } .P2 { color: var(--p2); } .P3 { color: var(--p3); }
+  .size { color: var(--muted); border-color: var(--muted); }
+  .item { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+          padding: 1.25rem 1.5rem; margin: 1.25rem 0; }
+  .item h3 { margin-top: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  .tablewrap { overflow-x: auto; margin: 1rem 0; }
+  th, td { border: 1px solid var(--border); padding: .45rem .6rem; text-align: left;
+           vertical-align: top; }
+  th { background: var(--accent-soft); }
+  .callout { border-left: 4px solid var(--p0); background: var(--card);
+             padding: .75rem 1rem; margin: 1rem 0; border-radius: 0 8px 8px 0; }
+  .callout.info { border-left-color: var(--accent); }
+  dt { font-weight: 700; margin-top: .6rem; }
+  dd { margin: .1rem 0 .4rem 1rem; color: var(--fg); }
+  nav ol { columns: 2; gap: 2rem; } nav li { break-inside: avoid; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>VOLT Team Portal — Product Backlog &amp; Grooming Guide</h1>
+<p class="subtitle">Written 2026-07-19 by the orchestrator session that built the app (swarm branch
+<code>claude/swarm-plan-zl575z</code>, PR&nbsp;#1). Audience: <strong>a future model session doing backlog
+grooming and task assignment</strong>, and George (product owner). This document is deliberately
+information-dense so a smaller model can act on it without re-deriving context.</p>
+
+<h2 id="howto">0. How to use this document (instructions to the grooming model)</h2>
+<ol>
+  <li><strong>Read the ground-truth sections (1–3) before touching any backlog item.</strong> They encode
+      org facts and codebase facts that are NOT discoverable from the code alone.</li>
+  <li><strong>Follow the existing swarm process for any implementation work.</strong> Read
+      <code>docs/swarm/constitution.md</code>, <code>docs/swarm/task-ledger.md</code>, and the packet format in
+      <code>docs/swarm/active/EXAMPLE-worker-packet.md</code>. Every task gets a scoped worker packet
+      (Allowed Files / Forbidden Files / Traps / Acceptance Criteria) and an <em>independent</em> checker;
+      no worker self-certifies. Continue task IDs from where the ledger leaves off.</li>
+  <li><strong>Constitution rules that most often bite new work</strong> (all BLOCKER-class):
+    database migrations are <em>additive-only</em> (never edit a shipped migration file); metric formulas
+    live in SQL views only, never re-derived in TypeScript; no secrets or service-role keys anywhere in
+    the frontend or committed files; no PII in URLs/logs/fixtures (fabricated names only in tests);
+    UI is Astryx design system only (verify props against <code>docs/swarm/astryx-api.md</code> or the
+    installed source under <code>node_modules/@astryxdesign/core/src/</code> — never guess); motivation
+    mechanics limited to honest progress signals — <em>no streaks, FOMO, countdowns, guilt copy, or
+    re-engagement hooks; users are minors</em>.</li>
+  <li><strong>Ask George before acting</strong> on anything marked "Open product questions." Do not resolve
+      product ambiguity unilaterally.</li>
+  <li><strong>Sizing legend:</strong> S = one small packet; M = 2–5 packets; L = an epic (5–15 packets);
+      XL = multi-epic, needs boss-architect design pass first.</li>
+</ol>
+
+<h2 id="org">1. Organization ground truth (from George, 2026-07-19 — not in any code file)</h2>
+<div class="tablewrap"><table>
+<tr><th>Team</th><th>Program</th><th>Number</th><th>Season schedule</th><th>Venue</th><th>Coached by</th></tr>
+<tr><td>VOLT</td><td>FRC</td><td>11195</td><td>FRC season (Jan–Apr): Tue 6–8pm, Thu 6–8pm, Sat 10am–2pm (start-of-season cadence)</td><td>George's basement</td><td>Adult coaches</td></tr>
+<tr><td>P3 (Polytechnic Puzzle Pieces)</td><td>FTC</td><td>16751</td><td>FTC season: Tue 6–8pm, Sun 3:30–6:30pm</td><td>George's garage/basement</td><td>Adult coaches</td></tr>
+<tr><td>Gear Girls</td><td>FTC</td><td>23469</td><td>FTC season: Thu 6–8pm, Sun 12:30–3:30pm</td><td>George's garage/basement</td><td>Adult coaches</td></tr>
+<tr><td>FLL Teams 1–3 ("library teams")</td><td>FLL</td><td>—</td><td>Tue &amp; Thu 4–6pm</td><td>O'Fallon Public Library</td><td><strong>P3 students</strong></td></tr>
+<tr><td>Flower STEMs</td><td>FLL</td><td>—</td><td>Mon &amp; Thu 4–6pm</td><td>United Methodist Church (Girl Scout teams)</td><td><strong>Gear Girls students</strong></td></tr>
+<tr><td>Lego Ninjas</td><td>FLL</td><td>—</td><td>Mon &amp; Thu 4–6pm</td><td>United Methodist Church (Girl Scout teams)</td><td><strong>Gear Girls students</strong></td></tr>
+</table></div>
+<ul>
+  <li><strong>Dual membership is real:</strong> FTC students (P3, Gear Girls) can <em>also</em> be members of
+      VOLT (FRC). The current schema cannot express this (see §2).</li>
+  <li><strong>Students coach FLL teams.</strong> This is structured, recurring outreach/mentoring — prime
+      FIRST Impact Award material — and is currently untracked.</li>
+  <li><strong>Seasons overlap:</strong> FTC (roughly Sep–Mar) and FRC (Jan–Apr) run concurrently for part of
+      the year; FLL has its own calendar. The schema's single-globally-active-season constraint cannot
+      express this (see §2).</li>
+  <li><strong>Non-coach adult mentors exist today</strong>, tracking hours in a separate system; George
+      explicitly wants this centralized.</li>
+  <li><strong>Scouting/match data is explicitly OUT of scope</strong> — George will build a separate
+      season-specific scouting tool. Do not add scouting features to this app.</li>
+</ul>
+
+<h2 id="code">2. Codebase ground truth (verified in-session, 2026-07-19)</h2>
+<ul>
+  <li><strong>Stack:</strong> Vite + React 18 + TypeScript strict; Astryx design system (no Tailwind/shadcn,
+      per PRD D3); Supabase (Postgres + RLS + Edge Functions: <code>checkin</code>, <code>ics</code>,
+      <code>send-invite</code>, <code>send-reminders</code>); Resend for email
+      (sender <code>notifications@mail.voltfrc.org</code>, domain verified); Vitest + Playwright.</li>
+  <li><strong>Roles:</strong> Postgres enum <code>role_enum = 'admin' | 'coach' | 'student' | 'parent'</code>.
+      No mentor, no student-coach. (Postgres <code>ALTER TYPE ... ADD VALUE</code> is additive and allowed.)</li>
+  <li><strong>Key schema facts</strong> (from <code>supabase/migrations/</code>, 7 files, all applied to the
+      production project):
+    <ul>
+      <li><code>students.team_id</code> is a single required FK — <strong>one team per student</strong>.
+          Blocker for dual membership (item B2).</li>
+      <li><code>seasons</code> has a partial unique index allowing <strong>exactly one active season
+          globally</strong>. Blocker for overlapping FTC/FRC/FLL seasons (item B3).</li>
+      <li><code>teams.program</code> is a <code>check (program in ('FRC','FTC','Other'))</code> constraint —
+          <strong>no 'FLL' value</strong>. Check constraints can't be "extended" additively; an additive
+          workaround (new constraint replacing old via add-new-drop-old in one migration, or classifying
+          FLL as 'Other') needs an explicit decision. Affects item B4.</li>
+      <li>ROS-08's leaderboard-privacy toggle has <strong>no persistence column</strong> (UI works against an
+          injectable seam; T028's checker logged the follow-up: likely
+          <code>seasons.leaderboard_show_full_name boolean not null default true</code>).</li>
+      <li>Metric views <code>v_student_participation</code> / <code>v_student_hours</code> are the only
+          allowed source of metric math (constitution item 3).</li>
+    </ul>
+  </li>
+  <li><strong>Deployment state:</strong> production Supabase project exists; migrations applied; all four Edge
+      Functions deployed; Resend domain verified; <code>RESEND_API_KEY</code> + cron Vault secrets set. As of
+      this writing <code>RESEND_SEND_MODE</code> is <em>not</em> yet flipped to <code>production</code>
+      (T052 human gate, in progress). No Vercel deployment yet (T070 blocked). First admin account created
+      manually (auth user + hand-inserted <code>profiles</code> row).</li>
+  <li><strong>Ledger state:</strong> 78 tasks Passed; human gates T052 (email), T063–T065 (data migration
+      chain), T070 (domain go-live) remain. T085 (shell wiring, see ED-0) in flight at time of writing.</li>
+</ul>
+
+<div class="callout">
+<strong>⚠ THE SINGLE MOST IMPORTANT ENGINEERING FACT (ED-1, P0):</strong> nearly every page still uses its
+<em>fixture-backed default data loader</em>. The pages were built with injectable <code>loadData</code> seams
+(correct architecture), but the follow-up tasks to wire those seams to the real Supabase data layer
+(<code>src/lib/supabase/</code>, T020) were never scoped or dispatched — T020's own packet explicitly declared
+them out of scope ("one small follow-up per page or per epic") and no such tasks were ever created.
+<strong>Consequence: the production app renders fabricated fixture data</strong> (e.g. the dashboard's
+"82.4% participation", "Priya Patel" signups) even when logged in against the real, empty production
+database. Mutations are affected too: e.g. <code>InvitesTab</code>'s resend/revoke default to fixture-backed
+fakes; sending a real invite through the UI will not hit the real <code>send-invite</code> Edge Function until
+wired. <em>Every feature below is cosmetic until ED-1 is done. It also blocks completing T052's email smoke
+test through the UI.</em>
+</div>
+
+<h2 id="debt">3. Known engineering debt (pre-existing, disclosed in the verification log)</h2>
+<div class="tablewrap"><table>
+<tr><th>ID</th><th>Priority</th><th>Item</th><th>Detail / source</th></tr>
+<tr><td>ED-0</td><td>P0</td><td>Shell wiring (T085)</td><td>RosterShell/ReportsShell rendered stale placeholders instead of the real, already-Passed tab components. Fix in flight at time of writing — check the ledger for T085's final status before assuming it landed.</td></tr>
+<tr><td>ED-1</td><td>P0</td><td>Real data wiring, all pages</td><td>See callout above. Suggested shape: one packet per page/epic wiring <code>loadData</code>/mutation seams to <code>src/lib/supabase/</code> loaders; keep fixtures for tests via the same seams. Needs a season-selection decision (pages currently pass a placeholder season id).</td></tr>
+<tr><td>ED-2</td><td>P1</td><td>Missing <code>ParticipationTab.test.tsx</code></td><td>P-COACH2 ("below 70%" persona) was verified with a scratch test that was deleted, never committed (found by T066). No dedicated test file exists.</td></tr>
+<tr><td>ED-3</td><td>P1</td><td>Retry-behavior regression tests</td><td>T082's three non-mechanical retry flows (SeasonSettings activate-retry, SettingsPage avatar-file retry, theme retry) are correct by inspection but have zero dedicated tests.</td></tr>
+<tr><td>ED-4</td><td>P2</td><td>ROS-08 persistence migration</td><td>Additive migration for the leaderboard-privacy column + wire AdminToggles' seam (see §2).</td></tr>
+<tr><td>ED-5</td><td>P2</td><td><code>RequireRole</code> toast-during-render</td><td>Fires <code>pushToast</code> synchronously during render → React 19 console error + StrictMode double-toast (guards.tsx, found by T021's checker; standing risk, never fixed).</td></tr>
+<tr><td>ED-6</td><td>P3</td><td>Small knowns</td><td><code>Kiosk.tsx</code> prettier failure (pre-existing); Skeleton shape NITs (ParticipationTab filter row, MeetingsList two-section coach view); guardian-link relationship not persisted through the invite flow; <code>seasons</code> date-order check is client-side only.</td></tr>
+</table></div>
+
+<h2 id="backlog">4. Product backlog (priority order)</h2>
+
+<div class="item">
+<h3>B1 — Wire the real data layer (= ED-1)<span class="badge P0">P0</span><span class="badge size">L</span></h3>
+<p>Listed here as well as in §3 because it is the true top of the product backlog: nothing below it
+delivers user value until the app shows real data. See the §2 callout for full detail. Groom this first.</p>
+</div>
+
+<div class="item">
+<h3>B2 — Multi-team student membership<span class="badge P0">P0</span><span class="badge size">XL</span></h3>
+<dl>
+<dt>Problem</dt><dd>P3/Gear Girls students can also be VOLT members; <code>students.team_id</code> (single FK) cannot express it. Workaround today would be duplicate student rows — which would double-count hours and fracture attendance history.</dd>
+<dt>Direction</dt><dd>Additive junction table (e.g. <code>student_teams(student_id, team_id, joined_on, left_on)</code>), backfilled from <code>team_id</code>; keep <code>team_id</code> as legacy/primary-team until all readers migrate. Touches: attendance expectations (which team's meeting counts for whom), per-team vs. combined hours credit, leaderboard scoping, reports filters, roster UI (team chips instead of single team column), invite flow.</dd>
+<dt>Open product questions</dt><dd>Do hours earned at a P3 meeting count toward that student's VOLT totals, or are hours strictly per-team? Is there a "primary" team for display purposes? Can parents of a dual-membership student see both teams' calendars (presumably yes)?</dd>
+<dt>Sequencing</dt><dd>Needs boss-architect design pass. Do BEFORE significant real data accumulates (migration cost grows with data). Depends on B1 (pointless while pages show fixtures).</dd>
+<dt>Acceptance seed</dt><dd>A student can belong to ≥2 teams; appears on both rosters; attendance at either team's session credits correctly per the answer to the hours question; leaderboard/report totals do not double-count.</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>B3 — Per-program (or per-team) seasons<span class="badge P0">P0</span><span class="badge size">L</span></h3>
+<dl>
+<dt>Problem</dt><dd>DB enforces exactly one active season globally; FTC, FRC, and FLL calendars overlap. Today, activating the FRC season would deactivate the FTC season mid-competition.</dd>
+<dt>Direction</dt><dd>Additive: add a scope column to <code>seasons</code> (e.g. <code>program</code> or <code>team_id</code>), replace the single partial unique index with a per-scope one (new index + drop old in one additive migration — index changes are not "editing a shipped migration"). Season-picker UI follows; note every report/tab currently receives one <code>seasonId</code> prop — the threading exists, only the selection source changes.</dd>
+<dt>Open product questions</dt><dd>Scope seasons per <em>program</em> (one FTC season shared by P3 + Gear Girls) or per <em>team</em>? Per-program is simpler and matches FIRST's structure; per-team allows different goal-hours per team — but <code>students.goal_hours_override</code> already handles individual variance.</dd>
+<dt>Sequencing</dt><dd>Decide alongside B2 (both are "before real data accumulates" schema decisions). Same boss-architect pass can cover both.</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>B4 — Student-coach role + FLL team support<span class="badge P1">P1</span><span class="badge size">XL</span></h3>
+<dl>
+<dt>Problem</dt><dd>Five FLL teams are coached by P3/Gear Girls students at external venues on their own schedules. None of this is in the app: FLL isn't a valid <code>teams.program</code> value, students can't run check-in or manage a team, and the coaching hours (structured outreach, Impact Award gold) go untracked.</dd>
+<dt>Direction</dt><dd>(a) Add FLL as a program value (see §2 for the check-constraint trap). (b) New <code>coaching_assignments</code> table (student ↔ team they coach). (c) A capability model: a student-coach gets coach-like powers <em>scoped to their assigned FLL team only</em> (run check-in/kiosk, mark sessions complete) without global coach powers — this is a real authorization design decision (RLS policies must enforce the scoping, not just UI). (d) Auto-credit: an FLL session run by a student-coach credits that student outreach/volunteer hours on their own team's ledger.</dd>
+<dt>Open product questions</dt><dd>Do FLL team members themselves get accounts (they're likely too young — COPPA/consent concern; probably the FLL teams exist as teams with sessions but WITHOUT student-member accounts, and only attendance <em>counts</em> are recorded, no rosters)? Who confirms a student-coach's hours — an adult coach approval step?</dd>
+<dt>Traps</dt><dd>Constitution: users are minors, no PII — FLL kids' names should probably never enter the system at all. RLS changes are BLOCKER-class review territory; checker must verify policies with a real scratch-Postgres harness like T012/T014 did (<code>supabase/tests/</code> has the precedent).</dd>
+<dt>Sequencing</dt><dd>After B2/B3 (it builds on team-scoping and per-program seasons). Boss-architect pass required for the authorization model.</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>B5 — Mentor role + central mentor hours<span class="badge P1">P1</span><span class="badge size">L</span></h3>
+<dl>
+<dt>Problem</dt><dd>Non-coach adult mentors track hours in a separate system; George wants it centralized. Grant applications and Impact Award submissions ask for mentor-hour numbers.</dd>
+<dt>Direction</dt><dd><code>ALTER TYPE role_enum ADD VALUE 'mentor'</code> (additive-safe). Mentors check in via the existing kiosk flow (machinery exists); appear in a mentors section of roster; hours roll up per team/season in reports. Decide what mentors can SEE (probably: their own hours + team calendar; NOT student PII beyond first names — SEC-02 posture). RLS policies needed for the new role everywhere (audit every existing policy that enumerates roles — <code>is_staff()</code> etc. — for whether mentor belongs).</dd>
+<dt>Open product questions</dt><dd>Do mentors self-register or get invited like parents? Do mentor hours need coach approval, or is kiosk check-in trusted?</dd>
+<dt>Acceptance seed</dt><dd>A mentor can be invited, check in at a meeting, and a coach can export "mentor hours by team for season X".</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>B6 — Venues on meetings/events<span class="badge P1">P1</span><span class="badge size">S</span></h3>
+<dl>
+<dt>Problem</dt><dd>Five regular venues (garage, basement, O'Fallon Public Library, United Methodist Church, competition sites); events have no location field; parents can't see where to go from calendar feeds or reminder emails.</dd>
+<dt>Direction</dt><dd>Additive <code>events.location</code> (or a small venues table if reuse is wanted); surface in event dialogs, detail pages, the ICS feed (<code>LOCATION</code> property — <code>supabase/functions/ics/location.ts</code> already exists as the seam), and reminder-email templates. Cheap, immediately useful, no schema controversy.</dd>
+<dt>Sequencing</dt><dd>Can go anytime; a good first packet for a new grooming session to calibrate on. Best right after B1 so it's visible with real data.</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>B7 — Parent volunteer signups<span class="badge P2">P2</span><span class="badge size">M</span></h3>
+<dl>
+<dt>Problem</dt><dd>Parents can only view + RSVP for their student. Build nights need food, competitions need transport/chaperones — coordinated off-app today.</dd>
+<dt>Direction</dt><dd>Volunteer-slot concept on events (slot name, count needed, sign-up), reusing the outreach signup mechanics/UI patterns. Parent home page gets a "help needed" section. Reminder emails include committed slots.</dd>
+<dt>Open product questions</dt><dd>Slots freeform per event, or a reusable catalog (food/transport/chaperone)? Can students sign up for volunteer slots too?</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>B8 — Impact Award / grant reporting export<span class="badge P2">P2</span><span class="badge size">M</span></h3>
+<dl>
+<dt>Problem</dt><dd>Outreach data (events, hours, signups — plus B4's student-coaching and B5's mentor hours once they exist) is exactly what FIRST Impact Award essays and grant applications need, but there's no aggregated export.</dd>
+<dt>Direction</dt><dd>A report tab or export: season-scoped totals (outreach events run, unique students participating, student outreach hours, people-reached if captured, mentor hours, FLL-coaching sessions). CSV export precedent exists (<code>src/pages/reports/csvExport.ts</code>). Metric math in SQL views only (constitution item 3) — new aggregates mean new additive views.</dd>
+<dt>Sequencing</dt><dd>Value multiplies after B4/B5 land; a minimal version (existing outreach data only) can ship anytime after B1.</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>B9 — Program-level cross-team dashboard<span class="badge P2">P2</span><span class="badge size">M</span></h3>
+<dl>
+<dt>Problem</dt><dd>George (admin over the whole program) sees one team at a time; no rollup of participation/hours/outreach across VOLT + P3 + Gear Girls (+ FLL later).</dd>
+<dt>Direction</dt><dd>An admin-only view aggregating the existing per-team metrics across teams, season-scoped. Depends on B3's season model to be meaningful across programs. Read-only; low schema impact (new views only).</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>B10 — Build-season task board<span class="badge P2">P2</span><span class="badge size">XL</span></h3>
+<dl>
+<dt>Problem</dt><dd>The app tracks who showed up but not what got done. Subsystem/task tracking (owners, due dates, status) would connect attendance to output. Ironically the repo is named "task tracker" and this is the one thing it doesn't do.</dd>
+<dt>Direction</dt><dd>Genuinely new domain (tasks, assignments, statuses) — needs its own boss-architect design pass and PRD-style spec from George before any grooming. Resist scope creep toward a full PM tool; the value is "what is blocking the robot this week," not Jira.</dd>
+<dt>Constitution note</dt><dd>Task-assignment UI must stay within motivation-ethics rules: no deadline-pressure mechanics aimed at students, no public shame boards. Progress signals must stay honest and neutral.</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>B11 — Tool/safety certification tracking<span class="badge P3">P3</span><span class="badge size">M</span></h3>
+<dl>
+<dt>Direction</dt><dd>Per-student certification records (tool, certified-on, certified-by), coach-managed, surfaced on the roster student detail. Simple additive table + roster UI. Useful for shop safety audits.</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>B12 — Announcements feed<span class="badge P3">P3</span><span class="badge size">M</span></h3>
+<dl>
+<dt>Direction</dt><dd>Coach-posted announcements, role/team-targeted, shown on home pages, optionally included in the existing weekly digest email rather than a new send (reuses T051's infrastructure; keeps email volume down). Read-receipts only if genuinely needed — that's surveillance-adjacent for minors; default to not tracking reads.</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>B13 — Inventory / purchase requests / budget<span class="badge P3">P3</span><span class="badge size">XL</span></h3>
+<dl>
+<dt>Direction</dt><dd>Parts inventory, purchase-request workflow, per-season budget tracking. Big, separate domain; validate demand before designing (does George actually want this in-app, or is a spreadsheet fine?). Do not groom without an explicit go-ahead.</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>B14 — Season-over-season analytics + alumni tracking<span class="badge P3">P3</span><span class="badge size">L</span></h3>
+<dl>
+<dt>Direction</dt><dd>Retention rate, participation by grad-year cohort, alumni list (for mentor pipeline — feeds B5). Coach/admin-facing only. Early-disengagement signals go to coaches, never to students (motivation-ethics rule). Needs ≥2 seasons of real data to be worth building — schedule accordingly.</dd>
+</dl>
+</div>
+
+<div class="item">
+<h3>B15 — Sponsor management<span class="badge P3">P3</span><span class="badge size">M</span></h3>
+<dl>
+<dt>Direction</dt><dd>Sponsor list, contact log, deliverables owed (logo placements, demo visits, thank-yous), per-season. Adult-facing only; zero student involvement, so low constitution risk. Validate demand first.</dd>
+</dl>
+</div>
+
+<h2 id="notes">5. Cross-cutting grooming notes</h2>
+<ul>
+  <li><strong>Recommended sequencing spine:</strong> B1 (real data) → B2+B3 together (schema decisions, one
+      boss-architect pass) → B6 (quick win) → B5 → B4 → B8 → the rest by demand. Human gates T052/T063–T065/T070
+      proceed in parallel with George.</li>
+  <li><strong>Anything touching RLS or roles</strong> must be checker-verified against a real scratch Postgres
+      (precedent: <code>supabase/tests/run.sh</code>, T012/T014 methodology in the verification log), not just
+      unit tests.</li>
+  <li><strong>Email changes</strong> stay behind the fail-closed <code>RESEND_SEND_MODE</code> mechanism; test
+      mode is the default everywhere; production sending is a George-only decision (constitution item 16).</li>
+  <li><strong>When in doubt about a product question, stop and ask George.</strong> The Open-product-questions
+      lists above are genuinely open — none have been answered yet unless a newer document says otherwise.</li>
+</ul>
+
+</main>
+</body>
+</html>

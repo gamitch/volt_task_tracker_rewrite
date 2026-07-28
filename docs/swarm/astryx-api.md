@@ -1839,6 +1839,12 @@ Button triggers an action when clicked. Use it for form submissions, confirmatio
 | `--button-focus-offset` | `3px` | Focus ring outline offset |
 | `--button-icon-only-aspect` | `1 / 1` | Aspect ratio for icon-only buttons |
 
+> **[D005 ANNOTATION — verified against installed `@astryxdesign/core@0.1.6` source, 2026-07-19.** The vendor text above is unmodified; this note documents behavior the tables omit. See `docs/swarm/dispute-log.md` D005.]
+>
+> **Primary/variant text color is theme-token-driven, not exposed as a Button CSS variable.** `variant="primary"` renders `backgroundColor: var(--color-accent)` and `color: var(--color-on-accent)` (installed source: `src/Button/Button.tsx` lines 163–165; the loading-spinner border also uses `--color-on-accent`, lines 493–496). `--color-on-accent` is additionally consumed by Badge (`variant="info"`), CheckboxInput (checked mark), RadioListItem (selected inner dot), and NavIcon — overriding it re-colors all of them consistently.
+> **Derivation trap:** when a theme supplies `color: { accent }`, `expandColorScale` bakes `--color-on-accent` as a resolved hex — light = P[100], dark = P[20] of the seed's HCT tonal palette — computed against the *derived* accent (`P[40]`/`P[80]`), and deliberately does NOT re-derive it when a raw `tokens: { '--color-accent': [...] }` override changes the actual accent (source comment, `src/theme/expandColorScale.ts` lines 126–129: "--color-on-accent stays baked: it is a contrast computation against the accent, which CSS cannot express"). A raw accent override that departs from the derived value can therefore silently break WCAG contrast between the two tokens.
+> **Sanctioned fix:** `--color-on-accent` is a valid `defineTheme` tokens key — it is a member of `colorDefaults` (`src/theme/tokens.stylex.ts` line 27) and thus of the typed `TokenName` union accepted by `tokens?: Partial<Record<TokenName, TokenValue>>`; explicit `tokens` entries are applied at highest precedence over the baked derivation (`src/theme/defineTheme.ts`, step 2). Supplying e.g. `'--color-on-accent': ['#FFFFFF', '#00008D']` is a documented, non-hallucinated usage (D005-authorized for this project's `volt.ts`).
+
 -e 
 ---
 
@@ -2584,7 +2590,7 @@ function Layout({ children, sidebar }) {
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `children` | `ReactNode` | — | Main content area, rendered inside a <main> element. |
+| `children` | `ReactNode` | — | Main content area. **[VOLT project annotation — T128, verified against the installed `@astryxdesign/core` shipped source (`node_modules/@astryxdesign/core/src/AppShell/AppShell.tsx` + `src/Layout/LayoutContent.tsx`), not vendor prose. The vendor text originally claimed this renders "inside a `<main>` element"; the installed source renders it as a plain `<div role="main">` (AppShell passes `role="main"` to `LayoutContent`, which is `<div role={role} ...>` — never a semantic HTML5 `<main>` tag). Corrected here per T123's own finding (`src/app/AppShell.test.tsx` module doc).]** |
 | `contentPadding` | `0 | 0.5 | 1 | 1.5 | 2 | 3 | 4 | 5 | 6 | 8 | 10` | `0` | Padding for the main content area. Set based on the dominant content pattern: 4 (16px) for forms/settings/text, 0 for dashboards/maps/tables. Override individual sections with Section. |
 | `topNav` | `ReactNode` | — | Top navigation slot, typically TopNav. |
 | `sideNav` | `ReactNode` | — | Side navigation slot, typically SideNav. |
@@ -2593,6 +2599,23 @@ function Layout({ children, sidebar }) {
 | `height` | `'fill' | 'auto'` | `'fill'` | Height behavior: 'fill' makes the shell fill the viewport (100dvh) with independent scroll containers; 'auto' lets the shell grow with content and uses sticky positioning for nav. |
 | `variant` | `'wash' | 'surface' | 'section' | 'elevated'` | `'elevated'` | Navigation background style controlling how nav areas contrast with content. 'wash' uses wash background, 'surface' uses surface background, 'section' adds dividers between nav and content, 'elevated' uses wash nav with elevated surface content and border radius. |
 | `xstyle` | `StyleXStyles` | — | StyleX styles for layout customization (margins, positioning, sizing). Must be a stylex.create() value, not an inline style object like style={{}}. |
+
+> **[VOLT project annotation — D004 (docs/swarm/dispute-log.md), boss-arbiter, 2026-07-18. Verified against the installed `@astryxdesign/core@0.1.6` shipped source (`node_modules/@astryxdesign/core/src/AppShell/AppShell.tsx`), not vendor prose. The vendor text above is left unmodified.]**
+>
+> The `mobileNav` row above is incomplete, and the ReactNode example above (`mobileNav={<MobileNav title="Menu">...</MobileNav>}`) is **non-functional when combined with `MobileNavToggle`** in v0.1.6. The installed source computes `mobileNavEnabled = !mobileNavDisabled && hasNavContent && mobileNavReactNode == null` — the ReactNode shorthand is a "you own everything" escape hatch that disables AppShell's context state entirely: `MobileNavToggle` renders `null` and `openMobileNav()`/`toggleMobileNav()` become no-ops. With the shorthand you must manage `isOpen`/`onOpenChange` and your own trigger manually (see the source's own example and the CLI template `MobileNavToggleBasic`).
+>
+> To keep AppShell's context-managed open state with custom drawer content, use the **`MobileNavConfig` object form**. Verified v0.1.6 fields (source: `interface MobileNavConfig`):
+>
+> | Field | Type | Default | Description (verified from source) |
+> |------|------|---------|-----------------------------------|
+> | `hasToggle` | `boolean` | `true` | Auto-render the hamburger toggle. When `false`, place `<MobileNavToggle />` yourself. Caveat: below the breakpoint, TopNav renders in "mobile-bar" mode, which renders only `heading` + `endContent` + the auto toggle — `startContent`/`centerContent` are NOT rendered there, so a `startContent`-placed toggle never appears. |
+> | `isOpen` | `boolean` | — | Controlled open state; when provided, AppShell stops managing state internally. |
+> | `onOpenChange` | `(isOpen: boolean) => void` | — | Open-state change callback. |
+> | `content` | `ReactNode` | — | Custom drawer content (e.g. a `<MobileNav>`); replaces the auto-generated drawer. Context-managed when `isOpen` is not supplied on the inner `MobileNav`. |
+> | `breakpoint` | `'sm' \| 'md' \| 'lg' \| 'none'` | `'md'` | Breakpoint below which mobile nav activates (`sm`=640px, `md`=768px, `lg`=1024px). |
+> | `defaultIsMobile` | `boolean` | `false` | SSR hint seeding the initial breakpoint state. |
+>
+> **Sanctioned usage for this project** (per D004): `mobileNav={{ content: <MobileNav header="...">...</MobileNav> }}` — the drawer opens via the toggle Astryx TopNav auto-injects in mobile-bar mode below the breakpoint.
 
 ## Theming
 
@@ -4696,6 +4719,8 @@ undefined
 # MobileNav
 
 A slide-out drawer for mobile navigation. MobileNav is the mobile counterpart to SideNav and accepts the same children. Use it on narrow viewports where a persistent sidebar is not practical. Inside AppShell, use MobileNavToggle as the trigger; it reads state from context automatically.
+
+> **[VOLT project annotation — D004]** The first example below (`<AppShell mobileNav={<MobileNav ...>}>`) does NOT work with `MobileNavToggle` in the installed v0.1.6 — the ReactNode shorthand disables AppShell's context state, making the toggle render `null`. Use `mobileNav={{ content: <MobileNav ...> }}` instead; see the D004 annotation in this file's AppShell section (after the AppShell Props table) for the verified `MobileNavConfig` fields, and `docs/swarm/dispute-log.md` D004 for the full ruling.
 
 ## Example
 

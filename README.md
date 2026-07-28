@@ -5,21 +5,21 @@ A reusable project starter for running structured multi-agent development workfl
 ## Architecture
 
 ```
-Boss Architect (opus)
+Boss Architect (fable)
 │  Defines the constitution and makes all architectural decisions
 │
 ├── Foreman Planner (sonnet)
 │   Converts the ledger into compact per-task packets
 │
-├── Worker Implementer (haiku)
+├── Worker Implementer (sonnet)
 │   Implements one task at a time; cannot self-certify
 │
-├── Checker Reviewer (sonnet)    ← reviews against acceptance criteria
+├── Checker Reviewer (opus)      ← reviews against acceptance criteria
 ├── Checker Tests (haiku)        ← runs lint, typecheck, tests, build
 ├── Checker Accessibility (sonnet) ← a11y, contrast, focus, dark mode
 ├── Checker Content (sonnet)     ← facts, quotes, protected text fidelity
 │
-└── Boss Arbiter (opus)
+└── Boss Arbiter (fable)
     Resolves worker/checker disputes after 3 failed attempts
 ```
 
@@ -126,7 +126,7 @@ SWARM-QUICKSTART.md          # Full reference guide
 ## Requirements
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (latest)
-- An Anthropic API key with access to opus, sonnet, and haiku models
+- An Anthropic API key with access to opus, sonnet, haiku, and fable models
 
 ## License
 

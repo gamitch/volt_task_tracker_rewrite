@@ -1,0 +1,86 @@
+-- T104 (ED-1 Packet P11): closes the leaderboard-privacy schema gap two
+-- already-Passed tasks (T028 `AdminToggles.tsx`, T044 `Leaderboard.tsx`)
+-- each independently investigated and disclosed -- both confirmed, via a
+-- direct grep of every migration file, that no privacy-shaped column
+-- existed anywhere in the schema as of their own dispatch. See this
+-- migration's own worker packet (`docs/swarm/active/T104-worker-packet.md`)
+-- for the full investigation this comment summarizes.
+--
+-- Additive-only (constitution item 10): a single `alter table ... add
+-- column` against the existing `public.seasons` table (created by
+-- 20260716000000_identity_roster.sql, lines 42-50). No existing migration
+-- file is modified by this one.
+--
+-- -----------------------------------------------------------------------
+-- Column placement -- `seasons`, not `teams` (re-verified independently,
+-- not taken on T028's word alone):
+--   1. `seasons` already carries the one other roster-adjacent per-period
+--      configurable value in this schema (`default_goal_hours`) -- the
+--      same precedent T028's own disclosure cited.
+--   2. `Leaderboard.tsx` (T044, already Passed) renders exactly ONE top-10
+--      list per season -- never split or filtered per team -- so a
+--      per-team value would have no single, unambiguous leaderboard-wide
+--      reading for that one list to apply; a per-season value maps 1:1
+--      onto the one leaderboard that value governs.
+--   3. ROS-08 frames this as an admin-set, program-wide preference ("Show
+--      first name + last initial publicly"), not something PRD 6.8 ever
+--      describes as varying by team within the same leaderboard.
+--
+-- -----------------------------------------------------------------------
+-- Column name -- DEVIATES from T028's own guessed name
+-- (`leaderboard_show_full_name`, disclosed in that task's own module doc),
+-- a documented, evidence-based deviation, not a stylistic preference:
+--
+-- T028's guess predates T044's later, independently-confirmed real
+-- semantics for this exact toggle. `AdminToggles.tsx`'s own shipped
+-- `Switch` description states the real, checker-verified behavior
+-- verbatim: "Controls whether leaderboard and kiosk surfaces display
+-- students' full first name plus last initial, OR A FULLY ANONYMIZED
+-- IDENTIFIER." `Leaderboard.tsx`'s own `formatDisplayName` implements
+-- exactly that: the toggle's ON state renders "First L." (first name plus
+-- a single capital initial, never the full last name); its OFF state
+-- renders a fixed, non-identifying label (`ANONYMIZED_STUDENT_LABEL`),
+-- never any part of the real name at all. SEC-04 explicitly prohibits
+-- last names on this surface in EITHER state -- a full name is never
+-- revealed by this boolean, in either position. A column literally named
+-- `leaderboard_show_full_name` would therefore misdescribe what it gates
+-- (implying `true` reveals a complete name, which never happens), and
+-- `false` would misleadingly read as "don't show the full name" when the
+-- real OFF behavior is stricter (fully anonymized), not merely "less
+-- than full."
+--
+-- This migration instead names the column `leaderboard_privacy_enabled`,
+-- for two independently-sufficient reasons:
+--   1. It matches the boolean vocabulary (`privacyOn` / `isPrivacyOn` /
+--      `LoadPrivacySettingFn`) both already-Passed consuming files
+--      independently converged on, with zero semantic translation needed
+--      in the loader that reads/writes it.
+--   2. It matches this schema's own existing "<domain>_enabled" naming
+--      convention for a comparable per-user/per-scope preference toggle:
+--      `notification_prefs.digest_enabled`
+--      (20260717000001_support_audit.sql, line 41).
+--
+-- -----------------------------------------------------------------------
+-- Default -- `not null default true`, matching SEC-04/ROS-08's explicitly
+-- stated default: "Show first name + last initial publicly (default on)".
+alter table public.seasons
+  add column leaderboard_privacy_enabled boolean not null default true;
+
+-- -----------------------------------------------------------------------
+-- RLS -- deliberately NO new policy added by this migration (re-verified,
+-- not assumed): `supabase/migrations/20260717000002_rls.sql`'s existing
+-- `seasons` policies operate at ROW level with no column-level grants
+-- anywhere in this schema (grep-confirmed: `grant`/`column privileges` do
+-- not appear in any migration file), so a new column on an already-RLS-
+-- covered table automatically inherits the same row-level policies for
+-- that column too, with no separate migration step required:
+--   - `staff_all` (`for all ... using (is_staff()) with check (is_staff())`)
+--     already permits any admin OR coach to write this new column, matching
+--     every other `seasons` write in this codebase (e.g. `updateSeason`,
+--     `setActiveSeason` in `src/lib/supabase/loaders/seasons.ts`) --
+--     `AdminToggles.tsx`'s own UI-level admin-only gate is stricter than
+--     this RLS floor by design (that file's own module doc #5 already
+--     discloses this as a deliberate UI-vs-RLS distinction, not a gap).
+--   - `read_all` (`for select ... using (true)`) already permits any
+--     authenticated user to read this new column, matching OUT-08's "all
+--     roles" leaderboard visibility requirement for `Leaderboard.tsx`.

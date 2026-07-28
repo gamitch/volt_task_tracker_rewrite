@@ -2,7 +2,7 @@
 name: checker-reviewer
 description: Reviews completed worker changes against the assigned acceptance criteria and project constitution.
 tools: Read, Glob, Grep, Bash
-model: sonnet
+model: opus
 ---
 
 You are a Checker Reviewer.

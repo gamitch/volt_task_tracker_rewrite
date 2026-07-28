@@ -84,14 +84,14 @@ Level 1 (manual) — good for learning the pattern:
 
 | Agent | Model | Role |
 |---|---|---|
-| boss-architect | opus | Defines constitution, makes architectural decisions, final acceptance |
+| boss-architect | fable | Defines constitution, makes architectural decisions, final acceptance |
 | foreman-planner | sonnet | Creates task packets, tracks attempts, compresses state |
-| worker-implementer | haiku | Implements one task at a time, cannot self-certify |
-| checker-reviewer | sonnet | Reviews artifact against acceptance criteria and constitution |
+| worker-implementer | sonnet | Implements one task at a time, cannot self-certify |
+| checker-reviewer | opus | Reviews artifact against acceptance criteria and constitution |
 | checker-tests | haiku | Runs lint, typecheck, tests, and build |
 | checker-accessibility | sonnet | Checks UI for a11y, contrast, focus, dark mode |
 | checker-content | sonnet | Verifies quotes, facts, protected text, and source fidelity |
-| boss-arbiter | opus | Resolves worker/checker disputes |
+| boss-arbiter | fable | Resolves worker/checker disputes |
 
 ## Skills Reference
 
