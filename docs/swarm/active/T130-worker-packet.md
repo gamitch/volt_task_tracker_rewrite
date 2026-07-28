@@ -28,6 +28,17 @@ that layout; `Grid` is equal-width-only; `StackItem` is `'static'|'fill'`.
 **Do NOT write custom CSS or `xstyle`** — StyleX is compile-time, this app has
 no StyleX plugin, and `stylex.create()` throws at runtime (F-2, verified).
 
+### In-repo precedents — read these before writing anything
+- `src/pages/roster/StudentsTab.tsx:998-1049` — `Table` with `pixel()`,
+  `proportional()`, `renderCell` returning `Badge`/`Text`/`MoreMenu`
+- `src/pages/reports/ParticipationTab.tsx:305-327` — imports and column types
+- `src/pages/reports/ParticipationTab.tsx:984-998` — the `Section`+`Table` JSX
+
+**All three cover the column API only.** No file in this repo uses row grouping
+or row expansion in a `Table` — the two hardest parts of this packet have **zero
+in-repo precedent**, which is exactly why T131 inherits whatever you establish.
+Document your choices as decisions, not as conventions you followed.
+
 ### Structure — Section + one Table per group (NOT the Table plugins)
 `useTableGroupedRows` and `useTableRowExpansion` are real in installed source
 but have **zero occurrences in `docs/swarm/astryx-api.md`**. Constitution item 2
@@ -36,9 +47,14 @@ is in force: *"A prop absent from that file is presumed hallucinated → MAJOR."
 bounds** — `ParticipationTab.tsx:130-137` and `EventsTab.tsx:217-226`. A packet
 cannot override the constitution, so:
 
-Use the precedent those two tasks established: **one `Section` per group
+Use the precedent **`ParticipationTab`** established: **one `Section` per group
 (Upcoming / Past), each containing a real `Heading level={2}` and one
-independent `<Table>`.** See `ParticipationTab.tsx:137-147` for the exact shape.
+independent `<Table>`.** Copy the shape from **`ParticipationTab.tsx:984-998`**
+— that is the actual JSX (`<Section dividers={['bottom']}><VStack gap={3}>
+<Heading level={2}/><Table data columns idKey density dividers hasHover/>
+</VStack></Section>`). *(EventsTab shares only the plugin ruling; it uses a
+single flat Table because RPT-04 named no grouping key, so it is not the
+grouping precedent.)*
 
 - This also resolves the heading question: **you own the coach section headings
   now** (T129 was descoped from `CoachOutreachSection`). Each Section keeps one
@@ -55,7 +71,19 @@ Compute the rendered row list yourself: when a row is expanded, splice its
 session-detail rows into the `data` array beneath it (same row type, discriminated
 by a `kind` field your `renderCell`s switch on). This needs no plugin and no
 `colSpan`. The free-text "Going: Priya, Devon" line (`OutreachList.tsx:2033`)
-renders as the child row's **title-column** content.
+renders as the child row's **title-column** content; non-title columns return
+`null` for child rows.
+
+**Row-type constraint:** `Table`'s generic is `T extends Record<string, unknown>`,
+so declare the union members as
+`export interface XRow extends Record<string, unknown>` — the established idiom
+at `ParticipationTab.tsx:361` and `SeasonSettings.tsx:349`. A plain `interface`
+will not satisfy the constraint. `idKey` accepts a function, so mixed row kinds
+can be keyed.
+
+**Expander a11y:** `Button` spreads rest props (`Button.tsx:547,739`), so put
+`aria-expanded={isExpanded}` and `aria-controls` on it — required, since the
+expander now controls rows injected into the same `<tbody>`.
 
 ### Columns
 `[expander] [date + weekday chips] [title + location] [planned/logged]
@@ -80,6 +108,12 @@ T131 and W5-P4 inherit exactly what is already on screen:
 - `KpiStrip.tsx:313-330`, `CoachHome.tsx:1786-1791` — label / value / secondary
 
 Put the extracted component under `src/components/` and name it for reuse.
+
+**Out of scope:** do **not** refactor `GoalProgressBar` (1758-1835) to consume
+the new component. It is rendered by both the coach view (`:2366`) and the
+student/parent view (`:2747` — forbidden to you), and its output is pinned by
+`OutreachList.test.tsx:1296-1297` ("9 hrs confirmed" / "7 hrs planned"). Extract
+*from* its shape; leave the component itself alone.
 
 ### UXC-04 — ONLY the expander violates
 **Corrected scope.** `Edit` (`OutreachList.tsx:1980-1986`) and `Cancel`
@@ -119,6 +153,13 @@ Note: this page renders **4** coach outreach events (5 fixtures exist;
 State and implement small-screen behavior below 768px (which columns drop or
 collapse, how a row reads on a phone). No horizontal page scroll at 375px; no
 control below a 44px touch target.
+
+**Escalation you will hit:** there is no CSS/`xstyle` available (F-2) and Astryx
+exports **no** breakpoint hook — `astryx-api.md` has zero `useMediaQuery`/
+`useBreakpoint`. The only viable mechanism is `window.matchMedia` with a real
+subscription; in-repo precedent at `CheckinResult.tsx:358-375`. (Note
+`LiveConsole.tsx:351` records a prior deliberate *non*-use, so state your
+reasoning.) This is pre-authorized — you do not need to stop and ask.
 
 **How to capture screenshots** (the route is `RequireAuth`-guarded and there is
 no session-injection seam for a real browser — `playwright.config.ts` documents
@@ -171,18 +212,24 @@ Capture before/after at 1440px and 375px in both themes; add the new figures to
 4. Astryx props from `astryx-api.md`; where it is silent, stop and flag rather
    than assuming installed source wins (see the Structure section — that is
    exactly what took the plugins off the table).
-5. Only **two** test assertions are pre-authorized for change: the expander at
-   `:1024`. Everything else in that file must stay green. `OutreachList.test.tsx`
-   is **67/67 passing** right now — that is your baseline.
+5. **Exactly one** test assertion is pre-authorized for change: the expander at
+   `OutreachList.test.tsx:1024`. Everything else in that file must stay green.
+   It is **67/67 passing** right now — that is your baseline. Sibling T129 may
+   touch student-section assertions in the same file; coordinate by keeping your
+   own edits to coach-section assertions only.
 6. Sibling T129 edits the **student** section of this file concurrently.
    Attribute noise honestly; never `git stash`.
 
 ## Required Output
 Full diff; column definitions with width choices and the shared `buildColumns()`
-factory; the expansion implementation; proof of column alignment — assert every
-`<td>` in a column carries an identical resolved width across all rows (jsdom
-returns zeros for geometry, so this structural assertion is the measurable
-form); measured collapsed row height from the preview rig; before/after
+factory; the expansion implementation; **proof of column alignment** — jsdom
+returns zeros for geometry, and `<td>` never receives a width at all (widths are
+applied only to `<th>`, `BaseTable.tsx:405-407`, under `tableLayout: 'fixed'` at
+`:54`), so assert instead: (i) each column's `<th>` carries the expected inline
+`width`/`minWidth`, (ii) those `<th>` style strings are **byte-identical between
+the Upcoming and Past tables**, (iii) `tableLayout: 'fixed'` is set on both
+`<table>`s, and (iv) every body `<tr>` has the same `<td>` count in the same
+column order; measured collapsed row height from the preview rig; before/after
 screenshots at 1440px and 375px in both themes; explicit proof each of Trap 2's
 eight behaviors is unchanged; confirmation the throwaway preview files were
 deleted; gate output (tsc, eslint 0 errors, full vitest, build, prettier);

@@ -35,17 +35,48 @@ line numbers were re-checked, use them:
 yours** — T130 is replacing that whole `List` with a `Table` and will
 re-establish its heading. Do not touch `CoachOutreachSection`.
 
-**CRITICAL — the obvious fix is wrong.** Do NOT drop `header` and pass
-`aria-label`: `List` destructures a closed prop set and never spreads rest props
-(`dist/List/List.js:81-93`), so `aria-label` type-checks and is **silently
-discarded at runtime**. `List.tsx:169` sets `aria-labelledby` *only when
-`header != null`* — a headerless `List` ends up with **no accessible name at
-all** (constitution item 15 regression).
+**There are two wrong ways to fix this. Read both before you start.**
 
-Per site use **(a)** keep the `List header` as the single visible title and
-delete the outer `Heading`, or **(b)** wrap in a labelled `Section`/region and
-drop the `header`. Prefer (a). Verify the **computed accessible name**, not the
-markup.
+**Wrong fix #1 — drop `header`, add `aria-label`.** `List` destructures a closed
+prop set and never spreads rest props (`dist/List/List.js:81-93`), so
+`aria-label` type-checks and is **silently discarded at runtime**. `List.tsx:169`
+sets `aria-labelledby` *only when `header != null`* — a headerless `List` ends up
+with **no accessible name at all** (constitution item 15 regression).
+
+**Wrong fix #2 — delete the outer `Heading`, keep the `header`.** Every one of
+these sites has the shape:
+
+```
+<VStack gap={3}>
+  <Heading level={2}>Next up</Heading>
+  {rows.length === 0 ? <EmptyState … /> : <List header="Next up"> … </List>}
+</VStack>
+```
+
+The `List header` renders **only in the non-empty branch**. Deleting the
+`Heading` therefore strips the section title — and its accessible name — from
+every **empty** state. On CoachHome that leaves five untitled `EmptyState`s
+stacked between `<Divider/>`s. Same failure as #1, just relocated.
+
+**Do this instead (the default):** keep the `Heading`, remove the `header` prop,
+and give the `List` its accessible name from the heading — wrap in a `Section`
+(or equivalent) carrying `aria-labelledby={headingId}` with a `useId`-generated
+id on the `Heading`. Unlike `List`, **`Section` does spread rest props**
+(`Section.tsx:239,268`), so the attribute genuinely lands. `useId` is already
+used across this repo.
+
+**Three sites need extra care:**
+- `CoachHome.tsx:2401-2409` and `LiveConsole.tsx:1086-1104` — the `Heading` is a
+  flex sibling of a control inside `HStack hAlign="between"`. Removing or moving
+  it collapses that layout.
+- `CoachHome.tsx:2402` — the `Heading` reads "Goal projection · confirmed +
+  planned" while the header reads only "Goal projection". Keep the fuller
+  wording; it carries BEH-02's confirmed-vs-planned framing.
+
+**Verify the computed accessible name, not the markup.** jsdom has no
+accessible-name computation, so the practical assertion is: resolve the list's
+`aria-labelledby` to its element and assert that element's `textContent` is the
+expected title — and assert it holds in the **empty** branch too.
 
 Not duplicates — leave alone: `CalendarPage.tsx:829`, `Leaderboard.tsx:519`,
 `EndMeetingDialog.tsx:880`, `ParentHome.tsx:1194/1203` (wording genuinely
@@ -85,13 +116,17 @@ Rewrite each in plain language a coach or student would understand.
 (`expect(container.textContent).toContain('T037')`). Updating that assertion is
 **pre-authorized** — do it in the same change.
 
+*(Twelve bullets, eleven **rendered** strings — `LiveConsole:111` is a module
+doc, not user-facing. Fix it anyway; it misleads the next reader.)*
+
 **Explicitly out of scope** (do not "fix", do not dispute):
 `src/pages/checkin/CheckinResult.tsx:453-455` (gated by `isDevBuild()`, never
 user-visible in production) and `src/pages/home/StudentHomeSlot.tsx:52` (dead
 code — `StudentHome.tsx:47-49` documents it is never mounted).
-`HoursTab.tsx:202`, `csvExport.ts:12`, `ParticipationTab.tsx:104` carry the same
-stale createClient claim in module docs but are outside Allowed Files — note
-them for follow-up, do not edit.
+`HoursTab.tsx:202` and `ParticipationTab.tsx:104` carry the same stale
+createClient claim in module docs but are outside Allowed Files — note them for
+follow-up, do not edit. (`csvExport.ts:12` looks similar but is a *file-scoped*
+claim that is still true — leave it alone entirely.)
 
 ### Item 3 — UXC-11: friendly dates (MINOR if violated)
 **There is no shared date formatter in this repo** — `src/lib/` contains only
@@ -141,7 +176,11 @@ enumerated sites", not "no ISO date anywhere".
 4. Astryx props verified against installed source or `astryx-api.md` (cite
    which). The api doc has been wrong twice — installed source wins on conflict.
 5. Sibling T130 works in `OutreachList.tsx` concurrently on the **coach**
-   section. Keep your diff to the student section there. Never `git stash`.
+   section (`CoachOutreachSection`, lines 2048-2097). Yours is
+   `StudentOutreachSection` (2622-2669) — separate functions ~550 lines apart,
+   no shared code. In the **shared test file** `OutreachList.test.tsx` you may
+   touch only student-section assertions; T130 is holding that file at its
+   67/67 baseline. Never `git stash`.
 
 ## Required Output
 Full diff; per-item evidence (Item 1: computed accessible name per list and how

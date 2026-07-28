@@ -90,6 +90,24 @@ If a worker believes the standard is wrong, impossible, contradictory, or harmfu
     that would have stripped accessible names off six screens, and a silent
     reversal of a passed task's green test.
 
+    **19a. The gate is capped at two rounds.** A third REVISE escalates to the
+    human owner instead of looping. Measured on wave 5's first packets: round 1
+    cost ~130K opus tokens and caught 4 BLOCKERs; round 2 cost ~105K and caught
+    2 MAJORs. One round costs roughly one prevented rework cycle, so two rounds
+    is break-even-to-positive and a third is net negative. A plan still failing
+    after two rounds has something wrong with the plan, not the wording.
+
+    **19b. Scope the gate by risk.** Full premise check for novel patterns and
+    for anything touching migrations, RLS, or metric SQL. Light check or skip
+    for packets that roll out an already-verified pattern to a new surface
+    (e.g. applying a proven table migration to a second list page). The gate
+    exists to catch unverified premises, not to re-audit settled ones.
+
+    **19c. Verify your own citations before submitting.** Roughly half of
+    round 1's findings were the author's own unverified line numbers and
+    claims. That is cheap to prevent and expensive to have an opus agent
+    discover.
+
 ## Definition of Ready (dispatch gate)
 
 A plan may be dispatched to workers only when:
