@@ -1,3 +1,8 @@
+> **ARCHIVAL — do not follow this document.** It describes the one-time repo
+> setup phase, completed 2026-07-13. Every step below was carried out long ago.
+> It is retained for history only. For current state and how to pick up work,
+> read `overview.md`.
+
 # Cowork handoff — VOLT Portal swarm setup
 
 You are picking up a finished planning phase. The four files in this folder are the complete context; no chat history exists or is needed. Precedence: VOLT_Portal_PRD.md (v1.5, requirement IDs are authoritative) > constitution.md > project-brief.md. astryx-api.md is the generated Astryx component API reference.

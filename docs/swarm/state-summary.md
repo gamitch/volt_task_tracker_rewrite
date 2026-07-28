@@ -65,7 +65,100 @@ deliberately terse going forward.
 **E1, E2, and E3 are all fully complete.** Full evidence for every row above is in
 `verification-log.md` under its `## T0xx` heading.
 
-## Active (2026-07-19, updated after T075 — router-wiring series' route-swap phase complete)
+### T076–T085 — auth-wiring fallout + E11 sweep fixes (all Passed)
+
+- T076 — `RequireRole` no longer reuses `NoAccessPage`'s sign-out treatment (T073b2 Gap B).
+- T077 — real invite-completion password flow (T073b2 Gap A).
+- T078 — updated 3 pre-existing tests' stale `RequireRole`-denial assertions.
+- T079 — fixed Google OAuth hard-redirect return-leg on `AcceptInvitePage`.
+- T080 — `EmptyState` heading-level sweep + `CoachHome` DES-04 color mapping (T067 findings).
+- T081 — `Spinner`→`Skeleton` where dimensions are known (T069 finding).
+- T082 — real retry actions on error `Banner`s (T069 finding).
+- T083 — DES-15 verbatim empty-state copy on 5 screens (T069 finding).
+- T084 — CI fix: exclude `tests/e2e/**` from Vitest discovery.
+- T085 — wired `RosterShell`/`ReportsShell` to their real tab components.
+
+### T086–T112 — epic ED-1: replace every fixture with real Supabase data (all Passed)
+
+Packets P0–P13 plus regression fixes and live hotfixes:
+
+- T086 (P0) — data-layer foundation: row types, `runMutation`/`invokeEdgeFunction`.
+- T087 (P1) — real invites load/send/revoke.
+- T089 (P2) — real Students tab load/mutations + first-time dialog wiring.
+- T090 (P3) — `send-invite` resend mode + `InvitesTab.onResend`.
+- T091 (P4) — `SeasonProvider` + real `SeasonSettings` CRUD/activate + `ReportsShell` season.
+- T094 (P5) — real Teams tab + Parents tab data wiring.
+- T095 (P6) — real Reports tabs data (Participation/Hours/Events).
+- T096 (P7) — real Meetings data + Cancel mutation + `ScheduleMeetingsDialog` wiring.
+- T103 (P8) — real Kiosk live tally/session title + new `checkin-token` Edge Function.
+- T100 (P9) — real student check-in path (`StudentMeetingView` + `CheckinResult`).
+- T101 (P10) — real Outreach data + mutations + `OutreachEventDialog` wiring.
+- T104 (P11) — leaderboard-privacy schema gap: new migration + `AdminToggles`/`Leaderboard`.
+- T105 (P12) — real `SettingsPage` data/mutations + avatar Storage bucket.
+- T102 (P13) — real `AcceptInvitePage` invite-lookup + `NoAccessPage` contact data.
+
+- T088/T092/T097/T098/T107 — `RosterShell`/`ReportsShell` test regressions from each
+  wiring step (a recurring, expected pattern; each fixed same-day).
+- T093 — URGENT live CI bundle-size gate failure on PR #1.
+- T099 — URGENT: real invite emails were showing T048 placeholder text to real recipients.
+- T108 — CRITICAL bootstrap fix: `/settings/season` route (George could not create a season).
+- T109/T110/T111/T112/T106 — live hotfixes reported by George: settings hard-fail on missing
+  `notification_prefs`; avatar-storage migration failing `supabase db push`; season-setup
+  button showing a stub; outreach events being dead ends; outreach real-season resolution.
+
+### T113–T119 — PRD v2 waves 1–2: schema foundations + attendance (all Passed)
+
+- T113 — `student_teams` membership junction + backfill (D-3 foundation).
+- T114 — SCH-04 **premise corrected**: `staff_all` write policies already existed since v1;
+  redundant migration dropped, PRD and capability map corrected. Worker proved it with a
+  three-run ablation rather than building the wrong thing.
+- T115 — TopNav shows the real active season (D-2 single-season model).
+- T116 — metric views migrate to membership-based D-3 double-count semantics.
+- T117 — coach-managed attendance with per-student hours on `OutreachDetail`.
+- T118 — expected-attendees roster checklist in `OutreachEventDialog` → planned RSVPs.
+- T119 — **D-7**: coach is ultimate authority over RSVPs/check-ins (George's direct override).
+
+### T120–T124 — wave 3: the visible UX push (all Passed)
+
+- T120 — dual-member multiplicity fixes in Reports + check-in strip. **FAILED attempt 1**
+  (MAJOR): claimed test coverage that did not exist and a module doc citing a nonexistent
+  test. Caught by the checker diffing the test file rather than trusting the report.
+- T121 — dense outreach rows, real roster wiring, edit-mode prefill, UXD-05 goal fix.
+  **FAILED attempt 1** (MAJOR): the "Attended" column was distinct `'going'` RSVPs, not
+  attendance — intent mislabeled as turnout. Reworked to query the real `attendance` table.
+- T122 — dense meeting rows + `loaders/meetings.ts` dual-member `.limit(1)` fix.
+- T123 — persistent staff KPI strip + `v_season_kpis` views.
+- T124 — coach dashboard analytics parity + activity feed (9 new views).
+
+### T125–T128 — wave 4 (all Passed, all first attempt)
+
+- T125 — event create/edit forms re-laid as full-height sectioned panels; both dialogs' test
+  files byte-unchanged and still green, proving logic was untouched.
+- T126 — retroactive student/parent check-off + `'self'` method and RLS migration. Checker
+  independently reproduced the full positive/negative permission matrix on a live
+  non-superuser role; no unauthorized write or delete path.
+- T127 — mark whole event complete, reusing the existing per-day completion path.
+- T128 — wave-3 debt: format gate, meetings label wording, `astryx-api.md` accuracy,
+  `v_planned_rsvp_hours` future guard.
+
+## Active (2026-07-28 — waves 1–4 complete, wave 5 approved and ready)
+
+**134 tasks · 129 Passed · 5 Blocked · 0 In Progress.** Every automatable task
+through wave 4 is Passed. The 5 Blocked are all human gates waiting on George
+(T052 email enablement; T063/T064/T065 migration cutover; T070 go-live).
+
+**Next up: wave 5 (UX craft), next task ID T129.** Requirements in
+`VOLT_UX_Craft_PRD_v3.md` (v3.1, approved). Visual craft only, no new features.
+P1 and P2 first; P2 blocks P3. See `overview.md` for the current snapshot and
+the F-1/F-2/F-3 Astryx feasibility constraints that constrain wave-5 packets.
+
+Six migrations are committed and awaiting George's `supabase db push`:
+`student_teams`, `membership_views`, `kpi_views`, `dashboard_views`,
+`self_checkoff`, `planned_hours_future_guard`.
+
+---
+
+### Historical detail below (2026-07-19, router-wiring series era)
 
 73 tasks Passed. E1-E9 are fully Passed for every automatable task in the entire app. All 13 app
 routes now resolve to real components (router-wiring series T073a/T074/T075, all Passed). 1 task
@@ -189,6 +282,47 @@ current tiered priority list.
   re-deriving its aggregate. **T059 unblocked.**
 
 ## Known Decisions (condensed — full rulings in dispute-log.md)
+
+### Added 2026-07-21/28 (waves 1–5)
+
+- **D-2 / D-3 (George, verbatim)**: one combined season for all teams — "I do not
+  want to manage seasons for 1 frc, 2 ftc, 5 fll teams." And hours **double
+  count**: "The hours a student spend on outreach on FTC WILL ALSO count for
+  hours for FRC because they are on both. SO P3+GG=VOLT... we are just a team,
+  not a compliance driven business."
+- **D-7 (George, verbatim)**: "As coach i am ultimate authority and should be
+  able to overwrite an rsvp or check-ins." Self-authored protection removed.
+- **Template-as-is routes stay frozen** (George, 2026-07-21): `/reports` and
+  `/settings` keep their Astryx template layout; wave 5 does not re-lay them out.
+  Settings still gets its copy fix.
+- **Leaderboard bars approved** (George, 2026-07-21) as an explicit constitution
+  item-17 ruling: proportional bars + "% of goal" state facts only, no streaks
+  or scarcity; SEC-04 anonymization unchanged. Do not re-litigate.
+- **Agent tiering (constitution item 18)**: sonnet workers by default;
+  `model: "opus"` for migrations, RLS, metric-SQL, and auth work. Rationale: the
+  ledger shows ~38% of tasks take a rework, but the worker/checker loop catches
+  those errors, and all-opus workers would roughly double spend to prevent them.
+- **Planning is now checked (constitution item 19)**: `checker-premise` must
+  return DISPATCH before any plan reaches a worker. The planning layer was the
+  only unchecked artifact in the process — and it shipped a PRD carrying two
+  false defect claims, an impossible prescription, an a11y-regressing "fix", and
+  a silent reversal of a passed task's green test.
+
+### Astryx feasibility constraints (verified against installed source, 2026-07-28)
+
+- **F-1** — `List`/`ListItem` cannot align columns across rows (3-slot flex with
+  self-sizing end caps); `Grid` is equal-width only; `StackItem` is
+  `'static'|'fill'`. **`Table` is the only primitive that can** — and is already
+  used in `StudentsTab.tsx` and `ParticipationTab.tsx`. Its row expansion is
+  inherited-columns only (no `renderExpandedContent`).
+- **F-2** — `xstyle` is typed on every component but **unusable here**: StyleX is
+  compile-time and the app has no StyleX plugin, so `stylex.create()` throws.
+  DES-21's ladder is effectively component → theme token → custom CSS.
+- **F-3** — `ProgressBar` takes one scalar and renders one fill: no segments, no
+  ticks, no goal marker, and its doc forbids stacking. One small custom bar is
+  pre-approved for UXC-05/UXC-08.
+- **Astryx `List` silently drops `aria-label`** (closed prop set, no rest
+  spread) — a headerless `List` has no accessible name at all.
 
 - **Stack lock**: Vite + React 19 (D002 deviation from PRD's "React 18") + TS
   strict + Supabase + Astryx only, no Tailwind/shadcn.
