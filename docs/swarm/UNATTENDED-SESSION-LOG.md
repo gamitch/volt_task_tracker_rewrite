@@ -37,29 +37,32 @@ and say plainly what I left.
 
 ## Deferred decisions
 
-**D-1 — `ListItem` label-slot truncation is lost, wave-wide.** Putting the
-title into `ListItem`'s `label` as a `<Link>` (the PRD-mandated UXC-04 shape)
-silently disables truncation: `Item.tsx:353-360` applies its single-line
-truncate style only when the label is a **string**, and a `ReactNode` label gets
-none. Measured in real Chromium — the anchor runs past the row at 1440px *and*
-375px with no ellipsis. This is a **regression against today's behaviour**, on
-every `ListItem` surface the wave converts (T132's student/parent rows, T133's
-calendar rows).
+**D-1 — DECIDED 2026-07-28 by George: accept no truncation. No cast.**
 
-Page-level horizontal scroll is *not* affected (`scrollWidth === innerWidth`
-holds at both widths) and row height is unchanged, so nothing breaks — a long
-coach-entered event title simply paints across the type badge without an
-ellipsis.
+Putting the title into `ListItem`'s `label` as a `<Link>` (the PRD-mandated
+UXC-04 shape) disables text truncation. `Item.tsx:353-360` applies its
+single-line truncate style only when the label is a **string**; a `ReactNode`
+label gets none, and `Link`'s own `maxLines` has nothing constraining its box.
+Measured in real Chromium: the anchor runs past the row at 1440px *and* 375px
+with no ellipsis. This is a regression against the previous plain-text label,
+on every `ListItem` surface the wave converts.
 
-There is a partial fix, and it needs George: `labelLines={1}` reaches `Item` at
-runtime through `ListItem`'s `restProps` spread and restores
-`overflow:hidden; nowrap`, bounding the paint inside the row. But it is absent
-from `ListItemProps`, so it needs a TypeScript escape hatch — an escalation no
-packet authorizes — and it *clips* rather than ellipsizes, because
-`text-overflow` cannot act on an atomic `inline-flex` box. So the real choice is
-between a TS cast for a clip, or accepting no truncation, or asking the vendor.
-**Not decided. Both packets now instruct workers to measure and report rather
-than chase an ellipsis.**
+**What is NOT affected:** page-level horizontal scroll
+(`scrollWidth === innerWidth` holds at both widths) and row height (0px delta).
+The failure mode is cosmetic — a long coach-entered title paints across the
+type badge instead of ellipsizing.
+
+**Decision:** accept it. The only available fix is `labelLines={1}`, which
+reaches `Item` at runtime through `ListItem`'s `restProps` spread but is absent
+from `ListItemProps` — so it needs a TypeScript escape hatch — and it *clips*
+rather than ellipsizes, because `text-overflow` cannot act on an atomic
+`inline-flex` box. A cast to reach a non-public prop, in exchange for a clip
+rather than an ellipsis, is not worth it.
+
+**Standing consequence — checkers must not flag this.** On any `ListItem`
+surface carrying a linked title, absent truncation is accepted behaviour, not a
+defect. Workers report the measurement and move on; they do not propose the
+cast. If the vendor later exposes `labelLines` on `ListItemProps`, revisit.
 
 **D-2 — `/roster` cannot be captured with real data, and this will recur.**
 `RosterShell`/`StudentsTab` expose no injectable loader seam, and there is no
