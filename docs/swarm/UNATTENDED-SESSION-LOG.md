@@ -37,6 +37,30 @@ and say plainly what I left.
 
 ## Deferred decisions
 
+**D-1 — `ListItem` label-slot truncation is lost, wave-wide.** Putting the
+title into `ListItem`'s `label` as a `<Link>` (the PRD-mandated UXC-04 shape)
+silently disables truncation: `Item.tsx:353-360` applies its single-line
+truncate style only when the label is a **string**, and a `ReactNode` label gets
+none. Measured in real Chromium — the anchor runs past the row at 1440px *and*
+375px with no ellipsis. This is a **regression against today's behaviour**, on
+every `ListItem` surface the wave converts (T132's student/parent rows, T133's
+calendar rows).
+
+Page-level horizontal scroll is *not* affected (`scrollWidth === innerWidth`
+holds at both widths) and row height is unchanged, so nothing breaks — a long
+coach-entered event title simply paints across the type badge without an
+ellipsis.
+
+There is a partial fix, and it needs George: `labelLines={1}` reaches `Item` at
+runtime through `ListItem`'s `restProps` spread and restores
+`overflow:hidden; nowrap`, bounding the paint inside the row. But it is absent
+from `ListItemProps`, so it needs a TypeScript escape hatch — an escalation no
+packet authorizes — and it *clips* rather than ellipsizes, because
+`text-overflow` cannot act on an atomic `inline-flex` box. So the real choice is
+between a TS cast for a clip, or accepting no truncation, or asking the vendor.
+**Not decided. Both packets now instruct workers to measure and report rather
+than chase an ellipsis.**
+
 *(appended as they arise)*
 
 ---

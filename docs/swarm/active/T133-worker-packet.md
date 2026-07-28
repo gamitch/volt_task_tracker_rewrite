@@ -208,10 +208,30 @@ re-litigate it or try to eject the component.
 3. Rendered title weight, size and colour measured and unchanged. **Row height
    within 2px of before** — swapping a bare text node for a baseline-aligned
    `inline-flex` anchor can shift the pitch slightly; report the measurement
-   rather than working around it. Truncation cannot be exercised by any existing
-   fixture (no title is long enough); prove the mechanism with a **synthetic
-   long title** in the rig, as T131's checker did.
+   rather than working around it.
+
+   **Truncation: `maxLines={1}` is inert in the `ListItem` label slot.**
+   `Item.tsx:353-360` applies its single-line truncate style only when the label
+   is a *string*; a `ReactNode` label gets none, and `ListItem` does not expose
+   `labelLines`. Measured in real Chromium with a synthetic long title: the label
+   span computes `overflow:visible; white-space:normal; text-overflow:clip` and
+   the `inline-flex` anchor runs past the row at both 1440px and 375px with no
+   ellipsis — a regression against today's string label, which does truncate.
+   **Do not attempt to prove an ellipsis.** Report the measured behaviour,
+   confirm `document.documentElement.scrollWidth === innerWidth` still holds at
+   both widths (measured safe — page-level scroll is what actually matters), and
+   record the lost truncation as a carried follow-up.
+
+   You may **propose** `labelLines={1}` — it reaches `Item` via `ListItem`'s
+   `restProps` spread (`ListItem.tsx:211,255`) and restores `overflow:hidden;
+   nowrap`, bounding the paint inside the row — but it is absent from
+   `ListItemProps` (needs a TS escape, not authorized here) and clips rather than
+   ellipsizes, since `text-overflow` cannot act on an atomic `inline-flex` box.
+   Propose it with measurements; do not ship it unasked.
 4. The `<div role="group">`'s `aria-labelledby` resolves to the visible `<h2>`,
+   **scoped by the heading id** — a full `AppShell` DOM also contains SideNav's
+   own `role="group"`, which a bare `querySelector('[role="group"]')` finds
+   first. `OutreachList.test.tsx:1520-1587` already scopes by id; copy that.
    asserted in the **two branches where the group renders**: populated, and the
    inner no-match empty state (`:823`). Mirror
    `OutreachList.test.tsx:1520-1587`. The `List` must no longer carry `header`.
