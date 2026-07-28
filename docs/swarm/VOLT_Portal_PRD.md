@@ -89,10 +89,17 @@ Persona acceptance smoke tests (used in final `/swarm-check`):
 > **IMPLEMENTATION GAP (2026-07-28, dispute-log D009):** the
 > `/meetings/:sessionId` half of NAV-08 below **was never built** — the route is
 > absent from `router.tsx` (which has no catch-all), and no meeting-detail
-> component exists. `CalendarPage.tsx:604` nonetheless links to it for every
-> meeting-type row, so those rows navigate to a blank page. Awaiting George's
-> decision; see D009 for options. The `/outreach/:eventId` half is real and
-> works.
+> component exists. The `/outreach/:eventId` half is real and works.
+>
+> **Resolved for now (T137, George's option b):** calendar meeting rows used to
+> link to the unbuilt route and render a blank content area. They now point at
+> `routePaths.meetings` — see `detailHrefFor` in `CalendarPage.tsx` (`:610`,
+> returning at `:622`). Verified by mounting the real route table: the old href
+> produced empty `innerHTML`, the new one resolves to `MeetingsList`.
+>
+> **NAV-08 itself remains unimplemented.** The interim destination is shared by
+> every meeting row, so the calendar can no longer reach a *specific* meeting.
+> Building the real detail page retires this annotation.
 
 - **NAV-08 Shareable deep links:** every event/session detail is URL-addressable — `/outreach/:eventId` (outreach + competitions) and `/meetings/:sessionId` (meeting detail page replacing the dialog in CAL-02). Detail views and list-row `MoreMenu`s include **Copy link** (`Toast` "Link copied"). Unauthenticated visits store the intended URL and redirect back to it after login (including the Google OAuth round-trip). Invalid/inaccessible IDs render the DES-12 error state, revealing nothing about the event.
 - **NAV-07** Meetings and Outreach are **separate routes with separate queries**. No screen may render a combined meetings+outreach list except Calendar (`/calendar`) and per-student history in Reports, where every row carries a type `Badge`.
