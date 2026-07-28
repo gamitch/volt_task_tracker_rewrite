@@ -27,6 +27,13 @@ export default defineConfig({
       '**/node_modules/**',
       '**/dist/**',
       '**/.claude/**',
+      // `*.throwaway.*` files are short-lived measurement rigs and probes that
+      // tasks create, measure with, and delete (`.gitignore` already makes them
+      // uncommittable). Vitest would otherwise collect a probe that happens to
+      // be named `*.throwaway.test.tsx` mid-flight, changing the suite's file
+      // and test counts -- and every task packet gates pass/fail on that exact
+      // count, so a transient probe can make a real baseline look broken.
+      '**/*.throwaway.*',
       'supabase/functions/**',
       'tests/e2e/**',
     ],
