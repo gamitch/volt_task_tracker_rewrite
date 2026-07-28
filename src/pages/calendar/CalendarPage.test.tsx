@@ -28,6 +28,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { routePaths } from '../../app/router';
 import {
   buildEnrichedSessions,
   CALENDAR_FILTER_ITEMS,
@@ -457,9 +458,7 @@ describe('row Link text is distinguishable per session (astryx-api.md Link Best 
 
     const links = Array.from(container.querySelectorAll('a'));
 
-    const meetingLink = links.find(
-      (a) => a.getAttribute('href') === '/meetings/session-build-upcoming',
-    );
+    const meetingLink = links.find((a) => a.getAttribute('href') === routePaths.meetings);
     const outreachLink = links.find(
       (a) => a.getAttribute('href') === '/outreach/event-food-bank-sort',
     );
@@ -480,20 +479,30 @@ describe('row Link text is distinguishable per session (astryx-api.md Link Best 
     renderPage();
     await flushMicrotasks();
 
-    const { events, sessions } = await defaultLoadCalendarSessions();
+    const { events } = await defaultLoadCalendarSessions();
     const eventById = new Map(events.map((event) => [event.id, event] as const));
+    // T137 (D009): meeting rows now share one interim href
+    // (`routePaths.meetings`), so a meeting row's expected title can no
+    // longer be derived from its href the way an outreach row's still can
+    // -- looked up from the fixture meeting event directly instead.
+    const meetingEventTitle = events.find((event) => event.type === 'meeting')?.title;
 
+    // Widened from `/^\/(meetings|outreach)\//` (T137): that regex required
+    // a trailing slash, so it no longer matched the bare `/meetings` href
+    // meeting rows now carry -- `(\/|$)` matches both that bare path and
+    // `/outreach/:eventId`.
     const links = Array.from(container.querySelectorAll('a')).filter((a) =>
-      (a.getAttribute('href') ?? '').match(/^\/(meetings|outreach)\//),
+      (a.getAttribute('href') ?? '').match(/^\/(meetings|outreach)(\/|$)/),
     );
-    expect(links.length).toBeGreaterThanOrEqual(4);
+    expect(links.length).toBe(4);
+    expect(links.filter((a) => a.getAttribute('href') === routePaths.meetings).length).toBe(2);
+
     for (const link of links) {
       const href = link.getAttribute('href') ?? '';
-      const expectedTitle = href.startsWith('/meetings/')
-        ? eventById.get(
-            sessions.find((s) => s.id === href.replace('/meetings/', ''))?.eventId ?? '',
-          )?.title
-        : eventById.get(href.replace('/outreach/', ''))?.title;
+      const expectedTitle =
+        href === routePaths.meetings
+          ? meetingEventTitle
+          : eventById.get(href.replace('/outreach/', ''))?.title;
       expect(expectedTitle).toBeTruthy();
       expect(link.textContent).toBe(expectedTitle);
       expect(link.textContent).not.toContain('View details');
@@ -535,14 +544,12 @@ describe('NAV-08 click-through hrefs (CAL-02)', () => {
     vi.setSystemTime(new Date('2026-07-19T12:00:00.000Z'));
   });
 
-  it('a meeting row links to /meetings/:sessionId', async () => {
+  it('a meeting row links to routePaths.meetings -- interim destination pending NAV-08 (D009), not the unbuilt /meetings/:sessionId', async () => {
     renderPage();
     await flushMicrotasks();
 
     const links = Array.from(container.querySelectorAll('a'));
-    const meetingLink = links.find(
-      (a) => a.getAttribute('href') === '/meetings/session-build-upcoming',
-    );
+    const meetingLink = links.find((a) => a.getAttribute('href') === routePaths.meetings);
     expect(meetingLink).toBeTruthy();
   });
 

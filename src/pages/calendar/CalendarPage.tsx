@@ -172,31 +172,39 @@
  *    requirement.
  *
  * -----------------------------------------------------------------------
- * 7. NAV-08 click-through routes (CAL-02) -- real navigation elements,
- *    correct-looking destination paths, not required to render real content
- *    at the destination (this task's own Forbidden Files clause).
+ * 7. NAV-08 click-through routes (CAL-02) -- T137 (D009 remediation).
  *
- * NAV-08 (PRD line 89, cited verbatim): "every event/session detail is
- * URL-addressable -- `/outreach/:eventId` (outreach + competitions) and
- * `/meetings/:sessionId` (meeting detail page replacing the dialog in
- * CAL-02)." `CalendarSessionRowItem` below routes outreach/competition rows
- * through the already-real `routePaths.outreachEvent(event.id)` helper
- * (imported, read-only, from `../../app/router`, which this task's Forbidden
- * Files list explicitly allows import-only) -- that exact route IS already
- * wired in `router.tsx` (to a placeholder component, per that file's own
- * `OutreachEventPage`). Meeting rows route to the literal
- * `` `/meetings/${session.id}` `` path: `router.tsx`'s own `routePaths` object
- * has NO helper for this NAV-08 path (only `routePaths.meetings` -- the
- * plain list route -- and `routePaths.meetingLiveSession`, a DIFFERENT path,
- * `/meetings/live/:sessionId`, for the in-progress live console, confirmed
- * by reading that read-only file directly) and `router.tsx`'s own `<Routes>`
- * table has no `/meetings/:sessionId` route registered at all yet -- a real,
- * disclosed gap (this task cannot fix it: `router.tsx` is Forbidden/
- * import-only), not silently worked around. Per this task's own Forbidden
- * Files clause ("you are not required to prove those destination routes
- * render anything ... only that this page links to the correct path"), the
- * literal string is constructed directly against NAV-08's own quoted path
- * shape rather than left unbuilt or invented as some other shape.
+ * NAV-08 (PRD line 97, cited verbatim; line 89 carries the D009 annotation
+ * that pushed the requirement text itself down): "every event/session
+ * detail is URL-addressable -- `/outreach/:eventId` (outreach +
+ * competitions) and `/meetings/:sessionId` (meeting detail page replacing
+ * the dialog in CAL-02)." `CalendarSessionRowItem` below routes
+ * outreach/competition rows through the real `routePaths.outreachEvent(
+ * event.id)` helper (imported, read-only, from `../../app/router`) -- that
+ * route IS wired in `router.tsx`, to `OutreachDetail`.
+ *
+ * Meeting rows do NOT route to NAV-08's own `/meetings/:sessionId` path.
+ * That page was never built: `router.tsx`'s `routePaths` object has no
+ * helper for it (only `routePaths.meetings`, the plain list route, and
+ * `routePaths.meetingLiveSession`, a DIFFERENT path,
+ * `/meetings/live/:sessionId`, for the in-progress live console), and
+ * `router.tsx`'s `<Routes>` table has no `/meetings/:sessionId` entry and no
+ * catch-all -- so a hand-built `` `/meetings/${session.id}` `` link (T112's
+ * original construction, which this file used until T137) rendered a blank
+ * content area for every meeting row. T133 then promoted that link from a
+ * secondary "View details" affordance to the row title itself, turning a
+ * latent gap into every meeting row's dead-end primary action. That gap is
+ * recorded as **D009** in `docs/swarm/dispute-log.md` and annotated inline
+ * at NAV-08.
+ *
+ * George's decision (2026-07-28, option b, T137): point meeting rows at
+ * `routePaths.meetings` -- a route that exists now -- instead of the
+ * unbuilt per-session path, until NAV-08's real meeting detail page ships
+ * as its own task. `router.tsx` stays Forbidden/import-only for this task;
+ * a stub route rendering nothing would be worse than this interim fix.
+ * Every meeting row now shares one destination (the meetings list) rather
+ * than each linking to a distinct session -- an intended, disclosed
+ * consequence of deferring NAV-08, not a regression to design around.
  *
  * -----------------------------------------------------------------------
  * 8. Astryx prop sourcing (constitution item 2) -- every prop below,
@@ -593,15 +601,25 @@ const CALENDAR_TYPE_BADGE: Record<
 };
 
 // ---------------------------------------------------------------------------
-// NAV-08 detail routes (module doc #7).
+// NAV-08 detail routes (module doc #7) -- outreach/competition rows link to
+// the real per-event detail route; meeting rows link to the interim
+// `routePaths.meetings` destination pending NAV-08's meeting detail page
+// (D009, `dispute-log.md`).
 // ---------------------------------------------------------------------------
 
 function detailHrefFor(event: CalendarEventRow, session: CalendarSessionRow): string {
   if (event.type === 'meeting') {
-    // NAV-08: "/meetings/:sessionId (meeting detail page ...)". No
-    // `routePaths` helper exists for this exact path yet (module doc #7) --
-    // constructed directly against NAV-08's own quoted shape.
-    return `/meetings/${session.id}`;
+    // NAV-08's per-meeting `/meetings/:sessionId` detail route (module doc
+    // #7) is unbuilt -- no `routePaths` helper for it, and `router.tsx` has
+    // no matching `<Route>` and no catch-all, so that path resolved to a
+    // blank content area (D009, `dispute-log.md`). George's decision
+    // (2026-07-28, option b): point meeting rows at `routePaths.meetings`,
+    // a route that exists, until NAV-08's real detail page ships as its own
+    // task. `session` is intentionally unused in this branch as a result
+    // (`AcceptInvitePage.tsx`'s `defaultLoadInvite`/`accept.ts` loader
+    // already established this `void x;` idiom for the same situation).
+    void session;
+    return routePaths.meetings;
   }
   // NAV-08: "/outreach/:eventId (outreach + competitions)".
   return routePaths.outreachEvent(event.id);
