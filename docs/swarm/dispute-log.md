@@ -728,3 +728,46 @@ from scratch (4.818:1 dark / 7.078:1 light), matching this ruling's
 recomputed values exactly. No residual risk remains. Full close-out
 evidence in `verification-log.md`'s `## T002b` entry and the archived
 `docs/swarm/archive/T002b-{worker,checker}-packet.md`.
+
+## D006 - T134 packet §4's roster deliverable is unachievable in this environment (worker-filed, carried across by the orchestrator)
+
+Nature:
+Worker-filed dispute, T134 attempt 2. The packet asked for a fresh `/roster`
+capture replacing a stale figure said to be missing the table's visible seams.
+The worker could not produce it and, on attempt 1, shipped the error-state
+screenshot instead while disclosing the problem in its output doc. Its checker
+correctly failed that (MAJOR) and directed the dispute. Recorded here by the
+orchestrator because `dispute-log.md` is forbidden to workers.
+
+Worker position:
+`/roster` cannot be captured with representative data in this environment.
+`RosterShell.tsx` takes no props and renders `<StudentsTab />` bare, and there
+is no `.env`, so `getSupabaseClient()` throws and every loader rejects. The page
+renders "Couldn't load the active season" plus "Couldn't load students" — no
+table, therefore no seams. The packet's §4 also says "change no code", so the
+worker had no legal path to a populated capture.
+
+Checker position:
+Confirmed by viewing `t134-roster-1440-light.webp` directly. Judged the
+attempt-1 overwrite a MAJOR on three grounds: it broke the convention of the
+`new-*.webp` family (its sibling `new-roster-teams.webp` shows the same page
+rendering normally, so a reader concludes the Students tab is broken); the
+disclosure lived only in a doc bound for a gitignored archive; and the
+replacement did not achieve §4's purpose anyway, since neither the old figure
+(empty roster) nor the new one (error) shows the table.
+
+Ruling (orchestrator, 2026-07-28):
+Dispute upheld. The deliverable was impossible as specified. `new-roster.webp`
+restored byte-identical; the four `t134-roster-*.webp` captures kept, since they
+correctly discharge the "full chrome on /roster" proof the routing task actually
+needed. Any future task needing a populated roster figure must be scoped with
+either a configured backend or explicit authorization to change `RosterShell`.
+
+**Correction to the premise, found after the ruling:** the tabs are not the
+problem. `StudentsTab` (`:1064`), `ParentsTab` (`:939`), `TeamsTab` (`:1101`)
+and `InvitesTab` (`:704`) each already expose an injectable `loadData` prop with
+a real default. The only gap is that `RosterShell` accepts no props and passes
+none down (`RosterShell.tsx:178`, `:204-207`). So the fix is a pass-through, not
+a new seam — materially smaller than this dispute and D-2 both assumed. Note
+also that a roster capture would still show the KPI strip's error, which is fed
+by `SeasonProvider` in `AppShell`, not by this page.
