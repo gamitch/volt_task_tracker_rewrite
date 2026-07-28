@@ -65,6 +65,41 @@ If a worker believes the standard is wrong, impossible, contradictory, or harmfu
 ### Motivation ethics 
 17. Motivation mechanics are limited to honest progress signals (PRD Section 5.7: milestones, planned-vs-confirmed hours, consistency strips). Loss-aversion framing, streak pressure, FOMO/scarcity, countdowns, guilt copy, and re-engagement hooks are prohibited → BLOCKER. Users are minors and volunteers; the app never optimizes for its own engagement.
 
+### Agent tiering & pre-dispatch verification
+18. **Worker model tier.** `worker-implementer` runs on its pinned default
+    (sonnet) for ordinary tasks — the worker/checker loop catches the errors
+    that tier makes, and upgrading every worker costs more than the reworks it
+    would prevent. The orchestrator MUST pass a `model: "opus"` override when
+    dispatching a task that matches any of these, where a silent error is a
+    data or privacy problem and is hard to detect after the fact:
+    - creates or edits a file under `supabase/migrations/`
+    - creates or modifies an RLS policy, or any `security definer` helper
+    - creates or modifies a SQL view containing metric math (PRD 8.4 territory)
+    - changes auth, session, role-resolution, or permission logic
+    The override goes on the dispatch call, not in the agent definition —
+    there is one worker prompt, not two. Record the tier used in the ledger row.
+
+19. **Planning artifacts are checked before dispatch.** No PRD, packet set, or
+    task packet reaches a worker until `checker-premise` has returned
+    **DISPATCH** on it. The planning layer is otherwise unverified: every other
+    artifact in this process is checked by someone who did not write it, and
+    plans were the sole exception. A REVISE verdict is not advisory — the
+    author revises and re-submits. Record the verdict alongside the plan.
+    Rationale: a real PRD in this project reached the approval gate carrying
+    two false defect claims, one physically impossible prescription, one "fix"
+    that would have stripped accessible names off six screens, and a silent
+    reversal of a passed task's green test.
+
+## Definition of Ready (dispatch gate)
+
+A plan may be dispatched to workers only when:
+
+1. `checker-premise` returned DISPATCH (item 19).
+2. Every factual claim it relies on was verified against the real repository.
+3. Every prescription is feasible, or its escalation is named and pre-approved.
+4. Every acceptance criterion is measurable with fixtures that exist today.
+5. Any reversal of previously-passed work is explicit and authorized.
+
 ## Definition of Done
 
 A task is done only when:
