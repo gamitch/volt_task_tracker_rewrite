@@ -1,9 +1,10 @@
 # Worker Packet: T131 — compact icon-pair row actions (coach outreach Table)
 
-**Revision 2** (2026-07-28), after `checker-premise` returned REVISE on
-revision 1 with 1 BLOCKER and 5 MAJORs. Every line citation below was
-re-verified against the files; revision 1's were wrong in eight places.
-Round 1 of the 2 permitted by constitution item 19a.
+**Revision 2** (2026-07-28). Revision 1 was returned REVISE by
+`checker-premise` with 1 BLOCKER and 5 MAJORs; revision 2 returned
+**DISPATCH** with minor line-drift corrections, which are folded in here.
+Every line citation below has been verified against the files twice.
+**This packet is cleared for dispatch under constitution item 19.**
 
 ## Task ID
 
@@ -62,23 +63,30 @@ to you:
 
 **Do not nest a `<Text>` inside the `Link`.** `Link` already wraps its children
 in its own `Text` and forwards typography props to it — installed source
-`node_modules/@astryxdesign/core/src/Link/Link.tsx:319-329` renders
+`node_modules/@astryxdesign/core/src/Link/Link.tsx:323-331` renders
 `<Text type size weight color display maxLines>{children}</Text>`, with those
-props declared on `LinkProps` at `:227-258`. A nested `Text maxLines={1}`
+props declared on `LinkProps` at `:227-257`. A nested `Text maxLines={1}`
 resolves to `display:'block'` + `overflow:hidden` inside Link's `inline` Text
 inside an `inline-flex` `<a>` with no `min-width:0` on children
 (`Link.tsx:53-55`), which silently stops truncating and overflows the cell.
 
-`color="primary"` is deliberate: `LinkProps.color` **defaults to `'accent'`**
-(`Link.tsx:297`), which would turn every event title purple — a visual change
-nobody asked for, and one the reference figure contradicts. `primary` keeps the
-title rendering identical to today. The link still has a non-color affordance:
-`Link.tsx:60-62` sets `textDecoration: { default: 'none', ':hover': … }`, so it
-underlines on hover. Verify the focus ring is visible.
+`color="primary"` is deliberate and reproduces today's rendering **exactly**,
+not approximately: today's `<Text type="body" weight="semibold" maxLines={1}>`
+passes no `color`, and `Text.tsx:226` resolves
+`color ?? defaultColorByType[type] ?? 'primary'` with
+`defaultColorByType.body === 'primary'` (`Text.tsx:165`). Meanwhile
+`LinkProps.color` **defaults to `'accent'`** (`Link.tsx:297`), which would turn
+every event title purple — a visual change nobody asked for and one the
+reference figure contradicts.
+
+The link has three non-colour affordances, so it stays discoverable:
+hover underline (`Link.tsx:60-64`), a `:hover` `color-mix` tint
+(`Link.tsx:105-114`), and a 2px accent `:focus-visible` outline at 2px offset
+(`Link.tsx:70-77`). Verify the focus ring renders.
 
 **Pre-authorized deviation (do not dispute, do not "fix"):** `weight`,
 `maxLines`, and `color` are **absent** from the `# Link` props table
-(`astryx-api.md:1958-1977`), which lists only `as`/`label`/`href`/
+(`astryx-api.md:1961-1977`), which lists only `as`/`label`/`href`/
 `hasUnderline`/`isDisabled`/`isExternalLink`/`newTabLabel`/`target`/`rel`/
 `onClick`/`tooltip`/`isStandalone`/`children`. Constitution item 2 would
 normally make an undocumented prop a MAJOR. They are verified real in installed
@@ -112,15 +120,16 @@ JSDoc is itself stale and must be rewritten, not preserved.**
 - **Cancel** — becomes an `IconButton`, `icon={<Icon icon="close" size="sm" />}`,
   `variant="destructive"`, `size="sm"`, and **`label={`Cancel – ${row.event.title}`}`
   verbatim** (see Trap 3 — three green tests depend on that exact string).
-  Add a `tooltip`. Keep the existing `canCancel` gate exactly as-is.
+  Set `tooltip="Cancel event"` (pinned so it is not left to invention; no test
+  depends on it). Keep the existing `canCancel` gate exactly as-is.
 - **Delete** the `<Link …>View details – {row.event.title}</Link>`.
 
 `IconButton`'s `label` is **required** and becomes the `aria-label`
 (`astryx-api.md:4267`); `astryx-api.md:4261` requires a `tooltip` ("label only
 reaches screen readers, sighted users need the hover hint"). Astryx's
 no-`label` rule governs **text links**, not icon buttons — do not remove it.
-`icon="close"` is a documented semantic name (`astryx-api.md:585`, list at
-`:610`).
+`icon="close"` is a documented semantic name (`astryx-api.md:585`; the
+valid-semantic-names list is on the `icon` row at `:608`).
 
 Precedent for `IconButton` + `Icon` inside a `Table` `renderCell`:
 `src/pages/roster/TeamsTab.tsx:950-966`. **Note its limits:** it uses
@@ -133,15 +142,15 @@ license the two things you most need here — those are authorized separately
 Shrink the actions column from `pixel(420)`. Derivation of the floor:
 
 ```
-Edit 48 (measured, :2556) + HStack gap 8 (gap={2}, :2307)
-  + IconButton 44 (square: Button.tsx:101-106 sets aspectRatio 1/1 and zero
+Edit 48 (measured, :2556) + HStack gap 8 (gap={2}, :2308)
+  + IconButton 44 (square: Button.tsx:103-108 sets aspectRatio 1/1 and zero
     paddingInline/Block for iconOnly, so the 44px minHeight becomes 44px wide)
   + cell paddingInline 16 (8 per side, compact: TableCell.tsx:70-75)
   = 116px
 ```
 
 **Use `pixel(128)` or more, not `pixel(120)`.** `CoachEventActions`'s `HStack`
-has `wrap="wrap"` (`:2307`), so a 4px margin is a wrap risk, and a wrap is what
+has `wrap="wrap"` (`:2308`), so a 4px margin is a wrap risk, and a wrap is what
 pushed rows to 81px in T130. The slack is enormous — 1132 − 660 − 224 = 248px —
 so there is no reason to shave it. Measure and report your final number.
 
@@ -195,7 +204,7 @@ conclusion. Do not delete the evidence trail.
    (`expect(foodBankLink!.textContent).toContain('View details')`) is in the
    **coach** test opened at `:1692`. That is the only one you amend — replace it
    with an assertion on the title. `:1759` is the identical-looking line in the
-   **student/parent** test opened at `:1738`, on a surface you are not touching;
+   **student/parent** test opened at `:1737`, on a surface you are not touching;
    it must keep passing unchanged. If you are editing `:1759`, you have changed
    the wrong component.
 2. **Keep every other T112 assertion structurally intact.** Still a real
@@ -243,9 +252,11 @@ Checked against the running artifact, not your summary.
    shipped cluster is a required artifact** (see Required Worker Output).
 2. The coach row's event title is a real `<a>` with `href` `/outreach/:eventId`,
    carrying **no** `aria-label`, accessible name equal to the event title.
-3. The title's rendered **weight, size, color, and single-line truncation are
-   unchanged from today** — colour included, since Link's default would have
-   changed it. Prove each.
+3. The title's rendered **weight, size, colour, and single-line truncation are
+   unchanged from today at rest** — colour included, since Link's default would
+   have changed it (`Text.tsx:165,226` proves `primary` is today's resolved
+   colour). Prove each. **Hover tint and focus ring are expected new
+   affordances, not regressions** — do not report them as colour changes.
 4. `View details – ` no longer appears anywhere in the coach `Table` surface. It
    still appears on the untouched student/parent rows.
 5. The `×` has `aria-label` exactly `Cancel – {title}` and a tooltip.
@@ -257,7 +268,9 @@ Checked against the running artifact, not your summary.
    dimension**, desktop and narrow. **The title text link is explicitly exempt**
    — it is a text link, not a button (WCAG 2.2 SC 2.5.8), and forcing a 44px
    line box on it would breach criterion 7. Do not enlarge it; do not report it
-   as a failure.
+   as a failure. This exemption is scoped against UXC-13's unqualified "44px
+   touch targets" (`VOLT_UX_Craft_PRD_v3.md:88`), which predates the title
+   becoming interactive: text links are out of scope for that requirement.
 9. At 375px: no page-level horizontal scroll
    (`document.documentElement.scrollWidth === innerWidth`); the narrow card
    column still renders the title link and the icon pair.
