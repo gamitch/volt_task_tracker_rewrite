@@ -874,6 +874,15 @@ Options for George:
   link to nowhere.
 - **(c)** Log it, change nothing.
 
-Recommended: **(b) now, (a) as its own task later.** A wrong-but-working
-destination beats a blank page, and NAV-08 deserves a real packet rather than
-being bolted onto the largest remaining migration.
+**DECIDED 2026-07-28 by George: option (b).** Calendar meeting rows point at
+`routePaths.meetings` — a destination that exists — pending a real NAV-08 detail
+page as its own task. Implemented as **T137**.
+
+Disclosed consequence, accepted: all meeting rows now share one href, so the
+calendar stops being a way to reach a *specific* meeting; clicking any of them
+lands on the meetings list. Row link text is still the event title (T133), so
+rows remain distinguishable to sighted and assistive users — only the
+destination is shared. Strictly better than a blank page, and reversible the
+moment the detail page exists.
+
+NAV-08 remains unimplemented and remains annotated as such in the PRD.
