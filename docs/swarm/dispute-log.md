@@ -830,3 +830,50 @@ checker measured it as achieving parity.
 Canonical: a linked row title renders `weight` 600 / 14px / `--color-text-primary`
 on every surface. Any future packet in this series should state that as the
 target, not as "unchanged".
+
+## D009 - NAV-08's `/meetings/:sessionId` route was never built, and CalendarPage links to it
+
+Nature:
+Orchestrator-found, 2026-07-28, while checking whether T135 should give meeting
+rows linked titles for parity with the three surfaces that now have them. Not a
+worker/checker disagreement — a gap between a PRD requirement and shipped code
+that nothing had flagged.
+
+Facts, each verified:
+- `VOLT_Portal_PRD.md:89` (NAV-08) requires `/meetings/:sessionId` — "meeting
+  detail page replacing the dialog in CAL-02".
+- `router.tsx` declares 14 routes. `/meetings` is exact; there is no
+  `/meetings/:sessionId` and **no catch-all**, so the URL matches nothing and
+  `<Routes>` renders null — a blank content area.
+- No meeting-detail component exists anywhere in `src/pages/meetings/`.
+- `CalendarPage.tsx:604` links to it regardless: `detailHrefFor` returns
+  `/meetings/${session.id}` for every meeting-type row. Its own module doc at
+  `:188` notes no `routePaths` helper exists for the path and constructs it
+  directly from NAV-08's quoted shape.
+
+Why it surfaced now:
+The link is pre-existing — T112 built it as a secondary "View details" link.
+**T133 promoted it to the row title itself**, so a dead end is now the row's
+primary affordance rather than a secondary one.
+
+T133's checker reported "both routes live (2×`/meetings/:sessionId`,
+2×`/outreach/:eventId`)". It verified the hrefs *render*; it did not verify they
+*resolve*. That is a real gap in an otherwise strong check, and the lesson is
+cheap to apply: **future nav/a11y criteria should require that a link resolves
+to a declared route, not merely that it has an href.**
+
+Ruling (orchestrator, 2026-07-28) — interim, pending George:
+T135 ships **no** linked title on meeting rows, and its packet says why, so a
+checker does not flag the inconsistency with the other three surfaces.
+
+Options for George:
+- **(a)** Build the meeting detail page. Implements NAV-08 as written. Own
+  packet, comparable in size to T133.
+- **(b)** Point calendar meeting rows at `/meetings` (or the live-console route
+  where applicable). Cheap; leaves NAV-08 unimplemented but stops shipping a
+  link to nowhere.
+- **(c)** Log it, change nothing.
+
+Recommended: **(b) now, (a) as its own task later.** A wrong-but-working
+destination beats a blank page, and NAV-08 deserves a real packet rather than
+being bolted onto the largest remaining migration.

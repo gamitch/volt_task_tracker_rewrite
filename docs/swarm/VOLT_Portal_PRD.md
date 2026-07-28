@@ -86,6 +86,14 @@ Persona acceptance smoke tests (used in final `/swarm-check`):
 - **NAV-04** Active item highlighted by `SideNav`'s built-in state; current page also sets `document.title` ("Meetings · VOLT").
 - **NAV-05** Mobile (< 768px): `SideNav` is replaced by Astryx `MobileNav` drawer triggered from `TopNav`. Student Home additionally surfaces a persistent **Check in** card whenever a meeting session is live (MTG-10) so check-in never requires navigation.
 - **NAV-06** Route guards: unauthenticated → `/login`; authenticated but role lacks route → redirect to `/` with `Toast` "You don't have access to that page."
+> **IMPLEMENTATION GAP (2026-07-28, dispute-log D009):** the
+> `/meetings/:sessionId` half of NAV-08 below **was never built** — the route is
+> absent from `router.tsx` (which has no catch-all), and no meeting-detail
+> component exists. `CalendarPage.tsx:604` nonetheless links to it for every
+> meeting-type row, so those rows navigate to a blank page. Awaiting George's
+> decision; see D009 for options. The `/outreach/:eventId` half is real and
+> works.
+
 - **NAV-08 Shareable deep links:** every event/session detail is URL-addressable — `/outreach/:eventId` (outreach + competitions) and `/meetings/:sessionId` (meeting detail page replacing the dialog in CAL-02). Detail views and list-row `MoreMenu`s include **Copy link** (`Toast` "Link copied"). Unauthenticated visits store the intended URL and redirect back to it after login (including the Google OAuth round-trip). Invalid/inaccessible IDs render the DES-12 error state, revealing nothing about the event.
 - **NAV-07** Meetings and Outreach are **separate routes with separate queries**. No screen may render a combined meetings+outreach list except Calendar (`/calendar`) and per-student history in Reports, where every row carries a type `Badge`.
 
