@@ -21,8 +21,8 @@ where a dependency had never shipped, and only caught it because it checked.
 
 ## Objective
 
-Coach meeting rows are `ListItem`s whose `description` stacks **five**
-`Text type="supporting"` lines plus a chip row. Nothing aligns between rows —
+Coach meeting rows are `ListItem`s whose `description` stacks **four**
+`Text type="supporting"` lines plus a chip row and a `Collapsible`. Nothing aligns between rows —
 `ListItem` wraps `Item`, a three-slot flex, so sibling rows *cannot* share
 column positions (PRD v3.1 F-1). Migrate them to `Table`, the only primitive
 that can align columns, exactly as T130 did for the coach outreach rows.
@@ -39,7 +39,7 @@ that can align columns, exactly as T130 did for the coach outreach rows.
 ## Scope correction — UXC-01 is already done here
 
 The PRD lists UXC-01 for this screen. **It has already shipped.**
-`CoachMeetingsSection` (`:1455-1511`) already renders
+`CoachMeetingsSection` (`:1455-1512`) already renders
 `<Heading level={2} id={headingId}>` + `<div role="group" aria-labelledby={headingId}>`
 wrapping the `List`/`EmptyState` ternary, and already omits `List header` —
 T129 did this. Its tests are green at `MeetingsList.test.tsx:637` and `:651`.
@@ -86,14 +86,31 @@ does not map cleanly here, and you must not force it.**
 
 `onEdit` takes a whole row (`onEdit(row)`), but `onCancelRequest` targets **one
 session** — `onCancelRequest(eventId, eventTitle, session)` — and each row can
-hold many sessions with different statuses (`:1370-1384` renders a Cancel
-button only for `status === 'scheduled'`).
+hold many sessions with different statuses (the conditional opens at `:1372`, Button `:1373-1380`, rendering Cancel only
+for `status === 'scheduled'`).
 
 So:
 - **Row-level actions column: the `Edit` chip only.** Replace the `MoreMenu`
   with a short `Button` (`size="sm"`, `variant="secondary"`, visible text
   `Edit`, `label={`Edit – ${row.title}`}`). One item behind a menu is a menu
   that should not exist.
+
+  > **⚠ PENDING HUMAN AUTHORIZATION — do not implement this bullet until the
+  > orchestrator confirms.** `VOLT_Portal_PRD.md:280` (MTG-01) specifies a
+  > "per-row `MoreMenu` (Edit, Cancel session — `AlertDialog`)". Removing it is
+  > a PRD deviation, and constitution item 1 puts PRD requirement IDs above
+  > packet text — conflicts are disputes, never improvised around. T131 obtained
+  > explicit authorization for the equivalent outreach change (commit
+  > `b959b90`); this packet had none. T122 already moved Cancel out of the menu
+  > (disclosed, certified), which is what leaves it holding a single item.
+  >
+  > **Consequence either way:** `it('Edit shows an honest stub…')` at `:791`
+  > looks up `aria-label^="Actions for Weekly Build Meeting"` (`:795-797`). If
+  > the `MoreMenu` goes, that lookup returns `undefined`, the optional-chained
+  > dispatch at `:799` swallows it silently, and the generic `Edit`-text search
+  > at `:801-803` finds the new chip — so **the test passes while asserting an
+  > affordance that no longer exists.** A dead test is worse than a failing one.
+  > Amend it explicitly; do not leave it green by accident.
 - **Cancel stays inside the expanded session rows**, exactly where it is today
   (`CoachMeetingSessionRow`, `:1328-1385`), with its existing verbatim label
   `` `Cancel ${formatWeekdayDate(session.sessionDate)} session` `` — three
@@ -102,27 +119,55 @@ So:
 Apply `MIN_TOUCH_TARGET_STYLE` (44px, T130's mechanism) to every button:
 Edit, the expander, and the per-session Cancel.
 
-## 3. Expansion — row splicing, not `Collapsible`
+## 3. Expansion — row splicing, with state lifted to `MeetingsList`
 
 Today the description embeds `<Collapsible trigger={`Session details (N)`}>`.
-Astryx's `Collapsible` **keeps its content in the DOM when collapsed**, which
-several tests rely on (see Traps).
+Astryx's `Collapsible` **keeps its content mounted when collapsed** — verified,
+`Collapsible.tsx:102-104` applies `contentHidden: {display:'none'}` to an
+always-rendered `<div>`; children are never conditionally rendered. Several
+tests depend on that. Row splicing removes those rows entirely.
 
-Replace it with T130's proven pattern: a flat `data` array where expanding an
-event **splices `kind: 'sessionDetail'` rows in** beneath it, driven by
-`useState`, with the expander button carrying `aria-expanded` and
-`aria-controls` (the latter only while expanded — the ids do not exist in the
-DOM when collapsed, so a collapsed `aria-controls` would be a stale IDREF).
+Replace it with T130's pattern: a flat `data` array where expanding an event
+**splices `kind: 'sessionDetail'` rows in** beneath it, with the expander button
+carrying `aria-expanded` and `aria-controls` (the latter only while expanded —
+the ids do not exist when collapsed, so a collapsed `aria-controls` would be a
+stale IDREF).
+
+**But do NOT copy T130's state placement.** `OutreachList.tsx:2677` holds
+expansion state in a `useState` **inside each section component**. Copying that
+here inherits a bug that does not exist on the outreach screen:
+
+`handleConfirmCancel` (`:1595-1608`) optimistically flips the canceled session's
+status, and `partitionCoachMeetingRows` is recomputed by `useMemo` on `rows`
+(`:1567`). A row is Upcoming only while it has **any** scheduled session —
+pinned by tests at `:457`/`:464`. `event-weekly-build`'s only scheduled session
+is the one being canceled, so **on confirm the row moves from the Upcoming
+section to the Past section.** With per-section state, the Past instance's set
+is empty, the row re-renders collapsed, and the user silently loses their
+expansion at the exact moment they most want to see the result of their action.
+
+**Ship one `useState<ReadonlySet<string>>` keyed by `eventId` in
+`MeetingsList`**, passed down to both sections. Expansion then survives the
+bucket change. This is simpler than the per-section version, not more complex,
+and it is what makes Trap 1's `:842` assertion satisfiable at all.
 
 **Do not use `useTableGroupedRows` or `useTableRowExpansion`.** They exist in
-installed source but have **zero occurrences in `docs/swarm/astryx-api.md`**,
-which constitution item 2 makes a MAJOR. Two passed tasks already ruled them
-out on exactly this ground.
+installed source but have **zero occurrences in `docs/swarm/astryx-api.md`**
+(grep-verified), which constitution item 2 makes a MAJOR. `ParticipationTab.tsx:128-140`
+and `EventsTab.tsx:218` both record the ruling on exactly this ground.
 
 **The canceled `Badge`** (`{summary.canceledCt > 0 && <Badge variant="error" …>}`,
-`:1449`) currently floats in `endContent`. Give it a column home — the date
+`:1447`) currently floats in `endContent`. Give it a column home — the date
 column, matching where T130 put its type badge. The PRD calls its current
-placement a defect ("floating canceled badge").
+placement a defect (`VOLT_UX_Craft_PRD_v3.md:98-99`, "floating canceled badge").
+
+**Two helpers you must re-declare, not import.** `MIN_TOUCH_TARGET_STYLE`
+(`OutreachList.tsx:2299`) and `sessionDetailAnchorId` (`:2099`) are
+**non-exported locals in a Forbidden file**. Copy their definitions locally —
+`const MIN_TOUCH_TARGET_STYLE: CSSProperties = { minHeight: '44px' }` — rather
+than exporting them from `OutreachList.tsx`. This is the one place "copy it" is
+correct; `StatCell` and `useIsNarrowViewport` are real modules and must be
+imported.
 
 ## 4. Narrow viewport
 
@@ -173,30 +218,77 @@ existing `ListItem` label was already semibold, so match it.
 
 ## Traps
 
-1. **`Collapsible` keeps content mounted; row splicing does not.** Three
-   assertions depend on collapsed content being present without a click:
-   - `:597` — `toContain('Attended: Alex Rivera, Bailey Chen, Casey Nguyen')`
-   - `:827` — `findButtonByText('Cancel Wed, Jul 22 session')` with no prior
-     expand
-   - `:842` — `toContain('Canceled — no attendance recorded.')` after the
-     mutation
-   All three must gain an explicit expand step. The test comment at `:594-596`
-   ("Collapsible content is always in the DOM … so no click needed") becomes
-   false and must be rewritten, not left.
-2. **`StatCell` splits strings the tests assert as one run.** These four will
-   break and are **authorized to be amended**, because the concatenated form is
-   exactly the undifferentiated density UXC-03 exists to fix:
+1. **`Collapsible` keeps content mounted; row splicing does not — and this
+   breaks NINE assertions across THREE tests, not three in one.** The premise
+   gate enumerated them by rendering the real coach view and re-measuring
+   `textContent` with every collapsed region removed. All nine are **authorized
+   to be amended**:
+
+   **Test `:550`** (`populated state: Upcoming/Past sections…`) — the packet's
+   revision 1 never mentioned this test at all:
+   - `:558` `toContain('Scheduled')` — the only source is
+     `SESSION_STATUS_BADGE.scheduled` (`:1244`), used at `:1343` inside the
+     expander. **It survives only by accident**, because §1 prescribes an hours
+     `StatCell` whose label is literally the word `Scheduled`. **Pin that label**
+     if you want it to keep passing; do not rename it casually.
+   - `:560` `toContain('Canceled')` — capital-C exists only inside the expander
+     (`:1246`, `:1364`). The row-level badge is lowercase `${n} canceled`
+     (`:1447`), so it does not satisfy this.
+   - `:561` `toContain('present')` — only from `formatPastAttendanceSummary`
+     (`:1233-1237`), rendered at `:1357` inside the expander.
+   - (`:559` `'Completed'` survives via the Past `EmptyState` description, by
+     luck rather than design. Do not rely on it.)
+
+   **Test `:820`** (`Cancel (inline, per-session) … really calls the mutation`):
+   - `:827` `findButtonByText('Cancel Wed, Jul 22 session')` — needs an expand.
+   - `:842` `toContain('Canceled — no attendance recorded.')` — **see Trap 2.**
+   - `:851` `findButtonByText('Cancel Sat, Jul 25 session')` — this is the
+     **Ravens** row, a different row from `:827`. It needs **its own** expand.
+
+   **Test `:854`** (`Cancel rolls back … when the mutation rejects`) — also
+   unmentioned in revision 1, and it will throw rather than fail cleanly:
+   - `:859` `findButtonByText('Cancel Wed, Jul 22 session')` with no prior
+     expand returns `undefined`, and `clickButton(undefined)` throws.
+   - `:868` the same string re-asserted after rollback.
+
+   The test comment at `:592-594` ("Collapsible content is always in the DOM …
+   so no click needed") becomes false and must be rewritten, not left.
+
+   **Add one `expandRow(title)` helper** beside `findButtonByText`
+   (`:142-146`). Nine call sites, one line each, test count unchanged.
+
+2. **`:842` is not fixed by an expand step — the row changes section
+   mid-test.** This is the subtlest thing in the task. Confirming the cancel
+   re-partitions `event-weekly-build` from Upcoming to Past (§3). An expand
+   performed before the mutation applied to the **Upcoming** copy; the Past copy
+   is a different render. If you ship per-section expansion state, `:842` fails
+   no matter how many expands you add. **Lifting the state to `MeetingsList`
+   (§3) is what makes this assertion satisfiable.** If you find yourself adding
+   a second post-mutation expand to force it green, stop — you have shipped the
+   wrong state placement.
+
+3. **`StatCell` splits strings the tests assert as one run.** These four break
+   and are **authorized**, because the concatenated form is exactly the
+   undifferentiated density UXC-03 exists to fix:
    - `:581` `'4h scheduled · 2h held'`
-   - `:585` `'Expected 5 · Attended 4'`
+   - `:584` `'Expected 5 · Attended 4'`
    - `:589` `'3h scheduled · 1.5h held'`
    - `:590` `'Expected 2 · Attended 3'`
-   Amend them to assert the same **numbers** in their new per-cell homes. Do
-   not weaken them to substring-of-anything checks — the point is that the
-   values still render, in the right column.
-3. **`'Session details (N)'` (`:595-596`) is the `Collapsible` trigger text.**
-   If you adopt T130's `Sessions (N)` wording, both assertions change. Either
-   keep the existing wording (cheaper, and no test churn) or change it and
-   amend both — state which you chose and why.
+   Amend them to assert the same **numbers** in their new per-cell homes. Note
+   `StatCell` renders label and value with **no separator** (`StatCell.tsx:56-61`;
+   its own test pins `"Planned3h"`), so do not assume a space. Do not weaken
+   these to substring-of-anything checks.
+
+3b. **`'Session details (N)'` (`:595-596`) is the `Collapsible` trigger text.**
+   Two options, and the width budget depends on which you pick:
+   - **Keep the wording** — no test churn, but budget the expander column at
+     **~170px**, not 120px. `Session details (3)` is ~50-60px wider than T130's
+     `Sessions (N)` (~102px natural, `OutreachList.tsx:2499-2508`) and will wrap
+     at 120px against a 44px target height — the exact mechanism that pushed
+     T130's rows past the 72px ceiling.
+   - **Adopt `Sessions (N)`** — 120px works, but both assertions change.
+   State which you chose and why.
+
 4. **Do not touch the T129 UXC-01 tests** (`:637`, `:651`). They assert the
    `aria-labelledby` round-trip in populated *and* empty branches. Your `Table`
    goes inside the existing `<div role="group">`; both must stay green
@@ -207,8 +299,9 @@ existing `ListItem` label was already semibold, so match it.
    None should need a single character changed. If one does, you have changed
    logic that was not in scope — stop and report.
 6. **Upcoming and Past render through the same component** (`CoachMeetingsSection`
-   is called twice). Their column widths must come out **byte-identical**, as
-   T130's did. Assert it.
+   is called twice), so byte-identical widths are structural, not something to
+   prove by luck. See criterion 9 — the shipped fixture renders only one
+   `Table`, so an assertion that "both tables match" would pass vacuously.
 7. **≤72px collapsed rows** (UXC-07) and **44px touch targets** (UXC-13).
    T130 failed attempt 1 on 28px controls, then had to rebalance all six
    columns when 44px broke the row ceiling. Expect that interaction; measure
@@ -221,17 +314,36 @@ existing `ListItem` label was already semibold, so match it.
 2. Coach rows render through `Table` with aligned columns; zero horizontal
    drift between sibling rows at 1440px.
 3. **Measured: the `Table`'s scroll wrapper has `scrollWidth <= clientWidth`
-   at 1440px**, both Upcoming and Past. Report both numbers.
-4. **Measured: every collapsed row ≤72px**, both sections.
+   at 1440px.** Report both numbers.
+
+   **Fixture reality — read this before writing any "both sections" check.**
+   `defaultLoadCoachMeetingsData` produces **2 Upcoming rows and 0 Past rows**
+   (both fixture events have a scheduled session, `:727-741`), so the Past
+   section renders an `EmptyState`, **not a second `Table`**. T130's analogous
+   test worked only because the outreach fixture is 2 Upcoming + 2 Past. To
+   measure anything "across both sections" you must **inject a two-bucket
+   fixture into your throwaway rig** — say so in your output. Do not assert
+   against a Past table that does not render.
+4. **Measured: every collapsed row ≤72px.** Both sections if you injected a
+   two-bucket rig fixture (criterion 3); otherwise Upcoming only, stated plainly.
 5. **Measured: Edit, the expander, and the per-session Cancel each ≥44px** in
    their smaller dimension, at 1440px and 375px.
 6. Expansion splices session rows in and removes them on collapse;
    `aria-expanded` present, `aria-controls` set only while expanded.
 7. The canceled `Badge` has a column home; nothing floats.
-8. At 375px: no page-level horizontal scroll
-   (`document.documentElement.scrollWidth === innerWidth`); the stacked card
-   column renders every field.
-9. Upcoming and Past column widths byte-identical.
+8. At 375px: **measure the baseline first** — `document.documentElement.scrollWidth`
+   on `/meetings` **before** your change — then after. The requirement is **no
+   new overflow**; exact equality is the goal but a residual traced to elements
+   outside your Allowed Files may be disclosed rather than fixed (T132's
+   precedent: it found 603px vs 375px on `/outreach`, traced it to Buttons its
+   packet forbade touching, and reported the number rather than rounding up).
+   The stacked card column must render every field.
+9. Upcoming and Past render through the same `CoachMeetingsSection`, so their
+   column widths are byte-identical **by construction**. With the shipped
+   fixture only one `Table` exists, so this is **not measurable in the suite** —
+   assert it in the rig against an injected two-bucket fixture, or state
+   explicitly that it is guaranteed structurally and unmeasured. Do not write a
+   test that silently passes because it found one table.
 10. `useIsNarrowViewport` is **imported** from `src/hooks/`, not redefined.
 11. `StatCell` is imported from `src/components/StatCell.tsx`, unmodified.
 12. **Captures at 1440px and 375px, light and dark**, as `.webp` (UXC-13/14).
@@ -240,8 +352,10 @@ existing `ListItem` label was already semibold, so match it.
 14. `npx vitest run` green. Baseline after the merge is **1440 across 62
     files** — confirm that is what you start from, and say so if it is not.
     You are amending assertions, not adding tests, so the expected **end** count
-    is also **1440 / 62**. The permitted deltas are exactly the assertions named
-    in Traps 1–3. Any other test that changes is a regression — report it, don't
+    is also **1440 / 62**. The permitted deltas are exactly the **nine**
+    assertions enumerated in Trap 1 plus the **four** in Trap 3 (and the two in
+    Trap 3b if you change the expander wording) — thirteen or fifteen sites, in
+    five tests. Any other test that changes is a regression — report it, don't
     silence it. Zero `.skip`/`.only`/`.todo`.
 
 ## Relevant Constitution Excerpt
