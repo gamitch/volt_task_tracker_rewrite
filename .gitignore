@@ -51,3 +51,9 @@ docs/swarm/archive/
 # Playwright test artifacts (regenerated on every run)
 test-results/
 playwright-report/
+
+# Throwaway preview rigs used to screenshot auth-guarded routes (UX work).
+# Always deleted by the task that creates them; ignored so a stray `git add -A`
+# can never commit one.
+*.throwaway.*
+preview.throwaway.html
