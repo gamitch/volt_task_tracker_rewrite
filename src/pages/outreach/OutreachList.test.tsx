@@ -65,6 +65,7 @@ if (
 }
 import {
   OutreachList,
+  buildCoachOutreachTableRows,
   buildEventGroups,
   buildInitialOutreachEventFromRow,
   buildUpcomingPast,
@@ -193,6 +194,12 @@ afterEach(() => {
   });
   container.remove();
   vi.restoreAllMocks();
+  // T130 (UXC-13): this file now also uses `vi.stubGlobal('matchMedia', ...)`
+  // (same idiom `CheckinResult.test.tsx` established for its own real
+  // `matchMedia`-subscription hook) -- `vi.restoreAllMocks()` alone does not
+  // undo a stubbed global, so this is added alongside it, same pairing
+  // `CheckinResult.test.tsx`'s own `afterEach` already uses.
+  vi.unstubAllGlobals();
 });
 
 // ---------------------------------------------------------------------------
@@ -1020,12 +1027,54 @@ describe('<OutreachList /> coach view', () => {
     // UXD-03 expand-in-place: per-session detail (the past completed
     // session's "120 people reached", the canceled session's honest copy)
     // is reachable via the "+" expander, not only on the full detail page.
+    //
+    // T130 (UXC-04) PRE-AUTHORIZED CHANGE: the expander's VISIBLE text is no
+    // longer "Show session details – {title}" (that string leaked the row
+    // title into visible control text, UXC-04's one genuine violation on
+    // this row -- see `OutreachList.tsx`'s own module doc above
+    // `buildCoachOutreachColumns`). The title now survives only in the
+    // accessible name (`label`, rendered as `aria-label` since this Button
+    // has visible children, `Sessions (N)`) -- so this assertion now finds
+    // the expander by its ACCESSIBLE NAME (`aria-label`) instead of visible
+    // `textContent`, matching how `aria-label` is already asserted on for
+    // Edit/Cancel elsewhere in this same file.
     const showButtons = Array.from(container.querySelectorAll('button')).filter((btn) =>
-      btn.textContent?.startsWith('Show session details'),
+      btn.getAttribute('aria-label')?.startsWith('Show session details'),
     );
     expect(showButtons.length).toBeGreaterThan(0);
+    // The visible text is now a short, non-title-leaking label, and the
+    // expander is a real ARIA disclosure control -- `aria-expanded` starts
+    // `false`. `aria-controls` is deliberately OMITTED while collapsed
+    // (post-T130-review CHECKER FIX -- module doc above,
+    // `buildCoachOutreachColumns`): the rows it would reference are
+    // spliced OUT of the data, not merely hidden, when collapsed, so
+    // pointing at their ids before expansion would be a stale/nonexistent
+    // IDREF, invalid per the ARIA spec even though it is a common
+    // real-world shortcut.
+    showButtons.forEach((btn) => {
+      expect(btn.textContent).toMatch(/^Sessions \(\d+\)$/);
+      expect(btn.getAttribute('aria-expanded')).toBe('false');
+      expect(btn.getAttribute('aria-controls')).toBeNull();
+    });
     act(() => {
       showButtons.forEach((btn) => btn.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    });
+    // Re-query after expansion -- clicking replaced/re-rendered the buttons
+    // (new `aria-expanded`/`label` state), so the ORIGINAL `showButtons`
+    // references are stale.
+    const hideButtons = Array.from(container.querySelectorAll('button')).filter((btn) =>
+      btn.getAttribute('aria-label')?.startsWith('Hide session details'),
+    );
+    expect(hideButtons.length).toBe(showButtons.length);
+    hideButtons.forEach((btn) => {
+      expect(btn.getAttribute('aria-expanded')).toBe('true');
+      // Now expanded -- `aria-controls` references real ids, and each one
+      // resolves to a real element in the DOM (not a stale IDREF).
+      const controlsIds = btn.getAttribute('aria-controls')?.split(' ') ?? [];
+      expect(controlsIds.length).toBeGreaterThan(0);
+      controlsIds.forEach((id) => {
+        expect(document.getElementById(id)).not.toBeNull();
+      });
     });
     expect(container.textContent).toContain('120 people reached');
     expect(container.textContent).toContain('Canceled — no attendance recorded.');
@@ -1448,6 +1497,91 @@ describe('<OutreachList /> student/parent view', () => {
     // The milestone tick itself is still shown as reached (a real, current
     // fact), independent of whether the one-time toast fires again.
     expect(container.textContent).toContain('25% reached');
+  });
+
+  // -------------------------------------------------------------------------
+  // T129/UXC-01 (STUDENT section only -- `CoachOutreachSection` is T130's).
+  // `StudentOutreachSection`'s own `List`'s `header` prop was removed (it
+  // used to print "Upcoming outreach events"/"Past outreach events" a
+  // second time, per `List.tsx:194-201`); its `Heading` now carries a
+  // `useId`-generated id, and a `<div role="group">` wrapping the
+  // List/EmptyState ternary carries `aria-labelledby={headingId}` --
+  // present in BOTH branches, so the region's accessible name survives even
+  // when there is no `List` to attach a `header` to.
+  //
+  // CHECKER FIX (rework of T129, MAJOR): the wrapper was originally an
+  // Astryx `Section`, which applies a full-bleed negative-margin band
+  // unconditionally and renders a bare, role-less `<div>` that cannot
+  // support `aria-labelledby` under ARIA. A plain `<div role="group">`
+  // fixes both; the query below includes `role="group"` so a regression
+  // back to a role-less wrapper fails the lookup itself, not just a later
+  // assertion.
+  // -------------------------------------------------------------------------
+  describe('T129 UXC-01 -- exactly one heading per Upcoming/Past section', () => {
+    function resolveAriaLabelledbyTarget(headingText: string): {
+      headingId: string;
+      resolvedText: string | null;
+    } {
+      const heading = Array.from(container.querySelectorAll('h2')).find(
+        (h) => h.textContent === headingText,
+      );
+      expect(heading).toBeTruthy();
+      const headingId = heading!.id;
+      expect(headingId).toBeTruthy();
+      const labelledEl = container.querySelector(`[role="group"][aria-labelledby="${headingId}"]`);
+      expect(labelledEl).toBeTruthy();
+      expect(labelledEl!.getAttribute('role')).toBe('group');
+      const resolvedId = labelledEl!.getAttribute('aria-labelledby')!;
+      const resolvedEl = document.getElementById(resolvedId);
+      return { headingId, resolvedText: resolvedEl?.textContent ?? null };
+    }
+
+    it('populated branch: both "Upcoming" and "Past" resolve aria-labelledby back to their own Heading, printed exactly once', async () => {
+      window.localStorage.clear();
+      renderAsUser(STUDENT_OR_PARENT_USER, { loadData: defaultLoadOutreachData });
+      await flushMicrotasks();
+
+      for (const title of ['Upcoming', 'Past']) {
+        const { resolvedText } = resolveAriaLabelledbyTarget(title);
+        expect(resolvedText).toBe(title);
+        const leafMatches = Array.from(container.querySelectorAll('*')).filter(
+          (el) => el.children.length === 0 && el.textContent === title,
+        );
+        expect(leafMatches.length).toBe(1);
+      }
+    });
+
+    it('empty branch: "Upcoming" has no scheduled sessions -- its aria-labelledby still resolves to its Heading, even with no List rendered ("Past" stays populated in the same render)', async () => {
+      window.localStorage.clear();
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        loadData: async (seasonId: string) => {
+          const base = await defaultLoadOutreachData(seasonId);
+          // Every session that was 'scheduled' becomes 'completed' -- no
+          // event has any scheduled session left, so `buildEventGroups`
+          // (module doc above) buckets everything into "Past", leaving
+          // "Upcoming" empty while "Past" stays populated.
+          return {
+            ...base,
+            sessions: base.sessions.map((session) =>
+              session.status === 'scheduled'
+                ? { ...session, status: 'completed' as const }
+                : session,
+            ),
+          };
+        },
+      });
+      await flushMicrotasks();
+
+      // Confirm "Upcoming" really is the EmptyState branch (per its own
+      // `emptyDescription`), not a load failure or the page-level "zero
+      // outreach at all" EmptyState.
+      expect(container.textContent).toContain('You have no upcoming outreach events.');
+
+      for (const title of ['Upcoming', 'Past']) {
+        const { resolvedText } = resolveAriaLabelledbyTarget(title);
+        expect(resolvedText).toBe(title);
+      }
+    });
   });
 });
 
@@ -2019,5 +2153,345 @@ describe('saveOutreachEvent (T101, Trap #5 real onSaveEvent default)', () => {
     // Never a delete call anywhere in this reconciliation (module doc #5's
     // own genuine FK-restrict finding).
     expect(sessionsSelectCall).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T130 (UXC-13, CHECKER FIX post-review, MAJOR): 44px touch-target proof.
+//
+// `minHeight` is set via the documented `style` prop (module doc on
+// `MIN_TOUCH_TARGET_STYLE`, `OutreachList.tsx`) -- a real inline `style`
+// HTML attribute, which jsdom (unlike a StyleX-driven CSS class) reflects
+// correctly without needing a real layout engine or a loaded stylesheet.
+// ---------------------------------------------------------------------------
+
+describe('<OutreachList /> coach view -- T130 44px touch targets (UXC-13, checker fix)', () => {
+  it('the expander, Edit, and Cancel buttons all carry a real 44px minHeight via the documented `style` prop', async () => {
+    renderAsUser(COACH_USER, { loadData: defaultLoadOutreachData });
+    await flushMicrotasks();
+
+    const expanderButtons = Array.from(container.querySelectorAll('button')).filter((btn) =>
+      btn.getAttribute('aria-label')?.startsWith('Show session details'),
+    );
+    const editButtons = Array.from(container.querySelectorAll('button')).filter((btn) =>
+      btn.getAttribute('aria-label')?.startsWith('Edit – '),
+    );
+    const cancelButtons = Array.from(container.querySelectorAll('button')).filter((btn) =>
+      btn.getAttribute('aria-label')?.startsWith('Cancel – '),
+    );
+    expect(expanderButtons.length).toBeGreaterThan(0);
+    expect(editButtons.length).toBeGreaterThan(0);
+    expect(cancelButtons.length).toBeGreaterThan(0);
+
+    for (const btn of [...expanderButtons, ...editButtons, ...cancelButtons]) {
+      expect(btn.style.minHeight).toBe('44px');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T130 (UXC-01, CHECKER FIX post-review, MAJOR): coach section
+// `aria-labelledby` parity with T129's own (already checker-verified) fix
+// on the student side of this same file.
+//
+// `CoachOutreachSection`'s `Heading` carries a `useId`-generated id, and a
+// plain `<div role="group" aria-labelledby={headingId}>` (NOT `Section`,
+// which renders a bare, role-less `<div>` -- `aria-labelledby` on an
+// implicit `role="generic"` element is name-prohibited under ARIA and is
+// silently discarded by assistive technology even though the attribute is
+// genuinely present in the DOM) wraps the `Table`/`EmptyState` ternary, so
+// the query below includes `role="group"` -- a regression back to a
+// role-less wrapper fails the lookup itself, not a later, weaker
+// assertion. Mirrors `StudentOutreachSection`'s own identical fix exactly
+// (T129, that describe block above, `resolveAriaLabelledbyTarget`).
+// ---------------------------------------------------------------------------
+
+describe('<OutreachList /> coach view -- T130 UXC-01 aria-labelledby parity with T129', () => {
+  function resolveCoachAriaLabelledbyTarget(headingText: string): {
+    headingId: string;
+    resolvedText: string | null;
+  } {
+    const heading = Array.from(container.querySelectorAll('h2')).find(
+      (h) => h.textContent === headingText,
+    );
+    expect(heading).toBeTruthy();
+    const headingId = heading!.id;
+    expect(headingId).toBeTruthy();
+    const labelledEl = container.querySelector(`[role="group"][aria-labelledby="${headingId}"]`);
+    expect(labelledEl).toBeTruthy();
+    expect(labelledEl!.getAttribute('role')).toBe('group');
+    const resolvedId = labelledEl!.getAttribute('aria-labelledby')!;
+    const resolvedEl = document.getElementById(resolvedId);
+    return { headingId, resolvedText: resolvedEl?.textContent ?? null };
+  }
+
+  it('populated branch: both "Upcoming" and "Past" resolve aria-labelledby back to their own Heading via a real role="group" wrapper, printed exactly once', async () => {
+    renderAsUser(COACH_USER, { loadData: defaultLoadOutreachData });
+    await flushMicrotasks();
+
+    for (const title of ['Upcoming', 'Past']) {
+      const { resolvedText } = resolveCoachAriaLabelledbyTarget(title);
+      expect(resolvedText).toBe(title);
+      const leafMatches = Array.from(container.querySelectorAll('*')).filter(
+        (el) => el.children.length === 0 && el.textContent === title,
+      );
+      expect(leafMatches.length).toBe(1);
+    }
+  });
+
+  it('empty branch: "Upcoming" has no scheduled sessions -- its aria-labelledby still resolves to its Heading via role="group", even with no Table rendered ("Past" stays populated in the same render)', async () => {
+    renderAsUser(COACH_USER, {
+      loadData: async (seasonId: string) => {
+        const base = await defaultLoadOutreachData(seasonId);
+        return {
+          ...base,
+          sessions: base.sessions.map((session) =>
+            session.status === 'scheduled' ? { ...session, status: 'completed' as const } : session,
+          ),
+        };
+      },
+    });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('No outreach events are currently scheduled.');
+
+    for (const title of ['Upcoming', 'Past']) {
+      const { resolvedText } = resolveCoachAriaLabelledbyTarget(title);
+      expect(resolvedText).toBe(title);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T130 (UXC-02/07): coach `Table` migration -- column-alignment proof.
+//
+// jsdom returns zeros for real layout geometry, and `<td>` never receives a
+// width at all (widths are applied only to `<th>`, `BaseTable.tsx:405-407`,
+// under `tableLayout: 'fixed'`, `BaseTable.tsx:54`) -- so this asserts the
+// documented substitute proof instead (packet's own Required Output list):
+//   (i)   each column's `<th>` carries the expected inline `width`/`minWidth`
+//   (ii)  those `<th>` style strings are byte-identical between the
+//         Upcoming and Past `<table>`s
+//   (iii) `tableLayout: 'fixed'` -- proven at the SOURCE level, not via
+//         jsdom `getComputedStyle` (confirmed empirically: jsdom does not
+//         apply the installed package's compiled StyleX stylesheet, so
+//         `getComputedStyle(table).tableLayout` reads back the CSS default
+//         `'auto'` regardless of the real class applied -- the same
+//         "jsdom returns zeros for geometry" limitation this task's own
+//         packet names). The real mechanism (`BaseTable.tsx:49-55,368`):
+//         the base `styles.table` StyleX rule sets `tableLayout: 'fixed'`
+//         unconditionally; the ONLY override, `styles.tableAutoLayout`
+//         ('auto'), is applied exclusively in "children mode"
+//         (`styles: children ? [styles.table, styles.tableAutoLayout] :
+//         [styles.table]`). `OutreachList.tsx`'s two `<Table data columns
+//         .../>` call sites never pass `children` (data-driven mode only,
+//         grep-provable), so the auto-layout override can never apply --
+//         `tableLayout: 'fixed'` is therefore active by construction, not
+//         by a runtime check this environment can observe.
+//   (iv)  every body `<tr>` has the same `<td>` count in the same column
+//         order
+// ---------------------------------------------------------------------------
+
+describe('<OutreachList /> coach view -- T130 Table column-alignment proof (UXC-02/07)', () => {
+  it('Upcoming and Past tables render the same 6 columns with byte-identical <th> widths, and every body row has 6 <td>s in the same order', async () => {
+    renderAsUser(COACH_USER, { loadData: defaultLoadOutreachData });
+    await flushMicrotasks();
+
+    const tables = Array.from(container.querySelectorAll('table'));
+    // This page renders exactly 4 coach outreach events (5 fixtures exist;
+    // `event-team-meeting` is excluded by NAV-07) -- 2 Upcoming, 2 Past --
+    // so exactly one `<table>` per bucket.
+    expect(tables.length).toBe(2);
+    const [upcomingTable, pastTable] = tables;
+
+    const upcomingThStyles = Array.from(upcomingTable.querySelectorAll('thead th')).map((th) =>
+      th.getAttribute('style'),
+    );
+    const pastThStyles = Array.from(pastTable.querySelectorAll('thead th')).map((th) =>
+      th.getAttribute('style'),
+    );
+
+    // (i) six columns, each carrying a real inline width/minWidth (the
+    // expander/date/stat/action columns are `pixel()`; the title column is
+    // `proportional(2)`, which resolves to a `%` width plus a `minWidth`
+    // floor -- never a column with no width style at all).
+    expect(upcomingThStyles.length).toBe(6);
+    upcomingThStyles.forEach((style) => {
+      expect(style).toMatch(/width:/);
+      expect(style).toMatch(/min-width:/);
+    });
+
+    // (ii) byte-identical between Upcoming and Past -- both call the SAME
+    // `buildCoachOutreachColumns` factory with the same `pixel()`/
+    // `proportional()` values (only header/cell TEXT differs by bucket,
+    // never a width).
+    expect(pastThStyles).toEqual(upcomingThStyles);
+
+    // (iv) every body `<tr>` in both tables has the same <td> count (6, one
+    // per column) in the same column order -- including the collapsed
+    // (non-expanded) event rows this render already contains. `kind:
+    // 'sessionDetail'` child rows (only reachable once expanded, covered by
+    // the dedicated expansion test below) also carry all 6 `<td>`s, several
+    // deliberately empty (`null`-rendered) -- proven separately below.
+    for (const table of tables) {
+      const bodyRows = Array.from(table.querySelectorAll('tbody tr'));
+      expect(bodyRows.length).toBeGreaterThan(0);
+      bodyRows.forEach((row) => {
+        expect(row.querySelectorAll('td').length).toBe(6);
+      });
+    }
+  });
+
+  it('expanding an event row splices session-detail rows beneath it, each still carrying all 6 <td>s (5 empty, 1 with the session content) -- no colSpan, no lost column alignment', async () => {
+    renderAsUser(COACH_USER, { loadData: defaultLoadOutreachData });
+    await flushMicrotasks();
+
+    const upcomingTable = container.querySelectorAll('table')[0];
+    const expandButton = Array.from(upcomingTable.querySelectorAll('button')).find((btn) =>
+      btn.getAttribute('aria-label')?.startsWith('Show session details'),
+    );
+    expect(expandButton).toBeTruthy();
+    const rowCountBefore = upcomingTable.querySelectorAll('tbody tr').length;
+
+    act(() => {
+      expandButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const rowCountAfter = upcomingTable.querySelectorAll('tbody tr').length;
+    expect(rowCountAfter).toBeGreaterThan(rowCountBefore);
+
+    Array.from(upcomingTable.querySelectorAll('tbody tr')).forEach((row) => {
+      expect(row.querySelectorAll('td').length).toBe(6);
+    });
+
+    // The now-"Hide" button is a real ARIA disclosure control referencing
+    // real ids of the rows it just revealed.
+    const hideButton = Array.from(upcomingTable.querySelectorAll('button')).find((btn) =>
+      btn.getAttribute('aria-label')?.startsWith('Hide session details'),
+    );
+    expect(hideButton).toBeTruthy();
+    expect(hideButton?.getAttribute('aria-expanded')).toBe('true');
+    const controlsIds = hideButton?.getAttribute('aria-controls')?.split(' ') ?? [];
+    expect(controlsIds.length).toBeGreaterThan(0);
+    controlsIds.forEach((id) => {
+      expect(document.getElementById(id)).not.toBeNull();
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T130 (UXC-13): responsive -- real `matchMedia` subscription, same
+// `vi.stubGlobal('matchMedia', ...)` override idiom `CheckinResult.test.tsx`
+// established for its own real-subscription hook.
+// ---------------------------------------------------------------------------
+
+describe('<OutreachList /> coach view -- T130 responsive (UXC-13)', () => {
+  function stubMatchMedia(matches: boolean): void {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockImplementation((query: string) => ({
+        matches,
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    );
+  }
+
+  it('below 768px, every coach table collapses to a single stacked column (no fixed-width column set that could force horizontal scroll at 375px)', async () => {
+    stubMatchMedia(true);
+    renderAsUser(COACH_USER, { loadData: defaultLoadOutreachData });
+    await flushMicrotasks();
+
+    const tables = Array.from(container.querySelectorAll('table'));
+    expect(tables.length).toBe(2);
+    tables.forEach((table) => {
+      const ths = Array.from(table.querySelectorAll('thead th'));
+      expect(ths.length).toBe(1);
+      expect(ths[0].getAttribute('style')).toMatch(/width: 100%/);
+      const bodyRows = Array.from(table.querySelectorAll('tbody tr'));
+      bodyRows.forEach((row) => {
+        expect(row.querySelectorAll('td').length).toBe(1);
+      });
+    });
+    // The row content itself is still fully present -- collapsing columns
+    // never drops data, only re-flows it into one stacked cell per row.
+    expect(container.textContent).toContain('Community Food Bank Sort');
+    expect(container.textContent).toContain('Planned3h');
+  });
+
+  it('at/above 768px (the default, unstubbed jsdom matchMedia -- see module doc), the desktop 6-column set renders', async () => {
+    stubMatchMedia(false);
+    renderAsUser(COACH_USER, { loadData: defaultLoadOutreachData });
+    await flushMicrotasks();
+
+    const tables = Array.from(container.querySelectorAll('table'));
+    tables.forEach((table) => {
+      expect(table.querySelectorAll('thead th').length).toBe(6);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T130 -- `buildCoachOutreachTableRows` pure-function coverage (this file's
+// own "pure functions exported, directly tested" convention).
+// ---------------------------------------------------------------------------
+
+describe('buildCoachOutreachTableRows (T130)', () => {
+  const event: OutreachEventRow = {
+    id: 'e1',
+    seasonId: 's1',
+    type: 'outreach',
+    title: 'Test Event',
+    description: '',
+    locationName: 'X',
+    address: '',
+    teamIds: null,
+    countsParticipation: false,
+    countsVolunteerHours: true,
+    adultVolunteersCount: 0,
+    adultVolunteerHours: 0,
+  };
+  const sessionA: OutreachSessionRow = {
+    id: 'sA',
+    eventId: 'e1',
+    sessionDate: '2026-08-01',
+    startsAt: '2026-08-01T14:00:00.000Z',
+    endsAt: '2026-08-01T16:00:00.000Z',
+    status: 'scheduled',
+    peopleReached: null,
+  };
+  const sessionB: OutreachSessionRow = {
+    id: 'sB',
+    eventId: 'e1',
+    sessionDate: '2026-08-02',
+    startsAt: '2026-08-02T14:00:00.000Z',
+    endsAt: '2026-08-02T16:00:00.000Z',
+    status: 'scheduled',
+    peopleReached: null,
+  };
+  const enrichedEvents = [{ event, sessions: [sessionA, sessionB] }];
+
+  it('collapsed (no expanded ids): one row per event, kind "event"', () => {
+    const rows = buildCoachOutreachTableRows(enrichedEvents, 'upcoming', [], [], [], new Set());
+    expect(rows.length).toBe(1);
+    expect(rows[0].kind).toBe('event');
+  });
+
+  it('expanded: the event row is immediately followed by one "sessionDetail" row per session, same order', () => {
+    const rows = buildCoachOutreachTableRows(
+      enrichedEvents,
+      'upcoming',
+      [],
+      [],
+      [],
+      new Set(['e1']),
+    );
+    expect(rows.map((r) => r.kind)).toEqual(['event', 'sessionDetail', 'sessionDetail']);
+    expect(rows.map((r) => r.id)).toEqual(['e1', 'e1::session::sA', 'e1::session::sB']);
   });
 });

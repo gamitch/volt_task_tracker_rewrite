@@ -563,7 +563,15 @@
  * single pre-existing disable directive (`useLoadState`, module doc above)
  * remains genuinely load-bearing and unchanged.
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import {
   AlertDialog,
   Badge,
@@ -578,10 +586,14 @@ import {
   SegmentedControl,
   SegmentedControlItem,
   Skeleton,
+  Table,
   Text,
   Toast,
   VisuallyHidden,
   VStack,
+  pixel,
+  proportional,
+  type TableColumn,
 } from '@astryxdesign/core';
 import { Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../../app/guards';
@@ -616,6 +628,12 @@ import {
 // T126 (PRD v2 UXP-03) -- module doc #14. This task's own new dialog/
 // component, `src/pages/outreach/`.
 import { SelfCheckoffDialog } from './SelfCheckoffDialog';
+// T130 (VOLT UX Craft PRD v3.1, UXC-03) -- the shared three-tier stat-cell
+// component extracted FROM this file's own pre-existing coach-row shape
+// (see `StatCell.tsx`'s own module doc for the extraction record). Used only
+// by the coach `Table` columns below; `GoalProgressBar` is deliberately left
+// consuming its own inline `Text` triplet, unchanged (out of scope).
+import { StatCell } from '../../components/StatCell';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets. Module doc #1.
@@ -1839,183 +1857,281 @@ function GoalProgressBar({
 // ---------------------------------------------------------------------------
 
 /**
- * T121 (UXP-04 outreach half / UXD-02/03/04): dense per-EVENT coach row --
- * replaces the former per-SESSION `CoachOutreachRowItem`. Answers UXD-02's
- * "when/what/where/how much/who" without navigation (date range + weekday
- * chips, title + category badge, location, planned/logged hours,
- * expected/attended counts + reached), carries inline Edit/Cancel actions
- * (UXD-04) plus a "+" expander (UXD-03) revealing per-session detail in
- * place. `ListItem` itself stays non-interactive (no `onClick`/`href`) --
- * every interactive element (expander toggle, Edit, Cancel, the pre-existing
- * T112 "View details" `Link`) lives together in `endContent`, as SIBLINGS,
- * not nested inside another interactive element -- honoring the same
- * Astryx "Don't place interactive elements inside an interactive list item"
- * constraint this file's own module doc #10 already established (the
- * warning is about nesting inside an ALREADY-interactive row, not about
- * multiple sibling controls in one non-interactive row's `endContent`).
- * Each interactive control's accessible name is suffixed with the event's
- * own title (an en dash, matching the pre-existing "View details – {title}"
- * convention) so multiple rows' otherwise-identical "Edit"/"Cancel"/expander
- * buttons stay distinguishable to assistive tech (UXD-09), the same
- * discipline this file's own module doc #13 already established for `Link`.
+ * T130 (VOLT UX Craft PRD v3.1, UXC-02/03/04/07/13/14) -- REWORK of T121's
+ * `List`/`ListItem` coach row (module doc above this replaced; the T121/
+ * CHECKER-FIX history is kept only in git blame, not restated here) onto
+ * Astryx `Table`, per F-1's finding that `ListItem`'s end slots are
+ * `flex: 0 0 auto` (`Item.tsx:268,272`) and therefore cannot align stat/
+ * action columns across rows -- confirmed live in this task's own "before"
+ * screenshots (`docs/swarm/figures/ux-craft/t130-outreach-coach-before-*.webp`):
+ * the "Planned"/"Expected" tiles sit at a different x on every row.
  *
- * CHECKER FIX (rework of T121, NIT #5) -- corrected claim: the category
- * `Badge` lives in `description` (below the title), not glued next to it.
- * The original worker output justified this as an Astryx CONSTRAINT
- * ("`ListItem.label` is `string`-only"), sourced from the `npm run astryx
- * -- component ListItem` CLI cross-check -- that CLI output is STALE/WRONG
- * against the actually-installed package: the real
- * `node_modules/@astryxdesign/core/dist/List/ListItem.d.ts` declares
- * `label: ReactNode` (not `string`), so a title+badge `ReactNode` COULD be
- * passed as `label` directly. Constitution item 2's own text already warns
- * the CLI is "a cross-check, not a source" for exactly this reason -- the
- * installed `.d.ts` should have been the authority, and wasn't checked here
- * the first time. This file's own layout (badge in `description`, not in
- * `label`) is kept as-is (already checker-accepted) -- it is a DESIGN
- * CHOICE (keeping `label` a plain title string for `ListItem`'s own
- * automatic single-line-truncation behavior, documented on `label`/
- * `description` in that same `.d.ts`: "Accepts a plain string (single-line
- * truncation applied automatically) or a ReactNode... no truncation
- * constraints applied" -- a `ReactNode` label loses that truncation
- * safety net for a long event title), not a hard API constraint.
+ * -----------------------------------------------------------------------
+ * Structure decision (disclosed, T131 inherits this): `useTableGroupedRows`/
+ * `useTableRowExpansion` are real in the installed package but have ZERO
+ * occurrences in `docs/swarm/astryx-api.md` -- constitution item 2 presumes
+ * an undocumented prop/plugin hallucinated, and two already-passed tasks
+ * (`ParticipationTab.tsx:305-327,984-998`, `EventsTab.tsx:217-226`) already
+ * adjudicated this exact question for the grouping/plugin question. So:
+ * ONE `Section`+`Table` per bucket (`CoachOutreachSection`, called once for
+ * "Upcoming" and once for "Past" by `CoachOutreachView` below, unchanged
+ * call shape), each with a real `Heading level={2}` -- `Table` has no
+ * `header` prop and its scroll wrapper hardcodes `role="group"
+ * aria-label="Table"` (`Table.tsx:160-161`), so the heading stays a real,
+ * separate element, matching `ParticipationTab.tsx:984-998`'s own JSX shape
+ * exactly (`<Section dividers={['bottom']}><VStack gap={3}><Heading
+ * level={2}/><Table data columns idKey density dividers hasHover/></VStack>
+ * </Section>`).
+ *
+ * Row expansion (also zero in-repo precedent, also T131 inherits this): a
+ * plain `useState<ReadonlySet<string>>` of expanded event ids, owned by
+ * `CoachOutreachSection` (one instance per bucket, so Upcoming/Past expand
+ * independently, matching the old per-row-component-instance `isExpanded`
+ * state this replaces). `buildCoachOutreachTableRows` below splices a
+ * `kind: 'sessionDetail'` row per session directly beneath its `kind:
+ * 'event'` parent row in the SAME flat array `Table`'s `data` prop
+ * consumes -- no `colSpan`, no plugin. The free-text "Going: Priya, Devon"
+ * line (ex `CoachSessionDetail`, unchanged content, still exported for
+ * direct testing) renders as the child row's OWN `title` column content;
+ * every other column's `renderCell` returns `null` for a `kind:
+ * 'sessionDetail'` row (packet's own instruction) -- no column claims a
+ * a width the free-text line does not need, and the free-text row still
+ * renders inside the SAME six `<td>`s every event row has (`null` is a
+ * valid, empty `<td>` child, not a removed cell), keeping "every body `<tr>`
+ * has the same `<td>` count in the same column order" (Required Output
+ * (iv)) true for every row, not just event rows.
+ *
+ * Two `Table`s (Upcoming, Past) resolve column widths independently
+ * (`resolveColumnWidths`, `columnUtils.ts`) -- `buildCoachOutreachColumns`
+ * is the ONE shared factory both `CoachOutreachSection` instances call with
+ * the identical `pixel()`/`proportional()` values (only `header`/cell
+ * CONTENT differ by `bucket`, e.g. "Planned" vs "Logged" -- never a width),
+ * so `resolveColumnWidths` -- a pure function of the column defs, not the
+ * data -- produces byte-identical `<th>` inline styles for both tables
+ * (Required Output (i)/(ii)).
+ *
+ * UXC-04 (the ONLY genuine violation on this row, per the packet's
+ * corrected scope): the expander was a `Button` with
+ * `label="Show session details – {title}"` and NO children, so the label
+ * doubled as the only visible text -- the row title leaked into visible
+ * control text. Fixed the same way Edit/Cancel already comply: `label`
+ * stays byte-identical (still pinned by `OutreachList.test.tsx`'s edit/
+ * cancel `aria-label` assertions and by the expander's own now-updated
+ * assertion, see below), short visible children added
+ * (`Sessions ({sessions.length})`), so the title survives in the
+ * accessible name only. `aria-expanded`/`aria-controls` are added too
+ * (`Button` spreads rest props onto the native `<button>`, `Button.tsx:
+ * 547,739` -- both are DOM/ARIA passthrough attributes `BaseProps.ts`'s own
+ * top comment lists as deliberately "kept", not Astryx-specific API surface
+ * documented per-component in `astryx-api.md`; the packet pre-verified and
+ * directed this exact usage given the expander now controls rows injected
+ * into the same `<tbody>`, a disclosed, deliberate exception to "every prop
+ * from `astryx-api.md`", not a silent one). `aria-controls` references the
+ * `id` of the first `Text` inside each of the event's own session-detail
+ * rows (`Text.id` IS documented, `astryx-api.md` "Text" Props table) --
+ * those ids only exist in the DOM once expanded (the rows are spliced OUT
+ * of `data`, not merely hidden, when collapsed), matching this file's own
+ * pre-existing "hidden means removed from the DOM" convention
+ * (`AlertDialog`/`Dialog` usage elsewhere in this codebase, cited by
+ * `LiveConsole.tsx`'s own module doc) rather than a CSS-hide. CHECKER FIX
+ * (post-T130 review, NIT): while COLLAPSED, `aria-controls` is omitted
+ * entirely (`undefined`, which React never renders as an attribute on a
+ * native `<button>`) rather than pointing at ids that do not exist in the
+ * DOM yet -- an IDREF to a nonexistent id is invalid per the ARIA spec
+ * even though it is a common real-world shortcut; this file now only sets
+ * `aria-controls` once `isExpanded` is true and the referenced ids are
+ * real. `aria-expanded` itself is always present (`false`/`true`), which
+ * alone is sufficient for AT to know the control is a disclosure toggle
+ * even in the collapsed state.
+ * "View details – {title}" and Edit/Cancel are UNCHANGED (UXC-04's own
+ * explicit exemption for the Link; Edit/Cancel already complied) --
+ * verbatim `label`s, verbatim visible text, verbatim en dash.
+ *
+ * UXC-13 (responsive, escalation pre-authorized by the packet): Astryx
+ * exports no breakpoint hook (zero `useMediaQuery`/`useBreakpoint` in
+ * `astryx-api.md`) and there is no CSS/`xstyle` escalation available (F-2),
+ * so `useIsNarrowViewport` below is a real `window.matchMedia` SUBSCRIPTION
+ * (not a one-time read), independently reimplemented in this file rather
+ * than imported -- `CheckinResult.tsx`'s own `usePrefersReducedMotion`
+ * (lines 357-387) is the in-repo precedent for the subscription shape, but
+ * that file is outside this task's Allowed Files, so this is a fresh
+ * implementation of the same pattern, matching this file's own established
+ * "independently reimplemented, not imported across pages" convention
+ * (NFR-09 date formatters above). `LiveConsole.tsx:351`'s own comment
+ * records a DELIBERATE prior *non*-use of `matchMedia` for a different
+ * question (mode detection driven by a route param, not a live breakpoint,
+ * and that file's own jsdom-only test toolchain genuinely could not prove a
+ * real subscription) -- not a precedent against using it here, where the
+ * question genuinely is a live CSS breakpoint and this repo's
+ * `test-setup.ts` already ships a guarded `matchMedia` polyfill every test
+ * environment gets for free (see this task's own worker output "judgment
+ * calls" for why that polyfill's `matches: false` default means this file's
+ * existing 66 assertions exercise the DESKTOP column set, and the new
+ * mobile-specific test below drives the narrow branch explicitly via
+ * `vi.stubGlobal`, the same override idiom `CheckinResult.test.tsx`
+ * established for the identical hook shape).
+ *
+ * Below 768px, `buildCoachOutreachColumns` returns a SINGLE `proportional`
+ * column instead of six `pixel`/`proportional` columns -- collapsing every
+ * column (date, stats, actions) into one stacked card per row, inside the
+ * same `Table`, rather than switching back to `List` (which the packet's
+ * own migration mandate forecloses) or letting `Table`'s own scroll wrapper
+ * kick in (six fixed-width desktop columns sum to ~950px, which WOULD
+ * force horizontal scroll at 375px -- forbidden by UXC-13).
+ *
+ * CHECKER FIX (post-T130 review, MAJOR): 44px touch targets, implemented,
+ * corrected premise. The first draft of this file shipped every
+ * interactive control at `size="sm"` (`Button.tsx:135` maps `sm` to
+ * `sizeVars['--size-element-sm']`, `tokens.stylex.ts:177` = **28px**) and
+ * then disclosed the gap as if `size="lg"` (36px, `tokens.stylex.ts:179`)
+ * had already been tried and still fell short "through props alone" -- two
+ * separate errors: the 36px ceiling was never actually reached (every
+ * control stayed at 28px), and "not reachable through props alone" was
+ * itself false. `style` IS a real, documented Astryx prop (`BaseProps.ts`'s
+ * own top comment keeps it; `astryx-api.md`'s FormField Props table
+ * documents it verbatim: "`style` | `React.CSSProperties` | Inline styles
+ * applied to the root element. Takes priority over StyleX inline styles.");
+ * `Button.tsx:545,652-656` merges a consumer `style` in via `mergeProps`
+ * (`mergeProps.ts:105-107` folds the consumer `style` into the merged
+ * props; `mergeTwoProps`, `mergeProps.ts:39-58`, then spreads it AFTER the
+ * StyleX-driven `height`, so it wins) -- this is the SAME documented
+ * `className`/`style` merge F-2 itself names as the sanctioned CSS surface
+ * ("`className`/`style` are merged (`src/utils/mergeProps.ts:62-107`)"),
+ * not `xstyle`/`stylex.create()` (which is what actually throws at
+ * runtime, per F-2's own reasoning -- that reasoning never applied to
+ * plain `style` objects, which this codebase already uses elsewhere, e.g.
+ * `CheckinResult.tsx:595`).
+ *
+ * Fix: `CoachExpanderButton` and both buttons in `CoachEventActions` now
+ * carry `style={{ minHeight: '44px' }}` (CSS `min-height` clamps the used
+ * height to `max(specified height, min-height)`, so this genuinely grows
+ * the rendered, clickable box to 44px regardless of `size`) -- `size="sm"`
+ * is kept (visual glyph/label/padding stay compact; only the hit box
+ * grows), since switching to `size="lg"` changes visible chrome for no
+ * accessibility benefit `min-height` alone doesn't already provide.
+ * Row-height impact re-measured with the same preview rig this task's own
+ * worker output already used (real Chromium, not assumed) -- see that
+ * output's own "gate output"/"known risks" section for the exact
+ * before/after numbers against UXC-07's 72px ceiling.
+ *
+ * What changes on mobile (<768px) is unrelated to the fix above: which/how
+ * many controls sit in one row and how much space surrounds them
+ * (single-column stacking gives every control its own full-width row,
+ * reducing accidental adjacent mis-taps on top of the real 44px target).
  */
-function CoachOutreachEventRow({
-  event,
-  sessions,
-  rsvps,
-  attendance,
-  students,
-  bucket,
-  onEdit,
-  onCancel,
-}: {
+
+// ---------------------------------------------------------------------------
+// UXC-13: real `matchMedia` subscription -- module doc above.
+// ---------------------------------------------------------------------------
+
+const NARROW_VIEWPORT_QUERY = '(max-width: 767px)';
+
+function getIsNarrowViewport(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false;
+  }
+  return window.matchMedia(NARROW_VIEWPORT_QUERY).matches;
+}
+
+function useIsNarrowViewport(): boolean {
+  const [isNarrow, setIsNarrow] = useState<boolean>(getIsNarrowViewport);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return;
+    }
+    const mediaQueryList = window.matchMedia(NARROW_VIEWPORT_QUERY);
+    setIsNarrow(mediaQueryList.matches);
+
+    const handleChange = (event: MediaQueryListEvent) => setIsNarrow(event.matches);
+    if (typeof mediaQueryList.addEventListener === 'function') {
+      mediaQueryList.addEventListener('change', handleChange);
+      return () => mediaQueryList.removeEventListener('change', handleChange);
+    }
+    // Safari < 14 fallback API.
+    mediaQueryList.addListener(handleChange);
+    return () => mediaQueryList.removeListener(handleChange);
+  }, []);
+
+  return isNarrow;
+}
+
+// ---------------------------------------------------------------------------
+// T130 -- row shape. `extends Record<string, unknown>` is required by
+// `Table`'s own generic constraint (`astryx-api.md` "Table" Props table,
+// `data: T[]`) -- the established idiom this file's own module doc cites at
+// `ParticipationTab.tsx:361`/`SeasonSettings.tsx:349`.
+// ---------------------------------------------------------------------------
+
+export interface CoachEventTableRow extends Record<string, unknown> {
+  kind: 'event';
+  id: string;
   event: OutreachEventRow;
-  sessions: readonly OutreachSessionRow[];
-  rsvps: readonly RsvpRow[];
-  /** CHECKER FIX (rework of T121, MAJOR) -- real attendance rows, the ONE
-   * source `stats.attendedCount` is computed from. */
-  attendance: readonly OutreachAttendanceRow[];
-  students: readonly OutreachStudentFixture[];
+  sessions: OutreachSessionRow[];
   bucket: 'upcoming' | 'past';
-  onEdit: (event: OutreachEventRow, sessions: readonly OutreachSessionRow[]) => void;
-  onCancel: (event: OutreachEventRow) => void;
-}): ReactNode {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const allStudentIds = useMemo(() => students.map((student) => student.id), [students]);
-  const stats = useMemo(
-    () => computeEventRowStats(sessions, rsvps, attendance, allStudentIds),
-    [sessions, rsvps, attendance, allStudentIds],
-  );
-  const studentNameById = useMemo(
-    () => new Map(students.map((student) => [student.id, student.name] as const)),
-    [students],
-  );
+  stats: EventRowStats;
+}
 
-  const canCancel = stats.scheduledSessions.length > 0;
-  const hoursValue = bucket === 'upcoming' ? stats.hours.plannedHours : stats.hours.confirmedHours;
-  const countValue = bucket === 'upcoming' ? stats.expectedCount : stats.attendedCount;
+export interface CoachSessionDetailTableRow extends Record<string, unknown> {
+  kind: 'sessionDetail';
+  id: string;
+  eventId: string;
+  session: OutreachSessionRow;
+}
 
-  const description = (
-    <VStack gap={1}>
-      <HStack gap={2} wrap="wrap" vAlign="center">
-        <Badge
-          variant="neutral"
-          label={event.type === 'competition' ? 'Competition' : 'Outreach'}
-        />
-        <Text type="supporting">{stats.dateRangeLabel}</Text>
-        {stats.weekdayChips.map((chip) => (
-          <Badge key={chip.key} variant="neutral" label={chip.label} />
-        ))}
-      </HStack>
-      <Text type="supporting">
-        {event.locationName}
-        {event.address !== '' ? ` · ${event.address}` : ''}
-      </Text>
-      {isExpanded && (
-        <VStack gap={2}>
-          {sessions.map((session) => (
-            <CoachSessionDetail
-              key={session.id}
-              session={session}
-              rsvps={rsvps}
-              studentNameById={studentNameById}
-            />
-          ))}
-        </VStack>
-      )}
-    </VStack>
-  );
+export type CoachOutreachTableRow = CoachEventTableRow | CoachSessionDetailTableRow;
 
-  const endContent = (
-    <HStack gap={4} vAlign="center" wrap="wrap">
-      <VStack gap={0}>
-        <Text type="label" color="secondary">
-          {bucket === 'upcoming' ? 'Planned' : 'Logged'}
-        </Text>
-        <Text type="body" weight="semibold" hasTabularNumbers>
-          {hoursValue}h
-        </Text>
-      </VStack>
-      <VStack gap={0}>
-        <Text type="label" color="secondary">
-          {bucket === 'upcoming' ? 'Expected' : 'Attended'}
-        </Text>
-        <Text type="body" weight="semibold" hasTabularNumbers>
-          {countValue} students
-        </Text>
-        {bucket === 'past' && stats.reached !== null && (
-          <Text type="supporting">Reached {stats.reached}</Text>
-        )}
-      </VStack>
-      <Button
-        label={
-          isExpanded
-            ? `Hide session details – ${event.title}`
-            : `Show session details – ${event.title}`
-        }
-        size="sm"
-        variant="ghost"
-        onClick={() => setIsExpanded((previous) => !previous)}
-      />
-      <Button
-        label={`Edit – ${event.title}`}
-        size="sm"
-        variant="secondary"
-        onClick={() => onEdit(event, sessions)}
-      >
-        Edit
-      </Button>
-      {canCancel && (
-        <Button
-          label={`Cancel – ${event.title}`}
-          size="sm"
-          variant="destructive"
-          onClick={() => onCancel(event)}
-        >
-          Cancel
-        </Button>
-      )}
-      <Link as={RouterLink} href={routePaths.outreachEvent(event.id)} isStandalone>
-        View details – {event.title}
-      </Link>
-    </HStack>
-  );
+function sessionDetailAnchorId(eventId: string, sessionId: string): string {
+  return `outreach-session-detail-${eventId}-${sessionId}`;
+}
 
-  return <ListItem label={event.title} description={description} endContent={endContent} />;
+/** Splices each expanded event's session-detail rows directly beneath it in
+ * one flat array -- module doc above. Exported for direct testing (this
+ * file's own "pure functions exported" convention). */
+export function buildCoachOutreachTableRows(
+  enrichedEvents: readonly EnrichedOutreachEvent[],
+  bucket: 'upcoming' | 'past',
+  rsvps: readonly RsvpRow[],
+  attendance: readonly OutreachAttendanceRow[],
+  allStudentIds: readonly string[],
+  expandedEventIds: ReadonlySet<string>,
+): CoachOutreachTableRow[] {
+  const rows: CoachOutreachTableRow[] = [];
+  for (const { event, sessions } of enrichedEvents) {
+    const stats = computeEventRowStats(sessions, rsvps, attendance, allStudentIds);
+    rows.push({ kind: 'event', id: event.id, event, sessions, bucket, stats });
+    if (expandedEventIds.has(event.id)) {
+      for (const session of sessions) {
+        rows.push({
+          kind: 'sessionDetail',
+          id: `${event.id}::session::${session.id}`,
+          eventId: event.id,
+          session,
+        });
+      }
+    }
+  }
+  return rows;
 }
 
 /** UXD-03 expand-in-place per-session detail -- date/time/hours + RSVP
  * (`going`) names, or the honest canceled/attendance-summary copy. Text
- * preserved verbatim from the former per-session row (module doc above) so
- * this is purely a relocation into the expander, not a copy change. */
-function CoachSessionDetail({
+ * preserved verbatim from the pre-T130 row (T121's own module doc, kept
+ * only in git blame) -- this is purely a relocation into the `title`
+ * column's `renderCell` for `kind: 'sessionDetail'` rows, not a copy
+ * change. `anchorId`, when supplied, lands on the first `Text` so the
+ * expander `Button`'s `aria-controls` (module doc above) has something
+ * real to reference once this row exists in the DOM. */
+export function CoachSessionDetail({
   session,
   rsvps,
   studentNameById,
+  anchorId,
 }: {
   session: OutreachSessionRow;
   rsvps: readonly RsvpRow[];
   studentNameById: ReadonlyMap<string, string>;
+  anchorId?: string;
 }): ReactNode {
   const goingNames = rsvps
     .filter((rsvp) => rsvp.sessionId === session.id && rsvp.status === 'going')
@@ -2024,7 +2140,7 @@ function CoachSessionDetail({
 
   return (
     <VStack gap={0.5}>
-      <Text type="supporting">
+      <Text id={anchorId} type="supporting">
         {formatSessionDateTime(session)} · {sessionHours(session)}h
       </Text>
       {session.status === 'canceled' ? (
@@ -2043,6 +2159,417 @@ function CoachSessionDetail({
       )}
     </VStack>
   );
+}
+
+/** UXC-02/07: dense event-row title-column content -- title (`Text
+ * maxLines`, never `textOverflow="truncate"` -- that is a TABLE-level prop
+ * that is a documented no-op for `renderCell` columns, `types.ts:573-574`:
+ * "Only affects cells using the default renderer (no `renderCell`)") +
+ * location line. Verbatim content/shape from the pre-T130 `ListItem` row's
+ * own `label` (title) -- same title, same "{location} · {address}" shape.
+ *
+ * UXC-07 fix (measured, not assumed): the category `Badge` is NOT inlined
+ * next to the title here (unlike the first draft of this column, kept only
+ * in this comment as a disclosed measurement record) -- putting `Badge` +
+ * title on one `nowrap` line, live, at 1440px against this exact `Table`'s
+ * own real (narrower-than-assumed) title-column width, left too little
+ * room for the title itself and forced aggressive truncation even for
+ * short titles ("Riverside Park Cleanup" -> "Riverside Park Clean…"); doing
+ * it the OTHER way (`wrap="wrap"`) instead wrapped the row onto two lines
+ * and pushed collapsed rows to 79px, over UXC-07's 72px ceiling. Fix: the
+ * `Badge` moved to the DATE column (`CoachEventDateCell` below) instead --
+ * this is also where the pre-T130 row already grouped it (module doc on
+ * `CoachEventDateCell`), not a new placement. The title column now has its
+ * own full column width for the title text alone; measured back down to
+ * 42px of content (title + location, single line each) in the same probe. */
+function CoachEventTitleCell({ event }: { event: OutreachEventRow }): ReactNode {
+  return (
+    <VStack gap={0.5}>
+      <Text type="body" weight="semibold" maxLines={1}>
+        {event.title}
+      </Text>
+      <Text type="supporting" maxLines={1}>
+        {event.locationName}
+        {event.address !== '' ? ` · ${event.address}` : ''}
+      </Text>
+    </VStack>
+  );
+}
+
+/** UXC-02: category `Badge` + date range + weekday chips column content --
+ * content/grouping originally moved verbatim from the pre-T130 row's own
+ * `description` block (module doc on `CoachEventTitleCell` above).
+ *
+ * CHECKER FIX (post-T130 review, MAJOR, module doc above) -- second
+ * measured pass: the type `Badge` was first grouped on the SAME line as
+ * `dateRangeLabel` (matching the pre-T130 row's own layout literally), but
+ * measured (real Chromium, this task's own preview rig) combined width for
+ * "Outreach" + "Jun 14 → Aug 2" is ~154px -- wide enough that giving this
+ * column enough room to never wrap it left too little of the table's own
+ * real 1132px-at-1440px width for the TITLE column, which started
+ * truncating instead ("Community Food Bank Sort" -> clipped). Regrouped:
+ * `Badge` now shares a line with the (always-short) weekday chips instead
+ * -- "Outreach" + "SUN (2)" measures well under half the width "Outreach" +
+ * "Jun 14 → Aug 2" needed -- and `dateRangeLabel` gets its own, narrower
+ * line. Still the same three real pieces of information (type, date range,
+ * weekday chips), just paired differently so this column's own real
+ * minimum width shrinks enough to give the title column its readable width
+ * back, without reintroducing the row-height regression the first
+ * `Badge`+title pairing (`CoachEventTitleCell`'s own module doc above)
+ * already measured and rejected. */
+function CoachEventDateCell({
+  event,
+  stats,
+}: {
+  event: OutreachEventRow;
+  stats: EventRowStats;
+}): ReactNode {
+  return (
+    <VStack gap={0.5}>
+      <Text type="supporting">{stats.dateRangeLabel}</Text>
+      <HStack gap={1} wrap="wrap" vAlign="center">
+        <Badge
+          variant="neutral"
+          label={event.type === 'competition' ? 'Competition' : 'Outreach'}
+        />
+        {stats.weekdayChips.map((chip) => (
+          <Badge key={chip.key} variant="neutral" label={chip.label} />
+        ))}
+      </HStack>
+    </VStack>
+  );
+}
+
+/** UXC-13 -- CHECKER FIX (post-T130 review, MAJOR, module doc above): a
+ * real 44px minimum touch target via the documented `style` prop
+ * (`astryx-api.md`'s FormField Props table documents `style`; `Button.tsx`
+ * merges it in via `mergeProps`, which spreads the consumer `style` AFTER
+ * the StyleX-driven `height`, so `minHeight` here genuinely wins -- CSS
+ * clamps the used height to `max(specified height, min-height)`). `size`
+ * itself stays `"sm"` on every button below -- only the hit box grows, not
+ * the visible glyph/label/padding. Shared by every button this file's
+ * coach `Table` renders (desktop AND the mobile card column, since
+ * `CoachExpanderButton`/`CoachEventActions` are shared components). */
+const MIN_TOUCH_TARGET_STYLE: CSSProperties = { minHeight: '44px' };
+
+/** UXC-04: the expander -- module doc above (the one genuine violation +
+ * fix). Shared by the desktop expander column and the mobile card column. */
+function CoachExpanderButton({
+  row,
+  isExpanded,
+  onToggleExpand,
+}: {
+  row: CoachEventTableRow;
+  isExpanded: boolean;
+  onToggleExpand: (eventId: string) => void;
+}): ReactNode {
+  const controlsIds = row.sessions
+    .map((session) => sessionDetailAnchorId(row.event.id, session.id))
+    .join(' ');
+  return (
+    <Button
+      label={
+        isExpanded
+          ? `Hide session details – ${row.event.title}`
+          : `Show session details – ${row.event.title}`
+      }
+      size="sm"
+      variant="ghost"
+      aria-expanded={isExpanded}
+      // CHECKER FIX (post-T130 review, NIT, module doc above): only a real
+      // disclosure target while expanded -- the referenced ids do not
+      // exist in the DOM until then (rows are spliced out, not hidden,
+      // when collapsed), so `aria-controls` is omitted (not a stale IDREF)
+      // in the collapsed state.
+      aria-controls={isExpanded ? controlsIds : undefined}
+      style={MIN_TOUCH_TARGET_STYLE}
+      onClick={() => onToggleExpand(row.event.id)}
+    >
+      {`Sessions (${row.sessions.length})`}
+    </Button>
+  );
+}
+
+/** UXC-04 (unchanged): Edit/Cancel/"View details" -- verbatim `label`s,
+ * verbatim visible text (packet's own "Corrected scope" -- only the
+ * expander violated UXC-04). Shared by the desktop actions column and the
+ * mobile card column. */
+function CoachEventActions({
+  row,
+  onEdit,
+  onCancel,
+}: {
+  row: CoachEventTableRow;
+  onEdit: (event: OutreachEventRow, sessions: readonly OutreachSessionRow[]) => void;
+  onCancel: (event: OutreachEventRow) => void;
+}): ReactNode {
+  const canCancel = row.stats.scheduledSessions.length > 0;
+  return (
+    <HStack gap={2} vAlign="center" wrap="wrap">
+      <Button
+        label={`Edit – ${row.event.title}`}
+        size="sm"
+        variant="secondary"
+        style={MIN_TOUCH_TARGET_STYLE}
+        onClick={() => onEdit(row.event, row.sessions)}
+      >
+        Edit
+      </Button>
+      {canCancel && (
+        <Button
+          label={`Cancel – ${row.event.title}`}
+          size="sm"
+          variant="destructive"
+          style={MIN_TOUCH_TARGET_STYLE}
+          onClick={() => onCancel(row.event)}
+        >
+          Cancel
+        </Button>
+      )}
+      <Link as={RouterLink} href={routePaths.outreachEvent(row.event.id)} isStandalone>
+        View details – {row.event.title}
+      </Link>
+    </HStack>
+  );
+}
+
+interface BuildCoachColumnsArgs {
+  bucket: 'upcoming' | 'past';
+  rsvps: readonly RsvpRow[];
+  studentNameById: ReadonlyMap<string, string>;
+  expandedEventIds: ReadonlySet<string>;
+  onToggleExpand: (eventId: string) => void;
+  onEdit: (event: OutreachEventRow, sessions: readonly OutreachSessionRow[]) => void;
+  onCancel: (event: OutreachEventRow) => void;
+  isNarrow: boolean;
+}
+
+function renderSessionDetailCell(
+  row: CoachSessionDetailTableRow,
+  rsvps: readonly RsvpRow[],
+  studentNameById: ReadonlyMap<string, string>,
+): ReactNode {
+  return (
+    <CoachSessionDetail
+      session={row.session}
+      rsvps={rsvps}
+      studentNameById={studentNameById}
+      anchorId={sessionDetailAnchorId(row.eventId, row.session.id)}
+    />
+  );
+}
+
+/**
+ * UXC-02/03/07/13 -- the ONE shared column factory both `CoachOutreachSection`
+ * instances (Upcoming, Past) call, so `resolveColumnWidths` (pure over the
+ * column defs) produces byte-identical `<th>` widths for both `Table`s
+ * (module doc above). `bucket` only ever changes header/cell TEXT, never a
+ * `pixel()`/`proportional()` value.
+ */
+function buildCoachOutreachColumns({
+  bucket,
+  rsvps,
+  studentNameById,
+  expandedEventIds,
+  onToggleExpand,
+  onEdit,
+  onCancel,
+  isNarrow,
+}: BuildCoachColumnsArgs): TableColumn<CoachOutreachTableRow>[] {
+  if (isNarrow) {
+    // UXC-13 (<768px): every desktop column collapses into one stacked card
+    // column -- module doc above for why (no h-scroll at 375px).
+    return [
+      {
+        key: 'card',
+        header: '',
+        width: proportional(1),
+        renderCell: (row) => {
+          if (row.kind === 'sessionDetail') {
+            return renderSessionDetailCell(row, rsvps, studentNameById);
+          }
+          const isExpanded = expandedEventIds.has(row.event.id);
+          const hoursValue =
+            bucket === 'upcoming' ? row.stats.hours.plannedHours : row.stats.hours.confirmedHours;
+          const countValue =
+            bucket === 'upcoming' ? row.stats.expectedCount : row.stats.attendedCount;
+          return (
+            <VStack gap={2}>
+              <CoachEventTitleCell event={row.event} />
+              <CoachEventDateCell event={row.event} stats={row.stats} />
+              <HStack gap={4} wrap="wrap">
+                <StatCell
+                  label={bucket === 'upcoming' ? 'Planned' : 'Logged'}
+                  value={`${hoursValue}h`}
+                />
+                <StatCell
+                  label={bucket === 'upcoming' ? 'Expected' : 'Attended'}
+                  value={`${countValue} students`}
+                  secondary={
+                    bucket === 'past' && row.stats.reached !== null
+                      ? `Reached ${row.stats.reached}`
+                      : undefined
+                  }
+                />
+              </HStack>
+              <HStack gap={2} wrap="wrap" vAlign="center">
+                <CoachExpanderButton
+                  row={row}
+                  isExpanded={isExpanded}
+                  onToggleExpand={onToggleExpand}
+                />
+              </HStack>
+              <CoachEventActions row={row} onEdit={onEdit} onCancel={onCancel} />
+            </VStack>
+          );
+        },
+      },
+    ];
+  }
+
+  return [
+    {
+      // CHECKER FIX (post-T130 review, MAJOR -- module doc above), 44px
+      // touch-target rebalance -- every width below is the real single-line
+      // natural content width (measured live, real Chromium, this task's
+      // own preview rig) plus a real margin, so NO column's own content
+      // wraps onto an extra line (wrapping, not the pixel values
+      // themselves, is what pushed collapsed rows over UXC-07's 72px
+      // ceiling in earlier passes -- see this task's own worker output
+      // "gate output" for the measurement log of each pass). `expander`'s
+      // own natural content ("Sessions (N)") measured 102px wide.
+      key: 'expander',
+      header: '',
+      width: pixel(120),
+      renderCell: (row) => {
+        if (row.kind !== 'event') return null;
+        const isExpanded = expandedEventIds.has(row.event.id);
+        return (
+          <CoachExpanderButton row={row} isExpanded={isExpanded} onToggleExpand={onToggleExpand} />
+        );
+      },
+    },
+    {
+      // `CoachEventDateCell`'s own `Badge`+chips regrouping (see that
+      // component's own module doc) measured 128px for its own widest real
+      // single line ("Outreach" + "SUN (1)") -- 150px keeps a real margin.
+      key: 'date',
+      header: 'Date',
+      width: pixel(150),
+      renderCell: (row) =>
+        row.kind === 'event' ? <CoachEventDateCell event={row.event} stats={row.stats} /> : null,
+    },
+    {
+      // An explicit `minWidth` (not the `proportional()` default of
+      // 120px) -- this column's own real minimum need, at the longest
+      // real fixture title ("Community Food Bank Sort"), measured 204px of
+      // TEXT at `size="sm"`/`weight="semibold"` -- +16px of real compact-
+      // density cell padding (`TableCell.tsx`'s own `densityStyles.compact`,
+      // `paddingInline: spacingVars['--spacing-2']` = 8px each side) = a
+      // real 220px floor; 224px keeps a small real margin. Without an
+      // explicit floor, the pixel columns around it (widened for the
+      // 44px-touch-target fix) would silently squeeze this column down and
+      // truncate real titles -- an explicit `minWidth` makes the trade-off
+      // visible instead.
+      //
+      // Disclosed trade-off (measured, not assumed): the real per-column
+      // single-line minimums below (this column's included) sum to
+      // slightly MORE than the `Table`'s own real available width at
+      // 1440px (its scroll wrapper's `clientWidth`, `Table.tsx:160-161`,
+      // measured 1132px for this route's real content-area layout) -- an
+      // earlier pass instead squeezed everything into exactly 1132px, and
+      // measured worse on every other axis for it (title truncated, date
+      // wrapped, actions wrapped, rows over 72px). This pass prioritizes
+      // (a) real 44px touch targets, (b) UXC-07's 72px row-height ceiling,
+      // (c) a fully readable, non-truncated title, and (d) byte-identical
+      // widths between the Upcoming/Past tables, over avoiding a real,
+      // measured ~42px (measured) of `Table`-INTERNAL horizontal scroll at 1440px
+      // specifically -- `Table`'s own scroll wrapper (`overflowX: auto`)
+      // is the documented mechanism for exactly this ("Scroll wrapper...
+      // handles an overflowing table", `Table.tsx`'s own anatomy), not a
+      // workaround. This does NOT affect UXC-13's own hard requirement,
+      // which is specifically "no h-scroll at 375px" -- at 375px this
+      // desktop column set is not used at all (`buildCoachOutreachColumns`'s
+      // own `isNarrow` branch, module doc above), so this trade-off cannot
+      // reach the 375px case. Measured (preview rig, real Chromium): zero
+      // page-level scroll either way (`document.documentElement.
+      // scrollWidth` stays exactly at the viewport width, both 1440px and
+      // 375px) -- only the `Table`'s own internal scroll region is
+      // affected, at 1440px only, and only by ~42px (measured: scroll wrapper clientWidth 1132px, scrollWidth 1174px).
+      key: 'title',
+      header: 'Event',
+      width: proportional(2, { minWidth: 224 }),
+      renderCell: (row) =>
+        row.kind === 'event' ? (
+          <CoachEventTitleCell event={row.event} />
+        ) : (
+          renderSessionDetailCell(row, rsvps, studentNameById)
+        ),
+    },
+    {
+      // Measured natural content ("Planned"/"4h" etc.) tops out at 84px.
+      key: 'hours',
+      header: '',
+      width: pixel(102),
+      align: 'end',
+      renderCell: (row) => {
+        if (row.kind !== 'event') return null;
+        const hoursValue =
+          bucket === 'upcoming' ? row.stats.hours.plannedHours : row.stats.hours.confirmedHours;
+        return (
+          <StatCell label={bucket === 'upcoming' ? 'Planned' : 'Logged'} value={`${hoursValue}h`} />
+        );
+      },
+    },
+    {
+      // Measured natural content ("Attended"/"2 students" etc.) tops out
+      // at 140px.
+      key: 'count',
+      header: '',
+      width: pixel(158),
+      align: 'end',
+      renderCell: (row) => {
+        if (row.kind !== 'event') return null;
+        const countValue =
+          bucket === 'upcoming' ? row.stats.expectedCount : row.stats.attendedCount;
+        return (
+          <StatCell
+            label={bucket === 'upcoming' ? 'Expected' : 'Attended'}
+            value={`${countValue} students`}
+            secondary={
+              bucket === 'past' && row.stats.reached !== null
+                ? `Reached ${row.stats.reached}`
+                : undefined
+            }
+          />
+        );
+      },
+    },
+    {
+      // CHECKER FIX (post-T130 review, MAJOR -- module doc above): widened
+      // from 320px so Edit + Cancel (each now a real 44px touch target,
+      // not visually wider, only taller) + the full, UXC-04-exempt "View
+      // details – {title}" text fit on ONE line instead of the `Link`
+      // wrapping to its own second line -- measured (preview rig, real
+      // Chromium): the widest real fixture combination (Edit + Cancel +
+      // "View details – Community Food Bank Sort") needs 378px of content
+      // (48+68+262) plus two 8px gaps (394px) plus 16px of real cell
+      // padding (410px); 420px keeps a small real margin (see the
+      // `key: 'title'` column's own comment above for the disclosed
+      // trade-off this makes against the table's own available width at
+      // 1440px). Wrapping to two lines was what pushed collapsed rows to
+      // 81px, over UXC-07's 72px ceiling -- fitting on one line brings it
+      // back under (see this task's own worker output "gate output" for
+      // the exact re-measured numbers).
+      key: 'actions',
+      header: '',
+      width: pixel(420),
+      renderCell: (row) =>
+        row.kind === 'event' ? (
+          <CoachEventActions row={row} onEdit={onEdit} onCancel={onCancel} />
+        ) : null,
+    },
+  ];
 }
 
 function CoachOutreachSection({
@@ -2066,32 +2593,119 @@ function CoachOutreachSection({
   onEdit: (event: OutreachEventRow, sessions: readonly OutreachSessionRow[]) => void;
   onCancel: (event: OutreachEventRow) => void;
 }): ReactNode {
+  // T130 -- module doc above: one independent expansion-state set per
+  // bucket instance (Upcoming/Past expand independently, matching the old
+  // per-row-component `isExpanded` state this replaces).
+  const [expandedEventIds, setExpandedEventIds] = useState<ReadonlySet<string>>(() => new Set());
+  const isNarrow = useIsNarrowViewport();
+  const allStudentIds = useMemo(() => students.map((student) => student.id), [students]);
+  const studentNameById = useMemo(
+    () => new Map(students.map((student) => [student.id, student.name] as const)),
+    [students],
+  );
+  // T129's own precedent for this exact "Heading id -> aria-labelledby"
+  // shape (`StudentOutreachSection`, this file, forbidden/read-only to
+  // this task) -- mirrored here for the coach section too (CHECKER FIX,
+  // post-T130 review, NIT: parity with the student sections in the same
+  // file). Unlike `StudentOutreachSection`'s own `List`-based reason (a
+  // headerless `List` silently drops ARIA props, UXC-01/D-G), `Table`'s
+  // own scroll wrapper hardcodes `aria-label="Table"` (`Table.tsx:160-161`,
+  // module doc above), which is generic and not event-bucket-specific --
+  // `aria-labelledby` gives the whole Upcoming/Past region its own real
+  // accessible name, resolving back to the SAME visible `Heading` text, in
+  // both the populated (`Table`) and empty (`EmptyState`) branches.
+  //
+  // CHECKER FIX (post-T130 review, MAJOR): the wrapper carrying
+  // `aria-labelledby` is a plain `<div role="group">`, NOT `Section` --
+  // this is the exact defect T129's own checker independently found and
+  // fixed on the student side of this same file (T129's own module doc,
+  // `StudentOutreachSection` above, forbidden/read-only): `Section.tsx`
+  // renders a bare `<div>` with no role (`{...props}` spread onto the
+  // outer div, never a `<section>` element, never a `role`), and under
+  // ARIA, `aria-labelledby` on an element with the implicit `generic` role
+  // is NAME-PROHIBITED -- assistive technology discards it outright, even
+  // though the attribute is genuinely present in the DOM and would pass a
+  // test that only checks for its presence. `role="group"` genuinely
+  // supports a computed accessible name, so this task's own test now
+  // queries `[role="group"][aria-labelledby="..."]` together (not
+  // `aria-labelledby` alone), so a role-less regression fails at the
+  // lookup rather than passing a weaker later assertion.
+  //
+  // `Section`'s own `dividers={['bottom']}` visual is dropped, not
+  // replaced -- matching `StudentOutreachSection`'s own fix exactly (no
+  // divider between its Upcoming/Past instances either): the `Heading`
+  // (bold, `level={2}`) plus the outer `VStack`'s own `gap` already
+  // separate Upcoming from Past visually, and `Table`'s own `dividers="rows"`
+  // (unchanged) still separates each row within a bucket.
+  const headingId = useId();
+
+  // CHECKER FIX (post-T130 review, NIT): a real `useCallback`, not a
+  // freshly-recreated closure re-justified by an
+  // `eslint-disable-next-line` on the `columns` memo below -- `[]` deps are
+  // correct because `setExpandedEventIds` (the `useState` setter) is
+  // referentially stable across renders (React's own guarantee), and the
+  // updater function reads `previous` from its own callback argument, never
+  // from an outer-scope closure value that could go stale.
+  const toggleExpand = useCallback((eventId: string): void => {
+    setExpandedEventIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(eventId)) next.delete(eventId);
+      else next.add(eventId);
+      return next;
+    });
+  }, []);
+
+  const rows = useMemo(
+    () =>
+      buildCoachOutreachTableRows(
+        enrichedEvents,
+        bucket,
+        rsvps,
+        attendance,
+        allStudentIds,
+        expandedEventIds,
+      ),
+    [enrichedEvents, bucket, rsvps, attendance, allStudentIds, expandedEventIds],
+  );
+
+  const columns = useMemo(
+    () =>
+      buildCoachOutreachColumns({
+        bucket,
+        rsvps,
+        studentNameById,
+        expandedEventIds,
+        onToggleExpand: toggleExpand,
+        onEdit,
+        onCancel,
+        isNarrow,
+      }),
+    [bucket, rsvps, studentNameById, expandedEventIds, toggleExpand, onEdit, onCancel, isNarrow],
+  );
+
   return (
     <VStack gap={3}>
-      <Heading level={2}>{title}</Heading>
-      {enrichedEvents.length === 0 ? (
-        <EmptyState
-          headingLevel={3}
-          title={`No ${title.toLowerCase()} outreach events`}
-          description={emptyDescription}
-        />
-      ) : (
-        <List hasDividers header={`${title} outreach events`}>
-          {enrichedEvents.map(({ event, sessions }) => (
-            <CoachOutreachEventRow
-              key={event.id}
-              event={event}
-              sessions={sessions}
-              rsvps={rsvps}
-              attendance={attendance}
-              students={students}
-              bucket={bucket}
-              onEdit={onEdit}
-              onCancel={onCancel}
-            />
-          ))}
-        </List>
-      )}
+      <Heading level={2} id={headingId}>
+        {title}
+      </Heading>
+      <div role="group" aria-labelledby={headingId}>
+        {enrichedEvents.length === 0 ? (
+          <EmptyState
+            headingLevel={3}
+            title={`No ${title.toLowerCase()} outreach events`}
+            description={emptyDescription}
+          />
+        ) : (
+          <Table
+            data={rows}
+            columns={columns}
+            idKey="id"
+            density="compact"
+            dividers="rows"
+            hasHover
+          />
+        )}
+      </div>
     </VStack>
   );
 }
@@ -2639,31 +3253,52 @@ function StudentOutreachSection({
   onOpenSelfCheckoff: (event: OutreachEventRow, sessions: readonly OutreachSessionRow[]) => void;
   emptyDescription: string;
 }): ReactNode {
+  // T129/UXC-01: stable id for this section's `Heading`, so the alternating
+  // List/EmptyState below gets the heading as its accessible name via
+  // `aria-labelledby` on a wrapping `<div role="group">`, instead of the
+  // `List`'s own `header` prop (which duplicates the visible title and
+  // vanishes in the empty branch). This component renders twice (Upcoming,
+  // Past), so each call gets its own id.
+  //
+  // CHECKER FIX (rework of T129, MAJOR): `Section` (not a plain div here)
+  // was the original wrapper, but `Section.tsx` applies a full-bleed
+  // negative-margin band unconditionally (`nestedStyles.outer`) and renders
+  // a bare `<div>` with no role, so `aria-labelledby` was both invisibly
+  // mis-laid-out (in any `LayoutContent padding={n>0}` ancestor) AND
+  // name-prohibited under ARIA (`role="generic"` does not support naming).
+  // A `<div role="group" aria-labelledby={headingId}>` fixes both: zero
+  // added margin/padding/background, and `role="group"` genuinely supports
+  // an accessible name.
+  const headingId = useId();
   return (
     <VStack gap={3}>
-      <Heading level={2}>{title}</Heading>
-      {enrichedEvents.length === 0 ? (
-        <EmptyState
-          headingLevel={3}
-          title={`No ${title.toLowerCase()} outreach events`}
-          description={emptyDescription}
-        />
-      ) : (
-        <List hasDividers header={`${title} outreach events`}>
-          {enrichedEvents.map(({ event, sessions }) => (
-            <StudentOutreachEventRow
-              key={event.id}
-              event={event}
-              sessions={sessions}
-              rsvps={rsvps}
-              viewerStudentId={viewerStudentId}
-              allowSelfCheckoff={allowSelfCheckoff}
-              onRsvpChange={onRsvpChange}
-              onOpenSelfCheckoff={onOpenSelfCheckoff}
-            />
-          ))}
-        </List>
-      )}
+      <Heading level={2} id={headingId}>
+        {title}
+      </Heading>
+      <div role="group" aria-labelledby={headingId}>
+        {enrichedEvents.length === 0 ? (
+          <EmptyState
+            headingLevel={3}
+            title={`No ${title.toLowerCase()} outreach events`}
+            description={emptyDescription}
+          />
+        ) : (
+          <List hasDividers>
+            {enrichedEvents.map(({ event, sessions }) => (
+              <StudentOutreachEventRow
+                key={event.id}
+                event={event}
+                sessions={sessions}
+                rsvps={rsvps}
+                viewerStudentId={viewerStudentId}
+                allowSelfCheckoff={allowSelfCheckoff}
+                onRsvpChange={onRsvpChange}
+                onOpenSelfCheckoff={onOpenSelfCheckoff}
+              />
+            ))}
+          </List>
+        )}
+      </div>
     </VStack>
   );
 }
