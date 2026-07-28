@@ -1,9 +1,11 @@
 # Worker Packet: T135 — MeetingsList coach rows → Astryx `Table` (UXC-02/03/07)
 
 Wave 5, packet W5-P4. The largest remaining wave-5 task.
-**Revision 2 (2026-07-28)** — refreshed after Wave A landed. `MeetingsList.tsx`
-itself is unchanged since revision 1, so every citation below still holds; what
-changed is the world around it.
+**Revision 3 (2026-07-28)** — cleared for dispatch. Revision 2 refreshed the
+packet after Wave A landed; the premise gate then returned **2 BLOCKERs and 2
+MAJORs**, all author errors, and revision 3 resolves them. Citations below have
+been verified twice against the real file. Carries a human authorization for a
+PRD deviation (§2).
 
 ## FIRST — merge the working branch
 
@@ -149,7 +151,13 @@ is empty, the row re-renders collapsed, and the user silently loses their
 expansion at the exact moment they most want to see the result of their action.
 
 **Ship one `useState<ReadonlySet<string>>` keyed by `eventId` in
-`MeetingsList`**, passed down to both sections. Expansion then survives the
+`CoachMeetingsView` (`:1544`)** — the component that already owns `rows`
+(`:1545`), runs the partition `useMemo` (`:1567`), holds `handleConfirmCancel`
+(`:1592`) and renders **both** sections (`:1745`, `:1754`), so it cannot remount
+across the re-partition. Pass the set and its toggle down to both. Do **not**
+park it in `MeetingsList` (`:2081`) — that is the role dispatcher, and a
+coach-only set would have to be drilled through two components and sit next to
+the student branch. Expansion then survives the
 bucket change. This is simpler than the per-section version, not more complex,
 and it is what makes Trap 1's `:842` assertion satisfiable at all.
 
@@ -234,7 +242,7 @@ existing `ListItem` label was already semibold, so match it.
      `StatCell` whose label is literally the word `Scheduled`. **Pin that label**
      if you want it to keep passing; do not rename it casually.
    - `:560` `toContain('Canceled')` — capital-C exists only inside the expander
-     (`:1246`, `:1364`). The row-level badge is lowercase `${n} canceled`
+     (`:1246`, `:1367`). The row-level badge is lowercase `${n} canceled`
      (`:1447`), so it does not satisfy this.
    - `:561` `toContain('present')` — only from `formatPastAttendanceSummary`
      (`:1233-1237`), rendered at `:1357` inside the expander.
@@ -320,7 +328,7 @@ existing `ListItem` label was already semibold, so match it.
 
    **Fixture reality — read this before writing any "both sections" check.**
    `defaultLoadCoachMeetingsData` produces **2 Upcoming rows and 0 Past rows**
-   (both fixture events have a scheduled session, `:727-741`), so the Past
+   (both fixture events have a scheduled session, `:726-741`), so the Past
    section renders an `EmptyState`, **not a second `Table`**. T130's analogous
    test worked only because the outreach fixture is 2 Upcoming + 2 Past. To
    measure anything "across both sections" you must **inject a two-bucket
@@ -355,9 +363,10 @@ existing `ListItem` label was already semibold, so match it.
     files** — confirm that is what you start from, and say so if it is not.
     You are amending assertions, not adding tests, so the expected **end** count
     is also **1440 / 62**. The permitted deltas are exactly the **nine**
-    assertions enumerated in Trap 1 plus the **four** in Trap 3 (and the two in
-    Trap 3b if you change the expander wording) — thirteen or fifteen sites, in
-    five tests. Any other test that changes is a regression — report it, don't
+    assertions enumerated in Trap 1, the **four** in Trap 3, and the **`:791`
+    rewrite mandated in §2** (which spans `:795-806`, not one line) — plus the
+    two in Trap 3b if you change the expander wording. That is **fourteen or
+    sixteen sites across six tests**. Anything beyond that set is a regression. Any other test that changes is a regression — report it, don't
     silence it. Zero `.skip`/`.only`/`.todo`.
 
 ## Relevant Constitution Excerpt
@@ -380,9 +389,11 @@ existing `ListItem` label was already semibold, so match it.
 
 - Final column widths and the measurement behind each.
 - Scroll-wrapper `clientWidth`/`scrollWidth` at 1440px, before and after.
-- Collapsed row heights, both sections, before and after.
+- Collapsed row heights, before and after — both sections if you injected a
+  two-bucket rig fixture, otherwise Upcoming only, stated plainly (criterion 4).
 - Touch-target measurements for Edit, expander, and Cancel, at both viewports.
-- The expander wording you chose (Trap 3) and why.
+- The expander wording you chose (Trap 3b) and why, with the expander column
+  width that follows from it.
 - Every test assertion amended, with before/after text and which Trap
   authorized it.
 - The test count you started from and ended with.
