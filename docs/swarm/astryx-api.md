@@ -1974,6 +1974,12 @@ Styled anchor link with variants, external link support, and polymorphic renderi
 | `onClick` | `MouseEventHandler` | — | Click event handler |
 | `tooltip` | `string` | — | Tooltip text displayed on hover |
 | `isStandalone` | `boolean` | `false` | Applies base font sizing |
+| `type` | `TextType` | `'body'` | Semantic text type, forwarded to the internal `Text`. Use `type="inherit"` for inline links inside an existing `Text` so the link adopts the surrounding text's size/line-height. **[VOLT project annotation — T132, verified against the installed `@astryxdesign/core` shipped source, not vendor prose. This prop is absent from this table entirely; it exists at `node_modules/@astryxdesign/core/src/Link/Link.tsx:234` (declaration) and `:294`/`:324` (default `'body'`, forwarded to `Text`).]** |
+| `size` | `TextSize` | — | Explicit font size override, forwarded to the internal `Text`. **[VOLT project annotation — T132, same installed-source verification as `type` above — `Link.tsx:238` (declaration), `:295`/`:325` (forwarded, no default).]** |
+| `weight` | `TextWeight` | — | Font weight override, forwarded to the internal `Text`. **[VOLT project annotation — T132 — `Link.tsx:242` (declaration), `:296`/`:326` (forwarded, no default).]** |
+| `color` | `TextColor` | `'accent'` | Text color, forwarded to the internal `Text`. **[VOLT project annotation — T132 — `Link.tsx:247` (declaration), `:297`/`:327` (default `'accent'`, forwarded). This is the same `color` prop already half-documented below in Theming (`data-color` ← `color`); that row never listed the prop itself, its default, or its type here.]** |
+| `display` | `TextDisplay` | `'inline'` | Display type, forwarded to the internal `Text`. **[VOLT project annotation — T132 — `Link.tsx:252` (declaration), `:298`/`:328` (default `'inline'`, forwarded).]** |
+| `maxLines` | `number` | `0` | Maximum lines before truncation, forwarded to the internal `Text`. **[VOLT project annotation — T132 — `Link.tsx:257` (declaration), `:299`/`:329` (default `0`, forwarded). `Link` wraps `children` in its own `Text` (`Link.tsx:323-331`); nesting another `Text`/block element inside `Link`'s children defeats this prop's truncation instead of composing with it.]** |
 | `children` | `ReactNode` | — | Link content **(required)** |
 
 ### LinkProvider

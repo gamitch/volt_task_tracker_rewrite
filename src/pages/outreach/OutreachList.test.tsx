@@ -1759,10 +1759,19 @@ describe('<OutreachList /> T112: "View details" navigation link on every row', (
     expect(parkCleanupLink).toBeTruthy();
     expect(tutoringLink).toBeTruthy();
 
-    expect(foodBankLinks[0].textContent).toContain('View details');
-    expect(foodBankLinks[0].textContent).toContain('Community Food Bank Sort');
+    // T132: the title itself is now the link (no separate "View details"
+    // text) on the student/parent side -- the same shape T131 already
+    // shipped on the coach view's own title link (`:1729` above, this same
+    // `describe` block, `toBe('Community Food Bank Sort')`). The two halves
+    // of this page now agree.
+    expect(foodBankLinks[0].textContent).toBe('Community Food Bank Sort');
     expect(parkCleanupLink!.textContent).toContain('Riverside Park Cleanup');
     expect(tutoringLink!.textContent).toContain('After-School Tutoring Drive');
+
+    // T132 acceptance criterion 3: no `aria-label`/`label` override -- the
+    // accessible name is the title text itself, same as it is with no
+    // `aria-label` present at all.
+    expect(foodBankLinks[0].hasAttribute('aria-label')).toBe(false);
   });
 });
 
@@ -2378,6 +2387,55 @@ describe('<OutreachList /> coach view -- T130 Table column-alignment proof (UXC-
     expect(controlsIds.length).toBeGreaterThan(0);
     controlsIds.forEach((id) => {
       expect(document.getElementById(id)).not.toBeNull();
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T132: two regression tests T131 could not add under its own "exactly one
+// assertion changes" constraint -- the coach title link's accessible name
+// (no `aria-label` override) and the actions column's real (post-T131)
+// `pixel(128)` width. Both are proven to genuinely discriminate below by
+// running them against the real pre-T131 file (`git show
+// c8275c7:src/pages/outreach/OutreachList.tsx`), where the coach title was
+// plain text (no link at all) and the actions column was `pixel(420)` --
+// see this task's own worker output for that run's output.
+// ---------------------------------------------------------------------------
+
+describe('<OutreachList /> coach view -- T132 regression: coach title link accessible name', () => {
+  it('the coach event title `<a>` carries no `aria-label` -- its accessible name is the title text itself', async () => {
+    renderAsUser(COACH_USER, { loadData: defaultLoadOutreachData });
+    await flushMicrotasks();
+
+    const foodBankLink = Array.from(container.querySelectorAll('a')).find(
+      (a) => a.getAttribute('href') === '/outreach/event-food-bank-sort',
+    );
+    expect(foodBankLink).toBeTruthy();
+    expect(foodBankLink!.hasAttribute('aria-label')).toBe(false);
+    expect(foodBankLink!.textContent).toBe('Community Food Bank Sort');
+  });
+});
+
+describe('<OutreachList /> coach view -- T132 regression: actions column width', () => {
+  it('the actions column (last <th>, header: "") carries the real post-T131 pixel(128) width', async () => {
+    renderAsUser(COACH_USER, { loadData: defaultLoadOutreachData });
+    await flushMicrotasks();
+
+    const tables = Array.from(container.querySelectorAll('table'));
+    expect(tables.length).toBe(2);
+    tables.forEach((table) => {
+      const ths = Array.from(table.querySelectorAll('thead th'));
+      expect(ths.length).toBe(6);
+      // `buildCoachOutreachColumns` is not exported (module doc above), and
+      // the actions column shares `header: ''` with the expander column, so
+      // it is located POSITIONALLY -- it is the last of the 6 columns
+      // (`key: 'actions'` is the final entry in the array
+      // `buildCoachOutreachColumns` returns, verified by reading the
+      // component file directly).
+      const actionsTh = ths[ths.length - 1];
+      // `columnUtils.ts:106` writes `style.width = \`${value}px\`` inline,
+      // which jsdom can read even though it can't compute real layout.
+      expect(actionsTh.getAttribute('style')).toMatch(/width:\s*128px/);
     });
   });
 });

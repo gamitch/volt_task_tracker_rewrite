@@ -656,6 +656,11 @@ import { SelfCheckoffDialog } from './SelfCheckoffDialog';
 // by the coach `Table` columns below; `GoalProgressBar` is deliberately left
 // consuming its own inline `Text` triplet, unchanged (out of scope).
 import { StatCell } from '../../components/StatCell';
+// T132: `useIsNarrowViewport` (and the query constant it reads) moved out of
+// this file to `src/hooks/` verbatim, so `MeetingsList` (T135) can import it
+// instead of copying it -- see that hook's own module doc for the full
+// "why a real subscription" reasoning this file used to carry inline.
+import { useIsNarrowViewport } from '../../hooks/useIsNarrowViewport';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets. Module doc #1.
@@ -2059,40 +2064,12 @@ function GoalProgressBar({
  */
 
 // ---------------------------------------------------------------------------
-// UXC-13: real `matchMedia` subscription -- module doc above.
+// UXC-13: real `matchMedia` subscription -- module doc above. T132: the
+// hook itself (and the query constant it reads) moved to
+// `src/hooks/useIsNarrowViewport.ts` verbatim, so `MeetingsList` (T135) can
+// import it instead of copying it -- see that file's own module doc for the
+// full "why a real subscription" reasoning this paragraph used to carry.
 // ---------------------------------------------------------------------------
-
-const NARROW_VIEWPORT_QUERY = '(max-width: 767px)';
-
-function getIsNarrowViewport(): boolean {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-    return false;
-  }
-  return window.matchMedia(NARROW_VIEWPORT_QUERY).matches;
-}
-
-function useIsNarrowViewport(): boolean {
-  const [isNarrow, setIsNarrow] = useState<boolean>(getIsNarrowViewport);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-      return;
-    }
-    const mediaQueryList = window.matchMedia(NARROW_VIEWPORT_QUERY);
-    setIsNarrow(mediaQueryList.matches);
-
-    const handleChange = (event: MediaQueryListEvent) => setIsNarrow(event.matches);
-    if (typeof mediaQueryList.addEventListener === 'function') {
-      mediaQueryList.addEventListener('change', handleChange);
-      return () => mediaQueryList.removeEventListener('change', handleChange);
-    }
-    // Safari < 14 fallback API.
-    mediaQueryList.addListener(handleChange);
-    return () => mediaQueryList.removeListener(handleChange);
-  }, []);
-
-  return isNarrow;
-}
 
 // ---------------------------------------------------------------------------
 // T130 -- row shape. `extends Record<string, unknown>` is required by
@@ -3179,8 +3156,10 @@ function rsvpStatusLabel(status: RsvpStatus): string {
  * event down to just its date/location summary) -- UXD-03's expand-in-place
  * mechanism is genuinely present and functional, just defaulted open here
  * for the reason above, not defaulted closed like the coach view's own row
- * (whose primary actions -- Edit/Cancel -- live in `endContent`, not behind
- * the expander).
+ * (whose primary actions -- Edit/Cancel -- live in a `CoachEventActions`
+ * `Table` cell since T130, not `endContent`; this sentence previously said
+ * "endContent", stale since T130 moved the coach row off `ListItem` --
+ * corrected here, T132).
  */
 function StudentOutreachEventRow({
   event,
@@ -3258,8 +3237,17 @@ function StudentOutreachEventRow({
     </VStack>
   );
 
-  // T112 HOTFIX (module doc #13): every row -- Upcoming AND Past alike --
-  // still always carries a real "View details" `Link`, unchanged shape.
+  // T112 HOTFIX (module doc #13) -- SUPERSEDED (T132): this row no longer
+  // carries a standalone "View details" `Link` in `endContent`. This
+  // paragraph used to say every row "still always carries a real 'View
+  // details' Link, unchanged shape" -- T132 falsifies that for the
+  // student/parent side: the former Link's `href`/keyboard path now lives
+  // on the row's own title instead (`ListItem`'s `label` below, a real
+  // `Link` wrapping `event.title`), not a separate action here. This
+  // matches T131's own coach-side change (`CoachEventActions` above no
+  // longer carries a separate "View details" `Link` either -- its keyboard
+  // path moved onto `CoachEventTitleCell`'s own title `Link`) -- the two
+  // halves of this page now agree with each other.
   // T126 (module doc #14): one more neutral, named-action `Button` for
   // eligible Past rows, opening the shared `SelfCheckoffDialog` scoped to
   // this row's own event/sessions.
@@ -3283,13 +3271,54 @@ function StudentOutreachEventRow({
           onClick={() => onOpenSelfCheckoff(event, sessions)}
         />
       )}
-      <Link as={RouterLink} href={routePaths.outreachEvent(event.id)} isStandalone>
-        View details – {event.title}
-      </Link>
     </HStack>
   );
 
-  return <ListItem label={event.title} description={description} endContent={endContent} />;
+  // ACCEPTED, DECIDED (T132; human-owner ruling, not a pending follow-up):
+  // `maxLines={1}` below sets real truncation CSS on the `Link`'s own inner
+  // `Text`, but `Item` (which `ListItem` renders through) only applies ITS
+  // OWN width-bounding single-line-truncate style when `label` is a plain
+  // string (`Item.tsx:350-360`, `isStringLabel`/`labelTruncateStyle`) --
+  // passing a `<Link>` makes `label` a `ReactNode`, so it gets none of
+  // that, and nothing else constrains the `inline-flex` anchor's width.
+  // Measured with a synthetic long title (real Chromium, this task's own
+  // throwaway rig): the anchor grows past the row instead of eliciting an
+  // ellipsis, at both 1440px and 375px -- a real, measured loss of
+  // truncation against the plain-string label this replaces, which DID
+  // truncate. A `labelLines`-style cast to reach past `ListItemProps`
+  // (`labelLines` is real on `Item` but absent from `ListItemProps`,
+  // reachable only via `ListItem`'s own untyped `...restProps` spread,
+  // `ListItem.tsx:211,255`) was considered and explicitly declined: a cast
+  // to get a `clip` instead of an `ellipsis` isn't worth it. This is
+  // accepted behaviour project-wide for a linked `ListItem` title, not a
+  // defect awaiting a fix.
+  //
+  // `document.documentElement.scrollWidth === window.innerWidth` still
+  // holds at 1440px. At 375px it does NOT hold, but not because of this
+  // `Link`/truncation change: the sole cause (verified by DOM inspection)
+  // is the "Mark attendance – {title}" `Button` text in `endContent`
+  // above, which this task did not touch -- that overflow pre-existed this
+  // task (worse: every row's own former "View details – {title}" link also
+  // overflowed at 375px before this task, which this change measurably
+  // fixed) and remains open as its own, separate, unrelated item.
+  return (
+    <ListItem
+      label={
+        <Link
+          as={RouterLink}
+          href={routePaths.outreachEvent(event.id)}
+          isStandalone
+          weight="semibold"
+          maxLines={1}
+          color="primary"
+        >
+          {event.title}
+        </Link>
+      }
+      description={description}
+      endContent={endContent}
+    />
+  );
 }
 
 /** UXD-03 expand-in-place per-session detail (student/parent view): date/
