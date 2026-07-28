@@ -4837,3 +4837,88 @@ importing `formatFriendlyDate`; consolidate `CoachHome.tsx:1193`'s
 `formatSessionDateLabel` onto the shared module (~15 near-duplicates repo-wide);
 strengthen `dates.test.ts` with a real timezone exercise rather than a
 constructor spy.
+
+## T130 — W5-P2: migrate OutreachList coach rows to Astryx `Table`
+- Date: 2026-07-28
+- Worker: worker-implementer (sonnet, attempts: 2)
+- Checker: checker-reviewer (same checker both passes)
+- Pre-dispatch: `checker-premise` ran twice; it removed **four BLOCKERs** from
+  this packet before any worker saw it (see the packet-revision commits).
+- Verdict: **PASS on attempt 2** (MINOR). Attempt 1 **FAILED (MAJOR)**.
+
+### Attempt-1 failure — a disclosed limitation resting on a false premise
+The worker shipped every control at `size="sm"` (28px) while disclosing that
+44px was unreachable because Astryx's `Button` "ceiling is 36px (`lg`)". Three
+things were wrong: `size="lg"` was never attempted; `style` **is** a documented
+Astryx prop (`astryx-api.md:1116`) that the component merges; and the PRD's own
+F-2 already sanctions `className`/`style`. An honest-looking escalation built on
+an unverified claim — and one T131 would have inherited verbatim.
+
+### Attempt-2 fix, independently verified
+- **44px targets implemented.** Checker traced the mechanism itself rather than
+  re-trusting the worker: `dist/astryx.css` contains **zero** `!important`
+  declarations (grep-confirmed), so an inline `style` beats the StyleX class
+  rule unconditionally; `mergeProps.ts:39-58` spreads consumer `style` last.
+  It further noted `minHeight` is the *stronger* choice than `height` — per CSS
+  2.1 §10.7 `min-height` clamps the used height rather than contesting
+  specificity at all. Applied to expander + Edit + Cancel, which the mobile
+  card branch reuses by construction.
+- **UXC-07 still holds, and improved.** Checker measured row pitch off the
+  regenerated figure independently of the deleted rig: **53px** (Upcoming) and
+  **61px** (Past), better than attempt 1's 65-67px. Cause verified: widening
+  columns so no cell wraps is what shortened the rows.
+- **The false premise is retracted in-code** (`OutreachList.tsx:1982-2003`),
+  stating plainly that everything shipped at 28px, that `lg` was never tried,
+  and that "not reachable through props alone" was itself false. This is what
+  T131 inherits.
+- **`Section` → `div role="group"`** now byte-parity with T129's shipped
+  pattern; `Section` import removed entirely. Dropping `dividers={['bottom']}`
+  verified correct rather than lazy: `Section.tsx:77-80` applies the full-bleed
+  negative margin *unconditionally*, so keeping it for the divider would have
+  reintroduced exactly T129's MAJOR 1.
+- NITs fixed and verified: `aria-controls` omitted while collapsed (tests
+  strengthened to `toBeNull()` collapsed and IDREF-resolved when expanded);
+  `toggleExpand` in `useCallback([])` with the suppression removed — checker
+  confirmed no stale closure (only free variable is a React-stable setter; prior
+  state read via the functional updater).
+- **No regression across either attempt**: the complete diff of
+  `OutreachList.test.tsx` contains **exactly one removed line** — the
+  pre-authorized `:1024` assertion. Everything else is pure addition. The
+  byte-identical `<th>` width assertion survived a full six-column rebalance.
+  All eight Trap 2 behaviors intact (only `computeEventRowStats` moved, with
+  byte-identical arguments). T112's `View details – {title}` verified U+2013
+  across all five label families. No forbidden plugins, no `textOverflow`.
+
+### MINOR — the disclosed trade-off, judged rather than accepted
+Asked for a straight read, the checker gave one: **content is genuinely clipped**
+at 1440px — row 2 renders `View details – Community Food Bank S`, cut mid-word,
+requiring horizontal scroll *within* the table. Arithmetic confirmed without the
+rig: 950px of `pixel()` columns + a 224px title floor = 1174px against a 1132px
+wrapper = the ~42px overflow disclosed.
+
+But it judged this a genuine trilemma, not a regression in disguise. With 44px
+buttons, letting the actions cell wrap puts it over the 72px row ceiling; the
+column is 420px wide *solely* to fit T112's pinned full-title link text on one
+line; and shortening that link is forbidden twice over (T112 is a passed task,
+and this packet explicitly prohibits it). The worker preserved every hard
+requirement — 44px targets, ≤72px rows, zero **page-level** scroll at both
+widths, byte-identical column widths, T112 verbatim — and spent the softest one.
+Nothing is functionally unreachable: Edit and Cancel are fully visible on every
+row and keyboard focus scrolls the link into view.
+
+Recorded as **not fully satisfying UXC-02**, whose point is columns that align
+*and read cleanly*. It needs a decision from whoever owns the T112 constraint.
+
+### Process note
+This task's checker also caught, during its T129 review, that T130's in-flight
+rework had introduced the identical `Section`-aria-labelledby defect T129 had
+just fixed. It was relayed to the worker mid-flight, so the defect never reached
+this review — a cross-task catch that saved a full cycle.
+
+### Follow-ups
+(1) Resolve the ~42px table-internal scroll — needs a ruling on the T112 link
+text, or adoption of the reference figure's compact `EDIT` + `×` icon pair.
+(2) Extract `useIsNarrowViewport` to a shared hook before T131's rollout,
+reconciling with `CheckinResult.tsx:358-387`. (3) Pin the 768px breakpoint and a
+`change`-event transition in tests. (4) Fix the "FormField"→"Field" citation in
+the `MIN_TOUCH_TARGET_STYLE` doc block, since T131 inherits that comment.
