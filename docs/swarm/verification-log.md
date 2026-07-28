@@ -4923,3 +4923,116 @@ reconciling with `CheckinResult.tsx:358-387`. (3) Pin the 768px breakpoint and a
 `change`-event transition in tests. (4) Fix the "FormField"→"Field" citation in
 the `MIN_TOUCH_TARGET_STYLE` doc block, since T131 inherits that comment.
 [2026-07-28T06:24:57Z] Worker finished. Checker required before completion.
+
+## T131 — compact icon-pair row actions (coach outreach Table) — PASS (attempt 1)
+
+Checker: checker-reviewer (opus), independent of the worker (sonnet).
+Verdict: **PASS**, severity MINOR (2 MINOR, 4 NIT). No BLOCKER, no MAJOR.
+
+**Premise gate (constitution item 19), two rounds, both pre-dispatch.**
+Round 1: REVISE — 1 BLOCKER, 5 MAJORs, all of them the packet author's
+(orchestrator's) errors, plus 8 wrong line citations. Round 2: DISPATCH with
+7 minor line drifts, 3 of which the gate identified as its own round-1 errors
+that the orchestrator had propagated. Cost roughly two prevented rework cycles
+against item 19a's two-round cap; the BLOCKER alone was unsatisfiable as
+written and would have failed the task by construction.
+
+The four findings that mattered:
+1. BLOCKER — "every interactive control >=44px" contradicted the same packet's
+   72px row ceiling once the title became a link (a 44px title line box plus
+   the supporting line and cell padding lands at ~70-72px). Rewritten to name
+   the expander/Edit/x and exempt text links under WCAG 2.2 SC 2.5.8, scoped
+   explicitly against UXC-13's unqualified wording upstream so a checker
+   reading past the packet could not reopen it.
+2. MAJOR — the prescribed `<Text>`-inside-`Link` arrangement is broken. `Link`
+   already wraps children in its own `Text` (`Link.tsx:323-331`) and forwards
+   `type/size/weight/color/display/maxLines` (`:227-257`). Nesting puts a
+   `display:block; overflow:hidden` child inside an `inline-flex` `<a>` with no
+   `min-width:0`, so truncation silently stops. Separately `LinkProps.color`
+   defaults to `'accent'` (`Link.tsx:297`), which would have turned every event
+   title purple — and the packet's own criteria never checked colour.
+3. MAJOR — "`style` is a documented Astryx prop (`astryx-api.md:1116`)" was
+   false. That line is the **Field** props table; `style` appears in exactly 7
+   props tables (Field, Carousel, CodeBlock, Kbd, Markdown, Overlay, Thumbnail)
+   and in none of Button, IconButton, or Link. It genuinely works
+   (`Button.tsx:545`, `:652-657`; `mergeProps.ts:84-89`; `IconButton.tsx:51`)
+   and T130 shipped it, so it is a real deviation authorized under D004 — but
+   presenting it as documented would have had a checker correctly fail
+   compliant work.
+4. MAJOR — the packet said two assertions change; exactly one does. The
+   authorizing PRD row named `:1759`, a surface the packet forbids touching,
+   making the authorization broader than the work it authorized. Corrected in
+   both `.md` and `.html`.
+
+**Checker evidence (all re-derived, not accepted).**
+The checker built its own preview rig and measured the shipped code *and* the
+`c8275c7` baseline by swapping the file in and out — the worker had carried the
+"before" number forward from a comment rather than rendering it.
+
+| | Upcoming cw/sw | Past cw/sw | overflow |
+|---|---|---|---|
+| baseline `c8275c7` | 1132 / 1174 | 1132 / 1174 | 42px each |
+| shipped | 1132 / 1132 | 1132 / 1132 | 0 |
+
+`<th>` widths `120/150/224/102/158/420` -> `120/150/474/102/158/128`, summing to
+exactly 1132. Rows 53 / 52.5 (Upcoming), 69 / 52.5 (Past), all <=72px; the 69px
+row is the "Reached N" row. Touch targets: expander 101.81x44, Edit 48.13x44,
+`x` 44x44, all real `<button>` with inline `min-height: 44px`, identical at
+375px. Title link: real `<a href>`, `aria-label` null, accessible name = event
+title. Typography byte-identical at rest before vs after — weight 600, 14px,
+line-height 20.0004px, `rgb(29,26,33)`, nowrap/ellipsis/hidden — confirming the
+`Text.tsx:165,226` prediction that `color="primary"` reproduces the resolved
+default exactly rather than approximately. Focus ring `solid 2px rgb(91,46,229)`
+at 2px offset.
+
+The checker also stress-tested truncation, which the worker had declared
+unexercised: a forced 920px title in a 458px box gives `scrollWidth 920 >
+clientWidth 458` with the anchor not overflowing its cell, wrapper still
+1132/1132, row still 53px. The nested-`Text` trap is genuinely avoided.
+
+Test discipline: exactly one assertion changed, at `:1726`, and it was
+*strengthened* (`toContain('View details')` -> `toBe('Community Food Bank
+Sort')`). `:1762` (student/parent) still asserts the old text and passes. The
+three Cancel-dependent tests (`:1302-1304`, `:2179-2181`, `:2187-2189`) and the
+`<th>` parity test are untouched and green. Zero `.skip`/`.only`/`.todo`/`xit`
+in the repo — nothing was silenced. 1414/1414 across 61 files; tsc, eslint
+(0 errors), vite build, and format:check all clean, re-run by the checker.
+
+**Worker honesty note.** The worker reported, unprompted, that the packet's
+claimed hover `color-mix` tint on the title link is present in the CSSOM but
+never reaches the glyphs, because `Link` hands its inner `Text` an explicit
+non-inheriting colour. The checker reproduced this exactly (anchor colour
+shifts on hover; span colour does not) and judged it correctly handled: the
+hover underline *does* paint and the focus ring is real, so two live
+non-colour affordances remain; it is pre-existing `@astryxdesign/core`
+composition outside Allowed Files. Reported rather than silently patched or
+disputed.
+
+**MINORs, fixed by the orchestrator after the check** (both comment-only, both
+caused or exposed by T131, both mechanically re-verified with all gates re-run
+green — disclosed here as orchestrator edits that no independent checker has
+reviewed):
+- `OutreachList.tsx:2008` asserted the fixed desktop columns "sum to ~950px".
+  That was `120+150+102+158+420`; T131 made it `658`. Corrected, with the old
+  value retained as history. The conclusion (658 > 375, so the narrow branch is
+  still required) is unchanged.
+- `OutreachList.tsx:2019-2022` still claimed "`astryx-api.md`'s FormField Props
+  table documents [`style`] verbatim". `grep -c FormField docs/swarm/astryx-api.md`
+  returns **0** — the claim was false twice over, since the row it described
+  belongs to `Field`. The file was shipping two contradictory statements about
+  the same constitution item 2 question, the corrected one being the new comment
+  at `:2294-2300`. Rewritten to point at the D004 reasoning.
+
+**Follow-ups logged (not blocking):**
+1. Annotate the `# Link` props table in `astryx-api.md` with the real
+   `weight`/`size`/`color`/`display`/`maxLines`/`type` props (banked by the
+   packet; would remove the need for a D004 escalation next time).
+2. `OutreachList.tsx:3173` still describes coach-row actions as living in
+   `endContent`; they have been in a `Table` since T130. Pre-existing.
+3. No test pins the title link's absence of `aria-label` or the `pixel(128)`
+   actions width — both were out of scope under T131's one-assertion
+   constraint. Worth adding in T132.
+4. Upstream note: `Link`'s `:hover` `color-mix` tint is inert because the inner
+   `Text` sets an explicit non-inheriting `color`.
+
+T132 (CalendarPage + student/parent parity) is unblocked.

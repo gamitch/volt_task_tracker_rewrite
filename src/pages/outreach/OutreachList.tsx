@@ -2005,8 +2005,11 @@ function GoalProgressBar({
  * column (date, stats, actions) into one stacked card per row, inside the
  * same `Table`, rather than switching back to `List` (which the packet's
  * own migration mandate forecloses) or letting `Table`'s own scroll wrapper
- * kick in (six fixed-width desktop columns sum to ~950px, which WOULD
- * force horizontal scroll at 375px -- forbidden by UXC-13).
+ * kick in (the fixed-width desktop columns sum to ~658px --
+ * 120+150+102+158+128, T131 -- which WOULD force horizontal scroll at
+ * 375px, forbidden by UXC-13. Was ~950px before T131 shrank the actions
+ * column from 420px to 128px; the conclusion is unchanged, since 658px
+ * still far exceeds 375px).
  *
  * CHECKER FIX (post-T130 review, MAJOR): 44px touch targets, implemented,
  * corrected premise. The first draft of this file shipped every
@@ -2016,10 +2019,16 @@ function GoalProgressBar({
  * had already been tried and still fell short "through props alone" -- two
  * separate errors: the 36px ceiling was never actually reached (every
  * control stayed at 28px), and "not reachable through props alone" was
- * itself false. `style` IS a real, documented Astryx prop (`BaseProps.ts`'s
- * own top comment keeps it; `astryx-api.md`'s FormField Props table
- * documents it verbatim: "`style` | `React.CSSProperties` | Inline styles
- * applied to the root element. Takes priority over StyleX inline styles.");
+ * itself false. `style` is a real Astryx prop, but it is NOT documented on
+ * `Button`/`IconButton`/`Link` -- see the corrected reasoning on
+ * `MIN_TOUCH_TARGET_STYLE` below (T131), which supersedes this paragraph.
+ * (The claim previously made here, that "`astryx-api.md`'s FormField Props
+ * table documents it verbatim", was false twice over: there is no
+ * `FormField` section in that file at all, and the `style` row it was
+ * describing belongs to `Field`. `style` appears in exactly seven props
+ * tables -- Field, Carousel, CodeBlock, Kbd, Markdown, Overlay, Thumbnail
+ * -- and in none of Button, IconButton, or Link. It is authorized here as
+ * an installed-source-verified deviation under D004, not as documentation.)
  * `Button.tsx:545,652-656` merges a consumer `style` in via `mergeProps`
  * (`mergeProps.ts:105-107` folds the consumer `style` into the merged
  * props; `mergeTwoProps`, `mergeProps.ts:39-58`, then spreads it AFTER the
