@@ -269,7 +269,7 @@
  *     when the current month/filter/day-selection combination has zero
  *     matching sessions even though sessions exist elsewhere).
  */
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import {
   Badge,
   Banner,
@@ -627,16 +627,26 @@ function CalendarSessionRowItem({
     </Text>
   );
 
-  const endContent = (
-    <HStack gap={2} vAlign="center">
-      <Badge variant={typeBadge.variant} label={typeBadge.label} />
-      <Link as={RouterLink} href={detailHrefFor(event, session)} isStandalone>
-        View details – {event.title}
-      </Link>
-    </HStack>
-  );
+  const endContent = <Badge variant={typeBadge.variant} label={typeBadge.label} />;
 
-  return <ListItem label={event.title} description={description} endContent={endContent} />;
+  return (
+    <ListItem
+      label={
+        <Link
+          as={RouterLink}
+          href={detailHrefFor(event, session)}
+          isStandalone
+          weight="semibold"
+          maxLines={1}
+          color="primary"
+        >
+          {event.title}
+        </Link>
+      }
+      description={description}
+      endContent={endContent}
+    />
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -691,6 +701,14 @@ export function CalendarPage({
   loadSessions = defaultLoadCalendarSessions,
 }: CalendarPageProps = {}): ReactNode {
   const loadState = useLoadState(loadSessions, [loadSessions]);
+  // UXC-01 (module doc #2's remedy (b), copying `OutreachList.tsx`'s shipped
+  // `StudentOutreachSection`/`CoachOutreachSection` pattern): a stable id for
+  // the "Sessions on <day>"/"Sessions in <month>" `Heading`, so the
+  // List/EmptyState ternary below can carry that heading as its accessible
+  // name via `aria-labelledby` on a wrapping `<div role="group">`, instead of
+  // the `List`'s own `header` prop (which duplicated the visible heading text
+  // and vanished in the empty branch -- T129's own attempt-1 failure).
+  const headingId = useId();
 
   const [focusDateIso, setFocusDateIso] = useState<string>(() => todayIsoChicago());
   const [selectedDayIso, setSelectedDayIso] = useState<string | null>(null);
@@ -766,75 +784,93 @@ export function CalendarPage({
     selectedDayIso !== null ? sessionsOnDay(typeFiltered, selectedDayIso) : typeFiltered;
 
   return (
-    <VStack gap={6} padding={6}>
-      <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
-        <Heading level={1}>Calendar</Heading>
-        <Button label="Today" variant="secondary" onClick={handleToday} />
-      </HStack>
+    // UXC-06: cap the page content at ~1120px and centre it. `maxWidth`
+    // alone does not centre (no auto-margin anywhere in Stack/Center) --
+    // the outer `VStack hAlign="center"` centers the inner, capped `VStack`
+    // on the cross axis; `width="100%"` on the inner `VStack` is
+    // load-bearing so it fills up to the cap instead of shrinking to
+    // fit-content under `align-items: center` (module doc's own citations:
+    // `astryx-api.md:389` cross-axis `hAlign`, `:385` `width`, `:363`/`:387`
+    // `maxWidth`).
+    <VStack hAlign="center">
+      <VStack width="100%" maxWidth={1120} gap={6} padding={6}>
+        <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
+          <Heading level={1}>Calendar</Heading>
+          <Button label="Today" variant="secondary" onClick={handleToday} />
+        </HStack>
 
-      {!hasAnySessions ? (
-        <EmptyState
-          headingLevel={2}
-          title="No sessions scheduled yet"
-          description="Meetings, outreach events, and competitions for this season will show up here once they're scheduled."
-        />
-      ) : (
-        <>
-          <Calendar
-            key={calendarResetKey}
-            mode="single"
-            weekStartsOn="sun"
-            focusDate={focusDateIso as ISODateString}
-            onFocusDateChange={handleFocusDateChange}
-            onChange={(iso) => setSelectedDayIso(iso)}
+        {!hasAnySessions ? (
+          <EmptyState
+            headingLevel={2}
+            title="No sessions scheduled yet"
+            description="Meetings, outreach events, and competitions for this season will show up here once they're scheduled."
           />
+        ) : (
+          <>
+            <Calendar
+              key={calendarResetKey}
+              mode="single"
+              weekStartsOn="sun"
+              focusDate={focusDateIso as ISODateString}
+              onFocusDateChange={handleFocusDateChange}
+              onChange={(iso) => setSelectedDayIso(iso)}
+            />
 
-          {/* DES-04 color legend -- module doc #1's resolution: the dots/
-              labels live here and in the list below, not inside the grid. */}
-          <HStack gap={2} wrap="wrap">
-            <Badge variant="purple" label="Meeting" />
-            <Badge variant="blue" label="Outreach" />
-            <Badge variant="orange" label="Competition" />
-          </HStack>
-
-          <SegmentedControl
-            value={filter}
-            onChange={(value) => setFilter(value as CalendarFilterValue)}
-            label="Filter sessions by type"
-          >
-            {CALENDAR_FILTER_ITEMS.map((item) => (
-              <SegmentedControlItem key={item.value} value={item.value} label={item.label} />
-            ))}
-          </SegmentedControl>
-
-          <VStack gap={3}>
-            <HStack hAlign="between" vAlign="center" wrap="wrap" gap={2}>
-              <Heading level={2}>
-                {selectedDayIso !== null
-                  ? `Sessions on ${formatWeekdayDate(selectedDayIso)}`
-                  : `Sessions in ${monthLabel(focusYear, focusMonth)}`}
-              </Heading>
-              {selectedDayIso !== null && (
-                <Button label="Show whole month" variant="ghost" onClick={handleShowWholeMonth} />
-              )}
+            {/* DES-04 color legend -- module doc #1's resolution: the dots/
+                labels live here and in the list below, not inside the grid. */}
+            <HStack gap={2} wrap="wrap">
+              <Badge variant="purple" label="Meeting" />
+              <Badge variant="blue" label="Outreach" />
+              <Badge variant="orange" label="Competition" />
             </HStack>
 
-            {visibleSessions.length === 0 ? (
-              <EmptyState
-                headingLevel={3}
-                title="No sessions match this view"
-                description="Try a different month, a different type filter, or clear the day selection."
-              />
-            ) : (
-              <List hasDividers header="Chronological session list">
-                {visibleSessions.map(({ session, event }) => (
-                  <CalendarSessionRowItem key={session.id} session={session} event={event} />
+            {/* UXC-06: `SegmentedControl`'s own root is already inline-flex/
+                hug (`SegmentedControl.tsx:89-95`) -- it was being stretched
+                by the parent `VStack`'s default `vAlign="stretch"`. Wrapping
+                it in `HStack hAlign="start"` stops the stretch. */}
+            <HStack hAlign="start">
+              <SegmentedControl
+                value={filter}
+                onChange={(value) => setFilter(value as CalendarFilterValue)}
+                label="Filter sessions by type"
+              >
+                {CALENDAR_FILTER_ITEMS.map((item) => (
+                  <SegmentedControlItem key={item.value} value={item.value} label={item.label} />
                 ))}
-              </List>
-            )}
-          </VStack>
-        </>
-      )}
+              </SegmentedControl>
+            </HStack>
+
+            <VStack gap={3}>
+              <HStack hAlign="between" vAlign="center" wrap="wrap" gap={2}>
+                <Heading level={2} id={headingId}>
+                  {selectedDayIso !== null
+                    ? `Sessions on ${formatWeekdayDate(selectedDayIso)}`
+                    : `Sessions in ${monthLabel(focusYear, focusMonth)}`}
+                </Heading>
+                {selectedDayIso !== null && (
+                  <Button label="Show whole month" variant="ghost" onClick={handleShowWholeMonth} />
+                )}
+              </HStack>
+
+              <div role="group" aria-labelledby={headingId}>
+                {visibleSessions.length === 0 ? (
+                  <EmptyState
+                    headingLevel={3}
+                    title="No sessions match this view"
+                    description="Try a different month, a different type filter, or clear the day selection."
+                  />
+                ) : (
+                  <List hasDividers>
+                    {visibleSessions.map(({ session, event }) => (
+                      <CalendarSessionRowItem key={session.id} session={session} event={event} />
+                    ))}
+                  </List>
+                )}
+              </div>
+            </VStack>
+          </>
+        )}
+      </VStack>
     </VStack>
   );
 }

@@ -476,16 +476,27 @@ describe('row Link text is distinguishable per session (astryx-api.md Link Best 
     expect(outreachLink!.textContent).not.toBe('View details');
   });
 
-  it('every rendered row link still communicates "View details" alongside its distinguishing title', async () => {
+  it('every rendered row link IS the event title itself (T133/UXC-04: the title became the link), never a separate "View details" label', async () => {
     renderPage();
     await flushMicrotasks();
+
+    const { events, sessions } = await defaultLoadCalendarSessions();
+    const eventById = new Map(events.map((event) => [event.id, event] as const));
 
     const links = Array.from(container.querySelectorAll('a')).filter((a) =>
       (a.getAttribute('href') ?? '').match(/^\/(meetings|outreach)\//),
     );
     expect(links.length).toBeGreaterThanOrEqual(4);
     for (const link of links) {
-      expect(link.textContent).toContain('View details');
+      const href = link.getAttribute('href') ?? '';
+      const expectedTitle = href.startsWith('/meetings/')
+        ? eventById.get(
+            sessions.find((s) => s.id === href.replace('/meetings/', ''))?.eventId ?? '',
+          )?.title
+        : eventById.get(href.replace('/outreach/', ''))?.title;
+      expect(expectedTitle).toBeTruthy();
+      expect(link.textContent).toBe(expectedTitle);
+      expect(link.textContent).not.toContain('View details');
     }
   });
 });
