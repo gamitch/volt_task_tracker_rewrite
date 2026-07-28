@@ -79,9 +79,10 @@ assistive users"; they were never distinguishable by name, and that is fine.
   makes it false, and revision 1 forbade fixing it while also forbidding
   shipping it stale. Correct it. The section header at `:595-597` points at it —
   check whether that needs a touch too.
-- `src/pages/calendar/CalendarPage.test.tsx` — only the **six** sites named in
-  Traps (`:461`, `:487`, `:489`, `:492-494`, `:538`, `:544`), plus the import
-  line needed to bring `routePaths` into the file.
+- `src/pages/calendar/CalendarPage.test.tsx` — the **six** sites named in Traps
+  (`:461`, `:487`, `:489`, `:492-496`, `:538`, `:544`), plus the import line
+  needed to bring `routePaths` into the file, plus — if you take Trap 3's split
+  option — one new `it()` block covering meeting rows. Nothing else.
 - `docs/swarm/active/T137-worker-output.md` (create)
 
 ## Forbidden Files
@@ -126,18 +127,40 @@ assistive users"; they were never distinguishable by name, and that is fine.
 
    ```js
    expect(links.length).toBe(4);
-   expect(links.filter((h) => h === routePaths.meetings).length).toBe(2);
+   expect(
+     links.filter((a) => a.getAttribute('href') === routePaths.meetings).length,
+   ).toBe(2);
    ```
+
+   **`links` is an `HTMLAnchorElement[]`, not a string array** — `:486` is
+   `Array.from(container.querySelectorAll('a')).filter(...)`. Revision 2 of this
+   packet compared the element to a string; that is `TS2367` (verified by
+   probe, not inferred) and would evaluate to `0` at runtime. The snippet above
+   is the corrected form. **Do not "fix" it by changing `:486` to produce hrefs
+   instead of elements** — the loop at `:490-500` calls
+   `link.getAttribute('href')` and `link.textContent`, so that would cascade
+   the diff well past the authorized sites.
+
+   `toBe(4)` is the right exact count: the default render produces exactly four
+   anchors — two `/meetings/...`, two `/outreach/...` — and a widened regex
+   matches all four.
 
    Import `routePaths` into the test file rather than hardcoding `'/meetings'` —
    `Kiosk.test.tsx:165` already does this, and it applies the packet's own
    "no string literal path" rule to the test side.
 
-3. **`:492-494`** — derives each row's expected title by parsing the session id
-   out of the href (`href.replace('/meetings/', '')`). That derivation is
-   impossible once the href carries no id. Rewrite the meeting branch to look
-   the expected title up another way, or scope this assertion to outreach rows
-   and cover meeting rows separately. **Do not delete the coverage.**
+3. **`:492-496`** — a single ternary (revision 2 said `:492-494`, two lines
+   short: `:495` is `)?.title` and `:496` is the outreach branch). It derives
+   each row's expected title by parsing the session id out of the href
+   (`href.replace('/meetings/', '')`). That derivation is impossible once the
+   href carries no id. Rewrite the meeting branch to look the expected title up
+   another way, or scope this assertion to outreach rows and cover meeting rows
+   separately. **Do not delete the coverage.**
+
+   Rewriting the meeting branch necessarily touches `:495-496`, and splitting
+   the coverage means adding a new `it()`. **Both are authorized** — treat the
+   loop body `:490-500` as the unit, and a new test block as permitted. Neither
+   is an unreported regression under criterion 7.
 4. **`:538`** — this is a test **name**, not an assertion. It is literally
    `'a meeting row links to /meetings/:sessionId'`. Rename it to describe the
    new behaviour, and say in the name or a comment that it is interim pending
@@ -173,7 +196,8 @@ the `:487`/`:489` pair.)
    `npx eslint .` zero errors and no new warnings (baseline **0 errors / 353
    warnings**).
 7. `npx vitest run` green. Baseline is **1440 across 62 files** and the expected
-   end count is also 1440 — you are amending assertions, not adding tests,
+   end count is also 1440 **unless you take Trap 3's split option**, which adds
+   one — you are amending assertions, not adding tests,
    unless you split Trap 3's coverage, in which case state the new count and
    why. Any test outside the **six** named sites that changes is a regression —
    report it, don't silence it.
