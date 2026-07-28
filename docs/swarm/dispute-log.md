@@ -771,3 +771,62 @@ none down (`RosterShell.tsx:178`, `:204-207`). So the fix is a pass-through, not
 a new seam — materially smaller than this dispute and D-2 both assumed. Note
 also that a roster capture would still show the KPI strip's error, which is fed
 by `SeasonProvider` in `AppShell`, not by this page.
+
+## D007 - T133 packet self-contradiction: criterion 4 requires a UXC-01 assertion, criterion 10 forbids the test that would carry it
+
+Nature:
+Checker-raised (T133 review, MINOR). Not a worker/checker disagreement — a
+defect in the packet, which is mine.
+
+Position:
+Criterion 4 required the `role="group"` accessible-name round-trip to be
+"asserted ... Mirror `OutreachList.test.tsx:1520-1587`" — a citation to a test
+file, i.e. an instruction to write a test. Criterion 10 pinned the suite at
+exactly 1414 and permitted only one amended assertion, i.e. an instruction not
+to add one. The worker resolved toward criterion 10 and proved the behaviour in
+a throwaway rig instead. The checker independently confirmed the behaviour is
+correct in both jsdom and Chromium, but noted that **30 of 31 tests still pass
+against the pre-change component** — nothing in the suite would catch removal
+of the wrapper.
+
+Ruling (orchestrator, 2026-07-28):
+The worker's resolution was correct: a numeric gate is unambiguous and an
+instruction to "mirror" a file is not, so it read the stricter one. The packet
+was wrong to state both. T133 stands as passed.
+
+The gap is real and matters more here than it would elsewhere: T129 lost
+accessible names on this exact pattern, and the protection against a recurrence
+is currently a deleted rig. **Follow-up authorized:** add the two scoped
+assertions to `CalendarPage.test.tsx` (populated + inner no-match branches,
+selector scoped by heading id) as a pure addition, 1414 → 1416. To be folded
+into the next task touching that file rather than dispatched alone.
+
+Process note: when a packet pins an exact test count *and* asks for new
+coverage, the count must be stated as the expected post-addition figure. Both
+T132 and T134 got this right; T133 did not.
+
+## D008 - T133 title weight moved 400 -> 600, mandated by the packet's own prescription while its criterion required "unchanged"
+
+Nature:
+Checker-raised (T133 review, NIT). Recorded so the next screen in this series is
+consistent rather than re-deciding it.
+
+Position:
+§1 prescribed the exact JSX including `weight="semibold"`. Criterion 3 required
+the title's rendered weight to be "unchanged". The calendar's pre-change title
+was `weight` 400 (a plain `ListItem` string label); after, it is 600. The worker
+followed the prescription and disclosed the delta accurately rather than
+silently satisfying one clause or the other.
+
+Ruling (orchestrator, 2026-07-28):
+**The weight change is intended and accepted.** Criterion 3's "unchanged" was
+written for the coach `Table` surface, where the title was already
+`weight="semibold"` and the risk was that `Link` would alter it. On `ListItem`
+surfaces the plain label was 400, so matching the coach rows necessarily moves
+it to 600 — which is the parity UXC-04 exists to create. The same applies to
+T132's student/parent rows, which moved 400 → 600 for the same reason and whose
+checker measured it as achieving parity.
+
+Canonical: a linked row title renders `weight` 600 / 14px / `--color-text-primary`
+on every surface. Any future packet in this series should state that as the
+target, not as "unchanged".
