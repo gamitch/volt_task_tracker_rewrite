@@ -72,7 +72,7 @@ LiveConsole imports `guards` and `routePaths`. Confirm this holds and move on.
 
 ## 2. Accessibility work this change creates
 
-Removing the chrome removes more than navigation. **All three of these are in
+Removing the chrome removes more than navigation. **All four of these are in
 scope** — they are consequences of your change, not pre-existing debt.
 
 **(a) `Kiosk.tsx` has no escape path at all.** `:406-478` contains zero `Link`,
@@ -88,7 +88,27 @@ a signed-in coach on a laptop.
 have no heading at all. With the chrome gone, those states have no heading
 anywhere on the page. Make the `<h1>` unconditional.
 
-**(c) The `role="main"` landmark and the skip link disappear with the chrome.**
+Its text is `{session.title}`, which is `null` in exactly those two states — so
+you need fallback copy, and inventing it is not your call. **Use the in-repo
+precedent:** `Kiosk.tsx:404` defines
+`FALLBACK_SESSION_TITLE = 'Meeting Check-In'` and applies it at `:442` as
+`sessionTitle?.title ?? FALLBACK_SESSION_TITLE`. Mirror that shape.
+
+**(c) The guard-denial screens go chromeless too — the match is on URL, not on
+what renders.** `RequireRole` renders `<AccessDeniedPage />` **in place** at the
+same URL rather than redirecting (`guards.tsx:499-500`; `:459-462` records that
+as a deliberate T073b2 decision), and `RequireAuth` renders `<NoAccessPage />`
+in place for the no-profile case (`:441`). So a signed-in student hitting
+`/kiosk/:sessionId` now gets a chromeless denial screen. This is survivable and
+probably an improvement — both pages render their own full-screen
+`Center > VStack[Heading, Card]` shell that is currently nested *inside* the
+Astryx `AppShell` — but confirm it rather than discovering it later.
+`AccessDeniedPage.tsx` carries its own `<Heading level={1}>` (`:88`) and its own
+escape link (`:95-97`). `NoAccessPage.tsx` has a heading (`:311`) and
+deliberately no buttons (`:18-21`, `:163`) because it signs the session out on
+mount — terminal by design, so losing nav costs nothing.
+
+**(d) The `role="main"` landmark and the skip link disappear with the chrome.**
 Astryx's `AppShell` supplies both — `dist/AppShell/AppShell.js:396`
 (`role: "main"`) and `:461-462` (`"Skip to content"`). Losing them is arguably
 correct for a single-purpose projection surface with no nav to skip past.
@@ -114,7 +134,7 @@ page was never wired to it.
 
 So: **do not delete the banner, and do not wire the loader.** Earning the
 banner's removal means swapping in `loadKioskDisplayToken`
-(`src/lib/supabase/loaders/kiosk.ts:338`, whose return type is a superset of
+(`src/lib/supabase/loaders/kiosk.ts:339`, whose return type is a superset of
 `LiveConsoleDisplayToken`) — real work, deliberately **out of scope here**, and
 banked as a follow-up. Verify only that the copy carries no jargon (no task IDs,
 no "fixture", no "stub") and leave it alone.
@@ -145,6 +165,12 @@ Capture `/roster` at 1440px and 375px, light and dark. **Overwriting
 
 `LiveConsole.tsx:42-48` and `Kiosk.tsx:20-28` both claim `router.tsx` renders an
 inline placeholder rather than importing the real component. T074 wired both.
+
+**Also `Kiosk.tsx:5-7`**, which enumerates everything the kiosk ever renders
+("only the page's own generic heading, the QR, the short code, and a numeric
+tally"). Your escape link from §2(a) makes that enumeration false. Update it in
+the same pass — shipping a newly-false module doc is precisely the mechanism
+that produced both of revision 1's BLOCKERs.
 These comments cost this task's premise review real time and will cost the next
 reader the same. Correct them.
 
@@ -164,7 +190,7 @@ reader the same. Correct them.
   concurrently.
 - `src/app/router.tsx` — read it, do not edit it. The route table is correct;
   the defect is in `AppShell`'s matching.
-- `src/theme/theme.smoke.test.tsx` — **it renders `<App />` (`:19,31`), which
+- `src/theme/theme.smoke.test.tsx` — **it renders `<App />` (`:19,30`), which
   mounts `AppShell`, so it is downstream of your change and you cannot edit it.**
   Risk is low (jsdom's default URL is `/`, hitting the chrome branch), but if it
   breaks, report it rather than working around it.
@@ -208,7 +234,8 @@ reader the same. Correct them.
 6. The `role="main"`/skip-link decision is recorded with reasoning.
 7. LiveConsole's banner is unchanged and jargon-free; Kiosk has no disclosure
    banner added and `Kiosk.test.tsx:173-179` is untouched and green.
-8. Both stale module-doc comments corrected.
+8. All three stale module-doc claims corrected: `LiveConsole.tsx:42-48`,
+   `Kiosk.tsx:20-28`, and `Kiosk.tsx:5-7`'s now-false PII enumeration.
 9. **Captures at 1440px and 375px, light and dark**, as `.webp`, for kiosk, live
    console, and roster. **The rig must inject `fixtureLoadKioskDisplayToken`
    (`Kiosk.tsx:277`) and stubbed tally/title** — no `.env` exists, so the real
@@ -246,6 +273,8 @@ reader the same. Correct them.
 - Evidence for the Kiosk escape path and LiveConsole's unconditional `<h1>`.
 - The banner verification result for each page, and explicit confirmation you
   added nothing to Kiosk.
+- Confirmation that both guard-denial screens still render acceptably at the two
+  projection URLs when chromeless (§2(c)).
 - Paths of all twelve captures, and whether each shows real or stubbed data.
 - Full output of the commands in criteria 11–12.
 - Anything unverified, stated plainly as unverified.
