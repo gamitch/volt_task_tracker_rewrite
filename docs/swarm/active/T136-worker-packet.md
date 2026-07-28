@@ -1,12 +1,13 @@
-# Worker Packet: T136 — semantic colour tokens + the shared progress bar (UXC-05 foundation, UXC-08)
+# Worker Packet: T136 — data-viz colour tokens + the shared goal bar (UXC-05 foundation, UXC-08)
 
-Wave 5, packet W5-P5. Runs after T135. **Scoped deliberately narrower than the
-PRD's W5-P4 line** — see "Scope" below.
+Wave 5, packet **W5-P4a**. Runs after T135.
+
+**Revision 2 (2026-07-28).** Revision 1 was returned REVISE with **1 BLOCKER and
+7 MAJORs**, all author errors — including a token prescription that does not
+compile, a trap quoting the wrong file, and a contrast threshold from the wrong
+WCAG rule. Every citation below has been verified against the real files.
 
 ## FIRST — merge the working branch
-
-Your worktree is created from `main`, not from the branch this work lives on.
-Before anything else:
 
 ```
 git fetch origin
@@ -15,197 +16,284 @@ git merge origin/claude/swarm-plan-zl575z
 
 Report the result. **If it conflicts, stop and report** rather than resolving.
 
-## Scope — and what was deliberately left out
+## Scope
 
-The PRD bundles UXC-05 (colour system), UXC-06 (layout composition) and UXC-08
-(goal bar) into one packet. That is three unrelated areas, a new shared
-component, and a reversal of a passed task whose defect the human owner reported
-live. **This packet builds and proves the primitives; T137 rolls them out.**
+The PRD bundles UXC-05, UXC-06 and UXC-08 into P4. This packet builds and proves
+the primitives; **T136b** rolls them out.
 
-**In scope here:**
-1. Semantic colour tokens in `src/theme/volt.ts`.
-2. One shared custom progress-bar component (F-3's pre-approved escalation).
-3. UXC-08: the outreach goal strip becomes a real bar, using that component.
+**In scope:** the two data-viz colour tokens, one shared bar component, and
+UXC-08's goal strip.
 
-**Deferred to T137 — do not do these:** per-team hues, type-badge hue variants,
-dashboard module pairing (UXC-06), leaderboard bars, student/parent home colour.
-Building the tokens without consumers is the point: T130 proved the `Table` on
-one surface before T132/T133 rolled it out, and that sequencing is why those
-rollouts were cheap.
+**Deferred — do not do these:** per-team hues, type-badge hue variants,
+UXC-06 dashboard pairing, leaderboard bars, student/parent *home* colour.
+(P5 remains "page frames on non-frozen routes" and is untouched by this packet.)
 
-## 1. Semantic tokens in `volt.ts`
+## 1. Colour tokens — use the ones that exist
 
-`src/theme/volt.ts` is **27 lines** and defines only `--color-accent` and
-`--color-on-accent`. There is no semantic colour system; UXC-05 needs one built,
-not extended.
+**Do not invent token names.** `defineTheme`'s `tokens` is
+`Partial<Record<TokenName, TokenValue>>` where `TokenName` is a **closed union
+type alias** (`dist/theme/defineTheme.d.ts`). A type alias cannot be augmented,
+so `src/theme/astryx-augment.d.ts`'s interface-merging trick does not apply, and
+a custom name fails the build:
 
-Add tokens for the two meanings this wave actually needs, each as a
-`[light, dark]` pair in the existing `tokens` block:
+```
+error TS2353: Object literal may only specify known properties, and
+'--color-confirmed' does not exist in type 'Partial<Record<TokenName, TokenValue>>'.
+```
 
-- **confirmed** — hours actually logged. Green family.
-- **planned** — hours committed but not yet logged. Purple family.
+Revision 1 prescribed exactly that, which made criterion 1 and the `tsc` gate
+mutually unsatisfiable.
 
-Both must reach **WCAG AA contrast against the bar track in both themes**, and
-you must report the measured ratios, not assert them. `D005` in the dispute log
-is the precedent for why: an earlier accent pairing measured 4.04:1 and had to
-be re-pinned.
+**Ship this instead** — override the two data-viz tokens that already exist and
+already typecheck, in `volt.ts`'s existing `tokens` block as `[light, dark]`
+pairs:
 
-Do **not** invent tokens for things this packet does not use. Per-team hues and
-badge variants are T137's, and unused tokens are indistinguishable from wrong
-ones until someone consumes them.
+- **`--color-data-categorical-green`** → confirmed hours
+- **`--color-data-categorical-purple`** → planned hours
+
+These are real `TokenName` keys (`dist/theme/domainTokens/dataTokens.d.ts`),
+documented as "one accent per category… for distinct series", and ship defaults
+(`#0B991F`, `#6B1EFD`) that are a reasonable starting point. They are **not**
+currently emitted in `theme.css`, so setting them here is what makes them exist.
+This also hands the deferred per-team-hue work eight more categorical hues with
+no further token design.
+
+**Regenerate the built stylesheet.** `theme.css:28-33` documents
+`npx astryx theme build src/theme/volt.ts`; the built token block mirrors
+`volt.ts`. Adding a token to `volt.ts` alone leaves the static stylesheet out of
+sync. Run it and disclose the diff. Note `package.json:13` deliberately excludes
+`volt.ts` from `format:check`.
+
+**How a component reads them.** They become real CSS custom properties —
+`generateThemeRules.js:232-237` emits `:scope { --tok: val; }` inside
+`@scope([data-astryx-theme="volt"])`, injected at runtime by `<Theme>`
+(`Theme.js:105-147`). A plain div reads them with `var(--tok)`. For a
+measurement rig, `useTheme().token(name)` returns the mode-resolved raw value.
+`xstyle` remains unusable (F-2).
 
 ## 2. The shared bar component
 
-**F-3 pre-authorizes exactly this and nothing more** (`VOLT_UX_Craft_PRD_v3.md`,
-Feasibility constraints): Astryx's `ProgressBar` has one scalar `value` and one
-fill div, and its own documentation forbids stacked bars. The architect ruling
-is that **one small custom bar — track, one or two fills, optional ticks — is
-approved under DES-21's final rung for UXC-05 and UXC-08 only.** Presentation
-only, no metric math, one shared module, contrast verified in both themes.
+**F-3 pre-authorizes exactly this** (`VOLT_UX_Craft_PRD_v3.md:74-79`): one small
+custom bar — track, one or two fills, optional ticks — under DES-21's final rung,
+for UXC-05 and UXC-08 only. Presentation only, one shared module, contrast
+verified in both themes.
 
-Create it as a single component (suggested `src/components/GoalBar.tsx`,
-alongside the shared `StatCell.tsx` that T131's wave extracted). Requirements:
+**The authority for a two-segment bar is `VOLT_Portal_PRD.md:239` (BEH-02)**:
+the hours bar renders confirmed hours plus planned hours as "a **visually
+lighter second segment**… never summed into one number." Cite it; it is what
+makes this legitimate rather than a stacked-bar violation of F-3.
 
-- Renders a **two-tone** fill: confirmed (green) and planned (purple), where
-  planned continues from where confirmed ends against a shared max.
-- Renders an optional **goal tick** at a given fraction.
-- Takes already-computed numbers as props. **It performs no arithmetic beyond
-  turning a value into a percentage width.** Constitution item 3 and PRD DATA-01
-  are absolute here: metric formulas live only in SQL views, and a bar that
-  computes hours is a BLOCKER.
-- Carries `role="progressbar"` with `aria-valuenow`/`aria-valuemin`/
-  `aria-valuemax`/`aria-valuetext`. See §3 — this is the crux.
+Create `src/components/GoalBar.tsx` + `GoalBar.test.tsx`, alongside the shared
+`StatCell.tsx`.
 
-## 3. UXC-08 — the goal strip, and the passed task it reverses
+**Layout — offset, never sum.** `OutreachList.tsx:55-58` records a
+grep-provable invariant that **no `confirmedHours + plannedHours` expression
+exists in that file**, and BEH-02 forbids summing them into one number. The
+natural implementation of "planned continues where confirmed ends" is exactly
+that forbidden sum. **Ship offset-based layout instead:** the planned segment is
+positioned at `left: confirmedPercent%` with `width: plannedPercent%`, each
+percentage computed independently against the goal. The component never adds the
+two.
 
-**Read this whole section before writing any code.**
+**Reuse `confirmedPercent` (`OutreachList.tsx:1207`)** — exported, already clamps
+to 100, already handles `goal <= 0`, already covered by tests. Pass percentages
+*in*; that makes "no arithmetic in the bar" trivially provable and satisfies
+constitution item 3 by construction.
 
-`GoalProgressBar` (`OutreachList.tsx:1803`) currently renders **zero** bars. Its
-module doc (`:71-79`) records why: George **live-reported** that the previous
-implementation showed two stacked bars layered under a third and fourth
-redundant "Team season goal" text repetition — "exactly UXD-05's own named
-anti-example". T121 fixed it by removing the bars entirely and shipping tiles.
+**Overflow is real and you must specify it.** Coach BEH-01's fixture
+(`OutreachList.test.tsx:1354-1358`) shrinks goals so confirmed is **9** and
+planned **7** against a goal of **15** — the segments exceed the track. Clamp
+the rendered widths so the fills never exceed 100% combined, and ensure
+`aria-valuenow` never exceeds `aria-valuemax`. Assert the overflow case in
+`GoalBar.test.tsx`.
 
-That fix is pinned by `OutreachList.test.tsx:1328-1347`, and the load-bearing
-line is `:1343`:
+**ARIA — complete shape, not just the role:**
+- `role="progressbar"` with `aria-valuenow`, `aria-valuemin`, `aria-valuemax`.
+- **`aria-valuenow` carries the confirmed value only.** The element can express
+  one number, and confirmed is the fact; planned is a projection.
+- **An accessible name is required.** Point `aria-labelledby` at the existing
+  `<Heading level={2}>{label}</Heading>` (`OutreachList.tsx:1832`) via `useId`.
+  This mirrors Astryx's own bar (`ProgressBar.js:213`) and the `role="group"`
+  precedent T129 established (`OutreachList.test.tsx:1520-1543`). Do **not** add
+  a second labelling element — that risks the one-heading assertion at `:1340`.
+- `aria-valuetext` reads a human sentence covering both segments.
+- Not focusable. It is a status indicator, not a control — no `tabIndex`.
+
+## 3. UXC-08 — the goal strip, and what it reverses
+
+**Read this whole section before writing code.**
+
+`GoalProgressBar` (doc `:1777-1802`, function `:1803`, body `:1820-1879`)
+renders **zero** bars today. The T121 note at `:67-82` records why: George
+**live-reported** two stacked bars whose own visible `label` captions formed a
+third and fourth "Team season goal" repetition — "exactly UXD-05's own named
+anti-example". T121 removed them and shipped tiles (`task-ledger.md:142`,
+"exactly one heading, zero progressbars — asserted").
+
+The pin is `OutreachList.test.tsx:1343`:
 
 ```js
 expect(container.querySelectorAll('[role="progressbar"]').length).toBe(0);
 ```
 
-So: **you cannot add an accessible bar without amending that assertion.** And
-you cannot dodge it by omitting `role="progressbar"` — that would trade a failing
-test for an inaccessible control, and constitution item 15 makes accessibility a
-shipping requirement, not a preference.
+**Verified: this is the only progressbar guard in the repository.** So you
+cannot add an accessible bar without amending it — and omitting the role to dodge
+it would trade a failing test for an inaccessible control, which constitution
+item 15 forbids.
 
-**Authorized resolution.** UXC-08's own text requires the disclosure ("Must
-disclose it reverses T121 and … exactly ONE bar"). Amend `:1343` from `toBe(0)`
-to `toBe(1)` and rename the test to say what it now guards. **The rest of that
-test must survive unchanged** — in particular:
+**Authorized:** amend `:1343` from `toBe(0)` to `toBe(1)` and rename the test to
+describe what it now guards. **Everything else in that test survives unchanged:**
+- `:1340` — exactly **one** `Team season goal` heading element.
+- `:1345` — `'9 hrs confirmed'`.
+- `:1346` — `'7 hrs planned'`.
 
-- `:1337-1342` — exactly **one** `Team season goal` heading element. The
-  duplicated-concept half of UXD-05 is not reversed and must keep passing.
-- `:1346-1347` — `'9 hrs confirmed'` and `'7 hrs planned'` still render.
+**Exactly one bar. Two fills inside one track.** Not one bar per metric. The
+original defect was two stacked bars; shipping two again reproduces precisely
+what the human owner reported.
 
-**Exactly one bar.** Not one per metric, not a confirmed bar beside a planned
-bar. The original defect was two stacked bars; shipping two again reproduces the
-exact thing the human owner reported. Two *fills* inside one track is the
-requirement.
+**The Goal tile stays.** `:1850-1856` renders "Goal / {goalHours} hrs" — T121
+shipped it and it is a displayed metric. Do not remove it in favour of the bar.
 
-**Do not touch the milestone toasts.** `BEH-01` (`:1349` onwards) asserts
-milestone toast copy at 25% and 50%. That system is `motivation-ethics` sensitive
-(constitution item 17: honest progress signals only, no streaks or urgency) and
-is out of scope. If your change alters when a toast fires, you have changed
-metric behaviour — stop and report.
+### Frozen — byte-identical, do not touch
+
+**The milestone `Badge` row (`:1867-1877`)**, which renders `"{milestone}% reached"`.
+UXC-08's wording ("Goal/**milestone** strip") invites moving these onto the bar
+as ticks. **Do not.** They are asserted by:
+- `OutreachList.test.tsx:1499` — `toContain('25% reached')` (student BEH-01)
+- `:1371-1372` — `not.toContain('75% reached')` / `not.toContain('100% reached')`
+  (coach BEH-01)
+
+A "goal tick" on the bar, if you render one, is **decorative only** and must not
+replace or relocate this row.
+
+**The `Toast` block (`:1822-1831`) and the props feeding
+`useMilestoneToasts` (`:1694-1724`)** — `seasonId`, `goalBarId`, `label`,
+`confirmedHours`, `goalHours`. That hook recomputes `confirmedPercent` from the
+same props the bar renders (`:1704`) and dedupes on a localStorage key
+`volt.outreach.milestoneToast.<seasonId>.<goalBarId>.<milestone>`
+(`:1663-1668`). Three ways a "bar-only" change silently alters toast behaviour:
+
+1. **Changing `goalBarId`** (e.g. to key a new bar instance) changes the
+   localStorage key → already-fired toasts re-fire → `:1496` fails.
+2. **Changing `label`** changes the toast body verbatim → `:1365`, `:1368`,
+   `:1487` fail.
+3. **Normalising or clamping `goalHours` before passing it down** changes the
+   percentage → changes which milestones cross.
+
+This is motivation-ethics territory (constitution item 17). If you find yourself
+touching any of it, stop and report.
+
+### The second render path — this ships to two surfaces
+
+`OutreachList.tsx:1763` says outright: "Goal bar — **shared by both role
+variants**." Call sites: **`:3058`** (coach, "Team season goal") and **`:3512`**
+(student/parent, "Your season goal").
+
+**So the student/parent outreach view also gains a bar. That is intended.** The
+student path has live tests at `:1419`, `:1458`, `:1480-1500` and **no**
+progressbar-count guard. Criterion 4 below therefore names both surfaces
+explicitly. Note the Forbidden list mentions T132's student/parent *rows* — that
+means the `ListItem` row rendering, not this shared goal bar.
 
 *(Citation note: `VOLT_UX_Craft_PRD_v3.md` cites this test as
 `OutreachList.test.tsx:1279-1298`. That is **stale** — that range is now T121's
-edit-dialog test. The real range is `:1328-1347`, verified.)*
+edit-dialog test. The real range is `:1328-1347`.)*
 
 ## Allowed Files
 
 - `src/theme/volt.ts`
+- `src/theme/theme.css` — the regenerated built token block only
 - `src/components/GoalBar.tsx` + `GoalBar.test.tsx` (new)
-- `src/pages/outreach/OutreachList.tsx` — **only** `GoalProgressBar`
-  (`:1803` onwards) and its module-doc paragraph at `:71-79`
-- `src/pages/outreach/OutreachList.test.tsx` — **only** the assertions named in
-  §3
-- `src/theme/theme.css` — only if a token needs a CSS surface; disclose why
+- `src/pages/outreach/OutreachList.tsx` — **`GoalProgressBar` and its own doc
+  comment (`:1777-1879`)**, plus the two stale references your change creates:
+  the file header at **`:3`** ("team season-goal `ProgressBar` pair") and the
+  section header at **`:1763`**. Nothing else.
+- `src/pages/outreach/OutreachList.test.tsx` — **only** `:1343` and the test's
+  name
 - `docs/swarm/active/T136-worker-output.md` (create)
 - New `.webp` figures under `docs/swarm/figures/ux-craft/`
 
 ## Forbidden Files
 
 - `src/pages/home/**`, `src/pages/outreach/Leaderboard.tsx`,
-  `src/pages/roster/**` — T137's rollout surfaces.
-- Everything in `OutreachList.tsx` outside `GoalProgressBar` — the coach
-  `Table` (T131), the student/parent rows (T132) and the shared hook all passed
-  recently. If your change requires touching them, stop and report.
+  `src/pages/roster/**` — the deferred rollout surfaces. `CoachHome`'s `KpiCard`
+  `ProgressBar` (`CoachHome.tsx:2183`) is correct as-is; F-3's approval does not
+  extend to replacing it.
+- Everything in `OutreachList.tsx` outside the ranges named above — the coach
+  `Table` (T131), the `ListItem` student/parent rows (T132), the shared hook.
 - `src/pages/meetings/**` — T135 may still be in flight.
-- `supabase/**` — no metric may move into or out of SQL.
+- `supabase/**`.
 - `docs/swarm/constitution.md`, `task-ledger.md`, `verification-log.md`,
   `dispute-log.md`, `.claude/**`.
 
 ## Traps
 
-1. **The bar must not compute anything.** `GoalProgressBar`'s doc at `:1298`
-   notes `goalHours` is "never a displayed metric itself, only a `ProgressBar`
-   `max`". Keep that property: pass confirmed, planned and goal in, render
-   widths out. Any hours arithmetic inside the component is a BLOCKER
-   (constitution item 3, PRD DATA-01).
-2. **One bar, two fills.** See §3. Two `<div role="progressbar">` elements on
-   that page fails `:1343` even after you amend it to `toBe(1)` — which is
-   exactly the guard you want.
-3. **`ProgressBar` is still the right choice elsewhere.** This custom component
-   is authorized for the *goal strip* only. Do not replace Astryx's
-   `ProgressBar` where it already ships correctly (`CoachHome.tsx`'s `KpiCard`).
-   F-3's approval is scoped to UXC-05 and UXC-08.
-4. **Contrast is measured, not asserted.** Report ratios for confirmed-on-track
-   and planned-on-track in **both** themes. `D005` exists because a
-   plausible-looking pairing measured 4.04:1.
-5. **The milestone toasts are motivation-ethics territory.** Do not adjust
-   thresholds, copy, or firing conditions.
+1. **Never sum confirmed and planned.** See §2. `OutreachList.tsx:55-58` makes
+   the absence of that expression a stated invariant; BEH-02 forbids it in
+   words. Offset-based layout only. Any hours arithmetic inside `GoalBar` is a
+   **BLOCKER** (constitution item 3, PRD DATA-01).
+2. **One bar, two fills.** Two `role="progressbar"` elements fail `:1343` even
+   after amending it to `toBe(1)` — which is exactly the guard you want.
+3. **The milestone Badge row and the Toast block are frozen.** See §3.
+4. **Contrast is measured, not asserted.** See criterion 2. Use
+   `useTheme().token()` for exact values rather than a computed-style heuristic —
+   D005's checker discarded that approach as "provably wrong" on this codebase.
+5. **`ProgressBar` is still right elsewhere.** This component is authorized for
+   the goal strip only.
 6. Do not certify your own work.
 
 ## Acceptance Criteria
 
-1. `volt.ts` defines confirmed and planned tokens as `[light, dark]` pairs, and
-   nothing unused.
-2. **Measured contrast ratios reported** for both fills against the track, in
-   both themes, each ≥4.5:1. State the method.
-3. `GoalBar` is one shared module, renders one track with up to two fills and an
-   optional goal tick, and contains **no arithmetic beyond percentage width**.
-4. The outreach page renders **exactly one** `role="progressbar"`, with valid
-   `aria-valuenow`/`min`/`max` and a human-readable `aria-valuetext`.
-5. `OutreachList.test.tsx:1343` amended `toBe(0)` → `toBe(1)` and the test
-   renamed to describe what it now guards. `:1337-1342` (one heading) and
-   `:1346-1347` (both hour figures) pass **unchanged**.
-6. `BEH-01`'s milestone assertions (`:1349` onwards) pass unchanged.
-7. **Captures at 1440px and 375px, light and dark**, as `.webp` — the bar is a
-   colour deliverable, so dark theme is not optional here.
-8. Keyboard and screen-reader path unaffected: the bar is not focusable (it is a
-   status indicator, not a control) but is announced.
-9. `npx tsc --noEmit`, `npx eslint .`, `npx vite build`,
-   `npm run format:check` clean.
-10. `npx vitest run` green. Baseline after your merge is **1440 across 62
-    files** — confirm that is what you start from and say so if not. You are
-    **adding** a test file, so report the expected end count explicitly
-    (baseline + your new `GoalBar` tests). The only permitted change to an
-    *existing* test is the single assertion named in §3. Any other existing test
-    that changes is a regression — report it, don't silence it. Zero
-    `.skip`/`.only`/`.todo`.
+1. `volt.ts` overrides `--color-data-categorical-green` and
+   `--color-data-categorical-purple` as `[light, dark]` pairs. No invented token
+   names. `theme.css`'s built block regenerated and the diff disclosed.
+2. **Measured contrast, reported with method, in both themes:**
+   - each fill against the track: **≥3:1** (WCAG 2.1 SC 1.4.11, non-text
+     contrast — *not* 4.5:1, which is the text threshold and was revision 1's
+     error);
+   - **confirmed against planned: ≥3:1.** Two adjacent segments that pass
+     individually against the track can still be indistinguishable from each
+     other. This is the check that actually matters on a two-tone bar.
+3. `GoalBar` is one shared module; renders one track, up to two fills positioned
+   by offset, optional decorative tick; contains **no arithmetic beyond
+   percentage-to-width**, and no addition of confirmed and planned.
+4. **Exactly one `role="progressbar"` on the coach outreach view, and exactly
+   one on the student/parent outreach view** — measured separately. Each carries
+   a resolvable accessible name via `aria-labelledby` to its existing heading,
+   valid `aria-valuenow`/`min`/`max` with `valuenow ≤ valuemax`, an
+   `aria-valuetext` covering both segments, and no `tabIndex`.
+5. The overflow case (confirmed 9 + planned 7 vs goal 15) renders without the
+   fills exceeding the track and without invalid ARIA. Asserted in
+   `GoalBar.test.tsx`.
+6. `OutreachList.test.tsx:1343` amended `toBe(0)` → `toBe(1)`, test renamed.
+   `:1340`, `:1345`, `:1346` pass **unchanged**.
+7. Both BEH-01 tests pass unchanged — coach at `:1349` onwards **and
+   student/parent at `:1480-1500`**. The milestone `Badge` row and the Toast
+   block are byte-identical.
+8. The Goal tile at `:1850-1856` still renders.
+9. **Captures at 1440px and 375px, light and dark, for both role views** —
+   eight figures. This is a colour deliverable; dark theme is not optional.
+10. `npx tsc --noEmit` clean; `npx vite build` clean; `npm run format:check`
+    clean; `npx eslint .` reports **zero errors and no new warnings**
+    (baseline: 0 errors / 352 warnings — do not chase the pre-existing ones).
+11. `npx vitest run` green. Baseline after your merge is **1440 across 62
+    files** — confirm and say so if it differs. You are **adding**
+    `GoalBar.test.tsx`, so state the expected end count explicitly. The only
+    permitted change to an existing test is `:1343` plus its name. Any other
+    existing test that changes is a regression — report it, don't silence it.
+    Zero `.skip`/`.only`/`.todo`.
 
 ## Relevant Constitution Excerpt
 
-- Item 3 — metric SQL and RLS come only from PRD 8.4; duplicating a metric
-  formula in TypeScript is a **BLOCKER**. This is the rule most at risk here.
-- Item 11 — DES-21 escalation ladder. The custom bar is F-3's pre-approved
-  final-rung escalation for this requirement only; `xstyle` does not work in
-  this app (F-2).
+- Item 3 — metric formulas live only in SQL views; duplicating one in TypeScript
+  is a **BLOCKER**. Trap 1 is this rule.
+- Item 11 — DES-21 ladder. The custom bar is F-3's pre-approved final-rung
+  escalation for this requirement only; `xstyle` does not work here (F-2).
 - Item 15 — accessibility is a shipping requirement. This is why the bar carries
-  `role="progressbar"` even though that costs a test amendment.
-- Item 17 — motivation ethics. Honest progress signals only. A goal bar is
-  factual; do not add urgency, streak, or scarcity framing around it.
+  `role="progressbar"` and a real accessible name even though that costs a test
+  amendment.
+- Item 17 — motivation ethics. Honest progress signals only; no urgency, streak
+  or scarcity framing. The frozen toast block is this rule.
 - Non-Negotiables — existing tests pass unless explicitly approved; no worker
   self-certifies.
 
@@ -213,20 +301,23 @@ edit-dialog test. The real range is `:1328-1347`, verified.)*
 
 `docs/swarm/active/T136-worker-output.md`:
 
-- The token values chosen and **measured** contrast ratios, both themes, with
-  the method used.
-- The bar's props and a statement of what arithmetic it does (should be:
-  percentage width only).
-- Rendered proof that exactly one `role="progressbar"` exists on the page, with
-  its ARIA values.
-- The exact test line amended, before/after, and confirmation that the other
-  assertions in that test and in `BEH-01` pass untouched.
-- Test count started from and ended with, with the delta accounted for.
-- Paths of the four captures.
-- Full output of the commands in criteria 9–10.
+- Token values chosen, and **measured** ratios for both fills-vs-track **and**
+  confirmed-vs-planned, both themes, with the method.
+- The `theme.css` regeneration diff.
+- `GoalBar`'s props, and an explicit statement of every arithmetic operation it
+  performs.
+- Rendered proof of exactly one `role="progressbar"` on **each** role view, with
+  its full ARIA attribute set and resolved accessible name.
+- The overflow case, rendered and measured.
+- The exact test line amended, before/after, plus confirmation that `:1340`,
+  `:1345`, `:1346`, both BEH-01 tests, the milestone Badge row and the Toast
+  block are untouched.
+- Test count started from and ended with, delta accounted for.
+- Paths of the eight captures.
+- Full output of the commands in criteria 10–11.
 - Anything unverified, stated plainly as unverified.
 
-Use a throwaway rig for measurement and capture (`*.throwaway.*` is gitignored
-**and excluded from vitest collection**, so it cannot affect your counts;
-Chromium at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`; `LoginAs` from
+Use a throwaway rig (`*.throwaway.*` is gitignored **and** vitest-excluded, so
+it cannot affect counts; Chromium at
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome`; `LoginAs` from
 `src/test-utils/authHarness.tsx:131`). **Delete it before finishing.**

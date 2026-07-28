@@ -157,6 +157,26 @@ function clickButton(button: HTMLButtonElement): void {
   });
 }
 
+/** T135 (Table migration, Trap 1/2 of that task's own worker packet) --
+ * expands a coach meeting row's session detail. Astryx's `Collapsible` used
+ * to keep its content always mounted in the DOM (only CSS-hidden while
+ * collapsed), so no click was ever needed to find session-detail text; row
+ * splicing (the `Table` migration's mechanism) genuinely removes those rows
+ * from the DOM until expanded, so a real click is now required. Finds the
+ * expander by its accessible name (`Show session details – {title}` /
+ * `Hide session details – {title}`) rather than its shared visible text
+ * (`Session details (N)`, which is NOT unique across rows -- every row's
+ * expander carries that same shape). */
+function expandRow(eventTitle: string): void {
+  const expander = Array.from(document.querySelectorAll('button')).find((button) =>
+    button.getAttribute('aria-label')?.startsWith(`Show session details – ${eventTitle}`),
+  );
+  if (!expander) {
+    throw new Error(`No expander button found for "${eventTitle}"`);
+  }
+  clickButton(expander);
+}
+
 /** T096: a fast, synchronous-resolving fake for the new `resolveStudentId`
  * seam -- injected explicitly (same "inject the fixture explicitly through
  * the seam" pattern every prior ED-1 packet established) by every
@@ -555,8 +575,24 @@ describe('<MeetingsList /> coach view', () => {
     expect(container.textContent).toContain('Ravens Strategy Session');
     expect(container.textContent).toContain('All teams');
     expect(container.textContent).toContain('Ravens');
+    // T135 (Table migration) Trap 1, authorized: the hours `StatCell`'s own
+    // label is literally the word "Scheduled" -- this assertion survives
+    // only because §1 of that task's packet pins that label; it is not
+    // independent proof of a session-status badge (see the expanded
+    // assertions below for that).
     expect(container.textContent).toContain('Scheduled');
+    // "Completed" survives via the Past section's own `EmptyState`
+    // description ("Completed and canceled meetings will show up here.") --
+    // by luck rather than design (T135 packet Trap 1), since this fixture's
+    // Past bucket is empty. Not relied upon as proof of a session badge.
     expect(container.textContent).toContain('Completed');
+
+    // T135 (Table migration) Trap 1: row splicing means a session's own
+    // status badge ("Canceled") and its attendance summary ("present") only
+    // exist in the DOM once this row's expander has been clicked -- unlike
+    // the old `Collapsible`, whose content stayed mounted (CSS-hidden, not
+    // removed) even while collapsed.
+    expandRow('Weekly Build Meeting');
     expect(container.textContent).toContain('Canceled');
     expect(container.textContent).toContain('present');
     expect(container.textContent).toContain('Schedule meetings');
@@ -575,25 +611,40 @@ describe('<MeetingsList /> coach view', () => {
     expect(container.textContent).toContain('WED (3)');
     expect(container.textContent).toContain('Wed, Jul 8 – Wed, Jul 22');
     expect(container.textContent).toContain('Robotics Lab');
-    // planned = scheduled (2h) + completed (2h) = 4h (canceled excluded);
-    // logged = completed only = 2h. Rendered as "scheduled"/"held" (T128
-    // NIT: "logged" collided with volunteer hours-logged vocabulary).
-    expect(container.textContent).toContain('4h scheduled · 2h held');
+    // T135 (Table migration) Trap 3, authorized: `StatCell` renders its
+    // label and value with NO separator (`StatCell.tsx:56-61`; its own test
+    // pins "Planned3h") and its `secondary` tier as its own separate line --
+    // the old single-run "4h scheduled · 2h held" string no longer exists as
+    // one run of text. Same real numbers (planned = scheduled 2h + completed
+    // 2h = 4h, canceled excluded; logged = completed only = 2h), asserted in
+    // their new per-cell homes instead of weakened to a substring-of-anything
+    // check.
+    expect(container.textContent).toContain('Scheduled4h');
+    expect(container.textContent).toContain('2h held');
     // expected = session-upcoming-build's 5 'going' RSVPs; attended =
-    // session-past-build-completed's 3 present + 1 late.
-    expect(container.textContent).toContain('Expected 5 · Attended 4');
+    // session-past-build-completed's 3 present + 1 late. Same split reason.
+    expect(container.textContent).toContain('Expected5');
+    expect(container.textContent).toContain('Attended 4');
 
     // "Ravens Strategy Session" has 2 sessions, both on Saturdays.
     expect(container.textContent).toContain('SAT (2)');
     expect(container.textContent).toContain('Ravens Team Room');
-    expect(container.textContent).toContain('3h scheduled · 1.5h held');
-    expect(container.textContent).toContain('Expected 2 · Attended 3');
+    expect(container.textContent).toContain('Scheduled3h');
+    expect(container.textContent).toContain('1.5h held');
+    expect(container.textContent).toContain('Expected2');
+    expect(container.textContent).toContain('Attended 3');
 
-    // UXD-03: expander trigger + per-session detail (attendee names) both
-    // present -- Collapsible content is always in the DOM (Astryx's own
-    // implementation, see this file's own module doc), so no click needed.
+    // UXD-03: expander trigger text is always visible (it is the `Button`'s
+    // own children, not conditionally-rendered `Collapsible` content), so no
+    // click is needed for these two.
     expect(container.textContent).toContain('Session details (3)');
     expect(container.textContent).toContain('Session details (2)');
+    // T135 (Table migration) Trap 1, authorized: unlike the old `Collapsible`
+    // (content always mounted, only CSS-hidden while collapsed), row
+    // splicing genuinely removes a session-detail row from the DOM until its
+    // parent row's expander is clicked -- the attendee-names line lives
+    // inside that spliced-in row.
+    expandRow('Weekly Build Meeting');
     expect(container.textContent).toContain('Attended: Alex Rivera, Bailey Chen, Casey Nguyen');
   });
 
@@ -788,22 +839,29 @@ describe('<MeetingsList /> coach view', () => {
   // T096 (module doc #7b, Trap #3 finding) -- Edit is left as an honest,
   // accurately-worded stub since `ScheduleMeetingsDialog` genuinely has no
   // edit mode, not the old misleading "dialog not built yet" copy.
+  //
+  // T135 (Table migration) §2, tenth authorized assertion change (on top of
+  // Trap 1's nine): the row-level `MoreMenu` this test used to open no
+  // longer exists (Edit is now a standalone chip, since Cancel already left
+  // the menu for a per-session button under T122, leaving exactly one item
+  // behind a menu). Before this rewrite, `moreMenuButton` resolved to
+  // `undefined` (nothing has `aria-label^="Actions for Weekly Build
+  // Meeting"` anymore), the optional-chained `?.dispatchEvent(...)` at the
+  // old `:850` silently no-opped, and the generic `el.textContent?.trim()
+  // === 'Edit'` search at the old `:852-854` still found the new Edit chip
+  // directly in the DOM (no menu-open needed) -- so the test would have kept
+  // passing while asserting an affordance (open a menu, click a menu item)
+  // that no longer exists. Rewritten to find and click the Edit chip
+  // directly, by its real accessible name.
   it('Edit shows an honest stub explaining the dialog has no edit mode (not the old misleading copy)', async () => {
     renderAsUser(COACH_USER, { loadCoachData: defaultLoadCoachMeetingsData });
     await flushMicrotasks();
 
-    const moreMenuButton = Array.from(container.querySelectorAll('button')).find((btn) =>
-      btn.getAttribute('aria-label')?.startsWith('Actions for Weekly Build Meeting'),
+    const editButton = Array.from(container.querySelectorAll('button')).find((btn) =>
+      btn.getAttribute('aria-label')?.startsWith('Edit – Weekly Build Meeting'),
     );
-    act(() => {
-      moreMenuButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    const editMenuItem = Array.from(document.querySelectorAll('[role="menuitem"], button')).find(
-      (el) => el.textContent?.trim() === 'Edit',
-    );
-    act(() => {
-      editMenuItem?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
+    expect(editButton).toBeTruthy();
+    clickButton(editButton as HTMLButtonElement);
 
     expect(container.textContent).toContain("Editing an existing meeting isn't supported yet");
     // NOT the old, now-inaccurate copy (the dialog IS built).
@@ -811,12 +869,14 @@ describe('<MeetingsList /> coach view', () => {
   });
 
   // T122 (module doc #10d) -- Cancel moved from the row's own MoreMenu into
-  // a plain per-session `Button` inside that row's expander (`Collapsible`
-  // content is always in the DOM -- see Astryx's own `Collapsible.tsx`,
-  // `display: none` toggled via CSS, not conditional rendering -- so this
-  // button is findable without simulating an expand click, same posture
-  // `ScheduleMeetingsDialog`'s "always mounted" `<dialog>` already
-  // established for this test file).
+  // a plain per-session `Button` inside that row's expander.
+  //
+  // T135 (Table migration) Trap 1, rewritten (was: "Collapsible content is
+  // always in the DOM ... so no click needed" -- now FALSE): row splicing
+  // (the `Table` migration's expansion mechanism) genuinely removes a
+  // session-detail row from the DOM until its parent row's expander is
+  // clicked, unlike `Collapsible`, which only CSS-hid its (always-mounted)
+  // content. `expandRow` performs that click first.
   it('Cancel (inline, per-session) + AlertDialog (DES-11) really calls the injected onCancelSession mutation', async () => {
     const onCancelSession = vi.fn().mockResolvedValue(undefined);
     renderAsUser(COACH_USER, { loadCoachData: defaultLoadCoachMeetingsData, onCancelSession });
@@ -824,6 +884,7 @@ describe('<MeetingsList /> coach view', () => {
 
     // "Weekly Build Meeting" has exactly one still-scheduled session
     // (session-upcoming-build, 2026-07-22, a Wednesday).
+    expandRow('Weekly Build Meeting');
     const cancelButton = findButtonByText('Cancel Wed, Jul 22 session');
     expect(cancelButton).toBeTruthy();
     clickButton(cancelButton as HTMLButtonElement);
@@ -837,8 +898,16 @@ describe('<MeetingsList /> coach view', () => {
     clickButton(confirmButton as HTMLButtonElement);
     await flushMicrotasks();
 
-    // Optimistic update: the formerly-scheduled session now shows a
-    // Canceled badge + copy inside its row's expander.
+    // T135 (Table migration) Trap 2: confirming the cancel means EVERY one
+    // of "Weekly Build Meeting"'s sessions is now completed/canceled (none
+    // still `scheduled`), so `partitionCoachMeetingRows` moves this row from
+    // the Upcoming `CoachMeetingsSection`'s own `Table` into the Past one's
+    // -- a different, separately-mounted `Table` instance. This assertion is
+    // only satisfiable because expansion state is lifted to
+    // `CoachMeetingsView` (ONE shared `Set`, not one per section, per that
+    // task's own module doc) -- the row's expanded-ness survives the bucket
+    // move, so its session-detail rows (including this "Canceled" copy) are
+    // still spliced into the Past table without a second expand click.
     expect(container.textContent).toContain('Canceled — no attendance recorded.');
     // The real mutation seam was genuinely called, with the target session's id.
     expect(onCancelSession).toHaveBeenCalledTimes(1);
@@ -846,16 +915,23 @@ describe('<MeetingsList /> coach view', () => {
     expect(container.textContent).toContain('Meeting session canceled');
     // The Cancel button for that now-canceled session is gone (only
     // `scheduled` sessions render one) -- the Ravens session's own Cancel
-    // button is untouched.
+    // button is untouched, but lives in a DIFFERENT row that has never been
+    // expanded, so it needs its own expand click first (T135 Trap 1).
     expect(findButtonByText('Cancel Wed, Jul 22 session')).toBeUndefined();
+    expandRow('Ravens Strategy Session');
     expect(findButtonByText('Cancel Sat, Jul 25 session')).toBeTruthy();
   });
 
+  // T135 (Table migration) Trap 1: without an `expandRow` call first,
+  // `findButtonByText` returns `undefined` and `clickButton(undefined)`
+  // throws -- session-detail rows (including this Cancel button) are
+  // spliced out of the DOM until expanded.
   it('Cancel rolls back the optimistic update and shows an error Banner when the mutation rejects', async () => {
     const onCancelSession = vi.fn().mockRejectedValue(new Error('network down'));
     renderAsUser(COACH_USER, { loadCoachData: defaultLoadCoachMeetingsData, onCancelSession });
     await flushMicrotasks();
 
+    expandRow('Weekly Build Meeting');
     const cancelButton = findButtonByText('Cancel Wed, Jul 22 session');
     clickButton(cancelButton as HTMLButtonElement);
     const confirmButton = Array.from(document.querySelectorAll('button')).find(
@@ -864,7 +940,9 @@ describe('<MeetingsList /> coach view', () => {
     clickButton(confirmButton as HTMLButtonElement);
     await flushMicrotasks();
 
-    // Rolled back -- the session's own Cancel button reappears.
+    // Rolled back -- the session's own Cancel button reappears, and (since
+    // the mutation rejected) the row never actually left the Upcoming
+    // section, so the same expanded `Table` instance still has it.
     expect(findButtonByText('Cancel Wed, Jul 22 session')).toBeTruthy();
     expect(container.textContent).toContain("Couldn't cancel meeting");
   });
