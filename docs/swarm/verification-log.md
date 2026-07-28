@@ -4755,3 +4755,85 @@ route-persistence test.
   that file; (NIT) confirm the automated verification-log completion
   markers are expected harness behavior, not worker edits (they are —
   standing housekeeping item every close-out already reverts).
+
+## T129 — W5-P1: app-wide mechanical sweep (UXC-01, UXC-10, UXC-11)
+- Date: 2026-07-28
+- Worker: worker-implementer (sonnet, attempts: 2)
+- Checker: checker-reviewer (same checker both passes)
+- Pre-dispatch: `checker-premise` ran **twice** (constitution item 19);
+  see the T129/T130 packet-revision commits.
+- Verdict: **PASS on attempt 2** (NIT). Attempt 1 **FAILED (2× MAJOR)**.
+
+### Attempt-1 failure — both defects originated in the packet, not the worker
+1. **Full-bleed regression.** The packet prescribed wrapping each section in
+   `<Section aria-labelledby={headingId}>`, citing (correctly) that `Section`
+   spreads rest props. Unverified: `Section` applies an *unconditional*
+   negative margin (`Section.tsx:238`, styles `:75-90`) to escape container
+   padding. `padding={0}` removes the compensating inner padding, not the
+   outer bleed. CoachHome renders its own `LayoutContent padding={6}`, which
+   publishes `--container-padding-inline-*: var(--spacing-6)` = 24px — so all
+   five dashboard sections' lists and empty states extended 24px past their
+   own headings. The checker proved it by rendering the real component and
+   resolving StyleX atomic classes against compiled `theme.css`; jsdom loads
+   no CSS, so the worker's tests could not have seen it.
+2. **Accessible name still not exposed — and newly lost.** `Section` renders a
+   role-less `<div>`; `aria-labelledby` on an implicit `generic` role is
+   **name-prohibited** under ARIA and discarded by AT. Meanwhile removing every
+   `header` prop removed the name `List` sets for itself (`List.tsx:169` sets
+   `aria-labelledby` only when `header != null`). Net: the populated branch
+   *lost* a name it previously had. The attempt-1 tests asserted only that the
+   attribute string round-trips — precisely the "verify markup, not computed
+   name" failure the packet's own Trap 1 warned about.
+
+### Attempt-2 fix, independently verified
+- All 11 sites now `<div role="group" aria-labelledby={headingId}>`: zero
+  margin/padding/background by construction, and `group` supports a name where
+  `generic` prohibits one. `Section` imports removed from the four non-shared
+  pages; correctly retained in `OutreachList.tsx` (T130's coach section uses it).
+- Checker re-ran its own probe against the real `CoachHome` inside the actual
+  `LayoutContent padding={6}` chain: every wrapper reports `classes:"(none)"`,
+  `inlineStyle:"(none)"`, `hasBleedClass:false`, while
+  `inheritsNonZeroPadVar:true` confirms the triggering condition was still
+  reproduced. Stronger than a measurement — the element cannot contribute
+  margin at any viewport.
+- Name computability confirmed on the correct element (role and
+  `aria-labelledby` on the same node), resolving to an `H2` at 10 of 11 sites
+  empirically, 11th by source + passing tests. **Empty branch now carries the
+  name too — which HEAD never did.**
+- Checker added a duplicate-`useId` check the worker had not claimed: the three
+  components that render twice (Upcoming/Past) produce distinct ids resolving
+  to their own headings (`duplicateLabelIds:false`).
+- Tests genuinely strengthened: all six helpers now select
+  `[role="group"][aria-labelledby=…]` and separately assert the role, so the
+  attempt-1 code would now fail. Empty-branch coverage retained at all six.
+- **Worker's disclosed near-miss verified clean**: it ran an over-broad
+  `prettier --write` (200-450 lines/file), discovered that drift was
+  pre-existing at HEAD, and reverted by reading `git show HEAD:<path>` and
+  rewriting — using **no** tree-mutating git command. Checker confirmed zero
+  lost top-level declarations across all seven source files, and `git stash
+  list` shows only the two known July orphans.
+- UXC-10: 11 packet sites + 2 residual found in review, all rewritten in plain
+  language. Two were *factually stale*, not merely jargon-laden (the LiveConsole
+  `createClient` claim, false since T071; CoachHome's "dialog hasn't shipped"),
+  and were corrected rather than merely de-jargoned. The `digestEnabled` rewrite
+  preserves a genuine open ambiguity honestly instead of inventing certainty.
+- UXC-11: new `src/lib/format/dates.ts` seeded from the one implementation that
+  already handled the UTC-midnight trap; ISO strings still used verbatim as map
+  keys and mutation arguments — display-only change, no identity regression.
+- Gates (checker-run): tsc 0; eslint 0 errors (352 warnings, one fewer than
+  attempt 1 — consistent with the removed `Section` imports); vitest
+  **1412/1412**; build 0; prettier clean on all 16 files.
+
+### Cross-task finding routed out of this review
+T130's rework introduced `<Section … aria-labelledby>` at
+`OutreachList.tsx:2666` — the identical defect. Flagged to T130's worker
+mid-flight rather than left for its checker to rediscover.
+
+### Follow-ups
+Stale `createClient` module docs at `HoursTab.tsx:202` / `ParticipationTab.tsx:104`
+(`csvExport.ts:12` is file-scoped and still true — leave alone); ISO leaks at
+`ScheduleMeetingsDialog.tsx:765,768` and `SeasonSettings.tsx:672`, now fixable by
+importing `formatFriendlyDate`; consolidate `CoachHome.tsx:1193`'s
+`formatSessionDateLabel` onto the shared module (~15 near-duplicates repo-wide);
+strengthen `dates.test.ts` with a real timezone exercise rather than a
+constructor spy.
