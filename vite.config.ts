@@ -15,7 +15,21 @@ export default defineConfig({
     // *.test.ts files (Deno.test(...), run separately via `deno test`) --
     // exclude them from vitest's default discovery, same reasoning as the
     // eslint.config.js exclusion added alongside this (CI break #4).
-    exclude: ['**/node_modules/**', '**/dist/**', 'supabase/functions/**', 'tests/e2e/**'],
+    // `.claude/worktrees/**` holds isolated subagent checkouts of this same
+    // repo (one full copy per concurrently-running worker). `.gitignore`
+    // covers them, but vitest does not read `.gitignore` -- without this
+    // entry the suite collects every worktree's copy of every test file and
+    // reports a doubled/tripled count against in-flight sibling code, which
+    // makes the "1414 / 61 files" baseline every task packet gates on
+    // meaningless. Excluded here rather than in each packet because no
+    // worker is allowed to edit this file.
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.claude/**',
+      'supabase/functions/**',
+      'tests/e2e/**',
+    ],
   },
   build: {
     rollupOptions: {

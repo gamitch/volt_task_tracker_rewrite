@@ -46,14 +46,15 @@ truncation silently stops. `color="primary"` is required — `LinkProps.color`
 defaults to `'accent'` (`Link.tsx:297`).
 
 No `label`/`aria-label`/`tooltip` on the link; its accessible name must be the
-title text (`astryx-api.md:1952`, `:1954`).
+title text (`astryx-api.md:1952`; the no-`aria-label`-on-text-links rule is
+`:1955`, and `:1954` is the separate no-generic-text rule).
 
 **Pre-authorized deviations (do not dispute):** `ListItem.label` accepts
 `ReactNode` (`src/List/ListItem.tsx:50`, `dist/List/ListItem.d.ts:29`) —
 `astryx-api.md:4590` documents ListItem's props as literally `undefined`, so
 every ListItem prop in this file is already an installed-source deviation.
 `Link`'s `weight`/`maxLines`/`color` are absent from the `# Link` props table
-(`astryx-api.md:1961-1977`) but verified real at the lines above. D004
+(`astryx-api.md:1963-1977`) but verified real at the lines above. D004
 precedent; T131 shipped both and Passed.
 
 ### 2. UXC-01 — label the section the way T129 already proved
@@ -123,10 +124,22 @@ Cap the page content at **~1120px** and centre it, per UXC-06. The
 pre-authorized `style` under D004; that was an unnecessary escalation past a
 documented prop, and constitution item 11 forbids it.
 
-- **`maxWidth`** is documented on `Stack`/`VStack` (`astryx-api.md:363`, `:387`)
-  and on `Center` (`:83`, `:139`) — "Numbers are treated as pixels". Installed
-  source confirms it emits real inline sizing (`Stack.tsx:115`, `:272-273`;
-  `Center.tsx:85`). `<VStack maxWidth={1120}>` *is* the container-level cap.
+- **`maxWidth` caps but does NOT centre.** `Stack.tsx:265-278` emits only
+  `width`/`height`/`maxWidth`/`minHeight` — there is no `marginInline: 'auto'`
+  anywhere in `Stack/` or `Center/`, and `CalendarPage`'s root `VStack` is a
+  block-level child of `LayoutContent`, so a `max-width` box with no auto margin
+  stays **left-aligned**. Ship the two-layer shape:
+
+  ```tsx
+  <VStack hAlign="center">                          {/* astryx-api.md:389 — cross axis */}
+    <VStack width="100%" maxWidth={1120} gap={6} padding={6}>
+  ```
+
+  `width="100%"` (`astryx-api.md:385`) is load-bearing: under
+  `align-items: center` the child's cross size is content-based, so without it
+  the content shrinks to fit-content instead of filling up to the 1120 cap.
+  `maxWidth` is documented at `astryx-api.md:363`/`:387` (Stack/VStack) and
+  `:83` (Center).
 - The `SegmentedControl` is not the thing that is wrong — its own root is
   already `inline-flex`/hug (`SegmentedControl.tsx:89-95`). It is being
   **stretched** by the parent `VStack`'s default `vAlign="stretch"`. Wrap it in
@@ -199,9 +212,15 @@ re-litigate it or try to eject the component.
    fixture (no title is long enough); prove the mechanism with a **synthetic
    long title** in the rig, as T131's checker did.
 4. The `<div role="group">`'s `aria-labelledby` resolves to the visible `<h2>`,
-   asserted in **all three** branches: populated, the inner no-match empty state
-   (`:823`), and the outer zero-session empty state (`:776`). Mirror
+   asserted in the **two branches where the group renders**: populated, and the
+   inner no-match empty state (`:823`). Mirror
    `OutreachList.test.tsx:1520-1587`. The `List` must no longer carry `header`.
+
+   For the **outer zero-session branch** (`:776`) the group does not exist at
+   all — the whole block is replaced. Assert there that the session-list section
+   is absent and the page still carries its own `<h2>` ("No sessions scheduled
+   yet"), which `CalendarPage.test.tsx:504-515` already pins and which must keep
+   passing unchanged. Do not assert a group there; there isn't one.
 5. At 1440px: content capped at ~1120px and centred; the `SegmentedControl` no
    longer spans the full width. Report the measured content width.
 6. At 375px: no page-level horizontal scroll
@@ -219,8 +238,9 @@ re-litigate it or try to eject the component.
 ## Relevant Constitution Excerpt
 
 - Item 2 — Astryx props come only from `astryx-api.md`; absent props are
-  presumed hallucinated → MAJOR. **Three exceptions pre-authorized above**
-  (ListItem props, Link typography props, `style`), all under D004. No others.
+  presumed hallucinated → MAJOR. **Two exceptions pre-authorized above**
+  (ListItem props, Link typography props), both under D004. No others — `style`
+  is explicitly NOT authorized here; §3 uses documented props.
 - Item 11 — DES-21 styling escalation; ejecting component source needs boss
   approval.
 - Item 12 — every async screen ships all four states. Your UXC-01 change touches

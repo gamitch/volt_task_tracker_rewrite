@@ -177,17 +177,26 @@ alignment. If it does, report the measurement rather than working around it.
 1. `src/hooks/useIsNarrowViewport.ts` exists, exports both functions, carries
    the `matchMedia`-subscription reasoning, and `OutreachList.tsx` imports it
    with no behaviour change.
-2. The 768px boundary is pinned by a real test (767 / 768 / 769).
+2. The hook's **query string** is pinned at 767 / 768 / 769 via a
+   query-parsing `vi.stubGlobal`. This pins the query, not a real viewport —
+   jsdom evaluates no media queries and `test-setup.ts:14-25` hardcodes
+   `matches: false`. Say so in your output. A test that stubs `matches` and
+   asserts the hook returns it is a tautology and fails this criterion.
 3. Student/parent rows: the event title is a real `<a href="/outreach/:eventId">`
    with **no** `aria-label`, accessible name equal to the title.
 4. `View details – ` no longer appears in the **rendered JSX or rendered DOM**.
    It still appears in ten module-doc comments (`:255, :259, :465, :479, :495,
-   :498, :1969, :2226, :2362, :2367`) — the historical record, including T131's
+   :498, :1969, :2226, :2367, :2640`) — the historical record, including T131's
    own note of the authorization for this reversal. **Do not delete them.** A
    whole-file grep is the wrong test here.
-5. Rendered title weight, size, colour and truncation match the coach rows at
-   rest (weight 600, 14px, the `primary` token, single-line ellipsis).
-6. Row height and alignment unchanged vs before — measured, not assumed.
+5. Rendered title weight, size and colour match the coach rows at rest (weight
+   600, 14px, the `primary` token). **Truncation cannot be exercised by any
+   existing fixture** — no title is long enough (`T131-worker-output.md:127-133`
+   hit this exact wall). Prove the mechanism with a **synthetic long title** in
+   the rig, as T131's checker did.
+6. Row height **within 2px** of before, alignment unchanged — measured, not
+   assumed. Swapping a bare text node for a baseline-aligned `inline-flex`
+   anchor can shift the pitch slightly; report the number.
 7. Both stale comments corrected: `:3182` and `:3261-3262`.
 8. `astryx-api.md`'s `# Link` props table lists the six typography props with
    installed-source line references.

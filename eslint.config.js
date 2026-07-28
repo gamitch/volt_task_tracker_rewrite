@@ -12,7 +12,11 @@ export default [
   // are linted/typechecked separately via `deno lint`/`deno check` (see
   // T017's worker verification). Linting them here with browser globals
   // produces false no-undef errors on every `Deno.*` reference.
-  { ignores: ['dist', 'node_modules', 'supabase/functions/**'] },
+  // `.claude` also holds isolated subagent worktrees -- full checkouts of
+  // this repo. eslint does not read `.gitignore` either, so without this
+  // `npx eslint .` lints every worker's in-flight copy alongside the real
+  // tree (see the matching note in `vite.config.ts`).
+  { ignores: ['dist', 'node_modules', '.claude', 'supabase/functions/**'] },
   js.configs.recommended,
   {
     files: ['**/*.{ts,tsx}'],
