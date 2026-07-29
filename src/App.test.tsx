@@ -63,6 +63,11 @@ beforeEach(() => {
   root = createRoot(container);
   document.documentElement.removeAttribute('data-theme');
   mockedSubscribeToAuthStateChange.mockReturnValue(() => {});
+  // ThemeModeProvider writes the resolved theme mode through to
+  // localStorage on every successful resolve -- without clearing it here,
+  // one test's resolved value leaks into the next test's synchronous seed
+  // (mirrors ThemeModeProvider.test.tsx's own beforeEach/afterEach).
+  window.localStorage.clear();
 });
 
 afterEach(() => {
@@ -72,6 +77,7 @@ afterEach(() => {
   container.remove();
   document.documentElement.removeAttribute('data-theme');
   vi.clearAllMocks();
+  window.localStorage.clear();
 });
 
 async function flushMicrotasks(): Promise<void> {
