@@ -527,6 +527,7 @@ import {
 } from '@astryxdesign/core';
 import { useAuth } from '../../app/guards';
 import { routePaths } from '../../app/router';
+import { EVENT_TYPE_BADGE } from '../../lib/eventTypeBadge';
 import { formatFriendlyDateRange } from '../../lib/format/dates';
 import {
   loadDashboardData,
@@ -548,22 +549,6 @@ export type EventType = 'meeting' | 'outreach' | 'competition';
 export type SessionStatus = 'scheduled' | 'completed' | 'canceled';
 export type RsvpStatus = 'going' | 'maybe' | 'declined';
 export type AttendanceStatus = 'present' | 'late' | 'excused' | 'absent';
-
-type BadgeVariant =
-  | 'neutral'
-  | 'info'
-  | 'success'
-  | 'warning'
-  | 'error'
-  | 'blue'
-  | 'cyan'
-  | 'green'
-  | 'orange'
-  | 'pink'
-  | 'purple'
-  | 'red'
-  | 'teal'
-  | 'yellow';
 
 export interface HomeTeamRow {
   id: string;
@@ -1794,16 +1779,13 @@ function KpiCard({
   );
 }
 
-// T080 MINOR fix: was meeting=blue/outreach=purple/competition=teal, which
-// was inconsistent with DES-04's real palette (`CalendarPage.tsx`'s own
-// "Meeting Violet"/"Circuit Blue"/"Comp Orange" mapping, also matched
-// verbatim by `EventsTab.tsx`) -- corrected to match both of those files
-// exactly: meeting=purple, outreach=blue, competition=orange.
-const EVENT_TYPE_BADGE: Record<EventType, { variant: BadgeVariant; label: string }> = {
-  meeting: { variant: 'purple', label: 'Meeting' },
-  outreach: { variant: 'blue', label: 'Outreach' },
-  competition: { variant: 'orange', label: 'Competition' },
-};
+// T138: `EVENT_TYPE_BADGE` now lives in `../../lib/eventTypeBadge` (imported
+// above), shared with `EventsTab.tsx`/`CalendarPage.tsx` instead of each
+// declaring its own copy. History: T080 corrected this file's mapping
+// (previously meeting=blue/outreach=purple/competition=teal) to match
+// DES-04's real palette, the same values `CalendarPage.tsx`/`EventsTab.tsx`
+// already used ("Meeting Violet"/"Circuit Blue"/"Comp Orange" ->
+// meeting=purple, outreach=blue, competition=orange).
 
 function NextUpRowItem({ row }: { row: NextUpRow }): ReactNode {
   const description = (
