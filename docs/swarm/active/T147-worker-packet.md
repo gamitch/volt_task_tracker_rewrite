@@ -1,8 +1,28 @@
 # Worker Packet: T147 — the outreach team picker shows fixture teams to real users
 
-**User-reported bug, found in manual testing.** Creating a new outreach shows
-`Ravens` and `Titans` in the team dropdown instead of the teams the coach actually
-created. This is not a test artifact; it is what production does today.
+**User-reported, and it is a hard blocker — not the cosmetic bug the first draft of
+this packet described.**
+
+Three separate reports from manual testing turned out to be one root cause:
+
+1. The outreach team dropdown lists `Ravens`/`Titans` instead of the coach's teams.
+2. The **meetings** dialog does the same.
+3. **Creating a meeting fails outright** — "Couldn't create these meetings."
+
+Report 3 is caused by reports 1 and 2. `teams.id` is
+`uuid primary key default gen_random_uuid()`
+(`20260716000000_identity_roster.sql:30`) and `events.team_ids` is `uuid[]`
+(`20260717000000_scheduling_attendance.sql:41`). The fixture ids are the strings
+`'team-ravens'` and `'team-titans'`, which are **not UUIDs**. `meetings.ts:680`
+writes the dialog's selection straight into the insert as
+`team_ids: args.payload.event.teamIds`, so Postgres rejects the row with an
+invalid-uuid error.
+
+Because the fixtures are the **only** options offered, every user selecting a team
+scope hits this. Scheduling a team-scoped meeting is currently impossible in
+production.
+
+Treat this as the priority item it is.
 
 **Packet SHA: pin this.** Before writing your output doc, run
 `git log -1 --format=%H -- docs/swarm/active/T147-worker-packet.md` and confirm it
@@ -36,10 +56,14 @@ const DEFAULT_TEAMS: readonly OutreachTeamOption[] = [
 ];
 ```
 
-**Neither call site passes `teams`,** so every real user gets the fixture:
+**No call site passes `teams`,** so every real user gets the fixture:
 
-- `OutreachList.tsx:3161-3171` — create/edit dialog
-- `OutreachDetail.tsx:1430-1437` — edit dialog
+- `OutreachList.tsx:3161-3171` — outreach create/edit dialog
+- `OutreachDetail.tsx:1430-1437` — outreach edit dialog
+- `MeetingsList.tsx:~2209` — **`ScheduleMeetingsDialog`, the same defect in a
+  second component.** It has its own `DEFAULT_TEAMS` fixture at
+  `ScheduleMeetingsDialog.tsx:319-320` and its own defaulted prop at `:548`. This is
+  the one that blocks meeting creation. Confirm the exact call-site lines yourself.
 
 Both omissions are deliberate and documented. `OutreachList.tsx:3153-3160`:
 

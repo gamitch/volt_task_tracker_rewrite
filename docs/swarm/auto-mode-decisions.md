@@ -102,3 +102,35 @@ must emit a follow-up task, not just a comment.** Flagging for George's decision
 
 Also worth noting: the grep that found this bug would have found it at any point
 since T101. Nobody looked, because nothing was failing.
+
+### 2026-07-29 — process correction: I was doing the foreman's job
+
+George asked why I was writing packets when `foreman-planner` exists for it. He is
+right, and the evidence is unambiguous: **packet authoring has been the weakest link
+in this session.** Four citation errors, three of which reached workers, every one
+caught by a gate rather than by me:
+
+| Error | Shape |
+|---|---|
+| D011 — three bars "have no value label" | Concluded from one absent prop, never read the surrounding JSX |
+| D012 — a citation "was already wrong" | Never opened the commit; it was correct when written |
+| T142 rev 1 — sidenav 240px, window "measured" | Wrong input, and credited a gate with a measurement it never took |
+| T146 — `client.ts:23` calls `createClient` | That is the import line; the call is `:79` |
+
+Two of those are the *same two* mistakes repeated. The pattern is that I write
+packets from my own investigation held in context, rather than from the tree — which
+is exactly what a fresh agent re-deriving from source would not do.
+
+**Decision: `foreman-planner` owns packet authoring from here.** I investigate, hand
+the finding over with my diagnosis explicitly marked as unverified, and it writes the
+packet and re-derives every citation. I keep gating and dispatch. Handed T147 and
+T148 over immediately rather than finishing them myself.
+
+**REVIEW:** I do not know how far back this drift goes — the earlier packets in this
+session (T144, T145, T146) were all mine too. Worth George deciding whether the
+foreman should also own the *existing* queued packets, or only new ones.
+
+Also logged as a mistake in its own right: I edited T147's packet **while a
+checker-premise gate was running against it**, so that gate is reading a file that
+changed underneath it. Its findings on the outreach half should still hold, but the
+run is compromised and I will treat its output as advisory rather than authoritative.
