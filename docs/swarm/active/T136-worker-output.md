@@ -1,8 +1,18 @@
 # T136 Worker Output — data-viz colour tokens + the shared goal bar
 
-Implemented per `docs/swarm/active/T136-worker-packet.md`. **Packet SHA verified:
-`3854e42`** (`git log -1 --format=%h -- docs/swarm/active/T136-worker-packet.md`
-after the merge below, matching the SHA stated in the dispatch instructions).
+Implemented per `docs/swarm/active/T136-worker-packet.md`.
+
+**This document covers two passes. Read the SHAs in order or you will trust the
+wrong one.** The first pass built against packet **`3854e42`** (revision 2); the
+REWORK section below built against **`1c3db8f`** (revision 3), which withdrew the
+impossible fill-vs-fill contrast criterion and replaced it with the divider. Both
+SHAs were verified at the time by
+`git log -1 --format=%h -- docs/swarm/active/T136-worker-packet.md`.
+
+**§2's contrast analysis describes a criterion that no longer exists.** It is
+kept deliberately — it is the evidence that justified withdrawing the criterion —
+but it is history, not a shipping requirement. Annotation added in the REWORK
+section.
 
 ## 0. Merge
 

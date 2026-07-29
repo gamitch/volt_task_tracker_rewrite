@@ -2,6 +2,12 @@
 
 Wave 5, packet **W5-P4a**. Runs after T135.
 
+**Revision 3 (2026-07-29).** Revision 2's contrast demand — ≥3:1 between the two
+fills — was **withdrawn as geometrically impossible** after the worker proved it
+and I re-derived it independently. See criterion 2, which now requires a visible
+boundary satisfied by a track-coloured divider. Anything below still labelled
+"revision 2" refers to that withdrawn demand, not to the divider.
+
 **Revision 2 (2026-07-28).** Revision 1 was returned REVISE with **1 BLOCKER and
 7 MAJORs**, all author errors — including a token prescription that does not
 compile, a trap quoting the wrong file, and a contrast threshold from the wrong
