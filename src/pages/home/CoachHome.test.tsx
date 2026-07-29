@@ -1426,6 +1426,52 @@ describe('<CoachHome /> T142/UXC-06 -- Next up + Activity feed pair via a respon
     expect(nextUpGrid.previousElementSibling?.getAttribute('role')).toBe('separator');
     expect(nextUpGrid.nextElementSibling?.getAttribute('role')).toBe('separator');
   });
+
+  // T150: pin `COACH_HOME_PAIRED_MODULE_MIN_WIDTH` inside its derived window
+  // so a future edit to the constant can't silently break two-up pairing.
+  // Unlike the `toContain` assertion above -- which builds its own expected
+  // string from the constant and so passes for ANY value -- this is a bound
+  // check against independently-derived numbers, re-verified against the
+  // five live sources (not copied from the code comment or the packet
+  // without checking):
+  //   1. `SideNav` is 260px (`node_modules/@astryxdesign/core/src/SideNav/
+  //      SideNav.tsx:65`, `width: 260`).
+  //   2. `AppShell` passes no `breakpoint` to `mobileNav`
+  //      (`src/app/AppShell.tsx:163`), so the documented default applies
+  //      (`docs/swarm/astryx-api.md:2621`, `MobileNavConfig.breakpoint`
+  //      default `'md'` = 768px). Below 768px, `MobileNav` replaces
+  //      `SideNav` and contributes 0px.
+  //   3. `LayoutContent padding={6}` removes 24px per side
+  //      (`node_modules/@astryxdesign/core/src/Layout/padding.stylex.ts:84-89`,
+  //      `paddingStyles[6]` -> `spacingVars['--spacing-6']`;
+  //      `node_modules/@astryxdesign/core/src/theme/tokens.stylex.ts:161`,
+  //      `'--spacing-6': '24px'`).
+  //   4. The pairing `Grid`'s own `gap={4}` is 16px (same tokens file,
+  //      `:159`, `'--spacing-4': '16px'`).
+  //   5. The track-min formula (`node_modules/@astryxdesign/core/src/Grid/
+  //      Grid.tsx`, `buildCappedTemplate`, ~:340-365): for
+  //      `columns={{ minWidth, max: 2 }}`, track min is
+  //      `min(100%, max(minWidth px, perColumn))` where
+  //      `perColumn = (100% - (max-1) * gap) / max`.
+  //
+  // Constraint A -- two columns must fit at 1024px (UXC-06's own accept
+  // clause, `docs/swarm/VOLT_UX_Craft_PRD_v3.html:167`, requires two-up
+  // above 1024px):
+  //   minWidth <= (1024 - 260 - 48 - 16) / 2 = 700 / 2 = 350
+  //
+  // Constraint B -- one column must be forced at 375px (no SideNav below
+  // 768px):
+  //   minWidth > (375 - 48 - 16) / 2 = 311 / 2 = 155.5
+  //
+  // Window: 155.5 < minWidth <= 350. The current value (280) sits inside it
+  // with 124.5px of margin above the 155.5 floor and 70px below the 350
+  // ceiling (280 - 155.5 = 124.5; 350 - 280 = 70 -- matches the code comment
+  // at CoachHome.tsx:1166-1169, not this task's own packet, whose prose
+  // description of the same two numbers is inverted).
+  it('T150: COACH_HOME_PAIRED_MODULE_MIN_WIDTH stays inside its derived 155.5-350 window', () => {
+    expect(COACH_HOME_PAIRED_MODULE_MIN_WIDTH).toBeGreaterThan(155.5);
+    expect(COACH_HOME_PAIRED_MODULE_MIN_WIDTH).toBeLessThanOrEqual(350);
+  });
 });
 
 describe('<CoachHome /> "Start check-in" visibility', () => {
