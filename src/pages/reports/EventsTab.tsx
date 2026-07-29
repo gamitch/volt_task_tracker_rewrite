@@ -36,10 +36,11 @@
  * through this task's own work -- read read-only afterward per the
  * packet's Dependencies section; its own then-local badge-map constant (the
  * `CalendarPage.tsx` line citation this doc originally gave for it, 577-586,
- * was already wrong at the time) mapped `meeting -> 'purple'`,
- * `outreach -> 'blue'`, `competition -> 'orange'`, IDENTICAL to this file's
- * then-local mapping -- both independently derived from the same DES-04
- * table, agreeing by construction from a shared source, not by import.
+ * actually spanned lines 580-587 at that commit (`48fcd90`) -- a few lines
+ * off, not fabricated) mapped `meeting -> 'purple'`, `outreach -> 'blue'`,
+ * `competition -> 'orange'`, IDENTICAL to this file's then-local mapping --
+ * both independently derived from the same DES-04 table, agreeing by
+ * construction from a shared source, not by import.
  *
  * T138 (UXC-05) later consolidated every independent copy of this mapping --
  * this file's included -- into the single shared constant in
@@ -51,19 +52,20 @@
  * carries this Badge so the type-mixing required by RPT-04 stays legible
  * per row.
  *
- * NOTE (pre-existing defect, exposed by T138, not caused by it): earlier
- * revisions of this doc claimed this file's mapping "deliberately diverges"
- * from `src/pages/home/CoachHome.tsx`'s own `EVENT_TYPE_BADGE` constant
- * (citing meeting=`blue`, outreach=`purple`, competition=`teal` at line
- * ~1191 there), and that `CoachHome.tsx` did NOT match DES-04. That claim
- * has been false since T080, which corrected `CoachHome.tsx` to
+ * NOTE (history, verified against the actual commits, not re-derived from
+ * this doc's own prior wording): when T058 wrote this NOTE, its claim was
+ * accurate -- at that commit (`48fcd90`), `CoachHome.tsx` line 1191 was
+ * exactly `const EVENT_TYPE_BADGE: Record<EventType, ...> = {` with
+ * `meeting=blue, outreach=purple, competition=teal`, which genuinely did
+ * NOT match DES-04. T080 (`82fafdf`) corrected `CoachHome.tsx` to
  * `meeting -> 'purple'`, `outreach -> 'blue'`, `competition -> 'orange'` --
- * the same DES-04 mapping this file uses -- and the line number given was
- * already wrong even before that correction. Since T138, `CoachHome.tsx`
- * carries no local constant at all: it imports the same shared
+ * the same DES-04 mapping this file uses, which is what made the
+ * divergence claim false -- and moved the constant to line 1210, which is
+ * what made the `~1191` citation stale. T138 then removed the local
+ * constant from `CoachHome.tsx` entirely: it now imports the same shared
  * `EVENT_TYPE_BADGE` from `src/lib/eventTypeBadge.ts` that this file
- * imports. There is no divergence; there is one shared mapping across
- * `CoachHome.tsx`, `CalendarPage.tsx`, and this file, and DES-04 is
+ * imports. There is no divergence today; there is one shared mapping
+ * across `CoachHome.tsx`, `CalendarPage.tsx`, and this file, and DES-04 is
  * satisfied everywhere it is used.
  *
  * -----------------------------------------------------------------------

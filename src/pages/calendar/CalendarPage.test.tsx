@@ -282,19 +282,37 @@ describe('NAV-07 mixed-list exception + DES-04 Badge color mapping', () => {
     expect(competitionVariants.every((v) => v === 'orange')).toBe(true); // Comp Orange, paired with label
   });
 
-  it('the legend renders the three DES-04 category Badges with the correct variants', async () => {
+  it('the legend renders exactly three DES-04 category Badges, in Meeting/Outreach/Competition order', async () => {
     renderPage();
     await flushMicrotasks();
 
-    const legendBadges = Array.from(container.querySelectorAll('.astryx-badge')).filter((b) =>
-      ['Meeting', 'Outreach', 'Competition'].includes(b.textContent ?? ''),
-    );
-    const byLabel = new Map(
-      legendBadges.map((b) => [b.textContent, b.getAttribute('data-variant')]),
-    );
-    expect(byLabel.get('Meeting')).toBe('purple');
-    expect(byLabel.get('Outreach')).toBe('blue');
-    expect(byLabel.get('Competition')).toBe('orange');
+    // Scoped to the legend's own HStack, not the whole container. Every
+    // session row also renders a `.astryx-badge` carrying the same three
+    // labels (module doc #3's NAV-07 requirement), so an unscoped query
+    // over `container` would pass even if the legend itself rendered zero
+    // badges -- the July fixture's row badges alone satisfy an unscoped
+    // "these labels/variants exist somewhere" check. Identify the legend
+    // as the one `.astryx-stack` (HStack/VStack's real rendered class,
+    // already used for `.astryx-badge` elsewhere in this file) whose
+    // direct children are *exactly* three `.astryx-badge` elements and
+    // nothing else -- true only of the legend, never of a row (each row
+    // has exactly one badge alongside other row content, not three badges
+    // as its only children).
+    const legendContainer = Array.from(container.querySelectorAll('.astryx-stack')).find((el) => {
+      const children = Array.from(el.children);
+      return children.length === 3 && children.every((c) => c.classList.contains('astryx-badge'));
+    });
+    expect(legendContainer).toBeTruthy();
+
+    const legendPairs = Array.from(legendContainer!.children).map((badge) => [
+      badge.textContent,
+      badge.getAttribute('data-variant'),
+    ]);
+    expect(legendPairs).toEqual([
+      ['Meeting', 'purple'],
+      ['Outreach', 'blue'],
+      ['Competition', 'orange'],
+    ]);
   });
 
   it('never renders a hardcoded hex color anywhere in the markup (constitution item 2/13 concern)', async () => {

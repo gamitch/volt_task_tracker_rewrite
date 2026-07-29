@@ -10,6 +10,32 @@ into this worktree in the first place — see "FIRST" section below):
 79bfcc602efd187918335d211de0cc02637fbf07
 ```
 
+## Rework log
+
+- **Round 1 → checker FAIL → Round 2 fix:** coordinator identified that
+  `EVENT_TYPE_ORDER`'s `as const satisfies readonly EventType[]` does not
+  enforce exhaustiveness (a fourth `EventType` could be added, `EVENT_TYPE_BADGE`
+  fixed, and `tsc --noEmit` would go green while the legend silently dropped
+  it). Addressed by adding a compile-time exhaustiveness guard to
+  `src/lib/eventTypeBadge.ts` — see "Post-review addendum" below.
+- **Round 2 → checker FAIL → Round 3 fix (this round):** checker found two
+  further problems, both addressed in this revision:
+  1. The `EventsTab.tsx` NOTE correction (2c) and the 577-586 citation
+     correction (2b) both contained a false claim of my own — I had repeated
+     the packet's unverified assertion that the old `CoachHome.tsx` `~1191`
+     citation and the `577-586` `CalendarPage.tsx` citation were "already
+     wrong at the time" they were written, without opening the actual
+     commits to check. The coordinator did check (`48fcd90`, `82fafdf`) and
+     both citations were accurate when written. Corrected below, verified
+     directly against those two commits this round.
+  2. The legend "proof" (Criterion 2) queried the whole container rather
+     than the legend subtree, so it did not actually test the legend — row
+     badges alone satisfied it, as demonstrated by emptying the legend and
+     still passing all 31 tests. Rewrote the test to scope to the legend
+     subtree and assert exact count + order, then proved it discriminates
+     with three separate mutations (empty, reorder, drop-one), each
+     reverted. See the rewritten "Criterion 2" section below.
+
 ## FIRST — merge result
 
 The packet's `docs/swarm/active/T145-worker-packet.md` did not exist in this
@@ -150,16 +176,95 @@ branch's array literal onto multiple lines), then `--check` passed.
 
 ## Criterion 2 — proof the rendered legend is unchanged
 
-Proof is a render assertion, not an eyeball: the pre-existing test `'the
-legend renders the three DES-04 category Badges with the correct variants'`
-(`CalendarPage.test.tsx:273-286`, untouched by this task) renders the page,
-filters `.astryx-badge` elements to those with text `Meeting`/`Outreach`/
-`Competition`, and asserts `byLabel.get('Meeting') === 'purple'`,
-`byLabel.get('Outreach') === 'blue'`, `byLabel.get('Competition') === 'orange'`.
-This test passed unmodified both before and after the Part 1 change (see
-`npx vitest run` output below — 31/31 `CalendarPage.test.tsx` tests green),
-confirming three badges, same labels, same variants, same order (Meeting,
-Outreach, Competition — `EVENT_TYPE_ORDER`'s literal order).
+**Superseded by rework.** The original version of this section cited the
+pre-existing test `'the legend renders the three DES-04 category Badges with
+the correct variants'` as proof of "three badges, same labels, same variants,
+same order." That was overstated: that test queried every `.astryx-badge` in
+the *whole container*, not the legend subtree, and every session row also
+renders a `.astryx-badge` with the same three labels (NAV-07's per-row type
+badge). Filtering by label and keying into a `Map` meant the test would still
+pass if the legend rendered **zero** badges — the July fixture's row badges
+alone satisfy it — and a `Map` keyed by label asserts nothing about count or
+order regardless. Demonstrated directly: replacing the legend's
+`EVENT_TYPE_ORDER.map(...)` with `EVENT_TYPE_ORDER.slice(0, 0).map(...)`
+(rendering zero legend badges) still passed all 31 tests. So the test
+established that the labels `Meeting`/`Outreach`/`Competition` map to
+`purple`/`blue`/`orange` **somewhere in the page**, not specifically in the
+legend, and said nothing about count (three) or order.
+
+The rendered legend genuinely is unchanged; what was missing was a test that
+would actually catch it if it were not. Rewrote the test
+(`CalendarPage.test.tsx`, now titled `'the legend renders exactly three
+DES-04 category Badges, in Meeting/Outreach/Competition order'`) to scope to
+the legend's own subtree and assert order:
+
+```ts
+const legendContainer = Array.from(container.querySelectorAll('.astryx-stack')).find((el) => {
+  const children = Array.from(el.children);
+  return children.length === 3 && children.every((c) => c.classList.contains('astryx-badge'));
+});
+expect(legendContainer).toBeTruthy();
+
+const legendPairs = Array.from(legendContainer!.children).map((badge) => [
+  badge.textContent,
+  badge.getAttribute('data-variant'),
+]);
+expect(legendPairs).toEqual([
+  ['Meeting', 'purple'],
+  ['Outreach', 'blue'],
+  ['Competition', 'orange'],
+]);
+```
+
+`.astryx-stack` is `HStack`/`VStack`'s real rendered class (the same pattern
+this file already uses for `.astryx-badge`, not an invented test hook). The
+legend is identified as the one `.astryx-stack` whose direct children are
+*exactly* three `.astryx-badge` elements and nothing else — true only of the
+legend (confirmed by inspecting the rendered `container.innerHTML` directly:
+each session row has exactly one badge alongside other row content, never
+three badges as a container's only children; the only other `data-gap="2"
+data-wrap="wrap"` `.astryx-stack` on the page wraps an `<h2>`, not badges).
+`toEqual` against an ordered array of `[label, variant]` pairs asserts count,
+labels, variants, and order together — a swap, a drop, a reorder, or an empty
+render all fail it.
+
+**Mutation-testing evidence (three mutations, each reverted):**
+
+Baseline hashes before any mutation:
+```
+sha256sum src/pages/calendar/CalendarPage.tsx src/pages/calendar/CalendarPage.test.tsx
+bd2105ca52d9423a0747dfbe29a6e1a4c7b87b6a80cc120a97b2d3a50e715f84  CalendarPage.tsx
+0aa5c51f14008b4177a01aacb9fb0622ee69a13fe387b8e498ef53543f5d21b4  CalendarPage.test.tsx
+```
+
+1. **Emptying the legend** — `EVENT_TYPE_ORDER.map(...)` →
+   `EVENT_TYPE_ORDER.slice(0, 0).map(...)` in `CalendarPage.tsx`. Result:
+   **fails** — `expect(legendContainer).toBeTruthy()` → `AssertionError:
+   expected undefined to be truthy` (no `.astryx-stack` has three badge-only
+   children anymore). Reverted; `sha256sum CalendarPage.tsx` back to
+   `bd2105ca...`.
+
+2. **Reordering `EVENT_TYPE_ORDER`** — `['meeting', 'outreach',
+   'competition']` → `['outreach', 'meeting', 'competition']` in
+   `src/lib/eventTypeBadge.ts`. Result: **fails** — `toEqual` diff shows
+   `['Outreach', 'blue']` where `['Meeting', 'purple']` was expected (and
+   vice versa) as the first two pairs. Reverted; `sha256sum
+   eventTypeBadge.ts` back to `1d0fff8975767b44c019246263c5ce26fbfdf5f00736
+   b0f5519e19975acb9d93`.
+
+3. **Dropping one entry** — `['meeting', 'outreach', 'competition']` →
+   `['meeting', 'competition']` in `src/lib/eventTypeBadge.ts`. Result:
+   **fails** — same `expect(legendContainer).toBeTruthy()` failure as
+   mutation 1 (only two badges now render, so no `.astryx-stack` has exactly
+   three badge-only children). Reverted; hash back to the same baseline as
+   above.
+
+After each revert, `sha256sum` on the touched file matched its pre-mutation
+value exactly, and `npx vitest run src/pages/calendar/CalendarPage.test.tsx`
+returned to **31 passed (31)**.
+
+This proves the rewritten legend test discriminates on count, labels,
+variants, and order — none of which the superseded version actually tested.
 
 ## Criterion 3 — grep for hand-written event-type badges
 
@@ -196,36 +301,82 @@ before edit, and the stale prose at line 107) — no mismatch to report.
 
 ### 2b. `EventsTab.tsx:29-46`
 
-Before (excerpt): claimed `EVENT_TYPE_BADGE` "below was derived directly from
-the PRD's own DES-04 table" and cited `CalendarPage.tsx` lines 577-586 for a
-`CALENDAR_TYPE_BADGE` constant that (per the packet) was already the wrong
-citation before T138.
+**Reworked once.** Round 1 corrected the tense but, following the packet's
+own (incorrect) framing, asserted the old `CalendarPage.tsx` line citation
+(577-586) "was already wrong at the time." The coordinator checked the T058
+commit (`48fcd90`) directly and found the constant actually spans lines
+580-587 there — close, not fabricated, and my round-1 wording overstated it
+into a second false claim replacing the first. Corrected per the
+coordinator's instruction: drop the "already wrong" framing and state the
+verified fact plainly.
 
-After: corrected tense throughout — "was **originally** derived directly
-from the PRD" (historical, describing the pre-T138 state), explicitly flags
-that the old `CalendarPage.tsx` line citation (577-586) "was already wrong at
-the time," and adds a new paragraph stating T138 consolidated every
-independent copy into `src/lib/eventTypeBadge.ts` and that `EVENT_TYPE_BADGE`
-"is now imported from there ... and merely re-exported further down ... it is
-no longer derived or defined in this file at all." Verified against the real
-import (`EventsTab.tsx:346` `import { EVENT_TYPE_BADGE } from
-'../../lib/eventTypeBadge';`) and re-export (`EventsTab.tsx:474` `export {
-EVENT_TYPE_BADGE };`).
+Before (as originally written pre-T145, at T058):
+> ... its own `CALENDAR_TYPE_BADGE` constant (`CalendarPage.tsx` lines
+> 577-586) maps `meeting -> 'purple'`, `outreach -> 'blue'`,
+> `competition -> 'orange'`, IDENTICAL to `EVENT_TYPE_BADGE` below -- both
+> independently derived from the same DES-04 table, confirmed byte-identical
+> in outcome, not merely "reused" by import ...
+
+After (final, this round):
+> ... its own then-local badge-map constant (the `CalendarPage.tsx` line
+> citation this doc originally gave for it, 577-586, actually spanned lines
+> 580-587 at that commit (`48fcd90`) -- a few lines off, not fabricated)
+> mapped `meeting -> 'purple'`, `outreach -> 'blue'`,
+> `competition -> 'orange'`, IDENTICAL to this file's then-local mapping --
+> both independently derived from the same DES-04 table, agreeing by
+> construction from a shared source, not by import.
+
+Verified directly this round: `git show 48fcd90:src/pages/calendar/CalendarPage.tsx | grep -n CALENDAR_TYPE_BADGE`
+locates the declaration at line 580 (`const CALENDAR_TYPE_BADGE: Record<`)
+closing at line 587 (`};`) — confirmed by reading the actual lines, not
+inferred. Also kept: the tense correction (`EVENT_TYPE_BADGE` is now
+imported/re-exported, not derived in this file) and the paragraph on T138's
+consolidation, both unchanged from round 1 and not disputed by the
+coordinator. Verified against the real import (`EventsTab.tsx:346` `import {
+EVENT_TYPE_BADGE } from '../../lib/eventTypeBadge';`) and re-export
+(`EventsTab.tsx:474` `export { EVENT_TYPE_BADGE };`).
 
 ### 2c. `EventsTab.tsx:47-54` (the false NOTE)
 
-Before:
+**Reworked once.** Round 1 corrected the divergence claim (true fix) but
+also asserted the original `~1191` `CoachHome.tsx` citation "was already
+wrong even before" T080's correction — a claim the packet's own wording had
+suggested but which round 1 did not independently verify before repeating.
+The coordinator checked the T058 commit (`48fcd90`) directly: at that
+commit, `CoachHome.tsx` line 1191 is exactly `const EVENT_TYPE_BADGE:
+Record<EventType, ...> = {` with `meeting=blue, outreach=purple,
+competition=teal` — the citation was fully accurate when T058 wrote it. Only
+T080 (`82fafdf`) made it stale, by both correcting the mapping and moving the
+constant to line 1210. Round 1's "already wrong at the time" clause was
+itself false — new false history replacing old false history, the exact
+defect this task exists to remove. Dropped completely per the coordinator's
+instruction (not replaced with a softer version of the same claim).
+
+Before (as originally written pre-T145, at T058):
 > NOTE (disclosed finding, not fixed here): this deliberately diverges from `src/pages/home/CoachHome.tsx`'s own `EVENT_TYPE_BADGE` constant (line ~1191 there: meeting=`blue`, outreach=`purple`, competition=`teal`), which does NOT match DES-04's literal table above. `CoachHome.tsx` is outside this task's Allowed Files (not editable here); this file's own mapping is the one that matches the PRD text verbatim, and the inconsistency is flagged as a candidate finding for a future corrective task touching `CoachHome.tsx`.
 
-After:
-> NOTE (pre-existing defect, exposed by T138, not caused by it): earlier revisions of this doc claimed this file's mapping "deliberately diverges" from `src/pages/home/CoachHome.tsx`'s own `EVENT_TYPE_BADGE` constant (citing meeting=`blue`, outreach=`purple`, competition=`teal` at line ~1191 there), and that `CoachHome.tsx` did NOT match DES-04. That claim has been false since T080, which corrected `CoachHome.tsx` to `meeting -> 'purple'`, `outreach -> 'blue'`, `competition -> 'orange'` -- the same DES-04 mapping this file uses -- and the line number given was already wrong even before that correction. Since T138, `CoachHome.tsx` carries no local constant at all: it imports the same shared `EVENT_TYPE_BADGE` from `src/lib/eventTypeBadge.ts` that this file imports. There is no divergence; there is one shared mapping across `CoachHome.tsx`, `CalendarPage.tsx`, and this file, and DES-04 is satisfied everywhere it is used.
+After (round 1, now superseded by this rework — recorded so the error is
+visible, not hidden):
+> NOTE (pre-existing defect, exposed by T138, not caused by it): earlier revisions of this doc claimed this file's mapping "deliberately diverges" from `src/pages/home/CoachHome.tsx`'s own `EVENT_TYPE_BADGE` constant (citing meeting=`blue`, outreach=`purple`, competition=`teal` at line ~1191 there), and that `CoachHome.tsx` did NOT match DES-04. That claim has been false since T080, which corrected `CoachHome.tsx` to `meeting -> 'purple'`, `outreach -> 'blue'`, `competition -> 'orange'` -- the same DES-04 mapping this file uses -- and the line number given was already wrong even before that correction. [...]
 
-Verified against the tree before writing this: `CoachHome.tsx:530` imports
-`EVENT_TYPE_BADGE` from `../../lib/eventTypeBadge`, and its own comment at
-`CoachHome.tsx:1782-1784` reads "T138: `EVENT_TYPE_BADGE` now lives in
-`../../lib/eventTypeBadge` ... History: T080 corrected this file's mapping" —
-confirming the packet's T080 claim independently rather than taking it on
-faith. `EventsTab.tsx` itself was **not** touched outside the module doc
+After (final, this round):
+> NOTE (history, verified against the actual commits, not re-derived from this doc's own prior wording): when T058 wrote this NOTE, its claim was accurate -- at that commit (`48fcd90`), `CoachHome.tsx` line 1191 was exactly `const EVENT_TYPE_BADGE: Record<EventType, ...> = {` with `meeting=blue, outreach=purple, competition=teal`, which genuinely did NOT match DES-04. T080 (`82fafdf`) corrected `CoachHome.tsx` to `meeting -> 'purple'`, `outreach -> 'blue'`, `competition -> 'orange'` -- the same DES-04 mapping this file uses, which is what made the divergence claim false -- and moved the constant to line 1210, which is what made the `~1191` citation stale. T138 then removed the local constant from `CoachHome.tsx` entirely: it now imports the same shared `EVENT_TYPE_BADGE` from `src/lib/eventTypeBadge.ts` that this file imports. There is no divergence today; there is one shared mapping across `CoachHome.tsx`, `CalendarPage.tsx`, and this file, and DES-04 is satisfied everywhere it is used.
+
+Verified directly this round (not taken on the packet's or my own round-1
+word):
+```
+git show 48fcd90:src/pages/home/CoachHome.tsx | sed -n '1191,1194p'
+# const EVENT_TYPE_BADGE: Record<EventType, { variant: BadgeVariant; label: string }> = {
+#   meeting: { variant: 'blue', label: 'Meeting' },
+#   outreach: { variant: 'purple', label: 'Outreach' },
+#   competition: { variant: 'teal', label: 'Competition' },
+
+git show 82fafdf:src/pages/home/CoachHome.tsx | grep -n "const EVENT_TYPE_BADGE"
+# 1210:const EVENT_TYPE_BADGE: Record<EventType, { variant: BadgeVariant; label: string }> = {
+```
+Both confirm the coordinator's correction exactly: line 1191 was accurate at
+T058, T080 both fixed the colours and moved the constant to line 1210.
+`EventsTab.tsx` itself remains **not** touched outside the module doc
 (`:29-54`); no code lines in this file were changed, per Allowed Files.
 
 ## Part 3 — tightened assertion + mutation-testing evidence
@@ -251,9 +402,12 @@ expect(outreachVariants.every((v) => v === 'blue')).toBe(true); // Circuit Blue,
 expect(competitionVariants.every((v) => v === 'orange')).toBe(true); // Comp Orange, paired with label
 ```
 
-The neighboring `'the legend renders...'` test (`:273-286` pre-edit) was
-already paired via a `Map`, so Part 1's legend coverage needed no change —
-confirmed it still passes after Part 1's rewrite.
+The neighboring `'the legend renders...'` test (`:273-286` pre-edit) also
+keyed by label into a `Map`, which looked paired but was not scoped to the
+legend subtree and so did not actually test the legend specifically (row
+badges carry the same labels) — see the corrected "Criterion 2" section
+below, which replaces that test with one scoped to the legend and covers
+count/order as well as the label-variant pairing this row-level test covers.
 
 **Mutation test performed:**
 
@@ -308,41 +462,38 @@ separately re-run, since the diff analysis above makes the count
 deterministic) — and on this task's final tree: **63 test files, 1469 tests,
 all passing.**
 
-## Commands 6–7 (full output)
+## Commands 6–7 (full output, final re-run this round, after all three rework items)
 
 ### `npx tsc --noEmit`
 Clean, no output, exit 0.
 
 ### `npx vite build`
-Succeeded: `✓ 2388 modules transformed` / `✓ built in 6.21s`. One pre-existing
+Succeeded: `✓ 2388 modules transformed` / `✓ built in 5.83s`. One pre-existing
 chunk-size warning (`index-Ujfb5LPm.js` 673.19 kB), unrelated to this task
-and present on the unmodified merge-base tree as well (this task added no new
-imports beyond what was already imported).
+and present on the unmodified merge-base tree as well.
 
 ### `npm run format:check`
-Initially failed on `src/lib/eventTypeBadge.ts` (the new `EVENT_TYPE_ORDER`
-literal needed reformatting). Ran `npx prettier --write
-src/lib/eventTypeBadge.ts`, which reformatted the tuple onto multiple lines.
-Re-ran `npm run format:check`: **"All matched files use Prettier code
-style!"**
+`All matched files use Prettier code style!` — clean.
 
 ### `npx eslint .`
 **0 errors, 352 warnings** (`✖ 352 problems (0 errors, 352 warnings)`).
-Compared against the unmodified merge-base tree via `git stash` /
-`npx eslint .` / `git stash pop`: baseline is also **0 errors, 352
-warnings** — identical count. This task introduced zero new lint warnings.
-All 352 warnings are the pre-existing `react-refresh/only-export-components`
-warnings scattered across many unrelated files (roster/settings/reports
-tabs, etc.) — none in the files this task touched.
+Re-compared against the current committed tree (pre-this-round, commit
+`771519a`) via `git stash` / `npx eslint .` / `git stash pop` one more time
+this round: baseline is also **0 errors, 352 warnings** — identical count.
+This round introduced zero new lint warnings. All 352 warnings are the
+pre-existing `react-refresh/only-export-components` warnings scattered
+across many unrelated files — none in the files this task touched.
 
 ### `npx vitest run` (full suite)
 ```
 Test Files  63 passed (63)
      Tests  1469 passed (1469)
-  Duration  52.27s
+  Duration  50.20s
 ```
-`CalendarPage.test.tsx` specifically: 31/31 passed both before and after the
-mutation test (see Part 3).
+`CalendarPage.test.tsx` specifically: 31/31 passed after all mutation tests
+in this round (row-variant pairing from round 1, exhaustiveness guard from
+round 2, and the three legend mutations from this round), each reverted to
+a byte-identical file.
 
 ## Citation check
 
