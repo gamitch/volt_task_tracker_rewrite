@@ -1020,3 +1020,178 @@ The diagnostic query above is kept for the record, but nobody needs to run it.
 project's actual stakes. Real risks here are losing student data, leaking PII or
 credentials, and breaking auth. Aggregate hour counts visible to the team they
 describe are not in that class.
+
+## D011 - UXC-05's "zero default-accent bars" is not achievable with Astryx `ProgressBar`, and the fix I specified would have made accessibility worse
+
+**Filed by the orchestrator 2026-07-29.** T144's worker built exactly what its
+packet specified, then reported a contrast problem rather than shipping quietly.
+**The work is built and committed but deliberately NOT merged.** Needs George's
+decision.
+
+### What happened
+
+T144's ruling was: every `<ProgressBar>` is a *measurement*, not a *status*, so
+use `variant="neutral"` at all ten sites. The worker implemented it, measured the
+result, and reported that `neutral` fails WCAG 1.4.11's 3:1 non-text threshold.
+
+I re-derived the numbers independently and **they are worse than the worker
+reported**, because it measured against the unscoped `--color-background-muted`
+while the real track is the `.astryx-progressbar`-scoped remap to
+`--color-border-emphasized` (`theme.css:497-500`).
+
+### Every variant, measured against the real track
+
+Track: `--color-border-emphasized` — light `#AFA9B7`, dark `#4A4551`. Fill
+values are the **progressbar-scoped overrides** at `theme.css:502-516`, not the
+global tokens. Formula sanity-checked at 21.00 for black/white.
+
+| variant | light | dark | ≥3:1 both? |
+|---|---|---|---|
+| `accent` (current default) | 2.00 | 2.03 | no |
+| `neutral` (T144's ruling) | **1.39** | **1.43** | no |
+| `success` | 2.20 | 1.85 | no |
+| `warning` | 1.54 | 6.25 | no |
+| `error` | 1.81 | 2.24 | no |
+
+**Not one variant passes in both themes.** So:
+
+- UXC-05's "zero default-accent bars" **cannot be satisfied** by choosing a
+  different variant. This is the same class of vendor limitation as D-1 and as
+  T136's fill-vs-fill ceiling — the palette cannot express the requirement.
+- **My ruling would have made it measurably worse**, 2.00 → 1.39. The worker
+  built what I asked; the specification was wrong.
+
+For contrast, `GoalBar` — the component T136 built *because* `ProgressBar` cannot
+do this — measures **3.33 light / 7.09 dark** (confirmed) and **5.47 / 4.67**
+(planned) against the same track. It passes because we chose its colours.
+
+### The part that is a real accessibility problem, independent of colour
+
+Seven of the ten bars pass `hasValueLabel`, so the number is rendered as text and
+the bar is a redundant visualisation — WCAG 1.4.11's "required to understand the
+content" arguably does not bite.
+
+**Three do not**, all in `CoachHome.tsx`: the team-hours, event-hours and
+per-student hours bars. All three also set `isLabelHidden`. **On those three the
+coloured fill is the only carrier of the value**, at 2.00:1 against its track.
+That is a genuine gap, it exists today, and T144 did not create it.
+
+### Options
+
+- **(a) Leave the colours alone; add value labels to the three bare bars.**
+  Fixes the real problem with text instead of colour, three lines, no colour
+  decision needed, and unambiguously an improvement. UXC-05's clause gets
+  recorded as unachievable with this component. **Recommended.**
+- **(b) Convert these bars to `GoalBar`.** The only option that satisfies both
+  UXC-05 and 1.4.11 properly. But `GoalBar` is pre-approved under F-3 for the
+  two-fill case only, so this widens that decision, and it touches seven files.
+- **(c) Merge T144 as built.** Satisfies UXC-05 on paper while dropping contrast
+  to 1.39. **Not recommended** — it is a knowing regression.
+
+**Recommendation: (a) now, (b) as its own task if George wants the bars in the
+semantic system.** T144's branch is preserved unmerged pending that call.
+
+### Process note
+
+T144's packet forbade `GoalBar` as a substitute and ruled `neutral` correct. Both
+were my calls and the second was wrong on the evidence. The worker followed the
+packet, measured anyway, and reported — which is the only reason this was caught
+before merge. The instruction that produced that outcome ("check the rendered
+contrast; if it is not visible, report it — do not silently pick a different
+variant to work around it") is worth keeping in future packets.
+
+### D011 addendum (2026-07-29) — the "three bare bars" finding was wrong; there is no 1.4.11 gap
+
+George approved option (a). Reading the three call sites to implement it showed
+its premise is false, so **(a) was not implemented — there is nothing to fix.**
+
+I tested for `hasValueLabel` and read its absence as "no text value." That was a
+grep artifact. All three carry the number in adjacent markup:
+
+| site | how the value is rendered as text |
+|---|---|
+| `CoachHome.tsx:1839` team hours | `endContent={<Text>{entry.confirmedHours}h</Text>}` on the same `ListItem` |
+| `CoachHome.tsx:1868` event hours | `endContent={<Text>{entry.totalHours}h</Text>}` |
+| `CoachHome.tsx:1895` per-student | sibling `<Text>`: `Xh confirmed + Yh planned = Zh / Goalh · P% · annotation` |
+
+The third is the most thorough label of any of the ten. Adding `hasValueLabel`
+would print a second copy of a number already on screen — "12 / 40" in the bar
+beside "12h" in `endContent`. A clarity regression, not an improvement.
+
+Re-checked the other seven; those do use `hasValueLabel` as reported. **So all
+ten bars convey their value as text.** WCAG 1.4.11's "unless required to
+understand the content" carve-out therefore applies to every one: the fill is a
+redundant visualisation and its 2.00:1 ratio is not a conformance failure.
+
+**Unchanged:** no variant reaches 3:1 in both themes (table above), `neutral` is
+worst at 1.39, T144 stays unmerged, and UXC-05's "zero default-accent bars" is
+still unachievable by variant swap — recorded as a vendor limitation alongside
+D-1 and T136's fill-vs-fill ceiling. The bars are faint; that is a visual-quality
+question, not an accessibility one, and it needs no urgent change.
+
+**Process:** the original entry asserted a gap from the absence of one prop
+without reading the surrounding JSX, and I presented it as the recommended fix.
+Presence of a rendered value is a question about the whole subtree, not one
+attribute. A checker's grep would have reproduced my error exactly.
+
+## D012 - T145's packet asserted a false citation, the worker wrote it into the code, and the checker caught it
+
+**Filed by the orchestrator 2026-07-29.** Not a worker/checker dispute — the
+checker was right, the worker did as instructed, and the instruction was wrong.
+Recorded because it is the second instance this session of the same error shape.
+
+### What happened
+
+T145 existed to remove a comment in `EventsTab.tsx` that stated false history.
+My packet directed the worker to correct it and, in doing so, asserted that the
+comment's citation to `CoachHome.tsx` "~1191" had been wrong even when written.
+The worker wrote that into the replacement comment. It is false.
+
+Verified at `48fcd90` (T058, the commit that introduced the NOTE): line 1191 is
+exactly `const EVENT_TYPE_BADGE: Record<EventType, ...> = {`, followed by
+`meeting: 'blue'`, `outreach: 'purple'`, `competition: 'teal'`. **Line number
+correct, all three colours correct — the citation was fully accurate when
+written.** It went stale only at T080 (`82fafdf`), which both corrected the
+mapping to purple/blue/orange and moved the constant to ~1210.
+
+So the task meant to delete false history replaced it with different false
+history. The checker caught it by opening the commit — which is the step I
+skipped when writing the packet.
+
+The companion claim, that `CalendarPage.tsx`'s "577-586" was wrong, is also
+overstated: the constant spans 580-587 there, so the citation brackets the right
+construct a few lines off.
+
+### The pattern
+
+Both of this session's orchestrator errors have the same shape — **a fact about
+code asserted from a partial read, then propagated with confidence**:
+
+- **D011:** concluded three bars had no text value from the absence of one prop,
+  without reading the surrounding JSX. All three render the value in `endContent`
+  or a sibling `<Text>`.
+- **D012 (here):** concluded a line citation was wrong without opening the commit
+  it referred to. It was correct at the time of writing.
+
+In both cases the erroneous claim was specific, plausible and confidently framed,
+which is what made it survive into a packet and, here, into shipped source. In
+both cases a checker or a direct read caught it only afterward.
+
+### Directive
+
+Packets must not assert that a citation, comment or historical claim is wrong
+unless the author has opened the referenced commit or file region and looked.
+"This looks stale" is a prompt to check, not a finding. Where a packet asks a
+worker to correct a factual claim, the packet must carry the evidence for the
+correction, not merely the assertion — and workers should treat an unevidenced
+"X is wrong" in a packet as something to verify before writing it into source.
+
+Corollary, from D011: whether something is rendered is a question about the whole
+subtree, not about one prop. A grep for an attribute is a way to find candidates,
+never a way to conclude absence.
+
+### Outcome
+
+T145 FAIL stands; rework issued for the false clause and for a second, unrelated
+MAJOR (the legend proof does not exercise the legend — it passes with zero legend
+badges rendered). T145's other criteria passed and are unaffected.

@@ -263,26 +263,57 @@ describe('NAV-07 mixed-list exception + DES-04 Badge color mapping', () => {
     const rows = Array.from(container.querySelectorAll('li'));
     expect(rows.length).toBeGreaterThanOrEqual(4);
 
+    // Paired by label, not just presence -- an unpaired `toContain` on
+    // variants alone would still pass if a label/variant pair were swapped
+    // (e.g. meeting badges rendering `blue` while outreach badges render
+    // `purple`), since the *set* of variants present would be unchanged.
     const badges = Array.from(container.querySelectorAll('.astryx-badge'));
-    const variants = badges.map((b) => b.getAttribute('data-variant'));
-    expect(variants).toContain('purple'); // Meeting Violet
-    expect(variants).toContain('blue'); // Circuit Blue
-    expect(variants).toContain('orange'); // Comp Orange
+    const variantsForLabel = (label: string) =>
+      badges.filter((b) => b.textContent === label).map((b) => b.getAttribute('data-variant'));
+
+    const meetingVariants = variantsForLabel('Meeting');
+    const outreachVariants = variantsForLabel('Outreach');
+    const competitionVariants = variantsForLabel('Competition');
+    expect(meetingVariants.length).toBeGreaterThan(0);
+    expect(outreachVariants.length).toBeGreaterThan(0);
+    expect(competitionVariants.length).toBeGreaterThan(0);
+    expect(meetingVariants.every((v) => v === 'purple')).toBe(true); // Meeting Violet, paired with label
+    expect(outreachVariants.every((v) => v === 'blue')).toBe(true); // Circuit Blue, paired with label
+    expect(competitionVariants.every((v) => v === 'orange')).toBe(true); // Comp Orange, paired with label
   });
 
-  it('the legend renders the three DES-04 category Badges with the correct variants', async () => {
+  it('the legend renders exactly three DES-04 category Badges, in Meeting/Outreach/Competition order', async () => {
     renderPage();
     await flushMicrotasks();
 
-    const legendBadges = Array.from(container.querySelectorAll('.astryx-badge')).filter((b) =>
-      ['Meeting', 'Outreach', 'Competition'].includes(b.textContent ?? ''),
-    );
-    const byLabel = new Map(
-      legendBadges.map((b) => [b.textContent, b.getAttribute('data-variant')]),
-    );
-    expect(byLabel.get('Meeting')).toBe('purple');
-    expect(byLabel.get('Outreach')).toBe('blue');
-    expect(byLabel.get('Competition')).toBe('orange');
+    // Scoped to the legend's own HStack, not the whole container. Every
+    // session row also renders a `.astryx-badge` carrying the same three
+    // labels (module doc #3's NAV-07 requirement), so an unscoped query
+    // over `container` would pass even if the legend itself rendered zero
+    // badges -- the July fixture's row badges alone satisfy an unscoped
+    // "these labels/variants exist somewhere" check. Identify the legend
+    // as the one `.astryx-stack` (HStack/VStack's real rendered class,
+    // already used for `.astryx-badge` elsewhere in this file) whose
+    // direct children are *exactly* three `.astryx-badge` elements and
+    // nothing else -- true only of the legend, never of a row (each row
+    // has exactly one badge alongside other row content, not three badges
+    // as its only children).
+    const matches = Array.from(container.querySelectorAll('.astryx-stack')).filter((el) => {
+      const children = Array.from(el.children);
+      return children.length === 3 && children.every((c) => c.classList.contains('astryx-badge'));
+    });
+    expect(matches).toHaveLength(1);
+    const legendContainer = matches[0];
+
+    const legendPairs = Array.from(legendContainer.children).map((badge) => [
+      badge.textContent,
+      badge.getAttribute('data-variant'),
+    ]);
+    expect(legendPairs).toEqual([
+      ['Meeting', 'purple'],
+      ['Outreach', 'blue'],
+      ['Competition', 'orange'],
+    ]);
   });
 
   it('never renders a hardcoded hex color anywhere in the markup (constitution item 2/13 concern)', async () => {

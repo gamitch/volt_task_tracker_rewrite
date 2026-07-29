@@ -27,10 +27,10 @@ earlier packet claimed:
 | `src/pages/meetings/MeetingsList.tsx:2344` | your participation % |
 | `src/pages/meetings/StudentMeetingView.tsx:742` | participation % |
 | `src/pages/home/ParentHome.tsx:1181` | your child's hours vs. goal |
-| `src/pages/home/CoachHome.tsx:1857` | a team's hours |
-| `src/pages/home/CoachHome.tsx:1886` | an event's hours |
-| `src/pages/home/CoachHome.tsx:1913` | a named student's hours vs. goal |
-| `src/pages/home/CoachHome.tsx:2183` | hours vs. team goal |
+| `src/pages/home/CoachHome.tsx:1839` | a team's hours |
+| `src/pages/home/CoachHome.tsx:1868` | an event's hours |
+| `src/pages/home/CoachHome.tsx:1895` | a named student's hours vs. goal |
+| `src/pages/home/CoachHome.tsx:2165` | hours vs. team goal |
 | `src/pages/home/StudentHome.tsx:1278` | your outreach hours vs. your goal |
 | `src/pages/reports/HoursTab.tsx:938` | confirmed hours vs. goal |
 | `src/pages/reports/ParticipationTab.tsx:818` | a named student's participation % |
@@ -89,11 +89,13 @@ scope.
 
 ## Traps
 
-1. **`CoachHome.tsx` has four of the ten**, at `:1857`, `:1886`, `:1913` and
-   `:2183`. Miss one and criterion 1 fails. Re-grep after editing.
-2. **T138 has just landed changes in `CoachHome.tsx`** (the event-type badge map).
-   Merge first, as instructed above, and expect the line numbers in the table to
-   have shifted. **Locate the bars by their `label` text, not by line number.**
+1. **`CoachHome.tsx` has four of the ten** — the most of any file. Miss one and
+   criterion 1 fails. Re-grep after editing rather than trusting your own count.
+2. **The line numbers in that table have already moved once.** T138 landed in
+   `CoachHome.tsx` and shifted its four bars up by 18 lines; the table above is
+   corrected for that. T143 is in flight and does not touch these files, but
+   **locate the bars by their `label` text, not by line number** regardless —
+   the table is a map, not a contract.
 3. Do not change any `label`, `value`, `max`, `hasValueLabel` or
    `isLabelHidden` prop. The only edit is adding `variant`.
 4. **Check the rendered contrast.** `neutral` against the track must still be
@@ -129,7 +131,7 @@ scope.
    output doc, in substance.
 6. `npx tsc --noEmit`, `npx vite build`, `npm run format:check` clean;
    `npx eslint .` zero errors; state the warning count against the baseline
-   (**0 errors / 353 warnings**) and explain any difference.
+   (**0 errors / 352 warnings** — T138 legitimately removed one) and explain any difference.
 7. `npx vitest run` green. Baseline **1469 across 63 files** — but T138 and T143
    may land first, so **reconcile against your own merge base**, not this number,
    and say what you reconciled against. Any test that changes is a regression:

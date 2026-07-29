@@ -104,8 +104,9 @@
  * | Meeting Violet | Astryx `purple` variant | Meeting type badge/cards |
  * | Comp Orange | Astryx `orange` variant | Competition type badge/cards |
  *
- * `CALENDAR_TYPE_BADGE` below maps `meeting -> 'purple'`,
- * `outreach -> 'blue'`, `competition -> 'orange'` -- Astryx `Badge`'s own
+ * `EVENT_TYPE_BADGE` (`../../lib/eventTypeBadge`, imported above) maps
+ * `meeting -> 'purple'`, `outreach -> 'blue'`, `competition -> 'orange'` --
+ * Astryx `Badge`'s own
  * `variant` prop (astryx-api.md line 530's Props table includes `blue`,
  * `purple`, `orange` in its literal union), never a hand-rolled hex
  * (constitution item 2/13 concern -- a hex would also break dark-mode
@@ -299,6 +300,7 @@ import {
 } from '@astryxdesign/core';
 import { Link as RouterLink } from 'react-router-dom';
 import { routePaths } from '../../app/router';
+import { EVENT_TYPE_BADGE, EVENT_TYPE_ORDER } from '../../lib/eventTypeBadge';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of the real `events`/`event_sessions`
@@ -589,17 +591,13 @@ function monthLabel(year: number, month: number): string {
 
 // ---------------------------------------------------------------------------
 // Type -> Badge variant mapping -- DES-04's named palette (module doc #2).
-// ---------------------------------------------------------------------------
-
-const CALENDAR_TYPE_BADGE: Record<
-  CalendarEventType,
-  { variant: 'purple' | 'blue' | 'orange'; label: string }
-> = {
-  meeting: { variant: 'purple', label: 'Meeting' }, // Meeting Violet
-  outreach: { variant: 'blue', label: 'Outreach' }, // Circuit Blue
-  competition: { variant: 'orange', label: 'Competition' }, // Comp Orange
-};
-
+// T138: moved to `../../lib/eventTypeBadge` (imported above, as
+// `EVENT_TYPE_BADGE`), shared with `CoachHome.tsx`/`EventsTab.tsx` instead of
+// this file keeping its own copy. That shared constant is declared with
+// `as const satisfies`, so indexing it here still narrows `variant` to
+// `'purple' | 'blue' | 'orange'` (not the full `BadgeVariant` union) exactly
+// as this file's own local `CALENDAR_TYPE_BADGE` did before -- see the
+// shared module's own comment for why.
 // ---------------------------------------------------------------------------
 // NAV-08 detail routes (module doc #7) -- outreach/competition rows link to
 // the real per-event detail route; meeting rows link to the interim
@@ -636,7 +634,7 @@ function CalendarSessionRowItem({
   session: CalendarSessionRow;
   event: CalendarEventRow;
 }): ReactNode {
-  const typeBadge = CALENDAR_TYPE_BADGE[event.type];
+  const typeBadge = EVENT_TYPE_BADGE[event.type];
 
   const description = (
     <Text type="supporting">
@@ -835,11 +833,19 @@ export function CalendarPage({
             />
 
             {/* DES-04 color legend -- module doc #1's resolution: the dots/
-                labels live here and in the list below, not inside the grid. */}
+                labels live here and in the list below, not inside the grid.
+                T145: driven from `EVENT_TYPE_ORDER`/`EVENT_TYPE_BADGE`
+                (`../../lib/eventTypeBadge`) instead of three hand-written
+                Badge literals -- the fourth copy of the DES-04 mapping that
+                T138 could not reach because it was JSX, not a map literal. */}
             <HStack gap={2} wrap="wrap">
-              <Badge variant="purple" label="Meeting" />
-              <Badge variant="blue" label="Outreach" />
-              <Badge variant="orange" label="Competition" />
+              {EVENT_TYPE_ORDER.map((type) => (
+                <Badge
+                  key={type}
+                  variant={EVENT_TYPE_BADGE[type].variant}
+                  label={EVENT_TYPE_BADGE[type].label}
+                />
+              ))}
             </HStack>
 
             {/* UXC-06: `SegmentedControl`'s own root is already inline-flex/
