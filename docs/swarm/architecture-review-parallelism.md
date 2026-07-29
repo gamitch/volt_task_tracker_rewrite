@@ -204,3 +204,51 @@ agents than at four.
 two measurement designs that could not detect their own bugs, and an acceptance
 criterion that was mathematically incapable of failing — all in one day, all mine. The
 gate is what makes parallelism safe rather than merely fast.
+
+
+---
+
+## Appendix — measured facts about the isolation mechanisms (2026-07-30)
+
+Added because the naming invites a wrong assumption, and this was tested rather than
+reasoned about.
+
+### `isolation: "remote"` is available, and does NOT isolate the filesystem
+
+Probed with a read-only agent. It reported the **same hostname (`vm`), same path
+(`/home/user/volt_task_tracker_rewrite`), same branch, and same commit** as the
+dispatching session. Those four are consistent with either a shared tree or a separate
+clone conventionally placed at the same path, so they do not discriminate.
+
+The discriminator was `git worktree list`. This checkout carries a fingerprint nothing
+else has — T144's deliberately-preserved unmerged worktree at
+`.claude/worktrees/agent-a640406e50762373c`. **The remote agent sees it.** Same
+filesystem, same working tree.
+
+**Consequence:** a "remote" agent that writes files writes into the live checkout on the
+live branch. For read-only work — auditing, measuring, probing — that is fine and it is
+genuinely another machine's compute. For anything that edits, it is the opposite of
+isolation and more hazardous than a local agent, because the name implies otherwise.
+
+### What actually isolates
+
+| Mechanism | Isolates filesystem? | Notes |
+|---|---|---|
+| `isolation: "worktree"` | **Yes** | Real separate path under `.claude/worktrees/agent-<id>`. Used by every worker and checker in this project. |
+| Manual `git worktree add` | **Yes** | What a second *session* should use. Plain git, provable, no gating. |
+| `isolation: "remote"` | **No** | Shares this tree, measured above. Read-only use only. |
+| `create_trigger` with `create_new_session_on_fire` | Presumably | A genuinely fresh session per firing, but schedule-driven rather than on-demand. Untested. |
+
+### For a second session working in parallel
+
+Manual `git worktree add` off the working branch, on its own branch, is the correct
+approach and needs nothing from the remote machinery.
+
+**One guaranteed conflict to plan for.** `task-ledger.md` and `constitution.md` are both
+**append-at-the-end** files. Two sessions each adding rows or items conflict at the same
+line, every time — this is certain, not probable. Constitution numbering collides too
+(items 20-24 were added in one day).
+
+Cheapest mitigation, and it is §3.4 arriving early: the second session writes to
+`docs/swarm/inbox/<branch>.md` and never touches either shared file. The integrating
+session folds it in. That converts a guaranteed conflict into a clean file add.
