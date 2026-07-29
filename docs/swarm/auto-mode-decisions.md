@@ -200,3 +200,52 @@ packets keep asking for:
   minWidth derivation and **I never propagated the fix into Part 1's example.** Live
   measurement is 1132 / 6px. That is a fifth citation-class error from me, and the
   first one a worker caught rather than a gate.
+
+### 2026-07-29 — T147 gate: BLOCKER. My acceptance criterion was a guaranteed tautology
+
+The gate on T147 returned REVISE/BLOCKER and it is the sharpest finding of the
+session.
+
+**The BLOCKER.** `OutreachDetail.tsx:503-506` declares `FIXTURE_TEAMS` with the
+**same two ids and the same two names** as the dialog's own `DEFAULT_TEAMS` —
+Ravens and Titans. So my criterion 6, "assert the dropdown renders the loader's teams
+and **not** Ravens/Titans", is self-contradictory at that call site: the loader's
+teams *are* Ravens and Titans. And the discrimination proof I mandated — revert the
+prop pass, confirm the test fails — **cannot fail**, because with and without the
+prop the rendered DOM is byte-identical.
+
+A worker following the packet literally would have produced a green tautology and
+reported a successful discrimination proof. I have spent this session telling workers
+that a test passing either way is worth less than none, and then wrote exactly that
+into an acceptance criterion.
+
+**Decisions taken:**
+
+1. **Part C split out.** The gate measured what I called "cheap": 27 tsc errors, 24 at
+   render sites in one test file, plus a `DEFAULT_STUDENTS` teamId coupling that
+   breaks 7 more tests with `No label found for "Riley Chen"` — an error that reads
+   like a harness bug. On a user-reported blocker with George away, T147 ships A+B
+   only: ~10 production lines, no test churn. **REVIEW** — this reverses my own
+   earlier decision to bundle the hardening, and the gate was right that I was
+   overreaching.
+2. **T146 lands before T147.** T147 inserts lines that shift the citations T146's
+   packet depends on, which would trip T146's own stop-and-report instruction.
+3. **The `DEFAULT_STUDENTS` exclusion loses its stated reason, and there is a real
+   defect behind it.** "T121 already fixed it" holds for OutreachList and is false for
+   OutreachDetail, which soft-fails by documented design (`:1121-1127`, `:1141-1143`,
+   a bare `.catch(() => {})`). On any roster-fetch failure a coach opening Edit sees
+   Riley Chen, Jordan Blake, Sam Okafor and Casey Nguyen — **fabricated minors' names
+   presented as a live roster with nothing indicating failure.** Handed to the foreman
+   to fold in or file; the old justification cannot be carried forward.
+4. **ScheduleMeetingsDialog filed separately**, flagged as the instance that actually
+   blocks meeting creation so it does not end up deprioritised behind the outreach
+   half.
+
+Three more of my citations were wrong (`:802-830`→`:802-853`, `:617-623`→`:618-623`,
+`1420-1430`→`1420-1429`). That is eight citation errors from me this session.
+
+**REVIEW — the pattern is now unambiguous.** Every packet I have written has needed a
+gate to make it safe, and the gates have caught progressively worse things: wrong line
+numbers, then a measurement that could not detect its own bug, then an acceptance
+criterion that could not fail. Handing authoring to `foreman-planner` was the right
+call and should probably be permanent rather than a correction for this session.
