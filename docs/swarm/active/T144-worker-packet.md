@@ -89,8 +89,8 @@ scope.
 
 ## Traps
 
-1. **`CoachHome.tsx` has four of the ten**, at `:1857`, `:1886`, `:1913` and
-   `:2183`. Miss one and criterion 1 fails. Re-grep after editing.
+1. **`CoachHome.tsx` has four of the ten** — the most of any file. Miss one and
+   criterion 1 fails. Re-grep after editing rather than trusting your own count.
 2. **The line numbers in that table have already moved once.** T138 landed in
    `CoachHome.tsx` and shifted its four bars up by 18 lines; the table above is
    corrected for that. T143 is in flight and does not touch these files, but
