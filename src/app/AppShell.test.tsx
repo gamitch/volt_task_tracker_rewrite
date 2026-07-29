@@ -35,7 +35,7 @@
  * reason (a `container.querySelector('main')` would always return `null`
  * against the real installed component).
  */
-import { act } from 'react';
+import { act, Component, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -43,6 +43,7 @@ import { AuthProvider, type AuthUser } from './guards';
 import { LoginAs } from '../test-utils/authHarness';
 import { routePaths } from './router';
 import { AppShell, type AppShellProps } from './AppShell';
+import { useActiveSeason } from './SeasonProvider';
 import type { SeasonRow } from '../lib/supabase/types';
 import type { KpiStripData } from '../lib/supabase/loaders/kpi';
 
@@ -319,20 +320,20 @@ describe('<AppShell /> (T006 chrome wrapper; T123 KpiStrip mount point)', () => 
       // above, plus proof the new props render nothing here: no chrome, no
       // `KpiStrip`, and neither fixture's content leaks in.
       //
-      // What this does NOT prove, despite an earlier version of this comment
-      // claiming it: that `SeasonProvider` is absent. T140's checker wrapped
-      // this branch in `<SeasonProvider>` -- the exact regression the packet
-      // forbids -- and all 23 tests still passed. The provider is
-      // DOM-transparent (`SeasonProvider.tsx:203` renders only a context
-      // Provider around `children`), and no chromeless page consumes
-      // `useActiveSeason()` (`Kiosk.tsx:41`, `LiveConsole.tsx:58` both
-      // document that they deliberately do not), so no assertion on
-      // `container` can detect it.
+      // What this test alone does NOT prove: that `SeasonProvider` is absent
+      // from this branch. `SeasonProvider` is DOM-transparent
+      // (`SeasonProvider.tsx:203` renders only a context Provider around
+      // `children`), and no chromeless page consumes `useActiveSeason()`
+      // (`Kiosk.tsx:41`, `LiveConsole.tsx:58` both document that they
+      // deliberately do not), so no assertion on `container` here can detect
+      // a `<SeasonProvider>` wrap.
       //
-      // The provable version -- render a probe child calling
-      // `useActiveSeason()` and assert it throws (`SeasonProvider.tsx:209-215`)
-      // -- is banked as T141. Until then the guard against that regression is
-      // the diff, not this test.
+      // That is what the "T141 provider-mount guard" `describe` block below
+      // proves instead: a probe child that calls `useActiveSeason()` on this
+      // same chromeless branch and asserts it throws the exact
+      // `SeasonProvider.tsx:209-215` message, with a companion case on an
+      // ordinary chrome-bearing route proving the same probe does NOT throw
+      // there (so criterion cannot pass because the probe itself is broken).
       expect(container.textContent).toContain(PAGE_MARKER_TEXT);
       expect(container.querySelector('[role="main"]')).toBeNull();
       expect(container.textContent).not.toContain('VOLT');
@@ -348,6 +349,105 @@ describe('<AppShell /> (T006 chrome wrapper; T123 KpiStrip mount point)', () => 
       expect(main?.textContent).toContain("Couldn't load the active season");
       expect(main?.textContent).not.toContain('T140 Fixture Regatta');
       expect(main?.textContent).not.toContain('No active season yet');
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // T141: a guard that can actually detect the chromeless branch being
+  // wrapped in `<SeasonProvider>` -- the regression T140's checker made
+  // (wrapping the chromeless branch in `<SeasonProvider>`) and every one of
+  // the tests above, including the pass-through-props ones, kept passing
+  // regardless. `SeasonProvider` is DOM-transparent
+  // (`SeasonProvider.tsx:203` renders only a context Provider around
+  // `children`) and no chromeless page consumes `useActiveSeason()`
+  // (`Kiosk.tsx:41`, `LiveConsole.tsx:58`), so the ONLY observable
+  // difference between wrapped and unwrapped is whether
+  // `useActiveSeason()` (`SeasonProvider.tsx:209-215`) throws when called by
+  // a child. A probe that calls it and asserts on the thrown message is
+  // therefore the whole mechanism.
+  // -------------------------------------------------------------------
+  describe('T141 provider-mount guard (probe that can detect a SeasonProvider wrap regression)', () => {
+    /** Minimal class-based error boundary, same shape
+     * `SeasonProvider.test.tsx`'s own `CaughtErrorBoundary` already
+     * establishes for this exact throw -- catching via a real boundary
+     * (rather than asserting `root.render()` itself throws) avoids
+     * depending on exactly how the installed React version propagates an
+     * uncaught render error through `act()`/`createRoot`. */
+    class ThrowCaughtBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+      state: { error: Error | null } = { error: null };
+      static getDerivedStateFromError(error: Error): { error: Error } {
+        return { error };
+      }
+      render(): ReactNode {
+        if (this.state.error) {
+          return <div data-testid="t141-boundary-error">{this.state.error.message}</div>;
+        }
+        return this.props.children;
+      }
+    }
+
+    /** Tiny probe: calls `useActiveSeason()` and, if it does NOT throw,
+     * renders a distinctive marker -- so the companion "does not throw" test
+     * below proves the probe actually ran (not merely that nothing crashed
+     * before it), and so the "must throw" test can assert this marker is
+     * ABSENT (the throw prevented this render from ever committing). */
+    function SeasonProbe(): ReactNode {
+      useActiveSeason();
+      return <div data-testid="t141-probe-ok">probe did not throw</div>;
+    }
+
+    /** Same two-branch render shape as `renderAt` above, but mounts
+     * `ThrowCaughtBoundary > SeasonProbe` as `AppShell`'s children instead
+     * of the plain page marker, so the probe sits exactly where a real page
+     * component would -- inside the chromeless branch's bare
+     * `<>{children}</>` on chromeless routes, or inside
+     * `<SeasonProvider>...<AstryxAppShell>...{children}` on ordinary
+     * routes. */
+    function renderProbeAt(path: string, user: AuthUser | null): void {
+      const probe = (
+        <ThrowCaughtBoundary>
+          <SeasonProbe />
+        </ThrowCaughtBoundary>
+      );
+      act(() => {
+        root.render(
+          <MemoryRouter initialEntries={[path]}>
+            <AuthProvider>
+              {user === null ? (
+                <AppShell>{probe}</AppShell>
+              ) : (
+                <LoginAs user={user}>
+                  <AppShell>{probe}</AppShell>
+                </LoginAs>
+              )}
+            </AuthProvider>
+          </MemoryRouter>,
+        );
+      });
+    }
+
+    it('useActiveSeason() throws the exact "must be called within a <SeasonProvider>" message when rendered as a child of the chromeless /login branch', () => {
+      // React logs the caught render error to the console loudly even
+      // though the boundary handles it; suppressed for this test only (not
+      // a global mock) per the packet's "Note on error-throwing tests".
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        renderProbeAt(routePaths.login, null);
+        expect(container.querySelector('[data-testid="t141-boundary-error"]')?.textContent).toBe(
+          'useActiveSeason() must be called within a <SeasonProvider>.',
+        );
+        // The throw prevents SeasonProbe's own render from ever committing.
+        expect(container.querySelector('[data-testid="t141-probe-ok"]')).toBeNull();
+      } finally {
+        consoleErrorSpy.mockRestore();
+      }
+    });
+
+    it('the same probe does NOT throw on an ordinary chrome-bearing route (SeasonProvider IS mounted there) -- proves criterion 1 cannot pass because the probe is simply broken', async () => {
+      renderProbeAt(routePaths.dashboard, COACH_USER);
+      await flushMicrotasks();
+      expect(container.querySelector('[data-testid="t141-probe-ok"]')).not.toBeNull();
+      expect(container.querySelector('[data-testid="t141-boundary-error"]')).toBeNull();
     });
   });
 });
