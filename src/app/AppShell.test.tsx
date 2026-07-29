@@ -333,7 +333,7 @@ describe('<AppShell /> (T006 chrome wrapper; T123 KpiStrip mount point)', () => 
       // same chromeless branch and asserts it throws the exact
       // `SeasonProvider.tsx:209-215` message, with a companion case on an
       // ordinary chrome-bearing route proving the same probe does NOT throw
-      // there (so criterion cannot pass because the probe itself is broken).
+      // there — so the guard cannot pass merely because the probe is broken.
       expect(container.textContent).toContain(PAGE_MARKER_TEXT);
       expect(container.querySelector('[role="main"]')).toBeNull();
       expect(container.textContent).not.toContain('VOLT');
@@ -443,7 +443,7 @@ describe('<AppShell /> (T006 chrome wrapper; T123 KpiStrip mount point)', () => 
       }
     });
 
-    it('the same probe does NOT throw on an ordinary chrome-bearing route (SeasonProvider IS mounted there) -- proves criterion 1 cannot pass because the probe is simply broken', async () => {
+    it('the same probe does NOT throw on an ordinary chrome-bearing route (SeasonProvider IS mounted there) -- proves the probe only throws when SeasonProvider is genuinely absent', async () => {
       renderProbeAt(routePaths.dashboard, COACH_USER);
       await flushMicrotasks();
       expect(container.querySelector('[data-testid="t141-probe-ok"]')).not.toBeNull();
