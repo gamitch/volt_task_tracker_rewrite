@@ -158,6 +158,38 @@ appends to `docs/swarm/verification-log.md` at EOF, and every concurrent
 worktree does the same, so any two worktrees merging manufacture an EOF
 conflict. Point the hook at a per-agent file instead.
 
+## Third standing rule added 2026-07-29 — agents can die without notifying
+
+**A background agent that stops producing output is not necessarily working.**
+T136's first checker died mid-run: its transcript ends on an assistant turn with
+`stop_reason: null`, timestamped ~30 minutes before I noticed, and **no
+completion notification ever arrived.** I found it only by checking the output
+file's mtime against the clock.
+
+Liveness check, cheap and safe — it reads metadata and the last event, never the
+transcript body (which would overflow context):
+
+```
+f=<task-output-file>
+date -u +%H:%M:%S; date -u -r "$f" +%H:%M:%S; wc -l < "$f"
+tail -1 "$f" | python3 -c "import sys,json; d=json.loads(sys.stdin.read()); \
+  print(d.get('type'), d.get('timestamp'), (d.get('message') or {}).get('stop_reason'))"
+```
+
+A last-event timestamp far behind the clock, with no growth, means dead — not
+busy. Cross-check with `ps` for a hung `vitest`/`chromium` child before
+concluding; if there is no such process, nothing is running.
+
+**When a checker dies, verify its worktree before re-dispatching.** Checkers are
+routinely told to mutate source and restore it, so a death mid-check can leave a
+mutation in place that would then be attributed to the worker. T136's worktree
+was clean, but that was luck rather than design.
+
+**Re-sequencing beats re-checking.** Because this task was already known to need
+a change (the withdrawn contrast criterion), the cheaper path was to fix the
+packet first, resume the worker, and check once at the end — rather than
+re-running a full check on work guaranteed to be superseded.
+
 ## Environment facts (verified, not assumed)
 
 **All 15 migrations are applied to George's remote Supabase project**, verified
