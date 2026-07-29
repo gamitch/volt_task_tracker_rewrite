@@ -316,10 +316,23 @@ describe('<AppShell /> (T006 chrome wrapper; T123 KpiStrip mount point)', () => 
         kpiStripProps: { loadKpiStripData: async () => T140_FIXTURE_KPI_DATA },
       });
       // Same assertions as the pre-existing (unmodified) chromeless test
-      // above, plus proof the new props don't leak through: if
-      // SeasonProvider were mounted here, `useActiveSeason()` would start
-      // resolving -- but there is no `[role="main"]` region at all (still a
-      // bare `<>{children}</>`), and neither fixture's content appears.
+      // above, plus proof the new props render nothing here: no chrome, no
+      // `KpiStrip`, and neither fixture's content leaks in.
+      //
+      // What this does NOT prove, despite an earlier version of this comment
+      // claiming it: that `SeasonProvider` is absent. T140's checker wrapped
+      // this branch in `<SeasonProvider>` -- the exact regression the packet
+      // forbids -- and all 23 tests still passed. The provider is
+      // DOM-transparent (`SeasonProvider.tsx:203` renders only a context
+      // Provider around `children`), and no chromeless page consumes
+      // `useActiveSeason()` (`Kiosk.tsx:41`, `LiveConsole.tsx:58` both
+      // document that they deliberately do not), so no assertion on
+      // `container` can detect it.
+      //
+      // The provable version -- render a probe child calling
+      // `useActiveSeason()` and assert it throws (`SeasonProvider.tsx:209-215`)
+      // -- is banked as T141. Until then the guard against that regression is
+      // the diff, not this test.
       expect(container.textContent).toContain(PAGE_MARKER_TEXT);
       expect(container.querySelector('[role="main"]')).toBeNull();
       expect(container.textContent).not.toContain('VOLT');
