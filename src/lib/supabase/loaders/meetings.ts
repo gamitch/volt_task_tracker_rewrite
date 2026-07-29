@@ -561,6 +561,14 @@ export function makeLoadCoachMeetingsData(
         (rsvpRows ?? []).map(mapRsvpDbRow),
         (studentRows ?? []).map(mapStudentDbRow),
       ),
+      // T147 -- `teamRows` was already fetched (above, in this same
+      // `Promise.all` batch) for `buildCoachMeetingRows`'s own per-row
+      // team-scope label; it never left this function until now. No new
+      // query, no new round trip -- just threading the same already-fetched
+      // list through to `CoachMeetingsData` too, so
+      // `MeetingsList.tsx`'s `<ScheduleMeetingsDialog>` can be passed real
+      // teams instead of its own fixture `DEFAULT_TEAMS`.
+      teams: (teamRows ?? []).map(mapTeamDbRow),
     };
   };
 }

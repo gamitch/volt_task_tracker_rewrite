@@ -403,12 +403,16 @@
  *     task, needed this narrower `overrideData` seam instead of that larger
  *     restructuring).
  *
- *     `teams` (`OutreachEventDialog`'s own prop) is deliberately NOT
- *     overridden here -- it falls back to that component's own already-
- *     disclosed fixture team list, same "still fixture-backed" posture
- *     `MeetingsList.tsx`'s own T096 wiring of `ScheduleMeetingsDialog`
- *     already established for the identical reason (no second teams-loading
- *     mechanism is part of this task's own Allowed Files scope).
+ *     T147 UPDATE: `teams` (`OutreachEventDialog`'s own prop) is now real,
+ *     not deferred -- `loaders/outreach.ts`'s `makeLoadOutreachData` fetches
+ *     it (parallel with this page's existing batch, no new round trip) and
+ *     it is threaded straight through `OutreachLoadResult`/`data.teams` to
+ *     `CoachOutreachView`'s own dialog instance below. The prior deferral
+ *     ("still fixture-backed, same posture as `MeetingsList.tsx`") is what
+ *     shipped the bug this task fixes: the fixture ids
+ *     (`'team-ravens'`/`'team-titans'`) are not valid `uuid`s, so selecting
+ *     the only options offered failed the real `events.team_ids uuid[]`
+ *     insert outright.
  *
  * -----------------------------------------------------------------------
  * 12. T106 HOTFIX: real active-season resolution, mirroring
@@ -663,6 +667,7 @@ import {
   type ExistingOutreachEvent,
   type OnSaveOutreachEventFn,
   type OutreachRosterStudent,
+  type OutreachTeamOption,
 } from './OutreachEventDialog';
 // T126 (PRD v2 UXP-03) -- module doc #14. This task's own new dialog/
 // component, `src/pages/outreach/`.
@@ -788,6 +793,13 @@ export interface OutreachLoadResult {
   attendance: readonly OutreachAttendanceRow[];
   students: readonly OutreachStudentFixture[];
   goalConfig: OutreachGoalConfig;
+  /** T147 -- real teams (`loaders/outreach.ts`'s `makeLoadOutreachData`,
+   * fetched in parallel with the rest of this batch), threaded to
+   * `OutreachEventDialog`'s own `teams` prop so a coach sees their real
+   * teams instead of that dialog's fixture `DEFAULT_TEAMS`
+   * (`'team-ravens'`/`'team-titans'`, non-uuid strings that fail the real
+   * `events.team_ids uuid[]` insert). */
+  teams: readonly OutreachTeamOption[];
 }
 
 export type LoadOutreachDataFn = (seasonId: string) => Promise<OutreachLoadResult>;
@@ -828,6 +840,19 @@ const FIXTURE_STUDENTS: readonly OutreachStudentFixture[] = [
   { id: 'student-priya-patel', name: 'Priya Patel' },
   { id: 'student-devon-marsh', name: 'Devon Marsh' },
   { id: PLACEHOLDER_CURRENT_STUDENT_ID, name: 'Lena Osei' },
+];
+
+/** T147 -- this file's own fixture default for the new `teams` field
+ * (Known Context/Traps #1: `defaultLoadOutreachData` below is an obviously-
+ * fake fixture loader, same posture every other `FIXTURE_*` const here
+ * already has). UUID-shaped ids (matching what the real `teams` table
+ * actually produces, `teams.id uuid primary key`) -- not the dialog's own
+ * `DEFAULT_TEAMS` fixture ids (`'team-ravens'`/`'team-titans'`), which are
+ * deliberately non-uuid strings and the whole root cause this task exists to
+ * fix. Names are fabricated (constitution item 6); nothing asserts on them. */
+const FIXTURE_TEAMS: readonly OutreachTeamOption[] = [
+  { id: 'b1c11111-1111-4111-8111-111111111111', name: 'Crimson Circuit' },
+  { id: 'b1c22222-2222-4222-8222-222222222222', name: 'Voltage Vanguard' },
 ];
 
 const FIXTURE_GOAL_CONFIG: OutreachGoalConfig = {
@@ -1313,6 +1338,7 @@ export async function defaultLoadOutreachData(seasonId: string): Promise<Outreac
       FIXTURE_GOAL_CONFIG.seasonId === seasonId
         ? FIXTURE_GOAL_CONFIG
         : { seasonId, individualGoalHoursByStudentId: {} },
+    teams: FIXTURE_TEAMS,
   };
 }
 
@@ -2846,6 +2872,10 @@ interface CoachOutreachViewProps {
   attendance: readonly OutreachAttendanceRow[];
   students: readonly OutreachStudentFixture[];
   goalConfig: OutreachGoalConfig;
+  /** T147 -- real teams (`loaders/outreach.ts`), threaded straight through to
+   * this view's own create/edit `OutreachEventDialog` `teams` prop, replacing
+   * that dialog's own `DEFAULT_TEAMS` fixture fallback. */
+  teams: readonly OutreachTeamOption[];
   /** T101 (module doc #11). Defaults to a real `events`/`event_sessions`
    * insert/update, passed straight through to `<OutreachEventDialog
    * onSaveEvent={...} />` -- T121 UPDATE: now genuinely used for BOTH create
@@ -2890,6 +2920,7 @@ function CoachOutreachView({
   attendance,
   students,
   goalConfig,
+  teams,
   onSaveEvent,
   onReload,
   onCancelEvent,
@@ -3155,15 +3186,18 @@ function CoachOutreachView({
           genuinely serves BOTH create (`initialEvent` undefined) and edit
           (`initialEvent` from a row's own "Edit" action) through this same
           instance, plus the real roster (`students`) and acting-coach id
-          (`currentUserProfileId`) this task wires in. `teams` deliberately
-          NOT overridden -- module doc #11 (unchanged, out of this task's own
-          Allowed Files). */}
+          (`currentUserProfileId`) this task wires in. T147: `teams` now
+          real too (`loaders/outreach.ts`'s `makeLoadOutreachData`), so a
+          coach sees their real teams instead of the dialog's own
+          `DEFAULT_TEAMS` fixture (`'team-ravens'`/`'team-titans'`, non-uuid
+          strings that failed the real `events.team_ids uuid[]` insert). */}
       <OutreachEventDialog
         isOpen={isEventDialogOpen}
         onOpenChange={(isOpen) => {
           setIsEventDialogOpen(isOpen);
           if (!isOpen) setEditingTarget(null);
         }}
+        teams={teams}
         onSaveEvent={handleSaveEventSubmit}
         initialEvent={initialEvent}
         students={rosterForDialog}
@@ -3777,6 +3811,7 @@ function OutreachListLoaded({
           attendance={data.attendance}
           students={data.students}
           goalConfig={data.goalConfig}
+          teams={data.teams}
           onSaveEvent={onSaveEvent}
           onReload={reloadOutreachData}
           onCancelEvent={onCancelEvent}

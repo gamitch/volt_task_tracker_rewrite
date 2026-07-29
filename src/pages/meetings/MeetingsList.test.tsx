@@ -558,7 +558,7 @@ describe('<MeetingsList /> coach view', () => {
   });
 
   it('empty state (zero meeting sessions)', async () => {
-    renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve({ rows: [] }) });
+    renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve({ rows: [], teams: [] }) });
     await flushMicrotasks();
     // DES-15 verbatim (PRD line 212, T083).
     expect(container.textContent).toContain('No meetings scheduled.');
@@ -722,6 +722,7 @@ describe('<MeetingsList /> coach view', () => {
             ],
           },
         ],
+        teams: [],
       };
       renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(pastOnlyRow) });
       await flushMicrotasks();
@@ -805,6 +806,7 @@ describe('<MeetingsList /> coach view', () => {
                 ],
               },
             ],
+            teams: [],
           });
     };
 
@@ -834,6 +836,91 @@ describe('<MeetingsList /> coach view', () => {
     // row both appear.
     expect(loadCallCount).toBe(2);
     expect(container.textContent).toContain('Meetings scheduled');
+  });
+
+  // -------------------------------------------------------------------------
+  // T147: the outreach/meetings team picker shows fixture teams to real
+  // users -- the meetings half, "the one that actually blocks a core create
+  // flow" (packet). `ScheduleMeetingsDialog`'s own `teams` prop now gets the
+  // already-fetched `loaders/meetings.ts` teams (threaded through
+  // `CoachMeetingsData`) instead of falling back to that dialog's own
+  // `DEFAULT_TEAMS` fixture (`'team-ravens'`/`'team-titans'`, non-uuid
+  // strings that fail the real `events.team_ids uuid[]` insert -- "Couldn't
+  // create these meetings.").
+  //
+  // Create mode has no `initialData`/edit mode at all (module doc #7b) --
+  // `allTeamIds` (derived straight from the `teams` prop) seeds
+  // `selectedTeamIds` on open, so this dialog needs no edit-mode fixture
+  // trick, unlike `OutreachEventDialog`'s edit-mode sites.
+  //
+  // Assertion mechanism -- UUID shape on the submitted payload, never a
+  // name-based assertion (this file's own `FIXTURE_EVENTS`/`FIXTURE_TEAMS`
+  // literally contain the text "Ravens" in unrelated fixture content --
+  // `:737`/`:740` -- so a name-based assertion cannot discriminate here).
+  // -------------------------------------------------------------------------
+  it('T147: deselecting one team submits a teamIds array of real UUIDs from the teams prop, never the fixture strings', async () => {
+    const onCreateMeetings = vi.fn().mockResolvedValue(undefined);
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    // UUID-shaped ids matching what the real `teams` table actually
+    // produces (`teams.id uuid primary key`); fabricated names
+    // (constitution item 6) -- never asserted on.
+    async function loadCoachDataWithRealTeams(): Promise<CoachMeetingsData> {
+      const base = await defaultLoadCoachMeetingsData();
+      return {
+        ...base,
+        teams: [
+          { id: 'd4444444-4444-4444-8444-444444444444', name: 'Photon Phalanx' },
+          { id: 'd5555555-5555-4555-8555-555555555555', name: 'Kinetic Krew' },
+        ],
+      };
+    }
+
+    renderAsUser(COACH_USER, { loadCoachData: loadCoachDataWithRealTeams, onCreateMeetings });
+    await flushMicrotasks();
+
+    const scheduleButtons = Array.from(container.querySelectorAll('button')).filter((btn) =>
+      btn.textContent?.includes('Schedule meetings'),
+    );
+    clickButton(scheduleButtons[0] as HTMLButtonElement);
+
+    // Title already defaults to a non-empty value (`DEFAULT_TITLE`,
+    // `ScheduleMeetingsDialog.tsx`); only a date is needed for `isValid`.
+    const dateInput = getFieldControl('Date') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(dateInput, '2026-08-05');
+    });
+
+    // Open the "Team scope" MultiSelector and deselect the LAST option in
+    // its own listbox -- positional, not by label text (with the fix
+    // reverted the injected UUID-fixture labels are absent, so a label
+    // lookup would die with a harness-shaped failure instead of the UUID
+    // mismatch this test exists to prove). Scoped to the trigger's own
+    // `aria-controls` listbox. The last option is never the `hasSelectAll`
+    // pseudo-option, which that component places FIRST.
+    const trigger = getFieldControl('Team scope');
+    clickButton(trigger as HTMLButtonElement);
+    const listboxId = trigger.getAttribute('aria-controls');
+    expect(listboxId).toBeTruthy();
+    const listbox = document.getElementById(listboxId ?? '');
+    expect(listbox).toBeTruthy();
+    const options = Array.from(listbox?.querySelectorAll('[role="option"]') ?? []);
+    expect(options.length).toBeGreaterThan(0);
+    act(() => {
+      options[options.length - 1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(onCreateMeetings).not.toHaveBeenCalled();
+    clickButton(findButtonByText('Create 1 meeting') as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(onCreateMeetings).toHaveBeenCalledTimes(1);
+    const payload = onCreateMeetings.mock.calls[0][0] as CreateMeetingsPayload;
+    const submittedTeamIds = payload.event.teamIds;
+    expect(submittedTeamIds).not.toBeNull();
+    expect(submittedTeamIds).not.toEqual([]);
+    for (const id of submittedTeamIds ?? []) {
+      expect(id).toMatch(UUID_RE);
+    }
   });
 
   // T096 (module doc #7b, Trap #3 finding) -- Edit is left as an honest,
@@ -1276,7 +1363,9 @@ describe('loadCoachMeetingsData (T096 real load)', () => {
 
     const load = makeLoadCoachMeetingsData(() => client);
     const result = await load();
-    expect(result).toEqual({ rows: [] });
+    // T147 -- `teams` bridges the "no rows" case the same honest way `rows`
+    // always has: a real empty array, never a crash/undefined.
+    expect(result).toEqual({ rows: [], teams: [] });
   });
 });
 

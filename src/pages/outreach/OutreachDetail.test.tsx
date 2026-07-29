@@ -1214,3 +1214,219 @@ describe('"Mark event complete" confirm -> real markDayComplete mutation + page 
     expect(container.textContent).toContain("Some sessions couldn't be marked complete");
   });
 });
+
+// ---------------------------------------------------------------------------
+// T147: the outreach/meetings team picker shows fixture teams to real users.
+// This page's own `<OutreachEventDialog>` (edit mode) now gets `teams` from
+// this page's real `detailData.teams` instead of that dialog's own
+// `DEFAULT_TEAMS` fixture (`'team-ravens'`/`'team-titans'`, non-uuid strings
+// that fail the real `events.team_ids uuid[]` insert -- the report that
+// blocked meeting creation outright, packet root-cause section).
+//
+// Assertion mechanism (packet "The assertion mechanism" section) -- UUID
+// shape on the SUBMITTED payload, never a name-based assertion: two earlier
+// revisions of this packet tried name-based assertions and both failed for
+// structural reasons specific to this codebase's fixtures (name collisions
+// with `DEFAULT_TEAMS`'s own "Ravens"/"Titans", and this page's own
+// `formatScopeLabel` rendering the loader's team names directly into the
+// page body). A UUID-shape assertion on the payload discriminates
+// correctly regardless of what names are used.
+//
+// Trap (packet "The single most important thing to understand"):
+// `OutreachEventDialog.tsx`'s own `resetForm` seeds `selectedTeamIds` from
+// `initialEvent.teamIds ?? allTeamIds` -- FROM THE EVENT, not from the
+// `teams` prop. An edit-mode fixture event already scoped to a team (e.g.
+// `teamIds: ['team-ravens']`) would submit that same array back verbatim
+// via `resolveTeamScope`, byte-identical whether or not this page's own
+// `teams` prop fix is present -- NOT a valid discrimination proof. The
+// event injected below deliberately sets `teamIds: null` so the dialog's
+// seed falls through to `allTeamIds`, which IS derived from the `teams`
+// prop under test here.
+// ---------------------------------------------------------------------------
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+describe('T147: OutreachEventDialog (edit mode) submits real team UUIDs, not DEFAULT_TEAMS fixture strings', () => {
+  // UUID-shaped ids matching what the real `teams` table actually produces
+  // (`teams.id uuid primary key`); fabricated names (constitution item 6) --
+  // never asserted on, so no naming trap to avoid here.
+  const REAL_TEAMS: TeamOption[] = [
+    { id: 'c2222222-2222-4222-8222-222222222222', name: 'Nimbus Ninjas', color: 'blue' },
+    { id: 'c3333333-3333-4333-8333-333333333333', name: 'Solar Sentinels', color: 'green' },
+  ];
+
+  async function loadDataWithRealTeams(eventId: string): Promise<OutreachDetailData | null> {
+    return {
+      event: {
+        id: eventId,
+        seasonId: 'season-1',
+        type: 'outreach',
+        title: 'Food Bank Sort',
+        description: '',
+        locationName: 'Riverside Food Bank',
+        address: '100 Riverside Dr',
+        // Recipe (packet "Recipe, all three call sites" step 1): `null` here
+        // is what makes `OutreachEventDialog.tsx:1051`'s
+        // `initialEvent.teamIds ?? allTeamIds` fall through to `allTeamIds`,
+        // which is derived from the `teams` prop this test is proving.
+        teamIds: null,
+        createdBy: null,
+        countsParticipation: false,
+        countsVolunteerHours: true,
+        adultVolunteersCount: 0,
+        adultVolunteerHours: 0,
+      },
+      sessions: [
+        {
+          id: 'session-1',
+          eventId,
+          sessionDate: '2026-08-02',
+          startsAt: '2026-08-02T14:00:00.000Z',
+          endsAt: '2026-08-02T17:00:00.000Z',
+          status: 'scheduled',
+          peopleReached: null,
+          notes: '',
+        },
+      ],
+      rsvps: [],
+      students: [],
+      teams: REAL_TEAMS,
+      profiles: [],
+    };
+  }
+
+  /** Opens the "Team scope" `MultiSelector` and deselects the LAST option in
+   * its own listbox -- positional, not by label text (packet "Two traps in
+   * step 2" section): with the fix reverted the injected labels
+   * ("Nimbus Ninjas"/"Solar Sentinels") are absent (the dialog falls back to
+   * `DEFAULT_TEAMS`'s "Ravens"/"Titans"), so a label lookup would die with a
+   * harness-shaped failure instead of the UUID mismatch this test exists to
+   * prove. Scoped to the MultiSelector's OWN listbox (via the trigger's
+   * `aria-controls`), not the whole document -- a second, unrelated
+   * `role="option"` group exists on this page (the dialog's own Event type
+   * `Selector`). The last option is never the `hasSelectAll` pseudo-option,
+   * which that component places FIRST. */
+  function deselectLastTeamOption(): void {
+    const trigger = getFieldControl('Team scope');
+    act(() => {
+      trigger.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const listboxId = trigger.getAttribute('aria-controls');
+    expect(listboxId).toBeTruthy();
+    const listbox = document.getElementById(listboxId ?? '');
+    expect(listbox).toBeTruthy();
+    const options = Array.from(listbox?.querySelectorAll('[role="option"]') ?? []);
+    expect(options.length).toBeGreaterThan(0);
+    const lastOption = options[options.length - 1];
+    act(() => {
+      lastOption.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+  }
+
+  it('deselecting one team submits a teamIds array of real UUIDs from the teams prop, never the fixture strings', async () => {
+    const onSaveEvent = vi.fn().mockResolvedValue(undefined);
+    renderDetail('event-1', { loadData: loadDataWithRealTeams, onSaveEvent });
+    await flushMicrotasks();
+
+    act(() => {
+      findMoreMenuButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    clickMenuItem('Edit');
+    expect(document.body.textContent).toContain('Edit outreach event');
+
+    deselectLastTeamOption();
+
+    const saveButton = Array.from(document.querySelectorAll('button')).find((btn) =>
+      btn.textContent?.trim().startsWith('Save changes'),
+    );
+    expect(saveButton).toBeTruthy();
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await flushMicrotasks();
+
+    expect(onSaveEvent).toHaveBeenCalledTimes(1);
+    const submittedTeamIds = onSaveEvent.mock.calls[0][0].event.teamIds as string[] | null;
+    expect(submittedTeamIds).not.toBeNull();
+    expect(submittedTeamIds).not.toEqual([]);
+    for (const id of submittedTeamIds ?? []) {
+      expect(id).toMatch(UUID_RE);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T147 Part A2: the "Expected attendees" roster fetch has the same defect
+// class this task exists to close for teams -- a rejected `loadRoster()`
+// used to leave `eventDialogRoster` at its initial `undefined`, so
+// `OutreachEventDialog`'s own `students` prop default (`DEFAULT_STUDENTS`)
+// silently took over, presenting four fabricated minors' names ("Riley
+// Chen", "Jordan Blake", "Sam Okafor", "Casey Nguyen") as the live roster
+// with no indication anything failed. Ported from `OutreachList.tsx`'s own
+// CHECKER FIX (rework of T121, NIT #6) -- the identical `RosterLoadState`
+// shape, applied here for the first time (the old justification for leaving
+// this page on the soft-fail path, "T121 already fixed it", was true for
+// `OutreachList.tsx` only).
+// ---------------------------------------------------------------------------
+
+describe("T147 Part A2: a roster-load FAILURE surfaces an honest page-side notice and passes a real empty array, never the dialog's own DEFAULT_STUDENTS fixture", () => {
+  it("a rejected loadRoster shows an error Banner with Retry, and the edit dialog's checklist never falls back to fabricated fixture students", async () => {
+    const loadRoster = vi.fn().mockRejectedValue(new Error('boom'));
+    renderDetail(
+      'event-food-bank-sort',
+      { loadData: defaultLoadOutreachDetail, loadRoster },
+      COACH_USER,
+    );
+    await flushMicrotasks();
+    expect(loadRoster).toHaveBeenCalledTimes(1);
+
+    // Honest, page-side DES-12 error notice -- visible even before the
+    // dialog is opened, same shape `OutreachList.tsx`'s own roster-failure
+    // notice already established.
+    expect(container.textContent).toContain("Couldn't load the student roster");
+    expect(container.textContent).toContain('Retry');
+
+    act(() => {
+      findMoreMenuButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    clickMenuItem('Edit');
+
+    // Never the dialog's own fixture fallback names -- a real, honest empty
+    // roster instead.
+    expect(document.body.textContent).not.toContain('Riley Chen');
+    expect(document.body.textContent).not.toContain('Jordan Blake');
+    expect(document.body.textContent).not.toContain('Sam Okafor');
+    expect(document.body.textContent).not.toContain('Casey Nguyen');
+    expect(document.body.textContent).toContain('Expected attendees (0 of 0)');
+  });
+
+  it('Retry re-runs loadRoster and clears the error notice on success', async () => {
+    const loadRoster = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce([
+        { id: 'stu-jamie', name: 'Jamie Rivera', teamId: 'team-ravens', isActive: true },
+      ]);
+    renderDetail(
+      'event-food-bank-sort',
+      { loadData: defaultLoadOutreachDetail, loadRoster },
+      COACH_USER,
+    );
+    await flushMicrotasks();
+    expect(container.textContent).toContain("Couldn't load the student roster");
+
+    const retryButton = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'Retry',
+    );
+    expect(retryButton).toBeTruthy();
+    act(() => {
+      retryButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    expect(loadRoster).toHaveBeenCalledTimes(2);
+    expect(container.textContent).not.toContain("Couldn't load the student roster");
+  });
+});

@@ -819,15 +819,23 @@ export function makeLoadOutreachData(
   );
   const loadStudents = createLoader<void, StudentDbRow[]>(queryAllStudents, getClient);
   const loadSeasonGoal = createLoader<string, SeasonGoalDbRow>(querySeasonGoal, getClient);
+  // T147 -- real teams, so `OutreachList.tsx` can pass them to
+  // `OutreachEventDialog`'s own `teams` prop instead of that dialog falling
+  // back to its fixture `DEFAULT_TEAMS` (`'team-ravens'`/`'team-titans'`,
+  // non-uuid strings that fail the `events.team_ids uuid[]` insert). Depends
+  // on nothing, same as `loadStudents`/`loadSeasonGoal` below -- batched into
+  // the same first `Promise.all`, not fetched serially.
+  const loadTeams = createLoader<void, TeamDbRow[]>(queryAllTeams, getClient);
 
   return async (seasonId: string): Promise<OutreachLoadResult> => {
     const eventRows = (await loadEvents(seasonId)) ?? [];
     const eventIds = eventRows.map((event) => event.id);
 
-    const [sessionRows, studentRows, seasonGoalRow] = await Promise.all([
+    const [sessionRows, studentRows, seasonGoalRow, teamRows] = await Promise.all([
       eventIds.length > 0 ? loadSessions(eventIds) : Promise.resolve([]),
       loadStudents(),
       loadSeasonGoal(seasonId),
+      loadTeams(),
     ]);
     const sessionIds = (sessionRows ?? []).map((session) => session.id);
     const [rsvpRows, attendanceRows] =
@@ -848,6 +856,7 @@ export function makeLoadOutreachData(
       attendance: (attendanceRows ?? []).map(mapAttendanceDbRowToOutreachAttendanceRow),
       students: students.map(mapStudentDbRowToOutreachStudentFixture),
       goalConfig,
+      teams: (teamRows ?? []).map(mapTeamDbRowToTeamOption),
     };
   };
 }
