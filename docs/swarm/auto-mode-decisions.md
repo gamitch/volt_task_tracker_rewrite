@@ -804,3 +804,47 @@ without scoping to the user" is precisely the shape that causes real leaks later
 someone caches a roster, a student name, or an attendance count the same way. Getting
 the pattern right while the stakes are a theme is cheap; getting it wrong teaches the
 codebase a habit that will eventually be expensive.
+
+### 2026-07-30 — T154: adopting the app-owned storage key, and the fix that could have reintroduced its own bug
+
+T154's gate returned DISPATCH but measured something that changes the design, so I am
+taking the cheaper path it offered rather than dispatching as written.
+
+**[F1] The "fail-safe in every branch" claim was false, and the failure is poetic.** The
+packet derives Supabase's internal key format. The gate measured what happens if a
+future SDK changes that format and an **old-format key is left orphaned** in the browser
+holding whatever session was last persisted: `readSessionUserId()` reads the stale
+user's id, and Bob is seeded with **Alice's** theme. `DRIFT2_MODE=dark`,
+`DRIFT2_IS_ALICES_THEME=true`. The mechanism is the packet's own orphaned-key pattern
+turned against it — the fix for the bleed could one day cause the bleed.
+
+**Decision: adopt the gate's [CP1] — own the key instead of deriving it.** `storageKey`
+is a **public, typed** `supabase-js` option, and `client.ts:79` is the single
+`createClient` call site in the repo. Passing `{ auth: { storageKey: … } }` makes drift
+**structurally impossible**: there is no formula to go stale, F1's branch becomes
+unreachable, criterion 1's four URL-parsing cases disappear, and the
+undocumented-internal caveat never needs writing into production source. The gate
+verified it by execution — `persistSession` still true, storage still `localStorage`.
+
+**Why now specifically.** Switching keys orphans any already-persisted session, forcing
+one re-login. That cost is **currently zero**: T063's MIG-04 cutover and T052/T070's
+Vercel go-live are all still blocked human gates, so there is no production deployment
+and the affected population is developer browsers. This is free today and will not be
+free later. Taking it now.
+
+**Consequence I am accepting, not hiding:** this changes auth configuration, so
+constitution item 18 moves the task from **sonnet to opus** tier. That is a real cost
+and it is the right trade against a fail-dangerous branch.
+
+[CP2]'s drift detector becomes unnecessary under this decision — with an app-owned key
+there is no derivation to detect drift in.
+
+**[F2] Third instance of the authority-promotion pattern, caught by a gate again.** The
+packet cited "constitution item 10" for the existing-tests non-negotiable; item 10 is
+the additive-migrations rule and the quoted text is at `constitution.md:11`. Worse, it
+implied George's ruling authorized **which tests change**. It does not — his ruling
+(`:767`) authorizes fixing the bleed properly and says nothing about test files. The
+authorization for rewriting those four tests is **mine**, under delegated authority,
+resting on the gate's measurement that exactly four fail and only because they read or
+write the old flat key. Attributing it to him would contaminate a citation that is
+otherwise genuinely his.
