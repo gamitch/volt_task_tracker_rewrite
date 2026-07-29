@@ -1,14 +1,19 @@
 # Worker Packet: T148 — light/dark/system theme control does nothing
 
-**Revision 3 (round 3).** Round 2's gate returned REVISE with two MAJORs. MAJOR-A
-(the localStorage seed's false "authorized by the human owner" claim) was the
-orchestrator's own relay error and is already corrected in Design section 2 above
-— it's now stated plainly as an auto-mode decision the human owner may strike,
-with the rest of the packet standing regardless. MAJOR-B (criterion 8's
-unobservable "fake refresh" proof) and eight fold-ins are addressed throughout
-this revision; see inline notes marked **(gate)**. Criterion 7 (the strongest
-criterion in the packet, per round 2) is unchanged again — its mechanism survived
-this round's rewrite unweakened.
+**Revision 4 (round 4, intended final).** Round 3's gate returned REVISE, but
+**criterion 8 is now settled and unchanged** — the gate built it exactly as
+round 3 specified and measured 1 call on mount, 2 after a successful `refresh()`,
+still 1 after a rejected one, confirmed discriminating in both directions
+(deleting the `refresh()` call drops it to 1; making `refresh()` fire
+unconditionally pushes the rejected case to 2) and confirmed the rejected case is
+non-vacuous (the click genuinely fires, the error genuinely renders). Do not
+touch it. One design decision needed a call rather than a transcription — Design
+section 2's logout/shared-browser case is now **disclosure-only**; the "clear it"
+option is dropped entirely, both because it would have required editing the
+Forbidden `guards.tsx` and because the in-scope alternative the gate tested
+(clearing whenever `user` is `null`) is actively destructive — see Design section
+2 for the full reasoning. Five further fold-ins throughout, all gate-measured; see
+inline notes marked **(gate)**.
 
 **User-reported:** "light mode/dark mode settings do not work, it all stays dark
 mode." (A second half of the same report — "there were additional themes in the
@@ -259,25 +264,34 @@ them to be discovered later (gate):**
 
 1. **`resolveThemeMode` resolves `null` while a real `localStorage` seed is
    present.** (E.g. the row went missing, or the stored value failed validation
-   server-side.) The natural implementation overwrites `mode` with `null`-coerced-
-   to-`'system'`, discarding a real last-known preference for no reason — prefer
-   keeping the existing seeded value when the network explicitly returns "nothing
-   useful" rather than blindly trusting `null` over a real prior read. State
-   whichever choice you make explicitly in your output doc; criterion 6 tests it.
+   server-side.) **Normative, not a choice: keep the existing seeded value.** Do
+   not overwrite `mode` with `null`-coerced-to-`'system'` — that discards a real
+   last-known preference for no reason. This matches the preference this section
+   already states elsewhere; it is not left to your judgment. Criterion 5 requires
+   a test for this case, not criterion 6.
 2. **`resolveThemeMode` rejects.** Nothing above says what happens on a rejected
    promise — "on every successful resolve" (write-through) implies there is an
    unsuccessful case too, and it needs a `.catch`/`try` so a network failure
    doesn't produce an unhandled promise rejection. Fail safe (keep whatever `mode`
    is currently showing — seeded or previously resolved — rather than crashing or
    silently reverting to `'system'`).
-3. **Logout, on a shared/kiosk browser.** The `localStorage` seed is not
-   user-scoped and is never cleared on `logout()`. If user A sets Dark and signs
-   out, user B's first paint on the same browser seeds from A's stored value until
-   B's own `theme_mode` resolves — a new wrong-theme flash for a case that has
-   none today (today everyone gets the same `'system'` default regardless of who
-   signed out last). Clear the stored value in `logout()`'s effect path, or accept
-   and disclose this as a known limitation in your output doc — pick one
-   explicitly; do not leave it silently unhandled.
+3. **Logout, on a shared/kiosk browser — disclose only, do not attempt to clear
+   (gate, corrected).** The `localStorage` seed is not user-scoped, so if user A
+   sets Dark and signs out, user B's first paint on the same browser may use A's
+   stored value for one frame until B's own `theme_mode` resolves. **Do not clear
+   the stored value in `logout()`'s effect path — that function lives in
+   `guards.tsx:311-321`, and `guards.tsx` is Forbidden for this task** (see
+   Forbidden Files below); reaching into it would repeat the exact mistake Design
+   section 4 already corrected once for `authHarness.tsx`. There is also no
+   in-scope alternative: clearing the seed unconditionally whenever `user` reads
+   `null` is not a safe substitute, since `user` is `null` during every normal
+   page load while the session is still resolving, not only after a real sign-out
+   — an unguarded clear there would wipe the seed on every boot (masked when the
+   profile fetch later succeeds and rewrites it, but permanent when
+   `resolveThemeMode` rejects, and permanent on any genuinely anonymous visit —
+   `/login`, a signed-out landing page — since nothing ever restores it). State
+   the shared-browser behaviour plainly in your output doc as a known, accepted
+   limitation. Do not build a fix for it.
 
 ### 3. Mount it in `App.tsx`, above `Theme`
 
@@ -287,8 +301,13 @@ them to be discovered later (gate):**
 `<AuthProvider>` (it needs `useAuth()`), wrapping `<Theme>` (so a small consumer can
 read `useThemeMode()` and pass it as `mode`). `Theme` cannot itself call the hook
 that provides its own `mode` prop — you need one small nested component (e.g. a
-`ThemedShell` that renders `<Theme mode={useThemeMode()}>{children}</Theme>`)
-between the two.
+`ThemedShell` that renders `<Theme mode={useThemeMode().mode}>{children}</Theme>`)
+between the two. **Note the `.mode` — corrected (gate).** `Theme.tsx:242-246`
+takes a scalar `ThemeMode`, but `useThemeMode()` must also expose `refresh`
+(the same shape `useActiveSeason()` uses, and criterion 8 depends on it), so
+the hook's return value is an object, not a bare `ThemeMode`. `<Theme
+mode={useThemeMode()}>` (no `.mode`) fails `tsc` immediately — a citation this
+packet asserts, not merely an example to adapt loosely.
 
 Resulting order: `BrowserRouter > AuthProvider > ThemeModeProvider > LayerProvider >
 ThemedShell(Theme) > AppShell > AppRoutes`. **Update `App.tsx`'s own top-of-file doc
@@ -446,13 +465,28 @@ lands, it does change how the app looks, immediately, in the same session.
    not work in this app. State this plainly in your output doc so a checker reads
    it as a known, accepted limitation rather than a missed case.
 
-   **Also cover the three unhandled-case decisions from Design section 2, each
-   with its own test:** a resolved `null` with a real `localStorage` seed present
-   keeps (or explicitly overwrites, per whichever you chose) the seeded value —
-   assert your chosen behavior explicitly; a rejected `resolveThemeMode` does not
-   throw an unhandled rejection and leaves `mode` at its last-good value; and
-   `logout()` either clears the stored value or your output doc explicitly
-   discloses that it doesn't, with the shared-browser consequence named.
+   **Also cover the two remaining unhandled-case decisions from Design section 2,
+   each with its own test — the third (logout) is disclosure-only, see Design
+   section 2's own text, nothing to test there:**
+   - A resolved `null` with a real `localStorage` seed present **keeps** the
+     seeded value — this is normative (Design section 2, case 1), not a choice;
+     assert it directly.
+   - **A rejected `resolveThemeMode` is not directly assertable by its resulting
+     `mode` value alone — name the actual mechanism (gate).** With the `.catch`
+     genuinely missing, `mode` may still read correctly in every individual test
+     (React doesn't crash on an unhandled rejection, it just leaks one), so
+     `expect(mode).toBe('dark')`-shaped assertions can pass green even when the
+     catch is absent — proving nothing about this specific case. The real,
+     observable failure surfaces at the **process level**: an uncaught rejection
+     makes `npx vitest run` report a nonzero error count (`"Errors 1 error"`) and
+     exit non-zero, even while every individual `expect` in the run stays green.
+     **The proof for this case is the full command's exit code and error count,
+     not a per-test assertion** — write the test that exercises a rejecting
+     `loadThemeMode`, then confirm via the actual `npx vitest run` output (not a
+     single test's pass/fail) that it reports 0 errors with your `.catch` in
+     place, and report what happens without it (a worker who only writes
+     `expect(mode).toBe(...)` here will believe they've proven something they
+     have not).
 6. **Split across two files by what each actually exercises (gate) — do not put
    every case in the provider test.**
    - `src/lib/supabase/auth.test.ts` (**add to Allowed Files** — additive only,
@@ -526,6 +560,11 @@ lands, it does change how the app looks, immediately, in the same session.
      itself; **do not edit `authHarness.tsx`**, only import `LoginAs` from it) so
      a real, resolved, authenticated `user` exists, **and** a scoped
      `<ThemeModeProvider loadThemeMode={injectedSpy}>` around `<SettingsPage>`.
+     **NIT:** `SeasonSettings.test.tsx:90` actually imports
+     `LoginAsDeferred as LoginAs`, not the plain `LoginAs` name — both are
+     byte-identical implementations (`authHarness.tsx:131` and `:142`), so either
+     import works here; don't stop if you see the aliased form instead of what
+     this packet names.
    - Assert the injected `loadThemeMode` spy was called **once** after the
      initial mount (the provider's own real fetch-on-mount effect).
    - Trigger a successful `onChangeTheme` (the existing injectable prop
@@ -548,9 +587,12 @@ lands, it does change how the app looks, immediately, in the same session.
     the human owner's decision, and that no such theme was added, discussed as
     feasible, or scoped.
 13. `npx tsc --noEmit`, `npx vite build`, `npm run format:check`, `npx eslint .` and
-    `npx vitest run` all clean. Baselines **on the tree after this packet's own
-    merge step** (not the pre-merge tree): **0 errors**, 63 test files,
-    **1476 tests**. Warnings: expect **355, not 354** — `useThemeMode` exports a
+    `npx vitest run` all clean. **Baselines corrected (gate) — measured at this
+    packet's own SHA: 64 test files, 1478 tests, 0 errors, 354 warnings.** The
+    branch merge step above is docs-only at the time of this measurement, so the
+    post-merge tree is identical — but confirm this yourself rather than skipping
+    the merge step or trusting that it stays true; other tasks may land before you
+    start. Warnings: expect **355, not 354** — `useThemeMode` exports a
     hook from the same file as the `ThemeModeProvider` component, reproducing
     `SeasonProvider.tsx:214`'s own `react-refresh/only-export-components` warning
     exactly (that file mixes a component and a hook export the same way). **This
