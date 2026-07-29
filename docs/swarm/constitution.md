@@ -242,3 +242,23 @@ After the third failure, the task must be escalated to boss-arbiter.
     passed with the feature entirely removed. This rule isolates the practice
     rather than restricting it.
 
+24. **Recording a task and merging it are one action, not two.** The ledger row
+    and the verification-log entry are updated **in the same commit that merges
+    the work**. A merge commit that lands source changes without also moving the
+    ledger row out of its pre-merge status is incomplete, and the orchestrator
+    should treat an unmerged-looking row on merged work as a bug in its own
+    process rather than as bookkeeping to catch up on later. Authorized by the
+    human owner 2026-07-29. Rationale, measured on the day it was written: ledger
+    rows for T142-T150 were backfilled at 11:39, accurately describing the state
+    at that moment. Five tasks then merged over the following ten hours and not
+    one row was updated, so the ledger still read "packet gated" and "filed" for
+    work that was live on the branch — the exact document the human owner would
+    read to decide whether to merge. The verification log was worse: its last
+    entry predated the entire wave, and **a gate had explicitly flagged the gap**
+    ("no verification-log entry despite being merged; Definition of Done items
+    3-4 are unsatisfied"), which was acknowledged and not acted on. **This is item
+    20's failure shape turned on the process itself** — a record written once,
+    never triaged, silently drifting from reality. Splitting merge from record
+    means the second step is always optional under time pressure, and it is
+    always the one dropped. Joining them removes the choice.
+
