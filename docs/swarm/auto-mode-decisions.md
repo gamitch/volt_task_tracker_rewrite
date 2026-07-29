@@ -58,3 +58,47 @@ T146 has no reason to exist and I will close it rather than invent a purpose for
 it.** That would also mean T143's checker reported something it had not verified,
 which would change how much weight I give its other findings — including the
 prototype-key MINOR already merged.
+
+### 2026-07-29 — T147, a user-reported bug: fixture teams reaching real users
+
+George reported from manual testing that creating a new outreach shows the wrong
+teams in the dropdown. Investigated and confirmed: `OutreachEventDialog`'s `teams`
+prop is optional with a hardcoded `DEFAULT_TEAMS` fixture default
+(`OutreachEventDialog.tsx:610-613`, `:964`, `:981`), and **neither call site passes
+it**, so every real user sees `Ravens`/`Titans`.
+
+**This is the most interesting failure in the session, because nothing went wrong.**
+Both omissions are deliberate and documented — `OutreachList.tsx:3153-3160` and
+`OutreachDetail.tsx:1420-1430` each record `teams` as intentionally not overridden
+because it sat outside that task's Allowed Files. T101 and T121 both respected scope
+correctly. The defect is purely that **no follow-up task was ever logged**, so a
+scoping decision aged into a shipped bug that only manual testing caught.
+
+**Decisions taken (auto mode):**
+
+1. **Filed as T147 and packeted immediately** rather than queued behind T142/T146. A
+   user-visible defect in a create flow outranks layout work and a test-coverage
+   task.
+2. **Scoped to include making `teams` required and deleting `DEFAULT_TEAMS`**, not
+   just passing the prop at two sites. An optional prop with a plausible-looking
+   fixture default is the mechanism that caused this; fixing only the instance leaves
+   it armed for the next call site. Two call sites makes it cheap now. Same reasoning
+   T143 used for `TeamOption.color`. **REVIEW** — this widens a bug fix into a small
+   API change, which is exactly the kind of scope growth my own rule 5 warns about. I
+   judged it in-bounds because the optional default *is* the bug, not an adjacent
+   concern. George may disagree.
+3. **Left `DEFAULT_STUDENTS` alone.** Same file, same smell, but T121 already wired
+   the real roster into `students`, so it is a live default rather than a latent bug.
+   Out of scope.
+4. **Forbade `CoachHome.tsx` in T147's packet** because T142 is running against it.
+
+**REVIEW — the process gap, which matters more than this bug.** Two workers each
+correctly declined to fix something outside scope, and both said so in a comment
+rather than in the ledger. Comments do not get triaged. If scope deferrals had been
+required to produce a logged task, this would have been caught months earlier and by
+a checker rather than by George. I am not changing the constitution unsupervised, but
+I think it wants a rule: **a worker that deliberately leaves a known defect in place
+must emit a follow-up task, not just a comment.** Flagging for George's decision.
+
+Also worth noting: the grep that found this bug would have found it at any point
+since T101. Nobody looked, because nothing was failing.
