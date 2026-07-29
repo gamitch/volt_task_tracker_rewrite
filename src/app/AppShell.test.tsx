@@ -42,7 +42,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthUser } from './guards';
 import { LoginAs } from '../test-utils/authHarness';
 import { routePaths } from './router';
-import { AppShell } from './AppShell';
+import { AppShell, type AppShellProps } from './AppShell';
+import type { SeasonRow } from '../lib/supabase/types';
+import type { KpiStripData } from '../lib/supabase/loaders/kpi';
 
 let container: HTMLDivElement;
 let root: Root;
@@ -73,17 +75,66 @@ const COACH_USER: AuthUser = { id: 'user-coach', email: 'coach@example.com', rol
 
 const PAGE_MARKER_TEXT = 'T123 AppShell test page marker';
 
-function renderAt(path: string, user: AuthUser | null): void {
+/**
+ * T140: fixtures for the new pass-through-props tests below. Distinctive
+ * values (not present anywhere else in this file's fixtures, and never
+ * produced by the real default loaders in this unconfigured jsdom test
+ * environment -- module doc above) so an assertion on them is proof the
+ * INJECTED loader is what rendered, not merely that something rendered.
+ * Mirrors `KpiStrip.test.tsx`'s own `FIXTURE_SEASON`/`FIXTURE_KPI_DATA`
+ * shape (reusing the mounting pattern that file establishes at `:91-105`,
+ * not its assertions -- see the new tests below for why).
+ */
+const T140_FIXTURE_SEASON: SeasonRow = {
+  id: 'season-t140-fixture',
+  name: 'T140 Fixture Season',
+  startsOn: '2026-01-01',
+  endsOn: '2026-12-31',
+  defaultGoalHours: 100,
+  isActive: true,
+  createdAt: '2026-01-01T00:00:00.000Z',
+};
+
+const T140_FIXTURE_KPI_DATA: KpiStripData = {
+  seasonId: 'season-t140-fixture',
+  totalHours: 42.5,
+  meetingHours: 10,
+  outreachHours: 12.5,
+  competitionHours: 20,
+  eventsLoggedCount: 7,
+  mostRecentEventTitle: 'T140 Fixture Regatta',
+  mostRecentEventDate: '2026-07-18',
+  activeStudentsCount: 9,
+  goalTargetHours: 400,
+  goalPct: 11,
+  teamBreakdown: [],
+};
+
+/**
+ * T140: `appShellProps` is an added optional third parameter (default `{}`,
+ * a safe no-op) so the pass-through-props tests below can reach the new
+ * `seasonProviderProps`/`kpiStripProps` seams through this one shared
+ * harness without touching any pre-existing `it(` body -- every pre-T140
+ * call site below still calls `renderAt(path, user)` with exactly two
+ * arguments, so `appShellProps` is `{}` there and
+ * `<AppShell {...appShellProps}>` renders identically to the old literal
+ * `<AppShell>`.
+ */
+function renderAt(
+  path: string,
+  user: AuthUser | null,
+  appShellProps: Omit<AppShellProps, 'children'> = {},
+): void {
   const page = <div data-testid="page-marker">{PAGE_MARKER_TEXT}</div>;
   act(() => {
     root.render(
       <MemoryRouter initialEntries={[path]}>
         <AuthProvider>
           {user === null ? (
-            <AppShell>{page}</AppShell>
+            <AppShell {...appShellProps}>{page}</AppShell>
           ) : (
             <LoginAs user={user}>
-              <AppShell>{page}</AppShell>
+              <AppShell {...appShellProps}>{page}</AppShell>
             </LoginAs>
           )}
         </AuthProvider>
@@ -222,6 +273,68 @@ describe('<AppShell /> (T006 chrome wrapper; T123 KpiStrip mount point)', () => 
       renderAt('/KIOSK/session-abc-123', COACH_USER);
       await flushMicrotasks();
       expect(container.querySelector('[role="main"]')).toBeNull();
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // T140: `seasonProviderProps`/`kpiStripProps` pass-through seams.
+  // -------------------------------------------------------------------
+  describe('T140 pass-through props (seasonProviderProps / kpiStripProps)', () => {
+    it('seasonProviderProps.loadActiveSeason reaches SeasonProvider on its own -- the "none" banner (which the real default loader, an error, never produces) proves the injected loader is what ran', async () => {
+      renderAt(routePaths.dashboard, COACH_USER, {
+        seasonProviderProps: { loadActiveSeason: async () => null },
+      });
+      await flushMicrotasks();
+      const main = container.querySelector('[role="main"]');
+      expect(main).not.toBeNull();
+      // The real default loader in this unconfigured jsdom environment always
+      // rejects (module doc above) -- it can never itself produce the "none"
+      // banner. Only the injected loader resolving `null` can.
+      expect(main?.textContent).toContain('No active season yet');
+      expect(main?.textContent).not.toContain("Couldn't load the active season");
+    });
+
+    it('kpiStripProps.loadKpiStripData reaches KpiStrip -- requires ALSO injecting a seasonProviderProps.loadActiveSeason that resolves a fixture season, since KpiStripContent (which actually receives loadKpiStripData) only mounts once activeSeason.status === "ready" (KpiStrip.tsx case \'ready\':), and the real default loadActiveSeason always rejects in this jsdom environment', async () => {
+      renderAt(routePaths.dashboard, COACH_USER, {
+        seasonProviderProps: { loadActiveSeason: async () => T140_FIXTURE_SEASON },
+        kpiStripProps: { loadKpiStripData: async () => T140_FIXTURE_KPI_DATA },
+      });
+      await flushMicrotasks();
+      const main = container.querySelector('[role="main"]');
+      expect(main).not.toBeNull();
+      // Distinctive fixture value -- only the injected loader could have
+      // produced it (not the real default, which always rejects here; not
+      // any other fixture in this file or in KpiStrip.test.tsx).
+      expect(main?.textContent).toContain('T140 Fixture Regatta');
+      expect(main?.textContent).not.toContain("Couldn't load the active season");
+      expect(main?.textContent).not.toContain('No active season yet');
+    });
+
+    it('the chromeless branch stays unwrapped even when both pass-through props are supplied -- no SeasonProvider is mounted there, so the injected fixtures never render', () => {
+      renderAt(routePaths.login, null, {
+        seasonProviderProps: { loadActiveSeason: async () => T140_FIXTURE_SEASON },
+        kpiStripProps: { loadKpiStripData: async () => T140_FIXTURE_KPI_DATA },
+      });
+      // Same assertions as the pre-existing (unmodified) chromeless test
+      // above, plus proof the new props don't leak through: if
+      // SeasonProvider were mounted here, `useActiveSeason()` would start
+      // resolving -- but there is no `[role="main"]` region at all (still a
+      // bare `<>{children}</>`), and neither fixture's content appears.
+      expect(container.textContent).toContain(PAGE_MARKER_TEXT);
+      expect(container.querySelector('[role="main"]')).toBeNull();
+      expect(container.textContent).not.toContain('VOLT');
+      expect(container.textContent).not.toContain('T140 Fixture Regatta');
+      expect(container.textContent).not.toContain('No active season yet');
+    });
+
+    it("<AppShell>{children}</AppShell> with no other props (App.tsx's own call shape) still renders the real default loaders -- the pre-existing season-level error banner, not any fixture content", async () => {
+      renderAt(routePaths.dashboard, COACH_USER);
+      await flushMicrotasks();
+      const main = container.querySelector('[role="main"]');
+      expect(main).not.toBeNull();
+      expect(main?.textContent).toContain("Couldn't load the active season");
+      expect(main?.textContent).not.toContain('T140 Fixture Regatta');
+      expect(main?.textContent).not.toContain('No active season yet');
     });
   });
 });
