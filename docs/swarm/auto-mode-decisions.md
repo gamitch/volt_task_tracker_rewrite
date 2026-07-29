@@ -752,3 +752,55 @@ item 24 is a merge blocked or delayed because the ledger prose is not written ye
 tempting a thin row just to satisfy the rule. If rows start getting shorter and less
 useful, that is the signal — and the fix is a minimum content bar (merge SHA, checker
 verdict, what the orchestrator verified independently), not repeal.
+
+## 2026-07-30 — George's rulings on the three items that were waiting for him
+
+Authoritative. Recorded before any agent was told, per the fix from yesterday's
+false-attribution incidents.
+
+1. **T153 — keep the `localStorage` theme seed.** Ratified. It stays as shipped in
+   T148. The REVIEW item is closed; the seed is no longer "awaiting owner ruling".
+2. **The `CoachHome.test.tsx:1194-1196` test amendment — ratified.** He has approved the
+   change from a `textContent` match to `container.querySelector('button[aria-pressed]')`,
+   which I had authorized under delegated authority. It is now his approval, not mine,
+   and satisfies constitution item 10 directly rather than by delegation.
+3. **T154 — do not accept the shared-browser bleed. Fix it properly.** He asked what the
+   correct user-centric method is, and on being given it, authorized packeting it.
+
+### The T154 design he approved, and why it is right rather than merely better
+
+The defect was never "we remember the theme". It is that the memory was filed under
+**this browser** when it should be filed under **this person on this browser**. Bob
+should not inherit Alice's theme for the same reason he should not inherit her inbox.
+
+And critically, the fix is *not* to destroy Alice's preference when she signs out —
+which is what clearing on logout does, and why every version of that idea failed. It is
+to key the seed by user id so Bob's lookup simply finds nothing and falls through to his
+OS, while Alice's survives for her next sign-in, which is what she would expect.
+
+**Mechanism, verified against installed source before proposing it** (not asserted, and
+still to be re-derived by the foreman):
+
+- `supabase-js` derives its own storage key as
+  `` `sb-${baseUrl.hostname.split(".")[0]}-auth-token` `` — `dist/index.mjs:680`.
+  Derivable from `VITE_SUPABASE_URL`, which `client.ts`'s `readEnv()` already reads.
+- `persistSession` defaults to `true` (`auth-js` `DEFAULT_AUTH_OPTIONS`).
+- The persisted blob contains the session including `user` (`_saveSession`,
+  `GoTrueClient.js:4278+`), so `user.id` is readable **synchronously**, before any
+  network call — which is the whole requirement, since the seed exists to beat two
+  round trips.
+- **To verify, not assume:** `_saveSession` writes the user to `storageKey + '-user'`
+  *only when a separate `userStorage` is configured*. This app configures none, so the
+  user should be in the main blob — the foreman must confirm which key actually holds it
+  rather than trusting either branch.
+
+**Failure mode, and why it is acceptable:** if Supabase ever changes that key format,
+the lookup finds nothing → no uid → no seed → the app falls back to today's
+single-flash behaviour. **Fail-safe, not fail-dangerous.** The worst case is the bug
+George originally reported, never a wrong theme and never a leak.
+
+**Why do this for something as trivial as a colour scheme.** "Cache it per browser
+without scoping to the user" is precisely the shape that causes real leaks later, when
+someone caches a roster, a student name, or an attendance count the same way. Getting
+the pattern right while the stakes are a theme is cheap; getting it wrong teaches the
+codebase a habit that will eventually be expensive.
