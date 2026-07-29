@@ -1,11 +1,14 @@
 # Worker Packet: T148 — light/dark/system theme control does nothing
 
-**Revision 2.** The premise gate returned REVISE (3 MAJORs, 6 MINORs, 1 NIT). It
-confirmed the root-cause analysis below against installed source at every step, and
-independently ran the mutation on criterion 6 itself (removed the `mode` prop,
-confirmed the dark/light cases both fail) — **criterion 6 is unchanged from
-revision 1.** Everything else in this revision addresses a specific finding; see
-inline notes marked **(gate)**.
+**Revision 3 (round 3).** Round 2's gate returned REVISE with two MAJORs. MAJOR-A
+(the localStorage seed's false "authorized by the human owner" claim) was the
+orchestrator's own relay error and is already corrected in Design section 2 above
+— it's now stated plainly as an auto-mode decision the human owner may strike,
+with the rest of the packet standing regardless. MAJOR-B (criterion 8's
+unobservable "fake refresh" proof) and eight fold-ins are addressed throughout
+this revision; see inline notes marked **(gate)**. Criterion 7 (the strongest
+criterion in the packet, per round 2) is unchanged again — its mechanism survived
+this round's rewrite unweakened.
 
 **User-reported:** "light mode/dark mode settings do not work, it all stays dark
 mode." (A second half of the same report — "there were additional themes in the
@@ -240,6 +243,41 @@ Rest of the shape, unchanged from revision 1:
   until a `user` exists.
 - `useThemeMode()` throws if called outside the provider, matching `useAuth()`/
   `useActiveSeason()`'s own posture.
+- **Keep the storage helpers module-private (not exported) — this is load-bearing
+  for criterion 13's warning count, not a style preference (gate).** `guards.tsx`'s
+  own analogues (`setIntendedUrl`/`getIntendedUrl`/`clearIntendedUrl`,
+  `:351-374`) ARE exported, because other modules call them directly. Nothing
+  outside `ThemeModeProvider.tsx` needs to call your read/write helpers — the
+  provider is the only consumer. If you export them anyway (e.g. by copying
+  `guards.tsx`'s shape too literally), each becomes a second export alongside the
+  component in the same file, and `react-refresh/only-export-components` fires
+  once per additional non-component export — two more warnings, landing on 357
+  instead of criterion 13's stated 355. Module-private avoids this outright.
+
+**Three cases the design above leaves unhandled — specify all three, do not leave
+them to be discovered later (gate):**
+
+1. **`resolveThemeMode` resolves `null` while a real `localStorage` seed is
+   present.** (E.g. the row went missing, or the stored value failed validation
+   server-side.) The natural implementation overwrites `mode` with `null`-coerced-
+   to-`'system'`, discarding a real last-known preference for no reason — prefer
+   keeping the existing seeded value when the network explicitly returns "nothing
+   useful" rather than blindly trusting `null` over a real prior read. State
+   whichever choice you make explicitly in your output doc; criterion 6 tests it.
+2. **`resolveThemeMode` rejects.** Nothing above says what happens on a rejected
+   promise — "on every successful resolve" (write-through) implies there is an
+   unsuccessful case too, and it needs a `.catch`/`try` so a network failure
+   doesn't produce an unhandled promise rejection. Fail safe (keep whatever `mode`
+   is currently showing — seeded or previously resolved — rather than crashing or
+   silently reverting to `'system'`).
+3. **Logout, on a shared/kiosk browser.** The `localStorage` seed is not
+   user-scoped and is never cleared on `logout()`. If user A sets Dark and signs
+   out, user B's first paint on the same browser seeds from A's stored value until
+   B's own `theme_mode` resolves — a new wrong-theme flash for a case that has
+   none today (today everyone gets the same `'system'` default regardless of who
+   signed out last). Clear the stored value in `logout()`'s effect path, or accept
+   and disclose this as a known limitation in your output doc — pick one
+   explicitly; do not leave it silently unhandled.
 
 ### 3. Mount it in `App.tsx`, above `Theme`
 
@@ -258,11 +296,16 @@ comment (`:1-16`) to describe the new order** — every other provider addition 
 this codebase has kept that comment truthful; do not leave it describing the old
 four-provider chain.
 
-**`App.tsx` has been a Forbidden File in prior packets (e.g. T142) — that was
-scope discipline for tasks that didn't need it, not a standing prohibition.** This
-task deliberately opens it, because DES-06 cannot be satisfied without touching the
-one file that mounts `Theme`. Do not read the file's history of being off-limits
-as a reason to hesitate here.
+**`App.tsx` has been a Forbidden File in prior packets — that was scope discipline
+for tasks that didn't need it, not a standing prohibition.** (**Corrected witness,
+gate:** an earlier revision cited T142 for this; T142's own Forbidden Files list
+does not mention `App.tsx` at all — verify that yourself before repeating it. The
+real witness is `SettingsPage.tsx:57`, which names it directly: "doing so would
+require editing `App.tsx` (this task's own Forbidden Files, confirmed
+read-only)" — that's T105, the task that built the Appearance control itself.) This
+task deliberately opens `App.tsx`, because DES-06 cannot be satisfied without
+touching the one file that mounts `Theme`. Do not read the file's history of being
+off-limits elsewhere as a reason to hesitate here.
 
 ### 4. Testability — MAJOR: use `vi.mock`, not a new `App` auth seam (gate)
 
@@ -282,15 +325,23 @@ outside Allowed Files, or stall.
 partial-mock convention (`vi.mock(path, async (importOriginal) => ({ ...actual,
 someExport: vi.fn() }))`, paired with `vi.mocked(...)`) already established
 elsewhere in this codebase for other modules — **correction to an earlier claim**:
-this convention is real and repo-wide (e.g. `RosterShell.test.tsx:105` mocks
-`../../lib/supabase/loaders/invites`; `OutreachDetail.test.tsx:100` mocks
-`../../lib/supabase/loaders/attendance`; `ReportsShell.test.tsx:109` mocks
-`../../lib/supabase/loaders/reports`; `StudentsTab.test.tsx:74` and
-`InviteParentDialog.test.tsx:63` both mock `../../lib/supabase` for
-`invokeEdgeFunction`) — but **none of these five mock `lib/supabase/auth`
-specifically**; verify this yourself before citing it further. Applying the same,
-already-proven convention to `../lib/supabase/auth` for `App.test.tsx` is the
-first instance of it for that module, not a sixth repeat of an existing one.
+this convention is real and repo-wide, but only **four** of the five sites
+originally cited actually support the `importOriginal`-partial-mock claim —
+verify each yourself before repeating any of them: `RosterShell.test.tsx:105`
+mocks `../../lib/supabase/loaders/invites` via `importOriginal`;
+`OutreachDetail.test.tsx:100` mocks `../../lib/supabase/loaders/attendance` via
+`importOriginal`; `StudentsTab.test.tsx:74` and `InviteParentDialog.test.tsx:63`
+both mock `../../lib/supabase` for `invokeEdgeFunction` via `importOriginal`.
+**`ReportsShell.test.tsx:109` is different** — it's a full synthetic factory
+mock with no `importOriginal` call at all (`vi.mock('../../lib/supabase/loaders/reports',
+() => ({ loadParticipationData: vi.fn(), ... }))`), so it supports "vi.mock is a
+real repo-wide convention" but not the specific partial-mock-via-importOriginal
+shape the other four demonstrate. **None of these five mock `lib/supabase/auth`
+specifically.** Applying the proven convention to `./lib/supabase/auth` (relative
+from `src/App.test.tsx`, which sits beside `App.tsx` in `src/` — **not**
+`../lib/supabase/auth`, which is one level too many and fails module resolution
+at collection) for `App.test.tsx` is the first instance of it for that module, not
+a sixth repeat of an existing one.
 
 Mock `getInitialSession`/`subscribeToAuthStateChange`/`resolveRole` (and, since
 `resolveThemeMode` lives in the same file, it can be mocked the same way when a
@@ -335,23 +386,27 @@ must keep passing unmodified) both behave identically to today.
 
 `SettingsPage.tsx`'s `persistTheme` (`:903-912`) currently only handles the failure
 path (`.catch`). Add a success path that calls the new provider's `refresh()`, the
-same way `SeasonSettings.tsx:727-728` already calls `useActiveSeason().refresh()`
-after its own successful mutation (module doc #9 there, `:285`). `SettingsPage`
-renders inside `App`'s normal (non-chromeless) tree, so `useThemeMode()` is reachable
-there. Both the initial change (`handleThemeChange`) and the Retry button
-(`:1119-1123`, calls `persistTheme` again) go through this one function, so wiring
-`refresh()` there covers both.
+same way `SeasonSettings.tsx`'s own `refreshActiveSeason()` call (`:867`) already
+calls `useActiveSeason().refresh()` after its own successful mutation (module doc
+#9 there, `:285`). `SettingsPage` renders inside `App`'s normal (non-chromeless)
+tree, so `useThemeMode()` is reachable there. Both the initial change
+(`handleThemeChange`) and the Retry button (`:1119-1123`, calls `persistTheme`
+again) go through this one function, so wiring `refresh()` there covers both.
 
-**MINOR — this breaks `SettingsPage.test.tsx` at scale, expect it (gate).**
-`SettingsPage.tsx` will call `useThemeMode()`, which throws outside a
-`ThemeModeProvider`. `SettingsPage.test.tsx` has **45 tests**, and effectively all
-of them render through one of two sites that do not currently wrap in any such
-provider: the shared `renderSettingsPage` helper (`:165-173`) and one standalone
-inline render inside an `AuthObserver` test (`:485-495`). Wrap both in
-`<ThemeModeProvider>` (nested inside the `<AuthProvider>` already there at both
-sites). **Expect all 45 tests to go red until you do this** — it is not a sign the
-design is wrong, it is the direct, predictable consequence of adding a
-provider-scoped hook call to a page that dozens of tests already render.
+**Not all of `SettingsPage.test.tsx` renders — verify the real number, don't
+assume 45 (gate).** `SettingsPage.tsx` will call `useThemeMode()`, which throws
+outside a `ThemeModeProvider`. The file has 45 `it(` blocks total, but a
+substantial minority are pure unit tests of exported helper functions
+(formatters, validators, etc.) that never render `<SettingsPage>` at all and are
+unaffected either way — measure the real count yourself rather than trusting
+either this packet's or an earlier revision's figure. What IS true: effectively
+every test that **does** render goes through one of two sites that do not
+currently wrap in any such provider — the shared `renderSettingsPage` helper
+(`:165-173`) and one standalone inline render inside an `AuthObserver` test
+(`:485-495`). Wrap both in `<ThemeModeProvider>` (nested inside the
+`<AuthProvider>` already there at both sites), and confirm the full 45-test suite
+is green afterward — the non-rendering tests were never going to fail, but the
+suite-wide count is still the right thing to report.
 
 **Remove the now-false disclaimer at `SettingsPage.tsx:1137-1139`** ("This saves
 your choice. It doesn't change how the app looks right now.") — once this task
@@ -384,16 +439,44 @@ lands, it does change how the app looks, immediately, in the same session.
    `localStorage` now reflects it. **Asserting only the final, settled state does
    not satisfy this criterion** — the whole point is proving the seeded value
    renders before the network call finishes, so the assertion must happen before
-   that call is allowed to finish.
-6. Regression test (new `ThemeModeProvider.test.tsx`, standalone — mirror
-   `SeasonProvider.test.tsx`'s harness shape, not a full `<App/>` render): for an
-   authenticated user with `theme_mode` stored as each of `'light'`/`'dark'`/
-   `'system'`/an invalid free-text value/no matching row, the exposed `mode`
-   resolves correctly in every case once the network value lands (the last two
-   both resolve to `'system'` absent a usable `localStorage` seed).
-7. Regression test (new `App.test.tsx`, using `vi.mock('../lib/supabase/auth', ...)`
-   for a fake authenticated session and `themeModeProviderProps` injection for a
-   controlled theme value): for an injected `loadThemeMode` returning `'dark'`,
+   that call is allowed to finish. **A first-ever visit (no `localStorage` entry
+   yet) still flashes** — this is the honestly-disclosed residual, not a defect:
+   there is nothing to seed from on that visit, and the `index.html`-script
+   approach that would avoid it is the one "Negative knowledge" above proves does
+   not work in this app. State this plainly in your output doc so a checker reads
+   it as a known, accepted limitation rather than a missed case.
+
+   **Also cover the three unhandled-case decisions from Design section 2, each
+   with its own test:** a resolved `null` with a real `localStorage` seed present
+   keeps (or explicitly overwrites, per whichever you chose) the seeded value —
+   assert your chosen behavior explicitly; a rejected `resolveThemeMode` does not
+   throw an unhandled rejection and leaves `mode` at its last-good value; and
+   `logout()` either clears the stored value or your output doc explicitly
+   discloses that it doesn't, with the shared-browser consequence named.
+6. **Split across two files by what each actually exercises (gate) — do not put
+   every case in the provider test.**
+   - `src/lib/supabase/auth.test.ts` (**add to Allowed Files** — additive only,
+     new `describe` block, do not touch existing tests in this file):
+     `resolveThemeMode`'s own cases — a present valid `theme_mode`, an invalid
+     free-text value, and no matching row — using the exact same
+     `buildFakeProfilesClient` helper this file already has at `:209-219` for
+     `resolveRole`'s own tests (same `.select().eq().maybeSingle()` chain
+     shape; do not rebuild a second fake client). This is a plain unit test of a
+     query function, not a component test — it belongs where `resolveRole`'s own
+     equivalent cases already live, not duplicated into the provider test.
+   - `ThemeModeProvider.test.tsx` (new, standalone — mirror
+     `SeasonProvider.test.tsx`'s harness shape, not a full `<App/>` render): for
+     an authenticated user, with an injected `loadThemeMode` resolving each of
+     `'light'`/`'dark'`/`'system'`, the exposed `mode` resolves correctly once the
+     network value lands. **Clear `localStorage` between cases yourself, inline in
+     this test file** — `src/test-setup.ts` clears nothing globally and is not in
+     this packet's Allowed Files, so a prior case's write-through will otherwise
+     leak into the next one and produce a flaky or silently-wrong pass.
+7. Regression test (new `App.test.tsx`, using `vi.mock('./lib/supabase/auth', ...)`
+   — mind the path depth, `App.test.tsx` sits beside `App.tsx` in `src/`, so it's
+   one level, not two — for a fake authenticated session and
+   `themeModeProviderProps` injection for a controlled theme value): for an
+   injected `loadThemeMode` returning `'dark'`,
    `document.documentElement.getAttribute('data-theme')` is `'dark'`; returning
    `'light'` → `'light'`; returning `'system'` → the attribute is **absent**
    (matches `Theme`'s own documented behavior, not an arbitrary choice — cite
@@ -417,12 +500,44 @@ lands, it does change how the app looks, immediately, in the same session.
    stays absent regardless of the injected value); restored, both pass. Reproduce
    that same proof yourself and report it.
 8. `SettingsPage.tsx`'s `persistTheme` calls the new provider's `refresh()` on a
-   successful `onChangeTheme`, not just on failure. Prove it: a test asserting a
-   fake `refresh` (or equivalent observable) fires after a successful theme change
-   but not after a rejected one. **Expect this to require wrapping
-   `SettingsPage.test.tsx`'s two render sites (`:165-173`, `:485-495`) in
-   `<ThemeModeProvider>` — see "Live update" above; do this before concluding
-   something else is wrong when the existing 45 tests go red.**
+   successful `onChangeTheme`, not just on failure.
+
+   **This cannot be proved the way earlier revisions described, and the gate
+   measured it directly.** "A fake `refresh` fires" is unobservable as stated:
+   `refresh` lives inside `ThemeModeProvider`'s own internal context, the context
+   value is not exported, and criterion 4 deliberately pins the only injectable
+   surface to `loadThemeMode` — there is no seam to inject a spy `refresh` into.
+   Wrapping `SettingsPage.test.tsx`'s two render sites in a **bare**
+   `<ThemeModeProvider>` (no `themeModeProviderProps`) is also not enough on its
+   own: the real, unmocked `<AuthProvider>` in those tests is unconfigured, `user`
+   stays `null`, and the provider correctly skips the fetch — a `loadThemeMode`
+   spy there is called zero times on mount and zero times after `refresh()`,
+   proving nothing.
+
+   **Use the template this codebase already has for exactly this shape**, from
+   the same task that established the `refresh()` pattern in the first place:
+   `SeasonSettings.test.tsx:620-660` (T091, checker-verified, green today) counts
+   an **injected loader's own call count** — 1 call on mount, 2 after a
+   successful mutation calls `refresh()`, still 1 after a rejected one — rather
+   than trying to spy on `refresh` itself. Reproduce that shape here:
+   - Render `SettingsPage` wrapped in **`LoginAs`** (`src/test-utils/authHarness.tsx`
+     — importing it is expected and is the repo-wide convention for this exact
+     need, used by 17 other test files including `SeasonSettings.test.tsx`
+     itself; **do not edit `authHarness.tsx`**, only import `LoginAs` from it) so
+     a real, resolved, authenticated `user` exists, **and** a scoped
+     `<ThemeModeProvider loadThemeMode={injectedSpy}>` around `<SettingsPage>`.
+   - Assert the injected `loadThemeMode` spy was called **once** after the
+     initial mount (the provider's own real fetch-on-mount effect).
+   - Trigger a successful `onChangeTheme` (the existing injectable prop
+     `SettingsPage` already accepts) and assert the spy is now called **twice** —
+     the second call is `refresh()` actually firing, the same proof
+     `SeasonSettings.test.tsx:639` uses for its own analogous case.
+   - Separately, trigger a **rejected** `onChangeTheme` and assert the spy stays
+     at **one** call — `refresh()` must not fire on failure, mirroring
+     `SeasonSettings.test.tsx:642-660`'s own negative case exactly.
+
+   This is criterion 8's actual "equivalent observable" — not a fake `refresh`
+   function, a real call-count assertion on the one seam that already exists.
 9. `SettingsPage.tsx:1137-1139`'s stale disclaimer copy is removed.
 10. No token, palette, or contrast change anywhere in `src/theme/**` — this task is
     wiring only. Confirm `theme.css`/`volt.ts` are byte-unchanged.
@@ -438,10 +553,15 @@ lands, it does change how the app looks, immediately, in the same session.
     **1476 tests**. Warnings: expect **355, not 354** — `useThemeMode` exports a
     hook from the same file as the `ThemeModeProvider` component, reproducing
     `SeasonProvider.tsx:214`'s own `react-refresh/only-export-components` warning
-    exactly (that file mixes a component and a hook export the same way). This is
-    an expected, accounted-for warning, not a regression to chase down. You are
-    adding two new test files (`ThemeModeProvider.test.tsx`, `App.test.tsx`) —
-    report the new file/test counts and explain the delta.
+    exactly (that file mixes a component and a hook export the same way). **This
+    figure assumes the storage helpers stay module-private per Design section 2
+    — if you export them, expect 357, not 355** (two more
+    `react-refresh/only-export-components` hits, one per additional non-component
+    export from that file); keeping them private is the correct choice and avoids
+    the discrepancy outright, not something to chase as a phantom regression
+    either way. You are adding two new test files (`ThemeModeProvider.test.tsx`,
+    `App.test.tsx`) and one new `describe` block in an existing file
+    (`auth.test.ts`) — report the new file/test counts and explain the delta.
 
 ## Allowed Files
 
@@ -450,6 +570,9 @@ lands, it does change how the app looks, immediately, in the same session.
 - `src/app/ThemeModeProvider.tsx` (create)
 - `src/app/ThemeModeProvider.test.tsx` (create)
 - `src/lib/supabase/auth.ts` (additive only — see criterion 1)
+- `src/lib/supabase/auth.test.ts` (additive only — one new `describe` block for
+  `resolveThemeMode`, per criterion 6; every existing test in this file
+  byte-unchanged)
 - `src/pages/settings/SettingsPage.tsx`
 - `src/pages/settings/SettingsPage.test.tsx`
 - `docs/swarm/active/T148-worker-output.md` (create)
@@ -462,9 +585,16 @@ lands, it does change how the app looks, immediately, in the same session.
 - `.claude/**`
 - `src/app/guards.tsx` — this task does not touch auth/session/role logic; if you
   find yourself needing to, stop and report rather than widening scope here
-- `src/test-utils/authHarness.tsx` — read as precedent only; do not export
-  `buildFakeAuthModule` from it or otherwise edit it. Use `vi.mock` per Design
-  section 4 instead.
+- `src/test-utils/authHarness.tsx` — **do not edit this file or export anything
+  new from it.** This is not a prohibition on using it: **importing `LoginAs`
+  from it is expected** and is the repo-wide convention (17 other test files
+  already do, including `SeasonSettings.test.tsx`, criterion 8's own template) —
+  use it exactly as those files do, just don't modify the file itself. `App.tsx`
+  auth-faking still goes through `vi.mock` per Design section 4, since `LoginAs`
+  cannot reach `App`'s own internal `<AuthProvider>` (that reasoning is unchanged
+  — the two mechanisms solve two different problems: `vi.mock` for `App.test.tsx`
+  because `App` hardcodes its provider; `LoginAs` for `SettingsPage.test.tsx`
+  because that page is rendered directly, not through `App`).
 - `src/app/SeasonProvider.tsx`, `src/app/AppShell.tsx` — read as precedent only, do
   not edit
 - `src/theme/**` (`volt.ts`, `theme.css`) — no token/contrast work in this task
@@ -500,13 +630,17 @@ Create `docs/swarm/active/T148-worker-output.md` covering: the exact
 `ThemeModeProvider`/`resolveThemeMode` shapes you built and why (especially if you
 deviated from the suggested signatures in Design sections 1/2); confirmation
 `guards.tsx`, `authHarness.tsx`, and `src/theme/**` are byte-unchanged; the
-localStorage seed-before-network-resolves proof for criterion 5; the
-discrimination proof for criterion 7; the live-update proof for criterion 8,
-including how many `SettingsPage.test.tsx` tests failed before you wrapped the two
-render sites and that all 45 pass afterward; confirmation the stale disclaimer
-copy is gone; the tiering judgment call (agree or disagree, and why); explicit
-restatement that "additional themes" was not resolved, discussed as feasible, or
-scoped; full command output; and anything you could not verify, stated plainly as
-unverified.
+localStorage seed-before-network-resolves proof for criterion 5, including
+explicit acknowledgment of the first-ever-visit residual; how you resolved each of
+the three unhandled cases from Design section 2 (null-with-seed, rejection,
+logout); the discrimination proof for criterion 7; the live-update call-count
+proof for criterion 8 (1 on mount / 2 after success / 1 after rejection, per the
+`SeasonSettings.test.tsx:620-660` template); how many `SettingsPage.test.tsx`
+tests actually render `<SettingsPage>` (verify the real number, do not assume 45)
+and confirmation the full 45-test suite passes after wrapping both render sites;
+confirmation the stale disclaimer copy is gone; the tiering judgment call (agree
+or disagree, and why); explicit restatement that "additional themes" was not
+resolved, discussed as feasible, or scoped; full command output; and anything you
+could not verify, stated plainly as unverified.
 
 Do not mark this task complete. A checker verifies it.
