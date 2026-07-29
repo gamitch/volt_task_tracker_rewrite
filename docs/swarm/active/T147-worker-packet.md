@@ -1,12 +1,12 @@
 # Worker Packet: T147 — the outreach/meetings team picker shows fixture teams to real users
 
-**Revision 2 — full rewrite.** The prior version of this file was edited by the
-orchestrator while a checker-premise gate was running against an earlier version of
-it. This revision folds in the gate's findings (all independently re-verified against
-the current tree by a second orchestrator pass before this rewrite — every citation
-below was re-derived, not copied) and narrows scope in one real way: **Part C (make
-`teams` required, delete the fixture) is deferred to a follow-up task, not built here.**
-See "What changed and why" at the bottom.
+**Revision 3.** Revision 2's premise gate returned BLOCKER a second time, on
+criterion 6, in a new form: the assertion could not pass at one site
+(`OutreachDetail`) and could not fail at another (`MeetingsList`), and Part B's
+premise (a reusable `FIXTURE_TEAMS` in `OutreachList.tsx`) was false — that fixture
+does not exist there. This revision replaces the whole name-based assertion
+approach with a UUID-shape assertion on the actual submitted payload. See
+"What changed and why" at the bottom for the full record.
 
 **User-reported, and it is a hard blocker — not the cosmetic bug the first draft of
 this packet described.**
@@ -33,18 +33,20 @@ blocks a core create flow, not a cosmetic dropdown.**
 `git log -1 --format=%H -- docs/swarm/active/T147-worker-packet.md` and confirm it
 matches the SHA in your dispatch prompt.
 
-## Landing order — read before you start
+## Landing order — read before you start, and verify it yourself
 
-**This task depends on T146 having already landed.** T146 leaves
-`src/lib/supabase/loaders/outreach.ts` byte-identical (it only touches line 731
-transiently, for its own mutation-and-restore proof), but this task inserts new lines
-inside `makeLoadOutreachData` (currently `:802-853`), which sits directly above
-`makeLoadOutreachDetail` (currently `:858-...`). If you are dispatched before T146
-has merged, every line citation below past `:802` may be stale — **stop and report
-the mismatch (constitution item 19c) rather than guessing.** If T146 has already
-landed, its own citations of `:858-860`/`:873` are for functions below the point
-where you are inserting lines, so your work does not invalidate anything it already
-shipped.
+**This task depends on T146.** As of this packet's own commit, T146 has been
+dispatched but has **not landed**. Do not assume it has. Before relying on any line
+citation past `loaders/outreach.ts:802`, check whether T146's changes are present
+(it adds a test file, `loaders/outreach.test.ts`, and leaves `outreach.ts` itself
+byte-identical when done). If T146 has not landed, **stop and report rather than
+guessing at current line numbers** — this task inserts new lines inside
+`makeLoadOutreachData`, which sits directly above functions T146 does not touch, so
+the two tasks do not conflict in content, only in whichever citations this packet
+gives you may have drifted by the time you start. Baselines below are measured on
+the pre-T146 tree; T146 will add tests, so your own starting numbers may differ —
+report what you actually see and explain any gap rather than treating it as a
+failure.
 
 ## FIRST — merge the working branch
 
@@ -72,10 +74,17 @@ teams?: readonly OutreachTeamOption[];
 // :981
 teams = DEFAULT_TEAMS,
 ```
-`OutreachTeamOption` (`:506-509`) is `{ id: string; name: string }`.
+`OutreachTeamOption` (`:506-509`) is `{ id: string; name: string }`. The dialog's
+`MultiSelector` (`:1494-1501`) renders
+`options={teams.map((team) => ({ value: team.id, label: team.name }))}` — the
+option **values are the team ids**, unmodified. On submit,
+`resolveTeamScope(selectedTeamIds, allTeamIds)` (`:891-898`) writes those same ids
+straight into the outgoing payload's `teamIds` field (`:1183`) unless every team is
+selected, in which case it sends `null` (meaning "all teams" — matches
+`events.team_ids IS NULL`).
 
-**`ScheduleMeetingsDialog`** (`src/pages/meetings/ScheduleMeetingsDialog.tsx`) has the
-identical shape:
+**`ScheduleMeetingsDialog`** (`src/pages/meetings/ScheduleMeetingsDialog.tsx`) has
+the identical shape, verified independently, not assumed from the pattern above:
 ```ts
 // :319-322
 const DEFAULT_TEAMS: readonly ScheduleTeamOption[] = [
@@ -87,9 +96,11 @@ teams?: readonly ScheduleTeamOption[];
 // :548
 teams = DEFAULT_TEAMS,
 ```
-`ScheduleTeamOption` (`:281-284`) is `{ id: string; name: string }` — structurally
-identical to `OutreachTeamOption`, though the two are separate types in separate
-files; do not merge them, that is out of scope.
+Same `allTeamIds`/`selectedTeamIds`/`resolveTeamScope` shape at `:503-511`,
+`:551`, `:554`, submitted at `:626`. `ScheduleTeamOption` (`:281-284`) is
+`{ id: string; name: string }` — structurally identical to `OutreachTeamOption`,
+though the two are separate types in separate files; do not merge them, that is
+out of scope.
 
 No call site passes `teams` anywhere:
 
@@ -99,8 +110,8 @@ No call site passes `teams` anywhere:
   meeting creation.**
 
 Every one of these omissions is documented as a deliberate scope deferral from an
-earlier task, and every one of those comments will become false once this task lands.
-**Correct all four, don't just leave them:**
+earlier task, and every one of those comments will become false once this task
+lands. **Correct all four, don't just leave them:**
 
 - `OutreachList.tsx:406-411` (module doc #11 — asserts `teams` "deliberately NOT
   overridden").
@@ -109,49 +120,131 @@ earlier task, and every one of those comments will become false once this task l
 - `MeetingsList.tsx:2195-2204` (same claim, citing the same reasoning).
 
 Do not read any of these four comments as a mistake by the tasks that wrote them —
-each was correctly scoped to its own Allowed Files at the time. The defect is that no
-follow-up was ever logged, the same pattern named in
-`docs/swarm/auto-mode-decisions.md`'s T147 entry.
+each was correctly scoped to its own Allowed Files at the time. The defect is that
+no follow-up was ever logged, per constitution item 20 (deliberate deferrals must
+file a task, not just a comment) — added specifically because of this bug.
+
+**Not a fourth instance:** `StudentDialog` (`src/pages/roster/StudentsTab.tsx`) also
+takes a `teams` prop, but `StudentsTab.tsx:313` already passes real,
+loader-sourced teams to it (`dialogTeamOptions`) — confirmed by direct read, not
+assumed from the pattern. Nothing to fix there.
+
+## The assertion mechanism — read this before writing any test
+
+**Do not assert on team names anywhere in this task.** Two name-based approaches
+were tried in earlier revisions of this packet and both failed for structural
+reasons specific to this codebase's fixtures, verified directly:
+
+1. `MeetingsList.tsx:737` has a fixture meeting titled `'Ravens Strategy Session'`
+   and `:740` a location `'Ravens Team Room'` — both render unconditionally. A
+   correctly-fixed page still contains the text "Ravens" three times over (title,
+   location, and the real team-scope label if the loader's real teams happen to
+   include one). `not.toContain('Ravens')` is unsatisfiable by a correct fix.
+2. `OutreachDetail.tsx:1360` renders `formatScopeLabel(event.teamIds, teams)`
+   directly into the page body — so if a test injects distinctly-named teams while
+   leaving the *fixture ids* (`'team-ravens'`/`'team-titans'`) in place anywhere
+   upstream, the positive assertion passes regardless of whether the real prop-pass
+   fix is present. Name assertions here cannot discriminate.
+
+**Use this instead.** `events.team_ids` is `uuid[]` — the entire defect is that a
+non-uuid string can reach it. Assert directly on that shape, on the payload a
+dialog actually submits, not on rendered text:
+
+```ts
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+```
+
+For each of the three call sites, the regression test must:
+
+1. Inject a `loadData`/`loadCoachData` returning teams with realistic **UUID-shaped
+   ids** (e.g. `'a1111111-1111-4111-8111-111111111111'`) and fabricated names
+   (constitution item 6) — names may be anything; they are never asserted on.
+2. Drive the dialog to a state where its submitted `teamIds` is a **real,
+   non-null array** rather than the "all selected → `null`" shortcut
+   (`resolveTeamScope`, cited above — returns `null` when every team is selected,
+   which is the *default* state on open). Two verified ways to do this, pick
+   whichever fits the call site:
+   - **Edit mode (`OutreachDetail` only):** seed the injected event's own
+     `teamIds` as a single real team (not all teams) — `:1051` seeds
+     `selectedTeamIds` from `initialEvent.teamIds ?? allTeamIds`, so an
+     already-team-scoped fixture event needs no dialog interaction at all; just
+     open and submit.
+   - **Create mode (`OutreachList`, `MeetingsList`):** open the `MultiSelector`
+     (labeled "Team scope") and click one option to deselect it before submitting.
+     `MultiSelector`'s rendered options carry `role="option"` with a click handler
+     toggling that exact item (installed source,
+     `node_modules/@astryxdesign/core/src/MultiSelector/MultiSelector.tsx:1082-1089`)
+     — find the option by its visible label text (which the injected fixture
+     controls) and click it. Verify the resulting interaction yourself; this
+     packet gives you the anchor, not a copy-pasteable selector.
+3. Assert the mock `onSaveEvent`/`onCreateMeetings` callback received a `teamIds`
+   array where **every element matches `UUID_RE`**.
+
+**Prove discrimination the same way as before** — revert the call site's prop pass
+(dialog falls back to `DEFAULT_TEAMS`), confirm the same test now fails (the
+submitted ids are `'team-ravens'`/`'team-titans'`, which do not match `UUID_RE`),
+restore, confirm it passes. This works identically at all three sites with no
+per-site special-casing, and it encodes the actual production failure (a non-uuid
+reaching `events.team_ids`) rather than a proxy for it.
+
+**Where a text assertion is still useful for something else** (e.g. confirming the
+right team *names* render for a sighted user), scope it to the open dialog's own
+DOM subtree, not `document.body.textContent`/full-page text — whole-page matching
+is what made the name collisions at `MeetingsList` and `OutreachDetail` unavoidable
+in the first place.
 
 ## The fix, part by part
 
 ### Part A — `OutreachDetail.tsx`: pass real teams (near one-line)
 
-Real teams are already in scope. `:1299` destructures `teams` from `detailData`, and
-it is already used at `:1360` (`formatScopeLabel`) and passed to `AttendancePanel` at
-`:1385`. Pass it to the dialog too, at the call site `:1430-1437`, and delete the
-stale comment at `:1420-1429`.
+Real teams are already in scope. `:1299` destructures `teams` from `detailData`,
+and it is already used at `:1360` (`formatScopeLabel`) and passed to
+`AttendancePanel` at `:1385`. Pass it to the dialog too, at the call site
+`:1430-1437`, and delete the stale comment at `:1420-1429`.
 
 Types are compatible, verify rather than assume: `TeamOption`
-(`OutreachDetail.tsx:402-415`) is `{ id, name, color }` (the `color` field is T143's
-required addition); `OutreachTeamOption` is `{ id, name }`. The extra `color` is fine
-for assignment.
+(`OutreachDetail.tsx:402-415`) is `{ id, name, color }` (the `color` field is
+T143's required addition); `OutreachTeamOption` is `{ id, name }`. The extra
+`color` is fine for assignment.
 
-### Part A2 — `OutreachDetail.tsx`: the roster fetch has the same defect class, fix it too
+### Part A2 — `OutreachDetail.tsx`: roster fetch has the same defect class — SEVERABLE
 
-While in this file for Part A, fix a second, closely related defect the gate found:
-the "Expected attendees" roster fetch silently falls back to fixture **student**
-names on failure, the identical failure mode this task exists to close for teams.
+While in this file for Part A, this packet also asks you to fix a second, closely
+related defect: the "Expected attendees" roster fetch silently falls back to
+fixture **student** names on failure, the identical failure mode this task exists
+to close for teams.
 
-`:1113-1127` declares `eventDialogRoster` state, with a comment stating a rejected
-`loadRoster()` call leaves it `undefined`, so `OutreachEventDialog`'s own `students`
-prop default (`DEFAULT_STUDENTS`) silently takes over. The effect at `:1129-1147`
-confirms it: `.catch(() => { /* Disclosed soft-fail */ })` — a real, empty catch
-block. A coach opening Edit after any roster-fetch failure (e.g. a transient network
-error) sees `DEFAULT_STUDENTS`'s four fabricated names (Riley Chen, Jordan Blake, Sam
-Okafor, Casey Nguyen) presented as the live roster, with no indication anything
-failed.
+`:1114-1127` declares `eventDialogRoster` state, with a comment stating a rejected
+`loadRoster()` call leaves it `undefined`, so `OutreachEventDialog`'s own
+`students` prop default (`DEFAULT_STUDENTS`) silently takes over. The effect at
+`:1135-1147` confirms it: `.catch(() => { /* Disclosed soft-fail */ })` — a real,
+empty catch block. A coach opening Edit after any roster-fetch failure (e.g. a
+transient network error) sees `DEFAULT_STUDENTS`'s four fabricated names (Riley
+Chen, Jordan Blake, Sam Okafor, Casey Nguyen) presented as the live roster, with no
+indication anything failed.
 
-**`OutreachList.tsx:2925-2979` already fixed the identical defect for its own roster
-fetch — use it as the template, not a novel design.** It replaced the
-undefined-on-failure pattern with a real `RosterLoadState` (`'loading' | 'ready' |
-'error'`), a `rosterForDialog` derivation that resolves to a real empty array (never
-`undefined`) on error, and an honest error `Banner` with a `Retry` action wired to a
-`retryToken` idiom. Port that shape to `OutreachDetail.tsx`'s own `eventDialogRoster`
-handling. The reason given in earlier code for leaving `OutreachDetail` on the soft-fail
-path — "T121 already fixed it" — was true for `OutreachList` only; `OutreachDetail`
-never received the fix. State that plainly in your output doc rather than repeating
-the stale justification.
+`OutreachList.tsx` already fixed the identical defect for its own roster fetch —
+use it as the template, not a novel design. Two regions there, both needed:
+
+- The state/effect/derivation: `:2925-2979` (a `RosterLoadState` union, a
+  `rosterState`/`rosterRetryToken` pair, the load effect, `retryRosterLoad`, and
+  the `rosterForDialog` derivation that resolves to a real empty array — never
+  `undefined` — on error).
+- The rendered notice: `:3081-3092` (an error `Banner` with a `Retry` action, only
+  when `rosterState.status === 'error'`).
+
+Port both to `OutreachDetail.tsx`'s own `eventDialogRoster` handling. The old
+justification for leaving `OutreachDetail` on the soft-fail path — "T121 already
+fixed it" — was true for `OutreachList` only; `OutreachDetail` never received the
+fix. State that plainly in your output doc rather than repeating the stale
+justification.
+
+**This part is explicitly severable.** It is real, but it is not what blocks
+meeting creation, and it touches a different failure surface (students, not
+teams) than the rest of this task. If you hit a genuine blocker on Part A2 alone,
+**do not let it hold up Parts A, B, or B2** — land those, report Part A2's problem
+plainly, and let it become its own follow-up rather than stalling the
+user-reported blocker behind it.
 
 ### Part B — `OutreachList.tsx`: real threading
 
@@ -170,27 +263,35 @@ getClient)` to `makeLoadOutreachData`, map it with the existing
 **Fetch it in parallel with the existing batch, not serially.** `makeLoadOutreachData`
 already runs two `Promise.all` batches (`:827-831` for
 sessions/students/seasonGoal, `:833-836` for rsvps/attendance once session ids are
-known). Teams depends on nothing — add it to the first batch. **Prove it, don't just
-assert it:** in your test, use a fake client that records call order/timing (e.g. an
-array pushed to on each query's invocation, or resolved promises with different
-delays) and assert the teams query is issued alongside the other zero-dependency
-queries, not after them.
+known). Teams depends on nothing — add it to the first batch. **Prove it, don't
+just assert it:** in your test, use a fake client that records call order/timing
+and assert the teams query is issued alongside the other zero-dependency queries,
+not after them.
 
-Three places construct an `OutreachLoadResult`-shaped object literal and will need a
-`teams` field once the interface grows one — `tsc` will find every one, but the three
-known today are: `defaultLoadOutreachData` (`OutreachList.tsx:1305-1317`, use
-`FIXTURE_TEAMS` — already declared in this file, confirm its exact location and
-reuse it, do not redeclare) and two test fixtures in `OutreachList.test.tsx` (at
-minimum `:970-977` and `:1404-1412` — grep the file for
-`individualGoalHoursByStudentId` to find every literal, there may be more than these
-two).
+**Correction — there is no existing `FIXTURE_TEAMS` in `OutreachList.tsx`.** An
+earlier revision of this packet assumed one existed and told you to reuse it; grep
+confirms zero occurrences. You must create one: a module-level
+`FIXTURE_TEAMS: readonly TeamOption[]` (or the matching local type this file
+already uses for `students`/similar fixtures — check the existing convention and
+match it), used by `defaultLoadOutreachData` (`:1305-1317`) and by test literals.
+Fabricate realistic UUID-shaped ids for it (matching what the real `teams` table
+actually produces) and fabricated names (constitution item 6) — the exact names
+don't matter under the new UUID-based assertion approach, so there is no naming
+trap to avoid here the way earlier revisions worried about.
+
+Three places construct an `OutreachLoadResult`-shaped object literal and will need
+a `teams` field once the interface grows one — `tsc` will find every one, but the
+three known today are: `defaultLoadOutreachData` itself, and two test fixtures in
+`OutreachList.test.tsx` (at minimum `:970-977` and `:1404-1412` — grep the file for
+`individualGoalHoursByStudentId` to find every literal, there may be more than
+these two).
 
 ### Part B2 — `MeetingsList.tsx` / `loaders/meetings.ts`: this is the one that blocks meeting creation
 
 **Do not treat this as "no team data available" — it is already fetched, just not
 threaded to the dialog.** `loaders/meetings.ts` already has a real `queryTeams`
-(`:352-357`) and already loads it in `makeLoadCoachMeetingsData`'s own parallel batch
-(`loadTeamRows` at `:541`, inside the `Promise.all` at `:546-554`) — it feeds
+(`:352-357`) and already loads it in `makeLoadCoachMeetingsData`'s own parallel
+batch (`loadTeamRows` at `:541`, inside the `Promise.all` at `:546-554`) — it feeds
 `buildCoachMeetingRows` (`:559`) for the per-row team-scope label, but the raw list
 never leaves that function. **No new query, no new round trip.**
 
@@ -198,9 +299,10 @@ What's missing:
 
 1. `CoachMeetingsData` (`MeetingsList.tsx:641-643`) has only a `rows` field. Add
    `teams: readonly FixtureTeam[]` (the existing `{id, name}` interface, `:548-551`
-   — already exported? verify; if not, keep it module-private and rely on structural
-   typing against `ScheduleTeamOption`, same as `OutreachTeamOption`/`TeamOption`
-   above — do not force a shared type across files that don't otherwise share one).
+   — check whether it's exported; if not, keep it module-private and rely on
+   structural typing against `ScheduleTeamOption`, same as
+   `OutreachTeamOption`/`TeamOption` above — do not force a shared type across
+   files that don't otherwise share one).
 2. In `loaders/meetings.ts`'s `makeLoadCoachMeetingsData` (`:536-566`), return
    `teams: (teamRows ?? []).map(mapTeamDbRow)` alongside `rows`.
 3. `CoachMeetingsView` (`MeetingsList.tsx:1936-1974`) needs a `teams` state,
@@ -209,101 +311,74 @@ What's missing:
    (`handleCreateMeetingsSubmit`, `:2056-2061`, currently `setRows(fresh.rows)`).
 4. Pass `teams={teams}` to `<ScheduleMeetingsDialog>` at `:2205-2209`.
 5. `defaultLoadCoachMeetingsData` (the fixture default, `:1119-1130`) needs
-   `teams: FIXTURE_TEAMS` added for type compatibility — that fixture already exists
-   at `:716-719` for `buildCoachMeetingRows`' own team parameter, reuse it, don't
-   redeclare.
-6. At least one object literal in `MeetingsList.test.tsx` constructs a bare
-   `{ rows: [] }` as `CoachMeetingsData` (seen at `:561`) — grep for other
-   `CoachMeetingsData`-shaped literals and update each; `tsc` will catch any you miss.
+   `teams: FIXTURE_TEAMS` added for type compatibility — that fixture already
+   exists at `:716-719` for `buildCoachMeetingRows`' own team parameter (this one
+   genuinely does already exist, verified directly — unlike `OutreachList.tsx`'s
+   nonexistent one above), reuse it, don't redeclare.
+6. `MeetingsList.test.tsx` constructs `CoachMeetingsData`-shaped object literals at
+   **three** sites, all verified directly: `:561` (`{ rows: [] }`), `:703`
+   (`const pastOnlyRow: CoachMeetingsData = { rows: [...] }`), and `:786`
+   (`Promise.resolve({ rows: [...] })`, implicitly typed via the enclosing
+   function's `Promise<CoachMeetingsData>` return type at `:782`). Update all
+   three; `tsc` will catch any you miss.
 
 **Do not build a `students` prop or roster wiring for `ScheduleMeetingsDialog`.**
 Unlike `OutreachEventDialog`, it has no such prop (`ScheduleMeetingsDialogProps`,
-`:536-543`, is `isOpen`/`onOpenChange`/`teams`/`onCreateMeetings` only — no attendee
-checklist exists on this dialog at all). If you find yourself adding one, stop; that
-is not this task.
+`:536-543`, is `isOpen`/`onOpenChange`/`teams`/`onCreateMeetings` only — no
+attendee checklist exists on this dialog at all). If you find yourself adding one,
+stop; that is not this task.
 
 ### Part C — explicitly NOT in this task
 
-An earlier draft of this packet scoped in making `teams` required on both dialogs and
-deleting both `DEFAULT_TEAMS` fixtures, reasoning that the optional-prop-with-a-fixture-
-default is the actual mechanism that shipped this bug. **That reasoning still holds,
-but the cost changed once the meetings half was in scope too, and it is deferred
-here rather than built:**
+Making `teams` required on both dialogs and deleting both `DEFAULT_TEAMS`
+fixtures is a real, defensible follow-up (the optional-prop-with-a-fixture-default
+is the actual mechanism that shipped this bug) but is deferred, not built here:
+`OutreachEventDialog.test.tsx` has 32 render sites mostly relying on the default,
+and `DEFAULT_STUDENTS` (`:618-623`) hardcodes `teamId: 'team-ravens'`/`'team-titans'`
+— a required-`teams` fix that also re-ids the fixture would break roster-matching
+tests in a way that reads like a harness bug, not an obviously-related fixture
+mismatch. `ScheduleMeetingsDialog.test.tsx` has 14 more render sites with the same
+issue. This is test-fixture entanglement to unwind carefully, not a same-day
+addition to a user-reported-blocker fix.
 
-- `OutreachEventDialog.test.tsx` has 32 render sites of `<OutreachEventDialog`, most
-  omitting `teams` (relying on the default) — making the prop required breaks every
-  one at the type level.
-- Worse: `groupActiveRosterByTeam` matches `student.teamId` against `team.id`, and
-  `DEFAULT_STUDENTS` (`:618-623`) hardcodes `teamId: 'team-ravens'`/`'team-titans'`.
-  If a future required-`teams` fix also renames or re-ids the fixture teams, tests
-  relying on `DEFAULT_STUDENTS` break with an error shaped like a harness bug
-  ("No label found for ...") rather than an obviously-related fixture mismatch.
-- `ScheduleMeetingsDialog.test.tsx` has 14 render sites, none passing `teams`
-  explicitly.
-
-This is real, but it is test-fixture entanglement to unwind carefully, not a
-same-day addition to a user-reported-blocker fix. **File it as its own follow-up
-task** (making `teams` required + deleting both `DEFAULT_TEAMS` fixtures + updating
-the affected tests) rather than building it here. Note this in your output doc so it
-is not lost.
-
-## The vacuous-test trap — read this before writing criterion 6's tests
-
-**`OutreachDetail.tsx`'s own `FIXTURE_TEAMS` (`:503-506`) is id- and name-identical
-to `OutreachEventDialog`'s `DEFAULT_TEAMS`** — both are
-`[{id:'team-ravens',name:'Ravens'},{id:'team-titans',name:'Titans'}]`. A test at that
-call site asserting "the dropdown shows the loader's teams, not Ravens/Titans" using
-the default loader is self-contradictory: the DOM is identical whether or not your
-fix landed, so the revert-and-confirm proof in criterion 6 **cannot fail**, and a
-checker mutating your fix would find a test that still passes.
-
-**Fix:** inject a scoped `loadData` returning distinctly-named teams for this specific
-test, the same way `OutreachDetail.test.tsx:614-620` already wraps
-`defaultLoadOutreachDetail` for a different purpose (an instrumented function that
-delegates to the real default, here overriding just the `teams` field of its result).
-**Do not rename `FIXTURE_TEAMS` itself** — `OutreachDetail.test.tsx:458-462` and
-`:1046-1057` both assert `'Ravens'`/`'Titans'` text content against it and are
-currently green; renaming it breaks passing tests for no reason.
-
-**`MeetingsList.tsx`'s own `FIXTURE_TEAMS` (`:716-719`) has the identical
-Ravens/Titans collision against `ScheduleMeetingsDialog`'s `DEFAULT_TEAMS`.** Apply
-the same fix there: an injected `loadCoachData` with distinctly-named teams for the
-discrimination test, `FIXTURE_TEAMS` itself left alone.
-
-`OutreachList.tsx`'s own fixtures do not have this problem to the same degree since
-that page currently has no teams data source of its own to collide with — but verify
-this yourself rather than assuming it from this packet.
+**Do not file the follow-up ledger row yourself.** `task-ledger.md` is a Forbidden
+File for workers — the orchestrator is filing this one. State in your output doc
+that Part C was not built and why, and stop there; do not attempt to create or
+edit any ledger file.
 
 ## Acceptance Criteria
 
 1. `OutreachDetail.tsx` passes its real `teams` to `OutreachEventDialog`.
 2. `OutreachDetail.tsx`'s roster fetch (Part A2) never silently falls back to
-   `DEFAULT_STUDENTS` on failure — a failed fetch resolves to a real empty array plus
-   a visible error `Banner` with `Retry`, mirroring `OutreachList.tsx:2925-2979`.
-3. `OutreachList.tsx` loads real teams (parallel with the existing batch — show your
-   evidence per Part B) and passes them to `OutreachEventDialog`.
+   `DEFAULT_STUDENTS` on failure — a failed fetch resolves to a real empty array
+   plus a visible error `Banner` with `Retry`, mirroring
+   `OutreachList.tsx:2925-2979`/`:3081-3092`. **Severable per Part A2 — report
+   separately from criteria 1/3/4 if it could not be completed.**
+3. `OutreachList.tsx` loads real teams (parallel with the existing batch — show
+   your evidence per Part B) and passes them to `OutreachEventDialog`.
 4. `MeetingsList.tsx` threads the already-fetched `teamRows` from
-   `loaders/meetings.ts` through `CoachMeetingsData` to `ScheduleMeetingsDialog`, with
-   no new query and no new round trip.
+   `loaders/meetings.ts` through `CoachMeetingsData` to `ScheduleMeetingsDialog`,
+   with no new query and no new round trip.
 5. All four stale comments (`OutreachList.tsx:406-411`, `OutreachList.tsx:3153-3160`,
-   `OutreachDetail.tsx:1420-1429`, `MeetingsList.tsx:2195-2204`) are corrected — each
-   currently asserts a fixture-backed posture that becomes false.
-6. **Regression tests, one per call site (four total: OutreachDetail, OutreachList,
-   MeetingsList, plus Part A2's roster-failure test)**, asserting real data reaches
-   the dialog/panel and the fixture does not, using the vacuous-test-trap workaround
-   above wherever `Ravens`/`Titans` collide.
+   `OutreachDetail.tsx:1420-1429`, `MeetingsList.tsx:2195-2204`) are corrected —
+   each currently asserts a fixture-backed posture that becomes false.
+6. **Regression tests, one per call site (three: OutreachDetail, OutreachList,
+   MeetingsList — plus Part A2's own roster-failure test if that part lands)**,
+   using the UUID-shape assertion mechanism above — never a name-based assertion
+   for this criterion.
 
    **Prove they discriminate:** revert each call site's fix, confirm the matching
-   test fails for the right reason, restore, confirm it passes. Report what you saw
-   for each. A test that passes either way is worth less than none.
+   test fails for the right reason (submitted ids are the fixture strings, not
+   UUIDs), restore, confirm it passes. Report what you saw for each.
 7. `npx tsc --noEmit`, `npx vite build`, `npm run format:check`, `npx eslint .` and
-   `npx vitest run` all clean. Baselines at this packet's commit (post-T146): **0
-   errors, 354 warnings**, 63 test files, **1474 tests**. Report yours and explain any
-   change. File count should not change (no new test files, only edits to existing
-   ones).
-8. `teams` stays optional on both dialogs; `DEFAULT_TEAMS` stays in place on both —
-   Part C is explicitly out of scope. State in your output doc that you filed it (or
-   flagged it for the orchestrator to file) as a follow-up.
+   `npx vitest run` all clean. Baselines **at this packet's own commit** (before
+   T146 lands — see "Landing order" above): **0 errors, 354 warnings**, 63 test
+   files, **1476 tests**. Report yours and explain any change, including any
+   delta attributable to T146 having landed in the meantime.
+8. `teams` stays optional on both dialogs; `DEFAULT_TEAMS` stays in place on both
+   — Part C is explicitly out of scope. State in your output doc that it was not
+   built. **Do not file a ledger task for it** — the orchestrator is handling
+   that directly.
 
 ## Allowed Files
 
@@ -330,51 +405,63 @@ this yourself rather than assuming it from this packet.
 - Every other loader under `src/lib/supabase/loaders/` (including `outreach.ts`
   beyond what Part B describes, and `meetings.ts` beyond what Part B2 describes)
 - `src/pages/outreach/AttendancePanel.tsx` — T143 landed here; do not disturb
-- `src/pages/home/CoachHome.tsx` — T142 is in flight against this file right now (it
-  does not render either dialog touched here — no functional conflict, just don't
-  touch it)
+- `src/pages/home/CoachHome.tsx` — T142 is in flight against this file right now
+  (it does not render either dialog touched here — verified directly, no
+  functional conflict — just don't touch it)
+- `src/pages/roster/StudentsTab.tsx` — read `:313` for confirmation only; already
+  correct, not this task's concern
 - `src/pages/meetings/ScheduleMeetingsDialog.test.tsx` — read for the render-site
-  pattern only if useful; not expected to need edits since Part C (which would touch
-  it) is out of scope here
+  pattern only if useful; not expected to need edits since Part C (which would
+  touch it) is out of scope here
 - Anything under `node_modules/`
 
 ## Relevant Constitution Excerpt
 
-- **Item 6** — fixture data must use fabricated names. Relevant in reverse here: the
-  fixtures are correctly fabricated, they are simply reaching real users.
+- **Item 6** — fixture data must use fabricated names. Relevant in reverse here:
+  the fixtures are correctly fabricated, they are simply reaching real users. Any
+  new fixture you create (Part B's `OutreachList.tsx` `FIXTURE_TEAMS`) follows the
+  same rule.
 - **Item 2** — component props come only from `docs/swarm/astryx-api.md`. Not
-  expected to bind here — this task changes no Astryx component usage, only which
-  data reaches existing props.
-- **Item 19c** — verify a citation before asserting it. Every citation in this packet
-  was re-derived from the current tree, not copied from an earlier draft. If anything
-  here does not match the tree, **stop and report the mismatch rather than guessing
-  at intent.**
+  expected to bind here for the dialogs themselves — this task changes no Astryx
+  component usage, only which data reaches existing props — but the `MultiSelector`
+  interaction in your tests should be verified against the installed source, cited
+  above, not guessed.
+- **Item 20** — a deliberate deferral must file a task, not just a comment. This is
+  exactly the rule this bug caused to exist. Part C is the one deferral in this
+  packet, and per the instruction above, the orchestrator files it — not you.
+- **Item 19c** — verify a citation before asserting it. Every citation in this
+  packet was re-derived from the current tree, not copied from an earlier draft.
+  If anything here does not match the tree, **stop and report the mismatch rather
+  than guessing at intent.**
 
 ## What changed and why (revision history, for your context only)
 
-The first draft of this packet covered only the outreach half and scoped in Part C.
-A checker-premise gate run against an intermediate version found: the meetings half
-was a same-class, higher-severity instance (it blocks meeting creation outright);
-Part C's cost was underestimated (test-fixture entanglement via `DEFAULT_STUDENTS`'
-hardcoded team ids); `OutreachDetail.tsx`'s roster fetch has the identical
-fixture-on-failure defect one function above the one this task already touches; and
-several line citations in the first draft had drifted (`makeLoadOutreachData` is
-`:802-853` not `:802-830`; `DEFAULT_STUDENTS` is `:618-623` not `:617-623`; the
-`OutreachDetail.tsx` stale comment is `:1420-1429` not `:1420-1430`). All of the
-above is folded into this revision and was independently re-verified against the
-tree before being written down here — do not re-litigate it, but do still verify
-anything you rely on per item 19c, the same as always.
+Revision 1 covered only the outreach half and scoped in Part C as a same-task
+addition. Revision 2 folded in the meetings half, deferred Part C, and added Part
+A2 — but its own criterion 6 asserted `not.toContain('Ravens'/'Titans')` against
+whole-page text. A second premise gate found this unsatisfiable in both
+directions: `MeetingsList.tsx` has fixture content genuinely named "Ravens" that
+renders regardless of the fix (`:737`, `:740`), so the negative assertion can never
+pass; and `OutreachDetail.tsx`'s own `formatScopeLabel` renders the loader's team
+names directly into the page body (`:1360`), so the positive assertion passes even
+with the fix reverted, given the earlier revision's fixture names collided with
+`DEFAULT_TEAMS`'s own. It also found Part B's `FIXTURE_TEAMS` reuse instruction was
+based on a fixture that does not exist in `OutreachList.tsx`. This revision
+replaces the whole mechanism with a UUID-shape assertion on the actual submitted
+mutation payload (see "The assertion mechanism" above), which is immune to name
+collisions at every site and encodes the real defect more directly than either
+name-based approach did.
 
 ## Required Worker Output
 
-Create `docs/swarm/active/T147-worker-output.md` covering: files changed at each of
-the four call sites; how you confirmed the `OutreachList`/`MeetingsList` team queries
-run in parallel with no extra round trip (recorded call order, not prose); the
-Part A2 roster-failure fix and how it mirrors `OutreachList.tsx:2925-2979`; how you
-avoided the Ravens/Titans vacuous-test trap at the `OutreachDetail`/`MeetingsList`
-call sites; the discrimination proof for each of the four regression tests; explicit
-confirmation Part C was not built, and where you filed (or flagged) it as a
-follow-up; full command output; and anything you could not verify, stated plainly as
-unverified.
+Create `docs/swarm/active/T147-worker-output.md` covering: files changed at each
+of the four call sites; how you confirmed the `OutreachList`/`MeetingsList` team
+queries run in parallel with no extra round trip (recorded call order, not prose);
+whether Part A2 landed, and if not, exactly what blocked it; the exact interaction
+sequence your tests use to reach a non-null `teamIds` at each create-mode site
+(`OutreachList`, `MeetingsList`); the discrimination proof for each of the three
+(or four) regression tests; explicit confirmation Part C was not built and that you
+did not attempt to file a ledger task for it; full command output; and anything you
+could not verify, stated plainly as unverified.
 
 Do not mark this task complete. A checker verifies it.
