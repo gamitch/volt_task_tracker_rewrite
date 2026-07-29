@@ -894,3 +894,104 @@ violates WCAG 2.4.4; after it, the same name points at the same destination,
 which conforms. The rows were never distinguishable by name, and that is fine.
 
 NAV-08 remains unimplemented and remains annotated as such in the PRD.
+
+## D010 - the KPI views' "defense in depth" RLS claim rests on a false premise, and the mechanism it names does not do what it says
+
+**Filed by the orchestrator 2026-07-29**, from a finding T140's checker made
+outside T140's blast radius while closing an unrelated disclosure. **Needs
+George's decision. Nothing has been changed.**
+
+### What the migration claims
+
+`supabase/migrations/20260723000000_kpi_views.sql:136-152` argues the KPI views
+are safe for non-staff sessions on two grounds:
+
+1. "Both views are plain (non-`security definer`/`security barrier`) views ...
+   so both views already run under the querying session's own RLS against those
+   base tables";
+2. "`seasons` in particular has ONLY a `staff_all` read policy (no `read_all`
+   ... equivalent), so a non-staff session querying `v_season_kpis` gets
+   RLS-filtered to zero rows regardless of any UI-level role gate."
+
+### Both are wrong
+
+**Claim 2's premise is false.** `20260717000002_rls.sql:74-79` declares **two**
+policies on `seasons` — `staff_all` (`for all to authenticated using
+(is_staff())`) **and** `read_all` (`for select to authenticated using (true)`).
+Any authenticated user can read `seasons`. Verified directly, and no later
+migration alters or drops either policy. `SeasonProvider.tsx:76-84` carries the
+same stale claim; that one is harmless because it draws no security conclusion
+from it.
+
+**Claim 1 is a misreading of Postgres view semantics**, and it is the one that
+matters. A plain view does **not** evaluate base-table RLS as the querying
+session. `security_invoker` defaults to **false**, so RLS on the base tables is
+evaluated with the **view owner's** rights. Grepped across all 15 migrations:
+
+- no `security_invoker` set anywhere;
+- no `force row level security` anywhere;
+- no `grant`/`revoke` in the KPI views migration.
+
+Absent `FORCE ROW LEVEL SECURITY`, a table's owner **bypasses RLS entirely**.
+Supabase runs migrations as a role that owns these tables, so the views are
+owned by a role for which base-table RLS does not apply. The stated mechanism
+therefore does not deliver the protection claimed for it.
+
+### What is NOT established
+
+**This is a code-reading finding, not a demonstrated vulnerability.** Nothing in
+this container can reach George's Supabase project (see the session log's
+environment facts), so the following are unverified and must not be asserted:
+
+- the actual owner of the two views in the live project;
+- the effective `grant`s on them, and therefore whether PostgREST exposes them
+  to an `authenticated` (or `anon`) session at all;
+- whether any of this is reachable in practice.
+
+Supabase commonly grants `authenticated` SELECT on new `public` objects by
+default, which is why this is worth settling rather than assuming benign.
+
+**Real mitigation that does exist:** `KpiStrip.tsx` gates on role at the UI
+level, so the app itself never issues this query for a student or parent. The
+defect is that the migration's comment presents a *second, independent* layer
+that is not actually there — so anyone relying on it is relying on nothing.
+
+### How George can settle it in one query
+
+Run against the remote project:
+
+```sql
+select c.relname,
+       c.relowner::regrole            as view_owner,
+       c.reloptions                   as view_options,   -- looks for security_invoker
+       has_table_privilege('authenticated', c.oid, 'SELECT') as authenticated_can_select
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public'
+  and c.relname in ('v_season_kpis', 'v_season_kpi_team_counts');
+```
+
+If `authenticated_can_select` is true and `view_options` does not contain
+`security_invoker=true`, a non-staff session can read season-wide aggregates
+directly, and the fix is `alter view ... set (security_invoker = on)` in a new
+migration — plus re-deriving the RLS posture of every base table the views join,
+since `read_all` on `seasons` means season rows themselves were never the
+barrier.
+
+### Options
+
+- **(a) Settle it first.** George runs the query above; we act on the answer.
+  Cheapest, and avoids writing a migration for a problem that may not exist.
+- **(b) Fix defensively now.** New migration setting `security_invoker = on` on
+  both views and correcting the comment. Safe in principle, but it changes RLS
+  behaviour and could break the coach/admin path if those sessions were relying
+  on owner-rights reads — which is exactly the sort of change that needs a real
+  packet and an opus worker under constitution item 18.
+- **(c) Correct only the prose.** Fix the false claims in the migration comment
+  and `SeasonProvider.tsx` so nobody relies on them, and leave the behaviour
+  alone pending (a).
+
+**Recommendation: (a), then (c) regardless of the answer.** The comment is wrong
+either way and should not survive; whether a migration is needed depends on
+facts only George can obtain. Editing an already-applied migration file is
+itself a decision for him, so even (c) is proposed, not taken.
