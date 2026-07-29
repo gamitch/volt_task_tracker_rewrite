@@ -197,9 +197,16 @@ const [mode, setMode] = useState<ThemeMode>(() => readStoredThemeMode() ?? 'syst
 On every successful resolve (initial load and `refresh()`), call the write
 function too, so the next boot's synchronous seed reflects the latest known value.
 
-**This is a real scope addition, authorized by the human owner, logged as REVIEW**
-(`docs/swarm/auto-mode-decisions.md`) because it widens the task beyond pure
-wiring — but the alternative ships a fix the reporter would still call broken.
+**This is a real scope addition, and it is the orchestrator's auto-mode decision —
+NOT the human owner's.** His only recorded decision on T148
+(`docs/swarm/auto-mode-decisions.md:276-278`) authorizes wiring the existing
+System/Light/Dark control to the `Theme` provider. It neither mentions nor
+contemplates a client-side persistence layer. The seed is in scope because a gate
+measured the flash — first paint `data-theme` null settling to dark, across two
+network round trips, on every load — and shipping that as the fix for "it all stays
+dark mode" would leave the reporter still calling it broken. **It is logged as a
+REVIEW item pending his ruling, and he may strike it.** If he does, the rest of this
+packet stands unchanged: the seed is additive to the wiring, not load-bearing for it.
 
 **MINOR — the suggested default seam creates a fresh query per render (gate).**
 Revision 1 suggested `loadThemeMode` default to an inline
