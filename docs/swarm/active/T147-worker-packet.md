@@ -162,23 +162,65 @@ For each of the three call sites, the regression test must:
 2. Drive the dialog to a state where its submitted `teamIds` is a **real,
    non-null array** rather than the "all selected → `null`" shortcut
    (`resolveTeamScope`, cited above — returns `null` when every team is selected,
-   which is the *default* state on open). Two verified ways to do this, pick
-   whichever fits the call site:
-   - **Edit mode (`OutreachDetail` only):** seed the injected event's own
-     `teamIds` as a single real team (not all teams) — `:1051` seeds
-     `selectedTeamIds` from `initialEvent.teamIds ?? allTeamIds`, so an
-     already-team-scoped fixture event needs no dialog interaction at all; just
-     open and submit.
-   - **Create mode (`OutreachList`, `MeetingsList`):** open the `MultiSelector`
-     (labeled "Team scope") and click one option to deselect it before submitting.
-     `MultiSelector`'s rendered options carry `role="option"` with a click handler
-     toggling that exact item (installed source,
-     `node_modules/@astryxdesign/core/src/MultiSelector/MultiSelector.tsx:1082-1089`)
-     — find the option by its visible label text (which the injected fixture
-     controls) and click it. Verify the resulting interaction yourself; this
-     packet gives you the anchor, not a copy-pasteable selector.
+   which is the *default* state on open). **One identical recipe at all three
+   sites — proven in both directions at all three before this packet was
+   written, do not re-litigate it or branch by site:**
+
+   `OutreachEventDialog.tsx:1051` seeds `selectedTeamIds` from
+   `initialEvent.teamIds ?? allTeamIds` — **from the edited event, not from the
+   `teams` prop.** An earlier revision of this packet told you that an
+   already-team-scoped edit-mode fixture event needs no interaction at all; that
+   is false as a discrimination proof — `resolveTeamScope` (`:898`) returns
+   `selectedTeamIds` verbatim, so if the injected event already carries
+   `teamIds: ['team-ravens']`, the submitted payload is `['team-ravens']`
+   identically whether or not the `teams` prop fix is present. The `teams` prop
+   only ever feeds `allTeamIds`, which only matters when the event's own
+   `teamIds` is `null` (`initialEvent.teamIds ?? allTeamIds` falls through).
+
+   **Recipe, all three call sites:**
+   1. Inject the event (edit-mode sites) with `teamIds: null` — this is what
+      makes `:1051` fall through to `allTeamIds`, which is the value under test.
+      Create-mode sites have no `initialEvent`, so `allTeamIds` is already what
+      seeds the selection; no change needed there.
+   2. Open the `MultiSelector` (labeled "Team scope") and click **the last
+      element matching `[role="option"]`** to deselect it before submitting —
+      positional, not by label text (see the next section for why).
+   3. Submit.
+
 3. Assert the mock `onSaveEvent`/`onCreateMeetings` callback received a `teamIds`
    array where **every element matches `UUID_RE`**.
+
+### Two traps in step 2, both verified live — read before writing the selector
+
+**Do not select the option by its visible label text.** With the fix reverted,
+the fixture labels are literally `Ravens`/`Titans`, so a label-text lookup finds
+nothing (`expected undefined to be truthy`) — a harness-shaped failure that reads
+like your test is broken and invites loosening the selector, not the UUID
+mismatch this test exists to prove. **Use position instead:** the last element
+matching `[role="option"]` inside the open `MultiSelector`. Reverting the fix
+then fails with `expected 'team-ravens' to match /^[0-9a-f]{8}-.../` — the actual
+assertion this test is for, at every site, every time.
+
+**A second, unrelated `role="option"` group renders in the same document at the
+`OutreachList`/`OutreachDetail` sites** — the dialog's own "Event type"
+`Selector` also uses `role="option"`. A live capture of every such node's text at
+one of these sites read `["Outreach", "Competition", "Select all", "Falcons",
+"Otters"]` — indexing `[0]` or `[1]` clicks the wrong control entirely. Scope
+your `[role="option"]` query to the "Team scope" `MultiSelector`'s own popup/list
+container, not the whole document. Also note `hasSelectAll`
+(`OutreachEventDialog.tsx:1499`) puts a "Select all" pseudo-option **first**
+inside that same list — it is real and clickable, and clicking it toggles every
+team at once, which is the opposite of what step 2 needs; "the last option" as
+prescribed above is deliberately chosen to avoid it, but confirm your own query
+excludes it too if you scope things differently.
+
+**The confirm button is natively disabled until the form is valid — this is
+expected, not a broken harness.** `ScheduleMeetingsDialog.tsx:611` and
+`OutreachEventDialog.tsx:1151` both compute
+`isValid = title.trim() !== '' && sessionsPayload.length > 0` (a non-empty title
+plus at least one scheduled session, which needs a date picked) and disable the
+submit button on `!isValid`. Give your fixture a title and a date before
+attempting step 3, at every site.
 
 **Prove discrimination the same way as before** — revert the call site's prop pass
 (dialog falls back to `DEFAULT_TEAMS`), confirm the same test now fails (the
