@@ -190,6 +190,42 @@ a change (the withdrawn contrast criterion), the cheaper path was to fix the
 packet first, resume the worker, and check once at the end — rather than
 re-running a full check on work guaranteed to be superseded.
 
+## Fourth standing rule added 2026-07-29 — verify the merge landed the work
+
+**After every merge, confirm the test-count delta before believing it.**
+
+T136 merged and silently shipped **without its main feature**. The worker left
+its rework uncommitted in the worktree working tree — as it had on the first
+pass, where I noticed and committed for it. The second time I did not, and
+merged the branch assuming its tip carried the work. It carried only the first
+pass, so the divider, its 7 tests and 6 re-captured figures were all left behind.
+
+**Every downstream signal looked correct.** Tests green, lint clean, build
+succeeded, and a genuine independent check had passed — against working-tree
+files that were never merged. That is the dangerous shape: nothing fails.
+
+What caught it was arithmetic. Worktree reported 1463; main after merge reported
+1460. Chasing the gap found `GoalBar.test.tsx` at 11 tests instead of 18, and the
+numbers reconciled exactly (1463 − 7 divider tests + 4 T140 tests the worktree
+predated = 1460). `grep divider src/components/GoalBar.tsx` in main returned zero.
+
+**The rule, in order:**
+
+1. Before merging, run `git -C <worktree> status --porcelain`. **Uncommitted
+   output means the branch tip does not have the work.** Commit it first —
+   labelled as orchestrator-committed and explicitly not a certification.
+2. After merging, run the suite in the main tree and check the delta against the
+   number the checker reported. If it does not reconcile, stop and find out why
+   before pushing.
+3. Spot-check the feature itself. A one-line `grep` for a distinctive identifier
+   from the change (`grep -c divider src/components/GoalBar.tsx`) would have
+   caught this instantly.
+
+**Related, from the same check:** a worker "proved" it deleted its throwaway rig
+with `git status --porcelain`, which **cannot see gitignored files** — and the
+rig was still on disk. Any cleanup proof must use `--ignored`, or plain `ls`.
+Worth removing from every rig-using packet, since they all inherit it.
+
 ## Standing calibration added 2026-07-29 — proportion findings to the stakes
 
 **George, 2026-07-29: "this is an application for our small robotics team, not a
