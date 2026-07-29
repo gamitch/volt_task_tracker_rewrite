@@ -279,3 +279,51 @@ independent decisions into one multi-select cost a real outcome. Three unrelated
 rules with different rationales and different costs are three questions. My
 inference that the omission was deliberate was wrong, and I stated it in the log as
 though it were established.
+
+## Monitoring constitution items 20-22
+
+George asked that the three new rules be watched for negative consequences. Recording
+the failure modes I actually expect, **before** observing them, so I notice them
+rather than explain them away. Each rule has a plausible inverse failure — the thing
+it prevents has a mirror image it could cause.
+
+### Item 20 — deferrals must file a task
+
+| Predicted failure | Signal to watch |
+|---|---|
+| **Ledger inflation.** Every worker files a task for every out-of-scope thing it notices, and genuinely blocking items get buried in noise. | Tasks filed per completed task rising above ~1, or a growing tail nobody ever picks up. |
+| **Duplicate filings.** Three workers touching the same file each file the same deferral. | Two open tasks describing one defect. |
+| **Chilling effect.** Workers stop *noticing* out-of-scope defects because recording one now has a cost. | Checkers finding defects that workers walked past silently. |
+
+**The rule is still worth it** — it was bought with three production bugs. But if the
+ledger starts filling with speculative items, the fix is a severity bar (file it if a
+user could hit it), not repeal.
+
+### Item 21 — report a SHA, verify existence
+
+| Predicted failure | Signal to watch |
+|---|---|
+| **Premature commits.** "Must report a SHA" pressures a worker to commit before its verification passes, just to have one to report. | Commits followed immediately by fix-up commits; reports quoting a SHA whose tree fails the suite. |
+| **Ritual compliance.** A SHA gets quoted without the work being in it. | Mismatch between the reported SHA and what HEAD actually contains — which is exactly what I now check anyway. |
+
+Lowest-risk of the three. The verification half costs me seconds and catches the
+failure the reporting half could introduce.
+
+### Item 22 — explicit pathspecs
+
+| Predicted failure | Signal to watch |
+|---|---|
+| **Forgotten files — the exact inverse of what it prevents.** A worker names three paths and omits the fourth it created, so a test file or output doc silently never lands. | `git status` non-empty after a worker reports committing; a merged task missing its output doc. |
+| **Verbose, error-prone commands.** Long pathspec lists invite typos that silently stage nothing. | Commits smaller than the reported change. |
+
+**This is the one I would bet on breaking first.** It converts a
+too-much-gets-committed failure into a too-little-gets-committed failure, and the new
+one is quieter — a missing file looks like nothing happened. Mitigated by item 21's
+existence check, which is why the two work better together than either alone.
+
+### How I will report
+
+Each of these gets flagged in this log the first time I see it, named as the predicted
+consequence rather than as a one-off. If a rule causes more harm than it prevents I
+will say so plainly and recommend amending it — a rule bought with real bugs is still
+a rule that can be wrong.
