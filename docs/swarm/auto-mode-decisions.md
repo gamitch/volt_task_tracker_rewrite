@@ -464,3 +464,39 @@ per-task ledger file (which §3.4 of the parallelism review proposes anyway), or
 The second is weaker but free.
 
 T148's gate independently flagged the same exposure on that packet.
+
+### 2026-07-29 — T147 round 3 authorized, and my ninth citation error
+
+**Decision: authorized a third gate round on T147**, past item 19a's two-round cap.
+Justified under my standing rule 4 — round 2 returned a BLOCKER, not wording — and
+warranted because *this one acceptance criterion has now failed three times*:
+
+| Attempt | Author | Failure |
+|---|---|---|
+| 1 | me | Could not **fail** — `FIXTURE_TEAMS` is id- and name-identical to `DEFAULT_TEAMS`, so the DOM is byte-identical either way |
+| 2 | foreman | Could not **pass** at MeetingsList (fixtures contain "Ravens Strategy Session"), and could not **fail** at OutreachDetail (`formatScopeLabel` renders loader names) |
+| 3 | me, relaying a gate | Not **readable** — `MultiSelector` renders `role="option"`/`aria-selected` with no `value` attribute, so option values are not queryable from jsdom |
+
+The round-3 gate is deliberately **scoped to that criterion alone**, not a full
+re-derivation, since two prior gates have already verified the root cause, schema,
+call sites, landing order and cost figures. If it fails again I escalate rather than
+spending a fourth round.
+
+**My ninth citation error, and the first by relaying rather than authoring.** I passed
+on the gate's claim that five test files `vi.mock` `lib/supabase/auth`. The foreman
+read all five: they mock `loaders/invites`, `loaders/students`, `loaders/attendance`,
+`loaders/outreach` and `loaders/reports`. **None mocks auth.** I verified three myself
+after the fact and the foreman is right.
+
+This one is worse than the others because I added no error of my own — I simply moved
+someone else's unverified claim downstream with my authority attached. The gate did not
+verify it; I did not verify it; the foreman did. **A relayed citation needs the same
+check as an authored one**, and I have been treating gate output as pre-verified
+because gates have been reliable.
+
+**REVIEW — the foreman has now caught three of my errors** (the fabricated source-edit
+accusation, the MeetingsList `students` prop that does not exist, and these two
+citations). It has also twice refused to act on an instruction it could not verify,
+including refusing to fabricate four findings I summarised without describing — which
+was my process error, relaying a summary where content was needed. That refusal
+behaviour is worth preserving explicitly if the role is formalised.
