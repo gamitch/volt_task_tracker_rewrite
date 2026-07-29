@@ -669,3 +669,46 @@ reversible by George, and reads as reversible.
 and hand the agent a *citation*, never a sentence to paraphrase. And when a subagent
 reports back that something is "authorized", I check *whose* authority it attributed
 before accepting the report. Both instances were caught by gates, not by me.
+
+### 2026-07-29 — addendum to the seed REVIEW: it cost a second-order defect
+
+Adding this under the T148 seed REVIEW entry because it is evidence George should have
+when he rules on it.
+
+My seed specification did not just widen the task — **it introduced a defect worse than
+the flash it fixes**, and a gate had to prove that by experiment.
+
+I specified that logout should clear the stored theme, so a shared browser would not
+give user B a flash of user A's theme. Two problems, both measured:
+
+1. **The prescription was impossible.** `logout()` lives at `guards.tsx:311-321`, and
+   `guards.tsx` is on this packet's own Forbidden Files list. A worker taking it
+   literally must violate the packet or stall. This is the *identical* failure shape
+   round 2 had already fixed for `authHarness.tsx` — reintroduced by me one section
+   later, in the same packet, after seeing the correction.
+2. **The in-scope alternative is destructive.** Clearing when `user === null`, unguarded,
+   wipes the seed on **every boot** while auth is still resolving. A successful profile
+   fetch happens to restore it — but with a rejecting loader the seed is **permanently
+   destroyed**, and on any anonymous visit (login page, logged-out landing) it is
+   destroyed with nothing to restore it. The gate measured both: `CASE3B = null` after a
+   failed resolve, `CASE3C = null` anonymous.
+
+**None of the criteria I wrote would have caught either.** They all assert within a
+single successful mount.
+
+**Decision: drop the clearing entirely; disclose the limitation instead.** User B may
+see one frame of user A's theme until their own profile resolves. That is a real
+downside, stated plainly, and strictly better than a mechanism that silently wipes the
+seed for everyone.
+
+**What this says about the seed decision overall, for George's ruling.** The flash is
+real and measured, and the seed does fix it — a gate confirmed `data-theme` lands on the
+first synchronous commit. But the seed is not free: it introduced a persistence layer
+with at least four distinct edge cases (null resolve, rejection, logout, first visit),
+three of which I specified wrongly or incompletely on the first pass, and one of which I
+specified in a way that would have made things worse. That is the actual cost of the
+scope addition, and it is larger than I represented when I decided it.
+
+I still think shipping "boots dark, snaps to light, every load" as the fix for "it all
+stays dark mode" is the wrong trade. But the case against is stronger than I made it,
+and George should have both halves.
