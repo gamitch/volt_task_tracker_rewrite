@@ -72,7 +72,7 @@ Say so in your output doc.
 `CoachHome.tsx` has **five** level-2 module sections: Next up (`:2323`), Activity
 feed (`:2349`), Hours by team (`:2390`), Goal projection (`:2418`), Top events
 (`:2459`). The HTML PRD phrases the rule generally — "Dashboard modules pair into two
-columns via Astryx `Grid`" (`VOLT_UX_Craft_PRD_v3.html:167`).
+columns via Astryx `Grid`" (`VOLT_UX_Craft_PRD_v3.html:165`).
 
 **Pairing two of five and leaving three stacked is an interpretation.** It is
 justified by the wireframe naming that specific pair and no other, but it is a
@@ -174,21 +174,31 @@ horizontal rule between side-by-side columns is meaningless. The Dividers at
 `KpiStrip.tsx:284,342`, `CoachHome.tsx:2016,2153,2222,2240`, `HoursTab.tsx:1050,1105`.
 `max` is documented at `astryx-api.md:135`.
 
-### Choosing `minWidth` — there is a window, and both ends are live
+### Choosing `minWidth` — derive it, do not copy it
 
-UXC-06's own accept clause (`VOLT_UX_Craft_PRD_v3.html:169`) requires modules to
-render two-up **above 1024px**. So:
+UXC-06's own accept clause (`VOLT_UX_Craft_PRD_v3.html:167`) requires modules to
+render two-up **above 1024px**. So there is a window with both ends live:
 
 - Too small, and it never collapses at 375px.
 - **Too large, and it silently fails across the whole 1024–1280 band** while looking
   perfect at 1440px. A value like 450 would pass a check that only measures 1440 and
   375.
 
-The gate measured the usable width as roughly 688px at a 1024px viewport (240px
-sidenav plus padding), putting the window at approximately **175–330**. Treat that as
-a starting point, not gospel — **verify it by measuring at all three widths** and
-state your arithmetic. Do not copy a `minWidth` from another call site; those grids
-hold KPI cards, not list modules.
+**Derive the window yourself from these inputs — no number is supplied on purpose.**
+
+- `SideNav` is **260px** (`SideNav.tsx:65`) and is present above 768px. The app
+  passes no `breakpoint`, so `AppShell`'s default `md` applies
+  (`src/app/AppShell.tsx:163`); below 768 it is replaced by `MobileNav` and
+  contributes 0.
+- `LayoutContent padding={6}` removes 24px per side.
+- Constraint A — two columns must fit at 1024:
+  `minWidth ≤ (1024 − 260 − 48 − gap) / 2`
+- Constraint B — one column must be forced at 375 (no sidenav):
+  `minWidth > (375 − 48 − gap) / 2`
+
+Produce both numbers, state them in your output doc, pick a value inside the window,
+then **check it against measurement at all three widths**. Do not copy a `minWidth`
+from another call site; those grids hold KPI cards, not list modules.
 
 ### Do not disturb the accessibility structure
 
@@ -220,15 +230,25 @@ pins the current structure and must keep passing. Your change is layout only.
 
 1. `CoachHome.tsx` caps content at 1120px and centres it, using the prescription in
    Part 1 (outer `hAlign="center"`, inner capped `VStack` with no `padding` prop).
-2. **Measured at 1440px:** report the inner element's **border-box** width (expect
-   ~1120) **and** its content-box width, plus the space either side. Naming both is
-   required — a verbatim T133 transplant yields 1120 border-box but only 1072
-   content-box, and that difference is how you prove you did not double-pad.
+2. **Measured at 1440px:** report the inner element's **border-box** and
+   **content-box** widths, plus the space either side.
+
+   **The two must be equal — any gap between them *is* the double-padding.** The
+   border-box number alone proves nothing: `reset.css:50` sets `box-sizing:
+   border-box` universally (imported via `theme.css:38`), so it reads ~1120 whether
+   or not you double-padded. The content-box number is the sole discriminator —
+   1120 correct, 1072 double-padded.
+
+   This makes the criterion depend on the stylesheet: **if your rig omits
+   `theme.css`, the universal border-box reset is absent, `box-sizing` falls back to
+   content-box, and a correct implementation measures 1168 border-box and reads as a
+   failure.** That is T133's false-MAJOR trap resurfacing in a new place. See
+   Measurement.
 3. Next up and Activity feed render side by side at 1440px, in that order left to
    right. Verify by `getBoundingClientRect`, not by eye.
 4. **The `columns={2}` discriminator — assert this in jsdom, it is deterministic.**
    `Grid` reflects visual props as data attributes, and passes the numeric form
-   through as its variant (`Grid.js:372-376`, `themeProps.js:67-104`):
+   through as its variant (`Grid.js:372-376`, `themeProps.js:67-96`):
    - `columns={2}` renders `data-columns="2"`
    - `columns={{minWidth, max: 2}}` renders **no** `data-columns` attribute
 
@@ -261,8 +281,10 @@ pins the current structure and must keep passing. Your change is layout only.
    restore, confirm pass. Report what you saw. A test that passes both ways is worth
    less than none, and has already cost this task set two rounds this session.
 10. `npx tsc --noEmit`, `npx vite build`, `npm run format:check`, `npx eslint .` and
-    `npx vitest run` all clean. Verified baselines: **0 errors, 352 warnings**,
-    63 test files, 1469 tests. Report yours and explain any difference.
+    `npx vitest run` all clean. Baselines measured at this packet's own commit:
+    **0 errors, 354 warnings**, 63 test files, **1474 tests**. (T143 merged after
+    revision 1 and moved both — do not compare against the older 352/1469.)
+    Report yours and explain any difference.
 
 ## Measurement
 
@@ -275,6 +297,11 @@ T133's checker's first run omitted `theme.css` and would have produced a false M
 a page that does not exist.
 
 Criteria 4 and 9 are jsdom and need no rig at all.
+
+**Name any throwaway probe `*.throwaway.test.tsx`.** `vite.config.ts:30-36` excludes
+that pattern precisely so a mid-flight rig cannot perturb the file and test counts
+criterion 10 gates on. A probe named otherwise will change the numbers you are being
+asked to report.
 
 ## Relevant Constitution Excerpt
 
