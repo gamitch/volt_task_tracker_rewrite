@@ -1099,3 +1099,37 @@ packet, measured anyway, and reported — which is the only reason this was caug
 before merge. The instruction that produced that outcome ("check the rendered
 contrast; if it is not visible, report it — do not silently pick a different
 variant to work around it") is worth keeping in future packets.
+
+### D011 addendum (2026-07-29) — the "three bare bars" finding was wrong; there is no 1.4.11 gap
+
+George approved option (a). Reading the three call sites to implement it showed
+its premise is false, so **(a) was not implemented — there is nothing to fix.**
+
+I tested for `hasValueLabel` and read its absence as "no text value." That was a
+grep artifact. All three carry the number in adjacent markup:
+
+| site | how the value is rendered as text |
+|---|---|
+| `CoachHome.tsx:1839` team hours | `endContent={<Text>{entry.confirmedHours}h</Text>}` on the same `ListItem` |
+| `CoachHome.tsx:1868` event hours | `endContent={<Text>{entry.totalHours}h</Text>}` |
+| `CoachHome.tsx:1895` per-student | sibling `<Text>`: `Xh confirmed + Yh planned = Zh / Goalh · P% · annotation` |
+
+The third is the most thorough label of any of the ten. Adding `hasValueLabel`
+would print a second copy of a number already on screen — "12 / 40" in the bar
+beside "12h" in `endContent`. A clarity regression, not an improvement.
+
+Re-checked the other seven; those do use `hasValueLabel` as reported. **So all
+ten bars convey their value as text.** WCAG 1.4.11's "unless required to
+understand the content" carve-out therefore applies to every one: the fill is a
+redundant visualisation and its 2.00:1 ratio is not a conformance failure.
+
+**Unchanged:** no variant reaches 3:1 in both themes (table above), `neutral` is
+worst at 1.39, T144 stays unmerged, and UXC-05's "zero default-accent bars" is
+still unachievable by variant swap — recorded as a vendor limitation alongside
+D-1 and T136's fill-vs-fill ceiling. The bars are faint; that is a visual-quality
+question, not an accessibility one, and it needs no urgent change.
+
+**Process:** the original entry asserted a gap from the absence of one prop
+without reading the surrounding JSX, and I presented it as the recommended fix.
+Presence of a rendered value is a question about the whole subtree, not one
+attribute. A checker's grep would have reproduced my error exactly.
