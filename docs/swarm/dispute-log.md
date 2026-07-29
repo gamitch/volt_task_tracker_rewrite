@@ -1133,3 +1133,65 @@ question, not an accessibility one, and it needs no urgent change.
 without reading the surrounding JSX, and I presented it as the recommended fix.
 Presence of a rendered value is a question about the whole subtree, not one
 attribute. A checker's grep would have reproduced my error exactly.
+
+## D012 - T145's packet asserted a false citation, the worker wrote it into the code, and the checker caught it
+
+**Filed by the orchestrator 2026-07-29.** Not a worker/checker dispute — the
+checker was right, the worker did as instructed, and the instruction was wrong.
+Recorded because it is the second instance this session of the same error shape.
+
+### What happened
+
+T145 existed to remove a comment in `EventsTab.tsx` that stated false history.
+My packet directed the worker to correct it and, in doing so, asserted that the
+comment's citation to `CoachHome.tsx` "~1191" had been wrong even when written.
+The worker wrote that into the replacement comment. It is false.
+
+Verified at `48fcd90` (T058, the commit that introduced the NOTE): line 1191 is
+exactly `const EVENT_TYPE_BADGE: Record<EventType, ...> = {`, followed by
+`meeting: 'blue'`, `outreach: 'purple'`, `competition: 'teal'`. **Line number
+correct, all three colours correct — the citation was fully accurate when
+written.** It went stale only at T080 (`82fafdf`), which both corrected the
+mapping to purple/blue/orange and moved the constant to ~1210.
+
+So the task meant to delete false history replaced it with different false
+history. The checker caught it by opening the commit — which is the step I
+skipped when writing the packet.
+
+The companion claim, that `CalendarPage.tsx`'s "577-586" was wrong, is also
+overstated: the constant spans 580-587 there, so the citation brackets the right
+construct a few lines off.
+
+### The pattern
+
+Both of this session's orchestrator errors have the same shape — **a fact about
+code asserted from a partial read, then propagated with confidence**:
+
+- **D011:** concluded three bars had no text value from the absence of one prop,
+  without reading the surrounding JSX. All three render the value in `endContent`
+  or a sibling `<Text>`.
+- **D012 (here):** concluded a line citation was wrong without opening the commit
+  it referred to. It was correct at the time of writing.
+
+In both cases the erroneous claim was specific, plausible and confidently framed,
+which is what made it survive into a packet and, here, into shipped source. In
+both cases a checker or a direct read caught it only afterward.
+
+### Directive
+
+Packets must not assert that a citation, comment or historical claim is wrong
+unless the author has opened the referenced commit or file region and looked.
+"This looks stale" is a prompt to check, not a finding. Where a packet asks a
+worker to correct a factual claim, the packet must carry the evidence for the
+correction, not merely the assertion — and workers should treat an unevidenced
+"X is wrong" in a packet as something to verify before writing it into source.
+
+Corollary, from D011: whether something is rendered is a question about the whole
+subtree, not about one prop. A grep for an attribute is a way to find candidates,
+never a way to conclude absence.
+
+### Outcome
+
+T145 FAIL stands; rework issued for the false clause and for a second, unrelated
+MAJOR (the legend proof does not exercise the legend — it passes with zero legend
+badges rendered). T145's other criteria passed and are unaffected.
