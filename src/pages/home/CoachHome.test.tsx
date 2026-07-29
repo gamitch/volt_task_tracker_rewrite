@@ -31,6 +31,7 @@ import {
   buildActivityFeed,
   buildLastCompletedMeetingSummary,
   buildNextUp,
+  COACH_HOME_PAIRED_MODULE_MIN_WIDTH,
   CoachHome,
   countUpcomingSessionsInNextDays,
   crossedMilestones,
@@ -1339,6 +1340,91 @@ describe('<CoachHome /> T129 UXC-01 -- exactly one heading per section, List/Emp
     }
     const { resolvedText: goalResolvedEmpty } = resolveAriaLabelledbyTarget(GOAL_PROJECTION_TITLE);
     expect(goalResolvedEmpty).toBe(GOAL_PROJECTION_TITLE);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T142/UXC-06: Next up + Activity feed pair two-up via `Grid`.
+//
+// jsdom has no CSS layout engine, so these tests do not (and cannot) prove
+// the pairing renders side by side at any given viewport width -- that is a
+// real-browser measurement, reported in `docs/swarm/active/
+// T142-worker-output.md`, not a jsdom assertion. What jsdom CAN prove
+// deterministically, with no rig at all:
+//   1. The `Grid` uses the RESPONSIVE `columns={{minWidth, max}}` object
+//      form, not the fixed `columns={2}` numeric form -- `Grid` reflects
+//      the numeric form as `data-columns`/a `columns-N` class token
+//      (`themeProps.js`'s `themeDataAttributes`/`buildClassName`) and
+//      passes `undefined` for the object form
+//      (`Grid.js:372`, `columnsVariant`), so `data-columns` is present iff
+//      `columns={2}` was used. This is the primary proof the packet asks
+//      for: it is deterministic and needs no browser.
+//   2. The two module headings share exactly one `Grid` ancestor (proving
+//      they were actually wrapped together, not just visually adjacent),
+//      and that ancestor's inline `--x-gridTemplateColumns` custom property
+//      (`Grid.js`'s `dynamicStyles.templateColumns`) encodes the
+//      responsive `repeat(auto-fill, minmax(...))` track template with the
+//      chosen `COACH_HOME_PAIRED_MODULE_MIN_WIDTH`, not a bare `repeat(2,
+//      1fr)`.
+// ---------------------------------------------------------------------------
+describe('<CoachHome /> T142/UXC-06 -- Next up + Activity feed pair via a responsive Grid', () => {
+  function findHeadingEl(headingText: string): HTMLElement {
+    const heading = Array.from(container.querySelectorAll('h2')).find(
+      (h) => h.textContent === headingText,
+    );
+    expect(heading).toBeTruthy();
+    return heading as HTMLElement;
+  }
+
+  function closestAstryxGrid(el: HTMLElement): HTMLElement {
+    const grid = el.closest('.astryx-grid');
+    expect(grid).toBeTruthy();
+    return grid as HTMLElement;
+  }
+
+  it('the Grid pairing the two modules carries no data-columns attribute (the columns={2} discriminator)', async () => {
+    renderAsUser(COACH_USER, {
+      loadData: fixtureLoadData,
+      loadDashboardData: fixtureLoadDashboardData,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+
+    const nextUpGrid = closestAstryxGrid(findHeadingEl('Next up'));
+    const activityFeedGrid = closestAstryxGrid(findHeadingEl('Activity feed'));
+
+    expect(nextUpGrid).toBe(activityFeedGrid);
+    expect(nextUpGrid.hasAttribute('data-columns')).toBe(false);
+    // Bonus discriminator (Grid.js's `classTokenForPropValue`): the fixed
+    // numeric form also stamps a `columns-2` class token; confirm it is
+    // absent too, not just the data attribute.
+    expect(nextUpGrid.className).not.toMatch(/\bcolumns-2\b/);
+  });
+
+  it('regression: the two headings share exactly one Grid ancestor, whose track template is the responsive form, not a bare two-column fixed grid', async () => {
+    renderAsUser(COACH_USER, {
+      loadData: fixtureLoadData,
+      loadDashboardData: fixtureLoadDashboardData,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+
+    const nextUpGrid = closestAstryxGrid(findHeadingEl('Next up'));
+    const activityFeedGrid = closestAstryxGrid(findHeadingEl('Activity feed'));
+    expect(nextUpGrid).toBe(activityFeedGrid);
+
+    const trackTemplate = nextUpGrid.style.getPropertyValue('--x-gridTemplateColumns');
+    expect(trackTemplate).toContain('repeat(auto-fill');
+    expect(trackTemplate).toContain(`${COACH_HOME_PAIRED_MODULE_MIN_WIDTH}px`);
+    expect(trackTemplate).not.toBe('repeat(2, 1fr)');
+
+    // The Divider that used to sit between the two stacked modules is gone
+    // -- the only Dividers immediately flanking this Grid are the ones that
+    // separate it from the stacked KPI grid above and "Hours by team"
+    // below. Astryx `Divider` renders `<div role="separator">`, not an
+    // `<hr>`.
+    expect(nextUpGrid.previousElementSibling?.getAttribute('role')).toBe('separator');
+    expect(nextUpGrid.nextElementSibling?.getAttribute('role')).toBe('separator');
   });
 });
 
