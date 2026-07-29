@@ -500,7 +500,7 @@
  *     column -- this file never touches `rsvps`/`event_sessions` directly
  *     for this number.
  */
-import { useEffect, useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type CSSProperties, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Badge,
@@ -517,11 +517,10 @@ import {
   List,
   ListItem,
   ProgressBar,
-  SegmentedControl,
-  SegmentedControlItem,
   Skeleton,
   Text,
   Toast,
+  ToggleButton,
   VisuallyHidden,
   VStack,
 } from '@astryxdesign/core';
@@ -1839,6 +1838,24 @@ function NextUpRowItem({ row }: { row: NextUpRow }): ReactNode {
   );
 }
 
+// UXC-06/T149: cap every ProgressBar on this page near ~480px (the PRD's own
+// number, VOLT_UX_Craft_PRD_v3.html:165). Three of the four sites this is
+// applied to -- TeamHoursRowItem, TopEventRowItem, GoalProjectionRowItem --
+// render inside a single-column `<List hasDividers>` with no `Grid`/column
+// constraint, so their bars would otherwise stretch to the page's full
+// ~1120px content width (T142's cap) -- that is the actual UXC-06 defect.
+// The fourth site (the KPI grid's "Hours vs. team goal" bar) never reaches
+// this cap: it lives in one of four `Grid columns={{ minWidth: 240, repeat:
+// 'fit' }}` columns, which at a 1120px content width and a 16px gap works out
+// to (1120 - 3*16) / 4 = 268px per column before the `KpiCard`'s own `Card`
+// padding is subtracted, and to ~495px at the widest this `auto-fit` grid can
+// resolve to at any content width -- so a 480px cap on it is inert
+// everywhere, not just at 1440px. Applying the same shared constant there
+// anyway is simpler than special-casing the one site the cap doesn't bind at.
+const COACH_HOME_PROGRESS_BAR_MAX_WIDTH_STYLE: CSSProperties = {
+  maxWidth: '480px',
+};
+
 // ---------------------------------------------------------------------------
 // T124 row components (module doc #13) -- every value rendered below is
 // already-computed (a view column or a sort/slice/format pure function
@@ -1875,6 +1892,7 @@ function TeamHoursRowItem({
           isLabelHidden
           value={entry.confirmedHours}
           max={maxHours > 0 ? maxHours : 1}
+          style={COACH_HOME_PROGRESS_BAR_MAX_WIDTH_STYLE}
         />
       }
       endContent={<Text type="supporting">{`${entry.confirmedHours}h`}</Text>}
@@ -1904,6 +1922,7 @@ function TopEventRowItem({
             isLabelHidden
             value={entry.totalHours}
             max={maxHours > 0 ? maxHours : 1}
+            style={COACH_HOME_PROGRESS_BAR_MAX_WIDTH_STYLE}
           />
         </VStack>
       }
@@ -1931,6 +1950,7 @@ function GoalProjectionRowItem({ row }: { row: StudentGoalProjectionEntry }): Re
             isLabelHidden
             value={row.confirmedHours}
             max={row.goalHours > 0 ? row.goalHours : 1}
+            style={COACH_HOME_PROGRESS_BAR_MAX_WIDTH_STYLE}
           />
           <Text type="supporting">
             {`${row.confirmedHours}h confirmed + ${row.plannedHours}h planned = ${totalHours}h / ${row.goalHours}h · ${percent}% · ${annotation}`}
@@ -2216,6 +2236,7 @@ export function CoachHome({
                     max={goalHours > 0 ? goalHours : 1}
                     hasValueLabel
                     formatValueLabel={(value, max) => `${value} / ${max} hrs`}
+                    style={COACH_HOME_PROGRESS_BAR_MAX_WIDTH_STYLE}
                   />
                   <HStack gap={2} wrap="wrap">
                     {GOAL_MILESTONES.map((milestone) =>
@@ -2485,14 +2506,13 @@ export function CoachHome({
                   <Heading level={2} id={goalProjectionHeadingId}>
                     Goal projection · confirmed + planned
                   </Heading>
-                  <SegmentedControl
-                    label="Goal projection filter"
-                    value={goalProjectionFilter}
-                    onChange={(value) => setGoalProjectionFilter(value as GoalProjectionFilter)}
-                  >
-                    <SegmentedControlItem value="all" label="All" />
-                    <SegmentedControlItem value="belowGoal" label="Below goal" />
-                  </SegmentedControl>
+                  <ToggleButton
+                    label="Below goal"
+                    isPressed={goalProjectionFilter === 'belowGoal'}
+                    onPressedChange={(pressed) =>
+                      setGoalProjectionFilter(pressed ? 'belowGoal' : 'all')
+                    }
+                  />
                 </HStack>
                 <div role="group" aria-labelledby={goalProjectionHeadingId}>
                   {sortedGoalProjection.length === 0 ? (
