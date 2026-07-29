@@ -14,7 +14,78 @@ kept deliberately — it is the evidence that justified withdrawing the criterio
 but it is history, not a shipping requirement. Annotation added in the REWORK
 section.
 
-## 0. Merge
+## REWORK (packet revision 3) — read this first
+
+The coordinator resumed this task after independently re-deriving §2's
+contrast ceiling and confirming it matched mine exactly. **Criterion 2's
+mutual (confirmed-vs-planned) fill contrast requirement was withdrawn as
+mathematically impossible and replaced with a visible-boundary-divider
+requirement instead.** §2 below is kept **unedited** as the record that
+justified the change (per the coordinator's explicit instruction); this
+section documents what changed on top of it.
+
+**Second merge, done for the rework:**
+
+```
+git fetch origin
+git merge origin/claude/swarm-plan-zl575z
+```
+
+Merge commit `0627914` — a real merge (not a fast-forward this time), but
+**clean, zero conflicts**. Brought in T137/T139/T140's landed work
+(`CalendarPage.tsx`/`.test.tsx`, `RosterShell.tsx`/`.test.tsx`, plus several
+`docs/swarm/**` files) — none of it touches this task's files. Verified:
+
+```
+$ git log -1 --format=%H -- docs/swarm/active/T136-worker-packet.md
+1c3db8f18bdf6b09b89c12e620afd5b3927c614c
+```
+
+**Matches the SHA the coordinator stated exactly.** Read the full revised
+packet before touching any code; the only substantive change from the
+version this doc's §1–§11 were originally written against is Acceptance
+Criterion 2's third bullet (fill-vs-fill contrast → visible divider) — every
+other section, including §2's own numbers, is unchanged in the new packet
+text.
+
+**What I built on top of the existing `GoalBar`:**
+
+- A 2px boundary divider, `data-testid="goal-bar-divider"`, absolutely
+  positioned at `left: calc(<confirmedWidth>% - 1px)`, full track height,
+  coloured `var(--color-background-muted)` — the **exact same CSS variable**
+  the track itself uses (`GoalBar.tsx`'s `style.backgroundColor` on the
+  outer `role="progressbar"` div), not a separately-authored value that
+  happens to match. Rendered **only** when `confirmedWidth > 0 &&
+  plannedWidth > 0` (both segments non-zero).
+- The existing clamping (`confirmedWidth`/`plannedWidth` at what was
+  `GoalBar.tsx:83-84`, unchanged lines, now at the same relative position)
+  was **not modified** — the divider's position is *derived from*
+  `confirmedWidth` (read, never written to) and does not participate in any
+  width computation. No new arithmetic beyond the existing
+  percentage-domain clamps; the divider adds a `>` comparison for the
+  render condition, nothing else.
+- 7 new tests in `GoalBar.test.tsx` (renders when both non-zero; absent when
+  planned is zero; absent when confirmed is zero; absent when confirmed is
+  clamped to 100% by the overflow rule; resolves to the same variable as the
+  track; positioned at the boundary without consuming fill width; positioned
+  from `confirmedWidth` alone, never `confirmedWidth + plannedWidth`).
+  **Confirmed these discriminate, not just pass:** I mutated the source
+  twice and reverted (verified byte-identical via `diff` after each
+  revert) — (1) changed the divider's colour to
+  `--color-data-categorical-green`: the "resolves to the SAME CSS variable"
+  test failed, the other 17 passed; (2) removed the
+  `confirmedWidth > 0 && plannedWidth > 0` guard (always render): all three
+  "absent when..." tests failed, the other 15 passed. Both mutations were
+  reverted immediately after observing the failure; `diff` against a
+  pre-mutation copy confirmed the file was restored exactly.
+- All eight figures **re-captured** in the same throwaway rig (recreated,
+  used, deleted again — see the updated §4/§8 below for the new data and
+  confirmation of cleanup).
+
+**Updated test count:** 1451 → **1463** (18 in `GoalBar.test.tsx`, up from
+11; plus +5 from the merge, unrelated to this task — see updated §7).
+
+## 0. Merge (original dispatch)
 
 ```
 git fetch origin
@@ -107,6 +178,19 @@ values shipped above per mode. Confirms `generateThemeRules.js:232-237`'s
 work as the packet describes.
 
 ## 2. Measured contrast — method, and the full result including the failure
+
+**STATUS UPDATE (rework): the "confirmed vs planned" mutual-contrast bullet
+analyzed below is WITHDRAWN by packet revision 3 — it is no longer a
+requirement.** The coordinator independently re-derived the same ceiling
+(3.061:1 light / 3.096:1 dark; 2.988/2.949 once restricted to recognisable
+green/purple) before accepting it, confirming the analysis below rather than
+just trusting it. The packet's replacement requirement — a visible boundary
+divider — is satisfied per the REWORK section above and updated §3/§4 below.
+**This whole section is kept exactly as originally written**, per the
+coordinator's explicit instruction, because it is the evidence that
+justified the packet change and belongs on the record. The "each fill vs
+track" numbers below are still current and still required (unchanged by the
+revision) and still pass.
 
 **Method:** WCAG 2.x relative-luminance contrast ratio, the standard formula
 (`(L1+0.05)/(L2+0.05)`, lighter over darker), computed directly from the
@@ -237,6 +321,18 @@ heading id), `aria-valuenow` = rounded confirmed percentage,
 pre-formatted string naming the planned segment. No `tabIndex` (not
 focusable).
 
+**Boundary divider (rework, packet revision 3):** a third child, rendered
+conditionally (`confirmedWidth > 0 && plannedWidth > 0`), absolutely
+positioned at `left: calc(${confirmedWidth}% - 1px)`, `width: '2px'`,
+`insetBlock: 0` (full track height), `backgroundColor:
+'var(--color-background-muted)'` — the identical CSS variable string the
+track's own `backgroundColor` uses, verified equal at both the source level
+(same literal string) and at the resolved-DOM level (§4). This adds **zero**
+new arithmetic beyond the render-condition comparison (`>`, not a
+computation) — the divider's `left` reads `confirmedWidth`, which was
+already computed by the pre-existing clamp lines; it does not introduce a
+new clamp or a new sum.
+
 ## 4. Rendered proof — exactly one `role="progressbar"` per role view
 
 **Rig:** `preview.throwaway.html` + `src/preview.throwaway.tsx` (both
@@ -248,10 +344,14 @@ gitignored via `*.throwaway.*`), mirroring T131/T135's own rig shape:
 a Playwright script (`chromium.launch({ executablePath:
 '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' })`). **Deleted before
 finishing** — `git status --porcelain` after cleanup shows no
-`*.throwaway.*` entries (confirmed above, both files removed via `rm`, dev
-server killed).
+`*.throwaway.*` entries (confirmed after both the original pass and the
+rework pass, both files removed via `rm`, dev server killed each time).
 
-### Coach view (`Team season goal`)
+**Rework: recreated the same rig verbatim and re-ran all 8 captures** (the
+divider changes every one). Below are the **updated** measurements,
+including the new `divider` field.
+
+### Coach view (`Team season goal`) — confirmed 9, planned 7, goal 52 (both non-zero → divider expected)
 
 | | Light | Dark |
 |---|---|---|
@@ -263,8 +363,18 @@ server killed).
 | track `background-color` | `rgb(175, 169, 183)` (`#AFA9B7`) | `rgb(74, 69, 81)` (`#4A4551`) |
 | confirmed fill colour | `rgb(11, 96, 61)` (`#0B603D`) | `rgb(142, 247, 170)` (`#8EF7AA`) |
 | planned fill colour | `rgb(62, 6, 151)` (`#3E0697`) | `rgb(179, 176, 254)` (`#B3B0FE`) |
+| **divider present** | **yes** | **yes** |
+| **divider `background-color`** | `rgb(175, 169, 183)` | `rgb(74, 69, 81)` |
+| **divider = track colour?** | **yes, exact match** | **yes, exact match** |
+| divider width | `2px` | `2px` |
 
-### Student/parent view (`Your season goal`)
+At 1440px the divider's `left` resolved to `194.922px` (`≈195.922px −
+1px`, i.e. exactly at the confirmed-fill boundary, per §3's formula) in
+both themes; at 375px, `55.5938px` (`≈56.5938px − 1px`). Both consistent
+with `calc(<confirmedWidth>% - 1px)` at the two different track pixel
+widths.
+
+### Student/parent view (`Your season goal`) — confirmed 3, planned 0, goal 12 (planned is zero → divider expected ABSENT)
 
 | | Light | Dark |
 |---|---|---|
@@ -273,6 +383,12 @@ server killed).
 | `aria-valuetext` | `"3 of 12 hours confirmed; 0 more planned"` | same |
 | `aria-labelledby` resolves to | `"Your season goal"` | `"Your season goal"` |
 | `tabindex` attribute present | no | no |
+| **divider present** | **no** | **no** |
+
+Confirmed correctly absent on the student/parent surface in this task's
+default fixture (planned = 0 hrs there) — this is the "absent when either
+segment is zero" behaviour, live-verified on a real page, not just in
+`GoalBar.test.tsx`.
 
 `valuenow ≤ valuemax` holds in every case (17≤100, 25≤100). Raw JSON from
 the capture script (all 8 combos, both viewports) is consistent across
@@ -308,7 +424,7 @@ planned exceed a 15h team goal):
   "ariaValueMax": "100",
   "ariaValueText": "9 of 15 hours confirmed; 7 more planned",
   "trackWidth": "1132px",
-  "fillWidths": ["679.188px", "452.797px"]
+  "fillWidths": ["679.188px", "452.797px", "2px"]
 }
 ```
 
@@ -316,6 +432,15 @@ planned exceed a 15h team goal):
 fills do not exceed the track combined. `progressbar` count: **1**. Page
 text confirmed to still contain `"9 hrs confirmed"`, `"7 hrs planned"`,
 `"15 hrs"` (the Goal tile, unchanged).
+
+**Rework re-check:** re-ran this exact live measurement after adding the
+divider. The third array entry (`"2px"`) is the divider — confirmed 60%
+and planned 40% (clamped) are both non-zero here, so it renders, exactly
+as `GoalBar.test.tsx`'s own overflow test's sibling divider assertions
+predict. Its presence does **not** change the fill widths (`679.188px` /
+`452.797px` are unchanged from the pre-divider measurement) — confirms it
+is a non-consuming overlay, not a third track segment, live, not just in
+the unit test.
 
 ## 6. Test amendment — exact line, before/after, and what survives unchanged
 
@@ -369,18 +494,38 @@ untouched — outside my edited range entirely.
 
 ## 7. Test count — started from, ended with, delta accounted for
 
-**Baseline after merge (confirmed by running `npx vitest run` before any
-edits): 1440 tests across 62 files** — matches the packet's stated
-baseline exactly.
+**Original pass baseline (confirmed by running `npx vitest run` before any
+edits): 1440 tests across 62 files** — matched the packet's stated
+baseline exactly at the time.
 
-**End state: 1451 tests across 63 files.**
+**Original pass end state: 1451 tests across 63 files** (+11, all from the
+new `GoalBar.test.tsx`).
 
-Delta: **+11 tests, +1 file** — all from the new `GoalBar.test.tsx` (11
-`it(...)` blocks, one new file). Zero change to any other file's test
-count. The only existing test whose assertion changed is the one
-documented in §6 (same test, same count — a `toBe(0)`→`toBe(1)` edit, not
-an added/removed test). Zero `.skip`/`.only`/`.todo` anywhere (grepped both
-touched test files — no matches).
+### Rework pass
+
+**After the second merge (before touching `GoalBar.tsx`/`.test.tsx` again):
+1463 tests across 63 files was the state AFTER my divider edits — I did not
+separately snapshot the count immediately post-merge/pre-divider-edit.**
+Reconstructed precisely instead: `git diff badc40d HEAD -- src/pages/calendar/CalendarPage.test.tsx src/pages/roster/RosterShell.test.tsx`
+shows **+6 added `it(` blocks, −1 removed = net +5** from T137/T139/T140's
+already-landed, already-passed work merged in via the second `git merge`
+(unrelated files, outside this task's scope). `1451 + 5 = 1456` is therefore
+the reconstructed post-merge/pre-rework baseline.
+
+**Final end state: 1463 tests across 63 files.**
+
+`1463 − 1456 = 7` — exactly the 7 new divider tests added to
+`GoalBar.test.tsx` this rework pass (11 → 18). Zero other file's test count
+changed by my own edits. Zero `.skip`/`.only`/`.todo` anywhere (re-grepped
+`GoalBar.test.tsx` and `OutreachList.test.tsx` after the rework — no
+matches).
+
+**Discrimination confirmed, not just "tests exist and pass":** two
+independent source mutations (divider colour changed; render-condition
+guard removed) were each reverted after observing the expected test
+failures — see the REWORK section above for the exact failure counts (1
+failed / 17 passed; 3 failed / 15 passed respectively). File confirmed
+byte-identical to a pre-mutation copy via `diff` after each revert.
 
 ## 8. Figure paths (eight captures)
 
@@ -404,14 +549,34 @@ spot-checked two of the eight (coach 1440 light/dark) — bar renders as one
 track with two clearly separated colour segments, milestone row and stat
 tiles both intact beneath it, matching the intended design.
 
-## 9. Full command output (criteria 10–11)
+**Rework: all 8 re-captured** (same paths, files overwritten) with the
+divider present — same method. The 2px divider is a subtle feature at
+1440px scale in a downscaled screenshot; its presence was **verified via
+the rendered-DOM measurement script (§4's tables), not by eyeballing pixel
+differences in the images** — the DOM measurement is the reliable signal
+here, the screenshots are for overall layout/colour review.
+
+**Noted, not a concern:** `git diff --stat` on the 8 figures shows 6 changed
+(all coach ones, as expected — divider added) and 2 of the 4 student ones
+(`student-1440-dark`, `student-375-light`) also changed in file size despite
+the student surface never rendering a divider in this fixture (planned = 0
+hrs). Re-opened `student-1440-dark.webp` and visually confirmed it is
+content-identical to the original capture (same layout, same single green
+fill, no divider) — the byte difference is PNG/WEBP encoding noise between
+two separate Chromium launches (e.g. font hinting/sub-pixel rendering),
+not a real content change. The other two student figures
+(`student-1440-light`, `student-375-dark`) came out byte-identical, which
+is consistent with this being encoder noise rather than a systematic
+effect.
+
+## 9. Full command output (criteria 10–11) — rework pass, final state
 
 ```
 $ npx tsc --noEmit
 (no output — clean)
 
 $ npx vite build
-✓ built in 4.94s
+✓ built in 5.23s
 (only pre-existing "chunks larger than 500kB" advisory, unrelated to this task)
 
 $ npx prettier --check "src/**/*.{ts,tsx}" "!src/theme/volt.ts" "*.{ts,js,json,html}"
@@ -425,8 +590,12 @@ $ npx eslint .
 
 $ npx vitest run
 Test Files  63 passed (63)
-     Tests  1451 passed (1451)
+     Tests  1463 passed (1463)
 ```
+
+(Original pass's commands, before the rework, all reported the same "clean"
+shape against the then-current 1451/63 count — reproduced in the git
+history of this doc, not repeated here to avoid duplication.)
 
 ## 10. Allowed/Forbidden Files compliance
 
@@ -454,27 +623,45 @@ Forbidden files untouched: `src/pages/home/**`, `Leaderboard.tsx`,
 four allowed source files, the eight new figures, and the two new
 `GoalBar.*` files.
 
+**Rework:** the divider was added entirely inside `GoalBar.tsx` and
+`GoalBar.test.tsx` — both already-created files under the explicitly
+Allowed `src/components/GoalBar.tsx` + `GoalBar.test.tsx (new)` line, so no
+new scope question arises. `OutreachList.tsx`/`.test.tsx` were **not**
+touched again this pass — `git status --porcelain` after the rework shows
+only `GoalBar.tsx`, `GoalBar.test.tsx`, and the 8 figures as changed/new
+(plus this output doc), confirmed below.
+
 ## 11. Unverified / not self-certified
 
-- **Criterion 2 is not fully met.** "Each fill vs track" passes both themes
-  with margin; "confirmed vs planned" (mutual) does not, in either theme,
-  and I have proven mathematically that it cannot be made to pass while
-  keeping both fills genuinely two-hued given the pinned track value. This
-  is the single largest open item in this submission — see §2 in full.
+- **Criterion 2's mutual-contrast bullet is WITHDRAWN, not a gap.** See the
+  REWORK section and §2's status update. The replacement (visible divider)
+  requirement is implemented and I have live-DOM evidence it satisfies its
+  own stated conditions (renders/absent correctly, resolves to the track
+  variable, does not consume fill width) — but I have **not** independently
+  re-derived the packet's own claim that "its contrast against both fills
+  then follows from the two fill-vs-track ratios already measured" beyond
+  trusting the logical argument (divider colour == track colour, and
+  each fill already clears 3:1 against the track colour, therefore
+  transitively clears 3:1 against anything equal to the track colour) —
+  this is sound arithmetic, not re-measured pixel-by-pixel against the
+  divider specifically, per the packet's own instruction not to re-measure
+  it.
 - The rig's coach-view error banners ("Couldn't load the active season" /
   "student roster") are asserted here to be a pre-existing rig artifact
   (same category T131 disclosed), not re-derived from first principles
   beyond noting the code path (`AppShell`'s own chrome, not
   `OutreachList`'s injected `loadData`) — plausible but not exhaustively
-  traced line-by-line.
-- Visual spot-check of the eight figures was **not** exhaustive (2 of 8
-  actually opened and read); the other six were validated only via the
-  Playwright rendered-DOM measurement script (§4/§8), not visually
-  re-opened by me.
-- I did not attempt to resolve the §2 tension by unilaterally reinterpreting
-  "the track" as something other than the packet's own pinned
-  `--color-border-emphasized` value — flagged for checker/architect
-  judgment rather than assumed.
+  traced line-by-line. Reappeared identically in the rework's re-captures.
+- Visual spot-check of the eight rework figures was **not** exhaustive (2 of
+  8 actually opened and read, same two as the original pass); the divider's
+  presence in all 8 was confirmed via the DOM measurement script, not by
+  visually distinguishing a 2px line in a downscaled screenshot.
+- The `+5` test delta attributed to the T137/T139/T140 merge (§7) was
+  reconstructed via `git diff <before> HEAD -- <two files>` rather than
+  observed directly as a pre-rework `vitest run` snapshot (I did not run
+  the suite between the second merge and starting the divider edits) — the
+  arithmetic is exact and reproducible, but it is a reconstruction, stated
+  as such.
 
 ## Known risks
 
@@ -495,12 +682,15 @@ four allowed source files, the eight new figures, and the two new
 
 ## Dispute
 
-**Not filed as a formal dispute** — the task was implementable and I shipped
+**Not filed as a formal dispute, in either pass.** The original pass shipped
 a complete, working, tested `GoalBar` + token override + reversed test
-guard. But §2's contrast finding is significant enough that I am
-explicitly **not** marking criterion 2 as met, and recommend the checker/
-architect decide whether: (a) the track binding should be reconsidered,
-(b) the mutual-contrast requirement needs a non-fill-colour mechanism (e.g.
-a divider — not implemented here, since it wouldn't change the measured
-number), or (c) this specific tension is accepted as a known, disclosed
-limitation the way D005 was for a different token pairing.
+guard, and explicitly declined to self-certify criterion 2's now-withdrawn
+mutual-contrast bullet rather than paper over it or invent a workaround.
+That finding was independently re-derived and accepted by the coordinator,
+the criterion was withdrawn, and this rework pass implements its
+replacement (the divider) plus re-captures all affected evidence. I am
+**not** self-certifying this rework either — the checker should re-derive
+the divider's correctness (including, per the coordinator's own note,
+mutating the source to confirm the tests discriminate, which I already did
+once myself and reported the exact results above) rather than take this
+report as sufficient on its own.
