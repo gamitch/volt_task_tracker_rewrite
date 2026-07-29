@@ -23,7 +23,7 @@
  * trips (session, then profile) -- still experienced as "broken".
  *
  * Fix: `mode` is seeded with a LAZY `useState` initializer
- * (`useState(() => readStoredThemeMode() ?? 'system')`) so the read happens
+ * (`useState(() => readSeededThemeMode() ?? 'system')`) so the read happens
  * SYNCHRONOUSLY during the first render, before any effect or network call
  * -- not `useState(readStoredThemeMode() ?? 'system')`, which would still
  * read synchronously but re-run the read on every render for no reason; the
@@ -31,9 +31,12 @@
  * `refresh()`) writes the resolved value back to `localStorage`, so the next
  * boot's synchronous seed reflects the latest known value.
  *
- * A first-ever visit (no `localStorage` entry yet) still flashes `'system'`
- * -- this is an honestly-disclosed residual, not a defect: there is nothing
- * to seed from on that visit, and the `index.html`-inline-script approach
+ * A first-ever visit still flashes `'system'` -- as does any visit where the
+ * session is absent, corrupt, or belongs to a user with no stored preference
+ * yet (T154; see `readSeededThemeMode`). This is an honestly-disclosed
+ * residual, not a defect: there is nothing safe to seed from in those cases,
+ * and a wrong seed is worse than one flash. The `index.html`-inline-script
+ * approach
  * that would avoid it does not work in this app (`Theme`'s own wrapper
  * `<div>` sets `color-scheme` explicitly and is a descendant of `<html>`, so
  * its own value overrides whatever a pre-hydration script set on `<html>`
@@ -44,7 +47,7 @@
  * preference should survive across tabs and browser restarts, unlike
  * `guards.tsx`'s `sessionStorage`-backed intended-URL redirect artifact
  * (`guards.tsx:351-360`, the storage-helper shape this module's own
- * `getStorage`/`readStoredThemeMode`/`writeStoredThemeMode` mirror -- same
+ * `getStorage`/`readSeededThemeMode`/`writeStoredThemeMode` mirror -- same
  * try/catch guard against locked-down/private-browsing contexts, different
  * storage instance and key).
  *
@@ -65,22 +68,56 @@
  *    vitest run`'s own error count), which is the only way this specific
  *    case is actually provable (an `expect(mode).toBe(...)`-shaped assertion
  *    passes green either way and proves nothing about the `.catch` itself).
- * 3. Logout on a shared/kiosk browser -- DISCLOSURE ONLY, deliberately not
- *    fixed here. The `localStorage` seed is not user-scoped: if user A sets
- *    Dark and signs out, user B's first paint on the same browser may use
- *    A's stored value for one frame until B's own `theme_mode` resolves.
- *    `logout()` lives in `guards.tsx` (Forbidden File for this task -- see
- *    the worker packet); reaching into it would repeat a mistake this
- *    codebase has already corrected once elsewhere. There is also no
- *    in-scope alternative: clearing the seed unconditionally whenever `user`
- *    reads `null` is NOT a safe substitute, because `user` is `null` during
- *    every normal page load while the session is still resolving, not only
- *    after a real sign-out -- an unguarded clear there would wipe the seed
- *    on every boot (masked when the profile fetch later succeeds and
+ * 3. Shared/kiosk browser cross-user bleed -- FIXED by T154, was disclosure
+ *    only under T148. T148 keyed the seed per BROWSER (one flat
+ *    `volt.themeMode`), so if user A set Dark and signed out, user B's first
+ *    paint on the same machine used A's value for one frame. The seed is now
+ *    keyed per USER (`volt.themeMode.<uid>`, `themeModeStorageKeyFor`), where
+ *    `<uid>` comes from the `user.id` in the session blob the SDK persists
+ *    under `SUPABASE_AUTH_STORAGE_KEY` (a key this app now OWNS -- see
+ *    `client.ts` for why owning it rather than deriving the SDK's internal
+ *    format is a safety property, not a style choice). B's lookup finds
+ *    nothing and falls through to his OS; A's preference survives for her
+ *    next sign-in rather than being destroyed on logout.
+ *
+ * -----------------------------------------------------------------------
+ * T154's three accepted limitations, stated rather than left to discovery.
+ * -----------------------------------------------------------------------
+ *
+ * a. NO migration of T148's old flat `volt.themeMode` key. Not merely
+ *    uneconomic -- migrating it would be INCORRECT. At the only moment a
+ *    migration could run (first read after upgrade) this code cannot tell
+ *    WHOSE preference the old flat value belongs to. Copying it into the
+ *    first uid-keyed slot would hand one user's value to whichever user
+ *    happens to load the page first, PERMANENTLY, instead of for the single
+ *    honestly-disclosed frame the current design accepts. An orphaned old key
+ *    is strictly safer than a guessed migration, so the old key is simply
+ *    left where it is, unread by anything.
+ *
+ * b. NO clear-on-logout, in any form. `logout()` lives in `guards.tsx`
+ *    (Forbidden File for this task), and every in-scope variant was already
+ *    measured as actively destructive under T148: clearing the seed whenever
+ *    `user` reads `null` is NOT a safe substitute, because `user` is `null`
+ *    during every normal page load while the session is still resolving, not
+ *    only after a real sign-out -- an unguarded clear there would wipe the
+ *    seed on every boot (masked when the profile fetch later succeeds and
  *    rewrites it, but PERMANENT when `resolveThemeMode` rejects, and
- *    PERMANENT on any genuinely anonymous visit -- `/login`, a signed-out
- *    landing page -- since nothing ever restores it). Accepted, documented
- *    limitation; not built.
+ *    PERMANENT on any genuinely anonymous visit such as `/login`, since
+ *    nothing ever restores it). Per-uid keying makes the question moot
+ *    regardless: B's lookup was never going to reach A's key.
+ *
+ * c. KEY ACCUMULATION, accepted. Every distinct user who has ever signed in
+ *    on a given browser leaves a permanent `volt.themeMode.<uid>` entry
+ *    behind; nothing deletes an old uid's key when a different user signs in.
+ *    On a browser several people share over a season (team laptops, a
+ *    kiosk-adjacent machine -- plausible for this app specifically) this
+ *    accumulates one small entry per distinct user, unbounded over the life
+ *    of the browser profile. This is a real property of the design, not a
+ *    defect: each entry is a few bytes, holds no PII beyond a uid already
+ *    present in the same browser's session blob, and unbounded-but-tiny
+ *    accumulation is a strictly better trade than either overwriting a
+ *    stranger's preference or building eviction logic for a cosmetic
+ *    setting. No cleanup is built.
  *
  * -----------------------------------------------------------------------
  * Mount point -- `App.tsx`, between `AuthProvider` and `Theme`.
@@ -98,6 +135,7 @@
 import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { resolveThemeMode as fetchThemeMode, type ThemeMode } from '../lib/supabase/auth';
+import { SUPABASE_AUTH_STORAGE_KEY } from '../lib/supabase/client';
 import { useAuth } from './guards';
 
 export type { ThemeMode };
@@ -110,7 +148,11 @@ export type { ThemeMode };
 // non-component export) -- see criterion 13 of the T148 worker packet.
 // ---------------------------------------------------------------------------
 
-const THEME_MODE_STORAGE_KEY = 'volt.themeMode';
+/** T154: the seed key is now per-USER, not per-browser. `<uid>` is the
+ * `user.id` of whoever the persisted Supabase session says is signed in. */
+function themeModeStorageKeyFor(userId: string): string {
+  return `volt.themeMode.${userId}`;
+}
 
 const VALID_THEME_MODES: readonly ThemeMode[] = ['system', 'light', 'dark'];
 
@@ -128,13 +170,66 @@ function getStorage(): Storage | null {
   }
 }
 
-function readStoredThemeMode(): ThemeMode | null {
-  const raw = getStorage()?.getItem(THEME_MODE_STORAGE_KEY) ?? null;
+/** The minimum shape this module needs out of the persisted session blob.
+ * Deliberately narrow: only `user.id`, nothing else is read. */
+interface PersistedSessionWithUserId {
+  user: { id: string };
+}
+
+function isPersistedSessionWithUserId(value: unknown): value is PersistedSessionWithUserId {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const { user } = value as { user?: unknown };
+  if (typeof user !== 'object' || user === null) {
+    return false;
+  }
+  const { id } = user as { id?: unknown };
+  return typeof id === 'string' && id.length > 0;
+}
+
+/**
+ * Reads the signed-in `user.id` SYNCHRONOUSLY out of the session blob the SDK
+ * itself persists under the key this app owns
+ * (`SUPABASE_AUTH_STORAGE_KEY`). Returns `null` -- meaning NO SEED, fall back
+ * to the single `'system'` flash -- on every failure axis: no storage, no key
+ * present, unparseable JSON, or a blob without a non-empty string
+ * `user.id`. It never returns a guessed or stale id, which is the whole
+ * safety property T154 rests on.
+ */
+function readSessionUserId(): string | null {
+  const storage = getStorage();
+  if (!storage) {
+    return null;
+  }
+  const raw = storage.getItem(SUPABASE_AUTH_STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    // Corrupt/truncated entry -- treat as absent. Never guess.
+    return null;
+  }
+  return isPersistedSessionWithUserId(parsed) ? parsed.user.id : null;
+}
+
+/** The synchronous seed read. `null` whenever the session is absent, corrupt,
+ * or has no usable id -- and also whenever THAT user simply has no stored
+ * preference yet (a different user's key is never consulted). */
+function readSeededThemeMode(): ThemeMode | null {
+  const userId = readSessionUserId();
+  if (userId === null) {
+    return null;
+  }
+  const raw = getStorage()?.getItem(themeModeStorageKeyFor(userId)) ?? null;
   return isValidThemeMode(raw) ? raw : null;
 }
 
-function writeStoredThemeMode(mode: ThemeMode): void {
-  getStorage()?.setItem(THEME_MODE_STORAGE_KEY, mode);
+function writeStoredThemeMode(userId: string, mode: ThemeMode): void {
+  getStorage()?.setItem(themeModeStorageKeyFor(userId), mode);
 }
 
 // ---------------------------------------------------------------------------
@@ -177,7 +272,7 @@ export function ThemeModeProvider({
   const { user } = useAuth();
   // Lazy initializer: runs synchronously during the FIRST render only, before
   // any effect or network call -- the flash fix (see module doc above).
-  const [mode, setMode] = useState<ThemeMode>(() => readStoredThemeMode() ?? 'system');
+  const [mode, setMode] = useState<ThemeMode>(() => readSeededThemeMode() ?? 'system');
   // Bumped by `refresh()` to force the effect below to re-run without
   // changing `loadThemeMode`'s own identity/deps -- same mechanism
   // `SeasonProvider.tsx`'s own `refreshToken` uses.
@@ -202,7 +297,11 @@ export function ThemeModeProvider({
           return;
         }
         setMode(resolved);
-        writeStoredThemeMode(resolved);
+        // Write-through is keyed by the AUTHENTICATED user's own id, taken
+        // from `useAuth()` rather than re-read from storage -- inside this
+        // branch `user` is known non-null, so this cannot write under
+        // someone else's key.
+        writeStoredThemeMode(user.id, resolved);
       })
       .catch((error: unknown) => {
         // Case 2: fail safe -- keep whatever `mode` is currently showing
