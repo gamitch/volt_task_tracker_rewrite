@@ -166,3 +166,37 @@ constitution rule rather than my habit.
 The near-miss also argues the separation the constitution already demands is doing
 real work: a source change reached the tree with no packet, no checker, and no human
 able to review it, and only a mechanical check caught it.
+
+### 2026-07-29 — T142's work was never committed, and the report did not say so
+
+T142's worker reported "Final state confirmed clean" and gave a full account of files
+changed, measurements taken and commands run. All of the work is real and on disk.
+**None of it was committed.** Its worktree HEAD was still my packet commit; `git
+status` showed two modified files and an untracked output doc.
+
+Caught only because the empty `git diff` against the merge base did not match a report
+describing 770 changed lines. Had I taken the report at face value and removed the
+worktree — which is what I do after every merge — the work would have been destroyed.
+
+**"Clean" and "committed" are different claims.** Earlier workers this session
+reported an explicit SHA; this one did not, and I read the absence as routine. Asked
+it to commit and to report the SHA, and told it the distinction matters because it
+decides whether work survives.
+
+**REVIEW — worth a constitution rule:** a worker's completion report should be
+required to state a commit SHA, and the orchestrator should verify HEAD moved before
+treating work as existing. Both halves are mechanical. I have been verifying *content*
+carefully all session while assuming *existence*.
+
+Two genuinely good calls by that worker, recorded because they are the behaviour the
+packets keep asking for:
+
+- It hit two apparent citation mismatches and investigated rather than guessing past
+  them. Both resolved — the SideNav citation refers to installed vendor source, not
+  this project's own similarly-named file.
+- It found a real error of mine and reported it instead of quietly working around it.
+  Part 1's worked example ("outer 1152, 16px each side") was measured back when the
+  packet still assumed a 240px SideNav. The gate corrected that to 260px for the
+  minWidth derivation and **I never propagated the fix into Part 1's example.** Live
+  measurement is 1132 / 6px. That is a fifth citation-class error from me, and the
+  first one a worker caught rather than a gate.
