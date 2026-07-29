@@ -374,3 +374,35 @@ I am not changing the constitution for this unsupervised — it constrains agent
 behaviour in a way that could have its own costs, and today's three consequences were
 all recoverable. Flagging it as the third rule this session that emerged from an
 incident rather than from design.
+
+### 2026-07-29 — constitution item 23, and the ledger backfilled
+
+**Item 23 added** at George's instruction: mutation experiments run in the agent's own
+worktree, never the shared tree. Encoded the distinction that matters — **reading the
+shared tree is unrestricted**, because a premise gate must check citations against
+live state including uncommitted work; only *mutations* need isolation. Added the
+corollary aimed at my own failure: a dirty tree is not automatically an unauthorized
+change, and the orchestrator must establish which agents are running before reverting.
+
+The rule deliberately protects the practice rather than restricting it. Mutation
+proofs have caught more real defects here than any other technique — including a test
+that passed with the feature entirely removed.
+
+**Ledger backfilled: T142 through T150.** The foreman found no rows for any of them,
+confirmed by grep across all 692 lines. Reconstructed from packets, worker output
+docs, checker verdicts, dispute-log entries and merge commits — evidence, not memory.
+
+Two things worth noting about the backfill:
+
+1. **The gap was real and predates today.** T142's own packet self-acknowledged it
+   ("there is no T142 ledger row"), which is how I came to cite a nonexistent ledger
+   title as grounds for a scope decision in that packet — an invented premise the gate
+   caught.
+2. **T144's row records a closed-no-change task**, which the ledger had no precedent
+   for. Written as `Closed — no change` with the branch preserved and both D011 and its
+   addendum cited, so a future reader does not mistake an unmerged branch for
+   abandoned work.
+
+The rows are long, matching the existing house style, and each records the
+orchestrator errors alongside the outcome rather than only the result. That is the
+part likely to be useful later.

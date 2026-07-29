@@ -221,3 +221,24 @@ After the third failure, the task must be escalated to boss-arbiter.
     flag an uncommitted file. The edit itself was a harmless fixture rename; the
     mechanism is indifferent to severity.
 
+23. **Mutation experiments run in the agent's own worktree, never the shared
+    tree.** Reading the shared working tree is unrestricted — a premise gate
+    must check citations against live state, including uncommitted work. But any
+    agent that *modifies* files to run an experiment — reverting a fix to prove a
+    test fails, re-iding a fixture to measure breakage, probing a type error —
+    does so in an isolated worktree it owns. An agent without one creates one
+    (`git worktree add`) rather than mutating the shared tree. Corollary for the
+    orchestrator: **a dirty working tree is not automatically an unauthorized
+    change.** Before reverting unexpected modifications, establish which agents
+    are running and whether one is mid-experiment; reverting another agent's
+    in-flight mutation corrupts its measurement. Authorized by the human owner
+    2026-07-29. Rationale: a `checker-premise` gate ran four instrumented
+    mutation experiments against the shared tree, intending to revert each. The
+    orchestrator found the tree dirty mid-experiment, reverted it, and
+    misattributed the change to a different agent that was operating correctly —
+    three failures from one missing convention. The practice that caused it is
+    correct and must not be discouraged: mutation proofs have caught more real
+    defects in this project than any other technique, including a test that
+    passed with the feature entirely removed. This rule isolates the practice
+    rather than restricting it.
+
