@@ -64,7 +64,19 @@ surface carrying a linked title, absent truncation is accepted behaviour, not a
 defect. Workers report the measurement and move on; they do not propose the
 cast. If the vendor later exposes `labelLines` on `ListItemProps`, revisit.
 
-**D-2 — `/roster` cannot be captured with real data, and this will recur.**
+**D-2 — RESOLVED 2026-07-29 by T139.** George chose "add the loader seam".
+Inspecting it shrank the task: all five children `RosterShell` renders already
+exposed injectable seams, and the shell simply rendered them with no props,
+swallowing every one. `RosterShellProps` now forwards to each. A capture harness
+can inject fixture loaders and get a real roster table.
+
+**Still true, and out of scope by design:** the KPI strip on `/roster` will
+still show an error, because that comes from `SeasonProvider` in `AppShell`, not
+from anything the shell renders. A roster capture needs that solved separately.
+
+The original entry follows, for the record.
+
+**D-2 (original) — `/roster` cannot be captured with real data, and this will recur.**
 `RosterShell`/`StudentsTab` expose no injectable loader seam, and there is no
 `.env` in this environment, so any roster screenshot shows a
 Supabase-not-configured error rather than the table. T134 shipped that as the
