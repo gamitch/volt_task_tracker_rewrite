@@ -291,6 +291,8 @@
     --color-background-inverted: light-dark(#1D1A21, #FEFBFF);
     --color-track: light-dark(#AFA9B7, #4A4551);
     --radius-chat: 42px;
+    --color-data-categorical-green: light-dark(#0B603D, #8EF7AA);
+    --color-data-categorical-purple: light-dark(#3E0697, #B3B0FE);
   }
 
   .astryx-heading.level-1 {
