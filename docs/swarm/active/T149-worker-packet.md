@@ -248,9 +248,11 @@ find nothing once "Below goal" only ever exists as the substring
 line fails with `expected undefined to be truthy`. **This is an authorized test
 amendment, not an unrelated break to route around** — the constitution's own
 non-negotiable ("existing tests must pass unless the boss explicitly approves a
-test update") is satisfied here: the human owner reviewed this exact failure and
-approved amending these three lines, recorded in
-`docs/swarm/auto-mode-decisions.md`. Replace the finder with:
+test update") is satisfied here by the **orchestrator**, acting under the human
+owner's standing auto-mode authority — **not by the human owner**, who is away and
+has not seen this finding. The approval and its reasoning are recorded at
+`docs/swarm/auto-mode-decisions.md` under "T149: authorizing the `:1194-1196` test
+amendment". Cite that, not him. Replace the finder with:
 
 ```ts
 const belowGoalButton = container.querySelector('button[aria-pressed]');
