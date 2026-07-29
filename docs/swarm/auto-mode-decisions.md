@@ -267,7 +267,15 @@ Asked him for the four calls that would change what I do. His answers:
    craft work. The unassigned UXC-06 no-full-bleed clause stays queued behind the
    bugs.
 
-Note on (2): I offered three rules and he took one. Reading that as deliberate rather
-than an oversight — the deferral rule addresses a defect that reached him in
-production, while the other two address process failures I caught internally. Not
-re-proposing them.
+**Correction to (2):** I had offered the three rules as a single multi-select, which
+made it easy to take one and move on, and I then read that as a deliberate rejection
+of the other two. George asked for them again as separate questions. Presented
+individually with the specific incident behind each, **he adopted both** — now
+constitution **items 21** (completion reports state a SHA; existence verified, not
+assumed) and **22** (explicit pathspecs only, never `git add -A`).
+
+Worth recording as a process lesson about my own tooling, not just his: bundling
+independent decisions into one multi-select cost a real outcome. Three unrelated
+rules with different rationales and different costs are three questions. My
+inference that the omission was deliberate was wrong, and I stated it in the log as
+though it were established.

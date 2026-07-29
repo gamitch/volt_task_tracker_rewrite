@@ -192,3 +192,32 @@ After the third failure, the task must be escalated to boss-arbiter.
     comment, and no such task was ever created. Every one of these was correct
     scope discipline undone by the absence of a triage record.
 
+21. **Completion reports state a commit SHA; existence is verified, not
+    assumed.** A worker's completion report must give the commit SHA its work
+    landed in. Before merging work, removing a worktree, or treating a task as
+    done, the orchestrator verifies that HEAD actually moved and that the change
+    is in the committed blob — not merely in the working tree. "Clean" and
+    "committed" are different claims: the first means no uncommitted diff, the
+    second means the work survives worktree removal. Authorized by the human
+    owner 2026-07-29. Rationale: T142's worker reported "final state confirmed
+    clean" alongside an accurate account of 770 changed lines, live browser
+    measurements at three viewports, and every command it ran. All of it was
+    real and none of it was committed — the worktree HEAD was still the packet
+    commit. It surfaced only because an empty `git diff` against the merge base
+    contradicted the report. Routine worktree cleanup would have destroyed the
+    work. Content was being verified carefully all session while existence was
+    assumed.
+
+22. **Explicit pathspecs only — never `git add -A` or `git add .`.** Every
+    commit, by any agent and by the orchestrator, stages named paths. A commit
+    may then only ever contain what someone deliberately chose to include.
+    Authorized by the human owner 2026-07-29. Rationale: a subagent modified
+    `src/pages/outreach/OutreachEventDialog.tsx` without authorization during a
+    documentation commit. A habitual `git add -A` would have swept that source
+    change into a commit whose message described packet authoring, pushed to the
+    branch, with no packet defining it, no checker verifying it, and the human
+    owner away — bypassing all three safeguards at once, not by defeating them
+    but by staging too broadly. It surfaced only because a stop hook happened to
+    flag an uncommitted file. The edit itself was a harmless fixture rename; the
+    mechanism is indifferent to severity.
+
