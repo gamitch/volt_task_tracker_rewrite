@@ -978,20 +978,45 @@ migration — plus re-deriving the RLS posture of every base table the views joi
 since `read_all` on `seasons` means season rows themselves were never the
 barrier.
 
-### Options
+### RESOLVED 2026-07-29 — fix the comment, leave the schema alone
 
-- **(a) Settle it first.** George runs the query above; we act on the answer.
-  Cheapest, and avoids writing a migration for a problem that may not exist.
-- **(b) Fix defensively now.** New migration setting `security_invoker = on` on
-  both views and correcting the comment. Safe in principle, but it changes RLS
-  behaviour and could break the coach/admin path if those sessions were relying
-  on owner-rights reads — which is exactly the sort of change that needs a real
-  packet and an opus worker under constitution item 18.
-- **(c) Correct only the prose.** Fix the false claims in the migration comment
-  and `SeasonProvider.tsx` so nobody relies on them, and leave the behaviour
-  alone pending (a).
+**George's standing guidance: this is a small robotics team's app, not an
+enterprise system. Keep it simple.** Re-reading the finding against that, the
+proportionate answer is clear, and the earlier three-option framing overstated
+the problem.
 
-**Recommendation: (a), then (c) regardless of the answer.** The comment is wrong
-either way and should not survive; whether a migration is needed depends on
-facts only George can obtain. Editing an already-applied migration file is
-itself a decision for him, so even (c) is proposed, not taken.
+**What these views actually expose, read directly rather than assumed:** season
+totals of volunteer hours by event type, a completed-events count, the most
+recent event's title and date, the active-student count, and the season's goal
+target. **No PII.** No names, no emails, no per-student rows, no contact
+details, no tokens.
+
+So the worst realistic case — a student's session queries the view directly
+instead of going through the UI — shows them their own team's aggregate stats:
+"the team logged 812 hours across 47 events." That is close to what a leaderboard
+shows anyway, and it is not worth a schema migration, an RLS audit, or a
+`security_invoker` change that could plausibly break the coach and admin path
+that actually works today.
+
+**Decision:**
+
+- **Do not change the schema.** No new migration, no `security_invoker`, no
+  re-derivation of every base table's RLS. The risk does not justify touching
+  working auth machinery.
+- **Do fix the false comment**, because a wrong security claim left in the tree
+  is how a future decision gets made on a bad premise — which is exactly what
+  happened here twice already. Scope: the two prose blocks in
+  `20260723000000_kpi_views.sql:136-152` and `SeasonProvider.tsx:76-84`. Editing
+  an already-applied migration's *comment* is still George's call, so this stays
+  proposed until he says go.
+- **Revisit only if the data in these views changes.** If a future task adds
+  per-student rows, names, or anything identifying to `v_season_kpis`, this
+  finding stops being cosmetic and the `security_invoker` question becomes real.
+  Noted here so that change trips over this entry.
+
+The diagnostic query above is kept for the record, but nobody needs to run it.
+
+**Standing calibration, applies beyond this entry:** proportion findings to this
+project's actual stakes. Real risks here are losing student data, leaking PII or
+credentials, and breaking auth. Aggregate hour counts visible to the team they
+describe are not in that class.

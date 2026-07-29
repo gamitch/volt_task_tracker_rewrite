@@ -190,6 +190,35 @@ a change (the withdrawn contrast criterion), the cheaper path was to fix the
 packet first, resume the worker, and check once at the end — rather than
 re-running a full check on work guaranteed to be superseded.
 
+## Standing calibration added 2026-07-29 — proportion findings to the stakes
+
+**George, 2026-07-29: "this is an application for our small robotics team, not a
+corporate enterprise application."**
+
+This governs how findings are written and how packets are scoped. It is not
+permission to be careless — it is an instruction to spend rigour where it
+matters.
+
+**Genuinely serious here:** losing student data; leaking PII or credentials;
+breaking auth so a coach cannot run a meeting; metric formulas drifting out of
+the SQL views; anything that makes a minor's information visible to someone who
+should not see it.
+
+**Not serious here:** aggregate hour counts visible to the team they describe;
+theoretical attack paths that require a schema change to close and are not
+reachable through the UI; enterprise hygiene with no user-visible consequence.
+
+D010 is the worked example. A real defect — a migration comment claiming an RLS
+protection that does not exist — was written up with three options and a
+migration on the table. Re-read against the stakes, the views turned out to
+contain no PII at all, so the proportionate fix is to correct the false comment
+and leave working auth machinery alone. The finding was right; the framing was
+oversized.
+
+**Applied to packets:** prefer the smaller change; do not add defensive
+machinery for risks that cannot hurt this team; and when a finding looks
+alarming, check what data is actually involved before writing options.
+
 ## Environment facts (verified, not assumed)
 
 **All 15 migrations are applied to George's remote Supabase project**, verified
