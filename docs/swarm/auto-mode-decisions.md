@@ -406,3 +406,61 @@ Two things worth noting about the backfill:
 The rows are long, matching the existing house style, and each records the
 orchestrator errors alongside the outcome rather than only the result. That is the
 part likely to be useful later.
+
+## Monitoring report — items 20-23, first live day
+
+George asked these be watched for negative consequences. Reporting on the first day
+they were in force, against the failure modes I predicted in advance.
+
+### Item 23 (mutations in your own worktree) — working, and it enabled the parallelism
+
+Three premise gates ran concurrently this afternoon. Two of them independently chose
+to create worktrees **outside the repo entirely** (under the scratchpad, with
+`node_modules` symlinked) rather than under `.claude/worktrees/` — cleaner than the
+rule required, and they reported the shared tree verified clean before and after.
+
+**This is the rule that made four-way parallelism possible.** Before it, one gate
+mutating the shared tree caused three separate failures in a single afternoon. Three
+gates doing it concurrently would have been unworkable.
+
+Predicted failure — "overhead discourages mutation testing" — **did not materialise**.
+Both gates still ran full mutation cycles.
+
+### Item 21 (report a SHA, verify existence) — no cost observed yet
+
+No worker has committed under it yet; T146's worker is the first dispatched with the
+requirement. Predicted failure was premature commits made just to have a SHA to quote.
+Nothing to report.
+
+### Item 22 (explicit pathspecs) — one near-miss, and it was mine
+
+Predicted this would break first, converting a too-much-committed failure into a
+too-little-committed one. Not observed yet. But I did leave a foreman-authored packet
+uncommitted across several turns *because* item 22 stopped me sweeping it up — which
+is the rule working, though it did trip a stop hook repeatedly.
+
+### Item 20 (deferrals must file a ledger row) — **first live test was a MISS, caught by a gate**
+
+T146's packet knowingly defers three things — the 81-cast class, the
+generated-`Database`-types path, and any other defective loaders the worker spots —
+and routed all three to the worker output doc. **That is exactly the comment-only
+deferral item 20 exists to prevent**, reproduced in a packet written after the rule
+landed.
+
+The gate caught it: *"item 20's first live test case is a miss."* Fixed by requiring
+the worker to state that the deferrals need follow-up ledger rows, which the foreman
+creates on receipt — since `task-ledger.md` is Forbidden to workers.
+
+**REVIEW — this is a real design gap, not just an oversight.** Item 20 places an
+obligation on the party who *cannot discharge it*: the worker or checker with the
+knowledge has no write access to the ledger. Every deferral therefore needs a relay,
+and a relay is exactly what failed for T101, T121 and SettingsPage — the three
+deferrals that became George's bug reports. The rule as written would have caught none
+of them without someone remembering to relay.
+
+Two candidate fixes, neither adopted unilaterally: give workers write access to a
+per-task ledger file (which §3.4 of the parallelism review proposes anyway), or make
+"file the deferrals" an explicit orchestrator checklist item on every worker report.
+The second is weaker but free.
+
+T148's gate independently flagged the same exposure on that packet.
