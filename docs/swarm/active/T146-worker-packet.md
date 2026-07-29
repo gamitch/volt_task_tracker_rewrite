@@ -33,7 +33,7 @@ const result = await client.from('teams').select('id, name, color').order(...)
 ```
 
 **That fully reinstates the original production bug — and `tsc` exits 0 and all
-1474 tests pass.** Nothing in the project notices.
+1476 tests pass.** Nothing in the project notices.
 
 Two reasons:
 
@@ -71,13 +71,18 @@ than a function lifted out for testability.
 **The fake client already exists — do not build one from scratch.**
 `src/pages/outreach/OutreachDetail.test.tsx:943-961` is a complete six-table
 `fromSpy` for `makeLoadOutreachDetail`, with a working non-null event row at
-`:906-925` and an `unexpected table` guard. Copy it and replace the `teams` branch's
+`:903-920` and an `unexpected table` guard. Copy it and replace the `teams` branch's
 `select` with a recording spy — `select.mock.calls[0][0]` is the column string. A
 second precedent, including a thenable-plus-`.order()` stub that satisfies both
 awaited-select and chained-select shapes with one object, is at
 `MeetingsList.test.tsx:1227-1241` and `:1268-1272`.
 
 That file is in a Forbidden tree, so read it as a template; do not edit it.
+
+**Your test runs in vitest's default node environment — do not add an
+`@vitest-environment jsdom` docblock.** `vite.config.ts` sets no global environment,
+and every page import in `outreach.ts` is `import type`, so nothing React-shaped is
+pulled in.
 
 **One constraint that will otherwise cost you an hour.** `outreach.ts:873`
 short-circuits — `if (eventRow === null) return null;` — and the teams query is then
@@ -194,7 +199,8 @@ it — with two real call sites to design against instead of one guess.
    failure output you saw at step 3, and confirm at step 4 that the file was restored
    byte-identically.
 4. Confirm against a recorded measurement rather than rediscovering it: the gate ran
-   the mutation at this packet's commit and got **tsc exit 0, 63 files / 1474 tests
+   the mutation **post-merge at `origin/claude/swarm-plan-zl575z` (`d26c52a`)** — the
+   tree step 1 actually gives you — and got **tsc exit 0, 63 files / 1476 tests
    passed, eslint 0 errors / 354 warnings** — i.e. nothing else in the suite notices.
    Report whether your run matches; do not burn a full suite run treating this as an
    open question.
@@ -206,12 +212,17 @@ it — with two real call sites to design against instead of one guess.
    so the test covers both ends of the chain rather than only the first.
 7. No other loader file is modified.
 8. `npx tsc --noEmit`, `npx vite build`, `npm run format:check`, `npx eslint .` and
-   `npx vitest run` all clean. Baselines measured at this packet's commit:
-   **0 errors, 354 warnings**, 63 test files, **1474 tests**. Your test count will
+   `npx vitest run` all clean. Baselines measured **post-merge at
+   `origin/claude/swarm-plan-zl575z` (`d26c52a`)** — the tree step 1 gives you, not
+   this packet's own commit, whose baseline you cannot reach:
+   **0 errors, 354 warnings**, 63 test files, **1476 tests**. Your test count will
    rise; the file count rises by one. Report both and explain.
 
 ## Relevant Constitution Excerpt
 
+- **Item 23** — mutation experiments run in your own worktree, never the shared tree.
+  Criterion 3 IS a mutation experiment. You already work in your own worktree, so this
+  is satisfied by default — but do not run it anywhere else.
 - **Item 19c** — verify a citation before asserting it. If anything here does not
   match the tree, **stop and report the mismatch rather than guessing at intent.**
   Three orchestrator citation errors reached workers this session (D011, D012, and a
@@ -225,7 +236,10 @@ Create `docs/swarm/active/T146-worker-output.md` covering: the fake-client shape
 built and which chain methods it needed; why you asserted columns rather than the
 literal string; the full mutation evidence for criterion 3, including whether the
 rest of the suite stayed green; any other loaders you noticed with the same defect,
-as findings only; a note on the generated-`Database`-types path as the structural
+as findings only — and state explicitly that these deferrals (the 81-cast class, the
+generated-`Database`-types path, and any other defective loaders you spot) **require
+follow-up ledger rows under constitution item 20**, which the foreman creates on
+receipt, since `task-ledger.md` is Forbidden to you; a note on the generated-`Database`-types path as the structural
 alternative; full command output; and anything you could not verify, stated plainly
 as unverified rather than omitted.
 
