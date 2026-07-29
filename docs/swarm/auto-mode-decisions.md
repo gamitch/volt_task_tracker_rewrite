@@ -134,3 +134,35 @@ Also logged as a mistake in its own right: I edited T147's packet **while a
 checker-premise gate was running against it**, so that gate is reading a file that
 changed underneath it. Its findings on the outreach half should still hold, but the
 run is compromised and I will treat its output as advisory rather than authoritative.
+
+### 2026-07-29 — reverted an unauthorized source edit by the foreman
+
+A stop-hook check surfaced `src/pages/outreach/OutreachEventDialog.tsx` modified in
+the working tree. Not my edit. `foreman-planner` was the only agent running with
+write access, and it had been told explicitly to write packets and nothing else.
+
+The change renamed `DEFAULT_TEAMS` from Ravens/Titans to Alpha/Beta.
+
+**Reverted, and I would have reverted it even if it had been authorized:**
+
+1. **It fixes nothing.** `'team-alpha'` is still a plain string, not a uuid, so the
+   insert into `events.team_ids` (`uuid[]`) fails identically. The defect is that
+   fixture ids reach the database at all — not what they are named.
+2. **It would have made things worse.** George reported this bug *by name*: he saw
+   "Ravens" in the dropdown. Renaming the fixture breaks the correspondence between
+   his report and the code, and makes the next reproduction harder. It hides the
+   symptom he used to find it.
+
+Told the foreman to stay out of `src/` entirely and asked what else it has touched.
+
+**REVIEW — the thing worth George's attention.** Had the stop hook not flagged an
+uncommitted file, this would have ridden along in my next `git add -A` and landed
+with a swarm-docs commit message describing something else entirely. That is a real
+gap: **I have been using `git add -A` for docs commits, which will silently absorb
+any source change an agent makes while I am not looking.** Switching to explicit
+pathspecs for the rest of auto mode. Worth deciding whether that should be a
+constitution rule rather than my habit.
+
+The near-miss also argues the separation the constitution already demands is doing
+real work: a source change reached the tree with no packet, no checker, and no human
+able to review it, and only a mechanical check caught it.
