@@ -49,3 +49,32 @@ export const EVENT_TYPE_ORDER = [
   'outreach',
   'competition',
 ] as const satisfies readonly EventType[];
+
+/**
+ * Compile-time exhaustiveness guard for `EVENT_TYPE_ORDER`.
+ *
+ * `as const satisfies readonly EventType[]` only constrains every *element*
+ * of the array to be a valid `EventType` -- it does not require every
+ * `EventType` to appear. Adding a fourth member to the `EventType` union
+ * therefore produces no error on `EVENT_TYPE_ORDER` on its own (unlike
+ * `EVENT_TYPE_BADGE` above, whose `Record<EventType, ...>` shape forces a
+ * TS1360 error for a missing key). Without this guard, a future added type
+ * would go green at `tsc --noEmit` while the legend silently rendered only
+ * the types present in this list -- replacing dependence on object
+ * insertion order (T145's original bug) with an equally silent dependence
+ * on someone remembering to update this second list.
+ *
+ * If `EVENT_TYPE_ORDER` is missing any `EventType`, `Exclude<...>` resolves
+ * to the missing member(s) instead of `never`, so the conditional type
+ * below resolves to a 2-tuple literal type naming them, and assigning
+ * `true` to that type fails to typecheck.
+ */
+type EventTypeOrderIsExhaustive =
+  Exclude<EventType, (typeof EVENT_TYPE_ORDER)[number]> extends never
+    ? true
+    : [
+        'EVENT_TYPE_ORDER is missing event types:',
+        Exclude<EventType, (typeof EVENT_TYPE_ORDER)[number]>,
+      ];
+const eventTypeOrderIsExhaustive: EventTypeOrderIsExhaustive = true;
+void eventTypeOrderIsExhaustive;

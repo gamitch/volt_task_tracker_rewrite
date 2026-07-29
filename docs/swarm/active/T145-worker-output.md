@@ -52,6 +52,102 @@ legend as:
 No `Object.keys`/`Object.entries` used anywhere. `EVENT_TYPE_ORDER` is
 imported alongside the already-imported `EVENT_TYPE_BADGE`.
 
+## Post-review addendum — compile-time exhaustiveness guard
+
+The coordinator reviewed the diff and identified a real gap: `as const
+satisfies readonly EventType[]` on `EVENT_TYPE_ORDER` only constrains each
+*element* to be a valid `EventType` — it does not require every `EventType`
+to appear. `EVENT_TYPE_BADGE`'s `Record<EventType, ...>` shape does force a
+`TS1360` error on a missing key, but `EVENT_TYPE_ORDER` alone would not, so a
+future fourth event type could be added, `EVENT_TYPE_BADGE` fixed to match,
+`tsc --noEmit` would go green, and the legend would still silently render
+only three of four badges — the same silent-failure shape T145 was opened to
+remove, just moved one level up.
+
+Added a compile-time exhaustiveness guard to `src/lib/eventTypeBadge.ts`:
+
+```ts
+type EventTypeOrderIsExhaustive =
+  Exclude<EventType, (typeof EVENT_TYPE_ORDER)[number]> extends never
+    ? true
+    : [
+        'EVENT_TYPE_ORDER is missing event types:',
+        Exclude<EventType, (typeof EVENT_TYPE_ORDER)[number]>,
+      ];
+const eventTypeOrderIsExhaustive: EventTypeOrderIsExhaustive = true;
+void eventTypeOrderIsExhaustive;
+```
+
+Used the coordinator-supplied shape, dropping the underscore prefix on the
+binding/type names: `noUnusedLocals`/`noUnusedParameters` are both `true` in
+`tsconfig.json`, and the `void eventTypeOrderIsExhaustive;` statement already
+counts as a real reference for both `tsc` and
+`@typescript-eslint/no-unused-vars`, so no underscore convention or
+eslint-disable comment was needed. Verified: `npx eslint
+src/lib/eventTypeBadge.ts` — no output (clean). `npx prettier --check
+src/lib/eventTypeBadge.ts` — failed once on the guard's initial formatting;
+ran `npx prettier --write src/lib/eventTypeBadge.ts` (reformatted the ternary
+branch's array literal onto multiple lines), then `--check` passed.
+
+**Verification the guard fires, exactly as the coordinator described:**
+
+1. Baseline hash (clean, guard in place, no mutation):
+   ```
+   sha256sum src/lib/eventTypeBadge.ts
+   1d0fff8975767b44c019246263c5ce26fbfdf5f00736b0f5519e19975acb9d93
+   ```
+   `npx tsc --noEmit` on this state: clean, no output.
+
+2. Added a fourth `EventType` union member only:
+   ```ts
+   export type EventType = 'meeting' | 'outreach' | 'competition' | 'fundraiser';
+   ```
+   `npx tsc --noEmit` produced **two** errors: the pre-existing `TS1360` on
+   `EVENT_TYPE_BADGE` ("Property 'fundraiser' is missing...") and, separately,
+   the new guard:
+   ```
+   src/lib/eventTypeBadge.ts(79,7): error TS2322: Type 'boolean' is not
+   assignable to type '["EVENT_TYPE_ORDER is missing event types:",
+   "fundraiser"]'.
+   ```
+
+3. To isolate the exact gap the coordinator described (someone adds the type,
+   fixes `EVENT_TYPE_BADGE`, `EVENT_TYPE_ORDER` stays stale), also added a
+   `fundraiser` entry to `EVENT_TYPE_BADGE` (satisfying its `Record` check)
+   while leaving `EVENT_TYPE_ORDER` untouched. `npx tsc --noEmit` then
+   produced **exactly one** error — the guard, and only the guard:
+   ```
+   src/lib/eventTypeBadge.ts(80,7): error TS2322: Type 'boolean' is not
+   assignable to type '["EVENT_TYPE_ORDER is missing event types:",
+   "fundraiser"]'.
+   ```
+   This is the scenario that would previously have gone green at `tsc
+   --noEmit` while the legend silently dropped the fourth badge; the guard
+   is what now catches it, naming the missing member by name.
+
+4. Reverted both mutations (the `EventType` union and the `EVENT_TYPE_BADGE`
+   addition) back to their exact original text.
+
+5. Re-hashed:
+   ```
+   sha256sum src/lib/eventTypeBadge.ts
+   1d0fff8975767b44c019246263c5ce26fbfdf5f00736b0f5519e19975acb9d93
+   ```
+   Identical to step 1 — byte-identical revert confirmed.
+
+**Full re-verification after the guard was added (final state):**
+
+- `npx tsc --noEmit` — clean, exit 0.
+- `npx vite build` — succeeded (`✓ 2388 modules transformed`, `✓ built in
+  5.86s`), same pre-existing unrelated chunk-size warning as before.
+- `npm run format:check` — "All matched files use Prettier code style!"
+- `npx eslint .` — **0 errors, 352 warnings**, identical count to the
+  merge-base baseline established earlier in this task (via `git stash` /
+  `npx eslint .` / `git stash pop`). No new warnings from the guard.
+- `npx vitest run` (full suite) — **63 test files, 1469 tests, all
+  passing**. Test count unchanged: the guard is pure `type`/`const`
+  TypeScript with no runtime behavior and adds no test files or blocks.
+
 ## Criterion 2 — proof the rendered legend is unchanged
 
 Proof is a render assertion, not an eyeball: the pre-existing test `'the
