@@ -1325,7 +1325,7 @@ describe('<OutreachList /> coach view', () => {
     expect(container.textContent).toContain('Event canceled');
   });
 
-  it('UXD-05: exactly one "Team season goal" heading (no duplicated concept), and no stacked ProgressBars for it', async () => {
+  it('UXD-05/UXC-08 (T136): exactly one "Team season goal" heading (no duplicated concept), and exactly ONE accessible GoalBar for it -- never two stacked bars', async () => {
     renderAsUser(COACH_USER, { loadData: defaultLoadOutreachData });
     await flushMicrotasks();
 
@@ -1338,10 +1338,13 @@ describe('<OutreachList /> coach view', () => {
       (el) => el.textContent === 'Team season goal',
     );
     expect(headings.length).toBe(1);
-    // UXD-05(c): grouped stat tiles, not stacked full-width ProgressBars --
-    // zero `role="progressbar"` elements anywhere on this page anymore.
-    expect(container.querySelectorAll('[role="progressbar"]').length).toBe(0);
-    // The confirmed/planned/goal numbers still render, just as tiles.
+    // T136: UXC-08's goal strip is a real bar again (F-3 custom component,
+    // `GoalBar`) -- but exactly ONE, with confirmed/planned as two offset
+    // fills inside that single track, not the pre-T121 TWO stacked
+    // `ProgressBar`s this same guard used to catch (2 -> T121's 0 -> this).
+    expect(container.querySelectorAll('[role="progressbar"]').length).toBe(1);
+    // The confirmed/planned/goal numbers still render as tiles too (T121's
+    // fix to this part is unchanged -- the bar is additive, not a replacement).
     expect(container.textContent).toContain('9 hrs confirmed');
     expect(container.textContent).toContain('7 hrs planned');
   });

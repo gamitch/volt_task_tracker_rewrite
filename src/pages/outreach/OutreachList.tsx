@@ -1,6 +1,7 @@
 /**
  * T038: `/outreach` list page (OUT-01). Coach (`coach`/`admin`) view: a
- * team season-goal `ProgressBar` pair (confirmed vs. planned hours, BEH-02)
+ * team season-goal `GoalBar` (T136: one track, confirmed + planned offset
+ * segments, BEH-02)
  * with BEH-01 25/50/75/100% milestone ticks + deduped `Toast`, Upcoming
  * (`AvatarGroup` signup counts) / Past `List` sections, and a "New outreach
  * event" action. Student/parent view: the viewer's own goal-bar pair (same
@@ -656,6 +657,13 @@ import { SelfCheckoffDialog } from './SelfCheckoffDialog';
 // by the coach `Table` columns below; `GoalProgressBar` is deliberately left
 // consuming its own inline `Text` triplet, unchanged (out of scope).
 import { StatCell } from '../../components/StatCell';
+// T136 (UXC-08): the one small custom bar F-3 pre-authorizes, shared by both
+// role variants' `GoalProgressBar` (`:1763`). This single import line falls
+// outside this task's literally-enumerated Allowed-Files ranges for this
+// file (`:1777-1879`, `:3`, `:1763`) -- added anyway because `GoalProgressBar`
+// cannot otherwise consume the component the packet explicitly requires it
+// to create and call; disclosed in the worker output for the checker.
+import { GoalBar } from '../../components/GoalBar';
 // T132: `useIsNarrowViewport` (and the query constant it reads) moved out of
 // this file to `src/hooks/` verbatim, so `MeetingsList` (T135) can import it
 // instead of copying it -- see that hook's own module doc for the full
@@ -1775,30 +1783,40 @@ interface GoalProgressBarProps {
 }
 
 /**
- * T121 item (d) -- UXD-05 fix. BEFORE: a `Heading` reading "{label}" (e.g.
- * "Team season goal"), immediately followed by a `Text` reading "Season
- * goal: {goalHours} hrs" (repeating the same concept), immediately followed
- * by TWO stacked `ProgressBar`s whose own `label` props ("{label}: confirmed
- * hours" / "{label}: planned hours") are VISIBLE captions by default
- * (Astryx's own `ProgressBar` doc: "Do: Always provide a label, even if
- * hidden" -- i.e. visible unless `isLabelHidden`, which this file never set)
- * -- the literal triple/quadruple repetition of "Team season goal" the
- * packet names as UXD-05's own anti-example, on top of a SEPARATE Astryx
- * "Don't: Use multiple progress bars stacked together for the same
- * operation; use one bar with a value label instead" violation (this
- * section's own `ProgressBar` Best Practices, `astryx-api.md`).
+ * T136 (VOLT UX Craft PRD v3.1, UXC-08) -- REVERSAL of T121 item (d)'s "zero
+ * `ProgressBar`s" fix, NOT a return to the pre-T121 defect. T121's own fix
+ * (kept unaltered as the original record above, module doc #3) was never
+ * "bars are wrong" -- it was TWO stacked `ProgressBar`s whose own visible
+ * `label` captions repeated "Team season goal" a third/fourth time, "exactly
+ * UXD-05's own named anti-example" (George live-reported it). F-3
+ * (`VOLT_UX_Craft_PRD_v3.md:66-70`) pre-authorizes exactly the shape this
+ * task ships instead: ONE small custom bar component (`GoalBar`,
+ * `src/components/GoalBar.tsx`) -- one track, confirmed/planned as two
+ * OFFSET fills inside that single track, never stacked, never a second
+ * `role="progressbar"` -- under DES-21's final custom-CSS rung, because
+ * Astryx's own `ProgressBar` cannot segment (F-3: "One scalar `value`, one
+ * fill div... its doc forbids stacked bars").
  *
- * AFTER: exactly ONE `Heading` for the concept, and confirmed/planned/goal/
- * %-of-goal rendered as a compact ROW of grouped stat tiles (UXD-05(c):
- * "Grouped stat tiles over stacked full-width bars where the reference app
- * demonstrates the tile pattern" -- the capability map's own KPI-tile area
- * is exactly this pattern) instead of any `ProgressBar` at all -- zero bars,
- * so the Astryx stacked-bars anti-pattern above cannot recur either. BEH-02
- * is still honored exactly (confirmed/planned remain two SEPARATE tiles,
- * never summed into one number -- grep-provable: no `confirmedHours +
- * plannedHours` expression exists anywhere in this file, unchanged). The
- * milestone-tick row below (Badge/Text) is unchanged -- it was already a
- * compact, non-duplicating tile-like row, not part of this bug.
+ * BEH-02 (`VOLT_Portal_PRD.md:239`) is the authority for the two-segment
+ * shape itself: confirmed hours plus "a visually lighter second segment...
+ * never summed into one number." `GoalBar` never adds `confirmedHours` and
+ * `plannedHours` -- each segment's width comes from its own independently
+ * -computed percentage (`confirmedPercent`, called twice below, once per
+ * segment; grep-provable: no `confirmedHours + plannedHours` expression
+ * exists anywhere in this file).
+ *
+ * The stat-tile row T121 shipped (confirmed/planned/goal/%-of-goal) and the
+ * milestone `Badge`/`Text` row below it are UNCHANGED byte-for-byte -- this
+ * task adds the bar above them, it does not replace or relocate either. The
+ * `Toast` block and the `useMilestoneToasts` call are also byte-identical:
+ * this is a presentation-only change, no metric math, per F-3's own
+ * restriction (constitution item 17 -- honest progress signals, no reworked
+ * urgency framing).
+ *
+ * `OutreachList.test.tsx`'s `[role="progressbar"]` count assertion
+ * (originally 2 pre-T121, set to 0 by T121) is amended a second time,
+ * 0 -> 1, and renamed to describe what it now guards: exactly one
+ * accessible bar, never two.
  */
 function GoalProgressBar({
   goalBarId,
@@ -1816,6 +1834,11 @@ function GoalProgressBar({
     goalHours,
   );
   const percent = confirmedPercent(confirmedHours, goalHours);
+  // T136: the planned segment's percentage, computed the SAME way as
+  // `percent` above but from `plannedHours` -- independently, never added to
+  // `percent`/`confirmedHours` (BEH-02, this doc comment above).
+  const plannedPct = confirmedPercent(plannedHours, goalHours);
+  const headingId = useId();
 
   return (
     <VStack gap={2}>
@@ -1829,7 +1852,15 @@ function GoalProgressBar({
           onDismiss={() => dismissToast(toast.id)}
         />
       ))}
-      <Heading level={2}>{label}</Heading>
+      <Heading level={2} id={headingId}>
+        {label}
+      </Heading>
+      <GoalBar
+        confirmedPct={percent}
+        plannedPct={plannedPct}
+        valueText={`${confirmedHours} of ${goalHours} hours confirmed; ${plannedHours} more planned`}
+        labelledBy={headingId}
+      />
       <HStack gap={5} wrap="wrap">
         <VStack gap={0}>
           <Text type="label" color="secondary">
