@@ -22,7 +22,9 @@ T143 fixed a real bug: the outreach path never selected `teams.color`, so coach-
 team colours never reached the attendance chips. It threaded the column through and
 shipped with a DOM test that genuinely fails when the fix is unwired.
 
-T143's checker then found the hole. It reverted the loader's select string:
+T143's checker then found the hole, and this gate **independently reproduced it** —
+so the finding below is measured, not attributed. It reverted the loader's select
+string:
 
 ```ts
 // src/lib/supabase/loaders/outreach.ts:731
@@ -66,13 +68,23 @@ Inject a fake client that **records the arguments passed to `.select()`** per ta
 then assert on what the `teams` query asked for. This exercises the real seam rather
 than a function lifted out for testability.
 
-**Expect the fake client to be most of the work.** `makeLoadOutreachDetail` builds
-six loaders (`outreach.ts:861-866`) — event, sessions, rsvps, students, teams,
-profile — and the returned function calls them in sequence. Your fake needs a
-`.from(table)` returning a chainable recorder that supports at least `.select()`,
-`.order()`, `.eq()`, `.in()` and `.maybeSingle()` as the real calls use them, and
-resolves to plausible empty-ish data so the loader completes. Read the actual query
-functions and match what they call; do not guess at the chain.
+**The fake client already exists — do not build one from scratch.**
+`src/pages/outreach/OutreachDetail.test.tsx:943-961` is a complete six-table
+`fromSpy` for `makeLoadOutreachDetail`, with a working non-null event row at
+`:906-925` and an `unexpected table` guard. Copy it and replace the `teams` branch's
+`select` with a recording spy — `select.mock.calls[0][0]` is the column string. A
+second precedent, including a thenable-plus-`.order()` stub that satisfies both
+awaited-select and chained-select shapes with one object, is at
+`MeetingsList.test.tsx:1227-1241` and `:1268-1272`.
+
+That file is in a Forbidden tree, so read it as a template; do not edit it.
+
+**One constraint that will otherwise cost you an hour.** `outreach.ts:873`
+short-circuits — `if (eventRow === null) return null;` — and the teams query is then
+**never issued**. So the events `maybeSingle` stub must resolve a **non-null**
+`EventDbRow`, not empty data. (`mapEventDbRowToOutreachDetailEvent` at `:558-574` is
+a pure field copy, so a minimal row suffices.) `.in()` is reached only when the
+sessions stub returns a non-empty array, so it is optional.
 
 ### Assert columns, not the string
 
@@ -84,6 +96,12 @@ someone who assumes it is wrong.
 Parse the recorded select string into a normalised set of column names — split on
 `,`, trim — and assert the `teams` select **contains `color`** (and `id` and
 `name`). That fails for the reason we care about and only that reason.
+
+**Treat a select of exactly `*` as satisfying the check.** `select('*')` returns
+every column, so it fixes the bug rather than causing it — and it is the existing
+in-repo pattern for this very table (`teams.ts:173`, `students.ts:185`). Without this
+carve-out the test would fail a refactor that broke nothing, which is the brittleness
+this whole section exists to avoid.
 
 ### Prove it discriminates
 
@@ -112,10 +130,14 @@ that covers it.**
 The class is much bigger than this instance. Measured on the current tree:
 
 - **81** `as …DbRow` casts across **16** loader files
-- **107** `.select(` calls under `src/lib/supabase/loaders/`
+- **91** real `.select(` call sites under `src/lib/supabase/loaders/` (a raw grep
+  returns 107; **16** of those lines are `.select(` written inside doc comments — I
+  miscounted this exact way before, so the correction is shown rather than hidden)
 - **zero** test files in that directory
 
-Every one of those casts can hide a column omission exactly as this one did. **Do
+Most of those casts can hide a column omission exactly as this one did. About ten
+real sites use `.select('*')` (e.g. `teams.ts:173`, `students.ts:185`), where a cast
+cannot hide an omission — the class is real but smaller than all 81. **Do
 not attempt to fix the class.** An 81-site change is not this task, would be
 unreviewable, and the right remedy is probably not more tests anyway.
 
@@ -123,21 +145,32 @@ For the record, since the obvious structural fix will occur to you: typing the
 Supabase client with a generated `Database` type would make the casts unnecessary
 and let the compiler catch omitted columns at the source. **That option is not
 available today** — there are no generated database types in this repo, and
-`client.ts:23` calls `createClient` without a `Database` generic. Adopting them is a
+`client.ts:79` — the only `createClient` call in `src/` — passes no `Database`
+generic (`:23` is merely the import). Adopting them is a
 separate, larger decision. Note it in your output doc as the structural path; do not
 start it.
 
 If you spot other loaders with the same defect, **list them in your output doc as
 findings**. Do not fix them.
 
+**The recorder stays a one-off, deliberately.** `src/test-utils/` exists
+(`authHarness.tsx`) and would be the natural home for a shared select-recorder, but
+promoting this to shared infrastructure on its first use presumes a second use that
+may never come. Build it inline. If a second loader test lands, *that* task extracts
+it — with two real call sites to design against instead of one guess.
+
 ---
 
 ## Allowed Files
 
 - `src/lib/supabase/loaders/outreach.test.ts` (create — the first test in this directory)
-- `src/lib/supabase/loaders/outreach.ts` — **only** if a minimal export is genuinely
-  required to test through the seam. Prefer touching it not at all; if you must,
-  justify it precisely and change nothing else in the file.
+- `src/lib/supabase/loaders/outreach.ts` — two distinct permissions:
+  - **Explicitly authorized:** temporarily editing line 731 for criterion 3's
+    mutation and restoring it byte-identically. This is required by the criteria and
+    is **not** an Allowed Files violation; a checker should not read it as one.
+  - **Only if genuinely required:** a minimal export to test through the seam. The
+    gate confirmed this is *not* needed — `queryAllTeams` can stay private. Prefer
+    touching it not at all beyond the mutation.
 - `docs/swarm/active/T146-worker-output.md` (create)
 
 ## Forbidden Files
@@ -160,11 +193,19 @@ findings**. Do not fix them.
 3. **Discrimination proved by mutation**, per the four steps above. Report the exact
    failure output you saw at step 3, and confirm at step 4 that the file was restored
    byte-identically.
-4. State in your output doc whether any *other* test in the suite failed at step 2's
-   regression. The checker found none did; confirm or correct that.
-5. `queryAllTeams` remains module-private, or its export is justified explicitly.
-6. No other loader file is modified.
-7. `npx tsc --noEmit`, `npx vite build`, `npm run format:check`, `npx eslint .` and
+4. Confirm against a recorded measurement rather than rediscovering it: the gate ran
+   the mutation at this packet's commit and got **tsc exit 0, 63 files / 1474 tests
+   passed, eslint 0 errors / 354 warnings** — i.e. nothing else in the suite notices.
+   Report whether your run matches; do not burn a full suite run treating this as an
+   open question.
+5. `queryAllTeams` remains module-private. The gate confirmed no export is needed.
+6. **Also assert the mapper hop.** Have the `teams` stub return
+   `[{ id: 't1', name: 'Ravens', color: 'blue' }]` and assert the loader's result
+   carries `color === 'blue'`. Two extra lines, and it guards
+   `mapTeamDbRowToTeamOption` (`outreach.ts:607-609`) as well as the select string —
+   so the test covers both ends of the chain rather than only the first.
+7. No other loader file is modified.
+8. `npx tsc --noEmit`, `npx vite build`, `npm run format:check`, `npx eslint .` and
    `npx vitest run` all clean. Baselines measured at this packet's commit:
    **0 errors, 354 warnings**, 63 test files, **1474 tests**. Your test count will
    rise; the file count rises by one. Report both and explain.
