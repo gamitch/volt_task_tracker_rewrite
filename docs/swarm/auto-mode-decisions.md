@@ -135,7 +135,26 @@ checker-premise gate was running against it**, so that gate is reading a file th
 changed underneath it. Its findings on the outreach half should still hold, but the
 run is compromised and I will treat its output as advisory rather than authoritative.
 
-### 2026-07-29 — reverted an unauthorized source edit by the foreman
+### 2026-07-29 — reverted a source edit and MISATTRIBUTED it to the foreman [CORRECTED]
+
+> **CORRECTION (same day).** The attribution below is **wrong** and is left in place
+> rather than rewritten, because the reasoning error matters more than the conclusion.
+> `foreman-planner` did not make this edit. The **T147 `checker-premise` gate** did,
+> as a deliberate measurement experiment — its own report lists "four instrumented
+> mutation experiments… **re-id'd `DEFAULT_TEAMS`**… each reverted", with the measured
+> result "re-iding to `team-alpha`/`team-beta` breaks 7 tests". `checker-premise` has
+> Bash. I caught the tree **mid-experiment**, before its revert, and my own revert may
+> have corrupted its measurement.
+>
+> My error: I reasoned "the only agent I know has Edit tools is the foreman, therefore
+> the foreman did it", without checking which other running agents could write to the
+> tree. A checker with Bash can modify files, and mutation testing — which I have been
+> demanding all session — *requires* it. I built a story from one salient fact and
+> acted on it, which is the same failure shape as D011 and D012, applied to an agent
+> instead of a line of code.
+>
+> The foreman refused the accusation, checked the tree, and escalated rather than
+> complying. That is the correct behaviour and it is what surfaced my error.
 
 A stop-hook check surfaced `src/pages/outreach/OutreachEventDialog.tsx` modified in
 the working tree. Not my edit. `foreman-planner` was the only agent running with
@@ -327,3 +346,31 @@ Each of these gets flagged in this log the first time I see it, named as the pre
 consequence rather than as a one-off. If a rule causes more harm than it prevents I
 will say so plainly and recommend amending it — a rule bought with real bugs is still
 a rule that can be wrong.
+
+### 2026-07-29 — concurrent mutation experiments need a protocol
+
+The misattribution above exposed a real gap, separate from my reasoning error.
+
+I have spent this session demanding that checkers and workers **prove** their claims by
+mutating the tree — revert the fix, confirm the test fails, restore. That is the right
+standard and it has caught genuine defects. But it means **multiple agents are
+deliberately modifying the shared working tree at unpredictable times**, and there is
+no convention distinguishing "an experiment in progress" from "an unauthorized change".
+
+Consequences already observed today:
+
+- I reverted a gate's in-flight experiment, possibly corrupting its measurement.
+- I accused an innocent agent of an unauthorized source change.
+- A stop hook fired on a file that was mid-experiment and legitimately dirty.
+
+**REVIEW — proposal for George, not adopted unilaterally.** Agents running mutation
+experiments should work in their own worktree, or announce the mutation window. The
+cheapest version: mutation experiments must be confined to an agent's own worktree,
+never the shared tree. Checkers already receive a worktree path for the work under
+review; the gate ran in the main tree because premise-checking happens *before* a
+worktree exists.
+
+I am not changing the constitution for this unsupervised — it constrains agent
+behaviour in a way that could have its own costs, and today's three consequences were
+all recoverable. Flagging it as the third rule this session that emerged from an
+incident rather than from design.
