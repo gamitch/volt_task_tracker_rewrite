@@ -1020,3 +1020,82 @@ The diagnostic query above is kept for the record, but nobody needs to run it.
 project's actual stakes. Real risks here are losing student data, leaking PII or
 credentials, and breaking auth. Aggregate hour counts visible to the team they
 describe are not in that class.
+
+## D011 - UXC-05's "zero default-accent bars" is not achievable with Astryx `ProgressBar`, and the fix I specified would have made accessibility worse
+
+**Filed by the orchestrator 2026-07-29.** T144's worker built exactly what its
+packet specified, then reported a contrast problem rather than shipping quietly.
+**The work is built and committed but deliberately NOT merged.** Needs George's
+decision.
+
+### What happened
+
+T144's ruling was: every `<ProgressBar>` is a *measurement*, not a *status*, so
+use `variant="neutral"` at all ten sites. The worker implemented it, measured the
+result, and reported that `neutral` fails WCAG 1.4.11's 3:1 non-text threshold.
+
+I re-derived the numbers independently and **they are worse than the worker
+reported**, because it measured against the unscoped `--color-background-muted`
+while the real track is the `.astryx-progressbar`-scoped remap to
+`--color-border-emphasized` (`theme.css:497-500`).
+
+### Every variant, measured against the real track
+
+Track: `--color-border-emphasized` — light `#AFA9B7`, dark `#4A4551`. Fill
+values are the **progressbar-scoped overrides** at `theme.css:502-516`, not the
+global tokens. Formula sanity-checked at 21.00 for black/white.
+
+| variant | light | dark | ≥3:1 both? |
+|---|---|---|---|
+| `accent` (current default) | 2.00 | 2.03 | no |
+| `neutral` (T144's ruling) | **1.39** | **1.43** | no |
+| `success` | 2.20 | 1.85 | no |
+| `warning` | 1.54 | 6.25 | no |
+| `error` | 1.81 | 2.24 | no |
+
+**Not one variant passes in both themes.** So:
+
+- UXC-05's "zero default-accent bars" **cannot be satisfied** by choosing a
+  different variant. This is the same class of vendor limitation as D-1 and as
+  T136's fill-vs-fill ceiling — the palette cannot express the requirement.
+- **My ruling would have made it measurably worse**, 2.00 → 1.39. The worker
+  built what I asked; the specification was wrong.
+
+For contrast, `GoalBar` — the component T136 built *because* `ProgressBar` cannot
+do this — measures **3.33 light / 7.09 dark** (confirmed) and **5.47 / 4.67**
+(planned) against the same track. It passes because we chose its colours.
+
+### The part that is a real accessibility problem, independent of colour
+
+Seven of the ten bars pass `hasValueLabel`, so the number is rendered as text and
+the bar is a redundant visualisation — WCAG 1.4.11's "required to understand the
+content" arguably does not bite.
+
+**Three do not**, all in `CoachHome.tsx`: the team-hours, event-hours and
+per-student hours bars. All three also set `isLabelHidden`. **On those three the
+coloured fill is the only carrier of the value**, at 2.00:1 against its track.
+That is a genuine gap, it exists today, and T144 did not create it.
+
+### Options
+
+- **(a) Leave the colours alone; add value labels to the three bare bars.**
+  Fixes the real problem with text instead of colour, three lines, no colour
+  decision needed, and unambiguously an improvement. UXC-05's clause gets
+  recorded as unachievable with this component. **Recommended.**
+- **(b) Convert these bars to `GoalBar`.** The only option that satisfies both
+  UXC-05 and 1.4.11 properly. But `GoalBar` is pre-approved under F-3 for the
+  two-fill case only, so this widens that decision, and it touches seven files.
+- **(c) Merge T144 as built.** Satisfies UXC-05 on paper while dropping contrast
+  to 1.39. **Not recommended** — it is a knowing regression.
+
+**Recommendation: (a) now, (b) as its own task if George wants the bars in the
+semantic system.** T144's branch is preserved unmerged pending that call.
+
+### Process note
+
+T144's packet forbade `GoalBar` as a substitute and ruled `neutral` correct. Both
+were my calls and the second was wrong on the evidence. The worker followed the
+packet, measured anyway, and reported — which is the only reason this was caught
+before merge. The instruction that produced that outcome ("check the rendered
+contrast; if it is not visible, report it — do not silently pick a different
+variant to work around it") is worth keeping in future packets.
