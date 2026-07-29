@@ -5073,3 +5073,39 @@ A correct implementation could only have avoided this by giving `FIXTURE_TEAMS` 
 **Process note.** The checker was right to flag this even though the substance is sound —
 a silent test edit and an approved one look identical in a diff, and only one of them has
 a record. That is the same principle as item 20's ledger requirement.
+
+---
+
+## 2026-07-29 — Definition-of-Done records for the wave landed in auto mode
+
+Backfilled. Constitution items 3-4 require a verification record per accepted task, and
+this wave landed while the human owner was away without one. Every entry below is a
+`checker-reviewer` PASS that I independently spot-verified before merging; merge SHAs
+are on the integration branch `claude/swarm-plan-zl575z`.
+
+**Suite at the end of the wave: 66 test files / 1507 tests / 0 eslint errors / 355
+warnings.** Baseline at the start of the day was 63 / 1469 / 354.
+
+| Task | Merge | Checker verdict | What I verified myself before merging |
+|---|---|---|---|
+| T142 | `35b5dd1` | PASS (MINOR ×2) | HEAD moved; token-level diff reduces 770 lines to five substantive edits; `data-columns` mutation fails both new tests |
+| T143 | `9bf339a` | PASS (MINOR ×2, NIT) | Prototype-key guard probed with `constructor`, `toString`, `hasOwnProperty`, `__proto__`, `valueOf` — all `undefined`, nine real hues unaffected |
+| T145 | `24442fa` | PASS (NIT ×2) | Reorder mutation fails with a clean `toEqual` diff; empty-legend mutation fails with the improved `expected [] to have a length of 1` |
+| T146 | `23d6672` | PASS (NIT) | Reverting the select fails the new test; `outreach.ts` zero net diff; scope exactly two new files |
+| T147 | `a44fb31` | PASS (MINOR, NIT ×2) | Root cause traced end to end (`teams.id uuid` → `events.team_ids uuid[]` → `meetings.ts:680`); two modified pre-existing tests ratified separately under item 10 |
+| T148 | `143a0ef` | PASS (MINOR) | Isolation fix present and suite green; MINOR closed before merge |
+| T149 | `49a2071` | PASS (NIT ×3) | Cap mutation 480→9999 fails cleanly; four bars carry the constant; zero `SegmentedControl` references remain |
+| T150 | `fdc7fd9` | PASS (NIT ×3) | Ceiling mutation at 450 fails with the right matcher; `CoachHome.tsx` zero net diff in the commit |
+
+**T144 is not in this table.** It was closed as **no-change** with its branch preserved
+unmerged — see dispute-log D011 and its addendum. No variant reaches 3:1 against the
+scoped track in both themes, so UXC-05's zero-default-accent clause is unachievable by
+variant swap; and the follow-on "three bars carry no text value" finding was my error,
+corrected in the addendum.
+
+**Standing caveat on this whole table.** Every PASS above was reached with the human
+owner away, under delegated auto-mode authority. Two items remain explicitly his to
+rule on — **T153** (the `localStorage` theme seed) and **T154** (the shared-browser
+theme bleed) — plus the `CoachHome.test.tsx:1194-1196` test amendment, which I
+authorized and recorded under my own name after two packets wrongly attributed it to
+him.
