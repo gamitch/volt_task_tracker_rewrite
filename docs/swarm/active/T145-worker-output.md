@@ -18,8 +18,8 @@ into this worktree in the first place — see "FIRST" section below):
   fixed, and `tsc --noEmit` would go green while the legend silently dropped
   it). Addressed by adding a compile-time exhaustiveness guard to
   `src/lib/eventTypeBadge.ts` — see "Post-review addendum" below.
-- **Round 2 → checker FAIL → Round 3 fix (this round):** checker found two
-  further problems, both addressed in this revision:
+- **Round 2 → checker FAIL → Round 3 fix:** checker found two further
+  problems, both addressed in that revision:
   1. The `EventsTab.tsx` NOTE correction (2c) and the 577-586 citation
      correction (2b) both contained a false claim of my own — I had repeated
      the packet's unverified assertion that the old `CoachHome.tsx` `~1191`
@@ -27,7 +27,7 @@ into this worktree in the first place — see "FIRST" section below):
      wrong at the time" they were written, without opening the actual
      commits to check. The coordinator did check (`48fcd90`, `82fafdf`) and
      both citations were accurate when written. Corrected below, verified
-     directly against those two commits this round.
+     directly against those two commits.
   2. The legend "proof" (Criterion 2) queried the whole container rather
      than the legend subtree, so it did not actually test the legend — row
      badges alone satisfied it, as demonstrated by emptying the legend and
@@ -35,6 +35,25 @@ into this worktree in the first place — see "FIRST" section below):
      subtree and assert exact count + order, then proved it discriminates
      with three separate mutations (empty, reorder, drop-one), each
      reverted. See the rewritten "Criterion 2" section below.
+- **Round 3 → checker PASSED, three closing items (this round):** the
+  checker independently re-derived every historical claim in the NOTE
+  against the commits, re-ran four mutations itself including the exact
+  `slice(0, 0)` probe, and confirmed the mutation hashes matched. Three
+  small items to close before landing, none a defect:
+  1. Merge `origin/claude/swarm-plan-zl575z` up (it had advanced one commit,
+     `c4b27a8` / D012, since the last merge) so the branch is not stale
+     relative to the integration branch.
+  2. Harden the legend selector from `.find()` (silent wrong-element binding
+     possible in principle, and an unscoped `expected undefined to be
+     truthy` failure message) to `.filter()` + `expect(matches).toHaveLength(1)`
+     (loud `expected length N to be 1` on a false-binding scenario, and a
+     `expected [] to have a length of 1 but got +0` message on the
+     empty-legend/dropped-entry mutations that now actually names the wrong
+     count rather than just "undefined"). Re-ran both mutations after the
+     change and confirmed the message changed.
+  3. Recorded in "Unverified" (below) that the legend is located
+     structurally, not by a stable identifier, and what would break that
+     assumption.
 
 ## FIRST — merge result
 
@@ -199,13 +218,14 @@ DES-04 category Badges, in Meeting/Outreach/Competition order'`) to scope to
 the legend's own subtree and assert order:
 
 ```ts
-const legendContainer = Array.from(container.querySelectorAll('.astryx-stack')).find((el) => {
+const matches = Array.from(container.querySelectorAll('.astryx-stack')).filter((el) => {
   const children = Array.from(el.children);
   return children.length === 3 && children.every((c) => c.classList.contains('astryx-badge'));
 });
-expect(legendContainer).toBeTruthy();
+expect(matches).toHaveLength(1);
+const legendContainer = matches[0];
 
-const legendPairs = Array.from(legendContainer!.children).map((badge) => [
+const legendPairs = Array.from(legendContainer.children).map((badge) => [
   badge.textContent,
   badge.getAttribute('data-variant'),
 ]);
@@ -215,6 +235,17 @@ expect(legendPairs).toEqual([
   ['Competition', 'orange'],
 ]);
 ```
+
+**Hardened in round 3's closing pass** (`.find()` → `.filter()` +
+`expect(matches).toHaveLength(1)`) at the checker's request: `.find()` binds
+to the first match silently if more than one `.astryx-stack` ever satisfies
+the "exactly three badge children" shape, and its failure mode when nothing
+matches (`expected undefined to be truthy`) only says "not found," not "how
+many did I find." `.filter()` + `toHaveLength(1)` makes a false-binding
+scenario (two or more matches) fail loudly with the actual count, and makes
+the empty-legend/dropped-entry failure read as a wrong badge count
+(`expected [] to have a length of 1 but got +0`) rather than an opaque
+`undefined`.
 
 `.astryx-stack` is `HStack`/`VStack`'s real rendered class (the same pattern
 this file already uses for `.astryx-badge`, not an invented test hook). The
@@ -228,7 +259,8 @@ data-wrap="wrap"` `.astryx-stack` on the page wraps an `<h2>`, not badges).
 labels, variants, and order together — a swap, a drop, a reorder, or an empty
 render all fail it.
 
-**Mutation-testing evidence (three mutations, each reverted):**
+**Mutation-testing evidence, original pass (`.find()` version, three
+mutations, each reverted):**
 
 Baseline hashes before any mutation:
 ```
@@ -258,6 +290,38 @@ bd2105ca52d9423a0747dfbe29a6e1a4c7b87b6a80cc120a97b2d3a50e715f84  CalendarPage.t
    mutation 1 (only two badges now render, so no `.astryx-stack` has exactly
    three badge-only children). Reverted; hash back to the same baseline as
    above.
+
+**Re-verified after hardening to `.filter()` + `toHaveLength(1)` (round 3's
+closing pass) — confirmed the diagnostic message actually changed, not
+assumed:**
+
+Baseline hashes unchanged from above (`CalendarPage.tsx`: `bd2105ca...`,
+`eventTypeBadge.ts`: `1d0fff89...`).
+
+1. **Emptying the legend** — same mutation as above. Result: **fails**, new
+   message:
+   ```
+   AssertionError: expected [] to have a length of 1 but got +0
+   ❯ src/pages/calendar/CalendarPage.test.tsx:305:21
+      305|     expect(matches).toHaveLength(1);
+   ```
+   This reads as "found 0 legend-shaped stacks, wanted 1" — a wrong badge
+   count, not an opaque `undefined`. Reverted; hash confirmed back to
+   `bd2105ca...`.
+
+2. **Dropping one entry** — same mutation as above. Result: **fails**, same
+   new message: `AssertionError: expected [] to have a length of 1 but got
+   +0` at the same `toHaveLength(1)` line. Reverted; hash confirmed back to
+   `1d0fff89...`.
+
+Reordering (mutation 2) was not re-run this pass — its failure mode is
+unaffected by the `.find()`→`.filter()` change (it still fails on the later
+`toEqual` order check, since `matches` still has exactly one element when
+only the order is wrong, not the count), and it was already verified
+end-to-end in the original pass above.
+
+Full suite after hardening and all reverts: `npx vitest run
+src/pages/calendar/CalendarPage.test.tsx` → **31 passed (31)**.
 
 After each revert, `sha256sum` on the touched file matched its pre-mutation
 value exactly, and `npx vitest run src/pages/calendar/CalendarPage.test.tsx`
@@ -515,6 +579,19 @@ no mismatch to report.
   identically at the pre-existing call site (`CalendarPage.tsx:645`,
   unchanged by this task) and in the pre-existing legend code this task
   replaced.
+- The rewritten legend test (`CalendarPage.test.tsx`) locates the legend
+  structurally — the one `.astryx-stack` whose direct children are exactly
+  three `.astryx-badge` elements and nothing else — rather than by a stable
+  identifier (a `data-testid` or similar would need an undocumented Astryx
+  prop, which constitution item 2 rules out). Its uniqueness is a measured
+  property of today's rendered DOM (1 of 7 `.astryx-stack` elements on the
+  populated page match, confirmed via `matches.toHaveLength(1)`), not a
+  guarantee enforced by any contract. A future UI change that introduces an
+  earlier three-badge-only `.astryx-stack` elsewhere on the page is the
+  scenario that would break this selector's uniqueness assumption (it would
+  fail loudly via `toHaveLength(1)` rather than silently binding to the
+  wrong element, per the hardening in this round, but it would still need a
+  human to update the selector).
 
 ## Git status
 

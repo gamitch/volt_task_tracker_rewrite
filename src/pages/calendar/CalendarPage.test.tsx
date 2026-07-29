@@ -298,13 +298,14 @@ describe('NAV-07 mixed-list exception + DES-04 Badge color mapping', () => {
     // nothing else -- true only of the legend, never of a row (each row
     // has exactly one badge alongside other row content, not three badges
     // as its only children).
-    const legendContainer = Array.from(container.querySelectorAll('.astryx-stack')).find((el) => {
+    const matches = Array.from(container.querySelectorAll('.astryx-stack')).filter((el) => {
       const children = Array.from(el.children);
       return children.length === 3 && children.every((c) => c.classList.contains('astryx-badge'));
     });
-    expect(legendContainer).toBeTruthy();
+    expect(matches).toHaveLength(1);
+    const legendContainer = matches[0];
 
-    const legendPairs = Array.from(legendContainer!.children).map((badge) => [
+    const legendPairs = Array.from(legendContainer.children).map((badge) => [
       badge.textContent,
       badge.getAttribute('data-variant'),
     ]);
