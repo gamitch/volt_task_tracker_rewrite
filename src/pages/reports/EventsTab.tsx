@@ -343,6 +343,7 @@ import {
   proportional,
   type TableColumn,
 } from '@astryxdesign/core';
+import { EVENT_TYPE_BADGE } from '../../lib/eventTypeBadge';
 import { loadEventSessionsData } from '../../lib/supabase/loaders/reports';
 
 // ---------------------------------------------------------------------------
@@ -463,15 +464,14 @@ export type LoadEventSessionsDataFn = (seasonId: string) => Promise<EventSession
 export const PLACEHOLDER_CURRENT_SEASON_ID = 'season-placeholder-current';
 
 // ---------------------------------------------------------------------------
-// DES-04 type -> Badge mapping (module doc #2) and session-status -> Badge
-// mapping (module doc #7).
+// DES-04 type -> Badge mapping and session-status -> Badge mapping (module
+// doc #7). T138: `EVENT_TYPE_BADGE` moved to `../../lib/eventTypeBadge`
+// (imported above, re-exported here) -- shared with `CoachHome.tsx`/
+// `CalendarPage.tsx` instead of this file keeping its own copy (module doc
+// #2's own history describes the prior independent-derivation duplication).
 // ---------------------------------------------------------------------------
 
-export const EVENT_TYPE_BADGE: Record<EventType, { variant: BadgeVariant; label: string }> = {
-  meeting: { variant: 'purple', label: 'Meeting' },
-  outreach: { variant: 'blue', label: 'Outreach' },
-  competition: { variant: 'orange', label: 'Competition' },
-};
+export { EVENT_TYPE_BADGE };
 
 export const SESSION_STATUS_BADGE: Record<SessionStatus, { variant: BadgeVariant; label: string }> =
   {

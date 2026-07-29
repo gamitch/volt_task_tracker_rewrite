@@ -299,6 +299,7 @@ import {
 } from '@astryxdesign/core';
 import { Link as RouterLink } from 'react-router-dom';
 import { routePaths } from '../../app/router';
+import { EVENT_TYPE_BADGE } from '../../lib/eventTypeBadge';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of the real `events`/`event_sessions`
@@ -589,17 +590,13 @@ function monthLabel(year: number, month: number): string {
 
 // ---------------------------------------------------------------------------
 // Type -> Badge variant mapping -- DES-04's named palette (module doc #2).
-// ---------------------------------------------------------------------------
-
-const CALENDAR_TYPE_BADGE: Record<
-  CalendarEventType,
-  { variant: 'purple' | 'blue' | 'orange'; label: string }
-> = {
-  meeting: { variant: 'purple', label: 'Meeting' }, // Meeting Violet
-  outreach: { variant: 'blue', label: 'Outreach' }, // Circuit Blue
-  competition: { variant: 'orange', label: 'Competition' }, // Comp Orange
-};
-
+// T138: moved to `../../lib/eventTypeBadge` (imported above, as
+// `EVENT_TYPE_BADGE`), shared with `CoachHome.tsx`/`EventsTab.tsx` instead of
+// this file keeping its own copy. That shared constant is declared with
+// `as const satisfies`, so indexing it here still narrows `variant` to
+// `'purple' | 'blue' | 'orange'` (not the full `BadgeVariant` union) exactly
+// as this file's own local `CALENDAR_TYPE_BADGE` did before -- see the
+// shared module's own comment for why.
 // ---------------------------------------------------------------------------
 // NAV-08 detail routes (module doc #7) -- outreach/competition rows link to
 // the real per-event detail route; meeting rows link to the interim
@@ -636,7 +633,7 @@ function CalendarSessionRowItem({
   session: CalendarSessionRow;
   event: CalendarEventRow;
 }): ReactNode {
-  const typeBadge = CALENDAR_TYPE_BADGE[event.type];
+  const typeBadge = EVENT_TYPE_BADGE[event.type];
 
   const description = (
     <Text type="supporting">
