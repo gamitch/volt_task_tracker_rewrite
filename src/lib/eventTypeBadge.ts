@@ -36,3 +36,16 @@ export const EVENT_TYPE_BADGE = {
   outreach: { variant: 'blue', label: 'Outreach' }, // Circuit Blue
   competition: { variant: 'orange', label: 'Competition' }, // Comp Orange
 } as const satisfies Record<EventType, { variant: BadgeVariant; label: string }>;
+
+/**
+ * Explicit render order for anything (e.g. `CalendarPage.tsx`'s DES-04
+ * legend) that needs all three event types in a fixed, human-meaningful
+ * sequence: Meeting, Outreach, Competition. Deliberately not derived via
+ * `Object.keys(EVENT_TYPE_BADGE)` -- that would only work today by accident
+ * of the object literal's insertion order, which is not a contract.
+ */
+export const EVENT_TYPE_ORDER = [
+  'meeting',
+  'outreach',
+  'competition',
+] as const satisfies readonly EventType[];

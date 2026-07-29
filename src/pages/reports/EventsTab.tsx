@@ -28,30 +28,43 @@
  *
  * `src/pages/calendar/CalendarPage.tsx` did not exist at the moment this
  * task was first dispatched (confirmed via `ls src/pages/calendar/`), so
- * `EVENT_TYPE_BADGE` below was derived directly from the PRD's own DES-04
- * table (`VOLT_Portal_PRD.md` lines 186-193): "Circuit Blue" = Astryx
+ * `EVENT_TYPE_BADGE` was originally derived directly from the PRD's own
+ * DES-04 table (`VOLT_Portal_PRD.md` lines 186-193): "Circuit Blue" = Astryx
  * `blue` = Outreach type badge/cards; "Meeting Violet" = Astryx `purple` =
  * Meeting type badge/cards; "Comp Orange" = Astryx `orange` = Competition
  * type badge/cards. `CalendarPage.tsx` (T045) landed mid-session, partway
  * through this task's own work -- read read-only afterward per the
- * packet's Dependencies section, its own `CALENDAR_TYPE_BADGE` constant
- * (`CalendarPage.tsx` lines 577-586) maps `meeting -> 'purple'`,
- * `outreach -> 'blue'`, `competition -> 'orange'`, IDENTICAL to
- * `EVENT_TYPE_BADGE` below -- both independently derived from the same
- * DES-04 table, confirmed byte-identical in outcome, not merely "reused"
- * by import (importing from `CalendarPage.tsx` remains out of this task's
- * Allowed Files; it stayed read-only reference only). Every session row
+ * packet's Dependencies section; its own then-local badge-map constant (the
+ * `CalendarPage.tsx` line citation this doc originally gave for it, 577-586,
+ * was already wrong at the time) mapped `meeting -> 'purple'`,
+ * `outreach -> 'blue'`, `competition -> 'orange'`, IDENTICAL to this file's
+ * then-local mapping -- both independently derived from the same DES-04
+ * table, agreeing by construction from a shared source, not by import.
+ *
+ * T138 (UXC-05) later consolidated every independent copy of this mapping --
+ * this file's included -- into the single shared constant in
+ * `src/lib/eventTypeBadge.ts`. `EVENT_TYPE_BADGE` is now imported from there
+ * (see the `import` above) and merely re-exported further down (module doc
+ * #7) for this file's own call sites; it is no longer derived or defined in
+ * this file at all, and it is no longer independently maintained in step
+ * with `CalendarPage.tsx` -- it is the same binding. Every session row
  * carries this Badge so the type-mixing required by RPT-04 stays legible
  * per row.
  *
- * NOTE (disclosed finding, not fixed here): this deliberately diverges from
- * `src/pages/home/CoachHome.tsx`'s own `EVENT_TYPE_BADGE` constant (line
- * ~1191 there: meeting=`blue`, outreach=`purple`, competition=`teal`),
- * which does NOT match DES-04's literal table above. `CoachHome.tsx` is
- * outside this task's Allowed Files (not editable here); this file's own
- * mapping is the one that matches the PRD text verbatim, and the
- * inconsistency is flagged as a candidate finding for a future corrective
- * task touching `CoachHome.tsx`.
+ * NOTE (pre-existing defect, exposed by T138, not caused by it): earlier
+ * revisions of this doc claimed this file's mapping "deliberately diverges"
+ * from `src/pages/home/CoachHome.tsx`'s own `EVENT_TYPE_BADGE` constant
+ * (citing meeting=`blue`, outreach=`purple`, competition=`teal` at line
+ * ~1191 there), and that `CoachHome.tsx` did NOT match DES-04. That claim
+ * has been false since T080, which corrected `CoachHome.tsx` to
+ * `meeting -> 'purple'`, `outreach -> 'blue'`, `competition -> 'orange'` --
+ * the same DES-04 mapping this file uses -- and the line number given was
+ * already wrong even before that correction. Since T138, `CoachHome.tsx`
+ * carries no local constant at all: it imports the same shared
+ * `EVENT_TYPE_BADGE` from `src/lib/eventTypeBadge.ts` that this file
+ * imports. There is no divergence; there is one shared mapping across
+ * `CoachHome.tsx`, `CalendarPage.tsx`, and this file, and DES-04 is
+ * satisfied everywhere it is used.
  *
  * -----------------------------------------------------------------------
  * 3. "Attendance/signup counts" -- two different concepts, sourced

@@ -263,11 +263,23 @@ describe('NAV-07 mixed-list exception + DES-04 Badge color mapping', () => {
     const rows = Array.from(container.querySelectorAll('li'));
     expect(rows.length).toBeGreaterThanOrEqual(4);
 
+    // Paired by label, not just presence -- an unpaired `toContain` on
+    // variants alone would still pass if a label/variant pair were swapped
+    // (e.g. meeting badges rendering `blue` while outreach badges render
+    // `purple`), since the *set* of variants present would be unchanged.
     const badges = Array.from(container.querySelectorAll('.astryx-badge'));
-    const variants = badges.map((b) => b.getAttribute('data-variant'));
-    expect(variants).toContain('purple'); // Meeting Violet
-    expect(variants).toContain('blue'); // Circuit Blue
-    expect(variants).toContain('orange'); // Comp Orange
+    const variantsForLabel = (label: string) =>
+      badges.filter((b) => b.textContent === label).map((b) => b.getAttribute('data-variant'));
+
+    const meetingVariants = variantsForLabel('Meeting');
+    const outreachVariants = variantsForLabel('Outreach');
+    const competitionVariants = variantsForLabel('Competition');
+    expect(meetingVariants.length).toBeGreaterThan(0);
+    expect(outreachVariants.length).toBeGreaterThan(0);
+    expect(competitionVariants.length).toBeGreaterThan(0);
+    expect(meetingVariants.every((v) => v === 'purple')).toBe(true); // Meeting Violet, paired with label
+    expect(outreachVariants.every((v) => v === 'blue')).toBe(true); // Circuit Blue, paired with label
+    expect(competitionVariants.every((v) => v === 'orange')).toBe(true); // Comp Orange, paired with label
   });
 
   it('the legend renders the three DES-04 category Badges with the correct variants', async () => {
