@@ -79,7 +79,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthUser } from '../../app/guards';
 import { LoginAsDeferred as LoginAs } from '../../test-utils/authHarness';
-import { RosterShell } from './RosterShell';
+import { RosterShell, type RosterShellProps } from './RosterShell';
 import type { InviteRow, InvitesTabLoadResult } from './InvitesTab';
 import { loadInvitesTabData } from '../../lib/supabase/loaders/invites';
 import type { StudentRow, StudentsTabLoadResult, TeamRow } from './StudentsTab';
@@ -303,7 +303,13 @@ const STUDENT_USER: AuthUser = {
   role: 'student',
 };
 
-function renderRosterShell(user: AuthUser | null): void {
+/**
+ * T139: `props` is optional and defaults to `undefined` (not `{}`) so the 14
+ * pre-T139 call sites below -- `renderRosterShell(SOME_USER)`, one argument
+ * -- render `<RosterShell />` exactly as before: zero props, spread from
+ * `undefined`, proving criterion 2 (the no-props call shape is untouched).
+ */
+function renderRosterShell(user: AuthUser | null, props?: RosterShellProps): void {
   act(() => {
     root.render(
       <MemoryRouter initialEntries={['/roster']}>
@@ -313,10 +319,10 @@ function renderRosterShell(user: AuthUser | null): void {
               path="/roster"
               element={
                 user === null ? (
-                  <RosterShell />
+                  <RosterShell {...props} />
                 ) : (
                   <LoginAs user={user}>
-                    <RosterShell />
+                    <RosterShell {...props} />
                   </LoginAs>
                 )
               }
@@ -568,5 +574,159 @@ describe('<RosterShell /> tab scaffold regression check (unchanged from T021)', 
     });
 
     expect(document.activeElement).toBe(parentsTabButton);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T139 (D-2/D006): `RosterShellProps` pass-through -- the central acceptance
+// criterion for THIS task. Each test injects a fixture loader through the
+// shell's props for exactly one child and asserts that child renders the
+// INJECTED fixture's data -- distinct from the module-boundary-mocked
+// default fixture asserted throughout this file above -- rather than the
+// default or an error state. A seam nothing outside the shell can reach is
+// not a seam; this is what proves each one actually conducts.
+// ---------------------------------------------------------------------------
+
+const PROP_INJECTED_TEAM_ROWS: readonly TeamRow[] = [
+  { id: 'team-solstice', name: 'Solstice', archived: false },
+];
+
+const PROP_INJECTED_STUDENT_ROWS: readonly StudentRow[] = [
+  {
+    id: 'student-priya-kapoor',
+    profileId: 'profile-priya-kapoor',
+    displayName: 'Priya Kapoor',
+    teamId: 'team-solstice',
+    gradYear: 2028,
+    isActive: true,
+    goalHoursOverride: null,
+  },
+];
+
+const PROP_INJECTED_STUDENTS_RESULT: StudentsTabLoadResult = {
+  students: PROP_INJECTED_STUDENT_ROWS,
+  teams: PROP_INJECTED_TEAM_ROWS,
+  invites: [],
+};
+
+const PROP_INJECTED_PARENT_PROFILE_ROWS: readonly ParentProfileRow[] = [
+  {
+    id: 'profile-dana-whitfield',
+    displayName: 'Dana Whitfield',
+    email: 'dana.whitfield@example.com',
+    avatarUrl: null,
+  },
+];
+
+const PROP_INJECTED_PARENTS_TAB_STUDENT_ROWS: readonly ParentsTabStudentRow[] = [
+  { id: 'student-jonah-reyes', displayName: 'Jonah Reyes' },
+];
+
+const PROP_INJECTED_GUARDIAN_LINK_ROWS: readonly GuardianLinkRow[] = [
+  {
+    id: 'link-whitfield-jonah',
+    parentProfileId: 'profile-dana-whitfield',
+    studentId: 'student-jonah-reyes',
+  },
+];
+
+const PROP_INJECTED_PARENTS_RESULT: ParentsTabLoadResult = {
+  parentProfiles: PROP_INJECTED_PARENT_PROFILE_ROWS,
+  guardianLinks: PROP_INJECTED_GUARDIAN_LINK_ROWS,
+  students: PROP_INJECTED_PARENTS_TAB_STUDENT_ROWS,
+  invites: [],
+};
+
+const PROP_INJECTED_TEAMS_TAB_TEAM_ROWS: readonly TeamsTabTeamRow[] = [
+  {
+    id: 'team-nightfall',
+    name: 'Nightfall',
+    shortName: 'NGHT',
+    program: 'Other',
+    color: 'purple',
+    archived: false,
+    sortOrder: 0,
+  },
+];
+
+const PROP_INJECTED_TEAMS_RESULT: TeamsTabLoadResult = {
+  teams: PROP_INJECTED_TEAMS_TAB_TEAM_ROWS,
+  studentTeamLinks: [],
+};
+
+const PROP_INJECTED_INVITE_ROWS: readonly InviteRow[] = [
+  {
+    id: 'invite-tomas-farrow-pending',
+    email: 'tomas.farrow.invite@example.com',
+    role: 'student',
+    studentId: 'student-tomas-farrow',
+    status: 'pending',
+    createdAt: '2026-07-15T09:00:00.000Z',
+    expiresAt: '2026-07-29T09:00:00.000Z',
+  },
+];
+
+const PROP_INJECTED_INVITES_RESULT: InvitesTabLoadResult = {
+  invites: PROP_INJECTED_INVITE_ROWS,
+};
+
+describe('<RosterShell /> pass-through props actually reach each child (T139, D-2/D006)', () => {
+  it('studentsTabProps.loadData overrides the default and renders the injected fixture', async () => {
+    renderRosterShell(COACH_USER, {
+      studentsTabProps: { loadData: async () => PROP_INJECTED_STUDENTS_RESULT },
+    });
+    await flushMicrotasks();
+    expect(container.textContent).toContain('Priya Kapoor');
+    // Not the module-mocked default fixture -- proves the prop, not the
+    // default loader, actually rendered.
+    expect(container.textContent).not.toContain('Amara Voss');
+  });
+
+  it('parentsTabProps.loadData overrides the default and renders the injected fixture', async () => {
+    renderRosterShell(COACH_USER, {
+      parentsTabProps: { loadData: async () => PROP_INJECTED_PARENTS_RESULT },
+    });
+    await flushMicrotasks();
+    clickTab('parents');
+    await flushMicrotasks();
+    expect(container.textContent).toContain('Dana Whitfield');
+    expect(container.textContent).not.toContain('Renata Alvarez');
+  });
+
+  it('teamsTabProps.loadData overrides the default and renders the injected fixture', async () => {
+    renderRosterShell(COACH_USER, {
+      teamsTabProps: { loadData: async () => PROP_INJECTED_TEAMS_RESULT },
+    });
+    await flushMicrotasks();
+    clickTab('teams');
+    await flushMicrotasks();
+    expect(container.textContent).toContain('Nightfall');
+    expect(container.textContent).not.toContain('Embercore');
+  });
+
+  it('invitesTabProps.loadData overrides the default and renders the injected fixture', async () => {
+    renderRosterShell(COACH_USER, {
+      invitesTabProps: { loadData: async () => PROP_INJECTED_INVITES_RESULT },
+    });
+    await flushMicrotasks();
+    clickTab('invites');
+    await flushMicrotasks();
+    expect(container.textContent).toContain('tomas.farrow.invite@example.com');
+    expect(container.textContent).not.toContain('briar.holloway.invite@example.com');
+  });
+
+  it('adminTogglesProps.loadPrivacySetting overrides the default and renders the injected value', async () => {
+    // Module-mocked default (`MOCK_PRIVACY_SETTING`, set in `beforeEach`
+    // above) resolves `true` -- the Switch would start checked if the prop
+    // were being ignored and the default loader used instead.
+    renderRosterShell(ADMIN_USER, {
+      adminTogglesProps: { loadPrivacySetting: async () => false },
+    });
+    await flushMicrotasks();
+    await waitForAdminTogglesReady();
+
+    const input = container.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+    expect(input, 'expected AdminToggles Switch checkbox input').toBeTruthy();
+    expect(input?.checked).toBe(false);
   });
 });
