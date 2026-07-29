@@ -176,3 +176,19 @@ The boss-arbiter decides whether:
 A worker/checker loop may run at most 3 failed attempts.
 
 After the third failure, the task must be escalated to boss-arbiter.
+
+20. **A deliberate deferral must file a task, not just a comment.** When a
+    worker or checker knowingly leaves a defect in place because it falls
+    outside its Allowed Files or scope, recording that in a code comment is not
+    sufficient — it must produce a follow-up task in the ledger. Comments are
+    not triaged; ledger rows are. Authorized by the human owner 2026-07-29.
+    Rationale, all three found by the owner in manual testing on the same day:
+    outreach and meetings team pickers shipped fixture teams because T101 and
+    T121 each correctly declined the out-of-scope wiring and said so only in a
+    comment — and because `events.team_ids` is `uuid[]` while the fixture ids
+    are plain strings, that deferral escalated into meeting creation failing
+    outright in production. The light/dark control shipped inert for the same
+    reason: `SettingsPage` documented live-wiring as "a future task" in a
+    comment, and no such task was ever created. Every one of these was correct
+    scope discipline undone by the absence of a triage record.
+

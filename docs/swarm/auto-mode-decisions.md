@@ -249,3 +249,25 @@ gate to make it safe, and the gates have caught progressively worse things: wron
 numbers, then a measurement that could not detect its own bug, then an acceptance
 criterion that could not fail. Handing authoring to `foreman-planner` was the right
 call and should probably be permanent rather than a correction for this session.
+
+### 2026-07-29 — George's decisions before leaving (authoritative, not my inference)
+
+Asked him for the four calls that would change what I do. His answers:
+
+1. **Themes: fix light/dark only.** T148 wires the existing System/Light/Dark control
+   to the `Theme` provider. Additional themes stay parked — not investigated, not
+   built — until he specifies what they were. Foreman notified.
+2. **Constitution: adopt the deferral rule only.** Added as **item 20** — a worker
+   knowingly leaving a defect must file a follow-up task, not just a code comment.
+   He did **not** adopt the other two I proposed (completion reports must state a
+   commit SHA; never `git add -A`). I am keeping both as my own practice, but they
+   are explicitly *not* project rules and I should not enforce them on agents.
+3. **T142: merge on checker PASS.** No visual review needed first.
+4. **Priority: bugs first, then the queue.** T146 → T147 → T148, then back to UXC
+   craft work. The unassigned UXC-06 no-full-bleed clause stays queued behind the
+   bugs.
+
+Note on (2): I offered three rules and he took one. Reading that as deliberate rather
+than an oversight — the deferral rule addresses a defect that reached him in
+production, while the other two address process failures I caught internally. Not
+re-proposing them.
