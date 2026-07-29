@@ -154,7 +154,13 @@ survive.
    pattern** — `KpiStrip.test.tsx:91-105` already mounts
    `<SeasonProvider loadActiveSeason={...}>` around `<KpiStrip
    loadKpiStripData={...} />` with both fixtures supplied and asserts the KPI
-   values render. Reuse it.
+   values render. Reuse it — but reuse the *mounting* pattern, not its
+   assertions. `KpiStrip.test.tsx:149-157` asserts the static label
+   `'Season hours'`, which renders whether or not your fixture was the source of
+   the data. **Assert a value only your fixture could produce** — a distinctive
+   number or string, the way T139's tests keyed off `Priya Kapoor` against the
+   default `Amara Voss`. A test that passes on a static label is weak evidence
+   that the seam conducts, which is the one thing criterion 4 exists to prove.
 
    For the **independent** `seasonProviderProps` proof, the cheapest clean route
    is the `'none'` state: `loadActiveSeason: async () => null` renders the
