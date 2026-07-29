@@ -585,3 +585,31 @@ already yours.
 **Process fix, effective now:** when I tell an agent something is "logged", I write the
 entry **before** sending the message, not after. An unwritten log entry that has been
 promised to a subagent is a claim in circulation with no backing.
+
+### Monitoring: item 22 and the stop hook interact badly
+
+Four times today the stop hook has fired on a packet a **subagent was actively
+writing**. Each time the correct action was to leave it alone — item 22 forbids me
+sweeping up files I did not deliberately name, and committing another agent's
+half-finished work under my authority is exactly what that rule prevents.
+
+But the hook cannot distinguish *"another agent is mid-edit"* from *"you forgot to
+commit"*, so it reads as an error condition on a healthy state. My workaround each time
+was to check whether the edit had actually landed — grep for the specific changes the
+agent was asked to make — and commit only once it had.
+
+**That workaround is sound and I am keeping it**, because it doubles as verification:
+three times it confirmed the agent's edits were complete before I committed, and once
+it caught that a revision was one message behind. But it is a manual check standing in
+for a missing signal.
+
+**REVIEW — worth fixing at higher parallelism, not now.** With four to five agents the
+hook fires on roughly every other turn. At fifteen it would fire constantly and the
+signal would be worthless. Two candidate fixes: have the hook ignore paths matching
+`docs/swarm/active/*-worker-packet.md` while any agent is running, or have agents write
+to a scratch path and move the file into place atomically when done. The second is
+better — it makes "in progress" and "ready" structurally distinguishable rather than
+inferable.
+
+Not changing anything unilaterally; the current cost is four interruptions and no
+incorrect commits.
