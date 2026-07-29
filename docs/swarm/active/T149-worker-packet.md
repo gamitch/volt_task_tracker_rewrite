@@ -1,10 +1,13 @@
 # Worker Packet: T149 — UXC-06's no-full-bleed clause, still open on CoachHome
 
-**Round 2.** Round 1's premise gate returned two BLOCKERs, and this revision
-rewrites both parts of the packet in response — not a patch on top of round 1.
-Read "What changed and why" at the bottom before starting if you want the short
-version of what was wrong and why; the sections below already reflect the fix, not
-the original prescription.
+**Round 3 (intended final).** Round 2's gate returned BLOCKER on the same defect
+class T148 hit two rounds ago: a packet asserted "the human owner authorized"
+something he never saw. That specific instance — the `:1194-1196` test amendment —
+is already corrected: it now cites `docs/swarm/auto-mode-decisions.md`'s "T149:
+authorizing the `:1194-1196` test amendment (orchestrator, not George)" entry by
+name and attributes the approval to the orchestrator's standing auto-mode
+authority, not to George. This round also folds in seven further findings, all
+gate-measured against a real Chromium probe — see inline notes marked **(gate)**.
 
 **Packet SHA: pin this.** Before writing your output doc, run
 `git log -1 --format=%H -- docs/swarm/active/T149-worker-packet.md` and confirm it
@@ -63,13 +66,22 @@ gap={4}>` containing exactly **four** `KpiCard`s (`:2199`, `:2211`, `:2233`,
 `:2251`), closing at `:2260`. The second card, "Hours vs. team goal" (`:2211`),
 contains the `ProgressBar` at `:2212-2219` — the one round 1 capped. At the page's
 own 1120px content width (T142's cap) with a 16px gap, four 240px-minimum columns
-fit exactly: `(1120 − 3×16) / 4 = 268px` per column, above the 240px floor, so the
-grid renders all four cards side by side and this bar is already 268px wide at
-1440px — **the exact width UXC-06's own accept clause measures.** A 480px cap on a
-268px-wide bar is inert: it only ever binds in the narrow band where the grid's
-`repeat: 'fit'` would otherwise let this specific card grow past 480px, which does
-not happen at any width where this card is one of four. Round 1's own prescribed
-comment for this bar even concedes the 268px figure and caps it anyway.
+fit exactly: `(1120 − 3×16) / 4 = 268px` is the **grid column** width. The bar
+itself is narrower still, after `KpiCard`'s own `<Card>` wrapper (`:1805`, no
+explicit `padding` prop, so Astryx's theme-default container padding applies) eats
+its share of that column — **measured directly in a real browser (jsdom has no
+layout engine and cannot produce this number itself): 244px, not 268px.** Round 2
+of this packet stated 268px and told you to re-derive it yourself; if you did, you
+would have found this same gap — 244px is the real, Chromium-measured figure, use
+it rather than the grid-column arithmetic alone.
+
+**This bar's cap is inert at every viewport, not only at 1440px.** Solving the
+grid's own `auto-fit`/`minmax(240px, 1fr)` breakpoints end to end shows this
+column never exceeds ~495px at any content width the page can reach — so a 480px
+cap on it is not merely inert at the one width UXC-06's accept clause happens to
+measure, it is inert everywhere. This strengthens, not just restates, "applying
+the constant here is harmless" from round 2 — it was true at 1440px by
+measurement; it is true at every width by the grid's own math.
 
 **Three other `ProgressBar`s genuinely span the full content region**, and none of
 them were touched by round 1. All three sit inside a single-column `<List
@@ -317,29 +329,63 @@ Report the exact failure output for both.
 
 ### Test 1 — a genuinely full-bleed bar is width-capped, and its colour is untouched
 
-**Anchor this on one of the three list-item bars, not the KPI grid bar.** jsdom has
-no real layout engine, so no assertion here can measure an actual rendered pixel
-width either way — but the KPI bar's width is inert regardless of whether the fix
-is present (it's 268px either way, per "The bar count, corrected" above), so an
-assertion anchored there would prove the `style` prop was typed without
-corresponding to any real behavioural difference. Anchor on a bar where the cap
-genuinely changes what a real browser renders: `GoalProjectionRowItem`'s bar (or
-either of the other two — your choice, pick one and be consistent) is a reasonable
-default since Part 2 already touches that section's filter control, so both tests
-can share test-setup context if convenient.
+**Anchor this on `TeamHoursRowItem`'s bar, not `GoalProjectionRowItem`'s and not
+the KPI grid bar (gate).** Three reasons, in order of weight:
 
-In `CoachHome.test.tsx`, add a new `describe` block immediately after the existing
-`<CoachHome /> DES-12 states` block (ends `:1066`) and before `<CoachHome /> T124
-dashboard-analytics section DES-12 states` (starts `:1078`) — re-locate these by
-searching for the `describe(` text, not the line numbers, since T150 is landing
-concurrently in a different part of this same file and may shift lines around it.
+1. **The KPI bar's width is inert regardless of whether the fix is present**
+   (244px either way, per "The bar count, corrected" above — measured, not
+   assumed), so an assertion anchored there would prove the `style` prop was
+   typed without corresponding to any real behavioural difference.
+2. `GoalProjectionRowItem`'s bar is one of three bars dispute-log D011's addendum
+   (`:1074-1077`) names as candidates for conversion to `GoalBar` under its
+   option (b) — a decision explicitly left to the human owner, not this task.
+   All three list-item bars share that exposure equally (not just the
+   goal-projection one), but `GoalProjectionRowItem` is also the one Part 2's
+   `ToggleButton` filters, so anchoring Test 1 there entangles two independent
+   concerns in one fixture. `TeamHoursRowItem` has neither problem.
+3. **Measured directly in a real browser, not computed** (jsdom has no layout
+   engine and cannot reproduce this): at 1440px, in a 1120px content region, the
+   three list bars render uncapped at **1076px** (`TeamHoursRowItem`),
+   **1017px** (`GoalProjectionRowItem`), and **1076px** (`TopEventRowItem`), all
+   collapsing to **480px** once your `style` constant is applied, while the KPI
+   bar stays at **244px** throughout. `TeamHoursRowItem`'s 1076px uncapped width
+   discriminates at least as strongly as either alternative — use it.
 
-Find your chosen bar via its accessible label, not a fragile DOM path — e.g. for
-`GoalProjectionRowItem`, the fixture row's own `{name} hours vs. goal` label
-(already used as an assertion target elsewhere in this file, `:1189`, so it is
-known-fixture-stable) — locate `[role="progressbar"]` whose `aria-labelledby`
-target has matching `textContent`, then `.closest('.astryx-progressbar')` for the
-styled root (the class name comes from `themeProps('progressbar', {variant})`,
+In `CoachHome.test.tsx`, **add Test 1 into the existing `<CoachHome /> T124 goal
+projection` describe block (`:1176` onward) — the same block Test 2 already
+extends, not a new block elsewhere (gate).** The block you might otherwise reach
+for — immediately after `<CoachHome /> DES-12 states` (ends `:1066`) — is the
+wrong seam: `:1067-1077` is a comment block plus the `fixtureLoadDashboardData`
+function declaration, not a describe block, and the describe block that precedes
+it never passes `loadDashboardData` at all, so `TeamHoursRowItem`'s row would not
+even render there. The `:1176` block already renders with
+`loadDashboardData: fixtureLoadDashboardData` and already has the exact fixtures
+Test 1 needs — one setup, two tests, add Test 1 as a second `it(` in the same
+block. T150 has already merged (`fdc7fd9`) and its own block sits elsewhere in
+this file (see Allowed Files below) — there is no concurrent-worktree line-shift
+risk left to hedge against, but re-locate by searching for the `describe(` text
+regardless, as always.
+
+Find your bar via its accessible label, not a fragile DOM path — `TeamHoursRowItem`
+sets its `ProgressBar`'s own label to `${entry.teamName} hours`
+(`CoachHome.tsx:1874`), so key off the fixture team name you're already using
+(check the `fixtureLoadDashboardData`/`TeamHoursEntry` fixture data for the exact
+value — this file's own convention is to assert on names it already renders
+elsewhere first, same as `:1189`'s existing pattern for a different row shape) —
+locate `[role="progressbar"]` whose `aria-labelledby` target has matching
+`textContent`.
+
+**Do not use `CSS.escape` or a bare `querySelector('#' + id)` to resolve that
+target id — both throw here (gate).** `CSS.escape` is undefined in this
+vitest/jsdom setup, and React 19's `useId` emits ids containing guillemets
+(`«r0»`-shaped), which are not valid inside a bare CSS selector string either way
+— both approaches produce a real `TypeError`, not a silent miss. **Use
+`document.getElementById(id)` instead** — `CoachHome.test.tsx:1266` already does
+exactly this, inside the existing `<CoachHome /> T129 UXC-01` block
+(`:1248-1368`), to resolve an `aria-labelledby` target correctly; copy that
+technique, don't rediscover the trap it already avoids. Once you have the
+progressbar element, `.closest('.astryx-progressbar')` for the styled root (the
+class name comes from `themeProps('progressbar', {variant})`,
 `ProgressBar.tsx:293-294`; verify it's really `.astryx-progressbar` against the
 installed source before relying on it).
 
@@ -365,7 +411,8 @@ where the cap is inert, just confirm the prop is present.
 ### Test 2 — the two-option control is gone, and "Below goal" filtering still works
 
 Extend the existing `<CoachHome /> T124 goal projection` describe block
-(`CoachHome.test.tsx:1176-1206` today) rather than replacing its test. **Amend the
+(`CoachHome.test.tsx:1176-1204` today — the same block Test 1 above now shares)
+rather than replacing its test. **Amend the
 button-finder at `:1194-1196`** per "The prescription" above (this is the
 authorized test update — cite this packet in your commit/output doc, not just the
 constitution clause). The rest of that test's assertions (`:1184-1193`,
@@ -397,16 +444,18 @@ confirm green.
 ## Allowed Files
 
 - `src/pages/home/CoachHome.tsx`
-- `src/pages/home/CoachHome.test.tsx` — **scoped**. You may only add content
-  within/immediately after the `<CoachHome /> DES-12 states` describe block, and
-  add-to/amend the `<CoachHome /> T124 goal projection` describe block (see
-  Test 1/Test 2 above for exact anchors, including the explicitly-authorized
-  `:1194-1196` amendment). **Do not touch the `<CoachHome /> T142/UXC-06 -- Next
-  up + Activity feed pair via a responsive Grid` describe block** (near the end of
-  the file) or anything inside it — T150 is landing there concurrently in a
-  separate worktree, touching only that block. If your diff to this file touches
-  anything outside these named regions, stop and report before proceeding; that is
-  very likely an unintended overlap with T150, not a needed change for this task.
+- `src/pages/home/CoachHome.test.tsx` — **scoped**. You may only add-to/amend the
+  `<CoachHome /> T124 goal projection` describe block (`:1176-1204` — both Test 1
+  and Test 2 live here now, see above for exact anchors, including the
+  explicitly-authorized `:1194-1196` amendment). **Do not touch the `<CoachHome />
+  T142/UXC-06 -- Next up + Activity feed pair via a responsive Grid` describe
+  block** or the `<CoachHome /> T150 ...` block, wherever they now sit — **T150
+  has already merged (`fdc7fd9`)**, so both exist in the file you'll start from,
+  not in a concurrent worktree; there is nothing to wait on or coordinate around,
+  just don't edit inside either block. If your diff to this file touches anything
+  outside the T124 goal projection block, stop and report before proceeding;
+  that is very likely an unintended overlap with T150's own tests, not a needed
+  change for this task.
 - `docs/swarm/active/T149-worker-output.md` (create)
 
 You may **read** (not edit) `docs/swarm/dispute-log.md` (D011 and its addendum) and
@@ -450,14 +499,27 @@ You may **read** (not edit) `docs/swarm/dispute-log.md` (D011 and its addendum) 
 7. No `xstyle`/`stylex.create()` call added anywhere. Confirm by grep in your
    output doc.
 8. `npx tsc --noEmit`, `npx vite build`, `npm run format:check`, `npx eslint .` and
-   `npx vitest run` all clean. Baseline at this packet's own commit `400816a`:
-   1476 tests / 63 files / 354 warnings. **T146 has since merged** — expect
-   1477 tests / 64 files after the FIRST step's branch merge, warnings unchanged;
-   report what you actually measure rather than either number on trust, since
-   other tasks may also have landed by the time you start.
-9. Your output doc states plainly that this closes UXC-06 fully on CoachHome (all
-   three clauses, across all four `ProgressBar` sites and the one control), or
-   explains precisely why not, if you find something that contradicts that.
+   `npx vitest run` all clean. **This packet's own commit is `c5314e5`, not
+   `400816a`** (that was round 1's packet commit — gate correction) — T146 is
+   already an ancestor of it, so the pre-merge baseline is **1477 tests / 64
+   files / 354 warnings / 0 errors**, not 1476/63. T150 has also merged
+   (`fdc7fd9`). Measured target after the FIRST step's branch merge: **1478
+   tests / 64 files / 354 warnings / 0 errors**. Report what you actually measure
+   rather than any number here on trust, including this one — other tasks may
+   also have landed by the time you start.
+9. Your output doc states plainly that this closes UXC-06's **third clause**
+   ("no full-bleed bars/controls") on CoachHome, across all four `ProgressBar`
+   sites and the one control. **Do not claim this closes UXC-06 "fully" or "all
+   three clauses"** — clauses 1 (content cap/centring) and 2 (two-up module
+   pairing) belong to T142 (`35b5dd1`) and T150 (`fdc7fd9`) respectively, and
+   neither is measurable within this task's own Allowed Files or fixtures; this
+   task has no way to verify either stayed closed, only that its own clause now
+   is. State explicitly which reading of "no bar or non-input control spans the
+   full content region" you applied: `Toast`, `Banner`, and `EmptyState` all
+   still render full-width by design on this page, and this task does not read
+   any of them as a violation (they are not bars, and none of them are
+   value-scale controls) — say so plainly rather than leaving it to be inferred,
+   since a checker reading the accept clause literally could otherwise flag them.
 
 ## Relevant Constitution Excerpt
 
@@ -470,30 +532,40 @@ You may **read** (not edit) `docs/swarm/dispute-log.md` (D011 and its addendum) 
   custom CSS; F-2 (`VOLT_UX_Craft_PRD_v3.md:55-60`) establishes that `xstyle` is
   broken in this app specifically, so the effective ladder skips it straight to
   `style`/`className`. Do not add a StyleX plugin to fix this — that is a stack
-  change far outside this task.
+  change far outside this task. **The PRD's own F-2 text cites `src/utils/
+  mergeProps.ts:62-107` for where `className`/`style` get merged — that path does
+  not exist.** The real file is `node_modules/@astryxdesign/core/src/utils/
+  mergeProps.ts` (this packet's own independent re-verification above already
+  cites `ProgressBar.tsx:290-298` directly rather than relying on the PRD's path;
+  if you go looking for the merge function itself, look under `node_modules`, not
+  `src`).
 - **Non-Negotiables** — "existing tests must pass unless the boss explicitly
   approves a test update." `CoachHome.test.tsx:1194-1196`'s amendment is exactly
   that approved case — see Part 2's own section on it above. Every other existing
   test in this file must still pass unmodified.
 - **Item 19c** — verify your own citations before submitting. Round 1 of this
   packet inherited an unverified "two live sites" premise from a ledger row that
-  was itself never checked against the page — the exact failure mode this item
-  exists to prevent. Several line numbers were re-derived by the author against
-  the current tree for this round, but concurrent tasks (T146, T150, others) may
-  move them again before you start. If anything here does not match what you
-  find, stop and report the mismatch.
+  was itself never checked against the page; round 2 attributed an orchestrator
+  decision to the human owner without a citation to check it against — two
+  different shapes of the same failure, both caught by gates rather than by the
+  packet's own author. Every line number and measured figure in this round was
+  re-derived or re-measured against the current tree (T146 and T150 have both
+  already merged — `c5314e5`/`fdc7fd9` — so there is no concurrent-worktree drift
+  left to hedge against here, only whatever lands after this packet's own commit).
+  If anything here does not match what you find, stop and report the mismatch.
 - **Item 23** — mutation experiments (your discrimination proofs) run in your own
   worktree, which you already have. Revert-measure-restore, never leave a mutation
   uncommitted or unreported.
 
-## What changed and why (round 1 → round 2)
+## What changed and why
 
-Round 1 capped only the KPI grid's `ProgressBar` and treated the SegmentedControl
-replacement's test impact as zero-risk. The round 1 premise gate found both wrong:
+**Round 1 → round 2.** Round 1 capped only the KPI grid's `ProgressBar` and
+treated the SegmentedControl replacement's test impact as zero-risk. The round 1
+premise gate found both wrong:
 
 - **BLOCKER — wrong bar capped.** The KPI grid bar is one of four equal columns at
-  every width where UXC-06's own accept clause measures (1440px), already 268px
-  wide, so a 480px cap on it is inert. The three bars that genuinely span the full
+  every width where UXC-06's own accept clause measures (1440px), already narrow,
+  so a 480px cap on it is inert. The three bars that genuinely span the full
   1120px content region (`TeamHoursRowItem`, `TopEventRowItem`,
   `GoalProjectionRowItem`, all in single-column `<List>` modules with no `Grid`)
   were never touched. This packet now caps all four with one shared constant.
@@ -501,16 +573,35 @@ replacement's test impact as zero-risk. The round 1 premise gate found both wron
   disproved by the source it cited.** `ToggleButton.tsx:298-307` renders `label`
   twice (once visibly, once in an `aria-hidden` width-reservation span);
   `textContent` doesn't respect `aria-hidden`, so an exact-text button finder
-  breaks. The human owner authorized amending the three affected lines
-  (`CoachHome.test.tsx:1194-1196`) rather than dropping Part 2 — see Part 2's own
-  section on this above for the authorized replacement (`aria-pressed`-based,
-  stronger than the original).
-- Nine citation corrections folded in throughout (T142 quote location, dispute-log
-  wording, astryx-api.md line numbers, test block locations, baseline counts,
-  `filterGoalProjectionRows`'s declaration line, and the ParticipationTab
-  "shipped" vs. "shipped and tested" distinction) — all independently re-verified
-  against the tree before being written down here, not copied from the finding
-  that named them.
+  breaks. **The orchestrator authorized amending the three affected lines**
+  (`CoachHome.test.tsx:1194-1196`) under the human owner's standing auto-mode
+  authority — **not George directly; he has not seen this finding** — rather than
+  dropping Part 2. See Part 2's own section above for the authorized replacement
+  (`aria-pressed`-based, stronger than the original) and
+  `docs/swarm/auto-mode-decisions.md`'s "T149: authorizing the `:1194-1196` test
+  amendment" entry for the record itself.
+- Nine citation corrections folded in throughout — all independently re-verified
+  against the tree before being written down, not copied from the finding that
+  named them.
+
+**Round 2 → round 3.** The round 2 gate returned BLOCKER on the identical
+misattribution T148 hit the same day: an earlier version of this packet's history
+section (the paragraph directly above, now corrected) stated the human owner had
+authorized the test amendment. He had not — that was always the orchestrator's own
+delegated decision, and round 2 had already written the correct attribution into
+Part 2's own body while leaving this historical section stating the opposite.
+Seven further findings, all measured against a real Chromium probe: the KPI bar's
+"inert" width corrected from a computed 268px to a measured 244px, with the cap
+shown inert at every viewport, not just 1440px; Test 1 re-anchored on
+`TeamHoursRowItem` instead of `GoalProjectionRowItem` (which dispute-log D011's
+addendum names, along with the other two list bars, as a candidate for later
+`GoalBar` conversion) and moved into the already-fixture-equipped T124 goal
+projection block instead of a bare slot with no `loadDashboardData`; a
+`CSS.escape`/bare-`querySelector('#'+id)` trap identified and routed around via
+`document.getElementById`, the same technique this file's own `:1266` already
+uses; AC9 narrowed to the one clause this task can actually verify; and T150's
+landing (`fdc7fd9`) updated throughout from "concurrent, in a separate worktree"
+to "already merged, don't touch its block."
 
 ## Required Worker Output
 
