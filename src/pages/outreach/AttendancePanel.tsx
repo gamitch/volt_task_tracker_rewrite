@@ -381,11 +381,26 @@ const STORED_COLOR_TO_BADGE_VARIANT: Readonly<
 
 /** T143 -- pure mapping, exported for direct testing (criterion 4: each of
  * `'default'`/`'gray'`/an unrecognised string resolves to `undefined`,
- * never a thrown error or a fabricated variant). */
+ * never a thrown error or a fabricated variant).
+ *
+ * MINOR fix-up (checker finding, post-merge): `STORED_COLOR_TO_BADGE_VARIANT`
+ * is a plain object literal indexed by unvalidated free text (`teams.color`
+ * has no check constraint -- module doc above), so a stored value of
+ * `'constructor'`/`'toString'`/etc. would resolve through JS's own
+ * `Object.prototype` chain to a real function value rather than `undefined`
+ * -- `resolveTeamBadgeVariant`'s `?? pickTeamBadgeVariant(...)` fallback
+ * then never fires (a function is not nullish), and that function gets
+ * passed to `Badge`'s `variant` prop. `Object.hasOwn` (own-property only,
+ * skips the inherited prototype chain entirely) is the one place this is
+ * guarded -- every other read of this table stays a plain index, since only
+ * THIS function's caller ever supplies attacker/DB-controlled free text as
+ * the key. */
 export function mapStoredColorToBadgeVariant(
   color: string,
 ): (typeof TEAM_BADGE_VARIANTS)[number] | undefined {
-  return STORED_COLOR_TO_BADGE_VARIANT[color];
+  return Object.hasOwn(STORED_COLOR_TO_BADGE_VARIANT, color)
+    ? STORED_COLOR_TO_BADGE_VARIANT[color]
+    : undefined;
 }
 
 /**

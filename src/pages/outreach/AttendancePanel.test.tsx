@@ -256,25 +256,34 @@ describe('resolveTeamBadgeVariant / mapStoredColorToBadgeVariant (T143, UXC-05 p
     expect(resolveTeamBadgeVariant('team-ravens', teamsWithStoredColor)).not.toBe('cyan');
   });
 
-  it('criterion 4 -- a stored colour of "default", "gray", or an unrecognised string falls back to pickTeamBadgeVariant, without crashing', () => {
+  it('criterion 4 -- a stored colour of "default", "gray", "constructor", or an unrecognised string falls back to pickTeamBadgeVariant, without crashing', () => {
+    // 'constructor' (checker finding, MINOR fix-up) -- Object.prototype's
+    // own inherited keys must NOT leak through a plain-object lookup keyed
+    // by unvalidated free text. Exercised alongside the other three
+    // deliberately-unrecognised values so a regression back to a bare `{}`
+    // lookup fails this same test, not a separate one.
     const teams: AttendancePanelTeam[] = [
       { id: 'team-default', name: 'Default Team', color: 'default' },
       { id: 'team-gray', name: 'Gray Team', color: 'gray' },
       { id: 'team-legacy', name: 'Legacy Team', color: 'crimson-legacy' },
+      { id: 'team-proto', name: 'Proto Team', color: 'constructor' },
     ];
     expect(mapStoredColorToBadgeVariant('default')).toBeUndefined();
     expect(mapStoredColorToBadgeVariant('gray')).toBeUndefined();
     expect(mapStoredColorToBadgeVariant('crimson-legacy')).toBeUndefined();
+    expect(mapStoredColorToBadgeVariant('constructor')).toBeUndefined();
 
     expect(() => resolveTeamBadgeVariant('team-default', teams)).not.toThrow();
     expect(() => resolveTeamBadgeVariant('team-gray', teams)).not.toThrow();
     expect(() => resolveTeamBadgeVariant('team-legacy', teams)).not.toThrow();
+    expect(() => resolveTeamBadgeVariant('team-proto', teams)).not.toThrow();
 
     expect(resolveTeamBadgeVariant('team-default', teams)).toBe(
       pickTeamBadgeVariant('team-default'),
     );
     expect(resolveTeamBadgeVariant('team-gray', teams)).toBe(pickTeamBadgeVariant('team-gray'));
     expect(resolveTeamBadgeVariant('team-legacy', teams)).toBe(pickTeamBadgeVariant('team-legacy'));
+    expect(resolveTeamBadgeVariant('team-proto', teams)).toBe(pickTeamBadgeVariant('team-proto'));
   });
 
   it('a team id absent from `teams` falls back to pickTeamBadgeVariant too', () => {

@@ -302,3 +302,116 @@ All green, 0 failures.
 ## Dispute
 
 None. The packet was followed as written; no blocker encountered.
+
+---
+
+## Addendum 1 — merge onto `origin/claude/swarm-plan-zl575z` @ `24442fa` (T145 landed)
+
+Coordinator asked for the branch to be brought up to date before checking
+(it was 15 commits behind). `git fetch origin && git merge
+origin/claude/swarm-plan-zl575z` produced a **clean automatic merge, no
+conflicts** (merge commit `cbcd100`). T145 touched `src/lib/eventTypeBadge.ts`
+(new), `CalendarPage.tsx`, `EventsTab.tsx`, `CoachHome.tsx` — none of which
+this task's commit (`f13dedb`) touched, so there was nothing to reconcile.
+Confirmed the merged tree still uses T145's shared-map approach for the
+DES-04 legend (`CalendarPage.tsx` imports `EVENT_TYPE_BADGE`/`EVENT_TYPE_ORDER`
+from `../../lib/eventTypeBadge` and renders the legend via
+`EVENT_TYPE_ORDER.map(...)`, no hardcoded badge object reintroduced).
+
+Diff of `f13dedb` against the new merge base (`b521ab0`, unchanged) is still
+exactly **6 files, +530/-9** (`git diff f13dedb^ f13dedb --stat`), matching
+the true scope of this task's own work.
+
+**Falsifiability check performed at the coordinator's request:** temporarily
+reverted `AttendancePanel.tsx`'s render site back to
+`pickTeamBadgeVariant(student.teamId)` (the pre-fix call) and re-ran
+`AttendancePanel.test.tsx`. The render-level DOM test (`<AttendancePanel />
+team chip honours the stored teams.color`) failed exactly as expected:
+`AssertionError: expected 'cyan' to be 'red'`, all other 36 tests in that
+file unaffected. Restored the file byte-for-byte (`git status --porcelain`
+came back empty, confirming an exact match to the committed version) and
+reran the full suite (green, 1474/1474).
+
+**Full verification re-run on the merged result** (integration-branch lint
+baseline per coordinator: 352 warnings / 0 errors):
+
+- `npx tsc --noEmit` — clean.
+- `npx vite build` — clean (`✓ built in 6.68s`), same pre-existing chunk-size
+  advisory only.
+- `npm run format:check` — `All matched files use Prettier code style!`
+- `npx eslint .` — **0 errors, 354 warnings** (baseline 352, +2 — same two
+  `react-refresh/only-export-components` warnings on
+  `mapStoredColorToBadgeVariant`/`resolveTeamBadgeVariant` already disclosed
+  above; unchanged in cause, only the baseline number shifted because T145
+  added its own shared module).
+- `npx vitest run` — **63 files passed, 1474 tests passed**, 0 failures.
+
+## Addendum 2 — MINOR fix: prototype-chain leak in `mapStoredColorToBadgeVariant`
+
+Checker (via coordinator) found: `STORED_COLOR_TO_BADGE_VARIANT` was a plain
+object literal indexed directly by unvalidated free text
+(`STORED_COLOR_TO_BADGE_VARIANT[color]`), so a stored `teams.color` value of
+`'constructor'` or `'toString'` resolved through JS's own inherited
+`Object.prototype` chain to a real function value instead of `undefined`.
+`resolveTeamBadgeVariant`'s `?? pickTeamBadgeVariant(...)` fallback never
+fires for a function (not nullish), so the function itself would flow into
+`Badge`'s `variant` prop. Reachable only via a direct DB write (the
+`TeamsTab` swatch picker only ever writes one of the eleven known
+`TokenColor` values), hence MINOR, not rework.
+
+**Fix:** `mapStoredColorToBadgeVariant` now guards the lookup with
+`Object.hasOwn(STORED_COLOR_TO_BADGE_VARIANT, color)`, returning `undefined`
+for anything not an own property (`src/pages/outreach/AttendancePanel.tsx`).
+
+**Verified the way the last fix was verified — fails before, passes after,**
+not just "added the assertion and observed green":
+
+1. Extended the criterion-4 test (`AttendancePanel.test.tsx`) with a fourth
+   unrecognised value, `'constructor'` (a `team-proto` fixture team), and
+   ran it **before** applying the `Object.hasOwn` fix:
+
+   ```
+   ✗ criterion 4 -- ... falls back to pickTeamBadgeVariant, without crashing
+   AssertionError: expected [Function Object] to be undefined
+   - Expected: undefined
+   + Received: [Function Object]
+     at src/pages/outreach/AttendancePanel.test.tsx:274
+   ```
+
+   This reproduces the checker's exact finding character for character
+   (`mapStoredColorToBadgeVariant('constructor')` returning
+   `function Object() { [native code] }` rather than `undefined`).
+
+2. Applied the `Object.hasOwn` guard, re-ran the same test:
+
+   ```
+   ✓ src/pages/outreach/AttendancePanel.test.tsx (37 tests | 36 skipped)
+   Tests  1 passed | 36 skipped (37)
+   ```
+
+3. Also directly re-ran the pre-existing `'every recognised TokenColor hue
+   maps across...'` test to confirm the guard did not regress the nine real
+   own-property hues — still green.
+
+**Full verification re-run after the fix:**
+
+- `npx tsc --noEmit` — clean.
+- `npx vite build` — clean (`✓ built in 6.02s`).
+- `npm run format:check` — `All matched files use Prettier code style!`
+- `npx eslint .` — **0 errors, 354 warnings** (unchanged from Addendum 1 —
+  the fix only changed internal logic in an already-exported function,
+  no new export, no new warning).
+- `npx vitest run` — **63 files passed, 1474 tests passed** (same total —
+  the fourth case was added to the existing criterion-4 `it`, not a new
+  `it`, so the count did not change).
+
+## Files changed (cumulative, including this addendum)
+
+- `src/pages/outreach/AttendancePanel.tsx` — `mapStoredColorToBadgeVariant`
+  now uses `Object.hasOwn` instead of a bare index lookup.
+- `src/pages/outreach/AttendancePanel.test.tsx` — criterion-4 test extended
+  with a fourth `'constructor'` case (`team-proto` fixture), asserting the
+  same fallback-to-hash behaviour as `'default'`/`'gray'`/`'crimson-legacy'`.
+- `docs/swarm/active/T143-worker-output.md` (this addendum).
+
+No other files changed in this pass.
