@@ -280,9 +280,36 @@ edit-dialog test. The real range is `:1328-1347`.)*
      error). **The track is `--color-background-muted`** — `theme.css:496`
      already remaps it for `.astryx-progressbar`, so worker and checker measure
      the same pair;
-   - **confirmed against planned: ≥3:1.** Two adjacent segments that pass
-     individually against the track can still be indistinguishable from each
-     other. This is the check that actually matters on a two-tone bar.
+   - **the boundary between confirmed and planned must be visible.** Two
+     adjacent segments that pass individually against the track can still be
+     indistinguishable from each other. That concern is real and is what this
+     criterion exists for.
+
+     **Revision 2 demanded ≥3:1 between the two fills. That is impossible and
+     the demand is withdrawn.** Chaining it with the two fill-vs-track
+     requirements confines both fills to one narrow luminance band on the same
+     side of the track: in light mode (track `#AFA9B7`, L=0.4091) both must sit
+     in `L ∈ [0, 0.1030]`, whose internal contrast ceiling is **3.061:1** and
+     only if one fill is literally black; in dark mode (track `#4A4551`,
+     L=0.0631) both must sit in `L ∈ [0.2892, 1]`, ceiling **3.096:1**, only at
+     near-white. Restricted to colours still recognisable as green and purple
+     the ceiling falls to **2.988 light / 2.949 dark** — under 3:1 before hue is
+     even chosen. Derived independently twice; do not re-litigate it.
+
+     **Satisfy it with a divider instead.** Render a 2px separator where the
+     confirmed fill ends and the planned fill begins, coloured
+     `var(--color-background-muted)` — the track's own colour. Its contrast
+     against both fills then *follows from* the two measurements above rather
+     than needing its own: each fill already clears 3:1 against the track, so it
+     clears 3:1 against a divider made of the track. This is the standard remedy
+     for adjacent parts of one graphic, and it is why WCAG 1.4.11 does not
+     itself require fill-vs-fill contrast.
+
+     Position it absolutely (`left: calc(<confirmed>% - 1px)`, full track
+     height) so it never consumes segment width — the existing clamping at
+     `GoalBar.tsx:83-84` must not change, and no width computation may ever add
+     the two percentages. Render it **only when both segments are non-zero**;
+     there is nothing to divide otherwise.
 3. `GoalBar` is one shared module; renders one track, up to two fills positioned
    by offset, optional decorative tick; contains **no arithmetic beyond
    percentage-to-width**, and no addition of confirmed and planned.
