@@ -1191,9 +1191,16 @@ describe('<CoachHome /> T124 goal projection', () => {
     expect(container.textContent).toContain('Amara Webb hours vs. goal');
     expect(container.textContent).toContain('84h short');
 
-    const belowGoalButton = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent === 'Below goal',
-    );
+    // T149/UXC-06: SegmentedControl replaced with a standalone ToggleButton
+    // (astryx-api.md:5602's own "Don't -- use ToggleButton instead" for a
+    // simple on/off state). ToggleButton renders its `label` twice in the
+    // DOM (once visibly, once in an aria-hidden width-reservation span --
+    // ToggleButton.tsx:298-307), so `textContent === 'Below goal'` can never
+    // match; `aria-pressed` (ToggleButton.tsx:319) is the reliable
+    // discriminator and is absent from SegmentedControlItem. This amendment
+    // is authorized per docs/swarm/auto-mode-decisions.md's "T149:
+    // authorizing the :1194-1196 test amendment (orchestrator, not George)".
+    const belowGoalButton = container.querySelector('button[aria-pressed]');
     expect(belowGoalButton).toBeTruthy();
     act(() => {
       belowGoalButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -1202,6 +1209,85 @@ describe('<CoachHome /> T124 goal projection', () => {
     // Dana (on track) drops out of the Below-goal view; Amara (below) stays.
     expect(container.textContent).not.toContain('Dana Voss hours vs. goal');
     expect(container.textContent).toContain('Amara Webb hours vs. goal');
+  });
+
+  it('T149/UXC-06: the two-option SegmentedControl is gone, replaced by a standalone ToggleButton', async () => {
+    renderAsUser(COACH_USER, {
+      loadData: fixtureLoadData,
+      loadDashboardData: fixtureLoadDashboardData,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+
+    // SegmentedControl renders role="radiogroup" -- its absence is the exact
+    // discriminator for "the two-option control is gone", not merely "a
+    // Below-goal button exists somewhere".
+    expect(container.querySelector('[role="radiogroup"]')).toBeNull();
+    // The amended finder above already covers this -- a real aria-pressed
+    // toggle exists, which only ToggleButton renders here.
+    expect(container.querySelector('button[aria-pressed]')).toBeTruthy();
+    // 'All' was the removed option's exact button text; it never collides
+    // with any other real button's full text in this file (unlike 'Below
+    // goal', which now duplicates itself inside ToggleButton's own DOM).
+    const allButton = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent === 'All',
+    );
+    expect(allButton).toBeUndefined();
+  });
+
+  it('T149/UXC-06: the TeamHoursRowItem ProgressBar is width-capped at 480px, and its colour is untouched', async () => {
+    renderAsUser(COACH_USER, {
+      loadData: fixtureLoadData,
+      loadDashboardData: fixtureLoadDashboardData,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+
+    // "Ravens" is the team-hours fixture's own team name (see the sibling
+    // "T124 hours by team" describe block above) -- TeamHoursRowItem sets
+    // its ProgressBar's own label to `${entry.teamName} hours`
+    // (CoachHome.tsx), so this is the accessible-name anchor, following this
+    // file's own convention (:1189's Dana-Voss pattern) of keying off a name
+    // already asserted elsewhere. Anchored on TeamHoursRowItem specifically,
+    // not GoalProjectionRowItem or the KPI grid bar: the KPI bar's width is
+    // inert regardless of the fix (244px either way), and
+    // GoalProjectionRowItem's bar is also the one Part 2's ToggleButton
+    // filters, which would entangle two independent concerns in one
+    // fixture.
+    const progressBars = Array.from(container.querySelectorAll('[role="progressbar"]'));
+    // CSS.escape does not exist in this vitest/jsdom setup, and React 19's
+    // useId emits ids containing guillemets that are not valid inside a bare
+    // CSS selector string either way -- resolve aria-labelledby via
+    // document.getElementById, exactly as the T129/UXC-01 block above
+    // already does.
+    const ravensBar = progressBars.find((bar) => {
+      const labelledbyId = bar.getAttribute('aria-labelledby');
+      if (!labelledbyId) return false;
+      const labelEl = document.getElementById(labelledbyId);
+      return labelEl?.textContent === 'Ravens hours';
+    });
+    expect(ravensBar).toBeTruthy();
+    const root = ravensBar!.closest('.astryx-progressbar');
+    expect(root).toBeTruthy();
+    expect((root as HTMLElement).style.maxWidth).toBe('480px');
+    // The pre-existing, untouched default variant -- guards against
+    // "helpfully" changing the colour while capping the width. D011 and its
+    // addendum already settled that no variant reaches 3:1 against its
+    // track in both themes and that all ten ProgressBar sites already carry
+    // their value as text, so width is the only in-scope change here.
+    expect(root!.getAttribute('data-variant')).toBe('accent');
+
+    // Also confirm the KPI grid's own bar still carries the same style
+    // constant post-fix, even though the cap is inert there at every width.
+    const kpiBar = progressBars.find((bar) => {
+      const labelledbyId = bar.getAttribute('aria-labelledby');
+      if (!labelledbyId) return false;
+      const labelEl = document.getElementById(labelledbyId);
+      return labelEl?.textContent === 'Hours vs. team goal';
+    });
+    expect(kpiBar).toBeTruthy();
+    const kpiRoot = kpiBar!.closest('.astryx-progressbar');
+    expect((kpiRoot as HTMLElement).style.maxWidth).toBe('480px');
   });
 });
 
