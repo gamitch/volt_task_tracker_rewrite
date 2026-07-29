@@ -500,3 +500,46 @@ citations). It has also twice refused to act on an instruction it could not veri
 including refusing to fabricate four findings I summarised without describing — which
 was my process error, relaying a summary where content was needed. That refusal
 behaviour is worth preserving explicitly if the role is formalised.
+
+### 2026-07-29 — T147's criterion failed four times. Every failure needed execution to find.
+
+Worth recording in full, because it is the strongest evidence this session produced
+about what gates are actually for.
+
+One acceptance criterion — "prove the fix works" — failed four times, in four
+distinct ways, authored by three different parties:
+
+| # | Author | Failure | Found by |
+|---|---|---|---|
+| 1 | me | Could not **fail**: `FIXTURE_TEAMS` is id- and name-identical to `DEFAULT_TEAMS`, so the DOM is byte-identical either way | gate, by mutation |
+| 2 | foreman | Could not **pass** at MeetingsList (fixtures contain "Ravens Strategy Session"); could not **fail** at OutreachDetail (`formatScopeLabel` renders loader names) | gate, by mutation |
+| 3 | me, relaying a gate | Not **readable**: `MultiSelector` renders `role="option"`/`aria-selected`, no `value` attribute | foreman, by reading vendor source |
+| 4 | foreman | Could not **fail** at OutreachDetail: `OutreachEventDialog.tsx:1051` seeds `selectedTeamIds` from `initialEvent.teamIds`, not from the `teams` prop | gate, by building it and running both directions |
+
+**Not one of these was findable by careful reading.** Each looked correct on
+inspection, including to whoever had just been burned by the previous one. Failure 4
+is the sharpest: the assertion targets the submitted payload, which is exactly the
+right thing to assert, and it still could not fail — because the value being submitted
+came from the test's own fixture rather than from the prop under test.
+
+The round-3 gate is the model. It did not review the recipe; it **implemented Part A,
+Part B and Part B2, wrote the assertion, and ran it at three sites in both
+directions**, producing a table. Then it proved the remedy the same way before
+proposing it.
+
+**Decision: dispatching after the four transcription edits, with no fifth gate.** The
+gate has empirically verified the corrected recipe at all three sites in both
+directions — that is stronger evidence than another review round would produce, and I
+told it I would escalate rather than loop. Rounds 1-3 were spent because each
+successive author could not see the next failure without executing; round 4 would be
+spent re-verifying something already executed.
+
+**REVIEW — the generalisable lesson for the parallelism review.** The premise gate's
+value is not that it reads packets carefully. It is that it **runs them**. Every
+finding of substance today came from execution: reverting a select and watching the
+suite stay green, emptying a legend and watching 31 tests pass, mutating a constant to
+450 and watching 1476 tests pass, instrumenting a provider and counting two profile
+fetches per boot, applying a ToggleButton and measuring `"Below goalBelow goal"`.
+
+If gate cost needs reducing at higher parallelism, cut the reading, not the running.
+A gate that only reads would have passed all four versions of this criterion.
