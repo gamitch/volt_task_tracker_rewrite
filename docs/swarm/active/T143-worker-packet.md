@@ -64,6 +64,15 @@ survive silently — which is precisely what happened last time.
 `OutreachDetail.tsx:297-299` explains why) from `TeamOption`. So the chain is
 short and the compiler will police it.
 
+**`TeamOption` itself has two further object-literal sites**, both of which must
+gain the field for `tsc` to pass, and both of which are in scope:
+`OutreachDetail.tsx:493-496` (`FIXTURE_TEAMS`) and
+`OutreachDetail.test.tsx:471`. Named explicitly so the "nothing else in this
+file" restriction below is not ambiguous about them.
+
+Useful coincidence: `FIXTURE_TEAMS` already contains `team-ravens`, which is the
+id the worked example in criterion 3 uses.
+
 ### The resolver
 
 `TokenColor` (`node_modules/@astryxdesign/core/dist/Token/Token.d.ts:19`):
@@ -109,8 +118,9 @@ that guarantee; if you change its signature, update that assertion and say so.
 
 - `src/lib/supabase/loaders/outreach.ts` — the team query's `select()`,
   `TeamDbRow`, `mapTeamDbRowToTeamOption`. **Nothing else in this file.**
-- `src/pages/outreach/OutreachDetail.tsx` — `TeamOption` and the team-mapping
-  call site. **Nothing else in this file.**
+- `src/pages/outreach/OutreachDetail.tsx` — `TeamOption`, the team-mapping call
+  site, **and `FIXTURE_TEAMS` (`:493-496`)**, which constructs `TeamOption`
+  literals and therefore must gain the field too. **Nothing else in this file.**
 - `src/pages/outreach/AttendancePanel.tsx` — `AttendancePanelTeam`, the resolver,
   the `:767` render site
 - `src/lib/**` — if you put the `TokenColor → BadgeVariant` resolver in its own
@@ -137,8 +147,13 @@ that guarantee; if you change its signature, update that assertion and say so.
    optional anywhere, justify it explicitly — the default answer is required.
 3. **The decisive test:** a team whose stored colour and hash colour **differ**,
    asserting the stored one wins. A team where they coincide proves nothing —
-   compute both, confirm they differ, and say so in your output. If you cannot
-   construct such a case, stop and report rather than shipping a weaker test.
+   compute both, confirm they differ, and say so in your output.
+
+   **A worked example, verified by running the real hash:** `team-ravens` hashes
+   to `cyan`. Give it a stored colour of `'red'` and the chip must render `red`,
+   not `cyan`. You may use this or construct your own, but state both values
+   either way. If you find the hash does **not** produce `cyan` for that id, stop
+   and report — something has changed under us.
 4. A stored colour of `'default'`, `'gray'`, or an unrecognised string falls back
    to `pickTeamBadgeVariant` and does not crash. Test each of the three.
 5. `pickTeamBadgeVariant`'s determinism assertion still passes.
