@@ -5036,3 +5036,40 @@ reviewed):
    `Text` sets an explicit non-inheriting `color`.
 
 T132 (CalendarPage + student/parent parity) is unblocked.
+
+## 2026-07-29 — Ratification: T147's two pre-existing test updates (constitution item 10)
+
+**Ratified by the orchestrator under standing auto-mode authority. NOT by the human
+owner**, who is away and has not seen this. He may reverse it.
+
+Item 10 requires boss approval before an existing test is modified. T147's worker
+changed two pre-existing tests in `src/pages/outreach/OutreachList.test.tsx` — the T121
+item (a) test and the T121 items (b)/(c) test — without prior approval, because I had
+not anticipated the need. Ratifying after the fact, on the checker's evidence.
+
+**What changed:** fixture data only. `teamId: 'team-ravens'` → a UUID. **Every assertion
+is byte-identical** — `toContain('Jamie Rivera')`, `not.toContain('Riley Chen')`,
+`toContain('Expected attendees (2 of 2)')`. No `.skip`, no `.only`, no test removed; the
+diff has six added `it(` blocks and zero removed.
+
+**Why this strengthens rather than weakens.** The checker reverted the production fix
+and both tests now **fail**, when previously they could not detect this defect at all.
+
+**Why it was forced, and what it exposed.** `groupActiveRosterByTeam`
+(`OutreachEventDialog.tsx:914-916`) matches `student.teamId === team.id`. Real roster
+rows carry `students.team_id` UUIDs; real teams carry `teams.id` UUIDs. But the dialog
+iterated `DEFAULT_TEAMS` with `'team-ravens'` — so **in production the "Expected
+attendees" checklist matched nothing and rendered empty.** The old tests were green only
+because their fixture roster shared the broken fixture's ids. The new fixture ids reflect
+reality; the old ones encoded the bug.
+
+A correct implementation could only have avoided this by giving `FIXTURE_TEAMS` the ids
+`'team-ravens'`/`'team-titans'` — which the packet forbids and which would have made the
+`OutreachList` criterion-6 test unable to pass at all.
+
+**Third change, type-forced:** `MeetingsList.test.tsx`'s
+`expect(result).toEqual({ rows: [] })` → `{ rows: [], teams: [] }`. Strictly stronger.
+
+**Process note.** The checker was right to flag this even though the substance is sound —
+a silent test edit and an approved one look identical in a diff, and only one of them has
+a record. That is the same principle as item 20's ledger requirement.
