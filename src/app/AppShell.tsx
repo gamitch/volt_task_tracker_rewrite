@@ -83,14 +83,34 @@ import type { ReactNode } from 'react';
 import { matchPath, useLocation } from 'react-router-dom';
 import { AppShell as AstryxAppShell } from '@astryxdesign/core';
 import { routePaths } from './router';
-import { SeasonProvider } from './SeasonProvider';
+import { SeasonProvider, type SeasonProviderProps } from './SeasonProvider';
 import { TopNav } from '../components/nav/TopNav';
 import { SideNav } from '../components/nav/SideNav';
 import { MobileNav } from '../components/nav/MobileNav';
-import { KpiStrip } from '../components/kpi/KpiStrip';
+import { KpiStrip, type KpiStripProps } from '../components/kpi/KpiStrip';
 
+/**
+ * T140: `seasonProviderProps`/`kpiStripProps` are pass-through seams onto the
+ * two children this shell already mounts unconditionally with no props --
+ * `SeasonProvider` (`./SeasonProvider.tsx`) already exposes an injectable
+ * `loadActiveSeason` seam, and `KpiStrip` (`../components/kpi/KpiStrip.tsx`)
+ * already exposes an injectable `loadKpiStripData` seam, but neither was
+ * reachable from outside this file before this task, so no capture or test
+ * harness could inject fixture loaders into any chrome-bearing page.
+ * `Omit<SeasonProviderProps, 'children'>` is required because
+ * `SeasonProviderProps` itself declares `children: ReactNode` --
+ * `AppShell` supplies that one itself (its own `children` prop, unchanged
+ * below), so it must not be re-exposed here. `KpiStripProps` has no
+ * `children` field at all, so it passes through whole, unmodified. Both
+ * types are imported, not redeclared, matching T139's identical pattern one
+ * level down (`RosterShell.tsx`). Every prop remains optional and every
+ * default remains the real loader -- `App.tsx:30`'s bare `<AppShell>` call
+ * keeps compiling and behaving identically.
+ */
 export interface AppShellProps {
   children: ReactNode;
+  seasonProviderProps?: Omit<SeasonProviderProps, 'children'>;
+  kpiStripProps?: KpiStripProps;
 }
 
 /**
@@ -121,7 +141,11 @@ const CHROMELESS_PATTERNS = [
   '/meetings/live/:sessionId',
 ];
 
-export function AppShell({ children }: AppShellProps): ReactNode {
+export function AppShell({
+  children,
+  seasonProviderProps,
+  kpiStripProps,
+}: AppShellProps): ReactNode {
   const location = useLocation();
   const isChromeless = CHROMELESS_PATTERNS.some(
     (pattern) => matchPath(pattern, location.pathname) !== null,
@@ -132,13 +156,13 @@ export function AppShell({ children }: AppShellProps): ReactNode {
   }
 
   return (
-    <SeasonProvider>
+    <SeasonProvider {...seasonProviderProps}>
       <AstryxAppShell
         topNav={<TopNav />}
         sideNav={<SideNav />}
         mobileNav={{ content: <MobileNav /> }}
       >
-        <KpiStrip />
+        <KpiStrip {...kpiStripProps} />
         {children}
       </AstryxAppShell>
     </SeasonProvider>
