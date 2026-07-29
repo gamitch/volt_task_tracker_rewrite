@@ -48,8 +48,18 @@ function getBar(): HTMLElement {
   return bar as HTMLElement;
 }
 
+// Excludes the boundary divider (`data-testid="goal-bar-divider"`, present
+// only when both segments are non-zero -- packet revision 2's replacement
+// for the withdrawn fill-vs-fill contrast demand) so every pre-existing
+// fill-shape assertion below is unaffected by whether it renders.
 function getFills(bar: HTMLElement): HTMLElement[] {
-  return Array.from(bar.children) as HTMLElement[];
+  return Array.from(bar.children).filter(
+    (el) => (el as HTMLElement).dataset.testid !== 'goal-bar-divider',
+  ) as HTMLElement[];
+}
+
+function getDivider(bar: HTMLElement): HTMLElement | null {
+  return bar.querySelector('[data-testid="goal-bar-divider"]');
 }
 
 describe('<GoalBar />', () => {
@@ -147,5 +157,73 @@ describe('<GoalBar />', () => {
     expect(bar.getAttribute('aria-valuenow')).toBe('0');
     const [confirmedFill] = getFills(bar);
     expect(confirmedFill.style.width).toBe('0%');
+  });
+
+  describe('boundary divider (packet revision 2 -- replaces the withdrawn fill-vs-fill contrast demand)', () => {
+    it('renders when both segments are non-zero', () => {
+      renderBar({ confirmedPct: 30, plannedPct: 20 });
+      const divider = getDivider(getBar());
+      expect(divider).toBeTruthy();
+    });
+
+    it('is absent when the planned segment is zero -- nothing to divide', () => {
+      renderBar({ confirmedPct: 20, plannedPct: 0 });
+      const divider = getDivider(getBar());
+      expect(divider).toBeNull();
+    });
+
+    it('is absent when the confirmed segment is zero -- nothing to divide', () => {
+      renderBar({ confirmedPct: 0, plannedPct: 15 });
+      const divider = getDivider(getBar());
+      expect(divider).toBeNull();
+    });
+
+    it('is absent when confirmed is clamped to a full 100% segment (planned forced to 0 by the overflow clamp)', () => {
+      renderBar({ confirmedPct: 100, plannedPct: 25 });
+      const divider = getDivider(getBar());
+      expect(divider).toBeNull();
+    });
+
+    it('resolves to the SAME CSS variable as the track (--color-background-muted) -- so a future refactor that recolours it fails this assertion rather than silently restoring an invisible boundary', () => {
+      renderBar({ confirmedPct: 30, plannedPct: 20 });
+      const bar = getBar();
+      const divider = getDivider(bar);
+      expect(divider).toBeTruthy();
+      expect(divider!.style.backgroundColor).toBe('var(--color-background-muted)');
+      // Same variable as the track itself (not a coincidentally-equal but
+      // separately-authored value) -- this is the property the packet says
+      // makes the divider's own contrast follow for free from the two
+      // already-measured fill-vs-track ratios, with no separate measurement.
+      expect(divider!.style.backgroundColor).toBe(bar.style.backgroundColor);
+    });
+
+    it('is positioned at the confirmed/planned boundary (left: calc(<confirmedWidth>% - 1px)) and does not consume segment width -- both fills keep their full clamped widths with the divider present', () => {
+      renderBar({ confirmedPct: 30, plannedPct: 20 });
+      const bar = getBar();
+      const divider = getDivider(bar);
+      expect(divider).toBeTruthy();
+      expect(divider!.style.left).toBe('calc(30% - 1px)');
+      expect(divider!.style.width).toBe('2px');
+      // The two fills are unaffected -- no width was reallocated to the
+      // divider (it is an absolutely positioned overlay, not a third
+      // track segment).
+      const [confirmedFill, plannedFill] = getFills(bar);
+      expect(confirmedFill.style.width).toBe('30%');
+      expect(plannedFill.style.width).toBe('20%');
+    });
+
+    it('is positioned from confirmedWidth alone -- never from confirmedWidth + plannedWidth (the no-sum invariant)', () => {
+      const confirmedPct = (9 / 15) * 100; // 60, overflow fixture
+      const plannedPct = (7 / 15) * 100; // 46.667, clamped to 40
+      renderBar({ confirmedPct, plannedPct });
+      const bar = getBar();
+      const divider = getDivider(bar);
+      expect(divider).toBeTruthy();
+      // If the divider's position were ever derived from confirmed+planned
+      // (100%) instead of confirmed alone (60%), this would read
+      // `calc(100% - 1px)` instead -- this assertion fails first if that
+      // regression is reintroduced.
+      expect(divider!.style.left).toBe(`calc(${confirmedPct}% - 1px)`);
+    });
   });
 });

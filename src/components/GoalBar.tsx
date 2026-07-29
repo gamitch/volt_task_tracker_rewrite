@@ -30,6 +30,22 @@
  * value Astryx's real `ProgressBar` track uses, not the near-transparent
  * unscoped default.
  *
+ * Boundary divider (packet revision 2, Acceptance Criterion 2's third
+ * bullet): revision 2 originally demanded >=3:1 fill-vs-fill contrast, which
+ * the worker output for this task proved mathematically impossible for any
+ * two genuinely-hued (non-black/white-degenerate) colours given this
+ * track's luminance -- the demand was withdrawn and replaced with a visible
+ * boundary instead. A 2px separator, coloured `var(--color-background
+ * -muted)` (the SAME variable as the track, not a new colour -- so its
+ * contrast against both fills follows for free from the two fill-vs-track
+ * measurements already on record, needing no separate measurement), sits
+ * exactly where the confirmed fill ends and the planned fill begins.
+ * Positioned absolutely so it never consumes segment width -- the
+ * `confirmedWidth`/`plannedWidth` clamping below is unchanged, and the
+ * divider's own position is derived from `confirmedWidth`, never added to
+ * it. Rendered only when both segments are non-zero (nothing to divide
+ * otherwise).
+ *
  * ARIA: `role="progressbar"` with a real accessible name via
  * `aria-labelledby` (caller passes the id of an existing heading -- see
  * `OutreachList.tsx`'s `GoalProgressBar`), `aria-valuenow`/`min`/`max` on
@@ -119,6 +135,18 @@ export function GoalBar({
           backgroundColor: 'var(--color-data-categorical-purple)',
         }}
       />
+      {confirmedWidth > 0 && plannedWidth > 0 && (
+        <div
+          data-testid="goal-bar-divider"
+          style={{
+            position: 'absolute',
+            insetBlock: 0,
+            left: `calc(${confirmedWidth}% - 1px)`,
+            width: '2px',
+            backgroundColor: 'var(--color-background-muted)',
+          }}
+        />
+      )}
     </div>
   );
 }
