@@ -31,10 +31,10 @@
  * -----------------------------------------------------------------------
  *
  * `grep -n "^# Theme\b" docs/swarm/astryx-api.md` returns ZERO matches --
- * confirmed directly, not taken on the packet's word. `Theme` is imported
- * and rendered in `App.tsx` (forbidden, read-only) with no `mode` prop wired
- * at all, and this project's `docs/swarm/astryx-api.md` has no `# Theme`
- * props-table section anywhere to check that usage against.
+ * confirmed directly, not taken on the packet's word. Originally, `Theme`
+ * was imported and rendered in `App.tsx` with no `mode` prop wired at all,
+ * and this project's `docs/swarm/astryx-api.md` has no `# Theme` props-table
+ * section anywhere to check that usage against.
  *
  * Resolved via `npm run astryx -- component Theme` (the CLI cross-check,
  * never a source per constitution item 2 -- if it ever disagreed with a
@@ -46,20 +46,22 @@
  *   Import: `import {Theme} from '@astryxdesign/core/theme';`
  *
  * This matches exactly what `src/theme/volt.ts`'s own `defineTheme(...)`
- * export (`voltTheme`, a `DefinedTheme`) already produces, and confirms
- * `App.tsx`'s `<Theme theme={voltTheme}>` (no `mode`) is currently pinned to
- * the documented `'system'` default, not "broken" -- just not yet exposing a
- * user-controllable override anywhere in the running app.
+ * export (`voltTheme`, a `DefinedTheme`) already produces.
  *
- * This file's own Appearance `RadioList` (module doc #6 below) writes to
- * `profiles.theme_mode` via the injectable `onChangeTheme` seam -- it does
- * NOT itself reach into the live `<Theme mode={...}>` provider, because
- * doing so would require editing `App.tsx` (this task's own Forbidden Files,
- * confirmed read-only), the same disclosed "control built, real live-wiring
- * is a future task" gap every prior settings-adjacent task in this project
- * has already taken this exact posture on. A future wiring task now has the
- * real, CLI-verified `mode` prop shape to work from instead of having to
- * re-derive it from scratch.
+ * UPDATE (T148): this file's own Appearance `RadioList` (module doc #6
+ * below) writes to `profiles.theme_mode` via the injectable `onChangeTheme`
+ * seam, and used to stop there -- the control never reached the live
+ * `<Theme mode={...}>` provider, because doing so would have required
+ * editing `App.tsx`, this task's Forbidden File at the time (T060). That gap
+ * shipped silently (only disclosed in a comment, never filed as a follow-up
+ * task) and became a real, human-reported bug: "light mode/dark mode
+ * settings do not work, it all stays dark mode" (constitution item 20's own
+ * rationale cites this exact case). T148 closed it: `App.tsx` now mounts a
+ * `ThemeModeProvider` that reads `profiles.theme_mode` and feeds `Theme`'s
+ * `mode` prop for real, and `persistTheme` below calls
+ * `useThemeMode().refresh()` on every successful `onChangeTheme` so the
+ * change applies immediately, in the same session -- see `App.tsx`'s and
+ * `ThemeModeProvider.tsx`'s own module docs for the full design.
  *
  * -----------------------------------------------------------------------
  * 3. "Sign out everywhere" vs. `guards.tsx`'s `logout()` -- Trap #3, a real,
@@ -442,6 +444,7 @@ import {
   VStack,
 } from '@astryxdesign/core';
 import { useAuth, pushToast } from '../../app/guards';
+import { useThemeMode } from '../../app/ThemeModeProvider';
 import { SubscribePopover } from '../calendar/SubscribePopover';
 import {
   changeTheme,
@@ -817,6 +820,9 @@ export function SettingsPage({
 }: SettingsPageProps = {}): ReactNode {
   const loadState = useLoadState(loadSettingsData, [loadSettingsData]);
   const { logout } = useAuth();
+  // T148: live-update seam -- see module doc #2 above and `persistTheme`
+  // below for the full design.
+  const { refresh: refreshThemeMode } = useThemeMode();
 
   const [profile, setProfile] = useState<SettingsProfile | null>(null);
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPrefsRow | null>(null);
@@ -902,13 +908,22 @@ export function SettingsPage({
   // same function.
   function persistTheme(value: ThemeMode): void {
     setThemeError(null);
-    onChangeTheme({ themeMode: value }).catch((error: unknown) => {
-      setThemeError(
-        error instanceof Error
-          ? error.message
-          : 'Something went wrong saving your theme preference.',
-      );
-    });
+    onChangeTheme({ themeMode: value })
+      .then(() => {
+        // T148: tell the shared ThemeModeProvider its cached value is stale
+        // now that the write genuinely succeeded -- success path only, same
+        // "refresh() on success, never on failure" posture
+        // `SeasonSettings.tsx`'s own `refreshActiveSeason()` call already
+        // establishes for this codebase's one prior analogous case.
+        refreshThemeMode();
+      })
+      .catch((error: unknown) => {
+        setThemeError(
+          error instanceof Error
+            ? error.message
+            : 'Something went wrong saving your theme preference.',
+        );
+      });
   }
 
   function handleThemeChange(value: string): void {
@@ -1134,9 +1149,6 @@ export function SettingsPage({
                     <RadioListItem label="Light" value="light" />
                     <RadioListItem label="Dark" value="dark" />
                   </RadioList>
-                  <Text type="supporting" color="secondary">
-                    This saves your choice. It doesn't change how the app looks right now.
-                  </Text>
                 </VStack>
               </Section>
 

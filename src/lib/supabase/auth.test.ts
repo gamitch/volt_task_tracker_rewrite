@@ -6,6 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   getInitialSession,
   resolveRole,
+  resolveThemeMode,
   signInWithGoogle,
   signInWithPassword,
   signOut,
@@ -244,6 +245,52 @@ describe('resolveRole (AUTH-04 no-access path)', () => {
     try {
       await resolveRole('user-1', client);
       expect.unreachable('resolveRole() should have rejected');
+    } catch (error) {
+      expect(isSupabaseLoaderError(error)).toBe(true);
+      expect(error).toMatchObject({ code: '42501' });
+    }
+  });
+});
+
+// T148: resolveThemeMode exercises the exact same
+// `client.from('profiles').select(...).eq(...).maybeSingle()` chain shape as
+// resolveRole above (just a different selected column) -- reuses the same
+// buildFakeProfilesClient helper rather than rebuilding a second fake
+// client, per the T148 worker packet's own explicit instruction.
+describe('resolveThemeMode (T148 SET-03 read)', () => {
+  it('resolves the stored theme_mode for a present, valid value', async () => {
+    const client = buildFakeProfilesClient({ data: { theme_mode: 'dark' }, error: null });
+
+    const result = await resolveThemeMode('user-1', client);
+
+    expect(result).toBe('dark');
+  });
+
+  it('resolves null for an invalid free-text theme_mode value (profiles.theme_mode is text, not enum-typed), never passing it through raw', async () => {
+    const client = buildFakeProfilesClient({ data: { theme_mode: 'ocean-blue' }, error: null });
+
+    const result = await resolveThemeMode('user-1', client);
+
+    expect(result).toBeNull();
+  });
+
+  it('resolves null for a missing profiles row -- the same "no rows" -> null mapping resolveRole uses for its own no-profile case', async () => {
+    const client = buildFakeProfilesClient({ data: null, error: null });
+
+    const result = await resolveThemeMode('user-with-no-profile', client);
+
+    expect(result).toBeNull();
+  });
+
+  it('rejects with a DES-16-compatible SupabaseLoaderError for a genuine query error (never coerced into null)', async () => {
+    const client = buildFakeProfilesClient({
+      data: null,
+      error: { message: 'permission denied for table profiles', code: '42501' },
+    });
+
+    try {
+      await resolveThemeMode('user-1', client);
+      expect.unreachable('resolveThemeMode() should have rejected');
     } catch (error) {
       expect(isSupabaseLoaderError(error)).toBe(true);
       expect(error).toMatchObject({ code: '42501' });

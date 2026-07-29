@@ -61,8 +61,10 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { AuthSession, SupabaseClient } from '@supabase/supabase-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AuthProvider, useAuth } from '../../app/guards';
+import { AuthProvider, useAuth, type AuthUser } from '../../app/guards';
+import { ThemeModeProvider, type LoadThemeModeFn } from '../../app/ThemeModeProvider';
 import { MANAGE_PREFERENCES_PATH } from '../../emails/layout/constants';
+import { LoginAs } from '../../test-utils/authHarness';
 import {
   makeChangeTheme,
   makeLoadSettingsData,
@@ -162,11 +164,18 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// T148: `SettingsPage` calls `useThemeMode()`, which throws outside a
+// `<ThemeModeProvider>`. Wrapped here (bare, no `loadThemeMode` override --
+// the outer `<AuthProvider>` below is also bare, so `user` stays `null` and
+// no fetch is ever attempted by these existing tests, same posture criterion
+// 8's own dedicated tests below take deliberately).
 function renderSettingsPage(props: Parameters<typeof SettingsPage>[0] = {}): void {
   act(() => {
     root.render(
       <AuthProvider>
-        <SettingsPage {...props} />
+        <ThemeModeProvider>
+          <SettingsPage {...props} />
+        </ThemeModeProvider>
       </AuthProvider>,
     );
   });
@@ -431,6 +440,100 @@ describe('<SettingsPage /> Appearance section (SET-03, module doc #6)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// T148 criterion 8: `persistTheme` calls `useThemeMode().refresh()` on a
+// successful `onChangeTheme`, not on a rejected one. Unobservable via a fake
+// `refresh` function (the context value isn't exported, and criterion 4
+// deliberately pins the only injectable surface to `loadThemeMode`) -- proved
+// instead via an injected loader's own call count, the exact template
+// `SeasonSettings.test.tsx:620-660` (T091) already established for the
+// analogous `useActiveSeason().refresh()` case: 1 call on mount, 2 after a
+// successful mutation calls `refresh()`, still 1 after a rejected one.
+//
+// A bare `<ThemeModeProvider>` (no `<LoginAs>`) is not enough on its own: the
+// real, unmocked `<AuthProvider>` elsewhere in this file is unconfigured,
+// `user` stays `null`, and the provider correctly skips the fetch -- a
+// `loadThemeMode` spy there would be called zero times on mount and zero
+// times after `refresh()`, proving nothing. `LoginAs` (imported from
+// `../../test-utils/authHarness`, per that file's own Forbidden-but-
+// importable posture) gives a real, resolved, authenticated `user`.
+// ---------------------------------------------------------------------------
+
+describe('<SettingsPage /> live theme update after a successful change (T148 criterion 8)', () => {
+  const THEME_TEST_USER: AuthUser = {
+    id: 'profile-theme-live-update-test',
+    email: 'fabricated.theme.tester@example.com',
+    role: 'coach',
+  };
+
+  function renderWithThemeSpy(
+    loadThemeMode: LoadThemeModeFn,
+    props: Parameters<typeof SettingsPage>[0] = {},
+  ): void {
+    act(() => {
+      root.render(
+        <LoginAs user={THEME_TEST_USER}>
+          <ThemeModeProvider loadThemeMode={loadThemeMode}>
+            <SettingsPage {...props} />
+          </ThemeModeProvider>
+        </LoginAs>,
+      );
+    });
+  }
+
+  function clickThemeRadio(value: 'system' | 'light' | 'dark'): void {
+    const radio = Array.from(container.querySelectorAll('input[type="radio"]')).find(
+      (input) => (input as HTMLInputElement).value === value,
+    ) as HTMLInputElement | undefined;
+    expect(radio, `expected a real radio input for value="${value}"`).toBeTruthy();
+    act(() => {
+      radio?.click();
+    });
+  }
+
+  it('calls the injected loadThemeMode once on mount, then a SECOND time after a successful onChangeTheme -- proving refresh() actually fired', async () => {
+    const loadThemeMode = vi.fn<LoadThemeModeFn>(async () => 'system');
+    renderWithThemeSpy(loadThemeMode, {
+      loadSettingsData: async () => makeSettingsData(),
+      onChangeTheme: async () => {},
+    });
+    await flushMicrotasks();
+
+    // One call already happened on mount (ThemeModeProvider's own initial
+    // fetch effect, once the LoginAs-provided session resolves).
+    expect(loadThemeMode).toHaveBeenCalledTimes(1);
+
+    clickThemeRadio('dark');
+    await flushMicrotasks();
+
+    // refresh() re-runs ThemeModeProvider's own loadThemeMode effect -- a
+    // second call proves refresh() was actually invoked, not just that the
+    // theme change succeeded.
+    expect(loadThemeMode).toHaveBeenCalledTimes(2);
+  });
+
+  it('does NOT call loadThemeMode again after a REJECTED onChangeTheme -- refresh() must not fire on failure', async () => {
+    const loadThemeMode = vi.fn<LoadThemeModeFn>(async () => 'system');
+    renderWithThemeSpy(loadThemeMode, {
+      loadSettingsData: async () => makeSettingsData(),
+      onChangeTheme: async () => {
+        throw new Error('network down');
+      },
+    });
+    await flushMicrotasks();
+
+    expect(loadThemeMode).toHaveBeenCalledTimes(1);
+
+    clickThemeRadio('dark');
+    await flushMicrotasks();
+
+    // Still just the one mount-time call -- failure must not force a
+    // refresh (mirrors SeasonSettings.test.tsx:642-660's own negative case).
+    expect(loadThemeMode).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("Couldn't save your theme preference");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Calendar feed -- SubscribePopover genuinely rendered -- module doc #10.
 // ---------------------------------------------------------------------------
 
@@ -485,12 +588,14 @@ describe('<SettingsPage /> Danger zone: Sign out everywhere (module doc #3)', ()
       root.render(
         <AuthProvider>
           <AuthObserver />
-          <SettingsPage
-            loadSettingsData={async () => makeSettingsData()}
-            onSignOutEverywhere={async () => {
-              order.push('onSignOutEverywhere');
-            }}
-          />
+          <ThemeModeProvider>
+            <SettingsPage
+              loadSettingsData={async () => makeSettingsData()}
+              onSignOutEverywhere={async () => {
+                order.push('onSignOutEverywhere');
+              }}
+            />
+          </ThemeModeProvider>
         </AuthProvider>,
       );
     });
