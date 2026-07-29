@@ -64,7 +64,19 @@ surface carrying a linked title, absent truncation is accepted behaviour, not a
 defect. Workers report the measurement and move on; they do not propose the
 cast. If the vendor later exposes `labelLines` on `ListItemProps`, revisit.
 
-**D-2 — `/roster` cannot be captured with real data, and this will recur.**
+**D-2 — RESOLVED 2026-07-29 by T139.** George chose "add the loader seam".
+Inspecting it shrank the task: all five children `RosterShell` renders already
+exposed injectable seams, and the shell simply rendered them with no props,
+swallowing every one. `RosterShellProps` now forwards to each. A capture harness
+can inject fixture loaders and get a real roster table.
+
+**Still true, and out of scope by design:** the KPI strip on `/roster` will
+still show an error, because that comes from `SeasonProvider` in `AppShell`, not
+from anything the shell renders. A roster capture needs that solved separately.
+
+The original entry follows, for the record.
+
+**D-2 (original) — `/roster` cannot be captured with real data, and this will recur.**
 `RosterShell`/`StudentsTab` expose no injectable loader seam, and there is no
 `.env` in this environment, so any roster screenshot shows a
 Supabase-not-configured error rather than the table. T134 shipped that as the
@@ -178,3 +190,42 @@ In flight at handover:
 
 Merged and pushed so far this session: T131 (accepted), PR #2 opened,
 Wave A packets written and gated, vitest/eslint worktree-exclusion fix.
+
+### Wave 5 continued (George back, 2026-07-28)
+
+Landed and recorded: T131, T132, T133, T134, T135. Baseline **1440 tests across
+62 files**, eslint **0 errors / 353 warnings**. PR #2 open, CI green. Four merged
+worktrees cleaned (~113 MB) after verifying their principal sources byte-identical
+to the branch.
+
+In flight:
+- **T136** — colour tokens + the F-3 pre-approved two-fill goal bar. Worker
+  running. Packet cleared at `3854e42` after a BLOCKER: the prescribed custom
+  `defineTheme` tokens do not compile (`TokenName` is a closed union alias,
+  TS2353, verified by probe), so it overrides the existing
+  `--color-data-categorical-*` tokens instead. Contrast threshold also corrected
+  — WCAG 1.4.11 wants **3:1** for non-text, on both fill-vs-track *and*
+  confirmed-vs-planned adjacency.
+- **T137** — calendar meeting rows point at `routePaths.meetings` (D009,
+  George's option b). Packet revision 3 at `75ca794`, PASSed round 2. Worker
+  dispatched.
+- **T139** — `RosterShell` pass-through props, closing D-2. Packet at `e319a9f`,
+  premise gate running.
+
+**T138 stays reserved** for the colour/composition rollout that follows T136;
+T139 was written first only because its files are disjoint from both tasks in
+flight.
+
+### The premise gate keeps earning its cost
+
+Across T131, T133, T135, T136 and T137, **every gate finding has been a defect
+in my packet, not in a worker's implementation.** T137 is the sharpest example:
+revision 1 claimed a test would "pass vacuously" when in fact it fails loudly one
+line earlier, and the gate's warning was that a worker would most likely repair
+it by *weakening* that assertion — manufacturing the exact vacuity the packet
+existed to prevent. Round 2 then caught that my corrected snippet did not compile
+(`TS2367` — the array holds elements, not strings).
+
+Two habits this has hardened, both now standing practice: cite nothing without
+re-reading the line (constitution 19c), and compile any code a packet prescribes
+before shipping the packet.

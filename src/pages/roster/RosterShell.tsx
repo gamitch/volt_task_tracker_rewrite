@@ -80,11 +80,20 @@
  * `/roster` because `router.tsx` (forbidden here) allegedly still rendered
  * an inline placeholder. Re-checked directly against the current
  * `router.tsx` (read-only reference, not edited by this task): it already
- * imports and renders the real `RosterShell` at `/roster`
- * (`import { RosterShell } from '../pages/roster/RosterShell';`, rendered
- * inside that route's `RequireAuth`). That gap was closed by a prior task,
+ * imports and renders the real `RosterShell` at `/roster`, rendered inside
+ * that route's `RequireAuth`. That gap was closed by a prior task,
  * independently of this one -- this file's wiring to the real tab content
  * (this task's own job) is the only remaining gap T085 exists to close.
+ *
+ * T139 UPDATE: the specific import quoted above by the original T085 doc
+ * (`import { RosterShell } from '../pages/roster/RosterShell';`) no longer
+ * exists -- T093 (a bundle-size fix, `d43fb3a`) made `router.tsx`'s own
+ * import of this file lazy too; `router.tsx:130` is now
+ * `const RosterShell = lazy(() => import('../pages/roster/RosterShell'));`.
+ * The substance of this doc item (that `router.tsx` really does render this
+ * component at `/roster`) is still true; only the quoted static-import
+ * literal is stale, so it is removed rather than left to assert code that no
+ * longer exists.
  *
  * -----------------------------------------------------------------------
  * 4. Astryx prop sourcing (constitution item 2) -- unchanged from T021 for
@@ -113,8 +122,9 @@
  *
  * -----------------------------------------------------------------------
  * 6. `AdminToggles` is imported via `React.lazy`, not a static import --
- *    a real, live circular-import bug found and fixed while wiring this
- *    task, not a stylistic choice.
+ *    a circular-import bug that was real at T085 time, found and fixed while
+ *    wiring that task, not a stylistic choice. See the T139 UPDATE at the end
+ *    of this section: the specific failure no longer reproduces.
  *
  * `AdminToggles.tsx` (forbidden/read-only here) imports `routePaths` from
  * `../../app/router` for its own season-settings-shortcut link (its own
@@ -144,18 +154,39 @@
  * evaluated synchronously as part of `RosterShell.tsx`'s own module-load
  * pass -- it only runs once this component actually renders, by which point
  * `router.tsx`'s own top-level module evaluation (including defining
- * `routePaths`) has already fully completed. Verified live: with this
- * change, the same five previously-failing suites (plus this task's own new
- * `RosterShell.test.tsx`) all pass -- see this task's worker output for the
- * full before/after `npm run test` runs.
+ * `routePaths`) has already fully completed. Verified live at T085 time:
+ * with this change, the same five previously-failing suites (plus this
+ * task's own new `RosterShell.test.tsx`) all passed.
+ *
+ * T139 UPDATE: the cycle described above was real and verified AT T085 TIME,
+ * but is no longer live today, and this doc previously presented it as a
+ * current-day fact rather than history. T093 (a bundle-size fix, `d43fb3a`)
+ * later made `router.tsx`'s own import of `RosterShell` lazy as well
+ * (`router.tsx:130`, `const RosterShell = lazy(() => import('../pages/
+ * roster/RosterShell'));`), which independently breaks the `router.tsx ->
+ * RosterShell.tsx` edge of the three-file cycle above -- `router.tsx` no
+ * longer evaluates this module synchronously at all. T139's own premise gate
+ * verified this empirically, in an isolated worktree at that task's packet
+ * SHA: reverting `AdminToggles` to a static value import here produced
+ * *zero* failures (full suite green, clean `vite build`), where the same
+ * change previously failed five suites at T085 time. `AdminToggles` is
+ * still imported via `lazy()` regardless -- not because reverting it is
+ * known to break something today, but because doing so is scope no task has
+ * requested, against a documented failure history, for zero present
+ * benefit.
  */
 import { lazy, Suspense, useState, type ReactNode } from 'react';
 import { Heading, Tab, TabList, VStack } from '@astryxdesign/core';
 import { RequireRole } from '../../app/guards';
-import { InvitesTab } from './InvitesTab';
-import { ParentsTab } from './ParentsTab';
-import { StudentsTab } from './StudentsTab';
-import { TeamsTab } from './TeamsTab';
+import { InvitesTab, type InvitesTabProps } from './InvitesTab';
+import { ParentsTab, type ParentsTabProps } from './ParentsTab';
+import { StudentsTab, type StudentsTabProps } from './StudentsTab';
+import { TeamsTab, type TeamsTabProps } from './TeamsTab';
+// T139: `import type` only -- erased at compile time, creates no runtime
+// import edge, so it cannot affect module doc #6's `router.tsx` cycle either
+// way. See module doc #6 for why the `AdminToggles` component itself still
+// comes in via `lazy()` rather than a static value import.
+import type { AdminTogglesProps } from './AdminToggles';
 
 /** Module doc #6 -- lazy, not static, to break a real router.tsx import cycle. */
 const AdminToggles = lazy(() => import('./AdminToggles'));
@@ -175,7 +206,30 @@ const ROSTER_TABS: readonly RosterTabConfig[] = [
   { value: 'invites', label: 'Invites' },
 ];
 
-export function RosterShell(): ReactNode {
+/**
+ * T139 (D-2/D006): optional pass-through props, one per child, each typed as
+ * that child's own already-exported props interface (imported, not
+ * redeclared). Every prop is optional and every child already defaults each
+ * of its own props individually (`ParentsTab.tsx:1223` is the precedent this
+ * mirrors one level up), so `<RosterShell />` with no props -- `router.tsx`'s
+ * only call site, a forbidden file for this task -- keeps rendering exactly
+ * the real default loaders it always has.
+ */
+export interface RosterShellProps {
+  studentsTabProps?: StudentsTabProps;
+  parentsTabProps?: ParentsTabProps;
+  teamsTabProps?: TeamsTabProps;
+  invitesTabProps?: InvitesTabProps;
+  adminTogglesProps?: AdminTogglesProps;
+}
+
+export function RosterShell({
+  studentsTabProps,
+  parentsTabProps,
+  teamsTabProps,
+  invitesTabProps,
+  adminTogglesProps,
+}: RosterShellProps = {}): ReactNode {
   const [activeTab, setActiveTab] = useState<RosterTabValue>(ROSTER_TABS[0].value);
 
   return (
@@ -198,13 +252,13 @@ export function RosterShell(): ReactNode {
             network call in its own lazy chunk beyond the module code
             already bundled for this page). */}
         <Suspense fallback={null}>
-          <AdminToggles />
+          <AdminToggles {...adminTogglesProps} />
         </Suspense>
 
-        {activeTab === 'students' && <StudentsTab />}
-        {activeTab === 'parents' && <ParentsTab />}
-        {activeTab === 'teams' && <TeamsTab />}
-        {activeTab === 'invites' && <InvitesTab />}
+        {activeTab === 'students' && <StudentsTab {...studentsTabProps} />}
+        {activeTab === 'parents' && <ParentsTab {...parentsTabProps} />}
+        {activeTab === 'teams' && <TeamsTab {...teamsTabProps} />}
+        {activeTab === 'invites' && <InvitesTab {...invitesTabProps} />}
       </VStack>
     </RequireRole>
   );

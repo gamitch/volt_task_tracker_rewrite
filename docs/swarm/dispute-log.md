@@ -880,9 +880,17 @@ page as its own task. Implemented as **T137**.
 
 Disclosed consequence, accepted: all meeting rows now share one href, so the
 calendar stops being a way to reach a *specific* meeting; clicking any of them
-lands on the meetings list. Row link text is still the event title (T133), so
-rows remain distinguishable to sighted and assistive users — only the
-destination is shared. Strictly better than a blank page, and reversible the
-moment the detail page exists.
+lands on the meetings list. Strictly better than a blank page, and reversible
+the moment the detail page exists.
+
+**Correction (2026-07-28).** An earlier revision of this entry claimed "row link
+text is still the event title (T133), so rows remain distinguishable to sighted
+and assistive users." **That was wrong, and the change is an accessibility
+improvement rather than a wash.** Both fixture meeting sessions belong to the
+same event, so their rows already rendered the identical accessible name
+"Weekly Build Meeting" — confirmed in the live DOM by T137's checker. Before
+T137 that was one accessible name pointing at *different* destinations, which
+violates WCAG 2.4.4; after it, the same name points at the same destination,
+which conforms. The rows were never distinguishable by name, and that is fine.
 
 NAV-08 remains unimplemented and remains annotated as such in the PRD.

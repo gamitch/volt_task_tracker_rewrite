@@ -65,3 +65,12 @@ preview.throwaway.html
 
 # Agent worktrees (isolated subagent checkouts, never part of the repo)
 .claude/worktrees/
+
+# SubagentStop heartbeat files, one per branch (see .claude/settings.json).
+# NOT the D-3 mistake repeated: D-3 was about worker OUTPUT documents, which
+# carry real caveats and are now committed. These carry a fixed string and a
+# timestamp — 356 byte-identical lines accumulated in verification-log.md
+# before this split. The durable record of a worker run is its output doc and
+# the ledger row; this is only a "checker still required" reminder. Untracked
+# keeps concurrent worktrees from colliding on it at all.
+docs/swarm/worker-runs/
