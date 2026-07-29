@@ -402,6 +402,16 @@ export type RsvpStatus = 'going' | 'maybe' | 'declined';
 export interface TeamOption {
   id: string;
   name: string;
+  /** T143 (UXC-05 part 2/3) -- `teams.color text not null`
+   * (`20260716000000_identity_roster.sql:34`), REQUIRED so `tsc` forces
+   * every construction site (this interface's own two object-literal sites
+   * below, plus `AttendancePanel.tsx`'s structurally-matched
+   * `AttendancePanelTeam`) to supply a real value rather than letting the
+   * colour silently never reach the chip it drives. Free text, no check
+   * constraint -- may not be one of Astryx's known `TokenColor` values; the
+   * consumer (`AttendancePanel.tsx`'s resolver) is the one place that is
+   * handled. */
+  color: string;
 }
 
 export interface ProfileOption {
@@ -491,8 +501,8 @@ export interface SessionSignupGroups {
 const PLACEHOLDER_SEASON_ID = 'season-placeholder-current';
 
 const FIXTURE_TEAMS: readonly TeamOption[] = [
-  { id: 'team-ravens', name: 'Ravens' },
-  { id: 'team-titans', name: 'Titans' },
+  { id: 'team-ravens', name: 'Ravens', color: 'blue' },
+  { id: 'team-titans', name: 'Titans', color: 'green' },
 ];
 
 const FIXTURE_PROFILES: readonly ProfileOption[] = [

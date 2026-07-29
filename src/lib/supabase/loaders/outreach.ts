@@ -438,9 +438,22 @@ interface SeasonIdDbRow {
   id: string;
 }
 
+/**
+ * T143 (UXC-05 part 2/3) -- `color` added, REQUIRED (matches `teams.color
+ * text not null`, `20260716000000_identity_roster.sql:34`). Previously
+ * `{id, name}` only: the outreach team query dropped the colour a coach sets
+ * in `TeamsTab`, so `AttendancePanel.tsx`'s chips fell back to a hash of the
+ * team id instead of the coach's real choice. `loaders/teams.ts` (the roster
+ * path, `select('*')`) already carried `color`; this was the one path that
+ * didn't. Required (not optional) so `tsc` polices every construction site
+ * (`TeamOption`/`AttendancePanelTeam`) rather than letting the bug survive
+ * behind a silently-unpopulated optional field -- see this task's packet for
+ * why an earlier attempt at this fix was blocked for doing exactly that.
+ */
 interface TeamDbRow {
   id: string;
   name: string;
+  color: string;
 }
 
 interface ProfileDbRow {
@@ -589,8 +602,10 @@ function mapStudentDbRowToRosterStudent(row: StudentDbRow): RosterStudent {
   return { id: row.id, name: row.display_name, teamId: row.team_id };
 }
 
+/** T143 -- `color` carried through unchanged (required field, module doc
+ * above the `TeamDbRow` interface). */
 function mapTeamDbRowToTeamOption(row: TeamDbRow): TeamOption {
-  return { id: row.id, name: row.name };
+  return { id: row.id, name: row.name, color: row.color };
 }
 
 function mapProfileDbRowToProfileOption(row: ProfileDbRow): ProfileOption {
@@ -709,8 +724,11 @@ async function queryActiveSeasonId(
   return { data: (result.data as SeasonIdDbRow | null) ?? null, error: result.error };
 }
 
+/** T143 -- `select()` grows `color` (the outreach path's own bug: it never
+ * selected the column at all, so it never reached `AttendancePanel`'s chips
+ * regardless of what a coach set in `TeamsTab`). */
 async function queryAllTeams(client: SupabaseClient): Promise<LoaderQueryResult<TeamDbRow[]>> {
-  const result = await client.from('teams').select('id, name').order('sort_order', {
+  const result = await client.from('teams').select('id, name, color').order('sort_order', {
     ascending: true,
   });
   return { data: (result.data as TeamDbRow[] | null) ?? null, error: result.error };
