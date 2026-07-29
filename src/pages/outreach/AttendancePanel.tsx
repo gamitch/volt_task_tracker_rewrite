@@ -57,6 +57,22 @@
  * tags that group or classify items: team names") so multiple teams on one
  * event are visually distinguishable, not just textually.
  *
+ * AMENDED 2026-07-29 (T143, UXC-05 part 2/3): the real bug this amendment
+ * fixes -- `pickTeamBadgeVariant` was, until this task, the ONLY input to
+ * the rendered chip's colour, so a coach's real `teams.color` choice (set in
+ * `TeamsTab`) never reached this panel; the chip showed a hash of the
+ * team's UUID instead. `resolveTeamBadgeVariant` (this file, near
+ * `pickTeamBadgeVariant`) is now the render site's actual resolver: it
+ * looks up the stored `AttendancePanelTeam.color` for the row's team and,
+ * if that free-text value maps to one of Astryx's nine hue variants
+ * (`mapStoredColorToBadgeVariant`), uses it; otherwise (`'default'`,
+ * `'gray'`, or an unrecognised string, or no matching team at all) it falls
+ * back to `pickTeamBadgeVariant(teamId)` unchanged -- so the "visually
+ * distinguishable, not just textually" guarantee this doc already promised
+ * still holds even for a team with no usable stored colour.
+ * `pickTeamBadgeVariant` itself is untouched and stays exported (its
+ * determinism is pinned by `AttendancePanel.test.tsx`).
+ *
  * -----------------------------------------------------------------------
  * 4. TRAP #2 -- un-mark / QR-edit semantics are OWNED by
  *    `../../lib/supabase/loaders/attendance.ts` (`resolveAttendanceWriteMethod`,
@@ -243,6 +259,16 @@ export interface AttendancePanelStudent {
 export interface AttendancePanelTeam {
   id: string;
   name: string;
+  /** T143 (UXC-05 part 2/3) -- `teams.color text not null`
+   * (`20260716000000_identity_roster.sql:34`), REQUIRED, structurally
+   * matching `OutreachDetail.tsx`'s own `TeamOption.color` (module doc
+   * above that interface) so the caller's already-fetched team objects pass
+   * through unchanged, same "no reshaping at this call site" contract this
+   * type already established for `id`/`name`. `resolveTeamBadgeVariant`
+   * below is the one place this free-text value (no check constraint) is
+   * resolved into a real `Badge` variant, with an honest fallback for a
+   * value that doesn't map to one. */
+  color: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -310,12 +336,90 @@ const TEAM_BADGE_VARIANTS = [
   'red',
 ] as const;
 
+/** T143 -- kept exactly as-is (its determinism is pinned by
+ * `AttendancePanel.test.tsx`, module doc #3's own trap). Still the right
+ * answer when no usable stored colour exists: `resolveTeamBadgeVariant`
+ * below falls back to this so multiple teams on one event stay
+ * distinguishable rather than collapsing to one neutral colour. */
 export function pickTeamBadgeVariant(teamId: string): (typeof TEAM_BADGE_VARIANTS)[number] {
   let hash = 0;
   for (let i = 0; i < teamId.length; i += 1) {
     hash = (hash * 31 + teamId.charCodeAt(i)) >>> 0;
   }
   return TEAM_BADGE_VARIANTS[hash % TEAM_BADGE_VARIANTS.length];
+}
+
+/**
+ * T143 (UXC-05 part 2/3) -- a coach's stored `teams.color` (free text, no
+ * check constraint, `TeamOption.color`/`AttendancePanelTeam.color` module
+ * docs above) maps onto Astryx's `Badge` non-semantic hue variants
+ * (`astryx-api.md`, Badge Props table `:530`) by exact name wherever
+ * possible. `TokenColor` (`@astryxdesign/core`'s `Token` component) has
+ * eleven values; nine map straight across to a `Badge` hue by name. The
+ * remaining two, `'default'` and `'gray'`, have no hue equivalent (a
+ * `Badge`'s own neutral-ish variant is `'neutral'`, a distinct string) --
+ * both, plus any unrecognised free-text value a legacy row might carry
+ * (same disclosed shape `TeamsTab.tsx`'s own `toKnownTeamColor` handles for
+ * its swatch picker, independently reimplemented here per this task's
+ * packet rather than importing that forbidden file), resolve to `undefined`
+ * so the caller falls back to `pickTeamBadgeVariant`. */
+const STORED_COLOR_TO_BADGE_VARIANT: Readonly<
+  Record<string, (typeof TEAM_BADGE_VARIANTS)[number] | undefined>
+> = {
+  red: 'red',
+  orange: 'orange',
+  yellow: 'yellow',
+  green: 'green',
+  teal: 'teal',
+  cyan: 'cyan',
+  blue: 'blue',
+  purple: 'purple',
+  pink: 'pink',
+  // 'default' and 'gray' deliberately absent -- no hue equivalent (module
+  // doc above); an absent key resolves to `undefined` via the index lookup.
+};
+
+/** T143 -- pure mapping, exported for direct testing (criterion 4: each of
+ * `'default'`/`'gray'`/an unrecognised string resolves to `undefined`,
+ * never a thrown error or a fabricated variant).
+ *
+ * MINOR fix-up (checker finding, post-merge): `STORED_COLOR_TO_BADGE_VARIANT`
+ * is a plain object literal indexed by unvalidated free text (`teams.color`
+ * has no check constraint -- module doc above), so a stored value of
+ * `'constructor'`/`'toString'`/etc. would resolve through JS's own
+ * `Object.prototype` chain to a real function value rather than `undefined`
+ * -- `resolveTeamBadgeVariant`'s `?? pickTeamBadgeVariant(...)` fallback
+ * then never fires (a function is not nullish), and that function gets
+ * passed to `Badge`'s `variant` prop. `Object.hasOwn` (own-property only,
+ * skips the inherited prototype chain entirely) is the one place this is
+ * guarded -- every other read of this table stays a plain index, since only
+ * THIS function's caller ever supplies attacker/DB-controlled free text as
+ * the key. */
+export function mapStoredColorToBadgeVariant(
+  color: string,
+): (typeof TEAM_BADGE_VARIANTS)[number] | undefined {
+  return Object.hasOwn(STORED_COLOR_TO_BADGE_VARIANT, color)
+    ? STORED_COLOR_TO_BADGE_VARIANT[color]
+    : undefined;
+}
+
+/**
+ * T143 -- the render site's ONE resolver (module doc #3's per-row chip
+ * variant). Rule (this task's packet): a stored colour that maps to a hue
+ * wins; `'default'`, `'gray'`, an unrecognised string, or a team id that
+ * doesn't resolve against `teams` at all, falls back to the existing
+ * deterministic `pickTeamBadgeVariant(teamId)` -- so multiple teams on one
+ * event stay visually distinguishable rather than collapsing onto one
+ * neutral colour, the same guarantee `pickTeamBadgeVariant` already
+ * provided before this task.
+ */
+export function resolveTeamBadgeVariant(
+  teamId: string,
+  teams: readonly AttendancePanelTeam[],
+): (typeof TEAM_BADGE_VARIANTS)[number] {
+  const team = teams.find((candidate) => candidate.id === teamId);
+  const storedVariant = team !== undefined ? mapStoredColorToBadgeVariant(team.color) : undefined;
+  return storedVariant ?? pickTeamBadgeVariant(teamId);
 }
 
 export function sortAttendanceSessions(
@@ -764,7 +868,7 @@ export function AttendancePanel({
                         session={session}
                         student={student}
                         teamName={resolveTeamName(student.teamId, teams)}
-                        teamBadgeVariant={pickTeamBadgeVariant(student.teamId)}
+                        teamBadgeVariant={resolveTeamBadgeVariant(student.teamId, teams)}
                         committedRow={committedRow}
                         isChecked={isChecked}
                         isPending={pendingKeys.has(key)}

@@ -468,7 +468,8 @@ describe('<OutreachDetail /> MetadataList content', () => {
   });
 
   it('resolveCreatorName / formatScopeLabel pure-function proof', () => {
-    const TEAMS: TeamOption[] = [{ id: 'team-ravens', name: 'Ravens' }];
+    // T143 -- `color` required.
+    const TEAMS: TeamOption[] = [{ id: 'team-ravens', name: 'Ravens', color: 'blue' }];
     expect(formatScopeLabel(null, TEAMS)).toBe('All teams');
     expect(formatScopeLabel(['team-ravens'], TEAMS)).toBe('Ravens');
     expect(formatScopeLabel(['team-unknown'], TEAMS)).toBe('No teams');

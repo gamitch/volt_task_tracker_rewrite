@@ -36,7 +36,9 @@ import {
   formatHours,
   formatSessionDateTime,
   isAttendingStatus,
+  mapStoredColorToBadgeVariant,
   pickTeamBadgeVariant,
+  resolveTeamBadgeVariant,
   resolveTeamName,
   rowKey,
   sortAttendanceSessions,
@@ -137,9 +139,13 @@ const CANCELED_SESSION: AttendancePanelSession = {
   status: 'canceled',
 };
 
+// T143 -- `color` required. These two values are picked ONLY to exercise the
+// "recognised hue" path for the general render/sort tests below; the
+// dedicated criterion-3/4 tests further down use their own fixtures so the
+// stored-vs-hash proof is never accidentally coupled to these.
 const TEAMS: readonly AttendancePanelTeam[] = [
-  { id: 'team-ravens', name: 'Ravens' },
-  { id: 'team-titans', name: 'Titans' },
+  { id: 'team-ravens', name: 'Ravens', color: 'blue' },
+  { id: 'team-titans', name: 'Titans', color: 'orange' },
 ];
 
 const ROSTER: readonly AttendancePanelStudent[] = [
@@ -228,8 +234,79 @@ describe('resolveTeamName / pickTeamBadgeVariant', () => {
     expect(resolveTeamName('team-unknown', TEAMS)).toBe('No team');
   });
 
-  it('is deterministic for the same team id', () => {
+  it('is deterministic for the same team id (criterion 5 -- unchanged by T143)', () => {
     expect(pickTeamBadgeVariant('team-ravens')).toBe(pickTeamBadgeVariant('team-ravens'));
+  });
+});
+
+describe('resolveTeamBadgeVariant / mapStoredColorToBadgeVariant (T143, UXC-05 part 2/3)', () => {
+  it('criterion 3 -- the decisive test: a stored colour that differs from the hash colour wins, proven by computing both', () => {
+    // Worked example from the packet, verified against the real hash
+    // (`pickTeamBadgeVariant`) rather than assumed: 'team-ravens' hashes to
+    // 'cyan'.
+    const hashColor = pickTeamBadgeVariant('team-ravens');
+    const storedColor = 'red';
+    expect(hashColor).toBe('cyan');
+    expect(storedColor).not.toBe(hashColor); // the two values genuinely differ.
+
+    const teamsWithStoredColor: AttendancePanelTeam[] = [
+      { id: 'team-ravens', name: 'Ravens', color: storedColor },
+    ];
+    expect(resolveTeamBadgeVariant('team-ravens', teamsWithStoredColor)).toBe('red');
+    expect(resolveTeamBadgeVariant('team-ravens', teamsWithStoredColor)).not.toBe('cyan');
+  });
+
+  it('criterion 4 -- a stored colour of "default", "gray", "constructor", or an unrecognised string falls back to pickTeamBadgeVariant, without crashing', () => {
+    // 'constructor' (checker finding, MINOR fix-up) -- Object.prototype's
+    // own inherited keys must NOT leak through a plain-object lookup keyed
+    // by unvalidated free text. Exercised alongside the other three
+    // deliberately-unrecognised values so a regression back to a bare `{}`
+    // lookup fails this same test, not a separate one.
+    const teams: AttendancePanelTeam[] = [
+      { id: 'team-default', name: 'Default Team', color: 'default' },
+      { id: 'team-gray', name: 'Gray Team', color: 'gray' },
+      { id: 'team-legacy', name: 'Legacy Team', color: 'crimson-legacy' },
+      { id: 'team-proto', name: 'Proto Team', color: 'constructor' },
+    ];
+    expect(mapStoredColorToBadgeVariant('default')).toBeUndefined();
+    expect(mapStoredColorToBadgeVariant('gray')).toBeUndefined();
+    expect(mapStoredColorToBadgeVariant('crimson-legacy')).toBeUndefined();
+    expect(mapStoredColorToBadgeVariant('constructor')).toBeUndefined();
+
+    expect(() => resolveTeamBadgeVariant('team-default', teams)).not.toThrow();
+    expect(() => resolveTeamBadgeVariant('team-gray', teams)).not.toThrow();
+    expect(() => resolveTeamBadgeVariant('team-legacy', teams)).not.toThrow();
+    expect(() => resolveTeamBadgeVariant('team-proto', teams)).not.toThrow();
+
+    expect(resolveTeamBadgeVariant('team-default', teams)).toBe(
+      pickTeamBadgeVariant('team-default'),
+    );
+    expect(resolveTeamBadgeVariant('team-gray', teams)).toBe(pickTeamBadgeVariant('team-gray'));
+    expect(resolveTeamBadgeVariant('team-legacy', teams)).toBe(pickTeamBadgeVariant('team-legacy'));
+    expect(resolveTeamBadgeVariant('team-proto', teams)).toBe(pickTeamBadgeVariant('team-proto'));
+  });
+
+  it('a team id absent from `teams` falls back to pickTeamBadgeVariant too', () => {
+    expect(resolveTeamBadgeVariant('team-unknown', TEAMS)).toBe(
+      pickTeamBadgeVariant('team-unknown'),
+    );
+  });
+
+  it('every recognised TokenColor hue maps across to the identically-named Badge variant', () => {
+    const recognizedHues = [
+      'red',
+      'orange',
+      'yellow',
+      'green',
+      'teal',
+      'cyan',
+      'blue',
+      'purple',
+      'pink',
+    ] as const;
+    for (const hue of recognizedHues) {
+      expect(mapStoredColorToBadgeVariant(hue)).toBe(hue);
+    }
   });
 });
 
@@ -479,6 +556,37 @@ describe('<AttendancePanel /> DES-12 states', () => {
     renderPanel({ roster: [], loadAttendance: async () => [] });
     await flushMicrotasks();
     expect(container.textContent).toContain('No students on this event');
+  });
+});
+
+describe('<AttendancePanel /> team chip honours the stored teams.color (T143, UXC-05 part 2/3)', () => {
+  it('renders the chip with the stored colour, not the hash colour, for a team where the two genuinely differ', async () => {
+    // Worked example: 'team-ravens' hashes to 'cyan' (asserted directly
+    // above in the pure-function tests); giving it a stored colour of
+    // 'red' must render 'red', proving the stored value wins over the hash.
+    const teamsWithStoredColor: AttendancePanelTeam[] = [
+      { id: 'team-ravens', name: 'Ravens', color: 'red' },
+      { id: 'team-titans', name: 'Titans', color: 'default' }, // no hue -- falls back to the hash.
+    ];
+    renderPanel({ teams: teamsWithStoredColor, loadAttendance: async () => [] });
+    await flushMicrotasks();
+
+    const ravensChip = Array.from(container.querySelectorAll('[data-variant]')).find(
+      (el) => el.textContent === 'Ravens',
+    );
+    expect(ravensChip).toBeTruthy();
+    expect(ravensChip?.getAttribute('data-variant')).toBe('red');
+    expect(ravensChip?.getAttribute('data-variant')).not.toBe('cyan');
+
+    // Accessibility (constitution item 15): colour is never the sole
+    // carrier of meaning here -- the chip's own text content is still the
+    // real team name, independent of which colour rendered.
+    expect(ravensChip?.textContent).toBe('Ravens');
+
+    const titansChip = Array.from(container.querySelectorAll('[data-variant]')).find(
+      (el) => el.textContent === 'Titans',
+    );
+    expect(titansChip?.getAttribute('data-variant')).toBe(pickTeamBadgeVariant('team-titans'));
   });
 });
 
