@@ -1112,19 +1112,43 @@ export function OutreachDetail({
   const [isMarkEventCompleteDialogOpen, setIsMarkEventCompleteDialogOpen] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackBanner | null>(null);
   // T121 item (a) -- best-effort roster fetch for the edit-mode dialog's
-  // "Expected attendees" checklist. Deliberately named `eventDialogRoster`,
-  // NOT `roster` -- this component's own pre-existing `roster` local
-  // (module doc #3's `resolveEventRoster(event, students)`, further below)
-  // is a DIFFERENT, team-scoped `RosterStudent[]` shape used for the
-  // Going/Maybe/Can't-go/No-response signup buckets and `AttendancePanel`;
-  // this is `OutreachEventDialog`'s own unrelated `OutreachRosterStudent[]`
-  // checklist shape (T118). A rejection (e.g. Supabase isn't configured in
-  // this environment/test) leaves `eventDialogRoster` at its initial
-  // `undefined`, so `OutreachEventDialog` falls back to its own
-  // `DEFAULT_STUDENTS` fixture -- never a broken edit flow.
-  const [eventDialogRoster, setEventDialogRoster] = useState<
-    readonly OutreachRosterStudent[] | undefined
-  >(undefined);
+  // "Expected attendees" checklist. Deliberately named `eventDialogRoster`
+  // below (the DERIVED value, not this state), NOT `roster` -- this
+  // component's own pre-existing `roster` local (module doc #3's
+  // `resolveEventRoster(event, students)`, further below) is a DIFFERENT,
+  // team-scoped `RosterStudent[]` shape used for the Going/Maybe/Can't-go/
+  // No-response signup buckets and `AttendancePanel`; this is
+  // `OutreachEventDialog`'s own unrelated `OutreachRosterStudent[]` checklist
+  // shape (T118).
+  //
+  // T147 (Part A2) -- a real, honest DES-12 load-state, same
+  // `RosterLoadState`/`rosterState`/`rosterRetryToken` shape
+  // `OutreachList.tsx`'s own CHECKER FIX (rework of T121, NIT #6) already
+  // established for its own roster fetch. BEFORE this fix, a rejection (e.g.
+  // Supabase isn't configured) left `eventDialogRoster` at its initial
+  // `undefined`, which `OutreachEventDialog` (its own `students` prop
+  // default) silently treated as "use my own `DEFAULT_STUDENTS` fixture" --
+  // i.e. a coach could open Edit after any roster-fetch failure and see FAKE
+  // sample students ("Riley Chen", "Sam Okafor", ...) presented as the live
+  // roster, with no indication anything failed. NOW: a failed fetch resolves
+  // to `{ status: 'error' }`, which (a) passes a real EMPTY array (never
+  // `undefined`) as `students`, so the dialog can never fall back to its own
+  // fixture, and (b) surfaces an honest error `Banner` (below, in this
+  // component's own render -- `OutreachEventDialog.tsx` stays
+  // forbidden/read-only, so this notice lives on the PAGE side, not injected
+  // into the dialog) with a real `Retry` action. The old justification for
+  // leaving this page on the soft-fail path ("T121 already fixed it") was
+  // true for `OutreachList.tsx` only -- this page never received the fix
+  // until now.
+  type RosterLoadState =
+    | { status: 'loading' }
+    | { status: 'ready'; students: readonly OutreachRosterStudent[] }
+    | { status: 'error' };
+  const [rosterState, setRosterState] = useState<RosterLoadState>({ status: 'loading' });
+  // Bumped by the error Banner's "Retry" action to force the effect below to
+  // re-run -- same `retryToken` idiom this file's own top-level
+  // `useOutreachDetailLoadState` already established.
+  const [rosterRetryToken, setRosterRetryToken] = useState(0);
 
   useEffect(() => {
     if (loadState.status === 'success') {
@@ -1134,17 +1158,34 @@ export function OutreachDetail({
 
   useEffect(() => {
     let isMounted = true;
+    setRosterState({ status: 'loading' });
     loadRoster()
       .then((rosterData) => {
-        if (isMounted) setEventDialogRoster(rosterData);
+        if (isMounted) setRosterState({ status: 'ready', students: rosterData });
       })
       .catch(() => {
-        // Disclosed soft-fail -- see the `eventDialogRoster` state doc above.
+        if (isMounted) setRosterState({ status: 'error' });
       });
     return () => {
       isMounted = false;
     };
-  }, [loadRoster]);
+  }, [loadRoster, rosterRetryToken]);
+
+  function retryRosterLoad(): void {
+    setRosterRetryToken((token) => token + 1);
+  }
+
+  // `undefined` only while genuinely still loading (a brief, transient
+  // state -- `OutreachEventDialog`'s own fixture fallback is a defensible,
+  // short-lived placeholder here, unlike the disclosed FAILURE case below).
+  // `'ready'` -> the real roster. `'error'` -> a real, honest EMPTY array,
+  // never the dialog's own fixture.
+  const eventDialogRoster =
+    rosterState.status === 'ready'
+      ? rosterState.students
+      : rosterState.status === 'error'
+        ? []
+        : undefined;
 
   async function reloadDetail(): Promise<void> {
     const fresh = await loadData(eventId);
@@ -1334,6 +1375,21 @@ export function OutreachDetail({
         />
       )}
 
+      {/* T147 (Part A2) -- honest, page-side notice for a roster-load
+          failure (module doc on `rosterState` above), same shape
+          `OutreachList.tsx`'s own CHECKER FIX (rework of T121, NIT #6)
+          already established. */}
+      {rosterState.status === 'error' && (
+        <Banner
+          status="error"
+          title="Couldn't load the student roster"
+          description={
+            'Editing this event will show an empty "Expected attendees" checklist until this is retried.'
+          }
+          endContent={<Button variant="ghost" label="Retry" onClick={retryRosterLoad} />}
+        />
+      )}
+
       {copiedUrl !== null && (
         <Toast
           type="info"
@@ -1422,14 +1478,18 @@ export function OutreachDetail({
           into this page for the first time, in EDIT mode
           (`initialEvent` pre-fills every field from the real fetched
           event/sessions/rsvps -- `buildInitialOutreachEvent`, T121 item (b)
-          UPDATE: now also prefills `expectedStudentIds`). `teams`
-          deliberately NOT overridden, same "still fixture-backed" posture
-          `OutreachList.tsx`'s own T101 wiring already established for the
-          identical reason. T121 item (a): `students`/`currentUserProfileId`
-          now wired to the real roster loader / signed-in coach id. */}
+          UPDATE: now also prefills `expectedStudentIds`). T121 item (a):
+          `students`/`currentUserProfileId` now wired to the real roster
+          loader / signed-in coach id. T147: `teams` now real too -- this
+          page's own already-fetched `detailData.teams` (already used above
+          for `formatScopeLabel`/`AttendancePanel`), replacing the dialog's
+          own `DEFAULT_TEAMS` fixture fallback (`'team-ravens'`/
+          `'team-titans'`, non-uuid strings that failed the real
+          `events.team_ids uuid[]` insert). */}
       <OutreachEventDialog
         isOpen={isEventDialogOpen}
         onOpenChange={setIsEventDialogOpen}
+        teams={teams}
         onSaveEvent={handleSaveEventSubmit}
         initialEvent={buildInitialOutreachEvent(event, sessions, rsvps)}
         students={eventDialogRoster}

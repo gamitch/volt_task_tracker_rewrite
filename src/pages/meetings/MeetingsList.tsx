@@ -640,6 +640,12 @@ export interface CoachMeetingRow {
 
 export interface CoachMeetingsData {
   rows: CoachMeetingRow[];
+  /** T147 -- `loaders/meetings.ts`'s `makeLoadCoachMeetingsData` already
+   * fetches this (`loadTeamRows`, for `buildCoachMeetingRows`'s own per-row
+   * team-scope label) -- threaded through here too so it can reach
+   * `<ScheduleMeetingsDialog>`'s own `teams` prop, replacing that dialog's
+   * fixture `DEFAULT_TEAMS`. */
+  teams: readonly FixtureTeam[];
 }
 
 export type LoadCoachMeetingsDataFn = () => Promise<CoachMeetingsData>;
@@ -1126,6 +1132,8 @@ export async function defaultLoadCoachMeetingsData(): Promise<CoachMeetingsData>
       FIXTURE_RSVPS,
       FIXTURE_STUDENTS,
     ),
+    // T147 -- same fixture `buildCoachMeetingRows` above already consumes.
+    teams: FIXTURE_TEAMS,
   };
 }
 
@@ -1940,6 +1948,11 @@ function CoachMeetingsView({
 }: CoachMeetingsViewProps): ReactNode {
   const loadState = useLoadState(loadData, [loadData]);
   const [rows, setRows] = useState<CoachMeetingRow[]>([]);
+  // T147 -- real teams, populated the same two places `rows` is (the
+  // initial-load effect below and the post-create reload,
+  // `handleCreateMeetingsSubmit`), threaded to `<ScheduleMeetingsDialog>`'s
+  // own `teams` prop.
+  const [teams, setTeams] = useState<readonly FixtureTeam[]>([]);
   const [stubNotice, setStubNotice] = useState<StubNotice | null>(null);
   const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
   // T096 (module doc #7a) -- drives the one rendered `<ScheduleMeetingsDialog>`
@@ -1970,6 +1983,7 @@ function CoachMeetingsView({
   useEffect(() => {
     if (loadState.status === 'success') {
       setRows(loadState.data.rows);
+      setTeams(loadState.data.teams);
     }
   }, [loadState]);
 
@@ -2059,6 +2073,7 @@ function CoachMeetingsView({
     try {
       const fresh = await loadData();
       setRows(fresh.rows);
+      setTeams(fresh.teams);
       setFeedback({
         status: 'success',
         title: 'Meetings scheduled',
@@ -2195,16 +2210,18 @@ function CoachMeetingsView({
       {/* T096 (module doc #7a) -- `ScheduleMeetingsDialog.tsx` (T031,
           already Passed, already built) wired into this page for the first
           time, in CREATE mode only (module doc #7b: this dialog has no edit
-          mode). `teams` is deliberately NOT overridden here -- it falls back
-          to that component's own already-disclosed fixture team list (same
-          "still fixture-backed" posture `StudentsTab.tsx`'s own module doc
-          #12 already established for `StudentDialog`'s `season` prop); this
-          task's own Allowed Files do not include a second teams-loading
-          mechanism for scheduling specifically, and inventing one would be
-          scope creep beyond wiring the dialog itself. */}
+          mode). T147: `teams` now real too -- `loaders/meetings.ts`'s
+          `makeLoadCoachMeetingsData` already fetched this list for its own
+          per-row team-scope label; it is now threaded through
+          `CoachMeetingsData`/this view's own `teams` state instead of the
+          dialog falling back to its own `DEFAULT_TEAMS` fixture
+          (`'team-ravens'`/`'team-titans'`, non-uuid strings that failed the
+          real `events.team_ids uuid[]` insert -- the report that blocked
+          meeting creation outright). No new query, no new round trip. */}
       <ScheduleMeetingsDialog
         isOpen={isScheduleDialogOpen}
         onOpenChange={setIsScheduleDialogOpen}
+        teams={teams}
         onCreateMeetings={handleCreateMeetingsSubmit}
       />
     </VStack>

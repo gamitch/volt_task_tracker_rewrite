@@ -172,6 +172,25 @@ async function flushMicrotasks(): Promise<void> {
   });
 }
 
+// T147 -- same helper `MeetingsList.test.tsx`/`OutreachDetail.test.tsx`
+// already established (Astryx `Field` renders a real `<label htmlFor={id}>`
+// for every labeled input, including `MultiSelector`'s own trigger button;
+// no testing-library `getByLabelText` equivalent is installed in this repo).
+function getFieldControl(labelText: string): HTMLElement {
+  const labels = Array.from(document.querySelectorAll('label'));
+  const label = labels.find((el) => el.textContent?.trim().startsWith(labelText));
+  if (!label) {
+    throw new Error(
+      `No label found for "${labelText}". Labels present: ${labels.map((l) => l.textContent).join(' | ')}`,
+    );
+  }
+  const forId = label.getAttribute('for');
+  if (!forId) throw new Error(`Label "${labelText}" has no htmlFor`);
+  const control = document.getElementById(forId);
+  if (!control) throw new Error(`No control found for id "${forId}"`);
+  return control;
+}
+
 function freshContainer(): void {
   act(() => {
     root.unmount();
@@ -974,6 +993,7 @@ describe('<OutreachList /> coach view', () => {
           attendance: [],
           students: [],
           goalConfig: { seasonId: 's1', individualGoalHoursByStudentId: {} },
+          teams: [],
         }),
     });
     await flushMicrotasks();
@@ -1167,11 +1187,18 @@ describe('<OutreachList /> coach view', () => {
   });
 
   it('T121 item (a): wires the real roster loader into the create dialog\'s "Expected attendees" checklist, replacing the fixture DEFAULT_STUDENTS', async () => {
-    const loadRoster = vi
-      .fn()
-      .mockResolvedValue([
-        { id: 'stu-jamie', name: 'Jamie Rivera', teamId: 'team-ravens', isActive: true },
-      ]);
+    const loadRoster = vi.fn().mockResolvedValue([
+      // T147: `teamId` matches `defaultLoadOutreachData`'s own `FIXTURE_TEAMS`
+      // (UUID-shaped, no longer `'team-ravens'`) -- this dialog's own
+      // `groupActiveRosterByTeam` only shows a roster row inside a team it can
+      // actually match against the real `teams` now threaded to it.
+      {
+        id: 'stu-jamie',
+        name: 'Jamie Rivera',
+        teamId: 'b1c11111-1111-4111-8111-111111111111',
+        isActive: true,
+      },
+    ]);
     renderAsUser(COACH_USER, { loadData: defaultLoadOutreachData, loadRoster });
     await flushMicrotasks();
     expect(loadRoster).toHaveBeenCalledTimes(1);
@@ -1239,9 +1266,21 @@ describe('<OutreachList /> coach view', () => {
     // "1 of N checked" assertion below to mean anything (a separate, already
     // -covered concern from whether the roster loader itself is wired --
     // see the previous test).
+    // T147: `teamId` matches `defaultLoadOutreachData`'s own `FIXTURE_TEAMS`
+    // (UUID-shaped, no longer `'team-ravens'`).
     const loadRoster = vi.fn().mockResolvedValue([
-      { id: 'student-amara-webb', name: 'Amara Webb', teamId: 'team-ravens', isActive: true },
-      { id: 'student-cole-jennings', name: 'Cole Jennings', teamId: 'team-ravens', isActive: true },
+      {
+        id: 'student-amara-webb',
+        name: 'Amara Webb',
+        teamId: 'b1c11111-1111-4111-8111-111111111111',
+        isActive: true,
+      },
+      {
+        id: 'student-cole-jennings',
+        name: 'Cole Jennings',
+        teamId: 'b1c11111-1111-4111-8111-111111111111',
+        isActive: true,
+      },
     ]);
     renderAsUser(COACH_USER, {
       loadData: defaultLoadOutreachData,
@@ -1377,6 +1416,111 @@ describe('<OutreachList /> coach view', () => {
 });
 
 // ---------------------------------------------------------------------------
+// T147: the outreach/meetings team picker shows fixture teams to real users.
+// This page now threads real `teams` (`loaders/outreach.ts`'s
+// `makeLoadOutreachData`) to `<OutreachEventDialog>`'s own `teams` prop
+// instead of that dialog falling back to its `DEFAULT_TEAMS` fixture
+// (`'team-ravens'`/`'team-titans'`, non-uuid strings that fail the real
+// `events.team_ids uuid[]` insert -- the report that blocked meeting
+// creation outright).
+//
+// Create mode has no `initialEvent`, so `OutreachEventDialog.tsx`'s own
+// `allTeamIds` (derived straight from the `teams` prop) is what seeds
+// `selectedTeamIds` on open -- unlike edit mode, no extra fixture-event
+// scoping trick is needed here to make the `teams` prop the thing under
+// test.
+//
+// Assertion mechanism -- UUID shape on the submitted payload, never a
+// name-based assertion (packet "The assertion mechanism" section).
+// ---------------------------------------------------------------------------
+
+describe('T147: OutreachEventDialog (create mode) submits real team UUIDs, not DEFAULT_TEAMS fixture strings', () => {
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  it('deselecting one team submits a teamIds array of real UUIDs from the teams prop, never the fixture strings', async () => {
+    const onSaveEvent = vi.fn().mockResolvedValue(undefined);
+    // `defaultLoadOutreachData` (Known Context/Traps #1's own fixture
+    // loader) now resolves `teams: FIXTURE_TEAMS` -- UUID-shaped ids
+    // (module doc on that fixture), the real prop under test here.
+    renderAsUser(COACH_USER, { loadData: defaultLoadOutreachData, onSaveEvent });
+    await flushMicrotasks();
+
+    const newEventButtons = Array.from(container.querySelectorAll('button')).filter((btn) =>
+      btn.textContent?.includes('New outreach event'),
+    );
+    act(() => {
+      newEventButtons[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const labels = Array.from(document.querySelectorAll('label'));
+    const titleLabel = labels.find((el) => el.textContent?.trim().startsWith('Title'));
+    const titleInput = document.getElementById(
+      titleLabel?.getAttribute('for') ?? '',
+    ) as HTMLInputElement;
+    const dateLabel = labels.find((el) => el.textContent?.trim().startsWith('Date'));
+    const dateInput = document.getElementById(
+      dateLabel?.getAttribute('for') ?? '',
+    ) as HTMLInputElement;
+
+    function setNativeInputValue(input: HTMLInputElement, value: string): void {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value',
+      )?.set;
+      setter?.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    act(() => {
+      setNativeInputValue(titleInput, 'Winter Coat Drive');
+      setNativeInputValue(dateInput, '2026-08-15');
+    });
+
+    // Open the "Team scope" MultiSelector and deselect the LAST option in
+    // its own listbox -- positional, not by label text (with the fix
+    // reverted the injected UUID-fixture labels are absent, so a label
+    // lookup would die with a harness-shaped failure instead of the UUID
+    // mismatch this test exists to prove). Scoped to the trigger's own
+    // `aria-controls` listbox, not the whole document -- a second,
+    // unrelated `role="option"` group exists on this page (the dialog's own
+    // Event type `Selector`). The last option is never the `hasSelectAll`
+    // pseudo-option, which that component places FIRST.
+    const trigger = getFieldControl('Team scope');
+    act(() => {
+      trigger.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const listboxId = trigger.getAttribute('aria-controls');
+    expect(listboxId).toBeTruthy();
+    const listbox = document.getElementById(listboxId ?? '');
+    expect(listbox).toBeTruthy();
+    const options = Array.from(listbox?.querySelectorAll('[role="option"]') ?? []);
+    expect(options.length).toBeGreaterThan(0);
+    act(() => {
+      options[options.length - 1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const createButton = Array.from(document.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'Create event — 1 session',
+    );
+    expect(createButton).toBeTruthy();
+    await act(async () => {
+      createButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await flushMicrotasks();
+
+    expect(onSaveEvent).toHaveBeenCalledTimes(1);
+    const submittedTeamIds = onSaveEvent.mock.calls[0][0].event.teamIds as string[] | null;
+    expect(submittedTeamIds).not.toBeNull();
+    expect(submittedTeamIds).not.toEqual([]);
+    for (const id of submittedTeamIds ?? []) {
+      expect(id).toMatch(UUID_RE);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // <OutreachList /> student/parent view -- all four DES-12 states
 // ---------------------------------------------------------------------------
 
@@ -1409,6 +1553,7 @@ describe('<OutreachList /> student/parent view', () => {
           attendance: [],
           students: [],
           goalConfig: { seasonId: 's1', individualGoalHoursByStudentId: {} },
+          teams: [],
         }),
     });
     await flushMicrotasks();
@@ -1921,6 +2066,12 @@ describe('loadOutreachData (T101 real load)', () => {
     const seasonMaybeSingleSpy = vi
       .fn()
       .mockResolvedValue({ data: { id: 'season-1', default_goal_hours: 100 }, error: null });
+    // T147 -- the new, real, batched `teams` query this loader now issues
+    // alongside `students`/`seasons` (module doc on `makeLoadOutreachData`).
+    const teamsOrderSpy = vi.fn().mockResolvedValue({
+      data: [{ id: 'b1c11111-1111-4111-8111-111111111111', name: 'Crimson Circuit', color: 'red' }],
+      error: null,
+    });
 
     const fromSpy = vi.fn((table: string) => {
       if (table === 'events') return { select: vi.fn(() => ({ eq: eventsEqSpy })) };
@@ -1928,6 +2079,7 @@ describe('loadOutreachData (T101 real load)', () => {
       if (table === 'rsvps') return { select: vi.fn(() => ({ in: rsvpsInSpy })) };
       if (table === 'attendance') return { select: vi.fn(() => ({ in: attendanceInSpy })) };
       if (table === 'students') return { select: vi.fn(() => ({ order: studentsOrderSpy })) };
+      if (table === 'teams') return { select: vi.fn(() => ({ order: teamsOrderSpy })) };
       if (table === 'seasons') {
         return {
           select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: seasonMaybeSingleSpy })) })),
@@ -1943,6 +2095,10 @@ describe('loadOutreachData (T101 real load)', () => {
     expect(eventsEqSpy).toHaveBeenCalledWith('season_id', 'season-1');
     expect(sessionsInSpy).toHaveBeenCalledWith('event_id', ['event-1']);
     expect(rsvpsInSpy).toHaveBeenCalledWith('session_id', ['session-1']);
+    expect(teamsOrderSpy).toHaveBeenCalled();
+    expect(result.teams).toEqual([
+      { id: 'b1c11111-1111-4111-8111-111111111111', name: 'Crimson Circuit', color: 'red' },
+    ]);
     // CHECKER FIX (rework of T121, MAJOR) -- ONE real, batched `attendance`
     // query, same `.in('session_id', [...])` shape as `rsvps` -- never a
     // per-event/per-session fan-out (this test only ever exercises ONE
@@ -1957,6 +2113,110 @@ describe('loadOutreachData (T101 real load)', () => {
     // The student's own explicit override (5) wins over the season default
     // (100) -- both real columns, module doc #2 of the loader file.
     expect(result.goalConfig.individualGoalHoursByStudentId['student-1']).toBe(5);
+  });
+
+  // T147 (packet Part B: "Prove it, don't just assert it") -- a fake client
+  // that records call ORDER, not just that each table was eventually
+  // queried. `teams` depends on nothing (same as `students`/`seasons`), so
+  // it must be issued in the SAME batch as those two, before the
+  // session-dependent `rsvps`/`attendance` queries (which can only start
+  // once `sessionRows` -- itself part of that same first batch -- has
+  // resolved). A serial "teams after everything else" implementation would
+  // still eventually call every table, so call-count assertions alone
+  // (the test above) cannot distinguish parallel from serial; only order
+  // can.
+  it('issues the teams query in the SAME batch as students/seasons (zero-dependency), never serialized after the session-dependent batch', async () => {
+    const callOrder: string[] = [];
+    // One real event + one real session -- needed so `eventIds`/`sessionIds`
+    // are both non-empty, which is what makes `event_sessions` (batch 1) and
+    // `rsvps`/`attendance` (batch 2, session-dependent) actually get issued
+    // at all; an empty result short-circuits those calls via `Promise.resolve([])`
+    // instead (module doc on `makeLoadOutreachData`), which would make this
+    // test's own ordering proof vacuous.
+    const eventsEqSpy = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: 'event-1',
+          season_id: 'season-1',
+          type: 'outreach',
+          title: 'T',
+          description: '',
+          location_name: '',
+          address: '',
+          team_ids: null,
+          counts_participation: false,
+          counts_volunteer_hours: true,
+          adult_volunteers_count: 0,
+          adult_volunteer_hours: 0,
+          created_by: null,
+        },
+      ],
+      error: null,
+    });
+    const sessionsInSpy = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: 'session-1',
+          event_id: 'event-1',
+          session_date: '2026-08-01',
+          starts_at: '2026-08-01T14:00:00.000Z',
+          ends_at: '2026-08-01T16:00:00.000Z',
+          status: 'scheduled',
+          people_reached: null,
+          notes: '',
+        },
+      ],
+      error: null,
+    });
+    const rsvpsInSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const attendanceInSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const studentsOrderSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const teamsOrderSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const seasonMaybeSingleSpy = vi
+      .fn()
+      .mockResolvedValue({ data: { id: 'season-1', default_goal_hours: 0 }, error: null });
+
+    const fromSpy = vi.fn((table: string) => {
+      callOrder.push(table);
+      if (table === 'events') return { select: vi.fn(() => ({ eq: eventsEqSpy })) };
+      if (table === 'event_sessions') return { select: vi.fn(() => ({ in: sessionsInSpy })) };
+      if (table === 'rsvps') return { select: vi.fn(() => ({ in: rsvpsInSpy })) };
+      if (table === 'attendance') return { select: vi.fn(() => ({ in: attendanceInSpy })) };
+      if (table === 'students') return { select: vi.fn(() => ({ order: studentsOrderSpy })) };
+      if (table === 'teams') return { select: vi.fn(() => ({ order: teamsOrderSpy })) };
+      if (table === 'seasons') {
+        return {
+          select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: seasonMaybeSingleSpy })) })),
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    await makeLoadOutreachData(() => client)('season-1');
+
+    // `from('teams')` must appear BEFORE `from('rsvps')`/`from('attendance')`
+    // in call order -- those two are only ever reachable once the whole
+    // first `Promise.all` batch (which `loadTeams()` is inside of) has
+    // already resolved and `sessionIds` is known. `events` is issued first,
+    // sequentially, ahead of the whole batch (module doc #1: it resolves
+    // `eventIds`, which the FIRST batched `Promise.all` needs for
+    // `loadSessions`).
+    const teamsIndex = callOrder.indexOf('teams');
+    const rsvpsIndex = callOrder.indexOf('rsvps');
+    const attendanceIndex = callOrder.indexOf('attendance');
+    expect(teamsIndex).toBeGreaterThanOrEqual(0);
+    expect(rsvpsIndex).toBeGreaterThan(teamsIndex);
+    expect(attendanceIndex).toBeGreaterThan(teamsIndex);
+    // The real proof of "same batch, not serial": `students`/`seasons`
+    // (the other two zero-dependency queries) are issued in the SAME
+    // microtask turn as `teams` -- `Promise.all([a, b, c, d])` evaluates
+    // its array synchronously, so all four calls land contiguously in
+    // `callOrder`, immediately after `events`, with nothing
+    // session-dependent interleaved before `rsvps`/`attendance`.
+    expect(callOrder.slice(1, 5).sort()).toEqual(
+      ['event_sessions', 'seasons', 'students', 'teams'].sort(),
+    );
   });
 
   it('falls back to the season default_goal_hours when a student has no goal_hours_override', async () => {
@@ -1975,6 +2235,10 @@ describe('loadOutreachData (T101 real load)', () => {
             }),
           })),
         };
+      }
+      // T147 -- the new, real, batched `teams` query this loader now issues.
+      if (table === 'teams') {
+        return { select: vi.fn(() => ({ order: vi.fn().mockResolvedValue(nullEmpty) })) };
       }
       if (table === 'seasons') {
         return {
