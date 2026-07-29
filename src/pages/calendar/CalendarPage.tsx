@@ -104,8 +104,9 @@
  * | Meeting Violet | Astryx `purple` variant | Meeting type badge/cards |
  * | Comp Orange | Astryx `orange` variant | Competition type badge/cards |
  *
- * `CALENDAR_TYPE_BADGE` below maps `meeting -> 'purple'`,
- * `outreach -> 'blue'`, `competition -> 'orange'` -- Astryx `Badge`'s own
+ * `EVENT_TYPE_BADGE` (`../../lib/eventTypeBadge`, imported above) maps
+ * `meeting -> 'purple'`, `outreach -> 'blue'`, `competition -> 'orange'` --
+ * Astryx `Badge`'s own
  * `variant` prop (astryx-api.md line 530's Props table includes `blue`,
  * `purple`, `orange` in its literal union), never a hand-rolled hex
  * (constitution item 2/13 concern -- a hex would also break dark-mode
@@ -299,7 +300,7 @@ import {
 } from '@astryxdesign/core';
 import { Link as RouterLink } from 'react-router-dom';
 import { routePaths } from '../../app/router';
-import { EVENT_TYPE_BADGE } from '../../lib/eventTypeBadge';
+import { EVENT_TYPE_BADGE, EVENT_TYPE_ORDER } from '../../lib/eventTypeBadge';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of the real `events`/`event_sessions`
@@ -832,11 +833,19 @@ export function CalendarPage({
             />
 
             {/* DES-04 color legend -- module doc #1's resolution: the dots/
-                labels live here and in the list below, not inside the grid. */}
+                labels live here and in the list below, not inside the grid.
+                T145: driven from `EVENT_TYPE_ORDER`/`EVENT_TYPE_BADGE`
+                (`../../lib/eventTypeBadge`) instead of three hand-written
+                Badge literals -- the fourth copy of the DES-04 mapping that
+                T138 could not reach because it was JSX, not a map literal. */}
             <HStack gap={2} wrap="wrap">
-              <Badge variant="purple" label="Meeting" />
-              <Badge variant="blue" label="Outreach" />
-              <Badge variant="orange" label="Competition" />
+              {EVENT_TYPE_ORDER.map((type) => (
+                <Badge
+                  key={type}
+                  variant={EVENT_TYPE_BADGE[type].variant}
+                  label={EVENT_TYPE_BADGE[type].label}
+                />
+              ))}
             </HStack>
 
             {/* UXC-06: `SegmentedControl`'s own root is already inline-flex/

@@ -28,30 +28,45 @@
  *
  * `src/pages/calendar/CalendarPage.tsx` did not exist at the moment this
  * task was first dispatched (confirmed via `ls src/pages/calendar/`), so
- * `EVENT_TYPE_BADGE` below was derived directly from the PRD's own DES-04
- * table (`VOLT_Portal_PRD.md` lines 186-193): "Circuit Blue" = Astryx
+ * `EVENT_TYPE_BADGE` was originally derived directly from the PRD's own
+ * DES-04 table (`VOLT_Portal_PRD.md` lines 186-193): "Circuit Blue" = Astryx
  * `blue` = Outreach type badge/cards; "Meeting Violet" = Astryx `purple` =
  * Meeting type badge/cards; "Comp Orange" = Astryx `orange` = Competition
  * type badge/cards. `CalendarPage.tsx` (T045) landed mid-session, partway
  * through this task's own work -- read read-only afterward per the
- * packet's Dependencies section, its own `CALENDAR_TYPE_BADGE` constant
- * (`CalendarPage.tsx` lines 577-586) maps `meeting -> 'purple'`,
- * `outreach -> 'blue'`, `competition -> 'orange'`, IDENTICAL to
- * `EVENT_TYPE_BADGE` below -- both independently derived from the same
- * DES-04 table, confirmed byte-identical in outcome, not merely "reused"
- * by import (importing from `CalendarPage.tsx` remains out of this task's
- * Allowed Files; it stayed read-only reference only). Every session row
+ * packet's Dependencies section; its own then-local badge-map constant (the
+ * `CalendarPage.tsx` line citation this doc originally gave for it, 577-586,
+ * actually spanned lines 580-587 at that commit (`48fcd90`) -- a few lines
+ * off, not fabricated) mapped `meeting -> 'purple'`, `outreach -> 'blue'`,
+ * `competition -> 'orange'`, IDENTICAL to this file's then-local mapping --
+ * both independently derived from the same DES-04 table, agreeing by
+ * construction from a shared source, not by import.
+ *
+ * T138 (UXC-05) later consolidated every independent copy of this mapping --
+ * this file's included -- into the single shared constant in
+ * `src/lib/eventTypeBadge.ts`. `EVENT_TYPE_BADGE` is now imported from there
+ * (see the `import` above) and merely re-exported further down (module doc
+ * #7) for this file's own call sites; it is no longer derived or defined in
+ * this file at all, and it is no longer independently maintained in step
+ * with `CalendarPage.tsx` -- it is the same binding. Every session row
  * carries this Badge so the type-mixing required by RPT-04 stays legible
  * per row.
  *
- * NOTE (disclosed finding, not fixed here): this deliberately diverges from
- * `src/pages/home/CoachHome.tsx`'s own `EVENT_TYPE_BADGE` constant (line
- * ~1191 there: meeting=`blue`, outreach=`purple`, competition=`teal`),
- * which does NOT match DES-04's literal table above. `CoachHome.tsx` is
- * outside this task's Allowed Files (not editable here); this file's own
- * mapping is the one that matches the PRD text verbatim, and the
- * inconsistency is flagged as a candidate finding for a future corrective
- * task touching `CoachHome.tsx`.
+ * NOTE (history, verified against the actual commits, not re-derived from
+ * this doc's own prior wording): when T058 wrote this NOTE, its claim was
+ * accurate -- at that commit (`48fcd90`), `CoachHome.tsx` line 1191 was
+ * exactly `const EVENT_TYPE_BADGE: Record<EventType, ...> = {` with
+ * `meeting=blue, outreach=purple, competition=teal`, which genuinely did
+ * NOT match DES-04. T080 (`82fafdf`) corrected `CoachHome.tsx` to
+ * `meeting -> 'purple'`, `outreach -> 'blue'`, `competition -> 'orange'` --
+ * the same DES-04 mapping this file uses, which is what made the
+ * divergence claim false -- and moved the constant to line 1210, which is
+ * what made the `~1191` citation stale. T138 then removed the local
+ * constant from `CoachHome.tsx` entirely: it now imports the same shared
+ * `EVENT_TYPE_BADGE` from `src/lib/eventTypeBadge.ts` that this file
+ * imports. There is no divergence today; there is one shared mapping
+ * across `CoachHome.tsx`, `CalendarPage.tsx`, and this file, and DES-04 is
+ * satisfied everywhere it is used.
  *
  * -----------------------------------------------------------------------
  * 3. "Attendance/signup counts" -- two different concepts, sourced
