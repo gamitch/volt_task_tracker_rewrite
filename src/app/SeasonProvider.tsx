@@ -73,11 +73,16 @@
  *      visitor hasn't signed in yet, or is mid-invite-acceptance) -- neither
  *      page has any season-scoped content to show, so a season fetch there
  *      would be pure waste, not a real requirement.
- *   2. `public.seasons`' only RLS read policy is `staff_all`
- *      (`is_staff()`) per `../lib/supabase/loaders/seasons.ts`'s own module
- *      doc (grep-verified there against `20260717000002_rls.sql`) -- an
- *      anonymous or not-yet-authenticated request querying it would only
- *      ever get an RLS-denied empty result anyway, which this provider
+ *   2. CORRECTED 2026-07-29 (dispute-log D010): this previously read
+ *      "`public.seasons`' only RLS read policy is `staff_all`", inherited
+ *      from `../lib/supabase/loaders/seasons.ts`'s module doc, which was
+ *      itself wrong. `20260717000002_rls.sql:74-79` declares **two**
+ *      policies -- `staff_all` (`is_staff()`) and `read_all`
+ *      (`for select to authenticated using (true)`) -- so any authenticated
+ *      user can read `seasons`, not only staff. **The conclusion below is
+ *      unaffected**, because both are scoped `to authenticated`: an
+ *      anonymous or not-yet-authenticated request matches neither policy and
+ *      so would only ever get an RLS-denied empty result anyway, which this provider
  *      would have to visually distinguish from the real "'none': zero
  *      seasons exist" case to avoid lying to a pre-auth visitor. Not
  *      mounting there at all sidesteps that ambiguity entirely rather than

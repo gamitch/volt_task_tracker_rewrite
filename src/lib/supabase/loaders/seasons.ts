@@ -83,9 +83,23 @@
  * `SeasonSettings.tsx`'s own page-local display shape.
  *
  * -----------------------------------------------------------------------
- * `public.seasons`' only RLS read policy (`supabase/migrations/
- * 20260717000002_rls.sql`, read-only reference, not imported here) grants
- * `admin`/`coach` (`is_staff()`) read access; `SeasonSettings.tsx` is already
+ * CORRECTED 2026-07-29 (dispute-log D010). This paragraph previously said
+ * `public.seasons` has only ONE RLS read policy, granting staff. **It has two**
+ * (`supabase/migrations/20260717000002_rls.sql:74-79`, read-only reference, not
+ * imported here): `staff_all` (`for all to authenticated using (is_staff())`)
+ * and `read_all` (`for select to authenticated using (true)`). So **any
+ * authenticated user can read `seasons`**, not only staff.
+ *
+ * The claim propagated from here into `SeasonProvider.tsx` and into
+ * `20260723000000_kpi_views.sql`, where it was used to justify a security
+ * conclusion — see D010. Correcting it at the source so it stops spreading.
+ *
+ * What still holds: both policies are scoped `to authenticated`, so a pre-auth
+ * or anonymous request matches neither and reads nothing. Every reasoning step
+ * below that depends only on "a pre-auth visitor gets nothing" is unaffected;
+ * any step that depends on "only staff can read seasons" is not.
+ *
+ * The original access reasoning follows. `SeasonSettings.tsx` is already
  * admin-only-gated (`RequireRole(['admin'])`, that file's own module doc #6)
  * and `SeasonProvider` is meant to be mounted only inside the authenticated
  * chrome (see `SeasonProvider.tsx`'s own module doc, Trap #5) -- so every

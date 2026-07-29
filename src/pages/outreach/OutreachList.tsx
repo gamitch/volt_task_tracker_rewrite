@@ -75,12 +75,28 @@
  * Use multiple progress bars stacked together for the same operation" rule,
  * layered under a THIRD/FOURTH redundant "Team season goal" text repetition
  * -- exactly UXD-05's own named anti-example. `GoalProgressBar`'s own
- * updated doc comment (this file, `T121 item (d)`) has the current,
- * accurate design: one heading + a grouped stat-tile row (confirmed/
- * planned/goal/%-of-goal), zero `ProgressBar`s. BEH-02 (confirmed/planned
- * never summed) is UNCHANGED by this -- still enforced exactly as this
- * module doc's own opening paragraph (above) describes, just rendered as
- * tiles instead of bars.
+ * updated doc comment (this file, `T121 item (d)`) described the post-T121
+ * design: one heading + a grouped stat-tile row (confirmed/planned/goal/
+ * %-of-goal), zero `ProgressBar`s.
+ *
+ * SUPERSEDED AGAIN BY T136 (UXC-05/UXC-08). The "zero bars" state above was
+ * itself an interim: T121 removed the bars because there were TWO of them
+ * stacked, not because a bar was wrong. `GoalProgressBar` now renders
+ * **exactly one** bar -- the shared `GoalBar` component
+ * (`src/components/GoalBar.tsx`), which F-3 pre-approves as the one custom
+ * bar in the project, since Astryx's own `ProgressBar` cannot segment. It is
+ * NOT an Astryx `ProgressBar`, so "zero `ProgressBar`s" remains literally
+ * true and is why that phrasing survived this long while being misleading.
+ *
+ * The stat-tile row is unchanged and still sits alongside it. The one-bar
+ * invariant is pinned by `OutreachList.test.tsx:1343` (`toBe(1)`, amended
+ * from T121's `toBe(0)`), so the two-stacked-bars defect George originally
+ * reported cannot return.
+ *
+ * BEH-02 (confirmed/planned never summed) is UNCHANGED by either revision --
+ * still enforced exactly as this module doc's own opening paragraph (above)
+ * describes. `GoalBar` renders the two as offset fills and contains no `+`
+ * operator in code at all.
  *
  * `ProgressBar` (astryx-api.md "ProgressBar" Props table) has no
  * multi-segment/stacked-fill prop -- confirmed directly against its own
