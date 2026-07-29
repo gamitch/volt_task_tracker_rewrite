@@ -122,8 +122,9 @@
  *
  * -----------------------------------------------------------------------
  * 6. `AdminToggles` is imported via `React.lazy`, not a static import --
- *    a real, live circular-import bug found and fixed while wiring this
- *    task, not a stylistic choice.
+ *    a circular-import bug that was real at T085 time, found and fixed while
+ *    wiring that task, not a stylistic choice. See the T139 UPDATE at the end
+ *    of this section: the specific failure no longer reproduces.
  *
  * `AdminToggles.tsx` (forbidden/read-only here) imports `routePaths` from
  * `../../app/router` for its own season-settings-shortcut link (its own
