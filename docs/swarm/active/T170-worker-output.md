@@ -6,16 +6,27 @@ revision-2 pin exactly.
 
 ## 1. Merge result
 
+**Round 1 (initial dispatch):**
 ```
 git fetch origin
 git merge origin/claude/swarm-plan-zl575z
 npm ci
 ```
-
 Fast-forward, no conflicts. Resulting HEAD (== `origin/claude/swarm-plan-zl575z`
 tip == the packet's own pinned commit): `d74dc203c7ff9b2026d13c0aa57731273909e820`.
 `npm ci` completed cleanly (340 packages, 9 pre-existing `npm audit`
 vulnerabilities, unrelated to this task, not touched).
+
+**Round 2 (checker gate round 1 MAJOR fix, this pass):**
+```
+git fetch origin
+git merge origin/claude/swarm-plan-zl575z
+```
+Branch had moved (T184 packet added upstream). My branch had also diverged
+(my own T170 commit `9682c82`), so this was a real, non-fast-forward merge —
+merge strategy `ort`, **zero conflicts**, 3 files changed (all
+`docs/swarm/**`, none touching my two files). Resulting HEAD:
+`e8744bad2c715b3f7bfa60d268ca7a5e03c60d79`.
 
 ## 2. Files changed
 
@@ -69,6 +80,96 @@ mounts.
 the `myGoalHours` expression are byte-unchanged (verified by diff, §criterion
 5 below) — only the argument now flowing into them changed.
 
+## 3a. Checker gate round 1 — FAIL (one MAJOR), test-only fix, source untouched
+
+The checker independently reproduced all five gates exactly, confirmed
+sabotage-clean, confirmed assertion-integrity clean (82→90 `it(` titles, only
+8 additions/0 removals/0 edits, no `.skip`/`.only`/`.todo`, blast radius 10/90
+reproduced), confirmed the `ViewerStudentIdGate` deviation benign, and
+confirmed the criterion-4 near-miss was correctly recorded rather than a real
+weakness. **The implementation itself was judged correct and was not asked to
+change.**
+
+**The MAJOR:** a mutation at `OutreachList.tsx:3877` that discards the
+resolver's real return value whenever non-null —
+
+```ts
+: resolveStudentId(viewer).then((id) => (id === null ? null : PLACEHOLDER_CURRENT_STUDENT_ID)),
+```
+
+— fully restores the original bug (every real student gets the placeholder
+back on the exact no-props path `router.tsx:244` exercises) and **passed
+90/90**. I reproduced this myself, verbatim, before making any change:
+
+```
+Test Files  1 passed (1)
+     Tests  90 passed (90)
+```
+
+**Root cause, confirmed:** every one of criteria 1, 2(a), and 10's positive
+assertions rendered with an **explicit** `viewerStudentId: DISTINCT_STUDENT_ID`
+prop, which short-circuits `resolveStudentId` before it is ever called
+(`:3875-3876`). No test rendered with **no** explicit prop and checked that
+the resolver's own distinct return value reached the rendered figures or the
+self-check-off dialog — the exact hazard the packet's own §3(c) flagged.
+
+**Fix applied (test-only, source verified byte-identical to committed HEAD
+before and after):** two new tests added, both rendering with **no**
+explicit `viewerStudentId` prop, resolving via
+`resolveStudentId: async () => DISTINCT_STUDENT_ID` instead:
+
+- `criterion 1 (resolver path, no explicit prop)` — same positive figures
+  (`"2 hrs confirmed"`, `"3 hrs planned"`, `"1 awaiting your RSVP"`,
+  `GoalBar`'s `aria-valuetext`), reached via the resolver only.
+- `criterion 10`'s own resolver-path test — same
+  `loadSelfCheckoffAttendance` spy assertion, reached via the resolver only.
+
+**Verification against the exact prescribed mutation, re-run myself:**
+applied `resolveStudentId(viewer).then((id) => (id === null ? null :
+PLACEHOLDER_CURRENT_STUDENT_ID))` at `:3877` again, with the two new tests
+in place:
+
+```
+FAIL  ... criterion 1 (resolver path, no explicit prop): the SAME positive figures...
+AssertionError: expected 'Outreach2 awaiting your RSVPYour seas…' to contain '2 hrs confirmed'
+Expected: "2 hrs confirmed"
+Received: "Outreach2 awaiting your RSVPYour season goalConfirmed0 hrs confirmed..."
+
+FAIL  ... criterion 10 ... calls loadSelfCheckoffAttendance with the resolver-returned id, with NO explicit viewerStudentId prop
+AssertionError: expected 'student-placeholder-current-viewer' to be 'student-real-c1'
+Expected: "student-real-c1"
+Received: "student-placeholder-current-viewer"
+
+Test Files  1 failed (1)
+     Tests  2 failed | 90 passed (92)
+```
+
+**RED, exactly as required.** Reverted the mutation (`git diff` on the
+source file empty afterward, confirming the source file is unchanged from
+the committed round-1 state); re-ran — **92/92 GREEN**.
+
+**Audit of every other positive criterion** (checker's instruction: "for
+each, ask whether it would still pass if resolution were broken but the
+explicit prop supplied"):
+- Criterion 2 — its own subject IS the explicit-prop-bypass behavior; its
+  vacuity-probe half already renders with no explicit prop and a broken
+  resolver, independently exercising the resolver-failure path. Not
+  vulnerable to this defect class.
+- Criterion 3 — coach view; never supplies `viewerStudentId` at all, and
+  `isCoachOrAdminView` short-circuits before either the explicit-prop check
+  or `resolveStudentId` is reached. Not vulnerable.
+- Criterion 4 (loading/error/null) — none of the three tests supply an
+  explicit `viewerStudentId`; all three exercise `resolveStudentId` directly.
+  Not vulnerable.
+- Criteria 1 and 10 were the only two vulnerable to this exact shape — both
+  fixed above. No further instance found.
+
+Two evidence imprecisions in this document (below, §4) were also corrected
+per the checker's finding: criterion 4(ii)'s blast radius understated (it
+also reds criterion 2's vacuity probe, not just criterion 4's own error
+test), and criterion 6's `is_active` grep count was reported as 1 hit when
+it is genuinely 2 (one doc comment, one real filter).
+
 ## 4. Per-criterion mutation evidence
 
 All mutations run in this worktree only (item 23), applied via `Edit`,
@@ -98,6 +199,12 @@ confirming the mutation's blast radius matches the design: one prop feeds
 both the read-side figures and the write-side dialog.)
 
 Reverted; re-ran — GREEN (2/2 passed).
+
+**Round-2 addendum:** this test alone was insufficient — see §3a. A sibling
+test, `criterion 1 (resolver path, no explicit prop)`, was added, rendering
+with no explicit `viewerStudentId` and `resolveStudentId: async () =>
+DISTINCT_STUDENT_ID` instead, asserting the identical positive figures.
+Mutation and RED output for that test are in §3a.
 
 ### Criterion 2 — explicit `viewerStudentId` bypasses `resolveStudentId`, paired
 
@@ -180,11 +287,36 @@ copy" proof, and it produced the RED shown above.)
 
 **Mutation (ii), error copy** `"Couldn't find your student record"` →
 `"Something broke while looking things up"`:
+
+**Correction (checker gate round 1):** the original version of this document
+reported this mutation's blast radius as confined to criterion 4's own
+describe block (1 failure). Re-run against the FULL test file, it is
+genuinely **2 failures**, not 1 — criterion 2's own vacuity-probe test
+(`vacuity probe: a broken resolveStudentId does not affect the explicit-prop
+render, but DOES break a separate no-explicit-prop render`) also asserts on
+this exact same copy string for its own no-explicit-prop half, and reds
+under the identical mutation:
+
 ```
-✓ loading: shown while resolveStudentId is still pending
-× error: shown when resolveStudentId rejects
-✓ null: shown when resolveStudentId resolves null...
+FAIL ... criterion 2 ... vacuity probe: a broken resolveStudentId does not affect the explicit-prop render, but DOES break a separate no-explicit-prop render
+AssertionError: expected 'Something broke while looking things …' to contain 'Couldn\'t find your student record'
+Expected: "Couldn't find your student record"
+Received: "Something broke while looking things upSomething went wrong looking up your student record. Try refreshing the page.Retry"
+
+FAIL ... criterion 4: identity tier own loading/error/null sub-states, isolated > error: shown when resolveStudentId rejects
+AssertionError: expected 'Something broke while looking things …' to contain 'Couldn\'t find your student record'
+Expected: "Couldn't find your student record"
+Received: "Something broke while looking things upSomething went wrong looking up your student record. Try refreshing the page.Retry"
+
+Test Files  1 failed (1)
+     Tests  2 failed | 90 passed (92)
 ```
+
+Isolation still holds — no OTHER test (criteria 1, 3, 4-loading, 4-null, 10,
+or either resolver-path addition) failed under this mutation, so the claim
+"(ii) RED / everything else GREEN" is correct, just with the correct count of
+what "everything else" excludes (2 tests legitimately share this exact copy
+string, not 1). Reverted; re-confirmed 92/92 GREEN.
 
 **Mutation (iii), null copy** `"No student account linked yet"` →
 `"Nothing here just yet"`:
@@ -215,13 +347,17 @@ exact range the packet asked me to independently trace) calls
 (`.in('event_id', ...)`), `queryRsvpsForSessions` (`.in('session_id', ...)`),
 `queryAttendanceForSessions` (`.in('session_id', ...)`), `queryAllStudents`
 (no filter beyond `.order(...)`), and `queryAllTeams`. `grep -n "is_active"
-src/lib/supabase/loaders/outreach.ts` returns exactly one hit, at line 829,
-inside `queryActiveSeasonId` (`seasons.is_active`, unrelated to students and
-not part of `makeLoadOutreachData`'s own load path at all — it backs a
-different function). **No `students.is_active` filter exists anywhere in
-this file.** Confirms no third T184-class disagreement: a deactivated
-student's own historical sessions/rsvps/attendance are never silently
-dropped from `data.sessions`/`data.rsvps`/`data.attendance`.
+src/lib/supabase/loaders/outreach.ts` returns **two** hits (corrected — the
+original version of this document said "exactly one hit, at line 829"; the
+substance was right, the count was wrong): line 184 (a doc-comment
+paraphrase, "`is_active = true`, `.maybeSingle()`... same pattern", not
+executable code) and line 829, the one real filter, inside
+`queryActiveSeasonId` (`seasons.is_active`, unrelated to students and not
+part of `makeLoadOutreachData`'s own load path at all — it backs a different
+function). **No `students.is_active` filter exists anywhere in this file, in
+either the doc comment or the code.** Confirms no third T184-class
+disagreement: a deactivated student's own historical sessions/rsvps/attendance
+are never silently dropped from `data.sessions`/`data.rsvps`/`data.attendance`.
 
 **Write side:** re-confirmed directly against the real migration files
 (not trusted from the packet's own citation): `my_student_ids()`
@@ -263,8 +399,10 @@ Chosen to resolve to the placeholder specifically because this file's own
 fixtures (`FIXTURE_RSVPS`/`FIXTURE_GOAL_CONFIG`) are keyed to it — unlike
 `StudentHome.test.tsx`'s own T176 fix, which resolves to a **distinct**
 id because that page's `loadData` takes `studentId` as an argument. No
-`expect(...)` line was edited. Result: **82/82 → 90/90** (82 original + 8
-new T170 tests), zero assertion rewrites.
+`expect(...)` line was edited. Result at round-1 dispatch: **82/82 → 90/90**
+(82 original + 8 new T170 tests), zero assertion rewrites. After the
+round-2 checker fix (§3a, two more resolver-path tests added): **90/90 →
+92/92**, still zero assertion rewrites to any pre-existing test.
 
 ### Criterion 8 — render-and-enumerate over `container.innerHTML`
 
@@ -294,13 +432,15 @@ captured `innerHTML` (NAV-07, unaffected by this task, still holds).
 
 ### Criterion 9 — no regression elsewhere
 
-Full `OutreachList.test.tsx`: 90/90 green (82 pre-existing + 8 new; the ~10
+Full `OutreachList.test.tsx`: **92/92 green** (82 pre-existing + 10 new — the
+8 from round 1 plus the 2 resolver-path additions from §3a; the ~10
 pre-existing failures were harness-only, fixed with zero assertion edits —
-see criterion 7). Full repo suite: 67 files / **1599** tests, all green
-(1591 baseline + 8 new T170 tests; see §5 below). Coach view and
-`OutreachDetail.tsx` (out of scope, unedited) both unaffected — confirmed by
-the coach-view describe blocks and the `OutreachDetail.test.tsx` file both
-passing unchanged in the full run.
+see criterion 7). Full repo suite (round 2, at merge commit
+`e8744bad2c715b3f7bfa60d268ca7a5e03c60d79`): 67 files / **1601** tests, all
+green (1599 round-1 total + 2 new resolver-path tests; see §5 below). Coach
+view and `OutreachDetail.tsx` (out of scope, unedited) both unaffected —
+confirmed by the coach-view describe blocks and the `OutreachDetail.test.tsx`
+file both passing unchanged in the full run.
 
 ### Criterion 10 — `SelfCheckoffDialog` carries the real resolved id, mutation-provable
 
@@ -330,22 +470,48 @@ now genuinely carries the real, resolved, non-placeholder id — the write
 path is reachable with the correct id, not merely enumerated from reading
 the code.
 
-## 5. Five gates — measured at my own merge-base SHA (`d74dc203c...`)
+**Round-2 addendum:** this test alone was insufficient — see §3a (it uses an
+explicit `viewerStudentId` prop, so it never observes the resolver's own
+return value). A sibling test was added, rendering with no explicit prop and
+`resolveStudentId: async () => DISTINCT_STUDENT_ID`, with the identical spy
+assertion on `loadSelfCheckoffAttendance`'s `studentId` argument. Mutation
+and RED output for that test are in §3a.
 
-All five re-measured after every mutation was reverted (final state):
+## 5. Five gates
+
+### Round 1 (dispatch), measured at merge-base `d74dc203c...`
 
 | Gate | Command | Result |
 |---|---|---|
 | Typecheck | `npx tsc --noEmit` | Exit 0, no output |
-| Build | `npx vite build` | Exit 0, `✓ built in 7.8s` (pre-existing >500kB chunk warning only, unrelated) |
+| Build | `npx vite build` | Exit 0, `✓ built in 7.8s` |
+| Format | `npm run format:check` | Clean |
+| Lint | `npx eslint .` | 0 errors / 357 warnings |
+| Tests | `npx vitest run` | 67 files / 1599 tests, all passed |
+
+### Round 2 (this pass, checker gate round 1 fix), measured at merge commit `e8744bad2c715b3f7bfa60d268ca7a5e03c60d79`
+
+Re-measured, not assumed, per the coordinator's explicit instruction (test
+count moves, do not reuse round-1's 1599):
+
+| Gate | Command | Result |
+|---|---|---|
+| Typecheck | `npx tsc --noEmit` | Exit 0, no output |
+| Build | `npx vite build` | Exit 0, `✓ built in 8.1s` (pre-existing >500kB chunk warning only, unrelated) |
 | Format | `npm run format:check` | "All matched files use Prettier code style!" |
-| Lint | `npx eslint .` | **0 errors / 357 warnings** (orientation figure matched exactly; all warnings pre-existing `react-refresh/only-export-components`) |
-| Tests | `npx vitest run` | **67 files / 1599 tests, all passed** (orientation baseline: 67 files / 1591 tests; +8 = this task's own new criterion tests) |
+| Lint | `npx eslint .` | **0 errors / 357 warnings** (unchanged from round 1; all warnings pre-existing `react-refresh/only-export-components`) |
+| Tests | `npx vitest run` | **67 files / 1601 tests, all passed** (round-1's 1599 + 2 new resolver-path tests from §3a) |
 
 `OutreachList.tsx`/`OutreachList.test.tsx` in isolation: `npx eslint
 src/pages/outreach/OutreachList.tsx src/pages/outreach/OutreachList.test.tsx`
 → 0 errors, 26 pre-existing warnings (all `react-refresh/only-export-components`
 on already-exported pure functions, none new).
+
+Source file (`OutreachList.tsx`) confirmed byte-identical to the round-1
+committed state throughout this round: `git diff` against HEAD returns empty
+both before writing the two new tests and after every mutation-revert cycle
+in §3a — **no source change was made**, per the coordinator's explicit
+instruction.
 
 ## 6. Known risks / disclosed judgment calls
 

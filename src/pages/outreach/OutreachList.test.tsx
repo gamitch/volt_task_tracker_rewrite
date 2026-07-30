@@ -1887,6 +1887,38 @@ describe('<OutreachList /> T170: viewerStudentId resolved for real', () => {
     expect(bar?.getAttribute('aria-valuetext')).toBe('2 of 20 hours confirmed; 3 more planned');
   });
 
+  /**
+   * Checker MAJOR fix (gate round 1): the criterion 1 test above renders
+   * with an EXPLICIT `viewerStudentId: DISTINCT_STUDENT_ID` prop, which
+   * short-circuits `resolveStudentId` before it is ever called (`:3875-3876`
+   * of the component). No test anywhere previously rendered with NO
+   * explicit `viewerStudentId` prop and checked that the RESOLVER's own
+   * distinct return value actually reached these same figures -- so a
+   * mutation that discards the resolver's real return value and
+   * substitutes `PLACEHOLDER_CURRENT_STUDENT_ID` whenever it is non-null
+   * (`resolveStudentId(viewer).then((id) => (id === null ? null :
+   * PLACEHOLDER_CURRENT_STUDENT_ID))`) passed 90/90: every positive
+   * assertion took the explicit-prop bypass path, and the only
+   * placeholder-returning stub is the harness's own default (indistinguishable
+   * from the mutated behavior). This test renders via the SAME resolver path
+   * `router.tsx:244`'s real, no-props call site actually takes.
+   */
+  it('criterion 1 (resolver path, no explicit prop): the SAME positive figures, reached via resolveStudentId itself, not the explicit-prop bypass', async () => {
+    renderAsUser(STUDENT_OR_PARENT_USER, {
+      loadData: () => Promise.resolve(makeDistinctViewerLoadResult()),
+      resolveStudentId: async () => DISTINCT_STUDENT_ID,
+    });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('2 hrs confirmed');
+    expect(container.textContent).toContain('3 hrs planned');
+    expect(container.textContent).toContain('1 awaiting your RSVP');
+
+    const bar = container.querySelector('[role="progressbar"]');
+    expect(bar).toBeTruthy();
+    expect(bar?.getAttribute('aria-valuetext')).toBe('2 of 20 hours confirmed; 3 more planned');
+  });
+
   describe('criterion 2: explicit viewerStudentId bypasses resolveStudentId entirely, paired', () => {
     it('(a) resolveStudentId is never called when viewerStudentId is explicit, and (b) the explicit id genuinely reaches the render', async () => {
       const resolveStudentId = vi.fn(async () => 'should-never-be-called');
@@ -1988,6 +2020,39 @@ describe('<OutreachList /> T170: viewerStudentId resolved for real', () => {
       renderAsUser(STUDENT_OR_PARENT_USER, {
         loadData: defaultLoadOutreachData,
         viewerStudentId: DISTINCT_STUDENT_ID,
+      });
+      await flushMicrotasks();
+
+      const cannedDriveButton = Array.from(container.querySelectorAll('button')).find(
+        (btn) => btn.textContent?.trim() === 'Mark attendance – Canned Food Drive',
+      );
+      expect(cannedDriveButton).toBeTruthy();
+      act(() => {
+        cannedDriveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      await flushMicrotasks();
+
+      expect(mockedLoadSelfCheckoffAttendance).toHaveBeenCalled();
+      const lastCall =
+        mockedLoadSelfCheckoffAttendance.mock.calls[
+          mockedLoadSelfCheckoffAttendance.mock.calls.length - 1
+        ];
+      expect(lastCall?.[1]).toBe(DISTINCT_STUDENT_ID);
+      expect(lastCall?.[1]).not.toBe(PLACEHOLDER_CURRENT_STUDENT_ID);
+    });
+
+    /**
+     * Checker MAJOR fix (gate round 1) -- the criterion 10 equivalent of
+     * the criterion 1 fix immediately above: the test above renders with an
+     * EXPLICIT `viewerStudentId` prop, so it never observes
+     * `resolveStudentId`'s own return value reaching `SelfCheckoffDialog`.
+     * This test renders with NO explicit prop, via the resolver path only.
+     */
+    it('opening "Mark attendance" calls loadSelfCheckoffAttendance with the resolver-returned id, with NO explicit viewerStudentId prop', async () => {
+      mockedLoadSelfCheckoffAttendance.mockClear();
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        loadData: defaultLoadOutreachData,
+        resolveStudentId: async () => DISTINCT_STUDENT_ID,
       });
       await flushMicrotasks();
 
