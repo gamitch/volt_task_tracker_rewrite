@@ -101,3 +101,111 @@ should not be able to log in, or failing that should see nothing · **proportion
 - **Gate proportionately (item 25).** T151 skipped a gate (mechanical, compiler-enforced) and
   passed clean; T170 got a narrow one and it found a BLOCKER; T181 got a full one and it found
   two. Match the round to the risk, not to the topic.
+
+---
+
+# TRIAGE PROPOSAL — 2026-07-30, awaiting the owner's veto
+
+**Written because the process was generating work faster than it closed it.** The owner
+measured it: 27 open rows this morning, 37 by evening, 5 tasks merged in between — **2 new
+rows filed per task merged** — against **54% of the token allowance spent**. T181 alone cost
+roughly **1.1M tokens** (foreman 187K + gate 164K + foreman revision 267K + worker 346K +
+checker 132K). At that rate the backlog never closes and the app never ships.
+
+**The cause is a policy I chose and never checked with him:** checkers are instructed to find
+things, and I filed *everything* they found. Most of those rows are artifacts of reviewing, not
+defects a user meets.
+
+**Nothing below is executed. The owner vetoes individually, then a session applies it.**
+
+## Rule applied
+
+A row survives only if **a user hits it, or it blocks deployment.** Everything else closes —
+closed, not deferred. If a closed item ever bites, it gets re-filed with a real symptom
+attached, which is cheaper than carrying it.
+
+## KEEP — the deployment path (5). Only the owner can move these.
+
+| Row | Why |
+|---|---|
+| T052 | production email enablement — HUMAN GATE |
+| T063 | MIG-04 validation gates + sign-off — HUMAN GATE |
+| T064 | roster → accounts post-migration verification (MIG-05) |
+| T065 | MIG-06 cutover — HUMAN GATE |
+| T070 | Vercel domain go-live — HUMAN GATE |
+
+**The app is not deployed.** Polish on an undeployed app is unbounded, which is the real reason
+the backlog grows. These five are the only path to "finished".
+
+## KEEP — a user hits this (9)
+
+| Row | Why |
+|---|---|
+| T169 | **silent data loss** — a student RSVPs, sees it apply, and it is discarded on reload. Owner-ruled, both surfaces, both halves now unblocked. |
+| T177 | the calendar-feed subscribe link points at a non-existent host **and** the feed row is a fixture — both halves fake |
+| T183 | `Hi Ada Reyes` greets every real signed-in student |
+| T173 | `CoachHome`'s three fabricated surfaces (`0 / 38 hrs`, `Default goal 10h`, admin Season-setup card) |
+| T191 | a deactivated child's card shows a `1 h` goal that exists in no data source |
+| T158 | Leaderboard — owner-ruled to embed in the dashboard; unblocked |
+| T178 | `EndMeetingDialog` built, tested, mounted nowhere — host still shows a "not shipped yet" banner |
+| T179 | `MarkDayCompleteDialog` same shape — a real coach workflow action |
+| T189 | `MeetingsList` participation reads an `is_active`-filtered view; **impact genuinely unknown** — investigate, then fix or close |
+
+## KEEP — cheap and pays for itself (2)
+
+| Row | Why |
+|---|---|
+| T156 | the loader throws away the real Postgres error. This is why diagnosing the dashboard bug needed DevTools and a screenshot. Makes every future bug cheaper. |
+| T175 | add `format:check` to CI — minutes of work, closes a silent-drift class |
+
+## CLOSE — process artifacts, no user impact (13)
+
+| Row | Why it closes |
+|---|---|
+| T152 | a test guard that discriminates in one direction. No user meets a half-strength guard. |
+| T171 | a true property that no test pins. The code is correct. |
+| T190 | fixture id-space rekeying so *future* tests are discriminating by construction |
+| T174 | `FIXTURE_RSVPS` id-space confusion — fixture-only |
+| T186 | a view column's comment says display-only. A comment. |
+| T160 | a type is still called `FixtureTeam`. Cosmetic. |
+| T182 | delete `StudentHomeSlot.tsx` — dead code hurting nobody |
+| T187 | dual-team narrowing, deliberate and disclosed. **Re-open when a student actually joins two teams.** |
+| T192 | per-card full-table reads — fine at one team, one season (item 25) |
+| T168 | the placeholder sweep. **The audits are done**; both families were found and closed. |
+| T172 | the mechanism fix. T151 already made the dialogs compiler-enforced and every known instance is fixed; this now only prevents hypothetical future ones. |
+| T144 | already closed as no-change (D011) — listed so it is not re-opened |
+| T153 | already ruled by the owner (keep the seed) — listed so it is not re-opened |
+
+## CLOSE — test coverage (7)
+
+**T161, T162, T163, T164, T165, T166, T167** — seven loader files with no unit tests.
+
+The risk is real and the cost is not worth it here. The suite is already **1631 tests**, and
+every loader bug that actually mattered this project was caught by the owner using the app, not
+by a unit test. **If a loader bug bites, write that loader's test then**, with a real symptom to
+target. Carrying seven speculative rows costs more than it saves.
+
+## ASK THE OWNER — one line each (2)
+
+| Row | The question |
+|---|---|
+| T188 | Two "confirmed hours" numbers exist and can legitimately disagree — attendance-backed vs RSVP-backed — so one student can see different totals on two screens. Rename them, or make outreach read the attendance number? |
+| T191 | (also in KEEP) A deactivated child's goal bar: season default, or no bar at all? |
+
+## Result if accepted
+
+**37 open → 16**, of which **5 are the owner's deployment gates** and **2 are cheap
+infrastructure**. Nine real user-facing items remain, most of them small.
+
+## And the process change that matters more than the cut
+
+**Match weight to risk — constitution item 25 already permits this and I under-used it.**
+
+- T151: no premise gate, sonnet worker, `checker-tests`. **Passed clean, roughly a tenth of
+  T181's cost.** That should be the default.
+- T170: narrow gate — found a BLOCKER. Worth it.
+- T181: full gate — found two BLOCKERs. Worth it, but a 1.1M-token task.
+
+**Reserve foreman + gate + opus checker for live-route bugs.** Everything else: packet, worker,
+cheap checker. And **stop filing findings as rows** — a checker's observation gets fixed in the
+moment or dropped, unless a user meets it.
