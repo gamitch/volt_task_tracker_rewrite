@@ -37,6 +37,32 @@ export class SupabaseNotConfiguredError extends Error {
   }
 }
 
+/**
+ * The `localStorage` key this app uses to persist the Supabase session,
+ * passed explicitly to `createClient` below via `auth.storageKey` (a public,
+ * typed SDK option -- `@supabase/supabase-js/dist/index.d.mts:162`). Owned by
+ * this app, NOT derived from `supabase-js`'s own internal default
+ * (`` `sb-${baseUrl.hostname.split('.')[0]}-auth-token` ``, `index.mjs:680` --
+ * undocumented, free to change on an SDK upgrade with no deprecation notice).
+ *
+ * T154 rejected deriving that format, and the reason is worth keeping here:
+ * `ThemeModeProvider.tsx` reads `user.id` out of the session blob stored under
+ * this key to scope its theme seed per user. If a future SDK version changed
+ * the derivation and left an OLD-format key orphaned in some browser still
+ * holding whatever session was last persisted there, a derived lookup would
+ * read the WRONG (stale) user's id and seed the current visitor with a
+ * stranger's theme -- the mechanism meant to fix the shared-browser bleed
+ * would instead cause it. That is fail-dangerous. Owning the key removes the
+ * branch entirely: there is no formula to drift.
+ *
+ * Changing this value orphans any session already persisted under the old
+ * derived key, forcing one re-login in that browser. That cost is currently
+ * zero -- there is no production deployment (MIG-04 cutover and Vercel
+ * go-live are both still blocked human gates), so the affected population is
+ * developer/test browsers.
+ */
+export const SUPABASE_AUTH_STORAGE_KEY = 'volt.supabaseAuthToken';
+
 function readEnv(): { url: string; anonKey: string } {
   const env = import.meta.env;
   const rawUrl: unknown = env.VITE_SUPABASE_URL;
@@ -76,7 +102,16 @@ export function getSupabaseClient(): SupabaseClient {
     throw new SupabaseNotConfiguredError();
   }
   const { url, anonKey } = readEnv();
-  cachedClient = createClient(url, anonKey);
+  // `auth.storageKey` is the ONLY auth option this app sets; every other
+  // (`persistSession`, `autoRefreshToken`, `detectSessionInUrl`, `flowType`)
+  // keeps its SDK default, because `applySettingDefaults` spreads the
+  // caller's `auth` object OVER `DEFAULT_AUTH_OPTIONS` rather than replacing
+  // it (`index.mjs:408`). `persistSession` therefore remains `true`
+  // (`index.mjs:37`), which is what makes the session blob readable from
+  // `localStorage` at all.
+  cachedClient = createClient(url, anonKey, {
+    auth: { storageKey: SUPABASE_AUTH_STORAGE_KEY },
+  });
   return cachedClient;
 }
 

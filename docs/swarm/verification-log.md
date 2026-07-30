@@ -5109,3 +5109,47 @@ rule on — **T153** (the `localStorage` theme seed) and **T154** (the shared-br
 theme bleed) — plus the `CoachHome.test.tsx:1194-1196` test amendment, which I
 authorized and recorded under my own name after two packets wrongly attributed it to
 him.
+
+---
+
+## T154 — per-user theme seed (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commit | `9586c35c0f077592460ee86e4cb857801f4d5add` (attempt 2) |
+| Verdict | **PASS with MINORs** (attempt 1: FAIL, 1 MAJOR) |
+| Attempts | 2 |
+| Worker / checker | `worker-implementer` (opus, worktree) / `checker-reviewer` (opus) |
+| tsc / build / format | clean / ✓ / clean |
+| eslint | 0 errors, 355 warnings (unchanged from baseline) |
+| vitest | 66 files, 1536 tests (from 1528) |
+| Post-merge on branch | re-measured after merge — see below |
+
+**Owner authority.** George's ruling (`auto-mode-decisions.md`, his three rulings) covers the
+*design*: fix the shared-browser bleed properly, keyed per user. **The decision to fix
+attempt 1's MAJOR rather than defer it was the orchestrator's**, not his, and is recorded
+that way in the ledger row and in the worker's output doc. The four re-keyed tests were
+authorized under the orchestrator's delegated authority satisfying `constitution.md:10`.
+
+**Two orchestrator errors are recorded against this task rather than the worker.**
+
+1. The packet cited `client.test.ts:1-19` as establishing a convention of constructing a
+   real client. That header says the opposite. The worker caught it and used `vi.mock`,
+   having proven packet option (a) impossible (`storageKey` is `protected` at
+   `@supabase/supabase-js/dist/index.d.mts:433`, so a readback fails `tsc`).
+2. The prescribed fix for the MAJOR **would not have worked.** I specified re-seeding only
+   on a non-null → different-non-null `user.id` transition; the real flow is A → null → B.
+   Worker and checker each implemented my literal rule and measured **3 failed / 33 passed
+   with the direct-switch test PASSING** — a green suite with the MAJOR unfixed. The fix
+   ships on the worker's `lastSeededUserId` formulation instead.
+
+Also recorded: the orchestrator challenged the checker's `constitution.md:159` citation for
+the MAJOR-deferral rule. The citation was correct; the challenge was wrong.
+
+**Carried forward:** T171 (the no-stale-frame property is true but pinned by nothing —
+a `useEffect` mutation that reintroduces a stale frame leaves all 36 tests green).
+
+**Disclosed residual, not a defect:** between sign-out and next sign-in the login screen
+still shows the previous user's theme. Resetting on `null` would fire on every normal page
+load while the session resolves, reintroducing T148's flash. Stated in three places in
+source and pinned by its own test.
