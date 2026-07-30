@@ -141,9 +141,22 @@ Packets P0–P13 plus regression fixes and live hotfixes:
 - T128 — wave-3 debt: format gate, meetings label wording, `astryx-api.md` accuracy,
   `v_planned_rsvp_hours` future guard.
 
-## Active (2026-07-29/30 — two live packets, everything below this note is stale)
+## Active (2026-07-29/30 — three live packets, everything below this note is stale)
 
-**2026-07-30 — two packets ready for dispatch, both foreman-authored:**
+**2026-07-30 — three packets ready for dispatch, all foreman-authored:**
+- **T151** (mechanism fix, not premise-gated per item 25 — mechanical,
+  compiler-enforced, no security/privacy dimension):
+  `docs/swarm/active/T151-worker-packet.md`. Makes the `teams` prop required
+  on `ScheduleMeetingsDialog`/`StudentDialog`/`OutreachEventDialog` and
+  deletes all three `DEFAULT_TEAMS` fixtures — T147 fixed the instances,
+  this closes the mechanism. Sonnet/worktree (item 18's opus triggers don't
+  fire), checker-tests (deterministic tsc/build/lint/test fits this task's
+  actual guarantee). Explicitly does NOT touch `StudentDialog.season`/
+  `DEFAULT_SEASON_INFO` (T159's job) or `OutreachEventDialog.students`/
+  `DEFAULT_STUDENTS` (separate instance of the family, not this task).
+  Prescribes a mechanism-closure proof (temporary render omitting `teams`
+  must fail `tsc` with `TS2741` at all three dialogs) since a green suite on
+  the current tree alone would not prove a future omission gets caught.
 - **T155** (priority — live user-visible 400 on the owner's home page,
   dispatch authorized): `docs/swarm/active/T155-worker-packet.md`. Wires
   `CoachHome` to `useActiveSeason()` instead of a placeholder-defaulting prop.
