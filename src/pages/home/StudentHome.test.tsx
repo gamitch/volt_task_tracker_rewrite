@@ -1091,6 +1091,7 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
     expect(resolveStudentId).not.toHaveBeenCalled();
     expect(resolveStudentScope).toHaveBeenCalledWith('student-explicit');
     expect(result).toEqual({
+      kind: 'linked',
       studentId: 'student-explicit',
       teamId: 'team-x',
       goalHours: 5,
@@ -1118,6 +1119,7 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
     expect(resolveStudentScope).not.toHaveBeenCalled();
     expect(resolveStudentId).toHaveBeenCalledWith(FIXTURE_VIEWER);
     expect(result).toEqual({
+      kind: 'linked',
       studentId: 'student-resolved',
       teamId: 'team-explicit',
       goalHours: 42,
@@ -1145,6 +1147,7 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
     expect(resolveStudentId).toHaveBeenCalledWith(FIXTURE_VIEWER);
     expect(resolveStudentScope).toHaveBeenCalledWith('student-resolved');
     expect(result).toEqual({
+      kind: 'linked',
       studentId: 'student-resolved',
       teamId: 'team-resolved',
       goalHours: 3,
@@ -1153,7 +1156,7 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
     });
   });
 
-  it('returns null (no student linked) when resolveStudentId resolves null, without calling resolveStudentScope', async () => {
+  it('returns {kind: "not-linked"} when resolveStudentId resolves null, without calling resolveStudentScope', async () => {
     const resolveStudentId = vi.fn(async () => null);
     const resolveStudentScope = vi.fn(async () => ({
       teamId: 'team-x',
@@ -1169,20 +1172,27 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
       resolveStudentScope,
       100,
     );
-    expect(result).toBeNull();
+    expect(result).toStrictEqual({ kind: 'not-linked' });
     expect(resolveStudentScope).not.toHaveBeenCalled();
   });
 
-  it('returns null when resolveStudentScope resolves null', async () => {
+  // T184: this used to describe (and assert) the exact bug this task
+  // removes -- a real, linked studentId whose resolveStudentScope resolves
+  // null used to collapse into the SAME `null` (and therefore the SAME
+  // "no student linked" copy) as the case above. Renamed to describe the
+  // new, distinct `{kind: 'inactive'}` outcome it now asserts.
+  it('returns {kind: "inactive"} when resolveStudentScope resolves null for a real, resolved studentId (deactivated student, not "no student linked")', async () => {
+    const resolveStudentScope = vi.fn(async () => null);
     const result = await resolveStudentIdentity(
       FIXTURE_VIEWER,
       'student-explicit',
       undefined,
       vi.fn(async () => 'unused'),
-      vi.fn(async () => null),
+      resolveStudentScope,
       100,
     );
-    expect(result).toBeNull();
+    expect(result).toStrictEqual({ kind: 'inactive' });
+    expect(resolveStudentScope).toHaveBeenCalledWith('student-explicit');
   });
 });
 
@@ -1477,6 +1487,36 @@ describe('<StudentHome /> T176 -- identity-resolution tier own DES-12 states, th
     expect(container.textContent).not.toContain('Nothing scheduled');
     expect(container.textContent).not.toContain("Couldn't find your student record");
   });
+
+  // T184: fourth isolated state -- a REAL, linked studentId (not
+  // 'not-linked') whose resolveStudentScope resolves null (deactivated
+  // student). Must render distinct copy from every other state on this
+  // page, not a reuse of "No student account linked yet" (the bug this
+  // task fixes) or any of the other 7 static titles this file renders
+  // elsewhere (re-derived directly against this file, not trusted from any
+  // packet/gate figure -- see this task's own worker output for the full
+  // enumeration).
+  it('(iv) inactive (real, linked student, deactivated): shows a distinct EmptyState, textually non-colliding with all other states on this page', async () => {
+    renderAsUser(STUDENT_USER, {
+      resolveStudentId: async () => 'student-real-inactive-1',
+      resolveStudentScope: async () => null,
+    });
+    await flushMicrotasks();
+    expect(container.textContent).toContain('Your student account is inactive');
+    // Not the sibling states' own copy on this same tier.
+    expect(container.textContent).not.toContain('No student account linked yet');
+    expect(container.textContent).not.toContain('Finding your student record');
+    expect(container.textContent).not.toContain("Couldn't find your student record");
+    // Not any of the other 6 static titles this file renders elsewhere
+    // (content tier, outer season-status wrapper) -- the full, re-derived
+    // 8-title enumeration minus the 2 already asserted above.
+    expect(container.textContent).not.toContain("Couldn't load Home");
+    expect(container.textContent).not.toContain('Nothing scheduled');
+    expect(container.textContent).not.toContain("You're all caught up");
+    expect(container.textContent).not.toContain('Sign in to view Home');
+    expect(container.textContent).not.toContain('No active season yet');
+    expect(container.textContent).not.toContain("Couldn't load the active season");
+  });
 });
 
 describe('<StudentHome /> T176 round 2 -- goal-hours denominator + confirmed/planned hours are ALL verbatim passthroughs from resolveStudentScope (v_student_goal_projection), never recomputed and never read from the still-fixture loadData (criterion 10, §2c corrected)', () => {
@@ -1651,5 +1691,49 @@ describe('<StudentHome /> T176 -- render-and-enumerate live over container.inner
     // miss once `events` is `[]`).
     expect(html).not.toContain('Meeting live now');
     expect(html).not.toContain('events to answer');
+  });
+});
+
+describe('<StudentHome /> T184 -- deactivated student (real, linked studentId, resolveStudentScope resolves null) gets its own honest copy, not the "no student linked" collapse (criterion 1)', () => {
+  it('renders the new "inactive" title for a real, distinct, non-placeholder, non-fixture id, and does NOT contain the "not-linked" title', async () => {
+    renderAsUser(STUDENT_USER, {
+      resolveStudentId: async () => 'student-real-inactive-1',
+      resolveStudentScope: async () => null,
+    });
+    await flushMicrotasks();
+    expect(container.textContent).toContain('Your student account is inactive');
+    expect(container.textContent).not.toContain('No student account linked yet');
+  });
+});
+
+describe('<StudentHome /> T184 -- "sees nothing" is proven with a positive control (criterion 5)', () => {
+  it('positive control: a real "linked" render DOES show greeting + goal-bar content markers', async () => {
+    renderAsUser(STUDENT_USER, {
+      resolveStudentId: async () => 'student-real-linked-c5',
+      resolveStudentScope: async () => ({
+        teamId: 'team-real-c5',
+        goalHours: 20,
+        confirmedHours: 4,
+        plannedHours: 2,
+      }),
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+    expect(container.textContent).toContain('Hi Ada Reyes');
+    const progressBar = container.querySelector('[role="progressbar"]');
+    expect(progressBar).toBeTruthy();
+    expect(progressBar!.getAttribute('aria-valuetext')).toBe('4 / 20 h (20%)');
+  });
+
+  it('the inactive render shows NEITHER marker the positive control above proved real', async () => {
+    renderAsUser(STUDENT_USER, {
+      resolveStudentId: async () => 'student-real-inactive-c5',
+      resolveStudentScope: async () => null,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+    expect(container.textContent).not.toContain('Hi Ada Reyes');
+    expect(container.querySelector('[role="progressbar"]')).toBeNull();
+    expect(container.textContent).toContain('Your student account is inactive');
   });
 });
