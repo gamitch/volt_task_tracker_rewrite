@@ -848,3 +848,33 @@ authorization for rewriting those four tests is **mine**, under delegated author
 resting on the gate's measurement that exactly four fail and only because they read or
 write the old flat key. Attributing it to him would contaminate a citation that is
 otherwise genuinely his.
+
+---
+
+## 2026-07-30 — George's rulings on T157/T158 (owner input, verbatim)
+
+**These are genuinely his, not mine.** Citable as owner authority. Asked because the
+placement of two unreachable components is a product decision not recoverable from code
+(external audit @ `2ec47d8`, folded in as T157/T158 at `f8929ba`).
+
+His words, complete: *"embed the leaderboard in the dashboard, ParentRsvp in
+OutreachDetail"*.
+
+**What this authorizes:**
+
+1. `Leaderboard` is **embedded in the dashboard** — not a standalone route. Settles T158's
+   open product question.
+2. `ParentRsvp` is hosted by **`OutreachDetail.tsx`**, which matches that component's own
+   doc comment (`ParentRsvp.tsx:113`, "expected to render one `<ParentRsvp>` per linked"
+   student). Settles half of T157.
+
+**What this does NOT authorize, stated explicitly because the failure mode here is mine
+and it has happened three times.** His ruling names two components. T157 covers **three**
+— `RsvpControl.tsx` is the *student* self-service control and he did not say where it
+goes. `OutreachDetail` is a plausible host and so is the student outreach list; the two
+give students materially different flows. **I am not inferring it.** T157 is split: the
+ParentRsvp half proceeds on his authority; `RsvpControl` becomes T169 and stays blocked
+on him.
+
+Nothing else in T157/T158 — loader design, test shape, embedding position within the
+dashboard — is covered by this ruling. Those are mine.
