@@ -5373,3 +5373,41 @@ so every claim about RLS evaluation, view ownership and PostgREST grants is reas
 SQL and policy text, never executed. The checker narrowed rather than eliminated it —
 availability is favourable under both view semantics, so the dashboard populates either way;
 exposure is the open question and is T185's scope.
+
+---
+
+## T151 — the dialog `teams` prop is now required (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commit | `d4326324170dde74355ce6b47cbeacc4f3438512` |
+| Verdict | **PASS** — zero findings at any severity, first attempt |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-tests` |
+| Premise gate | **None** — skipped under constitution item 25 (mechanical, compiler-enforced, premise pre-measured) |
+| tsc / build / format | 0 errors / ✓ / clean |
+| eslint | 0 errors, 357 warnings (unchanged) |
+| vitest | 67 files, 1591 tests (unchanged — no new `it(` blocks) |
+
+**What it closed.** Three dialogs each had an optional `teams` prop backed by a module-level
+`DEFAULT_TEAMS` fixture — the shape behind seven instances of this project's dominant defect
+family, three of which reached the owner as production bugs in one afternoon. T147 fixed the
+instances; T151 makes the prop required and deletes the fixtures, so a forgetful future call
+site **cannot compile**.
+
+**The guarantee was proved four times, by three different parties.** A render omitting `teams`
+fails `tsc` with `TS2741` at all three dialogs: verified by the worker, re-verified by the
+checker at each dialog, and verified once more by the orchestrator at `StudentDialog` —
+deliberately the one test file that needed zero changes, so nothing the worker wrote could
+mask the result.
+
+**Premise stability worth recording:** 34 `TS2741` errors, 24 + 10, zero in production source.
+Measured at `af28914`, re-measured at `03efe47`, reproduced by the worker at `dcfa6e0`. No drift
+across five merges. The row's original "46 inline team arrays" fear was wrong and is retired.
+
+**First task graded under item 25.** Foreman + worker + `checker-tests`, no premise gate, no
+opus reviewer — proportionate to a mechanical compiler-enforced change. It passed clean, which
+is the evidence that the heavier process is not always the right process.
+
+**Unblocks T172** (the mechanism fix for the whole class), which now has a proven pattern and a
+measured cost to generalise from.

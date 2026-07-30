@@ -375,9 +375,10 @@
  * 11e. Roster source (Known Context/Traps #4) -- `students` is a new,
  * OPTIONAL prop defaulting to `DEFAULT_STUDENTS`, a standalone fabricated
  * fixture (constitution item 6) -- same "independent duplicate, not a
- * shared import" precedent this file's own `DEFAULT_TEAMS` already
- * established (module doc above `DEFAULT_TEAMS`'s own declaration:
- * `OutreachList.tsx`'s fixtures are a forbidden/read-only file here). The
+ * shared import" precedent `ScheduleMeetingsDialog.tsx`'s own team fixture
+ * used to follow before T151 made that dialog's `teams` prop required and
+ * deleted it (`OutreachList.tsx`'s fixtures are a forbidden/read-only file
+ * here). The
  * REAL reuse of `loaders/students.ts` this task's packet asks for
  * ("reuse exportable pieces of loaders/students.ts... rather than
  * duplicating mapping logic") lives in `../../lib/supabase/loaders/
@@ -598,23 +599,11 @@ export interface ExistingOutreachEvent {
   expectedStudentIds?: readonly string[];
 }
 
-// ---------------------------------------------------------------------------
-// Fixture teams (constitution item 6: fabricated names only). Standalone
-// default -- `OutreachList.tsx`'s own student/event fixtures are a
-// forbidden/read-only file here, so this is a deliberate, independent
-// duplicate reusing the same fabricated team identities
-// `ScheduleMeetingsDialog.tsx` established (Ravens/Titans are the same
-// fictional team's real roster across both dialogs), not a shared import.
-// ---------------------------------------------------------------------------
-
-const DEFAULT_TEAMS: readonly OutreachTeamOption[] = [
-  { id: 'team-ravens', name: 'Ravens' },
-  { id: 'team-titans', name: 'Titans' },
-];
-
 /** T118 (UXP-02) module doc 11e -- standalone fabricated roster fixture
  * (constitution item 6), same "independent duplicate, not a shared import"
- * precedent `DEFAULT_TEAMS` above already established. */
+ * precedent `ScheduleMeetingsDialog.tsx`'s own team fixture used to follow
+ * before T151 made this file's `teams` prop required and deleted its
+ * fixture. */
 const DEFAULT_STUDENTS: readonly OutreachRosterStudent[] = [
   { id: 'student-ravens-1', name: 'Riley Chen', teamId: 'team-ravens', isActive: true },
   { id: 'student-ravens-2', name: 'Jordan Blake', teamId: 'team-ravens', isActive: true },
@@ -960,8 +949,7 @@ export const defaultOnSaveEvent: OnSaveOutreachEventFn = async (payload) => {
 export interface OutreachEventDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  /** Defaults to `DEFAULT_TEAMS` (fixture, module-level doc). */
-  teams?: readonly OutreachTeamOption[];
+  teams: readonly OutreachTeamOption[];
   /** T118 (UXP-02) module doc 11e -- defaults to `DEFAULT_STUDENTS`
    * (fixture, module-level doc). */
   students?: readonly OutreachRosterStudent[];
@@ -978,7 +966,7 @@ export interface OutreachEventDialogProps {
 export function OutreachEventDialog({
   isOpen,
   onOpenChange,
-  teams = DEFAULT_TEAMS,
+  teams,
   students = DEFAULT_STUDENTS,
   currentUserProfileId = PLACEHOLDER_CURRENT_COACH_PROFILE_ID,
   onSaveEvent = defaultOnSaveEvent,
