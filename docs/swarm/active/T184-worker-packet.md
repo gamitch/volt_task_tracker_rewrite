@@ -506,3 +506,84 @@ Attempt count starts at 0 (pre-dispatch). Three failed worker/checker rounds
 escalate to `boss-arbiter` (constitution Loop Limit). Any dispute the worker
 files goes through the standard Dispute Rule — do not improvise around a
 standard believed wrong, impossible, contradictory, or harmful.
+
+---
+
+# Gate round 1 amendments — AUTHORITATIVE, these override the text above
+
+Premise gate returned **DISPATCH** (no BLOCKER, no MAJOR, 3 MINOR) at `ce7c85e`. It built this
+design verbatim, applied the five prescribed test amendments, wrote the criteria as tests and ran
+six mutations. Three corrections follow; **where they conflict with anything above, these win.**
+
+## A1 — criterion 1's prescribed mutation is replaced
+
+The packet says reverting to `return null` will make the new title disappear "since the pre-fix
+`null` also renders the OLD copy". **Measured: it does not.** The consumer is now
+`loadState.data.kind`, so `null` crashes with `TypeError: Cannot read properties of null (reading
+'kind')` at `StudentHome.tsx:1651`. The criterion still goes RED and is not vacuous — a
+`toContain` positive assertion cannot pass through a crash — but **crash-RED is weaker evidence
+than assertion-RED**, and this file's history is precisely about crashes obscuring what a test
+proves.
+
+**Use `return { kind: 'not-linked' };` instead.** The gate measured that it yields the assertion
+failure this criterion actually describes:
+
+```
+expected 'No student account linked yetWe could…' to contain 'Your student account is inactive'
+```
+
+That is the semantic collapse worth proving — the two states rendering identically — rather than
+a crash.
+
+## A2 — criterion 4's "five pre-existing states" undercounts
+
+**Measured at `ce7c85e`:** `StudentHome.tsx` contains **10 `title=` occurrences across 8 distinct
+strings**, not 5. (The gate reported 9; the orchestrator re-counted and got 8 unique. Use the
+enumeration below, which is the measured list, and re-derive it at your own dispatch SHA rather
+than trusting either figure.)
+
+```
+"Couldn't find your student record"      "Couldn't load Home"
+"Couldn't load the active season"        "No active season yet"
+"No student account linked yet"          "Nothing scheduled"
+"Sign in to view Home"                   "You're all caught up"
+```
+
+The new inactive copy must be distinct from **all** of these, not from the packet's shorter list.
+The gate measured no collision, but a worker checking against the packet's list checks a subset.
+
+## A3 — use `toStrictEqual`, not `toEqual`
+
+`expect(result).toEqual({ kind: 'not-linked' })` also passes for
+`{ kind: 'not-linked', studentId: undefined }`, which the `toBeNull()` it replaces would have
+rejected. Against the orchestrator's standing condition that **no assertion may be weakened**,
+that is a real if narrow loosening. `toStrictEqual` closes it at zero cost.
+
+## What the gate established that this packet did not — do not re-derive
+
+- **RLS does not eat the signal.** This was the most plausible way the design could have been
+  unreachable: if `my_student_ids()` filtered on `is_active`, a deactivated student's own row
+  would be invisible, `resolveStudentId` would return `null`, she would land in `not-linked`, and
+  `inactive` would be dead code. Measured — `rls.sql:20-25` has **no `is_active` filter**, and
+  `own_or_linked_read` (`:100-102`) uses it directly. The design survives RLS.
+- **`scope === null` cannot mean "the query failed".** `createLoader` (`loader.ts:159-178`)
+  **throws** on both transport and Postgrest errors and returns `null` only for a genuinely absent
+  row, so errors route to the tier's error banner and never to `inactive`.
+- **The five test amendments are exactly five — measured, not asserted.** With only the production
+  change applied and tests untouched, the suite failed **exactly** the five enumerated in §6 and
+  nothing else (`5 failed | 46 passed (51)`). Note `tsc` passes in that state, so this could only
+  ever have been established by running it. After the five edits: **51/51 green**, diff confined to
+  lines 1093–1187, +9/−3, no assertion weakened.
+- **The positive control is real**, not a tautology: mutating `linked` to render the inactive
+  EmptyState turned it RED.
+- **No fixture collisions** — `student-real-inactive-1` differs from both
+  `PLACEHOLDER_CURRENT_STUDENT_ID` and `HARNESS_DEFAULT_RESOLVED_STUDENT_ID`.
+- **The `explicitTeamId` bypass** returns `linked` without reading scope, which would show a
+  deactivated student real content — but `DashboardPage.tsx:121` mounts `<StudentHome />` with zero
+  props, so that path is test-only and unreachable in production. Do not "fix" it.
+
+## Still unverified after the gate
+
+The gate confirmed `v_student_participation` ends `where s.is_active`
+(`membership_views.sql:67`) but did **not** render `MeetingsList` to see what a deactivated student
+lands on. That is **T189**, filed, and explicitly not this task's to touch.
