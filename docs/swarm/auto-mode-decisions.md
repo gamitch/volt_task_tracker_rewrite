@@ -927,3 +927,42 @@ display bug into writes against a non-existent row — either a `22P02`-class re
 T155's, or, if the column is not a uuid, persisted garbage.
 
 The `OutreachDetail` half has no such dependency and can proceed with T157.
+
+---
+
+## 2026-07-30 — George's ruling on security scope (owner input, verbatim)
+
+His words, complete: *"regarding a minors data and the security around this. while i admire
+the diligence and thoughtfulness, let's not overcomplicate our application becasue of it.
+This is a volunteer group, not a company. We store no PII, it is just a small team with me
+and thier parents. please keep it simple"*
+
+**Standing rule from this point:** proportionality. This is a small volunteer team — the
+owner, his students, and their parents. Findings are graded against *that* threat model, not
+a corporate one. Do not escalate a finding to security-class without a concrete, plausible
+harm in this context.
+
+**Two things this corrected, and both were the orchestrator over-reaching, not the
+constitution being wrong.**
+
+1. **Constitution item 4 is about TABLES** — "any table without policies → BLOCKER". Every
+   table has policies. It says nothing about views. T185 extended item 4 to views on the
+   orchestrator's own reading, then graded that extension as security-class. The constitution
+   never asked for it.
+2. **The "exposure" T185 described is the product.** The owner has already ruled that the
+   leaderboard is embedded in the dashboard (T158). A leaderboard shows everyone's hours. So
+   "any authenticated caller can read active students' team and hours" is the intended
+   feature, not a leak.
+
+**T185 is closed as no-change** on that reasoning. The one real residue — the migration
+header's `security_definer`/`security_invoker` wording being factually wrong — is a comment
+accuracy fix, folded into T186 rather than kept as its own task.
+
+**What is NOT relaxed, because it is free:** constitution item 6's fixture hygiene —
+fabricated names only, no real student names or emails in fixtures, logs, URLs or commit
+messages. That costs nothing, is already universally followed, and is good practice
+regardless of team size. No change proposed there.
+
+**What this does not license:** shipping something the owner would consider broken. Data
+integrity, correctness and honest on-screen values are unaffected by this ruling — it is
+about the *security* threat model specifically, not about lowering the bar generally.
