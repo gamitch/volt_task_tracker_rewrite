@@ -43,6 +43,24 @@ import { SeasonProvider, type LoadActiveSeasonFn } from '../../app/SeasonProvide
 import type { SeasonRow } from '../../lib/supabase/types';
 import { makeLoadOutreachData, makeSaveOutreachEvent } from '../../lib/supabase/loaders/outreach';
 import { LoginAs } from '../../test-utils/authHarness';
+// T170 criterion 10 -- same `importOriginal` partial-mock convention
+// `OutreachDetail.test.tsx`/`StudentsTab.test.tsx` already established
+// (named in `task-ledger.md`'s T161 row as this codebase's own `loaders/`
+// test convention): `SelfCheckoffDialog`'s own default `loadAttendance`
+// (`loadSelfCheckoffAttendance`) is intercepted so its real Supabase call
+// never fires in this test environment, AND so criterion 10 can assert on
+// the exact `studentId` argument it was called with. Every other real
+// export of this module (`insertSelfCheckoff`/`removeSelfCheckoff`) stays
+// real -- unexercised by any test in this file (no test here submits the
+// dialog's own confirm action).
+vi.mock('../../lib/supabase/loaders/selfCheckoff', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/supabase/loaders/selfCheckoff')>();
+  return {
+    ...actual,
+    loadSelfCheckoffAttendance: vi.fn(async () => []),
+  };
+});
+import { loadSelfCheckoffAttendance } from '../../lib/supabase/loaders/selfCheckoff';
 
 // ---------------------------------------------------------------------------
 // jsdom gap: `Dialog` renders a native `<dialog>` and calls
@@ -133,11 +151,38 @@ const DEFAULT_READY_SEASON: SeasonRow = {
 
 const DEFAULT_LOAD_ACTIVE_SEASON: LoadActiveSeasonFn = async () => DEFAULT_READY_SEASON;
 
+// T170 criterion 10 -- the mocked reference (module-level `vi.mock` above).
+const mockedLoadSelfCheckoffAttendance = vi.mocked(loadSelfCheckoffAttendance);
+
+/**
+ * T170 (harness fix, criterion 7 -- ~10 of 82 pre-existing tests, all
+ * harness-only): `OutreachList`'s own `viewerStudentId` no longer defaults
+ * to `PLACEHOLDER_CURRENT_STUDENT_ID` (component module doc #15) -- with no
+ * explicit `viewerStudentId`/`resolveStudentId` override, the real
+ * `resolveCurrentStudentId` default would fire a genuine, unmocked Supabase
+ * query in every student/parent-view test below, landing the identity tier
+ * in its own `'error'` DES-12 state instead of ever reaching this file's
+ * existing fixture-driven assertions. Unlike `StudentHome.test.tsx`'s own
+ * T176 harness fix (which resolves to a DISTINCT, non-placeholder id,
+ * because that page's `loadData` takes `studentId` as an argument), this
+ * file's own `defaultLoadOutreachData` fixtures
+ * (`FIXTURE_RSVPS`/`FIXTURE_GOAL_CONFIG`, component module doc #2) are
+ * themselves keyed to `PLACEHOLDER_CURRENT_STUDENT_ID` -- so the harness
+ * default here resolves to THAT same value, deliberately, to keep every
+ * pre-existing fixture-driven assertion passing unchanged. This default is
+ * spread BEFORE `props` (so an individual test's own
+ * `viewerStudentId`/`resolveStudentId` override always wins, same
+ * precedence `StudentHome.test.tsx`'s own harness fix established).
+ */
 function renderAsUser(
   user: AuthUser | null,
   props: Parameters<typeof OutreachList>[0] = {},
   loadActiveSeason: LoadActiveSeasonFn = DEFAULT_LOAD_ACTIVE_SEASON,
 ): void {
+  const mergedProps: Parameters<typeof OutreachList>[0] = {
+    resolveStudentId: async () => PLACEHOLDER_CURRENT_STUDENT_ID,
+    ...props,
+  };
   act(() => {
     root.render(
       // T112 (component module doc #13): `OutreachList` now renders a real
@@ -151,10 +196,10 @@ function renderAsUser(
         <AuthProvider>
           <SeasonProvider loadActiveSeason={loadActiveSeason}>
             {user === null ? (
-              <OutreachList {...props} />
+              <OutreachList {...mergedProps} />
             ) : (
               <LoginAs user={user}>
-                <OutreachList {...props} />
+                <OutreachList {...mergedProps} />
               </LoginAs>
             )}
           </SeasonProvider>
@@ -1729,6 +1774,304 @@ describe('<OutreachList /> student/parent view', () => {
         const { resolvedText } = resolveAriaLabelledbyTarget(title);
         expect(resolvedText).toBe(title);
       }
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T170: `viewerStudentId` resolved for real (component module doc #15).
+// Fixtures below deliberately use a distinct, fabricated, non-placeholder id
+// (`student-real-c1`/`student-real-c2`, hazard 3c) so a mutation that breaks
+// resolution and one that doesn't cannot render identically.
+// ---------------------------------------------------------------------------
+
+/** Distinct from `PLACEHOLDER_CURRENT_STUDENT_ID` and from
+ * `defaultLoadOutreachData`'s own `FIXTURE_*` ids (hazard 3c). */
+const DISTINCT_STUDENT_ID = 'student-real-c1';
+
+/** Own sessions/rsvps/goalConfig keyed to `DISTINCT_STUDENT_ID`, values
+ * chosen to differ from every other fixture in this file so a resolution
+ * regression (e.g. falling back to the placeholder) produces visibly
+ * different, not coincidentally identical, output. */
+function makeDistinctViewerLoadResult(): OutreachLoadResult {
+  const events: OutreachEventRow[] = [
+    makeTestEvent({ id: 'event-c1-confirmed', title: 'C1 Confirmed Event' }),
+    makeTestEvent({ id: 'event-c1-planned', title: 'C1 Planned Event' }),
+    makeTestEvent({ id: 'event-c1-unanswered', title: 'C1 Unanswered Event' }),
+  ];
+  const sessions: OutreachSessionRow[] = [
+    {
+      id: 'session-c1-confirmed',
+      eventId: 'event-c1-confirmed',
+      sessionDate: '2026-06-01',
+      startsAt: '2026-06-01T14:00:00.000Z',
+      endsAt: '2026-06-01T16:00:00.000Z', // 2h, completed -- confirmed
+      status: 'completed',
+      peopleReached: null,
+    },
+    {
+      id: 'session-c1-planned',
+      eventId: 'event-c1-planned',
+      sessionDate: '2026-08-01',
+      startsAt: '2026-08-01T14:00:00.000Z',
+      endsAt: '2026-08-01T17:00:00.000Z', // 3h, scheduled -- planned
+      status: 'scheduled',
+      peopleReached: null,
+    },
+    {
+      id: 'session-c1-unanswered',
+      eventId: 'event-c1-unanswered',
+      sessionDate: '2026-08-05',
+      startsAt: '2026-08-05T14:00:00.000Z',
+      endsAt: '2026-08-05T15:00:00.000Z', // scheduled, no rsvp -- unanswered
+      status: 'scheduled',
+      peopleReached: null,
+    },
+  ];
+  const rsvps: RsvpRow[] = [
+    {
+      id: 'rsvp-c1-confirmed',
+      sessionId: 'session-c1-confirmed',
+      studentId: DISTINCT_STUDENT_ID,
+      status: 'going',
+      respondedBy: DISTINCT_STUDENT_ID,
+      updatedAt: '2026-05-01T00:00:00.000Z',
+      createdAt: '2026-05-01T00:00:00.000Z',
+    },
+    {
+      id: 'rsvp-c1-planned',
+      sessionId: 'session-c1-planned',
+      studentId: DISTINCT_STUDENT_ID,
+      status: 'going',
+      respondedBy: DISTINCT_STUDENT_ID,
+      updatedAt: '2026-07-01T00:00:00.000Z',
+      createdAt: '2026-07-01T00:00:00.000Z',
+    },
+    // Deliberately NO rsvp row for `PLACEHOLDER_CURRENT_STUDENT_ID` at all --
+    // if resolution regressed to that placeholder, every figure below would
+    // read 0/empty instead of this fixture's own distinct values.
+  ];
+  return {
+    events,
+    sessions,
+    rsvps,
+    attendance: [],
+    students: [{ id: DISTINCT_STUDENT_ID, name: 'Real Student C1' }],
+    goalConfig: {
+      seasonId: 'season-placeholder-current',
+      individualGoalHoursByStudentId: { [DISTINCT_STUDENT_ID]: 20 },
+    },
+    teams: [],
+  };
+}
+
+describe('<OutreachList /> T170: viewerStudentId resolved for real', () => {
+  it('criterion 1: real resolved id reaches every consumer, positively, with a distinct non-placeholder fixture (hazard 3c)', async () => {
+    renderAsUser(STUDENT_OR_PARENT_USER, {
+      loadData: () => Promise.resolve(makeDistinctViewerLoadResult()),
+      viewerStudentId: DISTINCT_STUDENT_ID,
+    });
+    await flushMicrotasks();
+
+    // Confirmed/planned hours (computeStudentHours) and the unanswered-RSVP
+    // count (getUnansweredRsvpCount) -- both driven by `viewerStudentId`.
+    expect(container.textContent).toContain('2 hrs confirmed');
+    expect(container.textContent).toContain('3 hrs planned');
+    expect(container.textContent).toContain('1 awaiting your RSVP');
+
+    // GoalBar's own aria-valuetext (goalBarId identity feeds the milestone
+    // dedupe key, not directly assertable via DOM text -- the hours/goal
+    // figures baked into this string are the observable proxy for it).
+    const bar = container.querySelector('[role="progressbar"]');
+    expect(bar).toBeTruthy();
+    expect(bar?.getAttribute('aria-valuetext')).toBe('2 of 20 hours confirmed; 3 more planned');
+  });
+
+  /**
+   * Checker MAJOR fix (gate round 1): the criterion 1 test above renders
+   * with an EXPLICIT `viewerStudentId: DISTINCT_STUDENT_ID` prop, which
+   * short-circuits `resolveStudentId` before it is ever called (`:3875-3876`
+   * of the component). No test anywhere previously rendered with NO
+   * explicit `viewerStudentId` prop and checked that the RESOLVER's own
+   * distinct return value actually reached these same figures -- so a
+   * mutation that discards the resolver's real return value and
+   * substitutes `PLACEHOLDER_CURRENT_STUDENT_ID` whenever it is non-null
+   * (`resolveStudentId(viewer).then((id) => (id === null ? null :
+   * PLACEHOLDER_CURRENT_STUDENT_ID))`) passed 90/90: every positive
+   * assertion took the explicit-prop bypass path, and the only
+   * placeholder-returning stub is the harness's own default (indistinguishable
+   * from the mutated behavior). This test renders via the SAME resolver path
+   * `router.tsx:244`'s real, no-props call site actually takes.
+   */
+  it('criterion 1 (resolver path, no explicit prop): the SAME positive figures, reached via resolveStudentId itself, not the explicit-prop bypass', async () => {
+    renderAsUser(STUDENT_OR_PARENT_USER, {
+      loadData: () => Promise.resolve(makeDistinctViewerLoadResult()),
+      resolveStudentId: async () => DISTINCT_STUDENT_ID,
+    });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('2 hrs confirmed');
+    expect(container.textContent).toContain('3 hrs planned');
+    expect(container.textContent).toContain('1 awaiting your RSVP');
+
+    const bar = container.querySelector('[role="progressbar"]');
+    expect(bar).toBeTruthy();
+    expect(bar?.getAttribute('aria-valuetext')).toBe('2 of 20 hours confirmed; 3 more planned');
+  });
+
+  describe('criterion 2: explicit viewerStudentId bypasses resolveStudentId entirely, paired', () => {
+    it('(a) resolveStudentId is never called when viewerStudentId is explicit, and (b) the explicit id genuinely reaches the render', async () => {
+      const resolveStudentId = vi.fn(async () => 'should-never-be-called');
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        loadData: () => Promise.resolve(makeDistinctViewerLoadResult()),
+        viewerStudentId: DISTINCT_STUDENT_ID,
+        resolveStudentId,
+      });
+      await flushMicrotasks();
+
+      expect(resolveStudentId).not.toHaveBeenCalled();
+      // (b) -- distinguishable content, not just "did not error."
+      expect(container.textContent).toContain('2 hrs confirmed');
+    });
+
+    it('vacuity probe: a broken resolveStudentId does not affect the explicit-prop render, but DOES break a separate no-explicit-prop render', async () => {
+      const brokenResolveStudentId = vi.fn(async (): Promise<string | null> => {
+        throw new Error('boom');
+      });
+
+      // Explicit prop given -- must stay GREEN (resolveStudentId's own
+      // brokenness is never reached).
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        loadData: () => Promise.resolve(makeDistinctViewerLoadResult()),
+        viewerStudentId: DISTINCT_STUDENT_ID,
+        resolveStudentId: brokenResolveStudentId,
+      });
+      await flushMicrotasks();
+      expect(container.textContent).toContain('2 hrs confirmed');
+      expect(container.textContent).not.toContain("Couldn't find your student record");
+
+      // Separate render, no explicit prop -- must go RED under the same
+      // mutation (proves the vacuity probe isn't just an always-green
+      // assertion).
+      freshContainer();
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        loadData: () => Promise.resolve(makeDistinctViewerLoadResult()),
+        resolveStudentId: brokenResolveStudentId,
+      });
+      await flushMicrotasks();
+      expect(container.textContent).toContain("Couldn't find your student record");
+    });
+  });
+
+  it('criterion 3: coach/admin view never calls resolveStudentId, paired with a positive render control (REV2 BLOCKER-1 fix)', async () => {
+    const resolveStudentId = vi.fn(async () => 'should-never-be-called');
+    renderAsUser(COACH_USER, { loadData: defaultLoadOutreachData, resolveStudentId });
+    await flushMicrotasks();
+
+    // Positive control FIRST: the coach view genuinely rendered a
+    // coach-only affordance (not the whole view being absent/loading/
+    // errored) -- otherwise the spy-not-called assertion below would pass
+    // identically whether resolution was correctly skipped or the view
+    // never rendered at all (the exact vacuity the gate caught in round 1).
+    const newEventButtons = Array.from(container.querySelectorAll('button')).filter((btn) =>
+      btn.textContent?.includes('New outreach event'),
+    );
+    expect(newEventButtons.length).toBeGreaterThan(0);
+
+    expect(resolveStudentId).not.toHaveBeenCalled();
+  });
+
+  describe('criterion 4: identity tier own loading/error/null sub-states, isolated', () => {
+    it('loading: shown while resolveStudentId is still pending', async () => {
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        loadData: defaultLoadOutreachData,
+        resolveStudentId: () => new Promise<string | null>(() => {}),
+      });
+      await flushMicrotasks();
+      expect(container.textContent).toContain('Finding your student record');
+    });
+
+    it('error: shown when resolveStudentId rejects', async () => {
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        loadData: defaultLoadOutreachData,
+        resolveStudentId: () => Promise.reject(new Error('boom')),
+      });
+      await flushMicrotasks();
+      expect(container.textContent).toContain("Couldn't find your student record");
+    });
+
+    it('null: shown when resolveStudentId resolves null (no linked student), and SelfCheckoffDialog never mounts', async () => {
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        loadData: defaultLoadOutreachData,
+        resolveStudentId: async () => null,
+      });
+      await flushMicrotasks();
+      expect(container.textContent).toContain('No student account linked yet');
+      // The shared SelfCheckoffDialog is only ever rendered by
+      // StudentParentOutreachView -- confirms it never mounted on a null
+      // identity (module doc #15's write-side T184-class verdict, (ii)).
+      expect(container.querySelectorAll('dialog').length).toBe(0);
+    });
+  });
+
+  describe('criterion 10: SelfCheckoffDialog carries the real resolved id, mutation-provable', () => {
+    it('opening "Mark attendance" calls loadSelfCheckoffAttendance with the real, resolved, non-placeholder studentId', async () => {
+      mockedLoadSelfCheckoffAttendance.mockClear();
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        loadData: defaultLoadOutreachData,
+        viewerStudentId: DISTINCT_STUDENT_ID,
+      });
+      await flushMicrotasks();
+
+      const cannedDriveButton = Array.from(container.querySelectorAll('button')).find(
+        (btn) => btn.textContent?.trim() === 'Mark attendance – Canned Food Drive',
+      );
+      expect(cannedDriveButton).toBeTruthy();
+      act(() => {
+        cannedDriveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      await flushMicrotasks();
+
+      expect(mockedLoadSelfCheckoffAttendance).toHaveBeenCalled();
+      const lastCall =
+        mockedLoadSelfCheckoffAttendance.mock.calls[
+          mockedLoadSelfCheckoffAttendance.mock.calls.length - 1
+        ];
+      expect(lastCall?.[1]).toBe(DISTINCT_STUDENT_ID);
+      expect(lastCall?.[1]).not.toBe(PLACEHOLDER_CURRENT_STUDENT_ID);
+    });
+
+    /**
+     * Checker MAJOR fix (gate round 1) -- the criterion 10 equivalent of
+     * the criterion 1 fix immediately above: the test above renders with an
+     * EXPLICIT `viewerStudentId` prop, so it never observes
+     * `resolveStudentId`'s own return value reaching `SelfCheckoffDialog`.
+     * This test renders with NO explicit prop, via the resolver path only.
+     */
+    it('opening "Mark attendance" calls loadSelfCheckoffAttendance with the resolver-returned id, with NO explicit viewerStudentId prop', async () => {
+      mockedLoadSelfCheckoffAttendance.mockClear();
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        loadData: defaultLoadOutreachData,
+        resolveStudentId: async () => DISTINCT_STUDENT_ID,
+      });
+      await flushMicrotasks();
+
+      const cannedDriveButton = Array.from(container.querySelectorAll('button')).find(
+        (btn) => btn.textContent?.trim() === 'Mark attendance – Canned Food Drive',
+      );
+      expect(cannedDriveButton).toBeTruthy();
+      act(() => {
+        cannedDriveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      await flushMicrotasks();
+
+      expect(mockedLoadSelfCheckoffAttendance).toHaveBeenCalled();
+      const lastCall =
+        mockedLoadSelfCheckoffAttendance.mock.calls[
+          mockedLoadSelfCheckoffAttendance.mock.calls.length - 1
+        ];
+      expect(lastCall?.[1]).toBe(DISTINCT_STUDENT_ID);
+      expect(lastCall?.[1]).not.toBe(PLACEHOLDER_CURRENT_STUDENT_ID);
     });
   });
 });

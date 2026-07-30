@@ -5411,3 +5411,48 @@ is the evidence that the heavier process is not always the right process.
 
 **Unblocks T172** (the mechanism fix for the whole class), which now has a proven pattern and a
 measured cost to generalise from.
+
+---
+
+## T170 — `/outreach` resolves the real student (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commit | `131f081c8a22f53cb528686a496cb3aee65c10df` (attempt 2) |
+| Verdict | **PASS with MINORs** (attempt 1: FAIL, 1 MAJOR) |
+| Attempts | 2 |
+| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
+| Premise gate | 1 narrow round → REVISE (1 BLOCKER, 2 MAJOR); revision 2 dispatched without re-gate |
+| tsc / build / format | 0 errors / ✓ / clean |
+| eslint | 0 errors, 357 warnings (unchanged) |
+| vitest | 67 files, 1601 tests (from 1591) |
+
+**More than a display bug.** The premise gate found an eighth consumer of `viewerStudentId` that
+neither the packet nor the orchestrator had traced: `<SelfCheckoffDialog studentId={…} />` is not
+a filter — it re-queries Supabase and **writes `attendance` rows**. Self check-off on `/outreach`
+was broken in production, attempting writes against `'student-placeholder-current-viewer'`,
+rejected by the uuid column, the foreign key, and RLS. Nothing persisted; the feature did not work.
+
+**Attempt 1's MAJOR is the one worth remembering.** A single-line mutation restoring the entire
+original bug passed **90/90**. Every positive assertion supplied `viewerStudentId` explicitly,
+short-circuiting the resolver before it was ever called, so nothing observed the resolver
+producing a real id. **This is T146's shape** — reverting a select string reinstated a real bug
+with a green suite — and the hazard the packet itself flagged in bold. The worker built the
+distinct-id fixture correctly and then routed it through the bypass.
+
+Fixed test-only, source byte-identical between attempts. Verified three times independently —
+worker, checker and orchestrator each re-applied the regression and measured **2 failed / 90
+passed of 92**.
+
+**Two orchestrator errors recorded against this task.** The "purely client-side filter, none
+re-query Supabase" premise was mine and was wrong. And the "3 of 82" blast radius I measured was
+right for the probe I ran but wrong for the prescribed design, where it is ~10 — I measured a
+proxy for the change rather than the change.
+
+**Verified rather than accepted:** the worker's audit claiming criteria 2/3/4 were structurally
+immune held up under both empirical and source-reading checks — though its stated *reason* was
+imprecise, which the checker recorded rather than waving through.
+
+**Carried forward:** T190 (rekey the now-vestigial fixtures so the harness default can return a
+distinct id, making future tests discriminating by construction — measured at exactly 3 assertion
+updates, and unfoldable into T170 because that packet forbids assertion edits).
