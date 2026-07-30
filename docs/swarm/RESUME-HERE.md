@@ -1,4 +1,4 @@
-# Resume here — state of play at `main` = `f7ff055`
+# Resume here — state of play at `claude/swarm-plan-zl575z` = `cea38f1`
 
 Written 2026-07-30 so this session's context can be cleared without losing anything.
 If you are a fresh orchestrator session, read this file, then `constitution.md`, then the
@@ -7,41 +7,54 @@ in a conversation.
 
 ## Where the repo is
 
-- **PR #2 is merged.** `main` = `f7ff055` and contains all work through T154.
-- `claude/swarm-plan-zl575z` has been **restarted off that `main`** (PR #2 is finished and
-  must not be reused; further work opens a **new** PR).
-- Working tree clean. Gates measured green on this base: `tsc` exit 0 · eslint
-  **0 errors / 355 warnings** · **66 files / 1536 tests** · prettier clean · `vite build` ✓.
+- **PR #2 is merged** and must not be reused. `main` = `f7ff055`, all work through T154.
+- **PR #3 is open** (`claude/swarm-plan-zl575z` → `main`), carrying **T155 and T157 both
+  merged and PASSed**, plus T157's packet revision 2 and the handoff docs.
+- Working tree clean. Gates measured green at `cea38f1`: `tsc` exit 0 · eslint
+  **0 errors / 356 warnings** · **66 files / 1567 tests** · prettier clean · `vite build` ✓.
+  (Warnings went 355 → 356: T157's newly exported pure function, matching the file's own
+  convention. Tests went 1536 → 1546 → 1567.)
 - One worktree is deliberately preserved: `.claude/worktrees/agent-a640406e50762373c`
-  (T144's contrast evidence, D011). **Do not delete it.** All other agent worktrees were
-  cleaned up (~940 MB freed).
+  (T144's contrast evidence, D011). **Do not delete it.** All task worktrees from this
+  session were cleaned up.
+
+## Landed this session
+
+- **T155** — PASS attempt 1, no BLOCKER/MAJOR/MINOR. `CoachHome` now reads the real active
+  season; the `22P02` dashboard failure the owner reported is fixed. Three fabricated
+  surfaces survive it **by design and are filed as T173** — say so before anyone reports
+  them as new bugs.
+- **T157** — PASS attempt 1, one MINOR fixed at merge. `ParentRsvp` is reachable, with real
+  `profileId`/`guardianLinks` threaded. Follow-ups **T174**, **T175**; T165's row updated.
 
 ## Ready to dispatch, in priority order
 
-1. **T155** — the owner's dashboard bug (`22P02 invalid input syntax for type uuid`).
-   Packet at `docs/swarm/active/T155-worker-packet.md`, **revision 3**, gated **twice**
-   (item 19a's two-round cap is **spent** — dispatch a worker, do **not** re-gate).
-   Worker sonnet + checker opus. This is the highest-value open item: it is a live
-   user-facing failure the owner reported with screenshots.
-2. **T157** — mount `ParentRsvp` in `OutreachDetail.tsx` (owner-ruled placement).
-   Packet exists; gate round 1 returned REVISE. **Revision 2 must be written from
-   `docs/swarm/active/T157-gate-round1-findings.md`** — twelve required revisions, recorded
-   verbatim there. Round 2 of 2 is still available.
-3. **T151** — generalise the fix: make three dialogs' `teams` required, delete the fixtures.
+1. **T151** — generalise the fix: make three dialogs' `teams` required, delete the fixtures.
    Premise re-measured: **34 TS2741 errors, zero in production source**, all in two test
    files. Sequence **after or with T159** (`StudentDialog` has a fourth such prop, `season`).
-4. **T170** — `/outreach`'s `viewerStudentId` placeholder. **Hard-blocks T169's student
+2. **T170** — `/outreach`'s `viewerStudentId` placeholder. **Hard-blocks T169's student
    half**; wiring a persisting RSVP control first would write real rows keyed to a
    non-existent student.
+3. **T158** — Leaderboard, embedded in the dashboard per the owner's ruling.
+   **Its T155 hard-block is now cleared** — `CoachHome` sources a real `seasonId` from
+   `useActiveSeason()`, so the embed inherits a valid season id for free and
+   `Leaderboard.tsx`'s own `PLACEHOLDER_SEASON_ID` default is bypassed rather than
+   separately fixed. Note T155 restructured `CoachHome` into an outer/inner split, so any
+   line citation written for T158 before today is stale. Still two units of work: build a
+   real `loadLeaderboardData` (none exists), then embed.
+4. **T175** — add `format:check` to CI. Small, mechanical, and it closes a silent-drift
+   class: T157 proved every CI gate can stay green while the repo's format gate breaks.
 
 ## Open rows worth knowing about
 
-`T152` T147's half-strength guard · `T156` the loader discards the real Postgres error ·
-`T158` Leaderboard (owner ruled: embed in the dashboard; **blocked on T155**, same file) ·
-`T159` `StudentDialog.season` · `T161`–`T167` loader tests · `T168` placeholder sweep
-(**discovery only**) · `T169` `RsvpControl` on both surfaces (owner-ruled) · `T171` T154's
-no-stale-frame property is true but pinned by nothing · `T172` fix the placeholder
-**mechanism**, not instances.
+`T152` T147's half-strength guard · `T156` the loader discards the real Postgres error
+(**was blocked on T155, now unblocked**) · `T159` `StudentDialog.season` · `T161`–`T167`
+loader tests (**T165 must now keep TWO test blocks byte-intact, not one** — see its row) ·
+`T168` placeholder sweep (**discovery only**) · `T169` `RsvpControl` on both surfaces
+(owner-ruled; `OutreachDetail` half can go now that T157 landed, student half still blocked
+on T170) · `T171` T154's no-stale-frame property is true but pinned by nothing · `T172` fix
+the placeholder **mechanism**, not instances · `T173` `CoachHome`'s widgets have no real
+backend, three fabricated surfaces survive T155 · `T174` `FIXTURE_RSVPS` id-space confusion.
 
 ## Owner rulings — cite the record, never a paraphrase
 
@@ -95,6 +108,18 @@ discarded on reload.
   sets `user: null` first, so the real flow is A → null → B. Measured: the literal rule
   left a **green suite with the bug intact**.
 - **Mutations run in the agent's own worktree** (item 23), never the shared tree.
+- **Agent worktrees are created from `main`, not the branch tip — merge the branch in
+  before the agent reads anything.** Paid for on T157: the worker was dispatched against
+  **revision 1** of its packet (the version that gated REVISE with 4 MAJORs) because
+  revision 2 existed only on the feature branch, and nobody checked. Caught mid-task; ~320
+  lines were discarded and rewritten. It would not even have compiled. Any artifact written
+  during a session is invisible to every worktree agent dispatched afterwards unless the
+  branch is merged into the worktree first.
+- **A checker that only re-runs the worker's own mutations is under-using the tier.** T155's
+  and T157's checkers each found something by choosing an experiment the worker had not:
+  T155's executed the pin-mutation the worker had verified only by inspection, and T157's
+  ran its own vacuity probes on two criteria and caught the `format:check` regression by
+  running a gate the worker never reported on.
 - **Record and merge in one action** (item 24): ledger row + verification-log entry move in
   the same commit as the merge.
 - **A read-only role cannot build a prescription.** Do not ask `checker-premise` to apply
