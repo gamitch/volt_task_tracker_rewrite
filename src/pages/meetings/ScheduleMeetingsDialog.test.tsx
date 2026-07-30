@@ -34,7 +34,21 @@ import {
   resolveTeamScope,
   ScheduleMeetingsDialog,
   type CreateMeetingsPayload,
+  type ScheduleTeamOption,
 } from './ScheduleMeetingsDialog';
+
+// ---------------------------------------------------------------------------
+// T151: `teams` is now a required prop (the deleted `DEFAULT_TEAMS` module
+// fixture no longer exists) -- one shared local fixture for this file,
+// referenced at every render site below, not per-site inline arrays
+// (porting the deleted fixture's exact contents; this file has no
+// `students`/roster id-coupling constraint, so any fabricated ids would do,
+// but reusing the same ones avoids inventing new names for no reason).
+// ---------------------------------------------------------------------------
+const TEST_TEAMS: readonly ScheduleTeamOption[] = [
+  { id: 'team-ravens', name: 'Ravens' },
+  { id: 'team-titans', name: 'Titans' },
+];
 
 // ---------------------------------------------------------------------------
 // jsdom gap: `Dialog` renders a native `<dialog>` and calls
@@ -350,7 +364,7 @@ describe('computeConfirmLabel (BEH-07)', () => {
 describe('<ScheduleMeetingsDialog /> field order (MTG-02 / constitution item 13)', () => {
   it('renders fields in the exact MTG-02 order: title, team scope, location, schedule mode, date/time, notes', () => {
     act(() => {
-      root.render(<ScheduleMeetingsDialog isOpen onOpenChange={() => {}} />);
+      root.render(<ScheduleMeetingsDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
     });
     const labelTexts = Array.from(container.querySelectorAll('label'))
       .map((el) => el.textContent?.trim() ?? '')
@@ -381,6 +395,7 @@ describe('<ScheduleMeetingsDialog /> disabled/enabled confirm button (Known Cont
           isOpen
           onOpenChange={() => {}}
           onCreateMeetings={onCreateMeetings}
+          teams={TEST_TEAMS}
         />,
       );
     });
@@ -412,7 +427,7 @@ describe('<ScheduleMeetingsDialog /> disabled/enabled confirm button (Known Cont
 
   it('Single mode: clicking title empty re-disables the button even with a valid date', () => {
     act(() => {
-      root.render(<ScheduleMeetingsDialog isOpen onOpenChange={() => {}} />);
+      root.render(<ScheduleMeetingsDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
     });
     const dateInput = getFieldControl('Date') as HTMLInputElement;
     act(() => {
@@ -432,7 +447,7 @@ describe('<ScheduleMeetingsDialog /> disabled/enabled confirm button (Known Cont
 
   it('Weekly recurring mode: disabled with no range/weekday, enables once both are set (via the real DateRangeInput popover + preset)', () => {
     act(() => {
-      root.render(<ScheduleMeetingsDialog isOpen onOpenChange={() => {}} />);
+      root.render(<ScheduleMeetingsDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
     });
 
     clickButton(findButtonByText('Weekly recurring') as HTMLButtonElement);
@@ -469,7 +484,7 @@ describe('<ScheduleMeetingsDialog /> disabled/enabled confirm button (Known Cont
 
   it('Custom dates mode: disabled with zero picked dates, enables after adding one, count grows/shrinks as dates are added/removed', () => {
     act(() => {
-      root.render(<ScheduleMeetingsDialog isOpen onOpenChange={() => {}} />);
+      root.render(<ScheduleMeetingsDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
     });
     clickButton(findButtonByText('Custom dates') as HTMLButtonElement);
     expect(findButtonByText('Create 0 meetings')?.disabled).toBe(true);
@@ -520,6 +535,7 @@ describe('<ScheduleMeetingsDialog /> submit + cancel behavior', () => {
           isOpen
           onOpenChange={onOpenChange}
           onCreateMeetings={onCreateMeetings}
+          teams={TEST_TEAMS}
         />,
       );
     });
@@ -555,6 +571,7 @@ describe('<ScheduleMeetingsDialog /> submit + cancel behavior', () => {
           isOpen
           onOpenChange={onOpenChange}
           onCreateMeetings={onCreateMeetings}
+          teams={TEST_TEAMS}
         />,
       );
     });
@@ -572,7 +589,7 @@ describe('<ScheduleMeetingsDialog /> submit + cancel behavior', () => {
 
   it('resets to pristine defaults every time the dialog re-opens (nothing persists across opens)', () => {
     function Harness(): ReturnType<typeof ScheduleMeetingsDialog> {
-      return <ScheduleMeetingsDialog isOpen onOpenChange={() => {}} />;
+      return <ScheduleMeetingsDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />;
     }
     act(() => {
       root.render(<Harness />);
@@ -585,10 +602,12 @@ describe('<ScheduleMeetingsDialog /> submit + cancel behavior', () => {
 
     // Close then re-open (simulating a parent flipping `isOpen`).
     act(() => {
-      root.render(<ScheduleMeetingsDialog isOpen={false} onOpenChange={() => {}} />);
+      root.render(
+        <ScheduleMeetingsDialog isOpen={false} onOpenChange={() => {}} teams={TEST_TEAMS} />,
+      );
     });
     act(() => {
-      root.render(<ScheduleMeetingsDialog isOpen onOpenChange={() => {}} />);
+      root.render(<ScheduleMeetingsDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
     });
 
     // Back to the pristine zero-date state -- the previously-picked date did

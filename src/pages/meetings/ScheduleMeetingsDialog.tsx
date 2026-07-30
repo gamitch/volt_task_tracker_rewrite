@@ -309,18 +309,6 @@ export interface CreateMeetingsPayload {
 
 export type OnCreateMeetingsFn = (payload: CreateMeetingsPayload) => Promise<void>;
 
-// ---------------------------------------------------------------------------
-// Fixture teams (constitution item 6: fabricated names only). Standalone
-// default -- `MeetingsList.tsx`'s own team fixture is a forbidden/read-only
-// file here, so this is a deliberate, independent duplicate, not a shared
-// import (module-level doc, top of file).
-// ---------------------------------------------------------------------------
-
-const DEFAULT_TEAMS: readonly ScheduleTeamOption[] = [
-  { id: 'team-ravens', name: 'Ravens' },
-  { id: 'team-titans', name: 'Titans' },
-];
-
 const DEFAULT_TITLE = 'Team meeting';
 // Module doc #6 -- BEH-07 smart default stand-in for "creator's last-used time".
 const DEFAULT_START_TIME: ISOTimeString | undefined = createISOTimeString('18:00') ?? undefined;
@@ -536,8 +524,7 @@ export const defaultOnCreateMeetings: OnCreateMeetingsFn = async (payload) => {
 export interface ScheduleMeetingsDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  /** Defaults to `DEFAULT_TEAMS` (fixture, module-level doc). */
-  teams?: readonly ScheduleTeamOption[];
+  teams: readonly ScheduleTeamOption[];
   /** Defaults to `defaultOnCreateMeetings` (module doc #4). */
   onCreateMeetings?: OnCreateMeetingsFn;
 }
@@ -545,7 +532,7 @@ export interface ScheduleMeetingsDialogProps {
 export function ScheduleMeetingsDialog({
   isOpen,
   onOpenChange,
-  teams = DEFAULT_TEAMS,
+  teams,
   onCreateMeetings = defaultOnCreateMeetings,
 }: ScheduleMeetingsDialogProps): ReactNode {
   const allTeamIds = useMemo(() => teams.map((team) => team.id), [teams]);
