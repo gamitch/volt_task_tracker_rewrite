@@ -17,9 +17,12 @@
  *    student_id fk students, relationship, created_at, unique(parent, student)
  *    -- genuinely one-to-many: a parent can have multiple rows, one per
  *    linked student. `LinkedStudentRow` below is the display-only join shape
- *    (studentId/displayName/teamId/goalHoursOverride) this page needs from
+ *    (studentId/displayName/teamId/isActive) this page needs from
  *    `guardian_links` joined to `students` -- not a re-derivation of either
- *    table.
+ *    table. (T181: `goalHoursOverride` dropped from this shape --
+ *    `goalHours` now comes verbatim from `resolveStudentScope`, see module
+ *    doc #2 below -- and `isActive` added, a real `students.is_active`
+ *    column, for the factual per-card marker T181 adds.)
  *
  *    `events`/`event_sessions`/`rsvps` (`20260717000000_scheduling_attendance.sql`,
  *    lines 33-48 / 53-63 / 67-76): same subset `CoachHome.tsx`/`OutreachList.tsx`
@@ -38,13 +41,33 @@
  *     `CoachHome.tsx`'s `sumConfirmedHours` already established) -- it never
  *     recomputes an individual student's hours from raw attendance data.
  *   - MET-04's denominator (PRD line 541: `goal_hours_override ??
- *     season default_goal_hours`) has no SQL view for the ratio itself, only
- *     the numerator is a view column -- `studentGoalHours`/`hoursVsGoalPercent`
- *     below are the identical UI-side-percent-math idiom `CoachHome.tsx`'s
- *     `sumGoalHours`/`hoursVsGoalPercent` and `OutreachList.tsx`'s
- *     `confirmedPercent` already established and passed review for
- *     (independently reimplemented here, not imported -- both of those files
- *     are Forbidden Files/read-only reference only for this task).
+ *     season default_goal_hours`) IS available as a real SQL view column --
+ *     `v_student_goal_projection.goal_hours`
+ *     (`supabase/migrations/20260723000001_dashboard_views.sql:322-334`)
+ *     already computes `coalesce(s.goal_hours_override, se.default_goal_hours)
+ *     as goal_hours` in SQL, exactly this coalesce. `loaders/students.ts`'s
+ *     `resolveStudentScope` (T176) already reads it verbatim and documents
+ *     the required posture: "Verbatim passthrough (constitution item 3) --
+ *     `goal_hours` is already the coalesced value; no coalesce/override
+ *     arithmetic happens here" (`students.ts:428-429`). T181's real per-card
+ *     seam (`loaders/parentHome.ts`'s `makeLoadStudentHomeCardDataForParentHome`)
+ *     wires the FACTORY `makeResolveStudentScope` directly (never the
+ *     pre-bound singleton -- see that file's own module doc) and passes
+ *     `goalHours` through to `StudentHomeCardData.goalHours` unchanged, same
+ *     as `StudentHome.tsx`'s own T176-round-2 correction
+ *     (`StudentHome.tsx:1285-1289`) for the identical field. This file's OWN
+ *     TS-side `studentGoalHours()` (a per-student-override-defaulted-against
+ *     -season-default coalesce this file used to compute itself, before
+ *     this real wiring existed) is DELETED (T181) -- its sole importer was
+ *     `ParentHome.test.tsx`, and every fixture consumer now sources
+ *     `goalHours` the same verbatim way the real loader does.
+ *     `hoursVsGoalPercent` below remains the UI-side percent-MATH idiom
+ *     `CoachHome.tsx`'s `hoursVsGoalPercent`/`OutreachList.tsx`'s
+ *     `confirmedPercent` already established (independently reimplemented
+ *     here, not imported -- both of those files are Forbidden Files/
+ *     read-only reference only for this task) -- no metric-view equivalent
+ *     exists for the RATIO itself, only for each of its two
+ *     already-coalesced inputs (`goalHours`/`confirmedHours`).
  *   - `v_student_participation` (metric_views.sql lines 21-42, MET-01): NOT
  *     redefined here -- `StudentParticipationMetric` is imported directly
  *     from `StudentMeetingView.tsx`'s own already-checker-verified export
@@ -183,23 +206,29 @@
  * viewer's own control.
  *
  * -----------------------------------------------------------------------
- * 7. No shared Supabase client wired in yet -- same posture as every prior
- *    content page in this batch. `loadLinkedStudents`/`loadStudentData` are
- *    the injectable seams, defaulting to the OBVIOUSLY-FAKE
- *    `defaultLoadLinkedStudents`/`defaultLoadStudentHomeCardData` (fabricated
- *    names only, constitution item 6). A real implementation, once a shared
- *    Supabase client exists (a separate, not-yet-dispatched task per every
- *    sibling task's identical disclosure), would query `guardian_links`
- *    joined to `students`/`teams` for the outer seam, then
- *    `v_student_hours`/`v_student_participation`/`events`/`event_sessions`/
- *    `rsvps`/`attendance` scoped to one student for the per-card seam.
- *    `AuthUser` (`guards.tsx`) still carries no `guardian_links` linkage
- *    (the same disclosed gap `MeetingsList.tsx`/`OutreachList.tsx`/
- *    `CoachHome.tsx` already carry for their own viewer-linkage stand-ins)
- *    -- this page does not attempt to resolve "which parent is signed in"
- *    from `useAuth()`; `loadLinkedStudents()` stands in for "the linked
- *    students of whichever parent is currently viewing", the same class of
- *    provisional stand-in every sibling Home page has already disclosed.
+ * 7. T181 UPDATE: a real Supabase backend IS now wired -- this section
+ *    records what changed. `loadLinkedStudents`/`loadStudentData` are the
+ *    injectable seams; their prop DEFAULTS now point at
+ *    `loaders/parentHome.ts`'s real `loadLinkedStudentsForParentHome`/
+ *    `loadStudentHomeCardDataForParentHome` (that file's own module doc has
+ *    the full record: outer seam queries `guardian_links` joined
+ *    client-side to a wider `students` read (`id, display_name, team_id,
+ *    is_active`) and `teams`; per-card seam reuses `checkin.ts`'s own
+ *    `makeLoadConsistencyStripData` and `students.ts`'s own
+ *    `makeResolveStudentScope` -- FACTORIES, not the pre-bound singletons --
+ *    alongside new `events`/fuller-`event_sessions`/`rsvps` queries).
+ *    `defaultLoadLinkedStudents`/`defaultLoadStudentHomeCardData` below
+ *    (fabricated names only, constitution item 6) REMAIN, but only as named
+ *    fixture generators this file's own tests exercise directly -- they are
+ *    no longer this component's runtime default. `AuthUser` (`guards.tsx`)
+ *    still carries no `guardian_links` linkage of its own (the same
+ *    disclosed gap `MeetingsList.tsx`/`OutreachList.tsx`/`CoachHome.tsx`
+ *    already carry for their own viewer-linkage stand-ins) -- this page
+ *    still does not resolve "which parent is signed in" from `useAuth()`;
+ *    `loadLinkedStudentsForParentHome`'s own self-resolving session lookup
+ *    (`loaders/parentHome.ts`, mirroring `checkin.ts`'s own already-shipped
+ *    `querySessionUserId` pattern) is what actually answers that question
+ *    now, independently of `useAuth()`'s own state.
  *
  * -----------------------------------------------------------------------
  * 8. No parent-name greeting ("Hi Maria", PRD's own wireframe chrome, line
@@ -345,6 +374,10 @@ import {
   type ConsistencyStripEntry,
   type StudentParticipationMetric,
 } from '../meetings/StudentMeetingView';
+import {
+  loadLinkedStudentsForParentHome,
+  loadStudentHomeCardDataForParentHome,
+} from '../../lib/supabase/loaders/parentHome';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real columns/views. Module docs #1/#2.
@@ -381,7 +414,10 @@ export interface LinkedStudentRow {
   studentId: string;
   displayName: string;
   teamId: string;
-  goalHoursOverride: number | null;
+  /** Real `students.is_active` column (module doc #1) -- drives the factual
+   * "Not currently active" card marker below (T181), never a fabricated
+   * value. */
+  isActive: boolean;
 }
 
 export interface HomeEventRow {
@@ -451,7 +487,11 @@ export interface NextEventRow {
 }
 
 export interface StudentHomeCardData {
-  defaultGoalHours: number;
+  /** Verbatim passthrough of `v_student_goal_projection.goal_hours`
+   * (`resolveStudentScope`, module doc #2) -- already the coalesced
+   * `goal_hours_override ?? season default_goal_hours` value, computed in
+   * SQL. Never fed through a TS-side coalesce here (T181). */
+  goalHours: number;
   confirmedHours: number;
   participation: StudentParticipationMetric | null;
   consistencyEntries: readonly ConsistencyStripEntry[];
@@ -510,18 +550,30 @@ const FIXTURE_STUDENTS: readonly LinkedStudentRow[] = [
     studentId: STUDENT_ADA,
     displayName: 'Ada R.',
     teamId: TEAM_GEAR_GIRLS,
-    goalHoursOverride: null,
+    isActive: true,
   },
-  { studentId: STUDENT_BEA, displayName: 'Bea R.', teamId: TEAM_P3, goalHoursOverride: null },
+  { studentId: STUDENT_BEA, displayName: 'Bea R.', teamId: TEAM_P3, isActive: true },
   {
     studentId: STUDENT_CLEO,
     displayName: 'Cleo R.',
     teamId: TEAM_IRON_WOLVES,
-    goalHoursOverride: 20,
+    isActive: true,
   },
 ];
 
 const FIXTURE_DEFAULT_GOAL_HOURS = 100;
+
+/** Per-student goal hours (module doc #2) -- T181: replaces the TS-side
+ * coalesce this fixture used to perform via the now-deleted
+ * `studentGoalHours()` (a per-student override, defaulted against the
+ * season figure below, when no override was set). Cleo keeps her prior
+ * effective value (20); Ada/Bea keep the season default -- same fixture
+ * VALUES as before, sourced directly per-student now (matching the real
+ * loader's own verbatim-per-student shape) instead of computed from two
+ * separate fields at render time. */
+const FIXTURE_GOAL_HOURS: Readonly<Record<string, number>> = {
+  [STUDENT_CLEO]: 20,
+};
 
 /** Pre-computed `v_student_hours` rows (module doc #2) -- never recomputed.
  * Ada's 62/100 matches the PRD's own Parent Home wireframe worked example
@@ -791,15 +843,6 @@ export function isEventInTeamScope(
   return event.teamIds === null || event.teamIds.includes(teamId);
 }
 
-/** MET-04's denominator (module doc #2): `goal_hours_override ??
- * default_goal_hours`. */
-export function studentGoalHours(
-  student: { goalHoursOverride: number | null },
-  defaultGoalHours: number,
-): number {
-  return student.goalHoursOverride ?? defaultGoalHours;
-}
-
 /** UI-side percent math, no metric-view equivalent to duplicate (module doc
  * #2) -- same idiom `CoachHome.tsx`/`OutreachList.tsx` already established. */
 export function hoursVsGoalPercent(confirmedHours: number, goalHours: number): number {
@@ -915,9 +958,12 @@ export function applyRsvpOverride(
 }
 
 // ---------------------------------------------------------------------------
-// Fixture loaders -- obviously-fake defaults for the injectable `loadData`
-// seams (module doc #7). Real callers (once a shared Supabase client is
-// wired to a page -- a separate, not-yet-dispatched task) pass their own.
+// Fixture loaders -- obviously-fake data generators (module doc #7,
+// constitution item 6: fabricated names only). T181: these are no longer
+// this component's runtime default (see `ParentHome`'s own prop defaults
+// below, which now point at `loaders/parentHome.ts`'s real implementations)
+// -- kept as named exports because this file's own tests exercise them
+// directly to prove the shipped fixture data composes correctly.
 // ---------------------------------------------------------------------------
 
 export async function defaultLoadLinkedStudents(): Promise<LinkedStudentsResult> {
@@ -936,7 +982,7 @@ export async function defaultLoadStudentHomeCardData(
   );
   const nextEventSessionIds = new Set(nextEvents.map((event) => event.sessionId));
   return {
-    defaultGoalHours: FIXTURE_DEFAULT_GOAL_HOURS,
+    goalHours: FIXTURE_GOAL_HOURS[studentId] ?? FIXTURE_DEFAULT_GOAL_HOURS,
     confirmedHours: findConfirmedHours(studentId, PLACEHOLDER_SEASON_ID, FIXTURE_HOURS),
     participation: findParticipationMetric(studentId, FIXTURE_PARTICIPATION),
     consistencyEntries: selectLastCompletedAttendance(
@@ -1050,6 +1096,12 @@ const UNANSWERED_RSVP_SEGMENT_VALUE = 'unanswered';
  * "use color variants for category tags" guidance. */
 const MEETING_ROW_BADGE_VARIANT: BadgeVariant = 'blue';
 
+/** T181: factual-only copy for a deactivated linked student's card marker
+ * (the foreman's design call, `StudentHomeCardProps.isActive`'s own doc
+ * above) -- states a fact, never loss-aversion/guilt/streak framing
+ * (constitution item 17). */
+const INACTIVE_STUDENT_MARKER_LABEL = 'Not currently active';
+
 function NextEventRowItem({
   row,
   studentDisplayName,
@@ -1095,7 +1147,15 @@ interface StudentHomeCardProps {
   displayName: string;
   teamId: string;
   teamName: string;
-  goalHoursOverride: number | null;
+  /** Real `students.is_active` column (module doc #1) -- drives the factual
+   * "Not currently active" marker below (T181). This is the foreman's
+   * design call, not an owner ruling: a parent viewing a deactivated
+   * child's card is an unaffected observer, not a blocked actor, so this is
+   * a small, factual indicator alongside the team badge -- not
+   * `StudentHome.tsx`'s own T184 three-way union (that union is about a
+   * deactivated STUDENT signing in as herself, a genuinely different
+   * situation). The card, and its honest-absence figures, still render. */
+  isActive: boolean;
   loadData: LoadStudentHomeCardDataFn;
 }
 
@@ -1104,7 +1164,7 @@ function StudentHomeCard({
   displayName,
   teamId,
   teamName,
-  goalHoursOverride,
+  isActive,
   loadData,
 }: StudentHomeCardProps): ReactNode {
   const loadState = useLoadState(() => loadData(studentId, teamId), [loadData, studentId, teamId]);
@@ -1161,7 +1221,9 @@ function StudentHomeCard({
   }
 
   const data = loadState.data;
-  const goalHours = studentGoalHours({ goalHoursOverride }, data.defaultGoalHours);
+  // Verbatim passthrough (constitution item 3, module doc #2) -- `goalHours`
+  // is already the coalesced value; no coalesce/override arithmetic here.
+  const goalHours = data.goalHours;
   const hoursPercent = hoursVsGoalPercent(data.confirmedHours, goalHours);
 
   function handleRsvpChange(sessionId: string, status: RsvpStatus): void {
@@ -1173,7 +1235,10 @@ function StudentHomeCard({
       <VStack gap={4}>
         <HStack hAlign="between" vAlign="center" wrap="wrap" gap={2}>
           <Heading level={3}>{displayName}</Heading>
-          <Badge variant="blue" label={teamName} />
+          <HStack gap={2} vAlign="center" wrap="wrap">
+            <Badge variant="blue" label={teamName} />
+            {!isActive && <Badge variant="neutral" label={INACTIVE_STUDENT_MARKER_LABEL} />}
+          </HStack>
         </HStack>
 
         <VStack gap={1}>
@@ -1223,11 +1288,11 @@ function StudentHomeCard({
 // ---------------------------------------------------------------------------
 
 export interface ParentHomeProps {
-  /** Injectable outer data-loading seam (module doc #7). Defaults to
-   * fixture data. */
+  /** Injectable outer data-loading seam (module doc #7). T181: defaults to
+   * the real `loaders/parentHome.ts` implementation. */
   loadLinkedStudents?: LoadLinkedStudentsFn;
-  /** Injectable per-student data-loading seam (module doc #4/#7). Defaults
-   * to fixture data. */
+  /** Injectable per-student data-loading seam (module doc #4/#7). T181:
+   * defaults to the real `loaders/parentHome.ts` implementation. */
   loadStudentData?: LoadStudentHomeCardDataFn;
 }
 
@@ -1236,8 +1301,8 @@ export const WEEKLY_SUMMARY_FOOTER_NOTE =
   'You get a weekly summary by email every Sunday — manage in Settings.';
 
 export function ParentHome({
-  loadLinkedStudents = defaultLoadLinkedStudents,
-  loadStudentData = defaultLoadStudentHomeCardData,
+  loadLinkedStudents = loadLinkedStudentsForParentHome,
+  loadStudentData = loadStudentHomeCardDataForParentHome,
 }: ParentHomeProps = {}): ReactNode {
   const { user } = useAuth();
   const loadState = useLoadState(loadLinkedStudents, [loadLinkedStudents]);
@@ -1316,7 +1381,7 @@ export function ParentHome({
                 displayName={student.displayName}
                 teamId={student.teamId}
                 teamName={teamNameById.get(student.teamId) ?? 'Unassigned team'}
-                goalHoursOverride={student.goalHoursOverride}
+                isActive={student.isActive}
                 loadData={loadStudentData}
               />
             ))}

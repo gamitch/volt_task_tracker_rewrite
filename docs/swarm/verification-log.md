@@ -5498,3 +5498,51 @@ assertions to prove each discriminates independently rather than one short-circu
 **Also worth recording:** the checker caught its own false green mid-review — a first isolation
 mutation hit only a module comment rather than the JSX — and redid it rather than reporting the
 passing result.
+
+---
+
+## T181 — every parent's dashboard now shows real data (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commit | `a0d02fbeab915c643060809e1ff29219df795eb4` |
+| Verdict | **PASS with MINORs**, first attempt |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
+| Premise gate | 1 full round → REVISE (2 BLOCKER, 5 MAJOR); revision 2 dispatched without re-gate |
+| tsc / build / format | 0 errors / ✓ / clean |
+| eslint | 0 errors, **356** warnings (predicted −1, an export deleted) |
+| vitest | 68 files, 1631 tests (+26, reconciled per-file exactly) |
+
+**The fabricated-dashboard class is now closed** — `CoachHome` (T155), `StudentHome` (T176) and
+`ParentHome` (this) were all rendering fixture data on live routes.
+
+**This one was invisible to the audit that swept `ParentHome` clean.** That discriminator looked for
+placeholder *identity* props; these were function-typed *fixture loaders*, wearing the codebase's own
+legitimate `loadX` DI convention. Two discriminators were needed to see one defect family.
+
+**The finding of the session, and it is about our own process:** revision 1's regression proof was
+**vacuous inside the criterion written to prevent vacuity**. Its own words were *"State this ordering
+explicitly so the criterion cannot pass by accident."* The gate measured it passing with the entire
+fabrication bug restored — all three fixture cards hit their per-card error banner, so `displayName`
+never reached the DOM and "fixture names are gone" was trivially true.
+
+That is the **seventh** instance of the vacuous-absence shape across six tasks, and the first inside a
+criterion engineered against it. The lesson is now specific: declaring an ordering does not make an
+absence assertion safe. Only pairing it with a positive does. **This is structural enough that T172's
+mechanism work should absorb it** rather than the gates catching it one task at a time.
+
+**Also caught by the gate:** the packet imported loader singletons pre-bound to the real client, so
+two criteria could not run at all (factories fixed it in one line); and following revision 1 would
+have left `ParentHome.tsx:40-47`'s false "no SQL view for the ratio itself" claim in source — the
+exact claim that cost T176 a full round — pointing at a function the packet deletes.
+
+**Answered by measurement rather than reassurance:** the orchestrator flagged "only 1 of 43 catches
+the regression" as possibly a second near-miss. The checker measured it as a scoping artifact of a
+single-seam revert — both seams reverted fails 3 tests across 2 files, each seam having its own
+detector.
+
+**Carried forward:** T191 (a deactivated child's card renders a fabricated `0 / 1 h` goal — a UI clamp
+artifact surfacing as data, on the page built to stop fabricating) and T192 (unfiltered full-table
+reads once per card; acceptable at this project's scale under item 25, shipped as an explicit
+trade-off).

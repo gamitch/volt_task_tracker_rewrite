@@ -63,6 +63,42 @@ vi.mock('../../lib/supabase/loaders/students', async (importOriginal) => {
   };
 });
 
+// T181 (MAJOR 4): `ParentHome` (which this dispatcher routes `parent` users
+// to) now also calls a real backend (`loadLinkedStudentsForParentHome`/
+// `loadStudentHomeCardDataForParentHome`, `ParentHome.tsx`'s own prop
+// defaults), which hits the real, unconfigured-in-jsdom `getSupabaseClient()`
+// unless mocked at the module level -- same class of gap T176's own MAJOR 6
+// fix (above) closed for `StudentHome`. Both real defaults are mocked here
+// with fast, deterministic, DISTINCT, non-fixture data (gate round 1,
+// MAJOR 4: `ParentHome.tsx`'s own shipped fixture names -- 'Ada R.'/
+// 'Bea R.'/'Cleo R.' -- must never be this file's own discriminator, since
+// they never reach the DOM once the real default is wired and unmocked).
+vi.mock('../../lib/supabase/loaders/parentHome', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/supabase/loaders/parentHome')>();
+  return {
+    ...actual,
+    loadLinkedStudentsForParentHome: async () => ({
+      students: [
+        {
+          studentId: 'student-fixture-dashboardpage',
+          displayName: 'Dashboard Fixture Linked Student',
+          teamId: 'team-fixture-dashboardpage-parent',
+          isActive: true,
+        },
+      ],
+      teams: [{ id: 'team-fixture-dashboardpage-parent', name: 'Dashboard Fixture Parent Team' }],
+    }),
+    loadStudentHomeCardDataForParentHome: async () => ({
+      goalHours: 100,
+      confirmedHours: 0,
+      participation: null,
+      consistencyEntries: [],
+      nextEvents: [],
+      rsvps: [],
+    }),
+  };
+});
+
 // ---------------------------------------------------------------------------
 // Render harness -- mirrors CoachHome.test.tsx.
 //
@@ -161,9 +197,13 @@ describe('DashboardPage role dispatch', () => {
     // plain coach (CoachHome.tsx's own internal role gate), proving this
     // really is CoachHome branching internally, not a coincidence.
     expect(container.textContent).not.toContain('Season setup');
-    // Never the other two Home components' distinguishing content.
+    // Never the other two Home components' distinguishing content. T181
+    // (MAJOR 4, C11): the mocked ParentHome name, NOT the shipped
+    // `ParentHome.tsx` fixture names -- those never reach the DOM once the
+    // real default is wired, so asserting against them here would be
+    // vacuously true for the wrong reason (gate round 1's own finding).
     expect(container.textContent).not.toContain('Hi Ada Reyes');
-    expect(container.textContent).not.toContain('Ada R.');
+    expect(container.textContent).not.toContain('Dashboard Fixture Linked Student');
   });
 
   it('renders CoachHome for role "admin" (HOME-04 handled internally by CoachHome, not duplicated here)', async () => {
@@ -176,7 +216,7 @@ describe('DashboardPage role dispatch', () => {
     // with its real internal admin gate, not a separate admin component.
     expect(container.textContent).toContain('Season setup');
     expect(container.textContent).not.toContain('Hi Ada Reyes');
-    expect(container.textContent).not.toContain('Ada R.');
+    expect(container.textContent).not.toContain('Dashboard Fixture Linked Student');
   });
 
   it('renders StudentHome for role "student"', async () => {
@@ -185,17 +225,23 @@ describe('DashboardPage role dispatch', () => {
     // StudentHome-only hero heading (StudentHome.tsx's own fixture display name).
     expect(container.textContent).toContain('Hi Ada Reyes');
     expect(container.textContent).not.toContain('Team participation');
-    expect(container.textContent).not.toContain('Ada R.');
+    expect(container.textContent).not.toContain('Dashboard Fixture Linked Student');
   });
 
   it('renders ParentHome for role "parent"', async () => {
     renderAsUser(PARENT_USER);
     await flushMicrotasks();
-    // ParentHome-only per-linked-student cards (ParentHome.tsx's own fixture
-    // linked students).
-    expect(container.textContent).toContain('Ada R.');
-    expect(container.textContent).toContain('Bea R.');
-    expect(container.textContent).toContain('Cleo R.');
+    // T181 (MAJOR 4, C11): ParentHome-only per-linked-student card, sourced
+    // from this file's own module-level mock of the real
+    // `loadLinkedStudentsForParentHome` default (above) -- a distinct,
+    // non-fixture name/team, matching this file's own
+    // `-fixture-dashboardpage` naming convention (mirrors the
+    // `resolveStudentScope` mock's own `team-fixture-dashboardpage` above).
+    expect(container.textContent).toContain('Dashboard Fixture Linked Student');
+    expect(container.textContent).toContain('Dashboard Fixture Parent Team');
+    expect(container.textContent).not.toContain('Ada R.');
+    expect(container.textContent).not.toContain('Bea R.');
+    expect(container.textContent).not.toContain('Cleo R.');
     expect(container.textContent).not.toContain('Team participation');
     expect(container.textContent).not.toContain('Hi Ada Reyes');
   });
