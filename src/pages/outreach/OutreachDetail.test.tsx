@@ -76,10 +76,12 @@ import {
   deriveExpectedStudentIds,
   formatChicagoWallTime,
   formatScopeLabel,
+  formatSessionDateOnly,
   groupSessionSignups,
   OutreachDetail,
   resolveCreatorName,
   resolveEventRoster,
+  resolveOwnRosterStudent,
   resolveParentLinkedRosterStudents,
   type OutreachDetailData,
   type OutreachDetailSession,
@@ -2050,5 +2052,481 @@ describe('T157 DES-12 empty state: a parent with zero linked students', () => {
     expect(container.textContent).toContain('Signups');
     expect(container.textContent).toContain('Amara Chen');
     expect(container.textContent).toContain('Marcus Bello');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T169 (OutreachDetail half): the STUDENT's own self-service `RsvpControl`
+// (component module doc #14). Every criterion below lives here, never in
+// `RsvpControl.test.tsx` -- a criterion satisfiable from that component's own
+// test file would reproduce the exact "green suite, unreachable feature"
+// blind spot this task exists to close.
+//
+// Fixture-trap note (packet §6): the existing `STUDENT_USER` fixture
+// (`id: 'profile-student-1'`) deliberately never matches any roster row
+// anywhere in this file (including `ParentRsvp`'s own `LINKED_STUDENT`-family
+// ids) -- that is good for the negative-space criteria below, but means a
+// NEW, dedicated, self-contained student fixture set is required for the
+// positive-path criteria. `STUDENT_USER`/its id is never reused here.
+// ---------------------------------------------------------------------------
+
+const STUDENT_SELF_EVENT_ID = 'event-student-self-service';
+const STUDENT_SELF_EVENT_TITLE = 'Downtown Shelter Meal Prep';
+
+// Fabricated names (constitution item 6), deliberately distinct from every
+// other fixture name in this file / `ParentRsvp`'s own fixtures.
+/** The signed-in student's OWN roster row -- `profileId` matches
+ * `SELF_STUDENT_USER.id` below, per module doc #11's `AuthUser.id ===
+ * profiles.id` proof. */
+const OWN_STUDENT_ROSTER_ROW: RosterStudent = {
+  id: 'student-devon-osei',
+  name: 'Devon Osei',
+  teamId: 'team-ravens',
+  profileId: 'profile-devon-osei',
+};
+const SELF_STUDENT_USER: AuthUser = {
+  id: 'profile-devon-osei', // matches OWN_STUDENT_ROSTER_ROW.profileId
+  email: 'devon@example.com',
+  role: 'student',
+};
+
+/** A second roster row on the SAME team/session as `OWN_STUDENT_ROSTER_ROW`,
+ * whose `profileId` never matches the signed-in student -- criterion 3's
+ * self-vs-cross-student proof (this student must never get a control, and a
+ * click on the viewer's own control must never write this student's id). */
+const OTHER_STUDENT_ROSTER_ROW: RosterStudent = {
+  id: 'student-priya-nandan',
+  name: 'Priya Nandan',
+  teamId: 'team-ravens',
+  profileId: 'profile-priya-nandan',
+};
+
+/** Deliberately a Titan, while the fixture event used with it is Ravens-
+ * scoped -- criterion 4's team-scope composition-order proof (same shape as
+ * T157's own `OUT_OF_SCOPE_LINKED_STUDENT`). Same `profileId` as
+ * `OWN_STUDENT_ROSTER_ROW` (it IS the signed-in student's own record, just
+ * for a team outside this event's scope), deliberately different `id` so a
+ * wrongly-rendered control is unambiguously identifiable if this regresses. */
+const OUT_OF_SCOPE_SELF_STUDENT_ROW: RosterStudent = {
+  id: 'student-devon-osei-titans-record',
+  name: 'Devon Osei',
+  teamId: 'team-titans',
+  profileId: 'profile-devon-osei',
+};
+
+// Criterion 5's positive control: each of these three roster rows'
+// `profileId` DELIBERATELY equals a non-student viewer's own `AuthUser.id`
+// below, proving an absent self-RSVP control for that viewer is really
+// role-gating, not just "this viewer happens to have no roster match anyway"
+// (T170's own BLOCKER-1 lesson).
+const COACH_MATCHED_ROSTER_ROW: RosterStudent = {
+  id: 'student-jules-ferreira',
+  name: 'Jules Ferreira',
+  teamId: 'team-ravens',
+  profileId: COACH_USER.id,
+};
+const ADMIN_MATCHED_ROSTER_ROW: RosterStudent = {
+  id: 'student-kai-whitmore',
+  name: 'Kai Whitmore',
+  teamId: 'team-ravens',
+  profileId: ADMIN_USER.id,
+};
+const PARENT_MATCHED_ROSTER_ROW: RosterStudent = {
+  id: 'student-sana-iyer',
+  name: 'Sana Iyer',
+  teamId: 'team-ravens',
+  profileId: PARENT_USER.id,
+};
+
+/** Two sessions, deliberately on different calendar dates (§5e's own
+ * disclosed same-day-collision hazard) -- one strictly after `pinnedNowFn`
+ * (editable), one strictly before it (locked). Reuses the SAME
+ * `PINNED_NOW_ISO`/`pinnedNowFn` this file's own `ParentRsvp` fixtures
+ * already established above, rather than inventing a second pinned instant
+ * for no reason. */
+const STUDENT_SELF_SESSIONS: readonly OutreachDetailSession[] = [
+  {
+    id: 'session-student-self-day1',
+    eventId: STUDENT_SELF_EVENT_ID,
+    sessionDate: '2026-08-02',
+    startsAt: '2026-08-02T14:00:00.000Z', // after PINNED_NOW_ISO -> editable
+    endsAt: '2026-08-02T17:00:00.000Z',
+    status: 'scheduled',
+    peopleReached: null,
+    notes: '',
+  },
+  {
+    id: 'session-student-self-day2',
+    eventId: STUDENT_SELF_EVENT_ID,
+    sessionDate: '2026-07-19',
+    startsAt: '2026-07-19T14:00:00.000Z', // before PINNED_NOW_ISO -> locked
+    endsAt: '2026-07-19T17:00:00.000Z',
+    status: 'scheduled',
+    peopleReached: null,
+    notes: '',
+  },
+];
+
+function makeStudentSelfLoadData(
+  overrides: {
+    students?: readonly RosterStudent[];
+    teamIds?: string[] | null;
+    sessions?: readonly OutreachDetailSession[];
+    rsvps?: readonly RsvpRow[];
+  } = {},
+) {
+  const {
+    students = [OWN_STUDENT_ROSTER_ROW, OTHER_STUDENT_ROSTER_ROW],
+    teamIds = null,
+    sessions = STUDENT_SELF_SESSIONS,
+    rsvps = [],
+  } = overrides;
+  return async function loadStudentSelfDetail(eventId: string): Promise<OutreachDetailData | null> {
+    return {
+      event: {
+        id: eventId,
+        seasonId: 'season-1',
+        type: 'outreach',
+        title: STUDENT_SELF_EVENT_TITLE,
+        description: '',
+        locationName: 'Downtown Shelter',
+        address: '400 Elm St',
+        teamIds,
+        createdBy: null,
+        countsParticipation: false,
+        countsVolunteerHours: true,
+        adultVolunteersCount: 0,
+        adultVolunteerHours: 0,
+      },
+      sessions,
+      rsvps,
+      students,
+      teams: [
+        { id: 'team-ravens', name: 'Ravens', color: 'blue' },
+        { id: 'team-titans', name: 'Titans', color: 'green' },
+      ],
+      profiles: [],
+    };
+  };
+}
+
+/**
+ * Renders this page as a student, with a pinned clock and `loadRoster`
+ * stubbed. Same reasoning as this file's own `renderParentDetail` precedent
+ * (packet's own required-stub note, §6/criterion 8): left at its real
+ * default, `loadRoster` rejects in this environment (no configured Supabase
+ * client) and renders the unrelated T147 roster-failure `Banner` instead of
+ * the state these criteria actually test. `loadGuardianLinksForParent` is
+ * also stubbed so a role-gating test that renders as `PARENT_USER` never
+ * reaches a real, unconfigured Supabase client either.
+ */
+function renderStudentSelfDetail(
+  props: Parameters<typeof OutreachDetail>[0] = {},
+  user: AuthUser | null = SELF_STUDENT_USER,
+): void {
+  renderDetail(
+    STUDENT_SELF_EVENT_ID,
+    {
+      loadData: makeStudentSelfLoadData(),
+      loadRoster: async () => [],
+      loadGuardianLinksForParent: async () => [],
+      nowFn: pinnedNowFn,
+      ...props,
+    },
+    user,
+  );
+}
+
+/** Locates a single self-RSVP control by `RsvpControl`'s own `controlLabel`
+ * `aria-label` (§5e's locator -- no page-owned heading needed here, unlike
+ * `<ParentRsvp>`'s, since a student never sees another student's control). */
+function studentSelfRsvpControl(
+  session: OutreachDetailSession,
+  eventTitle: string = STUDENT_SELF_EVENT_TITLE,
+): Element | null {
+  const label = `Your RSVP for ${eventTitle} on ${formatSessionDateOnly(session)}`;
+  return container.querySelector(`[role="radiogroup"][aria-label="${label}"]`);
+}
+
+/** Every self-RSVP control on the page, independent of any particular
+ * session -- used by the negative-space/role-gating criteria. */
+function allStudentSelfRsvpControls(): Element[] {
+  return Array.from(container.querySelectorAll('[role="radiogroup"][aria-label^="Your RSVP for"]'));
+}
+
+// --- Criterion 2: `resolveOwnRosterStudent` -- direct unit describe block ---
+
+describe('resolveOwnRosterStudent (T169) -- self-to-self, not cross-person', () => {
+  const THIRD_ROSTER_ROW: RosterStudent = {
+    id: 'student-third-teammate',
+    name: 'Third Teammate',
+    teamId: 'team-ravens',
+    profileId: 'profile-third-teammate',
+  };
+  const ROSTER: readonly RosterStudent[] = [
+    OWN_STUDENT_ROSTER_ROW,
+    OTHER_STUDENT_ROSTER_ROW,
+    THIRD_ROSTER_ROW,
+  ];
+
+  it('returns the one roster row whose profileId matches the signed-in student, among 3+', () => {
+    expect(resolveOwnRosterStudent(ROSTER, OWN_STUDENT_ROSTER_ROW.profileId as string)).toEqual(
+      OWN_STUDENT_ROSTER_ROW,
+    );
+  });
+
+  it('returns null when no roster row matches at all', () => {
+    expect(resolveOwnRosterStudent(ROSTER, 'profile-nobody-on-this-roster')).toBeNull();
+  });
+
+  it('excludes a near-miss -- a similar-but-not-equal profileId does not match', () => {
+    // Differs from the real `profile-devon-osei` only by a suffix --
+    // exercises a strict `===` predicate, not a substring/prefix match that
+    // would wrongly succeed.
+    expect(resolveOwnRosterStudent(ROSTER, 'profile-devon-osei-jr')).toBeNull();
+  });
+});
+
+// --- Criterion 1: reachability -- the central proof ---
+
+describe('T169 reachability: a student sees a real <RsvpControl> for each session', () => {
+  it("renders a real, labeled RsvpControl for each session, for the viewer's own roster row", async () => {
+    renderStudentSelfDetail();
+    await flushMicrotasks();
+
+    const day1Control = studentSelfRsvpControl(STUDENT_SELF_SESSIONS[0]);
+    const day2Control = studentSelfRsvpControl(STUDENT_SELF_SESSIONS[1]);
+    expect(day1Control).toBeTruthy();
+    expect(day2Control).toBeTruthy();
+    expect(day1Control).not.toBe(day2Control);
+  });
+});
+
+// --- Criterion 3: integration -- self-only, not cross-student ---
+
+describe('T169 integration: self-only, not cross-student (the real rsvps.student_id proof)', () => {
+  it('renders exactly one self-RSVP control per session, and writes only the viewer’s own roster id', async () => {
+    renderStudentSelfDetail();
+    await flushMicrotasks();
+
+    // Count equals session count, not double -- a student never gets a
+    // control for the OTHER roster student sharing this session.
+    expect(allStudentSelfRsvpControls()).toHaveLength(STUDENT_SELF_SESSIONS.length);
+
+    const day1Control = studentSelfRsvpControl(STUDENT_SELF_SESSIONS[0]);
+    const goingButton = day1Control?.querySelector('button[data-value="going"]');
+    expect(goingButton).toBeTruthy();
+    await act(async () => {
+      goingButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+    await flushMicrotasks();
+
+    // `RsvpControl` emits no `studentId` into the DOM -- the spy's own call
+    // arguments are the only way to observe which student the control
+    // actually targets.
+    expect(mockedSubmitRsvpChange).toHaveBeenCalledTimes(1);
+    expect(mockedSubmitRsvpChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: STUDENT_SELF_SESSIONS[0].id,
+        studentId: OWN_STUDENT_ROSTER_ROW.id,
+        status: 'going',
+        respondedBy: SELF_STUDENT_USER.id,
+      }),
+    );
+  });
+});
+
+// --- Criterion 4: team-scope composition order ---
+
+describe('T169 team-scope composition: the self-to-self predicate composes over the ALREADY team-scoped roster', () => {
+  it("a self roster row outside this event's team scope gets no control anywhere on the page", async () => {
+    renderStudentSelfDetail({
+      loadData: makeStudentSelfLoadData({
+        students: [OUT_OF_SCOPE_SELF_STUDENT_ROW, OTHER_STUDENT_ROSTER_ROW],
+        teamIds: ['team-ravens'], // event scoped to Ravens; Devon's row here is Titans
+      }),
+    });
+    await flushMicrotasks();
+
+    expect(allStudentSelfRsvpControls()).toHaveLength(0);
+    // Not a visibility gate -- the rest of the page is unaffected.
+    expect(container.textContent).toContain('Signups');
+  });
+});
+
+// --- Criterion 5: role gating, paired with a positive control ---
+
+describe('T169 role gating, paired with a positive control (per T170’s BLOCKER-1 lesson)', () => {
+  it('an unauthenticated viewer sees no self-RSVP control; the rest of the page still renders', async () => {
+    renderStudentSelfDetail({}, null);
+    await flushMicrotasks();
+
+    expect(allStudentSelfRsvpControls()).toHaveLength(0);
+    // Positive-control precondition is waived for this case (no viewer id to
+    // match) -- assert the page's other expected content instead.
+    expect(container.textContent).toContain('Signups');
+    expect(container.textContent).toContain(STUDENT_SELF_EVENT_TITLE);
+  });
+
+  it('a signed-in coach with a genuinely matching roster row still sees no control -- but does see the Attendance panel', async () => {
+    renderStudentSelfDetail(
+      {
+        loadData: makeStudentSelfLoadData({
+          students: [COACH_MATCHED_ROSTER_ROW, OTHER_STUDENT_ROSTER_ROW],
+        }),
+      },
+      COACH_USER,
+    );
+    await flushMicrotasks();
+
+    expect(allStudentSelfRsvpControls()).toHaveLength(0);
+    expect(container.textContent).toContain('Attendance');
+  });
+
+  it('a signed-in admin with a genuinely matching roster row still sees no control -- but does see the Attendance panel', async () => {
+    renderStudentSelfDetail(
+      {
+        loadData: makeStudentSelfLoadData({
+          students: [ADMIN_MATCHED_ROSTER_ROW, OTHER_STUDENT_ROSTER_ROW],
+        }),
+      },
+      ADMIN_USER,
+    );
+    await flushMicrotasks();
+
+    expect(allStudentSelfRsvpControls()).toHaveLength(0);
+    expect(container.textContent).toContain('Attendance');
+  });
+
+  it('a signed-in parent with a genuinely matching roster row still sees no self-RSVP control -- but does see their own ParentRsvp control', async () => {
+    renderStudentSelfDetail(
+      {
+        loadData: makeStudentSelfLoadData({
+          students: [PARENT_MATCHED_ROSTER_ROW, OTHER_STUDENT_ROSTER_ROW],
+        }),
+        loadGuardianLinksForParent: async () => [
+          {
+            id: 'link-sana',
+            parentProfileId: PARENT_USER.id,
+            studentId: PARENT_MATCHED_ROSTER_ROW.id,
+            relationship: 'Guardian',
+          },
+        ],
+      },
+      PARENT_USER,
+    );
+    await flushMicrotasks();
+
+    expect(allStudentSelfRsvpControls()).toHaveLength(0);
+    // (b) positive control: the parent's OWN `<ParentRsvp>` control genuinely
+    // rendered, proving the page did not simply fail to render for this
+    // fixture -- distinct aria-label prefix, cannot collide with the
+    // self-RSVP locator above.
+    expect(
+      container.querySelector('[role="radiogroup"][aria-label^="RSVP on behalf of your student"]'),
+    ).toBeTruthy();
+  });
+});
+
+// --- Criterion 6: real currentUserProfileId threading ---
+
+describe('T169 data threading: currentUserProfileId reaches the real mutation, not the disclosed placeholder', () => {
+  it('clicking a segment writes responded_by as the signed-in student', async () => {
+    renderStudentSelfDetail();
+    await flushMicrotasks();
+
+    const day1Control = studentSelfRsvpControl(STUDENT_SELF_SESSIONS[0]);
+    const maybeButton = day1Control?.querySelector('button[data-value="maybe"]');
+    expect(maybeButton).toBeTruthy();
+    await act(async () => {
+      maybeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+    await flushMicrotasks();
+
+    expect(mockedSubmitRsvpChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        respondedBy: SELF_STUDENT_USER.id,
+        studentId: OWN_STUDENT_ROSTER_ROW.id,
+      }),
+    );
+  });
+});
+
+// --- Criterion 7: clock seam wired ---
+
+/**
+ * A dedicated, deliberately EXTREME pinned instant for this criterion --
+ * distinct from `PINNED_NOW_ISO` above. Chosen so the pinned clock genuinely
+ * DISAGREES with the real system clock (this repo's actual `now` is firmly
+ * past 2020, and always will be), which is what makes dropping `now={nowFn}`
+ * from the call site an OBSERVABLE, not vacuous, mutation: before the
+ * mutation, `CLOCK_SEAM_EDITABLE_SESSION` renders editable (the pinned clock
+ * says "not yet started"); after the mutation (the real system clock takes
+ * over), it renders locked (the real clock says it started years ago).
+ */
+const CLOCK_SEAM_PINNED_NOW_ISO = '2020-01-01T00:00:00.000Z';
+const clockSeamPinnedNowFn = (): Date => new Date(CLOCK_SEAM_PINNED_NOW_ISO);
+
+const CLOCK_SEAM_EDITABLE_SESSION: OutreachDetailSession = {
+  id: 'session-clock-seam-editable',
+  eventId: STUDENT_SELF_EVENT_ID,
+  sessionDate: '2020-01-02',
+  startsAt: '2020-01-02T00:00:00.000Z', // after CLOCK_SEAM_PINNED_NOW_ISO -> editable under the pinned clock
+  endsAt: '2020-01-02T03:00:00.000Z',
+  status: 'scheduled',
+  peopleReached: null,
+  notes: '',
+};
+const CLOCK_SEAM_LOCKED_SESSION: OutreachDetailSession = {
+  id: 'session-clock-seam-locked',
+  eventId: STUDENT_SELF_EVENT_ID,
+  sessionDate: '2019-12-30',
+  startsAt: '2019-12-30T00:00:00.000Z', // before CLOCK_SEAM_PINNED_NOW_ISO -> locked
+  endsAt: '2019-12-30T03:00:00.000Z',
+  status: 'scheduled',
+  peopleReached: null,
+  notes: '',
+};
+
+describe('T169 clock seam: now={nowFn} is genuinely wired to the self-service control', () => {
+  it('a session pinned strictly before its start is editable; one pinned strictly after its start is locked', async () => {
+    renderStudentSelfDetail({
+      loadData: makeStudentSelfLoadData({
+        sessions: [CLOCK_SEAM_EDITABLE_SESSION, CLOCK_SEAM_LOCKED_SESSION],
+      }),
+      nowFn: clockSeamPinnedNowFn,
+    });
+    await flushMicrotasks();
+
+    const editableControl = studentSelfRsvpControl(CLOCK_SEAM_EDITABLE_SESSION);
+    const lockedControl = studentSelfRsvpControl(CLOCK_SEAM_LOCKED_SESSION);
+    expect(
+      editableControl?.querySelector('button[data-value="going"]')?.getAttribute('aria-disabled'),
+    ).not.toBe('true');
+    expect(
+      lockedControl?.querySelector('button[data-value="going"]')?.getAttribute('aria-disabled'),
+    ).toBe('true');
+  });
+});
+
+// --- Criterion 8: empty case (§5g) ---
+
+describe('T169 empty case (§5g): a student viewer whose own roster row does not exist for this event', () => {
+  it('sees no self-RSVP control or section anywhere, and the rest of the page renders undisturbed', async () => {
+    renderStudentSelfDetail({
+      loadData: makeStudentSelfLoadData({
+        students: [OTHER_STUDENT_ROSTER_ROW], // no roster row's profileId matches SELF_STUDENT_USER.id
+      }),
+    });
+    await flushMicrotasks();
+
+    expect(allStudentSelfRsvpControls()).toHaveLength(0);
+    expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(container.textContent).not.toContain("Couldn't load");
+    // Nothing else on the page is disturbed.
+    expect(container.textContent).toContain('Signups');
+    expect(container.textContent).toContain(OTHER_STUDENT_ROSTER_ROW.name);
   });
 });

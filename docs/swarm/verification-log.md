@@ -5546,3 +5546,77 @@ detector.
 artifact surfacing as data, on the page built to stop fabricating) and T192 (unfiltered full-table
 reads once per card; acceptable at this project's scale under item 25, shipped as an explicit
 trade-off).
+
+---
+
+## T169 (OutreachDetail half) — student self-service RSVP control mounted (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commit | `7647820dab68cd89c5077faa5aa437219cc77dfa` |
+| Verdict | **PASS**, no BLOCKER/MAJOR/MINOR, 2 NIT (log-only) — first attempt |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
+| Premise gate | 2 rounds per item 19a: round 1 REVISE (1 MAJOR, 6 MINOR, 5 NIT); round 2 DISPATCH (4 MINOR, 6 NIT, folded in without a third round) |
+| tsc / build / format | 0 errors / n/a / clean |
+| eslint | 0 errors; `OutreachDetail.tsx` warnings 16→17 (expected `+1`, `react-refresh/only-export-components` on the new exported pure function, matching T157's identical precedent) |
+| vitest | `OutreachDetail.test.tsx` 60→73 (+13); full repo 1631→1644 (+13, 0 failures) |
+
+**Context: this was run as a deliberate test** of doing the packet → premise-gate → worker →
+checker cycle through subagents rather than inline in the orchestrating session, to see whether it
+reduces context growth there. It did: the packeting (2 rounds), premise-gating (2 rounds),
+implementation, and checking each ran in their own subagent transcript; only dispatch prompts, file
+reads, and final summaries landed in the orchestrating session.
+
+**The task.** `RsvpControl.tsx` was a finished, fully-tested component with zero production
+importers — reachable only from its own test file. T169's ledger row covers two surfaces
+(`OutreachDetail.tsx` and `OutreachList.tsx`); this merge is the `OutreachDetail.tsx` half only.
+Mounted `RsvpControl` role-gated beside T157's `ParentRsvp`, for the signed-in student's own roster
+row, via a new exported pure `resolveOwnRosterStudent(roster, userProfileId)` — a self-to-self
+predicate, deliberately narrower than T157's cross-person `resolveParentLinkedRosterStudents`.
+
+**§4's central premise — no loader work needed on either the read or write side — is the opposite
+of what T157 found for the parallel `ParentRsvp` case, and was proven rather than assumed**, per
+the ledger row's own instruction to enumerate the component's props against available data before
+scoping. Every `RsvpControlProps` field was already present on `OutreachDetail.tsx` post-T157;
+`RsvpControl.tsx:462` already defaults to the real `submitRsvpChange` (`outreach.ts:1092`).
+
+**Round 1 of the premise gate caught a real staleness bug in the packet itself, not a design flaw.**
+The packet's scope note justified excluding `OutreachList.tsx` because that half was "hard-blocked
+on T170" — true when first drafted, false by the time the gate ran, because T170 merged
+(`c201a3e`) mid-session. The gate also independently re-verified every citation in the packet's
+central §4 claim and found it held exactly as written; the MAJOR was scoping-note staleness, not
+the technical premise. Revision replaced the stale justification, added a `FOLLOW-UP NEEDED` note
+for the now-unblocked `OutreachList.tsx` defect (filed as **T193**), and folded in citation fixes.
+Round 2 found the revision sound and added a stronger tier-down argument the packet itself hadn't
+made: `students`' `own_or_linked_read` RLS (`rls.sql:102`) returns exactly one row for a student
+viewer, so a broken client-side predicate has no cross-student data available to reach in
+production at all — strengthening, not just permitting, the `sonnet` tier call.
+
+**The worker's own worktree started stale** — cut from `main` at `f7ff055`, 24 commits behind the
+packet commit, the exact item-24 failure mode that cost T157 ~320 discarded lines. **The worker
+caught this itself before writing any code**, verified ancestry with `git merge-base
+--is-ancestor`, fast-forwarded to the packet-pin commit, and disclosed the deviation in its output
+rather than silently proceeding on stale source or silently self-correcting without saying so.
+
+**The checker inspected the actual worktree artifact and independently re-ran mutations in its own
+worktree (item 23)** rather than trusting the worker's "confirmed RED, restored" claims —
+prioritizing criterion 3 (self-only vs. cross-student, proven via the `submitRsvpChange` spy's
+`studentId` argument) and criterion 6 (real `currentUserProfileId` threading — the exact
+placeholder-defect class this task exists to close, proven via the spy's `respondedBy` argument
+reverting to `'profile-placeholder-current-viewer'` under the omitted-prop mutation). Also ran an
+unprescribed extra probe against T170's own BLOCKER-1 shape (vacuous absence-only role-gating
+assertions) by loosening `isStudentViewer` to `user !== null`: the coach/admin/parent fixtures
+genuinely have a matching `profileId`, so their still-correct absence of a control proves
+role-gating, not "no match anyway" — the vacuity shape did not recur here.
+
+**Two NIT, log-only, no fix required:** an unguarded optional chain in one clock-seam assertion
+(not currently vacuous — mutation-proven RED — but would silently no-op if the locator ever
+returned `null`), and a substring positive control (`toContain('Attendance')`) rather than a
+structural one for the coach/admin role-gate cases.
+
+**Follow-up filed: T193** — `OutreachList.tsx`'s student-facing RSVP control still writes nothing
+to Supabase (`handleRsvpChange`, local-only `setRsvps` call), and the code comment excusing this as
+"currently Blocked" has been stale since before this session and stayed stale through T170's merge.
+Now unblocked (T170 supplies a real `viewerStudentId`), filed as its own ledger row per item 20
+rather than left as a comment.
