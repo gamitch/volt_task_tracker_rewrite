@@ -21,11 +21,13 @@ defect shape.
 round.** The narrow premise gate built §5's design end to end, ran every
 prescribed mutation, and reverted. §5's design is confirmed correct by
 execution and is not revised below. Everything else in this document has
-been corrected against three findings: a negative-only criterion (the exact
-vacuity shape that has now cost five rounds across four tasks), a wrong
-"pure client-side filter" premise that hid this task's most consequential
-real-world effect, and a blast-radius figure measured for the wrong
-mutation. Corrections are marked inline as **[REV2]**.
+been corrected against 1 BLOCKER, 2 MAJOR and 3 MINOR findings: a
+negative-only criterion (the exact vacuity shape that has now cost five
+rounds across four tasks), a wrong "pure client-side filter" premise that
+hid this task's most consequential real-world effect, a blast-radius figure
+measured for the wrong mutation, a non-compiling import instruction, an
+overstated correctness claim, and an unaddressed tension with a T176
+precedent. Corrections are marked inline as **[REV2]**.
 
 ## 1. Objective
 
@@ -266,8 +268,8 @@ fetch starts, because that fetch's own query parameters (`studentId`,
 here** — `loadData(seasonId)` never takes a student argument; `viewerStudentId`
 only filters already-loaded data. Sequencing identity resolution before the
 season-data load (mechanically copying T176's shape) would add a real,
-avoidable round-trip of latency for every student/parent view. Recommended
-instead: add a second `useLoadState` call **inside `OutreachListLoaded`**
+avoidable round-trip of latency for every student/parent view. Built as: a
+second `useLoadState` call **inside `OutreachListLoaded`**
 (`:3719` today), called unconditionally alongside the existing season-data
 `loadState` (both hooks at the top of the function, both firing on the same
 initial mount — genuinely parallel, no added latency), whose loader is:
@@ -355,10 +357,27 @@ Run every mutation in your own worktree only (item 23), revert with
    it's genuinely never called), and a **separate** no-explicit-prop test to
    go RED under the same mutation (proves the vacuity probe isn't just an
    always-green assertion).
-3. **Coach/admin view never calls `resolveStudentId`.** Spy assertion,
-   render as a coach. **Mutation:** force the loader to call
-   `resolveStudentId(viewer)` even when `isCoachOrAdminView`. **Expect RED**
-   on "spy called 0 times."
+3. **Coach/admin view never calls `resolveStudentId`. [REV2, BLOCKER-1 fix —
+   was negative-only, proven dead.]** The gate wrote this exact criterion
+   with the page in its error state (`loadData` rejects) and got `expect(spy)
+   .toHaveBeenCalledTimes(0)` passing alongside `expect(container.textContent)
+   .not.toContain('New outreach event')` — 9/9 passed **with the coach view
+   never rendering at all.** A spy-not-called assertion alone proves nothing;
+   it passes identically whether identity resolution is correctly skipped or
+   the whole view is simply absent. Fixed shape, mandatory for this and every
+   other criterion in this packet — **no assertion here or elsewhere may rest
+   on absence alone without a paired proof that the thing being tested for
+   absence was ever in a position to happen:**
+   - Render as a coach against a **populated, successful** `loadData` (not
+     loading, not error).
+   - Positive control: assert the coach view genuinely rendered — a
+     coach-only affordance is on screen (e.g. the "New outreach event"
+     button/action, or a coach-scoped table row) — **before** trusting the
+     spy count.
+   - **Mutation:** force the loader to call `resolveStudentId(viewer)` even
+     when `isCoachOrAdminView`. **Expect RED** on "spy called 0 times," with
+     the positive control still green (proves the mutation broke the right
+     thing, not the whole render).
 4. **Identity tier's own three sub-states, isolated (loading/error/null),
    each independently mutation-provable, none bleeding into another** — same
    three-way isolation technique as T176 criterion 7: mutate state (i)'s copy
@@ -367,22 +386,62 @@ Run every mutation in your own worktree only (item 23), revert with
    `computeStudentHours`, `getUnansweredRsvpCount`, `computeEventRowStats`,
    and the `myGoalHours` expression are byte-unchanged by your diff — only the
    argument fed into them changes. Inspection-level, label it as such.
-6. **T184 trap, established not assumed (§3d).** State plainly, with
-   citations, what happens for (i) a deactivated student, (ii) a signed-in
-   user with no linked student row. If you find a second-query hazard I
-   missed, file the follow-up rather than fixing it in scope. Inspection-level.
-7. **Blast radius reproduced and classified.** Report the exact failing count
-   at your own dispatch SHA and confirm each fix is harness-only (§3b). If not,
-   stop and report before proceeding.
-8. **Render-and-enumerate over `container.innerHTML`** for a fully real render
-   (real season, real resolved `viewerStudentId`, distinct fixture values) —
-   classify every visible personal figure as REAL / still-fabricated / honestly
-   empty, T176 §9-style table. This is the criterion that proves §1's claim
-   ("this fix should make every personal figure genuinely correct") rather
-   than asserting it.
+6. **T184 trap, both halves, established not assumed (§3d). [REV2 — now
+   covers the write side too, not just the read side.]** State plainly, with
+   citations, what happens for (i) a deactivated student and (ii) a
+   signed-in user with no linked student row, covering **both**
+   `computeStudentHours`/`getUnansweredRsvpCount`/etc. (read side) **and
+   `SelfCheckoffDialog`'s insert/delete (write side)** — my own trace found
+   both `queryStudentIdByProfileId` and `my_student_ids()` are
+   `is_active`-agnostic (§3d), so no disagreement should exist on this page
+   for either side, unlike T176's finding on `StudentHome`. Independently
+   confirm this rather than trust it, and still trace
+   `loaders/outreach.ts:908-963` yourself for a possible third disagreement
+   (§3d). If you find a hazard I missed, file the follow-up, don't fix it in
+   scope. Inspection-level.
+7. **Blast radius reproduced and classified. [REV2, MAJOR-2 fix — the
+   figure in §3b was measured for the wrong mutation.]** "3 of 82" is the
+   gate's own figure for changing the *default value* alone, with no
+   identity tier added — it is not the number your prescribed design (§5)
+   produces. Under §5's design (default becomes `undefined`, an identity
+   tier is added), the gate measured **~10 of 82** failing, all confirmed
+   harness-only (a one-line explicit-prop injection in `renderAsUser`
+   restored 82/82, zero assertion edits). **Expect and report a count near
+   10, not 3; do not stop-and-report solely because your count exceeds 3.**
+   Reserve stop-and-report for cases where a fix genuinely requires editing
+   what an `expect(...)` line checks, per §3b's original instruction.
+8. **Render-and-enumerate over `container.innerHTML`** for a fully real
+   render (real season, real resolved `viewerStudentId`, distinct fixture
+   values) — classify every visible personal figure, T176 §9-style table,
+   using **three** buckets, not two: REAL / still-fabricated-honestly-empty /
+   **REAL-INPUTS-DISCLOSED-DIVERGENT-FORMULA**. **[REV2]** Put
+   `computeStudentHours`'s own confirmed/planned figures in the third bucket
+   with a one-line note citing **T188** (§4) — real inputs, a real but
+   heuristic formula, not the same number `v_student_hours` would show
+   elsewhere in the app. **[REV2] Also enumerate `SelfCheckoffDialog`'s row**
+   (§1): does "Mark attendance" open, load, and (if you exercise it) write
+   against the real resolved id, not the placeholder? This is the criterion
+   that proves §1's claim ("this fix should make every personal figure
+   genuinely correct, and the self-check-off write path genuinely reachable")
+   rather than asserting it.
 9. **No regression elsewhere.** Full `OutreachList.test.tsx` and full repo
    suite stay green outside the harness-only fixes in criterion 7; coach view
    behavior and `OutreachDetail.tsx` (out of scope, unedited) unaffected.
+10. **[REV2, new] The self-check-off write path carries the real id,
+    mutation-provable, not just enumerated (§1's "most consequential
+    real-world effect").** `SelfCheckoffDialog` takes its own `loadAttendance`
+    (default `loadSelfCheckoffAttendance`) as an injectable prop
+    (`SelfCheckoffDialog.tsx:331,344`), but `OutreachList` does not inject it
+    — so intercept it the way this file's own conventions already do for
+    other real modules: `vi.mock('../../lib/supabase/loaders/selfCheckoff',
+    async (importOriginal) => ({ ...(await importOriginal()),
+    loadSelfCheckoffAttendance: vi.fn(...) }))` (partial mock, `importOriginal`
+    — same idiom named in `task-ledger.md`'s T161 row for this codebase's
+    `loaders/` tests). Open "Mark attendance" on a real row, flush, and
+    assert the spy's `studentId` argument equals the real, resolved,
+    non-placeholder id. **Mutation:** feed `PLACEHOLDER_CURRENT_STUDENT_ID`
+    into `SelfCheckoffDialog`'s `studentId` prop instead of the resolved one.
+    **Expect RED.**
 
 ## 7. Required evidence / gates
 

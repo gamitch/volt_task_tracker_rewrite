@@ -143,22 +143,35 @@ Packets P0–P13 plus regression fixes and live hotfixes:
 
 ## Active (2026-07-29/30 — four live packets, everything below this note is stale)
 
-**2026-07-30 — T170 packet ready for dispatch (foreman-planner):**
-`docs/swarm/active/T170-worker-packet.md`. Sixth instance of the
-placeholder-default family, second on a live route (`/outreach`'s
-`OutreachList.viewerStudentId`). Reuses `resolveCurrentStudentId`
+**2026-07-30 — T170 packet, revision 2, dispatching straight to a worker
+(foreman-planner):** `docs/swarm/active/T170-worker-packet.md`. Sixth
+instance of the placeholder-default family, second on a live route
+(`/outreach`'s `OutreachList.viewerStudentId`). Reuses `resolveCurrentStudentId`
 (`loaders/meetings.ts`) verbatim, the same seam T176 proved and shipped.
 Unlike T176, `OutreachList`'s underlying data is already real (`seasonId`
-already fixed, `loadData` already the real loader) — this fix should make
-every personal figure on the page genuinely correct, not merely honest.
-Sonnet/opus tier per item 18/25 (identity plumbing, no migration/RLS/new
-metric SQL, proven seam — not bumped for topic sensitivity). Grepped item 3
-before scoping: no SQL view duplicates `computeStudentHours`'s RSVP-based
-formula; that function pre-dates this task and is untouched. Checked the
-T184 is_active trap for this surface specifically: `OutreachList` has no
-second, further-scoped query analogous to `v_student_goal_projection`, so
-the false-empty failure mode T176 hit likely does not reproduce here — the
-packet requires the worker to verify this rather than inherit the claim.
+already fixed, `loadData` already the real loader). Sonnet/opus tier per item
+18/25.
+
+**Gate round 1 (narrow premise check) returned REVISE — 1 BLOCKER, 2 MAJOR, 3
+MINOR; item 19a's cap is now spent, so revision 2 goes to a worker with no
+gate behind it.** BLOCKER: criterion 3 was negative-only (spy-not-called
+passed 9/9 with the coach view in an error state, never rendering at all) —
+the same vacuity shape T176's own gate caught, now five rounds across four
+tasks. MAJOR-1: my consumer count was wrong (six of eight) and the two I
+missed included the important one — `SelfCheckoffDialog` (`:3637`) is a real
+`attendance` INSERT/DELETE keyed to `viewerStudentId`, so self-check-off on
+`/outreach` is broken today, a write-path defect, not just wrong displayed
+numbers. MAJOR-2: my own "3 of 82" blast-radius figure was measured for a
+different mutation than the packet's prescribed design produces (~10 of 82,
+still harness-only). Three MINORs: a non-compiling import instruction, an
+overstated correctness claim against the packet's own disclosed BEH-02
+divergence (now filed as **T188**, found during this same investigation), and
+an unaddressed tension with T176's precedent of deleting an unreachable
+loading-state branch. **The gate independently built and confirmed §5's
+parallel-fetch design correct by execution** — not revised. All six findings
+fixed in revision 2; T188 filed to `task-ledger.md` as a byproduct of the
+item-3 grep this investigation required.
+
 Blocks T169's student half (silent RSVP data loss) per the existing ledger
 row.
 
