@@ -21,6 +21,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthModule, type AuthUser } from './guards';
 import { LoginAs } from '../test-utils/authHarness';
+import type { AuthSession } from '../lib/supabase/auth';
 import { SUPABASE_AUTH_STORAGE_KEY } from '../lib/supabase/client';
 import {
   ThemeModeProvider,
@@ -58,6 +59,79 @@ function seedPersistedSession(userId: string): void {
       user: { id: userId, email: 'fabricated.person@example.com' },
     }),
   );
+}
+
+/**
+ * T154 rework: an `AuthModule` whose live user can be changed AFTER mount,
+ * without remounting the tree -- which is exactly what the real app does.
+ * `logout()`/`login()` (`guards.tsx:311-321`, `:293-300`) only call
+ * `setState`; neither reloads the page, and `ThemeModeProvider` sits above the
+ * router in `App.tsx`, so it is never remounted by an account switch. Driving
+ * `AuthProvider`'s own `subscribeToAuthStateChange` seam reproduces that
+ * faithfully; `LoginAs` cannot, because its fake module's user is fixed at
+ * construction.
+ */
+function buildSwitchableAuthModule(initialUser: AuthUser | null): {
+  authModule: AuthModule;
+  /** Emits a new auth state, as a real sign-in/sign-out would. `null` signs
+   * out. Wrap calls in `act()`. */
+  emit: (user: AuthUser | null) => void;
+} {
+  function sessionFor(user: AuthUser): AuthSession {
+    return {
+      access_token: `fake-access-token-for-${user.id}`,
+      refresh_token: `fake-refresh-token-for-${user.id}`,
+      expires_in: 3600,
+      token_type: 'bearer',
+      user: {
+        id: user.id,
+        email: user.email,
+        app_metadata: {},
+        user_metadata: {},
+        aud: 'authenticated',
+        created_at: new Date(0).toISOString(),
+      },
+    } as AuthSession;
+  }
+
+  const roleById = new Map<string, AuthUser['role']>();
+  let listener: ((session: AuthSession | null) => void) | null = null;
+
+  function remember(user: AuthUser | null): void {
+    if (user) roleById.set(user.id, user.role);
+  }
+  remember(initialUser);
+
+  const authModule: AuthModule = {
+    getInitialSession: async () => (initialUser ? sessionFor(initialUser) : null),
+    subscribeToAuthStateChange: (callback) => {
+      listener = (session) => {
+        callback('SIGNED_IN', session);
+      };
+      return () => {
+        listener = null;
+      };
+    },
+    signInWithPassword: async () => {
+      throw new Error('not implemented in this test');
+    },
+    signInWithGoogle: async () => {
+      throw new Error('not implemented in this test');
+    },
+    signOut: async () => {},
+    resolveRole: async (userId) => ({
+      status: 'found',
+      role: roleById.get(userId) ?? 'coach',
+    }),
+  };
+
+  return {
+    authModule,
+    emit: (user) => {
+      remember(user);
+      listener?.(user ? sessionFor(user) : null);
+    },
+  };
 }
 
 const TEST_USER: AuthUser = {
@@ -561,6 +635,26 @@ describe('<ThemeModeProvider /> T154 per-user seed keying', () => {
     });
   });
 
+  it('a THROWING Storage.getItem does not escape the render -- no white screen, just the system fallback', () => {
+    // `getStorage()` guards the property ACCESS to window.localStorage, not the
+    // getItem CALL. This runs in a lazy useState initializer inside a provider
+    // mounted above the whole tree, so an escaping exception is a white screen,
+    // not a flash. Both render-path reads are guarded (`safeGetItem`).
+    const getItemSpy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('localStorage is unavailable in this context');
+    });
+    try {
+      expect(() => {
+        mountAndAssertSync(BOB, (renders) => {
+          expect(modeOf()).toBe('system');
+          expect(renders[0]).toBe('system');
+        });
+      }).not.toThrow();
+    } finally {
+      getItemSpy.mockRestore();
+    }
+  });
+
   it('an invalid stored theme value under a VALID session -> no seed, falls back to system', () => {
     seedPersistedSession(BOB.id);
     window.localStorage.setItem(themeModeKeyFor(BOB.id), 'chartreuse');
@@ -620,5 +714,198 @@ describe('<ThemeModeProvider /> T154 per-user seed keying', () => {
     // Left exactly where it was, unread and unmodified.
     expect(window.localStorage.getItem('volt.themeMode')).toBe('dark');
     expect(window.localStorage.getItem(themeModeKeyFor(BOB.id))).toBeNull();
+  });
+});
+
+/**
+ * T154 rework -- the in-page account switch (module doc "case 4"). Per-uid
+ * keying alone did NOT fix the shared-browser bleed: the seed is read once per
+ * mount, and the real sign-out -> /login -> sign-in flow never remounts this
+ * provider, so B kept A's theme for the rest of the page session.
+ *
+ * Every test here uses a loader that resolves `null`, which is the case that
+ * made the original bug persistent rather than momentary: case 1 deliberately
+ * KEEPS the current value when the fetch resolves `null`, so nothing would
+ * ever have corrected the inherited theme.
+ */
+describe('<ThemeModeProvider /> T154 in-page account switch', () => {
+  const resolvesNull: LoadThemeModeFn = async () => null;
+
+  /** Mounts as `initialUser` and returns the recorded renders plus an `emit`
+   * that changes the live user WITHOUT remounting. */
+  async function mountSwitchable(initialUser: AuthUser | null): Promise<{
+    emit: (user: AuthUser | null) => Promise<void>;
+    renders: ThemeMode[];
+  }> {
+    const { authModule, emit } = buildSwitchableAuthModule(initialUser);
+    const renders: ThemeMode[] = [];
+    act(() => {
+      root.render(
+        <AuthProvider authModule={authModule}>
+          <ThemeModeProvider loadThemeMode={resolvesNull}>
+            <RecordingProbe renders={renders} />
+          </ThemeModeProvider>
+        </AuthProvider>,
+      );
+    });
+    await flushMicrotasks();
+    return {
+      renders,
+      emit: async (user) => {
+        act(() => {
+          emit(user);
+        });
+        await flushMicrotasks();
+      },
+    };
+  }
+
+  it('re-seeds when Alice signs out and Bob signs in on the same page -- the MAJOR the checker measured', async () => {
+    window.localStorage.setItem(themeModeKeyFor(ALICE.id), 'dark');
+    seedPersistedSession(ALICE.id);
+    setUpContainer();
+    try {
+      const { emit, renders } = await mountSwitchable(ALICE);
+      expect(modeOf()).toBe('dark'); // Alice's own theme, seeded at mount.
+
+      // The REAL flow: logout sets user null, then login sets Bob. Note this
+      // passes THROUGH null -- a "previous render was a different non-null
+      // user" test would never fire here, which is why the provider compares
+      // against the last non-null user it seeded for.
+      await emit(null);
+      await emit(BOB);
+
+      // Bob has nothing stored -> his OS default, NOT Alice's 'dark'.
+      expect(modeOf()).toBe('system');
+      // And Alice's preference is preserved for her next sign-in.
+      expect(window.localStorage.getItem(themeModeKeyFor(ALICE.id))).toBe('dark');
+      // Bob's own renders never showed 'dark' after he signed in.
+      expect(renders[renders.length - 1]).toBe('system');
+    } finally {
+      tearDownContainer();
+    }
+  });
+
+  it("re-seeds to Bob's OWN stored theme on an in-page switch, not merely away from Alice's", async () => {
+    // The non-tautology half, same as criterion 3: distinguishable values, so
+    // a lookup that just returns null for everyone cannot pass.
+    window.localStorage.setItem(themeModeKeyFor(ALICE.id), 'dark');
+    window.localStorage.setItem(themeModeKeyFor(BOB.id), 'light');
+    seedPersistedSession(ALICE.id);
+    setUpContainer();
+    try {
+      const { emit } = await mountSwitchable(ALICE);
+      expect(modeOf()).toBe('dark');
+
+      await emit(null);
+      await emit(BOB);
+
+      expect(modeOf()).toBe('light');
+    } finally {
+      tearDownContainer();
+    }
+  });
+
+  it('re-seeds on a DIRECT Alice -> Bob switch with no intervening null', async () => {
+    window.localStorage.setItem(themeModeKeyFor(ALICE.id), 'dark');
+    window.localStorage.setItem(themeModeKeyFor(BOB.id), 'light');
+    seedPersistedSession(ALICE.id);
+    setUpContainer();
+    try {
+      const { emit } = await mountSwitchable(ALICE);
+      expect(modeOf()).toBe('dark');
+
+      await emit(BOB);
+
+      expect(modeOf()).toBe('light');
+    } finally {
+      tearDownContainer();
+    }
+  });
+
+  it('the stale theme never reaches the DOM even for one frame during the switch', async () => {
+    // The synchronous property, applied to the switch: re-seeding during
+    // render (not in an effect) means React re-renders before children render
+    // or anything commits, so no intermediate frame carries Alice's value.
+    window.localStorage.setItem(themeModeKeyFor(ALICE.id), 'dark');
+    window.localStorage.setItem(themeModeKeyFor(BOB.id), 'light');
+    seedPersistedSession(ALICE.id);
+    setUpContainer();
+    try {
+      const { emit, renders } = await mountSwitchable(ALICE);
+      const beforeSwitch = renders.length;
+
+      await emit(null);
+      await emit(BOB);
+
+      // Nothing rendered after Bob signed in ever showed Alice's 'dark'.
+      const afterBobSignedIn = renders.slice(beforeSwitch).filter((m) => m !== 'dark');
+      expect(afterBobSignedIn[afterBobSignedIn.length - 1]).toBe('light');
+      expect(renders[renders.length - 1]).toBe('light');
+    } finally {
+      tearDownContainer();
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // The three things the re-seed must NOT do -- each would re-introduce the
+  // flash T148 fixed.
+  // -------------------------------------------------------------------------
+
+  it('does NOT re-seed while user is null -- signing out alone keeps the current theme (disclosed residual)', async () => {
+    // Honest disclosure, not a papered-over gap: between A signing out and B
+    // signing in, the login screen still carries A's theme. Resetting on null
+    // would break every normal page load, since `user` is null there too.
+    window.localStorage.setItem(themeModeKeyFor(ALICE.id), 'dark');
+    seedPersistedSession(ALICE.id);
+    setUpContainer();
+    try {
+      const { emit } = await mountSwitchable(ALICE);
+      expect(modeOf()).toBe('dark');
+
+      await emit(null);
+
+      expect(modeOf()).toBe('dark');
+    } finally {
+      tearDownContainer();
+    }
+  });
+
+  it('does NOT re-seed on null -> FIRST user (the normal page load), so no flash is re-introduced', async () => {
+    // Mount anonymous with Alice's seed already applied from the session blob,
+    // then let auth resolve to Alice. The seeded value must survive untouched
+    // and 'system' must never appear.
+    window.localStorage.setItem(themeModeKeyFor(ALICE.id), 'dark');
+    seedPersistedSession(ALICE.id);
+    setUpContainer();
+    try {
+      const { emit, renders } = await mountSwitchable(null);
+      // Seeded synchronously from the session blob, before auth resolved.
+      expect(renders[0]).toBe('dark');
+
+      await emit(ALICE);
+
+      expect(modeOf()).toBe('dark');
+      expect(renders).not.toContain('system');
+    } finally {
+      tearDownContainer();
+    }
+  });
+
+  it('a repeated emit of the SAME user does not re-seed or disturb a resolved value', async () => {
+    window.localStorage.setItem(themeModeKeyFor(ALICE.id), 'dark');
+    seedPersistedSession(ALICE.id);
+    setUpContainer();
+    try {
+      const { emit } = await mountSwitchable(ALICE);
+      expect(modeOf()).toBe('dark');
+
+      await emit(ALICE);
+      await emit(ALICE);
+
+      expect(modeOf()).toBe('dark');
+    } finally {
+      tearDownContainer();
+    }
   });
 });

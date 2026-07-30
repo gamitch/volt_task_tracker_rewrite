@@ -36,8 +36,7 @@
  * yet (T154; see `readSeededThemeMode`). This is an honestly-disclosed
  * residual, not a defect: there is nothing safe to seed from in those cases,
  * and a wrong seed is worse than one flash. The `index.html`-inline-script
- * approach
- * that would avoid it does not work in this app (`Theme`'s own wrapper
+ * approach that would avoid it does not work in this app (`Theme`'s own wrapper
  * `<div>` sets `color-scheme` explicitly and is a descendant of `<html>`, so
  * its own value overrides whatever a pre-hydration script set on `<html>`
  * once React mounts -- see the T148 worker packet's "Negative knowledge"
@@ -52,7 +51,7 @@
  * storage instance and key).
  *
  * -----------------------------------------------------------------------
- * Three unhandled cases, specified explicitly (not left to be discovered).
+ * Four specified cases, stated explicitly (not left to be discovered).
  * -----------------------------------------------------------------------
  *
  * 1. `resolveThemeMode` resolves `null` while a real `localStorage` seed is
@@ -80,6 +79,33 @@
  *    nothing and falls through to his OS; A's preference survives for her
  *    next sign-in rather than being destroyed on logout.
  *
+ *    Note this covers the FRESH-LOAD case (B opens the app in a new tab or
+ *    after a reload). The in-page account switch is a second, distinct
+ *    mechanism -- see case 4, which the first version of T154 got wrong.
+ *
+ * 4. In-page account switch -- FIXED, and the correction to T154's own first
+ *    version. Per-uid keying alone is NOT sufficient, and the earlier claim
+ *    that it made the shared-browser question "moot regardless" was
+ *    measurably false. The seed is read once per MOUNT, and this provider
+ *    mounts above the router in `App.tsx`; `logout()`/`login()`
+ *    (`guards.tsx:311-321`, `:293-300`) only call `setState` and never
+ *    reload. So on the ordinary sign-out -> /login -> sign-in-as-B flow the
+ *    provider is never remounted, the seed is never re-read, and B inherited
+ *    A's theme -- PERSISTENTLY for the rest of the page session, because case
+ *    1 above deliberately keeps the current value when the fetch resolves
+ *    `null`. The provider body now re-seeds from the new user's own key when
+ *    the signed-in user id changes away from the last user it seeded for.
+ *
+ *    RESIDUAL, disclosed rather than closed: between A signing out and B
+ *    signing in, the login screen still shows A's theme, because `user` is
+ *    `null` there and this provider deliberately does NOT re-seed on null.
+ *    That is the correct trade -- `user` is also `null` during every normal
+ *    page load while the session resolves, so resetting on null would
+ *    re-introduce the very flash T148 fixed, permanently on anonymous visits.
+ *    A signed-out login screen briefly carrying the previous user's colour
+ *    scheme leaks nothing (no name, no data -- a theme is not PII) and
+ *    corrects the moment anyone signs in.
+ *
  * -----------------------------------------------------------------------
  * T154's three accepted limitations, stated rather than left to discovery.
  * -----------------------------------------------------------------------
@@ -103,8 +129,13 @@
  *    seed on every boot (masked when the profile fetch later succeeds and
  *    rewrites it, but PERMANENT when `resolveThemeMode` rejects, and
  *    PERMANENT on any genuinely anonymous visit such as `/login`, since
- *    nothing ever restores it). Per-uid keying makes the question moot
- *    regardless: B's lookup was never going to reach A's key.
+ *    nothing ever restores it). Note that per-uid keying does NOT make this
+ *    question moot on its own -- an earlier version of this file claimed it
+ *    did, and that was wrong (see case 4). What closes the shared-browser
+ *    bleed is per-uid keying for fresh loads PLUS the in-page re-seed for
+ *    account switches. Neither requires destroying anyone's stored
+ *    preference, which is what makes clear-on-logout unnecessary rather than
+ *    merely undesirable.
  *
  * c. KEY ACCUMULATION, accepted. Every distinct user who has ever signed in
  *    on a given browser leaves a permanent `volt.themeMode.<uid>` entry
@@ -170,6 +201,28 @@ function getStorage(): Storage | null {
   }
 }
 
+/**
+ * `getStorage()` above guards the property ACCESS to `window.localStorage`, but
+ * not the `getItem` CALL, which can itself throw (a stubbed/instrumented
+ * `Storage.prototype.getItem`, or a hardened embedding). That distinction
+ * matters more here than it looks: both callers below run inside a LAZY
+ * `useState` initializer, during the render of a provider mounted above the
+ * whole tree in `App.tsx` -- so an escaping exception there is a white screen,
+ * not a one-frame flash. Guarded, so "absent, corrupt, or unreadable session
+ * data means no seed" is exhaustive on the render path rather than nearly so.
+ */
+function safeGetItem(key: string): string | null {
+  const storage = getStorage();
+  if (!storage) {
+    return null;
+  }
+  try {
+    return storage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
 /** The minimum shape this module needs out of the persisted session blob.
  * Deliberately narrow: only `user.id`, nothing else is read. */
 interface PersistedSessionWithUserId {
@@ -192,17 +245,13 @@ function isPersistedSessionWithUserId(value: unknown): value is PersistedSession
  * Reads the signed-in `user.id` SYNCHRONOUSLY out of the session blob the SDK
  * itself persists under the key this app owns
  * (`SUPABASE_AUTH_STORAGE_KEY`). Returns `null` -- meaning NO SEED, fall back
- * to the single `'system'` flash -- on every failure axis: no storage, no key
- * present, unparseable JSON, or a blob without a non-empty string
- * `user.id`. It never returns a guessed or stale id, which is the whole
- * safety property T154 rests on.
+ * to the single `'system'` flash -- on every failure axis: no storage, a
+ * throwing `getItem` (see `safeGetItem`), no key present, unparseable JSON, or
+ * a blob without a non-empty string `user.id`. It never returns a guessed or
+ * stale id, which is the whole safety property T154 rests on.
  */
 function readSessionUserId(): string | null {
-  const storage = getStorage();
-  if (!storage) {
-    return null;
-  }
-  const raw = storage.getItem(SUPABASE_AUTH_STORAGE_KEY);
+  const raw = safeGetItem(SUPABASE_AUTH_STORAGE_KEY);
   if (!raw) {
     return null;
   }
@@ -216,16 +265,22 @@ function readSessionUserId(): string | null {
   return isPersistedSessionWithUserId(parsed) ? parsed.user.id : null;
 }
 
-/** The synchronous seed read. `null` whenever the session is absent, corrupt,
- * or has no usable id -- and also whenever THAT user simply has no stored
- * preference yet (a different user's key is never consulted). */
+/** Reads one specific user's stored preference. Never consults any other
+ * user's key, and never falls back to a different user's value. */
+function readStoredThemeModeFor(userId: string): ThemeMode | null {
+  const raw = safeGetItem(themeModeStorageKeyFor(userId));
+  return isValidThemeMode(raw) ? raw : null;
+}
+
+/** The synchronous mount-time seed read. `null` whenever the session is
+ * absent, corrupt, or has no usable id -- and also whenever THAT user simply
+ * has no stored preference yet (a different user's key is never consulted). */
 function readSeededThemeMode(): ThemeMode | null {
   const userId = readSessionUserId();
   if (userId === null) {
     return null;
   }
-  const raw = getStorage()?.getItem(themeModeStorageKeyFor(userId)) ?? null;
-  return isValidThemeMode(raw) ? raw : null;
+  return readStoredThemeModeFor(userId);
 }
 
 function writeStoredThemeMode(userId: string, mode: ThemeMode): void {
@@ -277,6 +332,48 @@ export function ThemeModeProvider({
   // changing `loadThemeMode`'s own identity/deps -- same mechanism
   // `SeasonProvider.tsx`'s own `refreshToken` uses.
   const [refreshToken, setRefreshToken] = useState(0);
+
+  // -------------------------------------------------------------------------
+  // In-page account switch (T154 rework). See module doc "case 4".
+  // -------------------------------------------------------------------------
+  // The mount-time seed above runs ONCE. This provider mounts in `App.tsx`
+  // above the router, and neither `logout()` (`guards.tsx:311-321`) nor
+  // `login()` (`:293-300`) reloads the page -- both only call `setState`. So
+  // the ordinary SPA sign-out -> /login -> sign-in-as-B flow never remounts
+  // this provider, and without the block below B would keep A's theme for the
+  // rest of the page session (not one frame: case 1 deliberately KEEPS the
+  // current value when `resolveThemeMode` resolves `null`).
+  //
+  // `lastSeededUserId` tracks the last NON-NULL user this provider has seeded
+  // for. Comparing against that -- rather than against the previous rendered
+  // value -- is deliberate and load-bearing: the real logout->login flow is
+  // A -> null -> B, so a "previous render was non-null and different" test
+  // would never fire on the very flow this fixes.
+  //
+  // Two things this must NOT do, both of which would re-introduce the flash
+  // T148 fixed:
+  //   * never re-seed while `user` is null -- that is every normal page load
+  //     while the session resolves, not just a real sign-out;
+  //   * never re-seed on null -> FIRST user -- guarded by the
+  //     `lastSeededUserId !== null` test.
+  //
+  // Assigning state during render (rather than in an effect) is React's
+  // sanctioned "adjust state when input changes" pattern and is what keeps the
+  // synchronous-first-commit property: React discards the in-progress render
+  // and re-renders this component BEFORE its children render or anything
+  // commits, so the stale theme never reaches the DOM even for one frame.
+  const [lastSeededUserId, setLastSeededUserId] = useState<string | null>(() =>
+    readSessionUserId(),
+  );
+  if (user && user.id !== lastSeededUserId) {
+    setLastSeededUserId(user.id);
+    if (lastSeededUserId !== null) {
+      // Genuine account switch on a live page. Re-seed from the NEW user's own
+      // key, falling back to 'system' when this user has nothing stored --
+      // never leaving the previous user's value in place.
+      setMode(readStoredThemeModeFor(user.id) ?? 'system');
+    }
+  }
 
   useEffect(() => {
     if (!user) {

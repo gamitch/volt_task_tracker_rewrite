@@ -2,12 +2,86 @@
 
 **Packet:** `docs/swarm/active/T154-worker-packet.md`, revision 2.
 **Dispatch SHA (pinned):** `af2891453e4343e1b183a0b04d234762b0c29ad2`.
+**Attempt 2** — reworked after the checker's FAIL on `772acf9` (1 MAJOR, 3 MINOR,
+1 NIT). `origin/claude/swarm-plan-zl575z` (`1c119ae`) merged in first; the merge
+was clean and **docs-only** (4 files: T155 packet, auto-mode-decisions, an inbox
+note, the ledger) with no conflicts and no source overlap with this task.
 **Tier used: opus**, per packet "Tiering" and constitution item 18 — `client.ts`'s
 one `createClient` call site now takes a real `auth: { storageKey }` option, which
 is auth configuration and squarely inside item 18's trigger list. Recorded here
 for the ledger row.
 
 **Not marking this task complete. A checker verifies it.**
+
+---
+
+## 0a. Rework after FAIL — the in-page account switch (MAJOR), and one deviation I need reviewed
+
+The checker returned FAIL (1 MAJOR, 3 MINOR, 1 NIT) on `772acf9`. All four items
+are addressed below; the MAJOR was **fixed, not deferred**, per the coordinator's
+override.
+
+**The MAJOR, restated honestly.** Per-uid keying fixed the fresh-load path and
+nothing else. The seed is read **once per mount**; `ThemeModeProvider` mounts
+above the router in `App.tsx`; and neither `logout()` (`guards.tsx:311-321`) nor
+`login()` (`:293-300`) reloads — both only call `setState`. I verified both line
+ranges myself. So the ordinary sign-out → `/login` → sign-in-as-B flow never
+remounted the provider and never re-read the seed, and because case 1
+deliberately keeps the current value when the fetch resolves `null`, B kept A's
+theme for **the rest of the page session**. My shipped source asserted the
+opposite in three places; those are corrected, and the false "moot regardless"
+claim is now explicitly labelled as wrong in both the module doc and this report.
+
+**The fix.** The provider tracks `lastSeededUserId` and, when the signed-in user
+id differs from it, re-seeds from the **new user's own key**, falling back to
+`'system'`. State is assigned **during render**, not in an effect — React's
+sanctioned "adjust state when input changes" pattern — which is what preserves
+the synchronous-first-commit property: React re-renders before children render or
+anything commits, so the stale theme never reaches the DOM even for one frame.
+
+### DEVIATION — the literal rule as written would not have fixed the bug
+
+The instruction was to re-seed only when `user.id` changes **"from one non-null
+value to a different non-null value."** Implemented literally against the
+previous *rendered* value, **that never fires on the flow this task exists to
+fix.** I checked `guards.tsx` rather than assuming: `logout()` sets
+`user: null`, then `login()` sets the new user. So the real transition is
+**A → null → B**, and every individual step has `null` on one side. A
+"previous render was a different non-null user" test would sit there permanently
+inert while B kept A's theme.
+
+I implemented the rule against **the last non-null user the provider has seeded
+for**, ignoring null transitions. This fires on A → null → B *and* on a direct
+A → B, while still honouring all three prohibitions exactly as stated:
+
+- never re-seeds while `user` is null (guarded by `if (user && …)`);
+- never re-seeds on null → first user (guarded by `lastSeededUserId !== null`);
+- re-seeds on a genuine account switch, from B's own key.
+
+`ThemeModeProvider.test.tsx`'s *"does not attempt a fetch while unauthenticated"*
+test passes **unmodified**, as required. A dedicated test covers the direct
+A → B case so the distinction is pinned either way.
+
+**Flagging this rather than quietly widening the rule**, since it is a change to
+the trigger condition the coordinator specified. If the narrower literal reading
+was intended for a reason I have not seen, the one-line change is
+`user.id !== lastSeededUserId` → a previous-render comparison, and the
+A → null → B test is the one that would then go red. I believe that would ship
+the MAJOR unfixed, which is why I did not do it.
+
+**Mutation proof (item 1).** Removing the re-seed block turns **4 tests red**
+(the three switch tests plus the no-stale-frame test); restoring it returns all
+green. The three "must NOT re-seed" guard tests correctly stay green under that
+mutation — they constrain the fix rather than prove it, and I am not counting
+them as evidence for it.
+
+**Residual, disclosed not closed.** Between A signing out and B signing in, the
+login screen still carries A's theme, because `user` is `null` there and we
+deliberately do not re-seed. Resetting on null would re-introduce the T148 flash
+on every page load and permanently on anonymous visits. A signed-out login screen
+briefly showing the previous user's colour scheme leaks no name and no data — a
+theme is not PII. Stated in the module doc as case 4's residual and covered by a
+test that asserts exactly this behaviour, so it cannot regress silently.
 
 ---
 
@@ -113,7 +187,29 @@ function isPersistedSessionWithUserId(value: unknown): value is PersistedSession
 function readSessionUserId(): string | null
 function readSeededThemeMode(): ThemeMode | null
 function writeStoredThemeMode(userId: string, mode: ThemeMode): void
+
+// added by the rework:
+function safeGetItem(key: string): string | null            // guards the getItem CALL
+function readStoredThemeModeFor(userId: string): ThemeMode | null  // one user's key only
 ```
+
+Plus the in-page re-seed in the provider body (§0a), which assigns state during
+render:
+
+```ts
+const [lastSeededUserId, setLastSeededUserId] = useState<string | null>(() =>
+  readSessionUserId(),
+);
+if (user && user.id !== lastSeededUserId) {
+  setLastSeededUserId(user.id);
+  if (lastSeededUserId !== null) {
+    setMode(readStoredThemeModeFor(user.id) ?? 'system');
+  }
+}
+```
+
+All helpers remain **module-private** — no new exports — which is what holds the
+eslint warning count at 355 (see §8).
 
 Two deviations from the packet's literal sketch, both additive and reasoned:
 
@@ -173,8 +269,10 @@ still pass unchanged.
 
 Baseline re-confirmed at my own dispatch SHA before touching anything, exactly
 matching the packet's figures: **66 test files / 1507 tests / 0 eslint errors /
-355 warnings**. After: **66 files / 1528 tests** (+21: 4 in `client.test.ts`,
-17 in `ThemeModeProvider.test.tsx`) / **0 errors / 355 warnings**.
+355 warnings**. After the rework: **66 files / 1536 tests** (+29 from baseline:
+4 in `client.test.ts`, 25 in `ThemeModeProvider.test.tsx`) / **0 errors / 355
+warnings**. (Attempt 1 stood at 1528; the rework adds 8 — 7 account-switch tests
+plus the throwing-`getItem` test.)
 
 Every mutation below was run in my own worktree (item 23) and reverted from a
 saved pristine copy.
@@ -224,12 +322,30 @@ appears in any render:
 corrupt-session tests fail. Confirms the catch is genuinely exercised, not
 decorative.
 
-**I audited for the branch the instruction asked about and found none where the
-fail-safe language is untrue.** Every path in `readSeededThemeMode` returns
-`null` → `'system'`: no storage, no key, unparseable, non-object, missing/null
-`user`, missing/empty/non-string `user.id`, invalid theme value. There is no
-default-to-last-known and no cross-uid fallback anywhere. The claim in the module
-doc is one I am willing to stand behind as measured.
+Every path in `readSeededThemeMode` returns `null` → `'system'`: no storage, no
+key, unparseable, non-object, missing/null `user`, missing/empty/non-string
+`user.id`, invalid theme value. There is no default-to-last-known and no
+cross-uid fallback anywhere.
+
+**Correction to the first version's claim.** I wrote that I "audited every
+branch… no exceptions found." That was **not exhaustive**, and the checker was
+right to narrow it. `getStorage()` guards the property *access* to
+`window.localStorage`, not the `getItem` **call**, which can itself throw. Both
+render-path reads run inside a lazy `useState` initializer in a provider mounted
+above the whole tree in `App.tsx`, so an escaping exception there is a **white
+screen, not a flash** — a strictly worse failure than the one being prevented.
+
+**I guarded rather than narrowed**, which the coordinator preferred conditional
+on the warning count holding: both render-path reads now go through a
+module-private `safeGetItem()` that try/catches the call. Measured — **eslint
+stays at 0 errors / 355 warnings**, so guarding was free and no claim had to be
+weakened. Proven by mutation 6 (remove the try/catch → the new
+throwing-`getItem` test fails; restore → green).
+
+The remaining un-guarded storage call is `writeStoredThemeMode`'s `setItem`
+(quota-exceeded). That one is **not** on the render path — it runs inside the
+resolve handler, where the existing `.catch` already contains it and logs. Listed
+as residual risk item 3 rather than claimed as covered.
 
 ### Criterion 5 — synchronous first commit. **The packet's suggested test shape did not actually prove this.**
 
@@ -254,9 +370,19 @@ shape for this revision.
 **Fix:** I added a `RecordingProbe` that pushes `mode` into an array on **every**
 render, and assert on `renders[0]`. A lazy initializer produces
 `renders[0] === 'dark'` with `'system'` never present; an effect-based seed
-necessarily renders `'system'` first and corrects on a second render. Re-running
-mutation 3 against the strengthened test now **fails exactly one test** —
-criterion 5 — and passes with the real implementation.
+necessarily renders `'system'` first and corrects on a second render.
+
+**Corrected figure.** The first version of this doc claimed mutation 3 "fails
+exactly one test." That was **wrong: it failed three** — the `renders[0]` /
+`not.toContain` assertions in criterion 5, *"DOES serve user B his own seeded
+theme"*, and *"serves Alice her own theme from the very same storage state."*
+The coordinator measured 3 failed / 25 passed at `772acf9` and the checker
+reproduced it; I re-ran it myself and confirm 3 on that tree. On the reworked
+tree it now fails **four**, the fourth being the new *"does NOT re-seed on null
+-> FIRST user"* test, which also asserts `renders[0]`. The direction was always
+safe — I under-reported the mutation's blast radius, which understated how much
+the recording probe actually covers — but it was the headline finding and the
+number should have been right.
 
 I applied the same recording technique to the cross-user and corrupt-session
 tests via `expect(renders).not.toContain(...)`, because the reported bug was that
@@ -317,8 +443,18 @@ modified.
 (Forbidden File) and is byte-unchanged. I built no variant of "clear when `user`
 is `null`" anywhere — that branch is actively destructive, because `user` is
 `null` during every normal page load while the session resolves, not only after a
-real sign-out. Per-uid keying makes the question moot regardless: B's lookup
-never reaches A's key.
+real sign-out.
+
+**Correction: I previously wrote that per-uid keying makes the question "moot
+regardless." That was measurably false and is the MAJOR the checker caught.**
+Per-uid keying fixes only the FRESH-LOAD path. The seed is read once per mount,
+this provider mounts above the router, and `logout()`/`login()` only call
+`setState` — so an in-page account switch never re-read the seed, and B inherited
+A's theme *persistently* (case 1 keeps the current value when the fetch resolves
+`null`). What actually closes the bleed is per-uid keying **plus** the in-page
+re-seed added in this rework. Clear-on-logout remains unnecessary — but because
+the re-seed handles it without destroying anyone's stored preference, not because
+the question was moot.
 
 **Key accumulation disclosed** (criterion 8) in `ThemeModeProvider.tsx`'s module
 doc as limitation (c), alongside (a) no-migration and (b) no-clear-on-logout.
@@ -338,8 +474,15 @@ nothing evicts them. Accepted, not built around.
   the **orchestrator's authorization under delegated authority, not the human
   owner's.** George's ruling authorizes fixing the bleed and says nothing about
   test files. This satisfies the existing-tests non-negotiable at
-  **`constitution.md:11`** — *not* item 10, which is the additive-migrations
-  rule. The gate measured that exactly four tests fail and only because they
+  **`constitution.md:10`** — *"Existing tests must pass unless the boss
+  explicitly approves a test update."* **Corrected from `:11` in the first
+  version of this doc**, which was off by one: line 11 is *"No worker may mark
+  its own work complete."* (The packet carried the same `:11` error; flagging
+  the provenance, not to shift responsibility — I should have verified the line
+  myself under item 19c, and did not.) Note the two referents that collide
+  here: the **line** is `:10`, whereas the numbered Project-Specific Standard
+  **item 10** is the additive-migrations rule and is *not* what this rests on.
+  The gate measured that exactly four tests fail and only because they
   read or write the key being replaced; I confirmed that count myself (lines
   141, 201, 224, 249 of the original file were the only ones referencing
   `THEME_MODE_STORAGE_KEY`). **I am not describing this as owner-approved.**
@@ -381,7 +524,7 @@ npx vite build            → ✓ built in 5.63s
 npm run format:check      → All matched files use Prettier code style!
 npx eslint .              → ✖ 355 problems (0 errors, 355 warnings)
 npx vitest run            → Test Files 66 passed (66)
-                            Tests 1528 passed (1528)
+                            Tests 1536 passed (1536)
 ```
 
 **eslint count reasoning, independently confirmed rather than only cited.** The
@@ -431,3 +574,21 @@ tests. All tests pass regardless.
    rewriting it further was outside the four-test authorization; a follow-up
    could apply `RecordingProbe` there too. Flagging so the gap is recorded rather
    than assumed closed.
+7. **The in-page re-seed is proven in jsdom by driving `AuthProvider`'s
+   `subscribeToAuthStateChange` seam, not by clicking through the real UI.** The
+   harness reproduces the mechanism faithfully (same provider, same state
+   transitions, no remount — asserted), but it does not exercise
+   `SettingsPage`/`LoginPage` or the router. A genuine two-account click-through
+   remains unverified.
+8. **The login-screen residual is deliberate, not fixed** (§0a). Between sign-out
+   and the next sign-in, A's theme remains on screen. Disclosed in the module doc
+   and pinned by a test so it cannot change silently.
+9. **The re-seed reads storage during render.** This is intentional and is what
+   holds the synchronous property, but it means a render can touch
+   `localStorage` on an account switch. Both reads are guarded by `safeGetItem`
+   so a throwing `getItem` cannot escape into a white screen (mutation 6), and
+   the read happens only on the render where the user id actually changed — not
+   on every render.
+10. **I did not re-audit the T155 packet or ledger content** merged in from
+    `1c119ae`. The merge was docs-only and touched nothing this task owns, but I
+    read only enough to confirm that.
