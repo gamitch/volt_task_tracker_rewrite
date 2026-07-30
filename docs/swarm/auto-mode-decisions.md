@@ -966,3 +966,48 @@ regardless of team size. No change proposed there.
 **What this does not license:** shipping something the owner would consider broken. Data
 integrity, correctness and honest on-screen values are unaffected by this ruling — it is
 about the *security* threat model specifically, not about lowering the bar generally.
+
+---
+
+## 2026-07-30 — George's ruling on T184 (owner input, verbatim) + second auto-mode window
+
+His words, complete: *"T184 A deactivated student should not be able to login, if not possible,
+they should see nothing when they login"*.
+
+**What this authorizes.** A deactivated student (`students.is_active = false`) must be blocked
+at sign-in. If blocking at sign-in is not achievable, the fallback is explicit and ordered:
+they sign in and **see nothing**. Either way the current behaviour is wrong — today they are
+told *"we couldn't find a student record linked to your account yet"*, which is false: the
+record exists and is linked.
+
+**What it does not authorize:** the mechanism. Which layer enforces it, and whether "see
+nothing" means `NoAccessPage`, an empty shell, or something else, is the orchestrator's call.
+
+**Orchestrator's reading, recorded as mine.** Supabase auth authenticates a `profiles` row;
+`students.is_active` is a separate column, so "cannot log in" is not literally enforceable at
+the auth provider without touching auth configuration. The natural in-scope reading is role
+resolution: a viewer who resolves to the student role but whose `students` row is inactive is
+routed to the existing `NoAccessPage`/`AccessDeniedPage` surface rather than a dashboard. That
+satisfies both halves of his ruling — no usable session, nothing shown — without inventing a
+new surface. **To be confirmed against `guards.tsx`, which is a Forbidden File and may make the
+first reading impossible.** If it does, the fallback is what ships, and that is his stated
+second choice rather than a silent substitution.
+
+## Second unsupervised window — standing rules
+
+Owner left for work; usage refreshes in ~4 hours if this session hits a limit. Same posture as
+the first auto-mode window: make decisions, log them here for retrospective review, do not
+attribute any of them to him.
+
+**Work order chosen, and the reasoning, so it can be argued with later:**
+1. Finish T170 (packet revision 2 → worker → checker → merge). It is the last live-route
+   instance of the placeholder family and it repairs a broken write path.
+2. T184, now ruled and cheap.
+3. T181 — every parent's dashboard is entirely fabricated; the largest remaining user-facing gap.
+4. T158 and T169's `OutreachDetail` half — both unblocked, both restore finished features.
+5. T172 while T151's proven pattern is fresh.
+
+**Concurrency rule adopted for this window:** only ONE `foreman-planner` at a time. The foreman
+writes `task-ledger.md` and `state-summary.md`; two concurrent foremen conflict on the same
+append-at-end files, which `architecture-review-parallelism.md` §1.6 predicted. Workers and
+checkers parallelise freely on disjoint files.
