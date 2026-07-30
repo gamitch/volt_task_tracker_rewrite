@@ -17,6 +17,16 @@ boss-arbiter). **Tier: worker-implementer, sonnet** — reasoning below.
 **Checker: checker-reviewer, opus** — same tier T176 used for the identical
 defect shape.
 
+**Revision 2 of this packet — the last one; there is no gate behind this
+round.** The narrow premise gate built §5's design end to end, ran every
+prescribed mutation, and reverted. §5's design is confirmed correct by
+execution and is not revised below. Everything else in this document has
+been corrected against three findings: a negative-only criterion (the exact
+vacuity shape that has now cost five rounds across four tasks), a wrong
+"pure client-side filter" premise that hid this task's most consequential
+real-world effect, and a blast-radius figure measured for the wrong
+mutation. Corrections are marked inline as **[REV2]**.
+
 ## 1. Objective
 
 `OutreachList.tsx` computes every personal figure on `/outreach`'s
@@ -28,12 +38,24 @@ viewer's `students.id` and thread it to every consumer, reusing the
 already-shipped, already-tested resolution seam verbatim — do not design a
 second one.
 
-**Consequences currently measured, unchanged by your work except in kind:**
-`viewerStudentId` drives `computeEventRowStats` (`:3281`), the my-RSVP lookup
-(`:3310`), `computeStudentHours` (`:3554`), `myGoalHours` (`:3557`),
-`getUnansweredRsvpCount` (`:3559`), and `GoalBar`'s `goalBarId` identity
-(`:3594`, which also feeds the milestone-toast dedupe key,
-`volt.outreach.milestoneToast.<seasonId>.<goalBarId>.<milestone>`).
+**[REV2] Eight consumers, not six, and one of them writes.** `viewerStudentId`
+drives `computeEventRowStats` (`:3281`), the my-RSVP lookup (`:3310`),
+`computeStudentHours` (`:3554`), `myGoalHours` (`:3557`),
+`getUnansweredRsvpCount` (`:3559`), `GoalBar`'s `goalBarId` identity (`:3594`,
+which also feeds the milestone-toast dedupe key,
+`volt.outreach.milestoneToast.<seasonId>.<goalBarId>.<milestone>`),
+`handleRsvpChange`'s `withRsvpOverride(prev, viewerStudentId, sessionId,
+status)` (`:3567`, local-only per module doc #8b, benign), **and
+`<SelfCheckoffDialog studentId={viewerStudentId} />` (`:3637`).** The last one
+is not a filter — it is a real, networked write. `SelfCheckoffDialog` re-reads
+`attendance` (`loaders/selfCheckoff.ts:129-142`) and, on "Mark attendance",
+**inserts** an `attendance` row keyed `student_id: params.studentId`
+(`:183-201`) or **deletes** one keyed the same way (`:218-236`). **This is the
+task's most consequential real-world effect: self-check-off on `/outreach` is
+broken today**, attempting real writes against a `uuid not null` FK column
+keyed to `'student-placeholder-current-viewer'`, a value that is not a row in
+`students` at all. Fixing `viewerStudentId` repairs a broken write path, not
+only the displayed figures — say this plainly in your own report.
 
 **Read this first, it changes the shape of the fix:** `seasonId` on this same
 component is **already fixed** (module doc #12, `OutreachList.tsx:3901-3914`)
@@ -42,8 +64,13 @@ shipped and working. `loadData` already defaults to the real
 `loadOutreachData` (`loaders/outreach.ts:971`). **You are fixing exactly one
 remaining placeholder: `viewerStudentId`.** Nothing else in this file's data
 path is fake. Because of that, this fix should make every personal figure on
-this page genuinely correct for the first time — prove that by rendering, not
-by asserting it from the code (criterion 11).
+this page genuinely correct, and the self-check-off write path genuinely
+reachable — prove both by rendering/exercising, not by asserting it from the
+code (criterion 8). **[REV2] One caveat on "correct":** `computeStudentHours`
+itself is a disclosed, RSVP-based heuristic that legitimately disagrees with
+the attendance-backed `v_student_hours` a student might see elsewhere in the
+app — see §4. This task makes its *inputs* real; it does not reconcile that
+pre-existing formula divergence, which is tracked separately as **T188**.
 
 ## 2. Allowed / forbidden files
 
@@ -71,17 +98,30 @@ the real disclosed gap on record (module doc #7, `:217-224`).
   `OutreachEventDialog`; consume it exactly as it stands today, do not touch
   its props or signature.
 - `src/lib/supabase/loaders/meetings.ts` — read-only reference. Import
-  `resolveCurrentStudentId`, `CurrentViewerIdentity`, `ResolveCurrentStudentIdFn`
-  from it; do not edit it, do not copy its internals into a second
-  implementation.
+  `resolveCurrentStudentId` from it (`'../../lib/supabase/loaders/meetings'`).
+  Do not edit it, do not copy its internals into a second implementation.
 - `src/pages/meetings/MeetingsList.tsx`, `src/pages/home/StudentHome.tsx` —
-  read-only reference (the latter is where `CurrentViewerIdentity`/
-  `ResolveCurrentStudentIdFn` types actually originate, re-exported by
-  `meetings.ts` — see `MeetingsList.tsx:698-706`). Do not edit either.
-- `src/lib/supabase/loaders/outreach.ts` — not needed. `viewerStudentId` is a
-  purely client-side filter over already-loaded `sessions`/`rsvps`
-  (`loadData(seasonId)` never takes a student argument); if your design ends
-  up wanting to touch this file, stop and report why before doing it.
+  read-only reference. **[REV2, MINOR-1 fix — the original instruction here
+  did not compile.** `CurrentViewerIdentity`/`ResolveCurrentStudentIdFn` are
+  declared in `MeetingsList.tsx:698-706` and imported into `meetings.ts`
+  (`:158-171`) for its own internal use — `meetings.ts` does **not**
+  re-export them (tsc-confirmed: importing either from `loaders/meetings`
+  fails `TS2459`/`TS2724`). Import both directly from `'../meetings/MeetingsList'`,
+  exactly as `StudentHome.tsx:387` already does
+  (`import type { CurrentViewerIdentity, ResolveCurrentStudentIdFn } from
+  '../meetings/MeetingsList';` — same relative depth, `pages/outreach/` and
+  `pages/home/` are siblings). Do not edit either file.
+- `src/lib/supabase/loaders/outreach.ts` — not needed for this fix.
+  `loadData(seasonId)` never takes a student argument, and every consumer
+  reads `data.sessions`/`data.rsvps` already loaded by it — but **[REV2]** do
+  not extend that to "every consumer of `viewerStudentId` is a client-side
+  filter." Six of the eight are (§1); `SelfCheckoffDialog` (`:3637`) is a real
+  networked write, routed through `loaders/selfCheckoff.ts`, not this file.
+  You still don't need to touch `loaders/outreach.ts` or
+  `loaders/selfCheckoff.ts` — `SelfCheckoffDialog` already receives
+  `studentId={viewerStudentId}` (`:3637`) and inherits the fix automatically
+  once `viewerStudentId` itself is real. If your design ends up wanting to
+  touch either loader file, stop and report why before doing it.
 
 ## 3. What's already established — carry these, don't re-derive them
 
@@ -112,8 +152,10 @@ rather than what data feeds it, stop and report before proceeding.
 twice already (T176's criterion 3, and this file's own fixtures).**
 `OutreachList.tsx`'s shipped fixtures are keyed to
 `PLACEHOLDER_CURRENT_STUDENT_ID` at `:842` (`FIXTURE_STUDENTS`), `:865`
-(`FIXTURE_GOAL_CONFIG.individualGoalHoursByStudentId`), `:1049`/`:1105`
-(`FIXTURE_RSVPS[].studentId`/`.respondedBy`). **Any positive proof that "the
+(`FIXTURE_GOAL_CONFIG.individualGoalHoursByStudentId`), and twice more in
+`FIXTURE_RSVPS` — **[REV2, citation fix]** `.studentId` at `:1049`/`:1105`,
+`.respondedBy` at `:1051`/`:1107` (four distinct lines, not two). **Any
+positive proof that "the
 real resolved id reaches the consumers" must use a distinct, fabricated,
 non-placeholder id** (e.g. `student-real-c1`) with its own constructed
 sessions/rsvps/goalConfig, not the shipped fixture — otherwise a mutation that
@@ -129,22 +171,47 @@ failure T176's own gate caught before dispatch.
 the downstream read came back empty, producing the false "we couldn't find a
 student record" copy for someone who does, in fact, have one.
 
-**My own read, which you must verify rather than inherit:** `OutreachList`
-has no second, further-scoped query analogous to `v_student_goal_projection`.
-Once `resolveCurrentStudentId` returns a real (even deactivated) student id,
-every consumer here (`computeStudentHours`, `getUnansweredRsvpCount`,
-`computeEventRowStats`, `myGoalHours`, the `GoalBar`) is a **pure client-side
-filter over the already-loaded, season-scoped `sessions`/`rsvps`** — none of
-them re-query Supabase with an `is_active`-filtered `students` read. So a
-deactivated student's own outreach figures should render normally, not fall
-into the false-empty state. **Confirm this by reading `loadOutreachData`
-(`loaders/outreach.ts:908-963`) yourself and tracing every place
-`viewerStudentId` is consumed downstream of resolution — do not take my trace
-as settled.** If you find a query I missed, this is a second T184 instance:
-say so explicitly, do not silently paper over it, and do not fix it here —
-file the same class of follow-up T184 already is. State plainly what happens
-for (i) a deactivated student and (ii) a signed-in user with no linked
-student row at all, and what copy each produces.
+**[REV2 — corrected and completed, both halves now verified, not assumed.]**
+
+**Read side (personal figures):** `OutreachList` has no second,
+further-scoped query analogous to `v_student_goal_projection`.
+`computeStudentHours`, `getUnansweredRsvpCount`, `computeEventRowStats`, and
+`myGoalHours` are pure client-side filters over the already-loaded,
+season-scoped `sessions`/`rsvps` — none of them re-query Supabase with an
+`is_active`-filtered `students` read. So a deactivated student's *displayed*
+figures should render normally, not fall into the false-empty state.
+
+**Write side (self-check-off) — the part my first pass missed entirely.**
+`SelfCheckoffDialog` (§1) *does* re-query and write Supabase, so it is a
+second real gate this trap must be checked against, and I have now checked
+it, not merely flagged it: the RLS policies that authorize its insert/delete
+(`self_insert`/`self_delete`, `self_checkoff.sql:56-80`) both gate on
+`student_id in (select my_student_ids())`, and `my_student_ids()`
+(`rls.sql:20-26`) is `select id from students where profile_id = auth.uid()
+union select student_id from guardian_links where parent_profile_id =
+auth.uid()` — **the same posture as `queryStudentIdByProfileId`: no
+`is_active` filter.** So a deactivated student's self-check-off write would
+also be *authorized* by RLS (not silently blocked at that layer), consistent
+with the read side rather than a second disagreement.
+
+**Verdict for both (i)/(ii), read-verified against both files above:**
+(i) a **deactivated** student: id resolves, personal figures render normally,
+self-check-off writes are RLS-authorized — no false-empty state anywhere on
+this page, unlike T176. This does not reopen or resolve T184 (which concerns
+`v_student_goal_projection`, a different page); it is a fact about this page
+only. (ii) a signed-in user with **no linked student row at all**:
+`resolveCurrentStudentId` returns `null`, and every consumer (including
+`SelfCheckoffDialog`, which must not mount) needs to be gated behind that
+`null` check — the identity tier's own "no student account linked" state
+(§5/criterion 4).
+
+**Still yours to do, because I did not exhaustively trace `loadOutreachData`
+itself:** confirm `loaders/outreach.ts:908-963` genuinely never filters on
+`students.is_active` in a way that could produce a *third* disagreement (e.g.
+a deactivated student's own historical sessions/rsvps silently dropped from
+`data.sessions`/`data.rsvps`). If you find one, this is a new instance of the
+T184 class — file the follow-up, do not fix it here, and do not let it change
+your read/write verdicts above without saying so explicitly.
 
 ## 4. Constitution item 3 — checked, findings below, do not re-litigate
 
@@ -172,7 +239,26 @@ re-derive any computation. Prove this with a diff-based criterion (below),
 the same technique T176's round-2 fix used to re-confirm its own item-3
 compliance.
 
-## 5. Recommended design — parallel, not sequential; state your reasoning if you diverge
+**[REV2] This formula divergence is already filed — do not re-file it.** The
+`computeStudentHours`-vs-`v_student_hours` gap above (RSVP-based vs.
+attendance-based "confirmed hours", legitimately answering different
+questions) is tracked as **T188** (`task-ledger.md`, filed from this exact
+investigation). Cite it, don't duplicate it — see criterion 8's REAL/
+FABRICATED/DIVERGENT bucketing below.
+
+## 5. Design — parallel, not sequential; confirmed by execution, build it as specified
+
+**[REV2] This design is no longer "recommended" — it is settled.** The gate
+built it end to end, ran every prescribed mutation, and reverted: the two
+`useLoadState` calls are genuinely independent (`[loadData, seasonId]` vs.
+viewer-only deps), there is no race, no ordering hazard, and no
+resolved-id-with-stale-content state, because the identity branch renders
+only inside the post-success return. It also specifically tested a hazard
+this section doesn't call out below — the inline `viewer = {id, role}` object
+literal in a dependency array — and confirmed it does **not** cause a
+re-render loop, because `viewer` is constructed once in `OutreachList`, which
+does not itself re-render on `OutreachListLoaded`'s internal state changes.
+Build it as specified; do not re-litigate the shape.
 
 T176's `ResolvedStudentHomeView` resolves identity **before** its content
 fetch starts, because that fetch's own query parameters (`studentId`,
@@ -211,9 +297,31 @@ but **no longer defaults to the placeholder** (undefined when omitted); add
 already establishes. Thread both down through `OutreachListLoaded`'s props
 alongside a constructed `viewer: CurrentViewerIdentity`.
 
-You may diverge from this shape, but if you do, state the reason in your
-output the way T176's worker did for its own criterion-2/4 deviation (which
-the checker then confirmed was the correct reading, not a violation).
+**[REV2]** The two-hook, parallel-fetch architecture above is confirmed and
+not open for redesign. Implementation-level choices below it (exact prop
+names, where the constructed `viewer` object lives, copy wording) remain
+yours; if you diverge on one of those, state the reason in your output, the
+way T176's worker did for its own criterion-2/4 deviation (which the checker
+then confirmed was the correct reading, not a violation).
+
+**[REV2, addressing the loading-state tension directly] Keep the identity
+tier's own `loading` state — do not delete it the way T176 deleted its
+skip-mount branch, and here is the disanalogy.** T176 deleted its branch
+because it was *structurally* unreachable: with both `explicitStudentId`/
+`explicitTeamId` given, `resolveStudentIdentity`'s `??` short-circuit meant
+**zero real async work** occurred, so the returned promise settled on the
+very next microtask regardless of whether the gating component mounted at
+all (`StudentHome.tsx:1510-1524`). That is not this task's default,
+production path: with no explicit `viewerStudentId` prop, `resolveStudentId`
+always issues a **real Supabase query**. Because both `useLoadState` calls in
+§5 fire concurrently, the identity tier's `loading` UI is reached whenever
+`OutreachListLoaded`'s season-data `loadState` resolves *before* the identity
+promise does — plausible under ordinary network variance even though
+`resolveStudentId`'s single-row lookup is typically smaller than the season
+fetch, not the structurally-impossible case T176 found. Pin it with a real
+mutation (control the identity promise's timing in the test the way T176's
+own criterion 7(i)/(ii)/(iii) controlled its three sub-states), not a
+contrived one.
 
 **Copy:** reuse T176's established voice, not new invented strings, where the
 sentence is page-agnostic. `"Finding your student record…"` and `"Couldn't
