@@ -113,7 +113,9 @@ function renderAsUser(
     resolveStudentId: async () => HARNESS_DEFAULT_RESOLVED_STUDENT_ID,
     resolveStudentScope: async () => ({
       teamId: HARNESS_DEFAULT_RESOLVED_TEAM_ID,
-      goalHoursOverride: null,
+      goalHours: 100,
+      confirmedHours: 0,
+      plannedHours: 0,
     }),
     ...props,
   };
@@ -767,9 +769,16 @@ describe('StudentHome render -- BEH-02 confirmed/planned hours never summed', ()
       updatedAt: '2026-07-01T00:00:00.000Z',
     };
 
+    // T176 round 2: `events`/`sessions`/`rsvps` above (a 3h going-RSVP'd
+    // outreach session) are kept for "Next up" section coverage, but no
+    // longer drive the confirmed/planned hours legend -- `confirmedHours`/
+    // `plannedHours` are now verbatim `resolveStudentScope` passthroughs
+    // (`v_student_goal_projection`'s own columns), injected directly below,
+    // not derived from `data.studentHours`/`computePlannedHours(...)`
+    // anymore (still-fixture, unrelated `loadData` fields).
     const loadData = async (): Promise<StudentHomeData> =>
       buildDataFixture({
-        studentHours: { studentId: 'student-1', seasonId: 'season-1', confirmedHours: 62 },
+        studentHours: { studentId: 'student-1', seasonId: 'season-1', confirmedHours: 999 },
         events: [goingOutreachEvent],
         sessions: [goingOutreachSession],
         rsvps: [goingRsvp],
@@ -778,6 +787,12 @@ describe('StudentHome render -- BEH-02 confirmed/planned hours never summed', ()
     renderAsUser(STUDENT_USER, {
       loadData,
       studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
+      resolveStudentScope: async () => ({
+        teamId: 'team-fixture-beh02',
+        goalHours: 100,
+        confirmedHours: 62,
+        plannedHours: 3,
+      }),
       nowFn: () => FIXTURE_REFERENCE_NOW,
     });
     await flushMicrotasks();
@@ -787,6 +802,10 @@ describe('StudentHome render -- BEH-02 confirmed/planned hours never summed', ()
     expect(container.textContent).toContain('3 h planned');
     // ...and the sum (65) never appears anywhere as a combined figure.
     expect(container.textContent).not.toContain('65 h');
+    // Never the still-fixture loadData's own (deliberately different,
+    // unused) confirmedHours value -- proves this legend genuinely reads
+    // from resolveStudentScope, not data.studentHours.
+    expect(container.textContent).not.toContain('999');
   });
 });
 
@@ -821,16 +840,32 @@ describe('StudentHome DES-12 states', () => {
   });
 
   it('renders the shipped default fixture data end to end', async () => {
+    // T176 round 2: `teamId` is no longer passed explicitly here -- an
+    // explicit `teamId` now takes the `resolveStudentIdentity` bypass path
+    // unconditionally (goalHours/confirmedHours/plannedHours default to
+    // seasonDefaultGoalHours/0/0, never consulting `resolveStudentScope` at
+    // all), which would make "62 h confirmed" structurally unreachable.
+    // `resolveStudentScope` is injected directly instead, matching the same
+    // fixture values `defaultLoadStudentHomeData`'s own (still-fixture)
+    // `studentHours`/`FIXTURE_DEFAULT_GOAL_HOURS` used to supply, and the
+    // same `PLACEHOLDER_CURRENT_TEAM_ID` scope so STEM Fair/Library Demo
+    // (both team-scoped to that id) keep rendering.
     renderAsUser(STUDENT_USER, {
       loadData: fixtureLoadData,
       studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
-      teamId: PLACEHOLDER_CURRENT_TEAM_ID,
+      resolveStudentScope: async () => ({
+        teamId: PLACEHOLDER_CURRENT_TEAM_ID,
+        goalHours: 100,
+        confirmedHours: 62,
+        plannedHours: 3,
+      }),
       nowFn: () => FIXTURE_REFERENCE_NOW,
     });
     await flushMicrotasks();
 
     expect(container.textContent).toContain('Hi Ada Reyes');
     expect(container.textContent).toContain('62 h confirmed');
+    expect(container.textContent).toContain('3 h planned');
     expect(container.textContent).toContain('Participation: 87.5%');
     expect(container.textContent).toContain('Weekly Build Meeting');
     expect(container.textContent).toContain('STEM Fair');
@@ -1041,7 +1076,9 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
     const resolveStudentId = vi.fn(async () => 'should-never-be-called');
     const resolveStudentScope = vi.fn(async () => ({
       teamId: 'team-x',
-      goalHoursOverride: 5,
+      goalHours: 5,
+      confirmedHours: 2,
+      plannedHours: 1,
     }));
     const result = await resolveStudentIdentity(
       FIXTURE_VIEWER,
@@ -1049,21 +1086,26 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
       undefined,
       resolveStudentId,
       resolveStudentScope,
+      100,
     );
     expect(resolveStudentId).not.toHaveBeenCalled();
     expect(resolveStudentScope).toHaveBeenCalledWith('student-explicit');
     expect(result).toEqual({
       studentId: 'student-explicit',
       teamId: 'team-x',
-      goalHoursOverride: 5,
+      goalHours: 5,
+      confirmedHours: 2,
+      plannedHours: 1,
     });
   });
 
-  it('skips resolveStudentScope entirely when explicitTeamId is given, goalHoursOverride is null', async () => {
+  it('skips resolveStudentScope entirely when explicitTeamId is given -- goalHours falls back to seasonDefaultGoalHours, confirmed/planned default to 0', async () => {
     const resolveStudentId = vi.fn(async () => 'student-resolved');
     const resolveStudentScope = vi.fn(async () => ({
       teamId: 'should-never-be-used',
-      goalHoursOverride: 99,
+      goalHours: 99,
+      confirmedHours: 99,
+      plannedHours: 99,
     }));
     const result = await resolveStudentIdentity(
       FIXTURE_VIEWER,
@@ -1071,21 +1113,26 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
       'team-explicit',
       resolveStudentId,
       resolveStudentScope,
+      42,
     );
     expect(resolveStudentScope).not.toHaveBeenCalled();
     expect(resolveStudentId).toHaveBeenCalledWith(FIXTURE_VIEWER);
     expect(result).toEqual({
       studentId: 'student-resolved',
       teamId: 'team-explicit',
-      goalHoursOverride: null,
+      goalHours: 42,
+      confirmedHours: 0,
+      plannedHours: 0,
     });
   });
 
-  it('resolves nothing explicit -- calls both real seams', async () => {
+  it('resolves nothing explicit -- calls both real seams, verbatim passthrough (no coalesce/arithmetic applied here)', async () => {
     const resolveStudentId = vi.fn(async () => 'student-resolved');
     const resolveStudentScope = vi.fn(async () => ({
       teamId: 'team-resolved',
-      goalHoursOverride: 3,
+      goalHours: 3,
+      confirmedHours: 1.5,
+      plannedHours: 0.5,
     }));
     const result = await resolveStudentIdentity(
       FIXTURE_VIEWER,
@@ -1093,25 +1140,34 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
       undefined,
       resolveStudentId,
       resolveStudentScope,
+      100,
     );
     expect(resolveStudentId).toHaveBeenCalledWith(FIXTURE_VIEWER);
     expect(resolveStudentScope).toHaveBeenCalledWith('student-resolved');
     expect(result).toEqual({
       studentId: 'student-resolved',
       teamId: 'team-resolved',
-      goalHoursOverride: 3,
+      goalHours: 3,
+      confirmedHours: 1.5,
+      plannedHours: 0.5,
     });
   });
 
   it('returns null (no student linked) when resolveStudentId resolves null, without calling resolveStudentScope', async () => {
     const resolveStudentId = vi.fn(async () => null);
-    const resolveStudentScope = vi.fn(async () => ({ teamId: 'team-x', goalHoursOverride: null }));
+    const resolveStudentScope = vi.fn(async () => ({
+      teamId: 'team-x',
+      goalHours: 100,
+      confirmedHours: 0,
+      plannedHours: 0,
+    }));
     const result = await resolveStudentIdentity(
       FIXTURE_VIEWER,
       undefined,
       undefined,
       resolveStudentId,
       resolveStudentScope,
+      100,
     );
     expect(result).toBeNull();
     expect(resolveStudentScope).not.toHaveBeenCalled();
@@ -1124,6 +1180,7 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
       undefined,
       vi.fn(async () => 'unused'),
       vi.fn(async () => null),
+      100,
     );
     expect(result).toBeNull();
   });
@@ -1225,7 +1282,12 @@ describe('<StudentHome /> T176 -- real, resolved teamId reaches team-scoped widg
 
     renderAsUser(STUDENT_USER, {
       loadData,
-      resolveStudentScope: async () => ({ teamId: 'team-fixture-alpha', goalHoursOverride: null }),
+      resolveStudentScope: async () => ({
+        teamId: 'team-fixture-alpha',
+        goalHours: 100,
+        confirmedHours: 0,
+        plannedHours: 0,
+      }),
       nowFn: () => FIXTURE_REFERENCE_NOW,
     });
     await flushMicrotasks();
@@ -1239,7 +1301,9 @@ describe('<StudentHome /> T176 -- explicit teamId bypasses resolveStudentScope e
   it('(a) resolveStudentScope is never called AND (b) the rendered team-scope outcome reflects the explicit value', async () => {
     const resolveStudentScopeSpy = vi.fn(async () => ({
       teamId: 'team-should-never-be-used',
-      goalHoursOverride: 999,
+      goalHours: 999,
+      confirmedHours: 999,
+      plannedHours: 999,
     }));
     const inScopeEvent: HomeEventRow = {
       id: 'event-c4-in',
@@ -1415,23 +1479,73 @@ describe('<StudentHome /> T176 -- identity-resolution tier own DES-12 states, th
   });
 });
 
-describe('<StudentHome /> T176 -- goal-hours denominator is real across all three DOM surfaces (criterion 10, §2c)', () => {
+describe('<StudentHome /> T176 round 2 -- goal-hours denominator + confirmed/planned hours are ALL verbatim passthroughs from resolveStudentScope (v_student_goal_projection), never recomputed and never read from the still-fixture loadData (criterion 10, §2c corrected)', () => {
   const CRITERION_10_SEASON: SeasonRow = {
     ...FIXTURE_ACTIVE_SEASON,
     id: 'season-fixture-c10',
-    // Deliberately NOT 100 -- distinct from BOTH StudentHome.tsx's own
-    // fabricated FIXTURE_DEFAULT_GOAL_HOURS and this harness's own default
-    // FIXTURE_ACTIVE_SEASON.defaultGoalHours (both 100), so a coincidental
-    // match can't mask a bug (packet's own hazard warning).
-    defaultGoalHours: 7,
+    // Deliberately DIFFERENT from resolveStudentScope's own goalHours below
+    // in both tests -- if the render fell back to (or independently
+    // recomputed against) the season default, this number would leak into
+    // the assertions and be caught.
+    defaultGoalHours: 999,
   };
 
-  it('a null goalHoursOverride falls to the real season default (7) -- visible label, aria-valuemax, aria-valuetext', async () => {
+  it('goalHours/confirmedHours/plannedHours come from resolveStudentScope, never the season default and never data.studentHours (a deliberately different, unused fixture value)', async () => {
+    renderAsUser(
+      STUDENT_USER,
+      {
+        // Deliberately a DIFFERENT confirmedHours than resolveStudentScope's
+        // own value below -- if the render used this still-fixture value
+        // instead of the real view's value, this test would catch it.
+        loadData: async () =>
+          buildDataFixture({
+            studentHours: { studentId: 'student-1', seasonId: 'season-1', confirmedHours: 999 },
+          }),
+        resolveStudentScope: async () => ({
+          teamId: 'team-fixture-c10',
+          goalHours: 8,
+          confirmedHours: 2,
+          plannedHours: 1,
+        }),
+        nowFn: () => FIXTURE_REFERENCE_NOW,
+      },
+      async () => CRITERION_10_SEASON,
+    );
+    await flushMicrotasks();
+
+    const progressBar = container.querySelector('[role="progressbar"]');
+    expect(progressBar).toBeTruthy();
+    expect(progressBar!.getAttribute('aria-valuemax')).toBe('8');
+    expect(progressBar!.getAttribute('aria-valuetext')).toBe('2 / 8 h (25%)');
+    expect(container.innerHTML).toContain('2 / 8 h (25%)');
+    expect(container.innerHTML).toContain('aria-valuemax="8"');
+    expect(container.innerHTML).toContain('aria-valuetext="2 / 8 h (25%)"');
+    // Never the season default (999) -- proves no independent TS-side
+    // coalesce/override happens anymore (the coordinator's own fix).
+    expect(progressBar!.getAttribute('aria-valuemax')).not.toBe('999');
+    // Confirmed/planned legend -- the REAL view's numbers (2/1), never the
+    // still-fixture loadData's own confirmedHours (999) or
+    // computePlannedHours's fixture-derived result (this render's own
+    // `data.events`/`data.sessions`/`rsvps` are all empty, per
+    // `buildDataFixture`'s own default, so computePlannedHours would have
+    // returned 0 here even if still called -- the 999 confirmedHours is the
+    // genuinely discriminating value).
+    expect(container.textContent).toContain('2 h confirmed');
+    expect(container.textContent).toContain('1 h planned');
+    expect(container.textContent).not.toContain('999');
+  });
+
+  it('a different resolveStudentScope result renders different real numbers, proving nothing is hardcoded', async () => {
     renderAsUser(
       STUDENT_USER,
       {
         loadData: async () => buildDataFixture({ studentHours: null }),
-        resolveStudentScope: async () => ({ teamId: 'team-fixture-c10', goalHoursOverride: null }),
+        resolveStudentScope: async () => ({
+          teamId: 'team-fixture-c10',
+          goalHours: 40,
+          confirmedHours: 10,
+          plannedHours: 5,
+        }),
         nowFn: () => FIXTURE_REFERENCE_NOW,
       },
       async () => CRITERION_10_SEASON,
@@ -1440,36 +1554,13 @@ describe('<StudentHome /> T176 -- goal-hours denominator is real across all thre
 
     const progressBar = container.querySelector('[role="progressbar"]');
     expect(progressBar).toBeTruthy();
-    expect(progressBar!.getAttribute('aria-valuemax')).toBe('7');
-    expect(progressBar!.getAttribute('aria-valuetext')).toBe('0 / 7 h (0%)');
-    expect(container.innerHTML).toContain('0 / 7 h (0%)');
-    expect(container.innerHTML).toContain('aria-valuemax="7"');
-    expect(container.innerHTML).toContain('aria-valuetext="0 / 7 h (0%)"');
-    expect(progressBar!.getAttribute('aria-valuemax')).not.toBe('100');
-  });
-
-  it('a real goalHoursOverride wins over the season default', async () => {
-    renderAsUser(
-      STUDENT_USER,
-      {
-        loadData: async () =>
-          buildDataFixture({
-            studentHours: { studentId: 'student-1', seasonId: 'season-1', confirmedHours: 3 },
-          }),
-        resolveStudentScope: async () => ({ teamId: 'team-fixture-c10', goalHoursOverride: 12 }),
-        nowFn: () => FIXTURE_REFERENCE_NOW,
-      },
-      async () => CRITERION_10_SEASON,
-    );
-    await flushMicrotasks();
-
-    const progressBar = container.querySelector('[role="progressbar"]');
-    expect(progressBar).toBeTruthy();
-    expect(progressBar!.getAttribute('aria-valuemax')).toBe('12');
-    expect(progressBar!.getAttribute('aria-valuetext')).toBe('3 / 12 h (25%)');
-    expect(container.innerHTML).toContain('3 / 12 h (25%)');
-    expect(progressBar!.getAttribute('aria-valuemax')).not.toBe('7');
-    expect(progressBar!.getAttribute('aria-valuemax')).not.toBe('100');
+    expect(progressBar!.getAttribute('aria-valuemax')).toBe('40');
+    expect(progressBar!.getAttribute('aria-valuetext')).toBe('10 / 40 h (25%)');
+    expect(container.innerHTML).toContain('10 / 40 h (25%)');
+    expect(container.textContent).toContain('10 h confirmed');
+    expect(container.textContent).toContain('5 h planned');
+    expect(progressBar!.getAttribute('aria-valuemax')).not.toBe('8');
+    expect(progressBar!.getAttribute('aria-valuemax')).not.toBe('999');
   });
 });
 
@@ -1480,7 +1571,10 @@ describe('<StudentHome /> T176 -- render-and-enumerate live over container.inner
       name: 'Real Season C11',
       startsOn: '2026-01-01',
       endsOn: '2026-12-31',
-      defaultGoalHours: 45,
+      // Deliberately DIFFERENT from resolveStudentScope's own goalHours
+      // below, and deliberately unused (T176 round 2 -- see criterion 10):
+      // if this leaked into the render, the assertions below would catch it.
+      defaultGoalHours: 999,
       isActive: true,
       createdAt: '2026-01-01T00:00:00.000Z',
     };
@@ -1490,7 +1584,12 @@ describe('<StudentHome /> T176 -- render-and-enumerate live over container.inner
       {
         // `defaultLoadStudentHomeData` -- the shipped default, unmodified.
         resolveStudentId: async () => 'student-real-c11',
-        resolveStudentScope: async () => ({ teamId: 'team-real-c11', goalHoursOverride: null }),
+        resolveStudentScope: async () => ({
+          teamId: 'team-real-c11',
+          goalHours: 50,
+          confirmedHours: 5,
+          plannedHours: 2,
+        }),
         nowFn: () => FIXTURE_REFERENCE_NOW,
       },
       async () => REAL_SEASON,
@@ -1504,16 +1603,24 @@ describe('<StudentHome /> T176 -- render-and-enumerate live over container.inner
     // both its parameters for `displayName`.
     expect(html).toContain('Hi Ada Reyes');
 
-    // Rows 2-4 -- fixed by criterion 10: real season default (45), never
-    // the fabricated FIXTURE_DEFAULT_GOAL_HOURS (100).
+    // Rows 2-4 -- fixed by criterion 10: the real `resolveStudentScope`
+    // value (50), never the fabricated `FIXTURE_DEFAULT_GOAL_HOURS` (100)
+    // and never the (deliberately different, unused) season default (999).
     const progressBar = container.querySelector('[role="progressbar"]');
-    expect(progressBar!.getAttribute('aria-valuemax')).toBe('45');
-    expect(progressBar!.getAttribute('aria-valuetext')).toBe('0 / 45 h (0%)');
-    expect(html).toContain('0 / 45 h (0%)');
+    expect(progressBar!.getAttribute('aria-valuemax')).toBe('50');
+    expect(progressBar!.getAttribute('aria-valuetext')).toBe('5 / 50 h (10%)');
+    expect(html).toContain('5 / 50 h (10%)');
     expect(progressBar!.getAttribute('aria-valuemax')).not.toBe('100');
+    expect(progressBar!.getAttribute('aria-valuemax')).not.toBe('999');
 
-    // Row 5 -- studentHours -> null for a real (non-fixture) student id.
-    expect(html).toContain('0 h confirmed + 0 h planned');
+    // Row 5 -- RECLASSIFIED, T176 round 2 (coordinator correction): no
+    // longer "honestly empty" via a fixture-null `data.studentHours` --
+    // `confirmedHours`/`plannedHours` are now genuinely real
+    // `v_student_goal_projection` columns (same single `resolveStudentScope`
+    // read as the goal-hours denominator), so this real student's real
+    // confirmed/planned numbers (5/2) render here, not a fixture-derived 0.
+    expect(html).toContain('5 h confirmed + 2 h planned');
+    expect(html).not.toContain('0 h confirmed + 0 h planned');
 
     // Row 6 -- participation -> null -> em dash, never a fabricated 0%.
     expect(html).toContain('Participation: —');

@@ -56,7 +56,9 @@ vi.mock('../../lib/supabase/loaders/students', async (importOriginal) => {
     ...actual,
     resolveStudentScope: async () => ({
       teamId: 'team-fixture-dashboardpage',
-      goalHoursOverride: null,
+      goalHours: 100,
+      confirmedHours: 0,
+      plannedHours: 0,
     }),
   };
 });

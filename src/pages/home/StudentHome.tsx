@@ -115,22 +115,41 @@
  *     idiom for the same view. `null` (no row) renders "—", never a
  *     fabricated 0%, per that same file's convention.
  *   - MET-04's denominator (PRD: `goal_hours_override ?? season
- *     default_goal_hours`) has no SQL view of its own -- `resolveGoalHours`
- *     below is a plain nullish-coalesce of two real, already-loaded scalar
- *     values, not a re-derivation of anything the views compute. **T176:**
- *     both inputs are now genuinely real, not fixture-fed --
- *     `seasonDefaultGoalHours` is `useActiveSeason().season.defaultGoalHours`
- *     (`loaders/seasons.ts`, already loaded by `<SeasonProvider>` before this
- *     page ever mounts its content tier) and `goalHoursOverride` is the
- *     resolved student's own `students.goal_hours_override`
- *     (`resolveStudentScope`, `loaders/students.ts`, additive) -- neither
- *     comes from `loadData`'s own (still-fixture) `StudentHomeData` anymore;
- *     see the "Identity resolution" doc above `resolveStudentIdentity` below
- *     for the full record. `hoursVsGoalPercent`'s division is the same
- *     disclosed, legitimate UI-side percent math `OutreachList.tsx`'s
- *     `confirmedPercent` / `CoachHome.tsx`'s `hoursVsGoalPercent` already
- *     established (no metric view exists for this specific ratio to
- *     duplicate).
+ *     default_goal_hours`) **CORRECTED, T176 round 2 (coordinator's own
+ *     error, disclosed by them, fixed here) -- the claim this bullet
+ *     previously made, "has no SQL view of its own" / "not a re-derivation
+ *     of anything the views compute," is FALSE.**
+ *     `v_student_goal_projection` (`supabase/migrations/
+ *     20260723000001_dashboard_views.sql:322-334`) already computes exactly
+ *     this coalesce in SQL: `coalesce(s.goal_hours_override,
+ *     se.default_goal_hours) as goal_hours`, scoped to the currently-active
+ *     season. `kpi_views.sql:216` independently carries the SUMMED form of
+ *     the identical coalesce (`coalesce(sum(coalesce(s.goal_hours_override,
+ *     se.default_goal_hours)), 0)`), confirming this is genuine,
+ *     already-shipped view formula territory, not a gap. `goalHours` below
+ *     is now a VERBATIM PASSTHROUGH of that view's own `goal_hours` column
+ *     (via `resolveStudentScope`, `loaders/students.ts`, reading
+ *     `v_student_goal_projection` scoped by `student_id`) -- no coalesce,
+ *     no nullish-coalesce, no arithmetic of any kind happens on it in this
+ *     file. `confirmedHours`/`plannedHours` are the SAME view's own
+ *     `confirmed_hours`/`planned_hours` columns (its own LEFT JOINs to
+ *     `v_student_hours`/`v_student_planned_hours`), read via the SAME
+ *     single call -- also verbatim passthroughs, no longer sourced from
+ *     `loadData`'s own (still-fixture) `data.studentHours`/
+ *     `computePlannedHours(...)` for this purpose. `resolveGoalHours` (the
+ *     pure function below) is NOT called anywhere in this render path
+ *     anymore -- it stays exported and directly unit-tested (byte-
+ *     unchanged, in case another future caller needs the raw
+ *     coalesce-in-TypeScript idiom), but this file's own content tier does
+ *     not use it. See the "Identity resolution" doc above
+ *     `resolveStudentIdentity` below for the full record.
+ *     `hoursVsGoalPercent`'s division is the same disclosed, legitimate
+ *     UI-side percent math `OutreachList.tsx`'s `confirmedPercent` /
+ *     `CoachHome.tsx`'s `hoursVsGoalPercent` already established, and
+ *     `dashboard_views.sql`'s own module doc (heading 9) explicitly
+ *     disclaims computing this exact ratio in SQL ("Percent-of-goal ... is
+ *     deliberately NOT computed here") -- so this one division is
+ *     confirmed-legitimate, not an oversight.
  *
  * -----------------------------------------------------------------------
  * 5. "Check in" reuses T032's real validation contract -- not a second,
@@ -212,10 +231,12 @@
  * **Known, disclosed narrowing (not a bug, filed as a follow-up, T176
  * worker output criterion 12b):** `resolveStudentScope` reads the LEGACY
  * `students.team_id` primary-team column, per
- * `supabase/migrations/20260721000000_student_teams.sql`'s own header:
- * "a student may belong to more than one team... `students.team_id` remains
- * the legacy/primary-team read path until a later SCH-03+ packet migrates
- * readers over to this junction." Every other current reader
+ * `supabase/migrations/20260721000000_student_teams.sql`'s own header --
+ * TWO separate, non-contiguous verbatim fragments from that header, quoted
+ * here explicitly as such (not one contiguous sentence): line 2, "a student
+ * may belong to more than one team"; and lines 10-12, "[`students.team_id`]
+ * remains the legacy/primary-team read path until a later SCH-03+ packet
+ * migrates readers over to this junction." Every other current reader
  * (`v_student_participation`/`v_team_hours`, `dashboard_views.sql`,
  * `kpi_views.sql`) has already migrated to the `student_teams` junction;
  * this file has not. A dual-team-member student's second team's meetings,
@@ -448,21 +469,34 @@ export type LoadStudentHomeDataFn = (
 ) => Promise<StudentHomeData>;
 
 /**
- * T176 -- the resolved student's own `team_id`/`goal_hours_override`
- * (`students` table, own-row read). Type OWNED here (mirrors
- * `MeetingsList.tsx`'s own `CurrentViewerIdentity`/`ResolveCurrentStudentIdFn`
- * cross-file shape, module doc #8) and imported as a type by
- * `loaders/students.ts`, which supplies the real implementation
- * (`resolveStudentScope`, additive-only export).
+ * T176 round 2 (coordinator correction, module doc #4) -- the resolved
+ * student's own `team_id`/`goal_hours`/`confirmed_hours`/`planned_hours`,
+ * read from `v_student_goal_projection` (`supabase/migrations/
+ * 20260723000001_dashboard_views.sql:322-334`), NOT the raw `students`
+ * table. `goalHours` is that view's own already-coalesced `goal_hours`
+ * column (`coalesce(goal_hours_override, season default_goal_hours)`,
+ * computed in SQL) -- a verbatim passthrough, never recomputed here (same
+ * posture `CoachHome.tsx`'s own module doc "(g) Goal source" already
+ * records for the season-wide reader of this same view). `confirmedHours`/
+ * `plannedHours` are that view's own `confirmed_hours`/`planned_hours`
+ * columns (its own LEFT JOINs to `v_student_hours`/
+ * `v_student_planned_hours`) -- also verbatim passthroughs. Type OWNED
+ * here (mirrors `MeetingsList.tsx`'s own `CurrentViewerIdentity`/
+ * `ResolveCurrentStudentIdFn` cross-file shape, module doc #8) and
+ * imported as a type by `loaders/students.ts`, which supplies the real
+ * implementation (`resolveStudentScope`, additive-only export).
  */
 export interface StudentScope {
   teamId: string;
-  goalHoursOverride: number | null;
+  goalHours: number;
+  confirmedHours: number;
+  plannedHours: number;
 }
 
-/** `null` when the resolved student has no `students` row visible under RLS
- * (defensive -- in practice, the same row `resolveStudentId` above just
- * resolved from). */
+/** `null` when the resolved student has no `v_student_goal_projection` row
+ * (e.g. an inactive student, or genuinely no active season -- defensive;
+ * in practice `StudentHome`'s own outer wrapper never mounts this seam
+ * until `activeSeason.status === 'ready'`). */
 export type ResolveStudentScopeFn = (studentId: string) => Promise<StudentScope | null>;
 
 // ---------------------------------------------------------------------------
@@ -1235,23 +1269,32 @@ function StudentHomeLoadingSkeleton(): ReactNode {
 // ---------------------------------------------------------------------------
 // Content tier -- module docs #8/#9/#10. Everything the pre-T176
 // `StudentHome` body did, unchanged in behavior -- only WHERE
-// `studentId`/`teamId`/`seasonId`/the goal-hours pair come from changed
-// (props from the identity-resolution tier below, instead of defaulted
-// parameters / the still-fixture `loadData` result's own two fields --
-// module doc #4). Only ever mounts once a real `studentId`/`teamId` are
-// known (either resolved for real, or explicitly supplied -- module doc
-// above the identity-resolution tier).
+// `studentId`/`teamId`/`seasonId`/`goalHours`/`confirmedHours`/
+// `plannedHours` come from changed (props from the identity-resolution
+// tier below, instead of defaulted parameters / the still-fixture
+// `loadData` result's own fields -- module doc #4, T176 round 2 correction).
+// Only ever mounts once a real `studentId`/`teamId` are known (either
+// resolved for real, or explicitly supplied -- module doc above the
+// identity-resolution tier).
 // ---------------------------------------------------------------------------
 
 interface StudentHomeContentProps {
   studentId: string;
   teamId: string;
   seasonId: string;
-  /** Real `useActiveSeason().season.defaultGoalHours` (module doc #4 T176 update). */
-  seasonDefaultGoalHours: number;
-  /** Real, resolved `students.goal_hours_override` for THIS student, or
-   * `null` on the explicit-`teamId`-bypass path (module doc #4 T176 update). */
-  goalHoursOverride: number | null;
+  /** Verbatim passthrough of `v_student_goal_projection.goal_hours`
+   * (`resolveStudentScope`) -- already the coalesced
+   * `goal_hours_override ?? season default_goal_hours` value, computed in
+   * SQL. NOT fed through `resolveGoalHours` (module doc #4 T176 round 2). */
+  goalHours: number;
+  /** Verbatim passthrough of the same view's own `confirmed_hours` column
+   * (its own `v_student_hours` LEFT JOIN). Replaces the pre-round-2
+   * `data.studentHours?.confirmedHours ?? 0` (still-fixture) source. */
+  confirmedHours: number;
+  /** Verbatim passthrough of the same view's own `planned_hours` column
+   * (its own `v_student_planned_hours` LEFT JOIN). Replaces the
+   * pre-round-2 `computePlannedHours(...)` (still-fixture-sourced) call. */
+  plannedHours: number;
   loadData: LoadStudentHomeDataFn;
   nowFn: () => Date;
   submitCheckinCode: SubmitCheckinCodeFn;
@@ -1261,8 +1304,9 @@ function StudentHomeContent({
   studentId,
   teamId,
   seasonId,
-  seasonDefaultGoalHours,
-  goalHoursOverride,
+  goalHours,
+  confirmedHours,
+  plannedHours,
   loadData,
   nowFn,
   submitCheckinCode,
@@ -1323,13 +1367,15 @@ function StudentHomeContent({
   );
   const heroState = selectHeroState(liveSession !== null, opportunities.length);
 
-  const confirmedHours = data.studentHours?.confirmedHours ?? 0;
-  const plannedHours = computePlannedHours(data.sessions, data.events, rsvps, studentId);
-  // T176 (module doc #4, §2c): real season default + real own-row override
-  // -- NOT `data.defaultGoalHours`/`data.goalHoursOverride` (still-fixture
-  // `loadData` fields, kept on `StudentHomeData` unchanged but no longer
-  // consulted for this one computation).
-  const goalHours = resolveGoalHours(goalHoursOverride, seasonDefaultGoalHours);
+  // T176 round 2 (module doc #4): `confirmedHours`/`plannedHours`/
+  // `goalHours` are all verbatim passthroughs of `v_student_goal_projection`
+  // (props, from `resolveStudentScope`) -- NOT `data.studentHours`/
+  // `computePlannedHours(...)`/`data.defaultGoalHours`/
+  // `data.goalHoursOverride` (still-fixture `loadData` fields, kept on
+  // `StudentHomeData` unchanged but no longer consulted for these three
+  // numbers). `resolveGoalHours`/`computePlannedHours` themselves stay
+  // exported and directly unit-tested, byte-unchanged; simply not called
+  // from this render path anymore.
   const hoursPercent = hoursVsGoalPercent(confirmedHours, goalHours);
 
   function handleRsvpChange(sessionId: string, status: RsvpStatus): void {
@@ -1435,8 +1481,8 @@ function StudentHomeContent({
 }
 
 // ---------------------------------------------------------------------------
-// Identity-resolution tier -- T176. Real `studentId`/`teamId`/
-// `goalHoursOverride` resolution, mirroring `MeetingsList.tsx`'s own T096
+// Identity-resolution tier -- T176. Real `studentId`/`teamId`/goal-hours
+// resolution, mirroring `MeetingsList.tsx`'s own T096
 // `ResolvedStudentMeetingsView`/`StudentMeetingsViewContainer` split
 // (`../meetings/MeetingsList.tsx`, read-only reference, never imported --
 // independently authored against the identical shape, per this task's own
@@ -1450,17 +1496,39 @@ function StudentHomeContent({
 // plain `??` short-circuit, not a separate branch, so the call is
 // GENUINELY never made, not just its result discarded), bail to the empty
 // state on `null` (no student linked); then, UNLESS `explicitTeamId` is
-// supplied (in which case `goalHoursOverride` for this render is `null` --
-// no override, an honest default for the explicit-bypass path, never hit by
-// a real signed-in caller), resolve `{teamId, goalHoursOverride}` via
+// supplied (in which case there is no view row to read -- `goalHours` for
+// this render honestly falls back to the real `seasonDefaultGoalHours`
+// (the same value a `null`-override coalesce would have produced),
+// `confirmedHours`/`plannedHours` default to `0` -- an honest default for
+// the explicit-bypass path, never hit by a real signed-in caller), resolve
+// `{teamId, goalHours, confirmedHours, plannedHours}` via
 // `resolveStudentScope(studentId)`, bailing to the same empty state on
 // `null`.
+//
+// T176 ROUND 2 (checker MAJOR fix -- see `loaders/students.ts`'s own module
+// doc for the full record): this tier no longer skips its own mount when
+// both `explicitStudentId`/`explicitTeamId` are supplied. Measured directly
+// (throwaway local experiment, not committed): with the skip-mount branch
+// removed, the rendered sequence is IDENTICAL in every configuration --
+// `resolveStudentIdentity`'s own internal `??` short-circuit already makes
+// resolution for a fully-explicit call settle within the SAME microtask
+// tick regardless of whether this tier mounts at all (an `async function`
+// with no real `await` work still returns a promise that resolves on the
+// very next microtask, same as `useLoadState`'s own content-tier hop), so
+// there is no observable "Finding your student record…" flash to avoid in
+// the first place. The branch was therefore genuinely redundant, not
+// merely un-tested -- deleted rather than pinned with a contrived test
+// (the checker's own instruction: delete if genuinely redundant, pin
+// otherwise). `StudentHome`'s own `'ready'` case below now renders
+// `ResolvedStudentHomeView` directly.
 // ---------------------------------------------------------------------------
 
 export interface ResolvedStudentIdentity {
   studentId: string;
   teamId: string;
-  goalHoursOverride: number | null;
+  goalHours: number;
+  confirmedHours: number;
+  plannedHours: number;
 }
 
 export async function resolveStudentIdentity(
@@ -1469,15 +1537,28 @@ export async function resolveStudentIdentity(
   explicitTeamId: string | undefined,
   resolveStudentId: ResolveCurrentStudentIdFn,
   resolveStudentScope: ResolveStudentScopeFn,
+  seasonDefaultGoalHours: number,
 ): Promise<ResolvedStudentIdentity | null> {
   const studentId = explicitStudentId ?? (await resolveStudentId(viewer));
   if (studentId === null) return null;
   if (explicitTeamId !== undefined) {
-    return { studentId, teamId: explicitTeamId, goalHoursOverride: null };
+    return {
+      studentId,
+      teamId: explicitTeamId,
+      goalHours: seasonDefaultGoalHours,
+      confirmedHours: 0,
+      plannedHours: 0,
+    };
   }
   const scope = await resolveStudentScope(studentId);
   if (scope === null) return null;
-  return { studentId, teamId: scope.teamId, goalHoursOverride: scope.goalHoursOverride };
+  return {
+    studentId,
+    teamId: scope.teamId,
+    goalHours: scope.goalHours,
+    confirmedHours: scope.confirmedHours,
+    plannedHours: scope.plannedHours,
+  };
 }
 
 interface ResolvedStudentHomeViewProps {
@@ -1494,11 +1575,12 @@ interface ResolvedStudentHomeViewProps {
 }
 
 /**
- * Mounts only when `StudentHomeIdentityGate` below does NOT skip this tier
- * (i.e. at least one of `explicitStudentId`/`explicitTeamId` is missing).
- * Owns its OWN loading/error/no-student-linked DES-12 copy, each
- * independently distinguishable from the content tier's own "Loading
- * Home…"/"Couldn't load Home" copy (criterion 7 -- not a re-run of T129's
+ * Always mounts once `StudentHome`'s outer wrapper reaches
+ * `activeSeason.status === 'ready'` (T176 round 2 -- no skip-mount branch
+ * above this component anymore; see module doc above for why). Owns its
+ * OWN loading/error/no-student-linked DES-12 copy, each independently
+ * distinguishable from the content tier's own "Loading Home…"/"Couldn't
+ * load Home" copy (criterion 7 -- not a re-run of T129's
  * shared-skeleton-text NIT).
  */
 function ResolvedStudentHomeView({
@@ -1521,6 +1603,7 @@ function ResolvedStudentHomeView({
         explicitTeamId,
         resolveStudentId,
         resolveStudentScope,
+        seasonDefaultGoalHours,
       ),
     [
       viewer.id,
@@ -1529,6 +1612,7 @@ function ResolvedStudentHomeView({
       explicitTeamId,
       resolveStudentId,
       resolveStudentScope,
+      seasonDefaultGoalHours,
     ],
   );
 
@@ -1569,46 +1653,20 @@ function ResolvedStudentHomeView({
     );
   }
 
-  const { studentId, teamId, goalHoursOverride } = loadState.data;
+  const { studentId, teamId, goalHours, confirmedHours, plannedHours } = loadState.data;
   return (
     <StudentHomeContent
       studentId={studentId}
       teamId={teamId}
       seasonId={seasonId}
-      seasonDefaultGoalHours={seasonDefaultGoalHours}
-      goalHoursOverride={goalHoursOverride}
+      goalHours={goalHours}
+      confirmedHours={confirmedHours}
+      plannedHours={plannedHours}
       loadData={loadData}
       nowFn={nowFn}
       submitCheckinCode={submitCheckinCode}
     />
   );
-}
-
-/**
- * Module doc above -- an explicit `studentId` AND `teamId` together (every
- * pre-existing fixture-driven test/call site) skip the identity-resolution
- * tier's mount ENTIRELY, rendering `StudentHomeContent` directly with
- * `goalHoursOverride: null` (an honest default for this bypass path -- see
- * module doc above `resolveStudentIdentity`); anything else (the
- * real-world default, or only one of the two explicit) mounts
- * `ResolvedStudentHomeView`'s own real resolution load state.
- */
-function StudentHomeIdentityGate(props: ResolvedStudentHomeViewProps): ReactNode {
-  if (props.explicitStudentId !== undefined && props.explicitTeamId !== undefined) {
-    return (
-      <StudentHomeContent
-        studentId={props.explicitStudentId}
-        teamId={props.explicitTeamId}
-        seasonId={props.seasonId}
-        seasonDefaultGoalHours={props.seasonDefaultGoalHours}
-        goalHoursOverride={null}
-        loadData={props.loadData}
-        nowFn={props.nowFn}
-        submitCheckinCode={props.submitCheckinCode}
-      />
-    );
-  }
-  return <ResolvedStudentHomeView {...props} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -1713,7 +1771,7 @@ export function StudentHome({
       );
     case 'ready':
       return (
-        <StudentHomeIdentityGate
+        <ResolvedStudentHomeView
           viewer={{ id: user.id, role: user.role }}
           explicitStudentId={explicitStudentId}
           explicitTeamId={explicitTeamId}

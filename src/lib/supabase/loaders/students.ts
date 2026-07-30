@@ -319,43 +319,92 @@ export const updateStudent: UpdateStudentFn = makeUpdateStudent();
 /**
  * T176 -- additive only, appended after every pre-existing export (this
  * task's own Allowed Files instruction: no existing export's name,
- * signature, or behavior changes). Real own-row `students.team_id`/
- * `students.goal_hours_override` resolution for `StudentHome.tsx`'s
- * identity-resolution tier -- the same "single own-row read, real
- * `.eq('id', ...)` scope" shape `loaders/meetings.ts`'s own T096
- * `queryStudentIdByProfileId` already established for the sibling identity
- * seam, and RLS-identical: `students`' `own_or_linked_read` policy
- * (`supabase/migrations/20260717000002_rls.sql`, same policy
- * `loaders/students.ts`'s own `queryStudents` above is already bounded by
- * for staff, and `MeetingsList.tsx`'s own module doc #6 already cites for
- * a student/parent viewer's own row) already restricts this read to the
- * caller's own row whether or not this file's own `.eq('id', studentId)`
- * filter is present -- this filter is defense-in-depth, not the
- * authorization boundary (T176 worker output criterion 8's own inspection
- * note: no new role/family authorization logic is added here or anywhere
- * else in this task's diff).
+ * signature, or behavior changes).
  *
- * A brand-new interface (`StudentScopeDbRow`), not a reuse of the existing
- * module-private `StudentDbRow` above -- this task's own packet forbids
- * touching that interface's shape, and this query selects a narrower
- * two-column projection anyway (`team_id`, `goal_hours_override` only),
- * unrelated to `StudentDbRow`'s own eight-column shape.
+ * **Coordinator correction (post-checker, T176 round 2):** the original
+ * shape of this read selected the raw `students.team_id`/
+ * `students.goal_hours_override` columns and let `StudentHome.tsx`
+ * coalesce the goal-hours override against the season default in
+ * TypeScript. That is a constitution-item-3 violation with a working
+ * in-repo counterexample: `v_student_goal_projection`
+ * (`supabase/migrations/20260723000001_dashboard_views.sql:322-334`)
+ * already computes exactly this coalesce in SQL --
+ * `coalesce(s.goal_hours_override, se.default_goal_hours) as goal_hours`
+ * -- scoped to the currently-active season (`join seasons se on
+ * se.is_active`), and already has a working in-repo reader
+ * (`src/lib/supabase/loaders/dashboard.ts`'s own `queryGoalProjection`,
+ * `.select('student_id, season_id, team_id, goal_hours, confirmed_hours,
+ * planned_hours')`) whose own consumer (`CoachHome.tsx`'s module doc,
+ * "(g) Goal source") records the required posture verbatim:
+ * "`StudentGoalProjectionEntry.goalHours` is a verbatim passthrough, never
+ * recomputed here." This read now does the same thing for one student
+ * instead of a whole season.
+ *
+ * The same single read also returns `confirmed_hours`/`planned_hours`
+ * (the view's own `v_student_hours`/`v_student_planned_hours` LEFT JOINs,
+ * both already-real, already-SQL-computed columns) -- threaded through so
+ * `StudentHome.tsx`'s content tier no longer needs its own separate,
+ * fixture-fed `data.studentHours`/`computePlannedHours(...)` call for
+ * these two numbers either (same single read, strictly more honest data,
+ * not a second query).
+ *
+ * Scoped by `.eq('student_id', studentId)` only -- no explicit
+ * `.eq('season_id', ...)` filter is added, because the view's own `join
+ * seasons se on se.is_active` already restricts every row to the single
+ * currently-active season (`seasons_single_active_idx` guarantees at most
+ * one such row, same guarantee `loaders/seasons.ts`'s own
+ * `queryActiveSeason` already relies on) -- adding a second, redundant
+ * season filter here would require widening `ResolveStudentScopeFn`'s own
+ * signature to take a `seasonId` argument for no additional real scoping
+ * benefit, a disclosed, deliberate simplicity choice.
+ *
+ * RLS -- **reasoned, not measured (no live Supabase in this environment,
+ * same disclosed gap every task in this codebase carries).** The
+ * migration's own header (`dashboard_views.sql:49-52`) states none of its
+ * views are `security_definer`/`security_barrier`, so
+ * `v_student_goal_projection` runs under the CALLING session's own RLS
+ * against its base tables. For a `student`-role caller reading their own
+ * `student_id`: `students` carries `own_or_linked_read`
+ * (`rls.sql:100-102`, `id in (select my_student_ids())`); `seasons`
+ * carries `read_all` (`rls.sql:78-79`, any authenticated caller); the
+ * view's own `v_student_hours` LEFT JOIN reads `attendance`
+ * (`own_or_linked_read`, `rls.sql:230-232`) via `event_sessions`
+ * (`own_or_linked_read`, `rls.sql:180`) and `events`
+ * (`own_or_linked_read`, `rls.sql:153`); `v_student_planned_hours` reads
+ * `v_planned_rsvp_hours`, itself over `rsvps` (`own_or_linked_read`,
+ * `rls.sql:201`) via the same `event_sessions`/`events`. Every base table
+ * this view touches already grants a student read access to exactly their
+ * own row(s) -- composed together, a real signed-in student's own query
+ * genuinely resolves, not an RLS-caused false-empty. This exact
+ * composition (a multi-table view whose every base table is
+ * `own_or_linked_read`-covered, read by a student for their own id) has no
+ * DIRECT precedent elsewhere in this codebase to point to as a live-tested
+ * example -- flagged for the checker to independently confirm rather than
+ * accepted on my own reasoning alone.
+ *
+ * A brand-new interface (`StudentGoalProjectionDbRow`), not a reuse of the
+ * existing module-private `StudentDbRow` above -- this task's own packet
+ * forbids touching that interface's shape, and this query reads a
+ * different table (a view, not `students` directly) with a disjoint
+ * column set.
  */
-interface StudentScopeDbRow {
+interface StudentGoalProjectionDbRow {
   team_id: string;
-  goal_hours_override: number | null;
+  goal_hours: number;
+  confirmed_hours: number;
+  planned_hours: number;
 }
 
-async function queryStudentScopeById(
+async function queryStudentGoalProjectionById(
   client: SupabaseClient,
   studentId: string,
-): Promise<LoaderQueryResult<StudentScopeDbRow>> {
+): Promise<LoaderQueryResult<StudentGoalProjectionDbRow>> {
   const result = await client
-    .from('students')
-    .select('team_id, goal_hours_override')
-    .eq('id', studentId)
+    .from('v_student_goal_projection')
+    .select('team_id, goal_hours, confirmed_hours, planned_hours')
+    .eq('student_id', studentId)
     .maybeSingle();
-  return { data: (result.data as StudentScopeDbRow | null) ?? null, error: result.error };
+  return { data: (result.data as StudentGoalProjectionDbRow | null) ?? null, error: result.error };
 }
 
 /**
@@ -369,11 +418,21 @@ async function queryStudentScopeById(
 export function makeResolveStudentScope(
   getClient: () => SupabaseClient = getSupabaseClient,
 ): ResolveStudentScopeFn {
-  const loadScope = createLoader<string, StudentScopeDbRow>(queryStudentScopeById, getClient);
+  const loadScope = createLoader<string, StudentGoalProjectionDbRow>(
+    queryStudentGoalProjectionById,
+    getClient,
+  );
   return async (studentId: string) => {
     const row = await loadScope(studentId);
     if (row === null) return null;
-    return { teamId: row.team_id, goalHoursOverride: row.goal_hours_override };
+    // Verbatim passthrough (constitution item 3) -- `goal_hours` is already
+    // the coalesced value; no coalesce/override arithmetic happens here.
+    return {
+      teamId: row.team_id,
+      goalHours: row.goal_hours,
+      confirmedHours: row.confirmed_hours,
+      plannedHours: row.planned_hours,
+    };
   };
 }
 
