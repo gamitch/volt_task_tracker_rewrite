@@ -141,7 +141,26 @@ Packets P0–P13 plus regression fixes and live hotfixes:
 - T128 — wave-3 debt: format gate, meetings label wording, `astryx-api.md` accuracy,
   `v_planned_rsvp_hours` future guard.
 
-## Active (2026-07-29/30 — three live packets, everything below this note is stale)
+## Active (2026-07-29/30 — four live packets, everything below this note is stale)
+
+**2026-07-30 — T170 packet ready for dispatch (foreman-planner):**
+`docs/swarm/active/T170-worker-packet.md`. Sixth instance of the
+placeholder-default family, second on a live route (`/outreach`'s
+`OutreachList.viewerStudentId`). Reuses `resolveCurrentStudentId`
+(`loaders/meetings.ts`) verbatim, the same seam T176 proved and shipped.
+Unlike T176, `OutreachList`'s underlying data is already real (`seasonId`
+already fixed, `loadData` already the real loader) — this fix should make
+every personal figure on the page genuinely correct, not merely honest.
+Sonnet/opus tier per item 18/25 (identity plumbing, no migration/RLS/new
+metric SQL, proven seam — not bumped for topic sensitivity). Grepped item 3
+before scoping: no SQL view duplicates `computeStudentHours`'s RSVP-based
+formula; that function pre-dates this task and is untouched. Checked the
+T184 is_active trap for this surface specifically: `OutreachList` has no
+second, further-scoped query analogous to `v_student_goal_projection`, so
+the false-empty failure mode T176 hit likely does not reproduce here — the
+packet requires the worker to verify this rather than inherit the claim.
+Blocks T169's student half (silent RSVP data loss) per the existing ledger
+row.
 
 **2026-07-30 — three packets ready for dispatch, all foreman-authored:**
 - **T151** (mechanism fix, not premise-gated per item 25 — mechanical,
