@@ -1,511 +1,546 @@
 
-# T176 — Worker Packet
+# T176 — Worker Packet (Revision 2 — final; no gate behind this one)
 
 `StudentHome`'s `studentId`/`teamId`/`seasonId` default to placeholders; every
 signed-in student's dashboard fetches a fixture identity's data.
 
-**Header.** Branch tip `b2beb09` on `claude/swarm-plan-zl575z`. Ledger row:
-`docs/swarm/task-ledger.md` (T176, "Filed"; T155, "MERGED — the landed
-template"). Source audit: `docs/swarm/inbox/claude-audit-batch-2-t168-sweep.md`
-draft T-C1. **All citations below are read-verified by the foreman-planner
-directly against the live file contents at this SHA — not measured by
-running anything (the foreman has no Bash tool).** Line numbers are hints,
-not authoritative; two are already known to have drifted (see "Corrections
-to my own inputs" at the end). Re-verify everything with your own tools
-before relying on it, per item 19c.
+**Header.** Branch tip `b2beb09` on `claude/swarm-plan-zl575z`. Round-1
+packet gated **REVISE — 2 BLOCKER, 6 MAJOR, 1 MINOR set**, recorded verbatim
+at `docs/swarm/active/T176-gate-round1-findings.md` (committed `641e97c`,
+gate measured at `e375489`). **Round 2 of 2 — this revision goes straight to
+a worker with no gate behind it.** Every figure below is either (a)
+read-verified by the foreman directly against the live tree just now (no
+Bash available to this role — stated, not measured), or (b) attributed
+explicitly to the round-1 gate as **measured** (it had Write+Edit+Bash,
+built the packet's own prescribed shape, ran every mutation, and reverted).
+Do not conflate the two provenances; they're labeled throughout.
 
-**FIRST ACTION, before reading anything else in this packet or in
-`StudentHome.tsx`: merge `origin/claude/swarm-plan-zl575z` into your
-worktree.** Worktrees are created from `main` (`f7ff055`), which does **not**
-contain T155's merged `CoachHome` split, T157's `ParentRsvp` wiring, or the
-`resolveCurrentStudentId` precedent this packet builds on. T157's worker was
-dispatched against a stale packet for exactly this reason and threw away
-~320 lines. If your worktree doesn't contain `b2beb09`, this packet will
-cite symbols and patterns that don't exist yet in your tree.
+**FIRST ACTION, unchanged from revision 1: merge `origin/claude/swarm-plan-
+zl575z` into your worktree before reading anything else.** Worktrees are
+created from `main` (`f7ff055`), which contains neither T155's `CoachHome`
+split nor `resolveCurrentStudentId` (T096). T157's worker discarded ~320
+lines for exactly this omission.
 
-**Nothing in this packet is owner-approved.** George asked only for T176 to
-be dispatched; every architectural decision below (the 3-tier component
-split, which files are Allowed, the worker tier) is the foreman's own
-judgment call, not his. Nothing here cites `auto-mode-decisions.md` because
-nothing relevant exists there (checked: no entry mentions `StudentHome` or
-T176).
+**Nothing in this packet is owner-approved.** The round-1 gate independently
+checked `auto-mode-decisions.md` for `StudentHome`/`T176` and found no
+match — confirmed clean again by me. Three design decisions below are
+recorded as the **foreman's own**, not George's (§3): bringing the
+goal-hours denominator into scope, naming `Hi Ada Reyes` as the lead
+follow-up item, and stating the blast-radius numbers as a requirement.
 
 ---
 
-## 1. The bug (read-verified)
+## 1. The bug (unchanged from revision 1, read-verified)
 
-`StudentHome.tsx`, `export function StudentHome({...})` (hint: `:1130-1137`):
+`StudentHome.tsx`, `export function StudentHome({...})` (hint `:1130-1137`):
+defaults `studentId = PLACEHOLDER_CURRENT_STUDENT_ID`, `teamId =
+PLACEHOLDER_CURRENT_TEAM_ID`, `seasonId = PLACEHOLDER_SEASON_ID`.
+`DashboardPage.tsx`'s role switch renders `<StudentHome />` with zero props.
+`loadData(studentId, seasonId)` (hint `:1139-1142`) is the real fetch call —
+every signed-in student's dashboard is fetched for the fixture identity.
+
+## 2. What changed since revision 1, and why — read this before §6/§7
+
+### 2a. `studentId` resolution — unchanged, still correct
+
+Reuse `resolveCurrentStudentId` (`loaders/meetings.ts:664`) and its types
+`CurrentViewerIdentity`/`ResolveCurrentStudentIdFn` (exported from
+`MeetingsList.tsx:698`/`:706`), mirroring `ResolvedStudentMeetingsView`'s
+explicit-prop-bypass shape (`MeetingsList.tsx:2411-2484`). **Do not edit
+`MeetingsList.tsx`, `MeetingsList.test.tsx`, or `loaders/meetings.ts` — all
+three are now pure read-only reference (see §2b for why `loaders/meetings.ts`
+moved out of Allowed Files entirely).**
+
+### 2b. `teamId` — resolvable, but NOT single-valued. Corrected, and placement reopened.
+
+**Deleted claim, mine, wrong:** revision 1 said "there is exactly one team."
+**False.** `supabase/migrations/20260721000000_student_teams.sql` (read by
+me just now, header verbatim): *"a student may belong to more than one
+team... `students.team_id` remains the legacy/primary-team read path until a
+later SCH-03+ packet migrates readers over to this junction."* Every other
+current reader has already migrated: `v_student_participation`/
+`v_team_hours` (per the gate's measured citations,
+`membership_views.sql:63`/`:92`), `dashboard_views.sql:205-206`,
+`kpi_views.sql:256`; `ParticipationTab.tsx` (module doc #12, hint `:223-277`)
+carries a purpose-built dual-member fixture for exactly this; `checkin.ts`
+(hint `:128-134`) discloses a live `.limit(1)` gap that "arbitrarily picks
+one team's row for a dual member."
+
+`StudentHome`'s only team predicate is `isEventInTeamScope(event, teamId)`
+(`StudentHome.tsx:530-535`, read-verified — a **single** `teamId` tested
+against `event.teamIds`), gating `selectLiveMeetingSession`, `buildNextUp`,
+and `getUnansweredOutreachOpportunities`. **Resolving the primary
+`students.team_id` therefore means a dual-team-member student silently
+loses her second team's meetings, live check-in, and sign-up
+opportunities** — the same defect class T120 already fixed once on
+`ParticipationTab`.
+
+**Still ship T176 against the legacy `students.team_id` path.** The junction
+is a wider refactor (touching every reader, not just this one), and
+`students.team_id` is the migration's own documented interim path. But:
+**disclose this as a deliberate, known narrowing** (cite the migration's own
+sentence above, don't paraphrase it), and **file the follow-up** (§7,
+criterion 12b) for moving `StudentHome`'s scoping onto `student_teams`
+ACTIVE memberships. Do not silently resolve `teamId` as if it were single-
+valued by nature — it isn't; it's single-valued only in the column you're
+reading.
+
+**Placement reopened, per the gate's measured finding:** `src/lib/supabase/
+loaders/students.ts` **exists** (309 lines, read by me just now) — it
+already owns `StudentDbRow` (`:99-108`, including `team_id: string` and
+`goal_hours_override: number | null`) and `mapStudentDbRowToStudentRow`
+(`:139-149`) for `StudentsTab.tsx`. Revision 1 said no such file existed and
+put the new function in `loaders/meetings.ts` on that false premise.
+**Corrected: the new function goes in `loaders/students.ts`, not
+`loaders/meetings.ts`.** Reasoning: `loaders/meetings.ts` owns *identity
+resolution* — "which student is this" (`resolveCurrentStudentId`, a
+genuinely different concern). `loaders/students.ts` already owns *what a
+students row says* — the same concern this new function is. It's the
+natural sibling of `queryStudents`/`mapStudentDbRowToStudentRow`, not a
+second, unrelated addition to a file that already has its own filed
+test-coverage gap (T162) unrelated to this task. **Consequence:** `loaders/
+meetings.ts` needs **zero** edits for T176 — moved from Allowed to
+Forbidden/reference-only (§5).
+
+### 2c. The goal-hours denominator — brought into scope. Recorded as the foreman's decision, not George's.
+
+Revision 1's §2c declined this on the ground that "no honest value exists
+without a real loader." **That ground is false, and the gate proved it
+false, not just asserted it:** it re-rendered `StudentHome` with
+`season.defaultGoalHours` set to `7` and the screen still read `100` —
+because `activeSeason.season.defaultGoalHours` (real Supabase data,
+`loaders/seasons.ts:137/150`, already loaded by `SeasonProvider` and handed
+to `StudentHome` the moment §6 wires `useActiveSeason()` at all) is already
+in hand and simply never consulted.
+
+MET-04's denominator is `goal_hours_override ?? season default_goal_hours`.
+`season.defaultGoalHours` comes for free from the `useActiveSeason()` call
+this task is already making. The student's own `goal_hours_override` comes
+from the **same own-row `students` read** this task is already adding for
+`team_id` (§2b) — one more selected column, already RLS-scoped identically.
+
+**Decision (foreman's, not the owner's — no `auto-mode-decisions.md` entry
+authorizes this or anything else in this packet): bring it into scope,
+bounded explicitly.** This is the **one** additional real-data field in
+scope for T176. Do **not** build a real loader, or thread real values, for
+`events`/`sessions`/`rsvps`/`studentHours`/`participation`/`displayName` —
+those stay exactly as fixture-fed as revision 1 planned, and go honestly
+empty or stay fabricated per §7 criterion 11's enumeration.
+
+**Three DOM surfaces carry this fabricated value, not one — the gate
+measured this, revision 1 predicted only one:**
+
+| Surface | Fabricated value today |
+|---|---|
+| Visible `ProgressBar` label | `0 / 100 h (0%)` |
+| `aria-valuemax` | `100` |
+| `aria-valuetext` | `0 / 100 h (0%)` |
+
+A screen-reader user hears the fabricated number twice more than a sighted
+one sees it. **Criterion 10/11 must enumerate over `container.innerHTML`,
+not `textContent`** — `textContent` strips every ARIA attribute and would
+have missed two of the three surfaces.
+
+**Design (bounded, minimal):** `StudentHomeContent` computes `goalHours =
+resolveGoalHours(realGoalHoursOverride, realSeasonDefaultGoalHours)` using
+the real `activeSeason.season.defaultGoalHours` and the real,
+own-row-resolved `goalHoursOverride` — **not** `data.defaultGoalHours`/
+`data.goalHoursOverride` (the still-fixture `loadData`'s own fields, which
+keep existing on the `StudentHomeData` type unchanged — this task does not
+touch that type — but stop being consulted for this one computation).
+`resolveGoalHours`/`hoursVsGoalPercent` themselves stay byte-unchanged
+(criterion 9 — only which values feed them changes).
+
+## 3. Decisions recorded as the foreman's, not the owner's
+
+1. **§2c above** — bringing the goal-hours denominator into scope, bounded
+   to exactly that one field.
+2. **`Hi Ada Reyes` is the lead item of the follow-up ledger row (criterion
+   12a), named first, explicitly.** The gate's own measured DOM dump (§7,
+   the reproduced table) has it at the top of the screen:
+   `defaultLoadStudentHomeData` returns the literal string `'Ada Reyes'`
+   and **ignores both its parameters** — so every real signed-in student is
+   greeted by a fabricated human name, unconditionally, and fixing the
+   identity props this task closes does not touch it. It's the surface a
+   student notices first and the one most likely to get reported as a bug
+   by a real user, the same way George reported the `CoachHome` 400s
+   himself. Name it first; don't bury it in a list.
+3. **State the blast radius as a number (criterion 13).** Measured by the
+   gate: **13 of 33** `StudentHome.test.tsx` tests break, **1 of 5** in
+   `DashboardPage.test.tsx`, nothing else in the repo. Both harness-only.
+   13/33 is exactly the size where a worker starts rewriting assertions
+   instead of the harness — state the number so that doesn't happen here.
+
+## 4. `DashboardPage.test.tsx` — corrected remedy (measured, gate's fix, not mine)
+
+Revision 1's snippet mocked only `resolveCurrentStudentId` and **still
+fails** — the gate measured it: `1 of 5` tests break
+(`'renders StudentHome for role "student"'` →
+`expected "Couldn't find your student record…" to contain 'Hi Ada Reyes'`),
+because the new own-row query still hits the real, unconfigured
+`getSupabaseClient()`, which `createLoader` normalizes into a rejection
+(`loader.ts:168-173`). **Fix, measured sufficient:** the mock must name
+**both** resolvers —
 
 ```ts
-export function StudentHome({
-  loadData = defaultLoadStudentHomeData,
-  studentId = PLACEHOLDER_CURRENT_STUDENT_ID,   // 'student-placeholder-current-viewer'
-  teamId = PLACEHOLDER_CURRENT_TEAM_ID,          // 'team-placeholder-current-viewer'
-  seasonId = PLACEHOLDER_SEASON_ID,              // 'season-placeholder-current'
-  nowFn = () => new Date(),
-  submitCheckinCode = defaultSubmitCheckinCode,
-}: StudentHomeProps = {}): ReactNode {
+vi.mock('../../lib/supabase/loaders/meetings', async (importOriginal) => ({
+  ...(await importOriginal()),
+  resolveCurrentStudentId: async () => FIXTURE_STUDENT_ID,
+}));
+vi.mock('../../lib/supabase/loaders/students', async (importOriginal) => ({
+  ...(await importOriginal()),
+  resolveStudentScope: async () => ({ teamId: FIXTURE_TEAM_ID, goalHoursOverride: null }),
+}));
 ```
 
-`DashboardPage.tsx` (`export function DashboardPage`, hint `:107-130`) role
-switch: `case 'student': return <StudentHome />;` — zero props, the sole
-production render site.
+(module paths/export name adjusted to match §2b/§2c's actual final shape).
+**No extra `await flushMicrotasks()` is needed** — the gate measured the
+existing three flushes already cover both added async hops; revision 1's
+"if needed" hedge is dropped as unnecessary, not softened. Harness-only is
+sufficient — **zero assertion changes expected** (once mocked to a fixture
+id, `'Hi Ada Reyes'` still renders — it's unconditionally fabricated, §2c).
 
-Load-bearing: `const loadState = useLoadState(() => loadData(studentId,
-seasonId), [loadData, studentId, seasonId]);` (hint `:1139-1142`) is the real
-fetch call. Every signed-in student's dashboard is fetched for the fixture
-identity, not theirs.
-
-## 2. What I established myself, read-verified, not yet rendered
-
-### 2a. `studentId` — reuse the shipped seam, do not build a second one
-
-`resolveCurrentStudentId` (value, `loaders/meetings.ts` `:664`) /
-`makeResolveCurrentStudentId` (`:636-661`) already resolves the signed-in
-user's own `students.id`:
-- student role → `students.profile_id = auth.uid()` (`queryStudentIdByProfileId`, `:491-501`, private)
-- parent role → earliest-linked child via `guardian_links` (`queryFirstLinkedStudentId`, `:504-518`, private)
-- coach/admin → returns `null` defensively (dead branch here: `DashboardPage`
-  only ever mounts `StudentHome` for `role === 'student'`, so this branch
-  never fires in production — don't build role-branching inside
-  `StudentHome` to guard against it, the shared function already does)
-
-Its types (`CurrentViewerIdentity { id: string; role: Role }`,
-`ResolveCurrentStudentIdFn = (viewer) => Promise<string | null>`) are
-**exported from `MeetingsList.tsx`** (`:698`, `:706`), and `loaders/
-meetings.ts` already imports them back from there (`:158-171`) — a two-way
-type/value split that's the established convention for this exact
-capability, not an accident. Import both the types (from `MeetingsList.tsx`)
-and the default value (from `loaders/meetings.ts`) into `StudentHome.tsx`
-the same way. **Do not edit `MeetingsList.tsx` or `MeetingsList.test.tsx` —
-both are read-only reference/Forbidden here.**
-
-The precedent (`MeetingsList.tsx`) resolves only when the caller does *not*
-supply an explicit `studentId` — an inner wrapper component
-(`ResolvedStudentMeetingsView`, `:2411-2455`) owns its own `useLoadState`
-call and its own loading/error/null-empty-state DOM, and only renders the
-real content component once resolution succeeds. `StudentMeetingsViewContainer`
-(`:2468-2484`) is the dispatcher: `explicitStudentId !== undefined` bypasses
-resolution entirely, unchanged behavior for every caller/test that already
-passes one. **Mirror this shape.**
-
-The module doc's own framing (`MeetingsList.tsx` module doc #6, hint
-`:124-183`) is explicit that this fails loudly rather than silently faking a
-resolution — that's the posture, not decoration.
-
-### 2b. `teamId` — resolvable here. T155's deferral does NOT transfer.
-
-T155 deferred `CoachHome`'s `teamId` on a measured fact, not a guess:
-`AuthUser` (`guards.tsx`, `export interface AuthUser`, **verified at `:49-53`,
-not `:219-223`** — see corrections section) is `{id, email, role}`, no team
-linkage at all, and a *coach's* team isn't a well-defined single value
-anyway (a coach isn't scoped to one team). For a *student*, there is exactly
-one team: `students.team_id uuid not null references public.teams (id)`
-(`supabase/migrations/20260716000000_identity_roster.sql:63`) — **`not
-null`**, so once `studentId` is known, `teamId` always exists and is a
-single value.
-
-RLS confirmed (`supabase/migrations/20260717000002_rls.sql:96-102`):
-```sql
-create policy staff_all on students ...
-create policy own_or_linked_read on students
-  for select to authenticated
-  using (id in (select my_student_ids()));
-```
-`my_student_ids()` (`:20-26`) returns the signed-in student's own row id (or
-their guardian's linked children). A plain `select('team_id').eq('id',
-studentId)` for the just-resolved `studentId` is therefore already
-RLS-scoped to the requester's own row — no new authorization logic needed,
-same posture the reused `resolveCurrentStudentId` already has.
-
-**Do not reuse `queryAllStudents`** (`loaders/outreach.ts:756-768`) even
-though it does select `team_id` — it is `outreach.ts`-private (not
-exported), it's the coach-facing full-roster query (would need a network
-call returning every visible row just to read one), and cross-importing a
-private-by-convention query between two unrelated page-loader files isn't
-this codebase's pattern anywhere else. It's cited here only as schema
-evidence that `team_id` is a real, already-used column — not as a function
-to import.
-
-**Add ONE new, minimal function to `loaders/meetings.ts`** (additive only —
-see Allowed Files) that takes an already-resolved `studentId: string` and
-returns `Promise<string | null>` (`null` only defensively, since the column
-is `not null`; treat it the same as "no student record" if it ever occurs).
-Own its type (`ResolveStudentTeamIdFn`) in `StudentHome.tsx` — the actual
-consumer — and have `loaders/meetings.ts` import it back as a type, mirroring
-the exact cross-file shape `CurrentViewerIdentity`/`ResolveCurrentStudentIdFn`
-already use in the opposite direction.
-
-### 2c. There is no real `StudentHome` loader. Fixing identity props ≠ fixing the data.
-
-`LoadStudentHomeDataFn` (`:383-386`) is declared only in this file;
-`defaultLoadStudentHomeData` (`:903-918`) is the only implementation
-anywhere, and it's a fixture. Building a real loader is explicitly **out of
-scope** here — same posture T155 took for `CoachHome`, T173's own filed
-follow-up.
-
-**Read-verified prediction of what survives the fix, NOT rendered — you must
-confirm or correct this by actually rendering (§6, criterion 10):**
-
-`defaultLoadStudentHomeData(studentId, seasonId)`:
-- `seasonId: seasonId` — passthrough, always real once you fix sourcing.
-- `displayName: 'Ada Reyes'` — **hardcoded literal, ignores both params
-  entirely.** Renders as `` `Hi ${data.displayName}` `` (`:1250`). My
-  prediction: **stays fabricated**, unconditionally, forever, regardless of
-  which real student is signed in.
-- `defaultGoalHours: FIXTURE_DEFAULT_GOAL_HOURS` (`= 100`, `:896`) —
-  **hardcoded, ignores both params.** Feeds `goalHours =
-  resolveGoalHours(data.goalHoursOverride, data.defaultGoalHours)` (`:1240`,
-  and `goalHoursOverride` is *also* always `null` from the fixture) →
-  `hoursVsGoalPercent` → the `ProgressBar`'s `formatValueLabel` (`:1284`,
-  `` `${value} / ${max} h (${hoursPercent}%)` ``). My prediction: with
-  `confirmedHours` correctly going to `0` (see below), this renders `0 / 100
-  h (0%)` — a fabricated denominator beside a genuinely honest zero, same
-  two-surfaces-one-field shape T173 found on `CoachHome`'s `defaultGoalHours`
-  (there: `0 / 38 hrs` + a separate `Default goal 10h` secondary; here, only
-  the one surface — I did not find a second secondary-text surface for this
-  field on this page, but confirm by reading, don't take my word for it).
-- `events: FIXTURE_EVENTS.filter((e) => e.seasonId === seasonId)` (`:912`) —
-  every `FIXTURE_EVENTS` row hardcodes `seasonId: PLACEHOLDER_SEASON_ID`
-  (`:794/802/810/820`). Once `seasonId` is a real season UUID this filter
-  never matches → `events` becomes `[]`. **My prediction: this correctly
-  goes honestly empty** — same mechanism T173 found on `CoachHome`'s
-  `events`/`teamParticipation`/`studentHours` fields.
-- `sessions: FIXTURE_SESSIONS` (`:913`), `rsvps: FIXTURE_RSVPS` (`:914`) —
-  neither is filtered at the loader level, but every consumer
-  (`selectLiveMeetingSession` `:553-568`, `buildNextUp` `:584-627`,
-  `getUnansweredOutreachOpportunities` `:639-666`) joins sessions back to
-  `events` via `eventById.get(session.eventId)` and drops any session with
-  no matching event. With `events` empty, every join misses → hero renders
-  `quiet-greeting`, "Next up" and "Sign-up opportunities" both render their
-  `EmptyState`. **My prediction: honestly empty**, not fabricated (the
-  "you're all caught up" quiet-greeting copy is the same for a genuinely
-  caught-up student and for this all-filtered-out state — it never asserts
-  a false positive, so I'm not calling it fabricated, but flag if you
-  disagree).
-- `studentHours`/`participation`: both gated `FIXTURE_*.studentId ===
-  studentId` (`:915-916`) against the fixture's own hardcoded
-  `PLACEHOLDER_CURRENT_STUDENT_ID`. Once `studentId` is a real resolved
-  student id, neither matches → both `null` → `confirmedHours` becomes `0`
-  (`:1238`, `?? 0`) and `` `Participation: ${... : '—'}` `` (`:1288`) shows
-  `—`. **My prediction: honestly empty.**
-
-**I got the CoachHome equivalent of this enumeration wrong three times in
-one day before a render proved it. Do not repeat my prediction as fact —
-render it and correct me if I'm wrong.** (§6, criterion 10, is not optional
-and is not satisfied by re-tracing the code above — I already did that.)
-
-## 3. Corrections to my own inputs (found while verifying, before dispatch)
-
-1. `AuthUser`'s no-team-linkage evidence is at `guards.tsx:49-53` (`export
-   interface AuthUser { id: string; email: string; role: Role; }`), not
-   `:219-223` (that's `AuthProviderProps`, an unrelated interface). Same
-   citation-drift class the T157 gate caught twice on this project already
-   (`:2396`/`:2320`, `:1392-1397`/`:1391-1396`). The *conclusion* the brief
-   drew from it is still correct — just the line number was wrong.
-2. `queryAllStudents`'s select string (`'id, display_name, team_id,
-   profile_id, goal_hours_override'`) lives in `loaders/outreach.ts:756-768`,
-   not a shared `loaders/students.ts` — no such file exists. It's real
-   evidence that `team_id` is a live, already-used column (confirms `teamId`
-   is resolvable), but it is **not exported** and should not be imported or
-   reused directly (§2b).
-3. The ledger row's own re-verification SHA (`08b3ac1`) predates this
-   packet's dispatch SHA (`b2beb09`) — I re-read the live files myself at
-   dispatch time rather than trusting that earlier pass, and everything
-   above reflects that fresh read.
-
-## 4. The trap the brief did not flag — found here, not in any of the three inputs
-
-**`DashboardPage.test.tsx` will break, and it is not obviously in scope.**
-
-`DashboardPage.tsx` renders `<StudentHome />` with **zero** props (module
-doc #3's own text: "This dispatcher's ONLY job is role-based component
-selection... does not plumb any props through"). `DashboardPage.test.tsx`
-has an existing test, `'renders StudentHome for role "student"'` (hint
-`:148-155`), that asserts `container.textContent` contains `'Hi Ada Reyes'`
-after exactly 3 flushed microtasks, with **no** mock of
-`resolveCurrentStudentId` or the Supabase client anywhere in that file.
-
-Once `StudentHome`'s default `studentId`/`teamId` resolution goes real (an
-actual `getSupabaseClient()`-backed call), this test's unmocked render will
-hit that real default inside jsdom with no Supabase env configured — it will
-not synchronously produce `'Hi Ada Reyes'` the way it does today. This is
-the same class of trap the brief told you to watch for in `StudentHome.
-test.tsx` itself (§6, criterion 10's "pin the loader" instruction), just in
-a **different, easy-to-miss file** that doesn't import from `StudentHome.tsx`
-directly and that neither the brief nor T155's ledger row mentions.
-
-Precedent for what to do about it: this exact file was already touched by
-T155 for the analogous `CoachHome`/`useActiveSeason()` case — its own module
-doc (`:35-46`) attributes a `<SeasonProvider>` wrapper addition to T155,
-"harness-only, no individual `it(` body changes" where avoidable. Follow
-that precedent: `DashboardPage.test.tsx` is an Allowed File here, scoped
-narrowly (§5) to making the identity resolution resolve safely in this
-harness (e.g. `vi.mock('../../lib/supabase/loaders/meetings', async
-(importOriginal) => ({...(await importOriginal()), resolveCurrentStudentId:
-async () => FIXTURE_ID}))` — the `importOriginal` partial-mock pattern this
-project already uses elsewhere, cited in T161's own ledger row) plus,
-if needed, an extra `await flushMicrotasks()` call for the added async hop.
-**Once mocked to a fixture id, my own prediction (§2c) is that `'Hi Ada
-Reyes'` still appears** (it's unconditionally fabricated), so this
-particular test's *assertions* may not need to change at all — only its
-*harness*. Disclose exactly what you changed and why; do not touch the
-other four `it(` bodies in that `describe` block unless you can show they
-are actually affected.
+**Enumeration hazard, do not walk into this:** `DashboardPage.test.tsx`'s
+own `FIXTURE_ACTIVE_SEASON.defaultGoalHours` is **also `100`** — the same
+number as `StudentHome.tsx`'s fabricated `FIXTURE_DEFAULT_GOAL_HOURS`. **Do
+not add any assertion in `DashboardPage.test.tsx` that infers the
+denominator's source from the rendered number** — it would draw the wrong
+conclusion regardless of which way the bug goes. If this harness's mock
+needs a `goalHoursOverride`, use `null` (harmless) and prove nothing about
+sourcing here; that proof belongs in `StudentHome.test.tsx` with its own
+season fixture set to a value that is **not** `100` (criterion 10 below
+uses `7` for exactly this reason).
 
 ## 5. Allowed / Forbidden files
 
 **Allowed:**
 - `src/pages/home/StudentHome.tsx`
 - `src/pages/home/StudentHome.test.tsx`
-- `src/lib/supabase/loaders/meetings.ts` — **additive only.** You may add new
-  exports (a team-id resolver, its DB row type, its query function). You may
-  **not** change the name, signature, return shape, or behavior of any
-  existing export — `resolveCurrentStudentId`, `makeResolveCurrentStudentId`,
-  `queryStudentIdByProfileId`, `StudentIdDbRow`, `queryFirstLinkedStudentId`,
-  `GuardianLinkStudentIdDbRow`, or anything else already in that file. If
-  your diff touches an existing line for any reason, stop and explain why in
-  your worker output before proceeding.
-- `src/lib/supabase/loaders/meetings.test.ts` — **new file.** Scope it to
-  the new team-id resolver only. This is **not** T162 ("`loaders/meetings.ts`
-  has 0 tests, 726 lines" — still filed, not yet packeted, still true for
-  everything else in that file after you land this). Say so explicitly in
-  your output so a future reader doesn't assume T162 is subsumed.
-- `src/pages/home/DashboardPage.test.tsx` — **harness-only** (§4). Do not
-  change `DashboardPage.tsx` itself (see Forbidden below) or any assertion
-  in the `'coach'`/`'admin'`/`'parent'`/`null` cases.
+- `src/lib/supabase/loaders/students.ts` — **additive only.** New exports:
+  a query + resolver for the student's own `team_id`/`goal_hours_override`
+  by `id`. Must not change `StudentDbRow`, `TeamDbRow`, `InviteDbRow`,
+  `mapStudentDbRowToStudentRow`, `queryStudents`, `makeLoadStudentsTabData`,
+  `makeSetStudentActive`, `makeCreateStudent`, `makeUpdateStudent`, or any
+  other existing export's name/signature/behavior. If your diff touches an
+  existing line, stop and explain why before proceeding.
+- `src/lib/supabase/loaders/students.test.ts` — **new file.** Scope it to
+  the new function only; this is not a full coverage sweep of
+  `loaders/students.ts` (no ledger row currently claims that scope — say so
+  explicitly so a future reader doesn't assume it's covered).
+- `src/pages/home/DashboardPage.test.tsx` — harness-only (§4). No change to
+  any `it(`/`describe(` assertion in the `'coach'`/`'admin'`/`'parent'`/
+  `null` cases; the student case's assertions are expected to stay
+  unchanged too (§4) — if you find they must change, say exactly what and
+  why.
 
 **Forbidden (task-specific, in addition to the standing list):**
-- `src/pages/home/DashboardPage.tsx` — see reasoning below.
+- `src/pages/home/DashboardPage.tsx`
 - `src/pages/home/CoachHome.tsx`, `CoachHome.test.tsx`
 - `src/pages/home/ParentHome.tsx`, `ParentHome.test.tsx`
 - `src/pages/meetings/MeetingsList.tsx`, `MeetingsList.test.tsx`,
-  `ScheduleMeetingsDialog.tsx` — read-only reference; import from, never edit.
-- `src/lib/supabase/loaders/outreach.ts` — read-only reference (§2b/§3.2).
-- `supabase/migrations/**` — no migration needed; the schema already
-  supports this (§2b).
+  `ScheduleMeetingsDialog.tsx`
+- `src/lib/supabase/loaders/meetings.ts`, `loaders/meetings.test.ts` (does
+  not exist yet — not created by this task either; that's T162's scope) —
+  **moved out of Allowed Files this revision** (§2b); import from only.
+- `src/lib/supabase/loaders/outreach.ts`
+- `src/pages/roster/StudentsTab.tsx`, `StudentsTab.test.tsx`,
+  `StudentDialog.tsx` — read-only reference for `loaders/students.ts`'s
+  existing conventions; do not edit the pages that consume that loader.
+- `supabase/migrations/**` — no migration needed (§2b: `students.team_id`
+  and `goal_hours_override` already exist and are already readable under
+  the shipped `own_or_linked_read` policy).
 
 **Standing Forbidden list:** `docs/swarm/constitution.md`,
 `docs/swarm/task-ledger.md`, `docs/swarm/verification-log.md`,
 `docs/swarm/dispute-log.md`, `.claude/**`, `node_modules/`.
 
-**Why `DashboardPage.tsx` is Forbidden here (decision, not the owner's):**
-T155's proven pattern sources `seasonId` entirely inside `CoachHome.tsx`
-via `useActiveSeason()`, leaving `DashboardPage.tsx` byte-identical
-(sha256-confirmed by T155's checker) — no props threaded from the
-dispatcher. `MeetingsList.tsx`'s `studentId` resolution is the same shape:
-resolved internally via `useAuth()`, never threaded in from a parent. Both
-precedents independently chose "resolve inside the leaf component," and
-`DashboardPage.tsx`'s own module doc already asserts (and today is still
-true) that it "does not plumb any props through." Mirroring both
-precedents keeps that assertion true and avoids a second task ever needing
-to touch this exact dispatcher file for identity plumbing. (Its module doc
-is stale in one place after this lands — see §7 NIT — but fixing prose in a
-Forbidden file is out of scope; flag it, don't fix it.)
+`DashboardPage.tsx` stays Forbidden for the same reason as revision 1: both
+precedents this task mirrors (`CoachHome`/T155, `MeetingsList`/T096) resolve
+identity/season entirely inside the leaf component, keeping the dispatcher
+untouched.
 
 ## 6. Prescribed shape (deviate only with a stated reason in your worker output)
 
-Three-component split, extending T155's two-tier `CoachHome`/`CoachHomeContent`
-pattern with one more tier for identity resolution (season status and
-student identity are independent — season doesn't depend on which student it
-is, so gate season first, matching `CoachHome`'s already-proven ordering,
-then resolve identity):
+Same three-tier split as revision 1, with the identity-resolution tier's
+job widened per §2b/§2c:
 
-1. **`StudentHome`** (outer, keeps the name — `DashboardPage.tsx` imports it
-   unchanged). Calls `useAuth()` and `useActiveSeason()` unconditionally
-   (mirrors `CoachHome`'s own module doc note, hint `:2108-2111`: "Both
-   `useAuth()` and `useActiveSeason()` are called unconditionally before
-   either conditional return"). `user === null` check **first** (sign-in
-   prompt, unchanged copy) — **must** precede the `activeSeason.status`
-   switch, not be merged into or follow it (criterion 5). Then the same
-   four-way `activeSeason.status` switch `CoachHome`'s outer wrapper already
-   uses (`loading`/`none`/`error`/`ready` — independently authored, not
-   imported from the Forbidden `CoachHome.tsx`). On `ready`, renders the
-   identity-resolution wrapper.
-2. **A new inner wrapper** (name it what you like — mirrors
-   `ResolvedStudentMeetingsView`): calls `useLoadState` unconditionally to
-   resolve `{studentId, teamId}` via a small exported pure function (e.g.
-   `resolveStudentIdentity(viewer, resolveStudentId, resolveTeamId)`,
-   exported so it's independently unit-testable the same way `buildNextUp`/
-   `selectHeroState` already are in this file) — **unless** both `studentId`
-   and `teamId` were supplied explicitly as props, in which case skip this
-   tier entirely and render the content component directly (mirrors
-   `StudentMeetingsViewContainer`'s `explicitStudentId !== undefined`
-   bypass, generalized to two independently-bypassable props). Give this
-   tier its **own** loading/error/no-student-linked DES-12 states, with
-   copy distinguishable from the data-loading/error copy the content
-   component already has (criterion 7) — do not reuse "Loading Home…"/
-   "Couldn't load Home" verbatim for both boundaries; that ambiguity was
-   already logged as a NIT against `CoachHome`'s shared-skeleton-text choice
-   in T155's own merge (filed as T173) — don't repeat it here uncorrected.
-3. **The renamed content component** (e.g. `StudentHomeContent`): everything
-   `StudentHome`'s current function body does, unchanged in behavior,
-   parameterized by real, never-defaulted-to-a-placeholder `studentId`/
-   `teamId`/`seasonId` props (mirrors `CoachHomeContentProps`).
+1. **`StudentHome`** (outer, keeps the name). `useAuth()` + `useActiveSeason()`
+   called unconditionally. `user === null` check **first**, strictly before
+   the `activeSeason.status` switch (criterion 5a). Four-way
+   `activeSeason.status` switch, independently authored (mirrors
+   `CoachHome`'s outer wrapper; do not import from the Forbidden
+   `CoachHome.tsx`). On `ready`, renders the identity-resolution tier,
+   passing `activeSeason.season.defaultGoalHours` through.
+2. **Identity-resolution tier.** Props: `explicitStudentId: string |
+   undefined`, `explicitTeamId: string | undefined` (bypass triggers,
+   mirroring `MeetingsList`'s own `explicitStudentId !== undefined`
+   pattern), `viewer: CurrentViewerIdentity`, `resolveStudentId:
+   ResolveCurrentStudentIdFn`, `resolveStudentScope: ResolveStudentScopeFn`
+   (new — resolves `{ teamId: string; goalHoursOverride: number | null }`
+   for an already-known `studentId`; type owned by `StudentHome.tsx`,
+   imported as a type by `loaders/students.ts`, mirroring the existing
+   `CurrentViewerIdentity`/`ResolveCurrentStudentIdFn` cross-file shape).
+   Skip this tier's mount entirely only when **both** `explicitStudentId`
+   and `explicitTeamId` are supplied (matches most reworked tests, §7
+   criterion 13's zero-assertion-change expectation for `DashboardPage.
+   test.tsx` once mocked). Otherwise mount it; internally, compose a single
+   exported pure-ish async function (name it, e.g.,
+   `resolveStudentIdentity(viewer, explicitStudentId, explicitTeamId,
+   resolveStudentId, resolveStudentScope)`, exported so it's independently
+   unit-testable the same way `buildNextUp`/`selectHeroState` already are):
+   resolve `studentId` (skip the call if `explicitStudentId` is given), bail
+   to the "no student linked" empty state on `null`; then, unless
+   `explicitTeamId` is given (in which case `goalHoursOverride` for this
+   render is `null` — no override, an honest default for the bypass path,
+   never hit by real callers), resolve `{teamId, goalHoursOverride}` via
+   `resolveStudentScope(studentId)`, bail to the same empty state on `null`.
+   Own loading/error/no-student-linked DES-12 states here, **each with
+   copy distinguishable from the data-loading/error copy the content tier
+   already has** (criterion 7) — not a re-run of T173's shared-skeleton-text
+   NIT.
+3. **Content tier** (e.g. `StudentHomeContent`): everything the current
+   `StudentHome` body does, parameterized by real `studentId`/`teamId`/
+   `seasonId`/`seasonDefaultGoalHours`/`goalHoursOverride` — the last two
+   feeding `resolveGoalHours` instead of `data.defaultGoalHours`/
+   `data.goalHoursOverride` (§2c).
 
 ## 7. Acceptance criteria — each with its prescribed mutation
 
-Baselines **by reference**: before any edit, run the full suite (`npm run
-typecheck`, `npm run lint`, `npm run format:check`, `npm run build`,
-`vitest run`) at your own merged worktree tip and record those exact
-numbers as your reference baseline. Do not use any count in this packet or
-in any ledger row as a baseline — two prior tasks on this project shipped
-false regressions from stale pinned numbers.
+Baselines **by reference**: run `npm run typecheck`, `npm run lint`,
+`npm run format:check`, `npm run build`, and `vitest run` at your own merged
+worktree tip **before** any edit, and report all five — the round-1 gate
+only ran `typecheck` against its experimental build (clean), so this
+packet's shape is **unverified against the other four**. Run and report all
+five yourself; do not assume the others are clean. `format:check`
+specifically is not a formality: T157 shipped two prettier deviations that
+every other CI gate missed (that gap is what T175 exists to close) — run it
+for real.
 
-1. **Real `studentId` reaches `loadData`.** Inject a distinguishable,
-   non-placeholder, fabricated (item 6) `resolveStudentId` (e.g. resolves to
-   `'student-fixture-resolved'`) and spy on `loadData`; assert `loadData`
-   was called with exactly that id, never `PLACEHOLDER_CURRENT_STUDENT_ID`.
-   **Positive assertion, paired, not negative-only** — asserting merely
-   "not the placeholder" would pass if the fetch were disabled entirely.
-   *Mutation:* revert to the hardcoded placeholder default; confirm the spy
-   assertion goes red with the wrong id; restore; report the failure output.
-   Mutation-provable.
+1. **Real `studentId` reaches `loadData`.** Positive, paired (not
+   negative-only): spy on `loadData`, inject a distinguishable fabricated
+   (item 6) `resolveStudentId` resolving to e.g. `'student-fixture-
+   resolved'`; assert `loadData` was called with exactly that id.
+   *Mutation:* revert to the hardcoded placeholder default; confirm red;
+   restore. Mutation-provable.
 
-2. **Explicit `studentId` prop bypasses resolution.** Pass an explicit
-   `studentId` plus a `resolveStudentId` spy; assert the spy was called
-   **zero** times. *Mutation:* remove the bypass branch so resolution always
-   fires; confirm the spy's call count goes from 0 to 1 and the test fails.
-   Mutation-provable.
+2. **Explicit `studentId` prop bypasses `resolveStudentId` — paired, not
+   negative-only (BLOCKER 2 fix).** Assert **both**: (a) the
+   `resolveStudentId` spy was called zero times, **and** (b) `loadData` was
+   called with the explicit value **and** the rendered DOM reflects a
+   distinguishable, non-generic value that could only have come from the
+   explicit prop path (e.g. render with two different explicit
+   `studentId`s across two test cases and show the resulting content
+   differs). A mutation that disables identity resolution entirely (page
+   renders nothing) must fail **(b)**, since `loadData` is never called and
+   nothing renders. *Mutation:* remove the bypass branch so resolution
+   always fires; confirm the spy's call count goes 0→1 and (a) fails.
+   *Second mutation (the vacuity probe the gate ran):* stub
+   `ResolvedStudentIdentity`-equivalent to always return `null`; confirm
+   (b) now fails (nothing rendered, `loadData` never called). Both
+   mutation-provable.
 
-3. **Real `teamId`, resolved from the real `studentId`, reaches the
-   team-scoped widgets.** Reuse this file's own existing "Titans-only"
-   team-scope-exclusion fixture pattern (`FIXTURE_EVENTS`'s
-   `event-titans-meeting`/`FIXTURE_SESSIONS`'s `session-titans-meeting`,
-   `:816-825`/`:850-858`): inject `resolveTeamId` returning a specific
-   fixture team id, construct events scoped to that id (rendered) and to a
-   different id (excluded), assert both outcomes on real DOM text.
-   *Mutation:* revert to the hardcoded `PLACEHOLDER_CURRENT_TEAM_ID` (or
-   skip team resolution); confirm the team-scope proof now passes/fails
-   incorrectly (the wrong session renders, or the right one doesn't).
-   Mutation-provable.
+3. **Real, resolved `teamId` reaches the team-scoped widgets — three
+   distinct, non-placeholder strings (BLOCKER 1 fix).** Do **not** reuse
+   this file's own shipped `FIXTURE_EVENTS`/`FIXTURE_SESSIONS` Titans-scope
+   literals for the in-scope side of this proof — `PLACEHOLDER_CURRENT_
+   TEAM_ID` is the in-scope id in that fixture, which is exactly why
+   revision 1's version of this criterion couldn't fail. Construct your own
+   fixture events/sessions with: (i) an injected `resolveStudentScope`
+   resolving `teamId` to a fabricated id, e.g. `'team-fixture-alpha'`; (ii)
+   an in-scope event whose `teamIds` includes `'team-fixture-alpha'`; (iii)
+   an excluded event whose `teamIds` is a **different** fabricated id, e.g.
+   `'team-fixture-beta'` — all three strings distinct from each other and
+   from `PLACEHOLDER_CURRENT_TEAM_ID`. Assert the in-scope session renders
+   and the excluded one doesn't. *Mutation:* revert to
+   `PLACEHOLDER_CURRENT_TEAM_ID`; confirm this now genuinely fails (the
+   in-scope event no longer matches the resolved, differently-valued team
+   id). Mutation-provable.
 
-4. **Explicit `teamId` prop bypasses its own resolution**, independently of
-   criterion 2 (a caller may supply one without the other). Same shape as
-   criterion 2, spy call count. Mutation-provable.
+4. **Explicit `teamId` prop bypasses `resolveStudentScope` entirely —
+   paired, same shape as criterion 2 (BLOCKER 2 fix, extended).** Assert
+   the spy was called zero times **and** the rendered team-scope outcome
+   reflects the explicit value (not a resolved one), using the same
+   three-distinct-string discipline as criterion 3. Both the "always calls
+   the seam" mutation and the "identity tier disabled → blank page" vacuity
+   probe must fail this criterion's positive half. Mutation-provable.
 
-5. **Ordering: `user === null` precedes the season switch, which precedes
-   identity resolution.** Reuse T155's own proof technique exactly: a
-   synchronous sign-in-prompt test with no microtask flush.
-   *Mutation:* reorder the checks; confirm the synchronous test fails
-   (shows a season-loading skeleton instead of "Sign in to view Home", or
-   an identity-loading state instead of either). Mutation-provable.
+5. **Ordering.** (a) `user === null` strictly precedes the
+   `activeSeason.status` switch — *mutation:* move the null check inside
+   the `'ready'` branch; confirm the synchronous sign-in-prompt test now
+   shows the season-loading skeleton instead. Mutation-provable. (b) The
+   season switch precedes identity-resolution mounting — **label this
+   STRUCTURAL, not mutation-provable** (MAJOR 8): it's a direct consequence
+   of the identity tier being a child rendered only inside the `'ready'`
+   case, not a separately-testable runtime behavior. State this plainly in
+   your output; do not write a test that can only pass vacuously for it.
 
-6. **`seasonId` is sourced from `useActiveSeason()`, never
-   `PLACEHOLDER_SEASON_ID`.** Two parts, mirroring T155's own criterion 4:
-   (a) a probe rendering `StudentHome` with no `<SeasonProvider>` ancestor
-   throws exactly `'useActiveSeason() must be called within a
-   <SeasonProvider>.'`; (b) a spy on `loadData` receives the real
-   `activeSeason.season.id`, never the retired placeholder. *Mutation for
-   (b):* revert to the defaulted `seasonId` parameter; confirm the spy sees
-   the placeholder again. Mutation-provable, positive+paired.
+6. **`seasonId` sourced from `useActiveSeason()`.** (a) Fail-loud probe
+   outside `<SeasonProvider>` throws exactly `'useActiveSeason() must be
+   called within a <SeasonProvider>.'`. Mutation-provable as in T155's own
+   criterion 4. (b) `loadData` receives the real season id — **assert the
+   `seasonId` argument in isolation** (`loadData.mock.calls[0][1]`), not
+   the full call signature (MAJOR 8: revision 1's combined assertion went
+   red for `studentId` reasons on six of fourteen tests during the gate's
+   mutation 1, which is the wrong criterion reporting the wrong failure).
+   *Mutation:* revert to the defaulted `seasonId` parameter; confirm only
+   this criterion's isolated assertion goes red. Mutation-provable,
+   positive+paired.
 
-7. **Identity-resolution's own loading/error/no-student-linked states are
-   DES-12-complete (item 12) and textually distinct from the data-loading/
-   error states.** *Mutation (loading):* make `resolveStudentId` never
-   resolve; assert the identity-tier's own loading text, not "Loading
-   Home…". *Mutation (error):* make it reject; assert a distinct error
-   banner with a working Retry. *Mutation (null):* make it resolve `null`;
-   assert a distinct "no student record" EmptyState. Mutation-provable for
-   existence/distinctness of each state; the exact copy choice itself is
-   your call, not mandated.
+7. **Identity-resolution tier's own DES-12 states — three independent
+   sub-mutations, not one (MINOR fix — the gate found the null-case
+   survives a mutation aimed at the copy-collision case, so they are not
+   redundant and must be reported separately).** (i) loading: never-
+   resolving `resolveStudentId`/`resolveStudentScope`; assert this tier's
+   own loading text, distinct from "Loading Home…". (ii) error: reject;
+   assert a distinct error banner with a working Retry. (iii) null (no
+   linked student): resolve `null`; assert a distinct EmptyState. Each
+   independently mutation-provable; report all three separately, not as one
+   combined pass/fail.
 
-8. **The new `team_id` query is scoped only by the resolved student's own
-   id — no new client-side authorization logic.** Using a stubbed Supabase
-   client (mirror T157's checker's own filter-guard technique: assert the
-   exact `.eq(...)` args reaching the stub, not just the return value).
-   *Mutation:* drop the `.eq('id', studentId)` filter; confirm the guard
-   test fails. Mutation-provable. Separately, **inspection-only, not
-   mutation-provable**: confirm by diff review that no new role/family
-   check was added anywhere (RLS is the sole authorization boundary here,
-   per §2b) — label this half of the criterion as inspection.
+8. **The new own-row query is scoped only by the resolved student's own
+   id.** Stubbed-client test asserting the exact `.eq('id', studentId)`
+   args reaching the stub (mirrors T157's checker's own filter-guard
+   technique). **The stub must expose `.maybeSingle()` (or your chosen
+   terminal method) at both the filtered and unfiltered chain positions**
+   (MINOR: the gate found a stub missing this fails via a misdirecting
+   `TypeError: ...maybeSingle is not a function` instead of the intended
+   assertion when `.eq(...)` is dropped) — build the stub so the mutation
+   fails on the *intended* assertion, and confirm that in your report, not
+   just that it's red. *Mutation:* drop the `.eq(...)` filter; confirm the
+   guard assertion (not a `TypeError`) fails. Mutation-provable. Paired,
+   **inspection-only, not mutation-provable, label it as such**: confirm by
+   diff review that no new role/family authorization logic was added
+   anywhere — RLS (`own_or_linked_read`) is the sole authorization boundary.
 
-9. **No metric-math re-derivation (constitution item 3).** Diff review only
-   (**inspection, not mutation-provable**): `resolveGoalHours`,
+9. **No metric-math re-derivation (constitution item 3). Inspection-only,
+   not mutation-provable, label it as such.** `resolveGoalHours`,
    `hoursVsGoalPercent`, `computePlannedHours`, `buildNextUp`,
-   `getUnansweredOutreachOpportunities`, `selectLiveMeetingSession` function
-   *bodies* are byte-unchanged; only their call sites' `studentId`/`teamId`
-   argument sourcing may change.
+   `getUnansweredOutreachOpportunities`, `selectLiveMeetingSession`
+   function *bodies* byte-unchanged; only call-site argument sourcing
+   changes (including, this revision, which values feed
+   `resolveGoalHours` — §2c).
 
-10. **Render and enumerate every surviving on-screen fabricated surface,
-    live — not by re-tracing the code I already traced in §2c.** With the
-    real, never-placeholder `studentId`/`teamId`/`seasonId` (via your own
-    resolvers) and the **default** `loadData` (`defaultLoadStudentHomeData`,
-    not a test-injected fixture), render `StudentHome` end-to-end, dump the
-    full DOM text, and list every surviving string individually: its exact
-    on-screen text, the field it comes from, and whether it **stays
-    fabricated** or **goes honestly empty**. Confirm or correct my §2c
-    prediction (`'Hi Ada Reyes'` and the `defaultGoalHours`-fed denominator
-    predicted to survive; `events`/`sessions`/`rsvps`/`studentHours`/
-    `participation` predicted to go honestly empty). This is a live-render
-    requirement, not an inspection — label it as such in your output.
+10. **The goal-hours denominator is real across all three DOM surfaces
+    (§2c, §3 decision 1) — NEW criterion.** Enumerate over
+    `container.innerHTML`, not `textContent` (MAJOR 5 — `textContent`
+    strips `aria-valuemax`/`aria-valuetext`). Use a `StudentHome.test.tsx`-
+    local `SeasonProvider` fixture with `defaultGoalHours` set to a value
+    **other than `100`** (e.g. `7`) — deliberately distinct from both
+    `StudentHome.tsx`'s own fabricated `FIXTURE_DEFAULT_GOAL_HOURS` and
+    `DashboardPage.test.tsx`'s `FIXTURE_ACTIVE_SEASON.defaultGoalHours`
+    (both `100`), so a test that renders the real value can't be
+    coincidentally satisfied by the fabricated one. Cover both a `null`
+    `goalHoursOverride` (falls to the season default) and a real override
+    number (wins over the season default) — mirrors `resolveGoalHours`'s
+    own existing pure-function test at `:519-522`, now proven live. Assert
+    the visible label, `aria-valuemax`, and `aria-valuetext` all reflect
+    the real value. *Mutation:* revert to reading `data.defaultGoalHours`/
+    `data.goalHoursOverride` for this computation; confirm all three
+    surfaces regress to the fabricated `100`. Mutation-provable,
+    positive+paired.
 
-11. **File the follow-up (item 20).** Whatever criterion 10 actually finds,
-    state the exact ledger-row text for a `StudentHome` sibling of T173 (the
-    `CoachHome` equivalent) — same defect class (`LoadStudentHomeDataFn` has
-    no real implementation anywhere; the fixture's unfiltered fields
-    survive the identity fix). The foreman cannot write this row without
-    your criterion-10 findings.
+11. **Render-and-enumerate, live, over `innerHTML` — not a re-trace of code
+    (unchanged requirement from revision 1, scope corrected).** With real
+    `studentId`/`teamId`/`seasonId`/`goalHoursOverride`/
+    `seasonDefaultGoalHours` and the **default** `loadData`
+    (`defaultLoadStudentHomeData`), render end-to-end and confirm or correct
+    the gate's own measured enumeration below (attributed to the gate,
+    **measured** at `e375489`, not the foreman's prediction this time):
 
-12. **`DashboardPage.test.tsx`'s existing five tests all stay green,** with
-    every change disclosed (§4). If the student-role test's assertions
-    genuinely must change (not just its harness), say exactly what and why.
+    | # | String | Origin | Verdict |
+    |---|---|---|---|
+    | 1 | `Hi Ada Reyes` | `displayName` literal, ignores both params | **stays fabricated** — lead item, §3 decision 2 |
+    | 2 | `0 / 100 h (0%)` visible label | `FIXTURE_DEFAULT_GOAL_HOURS` | **fixed by criterion 10** — confirm it now reads the real value |
+    | 3 | `aria-valuemax="100"` | same field | **fixed by criterion 10** |
+    | 4 | `aria-valuetext="0 / 100 h (0%)"` | same field | **fixed by criterion 10** |
+    | 5 | `0 h confirmed + 0 h planned` | `studentHours` → `null` | honestly empty |
+    | 6 | `Participation: —` | `participation` → `null` | honestly empty |
+    | 7 | `Nothing scheduled` + helper copy | `events` → `[]` | honestly empty |
+    | 8 | `You're all caught up` (Sign-up opportunities `EmptyState`) | `opportunities` → `[]` | honestly empty |
+    | 9 | `You're all caught up. Nothing needs your attention right now.` (quiet-greeting hero) | `selectHeroState(false, 0)` | honestly empty, but state explicitly that it's a positive-reassurance string where the app in fact knows nothing — don't omit that judgement |
+    | 10 | *(absent)* live check-in / unanswered-RSVP hero, all list rows | joins miss once `events` is `[]` | honestly empty |
 
-## 8. Worker/checker tier
+    **Enumeration hazard:** row 8 and row 9 are both literally `You're all
+    caught up` — a single `toContain('You\'re all caught up')` assertion
+    cannot distinguish them. Scope your query to the specific section
+    (e.g. by heading/`aria-labelledby` group, already wired for T129/
+    UXC-01) rather than a bare substring match if you need to assert on
+    one and not the other.
 
-**Worker: sonnet.** Walking item 18's four triggers explicitly, since the
-brief asked me to say whether it fires rather than assert it doesn't:
-- creates/edits a file under `supabase/migrations/` — no (§2b: schema
-  already supports this, no migration).
-- creates/modifies an RLS policy or a `security definer` helper — no (the
-  new query relies entirely on the already-shipped `own_or_linked_read`
-  policy, unmodified).
-- creates/modifies a SQL view with metric math — no.
-- changes auth, session, role-resolution, or permission logic — **this is
-  the one to weigh, not wave away.** The new code reads which team a
-  signed-in student's own row belongs to. It is not role *resolution*
-  (that's `guards.tsx`'s `resolveRole`, untouched) and it is not a new
-  *permission* — RLS already enforces the exact same row-scoping
-  regardless of what this task's TypeScript does or gets wrong (§2b,
-  §7 criterion 8's inspection half). It's narrower than T157's own new
-  query (a cross-family `guardian_links` read, opus-escalated as a judgment
-  call) — this is a single own-row read, by the resolved viewer, of a
-  column already reachable to a coach/admin via `queryAllStudents`. The
-  literal precedent, `resolveCurrentStudentId` itself (T096), shipped at
-  the default tier with no opus override. I'm following that precedent, not
-  overriding it — flag to the checker if you disagree; this is exactly the
-  kind of call item 18 wants recorded, not silently assumed either way.
+12. **File the follow-ups (item 20) — two, not one.**
+    (a) `StudentHome`'s T173-sibling row: lead with `Hi Ada Reyes` (§3
+    decision 2), then the rest of your criterion-11 enumeration, then
+    `LoadStudentHomeDataFn` having no real implementation beyond the one
+    field criterion 10 lands.
+    (b) The `student_teams` follow-up (§2b): `StudentHome` scopes off the
+    legacy `students.team_id` primary-team path, not `student_teams` ACTIVE
+    memberships; a dual-team-member student silently loses her second
+    team's meetings/live-check-in/sign-up-opportunities, the same class
+    T120 already fixed on `ParticipationTab`.
+    **Label both non-mutation-provable — they're documentation
+    deliverables, not tests (MAJOR 8).**
 
-**Checker: `checker-reviewer`, opus.** Matches T155 (sonnet worker, opus
-checker) — the closest template — not because item 18 forces it, but
-because this task's hardest failure mode (§2c/criterion 10, the
-render-and-enumerate requirement) is exactly the class of judgment that
-needed opus's rigor project-wide even on sonnet-tier work, and getting it
-wrong here has already cost three corrections on the sibling CoachHome task
-in one day.
+13. **`DashboardPage.test.tsx`'s existing five tests stay green (§4).**
+    **Label non-mutation-provable — a no-regression check, not a new
+    behavior (MAJOR 8).** Report the exact diff and confirm zero assertion
+    changes were needed, or explain precisely what had to change and why.
 
-Checker instructions specific to this task: independently execute every
-mutation above rather than trusting the worker's description of one (per
-T157's own checker's practice); re-render criterion 10 yourself with your
-own fixture ids rather than re-reading the worker's enumeration; verify
-`DashboardPage.test.tsx`'s harness change doesn't silently disable the
-student-role test's own assertions (e.g. an over-broad mock that makes the
-test pass regardless of what `StudentHome` renders — check the mock is
-narrowly scoped to `resolveCurrentStudentId`/the new team resolver, not the
-whole `loaders/meetings.ts` module's behavior).
+14. **State the blast radius (§3 decision 3, MAJOR 7).** In your worker
+    output, before diving into individual test fixes: **13 of 33**
+    `StudentHome.test.tsx` tests break (all render-path tests; the 20
+    pure-function tests, `isEventInTeamScope` through `withLocalRsvpOverride`,
+    are unaffected) and need harness-level fixes — add `<SeasonProvider>`
+    and identity-resolution mocking to `renderAsUser`, mirroring
+    `CoachHome.test.tsx`'s own T155-era harness change — not per-test
+    assertion rewrites. **`DashboardPage.test.tsx`: 1 of 5** (§4). If your
+    actual numbers differ from these, say so and explain the delta; these
+    are the gate's measured baseline against its own experimental build,
+    not a guarantee against your final implementation.
+
+## 8. Worker/checker tier — unchanged reasoning from revision 1
+
+**Worker: sonnet.** Item 18's four triggers, walked explicitly: no
+migration, no RLS/`security definer` change, no metric-SQL view change.
+"Changes auth/session/role-resolution/permission logic" — still judged not
+to fire: the new query is a single own-row read of a column already
+reachable to staff via `loaders/students.ts`'s existing `queryStudents`,
+RLS-enforced identically whether or not this task's TypeScript gets the
+filter right (§7 criterion 8's inspection half), and it follows the
+literal, un-escalated precedent (`resolveCurrentStudentId`/T096) rather than
+overriding it. Narrower than T157's own new cross-family `guardian_links`
+read, which *was* escalated as a judgment call. Flag to the checker if this
+reasoning is wrong — recorded, not assumed either way.
+
+**Checker: `checker-reviewer`, opus.** Unchanged reasoning: matches T155's
+template, and this task's hardest failure mode (criteria 10/11, live
+render-and-enumerate over `innerHTML`) is exactly the class of judgment that
+needed opus's rigor project-wide, on this exact sibling component, twice
+already (revision 1's own §2c predictions were wrong on scope — the gate
+caught it, not a re-trace).
+
+Checker instructions, extended this revision: independently re-run **all
+14** criteria's mutations, not a sample; specifically re-run the vacuity
+probe (identity tier disabled → blank page) against criteria 2 and 4's
+final implementation, since that's the exact probe that found BLOCKER 2;
+re-render criterion 10 with your own season-fixture value (not `7` if the
+worker also used `7` — pick a third distinct number, so a checker-side
+coincidence can't mask a worker-side bug the same way `100`/`100` almost
+would have); verify `format:check` actually passes, not just that the
+worker claims it does (T157's own checker is the reason this project knows
+CI can stay green while `format:check` breaks).
 
 ## 9. Required worker output
 
-- Full DOM dump for criterion 10's render, with the enumeration as its own
-  labeled section (not folded into the mutation report for another
-  criterion).
-- Every mutation's actual command/diff and the actual failure output
-  (constitution item 13's spirit: no unexecutable prescriptions carried
-  forward — if any mutation above turns out not to fail as predicted, say
-  so and explain, don't silently skip it).
-- The exact `DashboardPage.test.tsx` diff, with reasoning for every changed
-  line.
-- The exact follow-up ledger-row text (criterion 11).
-- Full suite counts before/after, by reference to your own dispatch-SHA
-  baseline, not any number in this packet.
-- Any place you deviated from §6's prescribed shape, and why.
+- All five gate commands run and reported individually (typecheck, lint,
+  format:check, build, vitest) — §7 preamble.
+- Criterion 14's actual numbers, stated explicitly, with any delta from the
+  gate's baseline explained.
+- Full `container.innerHTML` dump for criterion 11, with the enumeration as
+  its own labeled section, confirming or correcting each row of the gate's
+  table above.
+- Every mutation's actual command/diff and actual failure output for every
+  criterion marked mutation-provable; explicit statements for every
+  criterion marked structural/inspection-only/non-mutation-provable.
+- The exact `DashboardPage.test.tsx` diff, with reasoning.
+- The exact text of both follow-up ledger rows (criterion 12a/12b).
+- Any deviation from §6's prescribed shape, and why.
