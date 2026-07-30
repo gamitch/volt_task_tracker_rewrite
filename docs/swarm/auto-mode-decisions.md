@@ -878,3 +878,52 @@ on him.
 
 Nothing else in T157/T158 — loader design, test shape, embedding position within the
 dashboard — is covered by this ruling. Those are mine.
+
+---
+
+## 2026-07-30 — George's ruling on T169 (owner input, verbatim)
+
+His words, complete: *"T169: the student can control belong on OutreachDetail alongside
+the parent's (one screen, role-gated), AND on the student-facing outreach"*.
+
+**What this authorizes:** `RsvpControl` is hosted on **both** surfaces — `OutreachDetail.tsx`
+alongside the parent control, role-gated, **and** the student-facing outreach view in
+`OutreachList.tsx`. Not one or the other. Settles T169's open placement question.
+
+**What it does not authorize:** everything else. Sequencing, loader design, test shape and
+the handling of the two defects found below are the orchestrator's calls.
+
+### What investigating the placement turned up — three measured findings
+
+Verified at `495539b`, all by reading the live tree.
+
+1. **The student-facing outreach view already has an RSVP control, and it writes nothing.**
+   `OutreachList.tsx:3563-3568`'s `handleRsvpChange` calls only `setRsvps(...)` local state.
+   Its own comment says so: *"local-only. No Supabase write happens here -- the real
+   persisted, validated RSVP flow is RsvpControl.tsx/ParentRsvp.tsx (T040/T042, Forbidden
+   Files, currently Blocked)."* **This reframes the student half of T169.** It is not
+   "add a missing control" — it is "replace a control that accepts the student's RSVP,
+   shows it applied, and silently discards it on reload." That is worse than an absent UI,
+   because the student believes they have responded. The comment's "currently Blocked" is
+   also stale; those files are not blocked.
+
+2. **`OutreachList`'s viewer is a placeholder student — sixth instance of the family, and
+   the first found on a live route.** `viewerStudentId = PLACEHOLDER_CURRENT_STUDENT_ID`
+   (`OutreachList.tsx:3877`; `:821` = `'student-placeholder-current-viewer'`), and
+   `router.tsx:244` renders `<OutreachList />` **passing no props**. Identical shape to
+   T155's `CoachHome.seasonId`. Filed as T170.
+
+3. **`RsvpControl` carries the same defect in its own signature:**
+   `currentUserProfileId = PLACEHOLDER_CURRENT_USER_PROFILE_ID` (`:461`; `:287` =
+   `'profile-placeholder-current-viewer'`). Whoever mounts it must pass the real value.
+
+### The sequencing decision this forces — mine, not the owner's
+
+**T169's student half is blocked on T170.** Mounting a genuinely-persisting RSVP control on
+a page whose viewer id is `'student-placeholder-current-viewer'` would issue **real
+`rsvps` upserts keyed to a student id that does not exist**. Today the fake handler makes
+that harmless because nothing is written. Wiring the real one first would convert a
+display bug into writes against a non-existent row — either a `22P02`-class rejection like
+T155's, or, if the column is not a uuid, persisted garbage.
+
+The `OutreachDetail` half has no such dependency and can proceed with T157.
