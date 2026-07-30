@@ -1,13 +1,16 @@
 # T157 worker packet — mount `ParentRsvp` in `OutreachDetail.tsx`
 
-**Revision 2 — this is the version that ships. Read this note before anything
-else.** Revision 1 gated REVISE at `checker-premise` round 1
+**Revision 2 — this is the version that ships, and it has cleared the gate. Read this
+note before anything else.** Revision 1 gated REVISE at `checker-premise` round 1
 (`0b932d0`; 4 MAJOR, 6 MINOR, 3 NIT — full verbatim list in
-`docs/swarm/active/T157-gate-round1-findings.md`). **Constitution item 19a
-caps the premise gate at two rounds. This is round 2 of 2 — if this revision
-also gates REVISE, the cap is spent and the next dispatch goes straight to a
-worker regardless.** I have written it accordingly: every one of the twelve
-required revisions is resolved below, not restated as an open question.
+`docs/swarm/active/T157-gate-round1-findings.md`); every one of those twelve required
+revisions is resolved below, not restated as an open question. **Round 2 returned
+DISPATCH** (5 MINOR, 4 NIT, no BLOCKER, no MAJOR), and all nine of its findings have
+since been folded into this text by the orchestrator, marked inline at each spot they
+land — MINOR-1 and MINOR-4 in §7e, MINOR-2 in §7e's locator fix, MINOR-3 in §8's
+preamble, MINOR-5 in §7c, NIT-1 in §4, NIT-2 in §6c, NIT-3 at the foot of this file.
+See that closing note for a procedural error of the orchestrator's that revision 2
+was instructed to encode and that has now been struck.
 
 **Epistemic status.** I have no Bash tool — I cannot execute anything.
 Everything below is one of three things, and I have kept them distinguishable
@@ -157,7 +160,8 @@ side**:
   no account yet).
 - **The BLOCKER the orchestrator originally hypothesized does NOT hold, and this
   packet does not imply otherwise.** `students`' `own_or_linked_read`
-  (`rls.sql:101-103`) is `id in (select my_student_ids())`, so `queryAllStudents` is
+  (`rls.sql:100-102` — corrected in round 2; both round 1's report and revision 2
+  carried `:101-103`) is `id in (select my_student_ids())`, so `queryAllStudents` is
   already server-scoped to the parent's own linked students. `rsvps`'
   `own_or_linked_write`/`own_or_linked_update` (`:205-212`) require
   `student_id in (select my_student_ids()) and responded_by = auth.uid()`. A wrong
@@ -326,16 +330,21 @@ the way that matters: `GuardianLinkRow`'s origin is `ParentRsvp.tsx`, a **compon
 not a page, and `OutreachDetail.tsx` (the page) is already a required, direct
 consumer of that same component's props — reusing its exported type is reusing the
 contract of a thing you're already calling, not reaching across an unrelated
-page/loader seam. Declaring a third structurally-identical interface
+page/loader seam. Declaring a third same-named interface
 (`types.ts:179`'s existing shared `GuardianLinkRow`, `ParentRsvp.tsx:258`'s, and a
 new one) would mean three places to keep in sync by hand with no compiler check
 between them — exactly the failure mode T143/T146 already demonstrated for a select
 string. Reuse removes that class of drift structurally.
 (Note: `src/lib/supabase/types.ts :: GuardianLinkRow` is a *different*, third
-declaration with the same name and same fields, used by `parents.ts`. Still do not
-use that one — it is a different type unrelated to this task's specific boundary,
-kept separate deliberately by that file's own Trap #3. This task's reuse target is
-`ParentRsvp.tsx`'s export specifically, not `types.ts`'s.)
+declaration with the same name, used by `parents.ts`. **Correction from round 2 of
+the gate (NIT-2): it is not structurally identical — it has five fields, carrying a
+`createdAt: string` that `ParentRsvp.tsx`'s four-field version does not.** Revision 2
+described all three as having "the same fields"; that was wrong, and the difference
+strengthens this decision rather than weakening it — `types.ts`'s type would oblige
+the new loader to select and map a column `ParentRsvp` never reads. Still do not use
+it: it is a different type for a different boundary, kept separate deliberately by
+`parents.ts`'s own Trap #3. This task's reuse target is `ParentRsvp.tsx`'s export
+specifically.)
 
 **6d. New loader in `outreach.ts`.** Same `createLoader`/`getClient` DI convention
 every other factory in this file already uses (cite `makeLoadOutreachDetail` as your
@@ -448,7 +457,14 @@ Revision 1's §12 cited constitution item 12 to make loading/empty/error/populat
 mandatory, while its own §10 waived the empty state — a direct contradiction the gate
 correctly flagged. **Ruling: item 12 governs; it is not waivable by a task packet's
 own text (precedence rule 1: PRD > constitution > ledger > packet judgment).** But
-this does not require a fourth, distinct state variant. I re-read this file's own
+this does not require a distinct *empty* state variant. (Round 2 of the gate flagged
+this sentence as reading like a contradiction against the four-variant type printed
+below — MINOR-5. To be unambiguous: the two are counting different things. **No
+variant is needed for _empty_**, which is a zero-length `ready`. The fourth variant
+below is **`idle`**, which is not an empty state at all — it is the never-fetched case
+for a non-parent viewer, who must never call the loader (§7c's own "fetch only when
+`isParentViewer`" rule). Three variants model the fetch; `idle` models not having
+started one.) I re-read this file's own
 already-passed precedent directly (`RosterLoadState`, `OutreachDetail.tsx:1143-1146`,
 shipped and checker-verified under **T147 Part A2**, whose own module comment
 explicitly frames it as "a real, honest DES-12 load-state"): that state machine is
@@ -478,6 +494,18 @@ type GuardianLinksLoadState =
 
 Fetch **only when `isParentViewer`** — a non-parent viewer must never call
 `loadGuardianLinksForParent` at all (directly test-provable — see §8 criterion 3).
+A non-parent viewer therefore sits in `idle` forever, which is the variant's whole
+purpose.
+
+**Where a parent viewer starts, since criterion 8 depends on it (round 2, MINOR-5).**
+For a parent viewer, initialise to **`loading`**, not `idle` — either directly, or by
+initialising to `idle` and transitioning synchronously in the same effect that fires
+the fetch. Do not leave a parent viewer observably in `idle` on first paint. Criterion
+8 asserts the loading state "while the promise is unresolved"; if a parent's first
+render is `idle` and `idle` renders nothing, that criterion has no window to observe
+and would pass vacuously against an unrendered state — the exact "criterion that
+cannot fail" shape this packet's §8 exists to prevent. State in your output doc which
+of the two shapes you implemented.
 
 **7d. Which students get a control — and the cross-family/team-scope MAJOR closed.**
 Same exported pure function as revision 1, unchanged in its own body:
@@ -565,9 +593,35 @@ notice it, but not this task's problem to solve pre-emptively beyond disclosing 
 **Placement and per-instance test-scoping.** Render one `<ParentRsvp>` per
 (session × qualifying linked student), inside the existing per-session loop
 (`orderedSessions.map(...)`), gated by
-`isParentViewer && guardianLinksState.status === 'ready'`. Placing it per-session,
-alongside `<SessionSignupList>`, matches this page's own established "OUT-04 is
-per-session, not per-event" discipline (module doc #4).
+`isParentViewer && user !== null && guardianLinksState.status === 'ready'`. Placing it
+per-session, alongside `<SessionSignupList>`, matches this page's own established
+"OUT-04 is per-session, not per-event" discipline (module doc #4).
+
+**The `user !== null &&` in that gate is load-bearing and must not be dropped as
+redundant — round 2 of the premise gate raised this as MINOR-1.** It looks redundant
+(`isParentViewer` is `user !== null && user.role === 'parent'`) but it is not:
+`isParentViewer` is a plain `boolean` const, **not a type predicate**, so TypeScript
+does not narrow `user: AuthUser | null` through it, and `currentUserProfileId={user.id}`
+below will not compile. This file's own precedent already handles exactly this —
+`OutreachDetail.tsx:1437` writes `{isStaffViewer && user !== null && (` before passing
+`currentUserProfileId={user.id}` at `:1442`. Follow it. Criterion 11 (`tsc`) catches
+this in seconds if you drop it, but the block below is copy-pasteable and should
+compile as given.
+
+**The call site, written out explicitly** (round 2's MINOR-4 — §7d prescribes the
+function and this section prescribes the loop, but revision 2 never wrote the line
+joining them, and criterion 2c's mutation presupposes it):
+```ts
+const parentLinkedStudents = resolveParentLinkedRosterStudents(
+  roster,
+  guardianLinksState.guardianLinks,
+  user.id,
+);
+```
+`user.id` is the correct `parentProfileId` because `OutreachDetail.tsx:301-306` already
+documents that `AuthUser.id === profiles.id`. Both `roster` and `students` are in scope
+at `OutreachDetail.tsx:1340-1341`, which is what makes criterion 2c's "swap which array
+is passed in" mutation applicable as written.
 
 **Locator fix, closing revision 5.** Do not use `ParentRsvp`'s `controlLabel` text as
 a locator. Read-verified directly against the installed vendor source
@@ -587,12 +641,27 @@ generalize to this page's one-per-(session×student) placement.
 the disambiguating information §7's own item-15 requirement needs anyway, and use it
 as the test-scoping anchor too — one piece of markup satisfying both jobs.** Wrap
 each `<ParentRsvp>` in a small container with its own `Heading level={4}` reading
-`` `Your RSVP for ${student.name}` `` (fabricated fixture names only, same register
-as the rest of this file's roster — not a new PII surface, this page already displays
-these same names elsewhere):
+`` `Your RSVP for ${student.name} — ${formatSessionDateOnly(session)}` `` (fabricated
+fixture names only, same register as the rest of this file's roster — not a new PII
+surface, this page already displays these same names elsewhere).
+
+**The heading must carry the session date as well as the student name — round 2 of
+the premise gate raised this as MINOR-2 and it is a required correction, not a
+suggestion.** A name-only heading disambiguates the student but *not* the session: a
+two-session event with one linked student renders two `<h4>`s with identical text, and
+the `Array.from(...).find(...)` locator below silently takes the first. Criteria 4/5/6
+would still pass — the first match is `session-food-bank-day1`, editable under the
+pinned clock — but they would be correctly scoped *by accident*, and a later
+second-session assertion would silently test the wrong node. That is the same defect
+this section correctly diagnoses in `controlLabel` (which carries the date but not the
+name), mirrored. **Use `OutreachDetail.tsx`'s own `formatSessionDateOnly`
+(`:833`, takes `OutreachDetailSession`) — do not import `ParentRsvp.tsx`'s
+same-named export (`:408`, takes `RsvpControlSession`). The page already has this
+function; no new import is needed.**
+
 ```tsx
 <VStack key={`${session.id}-${student.id}`} gap={2}>
-  <Heading level={4}>{`Your RSVP for ${student.name}`}</Heading>
+  <Heading level={4}>{`Your RSVP for ${student.name} — ${formatSessionDateOnly(session)}`}</Heading>
   <ParentRsvp
     studentId={student.id}
     studentProfileId={student.profileId}
@@ -611,8 +680,9 @@ these same names elsewhere):
 ```
 A test locates the instance by finding the heading with the expected text (raw DOM —
 this file has no `@testing-library/react`, confirmed directly; use
-`Array.from(container.querySelectorAll('h4')).find((h) => h.textContent === 'Your RSVP for Amara Chen')`
-or equivalent), then scopes into its sibling via
+`Array.from(container.querySelectorAll('h4')).find((h) => h.textContent === 'Your RSVP for Amara Chen — <that session's date>')`
+or equivalent — match on the full heading including the date, which is the whole point
+of MINOR-2's correction above), then scopes into its sibling via
 `heading.parentElement?.querySelector('[role="radiogroup"]')` — the heading and the
 `<ParentRsvp>` share the same `VStack` parent by construction. This does not require
 any change to `ParentRsvp.tsx` (Forbidden, untouched) and does not require inventing a
@@ -647,9 +717,12 @@ evidence of record for every mutation criterion below, and it is load-bearing, n
 incidental — do not treat "paste the output" as a formality.** `checker-premise`
 round 2 verifies this packet's *feasibility and internal consistency* by reading, by
 single-line `perl -pi` probes where that suffices, and by running the existing suite
-— it is not expected to and should not attempt to apply any of the six multi-line
-mutations below itself. After dispatch, **you (the worker) execute all six mutations
-yourself** and paste the actual output. After that, **`checker-reviewer` (opus, §9)
+— it is not expected to and should not attempt to apply any of the multi-line
+mutations below itself. After dispatch, **you (the worker) execute all nine mutations
+yourself — criteria 1, 2a, 2b, 2c, 4, 5, 6, 7 and 9, the same nine §11 enumerates**
+and paste the actual output. (Round 2 of the gate caught this preamble saying "six",
+which was revision 1's count leaking forward into revision 2's text — MINOR-3. It is
+**nine**; §11's enumeration governs and this sentence now matches it.) After that, **`checker-reviewer` (opus, §9)
 independently re-executes each mutation against your landed commit** as its own
 verification — it does not take your pasted output at face value merely because it
 is present. This is the same posture item 23 already establishes for mutation
@@ -950,8 +1023,23 @@ oversight.
 
 ---
 
-This packet has been through `checker-premise` once (round 1, REVISE). It is
-submitted here for round 2 — the last round available under item 19a. It must
-return DISPATCH before this reaches a worker; if it returns REVISE again, the cap is
-spent and this packet dispatches to a worker as-is regardless, per the orchestrator's
-standing instruction for this task.
+**Gate status: cleared.** This packet went through `checker-premise` twice — round 1
+REVISE (4 MAJOR, 6 MINOR, 3 NIT at `0b932d0`), round 2 **DISPATCH** (5 MINOR, 4 NIT,
+no BLOCKER, no MAJOR, at `ef2192a`). Round 2 confirmed the round-1 MAJOR is genuinely
+closed: it traced the `linkedStudentIds.has(student.id)` mutation against the new
+criteria and found criterion 2a fails on both its first and second cases, with 2b
+failing independently. It also confirmed no new criterion is incapable of failing.
+All nine round-2 findings have been folded into the text above by the orchestrator
+and are marked inline where they land.
+
+**Correction to this packet's own earlier closing note, and the error was the
+orchestrator's, not the foreman's.** Revision 2 stated that a second REVISE would
+mean "this packet dispatches to a worker as-is regardless, per the orchestrator's
+standing instruction." That instruction was wrong and should never have been given.
+`constitution.md:93` (item 19a) reads: *"The gate is capped at two rounds. A third
+REVISE escalates to the human owner instead of looping."* The cap ends the **looping**
+— it does not authorize dispatching an un-DISPATCHed packet. Under precedence rule 1
+(`constitution.md:40`), a standing orchestrator instruction ranks below the
+constitution and cannot override it. Round 2's NIT-3 caught this; it is moot for T157
+given the DISPATCH verdict, but it is struck here so no future packet inherits the
+procedure.
