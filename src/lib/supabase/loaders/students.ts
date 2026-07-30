@@ -89,6 +89,14 @@ import type {
   TeamRow,
   UpdateStudentFn,
 } from '../../../pages/roster/StudentsTab';
+// T176 -- additive only (this task's own Allowed Files instruction). New
+// own-row `students` resolution for `StudentHome.tsx`'s real
+// `teamId`/`goalHoursOverride` scoping. `ResolveStudentScopeFn`/
+// `StudentScope` are OWNED by `StudentHome.tsx` (mirrors the existing
+// `CurrentViewerIdentity`/`ResolveCurrentStudentIdFn` cross-file shape
+// `loaders/meetings.ts` already established for that file's own T096
+// resolution) -- imported here as types only.
+import type { ResolveStudentScopeFn } from '../../../pages/home/StudentHome';
 
 /**
  * Raw `public.students` row exactly as Postgrest returns it (snake_case) --
@@ -307,3 +315,67 @@ export function makeUpdateStudent(
 
 /** Default `onUpdateStudent` for `StudentsTab.tsx`. */
 export const updateStudent: UpdateStudentFn = makeUpdateStudent();
+
+/**
+ * T176 -- additive only, appended after every pre-existing export (this
+ * task's own Allowed Files instruction: no existing export's name,
+ * signature, or behavior changes). Real own-row `students.team_id`/
+ * `students.goal_hours_override` resolution for `StudentHome.tsx`'s
+ * identity-resolution tier -- the same "single own-row read, real
+ * `.eq('id', ...)` scope" shape `loaders/meetings.ts`'s own T096
+ * `queryStudentIdByProfileId` already established for the sibling identity
+ * seam, and RLS-identical: `students`' `own_or_linked_read` policy
+ * (`supabase/migrations/20260717000002_rls.sql`, same policy
+ * `loaders/students.ts`'s own `queryStudents` above is already bounded by
+ * for staff, and `MeetingsList.tsx`'s own module doc #6 already cites for
+ * a student/parent viewer's own row) already restricts this read to the
+ * caller's own row whether or not this file's own `.eq('id', studentId)`
+ * filter is present -- this filter is defense-in-depth, not the
+ * authorization boundary (T176 worker output criterion 8's own inspection
+ * note: no new role/family authorization logic is added here or anywhere
+ * else in this task's diff).
+ *
+ * A brand-new interface (`StudentScopeDbRow`), not a reuse of the existing
+ * module-private `StudentDbRow` above -- this task's own packet forbids
+ * touching that interface's shape, and this query selects a narrower
+ * two-column projection anyway (`team_id`, `goal_hours_override` only),
+ * unrelated to `StudentDbRow`'s own eight-column shape.
+ */
+interface StudentScopeDbRow {
+  team_id: string;
+  goal_hours_override: number | null;
+}
+
+async function queryStudentScopeById(
+  client: SupabaseClient,
+  studentId: string,
+): Promise<LoaderQueryResult<StudentScopeDbRow>> {
+  const result = await client
+    .from('students')
+    .select('team_id, goal_hours_override')
+    .eq('id', studentId)
+    .maybeSingle();
+  return { data: (result.data as StudentScopeDbRow | null) ?? null, error: result.error };
+}
+
+/**
+ * `getClient` is injectable (defaults to the shared singleton), same
+ * convention every export above already established, so tests can supply a
+ * stubbed transport with zero real network calls -- see this task's own new
+ * `students.test.ts` (scoped to this one function only -- NOT a full
+ * coverage sweep of this file, which no ledger row currently claims, per
+ * this task's own packet disclosure).
+ */
+export function makeResolveStudentScope(
+  getClient: () => SupabaseClient = getSupabaseClient,
+): ResolveStudentScopeFn {
+  const loadScope = createLoader<string, StudentScopeDbRow>(queryStudentScopeById, getClient);
+  return async (studentId: string) => {
+    const row = await loadScope(studentId);
+    if (row === null) return null;
+    return { teamId: row.team_id, goalHoursOverride: row.goal_hours_override };
+  };
+}
+
+/** `StudentHome.tsx`'s own default `resolveStudentScope`. */
+export const resolveStudentScope: ResolveStudentScopeFn = makeResolveStudentScope();
