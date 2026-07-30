@@ -172,6 +172,25 @@ async function flushMicrotasks(): Promise<void> {
   });
 }
 
+// T147 -- same helper `MeetingsList.test.tsx`/`OutreachDetail.test.tsx`
+// already established (Astryx `Field` renders a real `<label htmlFor={id}>`
+// for every labeled input, including `MultiSelector`'s own trigger button;
+// no testing-library `getByLabelText` equivalent is installed in this repo).
+function getFieldControl(labelText: string): HTMLElement {
+  const labels = Array.from(document.querySelectorAll('label'));
+  const label = labels.find((el) => el.textContent?.trim().startsWith(labelText));
+  if (!label) {
+    throw new Error(
+      `No label found for "${labelText}". Labels present: ${labels.map((l) => l.textContent).join(' | ')}`,
+    );
+  }
+  const forId = label.getAttribute('for');
+  if (!forId) throw new Error(`Label "${labelText}" has no htmlFor`);
+  const control = document.getElementById(forId);
+  if (!control) throw new Error(`No control found for id "${forId}"`);
+  return control;
+}
+
 function freshContainer(): void {
   act(() => {
     root.unmount();
@@ -974,6 +993,7 @@ describe('<OutreachList /> coach view', () => {
           attendance: [],
           students: [],
           goalConfig: { seasonId: 's1', individualGoalHoursByStudentId: {} },
+          teams: [],
         }),
     });
     await flushMicrotasks();
@@ -1167,11 +1187,18 @@ describe('<OutreachList /> coach view', () => {
   });
 
   it('T121 item (a): wires the real roster loader into the create dialog\'s "Expected attendees" checklist, replacing the fixture DEFAULT_STUDENTS', async () => {
-    const loadRoster = vi
-      .fn()
-      .mockResolvedValue([
-        { id: 'stu-jamie', name: 'Jamie Rivera', teamId: 'team-ravens', isActive: true },
-      ]);
+    const loadRoster = vi.fn().mockResolvedValue([
+      // T147: `teamId` matches `defaultLoadOutreachData`'s own `FIXTURE_TEAMS`
+      // (UUID-shaped, no longer `'team-ravens'`) -- this dialog's own
+      // `groupActiveRosterByTeam` only shows a roster row inside a team it can
+      // actually match against the real `teams` now threaded to it.
+      {
+        id: 'stu-jamie',
+        name: 'Jamie Rivera',
+        teamId: 'b1c11111-1111-4111-8111-111111111111',
+        isActive: true,
+      },
+    ]);
     renderAsUser(COACH_USER, { loadData: defaultLoadOutreachData, loadRoster });
     await flushMicrotasks();
     expect(loadRoster).toHaveBeenCalledTimes(1);
@@ -1239,9 +1266,21 @@ describe('<OutreachList /> coach view', () => {
     // "1 of N checked" assertion below to mean anything (a separate, already
     // -covered concern from whether the roster loader itself is wired --
     // see the previous test).
+    // T147: `teamId` matches `defaultLoadOutreachData`'s own `FIXTURE_TEAMS`
+    // (UUID-shaped, no longer `'team-ravens'`).
     const loadRoster = vi.fn().mockResolvedValue([
-      { id: 'student-amara-webb', name: 'Amara Webb', teamId: 'team-ravens', isActive: true },
-      { id: 'student-cole-jennings', name: 'Cole Jennings', teamId: 'team-ravens', isActive: true },
+      {
+        id: 'student-amara-webb',
+        name: 'Amara Webb',
+        teamId: 'b1c11111-1111-4111-8111-111111111111',
+        isActive: true,
+      },
+      {
+        id: 'student-cole-jennings',
+        name: 'Cole Jennings',
+        teamId: 'b1c11111-1111-4111-8111-111111111111',
+        isActive: true,
+      },
     ]);
     renderAsUser(COACH_USER, {
       loadData: defaultLoadOutreachData,
@@ -1325,7 +1364,7 @@ describe('<OutreachList /> coach view', () => {
     expect(container.textContent).toContain('Event canceled');
   });
 
-  it('UXD-05: exactly one "Team season goal" heading (no duplicated concept), and no stacked ProgressBars for it', async () => {
+  it('UXD-05/UXC-08 (T136): exactly one "Team season goal" heading (no duplicated concept), and exactly ONE accessible GoalBar for it -- never two stacked bars', async () => {
     renderAsUser(COACH_USER, { loadData: defaultLoadOutreachData });
     await flushMicrotasks();
 
@@ -1338,10 +1377,13 @@ describe('<OutreachList /> coach view', () => {
       (el) => el.textContent === 'Team season goal',
     );
     expect(headings.length).toBe(1);
-    // UXD-05(c): grouped stat tiles, not stacked full-width ProgressBars --
-    // zero `role="progressbar"` elements anywhere on this page anymore.
-    expect(container.querySelectorAll('[role="progressbar"]').length).toBe(0);
-    // The confirmed/planned/goal numbers still render, just as tiles.
+    // T136: UXC-08's goal strip is a real bar again (F-3 custom component,
+    // `GoalBar`) -- but exactly ONE, with confirmed/planned as two offset
+    // fills inside that single track, not the pre-T121 TWO stacked
+    // `ProgressBar`s this same guard used to catch (2 -> T121's 0 -> this).
+    expect(container.querySelectorAll('[role="progressbar"]').length).toBe(1);
+    // The confirmed/planned/goal numbers still render as tiles too (T121's
+    // fix to this part is unchanged -- the bar is additive, not a replacement).
     expect(container.textContent).toContain('9 hrs confirmed');
     expect(container.textContent).toContain('7 hrs planned');
   });
@@ -1370,6 +1412,111 @@ describe('<OutreachList /> coach view', () => {
     // 9 confirmed / 15 goal = 60% -- 75% and 100% must NOT show as reached.
     expect(container.textContent).not.toContain('75% reached');
     expect(container.textContent).not.toContain('100% reached');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T147: the outreach/meetings team picker shows fixture teams to real users.
+// This page now threads real `teams` (`loaders/outreach.ts`'s
+// `makeLoadOutreachData`) to `<OutreachEventDialog>`'s own `teams` prop
+// instead of that dialog falling back to its `DEFAULT_TEAMS` fixture
+// (`'team-ravens'`/`'team-titans'`, non-uuid strings that fail the real
+// `events.team_ids uuid[]` insert -- the report that blocked meeting
+// creation outright).
+//
+// Create mode has no `initialEvent`, so `OutreachEventDialog.tsx`'s own
+// `allTeamIds` (derived straight from the `teams` prop) is what seeds
+// `selectedTeamIds` on open -- unlike edit mode, no extra fixture-event
+// scoping trick is needed here to make the `teams` prop the thing under
+// test.
+//
+// Assertion mechanism -- UUID shape on the submitted payload, never a
+// name-based assertion (packet "The assertion mechanism" section).
+// ---------------------------------------------------------------------------
+
+describe('T147: OutreachEventDialog (create mode) submits real team UUIDs, not DEFAULT_TEAMS fixture strings', () => {
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  it('deselecting one team submits a teamIds array of real UUIDs from the teams prop, never the fixture strings', async () => {
+    const onSaveEvent = vi.fn().mockResolvedValue(undefined);
+    // `defaultLoadOutreachData` (Known Context/Traps #1's own fixture
+    // loader) now resolves `teams: FIXTURE_TEAMS` -- UUID-shaped ids
+    // (module doc on that fixture), the real prop under test here.
+    renderAsUser(COACH_USER, { loadData: defaultLoadOutreachData, onSaveEvent });
+    await flushMicrotasks();
+
+    const newEventButtons = Array.from(container.querySelectorAll('button')).filter((btn) =>
+      btn.textContent?.includes('New outreach event'),
+    );
+    act(() => {
+      newEventButtons[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const labels = Array.from(document.querySelectorAll('label'));
+    const titleLabel = labels.find((el) => el.textContent?.trim().startsWith('Title'));
+    const titleInput = document.getElementById(
+      titleLabel?.getAttribute('for') ?? '',
+    ) as HTMLInputElement;
+    const dateLabel = labels.find((el) => el.textContent?.trim().startsWith('Date'));
+    const dateInput = document.getElementById(
+      dateLabel?.getAttribute('for') ?? '',
+    ) as HTMLInputElement;
+
+    function setNativeInputValue(input: HTMLInputElement, value: string): void {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value',
+      )?.set;
+      setter?.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    act(() => {
+      setNativeInputValue(titleInput, 'Winter Coat Drive');
+      setNativeInputValue(dateInput, '2026-08-15');
+    });
+
+    // Open the "Team scope" MultiSelector and deselect the LAST option in
+    // its own listbox -- positional, not by label text (with the fix
+    // reverted the injected UUID-fixture labels are absent, so a label
+    // lookup would die with a harness-shaped failure instead of the UUID
+    // mismatch this test exists to prove). Scoped to the trigger's own
+    // `aria-controls` listbox, not the whole document -- a second,
+    // unrelated `role="option"` group exists on this page (the dialog's own
+    // Event type `Selector`). The last option is never the `hasSelectAll`
+    // pseudo-option, which that component places FIRST.
+    const trigger = getFieldControl('Team scope');
+    act(() => {
+      trigger.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const listboxId = trigger.getAttribute('aria-controls');
+    expect(listboxId).toBeTruthy();
+    const listbox = document.getElementById(listboxId ?? '');
+    expect(listbox).toBeTruthy();
+    const options = Array.from(listbox?.querySelectorAll('[role="option"]') ?? []);
+    expect(options.length).toBeGreaterThan(0);
+    act(() => {
+      options[options.length - 1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const createButton = Array.from(document.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'Create event — 1 session',
+    );
+    expect(createButton).toBeTruthy();
+    await act(async () => {
+      createButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await flushMicrotasks();
+
+    expect(onSaveEvent).toHaveBeenCalledTimes(1);
+    const submittedTeamIds = onSaveEvent.mock.calls[0][0].event.teamIds as string[] | null;
+    expect(submittedTeamIds).not.toBeNull();
+    expect(submittedTeamIds).not.toEqual([]);
+    for (const id of submittedTeamIds ?? []) {
+      expect(id).toMatch(UUID_RE);
+    }
   });
 });
 
@@ -1406,6 +1553,7 @@ describe('<OutreachList /> student/parent view', () => {
           attendance: [],
           students: [],
           goalConfig: { seasonId: 's1', individualGoalHoursByStudentId: {} },
+          teams: [],
         }),
     });
     await flushMicrotasks();
@@ -1723,7 +1871,10 @@ describe('<OutreachList /> T112: "View details" navigation link on every row', (
 
     // Distinguishable per-row text (astryx-api.md Link Best Practices, same
     // checker-fixed requirement `CalendarPage.tsx` already satisfies).
-    expect(foodBankLink!.textContent).toContain('View details');
+    // T131: the standalone "View details – {title}" action text moved off
+    // this link and onto the title itself -- the link's accessible name is
+    // now exactly the event title (no more "View details – " prefix).
+    expect(foodBankLink!.textContent).toBe('Community Food Bank Sort');
     expect(foodBankLink!.textContent).toContain('Community Food Bank Sort');
     expect(parkCleanupLink!.textContent).toContain('Riverside Park Cleanup');
     expect(tutoringLink!.textContent).toContain('After-School Tutoring Drive');
@@ -1756,10 +1907,19 @@ describe('<OutreachList /> T112: "View details" navigation link on every row', (
     expect(parkCleanupLink).toBeTruthy();
     expect(tutoringLink).toBeTruthy();
 
-    expect(foodBankLinks[0].textContent).toContain('View details');
-    expect(foodBankLinks[0].textContent).toContain('Community Food Bank Sort');
+    // T132: the title itself is now the link (no separate "View details"
+    // text) on the student/parent side -- the same shape T131 already
+    // shipped on the coach view's own title link (`:1729` above, this same
+    // `describe` block, `toBe('Community Food Bank Sort')`). The two halves
+    // of this page now agree.
+    expect(foodBankLinks[0].textContent).toBe('Community Food Bank Sort');
     expect(parkCleanupLink!.textContent).toContain('Riverside Park Cleanup');
     expect(tutoringLink!.textContent).toContain('After-School Tutoring Drive');
+
+    // T132 acceptance criterion 3: no `aria-label`/`label` override -- the
+    // accessible name is the title text itself, same as it is with no
+    // `aria-label` present at all.
+    expect(foodBankLinks[0].hasAttribute('aria-label')).toBe(false);
   });
 });
 
@@ -1906,6 +2066,12 @@ describe('loadOutreachData (T101 real load)', () => {
     const seasonMaybeSingleSpy = vi
       .fn()
       .mockResolvedValue({ data: { id: 'season-1', default_goal_hours: 100 }, error: null });
+    // T147 -- the new, real, batched `teams` query this loader now issues
+    // alongside `students`/`seasons` (module doc on `makeLoadOutreachData`).
+    const teamsOrderSpy = vi.fn().mockResolvedValue({
+      data: [{ id: 'b1c11111-1111-4111-8111-111111111111', name: 'Crimson Circuit', color: 'red' }],
+      error: null,
+    });
 
     const fromSpy = vi.fn((table: string) => {
       if (table === 'events') return { select: vi.fn(() => ({ eq: eventsEqSpy })) };
@@ -1913,6 +2079,7 @@ describe('loadOutreachData (T101 real load)', () => {
       if (table === 'rsvps') return { select: vi.fn(() => ({ in: rsvpsInSpy })) };
       if (table === 'attendance') return { select: vi.fn(() => ({ in: attendanceInSpy })) };
       if (table === 'students') return { select: vi.fn(() => ({ order: studentsOrderSpy })) };
+      if (table === 'teams') return { select: vi.fn(() => ({ order: teamsOrderSpy })) };
       if (table === 'seasons') {
         return {
           select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: seasonMaybeSingleSpy })) })),
@@ -1928,6 +2095,10 @@ describe('loadOutreachData (T101 real load)', () => {
     expect(eventsEqSpy).toHaveBeenCalledWith('season_id', 'season-1');
     expect(sessionsInSpy).toHaveBeenCalledWith('event_id', ['event-1']);
     expect(rsvpsInSpy).toHaveBeenCalledWith('session_id', ['session-1']);
+    expect(teamsOrderSpy).toHaveBeenCalled();
+    expect(result.teams).toEqual([
+      { id: 'b1c11111-1111-4111-8111-111111111111', name: 'Crimson Circuit', color: 'red' },
+    ]);
     // CHECKER FIX (rework of T121, MAJOR) -- ONE real, batched `attendance`
     // query, same `.in('session_id', [...])` shape as `rsvps` -- never a
     // per-event/per-session fan-out (this test only ever exercises ONE
@@ -1942,6 +2113,110 @@ describe('loadOutreachData (T101 real load)', () => {
     // The student's own explicit override (5) wins over the season default
     // (100) -- both real columns, module doc #2 of the loader file.
     expect(result.goalConfig.individualGoalHoursByStudentId['student-1']).toBe(5);
+  });
+
+  // T147 (packet Part B: "Prove it, don't just assert it") -- a fake client
+  // that records call ORDER, not just that each table was eventually
+  // queried. `teams` depends on nothing (same as `students`/`seasons`), so
+  // it must be issued in the SAME batch as those two, before the
+  // session-dependent `rsvps`/`attendance` queries (which can only start
+  // once `sessionRows` -- itself part of that same first batch -- has
+  // resolved). A serial "teams after everything else" implementation would
+  // still eventually call every table, so call-count assertions alone
+  // (the test above) cannot distinguish parallel from serial; only order
+  // can.
+  it('issues the teams query in the SAME batch as students/seasons (zero-dependency), never serialized after the session-dependent batch', async () => {
+    const callOrder: string[] = [];
+    // One real event + one real session -- needed so `eventIds`/`sessionIds`
+    // are both non-empty, which is what makes `event_sessions` (batch 1) and
+    // `rsvps`/`attendance` (batch 2, session-dependent) actually get issued
+    // at all; an empty result short-circuits those calls via `Promise.resolve([])`
+    // instead (module doc on `makeLoadOutreachData`), which would make this
+    // test's own ordering proof vacuous.
+    const eventsEqSpy = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: 'event-1',
+          season_id: 'season-1',
+          type: 'outreach',
+          title: 'T',
+          description: '',
+          location_name: '',
+          address: '',
+          team_ids: null,
+          counts_participation: false,
+          counts_volunteer_hours: true,
+          adult_volunteers_count: 0,
+          adult_volunteer_hours: 0,
+          created_by: null,
+        },
+      ],
+      error: null,
+    });
+    const sessionsInSpy = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: 'session-1',
+          event_id: 'event-1',
+          session_date: '2026-08-01',
+          starts_at: '2026-08-01T14:00:00.000Z',
+          ends_at: '2026-08-01T16:00:00.000Z',
+          status: 'scheduled',
+          people_reached: null,
+          notes: '',
+        },
+      ],
+      error: null,
+    });
+    const rsvpsInSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const attendanceInSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const studentsOrderSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const teamsOrderSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const seasonMaybeSingleSpy = vi
+      .fn()
+      .mockResolvedValue({ data: { id: 'season-1', default_goal_hours: 0 }, error: null });
+
+    const fromSpy = vi.fn((table: string) => {
+      callOrder.push(table);
+      if (table === 'events') return { select: vi.fn(() => ({ eq: eventsEqSpy })) };
+      if (table === 'event_sessions') return { select: vi.fn(() => ({ in: sessionsInSpy })) };
+      if (table === 'rsvps') return { select: vi.fn(() => ({ in: rsvpsInSpy })) };
+      if (table === 'attendance') return { select: vi.fn(() => ({ in: attendanceInSpy })) };
+      if (table === 'students') return { select: vi.fn(() => ({ order: studentsOrderSpy })) };
+      if (table === 'teams') return { select: vi.fn(() => ({ order: teamsOrderSpy })) };
+      if (table === 'seasons') {
+        return {
+          select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: seasonMaybeSingleSpy })) })),
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    await makeLoadOutreachData(() => client)('season-1');
+
+    // `from('teams')` must appear BEFORE `from('rsvps')`/`from('attendance')`
+    // in call order -- those two are only ever reachable once the whole
+    // first `Promise.all` batch (which `loadTeams()` is inside of) has
+    // already resolved and `sessionIds` is known. `events` is issued first,
+    // sequentially, ahead of the whole batch (module doc #1: it resolves
+    // `eventIds`, which the FIRST batched `Promise.all` needs for
+    // `loadSessions`).
+    const teamsIndex = callOrder.indexOf('teams');
+    const rsvpsIndex = callOrder.indexOf('rsvps');
+    const attendanceIndex = callOrder.indexOf('attendance');
+    expect(teamsIndex).toBeGreaterThanOrEqual(0);
+    expect(rsvpsIndex).toBeGreaterThan(teamsIndex);
+    expect(attendanceIndex).toBeGreaterThan(teamsIndex);
+    // The real proof of "same batch, not serial": `students`/`seasons`
+    // (the other two zero-dependency queries) are issued in the SAME
+    // microtask turn as `teams` -- `Promise.all([a, b, c, d])` evaluates
+    // its array synchronously, so all four calls land contiguously in
+    // `callOrder`, immediately after `events`, with nothing
+    // session-dependent interleaved before `rsvps`/`attendance`.
+    expect(callOrder.slice(1, 5).sort()).toEqual(
+      ['event_sessions', 'seasons', 'students', 'teams'].sort(),
+    );
   });
 
   it('falls back to the season default_goal_hours when a student has no goal_hours_override', async () => {
@@ -1960,6 +2235,10 @@ describe('loadOutreachData (T101 real load)', () => {
             }),
           })),
         };
+      }
+      // T147 -- the new, real, batched `teams` query this loader now issues.
+      if (table === 'teams') {
+        return { select: vi.fn(() => ({ order: vi.fn().mockResolvedValue(nullEmpty) })) };
       }
       if (table === 'seasons') {
         return {
@@ -2375,6 +2654,55 @@ describe('<OutreachList /> coach view -- T130 Table column-alignment proof (UXC-
     expect(controlsIds.length).toBeGreaterThan(0);
     controlsIds.forEach((id) => {
       expect(document.getElementById(id)).not.toBeNull();
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T132: two regression tests T131 could not add under its own "exactly one
+// assertion changes" constraint -- the coach title link's accessible name
+// (no `aria-label` override) and the actions column's real (post-T131)
+// `pixel(128)` width. Both are proven to genuinely discriminate below by
+// running them against the real pre-T131 file (`git show
+// c8275c7:src/pages/outreach/OutreachList.tsx`), where the coach title was
+// plain text (no link at all) and the actions column was `pixel(420)` --
+// see this task's own worker output for that run's output.
+// ---------------------------------------------------------------------------
+
+describe('<OutreachList /> coach view -- T132 regression: coach title link accessible name', () => {
+  it('the coach event title `<a>` carries no `aria-label` -- its accessible name is the title text itself', async () => {
+    renderAsUser(COACH_USER, { loadData: defaultLoadOutreachData });
+    await flushMicrotasks();
+
+    const foodBankLink = Array.from(container.querySelectorAll('a')).find(
+      (a) => a.getAttribute('href') === '/outreach/event-food-bank-sort',
+    );
+    expect(foodBankLink).toBeTruthy();
+    expect(foodBankLink!.hasAttribute('aria-label')).toBe(false);
+    expect(foodBankLink!.textContent).toBe('Community Food Bank Sort');
+  });
+});
+
+describe('<OutreachList /> coach view -- T132 regression: actions column width', () => {
+  it('the actions column (last <th>, header: "") carries the real post-T131 pixel(128) width', async () => {
+    renderAsUser(COACH_USER, { loadData: defaultLoadOutreachData });
+    await flushMicrotasks();
+
+    const tables = Array.from(container.querySelectorAll('table'));
+    expect(tables.length).toBe(2);
+    tables.forEach((table) => {
+      const ths = Array.from(table.querySelectorAll('thead th'));
+      expect(ths.length).toBe(6);
+      // `buildCoachOutreachColumns` is not exported (module doc above), and
+      // the actions column shares `header: ''` with the expander column, so
+      // it is located POSITIONALLY -- it is the last of the 6 columns
+      // (`key: 'actions'` is the final entry in the array
+      // `buildCoachOutreachColumns` returns, verified by reading the
+      // component file directly).
+      const actionsTh = ths[ths.length - 1];
+      // `columnUtils.ts:106` writes `style.width = \`${value}px\`` inline,
+      // which jsdom can read even though it can't compute real layout.
+      expect(actionsTh.getAttribute('style')).toMatch(/width:\s*128px/);
     });
   });
 });

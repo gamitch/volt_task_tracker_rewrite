@@ -197,6 +197,69 @@ export async function signOut(client: SupabaseClient = getSupabaseClient()): Pro
   }
 }
 
+/**
+ * T148: the three literal `profiles.theme_mode` values SET-03 names.
+ * Declared locally rather than imported from `@astryxdesign/core/theme`'s
+ * own `ThemeMode` export or from `SettingsPage.tsx`'s own local `ThemeMode`
+ * -- see the T148 worker packet's Design section 1 for why: importing from
+ * either would be a backwards/unnecessary layering dependency, and
+ * TypeScript's structural typing already makes this identical literal union
+ * assignable everywhere either of the other two is expected, no cast needed.
+ */
+export type ThemeMode = 'system' | 'light' | 'dark';
+
+const THEME_MODES: readonly ThemeMode[] = ['system', 'light', 'dark'];
+
+function isValidThemeMode(value: unknown): value is ThemeMode {
+  return typeof value === 'string' && (THEME_MODES as readonly string[]).includes(value);
+}
+
+/** The row shape this helper needs off `profiles` -- only `theme_mode` is
+ * needed here. The column is `text not null default 'system'` at the DB
+ * level (not enum-typed), so it is read as a plain `string` and validated
+ * client-side below -- mirroring `SettingsPage.tsx`'s own `isValidThemeMode`
+ * validation posture for this exact column, without importing it. */
+interface ProfileThemeModeRow {
+  theme_mode: string;
+}
+
+/**
+ * T148: resolves the signed-in user's `profiles.theme_mode` (SET-03),
+ * enforced by RLS (`profiles_read`: `for select to authenticated using
+ * (true)`) -- this helper does not re-derive or duplicate any RLS policy.
+ *
+ * Resolves `null` for a missing row (same `.maybeSingle()`-through-
+ * `createLoader` "no rows" -> `null` mapping `resolveRole` above uses) AND
+ * for a stored value outside `'system' | 'light' | 'dark'` -- the column is
+ * free text at the DB level, so an invalid/legacy value is treated the same
+ * as "nothing usable stored", letting the caller (`ThemeModeProvider`)
+ * decide what `null` means (module doc above: keep the existing seeded
+ * value rather than crashing or silently substituting a default here).
+ *
+ * `client` is injectable (defaults to the shared singleton) so tests can
+ * stub the transport with zero real network calls, same as `resolveRole`.
+ */
+export function resolveThemeMode(
+  userId: string,
+  client: SupabaseClient = getSupabaseClient(),
+): Promise<ThemeMode | null> {
+  const loadProfileThemeMode = createLoader<string, ProfileThemeModeRow>(
+    (c, id) =>
+      c
+        .from('profiles')
+        .select('theme_mode')
+        .eq('id', id)
+        .maybeSingle()
+        .overrideTypes<ProfileThemeModeRow, { merge: false }>(),
+    () => client,
+  );
+
+  return loadProfileThemeMode(userId).then((row): ThemeMode | null => {
+    if (row === null) return null;
+    return isValidThemeMode(row.theme_mode) ? row.theme_mode : null;
+  });
+}
+
 /** The row shape this helper needs off `profiles` -- see `types.ts`'s
  * `ProfileRow` for the full row and its column-by-column citations. Only
  * `role` is needed here. */

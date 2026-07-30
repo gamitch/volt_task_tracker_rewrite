@@ -500,7 +500,7 @@
  *     column -- this file never touches `rsvps`/`event_sessions` directly
  *     for this number.
  */
-import { useEffect, useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type CSSProperties, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Badge,
@@ -517,16 +517,16 @@ import {
   List,
   ListItem,
   ProgressBar,
-  SegmentedControl,
-  SegmentedControlItem,
   Skeleton,
   Text,
   Toast,
+  ToggleButton,
   VisuallyHidden,
   VStack,
 } from '@astryxdesign/core';
 import { useAuth } from '../../app/guards';
 import { routePaths } from '../../app/router';
+import { EVENT_TYPE_BADGE } from '../../lib/eventTypeBadge';
 import { formatFriendlyDateRange } from '../../lib/format/dates';
 import {
   loadDashboardData,
@@ -548,22 +548,6 @@ export type EventType = 'meeting' | 'outreach' | 'competition';
 export type SessionStatus = 'scheduled' | 'completed' | 'canceled';
 export type RsvpStatus = 'going' | 'maybe' | 'declined';
 export type AttendanceStatus = 'present' | 'late' | 'excused' | 'absent';
-
-type BadgeVariant =
-  | 'neutral'
-  | 'info'
-  | 'success'
-  | 'warning'
-  | 'error'
-  | 'blue'
-  | 'cyan'
-  | 'green'
-  | 'orange'
-  | 'pink'
-  | 'purple'
-  | 'red'
-  | 'teal'
-  | 'yellow';
 
 export interface HomeTeamRow {
   id: string;
@@ -1153,6 +1137,40 @@ export function formatRelativeTime(iso: string, nowMs: number): string {
 // ---------------------------------------------------------------------------
 
 export const ACTIVITY_FEED_DEFAULT_LIMIT = 10;
+
+// ---------------------------------------------------------------------------
+// T142/UXC-06: `minWidth` for the Next-up/Activity-feed pairing `Grid`.
+//
+// Derived, not copied, from the packet's two constraint inequalities
+// (`docs/swarm/active/T142-worker-packet.md`), using the real values this
+// task's own citations resolved to:
+//   - SideNav is 260px (`node_modules/@astryxdesign/core/src/SideNav/
+//     SideNav.tsx:65`, `width: 260`), present at/above the 768px `md`
+//     breakpoint `AppShell` uses by default (no `breakpoint` prop passed to
+//     the `mobileNav` config, `AppShell.tsx:163` -- confirmed against the
+//     documented default in `astryx-api.md`'s `MobileNavConfig.breakpoint`
+//     row: `'md'` = 768px). Below 768px, `MobileNav` replaces it and
+//     contributes 0.
+//   - `LayoutContent padding={6}` removes 24px per side (48px total).
+//   - The Grid's own `gap={4}` = 16px (spacing token `--spacing-4`,
+//     `node_modules/@astryxdesign/core/src/theme/tokens.stylex.ts:159`).
+//
+// Constraint A -- two columns must fit at 1024 (UXC-06's own accept clause,
+// `VOLT_UX_Craft_PRD_v3.html:167`, requires two-up above 1024px):
+//   minWidth <= (1024 - 260 - 48 - 16) / 2 = 700 / 2 = 350
+//
+// Constraint B -- one column must be forced at 375 (no SideNav there):
+//   minWidth > (375 - 48 - 16) / 2 = 311 / 2 = 155.5
+//
+// Window: 155.5 < minWidth <= 350. 280 is chosen well inside that window
+// (124px of margin above the 155.5 floor, 70px below the 350 ceiling) so a
+// few pixels of drift in any of the inputs above doesn't flip the
+// two-up/stacked behavior at either boundary width. Confirmed against real
+// `getBoundingClientRect()`/`grid-template-columns` measurement at 1440,
+// 1024, and 375 -- see `docs/swarm/active/T142-worker-output.md`.
+// ---------------------------------------------------------------------------
+
+export const COACH_HOME_PAIRED_MODULE_MIN_WIDTH = 280;
 
 /**
  * Trap #2/module doc #13(e): a plain equality check on two already-fetched
@@ -1794,16 +1812,13 @@ function KpiCard({
   );
 }
 
-// T080 MINOR fix: was meeting=blue/outreach=purple/competition=teal, which
-// was inconsistent with DES-04's real palette (`CalendarPage.tsx`'s own
-// "Meeting Violet"/"Circuit Blue"/"Comp Orange" mapping, also matched
-// verbatim by `EventsTab.tsx`) -- corrected to match both of those files
-// exactly: meeting=purple, outreach=blue, competition=orange.
-const EVENT_TYPE_BADGE: Record<EventType, { variant: BadgeVariant; label: string }> = {
-  meeting: { variant: 'purple', label: 'Meeting' },
-  outreach: { variant: 'blue', label: 'Outreach' },
-  competition: { variant: 'orange', label: 'Competition' },
-};
+// T138: `EVENT_TYPE_BADGE` now lives in `../../lib/eventTypeBadge` (imported
+// above), shared with `EventsTab.tsx`/`CalendarPage.tsx` instead of each
+// declaring its own copy. History: T080 corrected this file's mapping
+// (previously meeting=blue/outreach=purple/competition=teal) to match
+// DES-04's real palette, the same values `CalendarPage.tsx`/`EventsTab.tsx`
+// already used ("Meeting Violet"/"Circuit Blue"/"Comp Orange" ->
+// meeting=purple, outreach=blue, competition=orange).
 
 function NextUpRowItem({ row }: { row: NextUpRow }): ReactNode {
   const description = (
@@ -1822,6 +1837,24 @@ function NextUpRowItem({ row }: { row: NextUpRow }): ReactNode {
     />
   );
 }
+
+// UXC-06/T149: cap every ProgressBar on this page near ~480px (the PRD's own
+// number, VOLT_UX_Craft_PRD_v3.html:165). Three of the four sites this is
+// applied to -- TeamHoursRowItem, TopEventRowItem, GoalProjectionRowItem --
+// render inside a single-column `<List hasDividers>` with no `Grid`/column
+// constraint, so their bars would otherwise stretch to the page's full
+// ~1120px content width (T142's cap) -- that is the actual UXC-06 defect.
+// The fourth site (the KPI grid's "Hours vs. team goal" bar) never reaches
+// this cap: it lives in one of four `Grid columns={{ minWidth: 240, repeat:
+// 'fit' }}` columns, which at a 1120px content width and a 16px gap works out
+// to (1120 - 3*16) / 4 = 268px per column before the `KpiCard`'s own `Card`
+// padding is subtracted, and to ~495px at the widest this `auto-fit` grid can
+// resolve to at any content width -- so a 480px cap on it is inert
+// everywhere, not just at 1440px. Applying the same shared constant there
+// anyway is simpler than special-casing the one site the cap doesn't bind at.
+const COACH_HOME_PROGRESS_BAR_MAX_WIDTH_STYLE: CSSProperties = {
+  maxWidth: '480px',
+};
 
 // ---------------------------------------------------------------------------
 // T124 row components (module doc #13) -- every value rendered below is
@@ -1859,6 +1892,7 @@ function TeamHoursRowItem({
           isLabelHidden
           value={entry.confirmedHours}
           max={maxHours > 0 ? maxHours : 1}
+          style={COACH_HOME_PROGRESS_BAR_MAX_WIDTH_STYLE}
         />
       }
       endContent={<Text type="supporting">{`${entry.confirmedHours}h`}</Text>}
@@ -1888,6 +1922,7 @@ function TopEventRowItem({
             isLabelHidden
             value={entry.totalHours}
             max={maxHours > 0 ? maxHours : 1}
+            style={COACH_HOME_PROGRESS_BAR_MAX_WIDTH_STYLE}
           />
         </VStack>
       }
@@ -1915,6 +1950,7 @@ function GoalProjectionRowItem({ row }: { row: StudentGoalProjectionEntry }): Re
             isLabelHidden
             value={row.confirmedHours}
             max={row.goalHours > 0 ? row.goalHours : 1}
+            style={COACH_HOME_PROGRESS_BAR_MAX_WIDTH_STYLE}
           />
           <Text type="supporting">
             {`${row.confirmedHours}h confirmed + ${row.plannedHours}h planned = ${totalHours}h / ${row.goalHours}h · ${percent}% · ${annotation}`}
@@ -2123,395 +2159,433 @@ export function CoachHome({
       height="fill"
       content={
         <LayoutContent padding={6}>
-          <VStack gap={6}>
-            {toasts.map((toast) => (
-              <Toast
-                key={toast.id}
-                type="info"
-                body={toast.message}
-                isAutoHide
-                autoHideDuration={5000}
-                onDismiss={() => dismissToast(toast.id)}
-              />
-            ))}
+          {/* T142/UXC-06: cap the dashboard content at ~1120px and centre
+              it. `LayoutContent` renders a plain block `<div>` (no
+              `display` set), so this outer `VStack hAlign="center"`'s
+              `align-items: center` centres the inner, capped `VStack` on
+              the cross axis -- same mechanism T133 used on `/calendar`
+              (`CalendarPage.tsx:811-812`). The inner `VStack` deliberately
+              carries NO `padding` prop: `LayoutContent padding={6}` already
+              contributes 24px/side, and T133's verbatim inner
+              `padding={6}` would double that to 48px/side, shrinking
+              1120px of cap to 1072px of actual content width. */}
+          <VStack hAlign="center">
+            <VStack width="100%" maxWidth={1120} gap={6}>
+              {toasts.map((toast) => (
+                <Toast
+                  key={toast.id}
+                  type="info"
+                  body={toast.message}
+                  isAutoHide
+                  autoHideDuration={5000}
+                  onDismiss={() => dismissToast(toast.id)}
+                />
+              ))}
 
-            <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
-              <Heading level={1}>Home</Heading>
-              <HStack gap={2} wrap="wrap">
-                {checkInSession !== null && (
+              <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
+                <Heading level={1}>Home</Heading>
+                <HStack gap={2} wrap="wrap">
+                  {checkInSession !== null && (
+                    <Button
+                      label="Start check-in"
+                      variant="primary"
+                      onClick={() => navigate(routePaths.kioskSession(checkInSession.id))}
+                    />
+                  )}
                   <Button
-                    label="Start check-in"
-                    variant="primary"
-                    onClick={() => navigate(routePaths.kioskSession(checkInSession.id))}
+                    label="New outreach event"
+                    variant="secondary"
+                    onClick={() =>
+                      showStub(
+                        "This shortcut isn't wired up yet",
+                        'This button doesn\'t open the event form from here. Go to the Outreach page and use "New outreach event" there instead.',
+                      )
+                    }
                   />
-                )}
-                <Button
-                  label="New outreach event"
-                  variant="secondary"
-                  onClick={() =>
-                    showStub(
-                      "This shortcut isn't wired up yet",
-                      'This button doesn\'t open the event form from here. Go to the Outreach page and use "New outreach event" there instead.',
+                </HStack>
+              </HStack>
+
+              {stubNotice !== null && (
+                <Banner
+                  status="info"
+                  title={stubNotice.title}
+                  description={stubNotice.description}
+                  isDismissable
+                  onDismiss={() => setStubNotice(null)}
+                />
+              )}
+
+              <Grid columns={{ minWidth: 240, repeat: 'fit' }} gap={4}>
+                <KpiCard
+                  label="Team participation"
+                  value={
+                    teamParticipation !== null ? `${teamParticipation.participationPct}%` : '—'
+                  }
+                  secondary={
+                    <Text type="supporting" color="secondary">
+                      Season to date
+                    </Text>
+                  }
+                />
+
+                <KpiCard label="Hours vs. team goal" value={`${hoursPercent}%`}>
+                  <ProgressBar
+                    label="Hours vs. team goal"
+                    isLabelHidden
+                    value={confirmedHours}
+                    max={goalHours > 0 ? goalHours : 1}
+                    hasValueLabel
+                    formatValueLabel={(value, max) => `${value} / ${max} hrs`}
+                    style={COACH_HOME_PROGRESS_BAR_MAX_WIDTH_STYLE}
+                  />
+                  <HStack gap={2} wrap="wrap">
+                    {GOAL_MILESTONES.map((milestone) =>
+                      hoursPercent >= milestone ? (
+                        <Badge key={milestone} variant="neutral" label={`${milestone}% reached`} />
+                      ) : (
+                        <Text key={milestone} type="supporting" color="secondary">
+                          {milestone}%
+                        </Text>
+                      ),
+                    )}
+                  </HStack>
+                </KpiCard>
+
+                <KpiCard
+                  label="Last meeting attendance"
+                  value={attendanceRate !== null ? `${attendanceRate}%` : '—'}
+                  secondary={
+                    lastMeetingSummary !== null ? (
+                      <Text type="supporting" color="secondary">
+                        {lastMeetingSummary.title} ·{' '}
+                        {lastMeetingSummary.presentCount + lastMeetingSummary.lateCount} of{' '}
+                        {lastMeetingSummary.rosterSize} on roster
+                      </Text>
+                    ) : (
+                      <Text type="supporting" color="secondary">
+                        No completed meetings yet this season
+                      </Text>
                     )
                   }
                 />
-              </HStack>
-            </HStack>
 
-            {stubNotice !== null && (
-              <Banner
-                status="info"
-                title={stubNotice.title}
-                description={stubNotice.description}
-                isDismissable
-                onDismiss={() => setStubNotice(null)}
-              />
-            )}
-
-            <Grid columns={{ minWidth: 240, repeat: 'fit' }} gap={4}>
-              <KpiCard
-                label="Team participation"
-                value={teamParticipation !== null ? `${teamParticipation.participationPct}%` : '—'}
-                secondary={
-                  <Text type="supporting" color="secondary">
-                    Season to date
-                  </Text>
-                }
-              />
-
-              <KpiCard label="Hours vs. team goal" value={`${hoursPercent}%`}>
-                <ProgressBar
-                  label="Hours vs. team goal"
-                  isLabelHidden
-                  value={confirmedHours}
-                  max={goalHours > 0 ? goalHours : 1}
-                  hasValueLabel
-                  formatValueLabel={(value, max) => `${value} / ${max} hrs`}
+                <KpiCard
+                  label="Events in next 7 days"
+                  value={String(upcomingIn7Days)}
+                  secondary={
+                    <Text type="supporting" color="secondary">
+                      Meetings, outreach &amp; competitions
+                    </Text>
+                  }
                 />
-                <HStack gap={2} wrap="wrap">
-                  {GOAL_MILESTONES.map((milestone) =>
-                    hoursPercent >= milestone ? (
-                      <Badge key={milestone} variant="neutral" label={`${milestone}% reached`} />
-                    ) : (
-                      <Text key={milestone} type="supporting" color="secondary">
-                        {milestone}%
-                      </Text>
-                    ),
-                  )}
-                </HStack>
-              </KpiCard>
+              </Grid>
 
-              <KpiCard
-                label="Last meeting attendance"
-                value={attendanceRate !== null ? `${attendanceRate}%` : '—'}
-                secondary={
-                  lastMeetingSummary !== null ? (
-                    <Text type="supporting" color="secondary">
-                      {lastMeetingSummary.title} ·{' '}
-                      {lastMeetingSummary.presentCount + lastMeetingSummary.lateCount} of{' '}
-                      {lastMeetingSummary.rosterSize} on roster
-                    </Text>
-                  ) : (
-                    <Text type="supporting" color="secondary">
-                      No completed meetings yet this season
-                    </Text>
-                  )
-                }
-              />
+              <Divider />
 
-              <KpiCard
-                label="Events in next 7 days"
-                value={String(upcomingIn7Days)}
-                secondary={
-                  <Text type="supporting" color="secondary">
-                    Meetings, outreach &amp; competitions
-                  </Text>
-                }
-              />
-            </Grid>
-
-            <Divider />
-
-            {/* T124 secondary stat tiles (UXD-07, module doc #13). Own
+              {/* T124 secondary stat tiles (UXD-07, module doc #13). Own
                 DES-12 states, scoped to just this section (module doc's
                 own "independent load state" note above) -- a slow/failed
                 fetch here never blocks the primary KPI grid or Next up. */}
-            {dashboardState.status === 'loading' && (
-              <Grid columns={{ minWidth: 200, repeat: 'fit' }} gap={4}>
-                {[0, 1, 2, 3, 4, 5].map((card) => (
-                  <VStack key={card} gap={2} padding={4}>
-                    <Skeleton width={120} height={14} index={20 + card * 2} />
-                    <Skeleton width={60} height={20} index={21 + card * 2} />
-                  </VStack>
-                ))}
+              {dashboardState.status === 'loading' && (
+                <Grid columns={{ minWidth: 200, repeat: 'fit' }} gap={4}>
+                  {[0, 1, 2, 3, 4, 5].map((card) => (
+                    <VStack key={card} gap={2} padding={4}>
+                      <Skeleton width={120} height={14} index={20 + card * 2} />
+                      <Skeleton width={60} height={20} index={21 + card * 2} />
+                    </VStack>
+                  ))}
+                </Grid>
+              )}
+              {dashboardState.status === 'error' && (
+                <Banner
+                  status="error"
+                  title="Couldn't load dashboard analytics"
+                  description="Secondary stat tiles, goal projection, hours by team, top events, and the activity feed couldn't load. Try refreshing the page."
+                  endContent={
+                    <Button variant="ghost" label="Retry" onClick={dashboardState.retry} />
+                  }
+                />
+              )}
+              {dashboardData && (
+                <Grid columns={{ minWidth: 200, repeat: 'fit' }} gap={4}>
+                  <KpiCard
+                    label="Avg hours / active student"
+                    value={
+                      dashboardData.rosterStats
+                        ? `${dashboardData.rosterStats.avgHoursPerActiveStudent}h`
+                        : '—'
+                    }
+                    secondary={
+                      <Text type="supporting" color="secondary">
+                        Default goal {data.defaultGoalHours}h
+                      </Text>
+                    }
+                  />
+                  <KpiCard
+                    label="Students at goal"
+                    value={
+                      dashboardData.rosterStats
+                        ? String(dashboardData.rosterStats.studentsAtGoalCount)
+                        : '—'
+                    }
+                    secondary={
+                      <Text type="supporting" color="secondary">
+                        {dashboardData.rosterStats
+                          ? `of ${dashboardData.rosterStats.activeStudentCount} active`
+                          : 'No active roster yet'}
+                      </Text>
+                    }
+                  />
+                  <KpiCard
+                    label="Session days logged"
+                    value={
+                      dashboardData.sessionDays
+                        ? String(dashboardData.sessionDays.sessionDaysLogged)
+                        : '—'
+                    }
+                    secondary={
+                      <Text type="supporting" color="secondary">
+                        Completed only
+                      </Text>
+                    }
+                  />
+                  <KpiCard
+                    label="Attendance rate"
+                    value={
+                      dashboardData.attendanceRate
+                        ? `${dashboardData.attendanceRate.attendanceRatePct}%`
+                        : '—'
+                    }
+                    secondary={
+                      <Text type="supporting" color="secondary">
+                        Of active roster per session
+                      </Text>
+                    }
+                  />
+                  <KpiCard
+                    label="Upcoming commitment"
+                    value={
+                      dashboardData.upcomingCommittedHours
+                        ? `${dashboardData.upcomingCommittedHours.committedHours30d}h`
+                        : '0h'
+                    }
+                    secondary={
+                      <Text type="supporting" color="secondary">
+                        Planned in next 30 days
+                      </Text>
+                    }
+                  />
+                  <KpiCard
+                    label="Busiest day"
+                    value={busiestDay ? formatDayOfWeekLabel(busiestDay.dayOfWeek) : '—'}
+                    secondary={
+                      <Text type="supporting" color="secondary">
+                        By offered sessions
+                      </Text>
+                    }
+                  />
+                </Grid>
+              )}
+
+              <Divider />
+
+              {/* T142/UXC-06: Next up + Activity feed pair two-up via `Grid`
+                (PRD v1 desktop wireframe, `VOLT_Portal_PRD.md:119-120`).
+                `columns={{ minWidth: COACH_HOME_PAIRED_MODULE_MIN_WIDTH, max:
+                2 }}` is the RESPONSIVE object form, not `columns={2}` --
+                `columns={2}` is fixed (`repeat(2, 1fr)` at every width,
+                375px included) and ships a broken mobile dashboard. The
+                object form's `min(100%, ...)` track lets a lone column
+                shrink to the container instead of overflowing it. See
+                `COACH_HOME_PAIRED_MODULE_MIN_WIDTH`'s own doc comment for
+                the derivation. The `<Divider />` that used to separate
+                these two stacked modules is deliberately removed -- a
+                horizontal rule between side-by-side columns is
+                meaningless; the `Divider`s above and below this `Grid`
+                (separating stacked siblings) are unchanged. */}
+              <Grid columns={{ minWidth: COACH_HOME_PAIRED_MODULE_MIN_WIDTH, max: 2 }} gap={4}>
+                <VStack gap={3}>
+                  <Heading level={2} id={nextUpHeadingId}>
+                    Next up
+                  </Heading>
+                  <div role="group" aria-labelledby={nextUpHeadingId}>
+                    {nextUp.length === 0 ? (
+                      <EmptyState
+                        headingLevel={3}
+                        title="Nothing scheduled"
+                        description="Your team's next meetings, outreach events, and competitions will show up here."
+                      />
+                    ) : (
+                      <List hasDividers>
+                        {nextUp.map((row) => (
+                          <NextUpRowItem key={row.sessionId} row={row} />
+                        ))}
+                      </List>
+                    )}
+                  </div>
+                </VStack>
+
+                {/* T124 activity feed (UXP-10, module doc #13(d)) -- replaces
+                  the old team-scoped "Recent signups" section. Signup/drop/
+                  checked-off entries with Self origin labels, "Show all". */}
+                <VStack gap={3}>
+                  <Heading level={2} id={activityFeedHeadingId}>
+                    Activity feed
+                  </Heading>
+                  <div role="group" aria-labelledby={activityFeedHeadingId}>
+                    {dashboardData === null ? (
+                      <EmptyState
+                        headingLevel={3}
+                        title="No activity yet"
+                        description="Signups, drops, and check-offs will show up here."
+                      />
+                    ) : visibleActivityFeedEntries.length === 0 ? (
+                      <EmptyState
+                        headingLevel={3}
+                        title="No activity yet"
+                        description="Signups, drops, and check-offs will show up here."
+                      />
+                    ) : (
+                      <VStack gap={3}>
+                        <List hasDividers>
+                          {visibleActivityFeedEntries.map((entry) => (
+                            <ActivityFeedRowItem key={entry.id} entry={entry} />
+                          ))}
+                        </List>
+                        {!showAllActivity &&
+                          activityFeedEntries.length > ACTIVITY_FEED_DEFAULT_LIMIT && (
+                            <Button
+                              label="Show all"
+                              variant="ghost"
+                              onClick={() => setShowAllActivity(true)}
+                            />
+                          )}
+                      </VStack>
+                    )}
+                  </div>
+                </VStack>
               </Grid>
-            )}
-            {dashboardState.status === 'error' && (
-              <Banner
-                status="error"
-                title="Couldn't load dashboard analytics"
-                description="Secondary stat tiles, goal projection, hours by team, top events, and the activity feed couldn't load. Try refreshing the page."
-                endContent={<Button variant="ghost" label="Retry" onClick={dashboardState.retry} />}
-              />
-            )}
-            {dashboardData && (
-              <Grid columns={{ minWidth: 200, repeat: 'fit' }} gap={4}>
-                <KpiCard
-                  label="Avg hours / active student"
-                  value={
-                    dashboardData.rosterStats
-                      ? `${dashboardData.rosterStats.avgHoursPerActiveStudent}h`
-                      : '—'
-                  }
-                  secondary={
-                    <Text type="supporting" color="secondary">
-                      Default goal {data.defaultGoalHours}h
-                    </Text>
-                  }
-                />
-                <KpiCard
-                  label="Students at goal"
-                  value={
-                    dashboardData.rosterStats
-                      ? String(dashboardData.rosterStats.studentsAtGoalCount)
-                      : '—'
-                  }
-                  secondary={
-                    <Text type="supporting" color="secondary">
-                      {dashboardData.rosterStats
-                        ? `of ${dashboardData.rosterStats.activeStudentCount} active`
-                        : 'No active roster yet'}
-                    </Text>
-                  }
-                />
-                <KpiCard
-                  label="Session days logged"
-                  value={
-                    dashboardData.sessionDays
-                      ? String(dashboardData.sessionDays.sessionDaysLogged)
-                      : '—'
-                  }
-                  secondary={
-                    <Text type="supporting" color="secondary">
-                      Completed only
-                    </Text>
-                  }
-                />
-                <KpiCard
-                  label="Attendance rate"
-                  value={
-                    dashboardData.attendanceRate
-                      ? `${dashboardData.attendanceRate.attendanceRatePct}%`
-                      : '—'
-                  }
-                  secondary={
-                    <Text type="supporting" color="secondary">
-                      Of active roster per session
-                    </Text>
-                  }
-                />
-                <KpiCard
-                  label="Upcoming commitment"
-                  value={
-                    dashboardData.upcomingCommittedHours
-                      ? `${dashboardData.upcomingCommittedHours.committedHours30d}h`
-                      : '0h'
-                  }
-                  secondary={
-                    <Text type="supporting" color="secondary">
-                      Planned in next 30 days
-                    </Text>
-                  }
-                />
-                <KpiCard
-                  label="Busiest day"
-                  value={busiestDay ? formatDayOfWeekLabel(busiestDay.dayOfWeek) : '—'}
-                  secondary={
-                    <Text type="supporting" color="secondary">
-                      By offered sessions
-                    </Text>
-                  }
-                />
-              </Grid>
-            )}
 
-            <Divider />
+              <Divider />
 
-            <VStack gap={3}>
-              <Heading level={2} id={nextUpHeadingId}>
-                Next up
-              </Heading>
-              <div role="group" aria-labelledby={nextUpHeadingId}>
-                {nextUp.length === 0 ? (
-                  <EmptyState
-                    headingLevel={3}
-                    title="Nothing scheduled"
-                    description="Your team's next meetings, outreach events, and competitions will show up here."
-                  />
-                ) : (
-                  <List hasDividers>
-                    {nextUp.map((row) => (
-                      <NextUpRowItem key={row.sessionId} row={row} />
-                    ))}
-                  </List>
-                )}
-              </div>
-            </VStack>
-
-            <Divider />
-
-            {/* T124 activity feed (UXP-10, module doc #13(d)) -- replaces
-                the old team-scoped "Recent signups" section. Signup/drop/
-                checked-off entries with Self origin labels, "Show all". */}
-            <VStack gap={3}>
-              <Heading level={2} id={activityFeedHeadingId}>
-                Activity feed
-              </Heading>
-              <div role="group" aria-labelledby={activityFeedHeadingId}>
-                {dashboardData === null ? (
-                  <EmptyState
-                    headingLevel={3}
-                    title="No activity yet"
-                    description="Signups, drops, and check-offs will show up here."
-                  />
-                ) : visibleActivityFeedEntries.length === 0 ? (
-                  <EmptyState
-                    headingLevel={3}
-                    title="No activity yet"
-                    description="Signups, drops, and check-offs will show up here."
-                  />
-                ) : (
-                  <VStack gap={3}>
+              {/* T124 hours by team (UXP-06, module doc #13). Consumes T116's
+                `v_team_hours` unmodified -- season-wide, every team. */}
+              <VStack gap={3}>
+                <Heading level={2} id={hoursByTeamHeadingId}>
+                  Hours by team
+                </Heading>
+                <div role="group" aria-labelledby={hoursByTeamHeadingId}>
+                  {sortedTeamHours.length === 0 ? (
+                    <EmptyState
+                      headingLevel={3}
+                      title="No team hours yet"
+                      description="Confirmed hours will appear here once attendance is recorded this season."
+                    />
+                  ) : (
                     <List hasDividers>
-                      {visibleActivityFeedEntries.map((entry) => (
-                        <ActivityFeedRowItem key={entry.id} entry={entry} />
+                      {sortedTeamHours.map((entry) => (
+                        <TeamHoursRowItem
+                          key={entry.teamId}
+                          entry={entry}
+                          maxHours={maxTeamHours}
+                        />
                       ))}
                     </List>
-                    {!showAllActivity &&
-                      activityFeedEntries.length > ACTIVITY_FEED_DEFAULT_LIMIT && (
-                        <Button
-                          label="Show all"
-                          variant="ghost"
-                          onClick={() => setShowAllActivity(true)}
-                        />
-                      )}
-                  </VStack>
-                )}
-              </div>
-            </VStack>
+                  )}
+                </div>
+              </VStack>
 
-            <Divider />
+              <Divider />
 
-            {/* T124 hours by team (UXP-06, module doc #13). Consumes T116's
-                `v_team_hours` unmodified -- season-wide, every team. */}
-            <VStack gap={3}>
-              <Heading level={2} id={hoursByTeamHeadingId}>
-                Hours by team
-              </Heading>
-              <div role="group" aria-labelledby={hoursByTeamHeadingId}>
-                {sortedTeamHours.length === 0 ? (
-                  <EmptyState
-                    headingLevel={3}
-                    title="No team hours yet"
-                    description="Confirmed hours will appear here once attendance is recorded this season."
-                  />
-                ) : (
-                  <List hasDividers>
-                    {sortedTeamHours.map((entry) => (
-                      <TeamHoursRowItem key={entry.teamId} entry={entry} maxHours={maxTeamHours} />
-                    ))}
-                  </List>
-                )}
-              </div>
-            </VStack>
-
-            <Divider />
-
-            {/* T124 per-student goal projection (UXD-07, module doc #13).
+              {/* T124 per-student goal projection (UXD-07, module doc #13).
                 Motivation-ethics BLOCKER-class: annotations state facts,
                 the Below-goal filter is coach-facing triage, never a
                 ranking/shame framing (Trap #2). */}
-            <VStack gap={3}>
-              <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
-                <Heading level={2} id={goalProjectionHeadingId}>
-                  Goal projection · confirmed + planned
-                </Heading>
-                <SegmentedControl
-                  label="Goal projection filter"
-                  value={goalProjectionFilter}
-                  onChange={(value) => setGoalProjectionFilter(value as GoalProjectionFilter)}
-                >
-                  <SegmentedControlItem value="all" label="All" />
-                  <SegmentedControlItem value="belowGoal" label="Below goal" />
-                </SegmentedControl>
-              </HStack>
-              <div role="group" aria-labelledby={goalProjectionHeadingId}>
-                {sortedGoalProjection.length === 0 ? (
-                  <EmptyState
-                    headingLevel={3}
-                    title={
-                      goalProjectionFilter === 'belowGoal'
-                        ? 'No one is below goal'
-                        : 'No projection yet'
-                    }
-                    description={
-                      goalProjectionFilter === 'belowGoal'
-                        ? 'Every active student is projected to reach their season goal.'
-                        : 'Confirmed and planned hours will appear here once recorded this season.'
+              <VStack gap={3}>
+                <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
+                  <Heading level={2} id={goalProjectionHeadingId}>
+                    Goal projection · confirmed + planned
+                  </Heading>
+                  <ToggleButton
+                    label="Below goal"
+                    isPressed={goalProjectionFilter === 'belowGoal'}
+                    onPressedChange={(pressed) =>
+                      setGoalProjectionFilter(pressed ? 'belowGoal' : 'all')
                     }
                   />
-                ) : (
-                  <List hasDividers>
-                    {sortedGoalProjection.map((row) => (
-                      <GoalProjectionRowItem key={row.studentId} row={row} />
-                    ))}
-                  </List>
-                )}
-              </div>
-            </VStack>
-
-            <Divider />
-
-            {/* T124 top events by student hours (UXP-06, module doc #13). */}
-            <VStack gap={3}>
-              <Heading level={2} id={topEventsHeadingId}>
-                Top events by student hours
-              </Heading>
-              <div role="group" aria-labelledby={topEventsHeadingId}>
-                {sortedTopEvents.length === 0 ? (
-                  <EmptyState
-                    headingLevel={3}
-                    title="No events with hours yet"
-                    description="Events that award volunteer hours will show up here once attendance is recorded."
-                  />
-                ) : (
-                  <List hasDividers>
-                    {sortedTopEvents.map((entry) => (
-                      <TopEventRowItem key={entry.eventId} entry={entry} maxHours={maxEventHours} />
-                    ))}
-                  </List>
-                )}
-              </div>
-            </VStack>
-
-            {showSeasonSetupCard && (
-              <>
-                <Divider />
-                <Card>
-                  <VStack gap={2}>
-                    <Heading level={3}>Season setup</Heading>
-                    <Text type="supporting">
-                      {seasonSetupDescription(data.teams, data.seasonSetupStatus)}
-                    </Text>
-                    <Button
-                      label="Go to season setup"
-                      variant="secondary"
-                      onClick={() => navigate(routePaths.settingsSeason)}
+                </HStack>
+                <div role="group" aria-labelledby={goalProjectionHeadingId}>
+                  {sortedGoalProjection.length === 0 ? (
+                    <EmptyState
+                      headingLevel={3}
+                      title={
+                        goalProjectionFilter === 'belowGoal'
+                          ? 'No one is below goal'
+                          : 'No projection yet'
+                      }
+                      description={
+                        goalProjectionFilter === 'belowGoal'
+                          ? 'Every active student is projected to reach their season goal.'
+                          : 'Confirmed and planned hours will appear here once recorded this season.'
+                      }
                     />
-                  </VStack>
-                </Card>
-              </>
-            )}
+                  ) : (
+                    <List hasDividers>
+                      {sortedGoalProjection.map((row) => (
+                        <GoalProjectionRowItem key={row.studentId} row={row} />
+                      ))}
+                    </List>
+                  )}
+                </div>
+              </VStack>
+
+              <Divider />
+
+              {/* T124 top events by student hours (UXP-06, module doc #13). */}
+              <VStack gap={3}>
+                <Heading level={2} id={topEventsHeadingId}>
+                  Top events by student hours
+                </Heading>
+                <div role="group" aria-labelledby={topEventsHeadingId}>
+                  {sortedTopEvents.length === 0 ? (
+                    <EmptyState
+                      headingLevel={3}
+                      title="No events with hours yet"
+                      description="Events that award volunteer hours will show up here once attendance is recorded."
+                    />
+                  ) : (
+                    <List hasDividers>
+                      {sortedTopEvents.map((entry) => (
+                        <TopEventRowItem
+                          key={entry.eventId}
+                          entry={entry}
+                          maxHours={maxEventHours}
+                        />
+                      ))}
+                    </List>
+                  )}
+                </div>
+              </VStack>
+
+              {showSeasonSetupCard && (
+                <>
+                  <Divider />
+                  <Card>
+                    <VStack gap={2}>
+                      <Heading level={3}>Season setup</Heading>
+                      <Text type="supporting">
+                        {seasonSetupDescription(data.teams, data.seasonSetupStatus)}
+                      </Text>
+                      <Button
+                        label="Go to season setup"
+                        variant="secondary"
+                        onClick={() => navigate(routePaths.settingsSeason)}
+                      />
+                    </VStack>
+                  </Card>
+                </>
+              )}
+            </VStack>
           </VStack>
         </LayoutContent>
       }

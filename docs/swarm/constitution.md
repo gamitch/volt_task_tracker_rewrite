@@ -176,3 +176,89 @@ The boss-arbiter decides whether:
 A worker/checker loop may run at most 3 failed attempts.
 
 After the third failure, the task must be escalated to boss-arbiter.
+
+20. **A deliberate deferral must file a task, not just a comment.** When a
+    worker or checker knowingly leaves a defect in place because it falls
+    outside its Allowed Files or scope, recording that in a code comment is not
+    sufficient — it must produce a follow-up task in the ledger. Comments are
+    not triaged; ledger rows are. Authorized by the human owner 2026-07-29.
+    Rationale, all three found by the owner in manual testing on the same day:
+    outreach and meetings team pickers shipped fixture teams because T101 and
+    T121 each correctly declined the out-of-scope wiring and said so only in a
+    comment — and because `events.team_ids` is `uuid[]` while the fixture ids
+    are plain strings, that deferral escalated into meeting creation failing
+    outright in production. The light/dark control shipped inert for the same
+    reason: `SettingsPage` documented live-wiring as "a future task" in a
+    comment, and no such task was ever created. Every one of these was correct
+    scope discipline undone by the absence of a triage record.
+
+21. **Completion reports state a commit SHA; existence is verified, not
+    assumed.** A worker's completion report must give the commit SHA its work
+    landed in. Before merging work, removing a worktree, or treating a task as
+    done, the orchestrator verifies that HEAD actually moved and that the change
+    is in the committed blob — not merely in the working tree. "Clean" and
+    "committed" are different claims: the first means no uncommitted diff, the
+    second means the work survives worktree removal. Authorized by the human
+    owner 2026-07-29. Rationale: T142's worker reported "final state confirmed
+    clean" alongside an accurate account of 770 changed lines, live browser
+    measurements at three viewports, and every command it ran. All of it was
+    real and none of it was committed — the worktree HEAD was still the packet
+    commit. It surfaced only because an empty `git diff` against the merge base
+    contradicted the report. Routine worktree cleanup would have destroyed the
+    work. Content was being verified carefully all session while existence was
+    assumed.
+
+22. **Explicit pathspecs only — never `git add -A` or `git add .`.** Every
+    commit, by any agent and by the orchestrator, stages named paths. A commit
+    may then only ever contain what someone deliberately chose to include.
+    Authorized by the human owner 2026-07-29. Rationale: a subagent modified
+    `src/pages/outreach/OutreachEventDialog.tsx` without authorization during a
+    documentation commit. A habitual `git add -A` would have swept that source
+    change into a commit whose message described packet authoring, pushed to the
+    branch, with no packet defining it, no checker verifying it, and the human
+    owner away — bypassing all three safeguards at once, not by defeating them
+    but by staging too broadly. It surfaced only because a stop hook happened to
+    flag an uncommitted file. The edit itself was a harmless fixture rename; the
+    mechanism is indifferent to severity.
+
+23. **Mutation experiments run in the agent's own worktree, never the shared
+    tree.** Reading the shared working tree is unrestricted — a premise gate
+    must check citations against live state, including uncommitted work. But any
+    agent that *modifies* files to run an experiment — reverting a fix to prove a
+    test fails, re-iding a fixture to measure breakage, probing a type error —
+    does so in an isolated worktree it owns. An agent without one creates one
+    (`git worktree add`) rather than mutating the shared tree. Corollary for the
+    orchestrator: **a dirty working tree is not automatically an unauthorized
+    change.** Before reverting unexpected modifications, establish which agents
+    are running and whether one is mid-experiment; reverting another agent's
+    in-flight mutation corrupts its measurement. Authorized by the human owner
+    2026-07-29. Rationale: a `checker-premise` gate ran four instrumented
+    mutation experiments against the shared tree, intending to revert each. The
+    orchestrator found the tree dirty mid-experiment, reverted it, and
+    misattributed the change to a different agent that was operating correctly —
+    three failures from one missing convention. The practice that caused it is
+    correct and must not be discouraged: mutation proofs have caught more real
+    defects in this project than any other technique, including a test that
+    passed with the feature entirely removed. This rule isolates the practice
+    rather than restricting it.
+
+24. **Recording a task and merging it are one action, not two.** The ledger row
+    and the verification-log entry are updated **in the same commit that merges
+    the work**. A merge commit that lands source changes without also moving the
+    ledger row out of its pre-merge status is incomplete, and the orchestrator
+    should treat an unmerged-looking row on merged work as a bug in its own
+    process rather than as bookkeeping to catch up on later. Authorized by the
+    human owner 2026-07-29. Rationale, measured on the day it was written: ledger
+    rows for T142-T150 were backfilled at 11:39, accurately describing the state
+    at that moment. Five tasks then merged over the following ten hours and not
+    one row was updated, so the ledger still read "packet gated" and "filed" for
+    work that was live on the branch — the exact document the human owner would
+    read to decide whether to merge. The verification log was worse: its last
+    entry predated the entire wave, and **a gate had explicitly flagged the gap**
+    ("no verification-log entry despite being merged; Definition of Done items
+    3-4 are unsatisfied"), which was acknowledged and not acted on. **This is item
+    20's failure shape turned on the process itself** — a record written once,
+    never triaged, silently drifting from reality. Splitting merge from record
+    means the second step is always optional under time pressure, and it is
+    always the one dropped. Joining them removes the choice.
+

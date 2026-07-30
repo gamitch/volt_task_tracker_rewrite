@@ -1,6 +1,7 @@
 /**
  * T038: `/outreach` list page (OUT-01). Coach (`coach`/`admin`) view: a
- * team season-goal `ProgressBar` pair (confirmed vs. planned hours, BEH-02)
+ * team season-goal `GoalBar` (T136: one track, confirmed + planned offset
+ * segments, BEH-02)
  * with BEH-01 25/50/75/100% milestone ticks + deduped `Toast`, Upcoming
  * (`AvatarGroup` signup counts) / Past `List` sections, and a "New outreach
  * event" action. Student/parent view: the viewer's own goal-bar pair (same
@@ -74,12 +75,28 @@
  * Use multiple progress bars stacked together for the same operation" rule,
  * layered under a THIRD/FOURTH redundant "Team season goal" text repetition
  * -- exactly UXD-05's own named anti-example. `GoalProgressBar`'s own
- * updated doc comment (this file, `T121 item (d)`) has the current,
- * accurate design: one heading + a grouped stat-tile row (confirmed/
- * planned/goal/%-of-goal), zero `ProgressBar`s. BEH-02 (confirmed/planned
- * never summed) is UNCHANGED by this -- still enforced exactly as this
- * module doc's own opening paragraph (above) describes, just rendered as
- * tiles instead of bars.
+ * updated doc comment (this file, `T121 item (d)`) described the post-T121
+ * design: one heading + a grouped stat-tile row (confirmed/planned/goal/
+ * %-of-goal), zero `ProgressBar`s.
+ *
+ * SUPERSEDED AGAIN BY T136 (UXC-05/UXC-08). The "zero bars" state above was
+ * itself an interim: T121 removed the bars because there were TWO of them
+ * stacked, not because a bar was wrong. `GoalProgressBar` now renders
+ * **exactly one** bar -- the shared `GoalBar` component
+ * (`src/components/GoalBar.tsx`), which F-3 pre-approves as the one custom
+ * bar in the project, since Astryx's own `ProgressBar` cannot segment. It is
+ * NOT an Astryx `ProgressBar`, so "zero `ProgressBar`s" remains literally
+ * true and is why that phrasing survived this long while being misleading.
+ *
+ * The stat-tile row is unchanged and still sits alongside it. The one-bar
+ * invariant is pinned by `OutreachList.test.tsx:1343` (`toBe(1)`, amended
+ * from T121's `toBe(0)`), so the two-stacked-bars defect George originally
+ * reported cannot return.
+ *
+ * BEH-02 (confirmed/planned never summed) is UNCHANGED by either revision --
+ * still enforced exactly as this module doc's own opening paragraph (above)
+ * describes. `GoalBar` renders the two as offset fills and contains no `+`
+ * operator in code at all.
  *
  * `ProgressBar` (astryx-api.md "ProgressBar" Props table) has no
  * multi-segment/stacked-fill prop -- confirmed directly against its own
@@ -248,10 +265,17 @@
  *       became a dead end on this list page: no way to reach the real
  *       Edit/Cancel/RSVP-visibility functionality that already lives on that
  *       page. Fixed here: every row (Upcoming AND Past, coach AND
- *       student/parent view) now carries a real "View details" `Link` to
- *       `routePaths.outreachEvent(event.id)` in its `ListItem`'s
- *       `endContent` -- see module doc #13 for the full precedent
- *       investigation and shape.
+ *       student/parent view) carries a real `Link` to
+ *       `routePaths.outreachEvent(event.id)` -- see module doc #13 for the
+ *       full precedent investigation and shape. T131 UPDATE: on the coach
+ *       `Table` surface specifically, that `Link` no longer lives in a
+ *       separate "View details – {title}" action; it now IS the event
+ *       title itself (`CoachEventTitleCell`, below), reached the same way
+ *       (`routePaths.outreachEvent(event.id)`, real `<a href>`, real SPA
+ *       navigation). The student/parent `ListItem` surface is untouched by
+ *       T131 and still carries the standalone "View details – {title}"
+ *       `Link` in its `endContent` exactly as this paragraph originally
+ *       described.
  *    d. `MarkDayCompleteDialog.tsx` (T040) and `Leaderboard.tsx` (T044) are
  *       not referenced, imported, or stubbed anywhere in this file: neither
  *       is part of OUT-01's list-page scope (this task's own objective
@@ -379,12 +403,16 @@
  *     task, needed this narrower `overrideData` seam instead of that larger
  *     restructuring).
  *
- *     `teams` (`OutreachEventDialog`'s own prop) is deliberately NOT
- *     overridden here -- it falls back to that component's own already-
- *     disclosed fixture team list, same "still fixture-backed" posture
- *     `MeetingsList.tsx`'s own T096 wiring of `ScheduleMeetingsDialog`
- *     already established for the identical reason (no second teams-loading
- *     mechanism is part of this task's own Allowed Files scope).
+ *     T147 UPDATE: `teams` (`OutreachEventDialog`'s own prop) is now real,
+ *     not deferred -- `loaders/outreach.ts`'s `makeLoadOutreachData` fetches
+ *     it (parallel with this page's existing batch, no new round trip) and
+ *     it is threaded straight through `OutreachLoadResult`/`data.teams` to
+ *     `CoachOutreachView`'s own dialog instance below. The prior deferral
+ *     ("still fixture-backed, same posture as `MeetingsList.tsx`") is what
+ *     shipped the bug this task fixes: the fixture ids
+ *     (`'team-ravens'`/`'team-titans'`) are not valid `uuid`s, so selecting
+ *     the only options offered failed the real `events.team_ids uuid[]`
+ *     insert outright.
  *
  * -----------------------------------------------------------------------
  * 12. T106 HOTFIX: real active-season resolution, mirroring
@@ -464,9 +492,9 @@
  * import-only per that file's own Forbidden Files carve-out) -- the exact
  * same helper this file now uses below, for the exact same route.
  *
- * Mirrored here EXACTLY, not reinvented: `CoachOutreachRowItem`'s and
- * `StudentOutreachRowItem`'s own `endContent` (module docs #5/#7 above) now
- * each end with the identical `<Link as={RouterLink}
+ * Mirrored here at the time, not reinvented: `CoachOutreachRowItem`'s and
+ * `StudentOutreachRowItem`'s own `endContent` (module docs #5/#7 above) each
+ * ended with the identical `<Link as={RouterLink}
  * href={routePaths.outreachEvent(event.id)} isStandalone>View details –
  * {event.title}</Link>` element -- same component, same `as`/`href`/
  * `isStandalone` prop set, same "View details – <title>" text shape (this
@@ -480,6 +508,19 @@
  * honored by never making the row itself interactive, exactly as
  * `CalendarPage.tsx`'s own module doc #7/#8 already established for the
  * identical component).
+ *
+ * T131 UPDATE (supersedes the "identical" claim above for the coach side
+ * only): the coach view's own row surface was migrated off `ListItem` onto
+ * a `Table` by T121/T130 (module doc on `CoachEventTitleCell`/
+ * `CoachEventActions` below is now the coach-side source of truth, not this
+ * paragraph). On that `Table`, the standalone "View details – {title}"
+ * `Link` element described above was replaced: the link now renders directly
+ * on the title cell (`CoachEventTitleCell`), with the title text itself as
+ * its accessible name, and the separate "View details – {title}" text is
+ * gone from the coach surface entirely. The student/parent side still uses
+ * `ListItem`/`StudentOutreachRowItem` and still renders the "View details –
+ * {title}" `Link` exactly as this paragraph originally described --
+ * untouched by T131.
  *
  * Both role variants, both buckets (the packet's own explicit requirement):
  * `CoachOutreachRowItem` is shared by both `CoachOutreachSection` instances
@@ -580,6 +621,8 @@ import {
   EmptyState,
   Heading,
   HStack,
+  Icon,
+  IconButton,
   Link,
   List,
   ListItem,
@@ -624,6 +667,7 @@ import {
   type ExistingOutreachEvent,
   type OnSaveOutreachEventFn,
   type OutreachRosterStudent,
+  type OutreachTeamOption,
 } from './OutreachEventDialog';
 // T126 (PRD v2 UXP-03) -- module doc #14. This task's own new dialog/
 // component, `src/pages/outreach/`.
@@ -634,6 +678,18 @@ import { SelfCheckoffDialog } from './SelfCheckoffDialog';
 // by the coach `Table` columns below; `GoalProgressBar` is deliberately left
 // consuming its own inline `Text` triplet, unchanged (out of scope).
 import { StatCell } from '../../components/StatCell';
+// T136 (UXC-08): the one small custom bar F-3 pre-authorizes, shared by both
+// role variants' `GoalProgressBar` (`:1763`). This single import line falls
+// outside this task's literally-enumerated Allowed-Files ranges for this
+// file (`:1777-1879`, `:3`, `:1763`) -- added anyway because `GoalProgressBar`
+// cannot otherwise consume the component the packet explicitly requires it
+// to create and call; disclosed in the worker output for the checker.
+import { GoalBar } from '../../components/GoalBar';
+// T132: `useIsNarrowViewport` (and the query constant it reads) moved out of
+// this file to `src/hooks/` verbatim, so `MeetingsList` (T135) can import it
+// instead of copying it -- see that hook's own module doc for the full
+// "why a real subscription" reasoning this file used to carry inline.
+import { useIsNarrowViewport } from '../../hooks/useIsNarrowViewport';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets. Module doc #1.
@@ -737,6 +793,13 @@ export interface OutreachLoadResult {
   attendance: readonly OutreachAttendanceRow[];
   students: readonly OutreachStudentFixture[];
   goalConfig: OutreachGoalConfig;
+  /** T147 -- real teams (`loaders/outreach.ts`'s `makeLoadOutreachData`,
+   * fetched in parallel with the rest of this batch), threaded to
+   * `OutreachEventDialog`'s own `teams` prop so a coach sees their real
+   * teams instead of that dialog's fixture `DEFAULT_TEAMS`
+   * (`'team-ravens'`/`'team-titans'`, non-uuid strings that fail the real
+   * `events.team_ids uuid[]` insert). */
+  teams: readonly OutreachTeamOption[];
 }
 
 export type LoadOutreachDataFn = (seasonId: string) => Promise<OutreachLoadResult>;
@@ -777,6 +840,19 @@ const FIXTURE_STUDENTS: readonly OutreachStudentFixture[] = [
   { id: 'student-priya-patel', name: 'Priya Patel' },
   { id: 'student-devon-marsh', name: 'Devon Marsh' },
   { id: PLACEHOLDER_CURRENT_STUDENT_ID, name: 'Lena Osei' },
+];
+
+/** T147 -- this file's own fixture default for the new `teams` field
+ * (Known Context/Traps #1: `defaultLoadOutreachData` below is an obviously-
+ * fake fixture loader, same posture every other `FIXTURE_*` const here
+ * already has). UUID-shaped ids (matching what the real `teams` table
+ * actually produces, `teams.id uuid primary key`) -- not the dialog's own
+ * `DEFAULT_TEAMS` fixture ids (`'team-ravens'`/`'team-titans'`), which are
+ * deliberately non-uuid strings and the whole root cause this task exists to
+ * fix. Names are fabricated (constitution item 6); nothing asserts on them. */
+const FIXTURE_TEAMS: readonly OutreachTeamOption[] = [
+  { id: 'b1c11111-1111-4111-8111-111111111111', name: 'Crimson Circuit' },
+  { id: 'b1c22222-2222-4222-8222-222222222222', name: 'Voltage Vanguard' },
 ];
 
 const FIXTURE_GOAL_CONFIG: OutreachGoalConfig = {
@@ -1262,6 +1338,7 @@ export async function defaultLoadOutreachData(seasonId: string): Promise<Outreac
       FIXTURE_GOAL_CONFIG.seasonId === seasonId
         ? FIXTURE_GOAL_CONFIG
         : { seasonId, individualGoalHoursByStudentId: {} },
+    teams: FIXTURE_TEAMS,
   };
 }
 
@@ -1748,30 +1825,40 @@ interface GoalProgressBarProps {
 }
 
 /**
- * T121 item (d) -- UXD-05 fix. BEFORE: a `Heading` reading "{label}" (e.g.
- * "Team season goal"), immediately followed by a `Text` reading "Season
- * goal: {goalHours} hrs" (repeating the same concept), immediately followed
- * by TWO stacked `ProgressBar`s whose own `label` props ("{label}: confirmed
- * hours" / "{label}: planned hours") are VISIBLE captions by default
- * (Astryx's own `ProgressBar` doc: "Do: Always provide a label, even if
- * hidden" -- i.e. visible unless `isLabelHidden`, which this file never set)
- * -- the literal triple/quadruple repetition of "Team season goal" the
- * packet names as UXD-05's own anti-example, on top of a SEPARATE Astryx
- * "Don't: Use multiple progress bars stacked together for the same
- * operation; use one bar with a value label instead" violation (this
- * section's own `ProgressBar` Best Practices, `astryx-api.md`).
+ * T136 (VOLT UX Craft PRD v3.1, UXC-08) -- REVERSAL of T121 item (d)'s "zero
+ * `ProgressBar`s" fix, NOT a return to the pre-T121 defect. T121's own fix
+ * (kept unaltered as the original record above, module doc #3) was never
+ * "bars are wrong" -- it was TWO stacked `ProgressBar`s whose own visible
+ * `label` captions repeated "Team season goal" a third/fourth time, "exactly
+ * UXD-05's own named anti-example" (George live-reported it). F-3
+ * (`VOLT_UX_Craft_PRD_v3.md:66-70`) pre-authorizes exactly the shape this
+ * task ships instead: ONE small custom bar component (`GoalBar`,
+ * `src/components/GoalBar.tsx`) -- one track, confirmed/planned as two
+ * OFFSET fills inside that single track, never stacked, never a second
+ * `role="progressbar"` -- under DES-21's final custom-CSS rung, because
+ * Astryx's own `ProgressBar` cannot segment (F-3: "One scalar `value`, one
+ * fill div... its doc forbids stacked bars").
  *
- * AFTER: exactly ONE `Heading` for the concept, and confirmed/planned/goal/
- * %-of-goal rendered as a compact ROW of grouped stat tiles (UXD-05(c):
- * "Grouped stat tiles over stacked full-width bars where the reference app
- * demonstrates the tile pattern" -- the capability map's own KPI-tile area
- * is exactly this pattern) instead of any `ProgressBar` at all -- zero bars,
- * so the Astryx stacked-bars anti-pattern above cannot recur either. BEH-02
- * is still honored exactly (confirmed/planned remain two SEPARATE tiles,
- * never summed into one number -- grep-provable: no `confirmedHours +
- * plannedHours` expression exists anywhere in this file, unchanged). The
- * milestone-tick row below (Badge/Text) is unchanged -- it was already a
- * compact, non-duplicating tile-like row, not part of this bug.
+ * BEH-02 (`VOLT_Portal_PRD.md:239`) is the authority for the two-segment
+ * shape itself: confirmed hours plus "a visually lighter second segment...
+ * never summed into one number." `GoalBar` never adds `confirmedHours` and
+ * `plannedHours` -- each segment's width comes from its own independently
+ * -computed percentage (`confirmedPercent`, called twice below, once per
+ * segment; grep-provable: no `confirmedHours + plannedHours` expression
+ * exists anywhere in this file).
+ *
+ * The stat-tile row T121 shipped (confirmed/planned/goal/%-of-goal) and the
+ * milestone `Badge`/`Text` row below it are UNCHANGED byte-for-byte -- this
+ * task adds the bar above them, it does not replace or relocate either. The
+ * `Toast` block and the `useMilestoneToasts` call are also byte-identical:
+ * this is a presentation-only change, no metric math, per F-3's own
+ * restriction (constitution item 17 -- honest progress signals, no reworked
+ * urgency framing).
+ *
+ * `OutreachList.test.tsx`'s `[role="progressbar"]` count assertion
+ * (originally 2 pre-T121, set to 0 by T121) is amended a second time,
+ * 0 -> 1, and renamed to describe what it now guards: exactly one
+ * accessible bar, never two.
  */
 function GoalProgressBar({
   goalBarId,
@@ -1789,6 +1876,11 @@ function GoalProgressBar({
     goalHours,
   );
   const percent = confirmedPercent(confirmedHours, goalHours);
+  // T136: the planned segment's percentage, computed the SAME way as
+  // `percent` above but from `plannedHours` -- independently, never added to
+  // `percent`/`confirmedHours` (BEH-02, this doc comment above).
+  const plannedPct = confirmedPercent(plannedHours, goalHours);
+  const headingId = useId();
 
   return (
     <VStack gap={2}>
@@ -1802,7 +1894,15 @@ function GoalProgressBar({
           onDismiss={() => dismissToast(toast.id)}
         />
       ))}
-      <Heading level={2}>{label}</Heading>
+      <Heading level={2} id={headingId}>
+        {label}
+      </Heading>
+      <GoalBar
+        confirmedPct={percent}
+        plannedPct={plannedPct}
+        valueText={`${confirmedHours} of ${goalHours} hours confirmed; ${plannedHours} more planned`}
+        labelledBy={headingId}
+      />
       <HStack gap={5} wrap="wrap">
         <VStack gap={0}>
           <Text type="label" color="secondary">
@@ -1943,9 +2043,16 @@ function GoalProgressBar({
  * real. `aria-expanded` itself is always present (`false`/`true`), which
  * alone is sufficient for AT to know the control is a disclosure toggle
  * even in the collapsed state.
- * "View details – {title}" and Edit/Cancel are UNCHANGED (UXC-04's own
- * explicit exemption for the Link; Edit/Cancel already complied) --
- * verbatim `label`s, verbatim visible text, verbatim en dash.
+ * T131 SUPERSEDES the UXC-04 exemption this paragraph used to cite: the
+ * standalone "View details – {title}" `Link` in the coach actions column is
+ * gone (George authorized the reversal 2026-07-28, see this file's own
+ * git history / the T131 packet's "Authorization for the reversal"). Its
+ * `href`/keyboard path moves onto the event title itself
+ * (`CoachEventTitleCell`, below), not the actions cluster. Edit keeps its
+ * verbatim `label`/visible text; Cancel keeps its verbatim `label`
+ * (`Cancel – {title}`, en dash preserved) but is now an `IconButton` (a `×`
+ * glyph, not visible "Cancel" text) -- see `CoachEventActions`'s own module
+ * doc below for the current shape.
  *
  * UXC-13 (responsive, escalation pre-authorized by the packet): Astryx
  * exports no breakpoint hook (zero `useMediaQuery`/`useBreakpoint` in
@@ -1976,8 +2083,11 @@ function GoalProgressBar({
  * column (date, stats, actions) into one stacked card per row, inside the
  * same `Table`, rather than switching back to `List` (which the packet's
  * own migration mandate forecloses) or letting `Table`'s own scroll wrapper
- * kick in (six fixed-width desktop columns sum to ~950px, which WOULD
- * force horizontal scroll at 375px -- forbidden by UXC-13).
+ * kick in (the fixed-width desktop columns sum to ~658px --
+ * 120+150+102+158+128, T131 -- which WOULD force horizontal scroll at
+ * 375px, forbidden by UXC-13. Was ~950px before T131 shrank the actions
+ * column from 420px to 128px; the conclusion is unchanged, since 658px
+ * still far exceeds 375px).
  *
  * CHECKER FIX (post-T130 review, MAJOR): 44px touch targets, implemented,
  * corrected premise. The first draft of this file shipped every
@@ -1987,10 +2097,16 @@ function GoalProgressBar({
  * had already been tried and still fell short "through props alone" -- two
  * separate errors: the 36px ceiling was never actually reached (every
  * control stayed at 28px), and "not reachable through props alone" was
- * itself false. `style` IS a real, documented Astryx prop (`BaseProps.ts`'s
- * own top comment keeps it; `astryx-api.md`'s FormField Props table
- * documents it verbatim: "`style` | `React.CSSProperties` | Inline styles
- * applied to the root element. Takes priority over StyleX inline styles.");
+ * itself false. `style` is a real Astryx prop, but it is NOT documented on
+ * `Button`/`IconButton`/`Link` -- see the corrected reasoning on
+ * `MIN_TOUCH_TARGET_STYLE` below (T131), which supersedes this paragraph.
+ * (The claim previously made here, that "`astryx-api.md`'s FormField Props
+ * table documents it verbatim", was false twice over: there is no
+ * `FormField` section in that file at all, and the `style` row it was
+ * describing belongs to `Field`. `style` appears in exactly seven props
+ * tables -- Field, Carousel, CodeBlock, Kbd, Markdown, Overlay, Thumbnail
+ * -- and in none of Button, IconButton, or Link. It is authorized here as
+ * an installed-source-verified deviation under D004, not as documentation.)
  * `Button.tsx:545,652-656` merges a consumer `style` in via `mergeProps`
  * (`mergeProps.ts:105-107` folds the consumer `style` into the merged
  * props; `mergeTwoProps`, `mergeProps.ts:39-58`, then spreads it AFTER the
@@ -2021,40 +2137,12 @@ function GoalProgressBar({
  */
 
 // ---------------------------------------------------------------------------
-// UXC-13: real `matchMedia` subscription -- module doc above.
+// UXC-13: real `matchMedia` subscription -- module doc above. T132: the
+// hook itself (and the query constant it reads) moved to
+// `src/hooks/useIsNarrowViewport.ts` verbatim, so `MeetingsList` (T135) can
+// import it instead of copying it -- see that file's own module doc for the
+// full "why a real subscription" reasoning this paragraph used to carry.
 // ---------------------------------------------------------------------------
-
-const NARROW_VIEWPORT_QUERY = '(max-width: 767px)';
-
-function getIsNarrowViewport(): boolean {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-    return false;
-  }
-  return window.matchMedia(NARROW_VIEWPORT_QUERY).matches;
-}
-
-function useIsNarrowViewport(): boolean {
-  const [isNarrow, setIsNarrow] = useState<boolean>(getIsNarrowViewport);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-      return;
-    }
-    const mediaQueryList = window.matchMedia(NARROW_VIEWPORT_QUERY);
-    setIsNarrow(mediaQueryList.matches);
-
-    const handleChange = (event: MediaQueryListEvent) => setIsNarrow(event.matches);
-    if (typeof mediaQueryList.addEventListener === 'function') {
-      mediaQueryList.addEventListener('change', handleChange);
-      return () => mediaQueryList.removeEventListener('change', handleChange);
-    }
-    // Safari < 14 fallback API.
-    mediaQueryList.addListener(handleChange);
-    return () => mediaQueryList.removeListener(handleChange);
-  }, []);
-
-  return isNarrow;
-}
 
 // ---------------------------------------------------------------------------
 // T130 -- row shape. `extends Record<string, unknown>` is required by
@@ -2161,12 +2249,12 @@ export function CoachSessionDetail({
   );
 }
 
-/** UXC-02/07: dense event-row title-column content -- title (`Text
- * maxLines`, never `textOverflow="truncate"` -- that is a TABLE-level prop
- * that is a documented no-op for `renderCell` columns, `types.ts:573-574`:
- * "Only affects cells using the default renderer (no `renderCell`)") +
- * location line. Verbatim content/shape from the pre-T130 `ListItem` row's
- * own `label` (title) -- same title, same "{location} · {address}" shape.
+/** UXC-02/07: dense event-row title-column content -- title + location line.
+ * Location line stays a plain `Text maxLines` (never `textOverflow="truncate"`
+ * -- that is a TABLE-level prop that is a documented no-op for `renderCell`
+ * columns, `types.ts:573-574`: "Only affects cells using the default
+ * renderer (no `renderCell`)"), verbatim "{location} · {address}" shape,
+ * unchanged by T131.
  *
  * UXC-07 fix (measured, not assumed): the category `Badge` is NOT inlined
  * next to the title here (unlike the first draft of this column, kept only
@@ -2181,13 +2269,35 @@ export function CoachSessionDetail({
  * this is also where the pre-T130 row already grouped it (module doc on
  * `CoachEventDateCell`), not a new placement. The title column now has its
  * own full column width for the title text alone; measured back down to
- * 42px of content (title + location, single line each) in the same probe. */
+ * 42px of content (title + location, single line each) in the same probe.
+ *
+ * T131 UPDATE: the title itself is no longer a plain `Text` -- it is now a
+ * real `Link` (`as={RouterLink}`, `href={routePaths.outreachEvent(event.id)}`)
+ * carrying the former standalone "View details – {title}" action's keyboard
+ * path directly on the title (module doc #13/#8c above, T131 packet §1).
+ * `weight="semibold"`/`maxLines={1}`/`color="primary"` reproduce today's
+ * pre-T131 `<Text type="body" weight="semibold" maxLines={1}>` rendering
+ * exactly, including colour: `Text.tsx:165,226` resolve `body`'s default
+ * colour to `'primary'`, which is what `color="primary"` pins here --
+ * `Link`'s own prop default (`'accent'`, `Link.tsx:297`) would otherwise
+ * repaint every title purple. No `label`/`aria-label` is set: the title
+ * text is already the accessible name (`astryx-api.md:1952,1954`), and is
+ * per-row distinguishing, so a generic label would only make things worse,
+ * not better. The location line stays a non-interactive `Text` under the
+ * link, unchanged. */
 function CoachEventTitleCell({ event }: { event: OutreachEventRow }): ReactNode {
   return (
     <VStack gap={0.5}>
-      <Text type="body" weight="semibold" maxLines={1}>
+      <Link
+        as={RouterLink}
+        href={routePaths.outreachEvent(event.id)}
+        isStandalone
+        weight="semibold"
+        maxLines={1}
+        color="primary"
+      >
         {event.title}
-      </Text>
+      </Link>
       <Text type="supporting" maxLines={1}>
         {event.locationName}
         {event.address !== '' ? ` · ${event.address}` : ''}
@@ -2241,14 +2351,23 @@ function CoachEventDateCell({
 }
 
 /** UXC-13 -- CHECKER FIX (post-T130 review, MAJOR, module doc above): a
- * real 44px minimum touch target via the documented `style` prop
- * (`astryx-api.md`'s FormField Props table documents `style`; `Button.tsx`
- * merges it in via `mergeProps`, which spreads the consumer `style` AFTER
- * the StyleX-driven `height`, so `minHeight` here genuinely wins -- CSS
- * clamps the used height to `max(specified height, min-height)`). `size`
- * itself stays `"sm"` on every button below -- only the hit box grows, not
- * the visible glyph/label/padding. Shared by every button this file's
- * coach `Table` renders (desktop AND the mobile card column, since
+ * real 44px minimum touch target via the `style` prop. CORRECTED CITATION
+ * (T131): `style` is NOT documented on `# Button`/`# IconButton` -- there is
+ * no `FormField` section in `astryx-api.md` at all, and `style` appears in
+ * exactly 7 props tables there (Field, Carousel, CodeBlock, Kbd, Markdown,
+ * Overlay, Thumbnail), none of them Button/IconButton. This is a pre-
+ * authorized undocumented-prop deviation (constitution item 2's D004
+ * installed-source precedent, T131 packet Trap 4), not a documented one:
+ * verified directly in installed source instead -- `Button.tsx:545`
+ * destructures `style`, `:652-657` merges it via `mergeProps`, which spreads
+ * the consumer `style` AFTER the StyleX-driven `height` (`mergeProps.ts:84-
+ * 89`), so `minHeight` here genuinely wins (CSS clamps the used height to
+ * `max(specified height, min-height)`); `IconButton.tsx:51` spreads
+ * `...props` (including `style`) into `Button`, so the same deviation
+ * covers the `IconButton` `×` below too. `size` itself stays `"sm"` on
+ * every button below -- only the hit box grows, not the visible glyph/
+ * label/padding. Shared by every button this file's coach `Table` renders
+ * (desktop AND the mobile card column, since
  * `CoachExpanderButton`/`CoachEventActions` are shared components). */
 const MIN_TOUCH_TARGET_STYLE: CSSProperties = { minHeight: '44px' };
 
@@ -2290,10 +2409,32 @@ function CoachExpanderButton({
   );
 }
 
-/** UXC-04 (unchanged): Edit/Cancel/"View details" -- verbatim `label`s,
- * verbatim visible text (packet's own "Corrected scope" -- only the
- * expander violated UXC-04). Shared by the desktop actions column and the
- * mobile card column. */
+/** T131 (reverses part of T112, supersedes the UXC-04 "View details" text
+ * exemption -- George authorized 2026-07-28, `VOLT_UX_Craft_PRD_v3.md`
+ * UXC-04 row / commit `b959b90`, T131 packet "Authorization for the
+ * reversal"): the compact reference-app action-cluster shape
+ * (`old-events-tab.webp`) -- a short `Edit` chip + a destructive `×`
+ * `IconButton`, no more standalone "View details – {title}" text. That
+ * link's keyboard path to `/outreach/:eventId` did not disappear; it moved
+ * onto the title (`CoachEventTitleCell`, above).
+ *
+ * `Edit` -- unchanged: `Button`, `size="sm"`, `variant="secondary"`,
+ * verbatim `label`/visible text.
+ *
+ * `×` -- was a `variant="destructive"` `Button` with visible "Cancel" text;
+ * now a `variant="destructive"` `IconButton` (`icon="close"`, a documented
+ * semantic name, `astryx-api.md:585,608`) with the SAME verbatim
+ * `label={`Cancel – ${title}`}` (three green tests depend on the exact
+ * string, T131 packet Trap 3) -- `IconButton`'s `label` is required and
+ * becomes the `aria-label` (`astryx-api.md:4267`), and per
+ * `astryx-api.md:4261` an icon-only control also needs a `tooltip` since
+ * `label` alone never reaches sighted users; `tooltip="Cancel event"` is
+ * pinned (no test depends on its exact text). The `canCancel` gate is
+ * unchanged. Both `Edit` and `×` keep the real 44px `style` touch target
+ * (module doc on `MIN_TOUCH_TARGET_STYLE` above; `IconButton.tsx:51`
+ * spreads `style` through to the underlying `Button`).
+ *
+ * Shared by the desktop actions column and the mobile card column. */
 function CoachEventActions({
   row,
   onEdit,
@@ -2316,19 +2457,16 @@ function CoachEventActions({
         Edit
       </Button>
       {canCancel && (
-        <Button
+        <IconButton
           label={`Cancel – ${row.event.title}`}
-          size="sm"
+          icon={<Icon icon="close" size="sm" />}
           variant="destructive"
+          size="sm"
+          tooltip="Cancel event"
           style={MIN_TOUCH_TARGET_STYLE}
           onClick={() => onCancel(row.event)}
-        >
-          Cancel
-        </Button>
+        />
       )}
-      <Link as={RouterLink} href={routePaths.outreachEvent(row.event.id)} isStandalone>
-        View details – {row.event.title}
-      </Link>
     </HStack>
   );
 }
@@ -2472,30 +2610,31 @@ function buildCoachOutreachColumns({
       // truncate real titles -- an explicit `minWidth` makes the trade-off
       // visible instead.
       //
-      // Disclosed trade-off (measured, not assumed): the real per-column
-      // single-line minimums below (this column's included) sum to
-      // slightly MORE than the `Table`'s own real available width at
-      // 1440px (its scroll wrapper's `clientWidth`, `Table.tsx:160-161`,
-      // measured 1132px for this route's real content-area layout) -- an
-      // earlier pass instead squeezed everything into exactly 1132px, and
-      // measured worse on every other axis for it (title truncated, date
-      // wrapped, actions wrapped, rows over 72px). This pass prioritizes
-      // (a) real 44px touch targets, (b) UXC-07's 72px row-height ceiling,
-      // (c) a fully readable, non-truncated title, and (d) byte-identical
-      // widths between the Upcoming/Past tables, over avoiding a real,
-      // measured ~42px (measured) of `Table`-INTERNAL horizontal scroll at 1440px
-      // specifically -- `Table`'s own scroll wrapper (`overflowX: auto`)
-      // is the documented mechanism for exactly this ("Scroll wrapper...
-      // handles an overflowing table", `Table.tsx`'s own anatomy), not a
-      // workaround. This does NOT affect UXC-13's own hard requirement,
-      // which is specifically "no h-scroll at 375px" -- at 375px this
-      // desktop column set is not used at all (`buildCoachOutreachColumns`'s
-      // own `isNarrow` branch, module doc above), so this trade-off cannot
-      // reach the 375px case. Measured (preview rig, real Chromium): zero
-      // page-level scroll either way (`document.documentElement.
-      // scrollWidth` stays exactly at the viewport width, both 1440px and
-      // 375px) -- only the `Table`'s own internal scroll region is
-      // affected, at 1440px only, and only by ~42px (measured: scroll wrapper clientWidth 1132px, scrollWidth 1174px).
+      // T131 UPDATE (supersedes the trade-off this comment used to record):
+      // that trade-off is resolved, not merely re-described. The old
+      // `actions` column floor (420px, driven by the now-removed "View
+      // details – {title}" text -- see that column's own comment below) was
+      // the reason the per-column single-line minimums summed to slightly
+      // MORE than the `Table`'s own real available width at 1440px (its
+      // scroll wrapper's `clientWidth`, `Table.tsx:160-161`, measured
+      // 1132px for this route's real content-area layout, previously
+      // ~1174px of combined column minimums -- a real, measured ~42px of
+      // `Table`-internal horizontal scroll with text clipped mid-word).
+      // With `actions` shrunk (T131, that column's own comment below), the
+      // reclaimed width flows here automatically -- `title` is
+      // `proportional()`, so it absorbs whatever the fixed-`pixel` columns
+      // around it no longer claim -- and the sum no longer exceeds the
+      // Table's real available width. Measured (preview rig, real
+      // Chromium, 1440px): the `Table`'s own scroll wrapper now measures
+      // `scrollWidth <= clientWidth` (see this task's own worker output for
+      // the exact before/after numbers) -- no more `Table`-internal
+      // horizontal scroll, and the title is not truncated. This still does
+      // not touch UXC-13's own hard requirement ("no h-scroll at 375px"):
+      // at 375px this desktop column set is not used at all
+      // (`buildCoachOutreachColumns`'s own `isNarrow` branch, module doc
+      // above), and page-level scroll (`document.documentElement.
+      // scrollWidth` vs. viewport width) was already, and remains, zero at
+      // both 1440px and 375px.
       key: 'title',
       header: 'Event',
       width: proportional(2, { minWidth: 224 }),
@@ -2546,24 +2685,36 @@ function buildCoachOutreachColumns({
       },
     },
     {
-      // CHECKER FIX (post-T130 review, MAJOR -- module doc above): widened
-      // from 320px so Edit + Cancel (each now a real 44px touch target,
-      // not visually wider, only taller) + the full, UXC-04-exempt "View
-      // details – {title}" text fit on ONE line instead of the `Link`
-      // wrapping to its own second line -- measured (preview rig, real
-      // Chromium): the widest real fixture combination (Edit + Cancel +
-      // "View details – Community Food Bank Sort") needs 378px of content
-      // (48+68+262) plus two 8px gaps (394px) plus 16px of real cell
-      // padding (410px); 420px keeps a small real margin (see the
-      // `key: 'title'` column's own comment above for the disclosed
-      // trade-off this makes against the table's own available width at
-      // 1440px). Wrapping to two lines was what pushed collapsed rows to
-      // 81px, over UXC-07's 72px ceiling -- fitting on one line brings it
-      // back under (see this task's own worker output "gate output" for
-      // the exact re-measured numbers).
+      // T131 (reverses the CHECKER FIX / post-T130 module doc this comment
+      // used to describe): shrunk from 420px. The 420px floor existed only
+      // to hold Edit + Cancel + the full "View details – {title}" text on
+      // one line; that text is gone (T131 packet §2 -- Cancel is now an
+      // icon-only `×`, and "View details" moved onto the title,
+      // `CoachEventTitleCell`'s own module doc above). New floor: Edit 48px
+      // (measured natural width) + `HStack gap={2}` (8px) + the `×`
+      // `IconButton` 44px (square: `Button.tsx:103-108` sets `aspectRatio:
+      // 1/1` and zero `paddingInline`/`paddingBlock` for `isIconOnly`, so
+      // its 44px `minHeight` touch target becomes 44px wide too) + 16px of
+      // real cell padding (8px each side, compact density,
+      // `TableCell.tsx:70-75`) = 116px. Shipped at 128px, not the bare
+      // 116px floor and not 120px either: `CoachEventActions`'s own `HStack`
+      // has `wrap="wrap"` (below), so a near-zero margin is a real wrap
+      // risk, and a wrap is exactly what pushed collapsed rows to 81px in
+      // T130 (see the `key: 'title'` column's own comment above). The slack
+      // this frees is given back to the `title` column automatically --
+      // `title` is `proportional()`, so it absorbs whatever the fixed-`pixel`
+      // columns around it no longer claim (measured: the `Event` `<th>` grew
+      // from 224px to 474px). Measured (preview rig, real Chromium, 1440px):
+      // the `Table`'s scroll wrapper now measures `scrollWidth === clientWidth`
+      // == 1132px on both Upcoming and Past tables (was clientWidth 1132px /
+      // scrollWidth 1174px before this task -- no more internal horizontal
+      // scroll; see this task's own worker output for the full measurement
+      // log). Collapsed rows measured 52.5-53px (Upcoming) and 52.5-69px
+      // (Past, the 69px row has an extra "Reached N" secondary stat line) --
+      // well under UXC-07's 72px ceiling.
       key: 'actions',
       header: '',
-      width: pixel(420),
+      width: pixel(128),
       renderCell: (row) =>
         row.kind === 'event' ? (
           <CoachEventActions row={row} onEdit={onEdit} onCancel={onCancel} />
@@ -2721,6 +2872,10 @@ interface CoachOutreachViewProps {
   attendance: readonly OutreachAttendanceRow[];
   students: readonly OutreachStudentFixture[];
   goalConfig: OutreachGoalConfig;
+  /** T147 -- real teams (`loaders/outreach.ts`), threaded straight through to
+   * this view's own create/edit `OutreachEventDialog` `teams` prop, replacing
+   * that dialog's own `DEFAULT_TEAMS` fixture fallback. */
+  teams: readonly OutreachTeamOption[];
   /** T101 (module doc #11). Defaults to a real `events`/`event_sessions`
    * insert/update, passed straight through to `<OutreachEventDialog
    * onSaveEvent={...} />` -- T121 UPDATE: now genuinely used for BOTH create
@@ -2765,6 +2920,7 @@ function CoachOutreachView({
   attendance,
   students,
   goalConfig,
+  teams,
   onSaveEvent,
   onReload,
   onCancelEvent,
@@ -3030,15 +3186,18 @@ function CoachOutreachView({
           genuinely serves BOTH create (`initialEvent` undefined) and edit
           (`initialEvent` from a row's own "Edit" action) through this same
           instance, plus the real roster (`students`) and acting-coach id
-          (`currentUserProfileId`) this task wires in. `teams` deliberately
-          NOT overridden -- module doc #11 (unchanged, out of this task's own
-          Allowed Files). */}
+          (`currentUserProfileId`) this task wires in. T147: `teams` now
+          real too (`loaders/outreach.ts`'s `makeLoadOutreachData`), so a
+          coach sees their real teams instead of the dialog's own
+          `DEFAULT_TEAMS` fixture (`'team-ravens'`/`'team-titans'`, non-uuid
+          strings that failed the real `events.team_ids uuid[]` insert). */}
       <OutreachEventDialog
         isOpen={isEventDialogOpen}
         onOpenChange={(isOpen) => {
           setIsEventDialogOpen(isOpen);
           if (!isOpen) setEditingTarget(null);
         }}
+        teams={teams}
         onSaveEvent={handleSaveEventSubmit}
         initialEvent={initialEvent}
         students={rosterForDialog}
@@ -3078,8 +3237,10 @@ function rsvpStatusLabel(status: RsvpStatus): string {
  * event down to just its date/location summary) -- UXD-03's expand-in-place
  * mechanism is genuinely present and functional, just defaulted open here
  * for the reason above, not defaulted closed like the coach view's own row
- * (whose primary actions -- Edit/Cancel -- live in `endContent`, not behind
- * the expander).
+ * (whose primary actions -- Edit/Cancel -- live in a `CoachEventActions`
+ * `Table` cell since T130, not `endContent`; this sentence previously said
+ * "endContent", stale since T130 moved the coach row off `ListItem` --
+ * corrected here, T132).
  */
 function StudentOutreachEventRow({
   event,
@@ -3157,8 +3318,17 @@ function StudentOutreachEventRow({
     </VStack>
   );
 
-  // T112 HOTFIX (module doc #13): every row -- Upcoming AND Past alike --
-  // still always carries a real "View details" `Link`, unchanged shape.
+  // T112 HOTFIX (module doc #13) -- SUPERSEDED (T132): this row no longer
+  // carries a standalone "View details" `Link` in `endContent`. This
+  // paragraph used to say every row "still always carries a real 'View
+  // details' Link, unchanged shape" -- T132 falsifies that for the
+  // student/parent side: the former Link's `href`/keyboard path now lives
+  // on the row's own title instead (`ListItem`'s `label` below, a real
+  // `Link` wrapping `event.title`), not a separate action here. This
+  // matches T131's own coach-side change (`CoachEventActions` above no
+  // longer carries a separate "View details" `Link` either -- its keyboard
+  // path moved onto `CoachEventTitleCell`'s own title `Link`) -- the two
+  // halves of this page now agree with each other.
   // T126 (module doc #14): one more neutral, named-action `Button` for
   // eligible Past rows, opening the shared `SelfCheckoffDialog` scoped to
   // this row's own event/sessions.
@@ -3182,13 +3352,54 @@ function StudentOutreachEventRow({
           onClick={() => onOpenSelfCheckoff(event, sessions)}
         />
       )}
-      <Link as={RouterLink} href={routePaths.outreachEvent(event.id)} isStandalone>
-        View details – {event.title}
-      </Link>
     </HStack>
   );
 
-  return <ListItem label={event.title} description={description} endContent={endContent} />;
+  // ACCEPTED, DECIDED (T132; human-owner ruling, not a pending follow-up):
+  // `maxLines={1}` below sets real truncation CSS on the `Link`'s own inner
+  // `Text`, but `Item` (which `ListItem` renders through) only applies ITS
+  // OWN width-bounding single-line-truncate style when `label` is a plain
+  // string (`Item.tsx:350-360`, `isStringLabel`/`labelTruncateStyle`) --
+  // passing a `<Link>` makes `label` a `ReactNode`, so it gets none of
+  // that, and nothing else constrains the `inline-flex` anchor's width.
+  // Measured with a synthetic long title (real Chromium, this task's own
+  // throwaway rig): the anchor grows past the row instead of eliciting an
+  // ellipsis, at both 1440px and 375px -- a real, measured loss of
+  // truncation against the plain-string label this replaces, which DID
+  // truncate. A `labelLines`-style cast to reach past `ListItemProps`
+  // (`labelLines` is real on `Item` but absent from `ListItemProps`,
+  // reachable only via `ListItem`'s own untyped `...restProps` spread,
+  // `ListItem.tsx:211,255`) was considered and explicitly declined: a cast
+  // to get a `clip` instead of an `ellipsis` isn't worth it. This is
+  // accepted behaviour project-wide for a linked `ListItem` title, not a
+  // defect awaiting a fix.
+  //
+  // `document.documentElement.scrollWidth === window.innerWidth` still
+  // holds at 1440px. At 375px it does NOT hold, but not because of this
+  // `Link`/truncation change: the sole cause (verified by DOM inspection)
+  // is the "Mark attendance – {title}" `Button` text in `endContent`
+  // above, which this task did not touch -- that overflow pre-existed this
+  // task (worse: every row's own former "View details – {title}" link also
+  // overflowed at 375px before this task, which this change measurably
+  // fixed) and remains open as its own, separate, unrelated item.
+  return (
+    <ListItem
+      label={
+        <Link
+          as={RouterLink}
+          href={routePaths.outreachEvent(event.id)}
+          isStandalone
+          weight="semibold"
+          maxLines={1}
+          color="primary"
+        >
+          {event.title}
+        </Link>
+      }
+      description={description}
+      endContent={endContent}
+    />
+  );
 }
 
 /** UXD-03 expand-in-place per-session detail (student/parent view): date/
@@ -3600,6 +3811,7 @@ function OutreachListLoaded({
           attendance={data.attendance}
           students={data.students}
           goalConfig={data.goalConfig}
+          teams={data.teams}
           onSaveEvent={onSaveEvent}
           onReload={reloadOutreachData}
           onCancelEvent={onCancelEvent}

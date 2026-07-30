@@ -15,7 +15,28 @@ export default defineConfig({
     // *.test.ts files (Deno.test(...), run separately via `deno test`) --
     // exclude them from vitest's default discovery, same reasoning as the
     // eslint.config.js exclusion added alongside this (CI break #4).
-    exclude: ['**/node_modules/**', '**/dist/**', 'supabase/functions/**', 'tests/e2e/**'],
+    // `.claude/worktrees/**` holds isolated subagent checkouts of this same
+    // repo (one full copy per concurrently-running worker). `.gitignore`
+    // covers them, but vitest does not read `.gitignore` -- without this
+    // entry the suite collects every worktree's copy of every test file and
+    // reports a doubled/tripled count against in-flight sibling code, which
+    // makes the "1414 / 61 files" baseline every task packet gates on
+    // meaningless. Excluded here rather than in each packet because no
+    // worker is allowed to edit this file.
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.claude/**',
+      // `*.throwaway.*` files are short-lived measurement rigs and probes that
+      // tasks create, measure with, and delete (`.gitignore` already makes them
+      // uncommittable). Vitest would otherwise collect a probe that happens to
+      // be named `*.throwaway.test.tsx` mid-flight, changing the suite's file
+      // and test counts -- and every task packet gates pass/fail on that exact
+      // count, so a transient probe can make a real baseline look broken.
+      '**/*.throwaway.*',
+      'supabase/functions/**',
+      'tests/e2e/**',
+    ],
   },
   build: {
     rollupOptions: {

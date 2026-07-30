@@ -104,8 +104,9 @@
  * | Meeting Violet | Astryx `purple` variant | Meeting type badge/cards |
  * | Comp Orange | Astryx `orange` variant | Competition type badge/cards |
  *
- * `CALENDAR_TYPE_BADGE` below maps `meeting -> 'purple'`,
- * `outreach -> 'blue'`, `competition -> 'orange'` -- Astryx `Badge`'s own
+ * `EVENT_TYPE_BADGE` (`../../lib/eventTypeBadge`, imported above) maps
+ * `meeting -> 'purple'`, `outreach -> 'blue'`, `competition -> 'orange'` --
+ * Astryx `Badge`'s own
  * `variant` prop (astryx-api.md line 530's Props table includes `blue`,
  * `purple`, `orange` in its literal union), never a hand-rolled hex
  * (constitution item 2/13 concern -- a hex would also break dark-mode
@@ -172,31 +173,39 @@
  *    requirement.
  *
  * -----------------------------------------------------------------------
- * 7. NAV-08 click-through routes (CAL-02) -- real navigation elements,
- *    correct-looking destination paths, not required to render real content
- *    at the destination (this task's own Forbidden Files clause).
+ * 7. NAV-08 click-through routes (CAL-02) -- T137 (D009 remediation).
  *
- * NAV-08 (PRD line 89, cited verbatim): "every event/session detail is
- * URL-addressable -- `/outreach/:eventId` (outreach + competitions) and
- * `/meetings/:sessionId` (meeting detail page replacing the dialog in
- * CAL-02)." `CalendarSessionRowItem` below routes outreach/competition rows
- * through the already-real `routePaths.outreachEvent(event.id)` helper
- * (imported, read-only, from `../../app/router`, which this task's Forbidden
- * Files list explicitly allows import-only) -- that exact route IS already
- * wired in `router.tsx` (to a placeholder component, per that file's own
- * `OutreachEventPage`). Meeting rows route to the literal
- * `` `/meetings/${session.id}` `` path: `router.tsx`'s own `routePaths` object
- * has NO helper for this NAV-08 path (only `routePaths.meetings` -- the
- * plain list route -- and `routePaths.meetingLiveSession`, a DIFFERENT path,
- * `/meetings/live/:sessionId`, for the in-progress live console, confirmed
- * by reading that read-only file directly) and `router.tsx`'s own `<Routes>`
- * table has no `/meetings/:sessionId` route registered at all yet -- a real,
- * disclosed gap (this task cannot fix it: `router.tsx` is Forbidden/
- * import-only), not silently worked around. Per this task's own Forbidden
- * Files clause ("you are not required to prove those destination routes
- * render anything ... only that this page links to the correct path"), the
- * literal string is constructed directly against NAV-08's own quoted path
- * shape rather than left unbuilt or invented as some other shape.
+ * NAV-08 (PRD line 97, cited verbatim; line 89 carries the D009 annotation
+ * that pushed the requirement text itself down): "every event/session
+ * detail is URL-addressable -- `/outreach/:eventId` (outreach +
+ * competitions) and `/meetings/:sessionId` (meeting detail page replacing
+ * the dialog in CAL-02)." `CalendarSessionRowItem` below routes
+ * outreach/competition rows through the real `routePaths.outreachEvent(
+ * event.id)` helper (imported, read-only, from `../../app/router`) -- that
+ * route IS wired in `router.tsx`, to `OutreachDetail`.
+ *
+ * Meeting rows do NOT route to NAV-08's own `/meetings/:sessionId` path.
+ * That page was never built: `router.tsx`'s `routePaths` object has no
+ * helper for it (only `routePaths.meetings`, the plain list route, and
+ * `routePaths.meetingLiveSession`, a DIFFERENT path,
+ * `/meetings/live/:sessionId`, for the in-progress live console), and
+ * `router.tsx`'s `<Routes>` table has no `/meetings/:sessionId` entry and no
+ * catch-all -- so a hand-built `` `/meetings/${session.id}` `` link (T112's
+ * original construction, which this file used until T137) rendered a blank
+ * content area for every meeting row. T133 then promoted that link from a
+ * secondary "View details" affordance to the row title itself, turning a
+ * latent gap into every meeting row's dead-end primary action. That gap is
+ * recorded as **D009** in `docs/swarm/dispute-log.md` and annotated inline
+ * at NAV-08.
+ *
+ * George's decision (2026-07-28, option b, T137): point meeting rows at
+ * `routePaths.meetings` -- a route that exists now -- instead of the
+ * unbuilt per-session path, until NAV-08's real meeting detail page ships
+ * as its own task. `router.tsx` stays Forbidden/import-only for this task;
+ * a stub route rendering nothing would be worse than this interim fix.
+ * Every meeting row now shares one destination (the meetings list) rather
+ * than each linking to a distinct session -- an intended, disclosed
+ * consequence of deferring NAV-08, not a regression to design around.
  *
  * -----------------------------------------------------------------------
  * 8. Astryx prop sourcing (constitution item 2) -- every prop below,
@@ -269,7 +278,7 @@
  *     when the current month/filter/day-selection combination has zero
  *     matching sessions even though sessions exist elsewhere).
  */
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import {
   Badge,
   Banner,
@@ -291,6 +300,7 @@ import {
 } from '@astryxdesign/core';
 import { Link as RouterLink } from 'react-router-dom';
 import { routePaths } from '../../app/router';
+import { EVENT_TYPE_BADGE, EVENT_TYPE_ORDER } from '../../lib/eventTypeBadge';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of the real `events`/`event_sessions`
@@ -581,27 +591,33 @@ function monthLabel(year: number, month: number): string {
 
 // ---------------------------------------------------------------------------
 // Type -> Badge variant mapping -- DES-04's named palette (module doc #2).
+// T138: moved to `../../lib/eventTypeBadge` (imported above, as
+// `EVENT_TYPE_BADGE`), shared with `CoachHome.tsx`/`EventsTab.tsx` instead of
+// this file keeping its own copy. That shared constant is declared with
+// `as const satisfies`, so indexing it here still narrows `variant` to
+// `'purple' | 'blue' | 'orange'` (not the full `BadgeVariant` union) exactly
+// as this file's own local `CALENDAR_TYPE_BADGE` did before -- see the
+// shared module's own comment for why.
 // ---------------------------------------------------------------------------
-
-const CALENDAR_TYPE_BADGE: Record<
-  CalendarEventType,
-  { variant: 'purple' | 'blue' | 'orange'; label: string }
-> = {
-  meeting: { variant: 'purple', label: 'Meeting' }, // Meeting Violet
-  outreach: { variant: 'blue', label: 'Outreach' }, // Circuit Blue
-  competition: { variant: 'orange', label: 'Competition' }, // Comp Orange
-};
-
-// ---------------------------------------------------------------------------
-// NAV-08 detail routes (module doc #7).
+// NAV-08 detail routes (module doc #7) -- outreach/competition rows link to
+// the real per-event detail route; meeting rows link to the interim
+// `routePaths.meetings` destination pending NAV-08's meeting detail page
+// (D009, `dispute-log.md`).
 // ---------------------------------------------------------------------------
 
 function detailHrefFor(event: CalendarEventRow, session: CalendarSessionRow): string {
   if (event.type === 'meeting') {
-    // NAV-08: "/meetings/:sessionId (meeting detail page ...)". No
-    // `routePaths` helper exists for this exact path yet (module doc #7) --
-    // constructed directly against NAV-08's own quoted shape.
-    return `/meetings/${session.id}`;
+    // NAV-08's per-meeting `/meetings/:sessionId` detail route (module doc
+    // #7) is unbuilt -- no `routePaths` helper for it, and `router.tsx` has
+    // no matching `<Route>` and no catch-all, so that path resolved to a
+    // blank content area (D009, `dispute-log.md`). George's decision
+    // (2026-07-28, option b): point meeting rows at `routePaths.meetings`,
+    // a route that exists, until NAV-08's real detail page ships as its own
+    // task. `session` is intentionally unused in this branch as a result
+    // (`AcceptInvitePage.tsx`'s `defaultLoadInvite`/`accept.ts` loader
+    // already established this `void x;` idiom for the same situation).
+    void session;
+    return routePaths.meetings;
   }
   // NAV-08: "/outreach/:eventId (outreach + competitions)".
   return routePaths.outreachEvent(event.id);
@@ -618,7 +634,7 @@ function CalendarSessionRowItem({
   session: CalendarSessionRow;
   event: CalendarEventRow;
 }): ReactNode {
-  const typeBadge = CALENDAR_TYPE_BADGE[event.type];
+  const typeBadge = EVENT_TYPE_BADGE[event.type];
 
   const description = (
     <Text type="supporting">
@@ -627,16 +643,26 @@ function CalendarSessionRowItem({
     </Text>
   );
 
-  const endContent = (
-    <HStack gap={2} vAlign="center">
-      <Badge variant={typeBadge.variant} label={typeBadge.label} />
-      <Link as={RouterLink} href={detailHrefFor(event, session)} isStandalone>
-        View details – {event.title}
-      </Link>
-    </HStack>
-  );
+  const endContent = <Badge variant={typeBadge.variant} label={typeBadge.label} />;
 
-  return <ListItem label={event.title} description={description} endContent={endContent} />;
+  return (
+    <ListItem
+      label={
+        <Link
+          as={RouterLink}
+          href={detailHrefFor(event, session)}
+          isStandalone
+          weight="semibold"
+          maxLines={1}
+          color="primary"
+        >
+          {event.title}
+        </Link>
+      }
+      description={description}
+      endContent={endContent}
+    />
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -691,6 +717,14 @@ export function CalendarPage({
   loadSessions = defaultLoadCalendarSessions,
 }: CalendarPageProps = {}): ReactNode {
   const loadState = useLoadState(loadSessions, [loadSessions]);
+  // UXC-01 (module doc #2's remedy (b), copying `OutreachList.tsx`'s shipped
+  // `StudentOutreachSection`/`CoachOutreachSection` pattern): a stable id for
+  // the "Sessions on <day>"/"Sessions in <month>" `Heading`, so the
+  // List/EmptyState ternary below can carry that heading as its accessible
+  // name via `aria-labelledby` on a wrapping `<div role="group">`, instead of
+  // the `List`'s own `header` prop (which duplicated the visible heading text
+  // and vanished in the empty branch -- T129's own attempt-1 failure).
+  const headingId = useId();
 
   const [focusDateIso, setFocusDateIso] = useState<string>(() => todayIsoChicago());
   const [selectedDayIso, setSelectedDayIso] = useState<string | null>(null);
@@ -766,75 +800,101 @@ export function CalendarPage({
     selectedDayIso !== null ? sessionsOnDay(typeFiltered, selectedDayIso) : typeFiltered;
 
   return (
-    <VStack gap={6} padding={6}>
-      <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
-        <Heading level={1}>Calendar</Heading>
-        <Button label="Today" variant="secondary" onClick={handleToday} />
-      </HStack>
+    // UXC-06: cap the page content at ~1120px and centre it. `maxWidth`
+    // alone does not centre (no auto-margin anywhere in Stack/Center) --
+    // the outer `VStack hAlign="center"` centers the inner, capped `VStack`
+    // on the cross axis; `width="100%"` on the inner `VStack` is
+    // load-bearing so it fills up to the cap instead of shrinking to
+    // fit-content under `align-items: center` (module doc's own citations:
+    // `astryx-api.md:389` cross-axis `hAlign`, `:385` `width`, `:363`/`:387`
+    // `maxWidth`).
+    <VStack hAlign="center">
+      <VStack width="100%" maxWidth={1120} gap={6} padding={6}>
+        <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
+          <Heading level={1}>Calendar</Heading>
+          <Button label="Today" variant="secondary" onClick={handleToday} />
+        </HStack>
 
-      {!hasAnySessions ? (
-        <EmptyState
-          headingLevel={2}
-          title="No sessions scheduled yet"
-          description="Meetings, outreach events, and competitions for this season will show up here once they're scheduled."
-        />
-      ) : (
-        <>
-          <Calendar
-            key={calendarResetKey}
-            mode="single"
-            weekStartsOn="sun"
-            focusDate={focusDateIso as ISODateString}
-            onFocusDateChange={handleFocusDateChange}
-            onChange={(iso) => setSelectedDayIso(iso)}
+        {!hasAnySessions ? (
+          <EmptyState
+            headingLevel={2}
+            title="No sessions scheduled yet"
+            description="Meetings, outreach events, and competitions for this season will show up here once they're scheduled."
           />
+        ) : (
+          <>
+            <Calendar
+              key={calendarResetKey}
+              mode="single"
+              weekStartsOn="sun"
+              focusDate={focusDateIso as ISODateString}
+              onFocusDateChange={handleFocusDateChange}
+              onChange={(iso) => setSelectedDayIso(iso)}
+            />
 
-          {/* DES-04 color legend -- module doc #1's resolution: the dots/
-              labels live here and in the list below, not inside the grid. */}
-          <HStack gap={2} wrap="wrap">
-            <Badge variant="purple" label="Meeting" />
-            <Badge variant="blue" label="Outreach" />
-            <Badge variant="orange" label="Competition" />
-          </HStack>
-
-          <SegmentedControl
-            value={filter}
-            onChange={(value) => setFilter(value as CalendarFilterValue)}
-            label="Filter sessions by type"
-          >
-            {CALENDAR_FILTER_ITEMS.map((item) => (
-              <SegmentedControlItem key={item.value} value={item.value} label={item.label} />
-            ))}
-          </SegmentedControl>
-
-          <VStack gap={3}>
-            <HStack hAlign="between" vAlign="center" wrap="wrap" gap={2}>
-              <Heading level={2}>
-                {selectedDayIso !== null
-                  ? `Sessions on ${formatWeekdayDate(selectedDayIso)}`
-                  : `Sessions in ${monthLabel(focusYear, focusMonth)}`}
-              </Heading>
-              {selectedDayIso !== null && (
-                <Button label="Show whole month" variant="ghost" onClick={handleShowWholeMonth} />
-              )}
+            {/* DES-04 color legend -- module doc #1's resolution: the dots/
+                labels live here and in the list below, not inside the grid.
+                T145: driven from `EVENT_TYPE_ORDER`/`EVENT_TYPE_BADGE`
+                (`../../lib/eventTypeBadge`) instead of three hand-written
+                Badge literals -- the fourth copy of the DES-04 mapping that
+                T138 could not reach because it was JSX, not a map literal. */}
+            <HStack gap={2} wrap="wrap">
+              {EVENT_TYPE_ORDER.map((type) => (
+                <Badge
+                  key={type}
+                  variant={EVENT_TYPE_BADGE[type].variant}
+                  label={EVENT_TYPE_BADGE[type].label}
+                />
+              ))}
             </HStack>
 
-            {visibleSessions.length === 0 ? (
-              <EmptyState
-                headingLevel={3}
-                title="No sessions match this view"
-                description="Try a different month, a different type filter, or clear the day selection."
-              />
-            ) : (
-              <List hasDividers header="Chronological session list">
-                {visibleSessions.map(({ session, event }) => (
-                  <CalendarSessionRowItem key={session.id} session={session} event={event} />
+            {/* UXC-06: `SegmentedControl`'s own root is already inline-flex/
+                hug (`SegmentedControl.tsx:89-95`) -- it was being stretched
+                by the parent `VStack`'s default `vAlign="stretch"`. Wrapping
+                it in `HStack hAlign="start"` stops the stretch. */}
+            <HStack hAlign="start">
+              <SegmentedControl
+                value={filter}
+                onChange={(value) => setFilter(value as CalendarFilterValue)}
+                label="Filter sessions by type"
+              >
+                {CALENDAR_FILTER_ITEMS.map((item) => (
+                  <SegmentedControlItem key={item.value} value={item.value} label={item.label} />
                 ))}
-              </List>
-            )}
-          </VStack>
-        </>
-      )}
+              </SegmentedControl>
+            </HStack>
+
+            <VStack gap={3}>
+              <HStack hAlign="between" vAlign="center" wrap="wrap" gap={2}>
+                <Heading level={2} id={headingId}>
+                  {selectedDayIso !== null
+                    ? `Sessions on ${formatWeekdayDate(selectedDayIso)}`
+                    : `Sessions in ${monthLabel(focusYear, focusMonth)}`}
+                </Heading>
+                {selectedDayIso !== null && (
+                  <Button label="Show whole month" variant="ghost" onClick={handleShowWholeMonth} />
+                )}
+              </HStack>
+
+              <div role="group" aria-labelledby={headingId}>
+                {visibleSessions.length === 0 ? (
+                  <EmptyState
+                    headingLevel={3}
+                    title="No sessions match this view"
+                    description="Try a different month, a different type filter, or clear the day selection."
+                  />
+                ) : (
+                  <List hasDividers>
+                    {visibleSessions.map(({ session, event }) => (
+                      <CalendarSessionRowItem key={session.id} session={session} event={event} />
+                    ))}
+                  </List>
+                )}
+              </div>
+            </VStack>
+          </>
+        )}
+      </VStack>
     </VStack>
   );
 }

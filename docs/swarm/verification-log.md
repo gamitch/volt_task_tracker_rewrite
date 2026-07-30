@@ -4922,3 +4922,234 @@ text, or adoption of the reference figure's compact `EDIT` + `×` icon pair.
 reconciling with `CheckinResult.tsx:358-387`. (3) Pin the 768px breakpoint and a
 `change`-event transition in tests. (4) Fix the "FormField"→"Field" citation in
 the `MIN_TOUCH_TARGET_STYLE` doc block, since T131 inherits that comment.
+[2026-07-28T06:24:57Z] Worker finished. Checker required before completion.
+
+## T131 — compact icon-pair row actions (coach outreach Table) — PASS (attempt 1)
+
+Checker: checker-reviewer (opus), independent of the worker (sonnet).
+Verdict: **PASS**, severity MINOR (2 MINOR, 4 NIT). No BLOCKER, no MAJOR.
+
+**Premise gate (constitution item 19), two rounds, both pre-dispatch.**
+Round 1: REVISE — 1 BLOCKER, 5 MAJORs, all of them the packet author's
+(orchestrator's) errors, plus 8 wrong line citations. Round 2: DISPATCH with
+7 minor line drifts, 3 of which the gate identified as its own round-1 errors
+that the orchestrator had propagated. Cost roughly two prevented rework cycles
+against item 19a's two-round cap; the BLOCKER alone was unsatisfiable as
+written and would have failed the task by construction.
+
+The four findings that mattered:
+1. BLOCKER — "every interactive control >=44px" contradicted the same packet's
+   72px row ceiling once the title became a link (a 44px title line box plus
+   the supporting line and cell padding lands at ~70-72px). Rewritten to name
+   the expander/Edit/x and exempt text links under WCAG 2.2 SC 2.5.8, scoped
+   explicitly against UXC-13's unqualified wording upstream so a checker
+   reading past the packet could not reopen it.
+2. MAJOR — the prescribed `<Text>`-inside-`Link` arrangement is broken. `Link`
+   already wraps children in its own `Text` (`Link.tsx:323-331`) and forwards
+   `type/size/weight/color/display/maxLines` (`:227-257`). Nesting puts a
+   `display:block; overflow:hidden` child inside an `inline-flex` `<a>` with no
+   `min-width:0`, so truncation silently stops. Separately `LinkProps.color`
+   defaults to `'accent'` (`Link.tsx:297`), which would have turned every event
+   title purple — and the packet's own criteria never checked colour.
+3. MAJOR — "`style` is a documented Astryx prop (`astryx-api.md:1116`)" was
+   false. That line is the **Field** props table; `style` appears in exactly 7
+   props tables (Field, Carousel, CodeBlock, Kbd, Markdown, Overlay, Thumbnail)
+   and in none of Button, IconButton, or Link. It genuinely works
+   (`Button.tsx:545`, `:652-657`; `mergeProps.ts:84-89`; `IconButton.tsx:51`)
+   and T130 shipped it, so it is a real deviation authorized under D004 — but
+   presenting it as documented would have had a checker correctly fail
+   compliant work.
+4. MAJOR — the packet said two assertions change; exactly one does. The
+   authorizing PRD row named `:1759`, a surface the packet forbids touching,
+   making the authorization broader than the work it authorized. Corrected in
+   both `.md` and `.html`.
+
+**Checker evidence (all re-derived, not accepted).**
+The checker built its own preview rig and measured the shipped code *and* the
+`c8275c7` baseline by swapping the file in and out — the worker had carried the
+"before" number forward from a comment rather than rendering it.
+
+| | Upcoming cw/sw | Past cw/sw | overflow |
+|---|---|---|---|
+| baseline `c8275c7` | 1132 / 1174 | 1132 / 1174 | 42px each |
+| shipped | 1132 / 1132 | 1132 / 1132 | 0 |
+
+`<th>` widths `120/150/224/102/158/420` -> `120/150/474/102/158/128`, summing to
+exactly 1132. Rows 53 / 52.5 (Upcoming), 69 / 52.5 (Past), all <=72px; the 69px
+row is the "Reached N" row. Touch targets: expander 101.81x44, Edit 48.13x44,
+`x` 44x44, all real `<button>` with inline `min-height: 44px`, identical at
+375px. Title link: real `<a href>`, `aria-label` null, accessible name = event
+title. Typography byte-identical at rest before vs after — weight 600, 14px,
+line-height 20.0004px, `rgb(29,26,33)`, nowrap/ellipsis/hidden — confirming the
+`Text.tsx:165,226` prediction that `color="primary"` reproduces the resolved
+default exactly rather than approximately. Focus ring `solid 2px rgb(91,46,229)`
+at 2px offset.
+
+The checker also stress-tested truncation, which the worker had declared
+unexercised: a forced 920px title in a 458px box gives `scrollWidth 920 >
+clientWidth 458` with the anchor not overflowing its cell, wrapper still
+1132/1132, row still 53px. The nested-`Text` trap is genuinely avoided.
+
+Test discipline: exactly one assertion changed, at `:1726`, and it was
+*strengthened* (`toContain('View details')` -> `toBe('Community Food Bank
+Sort')`). `:1762` (student/parent) still asserts the old text and passes. The
+three Cancel-dependent tests (`:1302-1304`, `:2179-2181`, `:2187-2189`) and the
+`<th>` parity test are untouched and green. Zero `.skip`/`.only`/`.todo`/`xit`
+in the repo — nothing was silenced. 1414/1414 across 61 files; tsc, eslint
+(0 errors), vite build, and format:check all clean, re-run by the checker.
+
+**Worker honesty note.** The worker reported, unprompted, that the packet's
+claimed hover `color-mix` tint on the title link is present in the CSSOM but
+never reaches the glyphs, because `Link` hands its inner `Text` an explicit
+non-inheriting colour. The checker reproduced this exactly (anchor colour
+shifts on hover; span colour does not) and judged it correctly handled: the
+hover underline *does* paint and the focus ring is real, so two live
+non-colour affordances remain; it is pre-existing `@astryxdesign/core`
+composition outside Allowed Files. Reported rather than silently patched or
+disputed.
+
+**MINORs, fixed by the orchestrator after the check** (both comment-only, both
+caused or exposed by T131, both mechanically re-verified with all gates re-run
+green — disclosed here as orchestrator edits that no independent checker has
+reviewed):
+- `OutreachList.tsx:2008` asserted the fixed desktop columns "sum to ~950px".
+  That was `120+150+102+158+420`; T131 made it `658`. Corrected, with the old
+  value retained as history. The conclusion (658 > 375, so the narrow branch is
+  still required) is unchanged.
+- `OutreachList.tsx:2019-2022` still claimed "`astryx-api.md`'s FormField Props
+  table documents [`style`] verbatim". `grep -c FormField docs/swarm/astryx-api.md`
+  returns **0** — the claim was false twice over, since the row it described
+  belongs to `Field`. The file was shipping two contradictory statements about
+  the same constitution item 2 question, the corrected one being the new comment
+  at `:2294-2300`. Rewritten to point at the D004 reasoning.
+
+**Follow-ups logged (not blocking):**
+1. Annotate the `# Link` props table in `astryx-api.md` with the real
+   `weight`/`size`/`color`/`display`/`maxLines`/`type` props (banked by the
+   packet; would remove the need for a D004 escalation next time).
+2. `OutreachList.tsx:3173` still describes coach-row actions as living in
+   `endContent`; they have been in a `Table` since T130. Pre-existing.
+3. No test pins the title link's absence of `aria-label` or the `pixel(128)`
+   actions width — both were out of scope under T131's one-assertion
+   constraint. Worth adding in T132.
+4. Upstream note: `Link`'s `:hover` `color-mix` tint is inert because the inner
+   `Text` sets an explicit non-inheriting `color`.
+
+T132 (CalendarPage + student/parent parity) is unblocked.
+
+## 2026-07-29 — Ratification: T147's two pre-existing test updates (constitution item 10)
+
+**Ratified by the orchestrator under standing auto-mode authority. NOT by the human
+owner**, who is away and has not seen this. He may reverse it.
+
+Item 10 requires boss approval before an existing test is modified. T147's worker
+changed two pre-existing tests in `src/pages/outreach/OutreachList.test.tsx` — the T121
+item (a) test and the T121 items (b)/(c) test — without prior approval, because I had
+not anticipated the need. Ratifying after the fact, on the checker's evidence.
+
+**What changed:** fixture data only. `teamId: 'team-ravens'` → a UUID. **Every assertion
+is byte-identical** — `toContain('Jamie Rivera')`, `not.toContain('Riley Chen')`,
+`toContain('Expected attendees (2 of 2)')`. No `.skip`, no `.only`, no test removed; the
+diff has six added `it(` blocks and zero removed.
+
+**Why this strengthens rather than weakens.** The checker reverted the production fix
+and both tests now **fail**, when previously they could not detect this defect at all.
+
+**Why it was forced, and what it exposed.** `groupActiveRosterByTeam`
+(`OutreachEventDialog.tsx:914-916`) matches `student.teamId === team.id`. Real roster
+rows carry `students.team_id` UUIDs; real teams carry `teams.id` UUIDs. But the dialog
+iterated `DEFAULT_TEAMS` with `'team-ravens'` — so **in production the "Expected
+attendees" checklist matched nothing and rendered empty.** The old tests were green only
+because their fixture roster shared the broken fixture's ids. The new fixture ids reflect
+reality; the old ones encoded the bug.
+
+A correct implementation could only have avoided this by giving `FIXTURE_TEAMS` the ids
+`'team-ravens'`/`'team-titans'` — which the packet forbids and which would have made the
+`OutreachList` criterion-6 test unable to pass at all.
+
+**Third change, type-forced:** `MeetingsList.test.tsx`'s
+`expect(result).toEqual({ rows: [] })` → `{ rows: [], teams: [] }`. Strictly stronger.
+
+**Process note.** The checker was right to flag this even though the substance is sound —
+a silent test edit and an approved one look identical in a diff, and only one of them has
+a record. That is the same principle as item 20's ledger requirement.
+
+---
+
+## 2026-07-29 — Definition-of-Done records for the wave landed in auto mode
+
+Backfilled. Constitution items 3-4 require a verification record per accepted task, and
+this wave landed while the human owner was away without one. Every entry below is a
+`checker-reviewer` PASS that I independently spot-verified before merging; merge SHAs
+are on the integration branch `claude/swarm-plan-zl575z`.
+
+**Suite at the end of the wave: 66 test files / 1507 tests / 0 eslint errors / 355
+warnings.** Baseline at the start of the day was 63 / 1469 / 354.
+
+| Task | Merge | Checker verdict | What I verified myself before merging |
+|---|---|---|---|
+| T142 | `35b5dd1` | PASS (MINOR ×2) | HEAD moved; token-level diff reduces 770 lines to five substantive edits; `data-columns` mutation fails both new tests |
+| T143 | `9bf339a` | PASS (MINOR ×2, NIT) | Prototype-key guard probed with `constructor`, `toString`, `hasOwnProperty`, `__proto__`, `valueOf` — all `undefined`, nine real hues unaffected |
+| T145 | `24442fa` | PASS (NIT ×2) | Reorder mutation fails with a clean `toEqual` diff; empty-legend mutation fails with the improved `expected [] to have a length of 1` |
+| T146 | `23d6672` | PASS (NIT) | Reverting the select fails the new test; `outreach.ts` zero net diff; scope exactly two new files |
+| T147 | `a44fb31` | PASS (MINOR, NIT ×2) | Root cause traced end to end (`teams.id uuid` → `events.team_ids uuid[]` → `meetings.ts:680`); two modified pre-existing tests ratified separately under item 10 |
+| T148 | `143a0ef` | PASS (MINOR) | Isolation fix present and suite green; MINOR closed before merge |
+| T149 | `49a2071` | PASS (NIT ×3) | Cap mutation 480→9999 fails cleanly; four bars carry the constant; zero `SegmentedControl` references remain |
+| T150 | `fdc7fd9` | PASS (NIT ×3) | Ceiling mutation at 450 fails with the right matcher; `CoachHome.tsx` zero net diff in the commit |
+
+**T144 is not in this table.** It was closed as **no-change** with its branch preserved
+unmerged — see dispute-log D011 and its addendum. No variant reaches 3:1 against the
+scoped track in both themes, so UXC-05's zero-default-accent clause is unachievable by
+variant swap; and the follow-on "three bars carry no text value" finding was my error,
+corrected in the addendum.
+
+**Standing caveat on this whole table.** Every PASS above was reached with the human
+owner away, under delegated auto-mode authority. Two items remain explicitly his to
+rule on — **T153** (the `localStorage` theme seed) and **T154** (the shared-browser
+theme bleed) — plus the `CoachHome.test.tsx:1194-1196` test amendment, which I
+authorized and recorded under my own name after two packets wrongly attributed it to
+him.
+
+---
+
+## T154 — per-user theme seed (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commit | `9586c35c0f077592460ee86e4cb857801f4d5add` (attempt 2) |
+| Verdict | **PASS with MINORs** (attempt 1: FAIL, 1 MAJOR) |
+| Attempts | 2 |
+| Worker / checker | `worker-implementer` (opus, worktree) / `checker-reviewer` (opus) |
+| tsc / build / format | clean / ✓ / clean |
+| eslint | 0 errors, 355 warnings (unchanged from baseline) |
+| vitest | 66 files, 1536 tests (from 1528) |
+| Post-merge on branch | re-measured after merge — see below |
+
+**Owner authority.** George's ruling (`auto-mode-decisions.md`, his three rulings) covers the
+*design*: fix the shared-browser bleed properly, keyed per user. **The decision to fix
+attempt 1's MAJOR rather than defer it was the orchestrator's**, not his, and is recorded
+that way in the ledger row and in the worker's output doc. The four re-keyed tests were
+authorized under the orchestrator's delegated authority satisfying `constitution.md:10`.
+
+**Two orchestrator errors are recorded against this task rather than the worker.**
+
+1. The packet cited `client.test.ts:1-19` as establishing a convention of constructing a
+   real client. That header says the opposite. The worker caught it and used `vi.mock`,
+   having proven packet option (a) impossible (`storageKey` is `protected` at
+   `@supabase/supabase-js/dist/index.d.mts:433`, so a readback fails `tsc`).
+2. The prescribed fix for the MAJOR **would not have worked.** I specified re-seeding only
+   on a non-null → different-non-null `user.id` transition; the real flow is A → null → B.
+   Worker and checker each implemented my literal rule and measured **3 failed / 33 passed
+   with the direct-switch test PASSING** — a green suite with the MAJOR unfixed. The fix
+   ships on the worker's `lastSeededUserId` formulation instead.
+
+Also recorded: the orchestrator challenged the checker's `constitution.md:159` citation for
+the MAJOR-deferral rule. The citation was correct; the challenge was wrong.
+
+**Carried forward:** T171 (the no-stale-frame property is true but pinned by nothing —
+a `useEffect` mutation that reintroduces a stale frame leaves all 36 tests green).
+
+**Disclosed residual, not a defect:** between sign-out and next sign-in the login screen
+still shows the previous user's theme. Resetting on `null` would fire on every normal page
+load while the session resolves, reintroducing T148's flash. Stated in three places in
+source and pinned by its own test.

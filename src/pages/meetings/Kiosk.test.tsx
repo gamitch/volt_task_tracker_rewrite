@@ -52,6 +52,7 @@ import {
   makeLoadKioskSessionTitle,
   makeLoadKioskTally,
 } from '../../lib/supabase/loaders/kiosk';
+import { routePaths } from '../../app/router';
 
 // ---------------------------------------------------------------------------
 // Render harness -- mirrors `LiveConsole.test.tsx`'s `MemoryRouter`/`Routes`/
@@ -145,6 +146,25 @@ describe('KioskPage (T103 real wiring, DES-12 states)', () => {
     expect(container.textContent).toContain('AB23CD');
     expect(container.textContent).toContain('12 of 18 checked in');
     expect(container.querySelector('svg')).not.toBeNull();
+  });
+
+  it("T134 (UXC-12): renders a real escape link back to /meetings (this route is now chromeless, so this is the page's only way off itself)", async () => {
+    const loadDisplayToken: KioskDisplayTokenLoader = vi.fn().mockResolvedValue({
+      qrUrl: 'https://portal.voltfrc.org/checkin?s=x&t=abc',
+      shortCode: 'AB23CD',
+      refreshesInSeconds: 45,
+    });
+    const loadTally: KioskTallyLoader = vi.fn().mockResolvedValue({ checkedIn: 12, expected: 18 });
+    const loadSessionTitle: KioskSessionTitleLoader = vi
+      .fn()
+      .mockResolvedValue({ title: 'Tuesday Build Meeting' });
+
+    renderKiosk({ loadDisplayToken, loadTally, loadSessionTitle });
+    await flushMicrotasks();
+
+    const escapeLink = container.querySelector(`a[href="${routePaths.meetings}"]`);
+    expect(escapeLink).not.toBeNull();
+    expect(escapeLink?.textContent).toContain('Back to meetings');
   });
 
   it('renders the DES-12 Empty state for each seam independently when a loader resolves null', async () => {

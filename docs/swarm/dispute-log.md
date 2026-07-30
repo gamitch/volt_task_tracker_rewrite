@@ -728,3 +728,470 @@ from scratch (4.818:1 dark / 7.078:1 light), matching this ruling's
 recomputed values exactly. No residual risk remains. Full close-out
 evidence in `verification-log.md`'s `## T002b` entry and the archived
 `docs/swarm/archive/T002b-{worker,checker}-packet.md`.
+
+## D006 - T134 packet §4's roster deliverable is unachievable in this environment (worker-filed, carried across by the orchestrator)
+
+Nature:
+Worker-filed dispute, T134 attempt 2. The packet asked for a fresh `/roster`
+capture replacing a stale figure said to be missing the table's visible seams.
+The worker could not produce it and, on attempt 1, shipped the error-state
+screenshot instead while disclosing the problem in its output doc. Its checker
+correctly failed that (MAJOR) and directed the dispute. Recorded here by the
+orchestrator because `dispute-log.md` is forbidden to workers.
+
+Worker position:
+`/roster` cannot be captured with representative data in this environment.
+`RosterShell.tsx` takes no props and renders `<StudentsTab />` bare, and there
+is no `.env`, so `getSupabaseClient()` throws and every loader rejects. The page
+renders "Couldn't load the active season" plus "Couldn't load students" — no
+table, therefore no seams. The packet's §4 also says "change no code", so the
+worker had no legal path to a populated capture.
+
+Checker position:
+Confirmed by viewing `t134-roster-1440-light.webp` directly. Judged the
+attempt-1 overwrite a MAJOR on three grounds: it broke the convention of the
+`new-*.webp` family (its sibling `new-roster-teams.webp` shows the same page
+rendering normally, so a reader concludes the Students tab is broken); the
+disclosure lived only in a doc bound for a gitignored archive; and the
+replacement did not achieve §4's purpose anyway, since neither the old figure
+(empty roster) nor the new one (error) shows the table.
+
+Ruling (orchestrator, 2026-07-28):
+Dispute upheld. The deliverable was impossible as specified. `new-roster.webp`
+restored byte-identical; the four `t134-roster-*.webp` captures kept, since they
+correctly discharge the "full chrome on /roster" proof the routing task actually
+needed. Any future task needing a populated roster figure must be scoped with
+either a configured backend or explicit authorization to change `RosterShell`.
+
+**Correction to the premise, found after the ruling:** the tabs are not the
+problem. `StudentsTab` (`:1064`), `ParentsTab` (`:939`), `TeamsTab` (`:1101`)
+and `InvitesTab` (`:704`) each already expose an injectable `loadData` prop with
+a real default. The only gap is that `RosterShell` accepts no props and passes
+none down (`RosterShell.tsx:178`, `:204-207`). So the fix is a pass-through, not
+a new seam — materially smaller than this dispute and D-2 both assumed. Note
+also that a roster capture would still show the KPI strip's error, which is fed
+by `SeasonProvider` in `AppShell`, not by this page.
+
+## D007 - T133 packet self-contradiction: criterion 4 requires a UXC-01 assertion, criterion 10 forbids the test that would carry it
+
+Nature:
+Checker-raised (T133 review, MINOR). Not a worker/checker disagreement — a
+defect in the packet, which is mine.
+
+Position:
+Criterion 4 required the `role="group"` accessible-name round-trip to be
+"asserted ... Mirror `OutreachList.test.tsx:1520-1587`" — a citation to a test
+file, i.e. an instruction to write a test. Criterion 10 pinned the suite at
+exactly 1414 and permitted only one amended assertion, i.e. an instruction not
+to add one. The worker resolved toward criterion 10 and proved the behaviour in
+a throwaway rig instead. The checker independently confirmed the behaviour is
+correct in both jsdom and Chromium, but noted that **30 of 31 tests still pass
+against the pre-change component** — nothing in the suite would catch removal
+of the wrapper.
+
+Ruling (orchestrator, 2026-07-28):
+The worker's resolution was correct: a numeric gate is unambiguous and an
+instruction to "mirror" a file is not, so it read the stricter one. The packet
+was wrong to state both. T133 stands as passed.
+
+The gap is real and matters more here than it would elsewhere: T129 lost
+accessible names on this exact pattern, and the protection against a recurrence
+is currently a deleted rig. **Follow-up authorized:** add the two scoped
+assertions to `CalendarPage.test.tsx` (populated + inner no-match branches,
+selector scoped by heading id) as a pure addition, 1414 → 1416. To be folded
+into the next task touching that file rather than dispatched alone.
+
+Process note: when a packet pins an exact test count *and* asks for new
+coverage, the count must be stated as the expected post-addition figure. Both
+T132 and T134 got this right; T133 did not.
+
+## D008 - T133 title weight moved 400 -> 600, mandated by the packet's own prescription while its criterion required "unchanged"
+
+Nature:
+Checker-raised (T133 review, NIT). Recorded so the next screen in this series is
+consistent rather than re-deciding it.
+
+Position:
+§1 prescribed the exact JSX including `weight="semibold"`. Criterion 3 required
+the title's rendered weight to be "unchanged". The calendar's pre-change title
+was `weight` 400 (a plain `ListItem` string label); after, it is 600. The worker
+followed the prescription and disclosed the delta accurately rather than
+silently satisfying one clause or the other.
+
+Ruling (orchestrator, 2026-07-28):
+**The weight change is intended and accepted.** Criterion 3's "unchanged" was
+written for the coach `Table` surface, where the title was already
+`weight="semibold"` and the risk was that `Link` would alter it. On `ListItem`
+surfaces the plain label was 400, so matching the coach rows necessarily moves
+it to 600 — which is the parity UXC-04 exists to create. The same applies to
+T132's student/parent rows, which moved 400 → 600 for the same reason and whose
+checker measured it as achieving parity.
+
+Canonical: a linked row title renders `weight` 600 / 14px / `--color-text-primary`
+on every surface. Any future packet in this series should state that as the
+target, not as "unchanged".
+
+## D009 - NAV-08's `/meetings/:sessionId` route was never built, and CalendarPage links to it
+
+Nature:
+Orchestrator-found, 2026-07-28, while checking whether T135 should give meeting
+rows linked titles for parity with the three surfaces that now have them. Not a
+worker/checker disagreement — a gap between a PRD requirement and shipped code
+that nothing had flagged.
+
+Facts, each verified:
+- `VOLT_Portal_PRD.md:89` (NAV-08) requires `/meetings/:sessionId` — "meeting
+  detail page replacing the dialog in CAL-02".
+- `router.tsx` declares 14 routes. `/meetings` is exact; there is no
+  `/meetings/:sessionId` and **no catch-all**, so the URL matches nothing and
+  `<Routes>` renders null — a blank content area.
+- No meeting-detail component exists anywhere in `src/pages/meetings/`.
+- `CalendarPage.tsx:604` links to it regardless: `detailHrefFor` returns
+  `/meetings/${session.id}` for every meeting-type row. Its own module doc at
+  `:188` notes no `routePaths` helper exists for the path and constructs it
+  directly from NAV-08's quoted shape.
+
+Why it surfaced now:
+The link is pre-existing — T112 built it as a secondary "View details" link.
+**T133 promoted it to the row title itself**, so a dead end is now the row's
+primary affordance rather than a secondary one.
+
+T133's checker reported "both routes live (2×`/meetings/:sessionId`,
+2×`/outreach/:eventId`)". It verified the hrefs *render*; it did not verify they
+*resolve*. That is a real gap in an otherwise strong check, and the lesson is
+cheap to apply: **future nav/a11y criteria should require that a link resolves
+to a declared route, not merely that it has an href.**
+
+Ruling (orchestrator, 2026-07-28) — interim, pending George:
+T135 ships **no** linked title on meeting rows, and its packet says why, so a
+checker does not flag the inconsistency with the other three surfaces.
+
+Options for George:
+- **(a)** Build the meeting detail page. Implements NAV-08 as written. Own
+  packet, comparable in size to T133.
+- **(b)** Point calendar meeting rows at `/meetings` (or the live-console route
+  where applicable). Cheap; leaves NAV-08 unimplemented but stops shipping a
+  link to nowhere.
+- **(c)** Log it, change nothing.
+
+**DECIDED 2026-07-28 by George: option (b).** Calendar meeting rows point at
+`routePaths.meetings` — a destination that exists — pending a real NAV-08 detail
+page as its own task. Implemented as **T137**.
+
+Disclosed consequence, accepted: all meeting rows now share one href, so the
+calendar stops being a way to reach a *specific* meeting; clicking any of them
+lands on the meetings list. Strictly better than a blank page, and reversible
+the moment the detail page exists.
+
+**Correction (2026-07-28).** An earlier revision of this entry claimed "row link
+text is still the event title (T133), so rows remain distinguishable to sighted
+and assistive users." **That was wrong, and the change is an accessibility
+improvement rather than a wash.** Both fixture meeting sessions belong to the
+same event, so their rows already rendered the identical accessible name
+"Weekly Build Meeting" — confirmed in the live DOM by T137's checker. Before
+T137 that was one accessible name pointing at *different* destinations, which
+violates WCAG 2.4.4; after it, the same name points at the same destination,
+which conforms. The rows were never distinguishable by name, and that is fine.
+
+NAV-08 remains unimplemented and remains annotated as such in the PRD.
+
+## D010 - the KPI views' "defense in depth" RLS claim rests on a false premise, and the mechanism it names does not do what it says
+
+**Filed by the orchestrator 2026-07-29**, from a finding T140's checker made
+outside T140's blast radius while closing an unrelated disclosure. **Needs
+George's decision. Nothing has been changed.**
+
+### What the migration claims
+
+`supabase/migrations/20260723000000_kpi_views.sql:136-152` argues the KPI views
+are safe for non-staff sessions on two grounds:
+
+1. "Both views are plain (non-`security definer`/`security barrier`) views ...
+   so both views already run under the querying session's own RLS against those
+   base tables";
+2. "`seasons` in particular has ONLY a `staff_all` read policy (no `read_all`
+   ... equivalent), so a non-staff session querying `v_season_kpis` gets
+   RLS-filtered to zero rows regardless of any UI-level role gate."
+
+### Both are wrong
+
+**Claim 2's premise is false.** `20260717000002_rls.sql:74-79` declares **two**
+policies on `seasons` — `staff_all` (`for all to authenticated using
+(is_staff())`) **and** `read_all` (`for select to authenticated using (true)`).
+Any authenticated user can read `seasons`. Verified directly, and no later
+migration alters or drops either policy. `SeasonProvider.tsx:76-84` carries the
+same stale claim; that one is harmless because it draws no security conclusion
+from it.
+
+**Claim 1 is a misreading of Postgres view semantics**, and it is the one that
+matters. A plain view does **not** evaluate base-table RLS as the querying
+session. `security_invoker` defaults to **false**, so RLS on the base tables is
+evaluated with the **view owner's** rights. Grepped across all 15 migrations:
+
+- no `security_invoker` set anywhere;
+- no `force row level security` anywhere;
+- no `grant`/`revoke` in the KPI views migration.
+
+Absent `FORCE ROW LEVEL SECURITY`, a table's owner **bypasses RLS entirely**.
+Supabase runs migrations as a role that owns these tables, so the views are
+owned by a role for which base-table RLS does not apply. The stated mechanism
+therefore does not deliver the protection claimed for it.
+
+### What is NOT established
+
+**This is a code-reading finding, not a demonstrated vulnerability.** Nothing in
+this container can reach George's Supabase project (see the session log's
+environment facts), so the following are unverified and must not be asserted:
+
+- the actual owner of the two views in the live project;
+- the effective `grant`s on them, and therefore whether PostgREST exposes them
+  to an `authenticated` (or `anon`) session at all;
+- whether any of this is reachable in practice.
+
+Supabase commonly grants `authenticated` SELECT on new `public` objects by
+default, which is why this is worth settling rather than assuming benign.
+
+**Real mitigation that does exist:** `KpiStrip.tsx` gates on role at the UI
+level, so the app itself never issues this query for a student or parent. The
+defect is that the migration's comment presents a *second, independent* layer
+that is not actually there — so anyone relying on it is relying on nothing.
+
+### How George can settle it in one query
+
+Run against the remote project:
+
+```sql
+select c.relname,
+       c.relowner::regrole            as view_owner,
+       c.reloptions                   as view_options,   -- looks for security_invoker
+       has_table_privilege('authenticated', c.oid, 'SELECT') as authenticated_can_select
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public'
+  and c.relname in ('v_season_kpis', 'v_season_kpi_team_counts');
+```
+
+If `authenticated_can_select` is true and `view_options` does not contain
+`security_invoker=true`, a non-staff session can read season-wide aggregates
+directly, and the fix is `alter view ... set (security_invoker = on)` in a new
+migration — plus re-deriving the RLS posture of every base table the views join,
+since `read_all` on `seasons` means season rows themselves were never the
+barrier.
+
+### RESOLVED 2026-07-29 — fix the comment, leave the schema alone
+
+**George's standing guidance: this is a small robotics team's app, not an
+enterprise system. Keep it simple.** Re-reading the finding against that, the
+proportionate answer is clear, and the earlier three-option framing overstated
+the problem.
+
+**What these views actually expose, read directly rather than assumed:** season
+totals of volunteer hours by event type, a completed-events count, the most
+recent event's title and date, the active-student count, and the season's goal
+target. **No PII.** No names, no emails, no per-student rows, no contact
+details, no tokens.
+
+So the worst realistic case — a student's session queries the view directly
+instead of going through the UI — shows them their own team's aggregate stats:
+"the team logged 812 hours across 47 events." That is close to what a leaderboard
+shows anyway, and it is not worth a schema migration, an RLS audit, or a
+`security_invoker` change that could plausibly break the coach and admin path
+that actually works today.
+
+**Decision:**
+
+- **Do not change the schema.** No new migration, no `security_invoker`, no
+  re-derivation of every base table's RLS. The risk does not justify touching
+  working auth machinery.
+- **Do fix the false comment**, because a wrong security claim left in the tree
+  is how a future decision gets made on a bad premise — which is exactly what
+  happened here twice already. Scope: the two prose blocks in
+  `20260723000000_kpi_views.sql:136-152` and `SeasonProvider.tsx:76-84`. Editing
+  an already-applied migration's *comment* is still George's call, so this stays
+  proposed until he says go.
+- **Revisit only if the data in these views changes.** If a future task adds
+  per-student rows, names, or anything identifying to `v_season_kpis`, this
+  finding stops being cosmetic and the `security_invoker` question becomes real.
+  Noted here so that change trips over this entry.
+
+The diagnostic query above is kept for the record, but nobody needs to run it.
+
+**Standing calibration, applies beyond this entry:** proportion findings to this
+project's actual stakes. Real risks here are losing student data, leaking PII or
+credentials, and breaking auth. Aggregate hour counts visible to the team they
+describe are not in that class.
+
+## D011 - UXC-05's "zero default-accent bars" is not achievable with Astryx `ProgressBar`, and the fix I specified would have made accessibility worse
+
+**Filed by the orchestrator 2026-07-29.** T144's worker built exactly what its
+packet specified, then reported a contrast problem rather than shipping quietly.
+**The work is built and committed but deliberately NOT merged.** Needs George's
+decision.
+
+### What happened
+
+T144's ruling was: every `<ProgressBar>` is a *measurement*, not a *status*, so
+use `variant="neutral"` at all ten sites. The worker implemented it, measured the
+result, and reported that `neutral` fails WCAG 1.4.11's 3:1 non-text threshold.
+
+I re-derived the numbers independently and **they are worse than the worker
+reported**, because it measured against the unscoped `--color-background-muted`
+while the real track is the `.astryx-progressbar`-scoped remap to
+`--color-border-emphasized` (`theme.css:497-500`).
+
+### Every variant, measured against the real track
+
+Track: `--color-border-emphasized` — light `#AFA9B7`, dark `#4A4551`. Fill
+values are the **progressbar-scoped overrides** at `theme.css:502-516`, not the
+global tokens. Formula sanity-checked at 21.00 for black/white.
+
+| variant | light | dark | ≥3:1 both? |
+|---|---|---|---|
+| `accent` (current default) | 2.00 | 2.03 | no |
+| `neutral` (T144's ruling) | **1.39** | **1.43** | no |
+| `success` | 2.20 | 1.85 | no |
+| `warning` | 1.54 | 6.25 | no |
+| `error` | 1.81 | 2.24 | no |
+
+**Not one variant passes in both themes.** So:
+
+- UXC-05's "zero default-accent bars" **cannot be satisfied** by choosing a
+  different variant. This is the same class of vendor limitation as D-1 and as
+  T136's fill-vs-fill ceiling — the palette cannot express the requirement.
+- **My ruling would have made it measurably worse**, 2.00 → 1.39. The worker
+  built what I asked; the specification was wrong.
+
+For contrast, `GoalBar` — the component T136 built *because* `ProgressBar` cannot
+do this — measures **3.33 light / 7.09 dark** (confirmed) and **5.47 / 4.67**
+(planned) against the same track. It passes because we chose its colours.
+
+### The part that is a real accessibility problem, independent of colour
+
+Seven of the ten bars pass `hasValueLabel`, so the number is rendered as text and
+the bar is a redundant visualisation — WCAG 1.4.11's "required to understand the
+content" arguably does not bite.
+
+**Three do not**, all in `CoachHome.tsx`: the team-hours, event-hours and
+per-student hours bars. All three also set `isLabelHidden`. **On those three the
+coloured fill is the only carrier of the value**, at 2.00:1 against its track.
+That is a genuine gap, it exists today, and T144 did not create it.
+
+### Options
+
+- **(a) Leave the colours alone; add value labels to the three bare bars.**
+  Fixes the real problem with text instead of colour, three lines, no colour
+  decision needed, and unambiguously an improvement. UXC-05's clause gets
+  recorded as unachievable with this component. **Recommended.**
+- **(b) Convert these bars to `GoalBar`.** The only option that satisfies both
+  UXC-05 and 1.4.11 properly. But `GoalBar` is pre-approved under F-3 for the
+  two-fill case only, so this widens that decision, and it touches seven files.
+- **(c) Merge T144 as built.** Satisfies UXC-05 on paper while dropping contrast
+  to 1.39. **Not recommended** — it is a knowing regression.
+
+**Recommendation: (a) now, (b) as its own task if George wants the bars in the
+semantic system.** T144's branch is preserved unmerged pending that call.
+
+### Process note
+
+T144's packet forbade `GoalBar` as a substitute and ruled `neutral` correct. Both
+were my calls and the second was wrong on the evidence. The worker followed the
+packet, measured anyway, and reported — which is the only reason this was caught
+before merge. The instruction that produced that outcome ("check the rendered
+contrast; if it is not visible, report it — do not silently pick a different
+variant to work around it") is worth keeping in future packets.
+
+### D011 addendum (2026-07-29) — the "three bare bars" finding was wrong; there is no 1.4.11 gap
+
+George approved option (a). Reading the three call sites to implement it showed
+its premise is false, so **(a) was not implemented — there is nothing to fix.**
+
+I tested for `hasValueLabel` and read its absence as "no text value." That was a
+grep artifact. All three carry the number in adjacent markup:
+
+| site | how the value is rendered as text |
+|---|---|
+| `CoachHome.tsx:1839` team hours | `endContent={<Text>{entry.confirmedHours}h</Text>}` on the same `ListItem` |
+| `CoachHome.tsx:1868` event hours | `endContent={<Text>{entry.totalHours}h</Text>}` |
+| `CoachHome.tsx:1895` per-student | sibling `<Text>`: `Xh confirmed + Yh planned = Zh / Goalh · P% · annotation` |
+
+The third is the most thorough label of any of the ten. Adding `hasValueLabel`
+would print a second copy of a number already on screen — "12 / 40" in the bar
+beside "12h" in `endContent`. A clarity regression, not an improvement.
+
+Re-checked the other seven; those do use `hasValueLabel` as reported. **So all
+ten bars convey their value as text.** WCAG 1.4.11's "unless required to
+understand the content" carve-out therefore applies to every one: the fill is a
+redundant visualisation and its 2.00:1 ratio is not a conformance failure.
+
+**Unchanged:** no variant reaches 3:1 in both themes (table above), `neutral` is
+worst at 1.39, T144 stays unmerged, and UXC-05's "zero default-accent bars" is
+still unachievable by variant swap — recorded as a vendor limitation alongside
+D-1 and T136's fill-vs-fill ceiling. The bars are faint; that is a visual-quality
+question, not an accessibility one, and it needs no urgent change.
+
+**Process:** the original entry asserted a gap from the absence of one prop
+without reading the surrounding JSX, and I presented it as the recommended fix.
+Presence of a rendered value is a question about the whole subtree, not one
+attribute. A checker's grep would have reproduced my error exactly.
+
+## D012 - T145's packet asserted a false citation, the worker wrote it into the code, and the checker caught it
+
+**Filed by the orchestrator 2026-07-29.** Not a worker/checker dispute — the
+checker was right, the worker did as instructed, and the instruction was wrong.
+Recorded because it is the second instance this session of the same error shape.
+
+### What happened
+
+T145 existed to remove a comment in `EventsTab.tsx` that stated false history.
+My packet directed the worker to correct it and, in doing so, asserted that the
+comment's citation to `CoachHome.tsx` "~1191" had been wrong even when written.
+The worker wrote that into the replacement comment. It is false.
+
+Verified at `48fcd90` (T058, the commit that introduced the NOTE): line 1191 is
+exactly `const EVENT_TYPE_BADGE: Record<EventType, ...> = {`, followed by
+`meeting: 'blue'`, `outreach: 'purple'`, `competition: 'teal'`. **Line number
+correct, all three colours correct — the citation was fully accurate when
+written.** It went stale only at T080 (`82fafdf`), which both corrected the
+mapping to purple/blue/orange and moved the constant to ~1210.
+
+So the task meant to delete false history replaced it with different false
+history. The checker caught it by opening the commit — which is the step I
+skipped when writing the packet.
+
+The companion claim, that `CalendarPage.tsx`'s "577-586" was wrong, is also
+overstated: the constant spans 580-587 there, so the citation brackets the right
+construct a few lines off.
+
+### The pattern
+
+Both of this session's orchestrator errors have the same shape — **a fact about
+code asserted from a partial read, then propagated with confidence**:
+
+- **D011:** concluded three bars had no text value from the absence of one prop,
+  without reading the surrounding JSX. All three render the value in `endContent`
+  or a sibling `<Text>`.
+- **D012 (here):** concluded a line citation was wrong without opening the commit
+  it referred to. It was correct at the time of writing.
+
+In both cases the erroneous claim was specific, plausible and confidently framed,
+which is what made it survive into a packet and, here, into shipped source. In
+both cases a checker or a direct read caught it only afterward.
+
+### Directive
+
+Packets must not assert that a citation, comment or historical claim is wrong
+unless the author has opened the referenced commit or file region and looked.
+"This looks stale" is a prompt to check, not a finding. Where a packet asks a
+worker to correct a factual claim, the packet must carry the evidence for the
+correction, not merely the assertion — and workers should treat an unevidenced
+"X is wrong" in a packet as something to verify before writing it into source.
+
+Corollary, from D011: whether something is rendered is a question about the whole
+subtree, not about one prop. A grep for an attribute is a way to find candidates,
+never a way to conclude absence.
+
+### Outcome
+
+T145 FAIL stands; rework issued for the false clause and for a second, unrelated
+MAJOR (the legend proof does not exercise the legend — it passes with zero legend
+badges rendered). T145's other criteria passed and are unaffected.

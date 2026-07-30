@@ -1,12 +1,18 @@
 /**
  * T030: `/meetings` list page (MTG-01 coach view / MTG-14 student+parent view).
  *
- * Coach (`coach`/`admin`) view: `Section` "Upcoming" / `Section` "Past" lists
- * of **meeting-type** EVENTS only (NAV-07 -- never outreach/competition; one
- * row per recurring-meeting SERIES, not per session -- T122 module doc #10
- * below), each row showing recurrence chips + a date range (UXD-02 "when"),
- * location (UXD-02 "where", UXP-08), planned/logged hours, expected/attended
- * counts (UXD-02 "how much"/"who"), a per-row `MoreMenu` (Edit) and an
+ * Coach (`coach`/`admin`) view: `Section` "Upcoming" / `Section` "Past"
+ * `Table`s (T135, UXC-02/03/07 -- see that task's own module doc, below the
+ * T122 one, for the full Table-migration record) of **meeting-type** EVENTS
+ * only (NAV-07 -- never outreach/competition; one row per recurring-meeting
+ * SERIES, not per session -- T122 module doc #10 below), each row showing
+ * recurrence chips + a date range (UXD-02 "when"), location (UXD-02 "where",
+ * UXP-08), planned/logged hours, expected/attended counts (UXD-02 "how
+ * much"/"who"), a row-level "Edit" chip (T135 -- MTG-01's own literal text
+ * below, "per-row MoreMenu (Edit, Cancel session)", is a disclosed, written-
+ * authorized PRD deviation as of T135, recorded beside MTG-01 in
+ * `VOLT_Portal_PRD.md` -- Cancel already left this menu for T122's
+ * per-session buttons, below, leaving exactly one item behind a menu) and an
  * in-place expander (UXD-03) revealing every one of the event's own sessions
  * with their own inline Cancel action (DES-11 `AlertDialog`) -- MTG-01's
  * literal text (PRD line 272: "Actions: Schedule meetings, per-row MoreMenu
@@ -295,10 +301,13 @@
  *    variants for categories" warning). Attendance-status badges (student
  *    view) use DES-05's literal mapping (Present=success, Late=warning,
  *    Excused=neutral, Absent=error), cited from PRD line 195.
- *  - `MoreMenu`: "MoreMenu" Props table. `items` (`DropdownMenuOption[]`,
- *    re-exported from `@astryxdesign/core`'s `./DropdownMenu` barrel per
- *    `node_modules/@astryxdesign/core/dist/index.d.ts` line 81 --
- *    confirmed directly, not assumed), `label` used.
+ *  - `MoreMenu`: T135 SUPERSEDES this bullet -- the coach row's own
+ *    `MoreMenu` (previously documented here, `items`/`DropdownMenuOption[]`/
+ *    `label`) is REMOVED (module doc above, T135's own module doc below):
+ *    once Cancel left it for T122's per-session buttons, exactly one item
+ *    ("Edit") remained, so the menu itself is gone, replaced by a plain
+ *    `Button` chip. `MoreMenu` is no longer imported or rendered anywhere in
+ *    this file (grep-provable).
  *  - `AlertDialog`: "AlertDialog" Props table. `isOpen`, `onOpenChange`,
  *    `title`, `description`, `actionLabel`, `onAction` (all required) used;
  *    `actionVariant` left at its documented `'destructive'` default
@@ -319,16 +328,15 @@
  *    `gap`, `padding`, `hAlign`, `vAlign`, `wrap` used.
  *  - `Text`: "Text" Props table. `type` (`'supporting'`), `color`,
  *    `hasTabularNumbers` used.
- *  - `Collapsible` (T122, new to this file): "Collapsible" Props table.
- *    `trigger`, `children`, `defaultIsOpen` used; its own documented Anatomy
- *    ("Trigger: the always-visible button that toggles the content... Shows
- *    a label and a chevron indicator") makes it a real `<button>`-driven
- *    expander for free -- keyboard-operable (Enter/Space, focus) with no
- *    extra ARIA wiring needed on this file's part (this task's own "expander
- *    keyboard-accessible" Trap). Never nested inside an interactive
- *    `ListItem` (module doc #10 below) -- only inside a non-interactive
- *    one's `description` slot, alongside `MoreMenu`'s own established
- *    precedent (T112) for interactive content in that slot.
+ *  - `Collapsible` (T122, new to this file at the time): T135 SUPERSEDES
+ *    this bullet for the coach row -- `Collapsible` kept its own content
+ *    always mounted (CSS-`display:none` while collapsed, never removed from
+ *    the DOM, `Collapsible.tsx:102-104`), which is exactly the mechanism
+ *    T135's own Table-migration module doc (below) found unsuitable for a
+ *    `Table`'s flat `data` array; the coach row's expander is now a plain
+ *    `Button` (module doc above `MIN_TOUCH_TARGET_STYLE`) driving real row
+ *    splicing instead. `Collapsible` is no longer imported or rendered
+ *    anywhere in this file (grep-provable).
  *
  * -----------------------------------------------------------------------
  * 10. T122 (PRD v2 UXP-04, "meetings half" of the row-density rework;
@@ -411,11 +419,16 @@
  *        / `cancelMeetingSession`, `loaders/meetings.ts`, unchanged target
  *        shape: `(sessionId: string) => Promise<void>`) and its optimistic-
  *        update-with-rollback pattern are preserved byte-for-byte, only its
- *        UI trigger location moves. The row's own `MoreMenu` now carries
- *        only "Edit" (module doc #7b's stub reasoning is UNCHANGED and now
- *        reads MORE naturally: editing a whole meeting SERIES was always
- *        the real ask `ScheduleMeetingsDialog.tsx` cannot do, not editing
- *        one session).
+ *        UI trigger location moves. At the time of T122, the row's own
+ *        `MoreMenu` carried only "Edit" (module doc #7b's stub reasoning is
+ *        UNCHANGED and still reads MORE naturally: editing a whole meeting
+ *        SERIES was always the real ask `ScheduleMeetingsDialog.tsx` cannot
+ *        do, not editing one session) -- T135 SUPERSEDES the "MoreMenu"
+ *        part of this sentence specifically: one item behind a menu is a
+ *        menu that should not exist, so the row's own `MoreMenu` is REMOVED
+ *        (this file's own T135 module doc, below, has the full authorized-
+ *        deviation record) and replaced with a plain `Edit` `Button` chip.
+ *        Edit's own stub behavior/copy is otherwise byte-for-byte unchanged.
  *     e. Location (`event.locationName`) is a real, already-existing column
  *        (UXP-08's own resolution note: `events.location_name`/`address`
  *        are `not null` in the v1 schema; this task is the first to surface
@@ -449,28 +462,48 @@
  *        decision record lives in `loaders/meetings.ts`'s own module doc and
  *        this task's own worker output.
  */
-import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import {
   AlertDialog,
   Badge,
   Banner,
   Button,
-  Collapsible,
   EmptyState,
   Heading,
   HStack,
   List,
   ListItem,
-  MoreMenu,
   ProgressBar,
   Skeleton,
+  Table,
   Text,
   VisuallyHidden,
   VStack,
-  type DropdownMenuOption,
+  pixel,
+  proportional,
+  type TableColumn,
 } from '@astryxdesign/core';
 import { useAuth, type Role } from '../../app/guards';
 import { isSupabaseLoaderError } from '../../lib/supabase';
+// T135 (UXC-02/03/07, T130's proven pattern) -- the shared three-tier stat
+// cell (micro-label / value w/ hasTabularNumbers / secondary) extracted by
+// T131's wave precisely so this task inherits it. Import only -- Forbidden
+// Files bars editing `StatCell.tsx` itself.
+import { StatCell } from '../../components/StatCell';
+// T135 -- `useIsNarrowViewport` (and the query constant/subscription it
+// implements) was extracted to this shared hook by T132, specifically so
+// this task can import it instead of re-implementing the same
+// `window.matchMedia` subscription a second time (see that file's own
+// module doc). Import only -- Forbidden Files bars editing `src/hooks/**`.
+import { useIsNarrowViewport } from '../../hooks/useIsNarrowViewport';
 // T096 (ED-1 Packet P7): real load/mutation/studentId-resolution wiring --
 // module doc #6/#7. `createMeetings`/`ScheduleMeetingsDialog` (module doc
 // #7a) are this task's own wiring of an ALREADY-BUILT, ALREADY-PASSED
@@ -607,6 +640,12 @@ export interface CoachMeetingRow {
 
 export interface CoachMeetingsData {
   rows: CoachMeetingRow[];
+  /** T147 -- `loaders/meetings.ts`'s `makeLoadCoachMeetingsData` already
+   * fetches this (`loadTeamRows`, for `buildCoachMeetingRows`'s own per-row
+   * team-scope label) -- threaded through here too so it can reach
+   * `<ScheduleMeetingsDialog>`'s own `teams` prop, replacing that dialog's
+   * fixture `DEFAULT_TEAMS`. */
+  teams: readonly FixtureTeam[];
 }
 
 export type LoadCoachMeetingsDataFn = () => Promise<CoachMeetingsData>;
@@ -1093,6 +1132,8 @@ export async function defaultLoadCoachMeetingsData(): Promise<CoachMeetingsData>
       FIXTURE_RSVPS,
       FIXTURE_STUDENTS,
     ),
+    // T147 -- same fixture `buildCoachMeetingRows` above already consumes.
+    teams: FIXTURE_TEAMS,
   };
 }
 
@@ -1320,16 +1361,188 @@ function StubBanner({
   );
 }
 
+/**
+ * T135 (VOLT UX Craft PRD v3.1, UXC-02/03/07) -- REWORK of T122's `ListItem`
+ * coach row (module doc #10 above, kept for the row-shape/mutation history;
+ * this task changes only the rendering primitive, not the underlying data or
+ * mutations) onto Astryx `Table`, per PRD v3.1 F-1's finding that `ListItem`
+ * wraps `Item`, a three-slot flex whose end slots are `flex: 0 0 auto`
+ * (`Item.tsx:268,272`) and therefore cannot align stat/action columns across
+ * sibling rows -- exactly the defect T130 already fixed on the coach
+ * outreach rows (`OutreachList.tsx`'s `buildCoachOutreachColumns` and the
+ * components around it). This migration copies that proven mechanism
+ * (`useTableGroupedRows`/`useTableRowExpansion` remain forbidden -- zero
+ * occurrences in `astryx-api.md`, constitution item 2 -- so expansion is a
+ * flat `data` array with `kind: 'sessionDetail'` rows spliced in beneath
+ * their parent, exactly as `buildCoachOutreachTableRows` does).
+ *
+ * ONE genuine deviation from the outreach pattern (packet Trap 1/2): T130
+ * puts its expansion `useState` INSIDE each `CoachOutreachSection` instance
+ * (Upcoming, Past expand independently). That placement is wrong here.
+ * `handleConfirmCancel` (below) optimistically flips a canceled session's
+ * status, `partitionCoachMeetingRows` (module doc #10c) recomputes on the
+ * next render, and a row whose only scheduled session was just canceled
+ * moves from the Upcoming bucket to the Past bucket -- a DIFFERENT
+ * `CoachMeetingsSection` instance, with its own (in the per-section design)
+ * EMPTY expansion set, silently collapsing the row at the exact moment the
+ * user most wants to see the cancellation take effect. So expansion state
+ * here is lifted ONE level up, into `CoachMeetingsView`, and passed down to
+ * BOTH section instances -- it survives the bucket move because it is the
+ * same `Set`, not two independent ones.
+ *
+ * Row-level actions (packet §2): the "Edit"-only `MoreMenu` this row used to
+ * carry is replaced with a short `Edit` `Button` chip -- one item behind a
+ * menu is a menu that should not exist, same reasoning T131 already shipped
+ * on the outreach rows. AUTHORIZED (2026-07-28, George,
+ * `VOLT_Portal_PRD.md` beside MTG-01): this is a disclosed PRD deviation
+ * from MTG-01's literal "per-row MoreMenu (Edit, Cancel session)" text --
+ * Cancel already left the row-level menu for T122's per-session buttons
+ * (module doc #10d), leaving exactly one menu item. Per-session Cancel stays
+ * exactly where it already was (module doc #10d), inside the expander.
+ */
+
+/** UXC-13, T130's mechanism (`MIN_TOUCH_TARGET_STYLE`, `OutreachList.tsx`) --
+ * a non-exported local in a Forbidden file, so re-declared here rather than
+ * imported (packet's explicit instruction: this is the one place "copy it"
+ * is correct). `style` is a real, installed-source-verified prop deviation
+ * on `Button` (D004, constitution item 2), not a documented one -- see
+ * `OutreachList.tsx`'s own `MIN_TOUCH_TARGET_STYLE` doc comment for the full
+ * `mergeProps`/StyleX citation this task inherits without re-deriving. */
+const MIN_TOUCH_TARGET_STYLE: CSSProperties = { minHeight: '44px' };
+
+/** T130's mechanism (`sessionDetailAnchorId`, `OutreachList.tsx:2099`) -- a
+ * non-exported local in a Forbidden file, re-declared here (same reasoning
+ * as `MIN_TOUCH_TARGET_STYLE` above). Gives each spliced-in session-detail
+ * row's first `Text` a real id for the expander's `aria-controls` to
+ * reference, only once that row genuinely exists in the DOM (rows are
+ * spliced OUT, not hidden, when collapsed -- an `aria-controls` IDREF to a
+ * nonexistent id would be invalid). */
+function sessionDetailAnchorId(eventId: string, sessionId: string): string {
+  return `meeting-session-detail-${eventId}-${sessionId}`;
+}
+
+/** T130's mechanism -- the expander column/mobile-card control. Visible
+ * children stay the pre-existing `Session details (N)` wording (Trap 3b:
+ * "keep the wording" branch -- no test churn, `:595`/`:596` stay green
+ * untouched), while `label` (the accessible name) carries the per-row
+ * show/hide verb + title, matching `CoachExpanderButton`'s own
+ * `label`-vs-children split so the row title never leaks into the ONLY
+ * visible text on a menu-free action row. */
+function CoachMeetingExpanderButton({
+  row,
+  isExpanded,
+  onToggleExpand,
+}: {
+  row: CoachMeetingRow;
+  isExpanded: boolean;
+  onToggleExpand: (eventId: string) => void;
+}): ReactNode {
+  const controlsIds = row.sessions
+    .map((session) => sessionDetailAnchorId(row.eventId, session.sessionId))
+    .join(' ');
+  return (
+    <Button
+      label={
+        isExpanded ? `Hide session details – ${row.title}` : `Show session details – ${row.title}`
+      }
+      size="sm"
+      variant="ghost"
+      aria-expanded={isExpanded}
+      // Only a real disclosure target while expanded -- the referenced ids
+      // do not exist in the DOM until then (row splicing, not CSS-hide).
+      aria-controls={isExpanded ? controlsIds : undefined}
+      style={MIN_TOUCH_TARGET_STYLE}
+      onClick={() => onToggleExpand(row.eventId)}
+    >
+      {`Session details (${row.sessions.length})`}
+    </Button>
+  );
+}
+
+/** T131's compact reference-app action-cluster shape, reduced to the one
+ * action this row actually has (packet §2): a short `Edit` chip, verbatim
+ * `label`/visible text matching T131's own Edit button. No destructive `×`
+ * here -- Cancel targets one SESSION, not a whole row, and stays inside the
+ * expander (module doc #10d), so this row-level cluster is Edit alone. */
+function CoachMeetingRowActions({
+  row,
+  onEdit,
+}: {
+  row: CoachMeetingRow;
+  onEdit: (row: CoachMeetingRow) => void;
+}): ReactNode {
+  return (
+    <Button
+      label={`Edit – ${row.title}`}
+      size="sm"
+      variant="secondary"
+      style={MIN_TOUCH_TARGET_STYLE}
+      onClick={() => onEdit(row)}
+    >
+      Edit
+    </Button>
+  );
+}
+
+/** UXC-02: date range + recurrence chips + the canceled `Badge` -- module
+ * doc above (Table migration) and packet §3: the canceled `Badge` used to
+ * float in the row's own `endContent`, which the PRD itself calls a defect
+ * (`VOLT_UX_Craft_PRD_v3.md:98-99`, "floating canceled badge"). It now has a
+ * real column home, the date column, matching where T130 put its own type
+ * `Badge`. */
+function CoachMeetingDateCell({ summary }: { summary: CoachMeetingRowSummary }): ReactNode {
+  return (
+    <VStack gap={0.5}>
+      <Text type="supporting">{summary.dateRangeLabel}</Text>
+      {(summary.recurrenceChips.length > 0 || summary.canceledCt > 0) && (
+        <HStack gap={1} wrap="wrap" vAlign="center">
+          {summary.recurrenceChips.map((chip) => (
+            <Badge key={chip} variant="neutral" label={chip} />
+          ))}
+          {summary.canceledCt > 0 && (
+            <Badge variant="error" label={`${summary.canceledCt} canceled`} />
+          )}
+        </HStack>
+      )}
+    </VStack>
+  );
+}
+
+/** UXC-04 standing ruling (packet "Standing rulings" section): NOT a link.
+ * PRD NAV-08's `/meetings/:sessionId` detail route does not exist
+ * (`router.tsx` has 14 routes, none of them this, and no catch-all), and no
+ * meeting-detail component exists either -- linking would point at a blank
+ * page. D008: a linked title is canonically `weight` 600/14px/
+ * `--color-text-primary`; this plain title matches that weight (the
+ * pre-Table `ListItem` label was already semibold) without the link. */
+function CoachMeetingTitleCell({ row }: { row: CoachMeetingRow }): ReactNode {
+  return (
+    <VStack gap={0.5}>
+      <Text weight="semibold" maxLines={1}>
+        {row.title}
+      </Text>
+      <Text type="supporting" maxLines={1}>
+        {`${row.locationName.trim().length > 0 ? row.locationName : 'No location set'} · ${row.teamScopeLabel}`}
+      </Text>
+    </VStack>
+  );
+}
+
 /** T122 (module doc #10d) -- one of a `CoachMeetingRow`'s own sessions,
- * rendered inside that row's `Collapsible` expander (UXD-03). Carries the
- * ONLY per-session Cancel action left in this file (module doc #10d --
- * moved here from the old row-level `MoreMenu`, same underlying mutation/
- * optimistic-update pattern, unchanged). */
+ * rendered inside that row's expander (UXD-03) -- T135 relocates this from a
+ * `Collapsible` child into a spliced-in `Table` row's `title`-column cell
+ * content (same text/shape, byte-identical, only the mounting mechanism
+ * changes). Carries the ONLY per-session Cancel action left in this file
+ * (module doc #10d -- moved here from the old row-level `MoreMenu`, same
+ * underlying mutation/optimistic-update pattern, unchanged). `anchorId`
+ * lands on the first `Text` so the expander's `aria-controls` (above) has
+ * something real to reference once this row exists in the DOM. */
 function CoachMeetingSessionRow({
   eventId,
   eventTitle,
   session,
   onCancelRequest,
+  anchorId,
 }: {
   eventId: string;
   eventTitle: string;
@@ -1339,13 +1552,14 @@ function CoachMeetingSessionRow({
     eventTitle: string,
     session: CoachMeetingSessionDetail,
   ) => void;
+  anchorId?: string;
 }): ReactNode {
   const statusBadge = SESSION_STATUS_BADGE[session.status];
 
   return (
     <HStack gap={3} vAlign="start" wrap="wrap" padding={2}>
       <VStack gap={0.5}>
-        <Text type="supporting">
+        <Text id={anchorId} type="supporting">
           {`${formatWeekdayDate(session.sessionDate)} · ${formatTimeRangeWithDuration(session.startsAt, session.endsAt)}`}
         </Text>
         {session.status === 'scheduled' && (
@@ -1372,6 +1586,8 @@ function CoachMeetingSessionRow({
         {session.status === 'scheduled' && (
           <Button
             variant="ghost"
+            size="sm"
+            style={MIN_TOUCH_TARGET_STYLE}
             // Includes the session's own date so a multi-session row's
             // several Cancel buttons are each unambiguous (both visually
             // and to assistive tech), unlike a bare "Cancel session".
@@ -1384,84 +1600,250 @@ function CoachMeetingSessionRow({
   );
 }
 
-/** T122 (module doc #10) -- one row per meeting SERIES (UXD-02 density
- * standard): recurrence chips + date range ("when"), location ("where"),
- * planned/logged hours ("how much"), expected/attended counts ("who"), a
- * row-level "Edit" `MoreMenu` (module doc #10d), and an in-place
- * `Collapsible` expander (UXD-03) revealing every session with its own
- * inline Cancel. */
-function CoachMeetingRowItem({
-  row,
-  onEdit,
-  onCancelRequest,
-}: {
+// ---------------------------------------------------------------------------
+// T135 -- `Table` row shape. `extends Record<string, unknown>` is required
+// by `Table`'s own generic constraint (`astryx-api.md` "Table" Props table,
+// `data: T[]`), the same idiom `OutreachList.tsx`'s `CoachEventTableRow`
+// already established.
+// ---------------------------------------------------------------------------
+
+export interface CoachMeetingEventTableRow extends Record<string, unknown> {
+  kind: 'event';
+  id: string;
   row: CoachMeetingRow;
+  summary: CoachMeetingRowSummary;
+}
+
+export interface CoachMeetingSessionDetailTableRow extends Record<string, unknown> {
+  kind: 'sessionDetail';
+  id: string;
+  eventId: string;
+  eventTitle: string;
+  session: CoachMeetingSessionDetail;
+}
+
+export type CoachMeetingTableRow = CoachMeetingEventTableRow | CoachMeetingSessionDetailTableRow;
+
+/** Splices each expanded event's session-detail rows directly beneath it in
+ * one flat array -- T130's `buildCoachOutreachTableRows` mechanism, copied
+ * (not re-derived). Exported for direct testing. */
+export function buildCoachMeetingTableRows(
+  rows: readonly CoachMeetingRow[],
+  expandedEventIds: ReadonlySet<string>,
+): CoachMeetingTableRow[] {
+  const tableRows: CoachMeetingTableRow[] = [];
+  for (const row of rows) {
+    const summary = summarizeCoachMeetingRow(row.sessions);
+    tableRows.push({ kind: 'event', id: row.eventId, row, summary });
+    if (expandedEventIds.has(row.eventId)) {
+      for (const session of row.sessions) {
+        tableRows.push({
+          kind: 'sessionDetail',
+          id: `${row.eventId}::session::${session.sessionId}`,
+          eventId: row.eventId,
+          eventTitle: row.title,
+          session,
+        });
+      }
+    }
+  }
+  return tableRows;
+}
+
+function renderMeetingSessionDetailCell(
+  row: CoachMeetingSessionDetailTableRow,
+  onCancelRequest: (
+    eventId: string,
+    eventTitle: string,
+    session: CoachMeetingSessionDetail,
+  ) => void,
+): ReactNode {
+  return (
+    <CoachMeetingSessionRow
+      eventId={row.eventId}
+      eventTitle={row.eventTitle}
+      session={row.session}
+      onCancelRequest={onCancelRequest}
+      anchorId={sessionDetailAnchorId(row.eventId, row.session.sessionId)}
+    />
+  );
+}
+
+interface BuildCoachMeetingColumnsArgs {
+  expandedEventIds: ReadonlySet<string>;
+  onToggleExpand: (eventId: string) => void;
   onEdit: (row: CoachMeetingRow) => void;
   onCancelRequest: (
     eventId: string,
     eventTitle: string,
     session: CoachMeetingSessionDetail,
   ) => void;
-}): ReactNode {
-  const summary = useMemo(() => summarizeCoachMeetingRow(row.sessions), [row.sessions]);
+  isNarrow: boolean;
+}
 
-  const menuItems: DropdownMenuOption[] = [{ label: 'Edit', onClick: () => onEdit(row) }];
+/**
+ * UXC-02/03/07/13 -- the ONE shared column factory both `CoachMeetingsSection`
+ * instances (Upcoming, Past) call, so `resolveColumnWidths` (pure over the
+ * column defs) produces byte-identical `<th>` widths for both `Table`s
+ * (criterion 9) -- unlike `buildCoachOutreachColumns`, this row's content
+ * mapping (§1 of the packet) is IDENTICAL for both buckets (no
+ * "Planned"/"Logged" split -- "Scheduled"/"held" and "Expected"/"Attended"
+ * both apply the same way to an Upcoming or a Past row), so this factory
+ * takes no `bucket` parameter at all.
+ *
+ * Width budget (measured against this route's real available width at
+ * 1440px -- see this task's own worker output for the exact
+ * `clientWidth`/`scrollWidth` numbers): `expander` carries the unchanged
+ * `Session details (N)` wording (Trap 3b "keep the wording" branch), wider
+ * than T130's `Sessions (N)`; `date` carries recurrence chips (up to
+ * `MON (18)` plus siblings) and the canceled `Badge`, so it needs more room
+ * than T130's 150px; `actions` carries only the `Edit` chip, so it needs far
+ * less than T130's 128px.
+ */
+function buildCoachMeetingColumns({
+  expandedEventIds,
+  onToggleExpand,
+  onEdit,
+  onCancelRequest,
+  isNarrow,
+}: BuildCoachMeetingColumnsArgs): TableColumn<CoachMeetingTableRow>[] {
+  if (isNarrow) {
+    // UXC-13 (<768px): every desktop column collapses into one stacked card
+    // column, exactly as `buildCoachOutreachColumns`'s `isNarrow` branch
+    // does -- the fixed desktop columns sum to well over 375px, so without
+    // this the page scrolls horizontally (forbidden).
+    return [
+      {
+        key: 'card',
+        header: '',
+        width: proportional(1),
+        renderCell: (row) => {
+          if (row.kind === 'sessionDetail') {
+            return renderMeetingSessionDetailCell(row, onCancelRequest);
+          }
+          const isExpanded = expandedEventIds.has(row.row.eventId);
+          return (
+            <VStack gap={2}>
+              <CoachMeetingTitleCell row={row.row} />
+              <CoachMeetingDateCell summary={row.summary} />
+              <HStack gap={4} wrap="wrap">
+                <StatCell
+                  label="Scheduled"
+                  value={formatHoursLabel(row.summary.plannedHours)}
+                  secondary={`${formatHoursLabel(row.summary.loggedHours)} held`}
+                />
+                <StatCell
+                  label="Expected"
+                  value={`${row.summary.expectedCt}`}
+                  secondary={`Attended ${row.summary.attendedCt}`}
+                />
+              </HStack>
+              <HStack gap={2} wrap="wrap" vAlign="center">
+                <CoachMeetingExpanderButton
+                  row={row.row}
+                  isExpanded={isExpanded}
+                  onToggleExpand={onToggleExpand}
+                />
+              </HStack>
+              <CoachMeetingRowActions row={row.row} onEdit={onEdit} />
+            </VStack>
+          );
+        },
+      },
+    ];
+  }
 
-  const description = (
-    <VStack gap={1}>
-      {summary.recurrenceChips.length > 0 && (
-        <HStack gap={1} wrap="wrap">
-          {summary.recurrenceChips.map((chip) => (
-            <Badge key={chip} variant="neutral" label={chip} />
-          ))}
-        </HStack>
-      )}
-      <Text type="supporting">{summary.dateRangeLabel}</Text>
-      <Text type="supporting">
-        {`${row.locationName.trim().length > 0 ? row.locationName : 'No location set'} · ${row.teamScopeLabel}`}
-      </Text>
-      <Text type="supporting" hasTabularNumbers>
-        {`${formatHoursLabel(summary.plannedHours)} scheduled · ${formatHoursLabel(summary.loggedHours)} held`}
-      </Text>
-      <Text type="supporting" hasTabularNumbers>
-        {`Expected ${summary.expectedCt} · Attended ${summary.attendedCt}`}
-      </Text>
-      <Collapsible trigger={`Session details (${row.sessions.length})`} defaultIsOpen={false}>
-        <VStack gap={2} padding={2}>
-          {row.sessions.map((session) => (
-            <CoachMeetingSessionRow
-              key={session.sessionId}
-              eventId={row.eventId}
-              eventTitle={row.title}
-              session={session}
-              onCancelRequest={onCancelRequest}
-            />
-          ))}
-        </VStack>
-      </Collapsible>
-    </VStack>
-  );
-
-  const endContent = (
-    <HStack gap={2} vAlign="center">
-      {summary.canceledCt > 0 && <Badge variant="error" label={`${summary.canceledCt} canceled`} />}
-      <MoreMenu items={menuItems} label={`Actions for ${row.title}`} />
-    </HStack>
-  );
-
-  return <ListItem label={row.title} description={description} endContent={endContent} />;
+  return [
+    {
+      key: 'expander',
+      header: '',
+      width: pixel(170),
+      renderCell: (row) => {
+        if (row.kind !== 'event') return null;
+        const isExpanded = expandedEventIds.has(row.row.eventId);
+        return (
+          <CoachMeetingExpanderButton
+            row={row.row}
+            isExpanded={isExpanded}
+            onToggleExpand={onToggleExpand}
+          />
+        );
+      },
+    },
+    {
+      key: 'date',
+      header: 'Date',
+      width: pixel(200),
+      renderCell: (row) =>
+        row.kind === 'event' ? <CoachMeetingDateCell summary={row.summary} /> : null,
+    },
+    {
+      key: 'title',
+      header: 'Meeting',
+      width: proportional(2, { minWidth: 224 }),
+      renderCell: (row) =>
+        row.kind === 'event' ? (
+          <CoachMeetingTitleCell row={row.row} />
+        ) : (
+          renderMeetingSessionDetailCell(row, onCancelRequest)
+        ),
+    },
+    {
+      key: 'hours',
+      header: '',
+      width: pixel(130),
+      align: 'end',
+      renderCell: (row) => {
+        if (row.kind !== 'event') return null;
+        return (
+          <StatCell
+            label="Scheduled"
+            value={formatHoursLabel(row.summary.plannedHours)}
+            secondary={`${formatHoursLabel(row.summary.loggedHours)} held`}
+          />
+        );
+      },
+    },
+    {
+      key: 'count',
+      header: '',
+      width: pixel(158),
+      align: 'end',
+      renderCell: (row) => {
+        if (row.kind !== 'event') return null;
+        return (
+          <StatCell
+            label="Expected"
+            value={`${row.summary.expectedCt}`}
+            secondary={`Attended ${row.summary.attendedCt}`}
+          />
+        );
+      },
+    },
+    {
+      key: 'actions',
+      header: '',
+      width: pixel(80),
+      renderCell: (row) =>
+        row.kind === 'event' ? <CoachMeetingRowActions row={row.row} onEdit={onEdit} /> : null,
+    },
+  ];
 }
 
 function CoachMeetingsSection({
   title,
   rows,
   emptyDescription,
+  expandedEventIds,
+  onToggleExpand,
   onEdit,
   onCancelRequest,
 }: {
   title: string;
   rows: CoachMeetingRow[];
   emptyDescription: string;
+  expandedEventIds: ReadonlySet<string>;
+  onToggleExpand: (eventId: string) => void;
   onEdit: (row: CoachMeetingRow) => void;
   onCancelRequest: (
     eventId: string,
@@ -1470,15 +1852,35 @@ function CoachMeetingsSection({
   ) => void;
 }): ReactNode {
   // T129/UXC-01: stable id for this section's `Heading`, so the alternating
-  // List/EmptyState below gets the heading as its accessible name via
-  // `aria-labelledby` on a wrapping `<div role="group">`, instead of the
-  // `List`'s own `header` prop (which duplicates the visible title and
-  // vanishes in the empty branch). This component renders twice (Upcoming,
-  // Past), so each call gets its own id. CHECKER FIX (rework of T129,
-  // MAJOR): see `CoachHome.tsx`'s own module doc for why the wrapper is a
-  // plain `<div role="group">`, not `Section` (full-bleed margin + no
-  // nameable role).
+  // Table/EmptyState below gets the heading as its accessible name via
+  // `aria-labelledby` on a wrapping `<div role="group">`, instead of relying
+  // on `Table`'s own scroll wrapper (which hardcodes a generic
+  // `role="group" aria-label="Table"`, `Table.tsx:160-161` -- not
+  // bucket-specific). This component renders twice (Upcoming, Past), so
+  // each call gets its own id. CHECKER FIX (rework of T129, MAJOR): see
+  // `CoachHome.tsx`'s own module doc for why the wrapper is a plain
+  // `<div role="group">`, not `Section` (full-bleed margin + no nameable
+  // role).
   const headingId = useId();
+  const isNarrow = useIsNarrowViewport();
+
+  const tableRows = useMemo(
+    () => buildCoachMeetingTableRows(rows, expandedEventIds),
+    [rows, expandedEventIds],
+  );
+
+  const columns = useMemo(
+    () =>
+      buildCoachMeetingColumns({
+        expandedEventIds,
+        onToggleExpand,
+        onEdit,
+        onCancelRequest,
+        isNarrow,
+      }),
+    [expandedEventIds, onToggleExpand, onEdit, onCancelRequest, isNarrow],
+  );
+
   return (
     <VStack gap={3}>
       <Heading level={2} id={headingId}>
@@ -1495,16 +1897,14 @@ function CoachMeetingsSection({
             isCompact
           />
         ) : (
-          <List hasDividers>
-            {rows.map((row) => (
-              <CoachMeetingRowItem
-                key={row.eventId}
-                row={row}
-                onEdit={onEdit}
-                onCancelRequest={onCancelRequest}
-              />
-            ))}
-          </List>
+          <Table
+            data={tableRows}
+            columns={columns}
+            idKey="id"
+            density="compact"
+            dividers="rows"
+            hasHover
+          />
         )}
       </div>
     </VStack>
@@ -1548,6 +1948,11 @@ function CoachMeetingsView({
 }: CoachMeetingsViewProps): ReactNode {
   const loadState = useLoadState(loadData, [loadData]);
   const [rows, setRows] = useState<CoachMeetingRow[]>([]);
+  // T147 -- real teams, populated the same two places `rows` is (the
+  // initial-load effect below and the post-create reload,
+  // `handleCreateMeetingsSubmit`), threaded to `<ScheduleMeetingsDialog>`'s
+  // own `teams` prop.
+  const [teams, setTeams] = useState<readonly FixtureTeam[]>([]);
   const [stubNotice, setStubNotice] = useState<StubNotice | null>(null);
   const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
   // T096 (module doc #7a) -- drives the one rendered `<ScheduleMeetingsDialog>`
@@ -1555,10 +1960,30 @@ function CoachMeetingsView({
   // mode to open at all).
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackBanner | null>(null);
+  // T135 (Table migration, Trap 1/2) -- ONE expansion-state set for BOTH the
+  // Upcoming and Past `CoachMeetingsSection` instances, deliberately NOT one
+  // per instance (T130's own `OutreachList.tsx` placement, which does not
+  // apply here -- see this file's own Table-migration module doc above).
+  // Confirming a cancel can move a row from Upcoming to Past
+  // (`handleConfirmCancel` below, `partitionCoachMeetingRows`'s own doc); a
+  // per-section `Set` would silently re-collapse the row when it lands in
+  // its new section's own, separately-mounted `Table`. Lifting the state
+  // here means the SAME `Set` (and the same expanded-id membership) survives
+  // the bucket move.
+  const [expandedEventIds, setExpandedEventIds] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleExpand = useCallback((eventId: string): void => {
+    setExpandedEventIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(eventId)) next.delete(eventId);
+      else next.add(eventId);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (loadState.status === 'success') {
       setRows(loadState.data.rows);
+      setTeams(loadState.data.teams);
     }
   }, [loadState]);
 
@@ -1648,6 +2073,7 @@ function CoachMeetingsView({
     try {
       const fresh = await loadData();
       setRows(fresh.rows);
+      setTeams(fresh.teams);
       setFeedback({
         status: 'success',
         title: 'Meetings scheduled',
@@ -1743,6 +2169,8 @@ function CoachMeetingsView({
             title="Upcoming"
             rows={upcoming}
             emptyDescription="No meetings are currently scheduled."
+            expandedEventIds={expandedEventIds}
+            onToggleExpand={toggleExpand}
             onEdit={showEditStub}
             onCancelRequest={(eventId, eventTitle, session) =>
               setCancelTarget({ eventId, eventTitle, session })
@@ -1752,6 +2180,8 @@ function CoachMeetingsView({
             title="Past"
             rows={past}
             emptyDescription="Completed and canceled meetings will show up here."
+            expandedEventIds={expandedEventIds}
+            onToggleExpand={toggleExpand}
             onEdit={showEditStub}
             onCancelRequest={(eventId, eventTitle, session) =>
               setCancelTarget({ eventId, eventTitle, session })
@@ -1780,16 +2210,18 @@ function CoachMeetingsView({
       {/* T096 (module doc #7a) -- `ScheduleMeetingsDialog.tsx` (T031,
           already Passed, already built) wired into this page for the first
           time, in CREATE mode only (module doc #7b: this dialog has no edit
-          mode). `teams` is deliberately NOT overridden here -- it falls back
-          to that component's own already-disclosed fixture team list (same
-          "still fixture-backed" posture `StudentsTab.tsx`'s own module doc
-          #12 already established for `StudentDialog`'s `season` prop); this
-          task's own Allowed Files do not include a second teams-loading
-          mechanism for scheduling specifically, and inventing one would be
-          scope creep beyond wiring the dialog itself. */}
+          mode). T147: `teams` now real too -- `loaders/meetings.ts`'s
+          `makeLoadCoachMeetingsData` already fetched this list for its own
+          per-row team-scope label; it is now threaded through
+          `CoachMeetingsData`/this view's own `teams` state instead of the
+          dialog falling back to its own `DEFAULT_TEAMS` fixture
+          (`'team-ravens'`/`'team-titans'`, non-uuid strings that failed the
+          real `events.team_ids uuid[]` insert -- the report that blocked
+          meeting creation outright). No new query, no new round trip. */}
       <ScheduleMeetingsDialog
         isOpen={isScheduleDialogOpen}
         onOpenChange={setIsScheduleDialogOpen}
+        teams={teams}
         onCreateMeetings={handleCreateMeetingsSubmit}
       />
     </VStack>

@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "t=$(jq -r '.agent_type // empty' 2>/dev/null); [ \"$t\" = \"worker-implementer\" ] && { mkdir -p docs/swarm; echo \"[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Worker finished. Checker required before completion.\" >> docs/swarm/verification-log.md; }; exit 0"
+            "command": "t=$(jq -r '.agent_type // empty' 2>/dev/null); [ \"$t\" = \"worker-implementer\" ] && { b=$(git rev-parse --abbrev-ref HEAD 2>/dev/null | tr '/' '-'); b=${b:-unknown}; mkdir -p docs/swarm/worker-runs; echo \"[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Worker finished on $b. Checker required before completion.\" >> \"docs/swarm/worker-runs/$b.md\"; }; exit 0"
           }
         ]
       }

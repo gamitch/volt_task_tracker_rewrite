@@ -31,6 +31,7 @@ import {
   buildActivityFeed,
   buildLastCompletedMeetingSummary,
   buildNextUp,
+  COACH_HOME_PAIRED_MODULE_MIN_WIDTH,
   CoachHome,
   countUpcomingSessionsInNextDays,
   crossedMilestones,
@@ -1190,9 +1191,16 @@ describe('<CoachHome /> T124 goal projection', () => {
     expect(container.textContent).toContain('Amara Webb hours vs. goal');
     expect(container.textContent).toContain('84h short');
 
-    const belowGoalButton = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent === 'Below goal',
-    );
+    // T149/UXC-06: SegmentedControl replaced with a standalone ToggleButton
+    // (astryx-api.md:5602's own "Don't -- use ToggleButton instead" for a
+    // simple on/off state). ToggleButton renders its `label` twice in the
+    // DOM (once visibly, once in an aria-hidden width-reservation span --
+    // ToggleButton.tsx:298-307), so `textContent === 'Below goal'` can never
+    // match; `aria-pressed` (ToggleButton.tsx:319) is the reliable
+    // discriminator and is absent from SegmentedControlItem. This amendment
+    // is authorized per docs/swarm/auto-mode-decisions.md's "T149:
+    // authorizing the :1194-1196 test amendment (orchestrator, not George)".
+    const belowGoalButton = container.querySelector('button[aria-pressed]');
     expect(belowGoalButton).toBeTruthy();
     act(() => {
       belowGoalButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -1201,6 +1209,85 @@ describe('<CoachHome /> T124 goal projection', () => {
     // Dana (on track) drops out of the Below-goal view; Amara (below) stays.
     expect(container.textContent).not.toContain('Dana Voss hours vs. goal');
     expect(container.textContent).toContain('Amara Webb hours vs. goal');
+  });
+
+  it('T149/UXC-06: the two-option SegmentedControl is gone, replaced by a standalone ToggleButton', async () => {
+    renderAsUser(COACH_USER, {
+      loadData: fixtureLoadData,
+      loadDashboardData: fixtureLoadDashboardData,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+
+    // SegmentedControl renders role="radiogroup" -- its absence is the exact
+    // discriminator for "the two-option control is gone", not merely "a
+    // Below-goal button exists somewhere".
+    expect(container.querySelector('[role="radiogroup"]')).toBeNull();
+    // The amended finder above already covers this -- a real aria-pressed
+    // toggle exists, which only ToggleButton renders here.
+    expect(container.querySelector('button[aria-pressed]')).toBeTruthy();
+    // 'All' was the removed option's exact button text; it never collides
+    // with any other real button's full text in this file (unlike 'Below
+    // goal', which now duplicates itself inside ToggleButton's own DOM).
+    const allButton = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent === 'All',
+    );
+    expect(allButton).toBeUndefined();
+  });
+
+  it('T149/UXC-06: the TeamHoursRowItem ProgressBar is width-capped at 480px, and its colour is untouched', async () => {
+    renderAsUser(COACH_USER, {
+      loadData: fixtureLoadData,
+      loadDashboardData: fixtureLoadDashboardData,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+
+    // "Ravens" is the team-hours fixture's own team name (see the sibling
+    // "T124 hours by team" describe block above) -- TeamHoursRowItem sets
+    // its ProgressBar's own label to `${entry.teamName} hours`
+    // (CoachHome.tsx), so this is the accessible-name anchor, following this
+    // file's own convention (:1189's Dana-Voss pattern) of keying off a name
+    // already asserted elsewhere. Anchored on TeamHoursRowItem specifically,
+    // not GoalProjectionRowItem or the KPI grid bar: the KPI bar's width is
+    // inert regardless of the fix (244px either way), and
+    // GoalProjectionRowItem's bar is also the one Part 2's ToggleButton
+    // filters, which would entangle two independent concerns in one
+    // fixture.
+    const progressBars = Array.from(container.querySelectorAll('[role="progressbar"]'));
+    // CSS.escape does not exist in this vitest/jsdom setup, and React 19's
+    // useId emits ids containing guillemets that are not valid inside a bare
+    // CSS selector string either way -- resolve aria-labelledby via
+    // document.getElementById, exactly as the T129/UXC-01 block above
+    // already does.
+    const ravensBar = progressBars.find((bar) => {
+      const labelledbyId = bar.getAttribute('aria-labelledby');
+      if (!labelledbyId) return false;
+      const labelEl = document.getElementById(labelledbyId);
+      return labelEl?.textContent === 'Ravens hours';
+    });
+    expect(ravensBar).toBeTruthy();
+    const root = ravensBar!.closest('.astryx-progressbar');
+    expect(root).toBeTruthy();
+    expect((root as HTMLElement).style.maxWidth).toBe('480px');
+    // The pre-existing, untouched default variant -- guards against
+    // "helpfully" changing the colour while capping the width. D011 and its
+    // addendum already settled that no variant reaches 3:1 against its
+    // track in both themes and that all ten ProgressBar sites already carry
+    // their value as text, so width is the only in-scope change here.
+    expect(root!.getAttribute('data-variant')).toBe('accent');
+
+    // Also confirm the KPI grid's own bar still carries the same style
+    // constant post-fix, even though the cap is inert there at every width.
+    const kpiBar = progressBars.find((bar) => {
+      const labelledbyId = bar.getAttribute('aria-labelledby');
+      if (!labelledbyId) return false;
+      const labelEl = document.getElementById(labelledbyId);
+      return labelEl?.textContent === 'Hours vs. team goal';
+    });
+    expect(kpiBar).toBeTruthy();
+    const kpiRoot = kpiBar!.closest('.astryx-progressbar');
+    expect((kpiRoot as HTMLElement).style.maxWidth).toBe('480px');
   });
 });
 
@@ -1339,6 +1426,137 @@ describe('<CoachHome /> T129 UXC-01 -- exactly one heading per section, List/Emp
     }
     const { resolvedText: goalResolvedEmpty } = resolveAriaLabelledbyTarget(GOAL_PROJECTION_TITLE);
     expect(goalResolvedEmpty).toBe(GOAL_PROJECTION_TITLE);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T142/UXC-06: Next up + Activity feed pair two-up via `Grid`.
+//
+// jsdom has no CSS layout engine, so these tests do not (and cannot) prove
+// the pairing renders side by side at any given viewport width -- that is a
+// real-browser measurement, reported in `docs/swarm/active/
+// T142-worker-output.md`, not a jsdom assertion. What jsdom CAN prove
+// deterministically, with no rig at all:
+//   1. The `Grid` uses the RESPONSIVE `columns={{minWidth, max}}` object
+//      form, not the fixed `columns={2}` numeric form -- `Grid` reflects
+//      the numeric form as `data-columns`/a `columns-N` class token
+//      (`themeProps.js`'s `themeDataAttributes`/`buildClassName`) and
+//      passes `undefined` for the object form
+//      (`Grid.js:372`, `columnsVariant`), so `data-columns` is present iff
+//      `columns={2}` was used. This is the primary proof the packet asks
+//      for: it is deterministic and needs no browser.
+//   2. The two module headings share exactly one `Grid` ancestor (proving
+//      they were actually wrapped together, not just visually adjacent),
+//      and that ancestor's inline `--x-gridTemplateColumns` custom property
+//      (`Grid.js`'s `dynamicStyles.templateColumns`) encodes the
+//      responsive `repeat(auto-fill, minmax(...))` track template with the
+//      chosen `COACH_HOME_PAIRED_MODULE_MIN_WIDTH`, not a bare `repeat(2,
+//      1fr)`.
+// ---------------------------------------------------------------------------
+describe('<CoachHome /> T142/UXC-06 -- Next up + Activity feed pair via a responsive Grid', () => {
+  function findHeadingEl(headingText: string): HTMLElement {
+    const heading = Array.from(container.querySelectorAll('h2')).find(
+      (h) => h.textContent === headingText,
+    );
+    expect(heading).toBeTruthy();
+    return heading as HTMLElement;
+  }
+
+  function closestAstryxGrid(el: HTMLElement): HTMLElement {
+    const grid = el.closest('.astryx-grid');
+    expect(grid).toBeTruthy();
+    return grid as HTMLElement;
+  }
+
+  it('the Grid pairing the two modules carries no data-columns attribute (the columns={2} discriminator)', async () => {
+    renderAsUser(COACH_USER, {
+      loadData: fixtureLoadData,
+      loadDashboardData: fixtureLoadDashboardData,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+
+    const nextUpGrid = closestAstryxGrid(findHeadingEl('Next up'));
+    const activityFeedGrid = closestAstryxGrid(findHeadingEl('Activity feed'));
+
+    expect(nextUpGrid).toBe(activityFeedGrid);
+    expect(nextUpGrid.hasAttribute('data-columns')).toBe(false);
+    // Bonus discriminator (Grid.js's `classTokenForPropValue`): the fixed
+    // numeric form also stamps a `columns-2` class token; confirm it is
+    // absent too, not just the data attribute.
+    expect(nextUpGrid.className).not.toMatch(/\bcolumns-2\b/);
+  });
+
+  it('regression: the two headings share exactly one Grid ancestor, whose track template is the responsive form, not a bare two-column fixed grid', async () => {
+    renderAsUser(COACH_USER, {
+      loadData: fixtureLoadData,
+      loadDashboardData: fixtureLoadDashboardData,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+
+    const nextUpGrid = closestAstryxGrid(findHeadingEl('Next up'));
+    const activityFeedGrid = closestAstryxGrid(findHeadingEl('Activity feed'));
+    expect(nextUpGrid).toBe(activityFeedGrid);
+
+    const trackTemplate = nextUpGrid.style.getPropertyValue('--x-gridTemplateColumns');
+    expect(trackTemplate).toContain('repeat(auto-fill');
+    expect(trackTemplate).toContain(`${COACH_HOME_PAIRED_MODULE_MIN_WIDTH}px`);
+    expect(trackTemplate).not.toBe('repeat(2, 1fr)');
+
+    // The Divider that used to sit between the two stacked modules is gone
+    // -- the only Dividers immediately flanking this Grid are the ones that
+    // separate it from the stacked KPI grid above and "Hours by team"
+    // below. Astryx `Divider` renders `<div role="separator">`, not an
+    // `<hr>`.
+    expect(nextUpGrid.previousElementSibling?.getAttribute('role')).toBe('separator');
+    expect(nextUpGrid.nextElementSibling?.getAttribute('role')).toBe('separator');
+  });
+
+  // T150: pin `COACH_HOME_PAIRED_MODULE_MIN_WIDTH` inside its derived window
+  // so a future edit to the constant can't silently break two-up pairing.
+  // Unlike the `toContain` assertion above -- which builds its own expected
+  // string from the constant and so passes for ANY value -- this is a bound
+  // check against independently-derived numbers, re-verified against the
+  // five live sources (not copied from the code comment or the packet
+  // without checking):
+  //   1. `SideNav` is 260px (`node_modules/@astryxdesign/core/src/SideNav/
+  //      SideNav.tsx:65`, `width: 260`).
+  //   2. `AppShell` passes no `breakpoint` to `mobileNav`
+  //      (`src/app/AppShell.tsx:163`), so the documented default applies
+  //      (`docs/swarm/astryx-api.md:2621`, `MobileNavConfig.breakpoint`
+  //      default `'md'` = 768px). Below 768px, `MobileNav` replaces
+  //      `SideNav` and contributes 0px.
+  //   3. `LayoutContent padding={6}` removes 24px per side
+  //      (`node_modules/@astryxdesign/core/src/Layout/padding.stylex.ts:84-89`,
+  //      `paddingStyles[6]` -> `spacingVars['--spacing-6']`;
+  //      `node_modules/@astryxdesign/core/src/theme/tokens.stylex.ts:161`,
+  //      `'--spacing-6': '24px'`).
+  //   4. The pairing `Grid`'s own `gap={4}` is 16px (same tokens file,
+  //      `:159`, `'--spacing-4': '16px'`).
+  //   5. The track-min formula (`node_modules/@astryxdesign/core/src/Grid/
+  //      Grid.tsx`, `buildCappedTemplate`, ~:340-365): for
+  //      `columns={{ minWidth, max: 2 }}`, track min is
+  //      `min(100%, max(minWidth px, perColumn))` where
+  //      `perColumn = (100% - (max-1) * gap) / max`.
+  //
+  // Constraint A -- two columns must fit at 1024px (UXC-06's own accept
+  // clause, `docs/swarm/VOLT_UX_Craft_PRD_v3.html:167`, requires two-up
+  // above 1024px):
+  //   minWidth <= (1024 - 260 - 48 - 16) / 2 = 700 / 2 = 350
+  //
+  // Constraint B -- one column must be forced at 375px (no SideNav below
+  // 768px):
+  //   minWidth > (375 - 48 - 16) / 2 = 311 / 2 = 155.5
+  //
+  // Window: 155.5 < minWidth <= 350. The current value (280) sits inside it
+  // with 124.5px of margin above the 155.5 floor and 70px below the 350
+  // ceiling (280 - 155.5 = 124.5; 350 - 280 = 70 -- matches the code comment
+  // at CoachHome.tsx:1166-1169, not this task's own packet, whose prose
+  // description of the same two numbers is inverted).
+  it('T150: COACH_HOME_PAIRED_MODULE_MIN_WIDTH stays inside its derived 155.5-350 window', () => {
+    expect(COACH_HOME_PAIRED_MODULE_MIN_WIDTH).toBeGreaterThan(155.5);
+    expect(COACH_HOME_PAIRED_MODULE_MIN_WIDTH).toBeLessThanOrEqual(350);
   });
 });
 

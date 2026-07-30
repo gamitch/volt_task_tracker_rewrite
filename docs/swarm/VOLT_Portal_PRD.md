@@ -86,6 +86,21 @@ Persona acceptance smoke tests (used in final `/swarm-check`):
 - **NAV-04** Active item highlighted by `SideNav`'s built-in state; current page also sets `document.title` ("Meetings · VOLT").
 - **NAV-05** Mobile (< 768px): `SideNav` is replaced by Astryx `MobileNav` drawer triggered from `TopNav`. Student Home additionally surfaces a persistent **Check in** card whenever a meeting session is live (MTG-10) so check-in never requires navigation.
 - **NAV-06** Route guards: unauthenticated → `/login`; authenticated but role lacks route → redirect to `/` with `Toast` "You don't have access to that page."
+> **IMPLEMENTATION GAP (2026-07-28, dispute-log D009):** the
+> `/meetings/:sessionId` half of NAV-08 below **was never built** — the route is
+> absent from `router.tsx` (which has no catch-all), and no meeting-detail
+> component exists. The `/outreach/:eventId` half is real and works.
+>
+> **Resolved for now (T137, George's option b):** calendar meeting rows used to
+> link to the unbuilt route and render a blank content area. They now point at
+> `routePaths.meetings` — see `detailHrefFor` in `CalendarPage.tsx` (`:610`,
+> returning at `:622`). Verified by mounting the real route table: the old href
+> produced empty `innerHTML`, the new one resolves to `MeetingsList`.
+>
+> **NAV-08 itself remains unimplemented.** The interim destination is shared by
+> every meeting row, so the calendar can no longer reach a *specific* meeting.
+> Building the real detail page retires this annotation.
+
 - **NAV-08 Shareable deep links:** every event/session detail is URL-addressable — `/outreach/:eventId` (outreach + competitions) and `/meetings/:sessionId` (meeting detail page replacing the dialog in CAL-02). Detail views and list-row `MoreMenu`s include **Copy link** (`Toast` "Link copied"). Unauthenticated visits store the intended URL and redirect back to it after login (including the Google OAuth round-trip). Invalid/inaccessible IDs render the DES-12 error state, revealing nothing about the event.
 - **NAV-07** Meetings and Outreach are **separate routes with separate queries**. No screen may render a combined meetings+outreach list except Calendar (`/calendar`) and per-student history in Reports, where every row carries a type `Badge`.
 
@@ -268,6 +283,13 @@ export const voltTheme = defineTheme({
 ### 6.3 Meetings & attendance (participation %)
 
 **Scheduling**
+
+> **AUTHORIZED DEVIATION (2026-07-28, George) — the per-row `MoreMenu` below is
+> replaced by a plain `Edit` chip.** T122 moved "Cancel session" out of the menu
+> to per-session buttons inside the row expander (disclosed and certified),
+> leaving the menu holding a single item. T135 removes the menu; Cancel stays
+> per-session. Mirrors the resolution T131 shipped on the outreach rows
+> (commit `b959b90`). Everything else in MTG-01 stands.
 
 - **MTG-01** `/meetings` (coach): `Section` "Upcoming" and `Section` "Past" lists of **meeting sessions** (`Item` rows: date, time range, team scope, status `Badge`, attendance summary for past). Actions: **Schedule meetings**, per-row `MoreMenu` (Edit, Cancel session — `AlertDialog`).
 - **MTG-02** **Schedule meetings** `Dialog purpose="form"`: title (default "Team meeting"), team scope (`MultiSelector` of teams, default all), location, schedule mode (`SegmentedControl`: Single | Weekly recurring | Custom dates — parity with the current app), date/time pickers (`DateInput`/`TimeInput`, `DateRangeInput` for recurring range, weekday `CheckboxList` for recurring), notes. Creates one `events` row (type `meeting`) + one `event_sessions` row per date. Nothing is created until **Create meetings** is clicked; the button is disabled until title + at least one valid date exist.

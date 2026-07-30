@@ -46,8 +46,12 @@ venv/
 .claude/session/
 .claude/cache/
 
-# Swarm archive (can grow large — archive locally, don't commit)
-docs/swarm/archive/
+# Swarm archive IS committed (decision D-3, 2026-07-28). It was excluded on
+# the assumption it "can grow large"; measured, it is 2.1 MB of markdown across
+# 200 files — smaller than docs/swarm/figures/ (2.3 MB) and ~3% of .git.
+# Excluding it silently deleted every caveat a worker recorded only in its
+# output doc, at the moment the task was archived, while the artifact the
+# caveat was about stayed in the repo.
 
 # Playwright test artifacts (regenerated on every run)
 test-results/
@@ -58,3 +62,15 @@ playwright-report/
 # can never commit one.
 *.throwaway.*
 preview.throwaway.html
+
+# Agent worktrees (isolated subagent checkouts, never part of the repo)
+.claude/worktrees/
+
+# SubagentStop heartbeat files, one per branch (see .claude/settings.json).
+# NOT the D-3 mistake repeated: D-3 was about worker OUTPUT documents, which
+# carry real caveats and are now committed. These carry a fixed string and a
+# timestamp — 356 byte-identical lines accumulated in verification-log.md
+# before this split. The durable record of a worker run is its output doc and
+# the ledger row; this is only a "checker still required" reminder. Untracked
+# keeps concurrent worktrees from colliding on it at all.
+docs/swarm/worker-runs/

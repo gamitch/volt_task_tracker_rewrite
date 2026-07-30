@@ -141,11 +141,31 @@ Packets P0–P13 plus regression fixes and live hotfixes:
 - T128 — wave-3 debt: format gate, meetings label wording, `astryx-api.md` accuracy,
   `v_planned_rsvp_hours` future guard.
 
-## Active (2026-07-28 — waves 1–4 complete, wave 5 approved and ready)
+## Active (2026-07-29/30 — two live packets, everything below this note is stale)
 
-**134 tasks · 129 Passed · 5 Blocked · 0 In Progress.** Every automatable task
-through wave 4 is Passed. The 5 Blocked are all human gates waiting on George
-(T052 email enablement; T063/T064/T065 migration cutover; T070 go-live).
+**2026-07-30 — two packets ready for dispatch, both foreman-authored:**
+- **T155** (priority — live user-visible 400 on the owner's home page,
+  dispatch authorized): `docs/swarm/active/T155-worker-packet.md`. Wires
+  `CoachHome` to `useActiveSeason()` instead of a placeholder-defaulting prop.
+  Sonnet/opus tier per constitution item 18. Follow-ups named, not built:
+  `teamId`'s identical-shape placeholder, and `loadData`/`LoadCoachHomeDataFn`
+  having no real Supabase implementation anywhere in the repo.
+- **T154 revision 2**: `docs/swarm/active/T154-worker-packet.md`. Adopts the
+  gate's [CP1] (own `SUPABASE_AUTH_STORAGE_KEY` via `client.ts`'s
+  `createClient` call rather than deriving `supabase-js`'s internal default),
+  tier bumped sonnet→opus, [CP2] dropped as unnecessary, F2's citation fixed
+  (`constitution.md:11`, orchestrator's own test-rewrite authorization).
+
+**This section (below) predates T129–T156 entirely and is not a reliable
+snapshot of current ledger state** — it was last true 2026-07-28. The
+task-ledger.md `Summary table` is the live source of truth; this file needs a
+fuller reconciliation pass, flagged rather than attempted here since it was
+outside this turn's scope.
+
+**134 tasks · 129 Passed · 5 Blocked · 0 In Progress** (as of 2026-07-28 —
+stale, see above). Every automatable task through wave 4 is Passed. The 5
+Blocked are all human gates waiting on George (T052 email enablement;
+T063/T064/T065 migration cutover; T070 go-live).
 
 **Next up: wave 5 (UX craft), next task ID T129.** Requirements in
 `VOLT_UX_Craft_PRD_v3.md` (v3.1, approved). Visual craft only, no new features.
