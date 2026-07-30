@@ -29,6 +29,40 @@ import { SeasonProvider, type LoadActiveSeasonFn } from '../../app/SeasonProvide
 import type { SeasonRow } from '../../lib/supabase/types';
 import { DashboardPage } from './DashboardPage';
 
+// T176 -- `StudentHome` (which this dispatcher routes `student` users to)
+// now also calls a real identity-resolution seam (`resolveCurrentStudentId`/
+// `resolveStudentScope`, module doc #8 in `StudentHome.tsx`), the same way
+// `CoachHome` already required `useActiveSeason()` mocking (T155, above).
+// `DashboardPage` renders `<StudentHome />` with zero props (module doc #1
+// in `DashboardPage.tsx`, unchanged by this task -- that file is Forbidden
+// here), so both resolvers hit their real, unconfigured-in-jsdom defaults
+// unless mocked at the module level -- measured (T176 gate round 1, MAJOR
+// 6): mocking `resolveCurrentStudentId` alone still leaves the new
+// `resolveStudentScope` hop hitting the real `getSupabaseClient()`, which
+// `createLoader` normalizes into a rejection (`loader.ts:168-173`), which
+// this file's own "renders StudentHome for role \"student\"" test would
+// otherwise surface as `"Couldn't find your student record…"` instead of
+// `'Hi Ada Reyes'`. Both modules must be mocked together.
+vi.mock('../../lib/supabase/loaders/meetings', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/supabase/loaders/meetings')>();
+  return {
+    ...actual,
+    resolveCurrentStudentId: async () => 'student-fixture-dashboardpage',
+  };
+});
+vi.mock('../../lib/supabase/loaders/students', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/supabase/loaders/students')>();
+  return {
+    ...actual,
+    resolveStudentScope: async () => ({
+      teamId: 'team-fixture-dashboardpage',
+      goalHours: 100,
+      confirmedHours: 0,
+      plannedHours: 0,
+    }),
+  };
+});
+
 // ---------------------------------------------------------------------------
 // Render harness -- mirrors CoachHome.test.tsx.
 //

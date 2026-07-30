@@ -5307,3 +5307,69 @@ throughout and both gate rounds graded that scoping exemplary — no authority-p
 **Follow-ups filed:** T174 (`FIXTURE_RSVPS` id-space confusion, deferred under §10's template and
 independently verified), T175 (CI's missing `format:check`), and T165's row updated — it must now
 keep **two** things byte-intact, not one.
+
+---
+
+## T176 — StudentHome loads the real student's identity (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commit | `e5b2f1cf8e073549ee048191a5f430d0d14e12df` (attempt 2) |
+| Verdict | **PASS with MINORs** (attempt 1: FAIL, 1 MAJOR) |
+| Attempts | 2 |
+| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
+| Premise gate | 2 rounds; round 1 REVISE (2 BLOCKER, 6 MAJOR), round 2 authored without re-gate per item 19a |
+| tsc / build / format | 0 errors / ✓ / clean |
+| eslint | 0 errors, 357 warnings (+1 verified benign, pre-existing class) |
+| vitest | 67 files, 1591 tests (from 66 / 1567) |
+
+**The bug.** `StudentHome`'s `studentId`/`teamId`/`seasonId` defaulted to placeholder
+constants and `DashboardPage.tsx:122` rendered `<StudentHome />` with zero props, so every
+signed-in student's dashboard loaded a fixture identity's data. Seventh instance of this
+project's most productive defect family, second found on a live route.
+
+**Two BLOCKERs caught before a worker started, both proven by execution.** The premise gate
+was dispatched with Write+Edit deliberately — `checker-premise` has Bash but cannot write,
+which is why T157's gate could not run its prescribed mutations. This one built the
+prescribed shape, wrote all twelve criteria as tests, and ran every mutation.
+
+1. Criterion 3 was mathematically incapable of failing: the packet steered at this file's
+   own Titans fixture, where the in-scope team id **is** `PLACEHOLDER_CURRENT_TEAM_ID`, so
+   the injected "real" value and the mutation's hardcoded value were the same string.
+2. Criteria 2 and 4 were negative-only: a probe disabling identity resolution entirely —
+   blank page — left both green.
+
+Post-fix both were independently reproduced by the orchestrator: the criterion-3 mutation
+now yields 3 failed/48 passed, the vacuity probe 18 failed/33 passed.
+
+**Attempt 1's MAJOR is recorded against the orchestrator, not the worker.** The goal-hours
+denominator was brought into scope on the orchestrator's claim that no SQL view computed
+it. `v_student_goal_projection` (`dashboard_views.sql:322-334`) does, `CoachHome.tsx:493-497`
+already records the required verbatim-passthrough posture for that exact column, and
+`loaders/dashboard.ts:387` already reads it. The gate repeated the false premise, the packet
+repeated it, and the worker — explicitly ordered to confirm constitution item 3 — appended a
+sentence into the module doc asserting the denominator "has no SQL view of its own".
+
+The fix was a **substitution, not an expansion**: one read of the view returns `team_id`,
+`goal_hours`, `confirmed_hours` and `planned_hours`, replacing the raw-column query outright
+and honestly filling `0 h confirmed + 0 h planned` as a side effect. Not routed to
+`boss-arbiter` — the constitution is unambiguous, the view exists, and an in-repo precedent
+was already reading it.
+
+**Also recorded against the orchestrator:** a paraphrase claiming two helpers stayed exported
+"for their other callers". There are no other callers; both are now dead exports in
+production terms. The worker's own wording was precise and the overstatement was the
+orchestrator's.
+
+**Carried forward as follow-ups:** T183 (`Hi Ada Reyes` and the remaining fabricated
+surfaces), T184 (a deactivated student is told no record is linked — **needs the owner's
+ruling**, and escalates to MAJOR if that is a supported state), T185 (`security_invoker`:
+the repo's views do not run under the caller's RLS as documented — pre-existing, security
+class, minors' data), T186 (`v_student_goal_projection.team_id` documented display-only
+while a live route scopes off it), T187 (dual-team narrowing).
+
+**Largest unmeasured risk, stated plainly:** there is no live Supabase in this environment,
+so every claim about RLS evaluation, view ownership and PostgREST grants is reasoned from
+SQL and policy text, never executed. The checker narrowed rather than eliminated it —
+availability is favourable under both view semantics, so the dashboard populates either way;
+exposure is the open question and is T185's scope.

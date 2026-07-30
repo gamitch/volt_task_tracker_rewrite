@@ -21,11 +21,13 @@
  * pattern `CoachHome.test.tsx`/`OutreachList.test.tsx` already established,
  * including their `AuthProvider` + `LoginAs` role-login harness.
  */
-import { act } from 'react';
+import { act, Component, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthUser } from '../../app/guards';
 import { LoginAs } from '../../test-utils/authHarness';
+import { SeasonProvider, type LoadActiveSeasonFn } from '../../app/SeasonProvider';
+import type { SeasonRow } from '../../lib/supabase/types';
 import {
   buildNextUp,
   computePlannedHours,
@@ -38,6 +40,7 @@ import {
   PLACEHOLDER_CURRENT_STUDENT_ID,
   PLACEHOLDER_CURRENT_TEAM_ID,
   resolveGoalHours,
+  resolveStudentIdentity,
   selectHeroState,
   selectLiveMeetingSession,
   sessionHours,
@@ -52,6 +55,18 @@ import {
 
 // ---------------------------------------------------------------------------
 // Render harness -- mirrors CoachHome.test.tsx / OutreachList.test.tsx.
+//
+// T176: `StudentHome` now calls `useActiveSeason()` (module doc #8/#9 in
+// `StudentHome.tsx`), so every render needs a `<SeasonProvider>` ancestor --
+// same T155 shape `CoachHome.test.tsx`'s own harness already established for
+// its sibling Home component. `StudentHome` also now resolves real
+// `studentId`/`teamId`/`goalHoursOverride` via injectable
+// `resolveStudentId`/`resolveStudentScope` props (module doc #8) whenever
+// the caller does not supply BOTH `studentId` and `teamId` explicitly --
+// `renderAsUser` below defaults both resolvers to distinguishable fixture
+// values so every pre-existing `it(` (none of which relied on a specific
+// resolved id) keeps passing unmodified; only the new criterion 1-4/6/7/10/11
+// tests below override one or both explicitly.
 // ---------------------------------------------------------------------------
 
 let container: HTMLDivElement;
@@ -63,18 +78,60 @@ const STUDENT_USER: AuthUser = {
   role: 'student',
 };
 
-function renderAsUser(user: AuthUser | null, props: Parameters<typeof StudentHome>[0] = {}): void {
+const FIXTURE_ACTIVE_SEASON: SeasonRow = {
+  id: 'season-fixture-active',
+  name: 'Fixture Active Season',
+  startsOn: '2026-01-01',
+  endsOn: '2026-12-31',
+  defaultGoalHours: 100,
+  isActive: true,
+  createdAt: '2026-01-01T00:00:00.000Z',
+};
+
+const HARNESS_DEFAULT_RESOLVED_STUDENT_ID = 'student-fixture-harness-default';
+const HARNESS_DEFAULT_RESOLVED_TEAM_ID = 'team-fixture-harness-default';
+
+/**
+ * T176: `loadActiveSeason` is a new optional third parameter (default
+ * resolves `FIXTURE_ACTIVE_SEASON` quickly, matching every pre-existing
+ * `it(`'s implicit expectation) -- every call site that predates this task
+ * still calls `renderAsUser(user, props)` with exactly two arguments, so
+ * this default applies there unchanged; only the new criterion 6/10 tests
+ * below pass a third argument. `resolveStudentId`/`resolveStudentScope`
+ * default inside `props` (spread AFTER the harness defaults, so an
+ * individual test's own override always wins) to distinguishable fixture
+ * resolvers -- neither is the same value as `PLACEHOLDER_CURRENT_STUDENT_ID`/
+ * `PLACEHOLDER_CURRENT_TEAM_ID` (criterion 1/3's own "must not be the
+ * retired placeholder" discipline, applied to the harness default too).
+ */
+function renderAsUser(
+  user: AuthUser | null,
+  props: Parameters<typeof StudentHome>[0] = {},
+  loadActiveSeason: LoadActiveSeasonFn = async () => FIXTURE_ACTIVE_SEASON,
+): void {
+  const mergedProps: Parameters<typeof StudentHome>[0] = {
+    resolveStudentId: async () => HARNESS_DEFAULT_RESOLVED_STUDENT_ID,
+    resolveStudentScope: async () => ({
+      teamId: HARNESS_DEFAULT_RESOLVED_TEAM_ID,
+      goalHours: 100,
+      confirmedHours: 0,
+      plannedHours: 0,
+    }),
+    ...props,
+  };
   act(() => {
     root.render(
-      <AuthProvider>
-        {user === null ? (
-          <StudentHome {...props} />
-        ) : (
-          <LoginAs user={user}>
-            <StudentHome {...props} />
-          </LoginAs>
-        )}
-      </AuthProvider>,
+      <SeasonProvider loadActiveSeason={loadActiveSeason}>
+        <AuthProvider>
+          {user === null ? (
+            <StudentHome {...mergedProps} />
+          ) : (
+            <LoginAs user={user}>
+              <StudentHome {...mergedProps} />
+            </LoginAs>
+          )}
+        </AuthProvider>
+      </SeasonProvider>,
     );
   });
 }
@@ -112,6 +169,26 @@ afterEach(() => {
 });
 
 const REF_NOW_MS = FIXTURE_REFERENCE_NOW.getTime();
+
+// T176 -- pre-existing "renders the shipped default fixture data end to
+// end" / T129 "populated branch" tests both pass `defaultLoadStudentHomeData`
+// DIRECTLY (not wrapped) with explicit `studentId`/`teamId` (identity tier
+// skipped). `defaultLoadStudentHomeData`'s own `FIXTURE_EVENTS` are
+// hardcoded to the (module-private) literal `PLACEHOLDER_SEASON_ID` --
+// harmless before this task (the pre-T176 default `seasonId` parameter WAS
+// that literal), but now that `seasonId` is genuinely
+// `useActiveSeason().season.id` (this harness's own
+// `FIXTURE_ACTIVE_SEASON.id`, a real non-placeholder id), the two no longer
+// match and `FIXTURE_EVENTS.filter((event) => event.seasonId === seasonId)`
+// would silently return `[]`. Mirrors `CoachHome.test.tsx`'s own
+// pre-existing (T053-era, predating T155) `fixtureLoadData`/
+// `PLACEHOLDER_SEASON_ID_FOR_TESTS` convention exactly, for the identical
+// reason -- a `loadData` VALUE change in the two affected tests' own props,
+// not an assertion change (T176 worker output discloses this explicitly).
+const PLACEHOLDER_SEASON_ID_FOR_TESTS = 'season-placeholder-current';
+function fixtureLoadData(studentId: string): Promise<StudentHomeData> {
+  return defaultLoadStudentHomeData(studentId, PLACEHOLDER_SEASON_ID_FOR_TESTS);
+}
 
 // ---------------------------------------------------------------------------
 // Pure functions
@@ -692,9 +769,16 @@ describe('StudentHome render -- BEH-02 confirmed/planned hours never summed', ()
       updatedAt: '2026-07-01T00:00:00.000Z',
     };
 
+    // T176 round 2: `events`/`sessions`/`rsvps` above (a 3h going-RSVP'd
+    // outreach session) are kept for "Next up" section coverage, but no
+    // longer drive the confirmed/planned hours legend -- `confirmedHours`/
+    // `plannedHours` are now verbatim `resolveStudentScope` passthroughs
+    // (`v_student_goal_projection`'s own columns), injected directly below,
+    // not derived from `data.studentHours`/`computePlannedHours(...)`
+    // anymore (still-fixture, unrelated `loadData` fields).
     const loadData = async (): Promise<StudentHomeData> =>
       buildDataFixture({
-        studentHours: { studentId: 'student-1', seasonId: 'season-1', confirmedHours: 62 },
+        studentHours: { studentId: 'student-1', seasonId: 'season-1', confirmedHours: 999 },
         events: [goingOutreachEvent],
         sessions: [goingOutreachSession],
         rsvps: [goingRsvp],
@@ -703,6 +787,12 @@ describe('StudentHome render -- BEH-02 confirmed/planned hours never summed', ()
     renderAsUser(STUDENT_USER, {
       loadData,
       studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
+      resolveStudentScope: async () => ({
+        teamId: 'team-fixture-beh02',
+        goalHours: 100,
+        confirmedHours: 62,
+        plannedHours: 3,
+      }),
       nowFn: () => FIXTURE_REFERENCE_NOW,
     });
     await flushMicrotasks();
@@ -712,6 +802,10 @@ describe('StudentHome render -- BEH-02 confirmed/planned hours never summed', ()
     expect(container.textContent).toContain('3 h planned');
     // ...and the sum (65) never appears anywhere as a combined figure.
     expect(container.textContent).not.toContain('65 h');
+    // Never the still-fixture loadData's own (deliberately different,
+    // unused) confirmedHours value -- proves this legend genuinely reads
+    // from resolveStudentScope, not data.studentHours.
+    expect(container.textContent).not.toContain('999');
   });
 });
 
@@ -746,16 +840,32 @@ describe('StudentHome DES-12 states', () => {
   });
 
   it('renders the shipped default fixture data end to end', async () => {
+    // T176 round 2: `teamId` is no longer passed explicitly here -- an
+    // explicit `teamId` now takes the `resolveStudentIdentity` bypass path
+    // unconditionally (goalHours/confirmedHours/plannedHours default to
+    // seasonDefaultGoalHours/0/0, never consulting `resolveStudentScope` at
+    // all), which would make "62 h confirmed" structurally unreachable.
+    // `resolveStudentScope` is injected directly instead, matching the same
+    // fixture values `defaultLoadStudentHomeData`'s own (still-fixture)
+    // `studentHours`/`FIXTURE_DEFAULT_GOAL_HOURS` used to supply, and the
+    // same `PLACEHOLDER_CURRENT_TEAM_ID` scope so STEM Fair/Library Demo
+    // (both team-scoped to that id) keep rendering.
     renderAsUser(STUDENT_USER, {
-      loadData: defaultLoadStudentHomeData,
+      loadData: fixtureLoadData,
       studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
-      teamId: PLACEHOLDER_CURRENT_TEAM_ID,
+      resolveStudentScope: async () => ({
+        teamId: PLACEHOLDER_CURRENT_TEAM_ID,
+        goalHours: 100,
+        confirmedHours: 62,
+        plannedHours: 3,
+      }),
       nowFn: () => FIXTURE_REFERENCE_NOW,
     });
     await flushMicrotasks();
 
     expect(container.textContent).toContain('Hi Ada Reyes');
     expect(container.textContent).toContain('62 h confirmed');
+    expect(container.textContent).toContain('3 h planned');
     expect(container.textContent).toContain('Participation: 87.5%');
     expect(container.textContent).toContain('Weekly Build Meeting');
     expect(container.textContent).toContain('STEM Fair');
@@ -801,7 +911,7 @@ describe('<StudentHome /> T129 UXC-01 -- exactly one heading per section, List/E
 
   it('populated branch: both sections resolve aria-labelledby back to their own Heading, and each title prints exactly once', async () => {
     renderAsUser(STUDENT_USER, {
-      loadData: defaultLoadStudentHomeData,
+      loadData: fixtureLoadData,
       studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
       teamId: PLACEHOLDER_CURRENT_TEAM_ID,
       nowFn: () => FIXTURE_REFERENCE_NOW,
@@ -947,5 +1057,599 @@ describe('LiveCheckInCard check-in flow', () => {
     });
 
     expect(container.textContent).toContain('That code has expired. Ask your coach for a new one.');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T176 -- real studentId/teamId/seasonId resolution. Criteria 1-4/6/7/10/11
+// (criterion 5 is proven by the pre-existing "shows a sign-in prompt when
+// signed out" test above, rendered synchronously with no flush -- see that
+// test and this task's own worker output for the mutation record; criterion
+// 5b is structural, not mutation-provable, per the packet's own
+// classification -- documented in the worker output, not tested here).
+// ---------------------------------------------------------------------------
+
+const FIXTURE_VIEWER = { id: 'user-student', role: 'student' as const };
+
+describe('resolveStudentIdentity (pure-ish, directly testable, same posture buildNextUp/selectHeroState establish)', () => {
+  it('skips resolveStudentId entirely when explicitStudentId is given, and resolves scope for it', async () => {
+    const resolveStudentId = vi.fn(async () => 'should-never-be-called');
+    const resolveStudentScope = vi.fn(async () => ({
+      teamId: 'team-x',
+      goalHours: 5,
+      confirmedHours: 2,
+      plannedHours: 1,
+    }));
+    const result = await resolveStudentIdentity(
+      FIXTURE_VIEWER,
+      'student-explicit',
+      undefined,
+      resolveStudentId,
+      resolveStudentScope,
+      100,
+    );
+    expect(resolveStudentId).not.toHaveBeenCalled();
+    expect(resolveStudentScope).toHaveBeenCalledWith('student-explicit');
+    expect(result).toEqual({
+      studentId: 'student-explicit',
+      teamId: 'team-x',
+      goalHours: 5,
+      confirmedHours: 2,
+      plannedHours: 1,
+    });
+  });
+
+  it('skips resolveStudentScope entirely when explicitTeamId is given -- goalHours falls back to seasonDefaultGoalHours, confirmed/planned default to 0', async () => {
+    const resolveStudentId = vi.fn(async () => 'student-resolved');
+    const resolveStudentScope = vi.fn(async () => ({
+      teamId: 'should-never-be-used',
+      goalHours: 99,
+      confirmedHours: 99,
+      plannedHours: 99,
+    }));
+    const result = await resolveStudentIdentity(
+      FIXTURE_VIEWER,
+      undefined,
+      'team-explicit',
+      resolveStudentId,
+      resolveStudentScope,
+      42,
+    );
+    expect(resolveStudentScope).not.toHaveBeenCalled();
+    expect(resolveStudentId).toHaveBeenCalledWith(FIXTURE_VIEWER);
+    expect(result).toEqual({
+      studentId: 'student-resolved',
+      teamId: 'team-explicit',
+      goalHours: 42,
+      confirmedHours: 0,
+      plannedHours: 0,
+    });
+  });
+
+  it('resolves nothing explicit -- calls both real seams, verbatim passthrough (no coalesce/arithmetic applied here)', async () => {
+    const resolveStudentId = vi.fn(async () => 'student-resolved');
+    const resolveStudentScope = vi.fn(async () => ({
+      teamId: 'team-resolved',
+      goalHours: 3,
+      confirmedHours: 1.5,
+      plannedHours: 0.5,
+    }));
+    const result = await resolveStudentIdentity(
+      FIXTURE_VIEWER,
+      undefined,
+      undefined,
+      resolveStudentId,
+      resolveStudentScope,
+      100,
+    );
+    expect(resolveStudentId).toHaveBeenCalledWith(FIXTURE_VIEWER);
+    expect(resolveStudentScope).toHaveBeenCalledWith('student-resolved');
+    expect(result).toEqual({
+      studentId: 'student-resolved',
+      teamId: 'team-resolved',
+      goalHours: 3,
+      confirmedHours: 1.5,
+      plannedHours: 0.5,
+    });
+  });
+
+  it('returns null (no student linked) when resolveStudentId resolves null, without calling resolveStudentScope', async () => {
+    const resolveStudentId = vi.fn(async () => null);
+    const resolveStudentScope = vi.fn(async () => ({
+      teamId: 'team-x',
+      goalHours: 100,
+      confirmedHours: 0,
+      plannedHours: 0,
+    }));
+    const result = await resolveStudentIdentity(
+      FIXTURE_VIEWER,
+      undefined,
+      undefined,
+      resolveStudentId,
+      resolveStudentScope,
+      100,
+    );
+    expect(result).toBeNull();
+    expect(resolveStudentScope).not.toHaveBeenCalled();
+  });
+
+  it('returns null when resolveStudentScope resolves null', async () => {
+    const result = await resolveStudentIdentity(
+      FIXTURE_VIEWER,
+      'student-explicit',
+      undefined,
+      vi.fn(async () => 'unused'),
+      vi.fn(async () => null),
+      100,
+    );
+    expect(result).toBeNull();
+  });
+});
+
+describe('<StudentHome /> T176 -- real studentId reaches loadData (criterion 1)', () => {
+  it('loadData is called with exactly the injected resolveStudentId result, never the retired placeholder', async () => {
+    const loadDataSpy = vi.fn<(studentId: string, seasonId: string) => Promise<StudentHomeData>>(
+      () => new Promise<StudentHomeData>(() => {}),
+    );
+    renderAsUser(STUDENT_USER, {
+      loadData: loadDataSpy,
+      resolveStudentId: async () => 'student-fixture-resolved',
+    });
+    await flushMicrotasks();
+    expect(loadDataSpy).toHaveBeenCalledTimes(1);
+    expect(loadDataSpy.mock.calls[0]?.[0]).toBe('student-fixture-resolved');
+    expect(loadDataSpy.mock.calls[0]?.[0]).not.toBe(PLACEHOLDER_CURRENT_STUDENT_ID);
+  });
+});
+
+describe('<StudentHome /> T176 -- explicit studentId bypasses resolveStudentId, paired (criterion 2, BLOCKER 2 fix)', () => {
+  it('(a) resolveStudentId is never called AND (b) loadData receives the explicit value with distinguishable rendered content across two explicit ids', async () => {
+    const resolveStudentIdSpy = vi.fn(async () => 'student-should-never-be-used');
+    const loadDataByStudent = async (studentId: string): Promise<StudentHomeData> =>
+      buildDataFixture({ displayName: `Student ${studentId}` });
+
+    renderAsUser(STUDENT_USER, {
+      loadData: loadDataByStudent,
+      studentId: 'student-explicit-alpha',
+      resolveStudentId: resolveStudentIdSpy,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+    expect(resolveStudentIdSpy).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Hi Student student-explicit-alpha');
+
+    renderAsUser(STUDENT_USER, {
+      loadData: loadDataByStudent,
+      studentId: 'student-explicit-beta',
+      resolveStudentId: resolveStudentIdSpy,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+    expect(resolveStudentIdSpy).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Hi Student student-explicit-beta');
+    expect(container.textContent).not.toContain('student-explicit-alpha');
+  });
+});
+
+describe('<StudentHome /> T176 -- real, resolved teamId reaches team-scoped widgets, three distinct non-placeholder strings (criterion 3, BLOCKER 1 fix)', () => {
+  it("the in-scope event renders and the differently-teamed excluded event does not -- NOT this file's own shipped Titans fixture", async () => {
+    const inScopeEvent: HomeEventRow = {
+      id: 'event-in-scope-c3',
+      seasonId: 'season-1',
+      type: 'meeting',
+      title: 'In-Scope Team Meeting C3',
+      teamIds: ['team-fixture-alpha'],
+      countsVolunteerHours: false,
+    };
+    const excludedEvent: HomeEventRow = {
+      id: 'event-excluded-c3',
+      seasonId: 'season-1',
+      type: 'meeting',
+      title: 'Excluded Team Meeting C3',
+      teamIds: ['team-fixture-beta'],
+      countsVolunteerHours: false,
+    };
+    const inScopeSession: HomeSessionRow = {
+      id: 'session-in-scope-c3',
+      eventId: 'event-in-scope-c3',
+      startsAt: '2026-07-21T23:00:00.000Z',
+      endsAt: '2026-07-22T01:00:00.000Z',
+      status: 'scheduled',
+    };
+    const excludedSession: HomeSessionRow = {
+      id: 'session-excluded-c3',
+      eventId: 'event-excluded-c3',
+      startsAt: '2026-07-22T23:00:00.000Z',
+      endsAt: '2026-07-23T01:00:00.000Z',
+      status: 'scheduled',
+    };
+
+    const loadData = async (): Promise<StudentHomeData> =>
+      buildDataFixture({
+        events: [inScopeEvent, excludedEvent],
+        sessions: [inScopeSession, excludedSession],
+        rsvps: [],
+      });
+
+    // All three strings distinct from each other AND from
+    // PLACEHOLDER_CURRENT_TEAM_ID (revision-2 fix -- revision 1's version of
+    // this criterion reused this file's own shipped Titans fixture, where
+    // the in-scope id WAS PLACEHOLDER_CURRENT_TEAM_ID, so the mutation below
+    // could never fail).
+    expect('team-fixture-alpha').not.toBe(PLACEHOLDER_CURRENT_TEAM_ID);
+    expect('team-fixture-beta').not.toBe(PLACEHOLDER_CURRENT_TEAM_ID);
+    expect('team-fixture-alpha').not.toBe('team-fixture-beta');
+
+    renderAsUser(STUDENT_USER, {
+      loadData,
+      resolveStudentScope: async () => ({
+        teamId: 'team-fixture-alpha',
+        goalHours: 100,
+        confirmedHours: 0,
+        plannedHours: 0,
+      }),
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('In-Scope Team Meeting C3');
+    expect(container.textContent).not.toContain('Excluded Team Meeting C3');
+  });
+});
+
+describe('<StudentHome /> T176 -- explicit teamId bypasses resolveStudentScope entirely, paired (criterion 4, BLOCKER 2 fix extended)', () => {
+  it('(a) resolveStudentScope is never called AND (b) the rendered team-scope outcome reflects the explicit value', async () => {
+    const resolveStudentScopeSpy = vi.fn(async () => ({
+      teamId: 'team-should-never-be-used',
+      goalHours: 999,
+      confirmedHours: 999,
+      plannedHours: 999,
+    }));
+    const inScopeEvent: HomeEventRow = {
+      id: 'event-c4-in',
+      seasonId: 'season-1',
+      type: 'meeting',
+      title: 'C4 In Scope',
+      teamIds: ['team-explicit-c4'],
+      countsVolunteerHours: false,
+    };
+    const excludedEvent: HomeEventRow = {
+      id: 'event-c4-out',
+      seasonId: 'season-1',
+      type: 'meeting',
+      title: 'C4 Excluded',
+      teamIds: ['team-fixture-other-c4'],
+      countsVolunteerHours: false,
+    };
+    const inScopeSession: HomeSessionRow = {
+      id: 'session-c4-in',
+      eventId: 'event-c4-in',
+      startsAt: '2026-07-21T23:00:00.000Z',
+      endsAt: '2026-07-22T01:00:00.000Z',
+      status: 'scheduled',
+    };
+    const excludedSession: HomeSessionRow = {
+      id: 'session-c4-out',
+      eventId: 'event-c4-out',
+      startsAt: '2026-07-22T23:00:00.000Z',
+      endsAt: '2026-07-23T01:00:00.000Z',
+      status: 'scheduled',
+    };
+
+    expect('team-explicit-c4').not.toBe(PLACEHOLDER_CURRENT_TEAM_ID);
+    expect('team-fixture-other-c4').not.toBe(PLACEHOLDER_CURRENT_TEAM_ID);
+    expect('team-explicit-c4').not.toBe('team-fixture-other-c4');
+
+    const loadData = async (): Promise<StudentHomeData> =>
+      buildDataFixture({
+        events: [inScopeEvent, excludedEvent],
+        sessions: [inScopeSession, excludedSession],
+        rsvps: [],
+      });
+
+    renderAsUser(STUDENT_USER, {
+      loadData,
+      teamId: 'team-explicit-c4',
+      resolveStudentScope: resolveStudentScopeSpy,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+
+    expect(resolveStudentScopeSpy).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('C4 In Scope');
+    expect(container.textContent).not.toContain('C4 Excluded');
+  });
+});
+
+class T176ThrowCaughtBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null };
+  static getDerivedStateFromError(error: Error): { error: Error } {
+    return { error };
+  }
+  render(): ReactNode {
+    if (this.state.error) {
+      return <div data-testid="t176-boundary-error">{this.state.error.message}</div>;
+    }
+    return this.props.children;
+  }
+}
+
+describe('<StudentHome /> T176 -- fail-loud without a <SeasonProvider> ancestor (criterion 6a)', () => {
+  it('throws the exact "useActiveSeason() must be called within a <SeasonProvider>." message', () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      act(() => {
+        root.render(
+          <AuthProvider>
+            <LoginAs user={STUDENT_USER}>
+              <T176ThrowCaughtBoundary>
+                <StudentHome />
+              </T176ThrowCaughtBoundary>
+            </LoginAs>
+          </AuthProvider>,
+        );
+      });
+      expect(container.querySelector('[data-testid="t176-boundary-error"]')?.textContent).toBe(
+        'useActiveSeason() must be called within a <SeasonProvider>.',
+      );
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it('the companion case: the same probe does NOT throw when a <SeasonProvider> wrapping the fixture-resolving loader is present', async () => {
+    act(() => {
+      root.render(
+        <SeasonProvider loadActiveSeason={async () => FIXTURE_ACTIVE_SEASON}>
+          <AuthProvider>
+            <LoginAs user={STUDENT_USER}>
+              <T176ThrowCaughtBoundary>
+                <StudentHome
+                  loadData={fixtureLoadData}
+                  studentId={PLACEHOLDER_CURRENT_STUDENT_ID}
+                  teamId={PLACEHOLDER_CURRENT_TEAM_ID}
+                  nowFn={() => FIXTURE_REFERENCE_NOW}
+                />
+              </T176ThrowCaughtBoundary>
+            </LoginAs>
+          </AuthProvider>
+        </SeasonProvider>,
+      );
+    });
+    await flushMicrotasks();
+    expect(container.querySelector('[data-testid="t176-boundary-error"]')).toBeNull();
+    expect(container.textContent).toContain('Hi Ada Reyes');
+  });
+});
+
+describe('<StudentHome /> T176 -- seasonId sourced from useActiveSeason(), asserted in isolation (criterion 6b)', () => {
+  it('loadData receives EXACTLY the real active season id as its second argument, never the retired placeholder', async () => {
+    const loadDataSpy = vi.fn<(studentId: string, seasonId: string) => Promise<StudentHomeData>>(
+      () => new Promise<StudentHomeData>(() => {}),
+    );
+    renderAsUser(STUDENT_USER, { loadData: loadDataSpy });
+    await flushMicrotasks();
+    expect(loadDataSpy).toHaveBeenCalledTimes(1);
+    expect(loadDataSpy.mock.calls[0]?.[1]).toBe(FIXTURE_ACTIVE_SEASON.id);
+    expect(loadDataSpy.mock.calls[0]?.[1]).not.toBe(PLACEHOLDER_SEASON_ID_FOR_TESTS);
+  });
+});
+
+describe('<StudentHome /> T176 -- identity-resolution tier own DES-12 states, three independent sub-mutations (criterion 7)', () => {
+  it('(i) loading: shows the tier\'s own loading text, distinct from "Loading Home…"', async () => {
+    renderAsUser(STUDENT_USER, {
+      resolveStudentId: () => new Promise(() => {}),
+    });
+    await flushMicrotasks();
+    expect(container.textContent).toContain('Finding your student record');
+    expect(container.querySelector('[role="status"]')?.textContent).toBe(
+      'Finding your student record…',
+    );
+    expect(container.textContent).not.toContain('Loading Home');
+  });
+
+  it('(ii) error: shows a distinct error banner, distinct from "Couldn\'t load Home", with a working Retry', async () => {
+    let callCount = 0;
+    const resolveStudentId = vi.fn(async () => {
+      callCount += 1;
+      if (callCount === 1) throw new Error('boom-identity');
+      return HARNESS_DEFAULT_RESOLVED_STUDENT_ID;
+    });
+    renderAsUser(STUDENT_USER, { resolveStudentId });
+    await flushMicrotasks();
+    expect(container.textContent).toContain("Couldn't find your student record");
+    expect(container.textContent).not.toContain("Couldn't load Home");
+
+    const retryButton = findButtonByText('Retry');
+    expect(retryButton).toBeDefined();
+    act(() => {
+      retryButton!.click();
+    });
+    await flushMicrotasks();
+    expect(callCount).toBe(2);
+    expect(container.textContent).not.toContain("Couldn't find your student record");
+  });
+
+  it('(iii) null (no linked student): shows a distinct EmptyState, independent of the copy-collision mutation (ii) survives', async () => {
+    renderAsUser(STUDENT_USER, { resolveStudentId: async () => null });
+    await flushMicrotasks();
+    expect(container.textContent).toContain('No student account linked yet');
+    expect(container.textContent).not.toContain('Nothing scheduled');
+    expect(container.textContent).not.toContain("Couldn't find your student record");
+  });
+});
+
+describe('<StudentHome /> T176 round 2 -- goal-hours denominator + confirmed/planned hours are ALL verbatim passthroughs from resolveStudentScope (v_student_goal_projection), never recomputed and never read from the still-fixture loadData (criterion 10, §2c corrected)', () => {
+  const CRITERION_10_SEASON: SeasonRow = {
+    ...FIXTURE_ACTIVE_SEASON,
+    id: 'season-fixture-c10',
+    // Deliberately DIFFERENT from resolveStudentScope's own goalHours below
+    // in both tests -- if the render fell back to (or independently
+    // recomputed against) the season default, this number would leak into
+    // the assertions and be caught.
+    defaultGoalHours: 999,
+  };
+
+  it('goalHours/confirmedHours/plannedHours come from resolveStudentScope, never the season default and never data.studentHours (a deliberately different, unused fixture value)', async () => {
+    renderAsUser(
+      STUDENT_USER,
+      {
+        // Deliberately a DIFFERENT confirmedHours than resolveStudentScope's
+        // own value below -- if the render used this still-fixture value
+        // instead of the real view's value, this test would catch it.
+        loadData: async () =>
+          buildDataFixture({
+            studentHours: { studentId: 'student-1', seasonId: 'season-1', confirmedHours: 999 },
+          }),
+        resolveStudentScope: async () => ({
+          teamId: 'team-fixture-c10',
+          goalHours: 8,
+          confirmedHours: 2,
+          plannedHours: 1,
+        }),
+        nowFn: () => FIXTURE_REFERENCE_NOW,
+      },
+      async () => CRITERION_10_SEASON,
+    );
+    await flushMicrotasks();
+
+    const progressBar = container.querySelector('[role="progressbar"]');
+    expect(progressBar).toBeTruthy();
+    expect(progressBar!.getAttribute('aria-valuemax')).toBe('8');
+    expect(progressBar!.getAttribute('aria-valuetext')).toBe('2 / 8 h (25%)');
+    expect(container.innerHTML).toContain('2 / 8 h (25%)');
+    expect(container.innerHTML).toContain('aria-valuemax="8"');
+    expect(container.innerHTML).toContain('aria-valuetext="2 / 8 h (25%)"');
+    // Never the season default (999) -- proves no independent TS-side
+    // coalesce/override happens anymore (the coordinator's own fix).
+    expect(progressBar!.getAttribute('aria-valuemax')).not.toBe('999');
+    // Confirmed/planned legend -- the REAL view's numbers (2/1), never the
+    // still-fixture loadData's own confirmedHours (999) or
+    // computePlannedHours's fixture-derived result (this render's own
+    // `data.events`/`data.sessions`/`rsvps` are all empty, per
+    // `buildDataFixture`'s own default, so computePlannedHours would have
+    // returned 0 here even if still called -- the 999 confirmedHours is the
+    // genuinely discriminating value).
+    expect(container.textContent).toContain('2 h confirmed');
+    expect(container.textContent).toContain('1 h planned');
+    expect(container.textContent).not.toContain('999');
+  });
+
+  it('a different resolveStudentScope result renders different real numbers, proving nothing is hardcoded', async () => {
+    renderAsUser(
+      STUDENT_USER,
+      {
+        loadData: async () => buildDataFixture({ studentHours: null }),
+        resolveStudentScope: async () => ({
+          teamId: 'team-fixture-c10',
+          goalHours: 40,
+          confirmedHours: 10,
+          plannedHours: 5,
+        }),
+        nowFn: () => FIXTURE_REFERENCE_NOW,
+      },
+      async () => CRITERION_10_SEASON,
+    );
+    await flushMicrotasks();
+
+    const progressBar = container.querySelector('[role="progressbar"]');
+    expect(progressBar).toBeTruthy();
+    expect(progressBar!.getAttribute('aria-valuemax')).toBe('40');
+    expect(progressBar!.getAttribute('aria-valuetext')).toBe('10 / 40 h (25%)');
+    expect(container.innerHTML).toContain('10 / 40 h (25%)');
+    expect(container.textContent).toContain('10 h confirmed');
+    expect(container.textContent).toContain('5 h planned');
+    expect(progressBar!.getAttribute('aria-valuemax')).not.toBe('8');
+    expect(progressBar!.getAttribute('aria-valuemax')).not.toBe('999');
+  });
+});
+
+describe('<StudentHome /> T176 -- render-and-enumerate live over container.innerHTML, real ids + default loadData (criterion 11)', () => {
+  it('confirms or corrects the gate-measured enumeration table (T176-gate-round1-findings.md)', async () => {
+    const REAL_SEASON: SeasonRow = {
+      id: 'season-real-c11',
+      name: 'Real Season C11',
+      startsOn: '2026-01-01',
+      endsOn: '2026-12-31',
+      // Deliberately DIFFERENT from resolveStudentScope's own goalHours
+      // below, and deliberately unused (T176 round 2 -- see criterion 10):
+      // if this leaked into the render, the assertions below would catch it.
+      defaultGoalHours: 999,
+      isActive: true,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+
+    renderAsUser(
+      STUDENT_USER,
+      {
+        // `defaultLoadStudentHomeData` -- the shipped default, unmodified.
+        resolveStudentId: async () => 'student-real-c11',
+        resolveStudentScope: async () => ({
+          teamId: 'team-real-c11',
+          goalHours: 50,
+          confirmedHours: 5,
+          plannedHours: 2,
+        }),
+        nowFn: () => FIXTURE_REFERENCE_NOW,
+      },
+      async () => REAL_SEASON,
+    );
+    await flushMicrotasks();
+
+    const html = container.innerHTML;
+
+    // Row 1 -- lead item (§3 decision 2): stays fabricated regardless of
+    // real, non-placeholder ids -- `defaultLoadStudentHomeData` ignores
+    // both its parameters for `displayName`.
+    expect(html).toContain('Hi Ada Reyes');
+
+    // Rows 2-4 -- fixed by criterion 10: the real `resolveStudentScope`
+    // value (50), never the fabricated `FIXTURE_DEFAULT_GOAL_HOURS` (100)
+    // and never the (deliberately different, unused) season default (999).
+    const progressBar = container.querySelector('[role="progressbar"]');
+    expect(progressBar!.getAttribute('aria-valuemax')).toBe('50');
+    expect(progressBar!.getAttribute('aria-valuetext')).toBe('5 / 50 h (10%)');
+    expect(html).toContain('5 / 50 h (10%)');
+    expect(progressBar!.getAttribute('aria-valuemax')).not.toBe('100');
+    expect(progressBar!.getAttribute('aria-valuemax')).not.toBe('999');
+
+    // Row 5 -- RECLASSIFIED, T176 round 2 (coordinator correction): no
+    // longer "honestly empty" via a fixture-null `data.studentHours` --
+    // `confirmedHours`/`plannedHours` are now genuinely real
+    // `v_student_goal_projection` columns (same single `resolveStudentScope`
+    // read as the goal-hours denominator), so this real student's real
+    // confirmed/planned numbers (5/2) render here, not a fixture-derived 0.
+    expect(html).toContain('5 h confirmed + 2 h planned');
+    expect(html).not.toContain('0 h confirmed + 0 h planned');
+
+    // Row 6 -- participation -> null -> em dash, never a fabricated 0%.
+    expect(html).toContain('Participation: —');
+
+    // Row 7 -- events filtered to [] (the real season id never matches the
+    // fixture's own hardcoded placeholder literal) -> Next up empty.
+    expect(html).toContain('Nothing scheduled');
+
+    // Rows 8/9 -- BOTH literally "You're all caught up" (enumeration
+    // hazard, §7 criterion 11) -- scoped by the T129 aria-labelledby
+    // section group, not a bare substring match.
+    const opportunitiesGroup = Array.from(container.querySelectorAll('[role="group"]')).find((el) =>
+      el.textContent?.includes("You're all caught up"),
+    );
+    expect(opportunitiesGroup).toBeTruthy();
+    expect(opportunitiesGroup!.textContent).toContain(
+      'Outreach events awaiting your response will show up here.',
+    );
+    // Row 9's own quiet-greeting hero -- a DIFFERENT, longer sentence, a
+    // positive-reassurance string rendered where the app in fact knows
+    // nothing about this real student (disclosed judgement, not omitted).
+    expect(html).toContain("You're all caught up. Nothing needs your attention right now.");
+    const caughtUpOccurrences = (container.textContent?.match(/You're all caught up/g) ?? [])
+      .length;
+    expect(caughtUpOccurrences).toBe(2);
+
+    // Row 10 -- no live check-in card, no unanswered-RSVP hero (both joins
+    // miss once `events` is `[]`).
+    expect(html).not.toContain('Meeting live now');
+    expect(html).not.toContain('events to answer');
   });
 });
