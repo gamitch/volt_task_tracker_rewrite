@@ -356,6 +356,18 @@ import type {
   OutreachRosterStudent,
   SaveOutreachEventPayload,
 } from '../../../pages/outreach/OutreachEventDialog';
+// T157 (OUT-06 read side): `GuardianLinkRow` is REUSED from `ParentRsvp.tsx`'s
+// own export rather than redeclared here or imported from
+// `src/lib/supabase/types.ts`. `types.ts`'s same-named type is a DIFFERENT,
+// five-field shape (it carries `createdAt`, which `ParentRsvp` never reads) for
+// a different boundary, kept separate deliberately by `parents.ts`'s own Trap
+// #3. `ParentRsvp.tsx`'s four-field version is the exact contract the one
+// consumer of this loader (`OutreachDetail.tsx`'s `<ParentRsvp>` call site)
+// must satisfy, so mapping straight into it removes a whole class of
+// hand-sync drift -- the same drift T143/T146 already paid for on a select
+// string. Type-only import; erased at compile time, so the `ParentRsvp.tsx` ->
+// `outreach.ts` value import of `submitRsvpChange` is not made circular.
+import type { GuardianLinkRow } from '../../../pages/outreach/ParentRsvp';
 // T118 (UXP-02) module doc 7 -- reuses `loaders/students.ts`'s own already-
 // real `makeLoadStudentsTabData` (T089) rather than duplicating its raw
 // `students` query/mapping here.
@@ -422,11 +434,39 @@ interface AttendanceDbRow {
   status: 'present' | 'late' | 'excused' | 'absent';
 }
 
+/**
+ * T157 -- `profile_id` added. `public.students.profile_id uuid references
+ * public.profiles (id)` (`20260716000000_identity_roster.sql`) is NULLABLE (a
+ * student may have no account yet) and is a DIFFERENT id space than
+ * `students.id`. `OutreachDetail.tsx`'s own `RosterStudent.profileId` needs it
+ * so `<ParentRsvp>`'s self-vs-guardian attribution (`ParentRsvp.tsx` module
+ * doc #2(b)/#3) is computed against a real value instead of a plausible
+ * `null`. Additive only: this row shape is shared with `makeLoadOutreachData`
+ * via `mapStudentDbRowToOutreachStudentFixture`, which ignores the extra
+ * column.
+ */
 interface StudentDbRow {
   id: string;
   display_name: string;
   team_id: string;
+  profile_id: string | null;
   goal_hours_override: number | null;
+}
+
+/**
+ * T157 -- real `public.guardian_links` row shape, cited column-for-column from
+ * `supabase/migrations/20260716000000_identity_roster.sql` (`create table
+ * public.guardian_links`): `id`, `parent_profile_id` (not null), `student_id`
+ * (not null), `relationship` (text, not null), `created_at`. Only the four
+ * columns `ParentRsvp.tsx`'s own `GuardianLinkRow` reads -- `created_at` is
+ * ordered on but never mapped, since nothing on the RSVP-on-behalf surface
+ * displays it.
+ */
+interface GuardianLinkDbRow {
+  id: string;
+  parent_profile_id: string;
+  student_id: string;
+  relationship: string;
 }
 
 interface SeasonGoalDbRow {
@@ -598,8 +638,26 @@ function mapRsvpDbRowToDetailRsvpRow(row: RsvpDbRow): DetailRsvpRow {
   };
 }
 
+/** T157 -- `profileId` carried through (the `students.profile_id` hop
+ * `<ParentRsvp>`'s self-attribution needs; see `StudentDbRow` above). */
 function mapStudentDbRowToRosterStudent(row: StudentDbRow): RosterStudent {
-  return { id: row.id, name: row.display_name, teamId: row.team_id };
+  return {
+    id: row.id,
+    name: row.display_name,
+    teamId: row.team_id,
+    profileId: row.profile_id,
+  };
+}
+
+/** T157 -- 1:1 camelCase rename into `ParentRsvp.tsx`'s own exported
+ * `GuardianLinkRow` (see the import block's note), no derivation. */
+function mapGuardianLinkDbRowToGuardianLinkRow(row: GuardianLinkDbRow): GuardianLinkRow {
+  return {
+    id: row.id,
+    parentProfileId: row.parent_profile_id,
+    studentId: row.student_id,
+    relationship: row.relationship,
+  };
 }
 
 /** T143 -- `color` carried through unchanged (required field, module doc
@@ -700,9 +758,57 @@ async function queryAllStudents(
 ): Promise<LoaderQueryResult<StudentDbRow[]>> {
   const result = await client
     .from('students')
-    .select('id, display_name, team_id, goal_hours_override')
+    // T157 -- `profile_id` added (see `StudentDbRow`). The cast below
+    // *asserts* `profile_id` is present regardless of what was actually asked
+    // for, so `tsc` cannot catch a dropped column here -- the same blind spot
+    // T146 already documented for the `teams` select.
+    .select('id, display_name, team_id, profile_id, goal_hours_override')
     .order('display_name', { ascending: true });
   return { data: (result.data as StudentDbRow[] | null) ?? null, error: result.error };
+}
+
+/**
+ * T157 -- all of ONE parent's `guardian_links` rows, INCLUDING `relationship`.
+ *
+ * Structural template: `checkin.ts:393`'s own `queryGuardianLinksForParent`
+ * (all of a parent's links, ordered `created_at` ascending, no limit) -- NOT
+ * `meetings.ts:504`'s `queryFirstLinkedStudentId`, whose `.limit(1)` answers
+ * the different question "the parent's first linked child."
+ *
+ * Named `...WithRelationshipForParent` rather than reusing `checkin.ts`'s
+ * exact name deliberately: that file already owns `queryGuardianLinksForParent`
+ * as a module-private function with a NARROWER select (`student_id` only).
+ * There is no compile-time collision (different files, neither exported), but
+ * two same-named functions with different `.select()` shapes in one loaders
+ * directory is exactly the greppability trap T146's select-string class
+ * already cost this project once. `relationship` is the functional difference,
+ * so it is in the name.
+ *
+ * `relationship` is load-bearing, not incidental: it is the text
+ * `ParentRsvp.tsx`'s "Mom signed you up" attribution line (PRD line 297) is
+ * built from. Dropping it would silently degrade every parent-set RSVP to the
+ * generic `'unrecognized'` copy. Guarded against a silent revert by
+ * `outreach.test.ts`'s own select-string test (T146's pattern).
+ *
+ * Filtered `.eq('parent_profile_id', ...)` server-side. This is strictly
+ * NARROWER than the `own_read` RLS policy on `guardian_links`
+ * (`20260717000002_rls.sql`: `parent_profile_id = auth.uid() or student_id in
+ * (select my_student_ids())`) -- that disjunction's second arm also admits
+ * CO-GUARDIAN rows carrying a different `parent_profile_id`. Narrower is the
+ * correct posture here: a parent should see and act on their own guardian-link
+ * rows, not a co-guardian's. This is defence in depth on top of RLS, not a
+ * claim that it mirrors RLS.
+ */
+async function queryGuardianLinksWithRelationshipForParent(
+  client: SupabaseClient,
+  parentProfileId: string,
+): Promise<LoaderQueryResult<GuardianLinkDbRow[]>> {
+  const result = await client
+    .from('guardian_links')
+    .select('id, parent_profile_id, student_id, relationship')
+    .eq('parent_profile_id', parentProfileId)
+    .order('created_at', { ascending: true });
+  return { data: (result.data as GuardianLinkDbRow[] | null) ?? null, error: result.error };
 }
 
 async function querySeasonGoal(
@@ -903,6 +1009,39 @@ export function makeLoadOutreachDetail(
 
 /** `OutreachDetail.tsx`'s own real default `loadData`. */
 export const loadOutreachDetail: LoadOutreachDetailFn = makeLoadOutreachDetail();
+
+// ---------------------------------------------------------------------------
+// T157 (OUT-06 read side) -- the signed-in parent's own `guardian_links` rows.
+//
+// A SEPARATE seam from `makeLoadOutreachDetail` above, deliberately: this
+// query is only ever issued for a `parent`-role viewer (`OutreachDetail.tsx`'s
+// own `isParentViewer` gate), so folding it into that page's single top-level
+// load would make every coach/admin/student page view pay for a query they can
+// never use. Same separate-seam posture `makeLoadOutreachEventRoster` (further
+// below) / that page's own `loadRoster` prop already established.
+// ---------------------------------------------------------------------------
+
+export type LoadGuardianLinksForParentFn = (
+  parentProfileId: string,
+) => Promise<readonly GuardianLinkRow[]>;
+
+/** Same `createLoader`/`getClient` DI machinery `makeLoadOutreachDetail` above
+ * uses (its structural template). Resolves `[]` -- never `null`/`undefined` --
+ * so a caller can never read "no rows" as "fall back to something." */
+export function makeLoadGuardianLinksForParent(
+  getClient: () => SupabaseClient = getSupabaseClient,
+): LoadGuardianLinksForParentFn {
+  const loadLinks = createLoader<string, GuardianLinkDbRow[]>(
+    queryGuardianLinksWithRelationshipForParent,
+    getClient,
+  );
+  return async (parentProfileId: string): Promise<readonly GuardianLinkRow[]> =>
+    ((await loadLinks(parentProfileId)) ?? []).map(mapGuardianLinkDbRowToGuardianLinkRow);
+}
+
+/** `OutreachDetail.tsx`'s own real default `loadGuardianLinksForParent`. */
+export const loadGuardianLinksForParent: LoadGuardianLinksForParentFn =
+  makeLoadGuardianLinksForParent();
 
 // ---------------------------------------------------------------------------
 // Trap #2 -- shared RSVP mutation (module doc #3). Locally-defined param
