@@ -1494,16 +1494,23 @@ function StudentHomeContent({
 // establish elsewhere in this file): resolve `studentId` (skip the
 // `resolveStudentId` call entirely when `explicitStudentId` is supplied --
 // plain `??` short-circuit, not a separate branch, so the call is
-// GENUINELY never made, not just its result discarded), bail to the empty
-// state on `null` (no student linked); then, UNLESS `explicitTeamId` is
-// supplied (in which case there is no view row to read -- `goalHours` for
-// this render honestly falls back to the real `seasonDefaultGoalHours`
-// (the same value a `null`-override coalesce would have produced),
-// `confirmedHours`/`plannedHours` default to `0` -- an honest default for
-// the explicit-bypass path, never hit by a real signed-in caller), resolve
+// GENUINELY never made, not just its result discarded), return
+// `{kind:'not-linked'}` when it is `null` (no `students` row linked to this
+// profile at all); then, UNLESS `explicitTeamId` is supplied (in which case
+// there is no view row to read -- `goalHours` for this render honestly
+// falls back to the real `seasonDefaultGoalHours` (the same value a
+// `null`-override coalesce would have produced), `confirmedHours`/
+// `plannedHours` default to `0` -- an honest default for the
+// explicit-bypass path, never hit by a real signed-in caller), resolve
 // `{teamId, goalHours, confirmedHours, plannedHours}` via
-// `resolveStudentScope(studentId)`, bailing to the same empty state on
-// `null`.
+// `resolveStudentScope(studentId)`. T184: a `null` scope here does NOT mean
+// "no student" -- `studentId` is already confirmed real by the branch
+// above -- it means a REAL, linked `students` row with `is_active = false`
+// (`v_student_goal_projection` ends `where s.is_active`,
+// `dashboard_views.sql`), so this branch returns the distinct
+// `{kind:'inactive'}` rather than reusing the `not-linked` result. Every
+// other path returns `{kind:'linked', ...}`. See `StudentIdentityOutcome`
+// below.
 //
 // T176 ROUND 2 (checker MAJOR fix -- see `loaders/students.ts`'s own module
 // doc for the full record): this tier no longer skips its own mount when
@@ -1531,6 +1538,23 @@ export interface ResolvedStudentIdentity {
   plannedHours: number;
 }
 
+// T184: `resolveStudentIdentity` used to collapse two different facts into
+// one `null` -- "no student row linked to this profile at all" and "a
+// student row IS linked, but `students.is_active = false`" (deactivated) --
+// because `resolveStudentScope` reads `v_student_goal_projection`, which
+// ends `where s.is_active` (`dashboard_views.sql`), so a deactivated
+// student's own real, linked `studentId` still resolves a `null` scope. The
+// caller could not tell those two cases apart, so both rendered the SAME
+// "No student account linked yet" copy -- false for a deactivated student
+// who DOES have a linked record. `StudentIdentityOutcome` below is a
+// three-way discriminated union so each fact gets its own, honest, distinct
+// outcome: `'not-linked'` (no row at all) vs `'inactive'` (row exists,
+// `resolveStudentScope` returned `null` for a `studentId` that
+// `resolveStudentId` just confirmed is real). See `ResolvedStudentHomeView`
+// below for the two independent EmptyStates this produces.
+export type StudentIdentityOutcome =
+  ({ kind: 'linked' } & ResolvedStudentIdentity) | { kind: 'not-linked' } | { kind: 'inactive' };
+
 export async function resolveStudentIdentity(
   viewer: CurrentViewerIdentity,
   explicitStudentId: string | undefined,
@@ -1538,11 +1562,12 @@ export async function resolveStudentIdentity(
   resolveStudentId: ResolveCurrentStudentIdFn,
   resolveStudentScope: ResolveStudentScopeFn,
   seasonDefaultGoalHours: number,
-): Promise<ResolvedStudentIdentity | null> {
+): Promise<StudentIdentityOutcome> {
   const studentId = explicitStudentId ?? (await resolveStudentId(viewer));
-  if (studentId === null) return null;
+  if (studentId === null) return { kind: 'not-linked' };
   if (explicitTeamId !== undefined) {
     return {
+      kind: 'linked',
       studentId,
       teamId: explicitTeamId,
       goalHours: seasonDefaultGoalHours,
@@ -1551,8 +1576,9 @@ export async function resolveStudentIdentity(
     };
   }
   const scope = await resolveStudentScope(studentId);
-  if (scope === null) return null;
+  if (scope === null) return { kind: 'inactive' };
   return {
+    kind: 'linked',
     studentId,
     teamId: scope.teamId,
     goalHours: scope.goalHours,
@@ -1578,10 +1604,10 @@ interface ResolvedStudentHomeViewProps {
  * Always mounts once `StudentHome`'s outer wrapper reaches
  * `activeSeason.status === 'ready'` (T176 round 2 -- no skip-mount branch
  * above this component anymore; see module doc above for why). Owns its
- * OWN loading/error/no-student-linked DES-12 copy, each independently
- * distinguishable from the content tier's own "Loading Home…"/"Couldn't
- * load Home" copy (criterion 7 -- not a re-run of T129's
- * shared-skeleton-text NIT).
+ * OWN loading/error/not-linked/inactive (T184) DES-12 copy, each
+ * independently distinguishable from the content tier's own "Loading
+ * Home…"/"Couldn't load Home" copy (criterion 7 -- not a re-run of T129's
+ * shared-skeleton-text NIT) and from each other.
  */
 function ResolvedStudentHomeView({
   viewer,
@@ -1641,13 +1667,25 @@ function ResolvedStudentHomeView({
     );
   }
 
-  if (loadState.data === null) {
+  if (loadState.data.kind === 'not-linked') {
     return (
       <VStack gap={4} padding={6}>
         <EmptyState
           headingLevel={1}
           title="No student account linked yet"
           description="We couldn't find a student record linked to your account yet. Once one is linked, your Home will show up here."
+        />
+      </VStack>
+    );
+  }
+
+  if (loadState.data.kind === 'inactive') {
+    return (
+      <VStack gap={4} padding={6}>
+        <EmptyState
+          headingLevel={1}
+          title="Your student account is inactive"
+          description="Your student account has been deactivated. If you think this is a mistake, contact your coach or team admin."
         />
       </VStack>
     );

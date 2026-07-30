@@ -5456,3 +5456,45 @@ imprecise, which the checker recorded rather than waving through.
 **Carried forward:** T190 (rekey the now-vestigial fixtures so the harness default can return a
 distinct id, making future tests discriminating by construction — measured at exactly 3 assertion
 updates, and unfoldable into T170 because that packet forbids assertion edits).
+
+---
+
+## T184 — a deactivated student is no longer told her record is missing (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commit | `d63f7bad1a50892bfb7dc97c2f3b4cf094f0a387` |
+| Verdict | **PASS** — NITs only, first attempt |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
+| Premise gate | 1 full round → **DISPATCH** (3 MINOR, folded in as authoritative amendments) |
+| tsc / build / format | 0 errors / ✓ / clean |
+| eslint | 0 errors, 357 warnings (unchanged) |
+| vitest | 67 files, 1605 tests (+4, exactly the four added) |
+
+**Owner ruling honoured, and its unachievable half proven rather than assumed.** Blocking
+sign-in needs `guards.tsx`, which is Forbidden, and `is_active` appears **zero times** in both
+`auth.ts` and `guards.tsx`. So the owner's stated fallback — signs in, sees nothing — governs.
+
+**The orchestrator's first design would have shipped two bugs.** Routing to the existing
+`NoAccessPage`/`AccessDeniedPage` meant a force-sign-out on mount, copy that is *also* false for
+this user, and a dead-end loop back to the broken page. The foreman caught it by reading both
+surfaces instead of adopting the proposal.
+
+**Two orchestrator errors recorded, both caught by others:**
+1. I reported that the worker omitted its commit SHA under item 21. It did not — `T184-worker-output.md:3` states it. **I read the agent's summary message rather than its output document and asserted a reporting gap from the wrong artifact.** Struck from the record rather than carried forward.
+2. `DashboardPage.tsx:121` should be `:122`; I propagated the packet's off-by-one.
+
+**Three counts of one grep, three different answers.** The packet said 5 pre-existing title
+strings, the premise gate said 9, I measured 8-across-10. The checker re-derived it — **8 distinct
+static strings across 10 pre-existing occurrences**, confirming mine and refuting both others. The
+worker was told to re-derive rather than trust any of us, and did.
+
+**What was attacked rather than accepted:** criterion 5's "sees nothing" is an absence assertion,
+the shape that has gone vacuous six times across five tasks here. The checker neutered the guard,
+confirmed the full content genuinely renders, then went beyond the worker by reordering the paired
+assertions to prove each discriminates independently rather than one short-circuiting the other.
+
+**Also worth recording:** the checker caught its own false green mid-review — a first isolation
+mutation hit only a module comment rather than the JSX — and redid it rather than reporting the
+passing result.
