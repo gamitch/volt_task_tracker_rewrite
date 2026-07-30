@@ -5225,3 +5225,85 @@ risk, so this is the prescribed trade, not a deviation. Worth a line in a future
 outer/inner design, both scope deferrals (`teamId`, the `loadData` backend), the tier
 assignment, and every acceptance criterion were the orchestrator's, and the packet said so.
 No authority-promotion finding.
+
+## T157 — mount `ParentRsvp` in `OutreachDetail.tsx` (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commits | `b0b15b0` (source) + `9924db4` (output doc), attempt 1 |
+| Verdict | **PASS** — 1 MINOR (fixed at merge), 1 NIT; no BLOCKER, no MAJOR |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (opus, worktree) / `checker-reviewer` (opus) |
+| Packet | revision 2 — round 1 REVISE (4 MAJOR/6 MINOR/3 NIT), round 2 **DISPATCH** (5 MINOR/4 NIT) |
+| tsc / build / format | exit 0 / ✓ / **regressed, fixed at merge — see below** |
+| eslint | 0 errors, 355 → 356 warnings (+1, the new exported pure function) |
+| vitest | 66 files, **1546 → 1567** (+21 = 17 + 4 new tests, zero baseline broken) |
+
+**What shipped.** `ParentRsvp` was a finished, fully-tested component imported by exactly one
+file — its own test. A parent had no way to RSVP on behalf of their linked student. It is now
+mounted, one instance per (session × linked student), with real threaded data: `profile_id`
+carried through `StudentDbRow`/`queryAllStudents`/`mapStudentDbRowToRosterStudent`, and a new
+`makeLoadGuardianLinksForParent` that is **the only `guardian_links` read in the repo selecting
+`relationship`** — `parents.ts:190`, `checkin.ts:399` and `meetings.ts:510` all omit it, which
+is why none could be reused.
+
+**The verification chain, and why this task was opus-tiered.** `checker-premise` gated the
+packet twice but **could not execute a single mutation** — it has no Write or Edit tool and the
+sandbox refuses heredoc-to-source and multi-line `perl` insertion. The packet therefore made the
+worker's executed output the evidence of record and assigned independent re-execution to the
+checker. The checker re-ran **all nine** prescribed mutations plus four supplementary ones and
+found none unexecutable, reducing multi-line deletions to equivalent single-line edits.
+
+**Two results worth keeping.** Criterion 2a's two cases are *measurably* non-redundant: dropping
+the `parentProfileId` predicate fails only case 2 (1 failed / 59 passed), and case 1's exact-array
+`toEqual` is load-bearing — `toContain` would have passed. And criterion 4's omitted-prop mutation
+writes `respondedBy: 'profile-placeholder-current-parent'` into `rsvps.responded_by`, a column
+that `references public.profiles (id)`: a plausible row attributed to a nonexistent profile. That
+is the defect class this task closes, reproduced and then shut.
+
+**The checker ran its own vacuity probes** on criteria 3 and 8 rather than trusting them, and
+found neither vacuous — confirming the round-2 gate's MINOR-5 correction (a parent viewer starts
+in `loading`, not `idle`) is correct and not merely present. A negative-only assertion passes
+vacuously when a feature is disabled entirely; criterion 3's negatives are paired with a real
+positive.
+
+**Non-Negotiable #2 verified by diff, not by count.** Six removed lines across all three source
+files: one import, two loader lines the packet prescribes, and five fixture literals gaining
+`profileId` at the ten sites §6a authorizes. No existing `it(` body modified; the `vi.mock` and
+`afterEach` edits are pure additions. All new test content is a pure append.
+
+**MINOR-1, fixed at merge rather than deferred.** `npm run format:check` went from clean to
+failing on two prettier deviations in the new test file — a type-annotation wrap and a quote
+style. `npm run format` was applied in the merge commit, the gate is clean again, and the suite
+was re-verified at 1567 green with `tsc` exit 0. **The underlying gap is filed as T175:** CI runs
+`typecheck`, `lint`, `test`, `build` and the bundle-size gate but **not** `format:check`, so every
+CI gate stayed green while the repo's format gate broke. It was caught only because the checker
+chose to run it by hand. The instance is fixed; the class is not, until T175 lands.
+
+**One packet error, correctly flagged and not followed.** §8 criterion 4 prescribed a
+`submitRsvpChange` mock resolving an `RsvpRow`, but `SubmitRsvpChangeFn` is
+`(params) => Promise<void>` and `ParentRsvp` never reads the resolved value. The worker used
+`vi.fn(async () => {})` and said so; the checker confirmed the packet was wrong. This is the
+behaviour §2 asks for — neither silent compliance nor silent deviation.
+
+**Orchestrator dispatch error, recorded against this task, not the worker.** Agent worktrees are
+created from `f7ff055` (main), not the branch tip. I did not check that before dispatching, so the
+worker began against **revision 1** — the version that gated REVISE with 4 MAJORs — because
+revision 2 existed only on the feature branch. Caught mid-task and corrected. The worker discarded
+~320 lines and rewrote rather than salvaging, which was right on the merits: revision 1 would have
+declared a third `GuardianLinkRow`, collided with `checkin.ts`'s existing query name, used a
+name-only heading that cannot disambiguate a two-session event, and written
+`currentUserProfileId={user.id}` behind a gate that does not narrow — it would not have compiled.
+**Standing lesson for this branch: any worktree dispatch must merge the feature branch first, or
+the agent silently receives main's version of every artifact written this session.**
+
+**Attribution.** George's ruling covers **one thing only** — that `OutreachDetail.tsx` hosts
+`ParentRsvp` (`auto-mode-decisions.md`, "2026-07-30 — George's rulings on T157/T158"). The loader
+design, the outer/inner data threading, the test shape, the tier, the four revision-2 decisions
+(the `nowFn` seam, item 12 governing §10, the `GuardianLinkRow` reuse, `parseSelectedColumns`
+reuse) and every acceptance criterion are the orchestrator's and the foreman's. The packet said so
+throughout and both gate rounds graded that scoping exemplary — no authority-promotion finding.
+
+**Follow-ups filed:** T174 (`FIXTURE_RSVPS` id-space confusion, deferred under §10's template and
+independently verified), T175 (CI's missing `format:check`), and T165's row updated — it must now
+keep **two** things byte-intact, not one.
