@@ -1,12 +1,21 @@
 # Worker Packet: T155 — wire `CoachHome` to the real active season
 
-**Revision 2.** Revision 1 gated **REVISE, 3 MAJORs** (the coordinator's relay
-numbered a fourth alongside them — treat all four as MAJOR). The gate
-confirmed the correction of the coordinator's original diagnosis was right,
-then found that correction was *itself* incomplete in a way that matters more
-than anything else in this packet: the coordinator had already relayed the
-incomplete version to the human owner twice. **MAJOR 1 below is the one that
-matters most** — read it before anything else.
+**Revision 3 — this is the version that ships. Read this note before anything
+else.** Revision 1 gated REVISE (3 MAJORs, a 4th relayed alongside). Revision 2
+gated REVISE again (1 MAJOR, 6 MINOR, 4 NIT). **Constitution item 19a's
+two-round cap is now spent — there is no round 3 gate.** This revision goes
+straight to a worker. Every correction below either comes from something I
+re-verified myself by reading the live tree (I have no Bash — I could not
+execute anything, only read), or is explicitly attributed to the round-2
+premise gate's own executed measurement, relayed by the coordinator and
+carried here as measured, not re-derived by me. Where I found the coordinator's
+own relay to be *itself* imprecise against what I could independently read, I
+say so and use my own reading instead — noted inline at that one spot.
+
+**Round 2's MAJOR is below, and it is worse than the two residuals revision 2
+already disclosed — not a new defect, the same one, in a place that outranks
+both.** Read "The second finding" section in full; "two" has become "three"
+throughout this packet for that reason.
 
 **Priority: live, user-visible production failure.** The owner supplied
 DevTools screenshots; root cause is confirmed from the actual 400 response
@@ -208,23 +217,40 @@ don't let a checker discover them and mistake either for a regression:**
 
 ### Loading / none / error copy — use these literals, not a paraphrase
 
-Reuse `KpiStrip.tsx:160-188`'s exact three-state shape (KpiStrip already
+Reuse `KpiStrip.tsx:160-188`'s three-state *content* shape (KpiStrip already
 established this project's convention for a season-level `'none'`/`'error'`
-state — don't re-derive it):
+state — don't re-derive the copy), but **not its wrapper markup.** Resolving
+an ambiguity the round-2 gate flagged and I re-verified directly: `KpiStrip.tsx`
+wraps both its `'none'` and `'error'` `Banner`s in `<Section padding={3}
+dividers={['bottom']}>` (read-verified, `:165-171` and `:175-183`). Importing
+that wrapper into `CoachHome.tsx` would reintroduce exactly what
+`CoachHome.tsx:2016-2023`'s own comment records as a **T129 checker fix
+(MAJOR)**: `Section` applies an unconditional full-bleed negative-margin band
+that bleeds past this page's padded `LayoutContent`, and renders a bare,
+role-less `<div>`. `Section` is not imported anywhere in `CoachHome.tsx` today
+(grep-confirmed — the only two hits for the string `Section` in the whole file
+are inside that T129 comment itself). So:
 - `'none'`: `Banner status="info" title="No active season yet"` with
   description text adapted from KpiStrip's ("An admin needs to create and
-  activate a season in Season settings before Home can show data here.").
+  activate a season in Season settings before Home can show data here.") —
+  **`Banner` only, no `Section` wrapper.**
 - `'error'`: `Banner status="error" title="Couldn't load the active season"
   description={activeSeason.error.message}
   endContent={<Button variant="ghost" label="Retry"
-  onClick={activeSeason.refresh} />}` — verbatim shape of
-  `KpiStrip.tsx:173-183`.
+  onClick={activeSeason.refresh} />}` — the `Banner`'s own prop shape matches
+  `KpiStrip.tsx:173-183` verbatim; **its `<Section>` wrapper does not.** Cite
+  the T129 fix (`CoachHome.tsx:2016-2023`) in your own comment if you add one,
+  rather than re-deriving new justification prose.
 - `'loading'`: reuse or closely mirror the existing DES-12 loading skeleton at
   `CoachHome.tsx:2063-2091` (aria-busy, `VisuallyHidden role="status"`,
-  `Skeleton` tiles) rather than inventing a second shape — extracting it into
-  a small shared function so both the season-loading and the (unchanged, still
+  `Skeleton` tiles) rather than inventing a second shape. **Extract it into a
+  small shared function so both the season-loading and the (unchanged, still
   present inside `CoachHomeContent`) data-loading skeleton use one
-  implementation is encouraged but not required.
+  implementation — required, not encouraged, as of this revision.** A
+  hand-mirrored copy is nine magic `Skeleton` `index` values that can drift
+  from the original with nothing comparing them; extraction removes that
+  failure mode structurally instead of relying on a reviewer to notice a
+  future edit only updated one copy.
 
 `Banner` and `Button` are already imported in this file (`:507-508`); no new
 Astryx imports needed for this part.
@@ -235,14 +261,19 @@ Revision 1 corrected the coordinator's original framing ("tiles render
 fixture values when the analytics load fails") to "fixing `seasonId` makes
 the primary tiles show their genuine empty/DES-12 states." **That correction
 was also wrong, and it is the one that matters, because it was already
-relayed to the owner.** `defaultLoadCoachHomeData` (`:1410-1424`) season-filters
-only **three** of `CoachHomeData`'s eleven fields. The other eight pass
-straight through the fixture arrays, unfiltered, regardless of what
-`seasonId` is. Verified field by field, including tracing every function that
-consumes each one:
+relayed to the owner.** `defaultLoadCoachHomeData` (`:1410-1424`, read-verified —
+I opened this function directly) season-filters only **three** of
+`CoachHomeData`'s eleven fields (the interface itself, `:633-645`, has exactly
+eleven members — I counted them directly). **Correction to my own revision 2:
+"the other eight" is wrong; it is the other seven.** The eleventh field is
+`seasonId` itself, echoed back verbatim at `:1412` (`return { seasonId, ... }`)
+— it is the real value the caller passed in, not a fixture array, and it isn't
+part of either count below. Verified field by field, including tracing every
+function that consumes each one:
 
 | Field | Filtered by season? | After this fix |
 |---|---|---|
+| `seasonId` | N/A — the real argument, echoed back verbatim (`:1412`) | always the real, threaded id |
 | `events` | Yes (`FIXTURE_EVENTS.filter(e => e.seasonId === seasonId)`) | `[]` for any real season id |
 | `teamParticipation` | Yes (`FIXTURE_TEAM_PARTICIPATION.find(...)`) | `null` |
 | `studentHours` | Yes (`FIXTURE_STUDENT_HOURS.filter(...)`) | `[]` |
@@ -251,7 +282,7 @@ consumes each one:
 | `sessions` | **No** — `FIXTURE_SESSIONS`, always | unfiltered, but see below |
 | `rsvps` | **No** — `FIXTURE_RSVPS`, always | unfiltered, but see below |
 | `attendance` | **No** — `FIXTURE_ATTENDANCE`, always | unfiltered, but see below |
-| `defaultGoalHours` | **No** — `FIXTURE_DEFAULT_GOAL_HOURS = 10`, always | unfiltered, always `10` |
+| `defaultGoalHours` | **No** — `FIXTURE_DEFAULT_GOAL_HOURS = 10`, always (`:901`) | unfiltered, always `10` — **two separate on-screen surfaces, see below** |
 | `seasonSetupStatus` | **No** — `FIXTURE_SEASON_SETUP_STATUS`, always `{hasGoalsConfigured:false}` | unfiltered, always "missing setup" |
 
 **What this actually produces on screen, traced through every consuming
@@ -272,26 +303,70 @@ those four functions' outputs genuinely do go empty even though `sessions`/
 - **Next up:** "Nothing scheduled" empty state (honest — same join,
   `CoachHome.tsx:2415`).
 
-**But `Hours vs. team goal` does NOT go honest, and this is the finding that
-matters:** `sumGoalHours(data.students, teamId, data.defaultGoalHours)`
-(`:924-934`, formula: sum of `goalHoursOverride ?? defaultGoalHours` across
-active students on `teamId`) reads `students` and `defaultGoalHours` —
-**neither is season-filtered.** The gate measured this fixture arithmetic at
+**But `data.defaultGoalHours` does NOT go honest, and it leaks onto screen in
+TWO separate places — one root cause, two surfaces, and this is the finding
+that matters most in this packet.** One field, `defaultGoalHours` (unfiltered,
+always `10` per the table above), feeds two independent renders:
+
+**Surface 1 — `Hours vs. team goal`, already known as of revision 2.**
+`sumGoalHours(data.students, teamId, data.defaultGoalHours)` (`:924-934`,
+formula: sum of `goalHoursOverride ?? defaultGoalHours` across active students
+on `teamId`) reads `students` and `defaultGoalHours` — **neither is
+season-filtered.** The gate measured this fixture arithmetic, executed, at
 **`38`** — reconfirm at your own dispatch, don't trust the number blindly, but
 do not assume it becomes `0` or disappears. `sumConfirmedHours` reads
 `data.studentHours`, which **is** season-filtered, so it correctly goes to
 `0`. **The rendered value is `0 / 38 hrs`** (`CoachHome.tsx:2238`'s
 `formatValueLabel`), with `38` still fabricated fixture data sitting directly
-beside a genuinely honest `0`. If you tell the owner "the middle third goes
-honest" and he then sees `0 / 38 hrs`, that is a second false-expectation
-report on the same screen in one day. **State the measured reality, not the
-aspiration, in your output doc.**
+beside a genuinely honest `0`.
 
-**The admin "Season setup" card has the identical problem and is easy to miss
-because an existing test passes either way.** `showSeasonSetupCard =
-user.role === 'admin' && isSeasonMissingSetup(data.teams,
-data.seasonSetupStatus)` (`:2127-2128`); `isSeasonMissingSetup` (`:1393-1395`)
-is `teams.length === 0 || !status.hasGoalsConfigured`. `teams` and
+**Surface 2 — `Default goal {data.defaultGoalHours}h`, found by the round-2
+gate, and it outranks Surface 1.** Read-verified directly, and it corrects a
+citation error in the gate's own report (relayed by the coordinator): the
+line is `CoachHome.tsx:2320`, not `:2396` — `:2396` is a comment about
+`columns={2}` a few lines below; I confirmed `CoachHome.tsx` is byte-identical
+between `3b0a17a` and this packet's own HEAD, so this was a citation slip, not
+drift. This literal renders as the `secondary` of the **`Avg hours / active
+student`** `KpiCard` (`:2311-2323`) — a *different* tile from `Hours vs. team
+goal`, and it is not merely "beside" real data, it is **inside the same
+tile**: that `KpiCard`'s own `value` reads `dashboardData.rosterStats.avgHoursPerActiveStudent`
+(`loaders/dashboard.ts:115`'s real, Supabase-backed row mapping), and its own
+`secondary`, a few lines down in the same component instance, reads the
+fabricated `data.defaultGoalHours`. One tile, real number on top, fabricated
+number under it.
+
+**Why Surface 2 outranks Surface 1: it is currently invisible, and this fix is
+what turns it on.** This entire `KpiCard` grid (`Avg hours / active student`,
+`Students at goal`, `Session days logged`, `Attendance rate`, `Upcoming
+commitment`, `Busiest day` — read-verified at `:2309-2388`) is gated by
+`{dashboardData && (...)}`, i.e. it only renders once `dashboardState` (the
+*separate* `loadDashboardDataProp`/`dashboard.ts` fetch stream, real and
+Supabase-backed) succeeds. Today, that stream 400s on every load — this task's
+whole reason for existing — so `dashboardData` is never truthy and the owner
+has **never once seen** "Default goal 10h" on screen. `Hours vs. team goal`
+(Surface 1), by contrast, is in the *other* grid (`:2218-2252`), gated only by
+`loadState`/`data` (`loadData`/`defaultLoadCoachHomeData`, an in-memory
+fixture function with no network dependency at all) — that grid already
+renders today, bug or no bug. **Landing this fix is what puts Surface 2 on
+screen for the first time**, at the exact moment the owner is told the
+analytics-loading bug is fixed. If you tell him "the middle third goes
+honest" and he then sees `0 / 38 hrs` *and* a brand-new "Default goal 10h"
+appearing under a tile that wasn't visible before, that is a second and third
+false-expectation report on the same screen in one day. **State the measured
+reality, not the aspiration, in your output doc — both surfaces, one root
+cause.**
+
+**The admin "Season setup" card has the identical problem (a third fabricated
+field, `seasonSetupStatus`, not `defaultGoalHours` — see the table above) and
+is easy to miss because an existing test passes either way.**
+`showSeasonSetupCard = user.role === 'admin' && isSeasonMissingSetup(data.teams,
+data.seasonSetupStatus)` (`:2127-2128`); `isSeasonMissingSetup`
+(`CoachHome.tsx:1391-1396` — read-verified directly; the coordinator's relay
+of the gate's own correction proposed `:1392-1397` with the quoted body line
+at `:1396`, but my own direct read puts the function's full span at
+`:1391-1396` and the quoted `return` line at `:1395`. Using my own read here,
+noted as a discrepancy from the relay, not silently reconciled) is
+`teams.length === 0 || !status.hasGoalsConfigured`. `teams` and
 `seasonSetupStatus` are both unfiltered fixtures, and
 `FIXTURE_SEASON_SETUP_STATUS.hasGoalsConfigured` is hardcoded `false` — so
 this is `true` for every season, real or fixture, before and after this fix.
@@ -306,11 +381,14 @@ build a real backend for `loadData` (see below) — that remains correctly out
 of scope, for the same reasons as before. What changes is what you tell the
 checker, and what the checker tells the owner: **the fix genuinely, honestly
 empties four of eight primary widgets** (team participation, last-meeting
-attendance, events-in-7-days, next up) **and leaves two fabricated** (the
-goal-hours denominator, the admin season-setup card) **because their fixture
-inputs were never season-scoped to begin with.** Both residuals are captured
-as known output in criterion 5 below and named explicitly in the follow-up,
-not left for a future report to rediscover.
+attendance, events-in-7-days, next up) **and leaves three fabricated
+surfaces, from two root-cause fields** — `defaultGoalHours` (the `0 / 38 hrs`
+denominator on `Hours vs. team goal`, *and* the "Default goal 10h" secondary
+on `Avg hours / active student`, one field, two on-screen surfaces — see
+above) and `seasonSetupStatus` (the admin season-setup card) — **because their
+fixture inputs were never season-scoped to begin with.** All three surfaces
+are captured as known output in criterion 5 below and named explicitly in the
+follow-up, not left for a future report to rediscover.
 
 ## `teamId` — out of scope, and now for a fact, not a judgement call
 
@@ -386,12 +464,23 @@ not touch it. It is filed as a follow-up below, folded together with the
   `dispute-log.md`, `auto-mode-decisions.md`, `state-summary.md`, any other
   `docs/swarm/**` file, `.claude/**`.
 
-## Acceptance Criteria — every one needs a proof that can fail
+## Acceptance Criteria
 
 Four rounds were lost this week to acceptance criteria that could not fail
-(T147). Every criterion below must be checkable by reverting the relevant
-piece and watching the corresponding test fail — state the mutation you ran,
-not just the passing assertion.
+(T147). **Correction to how revision 2 stated this section's own blanket
+claim: not every criterion below is a revert-and-watch-it-fail proof, and
+claiming they all are is itself the kind of unfalsifiable-criterion problem
+this section exists to prevent — a checker who takes "every criterion below"
+literally and can't make criterion 2 or 7 fail via mutation would be right to
+flag that as a defect in the packet, not in their own testing.** Criteria 1,
+3, 4, 5, and 6's first two bullets are genuine revert-and-fail
+proofs — for each of those, state the mutation you ran, not just the passing
+assertion. Criteria 2, 6's third bullet, 7, 9, and 10 are **inspection, grep,
+or hash checks** — structural facts about the diff, not behavioral proofs —
+and are labeled as such at each one below. Criterion 5's "Season setup card"
+sub-bullet is a documented permanent residual, not a falsifiable check (see
+its own note). Do not try to force a mutation-revert proof onto any of these;
+state plainly which kind each one is in your output doc.
 
 **Cheaper path, verified feasible, use it:** define **one** named fixture
 `SeasonRow` constant (e.g. `FIXTURE_ACTIVE_SEASON`, id `'season-fixture-active'`
@@ -415,10 +504,10 @@ different fixture seasons. For the call-count/argument spy test in criterion
    `'season-placeholder-current'` and not anything else hardcoded in
    `CoachHome.tsx`). Revert the fix (restore the old default-parameter shape)
    and confirm this specific test fails — do not just assert it should.
-2. **`CoachHomeProps` no longer declares `seasonId`.** `PLACEHOLDER_SEASON_ID`
-   the module constant is untouched (still backs the `FIXTURE_*` fixture data
-   `defaultLoadCoachHomeData` reads) — only the prop and its use as a default
-   parameter are removed.
+2. **(Inspection check, not a mutation proof.) `CoachHomeProps` no longer
+   declares `seasonId`.** `PLACEHOLDER_SEASON_ID` the module constant is
+   untouched (still backs the `FIXTURE_*` fixture data `defaultLoadCoachHomeData`
+   reads) — only the prop and its use as a default parameter are removed.
 3. **All four `activeSeason.status` states render the exact literals
    prescribed in the "Loading / none / error copy" section above** — not just
    "distinct, correct content." Specifically: `'none'` → `'No active season
@@ -435,59 +524,125 @@ different fixture seasons. For the call-count/argument spy test in criterion
    `<SeasonProvider loadActiveSeason={...}>` wrapping the fixture-resolving
    loader is present.
 5. **The measured-reality proof — replaces revision 1's "genuine empty state"
-   framing entirely.** With `activeSeason` resolved to `FIXTURE_ACTIVE_SEASON`
-   and the **default** `loadData` (`defaultLoadCoachHomeData`, untouched — do
-   not inject a custom one for this test), assert **all** of the following in
-   one rendered tree, matching the field-by-field table above exactly:
+   framing entirely, and this criterion is the one that must actually see the
+   round-2 MAJOR, not just describe it.** With `activeSeason` resolved to
+   `FIXTURE_ACTIVE_SEASON`, the **default** `loadData` (`defaultLoadCoachHomeData`,
+   untouched — do not inject a custom one for this test), **and
+   `loadDashboardData` pinned to `defaultLoadCoachHomeData`'s sibling in-file
+   fixture, `defaultLoadDashboardData` — do not leave `loadDashboardData` at
+   `CoachHome`'s own real default for this test.** This pin is required, not
+   optional: `CoachHome`'s own prop default for `loadDashboardData` is the
+   real, Supabase-backed `loadDashboardData` (`dashboard.ts`), which has
+   nothing to connect to in this test's `jsdom` environment and rejects, so
+   `dashboardState.status` becomes `'error'` and the entire
+   `{dashboardData && (...)}`-gated grid — where Surface 2 of the MAJOR above
+   lives — never renders at all. Without this pin, this criterion cannot see
+   the defect the round-2 gate found, which is exactly how it went unseen
+   through revision 2. `defaultLoadDashboardData` already exists in
+   `CoachHome.tsx` (`:1665`) and is already used by existing tests in this
+   file — reuse it, don't build a new fixture loader.
+
+   With both fixtures wired, assert **all** of the following in one rendered
+   tree, matching the field-by-field table above exactly:
    - Team participation renders `'—'`, not `82.4%` or any other
      `FIXTURE_TEAM_PARTICIPATION` value.
    - Last meeting attendance renders `'—'`.
    - Events in next 7 days renders `0`.
    - Next up shows the "Nothing scheduled" empty state.
-   - **Hours vs. team goal renders `0 / 38 hrs` (or whatever you measure the
+   - **Hours vs. team goal renders `0 / 38 hrs`** (or whatever you measure the
      fixture arithmetic to be at your own dispatch — state the exact figure)
      — assert this value explicitly as the known-residual fabricated output,
-     not as a gap in coverage.** A test that silently omits this tile is not
-     a passing proof, it is a hole in one.
-   - If rendered for an admin user, the "Season setup" card is present —
-     assert this explicitly too, and note in your output doc that
-     `DashboardPage.test.tsx:113`'s pre-existing identical assertion passing
-     is not evidence of a fix here, only evidence the fixture never changes.
+     not as a gap in coverage. A test that silently omits this tile is not a
+     passing proof, it is a hole in one.
+   - **`Avg hours / active student`'s secondary renders `Default goal 10h`**
+     (or your own dispatch's measured `FIXTURE_DEFAULT_GOAL_HOURS` value) —
+     the round-2 MAJOR, and the reason `loadDashboardData` had to be pinned
+     above. Assert it explicitly, in the same tree, as a second known-residual
+     surface of the same `defaultGoalHours` root cause as the bullet above —
+     not a separate finding, not omitted because "it's basically the same
+     bug" as the one above it.
+   - **If rendered for an admin user, the "Season setup" card is present —
+     assert this too, but label it honestly: this sub-assertion is
+     documentation of a permanent residual, not a criterion that can fail.**
+     `isSeasonMissingSetup` reads only unfiltered fixture fields
+     (`teams`/`seasonSetupStatus`), so it is `true` for every season this
+     task can produce, real or fixture, before this fix, after this fix, and
+     under any mutation confined to this task's own scope — the round-2 gate
+     confirmed this by trying three different mutations and getting `true`
+     every time. Note in your output doc that `DashboardPage.test.tsx:113`'s
+     pre-existing identical assertion passing is not evidence of a fix here
+     either — same reason, restated: the fixture never changes.
 6. **`teamId`/`PLACEHOLDER_CURRENT_TEAM_ID` unchanged — three concrete
-   checks, not "byte-unchanged in behavior":**
+   inspection checks, not mutation proofs, and not "byte-unchanged in
+   behavior":**
    - `PLACEHOLDER_CURRENT_TEAM_ID`'s exported value is unchanged.
    - `CoachHomeProps.teamId`'s default parameter is still
      `= PLACEHOLDER_CURRENT_TEAM_ID`.
-   - `loaders/dashboard.ts` gains no `.eq('team_id', …)`/`.in('team_id', …)`
-     call anywhere (grep-provable; this file is Forbidden regardless, this is
-     a negative-diff check, not a review-for-quality one).
-7. `DashboardPage.tsx` byte-identical (hash before/after).
+   - **(`git diff --exit-code` check, not a criterion that can fail via
+     mutation — the file is Forbidden, so this is a structural guarantee, not
+     a behavioral one.)** `loaders/dashboard.ts` gains no
+     `.eq('team_id', …)`/`.in('team_id', …)` call anywhere.
+7. **(Hash check, not a mutation proof.)** `DashboardPage.tsx` byte-identical
+   (hash before/after).
 8. **Existing tests survive with harness-only changes — verified feasible,
-   not left as an open investigation.** `CoachHome.test.tsx` has **90** `it(`
-   blocks (not 126 — that figure conflated `it(`/`describe(` occurrences with
-   test count) and `DashboardPage.test.tsx` has **5**, for a combined target
-   of **95**. Of those, **29** currently break under the naive/reverted
-   version of this fix (all 29 `renderAsUser(...)` call sites in
-   `CoachHome.test.tsx` — grep-confirmed count) — not "both files outright":
-   `DashboardPage.test.tsx`'s student/parent/null-user cases never mount
-   `CoachHome` at all, so they're unaffected regardless. **Confirmed
-   sufficient, not merely expected to be:** wrapping both files' shared
-   `renderAsUser` function in `<SeasonProvider loadActiveSeason={...}>`
-   resolving `FIXTURE_ACTIVE_SEASON`, with the existing `flushMicrotasks()`
-   (its current `await Promise.resolve()` ×3) left as-is, is sufficient to
-   restore all 95 to green — no additional microtask-flush pass is needed, and
-   no individual `it(` body needs to change. Re-run this yourself at your own
-   dispatch SHA to confirm it still holds rather than trusting this figure,
-   but do not budget time for an "investigate whether more flushing is
-   needed" branch — it isn't. The one exception: if you find a test that
-   specifically asserted behavior only reachable through the old placeholder-
-   seasonId default, name it explicitly in your output doc rather than
-   silently adjusting it — none is currently known to exist.
-9. `npx tsc --noEmit`, `npx vite build`, `npm run format:check`,
-   `npx eslint .` all clean (0 errors; baseline **355** warnings — re-confirm
-   at your own dispatch SHA rather than trusting this figure).
-10. `npx vitest run` green. Baseline **66 test files / 1507 tests** at HEAD
-    `9c863c1` — re-confirm at your own dispatch SHA. State your expected end
+   not left as an open investigation. Breakdown corrected in this revision; I
+   independently re-confirmed the totals below by direct grep/read, not just
+   relayed them.** `CoachHome.test.tsx` has **90** `it(` blocks (I confirmed
+   this by grep, pattern `^\s*it\(`, count 90 — not 126, that figure conflated
+   `it(`/`describe(` occurrences with test count) and `DashboardPage.test.tsx`
+   has **5** (I confirmed by direct read: "coach", "admin", "student",
+   "parent", "null user" — one `it(` each), for a combined target of **95**.
+
+   **Of those, 29 currently break under the naive/reverted version of this
+   fix — corrected breakdown, the total was right by coincidence in revision
+   2, the attribution was not:**
+   - **27**, not 29, are in `CoachHome.test.tsx`. The string `renderAsUser`
+     occurs 29 times in that file (I grep-confirmed this count directly), but
+     one of those 29 is the function *definition* itself
+     (`CoachHome.test.tsx:84` — I confirmed this line directly), leaving 28
+     call sites spread across 27 distinct `it(` blocks (one block calls it
+     twice). I did not individually re-derive which specific block is the one
+     with two calls; that sub-detail is relayed, not independently confirmed
+     by me — the 28-calls/27-blocks/1-definition arithmetic is internally
+     consistent with my own 29-count grep either way.
+   - **2** are in `DashboardPage.test.tsx` — I confirmed directly by reading
+     both that file and `DashboardPage.tsx`: only the `"renders CoachHome for
+     role \"coach\""` and `"renders CoachHome for role \"admin\""` tests
+     (`:91`, `:105`) actually mount `CoachHome` at all (`DashboardPage.tsx`'s
+     own role switch, `:117-129`, routes only `'admin'`/`'coach'` to
+     `<CoachHome />`; `'student'`/`'parent'` go to different components
+     entirely, and `user === null` renders `null`). **Drop "unaffected
+     regardless" as a claim about the whole file — it's true for 3 of
+     `DashboardPage.test.tsx`'s 5 tests (student, parent, null-user), not all
+     5.** The other 2 (coach, admin) are exactly the ones counted in "29"
+     above.
+
+   **Confirmed sufficient, not merely expected to be (this part is the
+   round-2 gate's own executed measurement, relayed by the coordinator — I
+   have not re-executed it myself):** wrapping both files' `renderAsUser`
+   function in `<SeasonProvider loadActiveSeason={...}>` resolving
+   `FIXTURE_ACTIVE_SEASON`, with the existing `flushMicrotasks()` (its current
+   `await Promise.resolve()` ×3) left as-is, is sufficient to restore all 95
+   to green — no additional microtask-flush pass is needed, and no individual
+   `it(` body needs to change. Re-run this yourself at your own dispatch SHA
+   to confirm it still holds rather than trusting this figure, but do not
+   budget time for an "investigate whether more flushing is needed" branch —
+   it isn't. The one exception: if you find a test that specifically asserted
+   behavior only reachable through the old placeholder-seasonId default, name
+   it explicitly in your output doc rather than silently adjusting it — none
+   is currently known to exist.
+9. **(Build/health check, not a mutation proof.)** `npx tsc --noEmit`,
+   `npx vite build`, `npm run format:check`, `npx eslint .` all clean. The
+   round-2 gate reported this clean at 0 errors, 355 warnings, executed —
+   relayed by the coordinator, attributed to the gate, not re-executed by me
+   (I have no Bash). Re-confirm at your own dispatch SHA rather than trusting
+   this figure regardless of who's reporting it.
+10. **(Build/health check, not a mutation proof.)** `npx vitest run` green.
+    Baseline **66 test files / 1507 tests** at HEAD `9c863c1`. The round-2
+    gate reported **1510/1510 passing** on its own fully-built version of this
+    fix, executed — relayed by the coordinator, attributed to the gate, not
+    re-executed by me. Re-confirm your own baseline and end count at your own
+    dispatch SHA rather than trusting either number. State your expected end
     count (pure addition of new `it(` blocks for criteria 1/4/5) and whether
     you hit it.
 
@@ -500,23 +655,30 @@ cannot write `task-ledger.md` yourself; the orchestrator has said it will file
 this one directly in the merge commit per item 24):
 
 > **`CoachHome`'s primary widgets have no real Supabase implementation, and
-> two of them are now confirmed to render known-fabricated output even after
-> T155.** `LoadCoachHomeDataFn` (`loadData` prop) is only ever
-> `defaultLoadCoachHomeData`, a fixture — grep-confirmed, no other
-> implementation exists anywhere in the repo, and no ED-1 or T124-era task
-> ever built one. T155 stops the placeholder from reaching Postgres and, as a
-> secondary effect, stops it from coincidentally matching the fixture's own
-> season key — which correctly empties four widgets (team participation,
-> last-meeting attendance, events-in-7-days, next up) but **not** two others:
-> `Hours vs. team goal`'s denominator (`sumGoalHours` over unfiltered
-> `students`/`defaultGoalHours`, measured `38`) and the admin "Season setup"
-> card (`isSeasonMissingSetup` over unfiltered `teams`/`seasonSetupStatus`,
-> permanently true). Both remain fabricated, on screen, indefinitely, until
-> this follow-up lands. The real backing views for the two fields
-> `defaultLoadCoachHomeData` already filters correctly —
-> `TeamParticipationMetric`/`StudentHoursMetric` — already exist as
-> `v_team_participation`/`v_student_hours`
-> (`supabase/migrations/20260717000003_metric_views.sql:3,44`, referenced again
+> three on-screen surfaces (from two fabricated fields) are now confirmed to
+> render known-fabricated output even after T155.** `LoadCoachHomeDataFn`
+> (`loadData` prop) is only ever `defaultLoadCoachHomeData`, a fixture —
+> grep-confirmed, no other implementation exists anywhere in the repo, and no
+> ED-1 or T124-era task ever built one. T155 stops the placeholder from
+> reaching Postgres and, as a secondary effect, stops it from coincidentally
+> matching the fixture's own season key — which correctly empties four widgets
+> (team participation, last-meeting attendance, events-in-7-days, next up) but
+> **not** three surfaces from two fields: `defaultGoalHours` (unfiltered,
+> always `10`) feeds both `Hours vs. team goal`'s denominator (`sumGoalHours`
+> over unfiltered `students`/`defaultGoalHours`, measured `38`, rendering
+> `0 / 38 hrs`) *and*, separately, the `Avg hours / active student` tile's own
+> "Default goal 10h" secondary (`CoachHome.tsx:2320` — this second surface only
+> becomes visible once T155 ships, since it sits behind the `dashboardData`
+> gate this task is what makes reachable) — and `seasonSetupStatus` feeds the
+> admin "Season setup" card (`isSeasonMissingSetup` over unfiltered
+> `teams`/`seasonSetupStatus`, permanently true). All three remain fabricated,
+> on screen, indefinitely, until this follow-up lands. The real backing views
+> for the two fields `defaultLoadCoachHomeData` already filters correctly —
+> `TeamParticipationMetric`/`StudentHoursMetric` — already exist:
+> `v_student_hours` at
+> `supabase/migrations/20260717000003_metric_views.sql:3` and
+> `v_team_participation` at the same file's `:44` (read-verified directly —
+> revision 2 of this packet had this pairing backwards; also referenced again
 > in `20260722000000_membership_views.sql`), so a real loader for at least
 > those two is mechanical, mirroring `loaders/dashboard.ts`'s own pattern —
 > not new SQL design. The remaining fields (`teams`, `students`, `sessions`,
@@ -531,7 +693,14 @@ this one directly in the merge commit per item 24):
 
 ## Relevant Constitution Excerpts
 
-- **Non-Negotiable #2** (`constitution.md:11`) — existing tests pass unless
+- **Non-Negotiable #2** (`constitution.md:10`, corrected from `:11` — I
+  re-read the file directly: `:10` is "Existing tests must pass unless the
+  boss explicitly approves a test update"; `:11` is "No worker may mark its
+  own work complete," a different rule this packet also relies on separately,
+  below. Revision 2 of this packet introduced this same `:11` mislabel, and it
+  originated in T154's revision 2 while that packet was *fixing* a different
+  citation error — worth noting only because it shows how a correction in one
+  packet can seed a new error in another.) — existing tests pass unless
   explicitly approved. This task should need no approval: criterion 8 keeps
   every existing assertion, changing only two shared render-harness functions.
   If you find an existing test that cannot survive unmodified, stop and report
@@ -570,8 +739,13 @@ Create `docs/swarm/active/T155-worker-output.md` covering:
   revert-and-fail result.
 - Criterion 4's fail-loud proof (exact thrown message) and its companion.
 - Criterion 5's measured-reality proof: the actual before/after DOM content
-  for all six primary tiles/cards, including the exact `Hours vs. team goal`
-  figure and the admin Season-setup card, stated as known-residual output.
+  for all seven asserted tiles/cards (team participation, last-meeting
+  attendance, events-in-7-days, next up, `Hours vs. team goal`, `Avg hours /
+  active student`'s secondary, and the admin Season-setup card), including
+  the exact `Hours vs. team goal` and `Default goal` figures, both stated as
+  known-residual output from the same `defaultGoalHours` root cause, and the
+  Season-setup card noted as a documented permanent residual rather than a
+  falsifiable result.
 - The before/after call-count evidence for the "signed out never fetches"
   behavior change, and confirmation the milestone-toast dedupe key now
   includes the real season id.
