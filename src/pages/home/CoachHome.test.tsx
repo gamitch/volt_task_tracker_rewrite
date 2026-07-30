@@ -18,13 +18,19 @@
  * established, including their `AuthProvider` + `LoginAs` role-login
  * harness.
  */
-import { act } from 'react';
+import { act, Component, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthUser } from '../../app/guards';
 import { LoginAs } from '../../test-utils/authHarness';
-import type { ActivityFeedSource, FeedRsvpRow } from '../../lib/supabase/loaders/dashboard';
+import { SeasonProvider, type LoadActiveSeasonFn } from '../../app/SeasonProvider';
+import type { SeasonRow } from '../../lib/supabase/types';
+import type {
+  ActivityFeedSource,
+  DashboardData,
+  FeedRsvpRow,
+} from '../../lib/supabase/loaders/dashboard';
 import {
   ACTIVITY_FEED_DEFAULT_LIMIT,
   attendanceRatePercent,
@@ -73,6 +79,28 @@ import {
 
 // ---------------------------------------------------------------------------
 // Render harness -- mirrors OutreachList.test.tsx / MeetingsList.test.tsx.
+//
+// T155: `CoachHome` now calls `useActiveSeason()` (module doc #14 in
+// `CoachHome.tsx`), so every render needs a `<SeasonProvider>` ancestor.
+// `FIXTURE_ACTIVE_SEASON` is the ONE shared fixture `SeasonRow` this file
+// (and `DashboardPage.test.tsx`'s own harness) reuses, per the packet's own
+// "one constant, one non-placeholder id" guidance -- a distinctive id
+// (`'season-fixture-active'`, not a literal UUID, matching
+// `AppShell.test.tsx`'s `T140_FIXTURE_SEASON` convention), deliberately
+// DIFFERENT from `PLACEHOLDER_SEASON_ID_FOR_TESTS`
+// (`'season-placeholder-current'`, still used below by `fixtureLoadData`/
+// `fixtureLoadDashboardData`, which call `defaultLoadCoachHomeData`/
+// `defaultLoadDashboardData` directly with that literal, ignoring whatever
+// real `seasonId` `CoachHomeContent` itself resolves and passes into
+// `loadData(seasonId)`/`loadDashboardData(seasonId)` -- both fixture
+// functions have a strictly narrower `() => Promise<...>` signature than the
+// `(seasonId: string) => Promise<...>` the `loadData`/`loadDashboardData`
+// props require, so TypeScript's structural typing accepts them regardless
+// of what argument the real seam would pass). This is exactly why every
+// pre-existing `it(` body below keeps passing unmodified once `renderAsUser`
+// wraps in a `<SeasonProvider>` resolving `FIXTURE_ACTIVE_SEASON`: those
+// tests' own fixture loaders never look at the real resolved season id at
+// all, only the NEW tests added for this task (criterion 1/5) do.
 // ---------------------------------------------------------------------------
 
 let container: HTMLDivElement;
@@ -81,19 +109,44 @@ let root: Root;
 const COACH_USER: AuthUser = { id: 'user-coach', email: 'coach@example.com', role: 'coach' };
 const ADMIN_USER: AuthUser = { id: 'user-admin', email: 'admin@example.com', role: 'admin' };
 
-function renderAsUser(user: AuthUser | null, props: Parameters<typeof CoachHome>[0] = {}): void {
+const FIXTURE_ACTIVE_SEASON: SeasonRow = {
+  id: 'season-fixture-active',
+  name: 'Fixture Active Season',
+  startsOn: '2026-01-01',
+  endsOn: '2026-12-31',
+  defaultGoalHours: 100,
+  isActive: true,
+  createdAt: '2026-01-01T00:00:00.000Z',
+};
+
+/**
+ * T155: `loadActiveSeason` is a new optional third parameter (default
+ * resolves `FIXTURE_ACTIVE_SEASON`, matching every pre-existing `it(`'s
+ * implicit expectation of "the season is ready quickly") -- every call site
+ * that predates this task still calls `renderAsUser(user, props)` with
+ * exactly two arguments, so this default applies there unchanged; only the
+ * new criterion-1/3/5 tests below pass a third argument to reach the
+ * 'loading'/'none'/'error' season states or a different fixture season id.
+ */
+function renderAsUser(
+  user: AuthUser | null,
+  props: Parameters<typeof CoachHome>[0] = {},
+  loadActiveSeason: LoadActiveSeasonFn = async () => FIXTURE_ACTIVE_SEASON,
+): void {
   act(() => {
     root.render(
       <MemoryRouter>
-        <AuthProvider>
-          {user === null ? (
-            <CoachHome {...props} />
-          ) : (
-            <LoginAs user={user}>
+        <SeasonProvider loadActiveSeason={loadActiveSeason}>
+          <AuthProvider>
+            {user === null ? (
               <CoachHome {...props} />
-            </LoginAs>
-          )}
-        </AuthProvider>
+            ) : (
+              <LoginAs user={user}>
+                <CoachHome {...props} />
+              </LoginAs>
+            )}
+          </AuthProvider>
+        </SeasonProvider>
       </MemoryRouter>,
     );
   });
@@ -1062,6 +1115,276 @@ describe('<CoachHome /> DES-12 states', () => {
     expect(container.textContent).toContain('Regionals Qualifier');
     // Titans-scoped session must never appear (team-scope exclusion).
     expect(container.textContent).not.toContain('Titans Strategy Session');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T155: the placeholder never reaches a query (criterion 1) -- a genuine
+// revert-and-fail proof. Reverting `CoachHome`'s outer wrapper back to the
+// old default-parameter shape (`seasonId = PLACEHOLDER_SEASON_ID`, no
+// `useActiveSeason()` call) was built and measured, in this worker's own
+// isolated worktree per constitution item 23, to fail the last `it(` below
+// (the argument assertion): the reverted version calls `loadData`/
+// `loadDashboardData` with `'season-placeholder-current'` on every render,
+// including while this suite's injected `loadActiveSeason` is still
+// "loading"/"none"/"error" (there is no season concept to gate on at all),
+// so every assertion in this describe block fails against that reverted
+// code -- see `docs/swarm/active/T155-worker-output.md` for the exact
+// mutation diff and failure output.
+// ---------------------------------------------------------------------------
+
+describe('<CoachHome /> T155 -- the placeholder never reaches a query (criterion 1)', () => {
+  it('loadData/loadDashboardData are never called while activeSeason.status is "loading"', async () => {
+    const loadDataSpy = vi.fn(() => new Promise<CoachHomeData>(() => {}));
+    const loadDashboardDataSpy = vi.fn(() => new Promise<DashboardData>(() => {}));
+    renderAsUser(
+      COACH_USER,
+      { loadData: loadDataSpy, loadDashboardData: loadDashboardDataSpy },
+      () => new Promise(() => {}), // loadActiveSeason never resolves -- stays 'loading'.
+    );
+    await flushMicrotasks();
+    expect(container.textContent).toContain('Loading Home');
+    expect(loadDataSpy).not.toHaveBeenCalled();
+    expect(loadDashboardDataSpy).not.toHaveBeenCalled();
+  });
+
+  it('loadData/loadDashboardData are never called while activeSeason.status is "none"', async () => {
+    const loadDataSpy = vi.fn(() => new Promise<CoachHomeData>(() => {}));
+    const loadDashboardDataSpy = vi.fn(() => new Promise<DashboardData>(() => {}));
+    renderAsUser(
+      COACH_USER,
+      { loadData: loadDataSpy, loadDashboardData: loadDashboardDataSpy },
+      async () => null, // zero active seasons -- the real 'none' outcome.
+    );
+    await flushMicrotasks();
+    expect(container.textContent).toContain('No active season yet');
+    expect(loadDataSpy).not.toHaveBeenCalled();
+    expect(loadDashboardDataSpy).not.toHaveBeenCalled();
+  });
+
+  it('loadData/loadDashboardData are never called while activeSeason.status is "error"', async () => {
+    const loadDataSpy = vi.fn(() => new Promise<CoachHomeData>(() => {}));
+    const loadDashboardDataSpy = vi.fn(() => new Promise<DashboardData>(() => {}));
+    renderAsUser(
+      COACH_USER,
+      { loadData: loadDataSpy, loadDashboardData: loadDashboardDataSpy },
+      async () => {
+        throw { code: '500', message: 'Season load failed.', cause: null };
+      },
+    );
+    await flushMicrotasks();
+    expect(container.textContent).toContain("Couldn't load the active season");
+    expect(loadDataSpy).not.toHaveBeenCalled();
+    expect(loadDashboardDataSpy).not.toHaveBeenCalled();
+  });
+
+  it('receives EXACTLY FIXTURE_ACTIVE_SEASON.id once activeSeason.status is "ready" -- never the retired placeholder', async () => {
+    const loadDataSpy = vi.fn<(seasonId: string) => Promise<CoachHomeData>>(
+      () => new Promise<CoachHomeData>(() => {}),
+    );
+    const loadDashboardDataSpy = vi.fn<(seasonId: string) => Promise<DashboardData>>(
+      () => new Promise<DashboardData>(() => {}),
+    );
+    renderAsUser(COACH_USER, { loadData: loadDataSpy, loadDashboardData: loadDashboardDataSpy });
+    await flushMicrotasks();
+    expect(loadDataSpy).toHaveBeenCalledTimes(1);
+    expect(loadDataSpy).toHaveBeenCalledWith(FIXTURE_ACTIVE_SEASON.id);
+    expect(loadDashboardDataSpy).toHaveBeenCalledTimes(1);
+    expect(loadDashboardDataSpy).toHaveBeenCalledWith(FIXTURE_ACTIVE_SEASON.id);
+    // The genuinely discriminating assertion: never the retired placeholder.
+    expect(loadDataSpy.mock.calls[0]?.[0]).not.toBe('season-placeholder-current');
+    expect(loadDashboardDataSpy.mock.calls[0]?.[0]).not.toBe('season-placeholder-current');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T155: exact literals for all four `activeSeason.status` states (criterion
+// 3) -- inspection of the rendered copy, not a mutation proof (the packet's
+// own classification). 'ready' is already covered by the pre-existing
+// "DES-12 states" describe block above, which now runs through the new
+// season-status switch via `renderAsUser`'s default fixture-resolving
+// `loadActiveSeason`.
+// ---------------------------------------------------------------------------
+
+describe('<CoachHome /> T155 -- season-status literals (criterion 3)', () => {
+  it('"none": exact title/description, Banner only (no Section wrapper -- T129 fix, module doc #14)', async () => {
+    renderAsUser(COACH_USER, {}, async () => null);
+    await flushMicrotasks();
+    expect(container.textContent).toContain('No active season yet');
+    expect(container.textContent).toContain(
+      'An admin needs to create and activate a season in Season settings before Home can show data here.',
+    );
+  });
+
+  it('"error": exact title, the real error message, and a Retry that genuinely calls activeSeason.refresh()', async () => {
+    let callCount = 0;
+    const loadActiveSeason: LoadActiveSeasonFn = async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        throw { code: '500', message: 'Season load failed.', cause: null };
+      }
+      return FIXTURE_ACTIVE_SEASON;
+    };
+    renderAsUser(
+      COACH_USER,
+      { loadData: fixtureLoadData, nowFn: () => FIXTURE_REFERENCE_NOW },
+      loadActiveSeason,
+    );
+    await flushMicrotasks();
+    expect(container.textContent).toContain("Couldn't load the active season");
+    expect(container.textContent).toContain('Season load failed.');
+
+    const retryButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Retry',
+    );
+    expect(retryButton).toBeDefined();
+    act(() => {
+      retryButton!.click();
+    });
+    await flushMicrotasks();
+    expect(callCount).toBe(2);
+    // Retry re-ran loadActiveSeason, which now resolves -- 'ready' delegates
+    // to CoachHomeContent, proving Retry is genuinely wired to
+    // activeSeason.refresh(), not a dead click handler.
+    expect(container.textContent).toContain('Team participation');
+    expect(container.textContent).not.toContain("Couldn't load the active season");
+  });
+
+  it('"loading": renders the DES-12 skeleton and fires no query (see criterion 1 above for the call-count proof)', async () => {
+    renderAsUser(COACH_USER, {}, () => new Promise(() => {}));
+    await flushMicrotasks();
+    expect(container.textContent).toContain('Loading Home');
+    expect(container.querySelector('[role="status"]')?.textContent).toBe('Loading Home…');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T155: fail-loud proof (criterion 4) -- same pattern
+// `AppShell.test.tsx`'s own T141 provider-mount guard already establishes
+// (a class-based error boundary catching the real thrown error, rather than
+// asserting `root.render()` itself throws -- avoids depending on exactly how
+// the installed React version propagates an uncaught render error through
+// `act()`/`createRoot`).
+// ---------------------------------------------------------------------------
+
+class T155ThrowCaughtBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null };
+  static getDerivedStateFromError(error: Error): { error: Error } {
+    return { error };
+  }
+  render(): ReactNode {
+    if (this.state.error) {
+      return <div data-testid="t155-boundary-error">{this.state.error.message}</div>;
+    }
+    return this.props.children;
+  }
+}
+
+describe('<CoachHome /> T155 -- fail-loud without a <SeasonProvider> ancestor (criterion 4)', () => {
+  it('throws the exact "useActiveSeason() must be called within a <SeasonProvider>." message', () => {
+    // React logs the caught render error to the console loudly even though
+    // the boundary handles it; suppressed for this test only, not globally.
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      act(() => {
+        root.render(
+          <MemoryRouter>
+            <AuthProvider>
+              <LoginAs user={COACH_USER}>
+                <T155ThrowCaughtBoundary>
+                  <CoachHome />
+                </T155ThrowCaughtBoundary>
+              </LoginAs>
+            </AuthProvider>
+          </MemoryRouter>,
+        );
+      });
+      expect(container.querySelector('[data-testid="t155-boundary-error"]')?.textContent).toBe(
+        'useActiveSeason() must be called within a <SeasonProvider>.',
+      );
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it('the companion case: the same probe does NOT throw when a <SeasonProvider loadActiveSeason={...}> wrapping the fixture-resolving loader is present', async () => {
+    act(() => {
+      root.render(
+        <MemoryRouter>
+          <SeasonProvider loadActiveSeason={async () => FIXTURE_ACTIVE_SEASON}>
+            <AuthProvider>
+              <LoginAs user={COACH_USER}>
+                <T155ThrowCaughtBoundary>
+                  <CoachHome loadData={fixtureLoadData} nowFn={() => FIXTURE_REFERENCE_NOW} />
+                </T155ThrowCaughtBoundary>
+              </LoginAs>
+            </AuthProvider>
+          </SeasonProvider>
+        </MemoryRouter>,
+      );
+    });
+    await flushMicrotasks();
+    expect(container.querySelector('[data-testid="t155-boundary-error"]')).toBeNull();
+    // CoachHome itself rendered real content -- proof the probe (CoachHome
+    // calling useActiveSeason() at its own top level) genuinely did not
+    // throw here, not merely that nothing crashed before it ran.
+    expect(container.textContent).toContain('Team participation');
+  });
+});
+
+/** T155: reads a `KpiCard`'s rendered value (its `Heading level={2}`
+ * sibling) given the card's own `Heading level={4}` label text -- both
+ * render as real `h4`/`h2` elements (`Heading`'s own `level` prop maps
+ * directly to the semantic HTML element). */
+function kpiCardValue(label: string): string | null {
+  const labelHeading = Array.from(container.querySelectorAll('h4')).find(
+    (h) => h.textContent === label,
+  );
+  const valueHeading = labelHeading?.parentElement?.querySelector('h2');
+  return valueHeading?.textContent ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// T155: the measured-reality proof (criterion 5) -- a REAL, non-placeholder
+// season id (`FIXTURE_ACTIVE_SEASON.id`) reaching the DEFAULT `loadData`
+// (`defaultLoadCoachHomeData`, untouched, not a custom fixture) with
+// `loadDashboardData` PINNED to the in-file `defaultLoadDashboardData`
+// fixture (required -- `CoachHome`'s own real Supabase-backed default
+// rejects in this unconfigured jsdom environment, which would hide the
+// entire `{dashboardData && (...)}`-gated grid Surface 2 below lives in;
+// see module doc #14 in `CoachHome.tsx`).
+// ---------------------------------------------------------------------------
+
+describe('<CoachHome /> T155 -- measured-reality proof for a REAL, non-placeholder season (criterion 5)', () => {
+  it('genuinely empties four widgets while two known-residual fabricated surfaces (both from the same defaultGoalHours root cause) and the admin Season-setup permanent residual remain', async () => {
+    window.localStorage.clear();
+    renderAsUser(ADMIN_USER, {
+      // No `loadData` override -- the untouched real default,
+      // `defaultLoadCoachHomeData`, per criterion 5's own instruction.
+      loadDashboardData: defaultLoadDashboardData, // PINNED, not CoachHome's own real Supabase default.
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+
+    // Honest empties -- all four reach empty via the `events` season-filter
+    // join (module doc's own field-by-field table in the worker packet).
+    expect(kpiCardValue('Team participation')).toBe('—');
+    expect(container.textContent).not.toContain('82.4%'); // the fixture-only participation value must be genuinely gone
+    expect(container.textContent).toContain('No completed meetings yet this season'); // last-meeting attendance secondary
+    expect(kpiCardValue('Last meeting attendance')).toBe('—');
+    expect(kpiCardValue('Events in next 7 days')).toBe('0');
+    expect(container.textContent).toContain('Nothing scheduled'); // Next up empty state
+
+    // Known-residual fabricated surfaces -- the SAME root cause
+    // (`data.defaultGoalHours`, always the fixture `10`, never
+    // season-filtered), asserted explicitly as measured, not omitted.
+    expect(container.textContent).toContain('0 / 38 hrs'); // Surface 1: Hours vs. team goal
+    expect(container.textContent).toContain('Default goal 10h'); // Surface 2: Avg hours / active student's secondary -- the round-2 MAJOR
+
+    // Documented permanent residual (packet's own note), not a falsifiable
+    // check: `isSeasonMissingSetup` reads only unfiltered fixture fields, so
+    // this is `true` for every season this task can produce.
+    expect(container.textContent).toContain('Season setup');
   });
 });
 

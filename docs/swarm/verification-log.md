@@ -5153,3 +5153,75 @@ a `useEffect` mutation that reintroduces a stale frame leaves all 36 tests green
 still shows the previous user's theme. Resetting on `null` would fire on every normal page
 load while the session resolves, reintroducing T148's flash. Stated in three places in
 source and pinned by its own test.
+
+## T155 — wire `CoachHome` to the real active season (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commit | `7451fe801d35ff8cb1962044295d69e5ab7bf1b1` (attempt 1) |
+| Verdict | **PASS** — no BLOCKER, no MAJOR, no MINOR; 2 NITs logged only |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
+| Packet | revision 3 — gated twice, item 19a's cap spent, dispatched straight to a worker |
+| tsc / build / format | clean / ✓ / clean |
+| eslint | 0 errors, 355 warnings — **identical pre and post**, no new warning |
+| vitest | 66 files, **1536 → 1546** (+10, exactly the new `it(` blocks) |
+| `DashboardPage.tsx` | byte-identical, sha256 `4a5da47b46e14855dec428d545e0de70b12b73a51fc42c5ec7b1db3101fe7c81` |
+
+**The bug.** `CoachHome.tsx` declared `seasonId = PLACEHOLDER_SEASON_ID`
+(`'season-placeholder-current'`) and `DashboardPage.tsx` rendered `<CoachHome />` with no
+props, so that string reached `.eq('season_id', …)` on nine real Supabase queries. Postgres
+rejected all nine with `22P02 invalid input syntax for type uuid`. Owner-reported with
+DevTools screenshots; root cause confirmed from the actual 400 response body, not inferred.
+
+**The fix.** Outer `CoachHome` (season-status dispatch only) + inner `CoachHomeContent`,
+mirroring `KpiStrip`/`KpiStripContent`. `seasonId` removed from `CoachHomeProps` entirely
+rather than kept as a test-only override — keeping a dead prop production never sets is the
+shape of the bug the task existed to close. `user === null` is checked **before** the
+`activeSeason.status` switch; the packet's round-2 gate had built the reordered version and
+measured it failing the existing sign-in-prompt test, since `SeasonProvider`'s first
+synchronous render is always `{status:'loading'}`.
+
+**Two baseline disputes, both resolved in the worker's favour.** The packet pinned 1507
+tests at `9c863c1`. The worker measured **1536** at its own dispatch SHA and flagged the
+difference rather than reconciling it; the checker reverted all three source files and
+re-measured 1536 independently. The packet's figure was stale. This is the third time on
+this branch a stale pinned baseline nearly produced a false regression report — criterion 10's
+"compute your own baseline" instruction is what caught it.
+
+**The checker closed the worker's own self-flagged gap by execution.** The worker verified
+criterion 5's `loadDashboardData` pin was load-bearing **by inspection only** and said so
+plainly. The checker deleted just the pin line and got exactly one failure, on precisely the
+Surface-2 assertion (`expected … to contain 'Default goal 10h'`) — the worker's reasoning was
+right, and is now measured rather than inferred. The checker also dumped the literal rendered
+tree rather than trusting the assertions, and confirmed all seven surfaces in one tree.
+
+**Both disclosed behavior changes independently measured** by the checker, using its own
+season id rather than the worker's fixture: signed-out renders went `loadData=1
+loadDashboardData=1` → `0/0`, and the milestone-toast dedupe key moved from the shared
+placeholder namespace to the real season id. Both are improvements, both accurately described.
+
+**Known-residual output, disclosed not defective.** `Hours vs. team goal` renders `0 / 38 hrs`
+and `Avg hours / active student` renders a `Default goal 10h` secondary — one fabricated field
+(`defaultGoalHours`), two surfaces. The admin "Season setup" card is permanently present.
+These are **not** regressions: their fixture inputs were never season-scoped. All three are
+filed as **T173**, named explicitly rather than left for a future report to rediscover.
+
+**Correctly not mutation-proofed.** Criteria 2, 6c, 7, 9 and 10 are inspection/hash/grep/build
+checks, and criterion 5's Season-setup sub-bullet is a documented permanent residual that
+cannot fail. The worker classified each honestly and the checker agreed, declining to demand a
+fourth negative derivation of the Season-setup residual. Forcing falsifiability onto a
+structural check is the inverse of the T147 error and would have been a finding against the
+packet, not the worker.
+
+**NIT carried forward, attributable to the packet not the worker.** `CoachHomeLoadingSkeleton`
+is now shared by the season-resolution and data-resolution boundaries, so both announce the
+identical `role="status"` text `Loading Home…`; a screen-reader user cannot tell which of the
+two sequential async boundaries is pending, and the announcement may repeat on transition. The
+packet mandated the extraction ("required, not encouraged") to remove a nine-magic-value drift
+risk, so this is the prescribed trade, not a deviation. Worth a line in a future a11y pass.
+
+**Attribution.** The owner supplied the bug report, the screenshots, and the symptoms. The
+outer/inner design, both scope deferrals (`teamId`, the `loadData` backend), the tier
+assignment, and every acceptance criterion were the orchestrator's, and the packet said so.
+No authority-promotion finding.

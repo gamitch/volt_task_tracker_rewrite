@@ -25,10 +25,25 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthUser } from '../../app/guards';
 import { LoginAs } from '../../test-utils/authHarness';
+import { SeasonProvider, type LoadActiveSeasonFn } from '../../app/SeasonProvider';
+import type { SeasonRow } from '../../lib/supabase/types';
 import { DashboardPage } from './DashboardPage';
 
 // ---------------------------------------------------------------------------
 // Render harness -- mirrors CoachHome.test.tsx.
+//
+// T155: `CoachHome` (which this dispatcher routes `coach`/`admin` users to)
+// now calls `useActiveSeason()`, so every render needs a `<SeasonProvider>`
+// ancestor. `FIXTURE_ACTIVE_SEASON` is the same shared-fixture-constant
+// convention `CoachHome.test.tsx`'s own harness uses (a distinctive,
+// non-placeholder id, matching `AppShell.test.tsx`'s `T140_FIXTURE_SEASON`
+// pattern) -- criterion 8's own "harness-only, no individual it( body
+// changes" requirement: `loadActiveSeason` is a new optional second
+// parameter (default resolves this fixture quickly), so every pre-existing
+// `it(` below still calls `renderAsUser(user)` with exactly one argument.
+// The only two tests this actually affects are the "coach"/"admin" cases
+// (`DashboardPage.tsx`'s own role switch routes only those two roles to the
+// real `CoachHome`; `student`/`parent`/`null` never reach it at all).
 // ---------------------------------------------------------------------------
 
 let container: HTMLDivElement;
@@ -43,19 +58,34 @@ const STUDENT_USER: AuthUser = {
 };
 const PARENT_USER: AuthUser = { id: 'user-parent', email: 'parent@example.com', role: 'parent' };
 
-function renderAsUser(user: AuthUser | null): void {
+const FIXTURE_ACTIVE_SEASON: SeasonRow = {
+  id: 'season-fixture-active',
+  name: 'Fixture Active Season',
+  startsOn: '2026-01-01',
+  endsOn: '2026-12-31',
+  defaultGoalHours: 100,
+  isActive: true,
+  createdAt: '2026-01-01T00:00:00.000Z',
+};
+
+function renderAsUser(
+  user: AuthUser | null,
+  loadActiveSeason: LoadActiveSeasonFn = async () => FIXTURE_ACTIVE_SEASON,
+): void {
   act(() => {
     root.render(
       <MemoryRouter>
-        <AuthProvider>
-          {user === null ? (
-            <DashboardPage />
-          ) : (
-            <LoginAs user={user}>
+        <SeasonProvider loadActiveSeason={loadActiveSeason}>
+          <AuthProvider>
+            {user === null ? (
               <DashboardPage />
-            </LoginAs>
-          )}
-        </AuthProvider>
+            ) : (
+              <LoginAs user={user}>
+                <DashboardPage />
+              </LoginAs>
+            )}
+          </AuthProvider>
+        </SeasonProvider>
       </MemoryRouter>,
     );
   });
