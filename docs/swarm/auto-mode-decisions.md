@@ -1011,3 +1011,40 @@ attribute any of them to him.
 writes `task-ledger.md` and `state-summary.md`; two concurrent foremen conflict on the same
 append-at-end files, which `architecture-review-parallelism.md` §1.6 predicted. Workers and
 checkers parallelise freely on disjoint files.
+
+---
+
+## 2026-07-30 — T184 design decisions (orchestrator's, NOT the owner's)
+
+George's ruling settles behaviour only: *"A deactivated student should not be able to login, if
+not possible, they should see nothing when they login"*. Everything below is mine.
+
+**1. His fallback is what ships, and the trigger condition is confirmed rather than assumed.**
+A deactivated student **does** sign in today. `resolveSessionToAuthState` → `auth.ts`'s
+`resolveRole` reads only `profiles.role`, and **`is_active` appears zero times in both
+`auth.ts` and `guards.tsx`** (measured). Blocking sign-in would require editing `resolveRole`,
+`AuthContextValue`, `RequireAuth` or `RequireRole` — all in Forbidden `guards.tsx`. So his
+first choice is genuinely out of scope and his stated second clause governs. Disclosed
+substitution he authorised in advance, not a silent one.
+
+**2. My own landing-surface reading was wrong, and the foreman corrected it.** I proposed
+routing to the existing `NoAccessPage`/`AccessDeniedPage`. Both are unfit, measured:
+`NoAccessPage` **force-signs-out on mount** and says *"You're not on the roster yet"* — also
+false for this user, and a sign-out nobody asked for (`guards.tsx:478` documents both).
+`AccessDeniedPage`'s only action links to `/` → `DashboardPage` → `<StudentHome/>`, i.e. straight
+back to the broken page — a dead-end loop. The packet instead adds a new, distinct `EmptyState`
+inside `StudentHome.tsx`. Recorded because I would otherwise have shipped a sign-out and a loop.
+
+**3. I authorise the five test amendments, under delegated authority, explicitly NOT George's.**
+`StudentHome.test.tsx:1074-1187` pins the current `null`-collapse in five tests, which the
+three-way discriminated union necessarily changes. Constitution Non-Negotiable #2
+(`constitution.md:10`) requires the boss to approve a test update; the boss is away and this is
+mechanical — `null` becomes `{kind:'not-linked'}`/`{kind:'inactive'}`, or `kind:'linked'` is
+added. **No assertion may be weakened and none of the five may lose coverage**; the packet also
+requires a zero-diff regression pin on the existing not-linked test. The foreman was right to
+flag these rather than self-authorise.
+
+**4. Full premise gate, taking the foreman's recommendation over my prior lean.** T151 skipped a
+gate and T170 got a narrow one; this gets a full one, because the three-way state is a **new
+pattern for this file**, not a proven pattern reapplied — item 19b's own distinction. This file
+family has also produced a caught BLOCKER in every gate round run against it so far.
