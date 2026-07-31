@@ -1,10 +1,101 @@
-# Resume here — state of play at `claude/swarm-plan-zl575z` = `3e967e6`
+# Resume here — state of play at `main` = `94267a0` (2026-07-31 update below the line at §"UPDATE")
 
 Written 2026-07-30 so this session's context can be cleared without losing anything.
 Fresh orchestrator session: read this, then `constitution.md`, then the open rows in
 `task-ledger.md`. Everything is on disk; nothing important lives only in a conversation.
 
-## Where the repo is
+**A 2026-07-31 update sits near the top of this file (search "UPDATE — 2026-07-31") — read
+it before acting on anything below that predates it, since branch/PR state and the triage
+proposal's T169/T177 rows have both moved since this file was first written.**
+
+## UPDATE — 2026-07-31: branch state, and two triage rows resolved
+
+- **PR #3 and PR #4 are both merged into `main`.** `main` = `94267a0`, carrying everything
+  through T177 plus the View As feature requirements/design docs (PR #4). No open PRs remain.
+  `claude/swarm-plan-zl575z` (`f7e3143`) is content-equivalent to `main` but sits 2 commits
+  "behind" it in graph terms — GitHub's PR-merge created `97398ff` on `main` directly, and a
+  manual reconciling merge added `94267a0`, neither replayed onto the feature branch.
+  Harmless, but `git pull origin main` into this branch before starting new work on it.
+- Working tree clean. Gates re-measured green at `main`/`f7e3143`: `tsc` exit 0 · eslint
+  **0 errors / 358 warnings** · **69 files / 1654 tests** (measured with `.env.local`
+  **absent**, the mandated gate state) · `vite build` ✓. One pre-existing, unrelated
+  `prettier --check` warning on `src/theme/volt.ts` predates this session (confirmed present
+  at `fe62f88`, before any of today's commits) — not this session's to fix.
+- **The `.claude/worktrees/agent-a640406e50762373c` preservation note above no longer
+  applies.** That directory is empty in this checkout and `git worktree list` has no record
+  of it — specific to whatever filesystem wrote the note, not something deleted here.
+- **T169 and T177 both landed** (see below), resolving 2 of the triage proposal's "KEEP — a
+  user hits this" rows. **The rest of the triage proposal (further down this file) is
+  unchanged and still awaiting the owner's veto** — do not treat T169/T177 landing as any
+  kind of signal about the other rows in that proposal.
+
+### Landed 2026-07-30/31
+
+- **T169 (OutreachDetail half) — merged `18b481c`.** PASS, attempt 1, no BLOCKER/MAJOR/MINOR
+  (2 NIT, log-only). Mounted `RsvpControl` role-gated beside T157's `ParentRsvp` for the
+  signed-in student's own roster row, via a new `resolveOwnRosterStudent`. 2 rounds of
+  `checker-premise` (round 1 REVISE on a scope claim that went stale mid-session — T170 had
+  merged — round 2 DISPATCH). **Follow-up filed: T193** — the `OutreachList.tsx` student
+  half of T169 (the other row referenced in the old triage table below), now genuinely
+  unblocked since T170 supplies a real `viewerStudentId`. Not yet packeted.
+- **T177 — merged `18b481c` (source work), reconciled onto `main` at `94267a0`.** PASS,
+  attempt 2 (attempt 1 FAILed on 1 MAJOR: a new test wasn't actually hermetic to the
+  env-injection claim it made). Wired a real, injectable Functions-URL resolver and a new
+  `loaders/calendarFeed.ts` replacing a placeholder host and a fixture feed. **Heaviest
+  premise-gate history of any task yet** — 2 REVISE rounds (3 BLOCKER/2 MAJOR, then 1 new
+  BLOCKER/2 new MAJOR introduced by the first round's own fixes), hit item 19a's 2-round
+  cap, escalated to the human owner, who authorized one bounded revision-round exception
+  (recorded in `auto-mode-decisions.md`, "George's ruling on T177's item-19a escalation" —
+  a **structured-selection** ruling, not a verbatim quote; the entry says so explicitly).
+  **Follow-ups filed: T195** (nothing anywhere provisions a `calendar_feeds` row — the real
+  remaining gap; T177 makes the widget's failure *honest*, not the feature *functional*) and
+  **T194** (`onResetFeedToken`, same defect family, sequence after T195).
+- **Both merged via a deliberate test of running the packet → premise-gate → worker →
+  checker pipeline through subagents**, to see whether it reduces context growth in the
+  orchestrating session. **It worked** — each stage ran in its own subagent transcript; only
+  dispatch prompts, file reads, and final summaries landed here. Worth repeating.
+- **PR #3 and PR #4 both required manual intervention to merge.** PR #3 was initially
+  blocked by GitHub's stacked-PR restriction (PR #4 had it as a base) — no CLI/API
+  workaround found; the owner unstacked both in the GitHub UI, after which the normal merge
+  API worked. PR #4 merged into the *feature branch* (its base ref), not `main`, so `main`
+  needed a **second, separate, real merge** afterward (a raw fast-forward push was rejected
+  as non-fast-forward, since `main`'s own PR-merge commit had diverged from the feature
+  branch in the interim).
+
+### New rows filed this session (not part of the pre-existing triage proposal below)
+
+- **T193** — `OutreachList.tsx`'s student-facing RSVP control (T169's other half). A
+  reusable pattern already exists from T169's OutreachDetail half — the packet should
+  evaluate whether it transfers directly.
+- **T195** — the `calendar_feeds` provisioning gap. Likely needs a migration (item 18
+  trigger 1 → opus tier) alongside `fn_handle_invite_acceptance`. Sequence before T194.
+- **T194** — `SubscribePopover.tsx`'s `onResetFeedToken`, same fixture-default defect family
+  as T177 just fixed, one function over. Sequence after T195.
+
+### New process lessons this session
+
+- **A `git stash`/`git stash pop` cycle mid-merge silently destroys `MERGE_HEAD`.** Paid for
+  on T177's merge: after `git merge --no-ff --no-commit`, a stash-and-pop used to spot-check
+  an unrelated pre-existing prettier warning cleared `.git/MERGE_HEAD` without any error
+  message, and the subsequent `git commit` landed a **single-parent commit** — correct file
+  content, wrong lineage. Caught only by checking `git log --pretty=%P` out of habit. Fixed
+  via `git commit-tree` with the correct two parents against the already-correct tree,
+  rather than redoing the work. **Rule: never run `git stash` between `git merge --no-ff
+  --no-commit` and the final `git commit`** — use a disposable worktree for any mid-merge
+  spot-check instead.
+- **GitHub's stacked-PR restriction blocks the merge API, not just a UI button.** PR #3
+  couldn't be merged via `gh pr merge` while PR #4 (open, based on PR #3's head branch)
+  existed. No workaround found short of the owner unstacking both in the GitHub UI. Check
+  for other open PRs based on the same head branch before attempting a PR merge.
+- **Merging a PR whose base is a feature branch (not `main`) does not update `main`.** Needs
+  a second, real merge afterward — not something the original PR's merge does for you, and
+  a raw ref push will be rejected non-fast-forward if `main` has since diverged.
+- **The subagent-pipeline dispatch pattern measurably reduces orchestrator context growth**
+  — validated deliberately as a test on T169 and T177. Default to it for future tasks.
+
+---
+
+## Where the repo is (as of 2026-07-30 — see the 2026-07-31 UPDATE section above for what changed)
 
 - **PR #2 is merged** and must not be reused. `main` = `f7ff055`.
 - **PR #3 is open** (`claude/swarm-plan-zl575z` → `main`), carrying **16 merged tasks**.
@@ -12,6 +103,7 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
   **68 files / 1631 tests** · prettier clean · `vite build` ✓.
 - One worktree is deliberately preserved: `.claude/worktrees/agent-a640406e50762373c`
   (T144's contrast evidence, D011). **Do not delete it.** All others cleaned up.
+  **[2026-07-31: this worktree does not exist in the current checkout — see UPDATE.]**
 
 ## The headline: both defect families that produced every real bug are now closed
 
@@ -39,8 +131,8 @@ self check-off on `/outreach` — which was silently failing against a nonexiste
    now T155 landed; `CoachHome` sources a real `seasonId`, so the embed inherits it free.
    Two units: build a real `loadLeaderboardData` (none exists), then embed. Note T155
    restructured `CoachHome` into an outer/inner split — older line citations are stale.
-2. **T169** — `RsvpControl` on both surfaces (owner-ruled). The `OutreachDetail` half can go
-   now; the student half is **unblocked** too, since T170 landed.
+2. ~~**T169**~~ — **DONE 2026-07-31** (OutreachDetail half, `18b481c`). Other half re-filed as
+   **T193**, still open — see the 2026-07-31 UPDATE section at the top of this file.
 3. **T172** — the mechanism fix, and **it should now absorb the vacuous-absence problem**
    (see below), not just the placeholder-default one.
 4. **T178/T179/T180** — three finished, tested components mounted nowhere, each with a
@@ -141,8 +233,8 @@ the backlog grows. These five are the only path to "finished".
 
 | Row | Why |
 |---|---|
-| T169 | **silent data loss** — a student RSVPs, sees it apply, and it is discarded on reload. Owner-ruled, both surfaces, both halves now unblocked. |
-| T177 | the calendar-feed subscribe link points at a non-existent host **and** the feed row is a fixture — both halves fake |
+| T169 | **RESOLVED 2026-07-31, merged `18b481c` (OutreachDetail half).** The `OutreachList` half is re-filed as **T193**, still open. |
+| T177 | **RESOLVED 2026-07-31, merged (see UPDATE section above).** Provisioning gap it exposed is re-filed as **T195**; `onResetFeedToken` as **T194**. |
 | T183 | `Hi Ada Reyes` greets every real signed-in student |
 | T173 | `CoachHome`'s three fabricated surfaces (`0 / 38 hrs`, `Default goal 10h`, admin Season-setup card) |
 | T191 | a deactivated child's card shows a `1 h` goal that exists in no data source |
