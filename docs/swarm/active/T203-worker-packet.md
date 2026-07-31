@@ -94,7 +94,7 @@ before T158 actually landed. Re-verified against the real, current file
   a bare `<Leaderboard>` mount (only `VStack`/`Heading`/`Divider`) rewrites
   it — confirmed by grep, none of those three call `container(...)`. So a
   bare mount inherits `LayoutContent`'s ambient value, spacing step 6 —
-  `--spacing-6: 24px` (`tokens.stylex.js:233`) — meaning **the outer div
+  `--spacing-6: 24px` (`dist/theme/tokens.stylex.js:233`) — meaning **the outer div
   gets `margin-inline: -24px` on each side**, bleeding 24px past every
   sibling `VStack` section on the page.
   `Card`'s own div (`Card.js:200-207`) unconditionally calls `container({
@@ -103,7 +103,7 @@ before T158 actually landed. Re-verified against the real, current file
   descendant (including a nested `Section`'s outer div) reads them. This
   project's own theme overrides that token: `theme.css:518-519`,
   `.astryx-card { --astryx-card-padding: var(--spacing-3); }` — `--spacing-3:
-  12px` (`tokens.stylex.js:230`). So **wrapping in `Card` changes the
+  12px` (`dist/theme/tokens.stylex.js:230`). So **wrapping in `Card` changes the
   Section's own negative margin from -24px to -12px** — and because `Card`
   itself carries no negative margin of its own (it never bleeds past its own
   parent), the net effect is that the Card+Section combination's outer
@@ -151,15 +151,37 @@ before T158 actually landed. Re-verified against the real, current file
 
 ## 4. Ground truth — the real names, re-verified
 
-- `Leaderboard` (`src/pages/outreach/Leaderboard.tsx:470-474`):
+- `Leaderboard` — **gate round 1, NIT corrected**: `LeaderboardProps` is at
+  `src/pages/outreach/Leaderboard.tsx:457-468`, the component function
+  itself starts at `:470-474` (two adjacent but distinct ranges; the
+  original packet cited only the function's range for both):
   ```ts
   export interface LeaderboardProps {
     loadData?: LoadLeaderboardDataFn;       // defaults to defaultLoadLeaderboardData (fixture)
-    loadPrivacySetting?: LoadPrivacySettingFn; // defaults to the REAL loadPrivacySetting already (T104) — leave alone
+    loadPrivacySetting?: LoadPrivacySettingFn; // defaults to the REAL loadPrivacySetting (T104)
     seasonId?: string;                      // defaults to PLACEHOLDER_SEASON_ID
   }
   export function Leaderboard({ loadData, loadPrivacySetting, seasonId }: LeaderboardProps = {}): ReactNode
   ```
+  **Gate round 1, BLOCKER 1 — corrects this packet's original instruction
+  below the code block, which read "leave alone" and was wrong, and caused
+  a real bug the gate proved by execution.** `Leaderboard`'s own
+  `useLeaderboardData` hook (`:421-451`) fetches BOTH seams together:
+  `Promise.all([loadData(seasonId), loadPrivacySetting()])` (`:434`) — and
+  `Promise.all` rejects the instant EITHER promise rejects. `loadPrivacySetting`
+  defaults to the real, Supabase-backed `loadPrivacySetting`
+  (`../../lib/supabase/loaders/leaderboard_privacy.ts:168`, built by T104),
+  which throws `SupabaseNotConfiguredError` in any jsdom test. So leaving
+  it un-threaded (this packet's original instruction) means `Leaderboard`
+  can NEVER reach its populated (`status: 'success'`) state in ANY test in
+  this task's Allowed Files, no matter how correctly `loadLeaderboardData`
+  alone is threaded — the gate proved this by literally rendering the
+  packet's own prescribed mount and getting `"Couldn't load the leaderboard"`
+  every time. **Both seams must be independently injectable, threaded
+  through the same four boundaries §6b already threads `loadLeaderboardData`
+  through** — see the corrected §5/§6a/§6b/§6c/§7a/§7b below; a second,
+  parallel prop, `loadLeaderboardPrivacySetting`, is now required alongside
+  `loadLeaderboardData`.
   `Leaderboard` renders `<Section variant="section" padding={4}>` at `:478`
   and owns its **entire** DES-12 lifecycle internally (loading skeleton,
   error `Banner`+Retry, `EmptyState` when `entries.length === 0`, populated
@@ -201,23 +223,39 @@ before T158 actually landed. Re-verified against the real, current file
 - `src/pages/home/CoachHome.tsx`
 - `src/pages/home/CoachHome.test.tsx`
 - `src/pages/home/DashboardPage.test.tsx`
+- **Gate round 1, MINOR 1 — carve-out added:** exactly one throwaway rig,
+  `*.throwaway.*` (e.g. `<name>.throwaway.html` at the repo root +
+  `src/<name>.throwaway.tsx`), for criterion 5's live-browser measurement
+  only — already excluded from the vitest suite (`vite.config.ts:36`) and
+  gitignored (this project's established `*.throwaway.*` convention, see
+  T142's own worker output for precedent). Delete it before your final
+  commit (already required by §11 — this carve-out just stops it from also
+  being blocked by the "Any file not listed above" Forbidden catch-all
+  below).
 
 **Forbidden (read for reference only):**
 - `src/pages/outreach/Leaderboard.tsx`, `Leaderboard.test.tsx` — finished,
   tested. Import from it (`Leaderboard`, `LoadLeaderboardDataFn`,
-  `defaultLoadLeaderboardData`); do not modify it, do not duplicate its
-  internal state-machine/formatting/privacy logic. Its own module doc header
-  (`:2`) still reads "a `Section` on `/outreach`" — stale since the owner's
-  ruling ("embed in the dashboard, not a standalone route") superseded it;
-  this is a one-word documentation triviality, already correctly described
-  everywhere it actually matters (T158's own loader module doc, this
-  packet), not worth its own follow-up task — leave it, do not fix it here
-  (Forbidden file), and do not let it confuse you about where this mounts.
+  `defaultLoadLeaderboardData`, and — **gate round 1, BLOCKER 1 —
+  added** — `LoadPrivacySettingFn`, `defaultLoadPrivacySetting`); do not
+  modify it, do not duplicate its internal state-machine/formatting/privacy
+  logic. Its own module doc header (`:2`) still reads "a `Section` on
+  `/outreach`" — stale since the owner's ruling ("embed in the dashboard,
+  not a standalone route") superseded it; this is a one-word documentation
+  triviality, already correctly described everywhere it actually matters
+  (T158's own loader module doc, this packet), not worth its own follow-up
+  task — leave it, do not fix it here (Forbidden file), and do not let it
+  confuse you about where this mounts.
 - `src/lib/supabase/loaders/leaderboard.ts`, `leaderboard.test.ts` — finished
   (T158). Import `loadLeaderboardData` from it; do not modify.
-- `src/lib/supabase/loaders/leaderboard_privacy.ts` — untouched;
-  `Leaderboard`'s own `loadPrivacySetting` default is already real, do not
-  override it.
+- `src/lib/supabase/loaders/leaderboard_privacy.ts` — **gate round 1,
+  BLOCKER 1 — corrected: import access now permitted, write access still
+  Forbidden.** `Leaderboard`'s own `loadPrivacySetting` default is already
+  real (T104) — that fact does not mean it should stay un-threaded at the
+  `CoachHome` level (the original instruction here was the direct cause of
+  BLOCKER 1). Import `loadPrivacySetting` from this file for `CoachHome`'s
+  new `loadLeaderboardPrivacySetting` prop default (§6a/§6b); do not modify
+  the file itself, do not duplicate its internal logic.
 - `src/pages/home/DashboardPage.tsx` — read-only reference. Confirms
   `<CoachHome />` is mounted with **zero** props at `:120` for both
   `coach`/`admin` — this is why §7b's `DashboardPage.test.tsx` fix must be a
@@ -244,18 +282,34 @@ manager's install step before anything else; do not treat a missing
 ## 6. Design — `CoachHome.tsx`
 
 **6a. Imports.** Add to the existing `@astryxdesign/core` import list — no
-change needed, `Card`/`Divider` already imported (`:618`/`:619`). Add two new
-import statements near the existing loader imports (`:641-652`):
+change needed, `Card`/`Divider` already imported (`:618`/`:619`). Add three
+new import statements near the existing loader imports (`:641-652`) —
+**gate round 1, BLOCKER 1: a third import line added** for the privacy
+seam, mirroring the exact same asymmetric pattern the first two lines
+already establish (real loader value from `lib/supabase/loaders/*`, its
+type from `Leaderboard.tsx` itself, since that is the type `Leaderboard`'s
+own props actually require):
 ```ts
 import { loadLeaderboardData } from '../../lib/supabase/loaders/leaderboard';
-import { Leaderboard, type LoadLeaderboardDataFn } from '../outreach/Leaderboard';
+import { loadPrivacySetting } from '../../lib/supabase/loaders/leaderboard_privacy';
+import {
+  Leaderboard,
+  type LoadLeaderboardDataFn,
+  type LoadPrivacySettingFn,
+} from '../outreach/Leaderboard';
 ```
+No rename/alias needed on the `loadPrivacySetting` import — `CoachHome.tsx`
+has no pre-existing name of that shape (confirmed by grep), so this mirrors
+`loadLeaderboardData`'s own unaliased import immediately above it.
 
 **6b. Prop threading — mirrors `loadDashboardData`'s exact existing shape at
 both boundaries, verified against the real code (`:2093-2111`,
-`:2169-2227`, `:2238-2256`), not assumed.**
+`:2169-2227`, `:2238-2256`), not assumed. Gate round 1, BLOCKER 1: a SECOND
+new field, `loadLeaderboardPrivacySetting`, now threads through all four
+boundaries in parallel with `loadLeaderboardData` — do not add only one of
+the two.**
 
-`CoachHomeProps` (`:2093-2111`) — add one field, after `loadDashboardData`:
+`CoachHomeProps` (`:2093-2111`) — add two fields, after `loadDashboardData`:
 ```ts
 export interface CoachHomeProps {
   loadData?: LoadCoachHomeDataFn;
@@ -266,6 +320,17 @@ export interface CoachHomeProps {
    * leaderboard`, built by T158) -- same "prop defaults to the real loader"
    * convention `loadDashboardData` above already established. */
   loadLeaderboardData?: LoadLeaderboardDataFn;
+  /** T203 (gate round 1, BLOCKER 1): `Leaderboard` itself fetches TWO
+   * things internally via `Promise.all` (`Leaderboard.tsx`'s own
+   * `useLeaderboardData`) -- `loadData` (above) and `loadPrivacySetting`.
+   * Both must be independently injectable, or `Leaderboard` can never reach
+   * its populated state in any test (the real, unconfigured
+   * `loadPrivacySetting` always rejects in jsdom, and `Promise.all` fails
+   * if either promise rejects). Defaults to the real, SHARED
+   * `loadPrivacySetting` (`../../lib/supabase/loaders/leaderboard_privacy`,
+   * built by T104) -- same "prop defaults to the real loader" convention as
+   * `loadLeaderboardData` immediately above. */
+  loadLeaderboardPrivacySetting?: LoadPrivacySettingFn;
   teamId?: string;
   nowFn?: () => Date;
 }
@@ -279,11 +344,12 @@ export function CoachHome({
   loadData = loadCoachHomeData,
   loadDashboardData: loadDashboardDataProp = loadDashboardData,
   loadLeaderboardData: loadLeaderboardDataProp = loadLeaderboardData,
+  loadLeaderboardPrivacySetting: loadLeaderboardPrivacySettingProp = loadPrivacySetting,
   teamId = PLACEHOLDER_CURRENT_TEAM_ID,
   nowFn = () => new Date(),
 }: CoachHomeProps = {}): ReactNode {
 ```
-and pass it through in the `case 'ready':` branch (`:2214-2225`):
+and pass both through in the `case 'ready':` branch (`:2214-2225`):
 ```ts
     case 'ready':
       return (
@@ -294,13 +360,14 @@ and pass it through in the `case 'ready':` branch (`:2214-2225`):
           loadData={loadData}
           loadDashboardData={loadDashboardDataProp}
           loadLeaderboardData={loadLeaderboardDataProp}
+          loadLeaderboardPrivacySetting={loadLeaderboardPrivacySettingProp}
           defaultGoalHours={activeSeason.season.defaultGoalHours}
           nowFn={nowFn}
         />
       );
 ```
 
-`CoachHomeContentProps` (`:2238-2246`) — add one required field:
+`CoachHomeContentProps` (`:2238-2246`) — add two required fields:
 ```ts
 interface CoachHomeContentProps {
   user: AuthUser;
@@ -309,6 +376,7 @@ interface CoachHomeContentProps {
   loadData: LoadCoachHomeDataFn;
   loadDashboardData: LoadDashboardDataFn;
   loadLeaderboardData: LoadLeaderboardDataFn;
+  loadLeaderboardPrivacySetting: LoadPrivacySettingFn;
   defaultGoalHours: number;
   nowFn: () => Date;
 }
@@ -323,6 +391,7 @@ function CoachHomeContent({
   loadData,
   loadDashboardData: loadDashboardDataProp,
   loadLeaderboardData: loadLeaderboardDataProp,
+  loadLeaderboardPrivacySetting: loadLeaderboardPrivacySettingProp,
   defaultGoalHours,
   nowFn,
 }: CoachHomeContentProps): ReactNode {
@@ -345,18 +414,20 @@ current, see §3).** Do not add any new load-state boundary around
                 `margin-inline-start/-end: calc(-1 * var(--container-
                 padding-inline-start/-end, 0px))`). This page's
                 `LayoutContent padding={6}` is the nearest ancestor setting
-                those vars, and nothing between it and here resets them
-                (only `Card`/`Section`/`LayoutContent` call the shared
-                `container(...)` helper -- not the intervening `VStack`s) --
-                so a bare mount would bleed the leaderboard ~24px wider than
-                every sibling section on this page (`--spacing-6`, this
-                page's own ambient padding). `Card`'s own div re-declares
-                those vars to its own, smaller, theme-overridden value
-                (`--astryx-card-padding: var(--spacing-3)`, 12px,
-                `theme.css:518-519`) before `Section` reads them, and `Card`
-                itself carries no negative margin of its own -- so wrapping
-                here makes the leaderboard's outer edge line up with every
-                sibling section's edge instead of bleeding past it. Same
+                those vars (directly, via its own `padding.stylex.js`
+                mechanism -- NOT via the shared `container(...)` helper,
+                which only `Section`/`Card`/`Dialog` call), and nothing
+                between it and here resets them (not the intervening
+                `VStack`s) -- so a bare mount would bleed the leaderboard
+                ~24px wider than every sibling section on this page
+                (`--spacing-6`, this page's own ambient padding). `Card`'s
+                own div re-declares those vars to its own, smaller,
+                theme-overridden value (`--astryx-card-padding:
+                var(--spacing-3)`, 12px, `theme.css:518-519`) before
+                `Section` reads them, and `Card` itself carries no negative
+                margin of its own -- so wrapping here makes the
+                leaderboard's outer edge line up with every sibling
+                section's edge instead of bleeding past it. Same
                 nesting-hazard class this file's own T129 fix (module doc
                 #14, `:2271-2278`) already found and fixed for a different
                 wrapper. See this task's worker output for the live-browser
@@ -366,7 +437,11 @@ current, see §3).** Do not add any new load-state boundary around
                 check cannot resolve the `calc()` math; see the acceptance
                 criteria). */}
               <Card>
-                <Leaderboard loadData={loadLeaderboardDataProp} seasonId={seasonId} />
+                <Leaderboard
+                  loadData={loadLeaderboardDataProp}
+                  loadPrivacySetting={loadLeaderboardPrivacySettingProp}
+                  seasonId={seasonId}
+                />
               </Card>
 
               {showSeasonSetupCard && (
@@ -378,33 +453,45 @@ whatever precedes it, now this new block instead of "Top events" directly.)
 ## 7. Design — test files
 
 **7a. `CoachHome.test.tsx` — the harness fix (corrects §3's citation error;
-this is genuinely new code, not a reuse).**
+this is genuinely new code, not a reuse). Gate round 1, BLOCKER 1: the
+merge now needs a SECOND fixture default alongside `loadLeaderboardData` —
+`loadLeaderboardPrivacySetting`, or the render can never reach the
+populated/empty state in any test regardless of how correctly
+`loadLeaderboardData` alone is threaded (§4).**
 
-Add an import:
+Add an import (two names now, not one):
 ```ts
-import { defaultLoadLeaderboardData } from '../outreach/Leaderboard';
+import { defaultLoadLeaderboardData, defaultLoadPrivacySetting } from '../outreach/Leaderboard';
 ```
-Change `renderAsUser` (`:133-155`) to merge a safe fixture default for the
-new prop before spreading the caller's `props` — the first "default-prop
+`defaultLoadPrivacySetting` is already exported at `Leaderboard.tsx:401`
+(re-verified current) — a fixture that resolves `DEFAULT_PRIVACY_ON`, no
+new fixture needs authoring.
+
+Change `renderAsUser` (`:133-155`) to merge safe fixture defaults for BOTH
+new props before spreading the caller's `props` — the first "default-prop
 object merge" this file has needed, because unlike `loadData`/
 `loadDashboardData`/`nowFn`, none of the ~90 pre-existing `renderAsUser(...)`
-call sites could possibly have supplied `loadLeaderboardData` (the prop did
-not exist before this task), so requiring every one of them to be touched
-individually is the wrong fix — a single harness-level default is:
+call sites could possibly have supplied `loadLeaderboardData`/
+`loadLeaderboardPrivacySetting` (neither prop existed before this task), so
+requiring every one of them to be touched individually is the wrong fix — a
+single harness-level default is:
 ```ts
 function renderAsUser(
   user: AuthUser | null,
   props: Parameters<typeof CoachHome>[0] = {},
   loadActiveSeason: LoadActiveSeasonFn = async () => FIXTURE_ACTIVE_SEASON,
 ): void {
-  // T203: CoachHome's own default `loadLeaderboardData` is now the real,
-  // unconfigured-in-jsdom Supabase loader. Every pre-existing call site
-  // below predates this prop and cannot have overridden it, so the fixture
-  // default is merged here once rather than touching ~90 call sites; a
-  // caller-supplied `loadLeaderboardData` in `props` still wins (spread
-  // order below).
+  // T203: CoachHome's own default `loadLeaderboardData`/
+  // `loadLeaderboardPrivacySetting` are now the real, unconfigured-in-jsdom
+  // Supabase loaders (gate round 1, BLOCKER 1: `Leaderboard` fetches BOTH
+  // via `Promise.all`, so BOTH need a fixture default here, not just one).
+  // Every pre-existing call site below predates both props and cannot have
+  // overridden either, so the fixture defaults are merged here once rather
+  // than touching ~90 call sites; a caller-supplied override of either prop
+  // in `props` still wins (spread order below).
   const mergedProps: Parameters<typeof CoachHome>[0] = {
     loadLeaderboardData: defaultLoadLeaderboardData,
+    loadLeaderboardPrivacySetting: defaultLoadPrivacySetting,
     ...props,
   };
   act(() => {
@@ -431,13 +518,23 @@ change, matching item 10's "adding tests/fixture plumbing, not editing
 existing assertions" posture T157 already established for the identical
 class of fix.
 
-**7b. `DashboardPage.test.tsx` — the sixth `vi.mock` block (corrects "a
-sixth... block will be needed" from a prediction into concrete code).**
+**7b. `DashboardPage.test.tsx` — the sixth AND seventh `vi.mock` blocks
+(corrects "a sixth... block will be needed" from a prediction into
+concrete code). Gate round 1, BLOCKER 2 — proven by execution: the gate
+deleted the originally-prescribed sixth block entirely and the two
+"coach"/"admin" tests STILL passed, because the only assertion added
+(`toContain('Season Volunteer Leaderboard')`) is just the always-rendered
+section heading, present whether the leaderboard loads successfully or
+shows its error state — this test would have stayed green forever even if
+T203's embed were completely non-functional in production (same "vacuously
+true for the wrong reason" class already cited by T181 MAJOR 4, T183
+criterion 7c). Both the missing second mock AND the weak assertion are
+fixed below.**
 
 `DashboardPage.tsx` renders `<CoachHome />` with **zero** props (§5), so a
 per-test override is structurally impossible here — this file already solves
 the identical problem for five other real defaults via module-level
-`vi.mock(...)` blocks (`:52-181`). Add a sixth, immediately after the
+`vi.mock(...)` blocks (`:52-181`). Add TWO more, immediately after the
 existing `loaders/dashboard` mock (which ends `:181`), before the "Render
 harness" comment (`:183`):
 ```ts
@@ -454,18 +551,41 @@ vi.mock('../../lib/supabase/loaders/leaderboard', async (importOriginal) => {
     loadLeaderboardData: async (_seasonId: string) => ({ hours: [], students: [] }),
   };
 });
+// T203 (gate round 1, BLOCKER 1 / BLOCKER 2): `Leaderboard`'s own
+// `useLeaderboardData` fetches BOTH `loadData` and `loadPrivacySetting` via
+// `Promise.all` (`Leaderboard.tsx:434`) -- mocking only `loaders/leaderboard`
+// above still leaves the real, unconfigured `loaders/leaderboard_privacy`
+// rejecting in jsdom, and `Promise.all` fails if either promise rejects, so
+// the embed would stay in its error state and never actually prove
+// reachability. Same class of gap the mock immediately above closes for
+// `loaders/leaderboard` itself.
+vi.mock('../../lib/supabase/loaders/leaderboard_privacy', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/supabase/loaders/leaderboard_privacy')>();
+  return {
+    ...actual,
+    loadPrivacySetting: async () => true,
+  };
+});
 ```
-Then add a reachability assertion to **both** existing role-dispatch tests
+Then add reachability assertions to **both** existing role-dispatch tests
 (`renders CoachHome for role "coach"`, `:272-304`; `renders CoachHome for
 role "admin"`, `:306-332`) — proving the embed survives the full real
 route dispatch, not just `CoachHome.test.tsx`'s own isolated harness (the
 same "reachability from the actual entry point" discipline this project's
 own T157 OUT-03 finding exists to enforce — a component's own test file
-being an importer says nothing about whether a user can reach it):
+being an importer says nothing about whether a user can reach it). **Gate
+round 1, BLOCKER 2: the heading alone is not sufficient — add a
+state-discriminating assertion too** (mirrors criterion 3's shape; with
+both mocks above wired, the empty `hours: []` fixture plus `true` privacy
+setting resolves to `Leaderboard`'s honest empty-state text, not its error
+text):
 ```ts
     expect(container.textContent).toContain('Season Volunteer Leaderboard');
+    expect(container.textContent).toContain('No volunteer hours recorded yet');
+    expect(container.textContent).not.toContain("Couldn't load the leaderboard");
 ```
-(Add this line to each `it(` body; do not otherwise modify either test.)
+(Add these three lines to each `it(` body; do not otherwise modify either
+test.)
 
 ## 8. Acceptance criteria
 
@@ -485,6 +605,14 @@ confirm green again — "I predict this would fail" is not evidence.
    with the expected entry, and assert your `loadLeaderboardData` spy was
    called with `FIXTURE_ACTIVE_SEASON.id` — never `'season-placeholder-
    current'` (mirrors T155's own established idiom, `CoachHome.test.tsx:1197`).
+   Leave `loadLeaderboardPrivacySetting` un-overridden in this test — the
+   harness merge's `defaultLoadPrivacySetting` (§7a) covers it, the same
+   way pre-existing tests leave `nowFn` un-overridden and rely on its own
+   harness default. **This criterion only becomes reachable at all once
+   BLOCKER 1's fix (§6b/§7a) lands** — the gate proved the packet's
+   originally-prescribed shape could never reach `status: 'success'` in any
+   test, this criterion included, because the un-threaded real
+   `loadPrivacySetting` always rejected first.
    **Mutations:** (a) delete the `<Card><Leaderboard .../></Card>` block
    entirely — confirm the assertion fails. (b) revert `seasonId={seasonId}`
    to omitted — confirm the "never the placeholder" assertion fails (falls
@@ -492,9 +620,20 @@ confirm green again — "I predict this would fail" is not evidence.
    both.
 
 2. **Reachability via the real dispatcher (`DashboardPage.test.tsx`).** The
-   two new `toContain('Season Volunteer Leaderboard')` assertions (§7b).
-   **Mutation:** same as criterion 1(a), applied at the `CoachHome.tsx` call
-   site — confirm both the "coach" and "admin" tests now fail. Restore.
+   three new assertions in both role-dispatch tests (§7b: the heading, plus
+   the two gate-round-1-BLOCKER-2-added state-discriminating assertions —
+   `toContain('No volunteer hours recorded yet')` and
+   `not.toContain("Couldn't load the leaderboard")`).
+   **Mutations:** (a) same as criterion 1(a), applied at the `CoachHome.tsx`
+   call site — confirm all three assertions fail (or error) in both the
+   "coach" and "admin" tests. (b) **gate round 1, BLOCKER 2 — required,
+   proves the fix for the specific bug the gate found by execution:**
+   comment out just the new `loaders/leaderboard_privacy` `vi.mock` block
+   (§7b's second block) — confirm the two state-discriminating assertions
+   now fail (the embed falls back to its error state, `"Couldn't load the
+   leaderboard"`) while the heading assertion alone would still have passed
+   — pasting this contrast is the actual proof the heading-only assertion
+   was insufficient. Restore both mutations.
 
 3. **Harness safety — the merged default is load-bearing, not decorative.**
    In one existing populated-state test (or a small new one), assert
@@ -502,10 +641,21 @@ confirm green again — "I predict this would fail" is not evidence.
    (`Leaderboard`'s own honest empty-state text when its fixture default's
    filtered hours come back empty against a non-placeholder `seasonId`) and
    does **not** contain `"Couldn't load the leaderboard"` (its error-state
-   text). **Mutation:** remove the `mergedProps` merge in `renderAsUser`
-   (spread `props` directly again) — confirm the same test now shows
-   `"Couldn't load the leaderboard"` instead (the real, unconfigured loader
-   rejects in jsdom). Restore.
+   text). **Mutation — gate round 1, MAJOR 1, rewritten: the originally
+   prescribed mutation (removing the whole `mergedProps` merge) was a no-op
+   before BLOCKER 1's fix landed, because the render was already broken
+   regardless of this specific mutation (both pre- and post-mutation output
+   showed the same error text) — it only becomes discriminating once both
+   seams are real, threaded, and merged.** Remove only the
+   `loadLeaderboardPrivacySetting: defaultLoadPrivacySetting` entry from the
+   merge (leave `loadLeaderboardData` in place) — confirm the same test now
+   shows `"Couldn't load the leaderboard"` instead (the real, unconfigured
+   `loadPrivacySetting` rejects in jsdom, and `Promise.all` fails even
+   though `loadLeaderboardData` alone still resolves fine) — this isolates
+   proof that the SECOND seam specifically is load-bearing, not merely that
+   removing everything breaks something. Paste both the pre-mutation
+   (green) and post-mutation (red, with the actual failure text) output in
+   your report — do not paste only one side. Restore.
 
 4. **CSS-nesting — structural proof (the jsdom-provable ceiling; read §0
    before assuming more is possible here).** `Card`/`Section` both reflect a
@@ -526,25 +676,73 @@ confirm green again — "I predict this would fail" is not evidence.
    card')` now returns `null`. Restore.
 
 5. **CSS-nesting — the live-browser measurement (required, not optional;
-   see §0 for why jsdom cannot substitute).** Using a real dev server +
-   Playwright (matching this project's own established methodology for
-   exactly this class of claim — T002b's contrast measurement, T006-T008's
-   focus/contrast checks, T142's `minWidth` measurement), as a signed-in
-   coach with a real active season, render `/` and measure, on the shipped
-   `<Card><Leaderboard/></Card>` mount's own `.astryx-section` element:
-   (a) its rendered outer-box width matches its sibling sections' width
-   (e.g. compare against the "Top events by student hours" `VStack`'s own
+   see §0 for why jsdom cannot substitute). Gate round 1, MAJOR 2 —
+   prerequisites made concrete, citing this project's own established
+   mechanism rather than left implicit.**
+
+   **(i) Getting Playwright itself — do not `npm install` it, and do not
+   add it to `package.json`/`package-lock.json`.** Constitution item 9
+   pre-authorizes "dev tooling (vitest, playwright, eslint, prettier)" with
+   no boss-architect approval needed — but this project's own actual,
+   already-shipped mechanism (`playwright.config.ts`'s own module doc,
+   T066) is more specific than a plain install: the sandbox has a
+   **globally-installed** `playwright` package
+   (`/opt/node22/lib/node_modules/playwright`, Chromium pre-installed at
+   `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`), reached via a single
+   symlink, `node_modules/playwright -> /opt/node22/lib/node_modules/
+   playwright` (plain `ln -s`, not tracked by git since `node_modules/` is
+   already gitignored) — `package.json`/`package-lock.json` stay
+   byte-unchanged. T142's own worker output (`docs/swarm/active/
+   T142-worker-output.md`) independently confirms the same global package is
+   reachable this way and used a raw driver script (`node measure.mjs`,
+   kept only in scratch, never committed) against it rather than the full
+   `playwright/test` runner — that is the right level of machinery for a
+   one-off numeric measurement like this criterion, not a new permanent spec
+   file (`tests/e2e/**`/`playwright.config.ts` are both outside this task's
+   Allowed Files, §5 — do not add a spec there).
+
+   **(ii) Getting a signed-in coach with a real active season — do not look
+   for `.env`/real Supabase credentials, and do not try to sign in through
+   the real backend.** `playwright.config.ts`'s own module doc states
+   plainly (re-confirm this yourself, it is still accurate) that this
+   sandbox has no real Supabase backend and no mechanism to inject a fake
+   session into the REAL production `index.html`/`main.tsx` entry point —
+   that is exactly why `tests/e2e/**` only covers unauthenticated
+   routing/guard behavior. T142 solved the identical problem (a
+   live-Chromium, real-CSS measurement of a signed-in coach's dashboard) a
+   different way, and that is the mechanism to reuse here: build a
+   **throwaway** custom entry (`*.throwaway.html` + `*.throwaway.tsx`, §5's
+   carve-out) that mounts the real component tree directly — same shape as
+   `CoachHome.test.tsx`'s own `renderAsUser` harness (`MemoryRouter` →
+   `SeasonProvider loadActiveSeason={...}` resolving a fixture active
+   season → `AuthProvider` → `LoginAs({ id, email, role: 'coach' }, ...)`
+   from `src/test-utils/authHarness.tsx`) → `CoachHome`, with fixture
+   `loadData`/`loadDashboardData` props supplied directly so
+   "Top events by student hours" (and whatever else you need for the
+   sibling-width comparison) actually renders. Serve it with the Vite **dev
+   server** (`npx vite --port <port>`), not `npm run preview`/a production
+   build — a custom entry run through Vite's dev server is real source code
+   going through the real module graph, so `LoginAs`'s React-prop-based fake
+   auth module is reachable there (unlike the real production entry, which
+   is why `tests/e2e/**` itself cannot do this). This sidesteps the missing
+   `.env` entirely — no real Supabase credentials are needed or available,
+   and none should be sought.
+
+   **(iii) The measurement itself.** As a signed-in coach with a real
+   (fixture) active season, in the throwaway rig above, measure the shipped
+   `<Card><Leaderboard/></Card>` mount's own `.astryx-section` element: (a)
+   its rendered outer-box width matches its sibling sections' width (e.g.
+   compare against the "Top events by student hours" `VStack`'s own
    bounding rect) to within a few pixels (Card's own border width) — proving
    the fix actually closes the gap, not just that it changes something.
-   Separately, build a **throwaway** reference-only probe (this project's
-   `*.throwaway.*` convention, already excluded from the suite by
-   `vite.config.ts:36`; delete it before finishing) that mounts `<Leaderboard>`
-   bare (no `Card`) in the same page position, and confirm its `.astryx-
-   section` renders measurably **wider** than its would-be siblings by
-   approximately 24px per side (this packet's own traced numbers, §3) — this
-   is the counterfactual proof that the hazard is real, not merely that the
-   fix exists. Paste both measurements (numbers, not screenshots alone) into
-   your output doc.
+   Separately, in the **same** throwaway rig, mount `<Leaderboard>` bare (no
+   `Card`) in the same page position, and confirm its `.astryx-section`
+   renders measurably **wider** than its would-be siblings by approximately
+   24px per side (this packet's own traced numbers, §3) — this is the
+   counterfactual proof that the hazard is real, not merely that the fix
+   exists. Delete the throwaway rig before your final commit (§5, §11).
+   Paste both measurements (numbers, not screenshots alone) into your output
+   doc.
 
 6. **Build/type safety.** `tsc` passes with the extended `CoachHomeProps`/
    `CoachHomeContentProps` shapes. Verify by actually running the compiler.
@@ -575,10 +773,20 @@ one of two things, kept distinguishable:
   rules in `node_modules/@astryxdesign/core/dist/astryx.css` (a different
   worktree with `node_modules/` installed, same lockfile lineage — this
   worktree itself has no `node_modules/` yet, see §5), the theme override in
-  `theme.css:518-519`, the spacing token values in `tokens.stylex.js`, and
-  the fact that `Card`/`Section`/`LayoutContent` are the only three things
-  that call `container(...)` anywhere in the installed package (grepped).
-  This is real, numeric, and traced end-to-end — stronger evidence than the
+  `theme.css:518-519`, the spacing token values in `dist/theme/
+  tokens.stylex.js`, and the fact that nothing in this page's own ancestor
+  chain between `LayoutContent` and the `<Leaderboard>` mount point rewrites
+  `--container-padding-*` (**gate round 1, MINOR 2 — corrected**: the
+  installed package's own three callers of the shared `container(...)`
+  helper are `Section.js`/`Card.js`/`Dialog.js`, grepped directly —
+  `LayoutContent` is NOT one of them; it sets those same custom properties
+  directly via a different mechanism, `padding.stylex.js`'s exported var
+  styles, and `Dialog` is irrelevant here regardless since it is never an
+  ancestor on this page. The underlying conclusion — nothing on THIS page's
+  ancestor chain between `LayoutContent` and the mount resets those vars —
+  is unaffected and re-confirmed; only the "which three things call
+  `container(...)`" enumeration was wrong). This is real, numeric, and
+  traced end-to-end — stronger evidence than the
   original ledger row's doc-comment citation, which I found to be
   incorrectly described as unverifiable (§3).
 - **Not executable by me at all, stated plainly**: whether the real,
@@ -655,10 +863,11 @@ here.
 - Every commit states its SHA (item 21); explicit pathspecs only, never
   `git add -A`/`git add .` (item 22).
 - Your output doc includes: files touched, the executed mutation output for
-  all five mutation-marked criteria (1a, 1b, 2, 3, 4), criterion 5's actual
-  measured numbers from both the shipped and throwaway-probe renders, the
-  `tsc` result, before/after test counts for both files (criterion 7), and
-  any `FOLLOW-UP NEEDED` items.
+  all mutation points across the five mutation-marked criteria (1a, 1b, 2a,
+  2b, 3, 4 — six total; criterion 2 now has two sub-mutations per gate
+  round 1, BLOCKER 2), criterion 5's actual measured numbers from both the
+  shipped and throwaway-probe renders, the `tsc` result, before/after test
+  counts for both files (criterion 7), and any `FOLLOW-UP NEEDED` items.
 - Confirm the throwaway probe file used for criterion 5 was deleted before
   your final commit.
 - State plainly which of this packet's prescriptions (§6/§7) you followed
@@ -669,9 +878,15 @@ here.
 ## 12. Constitution excerpts relevant to this task
 
 - Item 6: no PII — fabricated names only (§8 criterion 8).
+- Item 9: dependency allowlist explicitly includes "dev tooling (vitest,
+  playwright, eslint, prettier)" — criterion 5's live-browser measurement is
+  pre-authorized, no boss-architect approval needed; use this project's own
+  established global-symlink mechanism in preference to a fresh install
+  (§8 criterion 5(i)).
 - Item 10: existing tests must pass; this task adds tests/fixture plumbing
-  and edits two `it(` bodies to append one new assertion line each (§7b) —
-  no existing assertion is removed or changed in meaning.
+  and edits two `it(` bodies to append three new assertion lines each (§7b,
+  corrected from one line per gate round 1, BLOCKER 2) — no existing
+  assertion is removed or changed in meaning.
 - Item 12: `Leaderboard` already ships its own full DES-12 lifecycle (§4);
   this task does not need to build a new one.
 - Item 18: worker tier sonnet, all four triggers explicitly checked (§9).
