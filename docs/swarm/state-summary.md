@@ -141,7 +141,22 @@ Packets P0–P13 plus regression fixes and live hotfixes:
 - T128 — wave-3 debt: format gate, meetings label wording, `astryx-api.md` accuracy,
   `v_planned_rsvp_hours` future guard.
 
-## Active (2026-07-31 — see T191 note below; older entries in this section are 2026-07-29/30 and otherwise stale)
+## Active (2026-07-31 — see T158 note directly below, then T191; older entries in this section are 2026-07-29/30 and otherwise stale)
+
+**2026-07-31 — T158 packet, DISPATCH-pending (`checker-premise`, full round):**
+`docs/swarm/active/T158-worker-packet.md`. Scope narrowed at packeting time to
+just the real loader + a new supporting migration (`v_leaderboard_students`,
+two columns, `where is_active`) — the embed half is split out as **T203**
+(needs its own CSS-nesting fix in `CoachHome.tsx` and two different
+test-harness fixes, neither built yet). Real finding: `students` has no
+`read_all` RLS policy and `Leaderboard.tsx` has no role gate at all, so a
+naive loader copying `coachHome.ts`'s pattern would silently under-serve
+student/parent viewers while working for staff — fixed via the view the
+schema's own comments (`rls.sql`, `student_teams.sql`) already name as the
+intended mechanism. Opus tier both roles (item 18 trigger 1: migration file).
+Also filed **T204** (stale RLS-mechanism comment in `loaders/students.ts`,
+documentation-only, no functional defect). See `task-ledger.md`'s T158/T203/
+T204 rows for full detail.
 
 **2026-07-31 — T191 packet, revision 2, DISPATCH-ready:**
 `docs/swarm/active/T191-worker-packet.md`. Replaces the fabricated `0 / 1 h
