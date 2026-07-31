@@ -45,12 +45,19 @@ independently, so it was never actually a reservation.
   - **T180** is genuinely cheap and low-risk: all three of its seams already default to real
     loaders, and it's read-only. It was also **missing from every triage table entirely** — the
     proposal's "37 → 16" result should have been "37 → 17."
-- **Backlog as it actually stands, this update:** of the ten original user-facing rows, four have
-  closed (T169, T177, T178, and T183 — merged on its own branch but PR #6 not yet merged to
-  `main`) and T173 is in flight (packet done, dispatched to a worker). Remaining:
+- **Backlog as it actually stands, this update:** of the ten original user-facing rows, five have
+  closed (T169, T177, T178, T183, and now **T173** — all merged on their own branches, T183/T173
+  on `claude/t183-student-home-loader`/PR #6, not yet merged to `main`). T173 PASSED with 4 NIT,
+  no follow-up rows needed (its residue is already covered by T198). Remaining:
   T191, T158, T179, T180, T189, plus the residue rows (T193, T194, T195, T198, T199, T200, and
   whatever T178/T179's own follow-ups turn out to be). **The triage proposal's cuts are still
   unapplied and still awaiting the owner's veto** — this update doesn't apply them either.
+- **T173 also hit item 19a's 2-round cap — twice, on the same packet** (two separate
+  owner-authorized bounded exceptions, both proven narrow by execution rather than open design
+  disputes; see its `verification-log.md` entry and `auto-mode-decisions.md`). Adopted a cheaper
+  design mid-packeting (thread `defaultGoalHours` from `activeSeason.season`, matching T176's
+  shipped pattern) rather than a third Supabase query. `teamId` deliberately unresolved, filed as
+  **T198** (product question, not a schema gap to guess at).
 
 ## UPDATE — 2026-07-30 evening: T183 landed on its own branch, `main` unchanged
 

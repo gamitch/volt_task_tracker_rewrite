@@ -5756,3 +5756,63 @@ byte-identical — module doc #9 already states the distinction explicitly elsew
 explanatory comments the worker added alongside the `DashboardPage.test.tsx` sibling-assertion
 fixes, slightly beyond a literal reading of the Allowed-Files line but confined to the exact sites
 named and adding no assertions beyond what was mandated.
+
+---
+
+## T173 — `CoachHome`'s goal-hours denominator and Season-setup card are now real (merged 2026-07-31)
+
+| Field | Value |
+|---|---|
+| Merged commit | `7435e3b` (branch `claude/t183-student-home-loader`, PR #6) |
+| Verdict | **PASS** — 4 NIT, no BLOCKER/MAJOR/MINOR, first attempt |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (sonnet) / `checker-reviewer` (opus) |
+| Premise gate | 2 rounds (item 19a cap, hit **twice** on this one packet — see below), then one owner-authorized bounded revision each time, dispatched with no 3rd gate round either time |
+| tsc / build / format | 0 errors / ✓ / clean |
+| eslint | 0 errors, 358 warnings (checker independently re-measured the baseline in an isolated worktree — zero delta) |
+| vitest | 70 files, 1673 tests (+13 from a 69/1660 baseline: +12 new `coachHome.test.ts`, +1 net from a Test A/B split) |
+
+**Two on-screen surfaces from two fabricated fields survived T155's fix.** `defaultGoalHours`
+(hardcoded `10`) fed both the "Hours vs. team goal" tile's denominator (fabricating `0 / 38 hrs`)
+and a separate "Avg hours / active student" tile's `Default goal 10h` secondary; `seasonSetupStatus`
+(hardcoded `hasGoalsConfigured: false`) made the admin "Season setup" card permanently claim setup
+was incomplete. A new `loaders/coachHome.ts` (2 real queries: `teams`, `students`) fixes the second;
+the first is fixed via a **redesign adopted mid-packeting**, not the original plan — `defaultGoalHours`
+now threads as a prop from `activeSeason.season.defaultGoalHours` (already fetched elsewhere in the
+component, zero new query) rather than through the new loader, matching T176's already-shipped
+pattern of threading goal-hours as a prop rather than through `loadData`. **`teamId` is deliberately
+not resolved by this task** — no table anywhere links a staff profile to a team, every `staff_all`
+RLS policy is program-wide not team-scoped, and this is filed separately as **T198**, a product
+question for the owner (does `CoachHome` need a real per-coach team concept, or should its remaining
+team-scoped widgets go season-wide like T124's already-shipped ones) rather than a schema gap to
+guess at. `teamId` falls through to an honest zero — checker-confirmed live in rendered DOM
+(`0% / 0 / 1 hrs`), not merely reasoned about.
+
+**Heaviest premise-gate history of any task this session — two separate item-19a escalations on
+one packet, both proven narrow by execution rather than open design disputes.** Round 1 found a
+BLOCKER by literally instrumenting and running the prescribed `DashboardPage.test.tsx` change: the
+assertion sat behind `CoachHome`'s `{dashboardData && (...)}` gate, which nothing in that file's
+existing mocks opened. Escalated to the owner (same structured-question shape as T183's two
+escalations); authorized. Round 2 independently rebuilt and ran the *entire* revised prescription,
+confirmed the round-1 fix and the adopted redesign both genuinely correct (mutation-tested, not
+inspected) — and then found a **second, different** BLOCKER the redesign itself introduced: moving
+`defaultGoalHours` from a fixture (`10`) to the real active season (`100`) changed the denominator a
+pre-existing, unrelated milestone-toast test depended on (`12/38 hrs` = 31.6%, crosses the 25%
+milestone and fires a toast; `12/308 hrs` = 3.9%, doesn't) — found only because the gate ran the
+suite, after the packet's own grep-based blast-radius argument (searching for old literal strings)
+missed it entirely, since the redesign's actual mechanism bypasses `loadData` rather than changing
+any string a grep could find. Escalated again; authorized again. Both rulings recorded in
+`auto-mode-decisions.md`.
+
+**Checker did not extend the packet's own habit of confident-but-wrong claims into the review
+itself.** Measured a from-scratch baseline in an isolated worktree rather than trusting either gate
+round's cached number, then mutation-tested all 3 new `DashboardPage.test.tsx` assertions and the
+BEH-01 milestone-toast fix live (revert-and-rerun, not read-and-assume) before rendering PASS.
+
+**4 NIT, none warranting a new ledger row:** `sumGoalHours`'s third argument (real `teamId` filtering)
+has zero test coverage today because `teamId` is still a placeholder that matches no real student —
+intrinsic to T198 being unresolved, not an oversight, and already disclosed in the module doc; two
+small citation-drift line numbers in new code comments; one additional type-only import
+(`SupabaseClient`) beyond the packet's literal one-import count, mechanically required by the DI'd
+stub-client test helper; the honest-zero state rendering as `0 / 1 hrs` (a pre-existing `max={goalHours
+> 0 ? goalHours : 1}` ProgressBar floor, untouched by this task, resolves once T198 lands).
