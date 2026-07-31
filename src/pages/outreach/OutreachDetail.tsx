@@ -335,6 +335,141 @@
  * data so the Signups/`AttendancePanel` sections reflect the real
  * `event_sessions.status`/`people_reached`/`attendance` writes, never a
  * client-only optimistic guess.
+ *
+ * -----------------------------------------------------------------------
+ * 13. T157 (OUT-06, PRD line 297): parent RSVP-on-behalf, mounted here for
+ *     the first time.
+ *
+ * `ParentRsvp.tsx` (T043) has been finished and fully tested since T043 but
+ * had ZERO production importers -- its own module doc #4 named this page as
+ * the expected future host ("A future page (`ParentHome.tsx`,
+ * `OutreachDetail.tsx`) is expected to render one `<ParentRsvp>` per linked
+ * student, passing each student's own `studentId`/`studentProfileId`/
+ * `guardianLinks` slice"). This task is that host, for this page only.
+ * (`RsvpControl.tsx`, the STUDENT-facing self-service counterpart, is now
+ * ALSO mounted here, by a later task -- see module doc #14 (T169) below for
+ * the full writeup. This sentence previously read "deliberately NOT mounted
+ * here"; that is no longer true and is corrected here rather than left
+ * standing as a stale record of a decision this file no longer makes.)
+ *
+ * (a) REAL DATA, NOT FIXTURE DEFAULTS -- the point of the task. Every one of
+ * `ParentRsvpProps`'s optional-with-a-plausible-default props is passed a
+ * real value at the call site below: `currentUserProfileId={user.id}` (the
+ * signed-in parent's own `profiles.id`, module doc #11's own
+ * `AuthUser.id === profiles.id` proof -- NOT `ParentRsvp`'s disclosed
+ * `PLACEHOLDER_CURRENT_PARENT_PROFILE_ID`), `studentProfileId` from the real
+ * new `RosterStudent.profileId`, and `guardianLinks` from a real
+ * `guardian_links` fetch. Each of those three is independently mutation-proven
+ * in this file's own test: reverting any one of them to its default makes a
+ * test fail with a WRONG-BUT-PLAUSIBLE render (a misattributed RSVP, not a
+ * crash), which is exactly the defect class this wiring closes.
+ *
+ * (b) NEW READ-SIDE LOADER WORK, contrary to the ledger's own framing. The
+ * RSVP submission path needed nothing (`submitRsvpChange` is already
+ * `ParentRsvp`'s own real default -- see the import note above), but the READ
+ * side needed two real additions in `loaders/outreach.ts`: `profile_id` on
+ * `queryAllStudents`/`StudentDbRow`/`mapStudentDbRowToRosterStudent`, and a
+ * new `makeLoadGuardianLinksForParent` factory. Neither existed.
+ *
+ * (c) SEPARATE LOAD SEAM, fetched only for a parent. `loadGuardianLinksForParent`
+ * is its own injectable prop with its own `GuardianLinksLoadState`, mirroring
+ * `loadRoster`/`RosterLoadState` (T147 Part A2) exactly rather than being
+ * folded into `loadData` -- a coach/admin/student/signed-out viewer must never
+ * issue this query at all, which this file's own test proves with a
+ * `not.toHaveBeenCalled()` assertion per role. A non-parent viewer therefore
+ * sits in `idle` forever; `idle` is the never-fetched variant, not an empty
+ * state. A PARENT viewer never observes `idle`: the state initialises to
+ * `loading` so the DES-12 loading window is real and observable rather than a
+ * blank first paint (which would make a loading-state assertion pass
+ * vacuously). "Empty" is a zero-length `ready`, matching this file's own
+ * already-shipped `RosterLoadState` mapping of DES-12/item 12 -- a parent with
+ * no linked students in scope sees no "Your RSVP" section at all, which is a
+ * deliberate, separately-tested choice (there is nothing for them to RSVP
+ * for), not a missing state.
+ *
+ * (d) PER-SESSION, matching module doc #4's OUT-04 discipline. One
+ * `<ParentRsvp>` per (session x qualifying linked student), inside the same
+ * `orderedSessions.map(...)` loop the signup lists use -- an RSVP is a
+ * per-session fact, so a parent with a multi-day event sees one control per
+ * day, not one for the whole event.
+ *
+ * (e) WHICH STUDENTS QUALIFY -- `resolveParentLinkedRosterStudents` above, the
+ * one place it is computed, composed over the ALREADY team-scoped `roster`
+ * (module doc #3), not the full `students` list. See that function's own doc
+ * for why both of its predicates are load-bearing and why this is defence in
+ * depth rather than the primary control.
+ *
+ * (f) THE HEADING IS BOTH THE ACCESSIBILITY REQUIREMENT AND THE TEST ANCHOR
+ * (item 15). `SegmentedControl` emits its `label` as an `aria-label`, never as
+ * `textContent`, and `ParentRsvp`'s own `controlLabel` carries the event title
+ * and session date but NOT the student's name -- so two linked students in one
+ * session render two `[role="radiogroup"]` elements with byte-identical
+ * accessible names, indistinguishable to a screen reader user and to a test
+ * locator alike. The page-owned `Heading level={4}` below carries BOTH the
+ * student name and the session date, which disambiguates every
+ * (session x student) instance on the page. Dropping the date would leave a
+ * two-session single-student event with two identical headings -- the same
+ * defect one level up.
+ *
+ * (g) THE CLOCK SEAM (`nowFn`). `ParentRsvp` locks a control once
+ * `now >= session.startsAt` (its own module doc #5, the universal OUT-03
+ * rule). This page's `FIXTURE_SESSIONS` are real fixed dates, so any test that
+ * clicks a segment button would go permanently red the moment wall-clock time
+ * passes those dates -- silently reported as a regression rather than as a
+ * test that was never deterministic. `nowFn` (defaulting to the real clock, so
+ * production behavior is unchanged) is threaded to every `<ParentRsvp>`'s own
+ * already-existing `now` prop so this file's tests pin a fixed instant and are
+ * wall-clock-independent forever. A future task adding another `<ParentRsvp>`
+ * render site on this page must pass `now={nowFn}` too, or it reintroduces the
+ * coupling.
+ *
+ * -----------------------------------------------------------------------
+ * 14. T169 (OutreachDetail half): the STUDENT's own self-service
+ *     `RsvpControl`, mounted here for the first time -- supersedes the
+ *     "deliberately NOT mounted here" note module doc #13 above previously
+ *     carried (now corrected in place, not left standing).
+ *
+ * (a) NO NEW LOADER WORK -- the opposite finding from T157's own parallel
+ * check for `ParentRsvp`. `RsvpControlProps` (`RsvpControl.tsx:430-454`) has
+ * no analogue of `ParentRsvp`'s `studentProfileId`/`guardianLinks` props: it
+ * is the student's own single control, not a guardian-on-behalf-of-N-children
+ * control, so there is no cross-person linkage data to fetch at all. Every
+ * prop it needs is already real data this page holds today, post-T157:
+ * `studentId` from the resolved roster row's own `id`, `session`/
+ * `eventTitle`/`currentRsvp` the same already-computed values `<ParentRsvp>`'s
+ * own call site already uses, `currentUserProfileId={user.id}` (module doc
+ * #11's `AuthUser.id === profiles.id` proof, which is role-agnostic and so
+ * holds for a student viewer exactly as it does for the parent/staff viewers
+ * already wired), and `now={nowFn}` -- reusing the SAME clock seam (f) above
+ * already anticipated a future `<RsvpControl>` render site would need, rather
+ * than building a second one. `onRsvpChange` is left at its default (the real
+ * `submitRsvpChange`, the same shared mutation (b) above documents).
+ *
+ * (b) `resolveOwnRosterStudent` -- self-to-self, NOT cross-person. Unlike
+ * `resolveParentLinkedRosterStudents` (e) above, which answers "which of
+ * *potentially several other people's* roster rows is this parent authorized
+ * to act on" (a genuine cross-person authorization question), this predicate
+ * answers a narrower one: "which roster row, if any, IS the signed-in
+ * student's own." Composed over the ALREADY team-scoped `roster` (module doc
+ * #3), not the full `students` list -- same reasoning (e) above already
+ * established: a student's own record for a team outside this event's scope
+ * must not surface a control for this event.
+ *
+ * (c) LOCATOR -- deliberately simpler than `ParentRsvp`'s own page-owned
+ * `Heading` (f) above. A student only ever sees their own single control,
+ * never another student's, so there is no cross-student `aria-label`
+ * collision to disambiguate the way two DIFFERENT linked students in the same
+ * session could produce for a parent. `RsvpControl`'s own `controlLabel`
+ * (`` `Your RSVP for ${eventTitle} on ${date}` ``) already carries both the
+ * event title and the session date, sufficient to disambiguate across this
+ * event's own multiple sessions without any new page-owned markup.
+ *
+ * (d) EMPTY CASE. A student viewer with no matching roster row
+ * (`ownRosterStudent === null` -- not on this event's team, or no `students`
+ * row at all) sees no self-RSVP control anywhere on this page, with no
+ * distinct empty-state message -- the same deliberate, tested "nothing to
+ * RSVP for" choice (c) above already made for a parent with zero linked
+ * students.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
@@ -370,9 +505,11 @@ import { useAuth } from '../../app/guards';
 // itself is modified (forbidden/read-only file).
 import {
   cancelOutreachEvent,
+  loadGuardianLinksForParent as defaultLoadGuardianLinksForParent,
   loadOutreachDetail,
   loadOutreachEventRoster,
   saveOutreachEvent,
+  type LoadGuardianLinksForParentFn,
   type LoadOutreachEventRosterFn,
 } from '../../lib/supabase/loaders/outreach';
 import {
@@ -390,6 +527,21 @@ import { AttendancePanel } from './AttendancePanel';
 // own `onMarkSessionComplete` prop already defaults to the real
 // `markDayComplete` mutation internally.
 import { MarkEventCompleteDialog } from './MarkEventCompleteDialog';
+// T157 (OUT-06): the parent-facing RSVP-on-behalf control -- module doc #13.
+// `GuardianLinkRow` is REUSED from that component's own export rather than
+// redeclared page-locally: this page must import the component anyway, so
+// reusing the exported prop contract of a thing it already calls removes a
+// hand-sync seam rather than adding one (module doc #13). Not given its own
+// injectable `onRsvpChange` override prop here -- same posture
+// `MarkEventCompleteDialog` above already established (module doc #12): that
+// component's own default is already the real `submitRsvpChange` mutation
+// (`ParentRsvp.tsx` module doc #7).
+import { ParentRsvp, type GuardianLinkRow } from './ParentRsvp';
+// T169 (OutreachDetail half, module doc #14): the STUDENT-facing self-service
+// RSVP control -- finished/tested since T040 but, until this task, had zero
+// production importers. Named import, matching how `ParentRsvp` above is
+// imported (`RsvpControl.tsx` also has a default export, unused here).
+import { RsvpControl } from './RsvpControl';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets. Module doc #1.
@@ -423,6 +575,20 @@ export interface RosterStudent {
   id: string;
   name: string;
   teamId: string;
+  /** T157 (module doc #13): that student's own `profiles.id`
+   * (`students.profile_id`), or `null` when the student has no linked account
+   * yet -- the column is nullable
+   * (`20260716000000_identity_roster.sql`). A DIFFERENT id space than `id`
+   * (a `students.id`). REQUIRED, not optional-with-a-default: an optional
+   * field would reintroduce the exact "plausible default, silent
+   * misattribution" defect this task exists to close -- with `studentProfileId`
+   * silently `null`, `ParentRsvp.tsx`'s `resolveRsvpResponderAttribution`
+   * cannot match the self case (its module doc #2(b)) and wrongly renders
+   * "Someone else recorded this response on your student's behalf" over a
+   * student's own answer. Same "page-local type grows one new field for a real
+   * need" move `OutreachDetailEvent` above already made for T101, which itself
+   * cites `loaders/students.ts :: TeamRow.archived` as the precedent. */
+  profileId: string | null;
 }
 
 export interface OutreachDetailEvent {
@@ -509,12 +675,42 @@ const FIXTURE_PROFILES: readonly ProfileOption[] = [
   { id: 'profile-coach-owens', name: 'Jordan Owens' },
 ];
 
+// T157: `profileId` is a `profiles.id` -- a DIFFERENT id space than `id`, which
+// is a `students.id` (module doc #13). Deliberately prefixed `profile-` so the
+// two can never be confused at a glance in a fixture, and deliberately non-null
+// for all five so any test needing a real self-vs-guardian attribution
+// distinction has a concrete value to assert against.
 const FIXTURE_STUDENTS: readonly RosterStudent[] = [
-  { id: 'student-amara-chen', name: 'Amara Chen', teamId: 'team-ravens' },
-  { id: 'student-marcus-bello', name: 'Marcus Bello', teamId: 'team-ravens' },
-  { id: 'student-nina-ortiz', name: 'Nina Ortiz', teamId: 'team-ravens' },
-  { id: 'student-sofia-delgado', name: 'Sofia Delgado', teamId: 'team-titans' },
-  { id: 'student-ravi-kapoor', name: 'Ravi Kapoor', teamId: 'team-titans' },
+  {
+    id: 'student-amara-chen',
+    name: 'Amara Chen',
+    teamId: 'team-ravens',
+    profileId: 'profile-amara-chen',
+  },
+  {
+    id: 'student-marcus-bello',
+    name: 'Marcus Bello',
+    teamId: 'team-ravens',
+    profileId: 'profile-marcus-bello',
+  },
+  {
+    id: 'student-nina-ortiz',
+    name: 'Nina Ortiz',
+    teamId: 'team-ravens',
+    profileId: 'profile-nina-ortiz',
+  },
+  {
+    id: 'student-sofia-delgado',
+    name: 'Sofia Delgado',
+    teamId: 'team-titans',
+    profileId: 'profile-sofia-delgado',
+  },
+  {
+    id: 'student-ravi-kapoor',
+    name: 'Ravi Kapoor',
+    teamId: 'team-titans',
+    profileId: 'profile-ravi-kapoor',
+  },
 ];
 
 const FIXTURE_EVENTS: readonly OutreachDetailEvent[] = [
@@ -710,6 +906,65 @@ export function groupSessionSignups(
     else cantGo.push(student); // 'declined' -- OUT-04's "Can't go" bucket.
   }
   return { going, maybe, cantGo, noResponse };
+}
+
+/**
+ * T157 (module doc #13) -- the ONE place "which students does this parent get
+ * an RSVP-on-behalf control for, on THIS event" is computed, matching this
+ * file's own established `resolveEventRoster`/`groupSessionSignups` convention.
+ *
+ * Two independent predicates, each load-bearing and each separately tested:
+ *  (a) `link.parentProfileId === parentProfileId` -- only the SIGNED-IN
+ *      parent's own links count. The `own_read` RLS policy on `guardian_links`
+ *      is a DISJUNCTION (`parent_profile_id = auth.uid() or student_id in
+ *      (select my_student_ids())`), so the rows a viewer is permitted to read
+ *      are not automatically self-scoped: a co-guardian row for the same
+ *      student, carrying a different `parent_profile_id`, is readable and must
+ *      not grant this viewer a control.
+ *  (b) membership in `roster` -- note this filters the ALREADY team-scoped
+ *      roster from `resolveEventRoster`, not the full `students` list: a
+ *      parent's linked student who is outside this event's team scope must not
+ *      get a control for this event, matching every other section on this
+ *      page's team-scope discipline (module doc #3). The composition order is
+ *      the point; a filter that is correct in isolation but wired against the
+ *      wrong upstream array is the defect this separation guards.
+ *
+ * This is defence in depth, NOT the primary control. `students`'
+ * `own_or_linked_read` RLS policy (`id in (select my_student_ids())`) already
+ * server-scopes the roster, and `rsvps`' own write/update policies require
+ * `student_id in (select my_student_ids()) and responded_by = auth.uid()`, so
+ * a wrong client-side filter here cannot by itself surface or write another
+ * family's data. It is still tested as an authorization predicate in its own
+ * right, because an untested one is a real defect class regardless of what a
+ * second layer happens to catch.
+ */
+export function resolveParentLinkedRosterStudents(
+  roster: readonly RosterStudent[],
+  guardianLinks: readonly GuardianLinkRow[],
+  parentProfileId: string,
+): RosterStudent[] {
+  const linkedStudentIds = new Set(
+    guardianLinks
+      .filter((link) => link.parentProfileId === parentProfileId)
+      .map((link) => link.studentId),
+  );
+  return roster.filter((student) => linkedStudentIds.has(student.id));
+}
+
+/** T169 (module doc #14(b)): which roster row, if any, is the signed-in
+ * STUDENT's own. Composed over the ALREADY team-scoped `roster` (module doc
+ * #3), not the full `students` list -- same reasoning as
+ * `resolveParentLinkedRosterStudents` (module doc #13(e)): a student's own
+ * record for a team outside this event's scope must not surface a control
+ * for this event. `AuthUser.id === profiles.id` (module doc #11), so
+ * `userProfileId` here is the signed-in student's own `user.id`. Self-to-self
+ * matching, not person-to-person -- a student maps to exactly one roster row,
+ * never several, so this returns a single row or `null`, not an array. */
+export function resolveOwnRosterStudent(
+  roster: readonly RosterStudent[],
+  userProfileId: string,
+): RosterStudent | null {
+  return roster.find((student) => student.profileId === userProfileId) ?? null;
 }
 
 export function sortSessionsByStart(
@@ -1077,6 +1332,19 @@ export interface OutreachDetailProps {
    * `OutreachEventDialog` `students` prop, replacing that dialog's own
    * `DEFAULT_STUDENTS` fixture fallback. */
   loadRoster?: LoadOutreachEventRosterFn;
+  /** T157 (module doc #13(c)) -- the signed-in parent's own `guardian_links`
+   * rows. Its own seam, mirroring `loadRoster` above, NOT folded into
+   * `loadData`: it is only ever called for a `parent`-role viewer. Defaults to
+   * the real query. */
+  loadGuardianLinksForParent?: LoadGuardianLinksForParentFn;
+  /** T157 (module doc #13(g)) -- injectable clock seam, threaded to every
+   * `<ParentRsvp>`'s own `now` prop so its session-start lock boundary is
+   * deterministically testable against this page's fixed fixture session
+   * dates. Defaults to the real system clock, so production behavior is
+   * unchanged. Same `nowFn` naming/default convention `CoachHome.tsx` already
+   * established for this identical purpose; disclosed as a new pattern for
+   * THIS file, which had no clock seam of its own before. */
+  nowFn?: () => Date;
 }
 
 export function OutreachDetail({
@@ -1085,6 +1353,8 @@ export function OutreachDetail({
   onSaveEvent = saveOutreachEvent,
   onCancelEvent = cancelOutreachEvent,
   loadRoster = loadOutreachEventRoster,
+  loadGuardianLinksForParent = defaultLoadGuardianLinksForParent,
+  nowFn = () => new Date(),
 }: OutreachDetailProps = {}): ReactNode {
   const { eventId: routeEventId } = useParams<{ eventId: string }>();
   const eventId = eventIdProp ?? routeEventId ?? '';
@@ -1150,11 +1420,68 @@ export function OutreachDetail({
   // `useOutreachDetailLoadState` already established.
   const [rosterRetryToken, setRosterRetryToken] = useState(0);
 
+  // T157 (module doc #13(c)) -- the role gate, computed HERE rather than
+  // alongside `isStaffViewer` further down, because the guardian-links fetch
+  // effect below depends on it and hooks must run before this component's own
+  // early `loading`/`error`/`notFound` returns. Identical shape to
+  // `isStaffViewer` (module doc #11) -- only role literals present in
+  // `guards.tsx`'s `Role` union are compared, and `user === null` falls
+  // through to `false`.
+  const isParentViewer = user !== null && user.role === 'parent';
+  const parentProfileId = user?.id ?? null;
+
+  // T157 (module doc #13(c)) -- DES-12/item 12 for the "Your RSVP" region.
+  // `idle` is the NEVER-FETCHED variant (a non-parent viewer, who must never
+  // issue this query), not an empty state; "empty" is a zero-length `ready`,
+  // the same mapping `RosterLoadState` above already ships. Initialised to
+  // `loading` rather than `idle` so a parent viewer's FIRST paint is an
+  // observable loading state -- a parent starting in `idle` (which renders
+  // nothing) would make a loading assertion pass against an unrendered state.
+  // The effect below immediately settles a non-parent viewer to `idle`.
+  type GuardianLinksLoadState =
+    | { status: 'idle' }
+    | { status: 'loading' }
+    | { status: 'ready'; guardianLinks: readonly GuardianLinkRow[] }
+    | { status: 'error' };
+  const [guardianLinksState, setGuardianLinksState] = useState<GuardianLinksLoadState>({
+    status: 'loading',
+  });
+  // Same `retryToken` idiom `rosterRetryToken` / `useOutreachDetailLoadState`
+  // above already established -- bumped by the error Banner's Retry action to
+  // force the effect below to re-run.
+  const [guardianLinksRetryToken, setGuardianLinksRetryToken] = useState(0);
+
   useEffect(() => {
     if (loadState.status === 'success') {
       setData(loadState.data);
     }
   }, [loadState]);
+
+  // T157 (module doc #13(c)) -- fetched ONLY for a parent viewer. Every other
+  // role (and a signed-out visitor) settles to `idle` without ever calling the
+  // loader, which this file's own test asserts directly per role.
+  useEffect(() => {
+    if (!isParentViewer || parentProfileId === null) {
+      setGuardianLinksState({ status: 'idle' });
+      return;
+    }
+    let isMounted = true;
+    setGuardianLinksState({ status: 'loading' });
+    loadGuardianLinksForParent(parentProfileId)
+      .then((links) => {
+        if (isMounted) setGuardianLinksState({ status: 'ready', guardianLinks: links });
+      })
+      .catch(() => {
+        if (isMounted) setGuardianLinksState({ status: 'error' });
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [isParentViewer, parentProfileId, loadGuardianLinksForParent, guardianLinksRetryToken]);
+
+  function retryGuardianLinksLoad(): void {
+    setGuardianLinksRetryToken((token) => token + 1);
+  }
 
   useEffect(() => {
     let isMounted = true;
@@ -1344,6 +1671,27 @@ export function OutreachDetail({
   // every other branch/section on this page is unchanged for a non-staff
   // viewer.
   const isStaffViewer = user !== null && (user.role === 'coach' || user.role === 'admin');
+  // T157 (module doc #13(e)) -- composed over the ALREADY team-scoped `roster`
+  // (module doc #3), NOT the full unfiltered `students` list: a parent's linked
+  // student outside this event's team scope gets no control for this event.
+  // `user.id` is the correct `parentProfileId` -- module doc #11 already
+  // established that `AuthUser.id === profiles.id`.
+  const parentLinkedStudents =
+    isParentViewer && user !== null && guardianLinksState.status === 'ready'
+      ? resolveParentLinkedRosterStudents(roster, guardianLinksState.guardianLinks, user.id)
+      : [];
+  // T169 (module doc #14) -- same shape `isStaffViewer`/`isParentViewer`
+  // already use: only the role literals present in `guards.tsx`'s `Role`
+  // union are compared, `user === null` falls through to `false`.
+  const isStudentViewer = user !== null && user.role === 'student';
+  // T169 (module doc #14(b)) -- computed once, outside the per-session loop
+  // (same placement as `parentLinkedStudents` above -- this value also
+  // doesn't vary per session). No new fetch, no new DES-12 state machine
+  // (module doc #14(a)): this is a synchronous `.find` over data the page's
+  // existing top-level `loadState` already resolved before any session
+  // renders at all.
+  const ownRosterStudent =
+    isStudentViewer && user !== null ? resolveOwnRosterStudent(roster, user.id) : null;
   const menuItems: DropdownMenuOption[] = [
     { label: 'Edit', onClick: openEditDialog },
     { label: 'Cancel event', onClick: openCancelConfirm },
@@ -1421,11 +1769,112 @@ export function OutreachDetail({
 
       <VStack gap={5}>
         <Heading level={2}>Signups</Heading>
+
+        {/* T157 (module doc #13(c)) -- the "Your RSVP" region's own DES-12
+            loading state, scoped to that region rather than blocking the whole
+            page. Mirrors this page's own top-level loading convention
+            (`aria-busy` + `VisuallyHidden role="status"` + a `Skeleton`) at a
+            smaller scope. Rendered once, not once per session: while the fetch
+            is in flight this page does not yet know how many linked students
+            exist, and N duplicate live regions would be worse for a screen
+            reader than one. */}
+        {isParentViewer && guardianLinksState.status === 'loading' && (
+          <VStack gap={1} aria-busy="true">
+            <VisuallyHidden as="div" role="status">
+              Loading your RSVP options…
+            </VisuallyHidden>
+            <Skeleton width={240} height={20} index={0} />
+          </VStack>
+        )}
+
+        {/* T157 (module doc #13(c)) -- honest DES-12 error state with a real
+            Retry, same shape as the roster-load-failure banner above. Never a
+            silent fallback: a failed fetch leaves `parentLinkedStudents` empty
+            rather than guessing at a linkage. */}
+        {isParentViewer && guardianLinksState.status === 'error' && (
+          <Banner
+            status="error"
+            title="Couldn't load your linked students"
+            description="Your RSVP controls can't be shown until this is retried."
+            endContent={<Button variant="ghost" label="Retry" onClick={retryGuardianLinksLoad} />}
+          />
+        )}
+
         {orderedSessions.length === 0 ? (
           <Text type="supporting">No sessions scheduled yet.</Text>
         ) : (
           orderedSessions.map((session) => (
-            <SessionSignupList key={session.id} session={session} roster={roster} rsvps={rsvps} />
+            <VStack key={session.id} gap={4}>
+              <SessionSignupList session={session} roster={roster} rsvps={rsvps} />
+              {/* T157 (module doc #13(d)/(f)) -- one `<ParentRsvp>` per
+                  (session x qualifying linked student), inside this page's own
+                  per-session loop (OUT-04 is per-session, module doc #4). The
+                  `user !== null` in this gate is LOAD-BEARING, not redundant
+                  with `isParentViewer`: that const is a plain boolean, not a
+                  type predicate, so TypeScript does not narrow `user` through
+                  it and `currentUserProfileId={user.id}` would not compile.
+                  Same shape module doc #11's `<AttendancePanel>` gate already
+                  uses for the identical reason. */}
+              {isParentViewer &&
+                user !== null &&
+                guardianLinksState.status === 'ready' &&
+                parentLinkedStudents.map((student) => (
+                  <VStack key={`${session.id}-${student.id}`} gap={2}>
+                    {/* Carries BOTH the student name and the session date --
+                        module doc #13(f): `ParentRsvp`'s own `controlLabel` is
+                        an `aria-label` carrying the date but not the name, so
+                        neither piece alone disambiguates every instance. */}
+                    <Heading level={4}>
+                      {`Your RSVP for ${student.name} — ${formatSessionDateOnly(session)}`}
+                    </Heading>
+                    <ParentRsvp
+                      studentId={student.id}
+                      studentProfileId={student.profileId}
+                      session={session}
+                      eventTitle={event.title}
+                      currentRsvp={
+                        rsvps.find(
+                          (rsvp) => rsvp.sessionId === session.id && rsvp.studentId === student.id,
+                        ) ?? null
+                      }
+                      guardianLinks={guardianLinksState.guardianLinks.filter(
+                        (link) => link.studentId === student.id,
+                      )}
+                      currentUserProfileId={user.id}
+                      now={nowFn}
+                    />
+                  </VStack>
+                ))}
+              {/* T169 (module doc #14) -- the STUDENT's own self-service
+                  control, one per session, for their own roster row only.
+                  `user !== null` is LOAD-BEARING here for the identical
+                  reason already documented at this file's other two role
+                  gates (`isParentViewer`/`isStaffViewer` above):
+                  `isStudentViewer` is a plain `boolean`, not a type
+                  predicate, so it does not narrow `user: AuthUser | null`
+                  and `currentUserProfileId={user.id}` would not compile
+                  without the separate null check. No page-owned `Heading`
+                  here, unlike `<ParentRsvp>` above -- module doc #14(c): a
+                  student only ever sees their own single control, so there
+                  is no cross-student `aria-label` collision to disambiguate;
+                  `RsvpControl`'s own `controlLabel` already carries both the
+                  event title and the session date. */}
+              {isStudentViewer && user !== null && ownRosterStudent !== null && (
+                <RsvpControl
+                  studentId={ownRosterStudent.id}
+                  session={session}
+                  eventTitle={event.title}
+                  currentRsvp={
+                    rsvps.find(
+                      (rsvp) =>
+                        rsvp.sessionId === session.id && rsvp.studentId === ownRosterStudent.id,
+                    ) ?? null
+                  }
+                  currentUserProfileId={user.id}
+                  now={nowFn}
+                />
+              )}
+            </VStack>
           ))
         )}
       </VStack>

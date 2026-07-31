@@ -223,6 +223,12 @@
  * at" (deliberately the same literal value `MeetingsList.tsx` uses, since
  * both pages stand in for the same not-yet-resolved viewer-linkage gap).
  *
+ * T170 UPDATE: this gap is now closed for `OutreachList` itself -- see
+ * module doc #15 below for the real resolution. `PLACEHOLDER_CURRENT_STUDENT_ID`
+ * is KEPT (this file's own fixtures below still key to it, and
+ * `OutreachList.test.tsx` still imports it), but is no longer this
+ * component's own runtime default for an unresolved `viewerStudentId`.
+ *
  * -----------------------------------------------------------------------
  * 8. Deliberate stubs (per Forbidden Files -- disclosed, not silently built
  *    as if real):
@@ -470,7 +476,8 @@
  *
  * `viewerStudentId = PLACEHOLDER_CURRENT_STUDENT_ID` (module doc #7) is a
  * separate, already-disclosed gap (which student, not which season) --
- * untouched by this fix, out of scope per this task's own packet.
+ * untouched by THIS fix, out of scope for T106. T170 UPDATE: closed by a
+ * later task -- see module doc #15.
  *
  * -----------------------------------------------------------------------
  * 13. T112 HOTFIX: navigation affordance to `/outreach/:eventId` on every
@@ -603,6 +610,80 @@
  * output "known risks" for the full disclosure); `OutreachList.tsx`'s own
  * single pre-existing disable directive (`useLoadState`, module doc above)
  * remains genuinely load-bearing and unchanged.
+ *
+ * -----------------------------------------------------------------------
+ * 15. T170: `viewerStudentId` resolved for real -- the last remaining
+ *     placeholder on this file's data path (module doc #7/#12's own closing
+ *     notes flagged this as a separate, then out-of-scope, gap; this is
+ *     the task that closes it).
+ *
+ * Eight consumers depended on `viewerStudentId`: `computeStudentHours`, the
+ * my-RSVP lookup, `getUnansweredRsvpCount`, `GoalBar`'s `goalBarId` identity
+ * (and its milestone-toast dedupe key), `handleRsvpChange`'s local-only
+ * override -- and, the one that is NOT a client-side filter,
+ * `<SelfCheckoffDialog studentId={viewerStudentId} />`, which re-queries AND
+ * WRITES real `attendance` rows (`loaders/selfCheckoff.ts`, insert/delete
+ * keyed on `student_id`). Before this fix every one of those read
+ * `'student-placeholder-current-viewer'`, a value that is not a row in
+ * `students` at all -- so self-check-off on this page was genuinely broken
+ * (every write attempt rejected by the `uuid not null` FK and the
+ * `student_id in (select my_student_ids())` RLS policy), not merely a
+ * display bug.
+ *
+ * Fix: reuses `MeetingsList.tsx`'s own `resolveCurrentStudentId`
+ * (`loaders/meetings.ts`; `CurrentViewerIdentity`/`ResolveCurrentStudentIdFn`
+ * imported directly from `MeetingsList.tsx`, same relative-sibling import
+ * `StudentHome.tsx:387` already established) verbatim -- no second
+ * implementation. `viewerStudentId` on `OutreachListProps` no longer
+ * defaults to the placeholder (`undefined` when omitted); a new
+ * `resolveStudentId` prop (default `resolveCurrentStudentId`) resolves the
+ * real `students.id` for the signed-in viewer.
+ *
+ * Parallel, not sequential: `loadData(seasonId)` never takes a student
+ * argument (every read-side consumer of `viewerStudentId` filters
+ * already-loaded `sessions`/`rsvps` client-side, module doc's own T106-era
+ * reasoning), so sequencing identity resolution before the season-data load
+ * (mirroring `StudentHome.tsx`'s own shape, which genuinely needs identity
+ * first because its content query takes `studentId` as an argument) would
+ * add a real, avoidable round trip here. `OutreachListLoaded` instead runs a
+ * SECOND `useLoadState` for identity resolution alongside its existing
+ * season-data load, both firing on the same initial mount, genuinely
+ * independent (neither reads the other's state). For a coach/admin viewer
+ * the identity loader short-circuits to `Promise.resolve(null)` WITHOUT ever
+ * calling `resolveStudentId` (criterion 3) -- the hook itself still fires
+ * unconditionally (Rules of Hooks), the same "hook always runs, injected
+ * function conditionally invoked" idiom this file already uses for
+ * `seasonId`/`loadData` (module doc #12). The student/parent branch gains
+ * its own DES-12 loading/error/null sub-states (`ViewerStudentIdGate`
+ * below), distinguishable from the season-data tier's own skeleton/error
+ * above, reusing `StudentHome.tsx`'s established copy verbatim where
+ * page-agnostic and adapting only the "no student linked" description's
+ * page-specific clause ("...your outreach view will show up here").
+ *
+ * T184-class check (both read AND write sides, since `SelfCheckoffDialog`
+ * genuinely re-queries/writes): `queryStudentIdByProfileId`
+ * (`loaders/meetings.ts`) and the RLS `my_student_ids()` function
+ * (`self_checkoff.sql`/`rls.sql`) that authorizes `SelfCheckoffDialog`'s own
+ * insert/delete are both `is_active`-agnostic, and none of this file's
+ * read-side computations (`computeStudentHours`/`getUnansweredRsvpCount`/
+ * `computeEventRowStats`/`myGoalHours`) re-query Supabase with an
+ * `is_active` filter either -- confirmed directly, not assumed
+ * (`loaders/outreach.ts`'s own `makeLoadOutreachData` was independently
+ * traced too: no `is_active` filter anywhere in it). So, unlike
+ * `StudentHome`/T176, a deactivated student's figures render normally and
+ * their self-check-off write remains RLS-authorized; no false-empty state
+ * exists on this page. A signed-in user with NO linked student row at all
+ * resolves `null` instead, and every consumer -- including
+ * `SelfCheckoffDialog`, which must not mount -- is gated behind that `null`
+ * check by `ViewerStudentIdGate` below. See this task's worker output for
+ * the full trace.
+ *
+ * `computeStudentHours` itself is unchanged (byte-identical, constitution
+ * item 3) -- it now simply receives the real id as its argument. Its own
+ * RSVP-based "confirmed hours" formula is a disclosed heuristic that
+ * legitimately disagrees with the attendance-backed `v_student_hours` a
+ * student might see elsewhere in the app; that pre-existing formula
+ * divergence is tracked separately as T188, not reconciled here.
  */
 import {
   useCallback,
@@ -662,6 +743,18 @@ import {
   type CancelOutreachEventFn,
   type LoadOutreachEventRosterFn,
 } from '../../lib/supabase/loaders/outreach';
+// T170 (module doc #15): reuses the same, already-shipped, already-tested
+// viewer-identity resolution seam `MeetingsList.tsx`/`StudentHome.tsx`
+// already established -- `CurrentViewerIdentity`/`ResolveCurrentStudentIdFn`
+// are declared on `MeetingsList.tsx` itself (forbidden/read-only file for
+// this task) and are NOT re-exported by `loaders/meetings.ts`; imported
+// directly here, the same relative-sibling import `StudentHome.tsx:387`
+// already uses (`pages/outreach/` and `pages/meetings/`/`pages/home/` are
+// siblings). The real implementation (`resolveCurrentStudentId`) comes from
+// `loaders/meetings.ts` (also forbidden/read-only for this task,
+// import-only, unmodified).
+import type { CurrentViewerIdentity, ResolveCurrentStudentIdFn } from '../meetings/MeetingsList';
+import { resolveCurrentStudentId } from '../../lib/supabase/loaders/meetings';
 import {
   OutreachEventDialog,
   type ExistingOutreachEvent,
@@ -3703,7 +3796,21 @@ interface OutreachListLoadedProps {
    * placeholder/null case; `OutreachList` only mounts this component once
    * `resolvedSeasonId !== null`. */
   seasonId: string;
-  viewerStudentId: string;
+  /** T170 (module doc #15) -- the signed-in viewer's identity, used to
+   * construct the identity-resolution loader below. Never used to filter
+   * anything directly; only `viewerStudentIdState`'s own resolved `data`
+   * (once `'success'`) is ever threaded to a consumer. */
+  viewer: CurrentViewerIdentity;
+  /** T170 -- an explicit caller-supplied `viewerStudentId` bypasses
+   * `resolveStudentId` entirely (criterion 2); `undefined` is the real-world
+   * default, resolved for real instead. */
+  explicitViewerStudentId: string | undefined;
+  /** T170 (module doc #15) -- defaults to the real `resolveCurrentStudentId`
+   * (`loaders/meetings.ts`), the same already-shipped, already-tested seam
+   * `MeetingsList.tsx`/`StudentHome.tsx` already use. Only ever invoked for
+   * a student/parent viewer with no explicit `viewerStudentId` (criterion
+   * 3) -- never for a coach/admin viewer. */
+  resolveStudentId: ResolveCurrentStudentIdFn;
   onSaveEvent: OnSaveOutreachEventFn;
   isCoachOrAdminView: boolean;
   /** T121 item (c). */
@@ -3719,7 +3826,9 @@ interface OutreachListLoadedProps {
 function OutreachListLoaded({
   loadData,
   seasonId,
-  viewerStudentId,
+  viewer,
+  explicitViewerStudentId,
+  resolveStudentId,
   onSaveEvent,
   isCoachOrAdminView,
   onCancelEvent,
@@ -3746,6 +3855,28 @@ function OutreachListLoaded({
     const fresh = await loadData(seasonId);
     setOverrideData(fresh);
   }
+
+  // T170 (module doc #15) -- runs in PARALLEL with the season-data
+  // `loadState` above (both hooks fire on this component's same initial
+  // mount; neither reads the other's state), not sequenced before it:
+  // `loadData(seasonId)` never takes a student argument, so there is no
+  // dependency that would require identity to resolve first, and
+  // sequencing it anyway would add a real, avoidable round trip for every
+  // student/parent view. Coach/admin viewers never invoke `resolveStudentId`
+  // (short-circuited to `Promise.resolve(null)` before it is ever called) --
+  // criterion 3 -- even though this hook itself still fires unconditionally
+  // (Rules of Hooks), the same "hook always runs, injected function
+  // conditionally invoked" idiom this file already uses for
+  // `seasonId`/`loadData` (module doc #12).
+  const viewerStudentIdState = useLoadState<string | null>(
+    () =>
+      isCoachOrAdminView
+        ? Promise.resolve(null)
+        : explicitViewerStudentId !== undefined
+          ? Promise.resolve(explicitViewerStudentId)
+          : resolveStudentId(viewer),
+    [isCoachOrAdminView, explicitViewerStudentId, resolveStudentId, viewer.id, viewer.role],
+  );
 
   if (loadState.status === 'loading') {
     return (
@@ -3819,9 +3950,9 @@ function OutreachListLoaded({
           viewerProfileId={viewerProfileId}
         />
       ) : (
-        <StudentParentOutreachView
+        <ViewerStudentIdGate
+          state={viewerStudentIdState}
           seasonId={seasonId}
-          viewerStudentId={viewerStudentId}
           viewerProfileId={viewerProfileId}
           events={outreachEvents}
           sessions={outreachSessions}
@@ -3834,7 +3965,92 @@ function OutreachListLoaded({
 }
 
 // ---------------------------------------------------------------------------
-// Top-level component -- module docs #6/#7/#9/#12.
+// T170 (module doc #15) -- the identity tier's own DES-12 loading/error/null
+// sub-states, distinguishable from the season-data tier's own
+// skeleton/error above (criterion 4). Takes the already-resolved
+// `viewerStudentIdState` as a prop rather than calling `useLoadState`
+// itself (that hook lives in `OutreachListLoaded`, run unconditionally
+// alongside the season-data load) -- this component itself owns no hooks,
+// only render-time branching, so it is safe to render conditionally.
+// Copy reuses `StudentHome.tsx`'s established DES-12 identity-tier voice
+// verbatim where it is page-agnostic (module doc #15); only the "no student
+// linked" description's page-specific clause is adapted.
+// ---------------------------------------------------------------------------
+
+interface ViewerStudentIdGateProps {
+  state: LoadState<string | null>;
+  seasonId: string;
+  /** T126 (module doc #14) -- `attendance.recorded_by` for any self
+   * check-off written from this view. */
+  viewerProfileId: string;
+  events: readonly OutreachEventRow[];
+  sessions: readonly OutreachSessionRow[];
+  initialRsvps: readonly RsvpRow[];
+  goalConfig: OutreachGoalConfig;
+}
+
+function ViewerStudentIdGate({
+  state,
+  seasonId,
+  viewerProfileId,
+  events,
+  sessions,
+  initialRsvps,
+  goalConfig,
+}: ViewerStudentIdGateProps): ReactNode {
+  if (state.status === 'loading') {
+    return (
+      <VStack gap={3} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          Finding your student record…
+        </VisuallyHidden>
+        <Skeleton width={160} height={20} index={0} />
+        <Skeleton width={220} height={16} index={1} />
+      </VStack>
+    );
+  }
+
+  if (state.status === 'error') {
+    return (
+      <Banner
+        status="error"
+        title="Couldn't find your student record"
+        description="Something went wrong looking up your student record. Try refreshing the page."
+        endContent={<Button variant="ghost" label="Retry" onClick={state.retry} />}
+      />
+    );
+  }
+
+  // `state.status === 'success'` here -- `state.data` is `string | null`.
+  // `null` = no linked student row (module doc #15's second T184-class
+  // half): every consumer, including `SelfCheckoffDialog`, is gated behind
+  // this check by simply never rendering `StudentParentOutreachView` (so
+  // the dialog never mounts).
+  if (state.data === null) {
+    return (
+      <EmptyState
+        headingLevel={1}
+        title="No student account linked yet"
+        description="We couldn't find a student record linked to your account yet. Once one is linked, your outreach view will show up here."
+      />
+    );
+  }
+
+  return (
+    <StudentParentOutreachView
+      seasonId={seasonId}
+      viewerStudentId={state.data}
+      viewerProfileId={viewerProfileId}
+      events={events}
+      sessions={sessions}
+      initialRsvps={initialRsvps}
+      goalConfig={goalConfig}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Top-level component -- module docs #6/#7/#9/#12/#15.
 // ---------------------------------------------------------------------------
 
 export interface OutreachListProps {
@@ -3851,9 +4067,19 @@ export interface OutreachListProps {
    * `useActiveSeason()` instead.
    */
   seasonId?: string;
-  /** Which student the student/parent view is currently scoped to (module
-   * doc #7). */
+  /** T170 UPDATE (module doc #15): which student the student/parent view is
+   * currently scoped to (module doc #7). No longer defaults to
+   * `PLACEHOLDER_CURRENT_STUDENT_ID` -- `undefined` (the real-world default)
+   * routes through `resolveStudentId` instead of a placeholder; supplying it
+   * explicitly (as every fixture-driven caller/test does) bypasses that
+   * resolution entirely (criterion 2). */
   viewerStudentId?: string;
+  /** T170 (module doc #15). Defaults to a real resolution
+   * (`resolveCurrentStudentId`, `../../lib/supabase/loaders/meetings.ts`),
+   * the same already-shipped seam `MeetingsList.tsx`/`StudentHome.tsx`
+   * already use. Only ever invoked when `viewerStudentId` above is NOT
+   * supplied, and never for a coach/admin viewer. */
+  resolveStudentId?: ResolveCurrentStudentIdFn;
   /** T101 (module doc #11). Defaults to a real `events`/`event_sessions`
    * insert, passed straight through to `<OutreachEventDialog
    * onSaveEvent={...} />` in the coach view -- T121 UPDATE: now also used
@@ -3874,7 +4100,8 @@ export interface OutreachListProps {
 export function OutreachList({
   loadData = loadOutreachData,
   seasonId: seasonIdProp,
-  viewerStudentId = PLACEHOLDER_CURRENT_STUDENT_ID,
+  viewerStudentId: explicitViewerStudentId,
+  resolveStudentId = resolveCurrentStudentId,
   onSaveEvent = saveOutreachEvent,
   onCancelEvent = cancelOutreachEvent,
   loadRoster = loadOutreachEventRoster,
@@ -3922,7 +4149,9 @@ export function OutreachList({
     <OutreachListLoaded
       loadData={loadData}
       seasonId={resolvedSeasonId}
-      viewerStudentId={viewerStudentId}
+      viewer={{ id: user.id, role: user.role }}
+      explicitViewerStudentId={explicitViewerStudentId}
+      resolveStudentId={resolveStudentId}
       onSaveEvent={onSaveEvent}
       isCoachOrAdminView={isCoachOrAdminView}
       onCancelEvent={onCancelEvent}

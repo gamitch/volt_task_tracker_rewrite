@@ -89,6 +89,14 @@ import type {
   TeamRow,
   UpdateStudentFn,
 } from '../../../pages/roster/StudentsTab';
+// T176 -- additive only (this task's own Allowed Files instruction). New
+// own-row `students` resolution for `StudentHome.tsx`'s real
+// `teamId`/`goalHoursOverride` scoping. `ResolveStudentScopeFn`/
+// `StudentScope` are OWNED by `StudentHome.tsx` (mirrors the existing
+// `CurrentViewerIdentity`/`ResolveCurrentStudentIdFn` cross-file shape
+// `loaders/meetings.ts` already established for that file's own T096
+// resolution) -- imported here as types only.
+import type { ResolveStudentScopeFn } from '../../../pages/home/StudentHome';
 
 /**
  * Raw `public.students` row exactly as Postgrest returns it (snake_case) --
@@ -307,3 +315,126 @@ export function makeUpdateStudent(
 
 /** Default `onUpdateStudent` for `StudentsTab.tsx`. */
 export const updateStudent: UpdateStudentFn = makeUpdateStudent();
+
+/**
+ * T176 -- additive only, appended after every pre-existing export (this
+ * task's own Allowed Files instruction: no existing export's name,
+ * signature, or behavior changes).
+ *
+ * **Coordinator correction (post-checker, T176 round 2):** the original
+ * shape of this read selected the raw `students.team_id`/
+ * `students.goal_hours_override` columns and let `StudentHome.tsx`
+ * coalesce the goal-hours override against the season default in
+ * TypeScript. That is a constitution-item-3 violation with a working
+ * in-repo counterexample: `v_student_goal_projection`
+ * (`supabase/migrations/20260723000001_dashboard_views.sql:322-334`)
+ * already computes exactly this coalesce in SQL --
+ * `coalesce(s.goal_hours_override, se.default_goal_hours) as goal_hours`
+ * -- scoped to the currently-active season (`join seasons se on
+ * se.is_active`), and already has a working in-repo reader
+ * (`src/lib/supabase/loaders/dashboard.ts`'s own `queryGoalProjection`,
+ * `.select('student_id, season_id, team_id, goal_hours, confirmed_hours,
+ * planned_hours')`) whose own consumer (`CoachHome.tsx`'s module doc,
+ * "(g) Goal source") records the required posture verbatim:
+ * "`StudentGoalProjectionEntry.goalHours` is a verbatim passthrough, never
+ * recomputed here." This read now does the same thing for one student
+ * instead of a whole season.
+ *
+ * The same single read also returns `confirmed_hours`/`planned_hours`
+ * (the view's own `v_student_hours`/`v_student_planned_hours` LEFT JOINs,
+ * both already-real, already-SQL-computed columns) -- threaded through so
+ * `StudentHome.tsx`'s content tier no longer needs its own separate,
+ * fixture-fed `data.studentHours`/`computePlannedHours(...)` call for
+ * these two numbers either (same single read, strictly more honest data,
+ * not a second query).
+ *
+ * Scoped by `.eq('student_id', studentId)` only -- no explicit
+ * `.eq('season_id', ...)` filter is added, because the view's own `join
+ * seasons se on se.is_active` already restricts every row to the single
+ * currently-active season (`seasons_single_active_idx` guarantees at most
+ * one such row, same guarantee `loaders/seasons.ts`'s own
+ * `queryActiveSeason` already relies on) -- adding a second, redundant
+ * season filter here would require widening `ResolveStudentScopeFn`'s own
+ * signature to take a `seasonId` argument for no additional real scoping
+ * benefit, a disclosed, deliberate simplicity choice.
+ *
+ * RLS -- **reasoned, not measured (no live Supabase in this environment,
+ * same disclosed gap every task in this codebase carries).** The
+ * migration's own header (`dashboard_views.sql:49-52`) states none of its
+ * views are `security_definer`/`security_barrier`, so
+ * `v_student_goal_projection` runs under the CALLING session's own RLS
+ * against its base tables. For a `student`-role caller reading their own
+ * `student_id`: `students` carries `own_or_linked_read`
+ * (`rls.sql:100-102`, `id in (select my_student_ids())`); `seasons`
+ * carries `read_all` (`rls.sql:78-79`, any authenticated caller); the
+ * view's own `v_student_hours` LEFT JOIN reads `attendance`
+ * (`own_or_linked_read`, `rls.sql:230-232`) via `event_sessions`
+ * (`own_or_linked_read`, `rls.sql:180`) and `events`
+ * (`own_or_linked_read`, `rls.sql:153`); `v_student_planned_hours` reads
+ * `v_planned_rsvp_hours`, itself over `rsvps` (`own_or_linked_read`,
+ * `rls.sql:201`) via the same `event_sessions`/`events`. Every base table
+ * this view touches already grants a student read access to exactly their
+ * own row(s) -- composed together, a real signed-in student's own query
+ * genuinely resolves, not an RLS-caused false-empty. This exact
+ * composition (a multi-table view whose every base table is
+ * `own_or_linked_read`-covered, read by a student for their own id) has no
+ * DIRECT precedent elsewhere in this codebase to point to as a live-tested
+ * example -- flagged for the checker to independently confirm rather than
+ * accepted on my own reasoning alone.
+ *
+ * A brand-new interface (`StudentGoalProjectionDbRow`), not a reuse of the
+ * existing module-private `StudentDbRow` above -- this task's own packet
+ * forbids touching that interface's shape, and this query reads a
+ * different table (a view, not `students` directly) with a disjoint
+ * column set.
+ */
+interface StudentGoalProjectionDbRow {
+  team_id: string;
+  goal_hours: number;
+  confirmed_hours: number;
+  planned_hours: number;
+}
+
+async function queryStudentGoalProjectionById(
+  client: SupabaseClient,
+  studentId: string,
+): Promise<LoaderQueryResult<StudentGoalProjectionDbRow>> {
+  const result = await client
+    .from('v_student_goal_projection')
+    .select('team_id, goal_hours, confirmed_hours, planned_hours')
+    .eq('student_id', studentId)
+    .maybeSingle();
+  return { data: (result.data as StudentGoalProjectionDbRow | null) ?? null, error: result.error };
+}
+
+/**
+ * `getClient` is injectable (defaults to the shared singleton), same
+ * convention every export above already established, so tests can supply a
+ * stubbed transport with zero real network calls -- see this task's own new
+ * `students.test.ts` (scoped to this one function only -- NOT a full
+ * coverage sweep of this file, which no ledger row currently claims, per
+ * this task's own packet disclosure).
+ */
+export function makeResolveStudentScope(
+  getClient: () => SupabaseClient = getSupabaseClient,
+): ResolveStudentScopeFn {
+  const loadScope = createLoader<string, StudentGoalProjectionDbRow>(
+    queryStudentGoalProjectionById,
+    getClient,
+  );
+  return async (studentId: string) => {
+    const row = await loadScope(studentId);
+    if (row === null) return null;
+    // Verbatim passthrough (constitution item 3) -- `goal_hours` is already
+    // the coalesced value; no coalesce/override arithmetic happens here.
+    return {
+      teamId: row.team_id,
+      goalHours: row.goal_hours,
+      confirmedHours: row.confirmed_hours,
+      plannedHours: row.planned_hours,
+    };
+  };
+}
+
+/** `StudentHome.tsx`'s own default `resolveStudentScope`. */
+export const resolveStudentScope: ResolveStudentScopeFn = makeResolveStudentScope();

@@ -499,6 +499,60 @@
  *     read here via `v_student_goal_projection`'s own `planned_hours`
  *     column -- this file never touches `rsvps`/`event_sessions` directly
  *     for this number.
+ *
+ * -----------------------------------------------------------------------
+ * 14. T155 -- wired to the REAL active season, replacing the placeholder
+ *     that was reaching Postgres as a literal string
+ *     (`"invalid input syntax for type uuid: \"season-placeholder-current\""`,
+ *     `22P02`, on every one of `loaders/dashboard.ts`'s nine season-filtered
+ *     queries). `CoachHome` (this file's default export) is now a thin outer
+ *     wrapper: it calls `useAuth()` then `useActiveSeason()`
+ *     (`../../app/SeasonProvider`, T091/T140's already-shipped mechanism),
+ *     checks `user === null` FIRST (must run before the season switch --
+ *     `<SeasonProvider>`'s own first synchronous render is always
+ *     `{status:'loading'}` regardless of who the user is, so reordering
+ *     would show the season-loading skeleton instead of the sign-in prompt
+ *     on the very first paint), then switches on `activeSeason.status`.
+ *     Only the `'ready'` case mounts `CoachHomeContent` below -- everything
+ *     that used to be `CoachHome`'s own body (the ~600 lines from the old
+ *     `navigate`/`useLoadState` calls onward) is unchanged INSIDE
+ *     `CoachHomeContent`, now taking `user`/`seasonId` as props instead of
+ *     resolving them itself. `seasonId` is no longer a prop with a
+ *     placeholder default -- it is always `activeSeason.season.id`, a real
+ *     UUID, once this component renders anything beyond the season-status
+ *     banners/skeleton. Same `Banner`-only (no `Section` wrapper -- the T129
+ *     checker fix a few lines below this doc explains why) copy pattern
+ *     `KpiStrip.tsx` already established for `'none'`/`'error'`; the
+ *     `'loading'` skeleton is shared (`CoachHomeLoadingSkeleton` below)
+ *     between this new season-level boundary and the pre-existing
+ *     data-level one inside `CoachHomeContent`, rather than hand-mirrored
+ *     twice.
+ *
+ *     Two disclosed, deliberate behavior changes (not regressions -- see
+ *     `docs/swarm/active/T155-worker-output.md` for the measured evidence):
+ *     (a) `loadData`/`loadDashboardData` no longer fire at all for a
+ *     signed-out viewer (they used to fire every render, even before the
+ *     `user === null` early return, because React hooks cannot be
+ *     conditionally skipped -- moving them into `CoachHomeContent`, which
+ *     only mounts once `user !== null && activeSeason.status === 'ready'`,
+ *     removes that always-on fetch for the signed-out path entirely); (b)
+ *     `useMilestoneToasts`'s dedupe key (`milestoneToastStorageKey`, module
+ *     doc "BEH-01" section below) now includes the REAL season id instead of
+ *     the one shared placeholder every season used to collide on -- a
+ *     latent cross-season-suppression bug this fix also closes, not a new
+ *     one it introduces.
+ *
+ *     Three fixture inputs `defaultLoadCoachHomeData`/
+ *     `defaultLoadDashboardData` never season-scoped (`defaultGoalHours`,
+ *     twice over -- `Hours vs. team goal`'s denominator AND `Avg hours /
+ *     active student`'s "Default goal {N}h" secondary -- and
+ *     `seasonSetupStatus`, feeding the admin "Season setup" card) remain
+ *     fabricated on screen after this fix, for any real season, because
+ *     their own fixture data was never filtered by season in the first
+ *     place. Filed as a follow-up (constitution item 20), not fixed here --
+ *     `loadData`/`loadDashboardData` growing a real Supabase-backed
+ *     implementation is out of this task's scope; see this file's own
+ *     module doc #9 and `docs/swarm/active/T155-worker-output.md`.
  */
 import { useEffect, useId, useState, type CSSProperties, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -524,8 +578,9 @@ import {
   VisuallyHidden,
   VStack,
 } from '@astryxdesign/core';
-import { useAuth } from '../../app/guards';
+import { useAuth, type AuthUser } from '../../app/guards';
 import { routePaths } from '../../app/router';
+import { useActiveSeason } from '../../app/SeasonProvider';
 import { EVENT_TYPE_BADGE } from '../../lib/eventTypeBadge';
 import { formatFriendlyDateRange } from '../../lib/format/dates';
 import {
@@ -1970,6 +2025,15 @@ interface StubNotice {
 // Top-level component -- module docs #1/#5/#6/#7/#11.
 // ---------------------------------------------------------------------------
 
+/**
+ * T155: no `seasonId` prop anymore (module doc #14) -- it is always
+ * `useActiveSeason().season.id` once resolved. No test in this file or
+ * `DashboardPage.test.tsx` ever passed `seasonId` as a render prop before
+ * this change (grep-verified), and production never set it either (`
+ * DashboardPage.tsx` renders `<CoachHome />` with no props) -- keeping it as
+ * a dead test-only override would be the same never-passed-placeholder
+ * shape as the bug this task closes.
+ */
 export interface CoachHomeProps {
   /** Injectable data-loading seam (module doc #9). Defaults to fixture data. */
   loadData?: LoadCoachHomeDataFn;
@@ -1980,7 +2044,6 @@ export interface CoachHomeProps {
    * already established -- pass `defaultLoadDashboardData` explicitly (as
    * this file's own tests do) for fixture behavior. */
   loadDashboardData?: LoadDashboardDataFn;
-  seasonId?: string;
   /** Which team this Coach/Admin Home is scoped to (module doc #8) --
    * scopes ONLY the pre-existing primary KPI grid / Next up / Recent-feed
    * team filter / check-in / season-setup card. T124's new season-wide
@@ -1991,14 +2054,147 @@ export interface CoachHomeProps {
   nowFn?: () => Date;
 }
 
+/**
+ * T155 (module doc #14): the DES-12 loading skeleton, shared between the new
+ * season-status boundary in `CoachHome` below (season still resolving) and
+ * the pre-existing data-status boundary inside `CoachHomeContent` (season
+ * resolved, `loadData` still resolving) -- one implementation, so a future
+ * edit to either state's shape can't silently drift the other out of sync
+ * (the packet's own explicit requirement: a hand-mirrored copy is nine magic
+ * `Skeleton` `index` values with nothing comparing them).
+ */
+function CoachHomeLoadingSkeleton(): ReactNode {
+  return (
+    <VStack gap={6} padding={6} aria-busy="true">
+      <VisuallyHidden as="div" role="status">
+        Loading Home…
+      </VisuallyHidden>
+      <Skeleton width={100} height={28} index={0} />
+      <Grid columns={{ minWidth: 240, repeat: 'fit' }} gap={4}>
+        {[0, 1, 2, 3].map((card) => (
+          <VStack key={card} gap={2} padding={4}>
+            <Skeleton width={140} height={14} index={card * 2 + 1} />
+            <Skeleton width={70} height={22} index={card * 2 + 2} />
+          </VStack>
+        ))}
+      </Grid>
+      <VStack gap={3}>
+        <Skeleton width={110} height={20} index={9} />
+        <VStack gap={2}>
+          {[0, 1, 2].map((row) => (
+            <HStack key={row} gap={4} vAlign="center">
+              <Skeleton width={220} height={16} index={row * 2 + 10} />
+              <Skeleton width={80} height={16} index={row * 2 + 11} />
+            </HStack>
+          ))}
+        </VStack>
+      </VStack>
+    </VStack>
+  );
+}
+
+/**
+ * T155 (module doc #14): the outer, season-status-dispatch-only wrapper --
+ * same shape as `KpiStrip`/`KpiStripContent`
+ * (`../../components/kpi/KpiStrip.tsx`). `user === null` MUST be checked
+ * BEFORE the `activeSeason.status` switch, not merged into it and not after
+ * it: `<SeasonProvider>`'s own first synchronous render is always
+ * `{status:'loading'}` regardless of who the user is
+ * (`SeasonProvider.tsx`), so a reordered check would show the season-loading
+ * skeleton instead of the sign-in prompt on the very first paint --
+ * measured, not theoretical (`CoachHome.test.tsx`'s `'shows a sign-in
+ * prompt'` test renders synchronously with no microtask flush and would fail
+ * with `expected 'Loading Home…' to contain 'Sign in to view Home'` if these
+ * two checks were swapped). Both `useAuth()` and `useActiveSeason()` are
+ * called unconditionally before either conditional return, satisfying
+ * Rules of Hooks the same way `KpiStrip`'s own module doc #1 describes for
+ * its own two hooks.
+ */
 export function CoachHome({
   loadData = defaultLoadCoachHomeData,
   loadDashboardData: loadDashboardDataProp = loadDashboardData,
-  seasonId = PLACEHOLDER_SEASON_ID,
   teamId = PLACEHOLDER_CURRENT_TEAM_ID,
   nowFn = () => new Date(),
 }: CoachHomeProps = {}): ReactNode {
   const { user } = useAuth();
+  const activeSeason = useActiveSeason();
+
+  if (user === null) {
+    return (
+      <VStack gap={4} padding={6}>
+        <EmptyState
+          headingLevel={1}
+          title="Sign in to view Home"
+          description="You need to be signed in to see this page."
+        />
+      </VStack>
+    );
+  }
+
+  switch (activeSeason.status) {
+    case 'loading':
+      return <CoachHomeLoadingSkeleton />;
+    case 'none':
+      return (
+        <VStack gap={4} padding={6}>
+          <Banner
+            status="info"
+            title="No active season yet"
+            description="An admin needs to create and activate a season in Season settings before Home can show data here."
+          />
+        </VStack>
+      );
+    case 'error':
+      return (
+        <VStack gap={4} padding={6}>
+          <Banner
+            status="error"
+            title="Couldn't load the active season"
+            description={activeSeason.error.message}
+            endContent={<Button variant="ghost" label="Retry" onClick={activeSeason.refresh} />}
+          />
+        </VStack>
+      );
+    case 'ready':
+      return (
+        <CoachHomeContent
+          user={user}
+          seasonId={activeSeason.season.id}
+          teamId={teamId}
+          loadData={loadData}
+          loadDashboardData={loadDashboardDataProp}
+          nowFn={nowFn}
+        />
+      );
+  }
+}
+
+/**
+ * T155 (module doc #14): everything `CoachHome` itself used to do, unchanged
+ * in behavior -- only WHERE `user`/`seasonId` come from changed (props from
+ * the outer wrapper above, instead of `useAuth()`/a defaulted parameter).
+ * Only mounts once the outer wrapper's `activeSeason.status === 'ready'`, so
+ * `user` here is always non-null (`AuthUser`, not `AuthUser | null`) and
+ * `seasonId` is always a real season UUID, never the retired
+ * `PLACEHOLDER_SEASON_ID` default.
+ */
+interface CoachHomeContentProps {
+  user: AuthUser;
+  seasonId: string;
+  teamId: string;
+  loadData: LoadCoachHomeDataFn;
+  loadDashboardData: LoadDashboardDataFn;
+  nowFn: () => Date;
+}
+
+function CoachHomeContent({
+  user,
+  seasonId,
+  teamId,
+  loadData,
+  loadDashboardData: loadDashboardDataProp,
+  nowFn,
+}: CoachHomeContentProps): ReactNode {
   const navigate = useNavigate();
   const loadState = useLoadState(() => loadData(seasonId), [loadData, seasonId]);
   const dashboardState = useLoadState(
@@ -2031,10 +2227,9 @@ export function CoachHome({
 
   // React Hooks must run unconditionally on every render (rules-of-hooks) --
   // `useMilestoneToasts` (which itself calls `useState`/`useEffect`) is
-  // therefore called here, BEFORE the not-signed-in/loading/error early
-  // returns below, using 0/0 fallbacks until real data has loaded (0/0
-  // crosses no milestone, so this is inert until `loadState.status ===
-  // 'success'`).
+  // therefore called here, BEFORE the loading/error early returns below,
+  // using 0/0 fallbacks until real data has loaded (0/0 crosses no
+  // milestone, so this is inert until `loadState.status === 'success'`).
   const successData = loadState.status === 'success' ? loadState.data : null;
   const preGoalHours = successData
     ? sumGoalHours(successData.students, teamId, successData.defaultGoalHours)
@@ -2048,46 +2243,8 @@ export function CoachHome({
     setStubNotice({ title, description });
   }
 
-  if (user === null) {
-    return (
-      <VStack gap={4} padding={6}>
-        <EmptyState
-          headingLevel={1}
-          title="Sign in to view Home"
-          description="You need to be signed in to see this page."
-        />
-      </VStack>
-    );
-  }
-
   if (loadState.status === 'loading') {
-    return (
-      <VStack gap={6} padding={6} aria-busy="true">
-        <VisuallyHidden as="div" role="status">
-          Loading Home…
-        </VisuallyHidden>
-        <Skeleton width={100} height={28} index={0} />
-        <Grid columns={{ minWidth: 240, repeat: 'fit' }} gap={4}>
-          {[0, 1, 2, 3].map((card) => (
-            <VStack key={card} gap={2} padding={4}>
-              <Skeleton width={140} height={14} index={card * 2 + 1} />
-              <Skeleton width={70} height={22} index={card * 2 + 2} />
-            </VStack>
-          ))}
-        </Grid>
-        <VStack gap={3}>
-          <Skeleton width={110} height={20} index={9} />
-          <VStack gap={2}>
-            {[0, 1, 2].map((row) => (
-              <HStack key={row} gap={4} vAlign="center">
-                <Skeleton width={220} height={16} index={row * 2 + 10} />
-                <Skeleton width={80} height={16} index={row * 2 + 11} />
-              </HStack>
-            ))}
-          </VStack>
-        </VStack>
-      </VStack>
-    );
+    return <CoachHomeLoadingSkeleton />;
   }
 
   if (loadState.status === 'error') {

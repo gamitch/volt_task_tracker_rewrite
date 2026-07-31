@@ -119,9 +119,10 @@
  * are excluded from the `Selector`'s option list -- same "archived teams
  * disappear from selectors" rule `TeamsTab.tsx`/T026 will also need to
  * respect independently (no coordination needed; this file applies it on
- * its own). `DEFAULT_TEAMS` fixture below deliberately includes one archived
- * team specifically to prove the exclusion is real, not vacuous (see this
- * task's worker output / test file).
+ * its own). `StudentDialog.test.tsx`'s own `TEST_TEAMS` fixture deliberately
+ * includes one archived team specifically to prove the exclusion is real,
+ * not vacuous (see that file's own `filterSelectableTeams` module doc #4
+ * test).
  *
  * -----------------------------------------------------------------------
  * 5. `onSubmit` still defaults to a fixture-backed stub here -- deliberate,
@@ -278,13 +279,6 @@ export type OnSubmitStudentFn = (
 // these are deliberate, independent defaults (module-level doc, top of file).
 // ---------------------------------------------------------------------------
 
-const DEFAULT_TEAMS: readonly StudentDialogTeamOption[] = [
-  { id: 'team-ironclad', name: 'Ironclad', archived: false },
-  { id: 'team-voltage', name: 'Voltage', archived: false },
-  // Module doc #4 -- proves `filterSelectableTeams` actually excludes this.
-  { id: 'team-legacy-forge', name: 'Legacy Forge', archived: true },
-];
-
 /** Module doc #3 -- matches `seasons.default_goal_hours`'s real column
  * default (`not null default 100`), not an arbitrary guess. */
 const DEFAULT_SEASON_INFO: ActiveSeasonGoalInfo = { defaultGoalHours: 100 };
@@ -408,8 +402,7 @@ export interface StudentDialogProps {
    * (module doc #2 -- `computeStudentDialogMode` is the single source of
    * truth, there is no separate `mode` prop to drift out of sync). */
   initialData?: StudentDialogInitialData;
-  /** Defaults to `DEFAULT_TEAMS` (fixture, module-level doc). */
-  teams?: readonly StudentDialogTeamOption[];
+  teams: readonly StudentDialogTeamOption[];
   /** Defaults to `DEFAULT_SEASON_INFO` (module doc #3). */
   season?: ActiveSeasonGoalInfo;
   /** Defaults to `defaultOnSubmitStudent` (module doc #5). */
@@ -420,7 +413,7 @@ export function StudentDialog({
   isOpen,
   onOpenChange,
   initialData,
-  teams = DEFAULT_TEAMS,
+  teams,
   season = DEFAULT_SEASON_INFO,
   onSubmit = defaultOnSubmitStudent,
 }: StudentDialogProps): ReactNode {

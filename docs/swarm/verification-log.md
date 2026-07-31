@@ -5153,3 +5153,539 @@ a `useEffect` mutation that reintroduces a stale frame leaves all 36 tests green
 still shows the previous user's theme. Resetting on `null` would fire on every normal page
 load while the session resolves, reintroducing T148's flash. Stated in three places in
 source and pinned by its own test.
+
+## T155 — wire `CoachHome` to the real active season (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commit | `7451fe801d35ff8cb1962044295d69e5ab7bf1b1` (attempt 1) |
+| Verdict | **PASS** — no BLOCKER, no MAJOR, no MINOR; 2 NITs logged only |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
+| Packet | revision 3 — gated twice, item 19a's cap spent, dispatched straight to a worker |
+| tsc / build / format | clean / ✓ / clean |
+| eslint | 0 errors, 355 warnings — **identical pre and post**, no new warning |
+| vitest | 66 files, **1536 → 1546** (+10, exactly the new `it(` blocks) |
+| `DashboardPage.tsx` | byte-identical, sha256 `4a5da47b46e14855dec428d545e0de70b12b73a51fc42c5ec7b1db3101fe7c81` |
+
+**The bug.** `CoachHome.tsx` declared `seasonId = PLACEHOLDER_SEASON_ID`
+(`'season-placeholder-current'`) and `DashboardPage.tsx` rendered `<CoachHome />` with no
+props, so that string reached `.eq('season_id', …)` on nine real Supabase queries. Postgres
+rejected all nine with `22P02 invalid input syntax for type uuid`. Owner-reported with
+DevTools screenshots; root cause confirmed from the actual 400 response body, not inferred.
+
+**The fix.** Outer `CoachHome` (season-status dispatch only) + inner `CoachHomeContent`,
+mirroring `KpiStrip`/`KpiStripContent`. `seasonId` removed from `CoachHomeProps` entirely
+rather than kept as a test-only override — keeping a dead prop production never sets is the
+shape of the bug the task existed to close. `user === null` is checked **before** the
+`activeSeason.status` switch; the packet's round-2 gate had built the reordered version and
+measured it failing the existing sign-in-prompt test, since `SeasonProvider`'s first
+synchronous render is always `{status:'loading'}`.
+
+**Two baseline disputes, both resolved in the worker's favour.** The packet pinned 1507
+tests at `9c863c1`. The worker measured **1536** at its own dispatch SHA and flagged the
+difference rather than reconciling it; the checker reverted all three source files and
+re-measured 1536 independently. The packet's figure was stale. This is the third time on
+this branch a stale pinned baseline nearly produced a false regression report — criterion 10's
+"compute your own baseline" instruction is what caught it.
+
+**The checker closed the worker's own self-flagged gap by execution.** The worker verified
+criterion 5's `loadDashboardData` pin was load-bearing **by inspection only** and said so
+plainly. The checker deleted just the pin line and got exactly one failure, on precisely the
+Surface-2 assertion (`expected … to contain 'Default goal 10h'`) — the worker's reasoning was
+right, and is now measured rather than inferred. The checker also dumped the literal rendered
+tree rather than trusting the assertions, and confirmed all seven surfaces in one tree.
+
+**Both disclosed behavior changes independently measured** by the checker, using its own
+season id rather than the worker's fixture: signed-out renders went `loadData=1
+loadDashboardData=1` → `0/0`, and the milestone-toast dedupe key moved from the shared
+placeholder namespace to the real season id. Both are improvements, both accurately described.
+
+**Known-residual output, disclosed not defective.** `Hours vs. team goal` renders `0 / 38 hrs`
+and `Avg hours / active student` renders a `Default goal 10h` secondary — one fabricated field
+(`defaultGoalHours`), two surfaces. The admin "Season setup" card is permanently present.
+These are **not** regressions: their fixture inputs were never season-scoped. All three are
+filed as **T173**, named explicitly rather than left for a future report to rediscover.
+
+**Correctly not mutation-proofed.** Criteria 2, 6c, 7, 9 and 10 are inspection/hash/grep/build
+checks, and criterion 5's Season-setup sub-bullet is a documented permanent residual that
+cannot fail. The worker classified each honestly and the checker agreed, declining to demand a
+fourth negative derivation of the Season-setup residual. Forcing falsifiability onto a
+structural check is the inverse of the T147 error and would have been a finding against the
+packet, not the worker.
+
+**NIT carried forward, attributable to the packet not the worker.** `CoachHomeLoadingSkeleton`
+is now shared by the season-resolution and data-resolution boundaries, so both announce the
+identical `role="status"` text `Loading Home…`; a screen-reader user cannot tell which of the
+two sequential async boundaries is pending, and the announcement may repeat on transition. The
+packet mandated the extraction ("required, not encouraged") to remove a nine-magic-value drift
+risk, so this is the prescribed trade, not a deviation. Worth a line in a future a11y pass.
+
+**Attribution.** The owner supplied the bug report, the screenshots, and the symptoms. The
+outer/inner design, both scope deferrals (`teamId`, the `loadData` backend), the tier
+assignment, and every acceptance criterion were the orchestrator's, and the packet said so.
+No authority-promotion finding.
+
+## T157 — mount `ParentRsvp` in `OutreachDetail.tsx` (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commits | `b0b15b0` (source) + `9924db4` (output doc), attempt 1 |
+| Verdict | **PASS** — 1 MINOR (fixed at merge), 1 NIT; no BLOCKER, no MAJOR |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (opus, worktree) / `checker-reviewer` (opus) |
+| Packet | revision 2 — round 1 REVISE (4 MAJOR/6 MINOR/3 NIT), round 2 **DISPATCH** (5 MINOR/4 NIT) |
+| tsc / build / format | exit 0 / ✓ / **regressed, fixed at merge — see below** |
+| eslint | 0 errors, 355 → 356 warnings (+1, the new exported pure function) |
+| vitest | 66 files, **1546 → 1567** (+21 = 17 + 4 new tests, zero baseline broken) |
+
+**What shipped.** `ParentRsvp` was a finished, fully-tested component imported by exactly one
+file — its own test. A parent had no way to RSVP on behalf of their linked student. It is now
+mounted, one instance per (session × linked student), with real threaded data: `profile_id`
+carried through `StudentDbRow`/`queryAllStudents`/`mapStudentDbRowToRosterStudent`, and a new
+`makeLoadGuardianLinksForParent` that is **the only `guardian_links` read in the repo selecting
+`relationship`** — `parents.ts:190`, `checkin.ts:399` and `meetings.ts:510` all omit it, which
+is why none could be reused.
+
+**The verification chain, and why this task was opus-tiered.** `checker-premise` gated the
+packet twice but **could not execute a single mutation** — it has no Write or Edit tool and the
+sandbox refuses heredoc-to-source and multi-line `perl` insertion. The packet therefore made the
+worker's executed output the evidence of record and assigned independent re-execution to the
+checker. The checker re-ran **all nine** prescribed mutations plus four supplementary ones and
+found none unexecutable, reducing multi-line deletions to equivalent single-line edits.
+
+**Two results worth keeping.** Criterion 2a's two cases are *measurably* non-redundant: dropping
+the `parentProfileId` predicate fails only case 2 (1 failed / 59 passed), and case 1's exact-array
+`toEqual` is load-bearing — `toContain` would have passed. And criterion 4's omitted-prop mutation
+writes `respondedBy: 'profile-placeholder-current-parent'` into `rsvps.responded_by`, a column
+that `references public.profiles (id)`: a plausible row attributed to a nonexistent profile. That
+is the defect class this task closes, reproduced and then shut.
+
+**The checker ran its own vacuity probes** on criteria 3 and 8 rather than trusting them, and
+found neither vacuous — confirming the round-2 gate's MINOR-5 correction (a parent viewer starts
+in `loading`, not `idle`) is correct and not merely present. A negative-only assertion passes
+vacuously when a feature is disabled entirely; criterion 3's negatives are paired with a real
+positive.
+
+**Non-Negotiable #2 verified by diff, not by count.** Six removed lines across all three source
+files: one import, two loader lines the packet prescribes, and five fixture literals gaining
+`profileId` at the ten sites §6a authorizes. No existing `it(` body modified; the `vi.mock` and
+`afterEach` edits are pure additions. All new test content is a pure append.
+
+**MINOR-1, fixed at merge rather than deferred.** `npm run format:check` went from clean to
+failing on two prettier deviations in the new test file — a type-annotation wrap and a quote
+style. `npm run format` was applied in the merge commit, the gate is clean again, and the suite
+was re-verified at 1567 green with `tsc` exit 0. **The underlying gap is filed as T175:** CI runs
+`typecheck`, `lint`, `test`, `build` and the bundle-size gate but **not** `format:check`, so every
+CI gate stayed green while the repo's format gate broke. It was caught only because the checker
+chose to run it by hand. The instance is fixed; the class is not, until T175 lands.
+
+**One packet error, correctly flagged and not followed.** §8 criterion 4 prescribed a
+`submitRsvpChange` mock resolving an `RsvpRow`, but `SubmitRsvpChangeFn` is
+`(params) => Promise<void>` and `ParentRsvp` never reads the resolved value. The worker used
+`vi.fn(async () => {})` and said so; the checker confirmed the packet was wrong. This is the
+behaviour §2 asks for — neither silent compliance nor silent deviation.
+
+**Orchestrator dispatch error, recorded against this task, not the worker.** Agent worktrees are
+created from `f7ff055` (main), not the branch tip. I did not check that before dispatching, so the
+worker began against **revision 1** — the version that gated REVISE with 4 MAJORs — because
+revision 2 existed only on the feature branch. Caught mid-task and corrected. The worker discarded
+~320 lines and rewrote rather than salvaging, which was right on the merits: revision 1 would have
+declared a third `GuardianLinkRow`, collided with `checkin.ts`'s existing query name, used a
+name-only heading that cannot disambiguate a two-session event, and written
+`currentUserProfileId={user.id}` behind a gate that does not narrow — it would not have compiled.
+**Standing lesson for this branch: any worktree dispatch must merge the feature branch first, or
+the agent silently receives main's version of every artifact written this session.**
+
+**Attribution.** George's ruling covers **one thing only** — that `OutreachDetail.tsx` hosts
+`ParentRsvp` (`auto-mode-decisions.md`, "2026-07-30 — George's rulings on T157/T158"). The loader
+design, the outer/inner data threading, the test shape, the tier, the four revision-2 decisions
+(the `nowFn` seam, item 12 governing §10, the `GuardianLinkRow` reuse, `parseSelectedColumns`
+reuse) and every acceptance criterion are the orchestrator's and the foreman's. The packet said so
+throughout and both gate rounds graded that scoping exemplary — no authority-promotion finding.
+
+**Follow-ups filed:** T174 (`FIXTURE_RSVPS` id-space confusion, deferred under §10's template and
+independently verified), T175 (CI's missing `format:check`), and T165's row updated — it must now
+keep **two** things byte-intact, not one.
+
+---
+
+## T176 — StudentHome loads the real student's identity (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commit | `e5b2f1cf8e073549ee048191a5f430d0d14e12df` (attempt 2) |
+| Verdict | **PASS with MINORs** (attempt 1: FAIL, 1 MAJOR) |
+| Attempts | 2 |
+| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
+| Premise gate | 2 rounds; round 1 REVISE (2 BLOCKER, 6 MAJOR), round 2 authored without re-gate per item 19a |
+| tsc / build / format | 0 errors / ✓ / clean |
+| eslint | 0 errors, 357 warnings (+1 verified benign, pre-existing class) |
+| vitest | 67 files, 1591 tests (from 66 / 1567) |
+
+**The bug.** `StudentHome`'s `studentId`/`teamId`/`seasonId` defaulted to placeholder
+constants and `DashboardPage.tsx:122` rendered `<StudentHome />` with zero props, so every
+signed-in student's dashboard loaded a fixture identity's data. Seventh instance of this
+project's most productive defect family, second found on a live route.
+
+**Two BLOCKERs caught before a worker started, both proven by execution.** The premise gate
+was dispatched with Write+Edit deliberately — `checker-premise` has Bash but cannot write,
+which is why T157's gate could not run its prescribed mutations. This one built the
+prescribed shape, wrote all twelve criteria as tests, and ran every mutation.
+
+1. Criterion 3 was mathematically incapable of failing: the packet steered at this file's
+   own Titans fixture, where the in-scope team id **is** `PLACEHOLDER_CURRENT_TEAM_ID`, so
+   the injected "real" value and the mutation's hardcoded value were the same string.
+2. Criteria 2 and 4 were negative-only: a probe disabling identity resolution entirely —
+   blank page — left both green.
+
+Post-fix both were independently reproduced by the orchestrator: the criterion-3 mutation
+now yields 3 failed/48 passed, the vacuity probe 18 failed/33 passed.
+
+**Attempt 1's MAJOR is recorded against the orchestrator, not the worker.** The goal-hours
+denominator was brought into scope on the orchestrator's claim that no SQL view computed
+it. `v_student_goal_projection` (`dashboard_views.sql:322-334`) does, `CoachHome.tsx:493-497`
+already records the required verbatim-passthrough posture for that exact column, and
+`loaders/dashboard.ts:387` already reads it. The gate repeated the false premise, the packet
+repeated it, and the worker — explicitly ordered to confirm constitution item 3 — appended a
+sentence into the module doc asserting the denominator "has no SQL view of its own".
+
+The fix was a **substitution, not an expansion**: one read of the view returns `team_id`,
+`goal_hours`, `confirmed_hours` and `planned_hours`, replacing the raw-column query outright
+and honestly filling `0 h confirmed + 0 h planned` as a side effect. Not routed to
+`boss-arbiter` — the constitution is unambiguous, the view exists, and an in-repo precedent
+was already reading it.
+
+**Also recorded against the orchestrator:** a paraphrase claiming two helpers stayed exported
+"for their other callers". There are no other callers; both are now dead exports in
+production terms. The worker's own wording was precise and the overstatement was the
+orchestrator's.
+
+**Carried forward as follow-ups:** T183 (`Hi Ada Reyes` and the remaining fabricated
+surfaces), T184 (a deactivated student is told no record is linked — **needs the owner's
+ruling**, and escalates to MAJOR if that is a supported state), T185 (`security_invoker`:
+the repo's views do not run under the caller's RLS as documented — pre-existing, security
+class, minors' data), T186 (`v_student_goal_projection.team_id` documented display-only
+while a live route scopes off it), T187 (dual-team narrowing).
+
+**Largest unmeasured risk, stated plainly:** there is no live Supabase in this environment,
+so every claim about RLS evaluation, view ownership and PostgREST grants is reasoned from
+SQL and policy text, never executed. The checker narrowed rather than eliminated it —
+availability is favourable under both view semantics, so the dashboard populates either way;
+exposure is the open question and is T185's scope.
+
+---
+
+## T151 — the dialog `teams` prop is now required (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commit | `d4326324170dde74355ce6b47cbeacc4f3438512` |
+| Verdict | **PASS** — zero findings at any severity, first attempt |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-tests` |
+| Premise gate | **None** — skipped under constitution item 25 (mechanical, compiler-enforced, premise pre-measured) |
+| tsc / build / format | 0 errors / ✓ / clean |
+| eslint | 0 errors, 357 warnings (unchanged) |
+| vitest | 67 files, 1591 tests (unchanged — no new `it(` blocks) |
+
+**What it closed.** Three dialogs each had an optional `teams` prop backed by a module-level
+`DEFAULT_TEAMS` fixture — the shape behind seven instances of this project's dominant defect
+family, three of which reached the owner as production bugs in one afternoon. T147 fixed the
+instances; T151 makes the prop required and deletes the fixtures, so a forgetful future call
+site **cannot compile**.
+
+**The guarantee was proved four times, by three different parties.** A render omitting `teams`
+fails `tsc` with `TS2741` at all three dialogs: verified by the worker, re-verified by the
+checker at each dialog, and verified once more by the orchestrator at `StudentDialog` —
+deliberately the one test file that needed zero changes, so nothing the worker wrote could
+mask the result.
+
+**Premise stability worth recording:** 34 `TS2741` errors, 24 + 10, zero in production source.
+Measured at `af28914`, re-measured at `03efe47`, reproduced by the worker at `dcfa6e0`. No drift
+across five merges. The row's original "46 inline team arrays" fear was wrong and is retired.
+
+**First task graded under item 25.** Foreman + worker + `checker-tests`, no premise gate, no
+opus reviewer — proportionate to a mechanical compiler-enforced change. It passed clean, which
+is the evidence that the heavier process is not always the right process.
+
+**Unblocks T172** (the mechanism fix for the whole class), which now has a proven pattern and a
+measured cost to generalise from.
+
+---
+
+## T170 — `/outreach` resolves the real student (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commit | `131f081c8a22f53cb528686a496cb3aee65c10df` (attempt 2) |
+| Verdict | **PASS with MINORs** (attempt 1: FAIL, 1 MAJOR) |
+| Attempts | 2 |
+| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
+| Premise gate | 1 narrow round → REVISE (1 BLOCKER, 2 MAJOR); revision 2 dispatched without re-gate |
+| tsc / build / format | 0 errors / ✓ / clean |
+| eslint | 0 errors, 357 warnings (unchanged) |
+| vitest | 67 files, 1601 tests (from 1591) |
+
+**More than a display bug.** The premise gate found an eighth consumer of `viewerStudentId` that
+neither the packet nor the orchestrator had traced: `<SelfCheckoffDialog studentId={…} />` is not
+a filter — it re-queries Supabase and **writes `attendance` rows**. Self check-off on `/outreach`
+was broken in production, attempting writes against `'student-placeholder-current-viewer'`,
+rejected by the uuid column, the foreign key, and RLS. Nothing persisted; the feature did not work.
+
+**Attempt 1's MAJOR is the one worth remembering.** A single-line mutation restoring the entire
+original bug passed **90/90**. Every positive assertion supplied `viewerStudentId` explicitly,
+short-circuiting the resolver before it was ever called, so nothing observed the resolver
+producing a real id. **This is T146's shape** — reverting a select string reinstated a real bug
+with a green suite — and the hazard the packet itself flagged in bold. The worker built the
+distinct-id fixture correctly and then routed it through the bypass.
+
+Fixed test-only, source byte-identical between attempts. Verified three times independently —
+worker, checker and orchestrator each re-applied the regression and measured **2 failed / 90
+passed of 92**.
+
+**Two orchestrator errors recorded against this task.** The "purely client-side filter, none
+re-query Supabase" premise was mine and was wrong. And the "3 of 82" blast radius I measured was
+right for the probe I ran but wrong for the prescribed design, where it is ~10 — I measured a
+proxy for the change rather than the change.
+
+**Verified rather than accepted:** the worker's audit claiming criteria 2/3/4 were structurally
+immune held up under both empirical and source-reading checks — though its stated *reason* was
+imprecise, which the checker recorded rather than waving through.
+
+**Carried forward:** T190 (rekey the now-vestigial fixtures so the harness default can return a
+distinct id, making future tests discriminating by construction — measured at exactly 3 assertion
+updates, and unfoldable into T170 because that packet forbids assertion edits).
+
+---
+
+## T184 — a deactivated student is no longer told her record is missing (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commit | `d63f7bad1a50892bfb7dc97c2f3b4cf094f0a387` |
+| Verdict | **PASS** — NITs only, first attempt |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
+| Premise gate | 1 full round → **DISPATCH** (3 MINOR, folded in as authoritative amendments) |
+| tsc / build / format | 0 errors / ✓ / clean |
+| eslint | 0 errors, 357 warnings (unchanged) |
+| vitest | 67 files, 1605 tests (+4, exactly the four added) |
+
+**Owner ruling honoured, and its unachievable half proven rather than assumed.** Blocking
+sign-in needs `guards.tsx`, which is Forbidden, and `is_active` appears **zero times** in both
+`auth.ts` and `guards.tsx`. So the owner's stated fallback — signs in, sees nothing — governs.
+
+**The orchestrator's first design would have shipped two bugs.** Routing to the existing
+`NoAccessPage`/`AccessDeniedPage` meant a force-sign-out on mount, copy that is *also* false for
+this user, and a dead-end loop back to the broken page. The foreman caught it by reading both
+surfaces instead of adopting the proposal.
+
+**Two orchestrator errors recorded, both caught by others:**
+1. I reported that the worker omitted its commit SHA under item 21. It did not — `T184-worker-output.md:3` states it. **I read the agent's summary message rather than its output document and asserted a reporting gap from the wrong artifact.** Struck from the record rather than carried forward.
+2. `DashboardPage.tsx:121` should be `:122`; I propagated the packet's off-by-one.
+
+**Three counts of one grep, three different answers.** The packet said 5 pre-existing title
+strings, the premise gate said 9, I measured 8-across-10. The checker re-derived it — **8 distinct
+static strings across 10 pre-existing occurrences**, confirming mine and refuting both others. The
+worker was told to re-derive rather than trust any of us, and did.
+
+**What was attacked rather than accepted:** criterion 5's "sees nothing" is an absence assertion,
+the shape that has gone vacuous six times across five tasks here. The checker neutered the guard,
+confirmed the full content genuinely renders, then went beyond the worker by reordering the paired
+assertions to prove each discriminates independently rather than one short-circuiting the other.
+
+**Also worth recording:** the checker caught its own false green mid-review — a first isolation
+mutation hit only a module comment rather than the JSX — and redid it rather than reporting the
+passing result.
+
+---
+
+## T181 — every parent's dashboard now shows real data (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commit | `a0d02fbeab915c643060809e1ff29219df795eb4` |
+| Verdict | **PASS with MINORs**, first attempt |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
+| Premise gate | 1 full round → REVISE (2 BLOCKER, 5 MAJOR); revision 2 dispatched without re-gate |
+| tsc / build / format | 0 errors / ✓ / clean |
+| eslint | 0 errors, **356** warnings (predicted −1, an export deleted) |
+| vitest | 68 files, 1631 tests (+26, reconciled per-file exactly) |
+
+**The fabricated-dashboard class is now closed** — `CoachHome` (T155), `StudentHome` (T176) and
+`ParentHome` (this) were all rendering fixture data on live routes.
+
+**This one was invisible to the audit that swept `ParentHome` clean.** That discriminator looked for
+placeholder *identity* props; these were function-typed *fixture loaders*, wearing the codebase's own
+legitimate `loadX` DI convention. Two discriminators were needed to see one defect family.
+
+**The finding of the session, and it is about our own process:** revision 1's regression proof was
+**vacuous inside the criterion written to prevent vacuity**. Its own words were *"State this ordering
+explicitly so the criterion cannot pass by accident."* The gate measured it passing with the entire
+fabrication bug restored — all three fixture cards hit their per-card error banner, so `displayName`
+never reached the DOM and "fixture names are gone" was trivially true.
+
+That is the **seventh** instance of the vacuous-absence shape across six tasks, and the first inside a
+criterion engineered against it. The lesson is now specific: declaring an ordering does not make an
+absence assertion safe. Only pairing it with a positive does. **This is structural enough that T172's
+mechanism work should absorb it** rather than the gates catching it one task at a time.
+
+**Also caught by the gate:** the packet imported loader singletons pre-bound to the real client, so
+two criteria could not run at all (factories fixed it in one line); and following revision 1 would
+have left `ParentHome.tsx:40-47`'s false "no SQL view for the ratio itself" claim in source — the
+exact claim that cost T176 a full round — pointing at a function the packet deletes.
+
+**Answered by measurement rather than reassurance:** the orchestrator flagged "only 1 of 43 catches
+the regression" as possibly a second near-miss. The checker measured it as a scoping artifact of a
+single-seam revert — both seams reverted fails 3 tests across 2 files, each seam having its own
+detector.
+
+**Carried forward:** T191 (a deactivated child's card renders a fabricated `0 / 1 h` goal — a UI clamp
+artifact surfacing as data, on the page built to stop fabricating) and T192 (unfiltered full-table
+reads once per card; acceptable at this project's scale under item 25, shipped as an explicit
+trade-off).
+
+---
+
+## T169 (OutreachDetail half) — student self-service RSVP control mounted (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commit | `7647820dab68cd89c5077faa5aa437219cc77dfa` |
+| Verdict | **PASS**, no BLOCKER/MAJOR/MINOR, 2 NIT (log-only) — first attempt |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
+| Premise gate | 2 rounds per item 19a: round 1 REVISE (1 MAJOR, 6 MINOR, 5 NIT); round 2 DISPATCH (4 MINOR, 6 NIT, folded in without a third round) |
+| tsc / build / format | 0 errors / n/a / clean |
+| eslint | 0 errors; `OutreachDetail.tsx` warnings 16→17 (expected `+1`, `react-refresh/only-export-components` on the new exported pure function, matching T157's identical precedent) |
+| vitest | `OutreachDetail.test.tsx` 60→73 (+13); full repo 1631→1644 (+13, 0 failures) |
+
+**Context: this was run as a deliberate test** of doing the packet → premise-gate → worker →
+checker cycle through subagents rather than inline in the orchestrating session, to see whether it
+reduces context growth there. It did: the packeting (2 rounds), premise-gating (2 rounds),
+implementation, and checking each ran in their own subagent transcript; only dispatch prompts, file
+reads, and final summaries landed in the orchestrating session.
+
+**The task.** `RsvpControl.tsx` was a finished, fully-tested component with zero production
+importers — reachable only from its own test file. T169's ledger row covers two surfaces
+(`OutreachDetail.tsx` and `OutreachList.tsx`); this merge is the `OutreachDetail.tsx` half only.
+Mounted `RsvpControl` role-gated beside T157's `ParentRsvp`, for the signed-in student's own roster
+row, via a new exported pure `resolveOwnRosterStudent(roster, userProfileId)` — a self-to-self
+predicate, deliberately narrower than T157's cross-person `resolveParentLinkedRosterStudents`.
+
+**§4's central premise — no loader work needed on either the read or write side — is the opposite
+of what T157 found for the parallel `ParentRsvp` case, and was proven rather than assumed**, per
+the ledger row's own instruction to enumerate the component's props against available data before
+scoping. Every `RsvpControlProps` field was already present on `OutreachDetail.tsx` post-T157;
+`RsvpControl.tsx:462` already defaults to the real `submitRsvpChange` (`outreach.ts:1092`).
+
+**Round 1 of the premise gate caught a real staleness bug in the packet itself, not a design flaw.**
+The packet's scope note justified excluding `OutreachList.tsx` because that half was "hard-blocked
+on T170" — true when first drafted, false by the time the gate ran, because T170 merged
+(`c201a3e`) mid-session. The gate also independently re-verified every citation in the packet's
+central §4 claim and found it held exactly as written; the MAJOR was scoping-note staleness, not
+the technical premise. Revision replaced the stale justification, added a `FOLLOW-UP NEEDED` note
+for the now-unblocked `OutreachList.tsx` defect (filed as **T193**), and folded in citation fixes.
+Round 2 found the revision sound and added a stronger tier-down argument the packet itself hadn't
+made: `students`' `own_or_linked_read` RLS (`rls.sql:102`) returns exactly one row for a student
+viewer, so a broken client-side predicate has no cross-student data available to reach in
+production at all — strengthening, not just permitting, the `sonnet` tier call.
+
+**The worker's own worktree started stale** — cut from `main` at `f7ff055`, 24 commits behind the
+packet commit, the exact item-24 failure mode that cost T157 ~320 discarded lines. **The worker
+caught this itself before writing any code**, verified ancestry with `git merge-base
+--is-ancestor`, fast-forwarded to the packet-pin commit, and disclosed the deviation in its output
+rather than silently proceeding on stale source or silently self-correcting without saying so.
+
+**The checker inspected the actual worktree artifact and independently re-ran mutations in its own
+worktree (item 23)** rather than trusting the worker's "confirmed RED, restored" claims —
+prioritizing criterion 3 (self-only vs. cross-student, proven via the `submitRsvpChange` spy's
+`studentId` argument) and criterion 6 (real `currentUserProfileId` threading — the exact
+placeholder-defect class this task exists to close, proven via the spy's `respondedBy` argument
+reverting to `'profile-placeholder-current-viewer'` under the omitted-prop mutation). Also ran an
+unprescribed extra probe against T170's own BLOCKER-1 shape (vacuous absence-only role-gating
+assertions) by loosening `isStudentViewer` to `user !== null`: the coach/admin/parent fixtures
+genuinely have a matching `profileId`, so their still-correct absence of a control proves
+role-gating, not "no match anyway" — the vacuity shape did not recur here.
+
+**Two NIT, log-only, no fix required:** an unguarded optional chain in one clock-seam assertion
+(not currently vacuous — mutation-proven RED — but would silently no-op if the locator ever
+returned `null`), and a substring positive control (`toContain('Attendance')`) rather than a
+structural one for the coach/admin role-gate cases.
+
+**Follow-up filed: T193** — `OutreachList.tsx`'s student-facing RSVP control still writes nothing
+to Supabase (`handleRsvpChange`, local-only `setRsvps` call), and the code comment excusing this as
+"currently Blocked" has been stale since before this session and stayed stale through T170's merge.
+Now unblocked (T170 supplies a real `viewerStudentId`), filed as its own ledger row per item 20
+rather than left as a comment.
+
+---
+
+## T177 — calendar-feed subscription link/loader wired to real data (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commit | `ce1783f5802391c4b5ae1971e49929bedffaec0f` |
+| Verdict | **PASS with follow-ups**, no BLOCKER/MAJOR remaining — attempt 2 (attempt 1: FAIL, 1 MAJOR/1 MINOR) |
+| Attempts | 2 |
+| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
+| Premise gate | 2 rounds per item 19a, both REVISE (round 1: 3 BLOCKER/2 MAJOR/4 MINOR/4 NIT; round 2: 1 new BLOCKER/2 new MAJOR, introduced by round 1's own fixes) — hit the two-round cap, escalated to the human owner, who authorized one bounded revision pass with no third gate round |
+| tsc / build / format | 0 errors / ✓ / clean on every file this task touched |
+| eslint | 0 errors, 358 warnings (+1, same already-tolerated `react-refresh/only-export-components` class) |
+| vitest | `.env.local` absent (mandated gate state): 69 files / 1654 tests, 0 failures (from 68/1644). `.env.local` present: exactly the 4 known pre-existing failures, no fifth |
+
+**Context: this was T177's turn in the same subagent-pipeline test as T169** — packeting, premise-
+gating, implementation, and checking each ran in their own subagent transcript, with only dispatch
+prompts, file reads, and final summaries landing in the orchestrating session.
+
+**The bug.** `SubscribePopover.tsx`'s calendar-feed "subscribe" widget in Settings defaulted
+`functionsBaseUrl` to a placeholder pointing at a non-existent host, and `loadCalendarFeed` to a
+fixture — so the link every signed-in user saw in `/settings` was dead, and the token it embedded
+was fabricated. Live-route, user-visible (`SettingsPage` at `/settings`, `RequireAuth` only).
+
+**The heaviest premise-gate history of any task this session.** Round 1 caught 3 real BLOCKERs: a
+test conflict with a currently-green `SettingsPage.test.tsx` assertion the original packet forbade
+touching; the fact that nothing anywhere in the codebase provisions a `calendar_feeds` row, so the
+prescribed fix would trade a fake link for a permanent error banner rather than a working feature;
+and a test technique (`vi.stubEnv`) that doesn't reach `import.meta.env` in this module, measured
+by building and running it. All three were genuine design gaps, not documentation errors. Round 2's
+revision fixed all three but introduced its own new BLOCKER — a test relying on the real loader's
+network-dependent failure mode, which made a live HTTPS call to the real Supabase project and failed
+whenever `.env.local` was present — plus a self-contradictory baseline and an overly strict
+byte-identical restriction that forbade a stale-doc correction the packet's own precedent required.
+
+**Item 19a's two-round cap was hit and handled as designed.** The orchestrator escalated to the
+human owner rather than looping a third gate round; the owner authorized one bounded revision pass
+(recorded in `docs/swarm/auto-mode-decisions.md`) applied directly to worker dispatch, explicitly
+**not** a general relaxation of the cap. That meant the eventual `checker-reviewer` pass was this
+implementation's first independent verification of any kind — and it earned the extra scrutiny:
+it caught a real residual defect the two premise-gate rounds never got a chance to see.
+
+**Checker-reviewer FAILed attempt 1, then independently re-verified attempt 2's fix rather than
+trusting the worker's report.** The MAJOR: a new `resolveFunctionsBaseUrl(undefined)` test didn't
+test what it claimed — an explicit `undefined` argument triggers the function's own default
+parameter identically to calling it with zero arguments, so the "injectable-parameter, not
+env-stubbing" test was silently just reading the real env var, and failed under real `.env.local`
+(a 5th env-present failure, undisclosed). Worker fixed it with a genuinely hermetic
+`resolveFunctionsBaseUrl('   ')` (whitespace-only) after confirming against the real
+implementation that `.trim()` runs before the blank-check. The checker re-read the source itself to
+confirm that claim, independently re-ran the criterion-1 mutation (matched exactly), and
+independently re-measured the full suite in both env states before rendering PASS.
+
+**Orchestrator re-verified a third time on the actual merged tree**, not the worktree — same
+typecheck/eslint/prettier/vitest results in both env states, confirming the fix survives the merge
+and isn't an artifact of the isolated worktree.
+
+**Honest framing carried through to the merge, not softened.** `grep -rn "calendar_feeds" src
+supabase` still returns zero INSERT sites. This task makes the widget's failure honest (a real
+DES-12 error banner) rather than making calendar subscription functional end-to-end — every real
+signed-in user sees "Couldn't load your calendar link" until a provisioning path exists. That gap is
+now its own row, **T195**, sequenced before **T194** (`onResetFeedToken`'s own fixture-shaped
+default, the same defect family, one function over in the same component — the reset flow needs a
+row to reset before it's worth fixing how it resets it).
+
+**One MINOR carried forward, not fixed:** a dangling commit-message reference to a
+`T177-worker-output.md` that was never in the worker's Allowed Files — a packet-scope gap, not a
+worker error, worth reconciling in the packet template rather than this task's own follow-up.

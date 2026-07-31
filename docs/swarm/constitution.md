@@ -262,3 +262,37 @@ After the third failure, the task must be escalated to boss-arbiter.
     means the second step is always optional under time pressure, and it is
     always the one dropped. Joining them removes the choice.
 
+
+25. **Proportionality.** Volt serves one small volunteer team — the owner, his
+    students, and their parents. No PII is stored. **Grade security findings
+    against that threat model, not a corporate one:** a finding is
+    security-class only when there is a concrete, plausible harm *in this
+    context*. **Item 4 covers tables; do not extend it to views**, and do not
+    manufacture a security-class finding out of an extension of a rule.
+    Correctness, data integrity and honest on-screen values are **unaffected**
+    by this item — it lowers no bar other than the security threat model.
+    Authorized by the human owner 2026-07-30, verbatim: *"while i admire the
+    diligence and thoughtfulness, let's not overcomplicate our application
+    becasue of it. This is a volunteer group, not a company. We store no PII,
+    it is just a small team with me and thier parents. please keep it simple"*
+    (`auto-mode-decisions.md`, "2026-07-30 — George's ruling on security
+    scope"). Rationale, and it is a record of the orchestrator's error rather
+    than a relaxation of anything: T176's checker found that
+    `dashboard_views.sql:49-52` claims its views run under the caller's RLS,
+    which is false — `security_definer` is a *function* attribute, the
+    view-level knob is `security_invoker` (PG 15+), it defaults off, and it
+    appears zero times in `supabase/`. True, and the orchestrator escalated it
+    to a security-class task (T185) on two bad steps: it read item 4's
+    table-scoped rule as covering views, then graded its own extension as
+    BLOCKER-adjacent. **The "exposure" was in fact the product** — the owner had
+    already ruled the leaderboard is embedded in the dashboard, and a
+    leaderboard shows everyone's hours, so "any authenticated caller can read
+    active students' team and hours" is the feature. T185 closed as no-change;
+    its one real residue, a wrong comment, folded into T186. Net task count went
+    down. **Item 6's fixture hygiene is deliberately untouched by this item** —
+    fabricated names in fixtures cost nothing, are already universal in the
+    codebase, and mean no one has to think about whether a test file is safe to
+    paste into an issue. **Second, narrower obligation:** do not bump a worker
+    to opus because a topic *sounds* sensitive. Tier follows genuine complexity
+    (item 18's four triggers). T157 was bumped sonnet→opus on "minors' family
+    linkage" reasoning that this item retires.

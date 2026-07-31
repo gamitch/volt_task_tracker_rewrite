@@ -115,13 +115,41 @@
  *     idiom for the same view. `null` (no row) renders "—", never a
  *     fabricated 0%, per that same file's convention.
  *   - MET-04's denominator (PRD: `goal_hours_override ?? season
- *     default_goal_hours`) has no SQL view of its own -- `resolveGoalHours`
- *     below is a plain nullish-coalesce of two real, already-loaded scalar
- *     values, not a re-derivation of anything the views compute.
+ *     default_goal_hours`) **CORRECTED, T176 round 2 (coordinator's own
+ *     error, disclosed by them, fixed here) -- the claim this bullet
+ *     previously made, "has no SQL view of its own" / "not a re-derivation
+ *     of anything the views compute," is FALSE.**
+ *     `v_student_goal_projection` (`supabase/migrations/
+ *     20260723000001_dashboard_views.sql:322-334`) already computes exactly
+ *     this coalesce in SQL: `coalesce(s.goal_hours_override,
+ *     se.default_goal_hours) as goal_hours`, scoped to the currently-active
+ *     season. `kpi_views.sql:216` independently carries the SUMMED form of
+ *     the identical coalesce (`coalesce(sum(coalesce(s.goal_hours_override,
+ *     se.default_goal_hours)), 0)`), confirming this is genuine,
+ *     already-shipped view formula territory, not a gap. `goalHours` below
+ *     is now a VERBATIM PASSTHROUGH of that view's own `goal_hours` column
+ *     (via `resolveStudentScope`, `loaders/students.ts`, reading
+ *     `v_student_goal_projection` scoped by `student_id`) -- no coalesce,
+ *     no nullish-coalesce, no arithmetic of any kind happens on it in this
+ *     file. `confirmedHours`/`plannedHours` are the SAME view's own
+ *     `confirmed_hours`/`planned_hours` columns (its own LEFT JOINs to
+ *     `v_student_hours`/`v_student_planned_hours`), read via the SAME
+ *     single call -- also verbatim passthroughs, no longer sourced from
+ *     `loadData`'s own (still-fixture) `data.studentHours`/
+ *     `computePlannedHours(...)` for this purpose. `resolveGoalHours` (the
+ *     pure function below) is NOT called anywhere in this render path
+ *     anymore -- it stays exported and directly unit-tested (byte-
+ *     unchanged, in case another future caller needs the raw
+ *     coalesce-in-TypeScript idiom), but this file's own content tier does
+ *     not use it. See the "Identity resolution" doc above
+ *     `resolveStudentIdentity` below for the full record.
  *     `hoursVsGoalPercent`'s division is the same disclosed, legitimate
  *     UI-side percent math `OutreachList.tsx`'s `confirmedPercent` /
- *     `CoachHome.tsx`'s `hoursVsGoalPercent` already established (no metric
- *     view exists for this specific ratio to duplicate).
+ *     `CoachHome.tsx`'s `hoursVsGoalPercent` already established, and
+ *     `dashboard_views.sql`'s own module doc (heading 9) explicitly
+ *     disclaims computing this exact ratio in SQL ("Percent-of-goal ... is
+ *     deliberately NOT computed here") -- so this one division is
+ *     confirmed-legitimate, not an oversight.
  *
  * -----------------------------------------------------------------------
  * 5. "Check in" reuses T032's real validation contract -- not a second,
@@ -181,34 +209,74 @@
  * stub.
  *
  * -----------------------------------------------------------------------
- * 8. `guards.tsx` `AuthUser`/`Role` gaps -- disclosed, not re-derived, same
- *    posture every sibling Home/list page in this batch already
- *    established.
+ * 8. `guards.tsx` `AuthUser`/`Role` gaps -- T176 UPDATE: `studentId`/`teamId`
+ *    are now resolved for real; this section records what changed and what
+ *    is still, deliberately, a disclosed gap.
  *
  * `AuthUser` (`guards.tsx`) carries only `{id, email, role}` -- no
- * `students.id` linkage. `PLACEHOLDER_CURRENT_STUDENT_ID` /
- * `PLACEHOLDER_CURRENT_TEAM_ID` below are disclosed stand-ins for "the
- * student this Student Home belongs to" and "that student's team", the same
- * class of gap `MeetingsList.tsx`/`OutreachList.tsx`/`CoachHome.tsx` already
- * documented. This file does not branch on `user.role` at all (unlike
+ * `students.id` linkage of its own. T176 closes that gap the same way T096
+ * (`MeetingsList.tsx`) already closed the identical gap for that page:
+ * `resolveCurrentStudentId` (`loaders/meetings.ts`, reused verbatim, not
+ * re-derived here) resolves the real `students.id` for the signed-in
+ * viewer, and this file's own new `resolveStudentScope`
+ * (`loaders/students.ts`, additive) resolves that student's own
+ * `team_id`/`goal_hours_override` by id. `PLACEHOLDER_CURRENT_STUDENT_ID` /
+ * `PLACEHOLDER_CURRENT_TEAM_ID` below are KEPT (still real, still exported --
+ * `StudentHome.test.tsx`, `defaultLoadStudentHomeData`'s own fixture rows,
+ * and the mutation-revert proofs in this task's own worker output all still
+ * reference them) but are no longer this component's own runtime default
+ * for an unresolved `studentId`/`teamId`; see the new "Identity resolution"
+ * doc directly above `resolveStudentIdentity` below for the resolved shape.
+ *
+ * **Known, disclosed narrowing (not a bug, filed as a follow-up, T176
+ * worker output criterion 12b):** `resolveStudentScope` reads the LEGACY
+ * `students.team_id` primary-team column, per
+ * `supabase/migrations/20260721000000_student_teams.sql`'s own header --
+ * TWO separate, non-contiguous verbatim fragments from that header, quoted
+ * here explicitly as such (not one contiguous sentence): line 2, "a student
+ * may belong to more than one team"; and lines 10-12, "[`students.team_id`]
+ * remains the legacy/primary-team read path until a later SCH-03+ packet
+ * migrates readers over to this junction." Every other current reader
+ * (`v_student_participation`/`v_team_hours`, `dashboard_views.sql`,
+ * `kpi_views.sql`) has already migrated to the `student_teams` junction;
+ * this file has not. A dual-team-member student's second team's meetings,
+ * live check-in, and sign-up opportunities are silently invisible on this
+ * page -- the same defect class T120 already fixed once on
+ * `ParticipationTab.tsx`. Deliberate, disclosed, out of T176's bounded
+ * scope (its own packet's explicit instruction), not silently assumed
+ * single-valued.
+ *
+ * This file still does not branch on `user.role` at all (unlike
  * `OutreachList.tsx`/`MeetingsList.tsx`, which are role-VARIANT pages):
  * `StudentHome` is one of three distinct Home components (`CoachHome`/
- * `StudentHome`/`ParentHome`, HOME-01/02/03) a future dispatcher will choose
- * among, per `CoachHome.tsx`'s own module doc #7 -- it only checks
- * `user === null` for the signed-out DES-12 state, identical to every
- * sibling Home component's own posture.
+ * `StudentHome`/`ParentHome`, HOME-01/02/03) `DashboardPage.tsx`'s own role
+ * dispatcher already chooses among -- it only checks `user === null` for
+ * the signed-out DES-12 state, identical to every sibling Home component's
+ * own posture (and, per T176, identical to `CoachHome.tsx`'s own T155
+ * outer-wrapper shape).
  *
  * -----------------------------------------------------------------------
- * 9. No shared Supabase client wired in yet -- same posture as every prior
- *    content page.
+ * 9. Data loading -- T176 UPDATE: `studentId`/`teamId` are real; `loadData`
+ *    itself, and everything it returns, is still fixture-fed (deliberately
+ *    out of T176's bounded scope, per its own packet, except for the ONE
+ *    field module doc #4 above already covers: MET-04's denominator).
  *
  * `loadData` is the injectable seam (`(studentId, seasonId) =>
  * Promise<StudentHomeData>`), defaulting to the OBVIOUSLY-FAKE
  * `defaultLoadStudentHomeData` (fabricated names only, constitution item 6).
- * A real implementation, once a shared Supabase client exists (a separate,
- * not-yet-dispatched task per every sibling task's identical disclosure),
- * would query `v_student_hours` / `v_student_participation` / `events` /
- * `event_sessions` / `rsvps` directly.
+ * `seasonId` is now the REAL `useActiveSeason().season.id` (T176, same
+ * mechanism `CoachHome.tsx`'s own T155 already established for its
+ * sibling), not a placeholder default -- but every field
+ * `defaultLoadStudentHomeData` itself returns (`displayName`, `events`,
+ * `sessions`, `rsvps`, `studentHours`, `participation`) is still the
+ * fixture it always was, now genuinely empty/absent for a real signed-in
+ * student rather than fabricated-and-wrong (T176 worker output criterion
+ * 11's own render-and-enumerate table has the exhaustive, measured list --
+ * `Hi Ada Reyes`, unconditionally fabricated regardless of who is signed
+ * in, is the lead item, named first per that output's own decision
+ * record). A real implementation of the REST of this seam, once a shared
+ * Supabase client exists for this page's own remaining fields, is filed as
+ * its own follow-up (same criterion 12a), not built here.
  *
  * -----------------------------------------------------------------------
  * 10. DES-12 four states.
@@ -307,6 +375,21 @@ import {
   type DropdownMenuOption,
 } from '@astryxdesign/core';
 import { useAuth } from '../../app/guards';
+import { useActiveSeason } from '../../app/SeasonProvider';
+// T176 -- real `studentId` resolution reuses T096's own `MeetingsList.tsx`/
+// `loaders/meetings.ts` resolution seam verbatim, per this task's own packet
+// (do not edit either file; both are read-only reference here). `resolveCurrentStudentId`
+// is the real default; `CurrentViewerIdentity`/`ResolveCurrentStudentIdFn` are the
+// minimal cross-file types that seam already established -- reused, not
+// re-derived. See module doc #8/#9 (updated below) and the new "Identity
+// resolution" section above the top-level component for the full T176 record.
+import { resolveCurrentStudentId } from '../../lib/supabase/loaders/meetings';
+import type { CurrentViewerIdentity, ResolveCurrentStudentIdFn } from '../meetings/MeetingsList';
+// T176 -- real `teamId`/`goalHoursOverride` own-row resolution, additive-only
+// new export on `loaders/students.ts` (see that file's own module doc for
+// the query/RLS record). Aliased on import (not the destructured prop name
+// below) purely to avoid shadowing this file's own `StudentHomeProps.resolveStudentScope`.
+import { resolveStudentScope as defaultResolveStudentScope } from '../../lib/supabase/loaders/students';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real columns/views. Module docs #4/#5/#6.
@@ -384,6 +467,37 @@ export type LoadStudentHomeDataFn = (
   studentId: string,
   seasonId: string,
 ) => Promise<StudentHomeData>;
+
+/**
+ * T176 round 2 (coordinator correction, module doc #4) -- the resolved
+ * student's own `team_id`/`goal_hours`/`confirmed_hours`/`planned_hours`,
+ * read from `v_student_goal_projection` (`supabase/migrations/
+ * 20260723000001_dashboard_views.sql:322-334`), NOT the raw `students`
+ * table. `goalHours` is that view's own already-coalesced `goal_hours`
+ * column (`coalesce(goal_hours_override, season default_goal_hours)`,
+ * computed in SQL) -- a verbatim passthrough, never recomputed here (same
+ * posture `CoachHome.tsx`'s own module doc "(g) Goal source" already
+ * records for the season-wide reader of this same view). `confirmedHours`/
+ * `plannedHours` are that view's own `confirmed_hours`/`planned_hours`
+ * columns (its own LEFT JOINs to `v_student_hours`/
+ * `v_student_planned_hours`) -- also verbatim passthroughs. Type OWNED
+ * here (mirrors `MeetingsList.tsx`'s own `CurrentViewerIdentity`/
+ * `ResolveCurrentStudentIdFn` cross-file shape, module doc #8) and
+ * imported as a type by `loaders/students.ts`, which supplies the real
+ * implementation (`resolveStudentScope`, additive-only export).
+ */
+export interface StudentScope {
+  teamId: string;
+  goalHours: number;
+  confirmedHours: number;
+  plannedHours: number;
+}
+
+/** `null` when the resolved student has no `v_student_goal_projection` row
+ * (e.g. an inactive student, or genuinely no active season -- defensive;
+ * in practice `StudentHome`'s own outer wrapper never mounts this seam
+ * until `activeSeason.status === 'ready'`). */
+export type ResolveStudentScopeFn = (studentId: string) => Promise<StudentScope | null>;
 
 // ---------------------------------------------------------------------------
 // Check-in contract -- module doc #5. Independently authored, shaped
@@ -1109,33 +1223,94 @@ function SignupOpportunityRowItem({
 }
 
 // ---------------------------------------------------------------------------
-// Top-level component -- module docs #8/#9/#10.
+// Shared DES-12 loading skeleton -- module docs #8/#9/#10, T176 UPDATE.
+// Reused for BOTH the outer wrapper's season-status 'loading' branch AND
+// the content tier's own data-loading branch -- one implementation, so a
+// future edit to either state's shape can't silently drift the other out of
+// sync (same reasoning `CoachHome.tsx`'s own `CoachHomeLoadingSkeleton`,
+// T155, already established for its sibling Home component).
 // ---------------------------------------------------------------------------
 
-export interface StudentHomeProps {
-  /** Injectable data-loading seam (module doc #9). Defaults to fixture data. */
-  loadData?: LoadStudentHomeDataFn;
-  studentId?: string;
-  /** Which team this Student Home is scoped to (module doc #8). */
-  teamId?: string;
-  seasonId?: string;
-  /** Injectable clock for the live-session check / Next up window / Sign-up
-   * opportunity filtering (module doc #2). Defaults to the real clock. */
-  nowFn?: () => Date;
-  /** Injectable check-in network call (module doc #5). Defaults to the real,
-   * typed `fetch()` implementation. */
-  submitCheckinCode?: SubmitCheckinCodeFn;
+function StudentHomeLoadingSkeleton(): ReactNode {
+  return (
+    <VStack gap={6} padding={6} aria-busy="true">
+      <VisuallyHidden as="div" role="status">
+        Loading Home…
+      </VisuallyHidden>
+      <Skeleton width={160} height={28} index={0} />
+      <Skeleton width="100%" height={64} index={1} />
+      <VStack gap={2}>
+        <Skeleton width={180} height={20} index={2} />
+        <Skeleton width="100%" height={10} index={3} />
+        <Skeleton width={220} height={14} index={4} />
+      </VStack>
+      <VStack gap={2}>
+        <Skeleton width={100} height={20} index={5} />
+        {[0, 1].map((row) => (
+          <HStack key={row} gap={4} vAlign="center">
+            <Skeleton width={220} height={16} index={row + 6} />
+            <Skeleton width={80} height={16} index={row + 8} />
+          </HStack>
+        ))}
+      </VStack>
+      <VStack gap={2}>
+        <Skeleton width={200} height={20} index={10} />
+        {[0, 1].map((row) => (
+          <HStack key={row} gap={4} vAlign="center">
+            <Skeleton width={220} height={16} index={row + 11} />
+            <Skeleton width={80} height={16} index={row + 13} />
+          </HStack>
+        ))}
+      </VStack>
+    </VStack>
+  );
 }
 
-export function StudentHome({
-  loadData = defaultLoadStudentHomeData,
-  studentId = PLACEHOLDER_CURRENT_STUDENT_ID,
-  teamId = PLACEHOLDER_CURRENT_TEAM_ID,
-  seasonId = PLACEHOLDER_SEASON_ID,
-  nowFn = () => new Date(),
-  submitCheckinCode = defaultSubmitCheckinCode,
-}: StudentHomeProps = {}): ReactNode {
-  const { user } = useAuth();
+// ---------------------------------------------------------------------------
+// Content tier -- module docs #8/#9/#10. Everything the pre-T176
+// `StudentHome` body did, unchanged in behavior -- only WHERE
+// `studentId`/`teamId`/`seasonId`/`goalHours`/`confirmedHours`/
+// `plannedHours` come from changed (props from the identity-resolution
+// tier below, instead of defaulted parameters / the still-fixture
+// `loadData` result's own fields -- module doc #4, T176 round 2 correction).
+// Only ever mounts once a real `studentId`/`teamId` are known (either
+// resolved for real, or explicitly supplied -- module doc above the
+// identity-resolution tier).
+// ---------------------------------------------------------------------------
+
+interface StudentHomeContentProps {
+  studentId: string;
+  teamId: string;
+  seasonId: string;
+  /** Verbatim passthrough of `v_student_goal_projection.goal_hours`
+   * (`resolveStudentScope`) -- already the coalesced
+   * `goal_hours_override ?? season default_goal_hours` value, computed in
+   * SQL. NOT fed through `resolveGoalHours` (module doc #4 T176 round 2). */
+  goalHours: number;
+  /** Verbatim passthrough of the same view's own `confirmed_hours` column
+   * (its own `v_student_hours` LEFT JOIN). Replaces the pre-round-2
+   * `data.studentHours?.confirmedHours ?? 0` (still-fixture) source. */
+  confirmedHours: number;
+  /** Verbatim passthrough of the same view's own `planned_hours` column
+   * (its own `v_student_planned_hours` LEFT JOIN). Replaces the
+   * pre-round-2 `computePlannedHours(...)` (still-fixture-sourced) call. */
+  plannedHours: number;
+  loadData: LoadStudentHomeDataFn;
+  nowFn: () => Date;
+  submitCheckinCode: SubmitCheckinCodeFn;
+}
+
+function StudentHomeContent({
+  studentId,
+  teamId,
+  seasonId,
+  goalHours,
+  confirmedHours,
+  plannedHours,
+  loadData,
+  nowFn,
+  submitCheckinCode,
+}: StudentHomeContentProps): ReactNode {
   const loadState = useLoadState(
     () => loadData(studentId, seasonId),
     [loadData, studentId, seasonId],
@@ -1160,51 +1335,8 @@ export function StudentHome({
     }
   }, [loadState]);
 
-  if (user === null) {
-    return (
-      <VStack gap={4} padding={6}>
-        <EmptyState
-          headingLevel={1}
-          title="Sign in to view Home"
-          description="You need to be signed in to see this page."
-        />
-      </VStack>
-    );
-  }
-
   if (loadState.status === 'loading') {
-    return (
-      <VStack gap={6} padding={6} aria-busy="true">
-        <VisuallyHidden as="div" role="status">
-          Loading Home…
-        </VisuallyHidden>
-        <Skeleton width={160} height={28} index={0} />
-        <Skeleton width="100%" height={64} index={1} />
-        <VStack gap={2}>
-          <Skeleton width={180} height={20} index={2} />
-          <Skeleton width="100%" height={10} index={3} />
-          <Skeleton width={220} height={14} index={4} />
-        </VStack>
-        <VStack gap={2}>
-          <Skeleton width={100} height={20} index={5} />
-          {[0, 1].map((row) => (
-            <HStack key={row} gap={4} vAlign="center">
-              <Skeleton width={220} height={16} index={row + 6} />
-              <Skeleton width={80} height={16} index={row + 8} />
-            </HStack>
-          ))}
-        </VStack>
-        <VStack gap={2}>
-          <Skeleton width={200} height={20} index={10} />
-          {[0, 1].map((row) => (
-            <HStack key={row} gap={4} vAlign="center">
-              <Skeleton width={220} height={16} index={row + 11} />
-              <Skeleton width={80} height={16} index={row + 13} />
-            </HStack>
-          ))}
-        </VStack>
-      </VStack>
-    );
+    return <StudentHomeLoadingSkeleton />;
   }
 
   if (loadState.status === 'error') {
@@ -1235,9 +1367,15 @@ export function StudentHome({
   );
   const heroState = selectHeroState(liveSession !== null, opportunities.length);
 
-  const confirmedHours = data.studentHours?.confirmedHours ?? 0;
-  const plannedHours = computePlannedHours(data.sessions, data.events, rsvps, studentId);
-  const goalHours = resolveGoalHours(data.goalHoursOverride, data.defaultGoalHours);
+  // T176 round 2 (module doc #4): `confirmedHours`/`plannedHours`/
+  // `goalHours` are all verbatim passthroughs of `v_student_goal_projection`
+  // (props, from `resolveStudentScope`) -- NOT `data.studentHours`/
+  // `computePlannedHours(...)`/`data.defaultGoalHours`/
+  // `data.goalHoursOverride` (still-fixture `loadData` fields, kept on
+  // `StudentHomeData` unchanged but no longer consulted for these three
+  // numbers). `resolveGoalHours`/`computePlannedHours` themselves stay
+  // exported and directly unit-tested, byte-unchanged; simply not called
+  // from this render path anymore.
   const hoursPercent = hoursVsGoalPercent(confirmedHours, goalHours);
 
   function handleRsvpChange(sessionId: string, status: RsvpStatus): void {
@@ -1340,6 +1478,351 @@ export function StudentHome({
       </div>
     </VStack>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Identity-resolution tier -- T176. Real `studentId`/`teamId`/goal-hours
+// resolution, mirroring `MeetingsList.tsx`'s own T096
+// `ResolvedStudentMeetingsView`/`StudentMeetingsViewContainer` split
+// (`../meetings/MeetingsList.tsx`, read-only reference, never imported --
+// independently authored against the identical shape, per this task's own
+// packet instruction not to edit that file).
+//
+// `resolveStudentIdentity` below composes the two resolution seams into one
+// exported, independently-testable async function (same "pure-ish,
+// exported, unit-testable" posture `buildNextUp`/`selectHeroState` already
+// establish elsewhere in this file): resolve `studentId` (skip the
+// `resolveStudentId` call entirely when `explicitStudentId` is supplied --
+// plain `??` short-circuit, not a separate branch, so the call is
+// GENUINELY never made, not just its result discarded), return
+// `{kind:'not-linked'}` when it is `null` (no `students` row linked to this
+// profile at all); then, UNLESS `explicitTeamId` is supplied (in which case
+// there is no view row to read -- `goalHours` for this render honestly
+// falls back to the real `seasonDefaultGoalHours` (the same value a
+// `null`-override coalesce would have produced), `confirmedHours`/
+// `plannedHours` default to `0` -- an honest default for the
+// explicit-bypass path, never hit by a real signed-in caller), resolve
+// `{teamId, goalHours, confirmedHours, plannedHours}` via
+// `resolveStudentScope(studentId)`. T184: a `null` scope here does NOT mean
+// "no student" -- `studentId` is already confirmed real by the branch
+// above -- it means a REAL, linked `students` row with `is_active = false`
+// (`v_student_goal_projection` ends `where s.is_active`,
+// `dashboard_views.sql`), so this branch returns the distinct
+// `{kind:'inactive'}` rather than reusing the `not-linked` result. Every
+// other path returns `{kind:'linked', ...}`. See `StudentIdentityOutcome`
+// below.
+//
+// T176 ROUND 2 (checker MAJOR fix -- see `loaders/students.ts`'s own module
+// doc for the full record): this tier no longer skips its own mount when
+// both `explicitStudentId`/`explicitTeamId` are supplied. Measured directly
+// (throwaway local experiment, not committed): with the skip-mount branch
+// removed, the rendered sequence is IDENTICAL in every configuration --
+// `resolveStudentIdentity`'s own internal `??` short-circuit already makes
+// resolution for a fully-explicit call settle within the SAME microtask
+// tick regardless of whether this tier mounts at all (an `async function`
+// with no real `await` work still returns a promise that resolves on the
+// very next microtask, same as `useLoadState`'s own content-tier hop), so
+// there is no observable "Finding your student record…" flash to avoid in
+// the first place. The branch was therefore genuinely redundant, not
+// merely un-tested -- deleted rather than pinned with a contrived test
+// (the checker's own instruction: delete if genuinely redundant, pin
+// otherwise). `StudentHome`'s own `'ready'` case below now renders
+// `ResolvedStudentHomeView` directly.
+// ---------------------------------------------------------------------------
+
+export interface ResolvedStudentIdentity {
+  studentId: string;
+  teamId: string;
+  goalHours: number;
+  confirmedHours: number;
+  plannedHours: number;
+}
+
+// T184: `resolveStudentIdentity` used to collapse two different facts into
+// one `null` -- "no student row linked to this profile at all" and "a
+// student row IS linked, but `students.is_active = false`" (deactivated) --
+// because `resolveStudentScope` reads `v_student_goal_projection`, which
+// ends `where s.is_active` (`dashboard_views.sql`), so a deactivated
+// student's own real, linked `studentId` still resolves a `null` scope. The
+// caller could not tell those two cases apart, so both rendered the SAME
+// "No student account linked yet" copy -- false for a deactivated student
+// who DOES have a linked record. `StudentIdentityOutcome` below is a
+// three-way discriminated union so each fact gets its own, honest, distinct
+// outcome: `'not-linked'` (no row at all) vs `'inactive'` (row exists,
+// `resolveStudentScope` returned `null` for a `studentId` that
+// `resolveStudentId` just confirmed is real). See `ResolvedStudentHomeView`
+// below for the two independent EmptyStates this produces.
+export type StudentIdentityOutcome =
+  ({ kind: 'linked' } & ResolvedStudentIdentity) | { kind: 'not-linked' } | { kind: 'inactive' };
+
+export async function resolveStudentIdentity(
+  viewer: CurrentViewerIdentity,
+  explicitStudentId: string | undefined,
+  explicitTeamId: string | undefined,
+  resolveStudentId: ResolveCurrentStudentIdFn,
+  resolveStudentScope: ResolveStudentScopeFn,
+  seasonDefaultGoalHours: number,
+): Promise<StudentIdentityOutcome> {
+  const studentId = explicitStudentId ?? (await resolveStudentId(viewer));
+  if (studentId === null) return { kind: 'not-linked' };
+  if (explicitTeamId !== undefined) {
+    return {
+      kind: 'linked',
+      studentId,
+      teamId: explicitTeamId,
+      goalHours: seasonDefaultGoalHours,
+      confirmedHours: 0,
+      plannedHours: 0,
+    };
+  }
+  const scope = await resolveStudentScope(studentId);
+  if (scope === null) return { kind: 'inactive' };
+  return {
+    kind: 'linked',
+    studentId,
+    teamId: scope.teamId,
+    goalHours: scope.goalHours,
+    confirmedHours: scope.confirmedHours,
+    plannedHours: scope.plannedHours,
+  };
+}
+
+interface ResolvedStudentHomeViewProps {
+  viewer: CurrentViewerIdentity;
+  explicitStudentId: string | undefined;
+  explicitTeamId: string | undefined;
+  resolveStudentId: ResolveCurrentStudentIdFn;
+  resolveStudentScope: ResolveStudentScopeFn;
+  seasonId: string;
+  seasonDefaultGoalHours: number;
+  loadData: LoadStudentHomeDataFn;
+  nowFn: () => Date;
+  submitCheckinCode: SubmitCheckinCodeFn;
+}
+
+/**
+ * Always mounts once `StudentHome`'s outer wrapper reaches
+ * `activeSeason.status === 'ready'` (T176 round 2 -- no skip-mount branch
+ * above this component anymore; see module doc above for why). Owns its
+ * OWN loading/error/not-linked/inactive (T184) DES-12 copy, each
+ * independently distinguishable from the content tier's own "Loading
+ * Home…"/"Couldn't load Home" copy (criterion 7 -- not a re-run of T129's
+ * shared-skeleton-text NIT) and from each other.
+ */
+function ResolvedStudentHomeView({
+  viewer,
+  explicitStudentId,
+  explicitTeamId,
+  resolveStudentId,
+  resolveStudentScope,
+  seasonId,
+  seasonDefaultGoalHours,
+  loadData,
+  nowFn,
+  submitCheckinCode,
+}: ResolvedStudentHomeViewProps): ReactNode {
+  const loadState = useLoadState(
+    () =>
+      resolveStudentIdentity(
+        viewer,
+        explicitStudentId,
+        explicitTeamId,
+        resolveStudentId,
+        resolveStudentScope,
+        seasonDefaultGoalHours,
+      ),
+    [
+      viewer.id,
+      viewer.role,
+      explicitStudentId,
+      explicitTeamId,
+      resolveStudentId,
+      resolveStudentScope,
+      seasonDefaultGoalHours,
+    ],
+  );
+
+  if (loadState.status === 'loading') {
+    return (
+      <VStack gap={3} padding={6} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          Finding your student record…
+        </VisuallyHidden>
+        <Skeleton width={160} height={20} index={0} />
+        <Skeleton width={220} height={16} index={1} />
+      </VStack>
+    );
+  }
+
+  if (loadState.status === 'error') {
+    return (
+      <VStack gap={4} padding={6}>
+        <Banner
+          status="error"
+          title="Couldn't find your student record"
+          description="Something went wrong looking up your student record. Try refreshing the page."
+          endContent={<Button variant="ghost" label="Retry" onClick={loadState.retry} />}
+        />
+      </VStack>
+    );
+  }
+
+  if (loadState.data.kind === 'not-linked') {
+    return (
+      <VStack gap={4} padding={6}>
+        <EmptyState
+          headingLevel={1}
+          title="No student account linked yet"
+          description="We couldn't find a student record linked to your account yet. Once one is linked, your Home will show up here."
+        />
+      </VStack>
+    );
+  }
+
+  if (loadState.data.kind === 'inactive') {
+    return (
+      <VStack gap={4} padding={6}>
+        <EmptyState
+          headingLevel={1}
+          title="Your student account is inactive"
+          description="Your student account has been deactivated. If you think this is a mistake, contact your coach or team admin."
+        />
+      </VStack>
+    );
+  }
+
+  const { studentId, teamId, goalHours, confirmedHours, plannedHours } = loadState.data;
+  return (
+    <StudentHomeContent
+      studentId={studentId}
+      teamId={teamId}
+      seasonId={seasonId}
+      goalHours={goalHours}
+      confirmedHours={confirmedHours}
+      plannedHours={plannedHours}
+      loadData={loadData}
+      nowFn={nowFn}
+      submitCheckinCode={submitCheckinCode}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Top-level component -- module docs #8/#9/#10, T176 UPDATE. Outer,
+// season-status-dispatch-only wrapper, same shape `CoachHome.tsx`'s own
+// T155 `CoachHome`/`CoachHomeContent` split already established for its
+// sibling Home component. `user === null` MUST be checked BEFORE the
+// `activeSeason.status` switch, not merged into it and not after it --
+// `<SeasonProvider>`'s own first synchronous render is always
+// `{status:'loading'}` regardless of who the user is (`SeasonProvider.tsx`),
+// so a reordered check would show the season-loading skeleton instead of the
+// sign-in prompt on the very first paint (criterion 5a -- measured, not
+// theoretical: this file's own `StudentHome.test.tsx` "shows a sign-in
+// prompt when signed out" test renders synchronously with no microtask
+// flush). Both `useAuth()` and `useActiveSeason()` are called
+// unconditionally before either conditional return, satisfying Rules of
+// Hooks the same way `CoachHome`'s own module doc already describes for its
+// own two hooks.
+//
+// No more `seasonId` prop (same T155 precedent `CoachHome.tsx`'s own
+// `CoachHomeProps` doc already establishes for the identical reason): it is
+// always `useActiveSeason().season.id` once resolved. No test in this file
+// or `DashboardPage.test.tsx` ever passed `seasonId` as a render prop before
+// this change (grep-verified), and production never set it either
+// (`DashboardPage.tsx` renders `<StudentHome />` with no props).
+// ---------------------------------------------------------------------------
+
+export interface StudentHomeProps {
+  /** Injectable data-loading seam (module doc #9). Defaults to fixture data. */
+  loadData?: LoadStudentHomeDataFn;
+  /** Explicit bypass for real `studentId` resolution (module doc above the
+   * identity-resolution tier). Omitted (the real-world default) resolves
+   * for real via `resolveStudentId`. */
+  studentId?: string;
+  /** Explicit bypass for real `teamId`/`goalHoursOverride` resolution (same
+   * module doc). Omitted (the real-world default) resolves for real via
+   * `resolveStudentScope`. */
+  teamId?: string;
+  /** Injectable clock for the live-session check / Next up window / Sign-up
+   * opportunity filtering (module doc #2). Defaults to the real clock. */
+  nowFn?: () => Date;
+  /** Injectable check-in network call (module doc #5). Defaults to the real,
+   * typed `fetch()` implementation. */
+  submitCheckinCode?: SubmitCheckinCodeFn;
+  /** T176 (module doc #8). Defaults to a real resolution
+   * (`../../lib/supabase/loaders/meetings.ts`, reused verbatim from T096).
+   * Only ever invoked when `studentId` above is NOT supplied. */
+  resolveStudentId?: ResolveCurrentStudentIdFn;
+  /** T176 (module doc #8). Defaults to a real resolution
+   * (`../../lib/supabase/loaders/students.ts`, additive). Only ever invoked
+   * when `teamId` above is NOT supplied. */
+  resolveStudentScope?: ResolveStudentScopeFn;
+}
+
+export function StudentHome({
+  loadData = defaultLoadStudentHomeData,
+  studentId: explicitStudentId,
+  teamId: explicitTeamId,
+  nowFn = () => new Date(),
+  submitCheckinCode = defaultSubmitCheckinCode,
+  resolveStudentId = resolveCurrentStudentId,
+  resolveStudentScope = defaultResolveStudentScope,
+}: StudentHomeProps = {}): ReactNode {
+  const { user } = useAuth();
+  const activeSeason = useActiveSeason();
+
+  if (user === null) {
+    return (
+      <VStack gap={4} padding={6}>
+        <EmptyState
+          headingLevel={1}
+          title="Sign in to view Home"
+          description="You need to be signed in to see this page."
+        />
+      </VStack>
+    );
+  }
+
+  switch (activeSeason.status) {
+    case 'loading':
+      return <StudentHomeLoadingSkeleton />;
+    case 'none':
+      return (
+        <VStack gap={4} padding={6}>
+          <Banner
+            status="info"
+            title="No active season yet"
+            description="An admin needs to create and activate a season in Season settings before Home can show data here."
+          />
+        </VStack>
+      );
+    case 'error':
+      return (
+        <VStack gap={4} padding={6}>
+          <Banner
+            status="error"
+            title="Couldn't load the active season"
+            description={activeSeason.error.message}
+            endContent={<Button variant="ghost" label="Retry" onClick={activeSeason.refresh} />}
+          />
+        </VStack>
+      );
+    case 'ready':
+      return (
+        <ResolvedStudentHomeView
+          viewer={{ id: user.id, role: user.role }}
+          explicitStudentId={explicitStudentId}
+          explicitTeamId={explicitTeamId}
+          resolveStudentId={resolveStudentId}
+          resolveStudentScope={resolveStudentScope}
+          seasonId={activeSeason.season.id}
+          seasonDefaultGoalHours={activeSeason.season.defaultGoalHours}
+          loadData={loadData}
+          nowFn={nowFn}
+          submitCheckinCode={submitCheckinCode}
+        />
+      );
+  }
 }
 
 export default StudentHome;
