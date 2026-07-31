@@ -204,8 +204,18 @@ describe('resolveFunctionsBaseUrl (T177 criterion 1 -- injectable-parameter seam
     expect(resolveFunctionsBaseUrl('')).toBe(PLACEHOLDER_SUPABASE_FUNCTIONS_URL);
   });
 
-  it('falls back to PLACEHOLDER_SUPABASE_FUNCTIONS_URL for an undefined input', () => {
-    expect(resolveFunctionsBaseUrl(undefined)).toBe(PLACEHOLDER_SUPABASE_FUNCTIONS_URL);
+  it('falls back to PLACEHOLDER_SUPABASE_FUNCTIONS_URL for a whitespace-only input', () => {
+    // Deliberately NOT `resolveFunctionsBaseUrl(undefined)`: an explicit
+    // `undefined` argument triggers the SAME default-parameter substitution
+    // as calling with zero arguments (`= readViteEnvVar('VITE_SUPABASE_URL')`),
+    // so it would silently read the REAL env var instead of exercising the
+    // fallback branch by argument value -- non-hermetic under a real
+    // `.env.local` (checker-reviewer round 1 measured this directly: fails
+    // with the real project URL instead of the placeholder). A
+    // whitespace-only string is a real, non-`undefined` argument that still
+    // reaches the fallback branch (`.trim()` reduces it to `''`, which is
+    // falsy), deterministic regardless of env state.
+    expect(resolveFunctionsBaseUrl('   ')).toBe(PLACEHOLDER_SUPABASE_FUNCTIONS_URL);
   });
 });
 
