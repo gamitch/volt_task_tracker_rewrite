@@ -121,7 +121,6 @@ import {
   buildAttendanceWriteRows,
   computeInitialAttendedStudentIds,
   formatSessionDateTime,
-  PLACEHOLDER_CURRENT_COACH_PROFILE_ID,
   type MarkDayCompletePayload,
   type MarkDayCompleteSession,
   type OnMarkDayCompleteFn,
@@ -259,9 +258,17 @@ export interface MarkEventCompleteDialogProps {
   roster: readonly RosterStudent[];
   /** Every `rsvps` row for the event's sessions. */
   rsvps: readonly RsvpRow[];
-  /** Injectable auth seam -- same disclosed placeholder
-   * `MarkDayCompleteDialog.tsx` already established. */
-  currentUserProfileId?: string;
+  /** Injectable auth seam. T179: required -- `MarkDayCompleteDialog.tsx`'s
+   * own matching prop lost its disclosed placeholder default in the same
+   * task (that file's module doc #7's "T179 UPDATE" paragraph has the full
+   * writeup, including deletion of the now-unused exported placeholder
+   * constant this prop used to default to -- deliberately not named here by
+   * its old identifier, since this task's own A3 criterion requires zero
+   * occurrences of that identifier anywhere in either file, prose included);
+   * this prop is required for the identical reason -- an omitted value must
+   * fail `tsc`, not silently write a fake `profiles.id` into
+   * `attendance.recorded_by`. */
+  currentUserProfileId: string;
   /** Injectable persistence seam, called once per remaining session (module
    * doc #1/#3). Defaults to the real `markDayComplete` mutation -- the SAME
    * shared code path `MarkDayCompleteDialog.tsx`'s own `onMarkComplete`
@@ -280,7 +287,7 @@ export function MarkEventCompleteDialog({
   sessions,
   roster,
   rsvps,
-  currentUserProfileId = PLACEHOLDER_CURRENT_COACH_PROFILE_ID,
+  currentUserProfileId,
   onMarkSessionComplete = markDayComplete,
   onFinished,
 }: MarkEventCompleteDialogProps): ReactNode {
