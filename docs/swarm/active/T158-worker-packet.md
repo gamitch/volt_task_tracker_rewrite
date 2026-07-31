@@ -9,13 +9,23 @@ reasons for the split are in §1 and are not a formality.
 
 **Epistemic status.** I am `foreman-planner` — I have Read/Grep/Glob and no Bash, so every
 citation below is a direct file read, not an inference from a summary. The one claim I cannot
-execute myself (the RLS/view-visibility mechanism in §4) was independently measured by
-`checker-premise`'s round-1 pass against a real scratch PGlite/PostgreSQL instance — cited below
-as measured fact, sourced to `verification-log.md`'s script/output, not asserted on my own
-reasoning alone. **This is revision 2 of this packet.** Round 1 returned REVISE (MAJOR severity,
-no BLOCKER); its full findings are in `docs/swarm/active/T158-gate-round1-findings.md`. Every
-correction below was independently re-verified against the live tree by me before being folded
-in, not transcribed from the gate's summary (constitution item 19c).
+execute myself (the RLS/view-visibility mechanism in §4) was independently measured **twice**
+against a real scratch PGlite/PostgreSQL instance — round 1 by `checker-premise`, round 2 by a
+separate, independent PGlite install and scratch script that reproduced every round-1 number
+exactly — cited below as measured fact, sourced to
+`docs/swarm/active/T158-gate-round1-findings.md`'s script/output record, not
+`verification-log.md` (grep-confirmed zero occurrences of "pglite" there, and its only "T158" hit
+is unrelated — re-verified by me before writing this revision, not transcribed), and not asserted
+on my own reasoning alone. **This is revision 3 of this packet.** Round 1 returned REVISE (MAJOR
+severity, no BLOCKER; full findings in `docs/swarm/active/T158-gate-round1-findings.md`). Round 2
+returned REVISE again (0 BLOCKER, 2 MAJOR — acceptance criterion 4's live-DB proof was vacuous as
+written — plus five smaller citation/wording findings); George authorized this one additional
+revision pass as a bounded exception to item 19a's two-round cap (`auto-mode-decisions.md`,
+"2026-07-31 — George's ruling on T158's item-19a escalation," verbatim: *"i authorize one more
+revision round"*), after which this packet dispatches directly to `worker-implementer` (opus) with
+no third `checker-premise` round. Every correction below was independently re-verified against the
+live tree by me before being folded in, not transcribed from the gate's or the orchestrator's
+summary (constitution item 19c).
 
 ---
 
@@ -68,12 +78,14 @@ packet past that one sentence is my design, stated as such.
 T173's real teams/students wiring). Re-verified directly, current line numbers:
 
 - `CoachHomeProps` interface: `CoachHome.tsx:2093-2111`. Current fields: `loadData?`,
-  `loadDashboardData?`, `teamId?`, `nowFn?` — all four already default to a real production value,
-  re-verified directly at the destructuring site (`:2170-2173`): `loadData = loadCoachHomeData`
-  (T173, real), `loadDashboardData: loadDashboardDataProp = loadDashboardData` (real),
-  `teamId = PLACEHOLDER_CURRENT_TEAM_ID` (T198's unrelated open gap, not this task's), `nowFn = ()
-  => new Date()`. A fifth (`loadLeaderboardData`) would extend the same "optional prop, defaults
-  to the real thing" shape consistently.
+  `loadDashboardData?`, `teamId?`, `nowFn?` — all four already follow the "optional prop, defaults
+  to a value" shape, re-verified directly at the destructuring site (`:2170-2173`), but not all
+  four defaults are real yet: `loadData = loadCoachHomeData` (T173, real), `loadDashboardData:
+  loadDashboardDataProp = loadDashboardData` (real), `nowFn = () => new Date()` (real) — three of
+  four. `teamId = PLACEHOLDER_CURRENT_TEAM_ID` (`:2172`, defined `:764`) is still a placeholder
+  pending T198; not this task's concern, since `Leaderboard` has no team dimension in its own type
+  at all. A fifth prop (`loadLeaderboardData`) would extend the same "optional prop, defaults to a
+  value" shape consistently — three real, one (inherited, pre-existing) still placeholder.
   **Stale doc-comment residue, disclosed here rather than left for a future session to trip over
   (checker-premise round 1 finding, folded into T204 below rather than fixed in this task —
   `CoachHome.tsx` is Forbidden, §7):** `CoachHome.tsx:2094`'s own doc comment on `loadData` still
@@ -94,7 +106,7 @@ T173's real teams/students wiring). Re-verified directly, current line numbers:
   cannot affect this task either way).
 
 **T157's reusable pattern, checked for transferability (`docs/swarm/active/T157-worker-packet.md`,
-already-Passed, merged `18b481c`):** its shape is "mount a finished, tested, previously-unmounted
+already-Passed, merged `b0b15b0`):** its shape is "mount a finished, tested, previously-unmounted
 component inside an existing page, thread real props, add a role gate if the mount needs one."
 Two-thirds of that transfers (finished/unmounted/thread-real-data); the role-gate third does
 **not** apply here — `Leaderboard` has no role branch to add, by design (module doc #6, OUT-08:
@@ -109,9 +121,14 @@ gets its own packet with its own investigation later, not a paragraph borrowed f
 
 ## 4. The finding that reshapes this task: `students` has no read-all policy, and `Leaderboard` has no role gate
 
-**`rls.sql:82-102` (read in full), the load-bearing text:**
+**`rls.sql:82-102` (read in full), the load-bearing text.** Condensed for readability, not
+byte-verbatim: `...` marks elided comment text (as before), and separately the two `create policy`
+statements below are each reflowed onto fewer lines than `rls.sql`'s own formatting (which splits
+`for ... to authenticated` and `using (...)` across three lines per policy, with the intervening
+`alter table ... enable row level security;` line omitted here entirely) — only the cited line
+range and substantive content are verbatim-accurate, not the line-wrapping:
 
-```
+```sql
 -- students (PRD 8.3: full | read own row + name/team of teammates (leaderboard)
 -- | read linked students)
 --
@@ -185,14 +202,21 @@ every role" to justify this new view not being a novel exposure shape. An exhaus
 - **`v_team_participation` has zero consumers anywhere in `src/`** — every hit is a comment or a
   type declaration (`CoachHome.tsx:95,240`, `types.ts:568-571`, `meetings.ts:450`), never an
   actual `.from('v_team_participation')` call. It supplies no precedent, positive or negative.
-- **`v_student_goal_projection` is the one real precedent**, and it's narrower than claimed: its
-  only query site is `loaders/students.ts:407` (`queryStudentGoalProjectionById`, inside
-  `makeResolveStudentScope`), a single-row `.eq('student_id', studentId).maybeSingle()` lookup —
-  reached by two non-staff-gated pages, `StudentHome` directly and `ParentHome` via the same
+- **`v_student_goal_projection` is the real precedent, and it's narrower than claimed — it also
+  has two query sites, not one, re-verified directly (a prior draft of this bullet undercounted;
+  checker-premise round 2).** The first, `loaders/students.ts:407` (`queryStudentGoalProjectionById`,
+  inside `makeResolveStudentScope`), is a single-row `.eq('student_id', studentId).maybeSingle()`
+  lookup reached by two non-staff-gated pages, `StudentHome` directly and `ParentHome` via the same
   factory (`loaders/parentHome.ts:184` imports `makeResolveStudentScope` from `students.ts` rather
   than querying the view itself, so this is one query site with two non-staff consumers, not two
-  independent queries). A per-caller-row lookup is a materially narrower shape than an unfiltered,
-  program-wide read.
+  independent queries). The second, `loaders/dashboard.ts:387` (`queryGoalProjection`), issues
+  `.select('student_id, season_id, team_id, goal_hours, confirmed_hours, planned_hours')
+  .eq('season_id', seasonId)` — unfiltered by student, program-wide — **but this second site is
+  itself staff-gated**: it backs `loadDashboardData`, which only `CoachHome.tsx` consumes, and
+  `DashboardPage.tsx:117-126`'s role switch renders `<CoachHome />` only for `coach`/`admin`.
+  Correcting the count does not change the conclusion: the one non-staff-reachable precedent
+  (`students.ts:407`) is still per-caller-row, not program-wide — a materially narrower shape than
+  an unfiltered, program-wide read.
 
 **Consequently the exposure this task creates has two halves, and the earlier draft only traced
 one of them (checker-premise round 1, MAJOR 2).** §6a's new view closes the NAME-visibility half —
@@ -207,9 +231,11 @@ hold for `v_student_hours` the way it holds for a brand-new view, a viewer of th
 leaderboard would see names with no hours (or an error), a different but equally real broken-page
 outcome from the one this section opened with.
 
-**Measured, not reasoned — verified live via a scratch PGlite/PostgreSQL instance (`checker-premise`
-round 1; see `verification-log.md` for the exact script/output, re-verifiable at dispatch time if
-needed).** The gate applied §6a's migration against a real Postgres (PGlite 18.3), with a
+**Measured, not reasoned — verified live via a scratch PGlite/PostgreSQL instance, independently
+twice (`checker-premise` round 1, then reproduced exactly by a separate round-2 install/script from
+scratch; see `docs/swarm/active/T158-gate-round1-findings.md` for the exact script/output —
+**not** `verification-log.md`, which contains zero occurrences of "pglite" and no relevant T158
+entry, grep-confirmed).** The gate applied §6a's migration against a real Postgres (PGlite 18.3), with a
 non-superuser view owner shaped like Supabase's real migration-applying role
 (`relforcerowsecurity=false`), and measured, as a `student`-role session:
 
@@ -336,11 +362,10 @@ after it)
 -- membership_views.sql, dashboard_views.sql all say so in their own header
 -- comments). No existing migration file is edited.
 --
--- Mechanism note -- MEASURED, not reasoned (see this task's own worker
--- packet §4; checker-premise round 1; verification-log.md carries the exact
--- script/output). This view sets no `security_invoker` (PG15+, absent from
--- this schema entirely, confirmed by grep), matching every other view here.
--- Verified live against a scratch PGlite Postgres instance with a
+-- Mechanism note -- MEASURED, not reasoned. This view sets no
+-- `security_invoker` (PG15+, absent from this schema entirely, confirmed by
+-- grep), matching every other view here. Verified live, independently
+-- twice, against a scratch PGlite/PostgreSQL instance with a
 -- non-superuser view owner shaped like Supabase's real migration-applying
 -- role (relforcerowsecurity=false): a student-role session reading this
 -- view gets every active student's name (the same session reading
@@ -493,25 +518,67 @@ ledger row.
    has no way to exercise a real Postgres `WHERE` clause. State this explicitly in your output
    doc rather than implying the TS suite covers it.
 4. **Prescribed method, not an optional fallback (checker-premise round 1 proved this is
-   trivially available in this environment — no Docker/psql needed, ~40s):** run
-   `npm install @electric-sql/pglite` in a scratch directory, apply this migration against it, and
-   verify — as a `student`-role session, with a non-superuser view owner shaped like Supabase's
-   real migration-applying role (`relforcerowsecurity=false`) — that: (a) querying
-   `v_leaderboard_students` directly returns more than just the caller's own row; (b) a
-   deactivated student's row does not appear; and **(c) querying `v_student_hours` unfiltered
-   (the exact shape `queryLeaderboardHours` in §6b uses) also returns more than the caller's own
-   row** — this third sub-check is required, not optional; it is what closes the hours-half of
-   §4's finding, not just the name half. `checker-premise` already ran this exact check once
-   (round 1 — see `verification-log.md`) and will re-verify at dispatch time regardless; running
-   it yourself and reporting the output is still required evidence, since the worker's own
-   artifact is what ships, not the gate's scratch script. **Two environment deltas, disclose both,
-   neither changes the verdict:** PGlite runs PG18 vs. Supabase's PG15/17 — irrelevant here,
-   `security_invoker` defaults off in both and that default has not changed across those versions;
-   and the view relies on Supabase's own `ALTER DEFAULT PRIVILEGES` granting `authenticated` SELECT
-   on new relations, the same mechanism all 15 existing views in this schema already depend on (no
-   migration in this repo issues an explicit `grant` to a view, confirmed). If PGlite genuinely
-   cannot be installed in your environment, say so explicitly and explain why rather than silently
-   substituting a weaker check.
+   trivially available in this environment — no Docker/psql needed, ~40s).** Run
+   `npm install @electric-sql/pglite` in a scratch directory and build a harness that is
+   non-vacuous **by construction**, not by luck: round 2's gate proved that a harness enabling RLS
+   on only `students` (omitting `attendance`/`events`/`event_sessions`, which `v_student_hours`
+   also reads) lets sub-checks (a) and (c) below pass for the wrong reason, while the negative
+   control at (e) quietly fails to collapse — a false positive on exactly the sub-check this
+   revision exists to add. The sub-parts below are therefore not independent options; **all are
+   required, in one script, one session:**
+
+   - **Setup, required exactly as follows.** Apply this task's own new migration (§6a) AND
+     `rls.sql`'s real policies — not a subset, not paraphrased — on **all four** tables this
+     view's data depends on: `students` (`rls.sql:94-102`), `attendance` (`rls.sql:224-232`),
+     `events` (`rls.sql:147-161`), `event_sessions` (`rls.sql:170-189`). For the `auth.uid()`
+     stub, start from `supabase/tests/auth_stub.sql` (this repo's own scratch-Postgres test
+     scaffolding — confirms the `auth` schema/`auth.users` shape) but note its `auth.uid()` always
+     returns `NULL` because that suite runs entirely as the Postgres superuser; this harness
+     instead needs a specific caller identity per simulated session, so redefine `auth.uid()` to
+     read a session-local value (e.g. a `set_config`-backed setting) that can be changed between
+     queries to simulate different callers. PGlite has no Supabase-managed
+     `ALTER DEFAULT PRIVILEGES`, so the harness must also issue its own
+     `grant select on all tables in schema public to authenticated` (or equivalent) — without it,
+     every simulated query fails before RLS is ever evaluated, which would make every sub-check
+     below pass or fail for the wrong reason too.
+   - **(a)** Querying `v_leaderboard_students` directly, as a `student`-role session, returns more
+     than just the caller's own row.
+   - **(b)** A deactivated student's row does not appear in that same query.
+   - **(c)** The same session querying `v_student_hours` unfiltered (the exact shape
+     `queryLeaderboardHours` in §6b uses) also returns more than the caller's own row — this
+     closes the hours-half of §4's finding, not just the name half.
+   - **(d) Base-table contrast — required, reported alongside (a)/(c) in the same script/session,
+     not a separate or optional check.** The same `student`-role session's plain
+     `select id, display_name from students` (the base table, no view) returns **exactly 1 row**
+     (the caller's own). This is what makes (a)/(c) meaningful evidence rather than an artifact of
+     a harness that never enabled RLS at all: it proves the base table's RLS is genuinely active
+     for this session, so the broader results in (a)/(c) are attributable to the view-owner
+     mechanism, not to an accidentally-permissive setup.
+   - **(e) `security_invoker=on` counterfactual — required negative control, not a disclosed-only
+     measurement.** In the same script, set `security_invoker=on` on **both**
+     `v_leaderboard_students` and `v_student_hours`, and confirm **both** of the queries from
+     (a)/(c) collapse to exactly 1 row. Report this as pass/fail, not merely as a disclosed
+     observation: a harness that skips base-table RLS on `attendance`/`events`/`event_sessions`
+     cannot pass this control for `v_student_hours` — that gap is exactly what makes this
+     sub-check a real proof instead of the vacuous one round 2's gate reproduced deliberately by
+     omission.
+
+   `checker-premise` already ran an equivalent check twice — round 1
+   (`docs/swarm/active/T158-gate-round1-findings.md` has the exact script/output; **not**
+   `verification-log.md`, which does not contain this record) and round 2 (an independent
+   install/script that reproduced every round-1 number exactly, and separately proved the vacuity
+   above by deliberately running the incomplete version) — and will re-verify at dispatch time
+   regardless; running it yourself and reporting the output is still required evidence, since the
+   worker's own artifact is what ships, not the gate's scratch script. **Two environment deltas,
+   disclose both, neither changes the verdict:** PGlite runs PG18 vs. Supabase's PG15/17 —
+   irrelevant here, `security_invoker` defaults off in both and that default has not changed across
+   those versions; and production Supabase relies on its own `ALTER DEFAULT PRIVILEGES` granting
+   `authenticated` SELECT on new relations (the same mechanism all 15 existing views in this schema
+   already depend on — no migration in this repo issues an explicit `grant` to a view, confirmed),
+   which is why this harness's own explicit `grant` in Setup above is a PGlite-only substitute for
+   that mechanism, not a change to production behavior. If PGlite genuinely cannot be installed in
+   your environment, say so explicitly and explain why rather than silently substituting a weaker
+   check.
 
 **Loader (`leaderboard.test.ts`, mutation-provable, mirroring `coachHome.test.ts`'s established
 shape exactly — cite it as your structural template):**
@@ -668,13 +735,16 @@ scratch:
   - `DashboardPage.test.tsx` renders `<DashboardPage />` with **zero** props at every call site
     (confirmed: `DashboardPage.tsx` itself renders `<CoachHome />` passing no props at all, so
     per-test overrides are structurally impossible here) — this file already handles the
-    identical problem for `loadCoachHomeData`/`loadDashboardData`/`resolveStudentScope`/
-    `loadStudentHomeData`/`loadLinkedStudentsForParentHome`/`loadStudentHomeCardDataForParentHome`
-    via five separate top-level `vi.mock(...)` blocks (`:52-181`, each with its own comment
-    explaining which real default it intercepts and why). A sixth, matching block for
-    `../../lib/supabase/loaders/leaderboard` (T158's new module) will be needed, or the existing
-    "renders CoachHome for role coach/admin" tests (`:272-330`) will start exercising the real,
-    unconfigured loader too.
+    identical problem across **five** modules, each intercepted by its own top-level `vi.mock(...)`
+    block (`:52-181`), re-verified directly (a prior draft of this bullet omitted one module):
+    `loaders/meetings` (`resolveCurrentStudentId`, `:52-58`), `loaders/students`
+    (`resolveStudentScope` and `loadStudentHomeData`, `:59-86`), `loaders/parentHome`
+    (`loadLinkedStudentsForParentHome` and `loadStudentHomeCardDataForParentHome`, `:98-122`),
+    `loaders/coachHome` (`loadCoachHomeData`, `:135-153`), and `loaders/dashboard`
+    (`loadDashboardData`, `:164-181`) — each block's own comment explains which real default it
+    intercepts and why. A sixth block for `../../lib/supabase/loaders/leaderboard` (T158's new
+    module) will be needed, or the existing "renders CoachHome for role coach/admin" tests
+    (`:272-330`) will start exercising the real, unconfigured loader too.
 - Given the CSS fix and the two-file test fix are both real but comparatively mechanical once
   T158's exports exist, T203 can reasonably get a **lighter** premise gate than T158's (item
   19b) — it rolls out an already-established mount pattern (T157) to a component with no role
