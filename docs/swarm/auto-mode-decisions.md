@@ -1048,3 +1048,24 @@ flag these rather than self-authorise.
 gate and T170 got a narrow one; this gets a full one, because the three-way state is a **new
 pattern for this file**, not a proven pattern reapplied — item 19b's own distinction. This file
 family has also produced a caught BLOCKER in every gate round run against it so far.
+
+## 2026-07-30 — George's ruling on T177's item-19a escalation (owner input, structured selection)
+
+**Mechanism, stated precisely so this isn't overread as a verbatim quote:** this was not free-text
+input. `T177-worker-packet.md`'s `checker-premise` gate ran two rounds — round 1 REVISE (3
+BLOCKER, 2 MAJOR), round 2 REVISE (1 new BLOCKER, 2 new MAJOR, all introduced by the round-1 fix
+itself) — which per item 19a caps at two rounds and escalates a third REVISE to the human owner
+rather than looping again. I presented three options via a structured question (own wording, not
+his): authorize one more revision round as a bounded exception, pause for his own review, or drop
+T177. He selected **"Authorize one more revision round"** — the option I had marked Recommended,
+on the grounds that round 2's findings were narrow and mechanical (swap a test technique for an
+already-proven-elsewhere `vi.mock` pattern, correct a baseline number, relax one over-strict scope
+line, fix one wrong citation, add two clarifying sentences) rather than an open design dispute. He
+added no free-text notes.
+
+**What this authorizes:** one additional `foreman-planner` revision pass on T177's packet applying
+round 2's findings, dispatched directly to `worker-implementer` afterward **without** a third
+`checker-premise` gate round — i.e., a bounded exception to item 19a's round cap for this specific
+packet, not a general relaxation of the cap. **What it does not authorize:** skipping the premise
+gate on any other task, or treating a future third-REVISE escalation as pre-approved by this
+ruling — each occurrence is its own escalation.
