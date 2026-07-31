@@ -21,7 +21,7 @@
 // directory's own first test file, T146) already established.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
-import { makeResolveStudentScope } from './students';
+import { makeLoadStudentHomeData, makeResolveStudentScope } from './students';
 
 /**
  * Records `.select()`/`.eq()`/`.maybeSingle()` for the
@@ -161,6 +161,123 @@ describe('makeResolveStudentScope (T176 criterion 8, round 2: v_student_goal_pro
 
     expect(mutatedRow).toEqual({
       data: { team_id: 'team-real-4', goal_hours: 100, confirmed_hours: 0, planned_hours: 0 },
+      error: null,
+    });
+    expect(maybeSingleSpy).toHaveBeenCalledTimes(1);
+    // The intended guard: eqSpy was never called under the mutated path.
+    expect(eqSpy).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * T183 -- new tests for `makeLoadStudentHomeData`/`loadStudentHomeData`,
+ * mirroring the `makeResolveStudentScope` describe block above but for the
+ * raw `students` table (`.eq('id', studentId)`, not the view's own
+ * `student_id`).
+ */
+function makeStudentsRecordingClient(row: { display_name: string } | null) {
+  const maybeSingleSpy = vi.fn().mockResolvedValue({ data: row, error: null });
+  const eqSpy = vi.fn(() => ({ maybeSingle: maybeSingleSpy }));
+  const selectSpy = vi.fn(() => ({ eq: eqSpy, maybeSingle: maybeSingleSpy }));
+  const fromSpy = vi.fn((table: string) => {
+    if (table === 'students') return { select: selectSpy };
+    throw new Error(`unexpected table: ${table}`);
+  });
+  return {
+    client: { from: fromSpy } as unknown as SupabaseClient,
+    fromSpy,
+    selectSpy,
+    eqSpy,
+    maybeSingleSpy,
+  };
+}
+
+describe('makeLoadStudentHomeData (T183 criterion 8)', () => {
+  it("reads students, scoped by exactly .eq('id', studentId) -- NOT student_id, the raw table's own primary key", async () => {
+    const { client, fromSpy, selectSpy, eqSpy } = makeStudentsRecordingClient({
+      display_name: 'Priya Chen',
+    });
+    const loadStudentHomeData = makeLoadStudentHomeData(() => client);
+
+    await loadStudentHomeData('student-real-1', 'season-real-1');
+
+    expect(fromSpy).toHaveBeenCalledWith('students');
+    expect(selectSpy).toHaveBeenCalledWith('display_name');
+    expect(selectSpy).toHaveBeenCalledTimes(1);
+    expect(eqSpy).toHaveBeenCalledTimes(1);
+    expect(eqSpy).toHaveBeenCalledWith('id', 'student-real-1');
+  });
+
+  it('maps display_name to displayName (real, per-student), passes seasonId through verbatim, and returns the SEVEN remaining fields as honest-empty literals -- no FIXTURE_* symbol', async () => {
+    const { client } = makeStudentsRecordingClient({ display_name: 'Priya Chen' });
+    const loadStudentHomeData = makeLoadStudentHomeData(() => client);
+
+    await expect(loadStudentHomeData('student-real-2', 'season-real-2')).resolves.toEqual({
+      seasonId: 'season-real-2',
+      displayName: 'Priya Chen',
+      defaultGoalHours: 0,
+      goalHoursOverride: null,
+      events: [],
+      sessions: [],
+      rsvps: [],
+      studentHours: null,
+      participation: null,
+    });
+  });
+
+  it('passes a DIFFERENT seasonId through verbatim on a second call, proving it is a real passthrough of the argument, not a hardcoded literal', async () => {
+    const { client } = makeStudentsRecordingClient({ display_name: 'Jordan Blake' });
+    const loadStudentHomeData = makeLoadStudentHomeData(() => client);
+
+    await expect(loadStudentHomeData('student-real-3', 'season-real-3')).resolves.toMatchObject({
+      seasonId: 'season-real-3',
+    });
+    await expect(loadStudentHomeData('student-real-3', 'season-real-4')).resolves.toMatchObject({
+      seasonId: 'season-real-4',
+    });
+  });
+
+  it('filters server-side by the REAL supplied studentId, never a hardcoded or omitted one (defense in depth on top of own_or_linked_read RLS)', async () => {
+    const { client, eqSpy } = makeStudentsRecordingClient({ display_name: 'Priya Chen' });
+    const loadStudentHomeData = makeLoadStudentHomeData(() => client);
+
+    await loadStudentHomeData('student-somebody-else', 'season-x');
+
+    expect(eqSpy).toHaveBeenCalledTimes(1);
+    expect(eqSpy).toHaveBeenCalledWith('id', 'student-somebody-else');
+  });
+
+  it("rejects (fail-loud, never bridged to fixture data) when no row is found -- a genuine anomaly at this point in the call chain, per this module doc's own row-not-found reasoning", async () => {
+    const { client } = makeStudentsRecordingClient(null);
+    const loadStudentHomeData = makeLoadStudentHomeData(() => client);
+
+    await expect(loadStudentHomeData('student-does-not-exist', 'season-x')).rejects.toThrow();
+  });
+
+  /**
+   * Criterion 8's own eq-drop filter-guard mutation test, same technique as
+   * `makeResolveStudentScope`'s own equivalent test above: drop the
+   * `.eq('id', studentId)` filter (simulated here directly, not by editing
+   * the loader) to confirm the intended guard assertion is genuinely what
+   * goes red -- not a `TypeError` from a stub that doesn't expose
+   * `maybeSingle` on the unfiltered chain position.
+   */
+  it('the eq-drop mutation fails on the intended eqSpy assertion, not a TypeError', async () => {
+    const { client, eqSpy, maybeSingleSpy } = makeStudentsRecordingClient({
+      display_name: 'Priya Chen',
+    });
+    // Simulates the mutated query:
+    // `.from('students').select('display_name').maybeSingle()` -- `.eq(...)`
+    // genuinely never called.
+    const mutatedResult = await (
+      client.from('students') as unknown as { select: (columns: string) => unknown }
+    ).select('display_name');
+    const mutatedRow = await (
+      mutatedResult as { maybeSingle: () => Promise<unknown> }
+    ).maybeSingle();
+
+    expect(mutatedRow).toEqual({
+      data: { display_name: 'Priya Chen' },
       error: null,
     });
     expect(maybeSingleSpy).toHaveBeenCalledTimes(1);
