@@ -26,7 +26,7 @@ This is the one thing in this file that will silently corrupt the ledger if igno
 
 Both sessions filed follow-ups from the same next-free number at roughly the same time on
 separate branches. **T178's pair is already on `main` and keeps the numbers.** Whoever merges
-PR #6 must **renumber T183's pair to T198 (StudentHome loaders) and T199 (test assertion)**
+PR #6 must **renumber T183's pair to T310 (StudentHome loaders) and T311 (test assertion)**
 before or during that merge — including the cross-references inside their own row text and in
 T183's `verification-log.md` entry. Do not resolve the `task-ledger.md` merge conflict by
 taking either side wholesale; both sets of rows are real and all four must survive.
@@ -71,7 +71,7 @@ the production default. Checker PASS, ledger and verification-log recorded. **PR
 merged** — it is based on `a3b9f00` and `main` has since moved to `534bdbf`, so it needs an
 update-from-`main` and will conflict on `task-ledger.md` and on this file's top section (both
 branches inserted an UPDATE at the same anchor). Resolve by keeping **both** sets of rows and
-both UPDATE sections, then apply the T198/T199 renumber above.
+both UPDATE sections, then apply the T310/T311 renumber above.
 
 ### T173 — in progress, other session
 
@@ -333,7 +333,7 @@ the backlog grows. These five are the only path to "finished".
 |---|---|
 | T169 | **RESOLVED 2026-07-31, merged `18b481c` (OutreachDetail half).** The `OutreachList` half is re-filed as **T193**, still open. |
 | T177 | **RESOLVED 2026-07-31, merged (see UPDATE section above).** Provisioning gap it exposed is re-filed as **T195**; `onResetFeedToken` as **T194**. |
-| T183 | **RESOLVED 2026-07-31**, merged onto `claude/t183-student-home-loader`; **PR #6 still open against `main`** (see the midday UPDATE). Residue re-filed as that branch's T196/T197 — **renumber to T198/T199**. |
+| T183 | **RESOLVED 2026-07-31**, merged onto `claude/t183-student-home-loader`; **PR #6 still open against `main`** (see the midday UPDATE). Residue re-filed as that branch's T196/T197 — **renumber to T310/T311**. |
 | T173 | **IN PROGRESS 2026-07-31** (other session) — packet final revision done, worker dispatching. `CoachHome`'s three fabricated surfaces (`0 / 38 hrs`, `Default goal 10h`, admin Season-setup card) |
 | T191 | a deactivated child's card shows a `1 h` goal that exists in no data source |
 | T158 | Leaderboard — owner-ruled to embed in the dashboard; unblocked |
@@ -391,7 +391,7 @@ user-facing items remain, most of them small.
 
 **Since this proposal was written, four of those ten have closed** — T169, T177, T178 and T183
 (T183 pending PR #6's merge) — and **T173 is in progress**. The remaining user-facing work is
-**T191, T158, T179, T180, T189**, plus the residue rows T193/T194/T195 and the T196–T199 set.
+**T191, T158, T179, T180, T189**, plus the residue rows T193/T194/T195, T196/T197, and T183's pair at T310/T311.
 That is the honest current shape of the backlog; **the proposal's cuts are still unapplied and
 still awaiting the owner's veto.**
 
