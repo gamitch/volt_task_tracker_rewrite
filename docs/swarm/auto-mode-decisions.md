@@ -1093,3 +1093,39 @@ the tier and the gate weight are all the orchestrator's or the foreman's.
 
 **Recorded here because the packet cited this ruling provisionally**, pointing at a coordinator
 message rather than this file. That is the citation the packet and worker output should now use.
+
+---
+
+## 2026-07-31 — George's ruling on T180's participation-section deletion
+
+**Context.** T180 mounted the real BEH-06 consistency strip on `/meetings`. Because that strip
+carries its own participation figure — from `loadConsistencyStripData`, a *different* query than
+the host's `loadStudentMeetingsData` — leaving both would put two numbers for the same metric on
+one screen, architecturally free to disagree. The orchestrator deleted the host's own
+`Participation` section on that reasoning and **shipped it before asking**, flagging it in the
+packet, the ledger, the PR and the merge report as a product call made on the owner's behalf.
+
+George asked to see it rather than decide from prose: **"for T180 i think i would need to see a
+mockup ui to determine how i want to answer. i'm not visualizing the impact."**
+
+He was shown a side-by-side of the **real** page — both versions rendered from their own committed
+components and the built `theme.css`, at `95e6702` and `79e159d`, same student, same fixtures —
+showing that the figure did not disappear but moved: from a standalone section above Upcoming, to
+the bottom of the page beside the five attendance dots it summarises, same `57.1%`, same bar, with
+the "isn't built yet" placeholder gone.
+
+He ruled: **"keep it as shipped."**
+
+**What this authorizes:** T180's Part B stands as merged. `/meetings` carries one participation
+figure, inside the strip. No follow-up row is needed and the alternative — restoring the top bar
+and suppressing the strip's copy via a new prop on the shared `ConsistencyStrip` — is **closed**,
+not deferred.
+
+**What it does not authorize:** anything about T189. That row is a separate, still-open question
+about what a *deactivated* student sees on this same screen, and it needs its own ruling.
+
+**Process note worth keeping.** The right response to "I can't visualize this" was to render the
+actual thing, not to describe it better. Rendering both versions in jsdom from their own commits
+and framing them with the real stylesheet cost one short detour and turned an abstract product
+question into a decision the owner could make by eye in seconds. **When a UI decision is put to the
+owner, show the UI.**
