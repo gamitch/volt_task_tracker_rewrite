@@ -18,6 +18,7 @@
  * established, including their `AuthProvider` + `LoginAs` role-login
  * harness.
  */
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { act, Component, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
@@ -31,6 +32,7 @@ import type {
   DashboardData,
   FeedRsvpRow,
 } from '../../lib/supabase/loaders/dashboard';
+import { makeLoadCoachHomeData } from '../../lib/supabase/loaders/coachHome';
 import {
   ACTIVITY_FEED_DEFAULT_LIMIT,
   attendanceRatePercent,
@@ -1345,29 +1347,94 @@ function kpiCardValue(label: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// T155: the measured-reality proof (criterion 5) -- a REAL, non-placeholder
-// season id (`FIXTURE_ACTIVE_SEASON.id`) reaching the DEFAULT `loadData`
-// (`defaultLoadCoachHomeData`, untouched, not a custom fixture) with
+// T173: the measured-reality proof (criterion 5) -- a REAL, non-placeholder
+// season id reaching a REAL `loaders/coachHome` loader (DI'd via a stub
+// Supabase client, mirroring `students.test.ts`'s own `makeRecordingClient`
+// style -- not a module-level `vi.mock`, since ~30 other tests in this file
+// must stay on `fixtureLoadData`/`defaultLoadCoachHomeData`), with
 // `loadDashboardData` PINNED to the in-file `defaultLoadDashboardData`
-// fixture (required -- `CoachHome`'s own real Supabase-backed default
+// fixture (RETAINED -- `CoachHome`'s own real Supabase-backed default
 // rejects in this unconfigured jsdom environment, which would hide the
-// entire `{dashboardData && (...)}`-gated grid Surface 2 below lives in;
-// see module doc #14 in `CoachHome.tsx`).
+// entire `{dashboardData && (...)}`-gated grid Surface 2 below lives in; see
+// module doc #14/#15 in `CoachHome.tsx`).
+//
+// Split into two tests (Round 2 redesign, T173 worker packet): Test A proves
+// the roster-sum now honestly floors to zero (no real student's `team_id`
+// matches the still-placeholder `teamId`) and that `activeSeason.season.
+// defaultGoalHours` reaches the DOM via the new prop-threading; Test B is a
+// positive control proving the admin "Season setup" card still correctly
+// fires for the one condition that can still trigger it (genuinely zero
+// teams), so Test A's `not.toContain('Season setup')` isn't vacuously true
+// for the wrong reason (constitution's anti-vacuous-absence requirement).
 // ---------------------------------------------------------------------------
 
-describe('<CoachHome /> T155 -- measured-reality proof for a REAL, non-placeholder season (criterion 5)', () => {
-  it('genuinely empties four widgets while two known-residual fabricated surfaces (both from the same defaultGoalHours root cause) and the admin Season-setup permanent residual remain', async () => {
+/**
+ * Minimal `.from(table)` dispatcher for `makeLoadCoachHomeData`'s two real,
+ * UNFILTERED queries (`teams`, `students`) -- mirrors
+ * `students.test.ts`'s `makeRecordingClient` style, throwing on any
+ * unexpected table name. Under the Round 2 redesign, no `.from('seasons')`
+ * handler is needed (there is no season query for this loader to perform).
+ */
+function makeCoachHomeStubClient(
+  teams: readonly { id: string; name: string }[],
+  students: readonly {
+    id: string;
+    display_name: string;
+    team_id: string;
+    is_active: boolean;
+    goal_hours_override: number | null;
+  }[],
+): SupabaseClient {
+  const fromSpy = vi.fn((table: string) => {
+    if (table === 'teams')
+      return { select: vi.fn().mockResolvedValue({ data: teams, error: null }) };
+    if (table === 'students') {
+      return { select: vi.fn().mockResolvedValue({ data: students, error: null }) };
+    }
+    throw new Error(`unexpected table: ${table}`);
+  });
+  return { from: fromSpy } as unknown as SupabaseClient;
+}
+
+describe('<CoachHome /> T173 -- measured-reality proof for a REAL, non-placeholder season with a REAL loaders/coachHome loader (criterion 5)', () => {
+  it('Test A (non-empty teams): genuinely empties four widgets, floors "Hours vs. team goal" to an honest 0 / 1 hrs (no real student matches the still-placeholder teamId), shows the real "Default goal 45h" from the active season, and clears the admin Season-setup card', async () => {
     window.localStorage.clear();
-    renderAsUser(ADMIN_USER, {
-      // No `loadData` override -- the untouched real default,
-      // `defaultLoadCoachHomeData`, per criterion 5's own instruction.
-      loadDashboardData: defaultLoadDashboardData, // PINNED, not CoachHome's own real Supabase default.
-      nowFn: () => FIXTURE_REFERENCE_NOW,
-    });
+    const stubClient = makeCoachHomeStubClient(
+      [{ id: 'team-real-falcons', name: 'Falcons' }],
+      [
+        {
+          id: 'student-real-jamie-osei',
+          display_name: 'Jamie Osei',
+          team_id: 'team-real-falcons', // NOT PLACEHOLDER_CURRENT_TEAM_ID.
+          is_active: true,
+          goal_hours_override: 18, // Distinctive; not asserted directly, exercises the field.
+        },
+      ],
+    );
+    renderAsUser(
+      ADMIN_USER,
+      {
+        loadData: makeLoadCoachHomeData(() => stubClient),
+        // RETAINED (round-1 NIT fix, still required after the rewrite):
+        // `CoachHome`'s own real Supabase-backed default rejects in this
+        // unconfigured jsdom environment, hiding the entire
+        // `{dashboardData && (...)}`-gated grid Surface 2 lives in.
+        loadDashboardData: defaultLoadDashboardData,
+        nowFn: () => FIXTURE_REFERENCE_NOW,
+      },
+      // `defaultGoalHours` no longer comes from the stub client at all
+      // (Round 2 redesign) -- it comes from `activeSeason.season.
+      // defaultGoalHours`, threaded as a prop. A distinctive override here
+      // (`45`, not `FIXTURE_ACTIVE_SEASON`'s own `100`) proves it is a real
+      // passthrough, not a hardcoded/coincidental value.
+      async () => ({ ...FIXTURE_ACTIVE_SEASON, defaultGoalHours: 45 }),
+    );
     await flushMicrotasks();
 
-    // Honest empties -- all four reach empty via the `events` season-filter
-    // join (module doc's own field-by-field table in the worker packet).
+    // Honest empties -- all four reach empty via the `events`/`sessions`/
+    // `attendance` literal-empty fields this loader returns (unaffected by
+    // this change, still exercised the same way: six `expect` calls
+    // covering four widgets total).
     expect(kpiCardValue('Team participation')).toBe('—');
     expect(container.textContent).not.toContain('82.4%'); // the fixture-only participation value must be genuinely gone
     expect(container.textContent).toContain('No completed meetings yet this season'); // last-meeting attendance secondary
@@ -1375,15 +1442,35 @@ describe('<CoachHome /> T155 -- measured-reality proof for a REAL, non-placehold
     expect(kpiCardValue('Events in next 7 days')).toBe('0');
     expect(container.textContent).toContain('Nothing scheduled'); // Next up empty state
 
-    // Known-residual fabricated surfaces -- the SAME root cause
-    // (`data.defaultGoalHours`, always the fixture `10`, never
-    // season-filtered), asserted explicitly as measured, not omitted.
-    expect(container.textContent).toContain('0 / 38 hrs'); // Surface 1: Hours vs. team goal
-    expect(container.textContent).toContain('Default goal 10h'); // Surface 2: Avg hours / active student's secondary -- the round-2 MAJOR
+    // Proves `activeSeason.season.defaultGoalHours` reaches the DOM via the
+    // new prop-threading (Round 2 redesign), independent of the stub client.
+    expect(container.textContent).toContain('Default goal 45h');
 
-    // Documented permanent residual (packet's own note), not a falsifiable
-    // check: `isSeasonMissingSetup` reads only unfiltered fixture fields, so
-    // this is `true` for every season this task can produce.
+    // Proves the roster-sum now honestly floors to zero: the stub client's
+    // one real student's `team_id` ('team-real-falcons') never matches the
+    // still-placeholder `teamId` ('team-placeholder-current-viewer', Scope
+    // ruling #1's "floors to honest zero" consequence, measured here, not
+    // just claimed). This assertion is driven entirely by `teams`/`students`
+    // (the stub client), not by `defaultGoalHours`'s source.
+    expect(container.textContent).toContain('0 / 1 hrs');
+    expect(container.textContent).not.toContain('0 / 38 hrs');
+
+    // Proves `hasGoalsConfigured: true` + non-empty teams correctly clears
+    // the admin card (positive control for the "still fires" case is Test B
+    // below).
+    expect(container.textContent).not.toContain('Season setup');
+  });
+
+  it("Test B (empty teams, positive control): the admin Season-setup card still correctly fires for the one condition that can still trigger it (genuinely zero teams) -- proves Test A's absence assertion isn't vacuously true for the wrong reason", async () => {
+    window.localStorage.clear();
+    const stubClient = makeCoachHomeStubClient([], []);
+    renderAsUser(ADMIN_USER, {
+      loadData: makeLoadCoachHomeData(() => stubClient),
+      loadDashboardData: defaultLoadDashboardData, // RETAINED, same reason as Test A.
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+
     expect(container.textContent).toContain('Season setup');
   });
 });
@@ -2000,7 +2087,19 @@ describe("<CoachHome /> BEH-01 milestone toast on this page's own hours-vs-goal 
   it('fires a "reached 25%" toast on first render, then does not re-fire on remount (deduped via localStorage)', async () => {
     window.localStorage.clear();
 
-    renderAsUser(COACH_USER, { loadData: fixtureLoadData, nowFn: () => FIXTURE_REFERENCE_NOW });
+    // T173 round 3 (closing round 2's own new BLOCKER): pin `loadActiveSeason`
+    // so this test's `defaultGoalHours` denominator stays the original `10`
+    // (the in-file `FIXTURE_DEFAULT_GOAL_HOURS`), independent of the Round 2
+    // redesign's unrelated change to where `defaultGoalHours` comes from in
+    // production (`activeSeason.season.defaultGoalHours`, which would
+    // otherwise resolve to `FIXTURE_ACTIVE_SEASON`'s own `100` here and
+    // silently stop this milestone from crossing 25%: 12/38=31.6% crosses,
+    // 12/308=3.9% does not).
+    renderAsUser(
+      COACH_USER,
+      { loadData: fixtureLoadData, nowFn: () => FIXTURE_REFERENCE_NOW },
+      async () => ({ ...FIXTURE_ACTIVE_SEASON, defaultGoalHours: 10 }),
+    );
     await flushMicrotasks();
     expect(container.textContent).toContain('Team hours goal: reached 25% of the season goal.');
 
@@ -2012,7 +2111,11 @@ describe("<CoachHome /> BEH-01 milestone toast on this page's own hours-vs-goal 
     document.body.appendChild(container);
     root = createRoot(container);
 
-    renderAsUser(COACH_USER, { loadData: fixtureLoadData, nowFn: () => FIXTURE_REFERENCE_NOW });
+    renderAsUser(
+      COACH_USER,
+      { loadData: fixtureLoadData, nowFn: () => FIXTURE_REFERENCE_NOW },
+      async () => ({ ...FIXTURE_ACTIVE_SEASON, defaultGoalHours: 10 }),
+    );
     await flushMicrotasks();
     expect(container.textContent).not.toContain('reached 25% of the season goal');
     // The milestone tick itself is still shown as a current fact.

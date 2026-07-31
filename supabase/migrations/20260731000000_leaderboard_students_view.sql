@@ -1,0 +1,57 @@
+-- T158: closes the gap rls.sql/student_teams.sql both name explicitly --
+-- "teammate name visibility for the leaderboard... closed by metric/
+-- leaderboard VIEWS, not a direct SELECT policy on `students`"
+-- (rls.sql:90-92, student_teams.sql:47-53, both read-only, quoted not
+-- paraphrased). `students` deliberately has no `read_all` policy (PII --
+-- real display names of minors); `own_or_linked_read` only lets a caller
+-- see their own/linked row(s), which is correct for every OTHER consumer
+-- of this table but not for OUT-08's leaderboard, which by design shows
+-- every active student's name to every authenticated role
+-- (`Leaderboard.tsx` module doc #6 -- no role gate anywhere in that file).
+--
+-- Two columns, one filter -- not a general-purpose "all students" view.
+-- `is_active` filters at the view level (not merely at the TS layer) so a
+-- deactivated student's historical `v_student_hours` row (that view has no
+-- is_active filter of its own -- confirmed, metric_views.sql:3-19) finds no
+-- matching name here and is silently skipped by `Leaderboard.tsx`'s own
+-- existing `topStudentsByHours` ("rows whose studentId has no matching
+-- roster entry are skipped" -- already-shipped behavior, unmodified by this
+-- migration). This is a disclosed, narrow, precedented choice (matches
+-- `v_student_participation`'s own `where s.is_active` convention,
+-- metric_views.sql:28 and membership_views.sql:67) -- it does not resolve
+-- the broader, still-open T201 question of whether a deactivated student's
+-- historical hours should surface ANYWHERE; it only decides this one new
+-- consumer follows the same "roster views are active-only" default every
+-- other roster-shaped view in this schema already uses.
+--
+-- Additive only (constitution item 10): `create or replace view` in a new
+-- file, this repo's own established convention (metric_views.sql,
+-- membership_views.sql, dashboard_views.sql all say so in their own header
+-- comments). No existing migration file is edited.
+--
+-- Mechanism note -- MEASURED, not reasoned. This view sets no
+-- `security_invoker` (PG15+, absent from this schema entirely, confirmed by
+-- grep), matching every other view here. Verified live, independently
+-- twice, against a scratch PGlite/PostgreSQL instance with a
+-- non-superuser view owner shaped like Supabase's real migration-applying
+-- role (relforcerowsecurity=false): a student-role session reading this
+-- view gets every active student's name (the same session reading
+-- `students` directly still gets exactly its own 1 row), and a
+-- `security_invoker=on` counterfactual collapses both back to 1 row --
+-- proving the view-owner RLS-bypass mechanism is real and load-bearing, not
+-- assumed. The SAME measured session also confirmed the identical
+-- mechanism already governs this task's own unfiltered `v_student_hours`
+-- read (see leaderboard.ts's queryLeaderboardHours) -- this view is not a
+-- novel exposure shape considered alone; both halves of the exposure (name
+-- + hours) share one proven mechanism, not two separate assumptions.
+-- Constitution item 25 already rules this class of exposure the intended,
+-- sanctioned outcome for the leaderboard specifically ("a leaderboard shows
+-- everyone's hours... is the feature"); PRD 8.3 (rls.sql:82-83) separately
+-- authorizes the name half. This comment does not restate
+-- dashboard_views.sql:49-52's "runs under the calling session's own RLS"
+-- claim -- that sentence is the one constitution item 25 and this task's
+-- own live measurement both found to be false.
+create or replace view v_leaderboard_students as
+select id, display_name
+from students
+where is_active;

@@ -5900,3 +5900,295 @@ Item 25 exists for exactly this.
 Harmless in this instance — nothing else was in flight on the branch, and its final commit and
 gates are clean — but worktree isolation is what has kept this session from colliding with the
 parallel one, so it should not become habit.
+## T183 — `StudentHome`'s greeting is now the real signed-in student's name (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commit | `b21a603` (branch `claude/t183-student-home-loader`, PR #6) |
+| Verdict | **PASS** — 1 MINOR, 2 NIT, first attempt |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (sonnet) / `checker-reviewer` (opus) |
+| Premise gate | 2 rounds (item 19a cap) — REVISE, REVISE, then one owner-authorized bounded revision round, dispatched with no 3rd gate round |
+| tsc / build / format | 0 errors / ✓ / clean |
+| eslint | 0 errors, 358 warnings (unchanged) |
+| vitest | 69 files, **1660 tests** (+6 — see dispute ruling below; baseline was 1654) |
+
+**Scope narrowed at packeting time, disclosed rather than silently cut.** `defaultLoadStudentHomeData`
+fabricated every real signed-in student's name as `'Ada Reyes'`, ignoring both its parameters — the
+only user-facing defect the ledger row's concrete evidence actually named. The other six
+`StudentHomeData` fields (`events`/`sessions`/`rsvps`/`participation`/etc.) were already
+T176-confirmed "honestly empty," not fabricated. Building real queries for them was cut from this
+task on proportionality (item 25) and refiled as **T199** (renumbered from T196 — a parallel session
+filed an unrelated T196/T197 pair from T178 on `main` at about the same time; `main`'s numbering is
+canonical, see `RESUME-HERE.md`), so `StudentHome.tsx`'s own "filed as its own follow-up" module-doc
+sentence doesn't dangle.
+
+**Heaviest premise-gate history since T177.** Round 1 found a genuine BLOCKER: the prescribed fix
+(swap the production `loadData` default + a `renderAsUser` test-harness default) broke
+`DashboardPage.test.tsx:226`, a file outside the original Allowed Files — the same failure-class
+`DashboardPage.test.tsx`'s own comment documents as a T176 gate round-1 finding. Round 2, after the
+fix, independently **built and ran the full prescription itself** (not just critiqued it) and
+measured it clean — 69 files/1654 tests, `tsc` clean — while still returning REVISE on 3 MAJOR:
+a wrong failure-count tripwire in the packet (claimed "exactly 2," measured 3, across 2 files), an
+unsatisfiable "all green" sub-criterion (the harness fix structurally cannot reach
+`DashboardPage.test.tsx`), and an Allowed-Files scope that forbade fixing three assertions the
+task's own change would otherwise leave vacuously true (`DashboardPage.test.tsx`'s coach/admin/
+parent role-discrimination tests, each asserting `.not.toContain('Hi Ada Reyes')` — a string nothing
+would produce once the mock's name changes). Item 19a's 2-round cap escalated to the human owner via
+a structured question, same shape as T177's earlier escalation this session; he authorized one
+bounded revision round (recorded in `auto-mode-decisions.md`). That revision applied all three
+findings and dispatched directly to a worker with no third gate round.
+
+**A self-disclosed packet contradiction, resolved by the checker rather than silently picked by the
+worker.** The packet's own count-tripwire language said the final suite should return to exactly
+1654 tests (baseline); a separate, unambiguous criterion mandated new unit-test coverage for the new
+loader. Both cannot hold — the "1654" figure was a transcription of round 2's own probe measurement
+(which had not included the mandated new tests) into binding-sounding criteria text in three places.
+The worker flagged this explicitly as a dispute candidate rather than improvising past it (Authority
+Boundaries: workers may not redefine success). The checker independently re-derived the same
+conclusion — verified the six new tests were substantive (three of the checker's own hand-injected
+mutations were killed by them), not padding — and ruled 1660 correct, closing the dispute without
+escalation to `boss-arbiter`.
+
+**Wiring proof verified non-vacuous by the checker, not assumed from the worker's report.** The
+checker reverted only the production default-parameter line and re-ran the suite: exactly one
+failure, on the exact assertion the fix was meant to make pass — confirming the swap is genuinely
+load-bearing, closing the vacuity gap round 1's gate first found in criterion 7.
+
+**Follow-ups filed:** **T200** (renumbered from T197, same collision as above; tighten `students.test.ts`'s row-not-found test to assert on the
+thrown message, not a bare `rejects.toThrow()` — currently indistinguishable from an incidental
+`TypeError`, same discipline the file's own eq-drop test already establishes). NIT-only, logged:
+a stale "obviously-fake **default**" comment header above the now-non-default
+`defaultLoadStudentHomeData` (correct not to touch it — the packet required that block
+byte-identical — module doc #9 already states the distinction explicitly elsewhere); three small
+explanatory comments the worker added alongside the `DashboardPage.test.tsx` sibling-assertion
+fixes, slightly beyond a literal reading of the Allowed-Files line but confined to the exact sites
+named and adding no assertions beyond what was mandated.
+
+---
+
+## T173 — `CoachHome`'s goal-hours denominator and Season-setup card are now real (merged 2026-07-31)
+
+| Field | Value |
+|---|---|
+| Merged commit | `7435e3b` (branch `claude/t183-student-home-loader`, PR #6) |
+| Verdict | **PASS** — 4 NIT, no BLOCKER/MAJOR/MINOR, first attempt |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (sonnet) / `checker-reviewer` (opus) |
+| Premise gate | 2 rounds (item 19a cap, hit **twice** on this one packet — see below), then one owner-authorized bounded revision each time, dispatched with no 3rd gate round either time |
+| tsc / build / format | 0 errors / ✓ / clean |
+| eslint | 0 errors, 358 warnings (checker independently re-measured the baseline in an isolated worktree — zero delta) |
+| vitest | 70 files, 1673 tests (+13 from a 69/1660 baseline: +12 new `coachHome.test.ts`, +1 net from a Test A/B split) |
+
+**Two on-screen surfaces from two fabricated fields survived T155's fix.** `defaultGoalHours`
+(hardcoded `10`) fed both the "Hours vs. team goal" tile's denominator (fabricating `0 / 38 hrs`)
+and a separate "Avg hours / active student" tile's `Default goal 10h` secondary; `seasonSetupStatus`
+(hardcoded `hasGoalsConfigured: false`) made the admin "Season setup" card permanently claim setup
+was incomplete. A new `loaders/coachHome.ts` (2 real queries: `teams`, `students`) fixes the second;
+the first is fixed via a **redesign adopted mid-packeting**, not the original plan — `defaultGoalHours`
+now threads as a prop from `activeSeason.season.defaultGoalHours` (already fetched elsewhere in the
+component, zero new query) rather than through the new loader, matching T176's already-shipped
+pattern of threading goal-hours as a prop rather than through `loadData`. **`teamId` is deliberately
+not resolved by this task** — no table anywhere links a staff profile to a team, every `staff_all`
+RLS policy is program-wide not team-scoped, and this is filed separately as **T198**, a product
+question for the owner (does `CoachHome` need a real per-coach team concept, or should its remaining
+team-scoped widgets go season-wide like T124's already-shipped ones) rather than a schema gap to
+guess at. `teamId` falls through to an honest zero — checker-confirmed live in rendered DOM
+(`0% / 0 / 1 hrs`), not merely reasoned about.
+
+**Heaviest premise-gate history of any task this session — two separate item-19a escalations on
+one packet, both proven narrow by execution rather than open design disputes.** Round 1 found a
+BLOCKER by literally instrumenting and running the prescribed `DashboardPage.test.tsx` change: the
+assertion sat behind `CoachHome`'s `{dashboardData && (...)}` gate, which nothing in that file's
+existing mocks opened. Escalated to the owner (same structured-question shape as T183's two
+escalations); authorized. Round 2 independently rebuilt and ran the *entire* revised prescription,
+confirmed the round-1 fix and the adopted redesign both genuinely correct (mutation-tested, not
+inspected) — and then found a **second, different** BLOCKER the redesign itself introduced: moving
+`defaultGoalHours` from a fixture (`10`) to the real active season (`100`) changed the denominator a
+pre-existing, unrelated milestone-toast test depended on (`12/38 hrs` = 31.6%, crosses the 25%
+milestone and fires a toast; `12/308 hrs` = 3.9%, doesn't) — found only because the gate ran the
+suite, after the packet's own grep-based blast-radius argument (searching for old literal strings)
+missed it entirely, since the redesign's actual mechanism bypasses `loadData` rather than changing
+any string a grep could find. Escalated again; authorized again. Both rulings recorded in
+`auto-mode-decisions.md`.
+
+**Checker did not extend the packet's own habit of confident-but-wrong claims into the review
+itself.** Measured a from-scratch baseline in an isolated worktree rather than trusting either gate
+round's cached number, then mutation-tested all 3 new `DashboardPage.test.tsx` assertions and the
+BEH-01 milestone-toast fix live (revert-and-rerun, not read-and-assume) before rendering PASS.
+
+**4 NIT, none warranting a new ledger row:** `sumGoalHours`'s third argument (real `teamId` filtering)
+has zero test coverage today because `teamId` is still a placeholder that matches no real student —
+intrinsic to T198 being unresolved, not an oversight, and already disclosed in the module doc; two
+small citation-drift line numbers in new code comments; one additional type-only import
+(`SupabaseClient`) beyond the packet's literal one-import count, mechanically required by the DI'd
+stub-client test helper; the honest-zero state rendering as `0 / 1 hrs` (a pre-existing `max={goalHours
+> 0 ? goalHours : 1}` ProgressBar floor, untouched by this task, resolves once T198 lands).
+
+---
+
+## T191 — a deactivated child's hours-vs-goal bar is now an honest marker, not a fabricated `1 h` (merged 2026-07-31)
+
+| Field | Value |
+|---|---|
+| Merged commit | `2e1b8ce` (branch `claude/t183-student-home-loader`, PR #6) |
+| Verdict | **PASS** — 3 NIT, no BLOCKER/MAJOR/MINOR, first attempt |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (sonnet) / `checker-reviewer` (opus) |
+| Premise gate | 2 rounds (item 19a cap) — round 1 REVISE (1 MAJOR), round 2 DISPATCH per the gate's own verdict, no owner escalation needed |
+| tsc / build / format | 0 errors / ✓ / clean |
+| eslint | 0 errors, 358 warnings (checker independently re-measured the baseline — zero delta) |
+| vitest | 70 files, 1673 tests (net-zero delta — 2 existing tests rewritten, 0 added/removed) |
+
+**A genuine product question, correctly not decided by a packet.** `ParentHome`'s per-child card
+rendered `0 / 1 h (0%)` for a deactivated linked student — the `1` a `ProgressBar` clamp artifact
+(`max={goalHours > 0 ? goalHours : 1}`) present in no data source. `RESUME-HERE.md` had already
+flagged this row under "Awaiting the owner's answer" before this session began. `foreman-planner`,
+while investigating whether a packet could be written, confirmed the question was still open and
+surfaced a real cost asymmetry: a "season default" number would need a **new SQL view** (the existing
+`v_student_goal_projection` deliberately excludes inactive students, and T184's `StudentHome` fix
+depends on that exclusion), a real migration under item 18 → opus tier, full gate; "no bar at all"
+needs no new SQL and extends an already-shipped honest-absence pattern at sonnet tier. Presented both
+options to the owner; he chose **"No bar at all."** Recorded in `auto-mode-decisions.md`. The
+`confirmedHours`/`is_active` half of the original finding (a deactivated student's real historical
+hours are invisible through `v_student_goal_projection` but exist, unfiltered, in `v_student_hours`)
+is unaffected by this choice and filed separately as **T201**.
+
+**The fix mirrors an in-repo precedent exactly, at the correct granularity.** `ParentHome.tsx`'s own
+`StudentHomeCardProps.isActive` doc comment had already, during T181, explicitly reasoned that this
+page's situation is *not* `StudentHome.tsx`'s T184 three-way union ("a parent viewing their
+deactivated child's card is an unaffected observer, not a blocked actor") — so the fix does not copy
+T184's whole-page swap. Instead it mirrors `ConsistencyStrip`'s own `participation === null` branch
+(same file family, same "one metric inside a card" granularity), replacing just the Hours-vs.-goal
+section with a `<Text type="supporting" color="secondary">` absence marker when `!isActive`.
+`goalHours`/`hoursPercent` stay computed unconditionally — checker-confirmed byte-unchanged — only the
+JSX consuming them becomes conditional.
+
+**Premise gate found a genuine MAJOR: a criterion true only by fixture coincidence, the same shape
+that cost two other tasks a round each this session.** The original test-rewrite prescription counted
+*all* `[role="progressbar"]` elements page-wide to prove "zero bars for an inactive card, one for an
+active card" — but `ConsistencyStrip` (mounted in every card) renders its own progressbar whenever
+`participation !== null`, independent of `isActive`. The claim held only because both test fixtures
+happen to pin `participation: null`. Fixed via a new `hoursVsGoalProgressBars` test helper that
+resolves each bar's `aria-labelledby` and filters on the label text, making the criterion true
+regardless of the fixtures' `participation` field — verified feasible against Astryx's actual
+`ProgressBar.tsx` source before committing to the approach.
+
+**Checker did not accept the fix on inspection.** Built its own probe pinning non-null `participation`
+on an inactive card specifically to try to reproduce the vacuity the gate had found, and confirmed the
+scoped helper correctly reports 0 Hours-vs-goal bars even with `ConsistencyStrip`'s own bar present in
+the DOM (measured: 1 page-wide bar, 0 scoped). Independently reproduced both required mutations
+(progressbar-count, marker-text) plus the marker-leak check, each breaking the assertion family it was
+meant to guard and no other.
+
+**Follow-up filed: T202** (NIT — checker found, while confirming no sibling surface needed the same
+fix, that `HoursTab.tsx:942` carries the identical `ProgressBar` clamp; it doesn't leak the fabricated
+`1` into visible copy there, but Astryx's `ProgressBar` emits `aria-valuemax` unconditionally, so a
+zero-goal row still announces a fabricated max to assistive tech even where sighted users see nothing
+wrong).
+
+---
+
+## T158 — real Supabase data for `Leaderboard.tsx`, via a new RLS-safe view (merged 2026-07-31)
+
+| Field | Value |
+|---|---|
+| Merged commit | `b703ed6` (branch `claude/t183-student-home-loader`, PR #6) |
+| Verdict | **PASS** — 1 MINOR (follow-up: T205), no BLOCKER/MAJOR, first attempt |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (**opus**, item 18 trigger 1 — migration) / `checker-reviewer` (**opus**) |
+| Premise gate | **3 rounds** (item 19a's 2-round cap hit and owner-authorized twice on this one packet — the heaviest gate history this session), full round throughout (item 19b: migration + novel pattern, no light-gate eligibility) |
+| tsc / build / format | 0 errors / ✓ / clean |
+| eslint | 0 errors, 358 warnings (unchanged) |
+| vitest | 71 files, 1685 tests (+12, exactly the new loader's own test file) |
+
+**Scope narrowed to the real data layer only.** `Leaderboard.tsx` had two gaps: never mounted, and
+no real loader (`LoadLeaderboardDataFn` declared, implemented nowhere). This task closes the second
+only — a new migration (`v_leaderboard_students`, two columns, `where is_active`) plus a new loader
+composing it with `v_student_hours`. The embed half is **T203**, split out at packeting time because
+it has its own real, independently-verified hazard (`CoachHome.tsx`'s own already-shipped T129 fix
+removed a `Section`-nesting CSS bug elsewhere in the same file; a bare `<Leaderboard>` mount would
+reproduce a smaller instance of it) and two different test-harness fixes, neither built yet.
+
+**The core finding: a naive loader would have silently broken for every non-staff viewer.**
+`students` has no `read_all` RLS policy — only `staff_all` and `own_or_linked_read` — and
+`Leaderboard.tsx` deliberately has no role gate at all (visible to every role by design). A loader
+copying the obvious in-repo precedent (`loaders/coachHome.ts`'s plain, unfiltered `students` query)
+would have RLS-filtered a student/parent session down to at most their own row while staff saw
+everyone — the exact role-dependent silent-breakage class this project has repeatedly found this
+session, here caused by schema rather than a missing prop. The schema's own migration comments
+(`rls.sql`, `student_teams.sql`) independently name the fix already: a view, not a table-policy
+change.
+
+**Empirically verified, not just reasoned about — three times, by two different agents.** This
+project has gotten a closely related RLS/view-mechanism claim wrong twice before (a false
+"views run under the caller's own RLS" comment in `dashboard_views.sql`, corrected once by
+constitution item 25/T176, then found repeated a second time, undisclosed until this task, in
+`loaders/students.ts`). Rather than reason about the mechanism a third time, `checker-premise`
+installed `@electric-sql/pglite` (an in-process WASM PostgreSQL, no Docker/server needed, ~40s
+setup) in a scratch directory during round 1, applied the actual prescribed migration, and measured
+the real visibility a `student`-role session gets — proving the design correct. Round 2
+independently re-ran the same measurement from a fresh install and reproduced every number exactly,
+then separately proved the packet's own acceptance criterion for this proof was vacuous as written
+by deliberately running an incomplete version (RLS on only one of four relevant tables) and watching
+it pass anyway — the same "true only by construction" shape that cost T173 and T191 a round each.
+The worker's own implementation then ran a third independent live-Postgres proof (13 real migration
+files applied unchanged, a non-superuser view owner, all 5 required sub-checks plus a self-test
+reproducing round 2's exact false positive as a control), and the checker reproduced it a fourth
+time with its own from-scratch harness rather than trusting the worker's script. All four
+measurements agree.
+
+**Two separate item-19a escalations on this one packet, both owner-authorized, both narrow and
+execution-proven.** Round 1→ round 2: fixed a false supporting claim (the packet argued three views
+were "already queried by non-staff surfaces" to justify the new exposure wasn't novel; only one of
+three actually was) and extended the RLS trace to the loader's own unfiltered `v_student_hours`
+read, the genuinely novel half the first draft hadn't traced. Round 2→round 3 (this time George
+asked a clarifying question — "why are you spinning up a separate postgres database? is that just
+to testing?" — before authorizing, answered and recorded in `auto-mode-decisions.md`): closed the
+vacuous criterion above and fixed four broken cross-references to `verification-log.md` (the actual
+record lived in `T158-gate-round1-findings.md`).
+
+**Follow-up filed: T205 (owner-ruled).** Checker independently measured a further dimension neither
+gate round covered: the new view is also readable by Supabase's fully unauthenticated `anon` key
+(ships in the public frontend bundle), not just logged-in users — the first view in this schema to
+expose `display_name` that way (hours-only anon exposure was pre-existing and unrelated to this
+task). Not graded security-class per constitution item 25, but also not decided unilaterally, since
+it's a different threat model than T185's already-settled "any *authenticated* caller can read
+hours" ruling. George ruled "close it off" — a one-line follow-up migration, not yet dispatched.
+
+**T204 also carried in this task's filing** (a second, previously-undisclosed instance of the
+`dashboard_views.sql:49-52` stale-comment class, found in `loaders/students.ts` while re-tracing
+this task's own RLS reasoning — documentation accuracy only, no functional defect).
+
+---
+
+## T303 — the event Attendance badge's noun
+
+**Merged `82da973`. First attempt, no findings.** Found by the owner running the app against real
+data, not by any test: an event read `12h recorded` while the KPI strip directly above it read
+`Season hours 0.0`. Both were correct under their own rule — `eventTotalHours` sums over eligible
+sessions with no status filter, while `v_student_hours` joins `es.status = 'completed'` — and they
+contradicted each other in one viewport.
+
+**Owner ruling: "12h recorded is right, just fix the wording to say 'scheduled'."** Implemented as a
+status-aware noun rather than a literal swap, because a blind swap moves the lie instead of removing
+it: once a day is marked complete those hours genuinely do count, and *scheduled* would be false in
+exactly that case. `resolveEventHoursNoun` is a small exported pure function; `eventTotalHours` is
+byte-for-byte unchanged.
+
+**Both mutations reproduced by the orchestrator rather than relayed.** Forcing `'recorded'` →
+**3 of 41** red, including the render-level test; forcing `'scheduled'` → **2 of 41** red. The worker
+proved only the first direction. Adding the reverse is the difference between "the test fails when
+the code is wrong" and "the test fails when the code is wrong **in either direction**" — with a
+two-valued return, one mutation leaves the other branch resting on an unmutated assertion.
+
+Gates in the shared tree: `tsc` 0, build ✓, prettier clean, eslint **0 errors / 360 warnings**,
+vitest **70 files / 1701 tests**, targeted exit 0.
+
+**Disclosed rather than buried:** the warning count rose by one. Adding an export to a file that also
+exports components triggers another `react-refresh/only-export-components` — a pattern this file
+already carries many times. Zero errors, and the alternative (a new file for one 3-line function)
+costs more than the warning.
+
+**No checker round** (item 25) — one noun, one pure function, both mutation directions verified
+directly.

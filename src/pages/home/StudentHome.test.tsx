@@ -23,11 +23,19 @@
  */
 import { act, Component, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthUser } from '../../app/guards';
 import { LoginAs } from '../../test-utils/authHarness';
 import { SeasonProvider, type LoadActiveSeasonFn } from '../../app/SeasonProvider';
 import type { SeasonRow } from '../../lib/supabase/types';
+// T183 -- the real, `getSupabaseClient()`-backed production `loadData`
+// default (`StudentHome.tsx:1763`'s new value). Imported here ONLY to
+// construct the criterion-11 test's own direct-DI proof against a stubbed
+// client (see "Proving the wiring for real", T183 worker packet) -- every
+// OTHER `it(` in this file keeps using the harness's `defaultLoadStudentHomeData`
+// default (`renderAsUser`'s own `mergedProps`, below) unchanged.
+import { makeLoadStudentHomeData } from '../../lib/supabase/loaders/students';
 import {
   buildNextUp,
   computePlannedHours,
@@ -117,6 +125,17 @@ function renderAsUser(
       confirmedHours: 0,
       plannedHours: 0,
     }),
+    // T183 -- `StudentHome.tsx:1763`'s own production default (`loadData`)
+    // is now the real, `getSupabaseClient()`-backed
+    // `loadStudentHomeData` (`loaders/students.ts`), which throws
+    // `SupabaseNotConfiguredError` in this jsdom test environment. Every
+    // pre-existing `it(` in this file that doesn't already inject its own
+    // `loadData` implicitly relied on the OLD fixture-fed default -- default
+    // this harness to the still-untouched, still-exported
+    // `defaultLoadStudentHomeData` so every one of those tests keeps its
+    // exact original behavior, zero content changes. An individual test's
+    // own `props.loadData` (spread after, below) always wins.
+    loadData: defaultLoadStudentHomeData,
     ...props,
   };
   act(() => {
@@ -1604,8 +1623,8 @@ describe('<StudentHome /> T176 round 2 -- goal-hours denominator + confirmed/pla
   });
 });
 
-describe('<StudentHome /> T176 -- render-and-enumerate live over container.innerHTML, real ids + default loadData (criterion 11)', () => {
-  it('confirms or corrects the gate-measured enumeration table (T176-gate-round1-findings.md)', async () => {
+describe('<StudentHome /> T176/T183 -- render-and-enumerate live over container.innerHTML, real ids + the REAL production loadData (criterion 11)', () => {
+  it('confirms or corrects the gate-measured enumeration table (T176-gate-round1-findings.md), now against the real T183 loader', async () => {
     const REAL_SEASON: SeasonRow = {
       id: 'season-real-c11',
       name: 'Real Season C11',
@@ -1619,10 +1638,33 @@ describe('<StudentHome /> T176 -- render-and-enumerate live over container.inner
       createdAt: '2026-01-01T00:00:00.000Z',
     };
 
+    // T183 -- direct DI against a stubbed `students` client, mirroring
+    // `students.test.ts`'s own `makeRecordingClient` helper (that file,
+    // lines 40-62) but for the real `queryStudentDisplayNameById` query
+    // (`.from('students').select('display_name').eq('id', studentId)
+    // .maybeSingle()`) instead of `v_student_goal_projection`. This is the
+    // one test in this file that documents what the SHIPPED PRODUCTION
+    // default (`StudentHome.tsx:1763`'s `loadStudentHomeData`) actually
+    // returns, field by field -- so it must exercise the real loader, not
+    // the harness's `defaultLoadStudentHomeData` fixture fallback.
+    const stubbedStudentsClient = {
+      from: (table: string) => {
+        if (table !== 'students') throw new Error(`unexpected table: ${table}`);
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: { display_name: 'Priya Chen' }, error: null }),
+            }),
+          }),
+        };
+      },
+    } as unknown as SupabaseClient;
+    const realLoadData = makeLoadStudentHomeData(() => stubbedStudentsClient);
+
     renderAsUser(
       STUDENT_USER,
       {
-        // `defaultLoadStudentHomeData` -- the shipped default, unmodified.
+        loadData: realLoadData,
         resolveStudentId: async () => 'student-real-c11',
         resolveStudentScope: async () => ({
           teamId: 'team-real-c11',
@@ -1638,10 +1680,16 @@ describe('<StudentHome /> T176 -- render-and-enumerate live over container.inner
 
     const html = container.innerHTML;
 
-    // Row 1 -- lead item (§3 decision 2): stays fabricated regardless of
-    // real, non-placeholder ids -- `defaultLoadStudentHomeData` ignores
-    // both its parameters for `displayName`.
-    expect(html).toContain('Hi Ada Reyes');
+    // Row 1 -- lead item (§3 decision 2). T183: the shipped production
+    // `loadData` now sources `displayName` for real (`loaders/students.ts`'s
+    // `queryStudentDisplayNameById`, `.eq('id', studentId)`) -- proven here
+    // by injecting a stubbed client that returns a fabricated, non-'Ada
+    // Reyes' name (constitution item 6) and asserting BOTH that it renders
+    // verbatim AND that the old fabricated name is gone, so a
+    // broken-but-differently-fabricated implementation would still fail
+    // this assertion.
+    expect(html).toContain('Hi Priya Chen');
+    expect(html).not.toContain('Hi Ada Reyes');
 
     // Rows 2-4 -- fixed by criterion 10: the real `resolveStudentScope`
     // value (50), never the fabricated `FIXTURE_DEFAULT_GOAL_HOURS` (100)

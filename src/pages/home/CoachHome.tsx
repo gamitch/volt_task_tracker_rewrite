@@ -544,15 +544,70 @@
  *
  *     Three fixture inputs `defaultLoadCoachHomeData`/
  *     `defaultLoadDashboardData` never season-scoped (`defaultGoalHours`,
- *     twice over -- `Hours vs. team goal`'s denominator AND `Avg hours /
- *     active student`'s "Default goal {N}h" secondary -- and
- *     `seasonSetupStatus`, feeding the admin "Season setup" card) remain
- *     fabricated on screen after this fix, for any real season, because
- *     their own fixture data was never filtered by season in the first
- *     place. Filed as a follow-up (constitution item 20), not fixed here --
- *     `loadData`/`loadDashboardData` growing a real Supabase-backed
- *     implementation is out of this task's scope; see this file's own
- *     module doc #9 and `docs/swarm/active/T155-worker-output.md`.
+ *     twice over, and `seasonSetupStatus`) remained fabricated on screen
+ *     after this fix, for any real season -- fixed by T173; see section 15
+ *     below.
+ *
+ * -----------------------------------------------------------------------
+ * 15. T173 -- `teams`/`students`/`seasonSetupStatus` now real; `defaultGoalHours`
+ *     threaded as a prop, not a query. Closes the three surfaces module doc
+ *     #14 above disclosed as still-fabricated.
+ *
+ * `loadData`'s production default (module doc #14's own `defaultLoadCoachHomeData`)
+ * is replaced by `loadCoachHomeData` (`../../lib/supabase/loaders/coachHome.ts`,
+ * imported above), which sources `teams`/`students` for real via two plain,
+ * unfiltered `.select(...)` queries (both tables' `staff_all` RLS policy
+ * grants unrestricted, program-wide read to any admin/coach viewer -- see
+ * that file's own module doc for the verbatim RLS quote and full reasoning).
+ * `defaultLoadCoachHomeData` ITSELF is untouched, stays exported for tests,
+ * and still returns `defaultGoalHours: FIXTURE_DEFAULT_GOAL_HOURS` (`10`,
+ * `:1010`/`:1522` in this file, as of this task's own edits -- re-derive,
+ * don't transcribe, if this drifts further) -- its own
+ * `CoachHome.test.tsx`'s `defaultLoadCoachHomeData (shipped fixture
+ * composition...)` describe block still correctly asserts `goalHours === 38`,
+ * `percent === 31.6`, and `crossedMilestones(percent)` equal to `[25]`,
+ * because it calls the fixture function directly and never touches the
+ * render path below -- it no longer describes what the actual rendered UI
+ * shows once this task ships, only what the retained fixture function
+ * itself still composes to.
+ *
+ * `defaultGoalHours` is NOT part of `loadCoachHomeData`'s return (Round 2
+ * redesign, T173 worker packet) -- `CoachHome` already calls
+ * `useActiveSeason()` and already holds a real `SeasonRow`
+ * (`activeSeason.season`) with its own real `defaultGoalHours` once ready;
+ * that value is threaded straight into `CoachHomeContent` as a plain prop
+ * (`defaultGoalHours={activeSeason.season.defaultGoalHours}`), the same
+ * pattern T176 already shipped for `StudentHome`'s `goalHours`/
+ * `confirmedHours`/`plannedHours`. `loadCoachHomeData`'s own
+ * `CoachHomeData.defaultGoalHours` field is populated with an inert literal
+ * `0`, never read anywhere in this file's render path, kept only because
+ * the type still declares the field (`loaders/students.ts:538`'s identical
+ * T176 precedent for `loadStudentHomeData`).
+ *
+ * `teamId`/`PLACEHOLDER_CURRENT_TEAM_ID` is UNTOUCHED by this task -- still
+ * a disclosed placeholder (module doc #8), now with a stated consequence:
+ * once `students` is sourced from the real `students` table, every row's
+ * `teamId` is a real team UUID that will never equal the literal
+ * `PLACEHOLDER_CURRENT_TEAM_ID`, so `sumGoalHours`/`sumConfirmedHours`
+ * floor to an honest `0` rather than showing a fabricated non-zero number --
+ * the same "placeholder never matches a real id" resolution class already
+ * shipped for four sibling widgets by module doc #14 above, now also
+ * covering this tile.
+ *
+ * `seasonSetupStatus: { hasGoalsConfigured: true }` -- every season that can
+ * reach this code path already has a real, non-null, structurally
+ * un-blankable `default_goal_hours` (`SeasonSettings.tsx`'s create form),
+ * so "has this season's goal hours been configured" is always true, not an
+ * approximation; see `loaders/coachHome.ts`'s own module doc for the full
+ * reasoning, including the disclosed `default_goal_hours = 0` edge case
+ * (still correctly `true` -- zero is still "configured").
+ *
+ * `events`/`sessions`/`rsvps`/`attendance`/`teamParticipation`/
+ * `studentHours` remain literal honest-empty values in `loadCoachHomeData`
+ * (not new Supabase queries) -- filed as follow-up T198, alongside the
+ * `teamId`/team-linkage product question above (bundled together since
+ * building real per-team queries for these would risk wasted work if that
+ * question resolves toward season-wide widgets instead).
  */
 import { useEffect, useId, useState, type CSSProperties, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -594,6 +649,7 @@ import {
   type StudentGoalProjectionEntry,
   type TeamHoursEntry,
 } from '../../lib/supabase/loaders/dashboard';
+import { loadCoachHomeData } from '../../lib/supabase/loaders/coachHome';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real columns/views. Module docs #3/#4.
@@ -2111,7 +2167,7 @@ function CoachHomeLoadingSkeleton(): ReactNode {
  * its own two hooks.
  */
 export function CoachHome({
-  loadData = defaultLoadCoachHomeData,
+  loadData = loadCoachHomeData,
   loadDashboardData: loadDashboardDataProp = loadDashboardData,
   teamId = PLACEHOLDER_CURRENT_TEAM_ID,
   nowFn = () => new Date(),
@@ -2163,6 +2219,7 @@ export function CoachHome({
           teamId={teamId}
           loadData={loadData}
           loadDashboardData={loadDashboardDataProp}
+          defaultGoalHours={activeSeason.season.defaultGoalHours}
           nowFn={nowFn}
         />
       );
@@ -2184,6 +2241,7 @@ interface CoachHomeContentProps {
   teamId: string;
   loadData: LoadCoachHomeDataFn;
   loadDashboardData: LoadDashboardDataFn;
+  defaultGoalHours: number;
   nowFn: () => Date;
 }
 
@@ -2193,6 +2251,7 @@ function CoachHomeContent({
   teamId,
   loadData,
   loadDashboardData: loadDashboardDataProp,
+  defaultGoalHours,
   nowFn,
 }: CoachHomeContentProps): ReactNode {
   const navigate = useNavigate();
@@ -2232,7 +2291,7 @@ function CoachHomeContent({
   // milestone, so this is inert until `loadState.status === 'success'`).
   const successData = loadState.status === 'success' ? loadState.data : null;
   const preGoalHours = successData
-    ? sumGoalHours(successData.students, teamId, successData.defaultGoalHours)
+    ? sumGoalHours(successData.students, teamId, defaultGoalHours)
     : 0;
   const preConfirmedHours = successData
     ? sumConfirmedHours(successData.students, teamId, successData.studentHours)
@@ -2474,7 +2533,7 @@ function CoachHomeContent({
                     }
                     secondary={
                       <Text type="supporting" color="secondary">
-                        Default goal {data.defaultGoalHours}h
+                        Default goal {defaultGoalHours}h
                       </Text>
                     }
                   />

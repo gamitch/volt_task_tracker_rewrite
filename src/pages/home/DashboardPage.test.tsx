@@ -35,14 +35,20 @@ import { DashboardPage } from './DashboardPage';
 // `CoachHome` already required `useActiveSeason()` mocking (T155, above).
 // `DashboardPage` renders `<StudentHome />` with zero props (module doc #1
 // in `DashboardPage.tsx`, unchanged by this task -- that file is Forbidden
-// here), so both resolvers hit their real, unconfigured-in-jsdom defaults
-// unless mocked at the module level -- measured (T176 gate round 1, MAJOR
-// 6): mocking `resolveCurrentStudentId` alone still leaves the new
-// `resolveStudentScope` hop hitting the real `getSupabaseClient()`, which
-// `createLoader` normalizes into a rejection (`loader.ts:168-173`), which
-// this file's own "renders StudentHome for role \"student\"" test would
-// otherwise surface as `"Couldn't find your student record…"` instead of
-// `'Hi Ada Reyes'`. Both modules must be mocked together.
+// here), so all three real exports below hit their real, unconfigured-in-
+// jsdom defaults unless mocked at the module level -- measured (T176 gate
+// round 1, MAJOR 6): mocking `resolveCurrentStudentId` alone still leaves
+// `resolveStudentScope` hitting the real `getSupabaseClient()`, which
+// `createLoader` normalizes into a rejection (`loader.ts:168-173`).
+// T183 -- `StudentHome.tsx:1763`'s own production `loadData` default is now
+// also real (`loaders/students.ts`'s `loadStudentHomeData`), a THIRD seam
+// this dispatcher's zero-props render reaches -- so this file's own
+// "renders StudentHome for role \"student\"" test now mocks all three
+// exports (`resolveCurrentStudentId` below, `resolveStudentScope` and
+// `loadStudentHomeData` in the second `vi.mock` block right after this one)
+// rather than the two T176 originally required; leaving any one unmocked
+// would surface as this test's "Couldn't load Home" DES-12 error state
+// instead of the `'Hi Jordan Blake'` marker text this file now asserts.
 vi.mock('../../lib/supabase/loaders/meetings', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/supabase/loaders/meetings')>();
   return {
@@ -59,6 +65,22 @@ vi.mock('../../lib/supabase/loaders/students', async (importOriginal) => {
       goalHours: 100,
       confirmedHours: 0,
       plannedHours: 0,
+    }),
+    // T183 -- the new production `loadData` export. A distinct, fabricated
+    // name from the `StudentHome.test.tsx` DI'd proof ('Priya Chen') so a
+    // reader can tell at a glance which test is proving which thing, and so
+    // a bug that returns the wrong constant couldn't accidentally satisfy
+    // both (constitution item 6 -- fixtures use fabricated names).
+    loadStudentHomeData: async (_studentId: string, seasonId: string) => ({
+      seasonId,
+      displayName: 'Jordan Blake',
+      defaultGoalHours: 0,
+      goalHoursOverride: null,
+      events: [],
+      sessions: [],
+      rsvps: [],
+      studentHours: null,
+      participation: null,
     }),
   };
 });
@@ -95,6 +117,65 @@ vi.mock('../../lib/supabase/loaders/parentHome', async (importOriginal) => {
       consistencyEntries: [],
       nextEvents: [],
       rsvps: [],
+    }),
+  };
+});
+
+// T173: `CoachHome` (which this dispatcher routes `coach`/`admin` users to)
+// now also calls a real backend for its primary KPI grid
+// (`loaders/coachHome.ts`'s `loadCoachHomeData`, `CoachHome.tsx:2168`'s own
+// prop default), which hits the real, unconfigured-in-jsdom
+// `getSupabaseClient()` unless mocked at the module level -- same class of
+// gap the `loaders/parentHome`/`loaders/students` mocks above already close
+// for the other two Home components. `teams: []` is deliberate (not
+// "distinctly non-empty") -- it keeps the admin test's existing
+// `.toContain('Season setup')` assertion's truth value unchanged; see the
+// new `'...missing teams.'` assertion below for how that assertion is
+// strengthened into a real proof instead of a vacuous one.
+vi.mock('../../lib/supabase/loaders/coachHome', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/supabase/loaders/coachHome')>();
+  return {
+    ...actual,
+    loadCoachHomeData: async (seasonId: string) => ({
+      seasonId,
+      defaultGoalHours: 0, // Inert -- see CoachHome.tsx module doc section 15; never asserted against.
+      teams: [],
+      students: [],
+      seasonSetupStatus: { hasGoalsConfigured: true },
+      events: [],
+      sessions: [],
+      rsvps: [],
+      attendance: [],
+      teamParticipation: null,
+      studentHours: [],
+    }),
+  };
+});
+
+// T173 (round-1 BLOCKER fix, required): `CoachHome.tsx`'s `Default goal
+// {defaultGoalHours}h` text (the `Avg hours / active student` secondary)
+// sits inside the `{dashboardData && (...)}` gate, which only opens once
+// `loadDashboardDataProp(seasonId)` resolves. Without this mock, the real,
+// unconfigured `getSupabaseClient()`-backed `loadDashboardData` default
+// rejects in jsdom and this entire grid -- including the `Default goal Xh`
+// text -- never renders, so no assertion inside it could ever pass. The
+// mock only needs to make the gate open; its field VALUES don't need to be
+// realistic (`DashboardData` is fully nullable/array-typed).
+vi.mock('../../lib/supabase/loaders/dashboard', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/supabase/loaders/dashboard')>();
+  return {
+    ...actual,
+    loadDashboardData: async (seasonId: string) => ({
+      seasonId,
+      rosterStats: null,
+      attendanceRate: null,
+      sessionDays: null,
+      upcomingCommittedHours: null,
+      dayOfWeekSessions: [],
+      teamHours: [],
+      topEvents: [],
+      goalProjection: [],
+      activityFeedSource: { events: [], sessions: [], rsvps: [], attendance: [], students: [] },
     }),
   };
 });
@@ -202,28 +283,65 @@ describe('DashboardPage role dispatch', () => {
     // `ParentHome.tsx` fixture names -- those never reach the DOM once the
     // real default is wired, so asserting against them here would be
     // vacuously true for the wrong reason (gate round 1's own finding).
+    // T183 (criterion 7c): once the "student" test's own mock below returns
+    // 'Hi Jordan Blake' instead of 'Hi Ada Reyes', the old string alone
+    // would go vacuously true here for an unrelated reason (coach renders
+    // never mount StudentHome at all) -- assert against the name actually
+    // in play too, same vacuity class this comment already documents for
+    // the ParentHome fixture names.
     expect(container.textContent).not.toContain('Hi Ada Reyes');
+    expect(container.textContent).not.toContain('Hi Jordan Blake');
     expect(container.textContent).not.toContain('Dashboard Fixture Linked Student');
+    // T173: proves (a) the new `loaders/dashboard` mock actually opened the
+    // `{dashboardData && (...)}` gate `Default goal {defaultGoalHours}h`
+    // lives inside (round-1 BLOCKER fix), and (b) `CoachHome.tsx`'s render
+    // now reads the new `defaultGoalHours` PROP (sourced from
+    // `activeSeason.season.defaultGoalHours`, `100` per this file's own
+    // `FIXTURE_ACTIVE_SEASON`), not `data.defaultGoalHours` -- if the
+    // render-source edit were missing this would show 'Default goal 0h'
+    // (the new loader's own inert literal) instead of '100h'.
+    expect(container.textContent).toContain('Default goal 100h');
   });
 
   it('renders CoachHome for role "admin" (HOME-04 handled internally by CoachHome, not duplicated here)', async () => {
     renderAsUser(ADMIN_USER);
     await flushMicrotasks();
     expect(container.textContent).toContain('Team participation');
-    // Fixture season-setup status is incomplete (CoachHome.tsx's own
-    // `FIXTURE_SEASON_SETUP_STATUS`), so an admin viewer sees the
-    // admin-only "Season setup" card -- proof this is the real CoachHome,
-    // with its real internal admin gate, not a separate admin component.
+    // T173: the mocked `loaders/coachHome` always reports
+    // `hasGoalsConfigured: true` -- this card now shows because the mock's
+    // `teams: []` makes `isSeasonMissingSetup` true via the teams branch,
+    // not the goals branch (there is no more fixture `seasonSetupStatus` in
+    // play for this render). The new `'...missing teams.'` assertion below
+    // is the real, non-vacuous proof of that -- this assertion alone stays
+    // true either way, so it's kept only as the same "is this really
+    // CoachHome" proof it always was.
     expect(container.textContent).toContain('Season setup');
+    // T173 (real, non-vacuous proof of `loaders/coachHome`'s wiring):
+    // pre-fix (or if `loadData` were never swapped), `defaultLoadCoachHomeData`'s
+    // in-file `FIXTURE_TEAMS` is non-empty and `FIXTURE_SEASON_SETUP_STATUS.
+    // hasGoalsConfigured` is `false`, so this description would read
+    // "...missing season goals." instead -- a genuinely different,
+    // assertable string.
+    expect(container.textContent).toContain('The active season is missing teams.');
+    // T173 -- same proof as the "coach" case above.
+    expect(container.textContent).toContain('Default goal 100h');
+    // T183 (criterion 7c) -- same vacuity guard as the "coach" case above.
     expect(container.textContent).not.toContain('Hi Ada Reyes');
+    expect(container.textContent).not.toContain('Hi Jordan Blake');
     expect(container.textContent).not.toContain('Dashboard Fixture Linked Student');
   });
 
   it('renders StudentHome for role "student"', async () => {
     renderAsUser(STUDENT_USER);
     await flushMicrotasks();
-    // StudentHome-only hero heading (StudentHome.tsx's own fixture display name).
-    expect(container.textContent).toContain('Hi Ada Reyes');
+    // StudentHome-only hero heading. T183: `StudentHome.tsx:1763`'s
+    // production `loadData` default is now real
+    // (`loaders/students.ts`'s `loadStudentHomeData`), mocked above to
+    // return 'Jordan Blake' -- this is the ONLY test in the repo that
+    // renders `<StudentHome />` zero-props through the real production
+    // dispatcher, so it is the only test that closes the vacuity gap on
+    // `StudentHome.tsx:1763` actually having been swapped.
+    expect(container.textContent).toContain('Hi Jordan Blake');
     expect(container.textContent).not.toContain('Team participation');
     expect(container.textContent).not.toContain('Dashboard Fixture Linked Student');
   });
@@ -243,7 +361,10 @@ describe('DashboardPage role dispatch', () => {
     expect(container.textContent).not.toContain('Bea R.');
     expect(container.textContent).not.toContain('Cleo R.');
     expect(container.textContent).not.toContain('Team participation');
+    // T183 (criterion 7c) -- same vacuity guard as the "coach"/"admin" cases
+    // above.
     expect(container.textContent).not.toContain('Hi Ada Reyes');
+    expect(container.textContent).not.toContain('Hi Jordan Blake');
   });
 
   it('renders nothing when user is null (defense in depth -- unreachable in practice under RequireAuth)', () => {

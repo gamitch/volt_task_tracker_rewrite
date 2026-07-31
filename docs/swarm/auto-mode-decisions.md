@@ -1172,6 +1172,148 @@ consumer.
 
 **Sequencing.** He also said **"then start T302"**, so T302 is taken first and T189's packet
 follows it.
+## 2026-07-30 — George's ruling on T183's item-19a escalation (owner input, structured selection)
+
+**Mechanism, same as T177's entry above — not free-text input.** `T183-worker-packet.md`'s
+`checker-premise` gate ran two rounds — round 1 REVISE (1 BLOCKER: the prescribed fix broke
+`DashboardPage.test.tsx:226`, a file outside the original Allowed Files list; 2 MAJOR), round 2
+REVISE (0 BLOCKER, 3 MAJOR, 3 MINOR — all numeric/textual mismatches inside the packet's own
+acceptance criteria, not a design flaw: a "exactly 2 new failures" tripwire that should say 3, a
+"1654 tests green" criterion that's unsatisfiable because the harness fix can't reach
+`DashboardPage.test.tsx`, and an Allowed-Files/criterion-13 pair that forbids fixing collateral
+vacuous assertions the task itself causes). Round 2's gate did more than critique: it independently
+built the full prescription in its own probes and measured **69 files / 1654 tests green, `tsc`
+clean**, and separately proved (by omitting just the `StudentHome.tsx:1763` swap) that the
+wiring-proof criterion genuinely fails without the real fix — i.e., the design is proven correct by
+execution, not merely argued. Per item 19a this still caps at two rounds and escalates rather than
+looping a third time. I presented the same three-option structured question as T177's precedent
+(authorize one more revision round / pause for review / drop T183), Recommended the first on the
+same "narrow and mechanical, not an open design dispute" grounds. He selected **"Authorize one more
+revision round."** No free-text notes added.
+
+**What this authorizes:** one additional `foreman-planner` revision pass on T183's packet applying
+round 2's findings (fix the tripwire count, rewrite the unsatisfiable criterion, widen the
+`DashboardPage.test.tsx` allowance to cover the three vacuous-assertion lines and the stale mock
+comment), dispatched directly to `worker-implementer` afterward **without** a third
+`checker-premise` round — a bounded exception scoped to this packet only, not a general relaxation
+of item 19a's cap and not pre-approval for any future third-REVISE escalation on any task.
+
+## 2026-07-31 — George's ruling on T173's item-19a escalation (owner input, structured selection)
+
+**Mechanism, same as the two entries above — not free-text input.** `T173-worker-packet.md`'s
+`checker-premise` gate ran two rounds. Round 1 REVISE (1 BLOCKER, proven by an instrumented test
+run: the prescribed `DashboardPage.test.tsx` assertion sat behind `CoachHome`'s
+`{dashboardData && (...)}` gate with no mock opening it; 1 MAJOR: a cheaper, already-precedented
+design existed — thread `defaultGoalHours` from the already-fetched `activeSeason.season`, matching
+T176's shipped pattern, instead of a third Supabase query). Round 2 (after adopting both findings)
+independently re-applied the full revised prescription, proved the BLOCKER genuinely closed by
+mutation-testing all three new assertions, confirmed the adopted redesign byte-exact against its
+T176 precedent — and then found a **new** BLOCKER the redesign itself introduced: threading
+`defaultGoalHours` from the real active season (100) instead of the old fixture (10) changes the
+denominator a pre-existing, unrelated test depends on (`CoachHome.test.tsx`'s BEH-01 milestone-toast
+test: `12/38 hrs` = 31.6%, crosses the 25% milestone and fires a toast, becomes `12/308 hrs` = 3.9%,
+no toast) — a currently-green test outside the packet's Allowed Files, the same failure shape as
+T183's own round-1 BLOCKER and T173's own round-1 BLOCKER, a third occurrence of one pattern this
+session. The gate wrote, applied, and verified the fix itself (pin the fixture season's
+`defaultGoalHours` to `10` at the two `renderAsUser` call sites in that one test) before reporting.
+Per item 19a this caps at two rounds and escalates. I presented the same three-option structured
+question as the two prior escalations (authorize one more revision round / pause for review / drop
+T173), Recommended the first on the same grounds the gate itself used in its "Framing for the owner"
+section: narrow, mechanical, proven correct by execution, not an open design problem. He selected
+**"Authorize one more revision round."** No free-text notes added.
+
+**What this authorizes:** one additional `foreman-planner` revision pass on T173's packet — naming
+the newly-broken test as a third authorized `CoachHome.test.tsx` region, prescribing the gate's own
+verified 6-line fix, and correcting the packet's blast-radius claim that missed this test (it
+reasoned from a grep for two literal strings when the redesign's actual mechanism bypasses `loadData`
+entirely, which is what a grep for old string literals cannot see) — dispatched directly to
+`worker-implementer` afterward **without** a third `checker-premise` round. Bounded to this packet
+only, per the same non-precedent-setting terms as the two rulings above.
+
+## 2026-07-31 — George's ruling on T191's display strategy (owner input, structured selection)
+
+**Mechanism, same as the three entries above — not free-text input.** `RESUME-HERE.md` had already
+flagged T191 under "Awaiting the owner's answer" before this session began (not a mid-flight gate
+escalation like the three entries above — this one was a genuine open product question the ledger
+row itself named, per constitution item 20/Authority Boundaries: a worker/planner may not pick a
+side on a question the ledger already deferred to the owner). `foreman-planner`, while investigating
+whether a packet could be written, confirmed the question was still open (no ruling since
+`RESUME-HERE.md` was written) and surfaced a cost asymmetry the original one-line framing didn't
+carry: showing a real "season default" number for a deactivated student's goal needs a **new SQL
+view** (the existing `v_student_goal_projection` deliberately excludes inactive students via `where
+s.is_active`, and T184's `StudentHome` fix depends on that exclusion — relaxing it would break T184),
+which is a real migration under constitution item 18 → **opus tier, full premise-gate round**;
+showing "no bar at all" needs no new SQL and extends an already-proven pattern (honest absence over
+fabrication) at sonnet tier with a light gate. I presented both options via a structured question,
+with "No bar at all" marked Recommended on the planner's own disclosed lean (item 17's honest-signals
+principle, and this session's unbroken preference for absence over a substituted number when the two
+are in tension) — explicitly not citing item 25's "keep it simple" security ruling as authority here,
+since that ruling was scoped to security threat-modeling and extending it to a UI-honesty question
+would repeat T185's own over-reach error. He selected **"No bar at all."** No free-text notes added.
+
+**What this authorizes:** a `T191-worker-packet.md` scoped to replacing the numeric hours-vs-goal bar
+with an honest non-numeric state when a card's linked student isn't active, no new SQL, sonnet tier.
+The `confirmedHours`/`is_active` second half of the original finding is unaffected by this choice
+either way and is filed separately as **T201** (a deactivated student's real historical hours are
+invisible through `v_student_goal_projection` but exist, unfiltered, in `v_student_hours` — scope
+undiagnosed, same posture as T189).
+
+## 2026-07-31 — George's ruling on T158's item-19a escalation (owner input, verbatim quote)
+
+**Mechanism, distinct from the four entries above — this one is free-text, not a structured
+selection.** `T158-worker-packet.md`'s `checker-premise` gate ran two full rounds (item 19b: full
+gate, unconditional per item 18's migration trigger). Round 1 REVISE (MAJOR: the packet's own
+supporting evidence claimed three views were already queried by non-staff surfaces to argue the
+new view's exposure shape wasn't novel; an exhaustive grep showed only one of three actually was).
+The gate went further than reading code to resolve it: it installed `@electric-sql/pglite` (a
+WASM PostgreSQL, no Docker/server needed) in a scratch directory and empirically measured the
+actual RLS/view-visibility mechanism the packet had flagged as "reasoned, not measured" — proving
+the migration+loader design genuinely correct. Round 2 (after the fixes) independently re-ran the
+same live-Postgres measurement from scratch and reproduced every number exactly, but found the
+revision's new acceptance criterion for the worker's own live-DB proof was vacuous as written — a
+harness with RLS enabled on only one of four relevant tables would pass the criterion for the wrong
+reason (the gate demonstrated this by deliberately running an incomplete harness and watching it
+pass) — plus a handful of citation errors (a cross-reference to a file that doesn't contain the
+cited data, two wrong line/commit citations).
+
+I presented the same three-option structured question used on the four prior escalations
+(authorize one more revision round / pause for review / drop T158). Instead of selecting an
+option, George asked a clarifying question first — **"why are you spinning up a seperate postgres
+database? is that just to testing?"** — which I answered directly (explaining PGlite is an
+ephemeral, in-process, disposable database used solely to verify an RLS mechanism claim this
+project has gotten wrong twice before, not anything touching real infrastructure). He then replied
+in free text, verbatim: **"i authorize one more revision round."** Not a selection from the
+structured options — a direct, verbatim instruction.
+
+**What this authorizes:** one additional `foreman-planner` revision pass on T158's packet — making
+acceptance criterion 4's live-DB proof non-vacuous (RLS enabled on all four relevant tables, a
+mandatory base-table contrast, and the already-measured `security_invoker=on` counterfactor
+promoted from disclosure to a required negative control), fixing the broken `verification-log.md`
+citations (repointing to the actual file the measurement is recorded in, `T158-gate-round1-findings.md`),
+and correcting the smaller citation errors — dispatched directly to `worker-implementer` afterward
+**without** a third `checker-premise` round. Bounded to this packet only, per the same
+non-precedent-setting terms as the four rulings above.
+
+## 2026-07-31 — George's ruling on T205 (owner input, structured selection)
+
+T158's checker-reviewer found, live-measured against a real Postgres, that `v_leaderboard_students`
+(T158's new view) is readable by Supabase's unauthenticated `anon` key — not just logged-in app
+users — and is the first view in this schema to expose `display_name` that way (the pre-existing
+`v_student_hours` was already `anon`-readable; not new). Not graded security-class or
+BLOCKER-adjacent per constitution item 25 ("do not manufacture a security-class finding out of an
+extension of a rule") and the owner's own "keep it simple" ruling, but explicitly not decided
+unilaterally either — this is a different threat model than T185's already-settled "any
+*authenticated* caller can read hours" ruling (a logged-in team member vs. an anonymous internet
+request), so extending T185's disposition without asking would have repeated exactly the kind of
+scope-creep-by-analogy this project's process has flagged before. Filed as **T205**, presented via
+a structured two-option question (leave as-is, matching T185's proportionality precedent, vs. close
+it off via a one-line follow-up migration, Recommended on the "no cost to close something that
+doesn't need to be open" grounds). George selected **"Close it off."**
+
+**What this authorizes:** T205 proceeds as a real follow-up task — a new migration
+(`revoke select on public.v_leaderboard_students from anon;` or equivalent), which per constitution
+item 18 trigger 1 requires opus tier and a full `checker-premise` round regardless of the change's
+size, no exception for a one-line revoke. Not yet packeted or dispatched as of this ruling.
 
 ---
 
