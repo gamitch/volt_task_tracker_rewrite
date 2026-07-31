@@ -1,4 +1,4 @@
-# Resume here — state of play at `main` = `534bdbf` (read the UPDATE sections top-down; each supersedes the ones below it)
+# Resume here — state of play at `main` = `79e159d` (read the UPDATE sections top-down; each supersedes the ones below it)
 
 Written 2026-07-30 so this session's context can be cleared without losing anything.
 Fresh orchestrator session: read this, then `constitution.md`, then the open rows in
@@ -7,6 +7,68 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 **Several dated UPDATE sections sit near the top of this file. Read them top-down — the
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
+
+## UPDATE — 2026-07-31 evening: T179 and T180 merged; T189 diagnosed and waiting on the owner
+
+**`main` = `79e159d`.** Gates there: `tsc` 0 · `vite build` ✓ · prettier clean · eslint
+**0 errors / 359 warnings** · vitest **70 files / 1696 tests**. CI green on every merge.
+
+**Merged since midday:** **T179** (PR #10) — `MarkDayCompleteDialog` mounted per-session on
+`OutreachDetail`, and its five fixture/placeholder-defaulted props made required so a forgetful
+call site cannot compile. **T180** (PR #11) — the real BEH-06 consistency strip mounted on
+`/meetings`, and the host's duplicate participation region deleted. Two of the three
+"mounted nowhere" rows are now closed; **T189 is the third and is blocked on a ruling.**
+
+**Row numbers are namespaced now — see the ledger's Legend.** T300–T309 is this session's block,
+T310–T319 the other session's, T206–T299 deliberately empty. **T300** (`OutreachEventDialog`'s own
+placeholder copy), **T301** (three source comments claiming a null check is compiler-required —
+measured false) and **T302** (`isEmpty`'s participation clause is asserted by nothing) are filed
+and unstarted.
+
+### T189 — DIAGNOSED, needs one owner decision before any packet is written
+
+Traced end to end at `79e159d`. The id resolution and the strip's dot row carry **no `is_active`
+filter**; only the participation figure reads `v_student_participation`, which ends
+`where s.is_active`. So a deactivated student sees **their real attendance dots beside "no
+completed meetings recorded yet this season"** — the two contradicting each other inside one
+widget. Reachable: `is_active` appears zero times in `auth.ts` and `guards.tsx`, and nothing has
+added a sign-in block since T184.
+
+**The question:** the owner's standing ruling is *"a deactivated student should not be able to
+login, if not possible, they should see nothing"* — but T184, which he accepted, shipped **honest
+copy** rather than nothing. Four options were put to him (honest copy / hide the strip / blank the
+page / close it under item 25); **he has not answered, and no packet should be written until he
+does.** Recommendation on the row: follow T184's precedent.
+
+**Scoping constraint that must survive into the packet:** the obvious fix touches either
+`ResolveCurrentStudentIdFn`'s return type — shared by three pages — or `ConsistencyStrip`'s props,
+an export the parallel T191 session imports and which T180's criterion C6 exists to protect. The
+containable design resolves `is_active` alongside the id and branches in `MeetingsList.tsx` alone.
+
+### Owner ruling recorded: T180 stands as shipped
+
+He asked to see it rather than decide from prose. Both versions were rendered from their own
+commits with the real stylesheet and shown side by side; he ruled **"keep it as shipped."**
+`/meetings` carries one participation figure, inside the strip. The alternative is **closed**, not
+deferred. **Process note worth keeping: when a UI decision goes to the owner, render the UI.**
+
+### What the last two tasks cost, and what they bought
+
+Both passed on the first attempt with no BLOCKER or MAJOR from their checkers, and between them
+added **one** backlog row (T302) — the other six checker findings were closed in test-only
+follow-up rounds rather than filed, because filing is more expensive than fixing at that size.
+
+**The premise gate paid for itself twice and then some.** On T179 it found that the packet's own
+prescribed `void reloadDetail()` left 86 tests green and the suite at **exit 1**. On T180 it found
+four of seven criteria non-discriminating — including one that failed *both* ways at once. Then
+the worker found that **the gate's own prescribed fix was also broken**, flagged it rather than
+shipping it, and the checker confirmed the substitution. Gate → worker → checker each caught the
+previous link's error.
+
+**The orchestrator's recurring failure, stated plainly:** T180's missing test seam was the **third
+repeat** of a shape already documented in `DashboardPage.test.tsx:33-52` and
+`OutreachList.test.tsx:158-165`. Both were readable in seconds and neither was read. Criteria keep
+getting written against a mental model of the harness instead of the harness.
 
 ## UPDATE — 2026-07-31 midday: T178 merged to `main`; T183 open; a T196/T197 number collision
 
