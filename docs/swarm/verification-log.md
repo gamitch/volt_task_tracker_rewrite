@@ -5873,3 +5873,30 @@ The product decision to delete the host's section stands on the architecture, no
 all. Pre-existing and identical at base, so not a T180 regression, but after Part B it is
 `participation`'s only remaining render-path consumer, which makes the gap more load-bearing than
 it was.
+
+---
+
+## T302 — the `isEmpty` participation clause, now asserted
+
+**Merged `3fb44a7`. First attempt, no findings.** One test, proportionate to the gap (item 25).
+
+Filed by T180's checker from a mutation the packet never named: deleting `participation === null`
+from `MeetingsList.tsx:2359` left **all 1696 tests green** — and green at base too, so the gap was
+pre-existing rather than a T180 regression. What it permitted: a student with zero history rows but
+a real participation row seeing *"No meeting history yet"* instead of their participation figure.
+After T180 deleted the host's own `Participation` section, that clause is `participation`'s **only
+remaining render-path consumer**, which is why a latent gap was worth closing now.
+
+**Mutation reproduced by the orchestrator rather than relayed** — `const isEmpty = history.length
+=== 0;` gives `1 failed | 75 passed (76)`, the single failure being the new test. Gates
+re-measured in the shared tree: `tsc` 0, build ✓, prettier clean, eslint 0 errors / 359 warnings
+unchanged, vitest **70 files / 1697 tests**, targeted file exit 0.
+
+**Deliberately no checker round.** A full opus review is disproportionate to one test whose
+discriminating mutation was already measured when the row was filed and re-measured directly here.
+Item 25 exists for exactly this.
+
+**Recorded deviation:** the worker edited the shared tree instead of its own worktree (item 23).
+Harmless in this instance — nothing else was in flight on the branch, and its final commit and
+gates are clean — but worktree isolation is what has kept this session from colliding with the
+parallel one, so it should not become habit.
