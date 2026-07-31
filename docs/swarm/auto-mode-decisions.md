@@ -1093,3 +1093,82 @@ the tier and the gate weight are all the orchestrator's or the foreman's.
 
 **Recorded here because the packet cited this ruling provisionally**, pointing at a coordinator
 message rather than this file. That is the citation the packet and worker output should now use.
+
+---
+
+## 2026-07-31 — George's ruling on T180's participation-section deletion
+
+**Context.** T180 mounted the real BEH-06 consistency strip on `/meetings`. Because that strip
+carries its own participation figure — from `loadConsistencyStripData`, a *different* query than
+the host's `loadStudentMeetingsData` — leaving both would put two numbers for the same metric on
+one screen, architecturally free to disagree. The orchestrator deleted the host's own
+`Participation` section on that reasoning and **shipped it before asking**, flagging it in the
+packet, the ledger, the PR and the merge report as a product call made on the owner's behalf.
+
+George asked to see it rather than decide from prose: **"for T180 i think i would need to see a
+mockup ui to determine how i want to answer. i'm not visualizing the impact."**
+
+He was shown a side-by-side of the **real** page — both versions rendered from their own committed
+components and the built `theme.css`, at `95e6702` and `79e159d`, same student, same fixtures —
+showing that the figure did not disappear but moved: from a standalone section above Upcoming, to
+the bottom of the page beside the five attendance dots it summarises, same `57.1%`, same bar, with
+the "isn't built yet" placeholder gone.
+
+He ruled: **"keep it as shipped."**
+
+**What this authorizes:** T180's Part B stands as merged. `/meetings` carries one participation
+figure, inside the strip. No follow-up row is needed and the alternative — restoring the top bar
+and suppressing the strip's copy via a new prop on the shared `ConsistencyStrip` — is **closed**,
+not deferred.
+
+**What it does not authorize:** anything about T189. That row is a separate, still-open question
+about what a *deactivated* student sees on this same screen, and it needs its own ruling.
+
+**Process note worth keeping.** The right response to "I can't visualize this" was to render the
+actual thing, not to describe it better. Rendering both versions in jsdom from their own commits
+and framing them with the real stylesheet cost one short detour and turned an abstract product
+question into a decision the owner could make by eye in seconds. **When a UI decision is put to the
+owner, show the UI.**
+
+---
+
+## 2026-07-31 — George's ruling on T189: honest copy
+
+**Context.** T189 was diagnosed (not built) at `79e159d`. A deactivated student on `/meetings`
+sees their **real** last-5 attendance dots sitting directly beside **"— (no completed meetings
+recorded yet this season)"** — the dots prove completed meetings exist and the sentence next to
+them denies it. Cause: the id resolution and the dot row carry no `is_active` filter, while the
+participation figure reads `v_student_participation`, which ends `where s.is_active`. Reachable:
+`is_active` appears zero times in `auth.ts` and `guards.tsx`.
+
+**Why it needed a ruling rather than a default.** George's standing ruling from T184 is *"A
+deactivated student should not be able to login, if not possible, they should see nothing when
+they login"* — but T184 itself, which he accepted, shipped **honest copy** rather than nothing.
+Applied literally here, "see nothing" would blank a page that otherwise shows correct history.
+Four options were put to him: honest copy (T184's precedent) / hide the strip only / blank the
+whole page / close it unfixed under item 25.
+
+He ruled: **"honest copy."**
+
+**What this authorizes.** Replace the contradictory pair with **one honest statement** that the
+student's account is inactive and participation is therefore not tracked. **Their meeting history
+stays visible** — Upcoming and Past are correct data and are not touched. This settles the
+question T184's ruling left open for this surface, and it means the app now says the same thing
+about a deactivated student on `StudentHome` and on `/meetings`.
+
+**What it does not authorize.** Any of the design: where the branch lives, what the copy says
+exactly, how `is_active` is resolved, the tier, or the gate weight. Those are the orchestrator's
+and the foreman's calls.
+
+**A constraint the packet must carry, recorded here so it is not lost.** The obvious fix touches
+either `ResolveCurrentStudentIdFn`'s return type — shared by `StudentMeetingView`, `OutreachList`
+and `StudentHome`, so widening it fans out to three pages — or `ConsistencyStrip`'s props, which is
+an **export the parallel T191 session imports** (`ParentHome.tsx:376`) and precisely the signature
+T180's criterion C6 exists to protect. The containable design resolves `is_active` alongside the
+id and branches in `MeetingsList.tsx` alone. **Changing the view is not the answer:**
+`where s.is_active` is *correct* for aggregate team metrics and only wrong for a student viewing
+themselves; removing it needs a migration (item 18 trigger 1) and silently changes every other
+consumer.
+
+**Sequencing.** He also said **"then start T302"**, so T302 is taken first and T189's packet
+follows it.
