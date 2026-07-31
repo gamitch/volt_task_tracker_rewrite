@@ -1,18 +1,27 @@
 # T177 — Worker Packet
 
-**Pinned to branch tip `3b6ad0f` on `claude/swarm-plan-zl575z`** (`git log -1`
-re-verified live this session; `main` remains `f7ff055`, unrelated). All
-citations below were read directly at this SHA, not carried from the ledger
-row, which itself discloses it was not re-verified this session.
+**Pinned to branch tip `5df13c8` on `claude/swarm-plan-zl575z`** (`git log -1`
+re-verified live this session; `main` remains `f7ff055`, unrelated). The
+packet itself has moved twice since round 1's citations were taken —
+`d8c75b9` (round 2's fixes) and `5df13c8` (the owner-ruling record below) —
+neither commit touches any file this packet cites, so no citation below is
+invalidated by the move.
 
-**Revision 2 of this packet.** Round 1 of `checker-premise` returned REVISE
-(3 BLOCKER, 2 MAJOR, 4 MINOR, 4 NIT). Item 19a caps this at two rounds. All
-findings are corrected below; corrections are marked inline as **[REV2]**.
-The convention findings from round 1 (Functions-URL shape, the
+**Revision 3 of this packet — final pass, no further `checker-premise` round
+follows.** Round 1 returned REVISE (3 BLOCKER, 2 MAJOR, 4 MINOR, 4 NIT);
+round 2's fixes themselves introduced 1 new BLOCKER and 2 new MAJOR, which
+`checker-premise` caught on round 2 and also returned REVISE — hitting item
+19a's two-round cap. Per item 19a this escalated to the human owner rather
+than looping a third `checker-premise` round automatically; **George
+authorized one bounded revision pass, applied directly, with dispatch to
+`worker-implementer` to follow with no further premise-gate round** — see
+`docs/swarm/auto-mode-decisions.md`, "2026-07-30 — George's ruling on T177's
+item-19a escalation," for the verbatim ruling. This revision applies that
+authorized pass. Findings are marked inline as **[REV2]** (round 1's fixes,
+unchanged since) and **[REV3]** (round 2's fixes, applied now). The
+convention findings from round 1 (Functions-URL shape, the
 no-uniqueness-on-`profile_id` schema fact, worker tier, security posture)
-were all confirmed and are unchanged. Two of round 1's BLOCKERs were real
-design gaps, not documentation errors, and are resolved by explicit decisions
-below (§1, §2), not left for the worker to choose.
+were all confirmed across both rounds and are unchanged.
 
 **Attempt:** 1 of 3 (constitution Loop Limit — a 4th attempt escalates to
 `boss-arbiter`). **Tier: `worker-implementer`, sonnet, worktree** — reasoning
@@ -62,10 +71,11 @@ not fixed here — see §6 criterion 11.
 - `src/pages/calendar/SubscribePopover.test.tsx`
 - `src/lib/supabase/loaders/calendarFeed.ts` (new file)
 - `src/lib/supabase/loaders/calendarFeed.test.ts` (new file)
-- `src/pages/settings/SettingsPage.test.tsx` — **[REV2] newly allowed, scope
-  restricted to exactly one block.** See §6 criterion 9 for the required
-  change and why it's required, and §3(f) for why this file cannot stay
-  Forbidden without leaving an already-green test permanently broken.
+- `src/pages/settings/SettingsPage.test.tsx` — **[REV3] newly allowed, scope
+  restricted to exactly three named places** (a rewritten `it` block, one new
+  top-level `vi.mock` block, and one corrected module-doc bullet — see §6
+  criterion 9, which also states why this file cannot stay Forbidden without
+  leaving an already-green test permanently broken).
 
 **Forbidden, in addition to the constitution's standing list
 (`docs/swarm/constitution.md`, `task-ledger.md`, `verification-log.md`,
@@ -73,7 +83,7 @@ not fixed here — see §6 criterion 11.
 - `src/pages/settings/SettingsPage.tsx` (source) — **[REV2] still Forbidden,
   unchanged.** The call site (`:1207`) does not change: it still passes only
   `profileId`, and `SubscribePopover`'s own defaults do the rest. Only the
-  *test* file changes (above), and only in the one place named in §6
+  *test* file changes (above), and only in the three places named in §6
   criterion 9. The checker independently confirms `SettingsPage.tsx` itself
   is zero-diff (item 23).
 - `src/lib/supabase/client.ts`, `loader.ts`, `functions.ts` — read-only
@@ -177,10 +187,17 @@ non-revoked row"). **Round 1 was wrong about the mechanism: PostgREST (the
 server) does not enforce single-row cardinality, and `.maybeSingle()` does
 not "throw."** `postgrest-js` (the installed client library, verified
 directly this round) fetches the response as an ordinary list and enforces
-cardinality **client-side**: `PostgrestTransformBuilder.ts:737-744` sets the
-`Accept: application/vnd.pgrst.object+json` header for `.maybeSingle()`, and
-`PostgrestBuilder.ts:519-537` is where the client-side check actually lives —
-if the returned array has more than one element, it synthesizes an error
+cardinality **client-side**. **[REV3, MINOR fix — round 2's own citation for
+this was also wrong, corrected now.]** `PostgrestTransformBuilder.ts:737-744`
+is `.maybeSingle()`'s own implementation, and it does **not** set any special
+`Accept` header — its own comment states this directly: "No Accept header
+override — we fetch as a list and enforce cardinality client-side." (The
+special `Accept: application/vnd.pgrst.object+json` header is set by
+`.single()`, a sibling method, at `:694` — not by `.maybeSingle()`, and not
+used anywhere in this task's query.) `PostgrestBuilder.ts:519-537` is where
+the client-side cardinality check actually lives, unchanged from round 2's
+claim — if the returned array has more than one element, it synthesizes an
+error
 response shaped `{ code: 'PGRST116', message: 'JSON object requested,
 multiple (or no) rows returned', ... }` rather than a genuine thrown
 exception; `createLoader` (`loader.ts:174-176`) already turns any non-null
@@ -207,6 +224,25 @@ is missing (`settings.ts:358-360`) rather than fabricating a row. Do the same
 here: zero active rows for a profile is a genuine, fail-loud error (routed
 into the existing DES-12 error Banner, `SubscribePopover.tsx:541-554`,
 untouched), never bridged to fixture data.
+
+**[REV3, new — reconciling with T109, which a worker reading `settings.ts`
+will hit immediately otherwise.]** `settings.ts:363-370` (T109) resolved a
+closely analogous "nothing anywhere inserts this row" case the **opposite**
+way: `notification_prefs` also has no backfill/insert path for most real
+profiles, and T109's own comment states that treating a missing row as
+fail-loud there "broke `/settings` for every real user," so it synthesizes
+`DEFAULT_NOTIFICATION_PREFS` — a graceful fallback — instead. This packet's
+fail-loud choice for `calendar_feeds` is still correct, and the reason the
+two cases differ is structural, not a judgment call: every one of
+`notification_prefs`' seven columns has a real, known Postgres column
+default (`not null default true`, cited in `settings.ts` itself), so a
+missing row and a fresh default row are *semantically identical* — there is
+nothing to fabricate that isn't already true. `calendar_feeds`' one
+meaningful column, `token`, has no such stand-in: it is a database-generated
+`uuid` (`default gen_random_uuid()`) with no default *value* a client could
+honestly synthesize — inventing one client-side would not synthesize "the
+row that doesn't exist yet," it would recreate `FIXTURE_ACTIVE_FEED`, the
+exact bug this task exists to remove.
 
 **(f) [REV2, new — the provisioning gap, round 1's BLOCKER 2.]** Nothing
 anywhere inserts a `calendar_feeds` row for a profile — not the invite
@@ -370,7 +406,7 @@ left standing.
 - `export const loadCalendarFeed: LoadCalendarFeedFn = makeLoadCalendarFeed();`
 
 **`SettingsPage.tsx` (source) is unchanged** (§2/§3c). **`SettingsPage.test.tsx`
-gets exactly one scoped change** — §6 criterion 9.
+gets exactly three scoped changes** — §6 criterion 9.
 
 ## 6. Acceptance criteria — prescribed mutation, expected result, for each
 
@@ -396,7 +432,9 @@ Run every mutation in your own worktree only (item 23), revert with
 3. **The multi-row hazard (§3d) is handled by a fake that actually
    enforces cardinality, not one that just differs textually. [REV2, MAJOR 5
    fix.]** The closest existing precedent is
-   `src/lib/supabase/loaders/parentHome.test.ts:20-67`'s `makeRecordingChain`
+   `src/lib/supabase/loaders/parentHome.test.ts:40-67`'s `makeRecordingChain`
+   (**[REV3, NIT fix]** not `:20-67` — lines 20-39 are that file's comment
+   header and its `RecordedCalls` interface, not the recording chain itself)
    — **not** `makeFakeSelectClient` (that name lives in
    `src/pages/roster/InvitesTab.test.tsx:513`, a different directory, and
    only models `.from().select().order()`, no `.limit()`; do not point the
@@ -448,32 +486,87 @@ Run every mutation in your own worktree only (item 23), revert with
    defaults should not require rewriting existing assertions. Report the
    actual diff on this file; if it's larger than "one new `describe` block
    for the two new pure functions," explain why.
-9. **[REV2, BLOCKER 1 fix, replaces the old "zero-diff" criterion.]
+9. **[REV3, supersedes REV2's version of this criterion — round 2's own fix
+   introduced a new BLOCKER and a new MAJOR, both resolved here.]
    `SettingsPage.tsx` (source) is zero-diff; `SettingsPage.test.tsx` changes
-   in exactly one place, and the change is decided here, not left to you.**
-   `SettingsPage.test.tsx:541-547` ("renders the real, imported
+   in exactly three named places, and the changes are decided here, not left
+   to you.** `SettingsPage.test.tsx:541-547` ("renders the real, imported
    SubscribePopover (its own 'Subscribe' trigger)") currently passes only
    because the fixture default resolves instantly to a success state. Once
-   `loadCalendarFeed`'s real default is wired, that test fails in **every**
-   env state — round 1 reproduced this both with and without `.env.local`
-   present, since (§3f) no `calendar_feeds` row exists for the test's fixture
-   profile either way. **Required change, decided:** rewrite that one `it`
-   block to assert the real, honest DES-12 error banner instead of the
-   `Subscribe` button — `expect(container.textContent).toContain("Couldn't
-   load your calendar link")` (the fixed Banner copy at
-   `SubscribePopover.tsx:544-546`, unchanged by this task) — and rename the
-   test to describe what it now proves (e.g. "renders the real, imported
-   SubscribePopover, which honestly errors because no calendar_feeds row is
-   provisioned yet"). **Pair it with a mutation proving genuine sensitivity,
-   not just a differently-worded tautology:** temporarily point
-   `SubscribePopover`'s default `loadCalendarFeed` back at
-   `defaultLoadCalendarFeed` (the fixture) — **expect this test to go RED**
-   (the error banner is gone; the fixture's fake success state, and the old
-   "Subscribe" button, reappear instead). This is the proof that the test is
-   actually reading which default is wired, not merely restating a fact
-   about the fixed Banner copy. **Every other line in `SettingsPage.test.tsx`
-   must be byte-identical** — the checker diffs the whole file, not just this
-   block, and confirms `SettingsPage.tsx` itself has zero diff (item 23).
+   `loadCalendarFeed`'s real default is wired, that test fails — this is a
+   real reversal of previously-passed work, named explicitly per constitution
+   item 19's Definition-of-Ready point 5: **`task-ledger.md:75` records T060
+   PASSED with its checker's explicit finding "Confirmed SubscribePopover is
+   genuinely imported, not reimplemented"** — this criterion revises that
+   exact assertion's *test*, not the underlying fact (`SubscribePopover` is
+   still genuinely imported and rendered; what's being fixed is what its
+   real default now honestly shows).
+
+   **[REV3, BLOCKER fix — round 2's prescribed fix used a live network call
+   and failed under real `.env.local`.]** Round 2 prescribed asserting the
+   real DES-12 error banner by letting the wired-in real `loadCalendarFeed`
+   actually run against `getSupabaseClient()`. `checker-premise` built and
+   measured this: with real Supabase config present, the loader issues a
+   real HTTPS GET to the live REST endpoint, does not settle within
+   `flushMicrotasks()`, and the component is still showing `"Loading your
+   calendar link..."` when the assertion runs — so it fails under that env
+   state (and was never exercised the other way in round 2's own text).
+   **Required fix, decided:** mock the loader module at the top of the test
+   file instead of letting the real network call happen at all —
+
+   ```ts
+   vi.mock('../../lib/supabase/loaders/calendarFeed', () => ({
+     loadCalendarFeed: async () => {
+       throw new Error('No calendar feed was found for your account.');
+     },
+   }));
+   ```
+
+   `checker-premise` built and verified this exact mock passes in **both**
+   env states (47/47), goes RED under the fixture-revert mutation below in
+   both states too, and makes zero network calls. This is the same
+   established in-repo pattern for the identical problem shape — a page
+   shell mounting a child whose real loader default reaches
+   `getSupabaseClient()` — already used at `src/pages/home/
+   DashboardPage.test.tsx:38-76` (whose own comment traces back to "T176
+   gate round 1, MAJOR 6" — the same gate lineage this finding belongs to),
+   `RosterShell.test.tsx:105,136,179,213,259`, `ReportsShell.test.tsx:109`,
+   `OutreachDetail.test.tsx:108,142`, and `OutreachList.test.tsx:56`. Follow
+   that convention, not a bespoke one.
+
+   Rewrite the `it` block itself to assert the real, honest DES-12 error
+   banner — `expect(container.textContent).toContain("Couldn't load your
+   calendar link")` (the fixed Banner copy at `SubscribePopover.tsx:544-546`,
+   unchanged by this task) — and rename it to describe what it now proves
+   (e.g. "renders the real, imported SubscribePopover, which honestly errors
+   because no calendar_feeds row is provisioned yet"). **Pair it with a
+   mutation proving genuine sensitivity, not just a differently-worded
+   tautology:** temporarily point `SubscribePopover`'s default
+   `loadCalendarFeed` back at `defaultLoadCalendarFeed` (the fixture) —
+   **expect this test to go RED** (the error banner is gone; the fixture's
+   fake success state, and the old "Subscribe" button, reappear instead).
+   `checker-premise` verified this mutation still goes RED under the mocked
+   version, in both env states.
+
+   **[REV3, MAJOR fix — round 2's "byte-identical" restriction was too
+   strict; it forbade a change §3c itself requires.]** Round 2 required
+   every other line in `SettingsPage.test.tsx` to stay byte-identical. That
+   is wrong: `SettingsPage.test.tsx:21-23` (module doc proof #4) currently
+   claims this test proves "its own real 'Subscribe' trigger button text is
+   present, sourced from the imported component, not a copy" — a claim this
+   very criterion makes false, and §3c already quotes T105 at length
+   specifically to require correcting a stale claim like this rather than
+   leaving it standing. **Exactly three things beyond the unchanged rest of
+   the file may change, no more:** (a) the rewritten `it` block itself
+   (above), (b) the new top-level `vi.mock('../../lib/supabase/loaders/
+   calendarFeed', ...)` block (above), and (c) the module-doc bullet at
+   `SettingsPage.test.tsx:21-23`, corrected to describe what the test proves
+   now (the widget is genuinely mounted and its real, wired default is what
+   produces the honest error state — not that a success button renders).
+   **Everything else in the file stays byte-identical** — the checker diffs
+   the whole file and confirms exactly these three changes and nothing
+   else, plus confirms `SettingsPage.tsx` (source) itself has zero diff
+   (item 23).
 10. **`onResetFeedToken` explicitly untouched, and named as a follow-up, not
     silently dropped (item 20, §5 point 7).** Your own output must state this
     plainly and recommend a follow-up ledger row describing it (same
@@ -488,37 +581,46 @@ Run every mutation in your own worktree only (item 23), revert with
     exists, and must recommend a follow-up ledger row for that gap
     specifically (a trigger alongside `fn_handle_invite_acceptance`, or
     equivalent — design left to that future task, not sketched further here).
-12. **No regression elsewhere, baseline stated precisely. [REV2, MAJOR 4
-    fix.]** Full repo suite stays green outside the two changed/new files'
-    own additions **and outside four already-failing, pre-existing tests
-    unrelated to this task**, named explicitly so they are not mistaken for
-    a regression you introduced: `AppShell.test.tsx` (two tests),
-    `CoachHome.test.tsx`, `ParentHome.test.tsx` — all env-dependent (pass
-    with `.env.local` absent, fail with it present; the same class of
-    real-default-vs-fixture-default env sensitivity this task's own fix
-    exhibits, per BLOCKER 1). **Measure your own before/after gates with
-    `.env.local` absent** — this repo's canonical, reproducible state (no
-    real Supabase project exists yet, per `client.ts`'s own "External-
-    Prerequisite Posture" module doc), and the state under which the four
-    pre-existing failures' count and identity is stable rather than
-    dependent on whichever real credentials happen to be in a given
-    developer's local file. State explicitly in your report which env state
-    you measured under. Do not attempt to fix the four pre-existing
-    failures — out of scope, not introduced by this task.
+12. **No regression elsewhere, baseline stated precisely, self-consistent.
+    [REV2, MAJOR 4 fix; REV3, MAJOR fix — round 2's own version of this
+    criterion contradicted itself.]** **Measure your own before/after gates
+    with `.env.local` absent** — this repo's canonical, reproducible state
+    (no real Supabase project exists yet, per `client.ts`'s own "External-
+    Prerequisite Posture" module doc). **In that mandated state, the full
+    repo suite must be fully green — zero pre-existing failures, full stop.**
+    Round 2's text mandated measuring with `.env.local` absent (where
+    `checker-premise` itself measured 68 files / 1644 tests, 0 failures,
+    clean) but then told the worker to expect "4 pre-existing failures" that
+    only exist in the *other*, non-mandated env state — self-contradictory,
+    corrected here.
+
+    **Separate note, for context only, not part of the gated baseline:**
+    with `.env.local` *present* (a state this task's own gates are not
+    measured under), four tests fail today, unrelated to this task and not
+    to be fixed by it: `AppShell.test.tsx` (two tests), `CoachHome.test.tsx`,
+    `ParentHome.test.tsx` — the same class of real-default-vs-fixture-default
+    env sensitivity this task's own fix exhibits (criterion 9), which is
+    exactly why this task's gates are pinned to the absent-`.env.local`
+    state rather than left ambiguous. If your own gate run under the
+    mandated absent-`.env.local` state is not fully green, that is a real
+    regression to investigate, not an instance of these four.
 
 ## 7. Required evidence / gates
 
 All five gates, measured at your own worktree SHA, **with `.env.local`
 absent** (criterion 12), before and after: `npx tsc --noEmit`,
 `npx vite build`, `npx prettier --check ...`, `npx eslint .`,
-`npx vitest run`. **[REV2, MAJOR 4 fix.]** Orientation only, re-measure, do
-not assume: **68 files / 1644 tests, with 4 pre-existing failures** (criterion
-12's list) as of this packet's pin (`3b6ad0f`) — not the "69 files / 1644
-tests, all green" figure the round-1 draft of this packet stated, which was
-wrong. Your own merge may move the file/test counts; the four pre-existing
-failures should still be present and unchanged in identity unless you have
-independent reason to believe otherwise (report if so, rather than silently
-absorbing a changed count).
+`npx vitest run`. **[REV3, MAJOR fix — the baseline below was still wrong
+after round 2's own correction attempt.]** Orientation only, re-measure, do
+not assume: **68 files / 1644 tests, 0 failures** under the mandated
+absent-`.env.local` state, as of this packet's pin (`5df13c8`) — not "69
+files / 1644 tests, all green" (round 1's wrong figure) and not "68 files /
+1644 tests, with 4 pre-existing failures" (round 2's own self-contradictory
+figure, which stated the four env-*present*-only failures as if they applied
+to the env-absent state this task's gates are actually measured under). Your
+own merge may move the file/test counts; if your own before-measurement
+under the mandated state is not 0 failures, report the discrepancy rather
+than silently reconciling it against either wrong prior figure.
 
 State your commit SHA (item 21) — the orchestrator verifies HEAD actually
 moved and the change is in the committed blob before treating this as
