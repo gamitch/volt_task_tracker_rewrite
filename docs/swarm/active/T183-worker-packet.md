@@ -1,12 +1,17 @@
 # Worker Packet: T183
 
-**Round 2 of 2 (constitution item 19a cap).** Revised in place after
-`checker-premise` round 1 returned REVISE (1 BLOCKER, 2 MAJOR, several
-factual corrections). All 9 required revisions from that gate are folded in
-below and independently re-verified against the current worktree (not taken
-on the gate's word) — see "Most Recent Failure" for a compact summary. If
-this round also comes back REVISE, item 19a requires escalation to the human
-owner rather than a third round.
+**Final revision pass — authorized as a bounded exception to constitution
+item 19a's 2-round premise-gate cap.** See `docs/swarm/auto-mode-decisions.md`,
+"George's ruling on T183's item-19a escalation" (2026-07-30), for the
+authorization. `checker-premise` ran two rounds: round 1 REVISE (1 BLOCKER,
+2 MAJOR — folded in below, see "Most Recent Failure"), round 2 REVISE (0
+BLOCKER, 3 MAJOR, 3 MINOR — narrow numeric/textual corrections to this
+packet's own acceptance criteria and Allowed Files, not new design work;
+also folded in below). Round 2's gate independently built and ran the full
+prescription in its own probes and measured **69 files / 1654 tests green,
+`tsc` clean** — the design is proven correct by execution, not merely
+argued. **This packet goes directly to `worker-implementer` after this
+revision, with no third `checker-premise` round.**
 
 ## Task ID
 T183
@@ -51,13 +56,36 @@ rather than silently expanding scope.
   proving the real wiring. Do not touch any other test in this file —
   including `StudentHome.test.tsx:1710-1727` (see the explicit ruling on that
   test below; it is deliberately left unedited, not overlooked).
-- `src/pages/home/DashboardPage.test.tsx` — **new for round 2**, scoped to
-  exactly two regions and nothing else:
-  1. The `vi.mock('../../lib/supabase/loaders/students', …)` block, lines
+- `src/pages/home/DashboardPage.test.tsx` — added in round 2, **widened in
+  this revision to cover collateral damage the swap itself causes** —
+  scoped to exactly FOUR regions and nothing else:
+  1. The T176 mock-rationale comment above the `vi.mock` block, lines
+     32-45 — correct the "both resolvers"/"Both modules must be mocked
+     together" language (lines 38, 45) to reflect the THIRD seam this task
+     adds (the display-name loader: two `vi.mock` blocks now cover three
+     mocked exports, not two), and update the trailing `'Hi Ada Reyes'`
+     marker text (line 45) to whichever fabricated name your mock now
+     returns.
+  2. The `vi.mock('../../lib/supabase/loaders/students', …)` block, lines
      53-64 — add the new loader export to the returned mock object.
-  2. The `it('renders StudentHome for role "student"')` test, lines 222-230
-     — change line 226's assertion from `'Hi Ada Reyes'` to the fabricated
-     name your mock returns.
+  3. The `it('renders StudentHome for role "student"')` test, lines
+     222-229 — change line 226's assertion from `'Hi Ada Reyes'` to the
+     fabricated name your mock returns.
+  4. Three now-vacuous negative assertions in the sibling role-dispatch
+     tests: `expect(container.textContent).not.toContain('Hi Ada Reyes')`
+     at line 205 (`renders CoachHome for role "coach"`), line 218 (`renders
+     CoachHome for role "admin"`), and line 246 (`renders ParentHome for
+     role "parent"`). Once region 3's mock swaps in your new fabricated
+     name, these three assert against a string (`'Ada Reyes'`) that no
+     longer appears anywhere for an unrelated reason — coach/admin/parent
+     renders never mount `StudentHome` at all — rather than proving
+     discrimination against the name actually in play. This is the exact
+     vacuity class this file's own comment at lines 200-204 already
+     documents for the `ParentHome` fixture names; the same principle
+     applies here. Update each to assert
+     `.not.toContain('Hi <your region-3 name>')`, in addition to or instead
+     of the old string, so all three remain non-vacuous proof that each
+     role renders neither of the other two components' identity markers.
   Zero other lines in this file may change. `DashboardPage.tsx` itself (the
   source component) stays Forbidden — this is a test-only addition. See
   "Proving the wiring for real" below for why this file is now in scope: it
@@ -78,11 +106,11 @@ rather than silently expanding scope.
 ## Context you need (re-verified against current repo state; cite these line
 numbers, not the ledger row's, if you quote anything back)
 
-**No `node_modules` in this worktree.** Confirmed by the round-1 gate
-(`npx vitest` failed `ERR_MODULE_NOT_FOUND`) and re-confirmed independently
-for this revision (`npm ci` — clean install, 340 packages). **Run `npm ci`
-(or `npm install`) before any test command, including your very first
-baseline run.** Do not interpret a pre-install failure as a repo defect.
+**`node_modules` is present in this worktree** (re-verified for this
+revision — round 1's "absent, `ERR_MODULE_NOT_FOUND`" state was specific to
+that gate's own environment and no longer holds here). If your own
+environment is missing it, run `npm ci` (or `npm install`) first, before
+any test command. Do not interpret a pre-install failure as a repo defect.
 
 **Real baseline, measured directly (not inherited from the ledger — the
 ledger's `67/1591` figure is T176-era and stale):** full suite `69 files /
@@ -209,21 +237,29 @@ state. Suggested default, matching `loaders/calendarFeed.ts`'s T177
 fallback string is also acceptable if you prefer it, but the choice must be
 in a doc comment and covered by a test either way.
 
-**Module doc #9 needs a correction, not just a code change.**
-`StudentHome.tsx:258-279` currently states `displayName` "stays fabricated
-regardless of who is signed in, is the lead item" of the still-fixture
-`loadData` surface. That claim becomes false the moment this task lands, and
-leaving it uncorrected is the exact documentation-trap class this project has
-hit before (T176's own false "no SQL view" claim cost a full round; T186 was
-filed specifically to fix two other stale claims in adjacent files). Correct
-it to state `displayName` is now sourced for real via the new loader, while
-the other SEVEN fields remain honest-empty literals in the new default (not
-fixture-derived) — one or two sentences, not a rewrite of the whole doc
-block. Leave the doc's separate closing sentence ("is filed as its own
-follow-up … not built here", lines ~277-279) intact or only lightly touched
-— it stays accurate after this task (see the disclosure note near the end of
-this packet); do not delete it or reword it to claim the remaining fields
-are now covered by anything.
+**Module doc #9 needs a correction, not just a code change — THREE sentences
+in this doc block go false, not one.** Re-verified directly against the
+current worktree:
+1. `StudentHome.tsx:259-262`: "`loadData` itself, and everything it
+   returns, is still fixture-fed" — false once `displayName` is real.
+2. `StudentHome.tsx:264-266`: "`loadData` is the injectable seam
+   (`(studentId, seasonId) => Promise<StudentHomeData>`), defaulting to the
+   OBVIOUSLY-FAKE `defaultLoadStudentHomeData`" — false once the production
+   default parameter (`:1763`) points at your new loader instead;
+   `defaultLoadStudentHomeData` remains obviously-fake, but it is no longer
+   what `loadData` defaults to.
+3. `StudentHome.tsx:267-277`: "...but every field `defaultLoadStudentHomeData`
+   itself returns (`displayName`, `events`, ... ) is still the fixture it
+   always was... `Hi Ada Reyes`, unconditionally fabricated regardless of
+   who is signed in, is the lead item" — false on its lead claim.
+Correct all three to state `displayName` is now sourced for real via the new
+loader, while the other SEVEN fields remain honest-empty literals in the new
+default (not fixture-derived) — a sentence or two per false claim, not a
+rewrite of the whole doc block. Leave the doc's separate closing sentence
+("is filed as its own follow-up … not built here", `:277-279`) intact or
+only lightly touched — it stays accurate after this task (see the
+disclosure note near the end of this packet); do not delete it or reword it
+to claim the remaining fields are now covered by anything.
 
 ## The test-harness hazard — the load-bearing finding of this packet, verify
 it yourself before writing any test change
@@ -231,8 +267,9 @@ it yourself before writing any test change
 `StudentHome.test.tsx`'s `renderAsUser` helper (lines 107-137) defaults
 `resolveStudentId`/`resolveStudentScope` in `mergedProps` (lines 112-119) but
 **does not default `loadData` at all**. Of this file's **29** `renderAsUser(...)`
-call sites (re-counted directly — 31 total string matches includes the
-function definition itself and one comment mention, neither a call site),
+call sites (re-counted directly — grepping `renderAsUser` returns **32**
+total matched lines: 1 is the function definition itself, line 107; 2 are
+comment mentions, lines 66 and 98; the remaining **29** are real call sites),
 **20 pass `loadData` explicitly, 9 do not.**
 
 **Corrected from round 1: the original draft of this packet grepped
@@ -270,34 +307,49 @@ Ada Reyes')`). Both were independently re-confirmed for this revision by
 direct inspection of the source, not just accepted from the round-1 gate.
 
 **If you swap `StudentHome.tsx:1763`'s default parameter without also fixing
-the harness, exactly these two tests will start invoking your new, real,
-`getSupabaseClient()`-backed loader.** In this project's test environment
-`getSupabaseClient()` throws `SupabaseNotConfiguredError` when unconfigured
-(`client.ts`, cited in `loader.ts`'s own module doc), which `createLoader`
-normalizes into a rejected promise — so those two tests will not hang, but
-they will render "Couldn't load Home" instead of `'Hi Ada Reyes'`, and fail.
-Confirm this yourself by running the full suite immediately after the
-`StudentHome.tsx` swap, before touching any test file — you should see
-**exactly 2 new failures** at those two locations, nothing more and nothing
-less. If you see a different count, stop and re-diagnose before proceeding;
-your understanding of the harness is incomplete.
+the harness, exactly THREE tests, in TWO files, will start invoking your
+new, real, `getSupabaseClient()`-backed loader.** In this project's test
+environment `getSupabaseClient()` throws `SupabaseNotConfiguredError` when
+unconfigured (`client.ts`, cited in `loader.ts`'s own module doc), which
+`createLoader` normalizes into a rejected promise — so these tests will not
+hang, but they will render "Couldn't load Home" instead of `'Hi Ada Reyes'`,
+and fail. The third is `DashboardPage.test.tsx:226` (the `renders
+StudentHome for role "student"` test), for the identical mechanism: it too
+renders `<StudentHome />` with zero props, and at this point in the
+sequence its `loaders/students` mock (lines 53-64) does not yet cover your
+new loader's export — that mock extension only happens later, deliberately,
+at criterion 7b. Confirm this yourself by running the full suite immediately
+after the `StudentHome.tsx` swap, before touching any test file or the
+`DashboardPage.test.tsx` mock — you should see **exactly 3 new failures, in
+2 files**: `StudentHome.test.tsx:1608` (assertion at `:1644`),
+`StudentHome.test.tsx:1711` (assertion at `:1722`), and
+`DashboardPage.test.tsx:226`. Nothing more and nothing less. If you see a
+different count or different locations, stop and re-diagnose before
+proceeding; your understanding of the harness is incomplete.
 
 **Required fix:** add a `loadData: defaultLoadStudentHomeData` default to
 `renderAsUser`'s `mergedProps` (same spread-order convention already used for
 `resolveStudentId`/`resolveStudentScope` — the harness default first, an
 individual test's own `props` override wins via the later spread). This
-restores both of those two tests, and every other pre-existing test, to
-their exact original behavior with **zero content changes**, because
-`defaultLoadStudentHomeData` itself is untouched. Re-run the full suite
-after this harness fix and confirm you are back to the pre-change pass
-count, with exactly **two** deliberate exceptions from this point forward:
-the criterion-11 test, which you will edit on purpose (next section), and
-`DashboardPage.test.tsx`'s "renders StudentHome for role student" test,
-which you will also edit on purpose ("Proving the wiring for real" below).
-`StudentHome.test.tsx:1710-1727` (the T184 positive control) is the second
-of the exactly-two tests that fail mid-swap, but its fix is **not** a third
-deliberate edit — it is simply restored to green, unedited, by the harness
-fix alone. See the explicit ruling on it below.
+restores both of the two `StudentHome.test.tsx` failures, and every other
+pre-existing test in that file, to their exact original behavior with
+**zero content changes**, because `defaultLoadStudentHomeData` itself is
+untouched. **This harness fix lives entirely inside `StudentHome.test.tsx`
+and cannot reach `DashboardPage.test.tsx` — do not expect the full suite
+back to baseline at this point.** Re-run the full suite after this harness
+fix (before either deliberate test update) and confirm: `StudentHome.test.tsx`
+itself back to its own 55/55, and the full suite at **1653 passed / 1
+failed** — the single remaining failure is `DashboardPage.test.tsx:226`,
+unchanged, because its mock still doesn't cover your new loader's export.
+From this point there are exactly **two** deliberate edits ahead of you:
+the criterion-11 test (next section) and `DashboardPage.test.tsx`'s
+"renders StudentHome for role student" test / mock ("Proving the wiring for
+real" below) — the latter is also what finally clears the one remaining
+failure. `StudentHome.test.tsx:1710-1727` (the T184 positive control) is
+the second of the two `StudentHome.test.tsx` failures from the mid-swap
+step, but its fix is **not** a third deliberate edit — it is simply
+restored to green, unedited, by the harness fix alone. See the explicit
+ruling on it below.
 
 ## The one test that must change on purpose, not by accident
 
@@ -388,7 +440,7 @@ at `StudentHome.tsx:1763` actually got swapped.** Every render in
 via the harness, and the two positive tests you write inject `loadData`
 explicitly too — so all of them would still pass even if you never touched
 line 1763 at all. **`DashboardPage.test.tsx`'s "renders StudentHome for role
-\"student\"" test (lines 222-230) is the ONLY test in the entire repo that
+\"student\"" test (lines 222-229) is the ONLY test in the entire repo that
 renders `<StudentHome />` with zero props through the real production
 dispatcher** (`DashboardPage.tsx:122`, Forbidden but unaffected — only its
 test file changes), which makes it the only test that can actually fail if
@@ -432,16 +484,24 @@ more direct, more debuggable unit-level proof of the loader's own behavior.
    described above. `defaultLoadStudentHomeData` (lines 1017-1032) is
    byte-identical before/after — diff it directly to confirm.
 5. `renderAsUser` (`StudentHome.test.tsx:107-137`) gets a `loadData:
-   defaultLoadStudentHomeData` default added to `mergedProps`. Report THREE
+   defaultLoadStudentHomeData` default added to `mergedProps`. Report FOUR
    suite runs, not two: (a) baseline before any change — expect `69 files /
    1654 tests`, all passing; (b) immediately after the `StudentHome.tsx`
-   default-parameter swap, before touching the harness or any test — expect
-   **exactly 2** new failures, at `StudentHome.test.tsx:1608` and `:1711`
-   (see "test-harness hazard" above) and nowhere else; if you see a
-   different count or different locations, stop and re-diagnose; (c) after
-   the harness fix alone (before the deliberate test edits in criteria 6/7)
-   — expect the pre-swap baseline count restored exactly, all 1654 tests
-   green again, because `defaultLoadStudentHomeData` itself is untouched.
+   default-parameter swap, before touching the harness, any test, or the
+   `DashboardPage.test.tsx` mock — expect **exactly 3** new failures, in
+   **2 files**: `StudentHome.test.tsx:1608` and `:1711`, plus
+   `DashboardPage.test.tsx:226` (see "test-harness hazard" above) and
+   nowhere else; if you see a different count or different locations, stop
+   and re-diagnose; (c) after the harness fix alone (before the deliberate
+   test edits in criteria 6/7) — **do not expect all-green.** The harness
+   fix lives entirely inside `StudentHome.test.tsx` and cannot reach
+   `DashboardPage.test.tsx`. Expect `StudentHome.test.tsx` itself restored
+   to its own full 55/55, and the full suite at **1653 passed / 1 failed**
+   — the one remaining failure is `DashboardPage.test.tsx:226`, unchanged,
+   because its mock still doesn't cover your new loader's export until
+   criterion 7b; (d) after criteria 6/7's deliberate edits (including 7b's
+   mock extension) — full suite back to `1654` passing, with the two
+   deliberate content changes from criteria 6/7b, per criterion 11 below.
 6. The criterion-11 test (`StudentHome.test.tsx:1607-1695`) is deliberately
    updated per "The one test that must change" above: real loader injected
    via a stubbed client, Row 1 asserts the real injected name, stale comment
@@ -462,6 +522,25 @@ more direct, more debuggable unit-level proof of the loader's own behavior.
       in the repo that renders `<StudentHome />` zero-props through the
       real production dispatcher, so it is the only test that closes the
       vacuity gap on `StudentHome.tsx:1763` actually changing.
+   c. Because 7b changes what `<StudentHome />` actually renders under
+      `DashboardPage.test.tsx`'s zero-props dispatch, three OTHER
+      assertions in the same file go vacuously true for the wrong reason
+      once `'Ada Reyes'` stops appearing anywhere: `expect(container
+      .textContent).not.toContain('Hi Ada Reyes')` at line 205 (`role
+      "coach"`), line 218 (`role "admin"`), and line 246 (`role "parent"`)
+      — this file's own comment at lines 200-204 already documents this
+      exact vacuity class for the `ParentHome` fixture names, and the same
+      principle applies here. Update all three to assert
+      `.not.toContain('Hi <your 7b name>')`, in addition to or instead of
+      the old string, so each stays proof that the coach/admin/parent
+      renders show neither `StudentHome`'s nor `ParentHome`'s identity
+      markers. Also correct the mock-rationale comment at lines 32-45: it
+      currently says "**both** resolvers must be mocked together" (line 38)
+      and "...would otherwise surface as 'Couldn't find your student
+      record' instead of 'Hi Ada Reyes'" (lines 43-45) — both claims go
+      false once a third seam (this task's display-name loader) exists and
+      the marker string changes; reword to name three mocked exports across
+      the two `vi.mock` blocks, and the new marker string.
 8. New unit tests in `students.test.ts`, mirroring the existing
    `makeResolveStudentScope` describe block (lines 64-170): correct
    `.from('students').select('display_name').eq('id', studentId)
@@ -480,29 +559,46 @@ more direct, more debuggable unit-level proof of the loader's own behavior.
     "renders the shipped default fixture data end to end",
     `StudentHome.test.tsx:842-873`) pass unmodified.
 11. Full repo test suite: report before/after counts (baseline `69 files /
-    1654 tests`, per above). Zero newly-failing tests outside exactly two
-    deliberate updates: the criterion-11 test (criterion 6) and
-    `DashboardPage.test.tsx`'s "renders StudentHome for role student" test
-    (criterion 7b). `StudentHome.test.tsx:1710-1727` (T184's positive
-    control) must be green and BYTE-IDENTICAL to its pre-task state — it is
-    restored by the harness fix alone and is explicitly NOT to be edited
-    (see the ruling on it above). Zero `.skip`/`.only`/`.todo` introduced.
-12. `tsc`, eslint, and prettier all clean (or unchanged from baseline warning
-    counts, with any delta explained — e.g. an expected
-    `react-refresh/only-export-components` +1 if you export a new component-
-    adjacent function, matching the class already tolerated at
-    `StudentHome.tsx` per T176/T184's own merges).
+    1654 tests`, per above; final also `69 files / 1654 tests`, all
+    passing). Zero newly-*failing* tests at any point outside the
+    documented mid-swap window (criterion 5b/5c). Content changes are
+    confined to: the criterion-11 test (criterion 6), `DashboardPage.test.tsx`'s
+    "renders StudentHome for role student" test and its mock (criterion
+    7b), and the three sibling-role `.not.toContain(...)` assertions plus
+    the mock-rationale comment in `DashboardPage.test.tsx` (criterion 7c) —
+    all of which remain passing throughout, so none of them count against
+    the newly-failing check. `StudentHome.test.tsx:1710-1727` (T184's
+    positive control) must be green and BYTE-IDENTICAL to its pre-task
+    state — it is restored by the harness fix alone and is explicitly NOT
+    to be edited (see the ruling on it above). Zero `.skip`/`.only`/`.todo`
+    introduced.
+12. `tsc`, eslint, and prettier all clean (or unchanged from baseline
+    counts, with any delta explained). Current baseline, re-measured
+    directly for this revision (`RESUME-HERE.md:20`, matching this
+    packet's own `69 files / 1654 tests` figure): `tsc` exit 0, eslint
+    **0 errors / 358 warnings**, prettier clean except one pre-existing,
+    unrelated warning on `src/theme/volt.ts` (not yours to fix). An
+    expected `react-refresh/only-export-components` +1 is acceptable if
+    you export a new component-adjacent function, matching the class
+    already tolerated at `StudentHome.tsx` per T176/T184's own merges.
 13. Zero diff on every Forbidden file. Zero diff outside the Allowed list —
     including, for `DashboardPage.test.tsx` specifically, zero diff outside
-    its two named regions (the mock block, lines 53-64, and the one test,
-    lines 222-230). Diff that file directly and confirm nothing else moved.
+    its FOUR named regions (the mock-rationale comment, lines 32-45; the
+    mock block, lines 53-64; the student-role test, lines 222-229; and the
+    three sibling-test assertions at lines 205/218/246). Diff that file
+    directly and confirm nothing else moved.
 
 ## Relevant Constitution Excerpt
 - Non-Negotiables: "Existing tests must pass unless the boss explicitly
-  approves a test update." (This packet pre-authorizes exactly TWO test
-  updates — the `StudentHome.test.tsx` criterion-11 test and
-  `DashboardPage.test.tsx`'s "renders StudentHome for role student" test —
-  as necessary and load-bearing; every other test, including
+  approves a test update." (This packet pre-authorizes content updates to a
+  bounded, named set: the `StudentHome.test.tsx` criterion-11 test
+  (criterion 6); `DashboardPage.test.tsx`'s "renders StudentHome for role
+  student" test and its mock (criterion 7b); and, added in this revision,
+  `DashboardPage.test.tsx`'s three sibling-role `.not.toContain(...)`
+  assertions at lines 205/218/246 plus its mock-rationale comment
+  (criterion 7c) — the last three are the packet's own swap causing
+  collateral vacuity elsewhere in the same file, not new scope. All are
+  necessary and load-bearing; every other test, including
   `StudentHome.test.tsx:1710-1727`, must remain green AND unedited.)
 - Item 3: RLS/metric SQL come only from PRD 8.4 / real migrations, copied
   verbatim; no re-deriving. The `own_or_linked_read` policy is quoted
@@ -562,31 +658,77 @@ full suite run confirms `69 files / 1654 tests` baseline and `55` tests in
 `StudentHomeData` shape, the 20/29 `loadData`-site split, the exactly-two
 failing tests, and the `root.render` line numbers (1392/1412) were all
 directly re-read from source, not copied from the gate's report.
-**This is round 2 of 2 (item 19a cap) — if `checker-premise` returns REVISE
-again, escalate to the human owner rather than drafting a round 3.**
+
+**Round 2 (checker-premise): REVISE.** 0 BLOCKER, 3 MAJOR, 3 MINOR — narrow
+numeric/textual corrections to this packet's own acceptance criteria and
+Allowed Files, not a design flaw. The gate independently built and ran the
+full prescription (not just critiqued it), measuring **69 files / 1654
+tests green, `tsc` clean**, and separately proved (by omitting just the
+`StudentHome.tsx:1763` swap) that the wiring-proof criterion genuinely fails
+without the real fix. All findings folded into this revision and
+independently re-verified against the current worktree:
+1. **MAJOR — "exactly 2 new failures" was wrong.** Measured: **3** failing
+   tests in **2** files (`StudentHome.test.tsx:1608`/`:1711` plus
+   `DashboardPage.test.tsx:226`). Fixed in the test-harness-hazard section,
+   criterion 5(b), and Required Worker Output.
+2. **MAJOR — criterion 5(c) claimed the impossible.** The harness fix lives
+   only in `StudentHome.test.tsx`; it cannot reach `DashboardPage.test.tsx`.
+   After the harness fix alone the suite is **1653/1654**, not all-green.
+   Fixed in criterion 5(c) and the "Required fix" paragraph.
+3. **MAJOR — the packet forbade fixing collateral damage it itself causes.**
+   Once 7b's mock swaps in the new name, three sibling assertions in
+   `DashboardPage.test.tsx` (lines 205/218/246) go vacuously true, and the
+   mock-rationale comment (lines 32-45) goes stale. Fixed: Allowed Files and
+   criterion 13 widened to four named regions; new criterion 7c added.
+4. **MINOR — `renderAsUser` arithmetic.** Grep returns **32** matched lines
+   (1 definition + 2 comments + 29 call sites), not "31 ... one comment."
+   The 29/20/9 figures were already correct.
+5. **MINOR — module doc #9 under-scoped.** Two more sentences besides the
+   one already flagged are now false (lines 259-262, 264-266). All three
+   now named in the correction instruction.
+6. **MINOR — citation nits.** `StudentHomeData` closes at line 464 (already
+   correct). `DashboardPage.test.tsx`'s student-role test closes at line
+   **229**, not 230 — fixed throughout. Lint baseline re-measured at **0
+   errors / 358 warnings** (`RESUME-HERE.md:20`), not the 357 T181-era
+   figure — added to criterion 12. `node_modules` **is** present in this
+   worktree — softened the note accordingly.
+
+**This was the final authorized revision round.** Per George's ruling
+(`auto-mode-decisions.md`, "George's ruling on T183's item-19a
+escalation"), this packet is dispatched directly to `worker-implementer`
+after this revision — there is no third `checker-premise` round.
 
 ## Required Worker Output
 - Files changed (exact list).
 - Summary of the new loader's shape and your row-not-found decision.
-- Confirmation you ran `npm ci` (or `npm install`) before any test command —
-  this worktree ships with no `node_modules`.
-- Confirmation you ran the full suite three times: (1) before any change —
+- Confirmation you ran `npm ci` (or `npm install`) first if `node_modules`
+  was missing in your environment (it is present in this worktree as
+  handed off, but confirm your own state before relying on that).
+- Confirmation you ran the full suite FOUR times: (1) before any change —
   baseline count, expect `69 files / 1654 tests`; (2) immediately after the
-  `StudentHome.tsx` default-swap, before touching the harness — to confirm
-  you personally observed **exactly 2** new failures, at
-  `StudentHome.test.tsx:1608` and `:1711`, and nowhere else, not just took
-  this packet's word for it; (3) after the harness fix and both deliberate
-  test updates — final count, matching baseline except the two deliberate
-  changes (criterion-11 test content changed; `DashboardPage.test.tsx`'s
-  student-role test content changed; `StudentHome.test.tsx:1710-1727`
-  green but byte-identical).
-- `tsc`/eslint/prettier output.
+  `StudentHome.tsx` default-swap, before touching the harness or the
+  `DashboardPage.test.tsx` mock — to confirm you personally observed
+  **exactly 3** new failures, in **2 files** (`StudentHome.test.tsx:1608`
+  and `:1711`, plus `DashboardPage.test.tsx:226`), and nowhere else, not
+  just took this packet's word for it; (3) after the harness fix alone,
+  before any deliberate test edit — confirm `StudentHome.test.tsx` back to
+  55/55 and the full suite at **1653/1654** with only
+  `DashboardPage.test.tsx:226` still failing (do not report "all green"
+  here — that is not correct at this checkpoint); (4) after criteria 6/7's
+  deliberate edits — final count, back to `69 files / 1654 tests`, all
+  passing, with content changes confined to the criterion-11 test, the
+  `DashboardPage.test.tsx` student-role test/mock, and the three
+  `DashboardPage.test.tsx` sibling-assertion + comment updates (criterion
+  7c) — and `StudentHome.test.tsx:1710-1727` green but byte-identical.
+- `tsc`/eslint/prettier output, compared against the current baseline (`tsc`
+  exit 0, eslint 0 errors / 358 warnings — see criterion 12).
 - Confirmation `defaultLoadStudentHomeData` is byte-identical (a `git diff`
   excerpt scoped to lines 1017-1032, or equivalent).
 - Confirmation `StudentHome.test.tsx:1710-1727` is byte-identical before/
   after (a `git diff` excerpt scoped to those lines, or equivalent).
-- Confirmation `DashboardPage.test.tsx`'s diff touches only lines 53-64 and
-  222-230 (a `git diff` of the whole file, or equivalent).
+- Confirmation `DashboardPage.test.tsx`'s diff touches only its four named
+  regions — lines 32-45, 53-64, 205, 218, 222-229, and 246 (a `git diff` of
+  the whole file, or equivalent).
 - Known risks, and whether a dispute is needed (e.g. if you concluded the
   scope ruling above is wrong, the row-not-found behavior needs a different
   DES-12 treatment than a plain error banner, or you disagree with the

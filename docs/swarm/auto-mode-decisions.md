@@ -1069,3 +1069,29 @@ round 2's findings, dispatched directly to `worker-implementer` afterward **with
 packet, not a general relaxation of the cap. **What it does not authorize:** skipping the premise
 gate on any other task, or treating a future third-REVISE escalation as pre-approved by this
 ruling — each occurrence is its own escalation.
+
+## 2026-07-30 — George's ruling on T183's item-19a escalation (owner input, structured selection)
+
+**Mechanism, same as T177's entry above — not free-text input.** `T183-worker-packet.md`'s
+`checker-premise` gate ran two rounds — round 1 REVISE (1 BLOCKER: the prescribed fix broke
+`DashboardPage.test.tsx:226`, a file outside the original Allowed Files list; 2 MAJOR), round 2
+REVISE (0 BLOCKER, 3 MAJOR, 3 MINOR — all numeric/textual mismatches inside the packet's own
+acceptance criteria, not a design flaw: a "exactly 2 new failures" tripwire that should say 3, a
+"1654 tests green" criterion that's unsatisfiable because the harness fix can't reach
+`DashboardPage.test.tsx`, and an Allowed-Files/criterion-13 pair that forbids fixing collateral
+vacuous assertions the task itself causes). Round 2's gate did more than critique: it independently
+built the full prescription in its own probes and measured **69 files / 1654 tests green, `tsc`
+clean**, and separately proved (by omitting just the `StudentHome.tsx:1763` swap) that the
+wiring-proof criterion genuinely fails without the real fix — i.e., the design is proven correct by
+execution, not merely argued. Per item 19a this still caps at two rounds and escalates rather than
+looping a third time. I presented the same three-option structured question as T177's precedent
+(authorize one more revision round / pause for review / drop T183), Recommended the first on the
+same "narrow and mechanical, not an open design dispute" grounds. He selected **"Authorize one more
+revision round."** No free-text notes added.
+
+**What this authorizes:** one additional `foreman-planner` revision pass on T183's packet applying
+round 2's findings (fix the tripwire count, rewrite the unsatisfiable criterion, widen the
+`DashboardPage.test.tsx` allowance to cover the three vacuous-assertion lines and the stale mock
+comment), dispatched directly to `worker-implementer` afterward **without** a third
+`checker-premise` round — a bounded exception scoped to this packet only, not a general relaxation
+of item 19a's cap and not pre-approval for any future third-REVISE escalation on any task.
