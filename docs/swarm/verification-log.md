@@ -5689,3 +5689,53 @@ row to reset before it's worth fixing how it resets it).
 **One MINOR carried forward, not fixed:** a dangling commit-message reference to a
 `T177-worker-output.md` that was never in the worker's Allowed Files — a packet-scope gap, not a
 worker error, worth reconciling in the packet template rather than this task's own follow-up.
+
+---
+
+## T178 — the end-meeting backend (build half) (merged 2026-07-31)
+
+| Field | Value |
+|---|---|
+| Merged commit | `64eeb83179295dabb36967f0790d8c2730cbe641` |
+| Verdict | **PASS with MINORs**, first attempt |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
+| Premise gate | 1 full round → REVISE (3 BLOCKER, 3 MAJOR); revision 2 dispatched without re-gate |
+| tsc / build / format | 0 errors / ✓ / clean |
+| eslint | 0 errors, 358 warnings (**zero new**) |
+| vitest | 70 files, 1668 tests (+1 file, +14 tests, exact) |
+
+**The ledger's framing was wrong and the foreman caught it before any code was written.** T178 was
+filed as a wiring gap — "finished and tested, mounted nowhere". All three of `EndMeetingDialog`'s
+seams were `console.warn` stubs and no end-meeting backend existed anywhere, so it was a build.
+
+**The gate changed the task's shape.** It built a reference implementation, got 17 tests green,
+then broke it — and found that mounting on `LiveConsole` is a **data-loss path**, because that
+console's attendance marking is an intentional no-op and its roster is a fixture. A real dialog on
+top marks every checked-in student a real `absent` row. The owner ruled the split
+(`auto-mode-decisions.md`, "George's ruling on the T178 build/mount split"); the mount is **T196,
+blocked**.
+
+**Two BLOCKERs were the T170 shape, and both left the suite green** — a criterion that passed when
+the coach's identity was baked at construction time, and one that passed when three sequenced
+writes became `Promise.all`. Rebuilt, then **verified three times independently**: dropping the
+awaits fails 2/14, the prescribed `Promise.all` fails 1/14, and the checker added the mutation that
+matters most — **flip-before-checkout**, the exact audit-mislog defect the ordering exists to
+prevent — which fails 2/14.
+
+**What makes this design sound, stated because the packet originally undersold it:** the flip is
+last, so every reachable partial state fails **safe** — absences written, session still
+`'scheduled'`, retry a clean no-op. There is no ordering in which the flip lands and the checkout
+doesn't. That is the actual reason no RPC (and therefore no migration) is needed.
+
+**Process notes worth keeping.** The foreman added a **proof step** to each rebuilt criterion — run
+the old mutation against the new test and confirm it *now* fails — which nobody asked for and which
+is the only thing that distinguishes a fixed criterion from a restated one. The checker disclosed
+its own false negative mid-review (a mutation that hit a module-doc line rather than code) and
+redid it. Both behaviours are why these reports are usable.
+
+**Carried forward: T197** — `onEditAttendance`'s row scoping is unasserted, and deleting both
+`.eq()`s leaves the suite green while converting a single-student edit into a table-wide
+`attendance` UPDATE. The shipped code is correct and the path is unreachable today, so it is filed
+rather than fixed in place — but it is a **gate on T196**, not an optional companion, because T196
+is blocked indefinitely and that path must not be mounted unguarded.

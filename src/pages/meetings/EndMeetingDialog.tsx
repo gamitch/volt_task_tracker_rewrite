@@ -38,16 +38,20 @@
  * checkout are ever simulated locally, mirroring `SeasonSettings.tsx`'s own
  * `withActiveSeason` precedent for "the one place a derived mutation is ever
  * applied to local state") AFTER that call resolves -- if it rejects, local
- * state is never touched (no optimistic half-flip). A real backend
- * implementation (a future wiring task, not this one) is expected to
- * implement `onEndMeeting` as a single transaction (e.g. an RPC running the
- * backfill INSERTs, the checkout UPDATEs, and the `event_sessions` UPDATE
- * together) so a real DB never observes a transiently-inconsistent state
- * either -- this file cannot prove that transactional detail (no Supabase
- * client is wired in here, section 5 below), but the callback's own single-
- * payload shape is deliberately built so a real implementation CAN satisfy
- * it atomically, rather than forcing three uncoordinated calls on the
- * caller.
+ * state is never touched (no optimistic half-flip). CORRECTED (T178): a real
+ * backend implementation (`src/lib/supabase/loaders/endMeeting.ts`, a
+ * separate task's own file, not this one) is THREE sequenced writes, not a
+ * single transaction/RPC -- no `supabase.rpc(...)` call, backfill (INSERT
+ * ... ON CONFLICT DO NOTHING) then checkout (UPDATE) then the
+ * `event_sessions` status flip (UPDATE), always in that order, always
+ * awaited sequentially. No RPC is needed because that ordering already
+ * makes every reachable partial-failure state safe on its own (see that
+ * file's own module doc for the full property) -- this file cannot prove
+ * that safety property itself (no Supabase client is wired in here, section
+ * 5 below), but the callback's own single-payload shape is deliberately
+ * built so a real implementation CAN satisfy the "one coherent action"
+ * contract this way, rather than forcing the caller to dispatch three
+ * uncoordinated calls of its own.
  *
  * -----------------------------------------------------------------------
  * 2. `trg_audit_attendance_post_completion` -- THE single most important
@@ -107,21 +111,21 @@
  *
  *   (a) ORDERING within `handleConfirmEndMeeting` (Known Context/Traps
  *       #1c/#2a): the backfill/checkout mutations described in section 1
- *       above must happen BEFORE (or, in one transaction, logically prior
- *       to) `event_sessions.status` flipping to `'completed'`. Backfill is
- *       an INSERT (never fires an `after update` trigger regardless of
- *       ordering), but checkout IS an `attendance` UPDATE
- *       (`check_out_at = ends_at` on an existing row) -- if that UPDATE ran
- *       AFTER the session row already read `'completed'`, the trigger would
- *       fire and log it as `attendance_edited_post_completion`, which is
- *       WRONG: closing out an open check-in as part of ending the meeting
- *       is the intentional, expected completion action itself, not a
- *       later correction a coach makes to an already-closed meeting. A real
- *       single-transaction implementation of `onEndMeeting` (section 1)
- *       naturally satisfies this by running the checkout UPDATEs and the
- *       `event_sessions` UPDATE as ordered statements in the same
- *       transaction (checkout first, status flip last) -- disclosed here as
- *       the specific reason that ordering matters, not just asserted.
+ *       above must happen BEFORE `event_sessions.status` flips to
+ *       `'completed'`. Backfill is an INSERT (never fires an `after update`
+ *       trigger regardless of ordering), but checkout IS an `attendance`
+ *       UPDATE (`check_out_at = ends_at` on an existing row) -- if that
+ *       UPDATE ran AFTER the session row already read `'completed'`, the
+ *       trigger would fire and log it as `attendance_edited_post_completion`,
+ *       which is WRONG: closing out an open check-in as part of ending the
+ *       meeting is the intentional, expected completion action itself, not a
+ *       later correction a coach makes to an already-closed meeting.
+ *       CORRECTED (T178): a real implementation of `onEndMeeting` (section 1)
+ *       is three sequenced writes, not one transaction -- it naturally
+ *       satisfies this by awaiting the checkout UPDATE before issuing the
+ *       `event_sessions` UPDATE (checkout second, status flip always last)
+ *       -- disclosed here as the specific reason that ordering matters, not
+ *       just asserted.
  *   (b) FUTURE coach edits (Known Context/Traps #2b): any attendance
  *       correction made AFTER this dialog's confirm (e.g. a coach later
  *       fixing a student's status from `present` to `late`) is a plain

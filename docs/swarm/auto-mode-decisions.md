@@ -1069,3 +1069,27 @@ round 2's findings, dispatched directly to `worker-implementer` afterward **with
 packet, not a general relaxation of the cap. **What it does not authorize:** skipping the premise
 gate on any other task, or treating a future third-REVISE escalation as pre-approved by this
 ruling — each occurrence is its own escalation.
+
+---
+
+## 2026-07-31 — George's ruling on the T178 build/mount split (owner input)
+
+Asked because T178's premise gate demonstrated, against a reference implementation it built
+itself, that mounting a real `EndMeetingDialog` on `LiveConsole` is a **data-loss path**:
+`LiveConsole.tsx:510-511`'s `notWiredSetAttendanceStatus` is an intentional no-op and
+`defaultLoadLiveConsoleData` is a fixture, so a meeting run through that console has **zero real
+`attendance` rows**. A real dialog on top loads the real roster, marks everyone absent, and
+completes the session — 14 students marked present become 14 real `absent` rows, and every
+correction afterwards trips `trg_audit_attendance_post_completion`.
+
+He was shown that and ruled: **"proceed with the loader build, park the mount."**
+
+**What this authorizes:** T178 ships the backend only. The mount is filed as **T196, blocked**,
+with the data-loss mechanism recorded on the row and its real prerequisite named — `LiveConsole`'s
+own `loadData`/`onSetAttendanceStatus` becoming real, which is **not yet filed as a task**.
+
+**What it does not authorize:** anything about how the loader is built. The design, the criteria,
+the tier and the gate weight are all the orchestrator's or the foreman's.
+
+**Recorded here because the packet cited this ruling provisionally**, pointing at a coordinator
+message rather than this file. That is the citation the packet and worker output should now use.
