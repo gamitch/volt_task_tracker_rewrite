@@ -1,508 +1,372 @@
-# T178 — Worker Packet
+# T178 — Worker Packet (revision 2 — BUILD HALF ONLY, mount split to T196)
 
 **Branch:** `claude/t178-end-meeting-dialog`, cut from `main` at `a3b9f00`. **Merge
 `origin/claude/t178-end-meeting-dialog` into your worktree first** — worktrees are cut
-from `main`, not the branch tip, and this packet lives only on the branch (item 24's
-lesson: T157's worker built ~320 lines against a superseded packet for want of this
-check).
+from `main`, not the branch tip (item 24's lesson: T157's worker built ~320 lines
+against a superseded packet for want of this check).
 
-**Concurrent session, stay out of it:** another session is active on
-`claude/t183-student-home-loader`, working in `src/pages/home/`. Do not touch
-`StudentHome.tsx`, `StudentHome.test.tsx`, `DashboardPage.*`. Do not edit
-`task-ledger.md` beyond nothing — you have no ledger access at all (Forbidden Files,
-below); the foreman owns that file.
+**Concurrent session, stay out of it:** `claude/t183-student-home-loader` is active in
+`src/pages/home/`. Do not touch `StudentHome.tsx`, `StudentHome.test.tsx`,
+`DashboardPage.*`. You have no ledger access — the foreman owns `task-ledger.md`.
 
-**Author:** `foreman-planner`. **Gate recommendation:** full `checker-premise` round
-before dispatch (see "Tier and gate" below) — do not skip it. **Worker tier
-recommendation:** `worker-implementer` on its pinned default (**sonnet**). **Checker
-recommendation:** `checker-reviewer` (**opus**).
+**Revision history:** revision 1's `checker-premise` round 1 (general-purpose agent,
+Write+Edit, measured at `accc692`) returned **REVISE — 3 BLOCKER, 3 MAJOR, 4 MINOR**.
+Full findings, executed not argued: `docs/swarm/active/T178-gate-round1-findings.md`
+— **read it, this packet works from it, not from a summary.** The gate built a
+reference `endMeeting.ts` + test + `LiveConsole` mount exactly as revision 1
+prescribed, got 17 tests green, then ran a mutation battery: 11 of 17 criteria
+discriminated as claimed, 6 did not.
 
-Baselines below are orientation, read from `docs/swarm/RESUME-HERE.md`, **not measured
-by this packet's author (no Bash tool available to the foreman)**. Re-measure yourself
-at your actual dispatch SHA, after merging the branch in: `tsc`, `eslint`, `vitest`
-(with `.env.local` **absent**, the mandated gate state), `prettier --check`, `vite
-build`. Orientation only: `main`@`94267a0` was tsc 0 / eslint 0 errors, 358 warnings /
-69 files, 1654 tests / build clean, one pre-existing unrelated prettier drift on
-`src/theme/volt.ts` (not yours to fix).
+**The owner was shown BLOCKER 3 (a real data-loss path the gate's own reference mount
+measured, not argued) and ruled: proceed with the loader build, park the mount.** This
+revision covers **§5's `endMeeting.ts` + its test file only.** The mount is filed as
+its own blocked row, **T196** (`task-ledger.md`), carrying the data-loss reasoning so
+it is not casually unblocked. Do not touch `LiveConsole.tsx`/`LiveConsole.test.tsx` in
+this task — they are not in your Allowed Files.
 
----
+**This is revision 2. It dispatches to `worker-implementer` directly — no further
+`checker-premise` round runs first**, per the coordinator's ruling. Get this right;
+there is no round 3 behind you.
 
-## 1. Objective — corrected framing, not the ledger's
-
-The ledger currently calls this a wiring gap: `EndMeetingDialog.tsx` is finished,
-tested (`EndMeetingDialog.test.tsx`, 489 lines / 21 blocks), and mounted nowhere;
-`LiveConsole.tsx`'s "End meeting" button shows a dismissible "has not shipped yet"
-`Banner` in its place. **That framing is wrong.** Read directly (`EndMeetingDialog.tsx`,
-current branch tip):
-
-- `defaultLoadEndMeetingSummary` (module doc section 5) returns hardcoded fixture data
-  unconditionally.
-- `defaultOnEndMeeting` only `console.warn`s the payload "a real single transaction
-  would have applied atomically."
-- `defaultOnEditAttendance` only `console.warn`s the UPDATE it would have sent.
-
-**No end-meeting loader or mutation exists anywhere under `src/lib/supabase/`** (grep
-`src/lib/supabase` for `EndMeetingDialog`/`EndMeetingSummary`/`EndMeetingPayload` —
-zero hits outside the component's own file and its test). Mounting the dialog as-is
-would give a coach a complete-looking "End meeting" flow that silently does nothing —
-strictly worse than today's honest banner, and the same class of defect as
-`handleRsvpChange`'s silent RSVP data loss (T169/T193).
-
-**This is two units: build the backend, then mount.** Scope it as a build. The owner
-was told this explicitly before authorizing the task; see "Owner authorization" below —
-do not shrink this back to a wiring-only task.
-
-**Ledger correction:** the foreman is updating `task-ledger.md`'s T178 row directly
-(type + description) in the same action as writing this packet, per the boss's
-instruction. You do not need to and must not touch that file.
+**Baselines — the gate's figures are measured, cite them, not the foreman's own
+unmeasured ones from revision 1:** at `accc692`, `tsc` clean, eslint 0 errors. Repo-wide
+(per the coordinator, since T169/T177 landed on `main` after revision 1 was drafted):
+**69 files / 1654 tests, eslint 0 errors / 358 warnings.** Re-measure yourself at your
+actual dispatch SHA after merging the branch in — `tsc`, `eslint`, `vitest`
+(`.env.local` absent), `prettier --check`, `vite build` (the gate did not run the last
+two — mark them un-measured until you do).
 
 ---
 
-## 2. The design question — settled, do not re-open
+## 1. Objective — build half only
 
-`EndMeetingDialog.tsx`'s own module doc (section 1, the sentence beginning "A real
-backend implementation ... is expected to implement `onEndMeeting` as a single
-transaction (e.g. an RPC running the backfill INSERTs, the checkout UPDATEs, and the
-`event_sessions` UPDATE together)") is a **false steer** and is itself part of this
-task's Allowed Files specifically so you can correct it (see §7).
-
-**This repo has an established, grep-provable convention: no `supabase.rpc(...)`
-call anywhere in `src/lib/supabase/` or `supabase/functions/`.** Read-verified by the
-foreman, each file's own module doc states it explicitly: `seasons.ts:37,293`,
-`outreach.ts:139`, `meetings.ts:90`, `teams.ts:41,334`. A repo-wide grep for
-`supabase.rpc` / `.rpc(` under `src/lib/supabase` returns zero matches.
-
-**The named precedent is `makeSetActiveSeason`** (`seasons.ts`, function
-`makeSetActiveSeason`, ~line 295), which `EndMeetingDialog.tsx`'s own module doc
-already cites by name for the `SetActiveSeasonPayload` atomicity pattern. Read
-directly: it performs **two separate single-column `runMutation` calls — `deactivate`
-then `activate` — never a combined update, never an RPC**, sequenced (`if
-(payload.deactivateSeasonId !== null) { await deactivate(...); } await
-activate(...);`), with the partial-failure risk (deactivate lands, activate rejects →
-zero active seasons until retry) **disclosed in its own module doc, Trap #1**, not
-engineered around.
-
-**Your design: three sequenced mutations, following that precedent exactly.**
-1. Backfill absences — INSERT-shaped write on `attendance` for
-   `payload.backfillAbsentStudentIds`.
-2. Checkout — UPDATE on `attendance` for `payload.checkoutStudentIds`.
-3. Status flip — UPDATE `event_sessions.status = 'completed'`.
-
-No migration. No RPC. No new RLS policy (§5 below — `staff_all` already covers every
-write here). If you conclude a migration or RPC is genuinely required, **stop and
-report to the foreman rather than building it** — this packet's premise is that none
-is needed, verified below; if that premise is wrong, that is exactly the kind of thing
-`checker-premise`/you should catch and escalate, not route around.
-
-**Ordering matters, and it is not symmetric.** `EndMeetingDialog.tsx`'s own module doc
-section 2 (`trg_audit_attendance_post_completion`, cited there in full from
-`supabase/migrations/20260717000001_support_audit.sql` lines 120-156, foreman
-read-verified against that file directly, byte-identical) fires on **any** `attendance`
-UPDATE whose session is *already* `'completed'` at the moment the UPDATE runs. Backfill
-is an INSERT (never fires an `after update` trigger, order-independent relative to the
-status flip). **Checkout is an UPDATE and must land BEFORE the status flip** — if the
-status flip ran first, the checkout UPDATE would fire the trigger and mislog an
-intentional meeting-close as `attendance_edited_post_completion`. Sequence:
-**backfill, then checkout, then status flip** — status flip always last.
+`EndMeetingDialog.tsx`'s three seams (`loadSummary`/`onEndMeeting`/`onEditAttendance`)
+are `console.warn`/fixture stubs; no backend exists anywhere under
+`src/lib/supabase/`. **This task builds that backend — `loaders/endMeeting.ts` and its
+test file — and nothing else.** Mounting is out of scope, blocked, tracked as T196.
+Do not add a `LiveConsole.tsx` mount "since you're already in there" — that is
+precisely the defect T196 exists to prevent (see its ledger row for the measured
+data-loss mechanism, or the gate findings' BLOCKER 3).
 
 ---
 
-## 3. What was established before designing (the boss's four questions)
+## 2. The design — unchanged from revision 1, confirmed correct by the gate's own execution
 
-### 3a. Identity — does the write need a coach profile id, and is one available?
+Three sequenced mutations, no RPC, no migration, no new RLS — this premise held under
+the gate's own execution, not just its reading:
 
-**`onEndMeeting`/`EndMeetingPayload` needs none.** `EndMeetingDialog.tsx`'s own
-`applyEndMeetingResult` (the function that simulates this payload's effect on local
-state) sets backfilled rows' `recordedBy: null` unconditionally — matching its own
-module doc's reasoning: "the coach ending the meeting is the one implicitly marking
-these students absent **by not having recorded anything for them**." Your real
-backfill INSERT must write `recorded_by: null` for the identical reason — this keeps
-the real DB row and the dialog's own local-state simulation in agreement, and avoids
-inventing an attribution semantic the finished, tested component never specified.
-Checkout (setting `check_out_at`) touches no attribution column either.
+1. Backfill absences — upsert-shaped write on `attendance` for
+   `payload.backfillAbsentStudentIds`, `onConflict: 'session_id,student_id'`,
+   `ignoreDuplicates: true`.
+2. Checkout — update on `attendance` for `payload.checkoutStudentIds`, setting
+   `check_out_at`, guarded `.is('check_out_at', null)`.
+3. Status flip — update `event_sessions.status = 'completed'`, always last.
 
-**`onEditAttendance` does need one**, and this is the real finding: it is a coach's
-deliberate, individual correction (the post-completion `SegmentedControl` row), and
-`loaders/attendance.ts`'s own established convention for this exact table
-(`UpsertAttendanceParams.recordedBy`, module doc #2) is that `attendance.recorded_by`
-is "always the ACTING coach's own `profiles.id`... always re-attributed to whoever is
-editing right now." Your `onEditAttendance` implementation must set
-`recorded_by` to the real signed-in coach's id on every edit.
+**Ordering — confirmed correct, and for the true reason, by the gate reading
+`supabase/migrations/20260717000001_support_audit.sql` directly:**
+`trg_audit_attendance_post_completion` is `after update on public.attendance`, with a
+live lookup of the session's status at UPDATE time. Checkout is an UPDATE and must
+precede the flip or it self-mislogs as a post-completion correction. Backfill is an
+INSERT — `on conflict do nothing`, no UPDATE fires, order-independent relative to the
+other two. The gate also confirmed this is the **only** trigger on `attendance` and
+there is none on `event_sessions` (`grep "create trigger"`). **backfill → checkout →
+flip is right — do not re-derive this, cite it.**
 
-**Is a real one available at the host?** Yes — read directly, `LiveConsole.tsx`'s own
-`LiveConsoleBody` already calls `useAuth()` (from `../../app/guards`) and already uses
-`user?.id ?? null` as `recordedBy` in its own pre-existing `handleSetStatus` (current
-branch tip, inside that function). **This is not the `MarkDayCompleteDialog`/T170
-defect shape** — that shape is a component defaulting an identity *prop* to a
-placeholder constant with no real value ever threaded in at any call site.
-`EndMeetingDialog.tsx`'s `OnEditAttendanceFn` signature carries **no identity
-parameter at all** (`(sessionId, studentId, status) => Promise<void>`), so there is no
-prop to default-to-placeholder in the first place — the identity must instead be
-captured by the **mutation factory's own closure**, built at the mount site
-(`LiveConsole.tsx`), over the real `useAuth().user`. Build it the same way
-`useLiveConsoleDisplayToken` (same file, already-existing) keeps a `loadRef` current
-across renders — a ref, not a prop default, so the closure always reads the latest
-signed-in user without needing to reconstruct the mutation function every render.
+**State the safety property explicitly in your own module doc — revision 1 undersold
+it, and the gate named this directly.** Because the flip is always last, *every*
+reachable partial-failure state fails in the safe direction: if the checkout UPDATE
+(step 2) fails, the backfill has already landed but the session is still
+`'scheduled'` — no audit pollution, and a retry is a clean no-op (idempotent via
+`ignoreDuplicates`/the `.is('check_out_at', null)` guard, both unchanged from
+revision 1, both gate-confirmed correct). **There is no ordering under this design in
+which the flip lands and the checkout doesn't.** This — not "no way to prove a real
+transaction" — is the actual, positive justification for three sequenced
+`runMutation` calls instead of an RPC: the design doesn't need transactional
+atomicity, because its own ordering already makes every partial-failure state safe.
+Say this plainly, not as a fallback explanation.
 
-If the factory is called while `getRecordedBy()` resolves `null` (defensive-only —
-`LiveConsolePage`'s `RequireRole` already keeps a signed-out/wrong-role user from
-reaching this component in production), **reject before issuing any network call**
-with a clear, disclosed error (precedent: `loaders/meetings.ts`'s
-`makeCreateMeetings` already rejects with a hand-authored message, "No active season
-is set up yet...", for its own pre-condition failure — same shape, same file's own
-established idiom). Do not silently write `recorded_by: null` for an edit — that
-would misattribute a real coach's correction to nobody, unlike the backfill case where
-`null` is the deliberately correct, disclosed value.
+**Be honest about what the coach actually sees on partial failure — the gate measured
+this too, and revision 1's §7 implied more than is true.** `runMutation` normalizes
+every rejection through `toLoaderError` (`../loader.ts`) into a plain object
+(`{code, message, cause}`, not an `Error` instance). `EndMeetingDialog.tsx`'s own
+`handleConfirmEndMeeting` catch block does `error instanceof Error ? error.message :
+'Something went wrong ending this meeting.'` — since your rejection is never an
+`Error` instance, the coach always sees the frozen generic fallback, concatenated with
+the `AlertDialog`'s own fixed title: literally *"Couldn't end this meeting… Something
+went wrong ending this meeting."* **Never the real Postgres error, and nothing about
+which partial state was reached.** `EndMeetingDialog.tsx` is frozen (§5) so this
+cannot be improved inside this packet. State this honestly in your module doc — the
+database-level story is safe, the human-facing story is silent, and both facts belong
+in writing, not just the first one.
 
-### 3b. What `EndMeetingSummaryData` needs, and what already exists to build it
+---
 
-Reuse is real and load-bearing here, not aspirational — verified against the actual
-files, not assumed:
+## 3. What was established — carried from revision 1, corrected where the gate found gaps
 
-- **`attendanceByStudentId`**: `loaders/attendance.ts` already exports
-  `makeLoadAttendanceForSessions`/`loadAttendanceForSessions` (`LoadAttendanceForSessionsFn
-  = (sessionIds) => Promise<AttendanceRow[]>`), returning exactly the columns
-  `EndMeetingDialog`'s own `AttendanceRecordState` needs (`status`, `checkInAt`,
-  `checkOutAt`, `method`, `recordedBy`) as a strict superset (also carries `id`,
-  `hoursOverride`, `updatedAt`, `createdAt`, which you simply drop when mapping). Call
-  it with `[sessionId]` and key the result by `studentId`. **Do not write a second
-  `attendance` query — import and call this one.**
-- **Roster** (`{studentId, name}[]`, scoped to the session's event's teams): no
-  existing exported function returns exactly this, but the *pattern* is fully
-  established in `loaders/kiosk.ts` (`makeLoadKioskTally`, read the whole file — none
-  of its query helpers are exported, so you re-derive per-page like every other loader
-  file in this directory does, you do not import them): resolve
-  `event_sessions.event_id` for the session, then `events.team_ids` for that event,
-  then filter **active** (`students.is_active = true`) students to those whose
-  `team_id` is in `team_ids` (or all active students if `team_ids` is `null` — "open to
-  every team", `kiosk.ts`'s own documented semantics, same as
-  `supabase/functions/checkin/index.ts`'s `TEAM_SCOPE_MISMATCH` check). Add
-  `display_name` to the student select (`kiosk.ts`'s own `queryActiveStudentTeams`
-  selects only `id, team_id`; you need `id, team_id, display_name`).
-- **`session`** (`id`, `title`, `endsAt`, `status`): `event_sessions` has `id`,
-  `ends_at`, `status` directly (no new column needed); `title` is composed from the
-  parent event's `events.title`, the same "not a real column on `event_sessions`,
-  composed by the caller" posture `EndMeetingDialog.tsx`'s own module doc section 6
-  already states.
+### 3a. Identity
 
-This means: **no new SQL, no new view, one new loader file** combining an
-already-established roster-resolution pattern (`kiosk.ts`) with an already-exported
-attendance loader (`attendance.ts`). This is the same shape of reuse that made T181 and
-T176 smaller than filed once found — found here too, before dispatch, not left for you
-to discover the hard way.
+`onEndMeeting`/`EndMeetingPayload` needs none (backfilled rows are `recorded_by: null`
+by the finished component's own design — `applyEndMeetingResult` in
+`EndMeetingDialog.tsx`). `onEditAttendance` needs the real acting coach's id in
+`recorded_by`, per `loaders/attendance.ts`'s own established convention for this
+table. Since `OnEditAttendanceFn`'s signature carries no identity parameter, identity
+must be captured by the mutation **factory's own closure** — build
+`makeOnEditAttendance(getRecordedBy, getClient?)` where `getRecordedBy: () => string |
+null` is called **fresh on every invocation of the returned function**, not read once
+at factory-construction time.
 
-### 3c. Metric views — constitution item 3
+**This packet has no mount in scope, so nothing you build calls this factory against a
+real `useAuth()` ref** — that wiring is T196's job. Your job is to build and test the
+factory itself so it is correct and ready when T196 unblocks. If `getRecordedBy()`
+resolves `null` at call time, reject before any network call (precedent:
+`loaders/meetings.ts`'s `makeCreateMeetings` rejects the same way for its own
+pre-condition failure).
 
-**Zero touch.** Nothing in this design reads or recomputes `v_student_hours`,
-`v_student_participation`, or `v_student_goal_projection`. This is pure
-`attendance`/`event_sessions`/`events`/`students` reads and writes — team-scoping
-(`team_ids.includes(team_id)`) and status filtering (`is_active`, `'present'|'late'`)
-are plain boolean filters, not formulas. State this plainly in your own module doc
-rather than leaving it unsaid — item 3 violations have cost this project a full round
-twice (T176) on exactly this kind of unstated claim.
+### 3b. Reuse — confirmed genuine by the gate's own wiring, not just reading
 
-### 3d. The audit trigger — confirmed, and what it means for you
+`makeLoadAttendanceForSessions(getClient)` (the DI-factory constructor — **the
+top-level `loadAttendanceForSessions` singleton has no client seam to inject a stub
+through; use the factory**) returned exactly `{status, checkInAt, checkOutAt, method,
+recordedBy}` through `mapAttendanceDbRowToAttendanceRow` when the gate actually wired
+it. The `loaders/kiosk.ts` roster-resolution pattern (session → event → `team_ids` →
+active-student filter) ported directly. Both premises hold — build on them as
+revision 1 specified.
 
-Foreman read `supabase/migrations/20260717000001_support_audit.sql` lines 100-157
-directly, byte-for-byte against `EndMeetingDialog.tsx`'s own citation — **matches
-exactly**. `trg_audit_attendance_post_completion` (`after update on attendance, for
-each row`) looks up `event_sessions.status` live via `NEW.session_id` and, only when
-that live status is already `'completed'`, inserts one `audit_log` row. It is
-`security definer`, so an ordinary RLS-scoped coach session can trigger it without
-needing direct `audit_log` write access. **Confirm, and do not violate:** your
-`onEditAttendance` implementation must be a plain `attendance` UPDATE and must never
-insert into `audit_log` itself — the trigger does that. Grep your own new file for
-`audit_log` before calling this done; it must appear only in a comment, never a real
-write, exactly the discipline `EndMeetingDialog.tsx` itself already follows.
+### 3c. Metric views — zero touch, unchanged, confirmed correct.
 
-One live-DB fact worth carrying forward, not a blocker: the trigger's `actor` column
-resolves `coalesce(auth.uid(), ... 'app.actor_id' ...)` and `audit_log.actor` is
-`NOT NULL` — an UPDATE from a session with no resolvable `auth.uid()` would abort. This
-repo's frontend always uses the real, RLS-authenticated Supabase client (constitution
-item 5 — no service-role key ever reaches `src/`), so a signed-in coach's own
-`onEditAttendance` call always has a resolvable `auth.uid()`. Not a design change,
-just confirm you are not routing this through anything else.
+### 3d. Audit trigger and RLS
 
-**RLS — confirmed, no migration needed.** `supabase/migrations/20260717000002_rls.sql`:
-`staff_all` policy exists on both `event_sessions` (line 172) and `attendance` (line
-226), granting admin/coach full read/write already. Foreman read both policy blocks
-directly. No new policy, no migration.
+Confirmed correct by the gate independently reading the same migration files.
+`staff_all` on both `event_sessions` and `attendance` already grants a coach full
+write access — **no migration is required; this premise held.** Never write to
+`audit_log` from this file — grep-provable, the gate confirmed zero occurrences in the
+reference implementation.
 
 ---
 
 ## 4. Owner authorization
 
-**Owner-approved, cited:** the decision to scope T178 as a real build (not a
-wiring-only task) after being told explicitly that no backend exists. This packet's
-author was told so directly by the dispatching session; there is no
-`auto-mode-decisions.md` entry to cite for it (it predates this packet, delivered
-in-conversation) — **do not claim it is recorded there.** Everything else in this
-packet — the three-mutation design, the `ignoreDuplicates` choice, the identity-closure
-shape, every acceptance criterion — is the **foreman's decision**, not owner-ruled.
-Say so if asked; do not promote any of it to owner authority (three prior incidents on
-this project did exactly that).
+**The split (build now, mount parked) is owner-ruled**, per the coordinator's
+2026-07-31 message reporting the ruling — **not yet recorded in
+`docs/swarm/auto-mode-decisions.md` as of this packet revision.** Cite the actual
+ledger entry once it exists; until then, cite the coordinator's message by date, not
+`auto-mode-decisions.md`, and say the same if asked. Everything else — the
+three-mutation design, `ignoreDuplicates`, the identity-closure shape, every
+acceptance criterion — remains the foreman's judgment, not owner-ruled.
 
 ---
 
 ## 5. Allowed / Forbidden files
 
 **Allowed:**
-- `src/lib/supabase/loaders/endMeeting.ts` — **new file.** The loader implementing
-  `LoadEndMeetingSummaryFn`, `OnEndMeetingFn`, and a factory
-  `makeOnEditAttendance(getRecordedBy, getClient?)` for `OnEditAttendanceFn` (types
-  imported from `EndMeetingDialog.tsx` — import-only from that file, do not redefine
-  them locally; this differs from `checkin.ts`'s convention of re-declaring *DB row*
-  shapes, which you should still do for your own `*DbRow` interfaces, but the
-  page-facing types (`EndMeetingSummaryData`, `EndMeetingPayload`,
-  `AttendanceRecordState`, `AttendanceStatus`, `LoadEndMeetingSummaryFn`,
-  `OnEndMeetingFn`, `OnEditAttendanceFn`) are exported from `EndMeetingDialog.tsx`
-  already — import them).
-- `src/lib/supabase/loaders/endMeeting.test.ts` — **new file.** Every loader file that
-  writes to the database in this repo ships its own test file
-  (`calendarFeed.test.ts`, `parentHome.test.ts`, `outreach.test.ts`,
-  `students.test.ts`) — `attendance.ts`, which you are reusing, has **no** test file of
-  its own (T167's still-open debt), so your suite is the only proof this reuse path
-  behaves correctly end-to-end. Do not skip it.
-- `src/pages/meetings/LiveConsole.tsx` — mount `EndMeetingDialog` in place of the
-  "End meeting" `Button`/`StubBanner`/`handleEndMeetingClick`/`endMeetingStub` state
-  (all four can be deleted — `EndMeetingDialog` renders its own "End meeting" `Button`
-  internally). Add three new optional `LiveConsoleBodyProps` fields
-  (`loadEndMeetingSummary`, `onEndMeeting`, `onEditAttendance`, typed against
-  `EndMeetingDialog.tsx`'s own exported function types), defaulting to real values:
-  `loadEndMeetingSummary`/`onEndMeeting` as plain imported singletons from
-  `loaders/endMeeting.ts` (same convention `MeetingsList.tsx` already uses for
-  `loadCoachMeetingsData`); `onEditAttendance` built inside `LiveConsoleBody` via
-  `makeOnEditAttendance` closed over a ref to the real `useAuth().user` (§3a).
-- `src/pages/meetings/LiveConsole.test.tsx` — update the existing "shows an
-  'End-meeting summary not built yet' disclosure Banner" test (delete it — the
-  behavior it proved no longer exists) and add the new mount-level tests in §6. This
-  is a foreman-authorized test reversal per Definition-of-Ready item 5 (constitution)
-  — the underlying feature that test proved (a stub banner) is being deliberately
-  replaced, not silently dropped.
+- `src/lib/supabase/loaders/endMeeting.ts` — **new file.** `LoadEndMeetingSummaryFn`,
+  `OnEndMeetingFn`, and `makeOnEditAttendance(getRecordedBy, getClient?)` for
+  `OnEditAttendanceFn`. Import the page-facing types from `EndMeetingDialog.tsx`
+  (`EndMeetingSummaryData`, `EndMeetingPayload`, `AttendanceRecordState`,
+  `AttendanceStatus`, `LoadEndMeetingSummaryFn`, `OnEndMeetingFn`,
+  `OnEditAttendanceFn`) — do not redefine them. Redeclare your own `*DbRow` shapes
+  locally, this directory's own convention.
+- `src/lib/supabase/loaders/endMeeting.test.ts` — **new file.** `attendance.ts` (which
+  you reuse) has no test file of its own — yours is the only proof this reuse path
+  behaves correctly.
 - `src/pages/meetings/EndMeetingDialog.tsx` — **module doc only, above the `import`
-  statement (i.e., only the comment block, lines 1-280ish).** No function, type, or
-  JSX in this file may change — its own logic is already finished and passed review;
-  do not re-open it. Specifically correct module doc section 1's sentence describing
-  `onEndMeeting`'s expected real implementation as "a single transaction (e.g. an RPC
-  running the backfill INSERTs, the checkout UPDATEs, and the `event_sessions` UPDATE
-  together)" — replace with an accurate description: three sequenced `runMutation`
-  calls in `loaders/endMeeting.ts`'s `makeOnEndMeeting`, following the
-  `makeSetActiveSeason` precedent, **not** a transaction/RPC, with the disclosed
-  partial-failure/idempotent-retry behavior from §7 below stated honestly (a real risk,
-  not engineered away). Cite `loaders/endMeeting.ts` by file and function name, not by
-  line number (item 19c — line numbers drift).
+  statement.** No function, type, or JSX may change. Correct the false
+  RPC/single-transaction steer — **grep for `transaction`, not just `"RPC"`.**
+  `"RPC"` finds one hit; `-i transaction` finds seven. The ones inside the module-doc
+  comment block (above the import line — this includes the section describing
+  `onEndMeeting`'s expected real implementation, and the ordering discussion
+  referencing "the same transaction") are all correctable under this packet's Allowed
+  Files; fix every one of them, not just the first. **Two of the seven sit inside
+  `defaultOnEndMeeting`'s function body** (a `console.warn` string literal) — that is
+  function content, forbidden by this same restriction. **Do not widen this packet's
+  scope to touch it.** Instead: leave it, and state explicitly in your worker output
+  that these two occurrences are a known, disclosed, uncorrected residual, out of
+  reach under this packet's Allowed Files (a dev-console-only string, never rendered
+  to a user — low stakes, but say so, don't let it pass silently).
 
 **Forbidden — everything else, explicitly including:**
 `docs/swarm/**`, `.claude/**`, `node_modules/`, `supabase/migrations/**` (no migration
-is needed — if you conclude one is, stop and report, §2), `src/pages/home/**`,
-`DashboardPage.*` (the concurrent T183 session), `EndMeetingDialog.test.tsx` (must stay
-green, untouched — it is your regression net for the frozen component logic),
-`src/lib/supabase/loaders/attendance.ts` (import `loadAttendanceForSessions`, do not
-fork or edit it), `src/lib/supabase/loaders/meetings.ts`, `kiosk.ts`, `checkin.ts`,
-`seasons.ts` (read-only precedent — none export the private query helpers you need, so
-you re-derive locally per this directory's own convention, you do not import their
-internals), `src/app/router.tsx`, `src/app/guards.tsx` (import-only —
-`useAuth`/`RequireRole` are already imported in `LiveConsole.tsx`, do not modify
-either file), `task-ledger.md`, `verification-log.md`, `dispute-log.md`.
+is needed — if you conclude one is, stop and report), **`src/pages/meetings/LiveConsole.tsx`
+and `LiveConsole.test.tsx` — out of scope for this revision, filed as T196, blocked**,
+`src/pages/home/**`, `DashboardPage.*` (concurrent T183 session),
+`EndMeetingDialog.test.tsx` (must stay green, untouched — your regression net for the
+frozen component logic), `src/lib/supabase/loaders/attendance.ts` (import
+`loadAttendanceForSessions`, don't fork it), `meetings.ts`, `kiosk.ts`, `checkin.ts`,
+`seasons.ts` (read-only precedent — none export the private helpers you need;
+re-derive locally), `src/app/router.tsx`, `src/app/guards.tsx`, `task-ledger.md`,
+`verification-log.md`, `dispute-log.md`.
 
 ---
 
-## 6. Acceptance criteria — each with a prescribed mutation
+## 6. Acceptance criteria — revised
 
-Per the boss's standing instruction on this project: no absence-only assertion (pair
-every negative with a positive that can genuinely fail), prescribe the mutation, run
-it, report the actual failure output. A criterion that cannot fail is worse than none.
+Criteria 14-16 (the mount, from revision 1) are **deleted, not renumbered** — do not
+fill the numbering gap with new mount work; they are preserved unmodified in this
+file's git history for whoever picks up T196. 1-13 remain, four corrected below per
+the gate's measured findings. Per the standing instruction on this project: no
+absence-only assertion, prescribe the mutation, run it, report the actual failure
+output — a criterion that cannot fail is worse than none.
 
-**Loader (`endMeeting.ts`/`endMeeting.test.ts`):**
+**Unchanged from revision 1 (the gate confirmed these hold as written) — 1, 2, 4, 6, 7,
+8, 10, 12, 13:**
 
-1. **`loadEndMeetingSummary` returns real, injected DB state, not
-   `EndMeetingDialog.tsx`'s own fixture.** Stub a recording Supabase client (pattern:
-   `parentHome.test.ts`'s `makeRecordingClient`/`makeRecordingChain`) returning a
-   distinct session/roster/attendance fixture (fabricated names per constitution item
-   6, distinct from `EndMeetingDialog.tsx`'s own `FIXTURE_ROSTER` names "Ada Q."/"Bea
-   R."/etc. — reusing those exact strings would make a fixture-collision the same class
-   T176 lost a criterion to). Assert the resolved data matches your injected fixture.
-   **Positive control, mutation-prescribed:** temporarily call
-   `defaultLoadEndMeetingSummary` (the dialog's own fixture stub) instead of your real
-   loader inside the same test and confirm the assertion *fails* (proves the assertion
-   can discriminate real-vs-fixture, not just "some data came back").
-2. **Roster team-scoping is load-bearing.** Fixture: two active students, one on a
-   team inside `event.team_ids`, one outside it. Assert only the in-scope student
-   appears. **Mutation:** set `team_ids: null` on the injected event row (the
-   documented "open to every team" case) and assert the roster now includes *both*
-   students — proving the filter genuinely gates on the value, not vacuously true or
-   false regardless of input.
-3. **`is_active` scoping.** Fixture: one active, one inactive student, both on an
-   in-scope team. Assert only the active student appears. **Mutation:** flip the
-   inactive student's fixture row to `is_active: true` and assert they now appear —
-   proving the filter discriminates.
-4. **`attendanceByStudentId` reuse is real.** Assert your loader's resolved
-   `attendanceByStudentId` for a known student matches a value only obtainable through
-   `loaders/attendance.ts`'s real column mapping (e.g. assert on `method`/`recordedBy`
-   fields that only exist because you called the real `AttendanceRow` mapper, not a
-   hand-rolled shape). Grep your own file for a second, independent `attendance` query
-   — there must be none; you call `attendance.ts`'s export.
-5. **`onEndMeeting` write ordering.** Recording-client spy asserting call order:
-   `attendance` upsert (backfill) → `attendance` update (checkout) →
-   `event_sessions` update (status flip), in that order, for a payload with non-empty
-   `backfillAbsentStudentIds` and `checkoutStudentIds`. **Mutation:** swap the checkout
-   and status-flip calls in your implementation and confirm this ordering test fails.
-   State plainly in your test file (and worker output) that this repo's test harness
-   is a stubbed-client unit test with no real Postgres — it can prove call *order*, not
-   that the trigger genuinely doesn't fire; the trigger's actual behavior is the
-   foreman's read-verified citation in §3d, not something this suite executes.
-6. **Backfill write shape.** Assert the upsert payload for each backfilled student is
-   exactly `{session_id, student_id, status: 'absent', method: 'coach', recorded_by:
-   null}` and that the call passes `{onConflict: 'session_id,student_id',
-   ignoreDuplicates: true}`. **Mutation:** remove `ignoreDuplicates: true` and confirm
-   a dedicated test asserting its presence fails — this flag is the mechanism that
-   makes a retried `onEndMeeting` call safe (§7); losing it silently is a real
-   regression, not a style nit.
-7. **Checkout write shape.** Assert the update sets `check_out_at: <payload.endsAt>`,
-   scoped to `session_id` + `.in('student_id', checkoutStudentIds)`, guarded with
-   `.is('check_out_at', null)`. **Mutation:** drop the `.is('check_out_at', null)`
-   guard and confirm a test asserting its presence (via the recorded call args) fails.
-8. **Status-flip write shape.** Assert `event_sessions` update sets
-   `{status: 'completed'}` scoped to `.eq('id', sessionId)` — same shape as
-   `meetings.ts`'s own `makeCancelMeetingSession`, different target value. Mutation:
-   change the written status to something other than `'completed'` and confirm a
-   dedicated test fails.
-9. **Partial-failure disclosure, proven not just documented.** Stub a client where the
-   `event_sessions` update rejects. Assert: (a) the `attendance` upsert (backfill) call
-   was issued, (b) the `attendance` update (checkout) call was issued, (c) the overall
-   `onEndMeeting(...)` promise rejects, surfacing the injected error. This is the
-   "coach sees an error banner, meeting isn't ended, but the backfill/checkout already
-   landed" state the module doc must disclose (§7) — prove the state is reachable, not
-   just describe it.
-10. **Retry after partial failure is safe.** Call `onEndMeeting` twice with the
-    identical payload against a client stub that succeeds both times. Assert the
-    second call does not throw and re-issues the same three calls with the same shapes
-    as criterion 6-8 — i.e., nothing in your implementation assumes "this student has
-    no row yet" beyond what `ignoreDuplicates`/the `.is('check_out_at', null)` guard
-    already defend.
-11. **`onEditAttendance` threads the real, distinct id.** Build `makeOnEditAttendance`
-    with a `getRecordedBy` stub returning `'coach-real-id-1'`; call it; assert the
-    update payload's `recorded_by` is exactly that string. **Then, in the same test
-    file, build a second instance with `getRecordedBy` returning a genuinely different
-    string, `'coach-real-id-2'`,** call it, and assert the captured payload carries
-    the *second* id — proving the closure reads live identity per-call rather than a
-    value baked in once (the exact discrimination T170's own MAJOR was about: a stub
-    that returns the same string every time cannot prove threading is real).
-12. **Null identity rejects before any network call.** `getRecordedBy` returns `null`;
-    call `onEditAttendance(...)`; assert the returned promise rejects and the spy
-    client's `.from(...)` was **never called**. **Mutation:** delete the null-guard and
-    confirm this test starts observing a real `.from('attendance').update(...)` call
-    with `recorded_by: null` — i.e., the test is currently discriminating, not vacuous.
-13. **No `audit_log` write anywhere in this file.** Grep-provable — zero literal
-    `audit_log` outside a comment. State this as a one-line assertion in your worker
-    output, not a runtime test (there is nothing to execute; it's a static property).
+1. `loadEndMeetingSummary` returns real, injected DB state, not the dialog's own
+   fixture, paired with a positive control (calling the dialog's own
+   `defaultLoadEndMeetingSummary` instead must make the assertion fail).
+2. Roster team-scoping (client-side, genuinely discriminates): inject one in-scope and
+   one out-of-scope active student; assert only the in-scope one appears; mutation —
+   set `team_ids: null` and assert both now appear.
+4. `attendanceByStudentId` reuse is real — assert on fields only obtainable through
+   `attendance.ts`'s real mapper; grep your own file for a second, independent
+   `attendance` query (there must be none).
+6. Backfill write shape — exact upsert payload plus `{onConflict:
+   'session_id,student_id', ignoreDuplicates: true}`; mutation — remove
+   `ignoreDuplicates` and confirm a dedicated test fails.
+7. Checkout write shape — `check_out_at: payload.endsAt`, scoped by `session_id` +
+   `.in('student_id', ...)`, guarded `.is('check_out_at', null)`; mutation — drop the
+   guard, confirm a dedicated test fails.
+8. Status-flip write shape — `{status: 'completed'}` scoped `.eq('id', sessionId)`;
+   mutation — change the written status, confirm a dedicated test fails.
+10. Retry after partial failure is safe — call `onEndMeeting` twice with the identical
+    payload against a client that succeeds both times; assert the second call
+    re-issues the same three writes without throwing.
+12. Null identity rejects before any network call — `getRecordedBy` returns `null`;
+    assert the promise rejects and the spy's `.from(...)` was never called; mutation —
+    delete the guard, confirm the test starts observing a real call.
+13. No `audit_log` write anywhere in this file — grep-provable, static, not a runtime
+    test.
 
-**Mount (`LiveConsole.tsx`/`LiveConsole.test.tsx`):**
+**3 — CORRECTED (MAJOR 1).** `is_active` is filtered server-side — a stubbed client
+does not enforce it, so revision 1's base assertion ("only the active student
+appears," against an injected client returning both) fails against a *correct*
+implementation, and its mutation (flipping `is_active` on the fixture) passes both
+before and after — unsatisfiable as written. **Revised: assert the query builder's
+recorded call included `.eq('is_active', true)` as an argument** (inspect the spy's
+captured call args for the `students` query, not the returned data). State plainly in
+your test file: server-side filters are argument-provable only in this harness, not
+outcome-provable — a stub client cannot demonstrate server-side filtering by its
+return value. Do not apply this same fix to criterion 2 — team-scoping genuinely runs
+client-side and criterion 2's original outcome-based assertion already discriminates
+correctly; these are two different mechanisms.
 
-14. **The stub is gone, proven with a positive that could not come from the stub.**
-    Render `LiveConsoleBody` with `COACH_USER` (existing fixture,
-    `LiveConsole.test.tsx`), inject a distinct `loadEndMeetingSummary` stub returning
-    known roster/attendance fixture data, click "End meeting". Assert
-    `container.textContent` contains a string only `buildEndMeetingConfirmDescription`
-    (the dialog's own already-tested pure function) can produce for your injected
-    fixture — e.g. the literal "Current attendance: N present..." tally computed from
-    your specific counts — **and** does not contain "has not shipped yet" /
-    "End-meeting summary not built yet". **Mutation, required:** revert the mount (put
-    the old `StubBanner`/`handleEndMeetingClick` back) and confirm this new test fails
-    — this is the exact "banner is gone" vacuous-absence trap named in the brief;
-    passing only on the positive-content assertion, independent of the negative one,
-    is what makes this non-vacuous.
-15. **The real `onEndMeeting` payload is correct end-to-end from a UI click.** Inject
-    a spy `onEndMeeting`; drive the full click path (Button → confirm `AlertDialog` →
-    `onAction`); assert the spy was called once with a payload whose
-    `backfillAbsentStudentIds`/`checkoutStudentIds` match what your injected fixture's
-    roster/attendance state actually implies (computed via the dialog's own exported
-    `buildEndMeetingPayload`, not hand-counted, so the assertion can't silently drift
-    from the real pure function's contract).
-16. **`onEditAttendance` threads the real signed-in coach's id from the mount site,
-    not a stub.** Render with `COACH_USER` (id `'user-coach'`, existing fixture);
-    reach the post-completion correction List (inject a fixture whose session is
-    already `'completed'`); change one student's status via the `SegmentedControl`;
-    assert the (spied) real `onEditAttendance` implementation's underlying mutation
-    call received `recorded_by: 'user-coach'`. **Mutation:** re-render with a second,
-    distinct `AuthUser` fixture (a new id, not `'user-coach'` or any id already used
-    elsewhere in this file) and confirm the captured `recorded_by` changes to match —
-    same distinct-value discipline as loader criterion 11, now proven through the real
-    mount wiring, not just the factory in isolation.
-17. **Doc correction is accurate, not just present.** Grep `EndMeetingDialog.tsx` for
-    the string `"RPC"` — the only acceptable remaining hits (if any) describe why one
-    is *not* used, never that one is expected. State in your worker output the exact
-    before/after of the corrected sentence.
+**5 — CORRECTED (BLOCKER 2).** The original ordering criterion (assert `.from(...)`
+call order on a plain recording spy) passes identically whether the three writes are
+truly sequenced or dispatched concurrently via `Promise.all` — `runMutation` builds
+its Postgrest chain synchronously before its first `await`, so a spy recording only
+call order can't see the difference. **Revised: gate each of the three stubbed calls
+(backfill upsert, checkout update, status-flip update) on its own independently
+resolvable ("deferred") promise** — a promise whose `resolve` you hold outside the
+call itself, not one that resolves automatically. Drive `onEndMeeting(payload)` and,
+before resolving anything, assert only the backfill call has been issued (checkout's
+and the flip's underlying `client.from(...)` calls have **not** happened yet — assert
+on call counts, not eventual order). Resolve the backfill's deferred, flush
+microtasks, assert the checkout call is now issued but the flip's is not. Resolve
+checkout's deferred, flush, assert the flip is now issued. **Prove the fix itself, not
+just the feature:** run the original `Promise.all`-concurrent mutation against this
+new version of the test and confirm it now fails (it passed, 17/17, against the
+original criterion 5; it must not pass against this one).
+
+**9 — CORRECTED (MAJOR 3).** Revision 1 claimed the rejection "surfaces the injected
+error" — false, measured: `runMutation` routes every rejection through
+`toLoaderError` (`../loader.ts`), whose top-level `.message` is always the fixed
+DES-16 copy; the injected detail survives only in `.cause`. A literal
+`rejects.toThrow('<injected message>')` fails, since `.toThrow` matches
+`.message`. **Revised: assert the rejection satisfies `isSupabaseLoaderError`
+(exported from `../loader`) and that its `.cause` contains/matches the injected
+rejection detail — never assert the top-level `.message` equals your injected
+string.** Keep the rest as specified: (a) the backfill call was issued, (b) the
+checkout call was issued, before the (now correctly asserted) rejection.
+
+**11 — CORRECTED (BLOCKER 1), this project's now-eighth instance of the
+vacuous-identity-assertion shape, this time inside a criterion written specifically to
+prevent it.** Revision 1 built **two separate factory instances**, each with a fixed
+stub, and asserted each instance's single call carried that instance's id — passes
+even if the factory bakes `getRecordedBy()`'s result once at construction time instead
+of reading it fresh per call, because each instance only ever gets one call, so "baked
+at construction" and "read fresh per call" are indistinguishable under that shape.
+§3a's whole point is that identity must be read fresh on **every call within one
+instance**, matching a `useRef`-backed accessor that changes across renders — revision
+1's own criterion never tested that. **Revised: build ONE `makeOnEditAttendance`
+instance with ONE `getRecordedBy` that returns a different value on successive
+invocations** (e.g. a closure over an index into `['coach-real-id-1',
+'coach-real-id-2']`, incrementing each call). Call the **same** returned
+`onEditAttendance` function twice. Assert the first call's captured `recorded_by` is
+`'coach-real-id-1'` and the second call's is `'coach-real-id-2'`. **Prove the fix
+itself:** run a construction-time-baked variant (`const bakedOnce = getRecordedBy();
+return async (...) => { const recordedBy = bakedOnce; ... }`) against this revised
+test and confirm it now fails (it passed against the original criterion 11's shape; it
+must not pass against this one).
 
 ---
 
 ## 7. Design record you must carry into your own module doc (`endMeeting.ts`)
 
 State honestly, mirroring `seasons.ts`'s own Trap #1 disclosure for
-`makeSetActiveSeason` (do not write a rosier version of this):
+`makeSetActiveSeason` — do not write a rosier version of any of this, and do not
+repeat revision 1's two understatements (both gate-caught):
 
 - Three sequential `runMutation` calls, not a transaction. If the second or third call
   rejects after an earlier one succeeded, the database is left in the corresponding
   partial state (backfill landed, checkout/flip did not; or backfill+checkout landed,
   flip did not) until the coach retries.
-- Retry is safe by construction, not by luck: backfill uses
-  `.upsert(rows, {onConflict:'session_id,student_id', ignoreDuplicates:true})`
-  (precedent: `supabase/functions/checkin/attendance_upsert.ts`'s own
-  `applyUpsertIgnoreDuplicates`, the same "first write wins, never clobber a real row"
-  semantics reused here specifically so a benign race — e.g. a real QR check-in landing
-  between `loadSummary` and confirm — is silently skipped rather than destructively
-  overwritten or fatally rejected); checkout re-sets the same `endsAt` value
-  idempotently, guarded by `.is('check_out_at', null)` so it never clobbers a real
-  checkout stamp set some other way; the status flip re-sets the same terminal value.
-  A coach re-clicking "End meeting" after a partial failure (the dialog's own
-  `handleConfirmEndMeeting` leaves `isConfirmOpen` open and `data` untouched on
-  rejection — read `EndMeetingDialog.tsx` yourself to confirm this before relying on
-  it) safely re-issues the same three calls without a duplicate-key rejection.
-- **Known residual, disclose it, do not silently fix it or expand scope to fix it:**
-  `LiveConsole.tsx`'s own roster/attendance panel (`loadData`/`onSetAttendanceStatus`)
-  remains fixture-backed after this task — a separate, pre-existing, already-disclosed
-  gap (that file's own module doc section 2). After a coach ends a meeting through the
-  now-real `EndMeetingDialog`, the roster panel above it will not reflect the
-  just-backfilled absences or checkouts (it never refetches). This is a real,
-  user-visible inconsistency between the now-real dialog and the still-fixture roster
-  panel on the same screen. Per constitution item 20, **file it as a follow-up task in
-  your worker output**, do not fix it here (wiring `LiveConsole`'s own live roster is a
-  materially larger task — QR minting, Realtime, the console's own `loadData` — well
-  beyond this packet's scope) and do not describe it only in a code comment.
+- **State the safety property as the actual justification, not as a disclaimer:**
+  because the flip is always last, every reachable partial-failure state fails in the
+  safe direction — a checkout failure leaves absences written and the session still
+  `'scheduled'`, no audit pollution, retry is a clean no-op. There is no ordering under
+  this design in which the flip lands and the checkout doesn't. This is *why* three
+  sequenced calls are sufficient and an RPC is not needed — say it as a positive
+  property of the design, not as "we can't prove otherwise."
+- Retry is safe by construction: backfill uses `.upsert(rows,
+  {onConflict:'session_id,student_id', ignoreDuplicates:true})` (precedent:
+  `supabase/functions/checkin/attendance_upsert.ts`'s own
+  `applyUpsertIgnoreDuplicates` — "first write wins, never clobber a real row," reused
+  here so a benign race, e.g. a real QR check-in landing between `loadSummary` and
+  confirm, is silently skipped rather than destructively overwritten or fatally
+  rejected); checkout re-sets the same `endsAt` value idempotently, guarded by
+  `.is('check_out_at', null)` so it never clobbers a real checkout stamp set some other
+  way; the status flip re-sets the same terminal value.
+- **Disclose the human side honestly, not just the database side.** `runMutation`
+  rejects with a plain object, not an `Error` instance, so `EndMeetingDialog.tsx`'s
+  frozen `error instanceof Error` check always falls through to its generic fallback
+  copy — a coach who hits a partial failure sees only *"Couldn't end this
+  meeting… Something went wrong ending this meeting"*, never the real error and
+  nothing about which partial state was reached. This cannot be improved inside this
+  packet (`EndMeetingDialog.tsx` is frozen); say so rather than letting the database
+  safety property imply the coach is informed too.
+- **Known residual, not this packet's to fix:** `LiveConsole.tsx`'s own roster/attendance
+  panel remains fixture-backed — this is why the mount is blocked as T196, not a
+  separate new disclosure.
 
 ---
 
-## 8. Tier and gate — the foreman's recommendation, not yet ratified
+## 8. Tier and gate — unchanged recommendation, now moot for the gate half
 
-**Worker tier: sonnet (no override).** None of constitution item 18's four explicit
-opus triggers fire: no migration file, no RLS policy or `security definer` helper
-created or modified (both already exist and are read-only here), no metric-math SQL
-view touched, no auth/session/role-resolution/permission logic changed (`useAuth()` is
-read, not modified, exactly as `LiveConsole.tsx` already does elsewhere in this same
-file). Item 25's second obligation retires tier bumps for "sounds sensitive" reasoning
-generalized to "sounds complex" — I am not invoking that.
-
-**But this is not a proven-pattern rollout (item 19b) — it is the first real backend
-for this dialog's atomicity contract**, a genuine multi-table sequenced write with a
-disclosed data-integrity/partial-failure mode and an identity-threading requirement
-this project has gotten wrong before (T170). That is exactly item 19b's "novel
-pattern" case, not its "rolling out an already-verified pattern to a new surface" case.
-**Recommendation: full `checker-premise` round before dispatch** (not skipped, not
-light), and `checker-reviewer` at **opus** for the post-implementation check — matching
-T170's and T181's own treatment (sonnet worker, opus checker, full gate; both found
-real defects). This is the foreman's judgment call, stated as such, not
-owner-authorized and not yet gate-ratified.
+**Worker tier: sonnet (no override)** — unchanged reasoning from revision 1: no
+migration, no RLS/security-definer change, no metric-SQL view, no auth/session logic
+change. **Checker: `checker-reviewer` at opus** for the post-implementation check,
+matching T170/T181's own treatment. **No further `checker-premise` round runs before
+dispatch** — the coordinator's ruling, not the foreman's call; round 1 already did the
+work a round 2 would have (built a reference implementation and mutation-tested it),
+and item 19a's cap plus the owner's direct involvement in the BLOCKER-3 decision are
+why this goes straight to a worker now.
 
 ---
 
 ## 9. Required worker output
 
-- Commit SHA (constitution item 21 — existence verified, not assumed).
+- Commit SHA (item 21 — existence verified, not assumed).
 - Every criterion in §6, with the actual mutation applied, actual failure output
-  pasted (test name + before/after pass counts), not summarized.
-- The five gates re-measured on your own worktree at your own dispatch SHA:
-  `tsc`, `eslint`, `vitest` (`.env.local` absent), `prettier --check`, `vite build`.
-- Zero-diff confirmation on every Forbidden file listed in §5.
-- The follow-up task named in §7 (the `LiveConsole` roster/attendance disconnect),
-  stated plainly, not just in a code comment (item 20).
-- Explicit disclosure of anything in this packet you could not verify, or found wrong.
+  pasted (test name + before/after pass counts), not summarized — including the two
+  "run the old/broken variant against the new test and confirm it now fails" steps in
+  criteria 5 and 11, which prove the fix itself, not just the feature.
+- The gates re-measured on your own worktree at your own dispatch SHA: `tsc`, `eslint`,
+  `vitest` (`.env.local` absent), `prettier --check`, `vite build` (the last two were
+  not run by the gate — you are the first to measure them for this task).
+- Zero-diff confirmation on every Forbidden file in §5, **especially
+  `LiveConsole.tsx`/`LiveConsole.test.tsx`** — this revision must not touch either,
+  even incidentally.
+- The `grep -i transaction EndMeetingDialog.tsx` before/after count, with the two
+  remaining (function-body, disclosed-residual) hits named explicitly.
+- Explicit disclosure of anything in this packet you could not verify, or found wrong
+  — including in the gate's own findings, if you find something there wrong; the gate
+  is a strong prior, not infallible.

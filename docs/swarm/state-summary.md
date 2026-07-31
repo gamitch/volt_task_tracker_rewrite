@@ -4,11 +4,14 @@
 T129 and are stale (already flagged inline at the relevant heading; full
 reconciliation still not attempted — out of scope for whichever session next has
 bandwidth for it). For current state, read `docs/swarm/RESUME-HERE.md` first, then
-`task-ledger.md`'s Summary table (live source of truth). **T178** is currently a
-drafted-but-not-yet-gated packet — `docs/swarm/active/T178-worker-packet.md`,
-`task-ledger.md`'s T178 row reframed from "wiring gap" to "backend + mount" the same
-day, both by `foreman-planner`. Next step for T178: `checker-premise` (full round
-recommended, not skipped).
+`task-ledger.md`'s Summary table (live source of truth). **T178** was reframed from
+"wiring gap" to a real build, then **split**: `checker-premise` round 1
+(`docs/swarm/active/T178-gate-round1-findings.md`, measured at `accc692`) returned
+REVISE (3 BLOCKER/3 MAJOR/4 MINOR), including a real data-loss path in mounting on a
+still-fixture-backed `LiveConsole.tsx` (BLOCKER 3) — owner ruled: build the loader,
+park the mount. Mount refiled as **T196** (Blocked). `endMeeting.ts`'s loader build is
+now packet revision 2, `docs/swarm/active/T178-worker-packet.md`, dispatching straight
+to `worker-implementer` with no further gate round (item 19a cap).
 
 **For orientation, read `overview.md` first — it's the lean entry point.**
 This file keeps a compact per-task log (one line each) and the standing
