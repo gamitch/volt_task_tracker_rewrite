@@ -1194,6 +1194,47 @@ describe('<MeetingsList /> student/parent view', () => {
     expect(container.textContent).toContain('No meeting history yet');
   });
 
+  // T302 -- `isEmpty` (`MeetingsList.tsx`'s `history.length === 0 &&
+  // participation === null`) was asserted by nothing: deleting the
+  // `participation === null` conjunct left the whole suite green, both at
+  // T180's head and at base (pre-existing gap, not a T180 regression). It
+  // matters more now than it used to -- T180 deleted this file's own
+  // `Participation` `ProgressBar`, so this clause is `participation`'s only
+  // remaining render-path consumer. A student with zero history rows but a
+  // real participation row must NOT collapse into the "No meeting history
+  // yet" empty state.
+  //
+  // Paired, not absence-only (this project has shipped seven-plus
+  // absence-only assertions that passed for the wrong reason, including two
+  // in T180's own first draft): absence of the empty-state copy, PLUS the
+  // "Recent attendance" heading, which the `isEmpty` branch never renders --
+  // it only exists past `StudentMeetingsView`'s own loading/error gate, on
+  // the same `else` branch as the empty-state check's alternative, so it
+  // cannot pass because the page merely failed to load or errored.
+  it('a student with zero history rows but a real participation row does not render the empty state', async () => {
+    renderAsUser(STUDENT_OR_PARENT_USER, {
+      resolveStudentId: fakeResolveStudentId('student-fixture'),
+      loadStudentData: () =>
+        Promise.resolve({
+          history: [],
+          participation: {
+            studentId: 'student-fixture',
+            teamId: 'team-ravens',
+            seasonId: 'season-placeholder-current',
+            expectedCt: 5,
+            presentCt: 4,
+            lateCt: 0,
+            excusedCt: 0,
+            participationPct: 80,
+          },
+        }),
+    });
+    await flushMicrotasks();
+    await flushMicrotasks();
+    expect(container.textContent).not.toContain('No meeting history yet');
+    expect(headingOutline()).toContain('H2:Recent attendance');
+  });
+
   // T096, Trap #4 -- the resolution seam's own three states (loading /
   // error / "no student linked"), independent of `StudentMeetingsView`'s
   // own load state below it.
