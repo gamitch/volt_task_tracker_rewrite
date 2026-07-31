@@ -1,12 +1,90 @@
-# Resume here — state of play at `main` = `94267a0` (2026-07-31 update below the line at §"UPDATE")
+# Resume here — state of play at `main` = `534bdbf` (read the UPDATE sections top-down; each supersedes the ones below it)
 
 Written 2026-07-30 so this session's context can be cleared without losing anything.
 Fresh orchestrator session: read this, then `constitution.md`, then the open rows in
 `task-ledger.md`. Everything is on disk; nothing important lives only in a conversation.
 
-**A 2026-07-31 update sits near the top of this file (search "UPDATE — 2026-07-31") — read
-it before acting on anything below that predates it, since branch/PR state and the triage
-proposal's T169/T177 rows have both moved since this file was first written.**
+**Several dated UPDATE sections sit near the top of this file. Read them top-down — the
+newest is first and supersedes what follows it. Do not act on anything below an UPDATE
+without checking whether that UPDATE moved it.**
+
+## UPDATE — 2026-07-31 midday: T178 merged to `main`; T183 open; a T196/T197 number collision
+
+**`main` = `534bdbf`.** PR #7 (T178) merged. CI green on the merge commit's parent
+(`Typecheck, Lint, Test, Build, Bundle Size` → success). Gate figures now on `main`: `tsc`
+exit 0 · eslint **0 errors / 358 warnings** · **70 files / 1668 tests** · `vite build` ✓ ·
+`format:check` clean (all measured with `.env.local` **absent**, the mandated gate state).
+
+### ⚠️ Two different tasks are both numbered T196, and both are numbered T197
+
+This is the one thing in this file that will silently corrupt the ledger if ignored.
+
+| Number | On `main` (from T178) | On `claude/t183-student-home-loader` (from T183) |
+|---|---|---|
+| **T196** | the parked `EndMeetingDialog` mount — **BLOCKED**, data-loss risk | `StudentHome`'s `events`/`sessions`/`rsvps`/`participation` still have no real loader |
+| **T197** | `onEditAttendance`'s row scoping is unasserted — gate on *its* T196 | `students.test.ts`'s bare `rejects.toThrow()` is indistinguishable from a `TypeError` |
+
+Both sessions filed follow-ups from the same next-free number at roughly the same time on
+separate branches. **T178's pair is already on `main` and keeps the numbers.** Whoever merges
+PR #6 must **renumber T183's pair to T198 (StudentHome loaders) and T199 (test assertion)**
+before or during that merge — including the cross-references inside their own row text and in
+T183's `verification-log.md` entry. Do not resolve the `task-ledger.md` merge conflict by
+taking either side wholesale; both sets of rows are real and all four must survive.
+
+**Root cause worth fixing, not just this instance:** "next free row number" is read from a
+file that two branches edit independently, so it is not actually a reservation. Either
+reserve numbers in a single place before branching, or namespace them per branch.
+
+### T178 — RESOLVED, merged
+
+Build half only. `src/lib/supabase/loaders/endMeeting.ts` (473 lines) + test (643 lines, 14
+tests): a summary loader plus three **sequenced** mutations — absence backfill and checkout on
+`attendance`, status flip on `event_sessions`. Plus a module-doc-only correction in
+`EndMeetingDialog.tsx`. PASS, first attempt.
+
+- **The ledger's original "wiring gap" framing was wrong.** All three of `EndMeetingDialog`'s
+  seams were `console.warn` stubs and no end-meeting backend existed anywhere. This was a build.
+- **The mount was split off and parked by owner ruling** (recorded in `auto-mode-decisions.md`).
+  `LiveConsole`'s attendance marking is an intentional no-op (`LiveConsole.tsx:510-511`) and its
+  roster is a fixture, so a real dialog on top would mark every checked-in student a real
+  `absent` row on first use — a complete-looking flow that does something **wrong**. Filed as
+  T196 (blocked); see the collision table above.
+- **No RPC and no migration**, resolved against the repo's grep-provable no-`supabase.rpc()`
+  convention and `makeSetActiveSeason` as precedent. `staff_all` already grants both writes.
+- **Write order is load-bearing** — `trg_audit_attendance_post_completion` is `after update on
+  attendance` with a live session-status lookup, so checkout must precede the flip. Because the
+  flip is last, every reachable partial state fails safe; that, not a transaction, is why no RPC
+  is needed. Verified three ways: dropping the `await`s fails 2/14, `Promise.all` fails 1/14,
+  flip-before-checkout fails 2/14.
+- **Two criteria previously passed against broken implementations** and were rebuilt: identity
+  threading (passed when the coach's id was baked at factory-construction time) and write
+  ordering (passed under `Promise.all`, because `runMutation` builds its PostgREST chain
+  synchronously and a call-order spy cannot tell). Same shape as T170's and T181's BLOCKERs.
+- **Known residual, disclosed:** two false "single transaction" claims remain at
+  `EndMeetingDialog.tsx:588` and `:597`, inside a function body the task's scope forbids
+  touching. Dev-console strings only, never rendered.
+
+### T183 — RESOLVED, merged onto its own branch; PR #6 still open against `main`
+
+Fixed `StudentHome`'s fabricated `'Ada Reyes'` greeting; real `students.display_name` is now
+the production default. Checker PASS, ledger and verification-log recorded. **PR #6 has not
+merged** — it is based on `a3b9f00` and `main` has since moved to `534bdbf`, so it needs an
+update-from-`main` and will conflict on `task-ledger.md` and on this file's top section (both
+branches inserted an UPDATE at the same anchor). Resolve by keeping **both** sets of rows and
+both UPDATE sections, then apply the T198/T199 renumber above.
+
+### T173 — in progress, other session
+
+Packet finished its final revision. Round 2 of the premise gate found two real BLOCKERs, both
+proven by executed tests and fixed; the owner authorized a bounded third round. Dispatching
+straight to the worker — no third gate round. **T191 and T158 not started.**
+
+### Branch/PR state right now
+
+- `main` = `534bdbf`. **No open PR against `main` except #6.**
+- `claude/t178-end-meeting-dialog` — merged via PR #7. **Do not reuse.**
+- `claude/t183-student-home-loader` — PR #6, open, needs the update + renumber above.
+- `claude/swarm-plan-zl575z` — restarted from `main` after PR #3 merged; carries doc updates only.
 
 ## UPDATE — 2026-07-31: branch state, and two triage rows resolved
 
@@ -135,8 +213,28 @@ self check-off on `/outreach` — which was silently failing against a nonexiste
    **T193**, still open — see the 2026-07-31 UPDATE section at the top of this file.
 3. **T172** — the mechanism fix, and **it should now absorb the vacuous-absence problem**
    (see below), not just the placeholder-default one.
-4. **T178/T179/T180** — three finished, tested components mounted nowhere, each with a
-   "not shipped yet" stub still sitting at the intended host.
+4. ~~**T178**~~ / **T179** / **T180** — filed together as "three finished, tested components
+   mounted nowhere, each with a 'not shipped yet' stub at the intended host." **That framing
+   held for only one of the three. Probe each before packeting — measured 2026-07-31:**
+   - **T178 — was not a wiring gap at all.** No backend existed; all three seams were
+     `console.warn` stubs. It became a build, and its mount was parked (T196). **Merged.**
+   - **T179 — a genuine wiring gap, but do not mount it as-is.** The persistence seam is
+     already real: `onMarkComplete` defaults to `markDayComplete`
+     (`loaders/outreach.ts:1200`, shipped by T101). The hazard is the *other* four props —
+     `session`, `roster`, `rsvps` and `currentUserProfileId` all default to fixtures /
+     `PLACEHOLDER_CURRENT_COACH_PROFILE_ID` (`MarkDayCompleteDialog.tsx:655-660`). Mounting
+     while those defaults exist means one forgotten prop writes **real** attendance rows for
+     **fixture** students. **Apply T151's mechanism first — make the four required and delete
+     the defaults, so a forgetful call site cannot compile** — then mount. This is the
+     placeholder-default family, not a new risk.
+   - **T180 — the cheapest of the three, and genuinely low-risk.** All three seams already
+     default to real loaders (`loadConsistencyStripDataFromSupabase`,
+     `loadLinkedStudentsFromSupabase`, `resolveCurrentStudentId`,
+     `StudentMeetingView.tsx:1052-1055`) and the component is **read-only — no mutations at
+     all**, so neither T178's data-loss shape nor T179's fixture-write shape applies. Scope
+     nuance from its ledger row still stands: this is the **outer wrapper only**; the same
+     file's `ConsistencyStrip` export is already reachable via `ParentHome` and must not be
+     disturbed.
 
 ## Blocked on the owner, not on us
 
@@ -229,18 +327,19 @@ attached, which is cheaper than carrying it.
 **The app is not deployed.** Polish on an undeployed app is unbounded, which is the real reason
 the backlog grows. These five are the only path to "finished".
 
-## KEEP — a user hits this (9)
+## KEEP — a user hits this (10 — was 9; T180 was missing, added 2026-07-31)
 
 | Row | Why |
 |---|---|
 | T169 | **RESOLVED 2026-07-31, merged `18b481c` (OutreachDetail half).** The `OutreachList` half is re-filed as **T193**, still open. |
 | T177 | **RESOLVED 2026-07-31, merged (see UPDATE section above).** Provisioning gap it exposed is re-filed as **T195**; `onResetFeedToken` as **T194**. |
-| T183 | `Hi Ada Reyes` greets every real signed-in student |
-| T173 | `CoachHome`'s three fabricated surfaces (`0 / 38 hrs`, `Default goal 10h`, admin Season-setup card) |
+| T183 | **RESOLVED 2026-07-31**, merged onto `claude/t183-student-home-loader`; **PR #6 still open against `main`** (see the midday UPDATE). Residue re-filed as that branch's T196/T197 — **renumber to T198/T199**. |
+| T173 | **IN PROGRESS 2026-07-31** (other session) — packet final revision done, worker dispatching. `CoachHome`'s three fabricated surfaces (`0 / 38 hrs`, `Default goal 10h`, admin Season-setup card) |
 | T191 | a deactivated child's card shows a `1 h` goal that exists in no data source |
 | T158 | Leaderboard — owner-ruled to embed in the dashboard; unblocked |
-| T178 | `EndMeetingDialog` built, tested, mounted nowhere — host still shows a "not shipped yet" banner |
-| T179 | `MarkDayCompleteDialog` same shape — a real coach workflow action |
+| T178 | **RESOLVED 2026-07-31, merged `534bdbf` (PR #7) — build half only.** The ledger's "mounted nowhere" framing was wrong: there was no backend to mount. The mount is parked as **T196 (blocked, data-loss risk)**; its test-integrity gate is **T197**. See the midday UPDATE. |
+| T179 | `MarkDayCompleteDialog` — a real coach workflow action. **"Same shape" as T178 turned out to be wrong** (measured 2026-07-31): its persistence seam is already real, but four props default to fixtures/placeholder. Must apply T151's required-prop mechanism *before* mounting. See "Ready to dispatch" item 4. |
+| T180 | **Omission in this triage — it belongs here and was left out of every table below.** `StudentMeetingView`'s outer wrapper, mounted nowhere. Measured the cheapest of the three: all seams already default to real loaders, and it is read-only, so no write-path risk. Outer wrapper only. |
 | T189 | `MeetingsList` participation reads an `is_active`-filtered view; **impact genuinely unknown** — investigate, then fix or close |
 
 ## KEEP — cheap and pays for itself (2)
@@ -286,8 +385,15 @@ target. Carrying seven speculative rows costs more than it saves.
 
 ## Result if accepted
 
-**37 open → 16**, of which **5 are the owner's deployment gates** and **2 are cheap
-infrastructure**. Nine real user-facing items remain, most of them small.
+**37 open → 17** (was stated as 16; T180 was missing from the tables — corrected 2026-07-31),
+of which **5 are the owner's deployment gates** and **2 are cheap infrastructure**. Ten real
+user-facing items remain, most of them small.
+
+**Since this proposal was written, four of those ten have closed** — T169, T177, T178 and T183
+(T183 pending PR #6's merge) — and **T173 is in progress**. The remaining user-facing work is
+**T191, T158, T179, T180, T189**, plus the residue rows T193/T194/T195 and the T196–T199 set.
+That is the honest current shape of the backlog; **the proposal's cuts are still unapplied and
+still awaiting the owner's veto.**
 
 ## And the process change that matters more than the cut
 
