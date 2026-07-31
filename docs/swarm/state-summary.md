@@ -143,20 +143,41 @@ Packets P0–P13 plus regression fixes and live hotfixes:
 
 ## Active (2026-07-31 — see T158 note directly below, then T191; older entries in this section are 2026-07-29/30 and otherwise stale)
 
-**2026-07-31 — T158 packet, DISPATCH-pending (`checker-premise`, full round):**
-`docs/swarm/active/T158-worker-packet.md`. Scope narrowed at packeting time to
-just the real loader + a new supporting migration (`v_leaderboard_students`,
-two columns, `where is_active`) — the embed half is split out as **T203**
-(needs its own CSS-nesting fix in `CoachHome.tsx` and two different
-test-harness fixes, neither built yet). Real finding: `students` has no
-`read_all` RLS policy and `Leaderboard.tsx` has no role gate at all, so a
+**2026-07-31 — T158 packet, revision 2, awaiting `checker-premise` round 2 of 2
+(item 19a cap):** `docs/swarm/active/T158-worker-packet.md`. Scope narrowed at
+packeting time to just the real loader + a new supporting migration
+(`v_leaderboard_students`, two columns, `where is_active`) — the embed half is
+split out as **T203** (needs its own CSS-nesting fix in `CoachHome.tsx` and two
+different test-harness fixes, neither built yet). Real finding: `students` has
+no `read_all` RLS policy and `Leaderboard.tsx` has no role gate at all, so a
 naive loader copying `coachHome.ts`'s pattern would silently under-serve
 student/parent viewers while working for staff — fixed via the view the
 schema's own comments (`rls.sql`, `student_teams.sql`) already name as the
 intended mechanism. Opus tier both roles (item 18 trigger 1: migration file).
-Also filed **T204** (stale RLS-mechanism comment in `loaders/students.ts`,
-documentation-only, no functional defect). See `task-ledger.md`'s T158/T203/
-T204 rows for full detail.
+Also filed **T204** (two stale doc-comment residues — `loaders/students.ts`'s
+RLS-mechanism comment and, folded in this round, `CoachHome.tsx:2094`'s
+"Defaults to fixture data" — both documentation-only, no functional defect).
+**Round 1 gate returned REVISE (0 BLOCKER, 2 MAJOR, 6 smaller findings) — full
+findings in `docs/swarm/active/T158-gate-round1-findings.md`, all folded into
+revision 2.** The central prescription (migration + loader design) was
+CONFIRMED correct by the gate spinning up a real scratch PGlite Postgres
+instance and measuring the RLS/view-visibility mechanism directly (no
+Docker/psql needed, ~40s) — proving both the name-visibility half
+(`v_leaderboard_students`) and, newly traced this round, the hours-visibility
+half (`v_student_hours`, queried unfiltered by the same loader) share one
+proven view-owner-RLS-bypass mechanism. The two MAJORs were evidentiary, not
+prescriptive: revision 1's §4 falsely claimed `v_student_hours`/
+`v_team_participation` were already queried from non-staff surfaces (grep
+disproved this — `v_student_hours` has exactly one, staff-gated, consumer;
+`v_team_participation` has none), and it only traced the name half of the
+exposure, not the hours half. Revision 2 corrects both, folds in the measured
+PGlite result as fact rather than a hedge (in both §4 and the migration's own
+SQL comment), and fixes six smaller citation/precision findings (a fabricated
+composite quote in §2, a misattributed test helper, a `security_barrier`
+overclaim, acceptance criterion 4 rewritten to prescribe PGlite as the method
+with a new third sub-check, a stub-shape gap in criterion 5, and an unedited
+self-correction artifact in §3). See `task-ledger.md`'s T158/T203/T204 rows for
+full detail.
 
 **2026-07-31 — T191 packet, revision 2, DISPATCH-ready:**
 `docs/swarm/active/T191-worker-packet.md`. Replaces the fabricated `0 / 1 h
