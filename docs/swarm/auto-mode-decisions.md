@@ -1155,3 +1155,39 @@ The `confirmedHours`/`is_active` second half of the original finding is unaffect
 either way and is filed separately as **T201** (a deactivated student's real historical hours are
 invisible through `v_student_goal_projection` but exist, unfiltered, in `v_student_hours` — scope
 undiagnosed, same posture as T189).
+
+## 2026-07-31 — George's ruling on T158's item-19a escalation (owner input, verbatim quote)
+
+**Mechanism, distinct from the four entries above — this one is free-text, not a structured
+selection.** `T158-worker-packet.md`'s `checker-premise` gate ran two full rounds (item 19b: full
+gate, unconditional per item 18's migration trigger). Round 1 REVISE (MAJOR: the packet's own
+supporting evidence claimed three views were already queried by non-staff surfaces to argue the
+new view's exposure shape wasn't novel; an exhaustive grep showed only one of three actually was).
+The gate went further than reading code to resolve it: it installed `@electric-sql/pglite` (a
+WASM PostgreSQL, no Docker/server needed) in a scratch directory and empirically measured the
+actual RLS/view-visibility mechanism the packet had flagged as "reasoned, not measured" — proving
+the migration+loader design genuinely correct. Round 2 (after the fixes) independently re-ran the
+same live-Postgres measurement from scratch and reproduced every number exactly, but found the
+revision's new acceptance criterion for the worker's own live-DB proof was vacuous as written — a
+harness with RLS enabled on only one of four relevant tables would pass the criterion for the wrong
+reason (the gate demonstrated this by deliberately running an incomplete harness and watching it
+pass) — plus a handful of citation errors (a cross-reference to a file that doesn't contain the
+cited data, two wrong line/commit citations).
+
+I presented the same three-option structured question used on the four prior escalations
+(authorize one more revision round / pause for review / drop T158). Instead of selecting an
+option, George asked a clarifying question first — **"why are you spinning up a seperate postgres
+database? is that just to testing?"** — which I answered directly (explaining PGlite is an
+ephemeral, in-process, disposable database used solely to verify an RLS mechanism claim this
+project has gotten wrong twice before, not anything touching real infrastructure). He then replied
+in free text, verbatim: **"i authorize one more revision round."** Not a selection from the
+structured options — a direct, verbatim instruction.
+
+**What this authorizes:** one additional `foreman-planner` revision pass on T158's packet — making
+acceptance criterion 4's live-DB proof non-vacuous (RLS enabled on all four relevant tables, a
+mandatory base-table contrast, and the already-measured `security_invoker=on` counterfactor
+promoted from disclosure to a required negative control), fixing the broken `verification-log.md`
+citations (repointing to the actual file the measurement is recorded in, `T158-gate-round1-findings.md`),
+and correcting the smaller citation errors — dispatched directly to `worker-implementer` afterward
+**without** a third `checker-premise` round. Bounded to this packet only, per the same
+non-precedent-setting terms as the four rulings above.
