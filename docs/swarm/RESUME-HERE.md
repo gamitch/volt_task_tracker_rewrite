@@ -8,7 +8,48 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 it before acting on anything below that predates it, since branch/PR state and the triage
 proposal's T169/T177 rows have both moved since this file was first written.**
 
-## UPDATE — 2026-07-31 (latest): T196/T197 collision resolved, `main` now carries T178 too
+## UPDATE — 2026-07-31 (latest of the latest): `main` has moved far ahead; PR #6 needs real reconciliation, not just an update
+
+**Read this before touching PR #6 or filing any new row on this branch.** `origin/main` is now at
+`b0a62c3` (checked live, not from memory) — a parallel session ("session A"/"session B" split) has
+landed T178, T179, T180, and pushed task numbering all the way to **T302**, plus a formal
+**per-session row-numbering protocol** or in `main`'s own `task-ledger.md` header (search
+"NAMESPACED PER SESSION"). Key facts:
+
+- **`main` now names this branch "session A" and reserves it the block `T310–T319`**, with `main`'s
+  own placeholder rows `T310`/`T311` explicitly annotated *"this is T183's renumbered 'T196'/'T197'"*.
+  **This branch does not use that block.** Earlier in this session (before this discovery), the
+  T196/T197 collision was resolved *locally* by renumbering to **T199/T200** instead — a
+  reasonable, correct decision at the time (nothing on `main` used those numbers then), but it does
+  not match what `main` came to expect afterward. **This is not a live collision** — `main`
+  currently has no real content at T198–T205, only reservation placeholders — but it does mean the
+  two branches' numbering schemes disagree, and reconciling them is real work for whoever merges
+  PR #6, not a formality.
+- **This branch's actual usage, for the record:** T198 (CoachHome team-linkage question, filed
+  packeting T173), T199/T200 (renumbered T196/T197, filed packeting T183), T201 (`is_active`
+  family, filed packeting T191), T202 (ProgressBar a11y clamp, checker-found on T191), T203
+  (Leaderboard embed, filed packeting T158), T204 (stale RLS comment, filed packeting T158), T205
+  (anon view exposure, checker-found on T158, owner-ruled "close it off"). All eight are real,
+  filed, cross-referenced across `task-ledger.md`/`verification-log.md`/`auto-mode-decisions.md`
+  many times each — **renumbering them now to fit `main`'s `T310–T319` block would be a large,
+  error-prone rewrite for a problem that isn't actually a collision.** Recommend the merge-time
+  reconciliation go the other way: delete `main`'s unclaimed `T310`/`T311`/`T312–T319` placeholder
+  rows (`main`'s own stated rule already covers this: *"Delete any reserved row left unclaimed when
+  a block closes"*) and note in `main`'s ledger that session A used T198–T205 instead, before the
+  block protocol existed on this branch.
+- **PR #6 (`claude/t183-student-home-loader` → `main`) is based on `main` @ `a3b9f00`, now well over
+  a hundred commits behind `origin/main`.** This needs a real merge/rebase, not a fast-forward, and
+  the conflict surface is large: both branches independently edited `task-ledger.md`'s row-numbering
+  section, `RESUME-HERE.md`'s top-of-file UPDATE anchor (repeatedly, on both sides), and likely
+  `state-summary.md`/`auto-mode-decisions.md` too. **Not attempted in this session** — it's a
+  meaningfully bigger and riskier operation than the four tasks (T183/T173/T191/T158) this session
+  was asked to run, and doing it unprompted risks silently dropping one side's history. Flagged for
+  the orchestrating session/owner to decide how to proceed, not resolved here.
+- **If you're a fresh session picking this up:** re-fetch `origin/main` yourself before trusting any
+  commit SHA or task count in this file — both branches are moving, and the gap between them may
+  have changed again since this note was written.
+
+## UPDATE — 2026-07-31 (previous): T196/T197 collision resolved, `main` now carries T178 too
 
 A **parallel session** operating on `main`/`claude/swarm-plan-zl575z` merged **PR #7 (T178)**
 while this session was mid-flight on `claude/t183-student-home-loader` (PR #6) and flagged, via a
