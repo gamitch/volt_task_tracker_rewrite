@@ -19,6 +19,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthUser } from '../../app/guards';
+import * as meetingsLoadersNs from '../../lib/supabase/loaders/meetings';
 import {
   aggregateParticipationRows,
   makeCancelMeetingSession,
@@ -48,7 +49,73 @@ import {
   type ResolveCurrentStudentIdFn,
   type StudentMeetingsData,
 } from './MeetingsList';
+import { defaultLoadConsistencyStripData, type ConsistencyStripData } from './StudentMeetingView';
 import type { CreateMeetingsPayload } from './ScheduleMeetingsDialog';
+
+// ---------------------------------------------------------------------------
+// T180 §3a (BLOCKER 1, gate round 1) -- the mount this task adds uses
+// `StudentMeetingView`'s own default `loadStripData` seam
+// (`loadConsistencyStripData`, `../../lib/supabase/loaders/checkin.ts`), a
+// REAL Supabase query. With `.env.local` absent that query rejects in every
+// student/parent test below, landing the strip in its own DES-12 error
+// branch and breaking three pre-existing assertions (measured, gate round 1
+// BLOCKER 1). Same module-level-mock shape `DashboardPage.test.tsx`
+// (T176 gate) and `OutreachList.test.tsx` (`loadSelfCheckoffAttendance`,
+// T170) already established for this exact failure shape.
+//
+// Lazy-holder shape, not a factory-level `await import('./StudentMeetingView')`
+// -- the gate measured that shape dying on the circular module graph
+// (`TypeError: loadData is not a function`, and separately
+// `ReferenceError: Cannot access '__vi_import_6__' before initialization`).
+// `beforeEach` below points `stripSeam.load` at the real
+// `defaultLoadConsistencyStripData` fixture builder (imported directly, not
+// through the mocked module) so every pre-existing test that reaches the
+// mount gets a real, resolving (if fixture-empty for most ids -- Trap #3's
+// disjoint id-spaces) strip instead of the network error branch; individual
+// criteria below override `stripSeam.load` per test.
+// ---------------------------------------------------------------------------
+const stripSeam = vi.hoisted(() => ({
+  load: null as null | ((studentId: string) => Promise<ConsistencyStripData>),
+}));
+vi.mock('../../lib/supabase/loaders/checkin', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/supabase/loaders/checkin')>();
+  return {
+    ...actual,
+    loadConsistencyStripData: (studentId: string) => stripSeam.load!(studentId),
+  };
+});
+
+// ---------------------------------------------------------------------------
+// C4 -- module-level spy target for `resolveCurrentStudentId`
+// (`../../lib/supabase/loaders/meetings.ts`), the seam
+// `StudentMeetingView.tsx`'s own `OwnStudentConsistencyStrip` falls back to
+// when the mount does NOT receive an explicit `studentId` (module doc #9 of
+// that file). C4 itself does `vi.spyOn(meetingsLoadersNs, 'resolveCurrentStudentId')`
+// locally rather than a file-level `vi.mock('../../lib/supabase/loaders/meetings', ...)`
+// -- measured live: a `vi.mock` factory here (even a correctly-written
+// lazy-holder one, spread-preserving every other real export) never
+// intercepted this specific call. Root cause, measured: this module sits one
+// hop into the SAME `checkin.ts` <-> `StudentMeetingView.tsx` circular import
+// this file also has to route around for the strip's own load seam
+// (`StudentMeetingView.tsx` imports `loadConsistencyStripData`/
+// `loadLinkedStudents` FROM `checkin.ts`; `checkin.ts` imports
+// `buildConsistencyStripData` FROM `StudentMeetingView.tsx`) -- with BOTH
+// `checkin` and `meetings` mocked via `vi.mock`, the `resolveStudentId`
+// reference `StudentMeetingView.tsx` receives as a default-parameter value
+// resolved to the REAL, unmocked `resolveCurrentStudentId` every time
+// (confirmed via `.toString()` on the live reference during the render), even
+// though a DIRECT import of the same mocked module from this test file itself
+// intercepted correctly. `vi.spyOn` on the shared namespace object sidesteps
+// the whole question -- it patches the property in place on the one module
+// object every consumer already holds a live binding to, and does NOT go
+// through a second `vi.mock`/`importOriginal` registration at all. Every
+// other test in this file reaches the student/parent view via an explicit
+// `studentId` prop or the host's own `resolveStudentId` prop (never the real
+// default), so nothing else in this file exercises this seam; C4 is this
+// spy's only consumer. `makeResolveCurrentStudentId` (used directly,
+// unmocked, by the `resolveCurrentStudentId (T096, Trap #4 real resolution)`
+// describe block below) is a different export, untouched by this.
+// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // jsdom gap: `AlertDialog` renders a native `<dialog>` and calls
@@ -186,10 +253,47 @@ function fakeResolveStudentId(studentId: string | null): ResolveCurrentStudentId
   return () => Promise.resolve(studentId);
 }
 
+/** T180 C3/C7 -- `[role="progressbar"]`'s accessible name resolves through
+ * `aria-labelledby`, NOT `aria-label` (Trap #9, measured DOM:
+ * `aria-labelledby="_r_9_"`). Never `aria-label`, which Astryx's
+ * `ProgressBar` does not set. */
+function progressBarNames(): string[] {
+  return Array.from(container.querySelectorAll('[role="progressbar"]')).map((el) => {
+    const labelledBy = el.getAttribute('aria-labelledby');
+    if (!labelledBy) return '';
+    return document.getElementById(labelledBy)?.textContent ?? '';
+  });
+}
+
+/** T180 C1/C5/C7 -- the strip's dots are Astryx `StatusDot`s, rendered
+ * `role="img"` PLUS the stable `astryx-statusdot` class. `role="img"` alone
+ * is not unique on this page: this page's own `Table` pagination also
+ * renders `role="img"` (Astryx `Kbd`, "Left arrow"/"Right arrow" hints) --
+ * measured live, `StudentMeetingView.test.tsx`'s own `statusDotVariants`/
+ * `statusDotLabels` helpers get away with the bare `role="img"` query only
+ * because that file's own container never renders a `Table`/`Kbd` inside
+ * it. The class selector is what actually discriminates on this page. */
+function stripDotCount(): number {
+  return container.querySelectorAll('[role="img"].astryx-statusdot').length;
+}
+
+/** T180 C8 -- the rendered heading outline, `H{level}:{text}`. */
+function headingOutline(): string[] {
+  return Array.from(container.querySelectorAll('h1,h2,h3,h4,h5,h6')).map(
+    (el) => `H${el.tagName.slice(1)}:${el.textContent}`,
+  );
+}
+
 beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
+  // T180 §3a -- default every test to a real, resolving (fixture-driven)
+  // strip load instead of the network-backed default, so pre-existing tests
+  // that reach the mount (the populated student/parent branch) don't land
+  // in the strip's own error branch. Individual criteria override this per
+  // test.
+  stripSeam.load = (studentId) => defaultLoadConsistencyStripData(studentId);
 });
 
 afterEach(() => {
@@ -1108,27 +1212,52 @@ describe('<MeetingsList /> student/parent view', () => {
     expect(container.textContent).toContain('No student account linked yet');
   });
 
+  // T180 §3a repair 1 (packet-authorized by name, `MeetingsList.test.tsx:1111`
+  // in the packet's own pre-mount line numbering): Part B deletes this
+  // file's own `Participation` `ProgressBar`, so `'57.1%'` -- this test's
+  // sole prior observable -- no longer renders anywhere on a successful
+  // resolution. Replaced, not deleted: a `vi.fn` spy on `loadStudentData`
+  // proves the resolved id was genuinely threaded through to `loadData`,
+  // keeping T096's own resolution proof alive without depending on the now-
+  // deleted participation figure.
   it('resolveStudentId resolving a real id renders StudentMeetingsView scoped to that id', async () => {
+    const loadStudentDataSpy = vi.fn(defaultLoadStudentMeetingsData);
     renderAsUser(STUDENT_OR_PARENT_USER, {
       resolveStudentId: fakeResolveStudentId(PLACEHOLDER_CURRENT_STUDENT_ID),
-      loadStudentData: defaultLoadStudentMeetingsData,
+      loadStudentData: loadStudentDataSpy,
     });
     await flushMicrotasks();
     await flushMicrotasks();
-    // Same fixture data `defaultLoadStudentMeetingsData` produces for
-    // `PLACEHOLDER_CURRENT_STUDENT_ID` explicitly (below) -- proves the
-    // resolved id was genuinely threaded through to `loadData`.
-    expect(container.textContent).toContain('57.1%');
+    expect(loadStudentDataSpy).toHaveBeenCalledWith(PLACEHOLDER_CURRENT_STUDENT_ID);
   });
 
-  it('populated state: own history + participation % sourced from the fixture row verbatim', async () => {
+  // T180 §3a repair 2 (packet-authorized by name, `:1124` in the packet's
+  // own pre-mount line numbering): broken twice by Part A + Part B --
+  // `'57.1%'` (the host's own deleted `Participation` `ProgressBar`) and the
+  // placeholder copy (deleted by Part A) both retarget onto the now-mounted
+  // strip.
+  it('populated state: own history, and the real BEH-06 strip mounted where the placeholder used to be', async () => {
+    stripSeam.load = (studentId) =>
+      Promise.resolve({
+        entries: [{ sessionId: 'cs-fixture', sessionDate: '2026-06-24', status: 'present' }],
+        participation: {
+          studentId,
+          teamId: 'team-ravens',
+          seasonId: 'season-placeholder-current',
+          expectedCt: 5,
+          presentCt: 4,
+          lateCt: 0,
+          excusedCt: 0,
+          participationPct: 80,
+        },
+      });
     renderAsUser(STUDENT_OR_PARENT_USER, {
       studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
       loadStudentData: defaultLoadStudentMeetingsData,
     });
     await flushMicrotasks();
+    await flushMicrotasks();
 
-    expect(container.textContent).toContain('57.1%');
     expect(container.textContent).toContain('Weekly Build Meeting');
     expect(container.textContent).toContain('Ravens Strategy Session');
     expect(container.textContent).toContain('Present');
@@ -1139,21 +1268,38 @@ describe('<MeetingsList /> student/parent view', () => {
     expect(container.querySelector('[aria-label^="Actions for"]')).toBeNull();
     expect(container.textContent).not.toContain('Schedule meetings');
 
-    // T129/UXC-10: the "last 5 meetings" disclosure (module doc #7d) no
-    // longer names the internal ticket -- plain, honest "not built yet"
-    // copy instead (no StatusDot usage).
-    expect(container.textContent).toContain('A visual "last 5 meetings" view isn\'t built yet');
+    // T180: the placeholder copy is gone, and the real strip's own
+    // populated participation figure (sourced from its own loader, not the
+    // deleted host `ProgressBar`) is what "57.1%" used to prove.
+    expect(container.textContent).not.toContain('A visual "last 5 meetings" view isn\'t built yet');
     expect(container.textContent).not.toContain('T037');
+    expect(container.textContent).toContain('Participation: 80%');
+    expect(stripDotCount()).toBe(1);
 
     // NAV-07: outreach content must never appear here either.
     expect(container.textContent).not.toContain('Community Food Drive');
   });
 
-  it("participation renders '—' (never a fabricated %) when the student has no metric row", async () => {
+  // T180 §3a repair 3 (packet-authorized by name, `:1152` in the packet's
+  // own pre-mount line numbering) -- THE DANGEROUS ONE. Left unretargeted,
+  // this title ("...when the student has no metric row") would start
+  // passing again after the mount for an entirely different reason: the
+  // strip's OWN em-dash empty state, sourced from a different loader
+  // (`stripSeam`, not `loadStudentData`), with the host's own
+  // now-deleted `Participation` section never in the render tree to have
+  // rendered anything at all. Retargeted explicitly, by title, to the
+  // thing it actually now proves.
+  it("the strip's participation renders '—' (never a fabricated %) when its loader returns no metric row", async () => {
+    stripSeam.load = () =>
+      Promise.resolve({
+        entries: [{ sessionId: 'cs-fixture', sessionDate: '2026-06-24', status: 'present' }],
+        participation: null,
+      });
     renderAsUser(STUDENT_OR_PARENT_USER, {
       studentId: 'student-with-zero-expected-sessions',
       loadStudentData: (studentId) => defaultLoadStudentMeetingsData(studentId),
     });
+    await flushMicrotasks();
     await flushMicrotasks();
     expect(container.textContent).toContain('—');
     expect(container.textContent).not.toMatch(/\d+%/);
@@ -1246,6 +1392,169 @@ describe('<MeetingsList /> student/parent view', () => {
         const { resolvedText } = resolveAriaLabelledbyTarget(title);
         expect(resolvedText).toBe(title);
       }
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // T180 -- Part A (mount the real BEH-06 strip) + Part B (delete the
+  // host's own duplicate `Participation` region). Every criterion below
+  // names the mutation that must turn it red (worker packet §5); the actual
+  // mutation runs + captured failure output for each live in this task's
+  // own worker output doc, not restated here.
+  // ---------------------------------------------------------------------------
+  describe('T180 -- the real BEH-06 consistency strip is mounted, and the host has exactly one participation region', () => {
+    it('C1: the consistency strip renders for a student, inside the real student view', async () => {
+      stripSeam.load = defaultLoadConsistencyStripData;
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        studentId: 'student-jordan-fixture',
+        loadStudentData: defaultLoadStudentMeetingsData,
+      });
+      await flushMicrotasks();
+      await flushMicrotasks();
+
+      // Mutation: remove the mount -> `expected +0 to be 5`.
+      expect(stripDotCount()).toBe(5);
+      expect(container.textContent).toContain('Upcoming');
+      expect(container.textContent).toContain('Past');
+    });
+
+    it('C2: the placeholder copy is gone and the real strip is there', async () => {
+      stripSeam.load = defaultLoadConsistencyStripData;
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        studentId: 'student-jordan-fixture',
+        loadStudentData: defaultLoadStudentMeetingsData,
+      });
+      await flushMicrotasks();
+      await flushMicrotasks();
+
+      // Mutation: restore the placeholder `Text` alongside the mount ->
+      // only this absence half reddens. The absence half ALONE is not
+      // evidence -- it also passes against a strip that failed to load
+      // (measured, gate round 1 BLOCKER 2c); the paired positive below is
+      // what keeps this criterion honest.
+      expect(container.textContent).not.toContain("isn't built yet");
+      expect(stripDotCount()).toBe(5);
+    });
+
+    // C3 (BLOCKER 2, gate round 1): rendered where the mutation is actually
+    // visible -- `studentId = PLACEHOLDER_CURRENT_STUDENT_ID` so the HOST's
+    // own participation fixture row is non-null (Trap #3: the two loaders'
+    // fixture id-spaces are disjoint, so any id that populates the strip
+    // leaves the host's own participation null and the mutation invisible).
+    // Accessible names resolved through `aria-labelledby`, never
+    // `aria-label` (Trap #9 -- Astryx `ProgressBar` does not set the
+    // latter).
+    it("C3: exactly one participation bar renders, and it is the strip's", async () => {
+      stripSeam.load = () =>
+        Promise.resolve({
+          entries: [],
+          participation: {
+            studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
+            teamId: 'team-ravens',
+            seasonId: 'season-placeholder-current',
+            expectedCt: 8,
+            presentCt: 6,
+            lateCt: 2,
+            excusedCt: 1,
+            participationPct: 85.7,
+          },
+        });
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
+        loadStudentData: defaultLoadStudentMeetingsData,
+      });
+      await flushMicrotasks();
+      await flushMicrotasks();
+
+      // Mutation: restore the host's `Participation` `VStack` ->
+      // `["Your participation: 57.1%", "Participation: 85.7%"]`, red.
+      expect(progressBarNames()).toEqual(['Participation: 85.7%']);
+    });
+
+    // C4 (MAJOR 3, gate round 1): module-level spy on the SAME
+    // `resolveCurrentStudentId` `StudentMeetingView.tsx`'s own
+    // `OwnStudentConsistencyStrip` would fall back to -- not a spy on the
+    // host's own `resolveStudentId` prop, which the mount never forwards
+    // and which stays at 1 in both trees regardless of this mutation.
+    // `toBe(0)`, not "at most once" -- the mutation moves the count from 0
+    // to 1, and `toBeLessThanOrEqual(1)` would be satisfied by 1 either way.
+    it('C4: mounting the strip with an explicit studentId never triggers a second identity resolution', async () => {
+      const spy = vi.spyOn(meetingsLoadersNs, 'resolveCurrentStudentId');
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
+        loadStudentData: defaultLoadStudentMeetingsData,
+      });
+      await flushMicrotasks();
+      await flushMicrotasks();
+
+      // Paired positive: the page actually finished rendering (not stuck in
+      // a resolution-error/loading state).
+      expect(container.textContent).toContain('Weekly Build Meeting');
+      // Mutation: drop `studentId` from the mount -> `expected 1 to be +0`.
+      expect(spy.mock.calls.length).toBe(0);
+    });
+
+    // C5 (MAJOR 4, gate round 1): the absence half asserts the strip's own
+    // shared vocabulary string ("meeting consistency" -- present in its
+    // loading, error AND empty branches, `StudentMeetingView.tsx:778-779`/
+    // `:802`/`:951`), not its populated dot-row output. A coach viewer never
+    // even reaches a rendered strip in this file (the mount only exists in
+    // the student/parent branch), so asserting on populated output alone
+    // would pass trivially without the mount ever having been hoisted out
+    // of that branch -- string coverage of every non-populated state is
+    // what actually catches that mutation.
+    it('C5: the coach view has no strip -- string coverage of every one of its non-populated states -- and its own content still renders', async () => {
+      renderAsUser(COACH_USER, { loadCoachData: defaultLoadCoachMeetingsData });
+      await flushMicrotasks();
+
+      // Mutation: hoist the mount out of the student/parent branch -> red.
+      expect(container.textContent).not.toContain('meeting consistency');
+      expect(stripDotCount()).toBe(0);
+      expect(container.textContent).toContain('Weekly Build Meeting');
+    });
+
+    // C7 (MINOR 7, gate round 1): the real default `loadLinkedStudents` seam
+    // is unstubbed here, so the stated mutation (switching the mount to
+    // `variant="linked"`) reddens because that path hits a DIFFERENT,
+    // unstubbed seam and renders "Couldn't load linked students" (0 dots),
+    // not because it "fans out to more than one strip" -- the fan-out is
+    // real but only observable with that seam stubbed (see this task's
+    // worker output doc for that measurement); it is not what THIS
+    // mutation, run against the default harness, demonstrates.
+    it('C7: the parent/student path renders exactly one strip via variant="own", never a fan-out', async () => {
+      stripSeam.load = defaultLoadConsistencyStripData;
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        studentId: 'student-jordan-fixture',
+        loadStudentData: defaultLoadStudentMeetingsData,
+      });
+      await flushMicrotasks();
+      await flushMicrotasks();
+
+      // Mutation: switch the mount to `variant="linked"` -> red (0 dots,
+      // via the unstubbed `loadLinkedStudents` error banner, not a fan-out).
+      expect(stripDotCount()).toBe(5);
+    });
+
+    // C8 (Trap #8): two `<h2>`s are deliberately lost (`Participation`, and
+    // the strip's own `variant="own"` branch emits no heading at all) --
+    // the host's `Recent attendance` heading is kept so the page still has
+    // a navigable heading over the mounted strip.
+    it('C8: the student view heading outline is H1 Meetings / H2 Upcoming / H2 Past / H2 Recent attendance', async () => {
+      stripSeam.load = defaultLoadConsistencyStripData;
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        studentId: 'student-jordan-fixture',
+        loadStudentData: defaultLoadStudentMeetingsData,
+      });
+      await flushMicrotasks();
+      await flushMicrotasks();
+
+      // Mutation: drop the `Recent attendance` heading -> red.
+      expect(headingOutline()).toEqual([
+        'H1:Meetings',
+        'H2:Upcoming',
+        'H2:Past',
+        'H2:Recent attendance',
+      ]);
     });
   });
 });

@@ -22,9 +22,12 @@
  * Student/parent view (MTG-14, PRD line 288: "`/meetings` for students =
  * their own history (status per session) + participation %. ... Read-only.")
  * -- own Upcoming/Past history rows (no MoreMenu, no Schedule action -- this
- * variant is read-only per MTG-14's own text) plus a participation %
- * sourced from a `v_student_participation`-shaped fixture row, never
- * computed by this component (constitution item 3 / Known Context/Traps #3).
+ * variant is read-only per MTG-14's own text). T180 mounts the real BEH-06
+ * consistency strip (`StudentMeetingView.tsx`, T037) beneath that history --
+ * see module doc #7d, below -- which is now this view's sole participation
+ * figure; this file no longer renders a participation `ProgressBar` of its
+ * own (constitution item 3 / Known Context/Traps #3 still governs the strip
+ * itself, a separate, already-Passed file this task only wires in).
  *
  * -----------------------------------------------------------------------
  * 1. Ground truth -- `event_sessions`/`events`/`attendance` column shapes
@@ -237,14 +240,19 @@
  *       packet steer.
  *    d. "Consistency strip"-shaped area (student/parent view) -- BEH-06's
  *       "last 5 completed meetings as `StatusDot`s" widget is T037's
- *       ("Student/parent meeting view + consistency strip", currently
- *       Blocked on this task) deliverable per `docs/swarm/task-ledger.md`.
- *       This file renders a clearly-labeled placeholder `Section`
- *       explaining that the real strip ships in T037, with NO `StatusDot`
- *       usage and no fabricated "last 5" data anywhere -- it does build the
- *       plain, real Upcoming/Past history rows MTG-14 itself requires (own
- *       status per session), which is a distinct, narrower deliverable than
- *       T037's summary widget on top of it. Untouched by this task.
+ *       already-built, already-Passed deliverable
+ *       (`StudentMeetingView.tsx`'s `StudentMeetingView`/`ConsistencyStrip`).
+ *       T180 mounts it directly beneath this view's Upcoming/Past history,
+ *       passing the `studentId` this file has already resolved (Known
+ *       Context/Traps #1 of that task's own packet) -- replacing the prior
+ *       placeholder `Section`'s "isn't built yet" copy entirely. T180 also
+ *       deletes this file's own participation `ProgressBar` (formerly above
+ *       Upcoming) as part of the same change: the strip renders its own
+ *       participation figure, and shipping both would put two independently-
+ *       loaded participation regions on one page (T180's own packet, Part B)
+ *       -- this file's own Upcoming/Past history rows (own status per
+ *       session) are UNCHANGED, a distinct, narrower deliverable from the
+ *       strip mounted beneath them.
  *
  * -----------------------------------------------------------------------
  * 8. DES-12 four states, reachable independently per role variant (Known
@@ -321,9 +329,12 @@
  *    variants per Astryx's own guidance (known-dimension content).
  *    `VisuallyHidden` + the wrapping `VStack`'s `aria-busy` carry the same
  *    "Loading…" announcements `Spinner`'s `label` used to provide.
- *  - `ProgressBar`: "ProgressBar" Props table. `label` (required), `value`,
- *    `isLabelHidden`, `hasValueLabel` used -- same idiom `ParticipationTab.tsx`
- *    already established for rendering a pre-computed percentage.
+ *  - T180: `ProgressBar` is no longer imported by this file -- the student
+ *    view's own participation `ProgressBar` (formerly documented here) was
+ *    deleted along with the `Section` it lived in (module doc #7d); the
+ *    mounted `StudentMeetingView` strip renders the page's sole
+ *    participation figure now, using its own `ProgressBar` internally
+ *    (`StudentMeetingView.tsx`'s own module doc #8, not this file's).
  *  - `VStack`/`HStack`: "Stack" section, `VStack`/`HStack` subsections.
  *    `gap`, `padding`, `hAlign`, `vAlign`, `wrap` used.
  *  - `Text`: "Text" Props table. `type` (`'supporting'`), `color`,
@@ -450,8 +461,11 @@
  *        reviewed against this page and found not applicable: no duplicated
  *        heading for one concept exists here (unlike the named Outreach
  *        anti-example), and no stacked full-width-bar pattern exists here
- *        for the tile pattern to replace (the single participation
- *        `ProgressBar` in the student view is one bar, not a stack).
+ *        for the tile pattern to replace. T180 UPDATE: this file no longer
+ *        renders a participation `ProgressBar` of its own at all -- the
+ *        single participation bar now lives inside the mounted
+ *        `StudentMeetingView` strip (module doc #7d), one bar, not a stack,
+ *        same conclusion.
  *     g. `.limit(1)` dual-member fix (`loaders/meetings.ts`
  *        `queryParticipationRowsForStudent`/`aggregateParticipationRows`) --
  *        this file's own consuming code (`buildStudentMeetingsData`'s
@@ -481,7 +495,6 @@ import {
   HStack,
   List,
   ListItem,
-  ProgressBar,
   Skeleton,
   Table,
   Text,
@@ -521,6 +534,12 @@ import {
   type CreateMeetingsPayload,
   type OnCreateMeetingsFn,
 } from './ScheduleMeetingsDialog';
+// T180 (module doc #7d) -- T037's already-built, already-Passed BEH-06
+// consistency-strip widget, mounted directly beneath this view's own
+// Upcoming/Past history. `StudentMeetingView.tsx` is Trap #5's forbidden-
+// export-signature-change file for this task; only its own comment text
+// changes, never its exports.
+import { StudentMeetingView } from './StudentMeetingView';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real columns. See module doc #1/#3.
@@ -2351,22 +2370,6 @@ function StudentMeetingsView({ studentId, loadData }: StudentMeetingsViewProps):
         />
       ) : (
         <>
-          <VStack gap={2}>
-            <Heading level={2}>Participation</Heading>
-            {participation === null ? (
-              <Text type="supporting">
-                {'—'} (no completed meetings recorded for you yet this season)
-              </Text>
-            ) : (
-              <ProgressBar
-                label={`Your participation: ${participation.participationPct}%`}
-                isLabelHidden
-                value={participation.participationPct}
-                hasValueLabel
-              />
-            )}
-          </VStack>
-
           <StudentHistorySection
             title="Upcoming"
             rows={upcoming}
@@ -2378,16 +2381,18 @@ function StudentMeetingsView({ studentId, loadData }: StudentMeetingsViewProps):
             emptyDescription="Your past meeting attendance will show up here."
           />
 
-          {/* Module doc #7d -- deliberate "consistency strip"-shaped
-              reference only. BEH-06's real last-5 StatusDot strip is T037's
-              deliverable, not built here. */}
-          <VStack gap={1}>
-            <Heading level={2}>Recent attendance</Heading>
-            <Text type="supporting">
-              A visual "last 5 meetings" view isn't built yet. Your full history is listed above in
-              the meantime.
-            </Text>
-          </VStack>
+          {/* T180 (module doc #7d) -- T037's real BEH-06 consistency strip,
+              mounted with the `studentId` this view has already resolved
+              (Trap #1: an explicit `studentId` bypasses the strip's own
+              resolution entirely). Its own participation figure is this
+              page's sole one now -- this file's former `Participation`
+              `ProgressBar` (formerly above Upcoming) was deleted as part of
+              this same change (Part B, T180's own packet) rather than
+              shipping two independently-loaded participation regions. The
+              strip carries its own DES-12 loading/error/empty states
+              (Trap #4) -- no second state machine wraps it here. */}
+          <Heading level={2}>Recent attendance</Heading>
+          <StudentMeetingView variant="own" studentId={studentId} />
         </>
       )}
     </VStack>
