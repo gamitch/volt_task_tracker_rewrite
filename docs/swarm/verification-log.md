@@ -5689,3 +5689,68 @@ row to reset before it's worth fixing how it resets it).
 **One MINOR carried forward, not fixed:** a dangling commit-message reference to a
 `T177-worker-output.md` that was never in the worker's Allowed Files — a packet-scope gap, not a
 worker error, worth reconciling in the packet template rather than this task's own follow-up.
+
+---
+
+## T183 — `StudentHome`'s greeting is now the real signed-in student's name (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commit | `b21a603` (branch `claude/t183-student-home-loader`, PR #6) |
+| Verdict | **PASS** — 1 MINOR, 2 NIT, first attempt |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (sonnet) / `checker-reviewer` (opus) |
+| Premise gate | 2 rounds (item 19a cap) — REVISE, REVISE, then one owner-authorized bounded revision round, dispatched with no 3rd gate round |
+| tsc / build / format | 0 errors / ✓ / clean |
+| eslint | 0 errors, 358 warnings (unchanged) |
+| vitest | 69 files, **1660 tests** (+6 — see dispute ruling below; baseline was 1654) |
+
+**Scope narrowed at packeting time, disclosed rather than silently cut.** `defaultLoadStudentHomeData`
+fabricated every real signed-in student's name as `'Ada Reyes'`, ignoring both its parameters — the
+only user-facing defect the ledger row's concrete evidence actually named. The other six
+`StudentHomeData` fields (`events`/`sessions`/`rsvps`/`participation`/etc.) were already
+T176-confirmed "honestly empty," not fabricated. Building real queries for them was cut from this
+task on proportionality (item 25) and refiled as **T196**, so `StudentHome.tsx`'s own "filed as its
+own follow-up" module-doc sentence doesn't dangle.
+
+**Heaviest premise-gate history since T177.** Round 1 found a genuine BLOCKER: the prescribed fix
+(swap the production `loadData` default + a `renderAsUser` test-harness default) broke
+`DashboardPage.test.tsx:226`, a file outside the original Allowed Files — the same failure-class
+`DashboardPage.test.tsx`'s own comment documents as a T176 gate round-1 finding. Round 2, after the
+fix, independently **built and ran the full prescription itself** (not just critiqued it) and
+measured it clean — 69 files/1654 tests, `tsc` clean — while still returning REVISE on 3 MAJOR:
+a wrong failure-count tripwire in the packet (claimed "exactly 2," measured 3, across 2 files), an
+unsatisfiable "all green" sub-criterion (the harness fix structurally cannot reach
+`DashboardPage.test.tsx`), and an Allowed-Files scope that forbade fixing three assertions the
+task's own change would otherwise leave vacuously true (`DashboardPage.test.tsx`'s coach/admin/
+parent role-discrimination tests, each asserting `.not.toContain('Hi Ada Reyes')` — a string nothing
+would produce once the mock's name changes). Item 19a's 2-round cap escalated to the human owner via
+a structured question, same shape as T177's earlier escalation this session; he authorized one
+bounded revision round (recorded in `auto-mode-decisions.md`). That revision applied all three
+findings and dispatched directly to a worker with no third gate round.
+
+**A self-disclosed packet contradiction, resolved by the checker rather than silently picked by the
+worker.** The packet's own count-tripwire language said the final suite should return to exactly
+1654 tests (baseline); a separate, unambiguous criterion mandated new unit-test coverage for the new
+loader. Both cannot hold — the "1654" figure was a transcription of round 2's own probe measurement
+(which had not included the mandated new tests) into binding-sounding criteria text in three places.
+The worker flagged this explicitly as a dispute candidate rather than improvising past it (Authority
+Boundaries: workers may not redefine success). The checker independently re-derived the same
+conclusion — verified the six new tests were substantive (three of the checker's own hand-injected
+mutations were killed by them), not padding — and ruled 1660 correct, closing the dispute without
+escalation to `boss-arbiter`.
+
+**Wiring proof verified non-vacuous by the checker, not assumed from the worker's report.** The
+checker reverted only the production default-parameter line and re-ran the suite: exactly one
+failure, on the exact assertion the fix was meant to make pass — confirming the swap is genuinely
+load-bearing, closing the vacuity gap round 1's gate first found in criterion 7.
+
+**Follow-ups filed:** **T197** (tighten `students.test.ts`'s row-not-found test to assert on the
+thrown message, not a bare `rejects.toThrow()` — currently indistinguishable from an incidental
+`TypeError`, same discipline the file's own eq-drop test already establishes). NIT-only, logged:
+a stale "obviously-fake **default**" comment header above the now-non-default
+`defaultLoadStudentHomeData` (correct not to touch it — the packet required that block
+byte-identical — module doc #9 already states the distinction explicitly elsewhere); three small
+explanatory comments the worker added alongside the `DashboardPage.test.tsx` sibling-assertion
+fixes, slightly beyond a literal reading of the Allowed-Files line but confined to the exact sites
+named and adding no assertions beyond what was mandated.

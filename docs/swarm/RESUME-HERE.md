@@ -8,6 +8,26 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 it before acting on anything below that predates it, since branch/PR state and the triage
 proposal's T169/T177 rows have both moved since this file was first written.**
 
+## UPDATE — 2026-07-30 evening: T183 landed on its own branch, `main` unchanged
+
+- **`main` is still `94267a0` / 69 files / 1654 tests** — nothing below in the 2026-07-31
+  UPDATE section changed. T183 landed on a **separate** branch, `claude/t183-student-home-loader`
+  (PR #6, draft, not yet merged into `main`), cut fresh from `main` for exactly this purpose.
+  **On that branch only**, HEAD is `b21a603` and the suite is **69 files / 1660 tests** (+6, a
+  disclosed, checker-ruled-correct delta from T183's own mandated new test coverage — see its
+  `verification-log.md` entry). Do not read `1654` as the count on that branch, and do not read
+  `1660` back onto `main` until it actually merges.
+- T183 fixed `StudentHome`'s fabricated `'Ada Reyes'` greeting (real `students.display_name` now
+  wired as the production default). Went through a full 2-round `checker-premise` cap (item 19a)
+  — round 1 found a genuine BLOCKER, round 2 found only narrow packet-text mismatches after
+  independently building and running the full fix clean — then one owner-authorized bounded
+  revision round, same escalation shape as T177's earlier one this session. Follow-ups filed:
+  **T196** (the deliberately-deferred `events`/`sessions`/`rsvps`/`participation` real-loader
+  work), **T197** (MINOR test-assertion tightening).
+- Same branch/PR is being used for T173, T191, T158 next (owner instruction, 2026-07-30) rather
+  than opening a new branch per task — matching this project's own established convention of one
+  PR accumulating several tasks before merging to `main` (see PR #3's 16-task history above).
+
 ## UPDATE — 2026-07-31: branch state, and two triage rows resolved
 
 - **PR #3 and PR #4 are both merged into `main`.** `main` = `94267a0`, carrying everything
