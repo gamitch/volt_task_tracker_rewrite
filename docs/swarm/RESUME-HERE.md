@@ -8,6 +8,50 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 it before acting on anything below that predates it, since branch/PR state and the triage
 proposal's T169/T177 rows have both moved since this file was first written.**
 
+## UPDATE — 2026-07-31 (latest): T196/T197 collision resolved, `main` now carries T178 too
+
+A **parallel session** operating on `main`/`claude/swarm-plan-zl575z` merged **PR #7 (T178)**
+while this session was mid-flight on `claude/t183-student-home-loader` (PR #6) and flagged, via a
+note relayed through the human owner, that both sessions had independently filed **T196 and T197**
+for two entirely different tasks each — "next free number" is read from a file two branches edit
+independently, so it was never actually a reservation.
+
+- **`main` = `534bdbf`, carrying T178 (real end-meeting backend; mount deliberately parked as its
+  own T196, blocked on `LiveConsole`'s own loaders becoming real).** `main`'s T196/T197 are now
+  canonical (they landed first): **T196** = the parked `EndMeetingDialog` mount (blocked, data-loss
+  risk), **T197** = `onEditAttendance` row-scoping unasserted (must land together with T196, not
+  before).
+- **This branch's own T196/T197 (filed while packeting T183) have been renumbered to T199/T200**
+  in `task-ledger.md`/`verification-log.md` here — **T199** = `StudentHome`'s deliberately-deferred
+  `events`/`sessions`/`rsvps`/`participation` real-loader work, **T200** = the MINOR
+  `students.test.ts` assertion-tightening follow-up. T198 (this branch's own `CoachHome`
+  team-linkage product question, filed while packeting T173) did not collide and keeps its number.
+  **All four original rows are real and none were dropped** — this was a pure renumbering on this
+  branch's copy, not a resolution-by-picking-a-side.
+- **PR #6 is now behind `main`** (based on `a3b9f00`; `main` has moved to `534bdbf` via PR #7).
+  It will need an update-from-`main` before it can merge, and that update **will conflict** on
+  `task-ledger.md` (the T196/T197 numbers, now resolved by the renumbering above — take this
+  branch's T198/T199/T200 rows AND main's T196/T197 rows, don't drop either side) and on this
+  file's own top section (both branches independently inserted a dated UPDATE at the same anchor
+  point — keep both blocks, don't pick one).
+- **Two corrections to the still-open triage proposal further down this file**, both measured
+  rather than guessed, from the same parallel session's work on T178: the "T178/T179/T180 — three
+  finished components mounted nowhere" framing held for only one of the three.
+  - **T179** (`MarkDayCompleteDialog`) is a real wiring gap, but not a simple mount: its
+    persistence seam is already real (`markDayComplete`, shipped by T101), but four other props
+    (`session`, `roster`, `rsvps`, `currentUserProfileId`) still default to fixtures/a placeholder.
+    Mounting it as-is risks one forgotten prop writing real attendance rows for fixture students —
+    T151's required-prop mechanism needs to land first.
+  - **T180** is genuinely cheap and low-risk: all three of its seams already default to real
+    loaders, and it's read-only. It was also **missing from every triage table entirely** — the
+    proposal's "37 → 16" result should have been "37 → 17."
+- **Backlog as it actually stands, this update:** of the ten original user-facing rows, four have
+  closed (T169, T177, T178, and T183 — merged on its own branch but PR #6 not yet merged to
+  `main`) and T173 is in flight (packet done, dispatched to a worker). Remaining:
+  T191, T158, T179, T180, T189, plus the residue rows (T193, T194, T195, T198, T199, T200, and
+  whatever T178/T179's own follow-ups turn out to be). **The triage proposal's cuts are still
+  unapplied and still awaiting the owner's veto** — this update doesn't apply them either.
+
 ## UPDATE — 2026-07-30 evening: T183 landed on its own branch, `main` unchanged
 
 - **`main` is still `94267a0` / 69 files / 1654 tests** — nothing below in the 2026-07-31

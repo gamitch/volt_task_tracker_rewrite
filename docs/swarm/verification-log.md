@@ -5710,8 +5710,10 @@ fabricated every real signed-in student's name as `'Ada Reyes'`, ignoring both i
 only user-facing defect the ledger row's concrete evidence actually named. The other six
 `StudentHomeData` fields (`events`/`sessions`/`rsvps`/`participation`/etc.) were already
 T176-confirmed "honestly empty," not fabricated. Building real queries for them was cut from this
-task on proportionality (item 25) and refiled as **T196**, so `StudentHome.tsx`'s own "filed as its
-own follow-up" module-doc sentence doesn't dangle.
+task on proportionality (item 25) and refiled as **T199** (renumbered from T196 — a parallel session
+filed an unrelated T196/T197 pair from T178 on `main` at about the same time; `main`'s numbering is
+canonical, see `RESUME-HERE.md`), so `StudentHome.tsx`'s own "filed as its own follow-up" module-doc
+sentence doesn't dangle.
 
 **Heaviest premise-gate history since T177.** Round 1 found a genuine BLOCKER: the prescribed fix
 (swap the production `loadData` default + a `renderAsUser` test-harness default) broke
@@ -5745,7 +5747,7 @@ checker reverted only the production default-parameter line and re-ran the suite
 failure, on the exact assertion the fix was meant to make pass — confirming the swap is genuinely
 load-bearing, closing the vacuity gap round 1's gate first found in criterion 7.
 
-**Follow-ups filed:** **T197** (tighten `students.test.ts`'s row-not-found test to assert on the
+**Follow-ups filed:** **T200** (renumbered from T197, same collision as above; tighten `students.test.ts`'s row-not-found test to assert on the
 thrown message, not a bare `rejects.toThrow()` — currently indistinguishable from an incidental
 `TypeError`, same discipline the file's own eq-drop test already establishes). NIT-only, logged:
 a stale "obviously-fake **default**" comment header above the now-non-default

@@ -1095,3 +1095,35 @@ round 2's findings (fix the tripwire count, rewrite the unsatisfiable criterion,
 comment), dispatched directly to `worker-implementer` afterward **without** a third
 `checker-premise` round — a bounded exception scoped to this packet only, not a general relaxation
 of item 19a's cap and not pre-approval for any future third-REVISE escalation on any task.
+
+## 2026-07-31 — George's ruling on T173's item-19a escalation (owner input, structured selection)
+
+**Mechanism, same as the two entries above — not free-text input.** `T173-worker-packet.md`'s
+`checker-premise` gate ran two rounds. Round 1 REVISE (1 BLOCKER, proven by an instrumented test
+run: the prescribed `DashboardPage.test.tsx` assertion sat behind `CoachHome`'s
+`{dashboardData && (...)}` gate with no mock opening it; 1 MAJOR: a cheaper, already-precedented
+design existed — thread `defaultGoalHours` from the already-fetched `activeSeason.season`, matching
+T176's shipped pattern, instead of a third Supabase query). Round 2 (after adopting both findings)
+independently re-applied the full revised prescription, proved the BLOCKER genuinely closed by
+mutation-testing all three new assertions, confirmed the adopted redesign byte-exact against its
+T176 precedent — and then found a **new** BLOCKER the redesign itself introduced: threading
+`defaultGoalHours` from the real active season (100) instead of the old fixture (10) changes the
+denominator a pre-existing, unrelated test depends on (`CoachHome.test.tsx`'s BEH-01 milestone-toast
+test: `12/38 hrs` = 31.6%, crosses the 25% milestone and fires a toast, becomes `12/308 hrs` = 3.9%,
+no toast) — a currently-green test outside the packet's Allowed Files, the same failure shape as
+T183's own round-1 BLOCKER and T173's own round-1 BLOCKER, a third occurrence of one pattern this
+session. The gate wrote, applied, and verified the fix itself (pin the fixture season's
+`defaultGoalHours` to `10` at the two `renderAsUser` call sites in that one test) before reporting.
+Per item 19a this caps at two rounds and escalates. I presented the same three-option structured
+question as the two prior escalations (authorize one more revision round / pause for review / drop
+T173), Recommended the first on the same grounds the gate itself used in its "Framing for the owner"
+section: narrow, mechanical, proven correct by execution, not an open design problem. He selected
+**"Authorize one more revision round."** No free-text notes added.
+
+**What this authorizes:** one additional `foreman-planner` revision pass on T173's packet — naming
+the newly-broken test as a third authorized `CoachHome.test.tsx` region, prescribing the gate's own
+verified 6-line fix, and correcting the packet's blast-radius claim that missed this test (it
+reasoned from a grep for two literal strings when the redesign's actual mechanism bypasses `loadData`
+entirely, which is what a grep for old string literals cannot see) — dispatched directly to
+`worker-implementer` afterward **without** a third `checker-premise` round. Bounded to this packet
+only, per the same non-precedent-setting terms as the two rulings above.
