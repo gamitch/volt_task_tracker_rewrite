@@ -5620,3 +5620,72 @@ to Supabase (`handleRsvpChange`, local-only `setRsvps` call), and the code comme
 "currently Blocked" has been stale since before this session and stayed stale through T170's merge.
 Now unblocked (T170 supplies a real `viewerStudentId`), filed as its own ledger row per item 20
 rather than left as a comment.
+
+---
+
+## T177 — calendar-feed subscription link/loader wired to real data (merged 2026-07-30)
+
+| Field | Value |
+|---|---|
+| Merged commit | `ce1783f5802391c4b5ae1971e49929bedffaec0f` |
+| Verdict | **PASS with follow-ups**, no BLOCKER/MAJOR remaining — attempt 2 (attempt 1: FAIL, 1 MAJOR/1 MINOR) |
+| Attempts | 2 |
+| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
+| Premise gate | 2 rounds per item 19a, both REVISE (round 1: 3 BLOCKER/2 MAJOR/4 MINOR/4 NIT; round 2: 1 new BLOCKER/2 new MAJOR, introduced by round 1's own fixes) — hit the two-round cap, escalated to the human owner, who authorized one bounded revision pass with no third gate round |
+| tsc / build / format | 0 errors / ✓ / clean on every file this task touched |
+| eslint | 0 errors, 358 warnings (+1, same already-tolerated `react-refresh/only-export-components` class) |
+| vitest | `.env.local` absent (mandated gate state): 69 files / 1654 tests, 0 failures (from 68/1644). `.env.local` present: exactly the 4 known pre-existing failures, no fifth |
+
+**Context: this was T177's turn in the same subagent-pipeline test as T169** — packeting, premise-
+gating, implementation, and checking each ran in their own subagent transcript, with only dispatch
+prompts, file reads, and final summaries landing in the orchestrating session.
+
+**The bug.** `SubscribePopover.tsx`'s calendar-feed "subscribe" widget in Settings defaulted
+`functionsBaseUrl` to a placeholder pointing at a non-existent host, and `loadCalendarFeed` to a
+fixture — so the link every signed-in user saw in `/settings` was dead, and the token it embedded
+was fabricated. Live-route, user-visible (`SettingsPage` at `/settings`, `RequireAuth` only).
+
+**The heaviest premise-gate history of any task this session.** Round 1 caught 3 real BLOCKERs: a
+test conflict with a currently-green `SettingsPage.test.tsx` assertion the original packet forbade
+touching; the fact that nothing anywhere in the codebase provisions a `calendar_feeds` row, so the
+prescribed fix would trade a fake link for a permanent error banner rather than a working feature;
+and a test technique (`vi.stubEnv`) that doesn't reach `import.meta.env` in this module, measured
+by building and running it. All three were genuine design gaps, not documentation errors. Round 2's
+revision fixed all three but introduced its own new BLOCKER — a test relying on the real loader's
+network-dependent failure mode, which made a live HTTPS call to the real Supabase project and failed
+whenever `.env.local` was present — plus a self-contradictory baseline and an overly strict
+byte-identical restriction that forbade a stale-doc correction the packet's own precedent required.
+
+**Item 19a's two-round cap was hit and handled as designed.** The orchestrator escalated to the
+human owner rather than looping a third gate round; the owner authorized one bounded revision pass
+(recorded in `docs/swarm/auto-mode-decisions.md`) applied directly to worker dispatch, explicitly
+**not** a general relaxation of the cap. That meant the eventual `checker-reviewer` pass was this
+implementation's first independent verification of any kind — and it earned the extra scrutiny:
+it caught a real residual defect the two premise-gate rounds never got a chance to see.
+
+**Checker-reviewer FAILed attempt 1, then independently re-verified attempt 2's fix rather than
+trusting the worker's report.** The MAJOR: a new `resolveFunctionsBaseUrl(undefined)` test didn't
+test what it claimed — an explicit `undefined` argument triggers the function's own default
+parameter identically to calling it with zero arguments, so the "injectable-parameter, not
+env-stubbing" test was silently just reading the real env var, and failed under real `.env.local`
+(a 5th env-present failure, undisclosed). Worker fixed it with a genuinely hermetic
+`resolveFunctionsBaseUrl('   ')` (whitespace-only) after confirming against the real
+implementation that `.trim()` runs before the blank-check. The checker re-read the source itself to
+confirm that claim, independently re-ran the criterion-1 mutation (matched exactly), and
+independently re-measured the full suite in both env states before rendering PASS.
+
+**Orchestrator re-verified a third time on the actual merged tree**, not the worktree — same
+typecheck/eslint/prettier/vitest results in both env states, confirming the fix survives the merge
+and isn't an artifact of the isolated worktree.
+
+**Honest framing carried through to the merge, not softened.** `grep -rn "calendar_feeds" src
+supabase` still returns zero INSERT sites. This task makes the widget's failure honest (a real
+DES-12 error banner) rather than making calendar subscription functional end-to-end — every real
+signed-in user sees "Couldn't load your calendar link" until a provisioning path exists. That gap is
+now its own row, **T195**, sequenced before **T194** (`onResetFeedToken`'s own fixture-shaped
+default, the same defect family, one function over in the same component — the reset flow needs a
+row to reset before it's worth fixing how it resets it).
+
+**One MINOR carried forward, not fixed:** a dangling commit-message reference to a
+`T177-worker-output.md` that was never in the worker's Allowed Files — a packet-scope gap, not a
+worker error, worth reconciling in the packet template rather than this task's own follow-up.
