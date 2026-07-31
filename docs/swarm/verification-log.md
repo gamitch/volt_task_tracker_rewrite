@@ -5692,6 +5692,214 @@ worker error, worth reconciling in the packet template rather than this task's o
 
 ---
 
+## T178 — the end-meeting backend (build half) (merged 2026-07-31)
+
+| Field | Value |
+|---|---|
+| Merged commit | `64eeb83179295dabb36967f0790d8c2730cbe641` |
+| Verdict | **PASS with MINORs**, first attempt |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
+| Premise gate | 1 full round → REVISE (3 BLOCKER, 3 MAJOR); revision 2 dispatched without re-gate |
+| tsc / build / format | 0 errors / ✓ / clean |
+| eslint | 0 errors, 358 warnings (**zero new**) |
+| vitest | 70 files, 1668 tests (+1 file, +14 tests, exact) |
+
+**The ledger's framing was wrong and the foreman caught it before any code was written.** T178 was
+filed as a wiring gap — "finished and tested, mounted nowhere". All three of `EndMeetingDialog`'s
+seams were `console.warn` stubs and no end-meeting backend existed anywhere, so it was a build.
+
+**The gate changed the task's shape.** It built a reference implementation, got 17 tests green,
+then broke it — and found that mounting on `LiveConsole` is a **data-loss path**, because that
+console's attendance marking is an intentional no-op and its roster is a fixture. A real dialog on
+top marks every checked-in student a real `absent` row. The owner ruled the split
+(`auto-mode-decisions.md`, "George's ruling on the T178 build/mount split"); the mount is **T196,
+blocked**.
+
+**Two BLOCKERs were the T170 shape, and both left the suite green** — a criterion that passed when
+the coach's identity was baked at construction time, and one that passed when three sequenced
+writes became `Promise.all`. Rebuilt, then **verified three times independently**: dropping the
+awaits fails 2/14, the prescribed `Promise.all` fails 1/14, and the checker added the mutation that
+matters most — **flip-before-checkout**, the exact audit-mislog defect the ordering exists to
+prevent — which fails 2/14.
+
+**What makes this design sound, stated because the packet originally undersold it:** the flip is
+last, so every reachable partial state fails **safe** — absences written, session still
+`'scheduled'`, retry a clean no-op. There is no ordering in which the flip lands and the checkout
+doesn't. That is the actual reason no RPC (and therefore no migration) is needed.
+
+**Process notes worth keeping.** The foreman added a **proof step** to each rebuilt criterion — run
+the old mutation against the new test and confirm it *now* fails — which nobody asked for and which
+is the only thing that distinguishes a fixed criterion from a restated one. The checker disclosed
+its own false negative mid-review (a mutation that hit a module-doc line rather than code) and
+redid it. Both behaviours are why these reports are usable.
+
+**Carried forward: T197** — `onEditAttendance`'s row scoping is unasserted, and deleting both
+`.eq()`s leaves the suite green while converting a single-student edit into a table-wide
+`attendance` UPDATE. The shipped code is correct and the path is unreachable today, so it is filed
+rather than fixed in place — but it is a **gate on T196**, not an optional companion, because T196
+is blocked indefinitely and that path must not be mounted unguarded.
+
+---
+
+## T179 — mount `MarkDayCompleteDialog`, and make its placeholder defaults impossible
+
+**Merged `a5958b0`. PASS-with-MINORs, first attempt, plus one test-only follow-up round.**
+Gates re-measured a third time in the shared tree with `.env.local` absent: `tsc` exit 0 ·
+`vite build` ✓ · `format:check` clean · eslint **0 errors / 359 warnings** · vitest
+**70 files / 1689 tests** · `OutreachDetail.test.tsx` alone exits **0**.
+
+**The +1 eslint warning is expected and traced.** Exporting `isSessionMarkDayCompleteEligible`
+costs one `react-refresh/only-export-components`. The checker diffed per-file JSON across both
+trees: exactly one file moved (`OutreachDetail.tsx` 17 → 18), and no file lost a warning to
+offset a gain elsewhere.
+
+**The premise gate found a defect in the packet's own prescribed code.** Revision 1 specified
+`void reloadDetail()` and claimed it stops a refetch failure masquerading as a write failure.
+`void` discards the promise's *value*, not its *rejection*. Measured: the test written to prove
+that behaviour left **86 tests green and the suite at exit code 1**, with vitest warning "This
+might cause false positive tests." Now `.catch(() => {})` — and the identical latent leak already
+sat at `OutreachDetail.tsx:1907-1909`, the very mount revision 1 cited as the pattern to mirror,
+so it was folded in.
+
+**Three more packet errors the gate caught, all mine.** (a) I asserted `isStaffViewer` cannot
+narrow `user`, quoting three source comments that say so; the gate deleted all three checks and
+`tsc` exited 0 — TS 4.4+ narrows through aliased conditions. The code stays, the reason was false,
+and revision 1 would have had the worker write a fourth copy of it (**T301**). (b) I cited OUT-05
+at PRD line 296 (it is **318**) and gated on `startsAt` while presenting it as a quotation of "on/
+after a session **date**" — a silent narrowing that would hide the trigger from a coach at 8 AM on
+the session's own morning. Now gates on `sessionDate` in America/Chicago by ISO string comparison.
+(c) My per-session trigger rendered **one accessible name for three buttons**, the exact item-15
+defect this file's own module doc already solves for `ParentRsvp` — which I cited twice without
+applying.
+
+**An absence assertion with no possible mutation, again.** Criterion B4 asked the dialog to show
+none of the deleted fixture names; after Part A there is no fixture branch left to break, so it
+tested the test fixture. The gate also measured that the page's **own** `FIXTURE_STUDENTS`
+(`OutreachDetail.tsx:683-714`) carries all four of those names verbatim, so a worker taking the
+obvious path would have got a red test blaming the wiring for something else entirely.
+
+**The checker invented six mutations the packet never named; four were caught, four survived.**
+Caught: a *student's* profile id reaching `attendance.recorded_by`, and the session id swapped for
+the event id (which reddened twice). Survived — and the checker proved with its own DOM probes
+that the shipped code is correct on every one, so these were coverage gaps, not defects:
+swapping `America/Chicago` for `'UTC'` (every existing instant was one where the two agree,
+including the case commented "still Aug 2 in Chicago"); the UI showing one session while the write
+targets another; `rsvps={[]}` at the call site; and a no-op `onOpenChange` leaving the dialog
+undismissable.
+
+**All four were closed rather than filed** — four small test additions in an already-Allowed file,
+each proven against the exact mutation the checker verified survives. Filing them would have grown
+the backlog for work cheaper to finish than to track (item 25).
+
+**A new test-authoring trap, found while closing them and worth carrying:** a page-wide label
+lookup for a roster student resolves to the **wrong** checkbox, because the staff-only
+`<AttendancePanel>` is fed the identical roster and renders a same-named control earlier in the
+DOM. Same shape as this task's Trap 10 for `<dialog>` elements — on this page, scope every lookup.
+
+**One correction to the gate, recorded so it is not re-derived:** revision 1 warned that a
+two-session fixture could pass criterion B3 by luck. Measured, it goes red. Three sessions is
+still required, for the real reason — last-element and off-by-one resolutions.
+
+---
+
+## T180 — mount the real consistency strip, and delete the duplicate participation region it exposes
+
+**Merged `dc77a0a`. PASS-with-MINORs, first attempt, plus one test-only follow-up round.**
+Gates re-measured a third time in the shared tree with `.env.local` absent: `tsc` 0 ·
+`vite build` ✓ · `format:check` clean · eslint **0 errors / 359 warnings (delta +0)** · vitest
+**70 files / 1696 tests** · `MeetingsList.test.tsx` alone exits **0**.
+
+**The headline result is about the process, not the code.** The premise gate found that criterion
+C4 could not discriminate as revision 1 wrote it, and proposed a specific `vi.mock` replacement.
+I copied that replacement into revision 2. **The gate's own fix was also broken**, and the worker
+caught it:
+
+```
+=== CORRECT CODE ===   PROBE packet-vi.mock calls: 0
+=== MUTATED ===        PROBE packet-vi.mock calls: 0
+```
+
+Green under its own mutation — the same shape-(c) failure the gate wrote the finding to prevent.
+The mock is live for direct calls and for dynamic imports; it simply never reaches the reference
+`StudentMeetingView.tsx` resolves at render time. The worker substituted `vi.spyOn` on a namespace
+import, **flagged the deviation itself and asked to be checked** rather than quietly shipping it,
+and the checker confirmed the substitution is the only one of the two mechanisms that works —
+verifying it intercepts the *render path*, not just a test-file call, since the delta of exactly 1
+can only originate in the component's own default-parameter fallback.
+
+**Four of seven criteria in revision 1 did not discriminate**, and applying it verbatim left three
+pre-existing tests red with no authorization covering them. The causes, all mine: the mount has no
+test seam, so the strip fired the real unconfigured loader in every student test (**the third
+repeat of a shape already documented in `DashboardPage.test.tsx:33-52` and
+`OutreachList.test.tsx:158-165`** — I checked neither); C3 failed both ways at once, staying green
+under its mutation because the two loaders' fixture id-spaces are **disjoint**, and going red
+against correct code under the other reading because Astryx exposes `ProgressBar` labels through
+`aria-labelledby`, not `aria-label`; C4 spied on a prop the mount never forwards, with an
+"at most once" threshold that 1 satisfies; and C5 stayed green while the coach's page rendered
+*"No student account linked yet"* as its first line.
+
+**A claim of mine that was the wrong conclusion from a correct grep.** "No test asserts on the
+host's bar" — true of the *label*, false of the *output*: three tests asserted on it, one of which
+would have started passing again for a different reason off the strip's own em-dash. And deleting
+the JSX orphans the `ProgressBar` import, which fails the build under `noUnusedLocals`.
+
+**Two proofs went beyond what the packet asked.** C6 was confirmed by a TypeScript token-stream
+comparison with comment and whitespace trivia dropped (`TOKEN STREAMS IDENTICAL`) — a stronger
+guarantee than the line-diff specified that the parallel T191 session cannot be broken by this.
+And the checker ran nine of its own mutations, including pinning the strip to its error and its
+loading branch, finding no vacuous assertion and confirming the deleted section's data path is not
+silently dead.
+
+**The em-dash that was verified by the wrong element.** The retargeted test asserting the strip
+shows `'—'` rather than a fabricated `%` was satisfied by the **dot row**, whose labels are built
+as `` `${dot.label} — ${date}` ``. Changing the participation branch's em-dash to `'N/A'` left the
+suite green. Closed by asserting the full string; proven both ways — the `'N/A'` mutation now
+reddens, and mutating the dot separator now leaves it green.
+
+**An honesty note worth keeping.** The C4 root-cause narrative (a `checkin.ts` ↔
+`StudentMeetingView.tsx` circular import) was stated as measured in a permanent in-test comment.
+The checker verified the three *observable* claims but could not isolate the mechanism — its probe
+was confounded, and it said so. The comment now states only what was measured and labels the
+mechanism a hypothesis. Item 2 makes that comment an audit-trail artefact; it should not claim
+more than was established.
+
+**Trap 2's own claim, restated honestly before dispatch:** the two participation numbers are
+*architecturally* free to disagree, but that is an inference — not reproducible from the shipped
+fixtures, whose id-spaces are disjoint. The gate had to cross them by hand to produce the screen.
+The product decision to delete the host's section stands on the architecture, not on a screenshot.
+
+**Carried forward: T302** — `isEmpty`'s `participation === null` clause has no test coverage at
+all. Pre-existing and identical at base, so not a T180 regression, but after Part B it is
+`participation`'s only remaining render-path consumer, which makes the gap more load-bearing than
+it was.
+
+---
+
+## T302 — the `isEmpty` participation clause, now asserted
+
+**Merged `3fb44a7`. First attempt, no findings.** One test, proportionate to the gap (item 25).
+
+Filed by T180's checker from a mutation the packet never named: deleting `participation === null`
+from `MeetingsList.tsx:2359` left **all 1696 tests green** — and green at base too, so the gap was
+pre-existing rather than a T180 regression. What it permitted: a student with zero history rows but
+a real participation row seeing *"No meeting history yet"* instead of their participation figure.
+After T180 deleted the host's own `Participation` section, that clause is `participation`'s **only
+remaining render-path consumer**, which is why a latent gap was worth closing now.
+
+**Mutation reproduced by the orchestrator rather than relayed** — `const isEmpty = history.length
+=== 0;` gives `1 failed | 75 passed (76)`, the single failure being the new test. Gates
+re-measured in the shared tree: `tsc` 0, build ✓, prettier clean, eslint 0 errors / 359 warnings
+unchanged, vitest **70 files / 1697 tests**, targeted file exit 0.
+
+**Deliberately no checker round.** A full opus review is disproportionate to one test whose
+discriminating mutation was already measured when the row was filed and re-measured directly here.
+Item 25 exists for exactly this.
+
+**Recorded deviation:** the worker edited the shared tree instead of its own worktree (item 23).
+Harmless in this instance — nothing else was in flight on the branch, and its final commit and
+gates are clean — but worktree isolation is what has kept this session from colliding with the
+parallel one, so it should not become habit.
 ## T183 — `StudentHome`'s greeting is now the real signed-in student's name (merged 2026-07-30)
 
 | Field | Value |

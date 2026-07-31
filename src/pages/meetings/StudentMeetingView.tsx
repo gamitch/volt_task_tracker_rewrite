@@ -11,12 +11,19 @@
  *
  * `MeetingsList.tsx`'s `StudentMeetingsView` ALREADY ships the full MTG-14
  * read-only history page for students/parents: own Upcoming/Past rows (per-
- * session attendance `Badge`s using DES-05's mapping), the participation %
- * `ProgressBar` (sourced from a `v_student_participation`-shaped fixture),
- * and all four DES-12 states. It also renders an explicitly-labeled
- * placeholder `Section` ("Recent attendance") whose copy states, verbatim,
- * that BEH-06's real "last 5 meetings" `StatusDot` consistency strip is
- * T037's deliverable and is NOT built there.
+ * session attendance `Badge`s using DES-05's mapping) and all four DES-12
+ * states. AT THE TIME T037 WAS BUILT, that file also rendered an explicitly-
+ * labeled placeholder `Section` ("Recent attendance") whose copy stated,
+ * verbatim, that BEH-06's real "last 5 meetings" `StatusDot` consistency
+ * strip was T037's deliverable and was NOT built there, and it separately
+ * rendered its own participation `ProgressBar` above Upcoming, sourced from
+ * a `v_student_participation`-shaped fixture. T180 UPDATE (comment-only in
+ * THIS file -- see that task's own module doc, `MeetingsList.tsx`): both of
+ * those are now history. T180 mounted this file's own `StudentMeetingView`
+ * in that placeholder's place (bottom of the student view, beneath Upcoming/
+ * Past) and deleted `MeetingsList.tsx`'s own participation `ProgressBar` as
+ * part of the same change, so the `ConsistencyStrip` below is now the
+ * page's sole participation figure.
  *
  * Reading that placeholder's own words plus this task's packet (Objective,
  * Known Context/Traps #1, Acceptance Criteria) together, the packet's
@@ -29,18 +36,23 @@
  *   Build the real, standalone, reusable BEH-06 consistency-strip widget
  *   (last-5 `StatusDot`s + the participation % that belongs next to it)
  *   that a future wiring task can drop into `MeetingsList.tsx`'s named
- *   placeholder slot -- and, per PRD line 235 ("student/parent meeting
- *   views (MTG-14, HOME-03)"), potentially into `ParentHome.tsx` (T055)'s
- *   "next 3 events"/per-student card too, since BEH-06 explicitly names
- *   both surfaces as consumers of the SAME strip.
+ *   placeholder slot -- T180 UPDATE: that wiring task has now happened, see
+ *   module doc #0's own T180 note above -- and, per PRD line 235
+ *   ("student/parent meeting views (MTG-14, HOME-03)"), potentially into
+ *   `ParentHome.tsx` (T055)'s "next 3 events"/per-student card too, since
+ *   BEH-06 explicitly names both surfaces as consumers of the SAME strip --
+ *   that second wiring (`ParentHome.tsx`) is still a separate, not-yet-done
+ *   task as of this comment.
  *
  * This is NOT a second, competing rebuild of `MeetingsList.tsx`'s own
- * Upcoming/Past history rows or its own participation `ProgressBar` -- this
- * file does not render a session history list at all. This IS judged
- * genuinely resolvable (not ambiguous enough to require a dispute) because
- * the packet's narrowing language is unusually explicit and the placeholder
- * `Section` it points at is unambiguous about what it is deferring. No
- * dispute filed for this scope question; flagged and explained here per the
+ * Upcoming/Past history rows -- this file does not render a session history
+ * list at all (T180 UPDATE: `MeetingsList.tsx` no longer has its own
+ * participation `ProgressBar` to avoid duplicating either, per that task's
+ * own module doc). This IS judged genuinely resolvable (not ambiguous
+ * enough to require a dispute) because the packet's narrowing language was
+ * unusually explicit and the placeholder `Section` it pointed at was
+ * unambiguous about what it was deferring (T180 UPDATE: that placeholder no
+ * longer exists -- see module doc #0). No
  * packet's own instruction to "state your read of the situation and your
  * chosen scope clearly" regardless of which way it resolved.
  *
@@ -176,8 +188,9 @@
  * packet's explicit instruction to state this choice.
  *
  * `variant="own"` (the default) covers the single-student case (a student
- * viewing their own strip, or this widget being dropped into
- * `MeetingsList.tsx`'s own placeholder slot for that same student). This
+ * viewing their own strip, or this widget mounted -- T180 UPDATE: now
+ * actually mounted, not just "dropped into a placeholder slot" -- inside
+ * `MeetingsList.tsx`'s own student view for that same student). This
  * component still does NOT call `useAuth()` to infer WHICH VARIANT to
  * render -- that choice (module doc #9 below) is unchanged by T100 and
  * still stays with the caller.
@@ -681,9 +694,10 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
 // ---------------------------------------------------------------------------
 // `ConsistencyStrip` -- the reusable presentational widget itself (module
 // doc #0, #8). No data-fetching, no role logic: pure props in, dots +
-// participation bar out. This is the piece a future wiring task drops into
-// `MeetingsList.tsx`'s placeholder `Section` and/or `ParentHome.tsx`'s
-// per-student card.
+// participation bar out. T180 UPDATE: this is the piece that wiring task
+// mounted into `MeetingsList.tsx`'s student view (module doc #0); wiring it
+// into `ParentHome.tsx`'s per-student card too remains a separate,
+// not-yet-done task as of this comment.
 // ---------------------------------------------------------------------------
 
 export interface ConsistencyStripProps {
@@ -1018,12 +1032,13 @@ function OwnStudentConsistencyStrip({
 
 export interface StudentMeetingViewProps {
   /**
-   * `'own'` (default): a single student's own strip -- the shape a future
-   * wiring task drops into `MeetingsList.tsx`'s placeholder slot for the
-   * current viewer. `'linked'`: one strip per linked student -- the shape
-   * `ParentHome.tsx` (T055)'s per-student card would use. This component
-   * does not infer WHICH VARIANT to render from `useAuth()` (module doc #6)
-   * -- the caller decides.
+   * `'own'` (default): a single student's own strip -- T180 mounts this
+   * variant into `MeetingsList.tsx`'s student view for the current viewer.
+   * `'linked'`: one strip per linked student -- the shape `ParentHome.tsx`
+   * (T055)'s per-student card would use (still a separate, not-yet-done
+   * wiring task as of this comment). This component does not infer WHICH
+   * VARIANT to render from `useAuth()` (module doc #6) -- the caller
+   * decides.
    */
   variant?: 'own' | 'linked';
   /**
