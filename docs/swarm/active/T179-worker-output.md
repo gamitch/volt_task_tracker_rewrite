@@ -14,16 +14,20 @@ branch `t179-work`, based on `8873370`), per constitution item 23. The shared ch
 - `src/pages/outreach/OutreachDetail.tsx`
 - `src/pages/outreach/OutreachDetail.test.tsx`
 
-`git diff --stat` against `8873370`:
+`git diff --stat` against `8873370` (real output, pasted verbatim -- corrected in the
+follow-up round below; the version originally here was retyped and both understated
+`MarkEventCompleteDialog.tsx` and omitted this output doc's own line from the file count):
 
 ```
+$ git diff --stat 8873370 c017256
+ docs/swarm/active/T179-worker-output.md            | 392 ++++++++++++++++++++
  src/pages/outreach/MarkDayCompleteDialog.test.tsx  |  33 +-
  src/pages/outreach/MarkDayCompleteDialog.tsx       | 154 +++-----
  .../outreach/MarkEventCompleteDialog.test.tsx      |  12 +
- src/pages/outreach/MarkEventCompleteDialog.tsx     |  13 +-
+ src/pages/outreach/MarkEventCompleteDialog.tsx     |  17 +-
  src/pages/outreach/OutreachDetail.test.tsx         | 394 +++++++++++++++++++++
  src/pages/outreach/OutreachDetail.tsx              | 327 ++++++++++++++++-
- 6 files changed, 805 insertions(+), 128 deletions(-)
+ 7 files changed, 1201 insertions(+), 128 deletions(-)
 ```
 
 No file outside the six Allowed files was touched. `OutreachEventDialog.tsx` (T300) and the
@@ -390,3 +394,125 @@ branch — see final report for the SHA).
 None. Revision 2 was implementable as written; the one place I diverged from a literal reading
 (not exporting `formatChicagoDateOnly`) is a strict subset of what the packet asked for
 (export the eligibility predicate) and produces the exact warning delta the packet specifies.
+
+---
+
+## Follow-up round -- checker PASS-with-MINORs, four surviving mutations closed
+
+The opus checker verified the shipped implementation (this commit, `c017256`) is **correct** with
+its own DOM probes; its findings were purely about test coverage. This round adds four tests to
+`src/pages/outreach/OutreachDetail.test.tsx`, closing all four, plus the diffstat correction
+above. **No production code changed in this round** -- every file in the Allowed list except
+`OutreachDetail.test.tsx` and this doc was untouched; each mutation below was applied to
+`OutreachDetail.tsx` only transiently, to prove the new/modified test reddens, then reverted
+(confirmed by `git diff --stat` showing zero change to `OutreachDetail.tsx` afterward).
+
+### 1. Timezone was asserted nowhere
+
+Added two tests to the `isSessionMarkDayCompleteEligible` `describe` block: an instant where
+Chicago (CDT, UTC-5) and UTC disagree on the calendar date
+(`new Date('2026-08-04T02:00:00.000Z')` -- 9 PM Aug 3 in Chicago, already Aug 4 in UTC -- against
+a session dated `2026-08-04`, expected `false`), and a second instant pinning the winter/CST
+offset (UTC-6) the same way (`new Date('2026-01-05T05:30:00.000Z')` against a session dated
+`2026-01-05`, expected `false`).
+
+**Mutation:** `CHICAGO_DATE_ONLY_FORMATTER`'s `timeZone: CHICAGO_TIME_ZONE` -> `timeZone: 'UTC'`.
+
+```
+ FAIL  … isSessionMarkDayCompleteEligible … > is NOT eligible when it is already the session date in UTC but still the day before in Chicago (CDT)
+AssertionError: expected true to be false // Object.is equality
+ FAIL  … isSessionMarkDayCompleteEligible … > is NOT eligible when it is already the session date in UTC but still the day before in Chicago (CST, winter offset)
+AssertionError: expected true to be false // Object.is equality
+ Tests  2 failed | 4 passed | 88 skipped (94)
+```
+
+Reverted: `npx vitest run -t "isSessionMarkDayCompleteEligible"` -> `6 passed | 88 skipped (94)`.
+`tsc --noEmit` exit 0 both before applying and after reverting.
+
+### 2. Nothing tied the clicked trigger to the session id in the write
+
+Rewrote B5 to drive from `triggers[1]` (the SECOND of three triggers) instead of `triggers[0]`,
+and to assert `payload.sessionId` equals `MDC_SESSION_2.id`. `triggers[0]` could not distinguish
+"the write targets the clicked session" from "the write always targets the first session," since
+`orderedSessions[0].id` is trivially the correct answer there.
+
+**Mutation:** `session={markDayCompleteSession}` ->
+`session={{ ...markDayCompleteSession, id: orderedSessions[0].id }}`.
+
+```
+ FAIL  … (B5) > confirming the SECOND trigger calls the real markDayComplete mutation with the SECOND session's id and recordedBy = the signed-in coach's own id
+AssertionError: expected 'session-mdc-1' to be 'session-mdc-2' // Object.is equality
+```
+
+Reverted: `npx vitest run -t "threads the real signed-in coach"` -> `1 passed | 93 skipped (94)`.
+`tsc --noEmit` exit 0 both before and after.
+
+### 3. `rsvps` reaching the dialog was unproven
+
+Added a new test with its own fixture override (`makeMarkDayCompleteLoadData({ rsvps: goingRsvps
+})`, a single `going` RSVP for "Priya Shah" on `MDC_SESSION_1`) and asserted the corresponding
+roster checkbox is pre-checked, while the other student's checkbox stays unchecked. The lookup is
+scoped to the dialog element itself (Trap 10) -- the same page also mounts a staff-only
+`<AttendancePanel>` fed the SAME `roster`, which renders its own, unrelated "Priya Shah"-labeled
+checkbox earlier in the DOM; a page-wide `getFieldControl` lookup silently resolved to that one
+instead of the dialog's own checklist row the first time this test was written, which is why the
+new `getDialogFieldControl` helper queries only within `findMarkDayCompleteDialogElement()`.
+
+**Mutation:** `rsvps={rsvps}` -> `rsvps={[]}` at the `<MarkDayCompleteDialog>` call site.
+
+```
+ FAIL  … going RSVP pre-checks the roster row > pre-checks the student with a real going RSVP for the clicked session; the other student starts unchecked
+AssertionError: expected false to be true // Object.is equality
+```
+
+Reverted: `npx vitest run -t "going RSVP pre-checks"` -> `1 passed | 93 skipped (94)`. `tsc
+--noEmit` exit 0 both before and after.
+
+### 4. The dialog's close/unmount contract was unasserted
+
+Added a test that opens the dialog, clicks its real Cancel button (which calls the dialog's own
+`handleClose` -> `onOpenChange(false)`), and asserts the whole `<MarkDayCompleteDialog>` element
+unmounts (`findMarkDayCompleteDialogElement()` returns `undefined`) -- proving module doc #15(b)'s
+claim that the dialog can actually be dismissed.
+
+**Mutation:** `onOpenChange={(isOpen) => { if (!isOpen) setMarkDayCompleteSessionId(null); }}` ->
+`onOpenChange={() => {}}`.
+
+```
+ FAIL  … Cancel really closes/unmounts it (module doc #15(b)) > clicking Cancel unmounts the dialog -- it is not stuck open forever
+AssertionError: expected <dialog …> "Mark day completeRiverside Trail Build …" to be undefined
+```
+(Real output: the assertion failed with the dialog element still present -- pasted here in
+condensed form; the full command output included the entire un-truncated dialog `outerHTML`.)
+
+Reverted: `npx vitest run -t "Cancel really closes"` -> `1 passed | 93 skipped (94)`. `tsc
+--noEmit` exit 0 both before and after.
+
+### Gates, this round (`.env.local` absent throughout)
+
+```
+$ npx tsc --noEmit; echo $?
+0
+$ npx vite build   → ✓ built in ~5s (pre-existing >500kB chunk warning, unrelated)
+$ npm run format:check   → All matched files use Prettier code style!
+$ npx eslint .   → ✖ 359 problems (0 errors, 359 warnings) -- unchanged; this round only added
+  test cases to an already-covered test file, no new exported symbol.
+$ npx vitest run   → Test Files 70 passed (70) / Tests 1689 passed (1689)
+  -- base (post-round-1) was 70 files / 1685 tests; +4 here (two timezone tests, one rsvps
+  pre-check test, one Cancel/unmount test). B5 was MODIFIED, not added, so it is not part of
+  the +4.
+$ npx vitest run src/pages/outreach/OutreachDetail.test.tsx >/dev/null 2>&1; echo $?
+0
+```
+
+### Files changed, this round
+
+- `src/pages/outreach/OutreachDetail.test.tsx` -- four new/modified tests (items 1-4 above).
+- `docs/swarm/active/T179-worker-output.md` -- this section, plus the diffstat correction above.
+
+No production file was left modified relative to `c017256`; confirmed by `git diff --stat
+c017256` (this worktree's parent commit) showing changes to only the two files listed above.
+
+### Dispute, this round
+
+None.

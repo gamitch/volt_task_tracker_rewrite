@@ -2579,6 +2579,31 @@ describe('isSessionMarkDayCompleteEligible (T179, module doc #15(c) -- OUT-05 ga
       false,
     );
   });
+
+  // T179 follow-up round (checker MINOR #1): every instant used above is one
+  // where Chicago and UTC agree on the calendar date -- including the
+  // "still Aug 2 in Chicago" case just above, which is Aug 2 in UTC too.
+  // Mutating `CHICAGO_TIME_ZONE` -> `'UTC'` inside `formatChicagoDateOnly`
+  // left the whole suite green. These two cases pin instants where the two
+  // zones DISAGREE on the date, so that mutation reddens here.
+  it('is NOT eligible when it is already the session date in UTC but still the day before in Chicago (CDT)', () => {
+    // 2026-08-04T02:00:00.000Z is 9:00 PM on 2026-08-03 in America/Chicago
+    // (CDT, UTC-5) but is already 2026-08-04 in UTC.
+    const stillAug3InChicago = new Date('2026-08-04T02:00:00.000Z');
+    expect(
+      isSessionMarkDayCompleteEligible({ ...BASE, sessionDate: '2026-08-04' }, stillAug3InChicago),
+    ).toBe(false);
+  });
+
+  it('is NOT eligible when it is already the session date in UTC but still the day before in Chicago (CST, winter offset)', () => {
+    // 2026-01-05T05:30:00.000Z is 11:30 PM on 2026-01-04 in America/Chicago
+    // (CST, UTC-6 -- a different offset than the CDT case above) but is
+    // already 2026-01-05 in UTC.
+    const stillJan4InChicago = new Date('2026-01-05T05:30:00.000Z');
+    expect(
+      isSessionMarkDayCompleteEligible({ ...BASE, sessionDate: '2026-01-05' }, stillJan4InChicago),
+    ).toBe(false);
+  });
 });
 
 const MARK_DAY_EVENT_ID = 'event-riverside-trail-build';
@@ -2850,14 +2875,83 @@ describe('"Mark day complete" dialog receives THIS page’s real roster, not a f
   });
 });
 
-describe('"Mark day complete" threads the real signed-in coach’s profiles.id, not a placeholder (B5)', () => {
-  it('confirming calls the real markDayComplete mutation with recordedBy = the signed-in coach’s own id', async () => {
-    mockedMarkDayComplete.mockResolvedValueOnce(undefined);
-    renderMarkDayCompleteDetail();
+// T179 follow-up round (checker MINOR #3): the shared `makeMarkDayCompleteLoadData`
+// fixture (used by B1/B2/B3/B4/B5/B6 above) passes `rsvps: []`, so nothing at
+// page level ever exercised the going-RSVP-pre-check path -- `rsvps={[]}` at
+// the `<MarkDayCompleteDialog>` call site left the whole suite green. This
+// block gives the fixture a real, non-empty `rsvps` array with a `going` row
+// and asserts the corresponding student is pre-checked when the dialog opens,
+// proving the page's real `rsvps` prop (not an empty array) reaches the
+// dialog.
+describe('"Mark day complete" dialog receives THIS page’s real rsvps -- going RSVP pre-checks the roster row', () => {
+  it('pre-checks the student with a real going RSVP for the clicked session; the other student starts unchecked', async () => {
+    const goingRsvps: RsvpRow[] = [
+      {
+        id: 'rsvp-priya-going',
+        sessionId: MDC_SESSION_1.id,
+        studentId: 'student-priya-shah',
+        status: 'going',
+        respondedBy: 'profile-priya-shah',
+        updatedAt: '2026-08-01T00:00:00.000Z',
+        createdAt: '2026-08-01T00:00:00.000Z',
+      },
+    ];
+    renderMarkDayCompleteDetail({
+      loadData: makeMarkDayCompleteLoadData({ rsvps: goingRsvps }),
+    });
     await flushMicrotasks();
 
     act(() => {
       findMarkDayCompleteTriggers()[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    // Scoped to the dialog itself (Trap 10) -- the same page also mounts a
+    // staff-only <AttendancePanel> using this SAME roster, which renders its
+    // own, unrelated "Priya Shah"-labeled checkbox earlier in the DOM. A
+    // page-wide label lookup would silently resolve to that one instead.
+    const dialogEl = findMarkDayCompleteDialogElement();
+    expect(dialogEl).toBeTruthy();
+    const dialogLabels = Array.from(dialogEl?.querySelectorAll('label') ?? []);
+    function getDialogFieldControl(labelText: string): HTMLInputElement {
+      const label = dialogLabels.find((el) => el.textContent?.trim() === labelText);
+      if (!label) throw new Error(`No dialog label found for "${labelText}"`);
+      const forId = label.getAttribute('for');
+      if (!forId) throw new Error(`Label "${labelText}" has no htmlFor`);
+      const control = document.getElementById(forId);
+      if (!control) throw new Error(`No control found for id "${forId}"`);
+      return control as HTMLInputElement;
+    }
+
+    const priyaCheckbox = getDialogFieldControl('Priya Shah');
+    const devonCheckbox = getDialogFieldControl('Devon Osei');
+    expect(priyaCheckbox.checked).toBe(true);
+    expect(devonCheckbox.checked).toBe(false);
+  });
+});
+
+describe('"Mark day complete" threads the real signed-in coach’s profiles.id, not a placeholder (B5)', () => {
+  // T179 follow-up round (checker MINOR #2 -- the most important of the
+  // four): driven from `triggers[1]`, NOT `triggers[0]`. `triggers[0]`
+  // resolves to `orderedSessions[0]`, so it cannot distinguish "the write
+  // targets the session whose trigger was clicked" from "the write always
+  // targets the first session" -- a mutation that swaps in
+  // `orderedSessions[0].id` for the resolved session's `id` is a no-op
+  // against `triggers[0]` (`orderedSessions[0].id` IS already correct
+  // there) and left the whole suite green. Using the SECOND trigger means
+  // the payload's `sessionId` can only equal `MDC_SESSION_2.id` if the
+  // clicked trigger actually determined which session's data was written --
+  // the UI showing one session while the write targets another is a
+  // data-integrity gap on this write path.
+  it('confirming the SECOND trigger calls the real markDayComplete mutation with the SECOND session’s id and recordedBy = the signed-in coach’s own id', async () => {
+    mockedMarkDayComplete.mockResolvedValueOnce(undefined);
+    renderMarkDayCompleteDetail();
+    await flushMicrotasks();
+
+    const triggers = findMarkDayCompleteTriggers();
+    expect(triggers).toHaveLength(3);
+    act(() => {
+      triggers[1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     const confirmButton = findMarkDayCompleteConfirmButton();
     expect(confirmButton).toBeTruthy();
@@ -2868,7 +2962,7 @@ describe('"Mark day complete" threads the real signed-in coach’s profiles.id, 
 
     expect(mockedMarkDayComplete).toHaveBeenCalledTimes(1);
     expect(mockedMarkDayComplete.mock.calls[0][0].recordedBy).toBe(COACH_USER.id);
-    expect(mockedMarkDayComplete.mock.calls[0][0].sessionId).toBe(MDC_SESSION_1.id);
+    expect(mockedMarkDayComplete.mock.calls[0][0].sessionId).toBe(MDC_SESSION_2.id);
   });
 });
 
@@ -2922,5 +3016,37 @@ describe('"Mark day complete" write/reload composition -- Trap 6, two tests, one
     // The reload was genuinely attempted (and genuinely rejected) -- this
     // is not a vacuous "the reload never ran" pass.
     expect(loadCount).toBe(2);
+  });
+});
+
+// T179 follow-up round (checker MINOR #4): the page's own `onOpenChange`
+// handler (`(isOpen) => { if (!isOpen) setMarkDayCompleteSessionId(null); }`)
+// is what actually lets the coach dismiss the dialog -- the module doc's own
+// #15(b) claims the dialog can be closed this way. A no-op `onOpenChange`
+// (`() => {}`) left the whole suite green because nothing asserted the
+// dialog ever goes away. This test drives the dialog's real Cancel button
+// (which calls `onOpenChange(false)` internally -- `MarkDayCompleteDialog.tsx`'s
+// own `handleClose`) and asserts the whole `<MarkDayCompleteDialog>` element
+// unmounts, per Trap 5's "whole element gated, not just isOpen" design.
+describe('"Mark day complete" dialog Cancel really closes/unmounts it (module doc #15(b))', () => {
+  it('clicking Cancel unmounts the dialog -- it is not stuck open forever', async () => {
+    renderMarkDayCompleteDetail();
+    await flushMicrotasks();
+
+    act(() => {
+      findMarkDayCompleteTriggers()[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(findMarkDayCompleteDialogElement()).toBeTruthy();
+
+    const cancelButton = Array.from(
+      findMarkDayCompleteDialogElement()?.querySelectorAll('button') ?? [],
+    ).find((btn) => btn.textContent?.trim() === 'Cancel');
+    expect(cancelButton).toBeTruthy();
+    act(() => {
+      cancelButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    expect(findMarkDayCompleteDialogElement()).toBeUndefined();
   });
 });
