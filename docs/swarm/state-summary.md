@@ -141,7 +141,31 @@ Packets P0–P13 plus regression fixes and live hotfixes:
 - T128 — wave-3 debt: format gate, meetings label wording, `astryx-api.md` accuracy,
   `v_planned_rsvp_hours` future guard.
 
-## Active (2026-07-29/30 — four live packets, everything below this note is stale)
+## Active (2026-07-31 — see T191 note below; older entries in this section are 2026-07-29/30 and otherwise stale)
+
+**2026-07-31 — T191 packet, revision 2, DISPATCH-ready:**
+`docs/swarm/active/T191-worker-packet.md`. Replaces the fabricated `0 / 1 h
+(0%)` Hours-vs-goal bar on a deactivated linked student's `ParentHome` card
+with an honest non-numeric marker (owner-ruled "No bar at all",
+`auto-mode-decisions.md` 2026-07-31). Sonnet tier, `checker-reviewer` at
+checkout. **Round 1 `checker-premise` returned REVISE (1 MAJOR, 3 MINOR, 5
+NIT), all addressed in revision 2 — this is item 19a's round 2 of 2 max, and
+the gate itself said no further gate round is needed, so this packet goes
+straight to a worker.** MAJOR: Acceptance Criterion 1's "if and only if"
+page-wide progressbar-count claim was true only because both test fixtures
+happen to pin `participation: null` (`ConsistencyStrip`'s own Participation
+bar renders independent of `isActive`) — fixed by scoping the C4 test
+rewrite to a new `hoursVsGoalProgressBars` helper (resolves each bar's
+`aria-labelledby`, filters on the label containing "hours vs. goal"),
+confirmed feasible by reading Astryx's `ProgressBar.tsx` source directly.
+Marker copy changed to `'not shown while this student is inactive'` (the
+original draft stuttered "hours vs. goal" twice). Mutation proof now
+requires two mutations (progressbar-count and marker-text) instead of one.
+Five NITs (citation/line-number fixes, explicit T181/`a0d02fb` naming per
+Definition of Ready item 5) folded in. See `task-ledger.md`'s T191 row for
+full detail.
+
+## Older active section (2026-07-29/30 — four live packets, everything below this note is stale)
 
 **2026-07-30 — T170 packet, revision 2, dispatching straight to a worker
 (foreman-planner):** `docs/swarm/active/T170-worker-packet.md`. Sixth

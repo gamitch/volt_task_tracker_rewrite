@@ -128,12 +128,17 @@ real `students.is_active` column, not a placeholder.
 
 **The precedent to mirror — already proven, already in this exact card, one
 section below.** `ConsistencyStrip` (`src/pages/meetings/
-StudentMeetingView.tsx:698-751`, already-Passed, T037/read-only reference) is
+StudentMeetingView.tsx:698-752`, already-Passed, T037/read-only reference) is
 reused directly inside this same `StudentHomeCard`
 (`ParentHome.tsx:1256`: `<ConsistencyStrip entries={data.consistencyEntries}
 participation={data.participation} />`). Its own participation sub-widget
-(`StudentMeetingView.tsx:735-748`) is the section-level "one metric inside a
-card, replaced with an honest absence marker" pattern this task needs:
+(`StudentMeetingView.tsx:735-749`) is the section-level "one metric inside a
+card, replaced with an honest absence marker" pattern this task needs -- but
+see the MAJOR-severity warning in "The test that must change on purpose"
+below before assuming a page-wide `[role="progressbar"]` count can prove
+anything about this pattern in `ParentHome.tsx`'s own tests: this widget
+renders its own progressbar independent of `isActive` whenever
+`participation !== null`, and is NOT gated by this task's fix:
 ```
 <VStack gap={1}>
   <Text type="label">Participation</Text>
@@ -185,16 +190,25 @@ corrections and one new constant — nothing else moves.
     * `docs/swarm/auto-mode-decisions.md` 2026-07-31) -- factual-only copy
     * for a deactivated linked student's Hours-vs.-goal section, replacing
     * the numeric bar. Mirrors `ConsistencyStrip`'s own
-    * `participation === null` branch (`StudentMeetingView.tsx:737-740`) --
+    * `participation === null` branch (`StudentMeetingView.tsx:738-740`) --
     * an em dash plus a short factual parenthetical, never a fabricated
-    * number (constitution item 17). */
-   const INACTIVE_STUDENT_HOURS_MARKER =
-     "hours vs. goal isn't shown for an inactive student";
+    * number (constitution item 17). Deliberately does NOT restate this
+    * section's own "Hours vs. goal" label inside the parenthetical --
+    * the precedent being mirrored states a fact ("no completed meetings
+    * recorded yet this season") without repeating its own "Participation"
+    * label back; match that shape, not a copy that stutters the label. */
+   const INACTIVE_STUDENT_HOURS_MARKER = 'not shown while this student is inactive';
    ```
    This exact wording is chosen deliberately distinct from the badge's own
    `'Not currently active'` string (case AND wording both differ) so a test
    asserting one can never accidentally match the other — do not reuse the
-   badge's exact phrase here.
+   badge's exact phrase here. (An earlier draft of this wording, "hours vs.
+   goal isn't shown for an inactive student", rendered as a stutter --
+   "Hours vs. goal— (hours vs. goal isn't shown for an inactive student)" --
+   because it restates the section's own visible label; this wording avoids
+   that.) This constant is declared `const`, not `export const` -- see "The
+   test that must change on purpose" below for why the test file inlines
+   the literal rather than importing it.
 3. **The render change**, replacing lines 1244-1254:
    ```
    <VStack gap={1}>
@@ -227,35 +241,85 @@ corrections and one new constant — nothing else moves.
 
 ## The test that must change on purpose, not by accident
 `ParentHome.test.tsx:676-745`, `describe('<ParentHome /> C4: a deactivated
-linked student's card is honest and present', ...)`, contains the two tests
-that currently assert and prove today's fabricated behavior — re-verified
-still present verbatim this session:
-- Line 713: `expect(progressBar!.getAttribute('aria-valuetext')).toBe('0 / 1
-  h (0%)')` (single-inactive-student test).
-- Line 737: `expect(valueTexts).toContain('0 / 1 h (0%)')` (mixed
-  active+inactive siblings test).
+linked student's card is honest and present', ...)`, is **T181's own test
+coverage** (merged `a0d02fb` -- this ledger row's own stated dependency)
+proving today's fabricated behavior — re-verified still present verbatim
+this session:
+- Line 707: `expect(container.querySelectorAll('[role="progressbar"]')).
+  toHaveLength(1)` (single-inactive-student test).
+- Lines 712-713: `const progressBar = container.querySelector('[role=
+  "progressbar"]'); expect(progressBar!.getAttribute('aria-valuetext')).
+  toBe('0 / 1 h (0%)')` (same test).
+- Lines 736-737: `expect(valueTexts).toHaveLength(2); expect(valueTexts).
+  toContain('0 / 1 h (0%)')` (mixed active+inactive siblings test).
 
-Both must be **deliberately rewritten**, not left to go silently stale — with
-this fix, the inactive card renders zero `[role="progressbar"]` elements, so
-`progressBar!.getAttribute(...)` on line 713 would throw on a `null` element
-if left as-is (a loud failure, not a silent one, but still the wrong
-assertion for what this task ships). Rewrite both, keeping every other
-assertion in the block (student name, team badge, "Nothing scheduled", "Not
-currently active" marker count) exactly as it is today:
+Per constitution Definition of Ready item 5 ("any reversal of previously-
+passed work is explicit and authorized"): reversing these assertions is
+explicitly authorized here — they document the exact fabrication George's
+2026-07-31 ruling (above) directs this task to remove. Every other assertion
+in the block (student name, team badge, "Nothing scheduled", "Not currently
+active" marker count) stays exactly as it is today.
+
+**Why a page-wide `[role="progressbar"]` count cannot be reused as-is (read
+this before rewriting either test).** `ConsistencyStrip` (mounted one
+section below, `ParentHome.tsx:1256`) renders its OWN `[role="progressbar"]`
+whenever `data.participation !== null` (`StudentMeetingView.tsx:742-747`),
+entirely independent of `isActive` — `ConsistencyStrip` takes no `isActive`
+prop at all. Today both `EMPTY_CARD_DATA` and `ACTIVE_CARD_DATA`
+(`ParentHome.test.tsx:171-178`, `:689-693`) pin `participation: null`, so a
+page-wide count happens to equal the Hours-vs-goal-only count — but that is
+a fixture coincidence, not something Acceptance Criterion 1 can rely on
+being true in general. Scope every rewritten assertion below to the
+Hours-vs-goal bar specifically, using this helper (new code, placed once
+near the top of the C4 `describe` block, anywhere before its first use):
+```
+/** Scopes a `[role="progressbar"]` query to the Hours-vs-goal section's own
+ * bar. Astryx's `ProgressBar` sets `aria-labelledby` (pointing at a sibling
+ * label element) on the progressbar div itself, NOT `aria-label` --
+ * verified against `node_modules/@astryxdesign/core/src/ProgressBar/
+ * ProgressBar.tsx:333`. (This differs from this file's own `[role=
+ * "radiogroup"]` queries above, e.g. line 940, which DO read `aria-label`
+ * directly -- that's `SegmentedControl`, a different component with a
+ * different implementation; do not assume the same attribute works here.)
+ * A page-wide `[role="progressbar"]` count can't distinguish this bar from
+ * `ConsistencyStrip`'s own Participation bar, which renders whenever
+ * `participation !== null` regardless of `isActive` -- this scoping keeps
+ * Acceptance Criterion 1 true regardless of what any fixture's
+ * `participation` field holds, not true by fixture coincidence. */
+function hoursVsGoalProgressBars(root: HTMLElement): Element[] {
+  return Array.from(root.querySelectorAll('[role="progressbar"]')).filter((el) => {
+    const labelId = el.getAttribute('aria-labelledby');
+    const labelEl = labelId ? document.getElementById(labelId) : null;
+    return labelEl?.textContent?.includes('hours vs. goal') ?? false;
+  });
+}
+```
+The Participation bar's own label (`` `Participation: ${participation.
+participationPct}%` ``, `StudentMeetingView.tsx:743`) never contains the
+substring `"hours vs. goal"`, so this filter cannot accidentally include it.
+
+`INACTIVE_STUDENT_HOURS_MARKER` is declared `const`, not `export const` (see
+Design above) — importing it into the test file would require a fifth
+`ParentHome.tsx` edit not listed in Allowed Files, so **inline the literal
+string** `'not shown while this student is inactive'` in the test file
+instead, the same convention this file already uses for
+`INACTIVE_STUDENT_MARKER_LABEL` (asserted as the literal `'Not currently
+active'` throughout this file, never imported).
 
 **Test 1** (currently titled "renders exactly one card, the factual 'Not
 currently active' marker, and honest clamped-zero figures" — retitle to
 reflect the new behavior, e.g. "...and an honest non-numeric hours state"):
-- Change `expect(container.querySelectorAll('[role="progressbar"]')).
-  toHaveLength(1)` to `toHaveLength(0)` — the sole card is inactive, so no
-  progressbar renders at all.
-- Remove the `aria-valuetext` assertion (line 713); there is no
-  `[role="progressbar"]` left to query.
-- Add a positive assertion that `container.textContent` contains
-  `INACTIVE_STUDENT_HOURS_MARKER`'s exact text (import or inline the
-  literal string — your call, matching this file's existing convention for
-  asserting against `INACTIVE_STUDENT_MARKER_LABEL`'s text elsewhere in this
-  same file).
+- Change line 707's `expect(container.querySelectorAll('[role=
+  "progressbar"]')).toHaveLength(1)` to `expect(hoursVsGoalProgressBars
+  (container)).toHaveLength(0)` — the sole card is inactive, so its
+  Hours-vs-goal section renders no progressbar.
+- Delete BOTH line 712 (`const progressBar = container.querySelector(...)`)
+  AND its consuming assertion at line 713 together — leaving the
+  declaration without a consumer is a hard `@typescript-eslint/no-unused-
+  vars` eslint error, not just a stale assertion.
+- Add a positive assertion: `expect(container.textContent).toContain('not
+  shown while this student is inactive')` (the literal string, inlined —
+  see above).
 - Add a direct regression guard: `expect(container.textContent).not.
   toContain('0 / 1 h')` — the literal fabricated string this task removes.
 - Keep: exactly one card, `'Marisol Tan'`, `'Delta Drift'`, not
@@ -264,51 +328,80 @@ reflect the new behavior, e.g. "...and an honest non-numeric hours state"):
 
 **Test 2** (the anti-leak/positive-control test, "a sibling active student's
 real, non-zero figures never leak onto the deactivated card"):
-- `valueTexts` (the array of `[role="progressbar"]` `aria-valuetext`s) now
-  has length **1**, not 2 — only `ACTIVE_STUDENT`'s card renders a bar.
-  Change `expect(valueTexts).toHaveLength(2)` to `toHaveLength(1)`.
+- Change the `valueTexts` declaration to map over `hoursVsGoalProgressBars
+  (container)` instead of the page-wide `container.querySelectorAll('[role=
+  "progressbar"]')` — same reasoning as Test 1.
+- `valueTexts` now has length **1**, not 2 — only `ACTIVE_STUDENT`'s card
+  renders a Hours-vs-goal bar. Change `expect(valueTexts).toHaveLength(2)`
+  to `toHaveLength(1)`.
 - Remove `expect(valueTexts).toContain('0 / 1 h (0%)')` (line 737) — there
-  is no longer a progressbar to produce that string.
+  is no longer a Hours-vs-goal bar on the inactive card to produce that
+  string.
 - Keep `expect(valueTexts).toContain('77 / 120 h (64.2%)')` unchanged —
   this is the positive control proving the active sibling's real figures
   still render correctly and are unaffected by this task.
-- Add: `expect(container.textContent).toContain(INACTIVE_STUDENT_HOURS_
-  MARKER)` (the inactive card's new marker renders) **and** a check that it
-  appears exactly once — mirroring this same test's existing
+- Add: `expect(container.textContent).toContain('not shown while this
+  student is inactive')` (the inactive card's new marker renders) **and** a
+  check that it appears exactly once — mirroring this same test's existing
   `expect(container.textContent?.split('Not currently active').length).
-  toBe(2)` idiom (i.e. `.split(INACTIVE_STUDENT_HOURS_MARKER).length` should
-  be `2`) — proving the marker does not leak onto the active student's card.
+  toBe(2)` idiom (i.e. `.split('not shown while this student is inactive')
+  .length` should be `2`) — proving the marker does not leak onto the
+  active student's card.
 - Keep the existing `'Not currently active'` badge assertions unchanged.
 
-**Mutation proof required before you report this done:** temporarily revert
-your JSX change (force the `ProgressBar` branch to render unconditionally,
-e.g. hardcode `isActive ? ... : ...` back to always-true) and confirm both
-rewritten tests fail — specifically that the `toHaveLength(0)`/
-`toHaveLength(1)` assertions and the marker-text assertions genuinely
-distinguish the fix from its absence, not just that the suite goes red for
-an unrelated reason. Restore your real fix afterward and confirm both pass
-again. Report both runs' output.
+**Mutation proof required before you report this done — TWO mutations, not
+one.** A single mutation (forcing the branch always-on) only exercises the
+progressbar-count assertions; the marker-text assertions never execute
+during it, so it alone can't prove they discriminate anything:
+- **Mutation A**: force the `!isActive` branch condition to always-false
+  (e.g. `{!isActive ? ... : ...}` → `{false ? ... : ...}`, restoring the
+  `ProgressBar` branch unconditionally). Confirm both rewritten tests fail
+  at their `hoursVsGoalProgressBars(...)` length assertions specifically
+  (`toHaveLength(0)` / `toHaveLength(1)`).
+- **Mutation B**: keep the real `!isActive` condition, but blank or change
+  `INACTIVE_STUDENT_HOURS_MARKER`'s string value. Confirm both rewritten
+  tests fail at their marker-text assertions specifically, with the
+  progressbar-count assertions still passing — proving the marker-text
+  assertions are genuinely load-bearing, not dead code a broken
+  progressbar-count check alone happens to mask.
+- **Optional third (recommended, not required)**: render the marker
+  unconditionally regardless of `isActive`, and confirm Test 2's `.split
+  (...).length` assertion fails — catching the marker leaking onto
+  `ACTIVE_STUDENT`'s card too.
+Restore your real fix afterward and confirm both tests pass again. Report
+every mutation run's output, not just the final green run.
 
 ## Acceptance Criteria
-1. `ParentHome.tsx`'s "Hours vs. goal" section renders `[role="progressbar"]`
-   for a card if and only if that card's `isActive` is `true`. Zero
-   progressbars for an inactive-only render; exactly one progressbar per
-   active card in a mixed render.
+1. `ParentHome.tsx`'s "Hours vs. goal" section renders its own
+   `[role="progressbar"]` — identified by accessible name (via
+   `aria-labelledby`) containing `"hours vs. goal"`, scoped with the
+   `hoursVsGoalProgressBars` test helper below, NOT by a page-wide count —
+   if and only if that card's `isActive` is `true`. Zero Hours-vs-goal
+   progressbars for an inactive-only render; exactly one Hours-vs-goal
+   progressbar per active card in a mixed render. This must hold regardless
+   of `ConsistencyStrip`'s own, independently-rendered Participation
+   `ProgressBar` (`StudentMeetingView.tsx:742-747`, renders whenever
+   `participation !== null`, unrelated to `isActive`) — do not conflate the
+   two bars, and do not rely on both test fixtures happening to pin
+   `participation: null` to make this criterion true only by coincidence.
 2. For an inactive card, the section instead renders `INACTIVE_STUDENT_
-   HOURS_MARKER`'s exact text (an em dash plus a short factual
-   parenthetical), never a number, never the string `'0 / 1 h'` or any
-   variant of it.
+   HOURS_MARKER`'s exact text (`'not shown while this student is
+   inactive'`, an em dash plus a short factual parenthetical), never a
+   number, never the string `'0 / 1 h'` or any variant of it.
 3. An active card's rendered output for this section is byte-identical to
    today's — same `ProgressBar` props, same `aria-valuetext` format. Prove
-   this with the existing C3 test (`ParentHome.tsx` "goalHours is a verbatim
-   passthrough" describe block, currently lines 639-673) passing unmodified.
+   this with the existing C3 test (`ParentHome.test.tsx` "goalHours is a
+   verbatim passthrough" describe block, currently lines 639-674) passing
+   unmodified.
 4. `goalHours`/`hoursPercent` (`ParentHome.tsx:1226-1227`) are byte-identical
    before/after — diff those two lines directly and confirm zero change.
    `parentHome.ts` and `parentHome.test.ts` have zero diff.
 5. The C4 test block (`ParentHome.test.tsx:676-745`) is rewritten per "The
-   test that must change on purpose" above, both tests passing, both proven
-   by mutation to genuinely discriminate the fix from its absence (report
-   the mutation run's failure output, not just the final green run).
+   test that must change on purpose" above, both tests passing, and proven
+   by BOTH prescribed mutations (A and B) to genuinely discriminate the fix
+   from its absence — the progressbar-count assertions and the
+   marker-text assertions each independently proven load-bearing (report
+   every mutation run's failure output, not just the final green run).
 6. Every other test in `ParentHome.test.tsx` passes unmodified — report a
    full-file before/after test count and confirm the delta is exactly the
    C4 block's content (same number of `it(...)` blocks, same titles except
@@ -379,9 +472,9 @@ again. Report both runs' output.
   `ParentHome.test.tsx`).
 - Confirmation of the render-block diff, the new constant, and both
   doc-comment corrections (a `git diff` excerpt or equivalent for each).
-- The mutation-proof run required in "The test that must change on purpose"
-  above: both the failing (reverted) and passing (real fix) output for the
-  rewritten C4 tests.
+- The mutation-proof runs required in "The test that must change on purpose"
+  above: Mutation A's failure output, Mutation B's failure output, and the
+  final passing (real fix) output for the rewritten C4 tests.
 - Full `ParentHome.test.tsx` before/after test counts, and full repo suite
   before/after counts.
 - `tsc`/eslint/prettier output compared against current baseline.
@@ -392,5 +485,41 @@ again. Report both runs' output.
   needs a different shape than prescribed).
 
 ## Most Recent Failure
-None — this is this packet's first revision, not yet run through
-`checker-premise`.
+Revision 2 (item 19a's round cap — this is the last permitted
+`checker-premise` round for this packet; the gate's own round-1 verdict said
+none of its findings needed a second full gate round, so this revision is
+expected to reach DISPATCH).
+
+Round 1's `checker-premise` verdict: **REVISE** (1 MAJOR, 3 MINOR, 5 NIT, no
+escalation needed). What changed in this revision:
+- **MAJOR** (Acceptance Criterion 1 was false in general — true only because
+  both test fixtures happen to pin `participation: null`, since
+  `ConsistencyStrip`'s own Participation `ProgressBar` renders independent
+  of `isActive` whenever `participation !== null`): fixed via a scoped
+  `hoursVsGoalProgressBars` test helper (resolves the bar's `aria-
+  labelledby` to its label text and filters on `"hours vs. goal"`) — see
+  "The test that must change on purpose" and Acceptance Criterion 1. Option
+  (a), the gate's preferred fix, confirmed feasible by reading
+  `ProgressBar.tsx` directly (it sets `aria-labelledby`, not `aria-label`,
+  on the progressbar div itself).
+- **MINOR** (unused-variable eslint error): fixed — instructions now
+  explicitly delete both the `const progressBar = ...` declaration and its
+  consuming assertion together, not just the assertion.
+- **MINOR** (a single mutation can't prove both assertion families
+  discriminate): fixed — now prescribes Mutation A (forces the branch
+  always-on, exercises the count assertions) and Mutation B (blanks the
+  marker text, exercises the marker-text assertions), plus an optional
+  third leak-check.
+- **MINOR** (copy stutters "hours vs. goal" twice): fixed — new marker text
+  is `'not shown while this student is inactive'`, matching the
+  precedent's fact-only shape without restating the section's own label.
+- **NITs**: removed the inaccurate "would throw on a null element"
+  prediction (a different, earlier assertion fails first); fixed the C3
+  citation (`ParentHome.test.tsx`, not `ParentHome.tsx`; lines 639-674, not
+  639-673); fixed `ConsistencyStrip`'s span (`StudentMeetingView.tsx:
+  698-752`, not 698-751) and its participation sub-widget's span (`:735-
+  749`, not `:735-748`); resolved the constant-import ambiguity (inline the
+  literal string in the test file; `INACTIVE_STUDENT_HOURS_MARKER` stays
+  non-exported, no fifth `ParentHome.tsx` edit); named **T181** (merged
+  `a0d02fb`) explicitly as the task whose test coverage is being
+  deliberately reversed here, per Definition of Ready item 5.
