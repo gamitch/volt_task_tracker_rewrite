@@ -5800,3 +5800,76 @@ DOM. Same shape as this task's Trap 10 for `<dialog>` elements — on this page,
 **One correction to the gate, recorded so it is not re-derived:** revision 1 warned that a
 two-session fixture could pass criterion B3 by luck. Measured, it goes red. Three sessions is
 still required, for the real reason — last-element and off-by-one resolutions.
+
+---
+
+## T180 — mount the real consistency strip, and delete the duplicate participation region it exposes
+
+**Merged `dc77a0a`. PASS-with-MINORs, first attempt, plus one test-only follow-up round.**
+Gates re-measured a third time in the shared tree with `.env.local` absent: `tsc` 0 ·
+`vite build` ✓ · `format:check` clean · eslint **0 errors / 359 warnings (delta +0)** · vitest
+**70 files / 1696 tests** · `MeetingsList.test.tsx` alone exits **0**.
+
+**The headline result is about the process, not the code.** The premise gate found that criterion
+C4 could not discriminate as revision 1 wrote it, and proposed a specific `vi.mock` replacement.
+I copied that replacement into revision 2. **The gate's own fix was also broken**, and the worker
+caught it:
+
+```
+=== CORRECT CODE ===   PROBE packet-vi.mock calls: 0
+=== MUTATED ===        PROBE packet-vi.mock calls: 0
+```
+
+Green under its own mutation — the same shape-(c) failure the gate wrote the finding to prevent.
+The mock is live for direct calls and for dynamic imports; it simply never reaches the reference
+`StudentMeetingView.tsx` resolves at render time. The worker substituted `vi.spyOn` on a namespace
+import, **flagged the deviation itself and asked to be checked** rather than quietly shipping it,
+and the checker confirmed the substitution is the only one of the two mechanisms that works —
+verifying it intercepts the *render path*, not just a test-file call, since the delta of exactly 1
+can only originate in the component's own default-parameter fallback.
+
+**Four of seven criteria in revision 1 did not discriminate**, and applying it verbatim left three
+pre-existing tests red with no authorization covering them. The causes, all mine: the mount has no
+test seam, so the strip fired the real unconfigured loader in every student test (**the third
+repeat of a shape already documented in `DashboardPage.test.tsx:33-52` and
+`OutreachList.test.tsx:158-165`** — I checked neither); C3 failed both ways at once, staying green
+under its mutation because the two loaders' fixture id-spaces are **disjoint**, and going red
+against correct code under the other reading because Astryx exposes `ProgressBar` labels through
+`aria-labelledby`, not `aria-label`; C4 spied on a prop the mount never forwards, with an
+"at most once" threshold that 1 satisfies; and C5 stayed green while the coach's page rendered
+*"No student account linked yet"* as its first line.
+
+**A claim of mine that was the wrong conclusion from a correct grep.** "No test asserts on the
+host's bar" — true of the *label*, false of the *output*: three tests asserted on it, one of which
+would have started passing again for a different reason off the strip's own em-dash. And deleting
+the JSX orphans the `ProgressBar` import, which fails the build under `noUnusedLocals`.
+
+**Two proofs went beyond what the packet asked.** C6 was confirmed by a TypeScript token-stream
+comparison with comment and whitespace trivia dropped (`TOKEN STREAMS IDENTICAL`) — a stronger
+guarantee than the line-diff specified that the parallel T191 session cannot be broken by this.
+And the checker ran nine of its own mutations, including pinning the strip to its error and its
+loading branch, finding no vacuous assertion and confirming the deleted section's data path is not
+silently dead.
+
+**The em-dash that was verified by the wrong element.** The retargeted test asserting the strip
+shows `'—'` rather than a fabricated `%` was satisfied by the **dot row**, whose labels are built
+as `` `${dot.label} — ${date}` ``. Changing the participation branch's em-dash to `'N/A'` left the
+suite green. Closed by asserting the full string; proven both ways — the `'N/A'` mutation now
+reddens, and mutating the dot separator now leaves it green.
+
+**An honesty note worth keeping.** The C4 root-cause narrative (a `checkin.ts` ↔
+`StudentMeetingView.tsx` circular import) was stated as measured in a permanent in-test comment.
+The checker verified the three *observable* claims but could not isolate the mechanism — its probe
+was confounded, and it said so. The comment now states only what was measured and labels the
+mechanism a hypothesis. Item 2 makes that comment an audit-trail artefact; it should not claim
+more than was established.
+
+**Trap 2's own claim, restated honestly before dispatch:** the two participation numbers are
+*architecturally* free to disagree, but that is an inference — not reproducible from the shipped
+fixtures, whose id-spaces are disjoint. The gate had to cross them by hand to produce the screen.
+The product decision to delete the host's section stands on the architecture, not on a screenshot.
+
+**Carried forward: T302** — `isEmpty`'s `participation === null` clause has no test coverage at
+all. Pre-existing and identical at base, so not a T180 regression, but after Part B it is
+`participation`'s only remaining render-path consumer, which makes the gap more load-bearing than
+it was.
