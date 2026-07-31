@@ -45,14 +45,16 @@ independently, so it was never actually a reservation.
   - **T180** is genuinely cheap and low-risk: all three of its seams already default to real
     loaders, and it's read-only. It was also **missing from every triage table entirely** — the
     proposal's "37 → 16" result should have been "37 → 17."
-- **Backlog as it actually stands, this update:** of the ten original user-facing rows, six have
-  closed (T169, T177, T178, T183, T173, and now **T191** — all merged on their own branches,
-  T183/T173/T191 on `claude/t183-student-home-loader`/PR #6, not yet merged to `main`). T173
-  PASSED with 4 NIT (residue covered by T198); T191 PASSED with 3 NIT (residue filed as T202).
-  Remaining: **T158** (in flight next), T179, T180, T189, plus the residue rows (T193, T194, T195,
-  T198, T199, T200, T201, T202, and whatever T178/T179's own follow-ups turn out to be). **The
-  triage proposal's cuts are still unapplied and still awaiting the owner's veto** — this update
-  doesn't apply them either.
+- **Backlog as it actually stands, this update:** of the ten original user-facing rows, seven have
+  closed (T169, T177, T178, T183, T173, T191, and now **T158** — all merged on their own branches,
+  T183/T173/T191/T158 on `claude/t183-student-home-loader`/PR #6, not yet merged to `main`). T173
+  PASSED with 4 NIT (residue covered by T198); T191 PASSED with 3 NIT (residue filed as T202); T158
+  PASSED with 1 MINOR (residue filed as T205, owner-ruled "close it off," not yet dispatched).
+  Remaining: T179, T180, T189, plus the residue rows (T193, T194, T195, T198, T199, T200, T201,
+  T202, T203, T204, T205, and whatever T178/T179's own follow-ups turn out to be) — **T158's own
+  embed half, T203, is the most natural next pick** (its design/CSS-hazard investigation is already
+  written into the row). **The triage proposal's cuts are still unapplied and still awaiting the
+  owner's veto** — this update doesn't apply them either.
 - **T173 also hit item 19a's 2-round cap — twice, on the same packet** (two separate
   owner-authorized bounded exceptions, both proven narrow by execution rather than open design
   disputes; see its `verification-log.md` entry and `auto-mode-decisions.md`). Adopted a cheaper
@@ -68,6 +70,23 @@ independently, so it was never actually a reservation.
   fixed via a selector scoped to the Hours-vs-goal section specifically). Split off **T201**
   (`confirmedHours`/`is_active`, undiagnosed scope, same posture as T189) and **T202** (a sibling
   `ProgressBar` clamp elsewhere still fabricates `aria-valuemax` for assistive tech).
+- **T158 was the highest-scrutiny task this session — a new database migration.** Split into the
+  real data layer only (this row) vs. the embed (**T203**), since item 18's migration trigger
+  forces opus/full-gate regardless of the UI half's size. Hit item 19a's 2-round cap **twice on one
+  packet** (both owner-authorized): round 1→2 fixed a false supporting claim (only 1 of 3 cited
+  "already-queried" views actually was) and extended the RLS trace to the loader's own unfiltered
+  `v_student_hours` read; round 2→3, George asked a clarifying question about why a scratch Postgres
+  was needed before authorizing (recorded in `auto-mode-decisions.md`), closing a vacuous
+  live-DB-proof criterion. **The core RLS/view-visibility mechanism was empirically verified four
+  times by three different agents** (`@electric-sql/pglite`, an in-process WASM Postgres, ~40s
+  setup, no Docker) rather than reasoned about — this project had gotten a closely related RLS/view
+  claim wrong twice before (`dashboard_views.sql`, then `loaders/students.ts`), so nothing here was
+  taken on argument alone. **Follow-up: T205** — checker found the new view is also readable by
+  Supabase's unauthenticated `anon` key (not just logged-in users), a different threat model than
+  T185's already-settled "any authenticated caller" ruling; George ruled "close it off" (one-line
+  revoke migration, not yet dispatched, needs its own full opus-tier gate per item 18 regardless of
+  size). Also filed **T204** (a second, previously-undisclosed instance of the same stale-RLS-comment
+  class T158 fixed once in `dashboard_views.sql`'s wake, found this time in `loaders/students.ts`).
 
 ## UPDATE — 2026-07-30 evening: T183 landed on its own branch, `main` unchanged
 

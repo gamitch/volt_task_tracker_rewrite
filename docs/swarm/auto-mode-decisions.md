@@ -1191,3 +1191,24 @@ citations (repointing to the actual file the measurement is recorded in, `T158-g
 and correcting the smaller citation errors — dispatched directly to `worker-implementer` afterward
 **without** a third `checker-premise` round. Bounded to this packet only, per the same
 non-precedent-setting terms as the four rulings above.
+
+## 2026-07-31 — George's ruling on T205 (owner input, structured selection)
+
+T158's checker-reviewer found, live-measured against a real Postgres, that `v_leaderboard_students`
+(T158's new view) is readable by Supabase's unauthenticated `anon` key — not just logged-in app
+users — and is the first view in this schema to expose `display_name` that way (the pre-existing
+`v_student_hours` was already `anon`-readable; not new). Not graded security-class or
+BLOCKER-adjacent per constitution item 25 ("do not manufacture a security-class finding out of an
+extension of a rule") and the owner's own "keep it simple" ruling, but explicitly not decided
+unilaterally either — this is a different threat model than T185's already-settled "any
+*authenticated* caller can read hours" ruling (a logged-in team member vs. an anonymous internet
+request), so extending T185's disposition without asking would have repeated exactly the kind of
+scope-creep-by-analogy this project's process has flagged before. Filed as **T205**, presented via
+a structured two-option question (leave as-is, matching T185's proportionality precedent, vs. close
+it off via a one-line follow-up migration, Recommended on the "no cost to close something that
+doesn't need to be open" grounds). George selected **"Close it off."**
+
+**What this authorizes:** T205 proceeds as a real follow-up task — a new migration
+(`revoke select on public.v_leaderboard_students from anon;` or equivalent), which per constitution
+item 18 trigger 1 requires opus tier and a full `checker-premise` round regardless of the change's
+size, no exception for a one-line revoke. Not yet packeted or dispatched as of this ruling.

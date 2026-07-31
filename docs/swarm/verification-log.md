@@ -5878,3 +5878,76 @@ fix, that `HoursTab.tsx:942` carries the identical `ProgressBar` clamp; it doesn
 `1` into visible copy there, but Astryx's `ProgressBar` emits `aria-valuemax` unconditionally, so a
 zero-goal row still announces a fabricated max to assistive tech even where sighted users see nothing
 wrong).
+
+---
+
+## T158 — real Supabase data for `Leaderboard.tsx`, via a new RLS-safe view (merged 2026-07-31)
+
+| Field | Value |
+|---|---|
+| Merged commit | `b703ed6` (branch `claude/t183-student-home-loader`, PR #6) |
+| Verdict | **PASS** — 1 MINOR (follow-up: T205), no BLOCKER/MAJOR, first attempt |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (**opus**, item 18 trigger 1 — migration) / `checker-reviewer` (**opus**) |
+| Premise gate | **3 rounds** (item 19a's 2-round cap hit and owner-authorized twice on this one packet — the heaviest gate history this session), full round throughout (item 19b: migration + novel pattern, no light-gate eligibility) |
+| tsc / build / format | 0 errors / ✓ / clean |
+| eslint | 0 errors, 358 warnings (unchanged) |
+| vitest | 71 files, 1685 tests (+12, exactly the new loader's own test file) |
+
+**Scope narrowed to the real data layer only.** `Leaderboard.tsx` had two gaps: never mounted, and
+no real loader (`LoadLeaderboardDataFn` declared, implemented nowhere). This task closes the second
+only — a new migration (`v_leaderboard_students`, two columns, `where is_active`) plus a new loader
+composing it with `v_student_hours`. The embed half is **T203**, split out at packeting time because
+it has its own real, independently-verified hazard (`CoachHome.tsx`'s own already-shipped T129 fix
+removed a `Section`-nesting CSS bug elsewhere in the same file; a bare `<Leaderboard>` mount would
+reproduce a smaller instance of it) and two different test-harness fixes, neither built yet.
+
+**The core finding: a naive loader would have silently broken for every non-staff viewer.**
+`students` has no `read_all` RLS policy — only `staff_all` and `own_or_linked_read` — and
+`Leaderboard.tsx` deliberately has no role gate at all (visible to every role by design). A loader
+copying the obvious in-repo precedent (`loaders/coachHome.ts`'s plain, unfiltered `students` query)
+would have RLS-filtered a student/parent session down to at most their own row while staff saw
+everyone — the exact role-dependent silent-breakage class this project has repeatedly found this
+session, here caused by schema rather than a missing prop. The schema's own migration comments
+(`rls.sql`, `student_teams.sql`) independently name the fix already: a view, not a table-policy
+change.
+
+**Empirically verified, not just reasoned about — three times, by two different agents.** This
+project has gotten a closely related RLS/view-mechanism claim wrong twice before (a false
+"views run under the caller's own RLS" comment in `dashboard_views.sql`, corrected once by
+constitution item 25/T176, then found repeated a second time, undisclosed until this task, in
+`loaders/students.ts`). Rather than reason about the mechanism a third time, `checker-premise`
+installed `@electric-sql/pglite` (an in-process WASM PostgreSQL, no Docker/server needed, ~40s
+setup) in a scratch directory during round 1, applied the actual prescribed migration, and measured
+the real visibility a `student`-role session gets — proving the design correct. Round 2
+independently re-ran the same measurement from a fresh install and reproduced every number exactly,
+then separately proved the packet's own acceptance criterion for this proof was vacuous as written
+by deliberately running an incomplete version (RLS on only one of four relevant tables) and watching
+it pass anyway — the same "true only by construction" shape that cost T173 and T191 a round each.
+The worker's own implementation then ran a third independent live-Postgres proof (13 real migration
+files applied unchanged, a non-superuser view owner, all 5 required sub-checks plus a self-test
+reproducing round 2's exact false positive as a control), and the checker reproduced it a fourth
+time with its own from-scratch harness rather than trusting the worker's script. All four
+measurements agree.
+
+**Two separate item-19a escalations on this one packet, both owner-authorized, both narrow and
+execution-proven.** Round 1→ round 2: fixed a false supporting claim (the packet argued three views
+were "already queried by non-staff surfaces" to justify the new exposure wasn't novel; only one of
+three actually was) and extended the RLS trace to the loader's own unfiltered `v_student_hours`
+read, the genuinely novel half the first draft hadn't traced. Round 2→round 3 (this time George
+asked a clarifying question — "why are you spinning up a separate postgres database? is that just
+to testing?" — before authorizing, answered and recorded in `auto-mode-decisions.md`): closed the
+vacuous criterion above and fixed four broken cross-references to `verification-log.md` (the actual
+record lived in `T158-gate-round1-findings.md`).
+
+**Follow-up filed: T205 (owner-ruled).** Checker independently measured a further dimension neither
+gate round covered: the new view is also readable by Supabase's fully unauthenticated `anon` key
+(ships in the public frontend bundle), not just logged-in users — the first view in this schema to
+expose `display_name` that way (hours-only anon exposure was pre-existing and unrelated to this
+task). Not graded security-class per constitution item 25, but also not decided unilaterally, since
+it's a different threat model than T185's already-settled "any *authenticated* caller can read
+hours" ruling. George ruled "close it off" — a one-line follow-up migration, not yet dispatched.
+
+**T204 also carried in this task's filing** (a second, previously-undisclosed instance of the
+`dashboard_views.sql:49-52` stale-comment class, found in `loaders/students.ts` while re-tracing
+this task's own RLS reasoning — documentation accuracy only, no functional defect).
