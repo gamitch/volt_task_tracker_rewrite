@@ -364,3 +364,153 @@ orchestrator holds those slots.
   pair) — if a future Vite/Vitest upgrade changes that transform's output shape, this specific spy
   could silently stop intercepting. No action needed now; noting it because it's a newly-introduced
   pattern in this file.
+
+---
+
+## Follow-up round (opus checker: PASS-with-MINORs)
+
+**Allowed files this round:** `src/pages/meetings/MeetingsList.test.tsx` and this output doc only.
+**No production source changed.** Both fixes are test-file-and-comment-only, per the round's
+instructions. Mutation experiments against `StudentMeetingView.tsx` (Forbidden except for reading)
+were run in an isolated `git worktree` (constitution item 23), never against the shared tree, and
+`StudentMeetingView.tsx` is confirmed byte-identical to `2fc408c` afterward (`git diff --stat`
+empty, `git diff 2fc408c -- src/pages/meetings/StudentMeetingView.tsx | wc -l` → `0`).
+
+### Item 1 — the over-titled test's assertion moved onto the wrong element, fixed
+
+The checker measured that `MeetingsList.test.tsx`'s `toContain('—')` assertion (the test titled
+*"the strip's participation renders '—' … when its loader returns no metric row"*) was actually
+satisfied by the **dot row's** own em-dash separator (`StudentMeetingView.tsx:735`,
+`` `${dot.label} — ${formatShortDate(entry.sessionDate)}` ``) — not by the participation branch
+the title names (`StudentMeetingView.tsx:751-754`). The test's own fixture entry
+(`sessionId: 'cs-fixture'`) renders exactly one dot, so the dot row alone was enough to satisfy the
+bare `'—'` check regardless of what the participation branch rendered.
+
+**Fix applied:** the assertion now checks the full participation string,
+`expect(container.textContent).toContain('— (no completed meetings recorded yet this season)')`,
+which cannot be satisfied by the dot row (whose text is `Present — Jun 24`, not that phrase). The
+`not.toMatch(/\d+%/)` guard is unchanged.
+
+**Mutation (a) — participation branch's em-dash → `'N/A'` (applied to `StudentMeetingView.tsx:753`
+in the isolated worktree only). Must now go RED (it previously did not):**
+
+```
+$ npx vitest run src/pages/meetings/MeetingsList.test.tsx -t "the strip's participation renders"
+
+ FAIL  src/pages/meetings/MeetingsList.test.tsx > <MeetingsList /> student/parent view > the strip's participation renders '—' (never a fabricated %) when its loader returns no metric row
+AssertionError: expected 'MeetingsUpcomingWeekly Build MeetingW…' to contain '— (no completed meetings recorded yet…'
+
+Expected: "— (no completed meetings recorded yet this season)"
+Received: "MeetingsUpcomingWeekly Build MeetingWed, Jul 22 · 6:00–8:00 PM · 2hNot yet heldRavens Strategy SessionSat, Jul 25 · 5:30–7:00 PM · 1h 30mNot yet heldPastWeekly Build MeetingWed, Jul 15 · 6:00–8:00 PM · 2hNot yet heldRavens Strategy SessionSat, Jul 11 · 5:30–7:00 PM · 1h 30mNot yet heldWeekly Build MeetingWed, Jul 8 · 6:00–8:00 PM · 2hNot yet heldRecent attendanceLast 1 completed meetingPresent — Jun 24ParticipationN/A (no completed meetings recorded yet this season)"
+
+ ❯ src/pages/meetings/MeetingsList.test.tsx:1323:35
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 74 skipped (75)
+```
+
+Confirms the assertion now genuinely depends on the participation branch's own em-dash: the
+"Received" string shows `ParticipationN/A (no completed meetings recorded yet this season)`, i.e.
+the mutation is visible in exactly the substring the assertion targets. Reverted (`git diff --stat`
+against `2fc408c` empty).
+
+**Mutation (b) — dot-label separator ` — ` → ` :: ` (applied to `StudentMeetingView.tsx:735` in the
+isolated worktree only). Must now stay GREEN (it previously went red for the wrong reason):**
+
+```
+$ npx vitest run src/pages/meetings/MeetingsList.test.tsx -t "the strip's participation renders"
+
+ ✓ src/pages/meetings/MeetingsList.test.tsx (75 tests | 74 skipped) 83ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 74 skipped (75)
+```
+
+Confirms the assertion no longer depends on the dot row's separator at all — the dot row's own text
+became `Present :: Jun 24` under this mutation, and the test did not notice, because the assertion
+now targets only the participation branch. Reverted (`git diff --stat` against `2fc408c` empty;
+`git diff 2fc408c -- src/pages/meetings/StudentMeetingView.tsx | wc -l` → `0`).
+
+Both proofs together demonstrate the assertion has moved fully off the dot row and onto the
+participation branch the test's title names.
+
+### Item 2 — the C4 root-cause comment, restated as measured-vs-hypothesis
+
+The checker confirmed three observable facts about C4's `vi.mock`/`vi.spyOn` deviation (the
+packet's own `vi.mock` snippet reads 0 calls under both correct code and the mutation; that same
+mock does intercept a direct call from the test file; `vi.spyOn` reads 1 under the mutation) but
+could not isolate the stated circular-import mechanism, because its probe (removing `checkin`'s
+mock to test whether the resolver is reached at all) was confounded — with that mock gone, the real
+`checkin` loader rejects, so "resolver never reached" and "mock never installed" produce
+indistinguishable failures.
+
+**Fix applied:** rewrote the comment block above the `stripSeam`/C4 mocks in
+`MeetingsList.test.tsx` (originally at the packet's cited `:72-100`, now the block introducing C4's
+spy target) to state the three measured facts as a numbered list, and to mark the circular-import
+explanation explicitly as **"A HYPOTHESIS, not established by measurement"** with the confound
+named, rather than as an established root cause. Also rewrote this output doc's own C4 section
+below to match (see the note appended to §4/C4 above — left in place as history — plus this
+section, which is the corrected framing).
+
+**Corrected framing (supersedes the "Root cause, measured" language in §4/C4 above and in the
+in-file comment before this round):** C4's `vi.spyOn(meetingsLoadersNs, 'resolveCurrentStudentId')`
+is used **because it is measured to discriminate the mutation** (0 under correct code, 1 under the
+mutation) where a `vi.mock` factory for the same target does not (0 under both). *Why* the `vi.mock`
+factory fails to intercept this specific call was investigated but not conclusively isolated; the
+circular-import explanation remains the most likely account but is not claimed as verified.
+
+**NIT closed:** added `spy.mockRestore()` at the end of the C4 test (`vite.config.ts` sets no
+`restoreMocks`, and C4 is the only test in this file installing this particular spy).
+
+### Item 3 — not touched, per instruction
+
+The checker's `isEmpty`'s `participation === null` clause coverage gap is pre-existing (identical
+at `main` = `a3b9f00`) and out of scope for this round. No change made. It is being filed as its
+own ledger row by the orchestrator, not by this worker.
+
+### Gates, this round (all six, `.env.local` absent)
+
+```
+$ ls .env.local
+ls: cannot access '.env.local': No such file or directory
+
+$ npx tsc --noEmit
+(no output — exit 0)
+
+$ npx vite build
+✓ built in 4.86s
+(pre-existing "chunks larger than 500 kB" advisory only, unrelated to this task.)
+
+$ npm run format:check
+Checking formatting...
+All matched files use Prettier code style!
+
+$ npx eslint .
+✖ 359 problems (0 errors, 359 warnings)
+Delta: +0 (unchanged from prior round / base).
+
+$ npx vitest run
+ Test Files  70 passed (70)
+      Tests  1696 passed (1696)
+```
+No test count change from the prior round's `70 files / 1696 tests` — this round modified two
+existing assertions/comments in place and added no new `it()` blocks.
+
+```
+$ npx vitest run src/pages/meetings/MeetingsList.test.tsx >/dev/null 2>&1; echo $?
+0
+```
+75 tests, all passing, exit code 0.
+
+### Deferred — for the ledger (this round)
+
+- **`isEmpty`'s `participation === null` clause has no test coverage.** File:
+  `src/pages/meetings/MeetingsList.tsx` (the `isEmpty` predicate around `:2340`, per the packet's
+  own Trap 2 citation). Pre-existing, identical at `main`. Not fixed per explicit instruction (item
+  3 of this round); the checker is filing its own ledger row for it.
+
+### Commit
+
+Committed to `claude/t180-student-meeting-view` and pushed; see the commit message titled
+"T180 follow-up — retarget dangerous-titled test's assertion, restate C4 comment as measured" on
+that branch for the exact SHA (reported alongside this doc in the worker's final response).

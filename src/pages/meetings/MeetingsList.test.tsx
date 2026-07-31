@@ -91,28 +91,37 @@ vi.mock('../../lib/supabase/loaders/checkin', async (importOriginal) => {
 // `StudentMeetingView.tsx`'s own `OwnStudentConsistencyStrip` falls back to
 // when the mount does NOT receive an explicit `studentId` (module doc #9 of
 // that file). C4 itself does `vi.spyOn(meetingsLoadersNs, 'resolveCurrentStudentId')`
-// locally rather than a file-level `vi.mock('../../lib/supabase/loaders/meetings', ...)`
-// -- measured live: a `vi.mock` factory here (even a correctly-written
-// lazy-holder one, spread-preserving every other real export) never
-// intercepted this specific call. Root cause, measured: this module sits one
-// hop into the SAME `checkin.ts` <-> `StudentMeetingView.tsx` circular import
-// this file also has to route around for the strip's own load seam
-// (`StudentMeetingView.tsx` imports `loadConsistencyStripData`/
-// `loadLinkedStudents` FROM `checkin.ts`; `checkin.ts` imports
-// `buildConsistencyStripData` FROM `StudentMeetingView.tsx`) -- with BOTH
-// `checkin` and `meetings` mocked via `vi.mock`, the `resolveStudentId`
-// reference `StudentMeetingView.tsx` receives as a default-parameter value
-// resolved to the REAL, unmocked `resolveCurrentStudentId` every time
-// (confirmed via `.toString()` on the live reference during the render), even
-// though a DIRECT import of the same mocked module from this test file itself
-// intercepted correctly. `vi.spyOn` on the shared namespace object sidesteps
-// the whole question -- it patches the property in place on the one module
-// object every consumer already holds a live binding to, and does NOT go
-// through a second `vi.mock`/`importOriginal` registration at all. Every
-// other test in this file reaches the student/parent view via an explicit
-// `studentId` prop or the host's own `resolveStudentId` prop (never the real
-// default), so nothing else in this file exercises this seam; C4 is this
-// spy's only consumer. `makeResolveCurrentStudentId` (used directly,
+// locally rather than a file-level `vi.mock('../../lib/supabase/loaders/meetings', ...)`.
+//
+// T180 follow-up (checker PASS-with-MINOR item 2): stating only what was
+// measured. Three facts, confirmed directly:
+//   1. A `vi.mock('../../lib/supabase/loaders/meetings', ...)` factory here
+//      reads 0 calls on `spy` under BOTH correct code and the C4 mutation --
+//      it never discriminates, so it cannot back this criterion.
+//   2. That same mocked module DOES intercept a direct call made from this
+//      test file itself.
+//   3. `vi.spyOn(meetingsLoadersNs, 'resolveCurrentStudentId')` reads 1 under
+//      the C4 mutation and 0 under correct code -- it discriminates, which is
+//      why C4 uses it.
+// A HYPOTHESIS, not established by measurement, for why (1) happens: this
+// module sits one hop into the `checkin.ts` <-> `StudentMeetingView.tsx`
+// circular import this file also routes around for the strip's own load
+// seam, and the `resolveStudentId` default-parameter reference
+// `StudentMeetingView.tsx` receives may bind to the real function instead of
+// the `vi.mock`'d one as a result. The probe built to isolate this --
+// removing `checkin`'s own mock to see whether the resolver is even reached
+// -- was confounded: with that mock gone, the real `checkin` loader rejects,
+// so "the resolver was never reached" could not be told apart from "the mock
+// was never installed." Do not restate the circular-import mechanism as the
+// established cause; only (1)-(3) above are measured. `vi.spyOn` on the
+// shared namespace object works regardless of the mechanism -- it patches the
+// property in place on the one module object every consumer already holds a
+// live binding to, and does not go through a second `vi.mock`/
+// `importOriginal` registration at all. Every other test in this file reaches
+// the student/parent view via an explicit `studentId` prop or the host's own
+// `resolveStudentId` prop (never the real default), so nothing else in this
+// file exercises this seam; C4 is this spy's only consumer, and restores it
+// with `spy.mockRestore()`. `makeResolveCurrentStudentId` (used directly,
 // unmocked, by the `resolveCurrentStudentId (T096, Trap #4 real resolution)`
 // describe block below) is a different export, untouched by this.
 // ---------------------------------------------------------------------------
@@ -1301,7 +1310,17 @@ describe('<MeetingsList /> student/parent view', () => {
     });
     await flushMicrotasks();
     await flushMicrotasks();
-    expect(container.textContent).toContain('—');
+    // T180 follow-up (checker PASS-with-MINOR item 1): a bare `toContain('—')`
+    // is satisfied by the DOT ROW's own em-dash separator
+    // (`StudentMeetingView.tsx:735`, `${dot.label} — ${formatShortDate(...)}`),
+    // which this test's own fixture entry also renders, NOT by the
+    // participation branch this test is titled after
+    // (`StudentMeetingView.tsx:751-754`). Measured: retargeting the
+    // participation branch's own em-dash to `'N/A'` left this assertion green
+    // (see T180-worker-output.md, "Follow-up round" section, for the pasted
+    // mutation output). Assert the full participation string instead so the
+    // assertion can only be satisfied by the branch the title names.
+    expect(container.textContent).toContain('— (no completed meetings recorded yet this season)');
     expect(container.textContent).not.toMatch(/\d+%/);
   });
 
@@ -1492,6 +1511,10 @@ describe('<MeetingsList /> student/parent view', () => {
       expect(container.textContent).toContain('Weekly Build Meeting');
       // Mutation: drop `studentId` from the mount -> `expected 1 to be +0`.
       expect(spy.mock.calls.length).toBe(0);
+      // T180 follow-up NIT: restore the spy -- `vite.config.ts` sets no
+      // `restoreMocks`, and this is the only test in the file that installs
+      // this particular spy.
+      spy.mockRestore();
     });
 
     // C5 (MAJOR 4, gate round 1): the absence half asserts the strip's own
