@@ -416,7 +416,8 @@ export interface LinkedStudentRow {
   teamId: string;
   /** Real `students.is_active` column (module doc #1) -- drives the factual
    * "Not currently active" card marker below (T181), never a fabricated
-   * value. */
+   * value. Also drives the Hours-vs.-goal section's display branch below
+   * (T191), not only the card marker. */
   isActive: boolean;
 }
 
@@ -1102,6 +1103,19 @@ const MEETING_ROW_BADGE_VARIANT: BadgeVariant = 'blue';
  * (constitution item 17). */
 const INACTIVE_STUDENT_MARKER_LABEL = 'Not currently active';
 
+/** T191 (owner ruling: "No bar at all",
+ * `docs/swarm/auto-mode-decisions.md` 2026-07-31) -- factual-only copy
+ * for a deactivated linked student's Hours-vs.-goal section, replacing
+ * the numeric bar. Mirrors `ConsistencyStrip`'s own
+ * `participation === null` branch (`StudentMeetingView.tsx:738-740`) --
+ * an em dash plus a short factual parenthetical, never a fabricated
+ * number (constitution item 17). Deliberately does NOT restate this
+ * section's own "Hours vs. goal" label inside the parenthetical --
+ * the precedent being mirrored states a fact ("no completed meetings
+ * recorded yet this season") without repeating its own "Participation"
+ * label back; match that shape, not a copy that stutters the label. */
+const INACTIVE_STUDENT_HOURS_MARKER = 'not shown while this student is inactive';
+
 function NextEventRowItem({
   row,
   studentDisplayName,
@@ -1154,7 +1168,9 @@ interface StudentHomeCardProps {
    * a small, factual indicator alongside the team badge -- not
    * `StudentHome.tsx`'s own T184 three-way union (that union is about a
    * deactivated STUDENT signing in as herself, a genuinely different
-   * situation). The card, and its honest-absence figures, still render. */
+   * situation). The card still renders; its Hours-vs.-goal figures are no
+   * longer numeric at all for an inactive student (T191) -- that section
+   * renders an honest absence marker instead of a fabricated number. */
   isActive: boolean;
   loadData: LoadStudentHomeCardDataFn;
 }
@@ -1243,14 +1259,20 @@ function StudentHomeCard({
 
         <VStack gap={1}>
           <Text type="label">Hours vs. goal</Text>
-          <ProgressBar
-            label={`${displayName}'s hours vs. goal`}
-            isLabelHidden
-            value={data.confirmedHours}
-            max={goalHours > 0 ? goalHours : 1}
-            hasValueLabel
-            formatValueLabel={(value, max) => `${value} / ${max} h (${hoursPercent}%)`}
-          />
+          {!isActive ? (
+            <Text type="supporting" color="secondary">
+              {'—'} ({INACTIVE_STUDENT_HOURS_MARKER})
+            </Text>
+          ) : (
+            <ProgressBar
+              label={`${displayName}'s hours vs. goal`}
+              isLabelHidden
+              value={data.confirmedHours}
+              max={goalHours > 0 ? goalHours : 1}
+              hasValueLabel
+              formatValueLabel={(value, max) => `${value} / ${max} h (${hoursPercent}%)`}
+            />
+          )}
         </VStack>
 
         <ConsistencyStrip entries={data.consistencyEntries} participation={data.participation} />
