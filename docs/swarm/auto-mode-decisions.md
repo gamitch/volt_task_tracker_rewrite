@@ -1127,3 +1127,31 @@ reasoned from a grep for two literal strings when the redesign's actual mechanis
 entirely, which is what a grep for old string literals cannot see) — dispatched directly to
 `worker-implementer` afterward **without** a third `checker-premise` round. Bounded to this packet
 only, per the same non-precedent-setting terms as the two rulings above.
+
+## 2026-07-31 — George's ruling on T191's display strategy (owner input, structured selection)
+
+**Mechanism, same as the three entries above — not free-text input.** `RESUME-HERE.md` had already
+flagged T191 under "Awaiting the owner's answer" before this session began (not a mid-flight gate
+escalation like the three entries above — this one was a genuine open product question the ledger
+row itself named, per constitution item 20/Authority Boundaries: a worker/planner may not pick a
+side on a question the ledger already deferred to the owner). `foreman-planner`, while investigating
+whether a packet could be written, confirmed the question was still open (no ruling since
+`RESUME-HERE.md` was written) and surfaced a cost asymmetry the original one-line framing didn't
+carry: showing a real "season default" number for a deactivated student's goal needs a **new SQL
+view** (the existing `v_student_goal_projection` deliberately excludes inactive students via `where
+s.is_active`, and T184's `StudentHome` fix depends on that exclusion — relaxing it would break T184),
+which is a real migration under constitution item 18 → **opus tier, full premise-gate round**;
+showing "no bar at all" needs no new SQL and extends an already-proven pattern (honest absence over
+fabrication) at sonnet tier with a light gate. I presented both options via a structured question,
+with "No bar at all" marked Recommended on the planner's own disclosed lean (item 17's honest-signals
+principle, and this session's unbroken preference for absence over a substituted number when the two
+are in tension) — explicitly not citing item 25's "keep it simple" security ruling as authority here,
+since that ruling was scoped to security threat-modeling and extending it to a UI-honesty question
+would repeat T185's own over-reach error. He selected **"No bar at all."** No free-text notes added.
+
+**What this authorizes:** a `T191-worker-packet.md` scoped to replacing the numeric hours-vs-goal bar
+with an honest non-numeric state when a card's linked student isn't active, no new SQL, sonnet tier.
+The `confirmedHours`/`is_active` second half of the original finding is unaffected by this choice
+either way and is filed separately as **T201** (a deactivated student's real historical hours are
+invisible through `v_student_goal_projection` but exist, unfiltered, in `v_student_hours` — scope
+undiagnosed, same posture as T189).
