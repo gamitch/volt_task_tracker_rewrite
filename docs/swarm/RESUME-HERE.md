@@ -148,6 +148,147 @@ straight to the worker — no third gate round. **T191 and T158 not started.**
 - `claude/t183-student-home-loader` — PR #6, open, needs the update + renumber above.
 - `claude/swarm-plan-zl575z` — restarted from `main` after PR #3 merged; carries doc updates only.
 
+## UPDATE — 2026-07-31 (latest of the latest): `main` has moved far ahead; PR #6 needs real reconciliation, not just an update
+
+**Read this before touching PR #6 or filing any new row on this branch.** `origin/main` is now at
+`b0a62c3` (checked live, not from memory) — a parallel session ("session A"/"session B" split) has
+landed T178, T179, T180, and pushed task numbering all the way to **T302**, plus a formal
+**per-session row-numbering protocol** or in `main`'s own `task-ledger.md` header (search
+"NAMESPACED PER SESSION"). Key facts:
+
+- **`main` now names this branch "session A" and reserves it the block `T310–T319`**, with `main`'s
+  own placeholder rows `T310`/`T311` explicitly annotated *"this is T183's renumbered 'T196'/'T197'"*.
+  **This branch does not use that block.** Earlier in this session (before this discovery), the
+  T196/T197 collision was resolved *locally* by renumbering to **T199/T200** instead — a
+  reasonable, correct decision at the time (nothing on `main` used those numbers then), but it does
+  not match what `main` came to expect afterward. **This is not a live collision** — `main`
+  currently has no real content at T198–T205, only reservation placeholders — but it does mean the
+  two branches' numbering schemes disagree, and reconciling them is real work for whoever merges
+  PR #6, not a formality.
+- **This branch's actual usage, for the record:** T198 (CoachHome team-linkage question, filed
+  packeting T173), T199/T200 (renumbered T196/T197, filed packeting T183), T201 (`is_active`
+  family, filed packeting T191), T202 (ProgressBar a11y clamp, checker-found on T191), T203
+  (Leaderboard embed, filed packeting T158), T204 (stale RLS comment, filed packeting T158), T205
+  (anon view exposure, checker-found on T158, owner-ruled "close it off"). All eight are real,
+  filed, cross-referenced across `task-ledger.md`/`verification-log.md`/`auto-mode-decisions.md`
+  many times each — **renumbering them now to fit `main`'s `T310–T319` block would be a large,
+  error-prone rewrite for a problem that isn't actually a collision.** Recommend the merge-time
+  reconciliation go the other way: delete `main`'s unclaimed `T310`/`T311`/`T312–T319` placeholder
+  rows (`main`'s own stated rule already covers this: *"Delete any reserved row left unclaimed when
+  a block closes"*) and note in `main`'s ledger that session A used T198–T205 instead, before the
+  block protocol existed on this branch.
+- **PR #6 (`claude/t183-student-home-loader` → `main`) is based on `main` @ `a3b9f00`, now well over
+  a hundred commits behind `origin/main`.** This needs a real merge/rebase, not a fast-forward, and
+  the conflict surface is large: both branches independently edited `task-ledger.md`'s row-numbering
+  section, `RESUME-HERE.md`'s top-of-file UPDATE anchor (repeatedly, on both sides), and likely
+  `state-summary.md`/`auto-mode-decisions.md` too. **Not attempted in this session** — it's a
+  meaningfully bigger and riskier operation than the four tasks (T183/T173/T191/T158) this session
+  was asked to run, and doing it unprompted risks silently dropping one side's history. Flagged for
+  the orchestrating session/owner to decide how to proceed, not resolved here.
+- **If you're a fresh session picking this up:** re-fetch `origin/main` yourself before trusting any
+  commit SHA or task count in this file — both branches are moving, and the gap between them may
+  have changed again since this note was written.
+
+## UPDATE — 2026-07-31 (previous): T196/T197 collision resolved, `main` now carries T178 too
+
+A **parallel session** operating on `main`/`claude/swarm-plan-zl575z` merged **PR #7 (T178)**
+while this session was mid-flight on `claude/t183-student-home-loader` (PR #6) and flagged, via a
+note relayed through the human owner, that both sessions had independently filed **T196 and T197**
+for two entirely different tasks each — "next free number" is read from a file two branches edit
+independently, so it was never actually a reservation.
+
+- **`main` = `534bdbf`, carrying T178 (real end-meeting backend; mount deliberately parked as its
+  own T196, blocked on `LiveConsole`'s own loaders becoming real).** `main`'s T196/T197 are now
+  canonical (they landed first): **T196** = the parked `EndMeetingDialog` mount (blocked, data-loss
+  risk), **T197** = `onEditAttendance` row-scoping unasserted (must land together with T196, not
+  before).
+- **This branch's own T196/T197 (filed while packeting T183) have been renumbered to T199/T200**
+  in `task-ledger.md`/`verification-log.md` here — **T199** = `StudentHome`'s deliberately-deferred
+  `events`/`sessions`/`rsvps`/`participation` real-loader work, **T200** = the MINOR
+  `students.test.ts` assertion-tightening follow-up. T198 (this branch's own `CoachHome`
+  team-linkage product question, filed while packeting T173) did not collide and keeps its number.
+  **All four original rows are real and none were dropped** — this was a pure renumbering on this
+  branch's copy, not a resolution-by-picking-a-side.
+- **PR #6 is now behind `main`** (based on `a3b9f00`; `main` has moved to `534bdbf` via PR #7).
+  It will need an update-from-`main` before it can merge, and that update **will conflict** on
+  `task-ledger.md` (the T196/T197 numbers, now resolved by the renumbering above — take this
+  branch's T198/T199/T200 rows AND main's T196/T197 rows, don't drop either side) and on this
+  file's own top section (both branches independently inserted a dated UPDATE at the same anchor
+  point — keep both blocks, don't pick one).
+- **Two corrections to the still-open triage proposal further down this file**, both measured
+  rather than guessed, from the same parallel session's work on T178: the "T178/T179/T180 — three
+  finished components mounted nowhere" framing held for only one of the three.
+  - **T179** (`MarkDayCompleteDialog`) is a real wiring gap, but not a simple mount: its
+    persistence seam is already real (`markDayComplete`, shipped by T101), but four other props
+    (`session`, `roster`, `rsvps`, `currentUserProfileId`) still default to fixtures/a placeholder.
+    Mounting it as-is risks one forgotten prop writing real attendance rows for fixture students —
+    T151's required-prop mechanism needs to land first.
+  - **T180** is genuinely cheap and low-risk: all three of its seams already default to real
+    loaders, and it's read-only. It was also **missing from every triage table entirely** — the
+    proposal's "37 → 16" result should have been "37 → 17."
+- **Backlog as it actually stands, this update:** of the ten original user-facing rows, seven have
+  closed (T169, T177, T178, T183, T173, T191, and now **T158** — all merged on their own branches,
+  T183/T173/T191/T158 on `claude/t183-student-home-loader`/PR #6, not yet merged to `main`). T173
+  PASSED with 4 NIT (residue covered by T198); T191 PASSED with 3 NIT (residue filed as T202); T158
+  PASSED with 1 MINOR (residue filed as T205, owner-ruled "close it off," not yet dispatched).
+  Remaining: T179, T180, T189, plus the residue rows (T193, T194, T195, T198, T199, T200, T201,
+  T202, T203, T204, T205, and whatever T178/T179's own follow-ups turn out to be) — **T158's own
+  embed half, T203, is the most natural next pick** (its design/CSS-hazard investigation is already
+  written into the row). **The triage proposal's cuts are still unapplied and still awaiting the
+  owner's veto** — this update doesn't apply them either.
+- **T173 also hit item 19a's 2-round cap — twice, on the same packet** (two separate
+  owner-authorized bounded exceptions, both proven narrow by execution rather than open design
+  disputes; see its `verification-log.md` entry and `auto-mode-decisions.md`). Adopted a cheaper
+  design mid-packeting (thread `defaultGoalHours` from `activeSeason.season`, matching T176's
+  shipped pattern) rather than a third Supabase query. `teamId` deliberately unresolved, filed as
+  **T198** (product question, not a schema gap to guess at).
+- **T191 was a genuine open product question, not a mid-flight gate escalation** — `RESUME-HERE.md`
+  had already flagged it under "Awaiting the owner's answer" before this session began. George
+  chose "no bar at all" over a season-default number (the latter would have needed a new SQL view
+  and opus tier). Its own packet then hit item 19a's cap once (1 MAJOR: a naive page-wide
+  progressbar count would have been vacuous by fixture coincidence — `ConsistencyStrip` renders its
+  own bar independent of `isActive`, and both test fixtures happened to pin `participation: null`;
+  fixed via a selector scoped to the Hours-vs-goal section specifically). Split off **T201**
+  (`confirmedHours`/`is_active`, undiagnosed scope, same posture as T189) and **T202** (a sibling
+  `ProgressBar` clamp elsewhere still fabricates `aria-valuemax` for assistive tech).
+- **T158 was the highest-scrutiny task this session — a new database migration.** Split into the
+  real data layer only (this row) vs. the embed (**T203**), since item 18's migration trigger
+  forces opus/full-gate regardless of the UI half's size. Hit item 19a's 2-round cap **twice on one
+  packet** (both owner-authorized): round 1→2 fixed a false supporting claim (only 1 of 3 cited
+  "already-queried" views actually was) and extended the RLS trace to the loader's own unfiltered
+  `v_student_hours` read; round 2→3, George asked a clarifying question about why a scratch Postgres
+  was needed before authorizing (recorded in `auto-mode-decisions.md`), closing a vacuous
+  live-DB-proof criterion. **The core RLS/view-visibility mechanism was empirically verified four
+  times by three different agents** (`@electric-sql/pglite`, an in-process WASM Postgres, ~40s
+  setup, no Docker) rather than reasoned about — this project had gotten a closely related RLS/view
+  claim wrong twice before (`dashboard_views.sql`, then `loaders/students.ts`), so nothing here was
+  taken on argument alone. **Follow-up: T205** — checker found the new view is also readable by
+  Supabase's unauthenticated `anon` key (not just logged-in users), a different threat model than
+  T185's already-settled "any authenticated caller" ruling; George ruled "close it off" (one-line
+  revoke migration, not yet dispatched, needs its own full opus-tier gate per item 18 regardless of
+  size). Also filed **T204** (a second, previously-undisclosed instance of the same stale-RLS-comment
+  class T158 fixed once in `dashboard_views.sql`'s wake, found this time in `loaders/students.ts`).
+
+## UPDATE — 2026-07-30 evening: T183 landed on its own branch, `main` unchanged
+
+- **`main` is still `94267a0` / 69 files / 1654 tests** — nothing below in the 2026-07-31
+  UPDATE section changed. T183 landed on a **separate** branch, `claude/t183-student-home-loader`
+  (PR #6, draft, not yet merged into `main`), cut fresh from `main` for exactly this purpose.
+  **On that branch only**, HEAD is `b21a603` and the suite is **69 files / 1660 tests** (+6, a
+  disclosed, checker-ruled-correct delta from T183's own mandated new test coverage — see its
+  `verification-log.md` entry). Do not read `1654` as the count on that branch, and do not read
+  `1660` back onto `main` until it actually merges.
+- T183 fixed `StudentHome`'s fabricated `'Ada Reyes'` greeting (real `students.display_name` now
+  wired as the production default). Went through a full 2-round `checker-premise` cap (item 19a)
+  — round 1 found a genuine BLOCKER, round 2 found only narrow packet-text mismatches after
+  independently building and running the full fix clean — then one owner-authorized bounded
+  revision round, same escalation shape as T177's earlier one this session. Follow-ups filed:
+  **T196** (the deliberately-deferred `events`/`sessions`/`rsvps`/`participation` real-loader
+  work), **T197** (MINOR test-assertion tightening).
+- Same branch/PR is being used for T173, T191, T158 next (owner instruction, 2026-07-30) rather
+  than opening a new branch per task — matching this project's own established convention of one
+  PR accumulating several tasks before merging to `main` (see PR #3's 16-task history above).
+
 ## UPDATE — 2026-07-31: branch state, and two triage rows resolved
 
 - **PR #3 and PR #4 are both merged into `main`.** `main` = `94267a0`, carrying everything

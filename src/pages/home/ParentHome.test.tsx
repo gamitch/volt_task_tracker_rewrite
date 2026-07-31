@@ -674,6 +674,27 @@ describe('<ParentHome /> C3: goalHours is a verbatim passthrough, never TS-recom
 });
 
 describe("<ParentHome /> C4: a deactivated linked student's card is honest and present", () => {
+  /** Scopes a `[role="progressbar"]` query to the Hours-vs-goal section's own
+   * bar. Astryx's `ProgressBar` sets `aria-labelledby` (pointing at a sibling
+   * label element) on the progressbar div itself, NOT `aria-label` --
+   * verified against `node_modules/@astryxdesign/core/src/ProgressBar/
+   * ProgressBar.tsx:333`. (This differs from this file's own `[role=
+   * "radiogroup"]` queries above, e.g. line 940, which DO read `aria-label`
+   * directly -- that's `SegmentedControl`, a different component with a
+   * different implementation; do not assume the same attribute works here.)
+   * A page-wide `[role="progressbar"]` count can't distinguish this bar from
+   * `ConsistencyStrip`'s own Participation bar, which renders whenever
+   * `participation !== null` regardless of `isActive` -- this scoping keeps
+   * Acceptance Criterion 1 true regardless of what any fixture's
+   * `participation` field holds, not true by fixture coincidence. */
+  function hoursVsGoalProgressBars(root: HTMLElement): Element[] {
+    return Array.from(root.querySelectorAll('[role="progressbar"]')).filter((el) => {
+      const labelId = el.getAttribute('aria-labelledby');
+      const labelEl = labelId ? document.getElementById(labelId) : null;
+      return labelEl?.textContent?.includes('hours vs. goal') ?? false;
+    });
+  }
+
   const INACTIVE_STUDENT: LinkedStudentRow = {
     studentId: 'student-c4-inactive',
     displayName: 'Marisol Tan',
@@ -692,7 +713,7 @@ describe("<ParentHome /> C4: a deactivated linked student's card is honest and p
     confirmedHours: 77,
   };
 
-  it('renders exactly one card, the factual "Not currently active" marker, and honest clamped-zero figures', async () => {
+  it("renders exactly one card, the factual 'Not currently active' marker, and an honest non-numeric hours state", async () => {
     renderAsUser(PARENT_USER, {
       loadLinkedStudents: async () => ({
         students: [INACTIVE_STUDENT],
@@ -704,13 +725,13 @@ describe("<ParentHome /> C4: a deactivated linked student's card is honest and p
 
     // (a) exactly one card renders -- rules out this being mistaken for the
     // zero-students page-level EmptyState.
-    expect(container.querySelectorAll('[role="progressbar"]')).toHaveLength(1);
+    expect(hoursVsGoalProgressBars(container)).toHaveLength(0);
     expect(container.textContent).toContain('Marisol Tan');
     expect(container.textContent).toContain('Delta Drift');
     expect(container.textContent).not.toContain('No linked students yet');
-    // (b) honest-absence figures: clamped-zero hours, "Nothing scheduled".
-    const progressBar = container.querySelector('[role="progressbar"]');
-    expect(progressBar!.getAttribute('aria-valuetext')).toBe('0 / 1 h (0%)');
+    // (b) honest-absence figures: no numeric hours bar, "Nothing scheduled".
+    expect(container.textContent).toContain('not shown while this student is inactive');
+    expect(container.textContent).not.toContain('0 / 1 h');
     expect(container.textContent).toContain('Nothing scheduled');
     // (c) the factual marker's exact copy.
     expect(container.textContent).toContain('Not currently active');
@@ -730,17 +751,18 @@ describe("<ParentHome /> C4: a deactivated linked student's card is honest and p
     });
     await flushMicrotasks();
 
-    const valueTexts = Array.from(container.querySelectorAll('[role="progressbar"]')).map((el) =>
+    const valueTexts = hoursVsGoalProgressBars(container).map((el) =>
       el.getAttribute('aria-valuetext'),
     );
-    expect(valueTexts).toHaveLength(2);
-    expect(valueTexts).toContain('0 / 1 h (0%)');
+    expect(valueTexts).toHaveLength(1);
     // hoursVsGoalPercent(77, 120) = 64.2.
     expect(valueTexts).toContain('77 / 120 h (64.2%)');
     expect(container.textContent).toContain('Not currently active');
     // Only Marisol's card carries the marker, not Owen's active one -- the
     // marker text appears exactly once.
     expect(container.textContent?.split('Not currently active').length).toBe(2);
+    expect(container.textContent).toContain('not shown while this student is inactive');
+    expect(container.textContent?.split('not shown while this student is inactive').length).toBe(2);
   });
 });
 

@@ -256,27 +256,29 @@
  * outer-wrapper shape).
  *
  * -----------------------------------------------------------------------
- * 9. Data loading -- T176 UPDATE: `studentId`/`teamId` are real; `loadData`
- *    itself, and everything it returns, is still fixture-fed (deliberately
- *    out of T176's bounded scope, per its own packet, except for the ONE
- *    field module doc #4 above already covers: MET-04's denominator).
+ * 9. Data loading -- T176 UPDATE: `studentId`/`teamId` are real. T183
+ *    UPDATE: `loadData`'s `displayName` is now real too (real
+ *    `students.display_name`, own row, `loaders/students.ts`'s
+ *    `loadStudentHomeData`) -- everything ELSE it returns remains an
+ *    honest-empty literal, not fixture-derived (deliberately out of T183's
+ *    bounded scope, per its own packet, except for the ONE field module doc
+ *    #4 above already covers: MET-04's denominator).
  *
  * `loadData` is the injectable seam (`(studentId, seasonId) =>
- * Promise<StudentHomeData>`), defaulting to the OBVIOUSLY-FAKE
- * `defaultLoadStudentHomeData` (fabricated names only, constitution item 6).
- * `seasonId` is now the REAL `useActiveSeason().season.id` (T176, same
- * mechanism `CoachHome.tsx`'s own T155 already established for its
- * sibling), not a placeholder default -- but every field
- * `defaultLoadStudentHomeData` itself returns (`displayName`, `events`,
- * `sessions`, `rsvps`, `studentHours`, `participation`) is still the
- * fixture it always was, now genuinely empty/absent for a real signed-in
- * student rather than fabricated-and-wrong (T176 worker output criterion
- * 11's own render-and-enumerate table has the exhaustive, measured list --
- * `Hi Ada Reyes`, unconditionally fabricated regardless of who is signed
- * in, is the lead item, named first per that output's own decision
- * record). A real implementation of the REST of this seam, once a shared
- * Supabase client exists for this page's own remaining fields, is filed as
- * its own follow-up (same criterion 12a), not built here.
+ * Promise<StudentHomeData>`), defaulting to the REAL `loadStudentHomeData`
+ * (T183; the still-obviously-fake `defaultLoadStudentHomeData` remains
+ * exported for tests, fabricated names only per constitution item 6, but is
+ * no longer what this default parameter points at). `seasonId` is now the
+ * REAL `useActiveSeason().season.id` (T176, same mechanism `CoachHome.tsx`'s
+ * own T155 already established for its sibling), not a placeholder default.
+ * `displayName` is the real, per-student `students.display_name` (T183); the
+ * other SEVEN fields (`defaultGoalHours`, `goalHoursOverride`, `events`,
+ * `sessions`, `rsvps`, `studentHours`, `participation`) are honest-empty
+ * literals in the new default (`0`/`null`/`[]`, never `FIXTURE_*`-derived),
+ * genuinely empty/absent for a real signed-in student rather than
+ * fabricated-and-wrong. A real implementation of the REST of this seam, once
+ * a shared Supabase client exists for this page's own remaining fields, is
+ * filed as its own follow-up (same criterion 12a), not built here.
  *
  * -----------------------------------------------------------------------
  * 10. DES-12 four states.
@@ -389,7 +391,10 @@ import type { CurrentViewerIdentity, ResolveCurrentStudentIdFn } from '../meetin
 // new export on `loaders/students.ts` (see that file's own module doc for
 // the query/RLS record). Aliased on import (not the destructured prop name
 // below) purely to avoid shadowing this file's own `StudentHomeProps.resolveStudentScope`.
-import { resolveStudentScope as defaultResolveStudentScope } from '../../lib/supabase/loaders/students';
+import {
+  loadStudentHomeData,
+  resolveStudentScope as defaultResolveStudentScope,
+} from '../../lib/supabase/loaders/students';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real columns/views. Module docs #4/#5/#6.
@@ -1760,7 +1765,7 @@ export interface StudentHomeProps {
 }
 
 export function StudentHome({
-  loadData = defaultLoadStudentHomeData,
+  loadData = loadStudentHomeData,
   studentId: explicitStudentId,
   teamId: explicitTeamId,
   nowFn = () => new Date(),

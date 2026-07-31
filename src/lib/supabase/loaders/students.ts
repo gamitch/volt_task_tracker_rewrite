@@ -96,7 +96,11 @@ import type {
 // `CurrentViewerIdentity`/`ResolveCurrentStudentIdFn` cross-file shape
 // `loaders/meetings.ts` already established for that file's own T096
 // resolution) -- imported here as types only.
-import type { ResolveStudentScopeFn } from '../../../pages/home/StudentHome';
+import type {
+  LoadStudentHomeDataFn,
+  ResolveStudentScopeFn,
+  StudentHomeData,
+} from '../../../pages/home/StudentHome';
 
 /**
  * Raw `public.students` row exactly as Postgrest returns it (snake_case) --
@@ -438,3 +442,109 @@ export function makeResolveStudentScope(
 
 /** `StudentHome.tsx`'s own default `resolveStudentScope`. */
 export const resolveStudentScope: ResolveStudentScopeFn = makeResolveStudentScope();
+
+/**
+ * T183 -- additive only (this task's own Allowed Files instruction: no
+ * existing export's name, signature, or behavior changes). Real
+ * `StudentHome.tsx:1763` production `loadData` default, narrowed to the ONE
+ * user-facing defect that row's own citations name -- the fabricated
+ * `'Ada Reyes'` greeting (`defaultLoadStudentHomeData`, `StudentHome.tsx:1023`,
+ * untouched, still exported for tests). Per this task's own scope ruling,
+ * every OTHER `StudentHomeData` field is left an honest literal empty value
+ * (`[]`/`null`/`0`) -- no new queries for events/sessions/rsvps/hours/
+ * participation; those are already correctly empty today (T176), not
+ * fabricated, and a real implementation of that rest-of-the-seam is its own
+ * separate follow-up (see `StudentHome.tsx`'s own module doc #9, lines
+ * 277-279).
+ *
+ * Same shape as `queryStudentGoalProjectionById`/`makeResolveStudentScope`
+ * above: a single-row query via `createLoader`, injectable `getClient`,
+ * `.eq('id', studentId).maybeSingle()`, camelCase mapping in the returned
+ * closure. Selects only `display_name` -- same "select only what this
+ * screen needs" discipline as that sibling export -- not a full-row read of
+ * the already-documented `StudentDbRow` above.
+ *
+ * Column: `id`, not `student_id` -- the raw `students` table's own primary
+ * key (`StudentDbRow` above), unlike `v_student_goal_projection`'s view-only
+ * `student_id` column name. `studentId` here is genuinely `students.id`
+ * (`loaders/meetings.ts:57`'s own `resolveCurrentStudentId` documents its
+ * query as `students.profile_id = auth.uid()` resolving `students.id`, and
+ * `StudentHome.tsx:1566`'s `resolveStudentIdentity` threads that same value
+ * through unchanged to what `StudentHomeContent` eventually passes to
+ * `loadData`).
+ *
+ * RLS -- `supabase/migrations/20260717000002_rls.sql:100-102`:
+ * ```sql
+ * create policy own_or_linked_read on students
+ *   for select to authenticated
+ *   using (id in (select my_student_ids()));
+ * ```
+ * A signed-in student reading their own row by `id` resolves fine -- a
+ * simpler case than `queryStudentGoalProjectionById`'s own reasoning above
+ * (no multi-table view, no LEFT JOINs to trace): `id in (select
+ * my_student_ids())` is satisfied directly by the student's own linked row.
+ *
+ * Row-not-found -- by the time `StudentHomeContent` calls `loadData`,
+ * `resolveStudentId`/`resolveStudentScope` have already both resolved
+ * non-null for this `studentId` (`StudentHome.tsx:1558-1579`,
+ * `resolveStudentIdentity`), so a null `display_name` row here is a genuine
+ * anomaly, not an expected empty state. Fail loud (never bridged to fixture
+ * data), same precedent `loaders/calendarFeed.ts`'s `makeLoadCalendarFeed`
+ * already established (T177) -- this surfaces as `StudentHomeContent`'s
+ * existing "Couldn't load Home" error banner (`StudentHome.tsx:1342-1353`),
+ * no new DES-12 state needed.
+ */
+interface StudentDisplayNameDbRow {
+  display_name: string;
+}
+
+async function queryStudentDisplayNameById(
+  client: SupabaseClient,
+  studentId: string,
+): Promise<LoaderQueryResult<StudentDisplayNameDbRow>> {
+  const result = await client
+    .from('students')
+    .select('display_name')
+    .eq('id', studentId)
+    .maybeSingle();
+  return { data: (result.data as StudentDisplayNameDbRow | null) ?? null, error: result.error };
+}
+
+/**
+ * `getClient` is injectable (defaults to the shared singleton), same
+ * convention every export above already established, so tests can supply a
+ * stubbed transport with zero real network calls -- see this task's own new
+ * `students.test.ts` coverage.
+ */
+export function makeLoadStudentHomeData(
+  getClient: () => SupabaseClient = getSupabaseClient,
+): LoadStudentHomeDataFn {
+  const loadRow = createLoader<string, StudentDisplayNameDbRow>(
+    queryStudentDisplayNameById,
+    getClient,
+  );
+  return async (studentId: string, seasonId: string): Promise<StudentHomeData> => {
+    const row = await loadRow(studentId);
+    // Fail loud, never bridged to fixture data -- see module doc above.
+    if (row === null) {
+      throw new Error('No student record was found for your account.');
+    }
+    // Return shape: real displayName, verbatim seasonId passthrough, every
+    // other field an honest literal empty value (this task's own scope
+    // ruling above) -- no `FIXTURE_*` symbol referenced anywhere here.
+    return {
+      seasonId,
+      displayName: row.display_name,
+      defaultGoalHours: 0,
+      goalHoursOverride: null,
+      events: [],
+      sessions: [],
+      rsvps: [],
+      studentHours: null,
+      participation: null,
+    };
+  };
+}
+
+/** `StudentHome.tsx`'s own real, production default `loadData`. */
+export const loadStudentHomeData: LoadStudentHomeDataFn = makeLoadStudentHomeData();
