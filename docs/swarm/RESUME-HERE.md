@@ -45,19 +45,29 @@ independently, so it was never actually a reservation.
   - **T180** is genuinely cheap and low-risk: all three of its seams already default to real
     loaders, and it's read-only. It was also **missing from every triage table entirely** — the
     proposal's "37 → 16" result should have been "37 → 17."
-- **Backlog as it actually stands, this update:** of the ten original user-facing rows, five have
-  closed (T169, T177, T178, T183, and now **T173** — all merged on their own branches, T183/T173
-  on `claude/t183-student-home-loader`/PR #6, not yet merged to `main`). T173 PASSED with 4 NIT,
-  no follow-up rows needed (its residue is already covered by T198). Remaining:
-  T191, T158, T179, T180, T189, plus the residue rows (T193, T194, T195, T198, T199, T200, and
-  whatever T178/T179's own follow-ups turn out to be). **The triage proposal's cuts are still
-  unapplied and still awaiting the owner's veto** — this update doesn't apply them either.
+- **Backlog as it actually stands, this update:** of the ten original user-facing rows, six have
+  closed (T169, T177, T178, T183, T173, and now **T191** — all merged on their own branches,
+  T183/T173/T191 on `claude/t183-student-home-loader`/PR #6, not yet merged to `main`). T173
+  PASSED with 4 NIT (residue covered by T198); T191 PASSED with 3 NIT (residue filed as T202).
+  Remaining: **T158** (in flight next), T179, T180, T189, plus the residue rows (T193, T194, T195,
+  T198, T199, T200, T201, T202, and whatever T178/T179's own follow-ups turn out to be). **The
+  triage proposal's cuts are still unapplied and still awaiting the owner's veto** — this update
+  doesn't apply them either.
 - **T173 also hit item 19a's 2-round cap — twice, on the same packet** (two separate
   owner-authorized bounded exceptions, both proven narrow by execution rather than open design
   disputes; see its `verification-log.md` entry and `auto-mode-decisions.md`). Adopted a cheaper
   design mid-packeting (thread `defaultGoalHours` from `activeSeason.season`, matching T176's
   shipped pattern) rather than a third Supabase query. `teamId` deliberately unresolved, filed as
   **T198** (product question, not a schema gap to guess at).
+- **T191 was a genuine open product question, not a mid-flight gate escalation** — `RESUME-HERE.md`
+  had already flagged it under "Awaiting the owner's answer" before this session began. George
+  chose "no bar at all" over a season-default number (the latter would have needed a new SQL view
+  and opus tier). Its own packet then hit item 19a's cap once (1 MAJOR: a naive page-wide
+  progressbar count would have been vacuous by fixture coincidence — `ConsistencyStrip` renders its
+  own bar independent of `isActive`, and both test fixtures happened to pin `participation: null`;
+  fixed via a selector scoped to the Hours-vs-goal section specifically). Split off **T201**
+  (`confirmedHours`/`is_active`, undiagnosed scope, same posture as T189) and **T202** (a sibling
+  `ProgressBar` clamp elsewhere still fabricates `aria-valuemax` for assistive tech).
 
 ## UPDATE — 2026-07-30 evening: T183 landed on its own branch, `main` unchanged
 

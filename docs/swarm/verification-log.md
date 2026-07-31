@@ -5816,3 +5816,65 @@ small citation-drift line numbers in new code comments; one additional type-only
 (`SupabaseClient`) beyond the packet's literal one-import count, mechanically required by the DI'd
 stub-client test helper; the honest-zero state rendering as `0 / 1 hrs` (a pre-existing `max={goalHours
 > 0 ? goalHours : 1}` ProgressBar floor, untouched by this task, resolves once T198 lands).
+
+---
+
+## T191 — a deactivated child's hours-vs-goal bar is now an honest marker, not a fabricated `1 h` (merged 2026-07-31)
+
+| Field | Value |
+|---|---|
+| Merged commit | `2e1b8ce` (branch `claude/t183-student-home-loader`, PR #6) |
+| Verdict | **PASS** — 3 NIT, no BLOCKER/MAJOR/MINOR, first attempt |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (sonnet) / `checker-reviewer` (opus) |
+| Premise gate | 2 rounds (item 19a cap) — round 1 REVISE (1 MAJOR), round 2 DISPATCH per the gate's own verdict, no owner escalation needed |
+| tsc / build / format | 0 errors / ✓ / clean |
+| eslint | 0 errors, 358 warnings (checker independently re-measured the baseline — zero delta) |
+| vitest | 70 files, 1673 tests (net-zero delta — 2 existing tests rewritten, 0 added/removed) |
+
+**A genuine product question, correctly not decided by a packet.** `ParentHome`'s per-child card
+rendered `0 / 1 h (0%)` for a deactivated linked student — the `1` a `ProgressBar` clamp artifact
+(`max={goalHours > 0 ? goalHours : 1}`) present in no data source. `RESUME-HERE.md` had already
+flagged this row under "Awaiting the owner's answer" before this session began. `foreman-planner`,
+while investigating whether a packet could be written, confirmed the question was still open and
+surfaced a real cost asymmetry: a "season default" number would need a **new SQL view** (the existing
+`v_student_goal_projection` deliberately excludes inactive students, and T184's `StudentHome` fix
+depends on that exclusion), a real migration under item 18 → opus tier, full gate; "no bar at all"
+needs no new SQL and extends an already-shipped honest-absence pattern at sonnet tier. Presented both
+options to the owner; he chose **"No bar at all."** Recorded in `auto-mode-decisions.md`. The
+`confirmedHours`/`is_active` half of the original finding (a deactivated student's real historical
+hours are invisible through `v_student_goal_projection` but exist, unfiltered, in `v_student_hours`)
+is unaffected by this choice and filed separately as **T201**.
+
+**The fix mirrors an in-repo precedent exactly, at the correct granularity.** `ParentHome.tsx`'s own
+`StudentHomeCardProps.isActive` doc comment had already, during T181, explicitly reasoned that this
+page's situation is *not* `StudentHome.tsx`'s T184 three-way union ("a parent viewing their
+deactivated child's card is an unaffected observer, not a blocked actor") — so the fix does not copy
+T184's whole-page swap. Instead it mirrors `ConsistencyStrip`'s own `participation === null` branch
+(same file family, same "one metric inside a card" granularity), replacing just the Hours-vs.-goal
+section with a `<Text type="supporting" color="secondary">` absence marker when `!isActive`.
+`goalHours`/`hoursPercent` stay computed unconditionally — checker-confirmed byte-unchanged — only the
+JSX consuming them becomes conditional.
+
+**Premise gate found a genuine MAJOR: a criterion true only by fixture coincidence, the same shape
+that cost two other tasks a round each this session.** The original test-rewrite prescription counted
+*all* `[role="progressbar"]` elements page-wide to prove "zero bars for an inactive card, one for an
+active card" — but `ConsistencyStrip` (mounted in every card) renders its own progressbar whenever
+`participation !== null`, independent of `isActive`. The claim held only because both test fixtures
+happen to pin `participation: null`. Fixed via a new `hoursVsGoalProgressBars` test helper that
+resolves each bar's `aria-labelledby` and filters on the label text, making the criterion true
+regardless of the fixtures' `participation` field — verified feasible against Astryx's actual
+`ProgressBar.tsx` source before committing to the approach.
+
+**Checker did not accept the fix on inspection.** Built its own probe pinning non-null `participation`
+on an inactive card specifically to try to reproduce the vacuity the gate had found, and confirmed the
+scoped helper correctly reports 0 Hours-vs-goal bars even with `ConsistencyStrip`'s own bar present in
+the DOM (measured: 1 page-wide bar, 0 scoped). Independently reproduced both required mutations
+(progressbar-count, marker-text) plus the marker-leak check, each breaking the assertion family it was
+meant to guard and no other.
+
+**Follow-up filed: T202** (NIT — checker found, while confirming no sibling surface needed the same
+fix, that `HoursTab.tsx:942` carries the identical `ProgressBar` clamp; it doesn't leak the fabricated
+`1` into visible copy there, but Astryx's `ProgressBar` emits `aria-valuemax` unconditionally, so a
+zero-goal row still announces a fabricated max to assistive tech even where sighted users see nothing
+wrong).
