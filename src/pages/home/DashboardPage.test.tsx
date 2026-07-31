@@ -121,6 +121,65 @@ vi.mock('../../lib/supabase/loaders/parentHome', async (importOriginal) => {
   };
 });
 
+// T173: `CoachHome` (which this dispatcher routes `coach`/`admin` users to)
+// now also calls a real backend for its primary KPI grid
+// (`loaders/coachHome.ts`'s `loadCoachHomeData`, `CoachHome.tsx:2168`'s own
+// prop default), which hits the real, unconfigured-in-jsdom
+// `getSupabaseClient()` unless mocked at the module level -- same class of
+// gap the `loaders/parentHome`/`loaders/students` mocks above already close
+// for the other two Home components. `teams: []` is deliberate (not
+// "distinctly non-empty") -- it keeps the admin test's existing
+// `.toContain('Season setup')` assertion's truth value unchanged; see the
+// new `'...missing teams.'` assertion below for how that assertion is
+// strengthened into a real proof instead of a vacuous one.
+vi.mock('../../lib/supabase/loaders/coachHome', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/supabase/loaders/coachHome')>();
+  return {
+    ...actual,
+    loadCoachHomeData: async (seasonId: string) => ({
+      seasonId,
+      defaultGoalHours: 0, // Inert -- see CoachHome.tsx module doc section 15; never asserted against.
+      teams: [],
+      students: [],
+      seasonSetupStatus: { hasGoalsConfigured: true },
+      events: [],
+      sessions: [],
+      rsvps: [],
+      attendance: [],
+      teamParticipation: null,
+      studentHours: [],
+    }),
+  };
+});
+
+// T173 (round-1 BLOCKER fix, required): `CoachHome.tsx`'s `Default goal
+// {defaultGoalHours}h` text (the `Avg hours / active student` secondary)
+// sits inside the `{dashboardData && (...)}` gate, which only opens once
+// `loadDashboardDataProp(seasonId)` resolves. Without this mock, the real,
+// unconfigured `getSupabaseClient()`-backed `loadDashboardData` default
+// rejects in jsdom and this entire grid -- including the `Default goal Xh`
+// text -- never renders, so no assertion inside it could ever pass. The
+// mock only needs to make the gate open; its field VALUES don't need to be
+// realistic (`DashboardData` is fully nullable/array-typed).
+vi.mock('../../lib/supabase/loaders/dashboard', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/supabase/loaders/dashboard')>();
+  return {
+    ...actual,
+    loadDashboardData: async (seasonId: string) => ({
+      seasonId,
+      rosterStats: null,
+      attendanceRate: null,
+      sessionDays: null,
+      upcomingCommittedHours: null,
+      dayOfWeekSessions: [],
+      teamHours: [],
+      topEvents: [],
+      goalProjection: [],
+      activityFeedSource: { events: [], sessions: [], rsvps: [], attendance: [], students: [] },
+    }),
+  };
+});
+
 // ---------------------------------------------------------------------------
 // Render harness -- mirrors CoachHome.test.tsx.
 //
@@ -233,17 +292,39 @@ describe('DashboardPage role dispatch', () => {
     expect(container.textContent).not.toContain('Hi Ada Reyes');
     expect(container.textContent).not.toContain('Hi Jordan Blake');
     expect(container.textContent).not.toContain('Dashboard Fixture Linked Student');
+    // T173: proves (a) the new `loaders/dashboard` mock actually opened the
+    // `{dashboardData && (...)}` gate `Default goal {defaultGoalHours}h`
+    // lives inside (round-1 BLOCKER fix), and (b) `CoachHome.tsx`'s render
+    // now reads the new `defaultGoalHours` PROP (sourced from
+    // `activeSeason.season.defaultGoalHours`, `100` per this file's own
+    // `FIXTURE_ACTIVE_SEASON`), not `data.defaultGoalHours` -- if the
+    // render-source edit were missing this would show 'Default goal 0h'
+    // (the new loader's own inert literal) instead of '100h'.
+    expect(container.textContent).toContain('Default goal 100h');
   });
 
   it('renders CoachHome for role "admin" (HOME-04 handled internally by CoachHome, not duplicated here)', async () => {
     renderAsUser(ADMIN_USER);
     await flushMicrotasks();
     expect(container.textContent).toContain('Team participation');
-    // Fixture season-setup status is incomplete (CoachHome.tsx's own
-    // `FIXTURE_SEASON_SETUP_STATUS`), so an admin viewer sees the
-    // admin-only "Season setup" card -- proof this is the real CoachHome,
-    // with its real internal admin gate, not a separate admin component.
+    // T173: the mocked `loaders/coachHome` always reports
+    // `hasGoalsConfigured: true` -- this card now shows because the mock's
+    // `teams: []` makes `isSeasonMissingSetup` true via the teams branch,
+    // not the goals branch (there is no more fixture `seasonSetupStatus` in
+    // play for this render). The new `'...missing teams.'` assertion below
+    // is the real, non-vacuous proof of that -- this assertion alone stays
+    // true either way, so it's kept only as the same "is this really
+    // CoachHome" proof it always was.
     expect(container.textContent).toContain('Season setup');
+    // T173 (real, non-vacuous proof of `loaders/coachHome`'s wiring):
+    // pre-fix (or if `loadData` were never swapped), `defaultLoadCoachHomeData`'s
+    // in-file `FIXTURE_TEAMS` is non-empty and `FIXTURE_SEASON_SETUP_STATUS.
+    // hasGoalsConfigured` is `false`, so this description would read
+    // "...missing season goals." instead -- a genuinely different,
+    // assertable string.
+    expect(container.textContent).toContain('The active season is missing teams.');
+    // T173 -- same proof as the "coach" case above.
+    expect(container.textContent).toContain('Default goal 100h');
     // T183 (criterion 7c) -- same vacuity guard as the "coach" case above.
     expect(container.textContent).not.toContain('Hi Ada Reyes');
     expect(container.textContent).not.toContain('Hi Jordan Blake');
