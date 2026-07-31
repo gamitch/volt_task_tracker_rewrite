@@ -78,11 +78,13 @@ import {
   formatScopeLabel,
   formatSessionDateOnly,
   groupSessionSignups,
+  isSessionMarkDayCompleteEligible,
   OutreachDetail,
   resolveCreatorName,
   resolveEventRoster,
   resolveOwnRosterStudent,
   resolveParentLinkedRosterStudents,
+  type LoadOutreachDetailFn,
   type OutreachDetailData,
   type OutreachDetailSession,
   type RosterStudent,
@@ -2528,5 +2530,523 @@ describe('T169 empty case (§5g): a student viewer whose own roster row does not
     // Nothing else on the page is disturbed.
     expect(container.textContent).toContain('Signups');
     expect(container.textContent).toContain(OTHER_STUDENT_ROSTER_ROW.name);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T179 (OUT-05, `docs/swarm/VOLT_Portal_PRD.md:318`): the per-session "Mark
+// day complete" trigger + dialog (component module doc #15). Criteria A1-A4
+// live in `MarkDayCompleteDialog.test.tsx`/`MarkEventCompleteDialog.test.tsx`
+// (the props are required there); B1-B7 live here, since they are about THIS
+// page's wiring, not that dialog's own internal behavior (which
+// `MarkDayCompleteDialog.test.tsx` already covers and is not duplicated).
+// ---------------------------------------------------------------------------
+
+describe('isSessionMarkDayCompleteEligible (T179, module doc #15(c) -- OUT-05 gates on session DATE, not startsAt)', () => {
+  const BASE: OutreachDetailSession = {
+    id: 'session-eligibility-base',
+    eventId: 'event-eligibility-base',
+    sessionDate: '2026-08-03',
+    startsAt: '2026-08-03T14:00:00.000Z', // 9:00 AM America/Chicago
+    endsAt: '2026-08-03T17:00:00.000Z',
+    status: 'scheduled',
+    peopleReached: null,
+    notes: '',
+  };
+
+  it('is eligible once the Chicago date reaches the session date, even BEFORE startsAt (the session’s own morning)', () => {
+    // 8:00 AM America/Chicago on the session's own date -- strictly before
+    // `startsAt` (9:00 AM Chicago), but ON the date OUT-05 gates on.
+    const eightAmChicago = new Date('2026-08-03T13:00:00.000Z');
+    expect(isSessionMarkDayCompleteEligible(BASE, eightAmChicago)).toBe(true);
+  });
+
+  it('is NOT eligible the calendar day before the session date', () => {
+    const dayBeforeChicago = new Date('2026-08-02T23:00:00.000Z'); // still Aug 2 in Chicago (CDT, UTC-5)
+    expect(isSessionMarkDayCompleteEligible(BASE, dayBeforeChicago)).toBe(false);
+  });
+
+  it('is NOT eligible for a completed session, regardless of the clock', () => {
+    const farFuture = new Date('2030-01-01T00:00:00.000Z');
+    expect(isSessionMarkDayCompleteEligible({ ...BASE, status: 'completed' }, farFuture)).toBe(
+      false,
+    );
+  });
+
+  it('is NOT eligible for a canceled session, regardless of the clock', () => {
+    const farFuture = new Date('2030-01-01T00:00:00.000Z');
+    expect(isSessionMarkDayCompleteEligible({ ...BASE, status: 'canceled' }, farFuture)).toBe(
+      false,
+    );
+  });
+
+  // T179 follow-up round (checker MINOR #1): every instant used above is one
+  // where Chicago and UTC agree on the calendar date -- including the
+  // "still Aug 2 in Chicago" case just above, which is Aug 2 in UTC too.
+  // Mutating `CHICAGO_TIME_ZONE` -> `'UTC'` inside `formatChicagoDateOnly`
+  // left the whole suite green. These two cases pin instants where the two
+  // zones DISAGREE on the date, so that mutation reddens here.
+  it('is NOT eligible when it is already the session date in UTC but still the day before in Chicago (CDT)', () => {
+    // 2026-08-04T02:00:00.000Z is 9:00 PM on 2026-08-03 in America/Chicago
+    // (CDT, UTC-5) but is already 2026-08-04 in UTC.
+    const stillAug3InChicago = new Date('2026-08-04T02:00:00.000Z');
+    expect(
+      isSessionMarkDayCompleteEligible({ ...BASE, sessionDate: '2026-08-04' }, stillAug3InChicago),
+    ).toBe(false);
+  });
+
+  it('is NOT eligible when it is already the session date in UTC but still the day before in Chicago (CST, winter offset)', () => {
+    // 2026-01-05T05:30:00.000Z is 11:30 PM on 2026-01-04 in America/Chicago
+    // (CST, UTC-6 -- a different offset than the CDT case above) but is
+    // already 2026-01-05 in UTC.
+    const stillJan4InChicago = new Date('2026-01-05T05:30:00.000Z');
+    expect(
+      isSessionMarkDayCompleteEligible({ ...BASE, sessionDate: '2026-01-05' }, stillJan4InChicago),
+    ).toBe(false);
+  });
+});
+
+const MARK_DAY_EVENT_ID = 'event-riverside-trail-build';
+
+/** T179 (Trap 11) -- deliberately DISTINCT from `FIXTURE_STUDENTS`
+ * (`OutreachDetail.tsx:683-714`'s own "Amara Chen"/"Marcus Bello"/
+ * "Nina Ortiz"/"Sofia Delgado"/"Ravi Kapoor", reached via
+ * `defaultLoadOutreachDetail` -- the loader EVERY OTHER test in this file
+ * uses). This task's own premise gate measured that a test asserting "the
+ * dialog shows no fixture names" against the default loader passes for a
+ * reason that has nothing to do with the wiring under test
+ * (`[true, true, true, true]` -- all four `DEFAULT_ROSTER` names are also
+ * `FIXTURE_STUDENTS` names). Using a genuinely different roster here means
+ * B4's positive assertion (below) can only pass if this page's own real
+ * roster actually reached the dialog. */
+const MDC_ROSTER: readonly RosterStudent[] = [
+  {
+    id: 'student-priya-shah',
+    name: 'Priya Shah',
+    teamId: 'team-comets',
+    profileId: 'profile-priya-shah',
+  },
+  {
+    id: 'student-devon-osei',
+    name: 'Devon Osei',
+    teamId: 'team-comets',
+    profileId: 'profile-devon-osei',
+  },
+];
+
+const MDC_SESSION_1: OutreachDetailSession = {
+  id: 'session-mdc-1',
+  eventId: MARK_DAY_EVENT_ID,
+  sessionDate: '2026-08-03',
+  startsAt: '2026-08-03T14:00:00.000Z',
+  endsAt: '2026-08-03T17:00:00.000Z',
+  status: 'scheduled',
+  peopleReached: null,
+  notes: '',
+};
+const MDC_SESSION_2: OutreachDetailSession = {
+  id: 'session-mdc-2',
+  eventId: MARK_DAY_EVENT_ID,
+  sessionDate: '2026-08-04',
+  startsAt: '2026-08-04T14:00:00.000Z',
+  endsAt: '2026-08-04T17:00:00.000Z',
+  status: 'scheduled',
+  peopleReached: null,
+  notes: '',
+};
+const MDC_SESSION_3: OutreachDetailSession = {
+  id: 'session-mdc-3',
+  eventId: MARK_DAY_EVENT_ID,
+  sessionDate: '2026-08-05',
+  startsAt: '2026-08-05T14:00:00.000Z',
+  endsAt: '2026-08-05T17:00:00.000Z',
+  status: 'scheduled',
+  peopleReached: null,
+  notes: '',
+};
+
+/** Strictly on/after all three `MDC_SESSION_*` dates, so every session is
+ * date-eligible under this pinned clock -- the stable baseline B1/B3/B4/B5/B6
+ * need. B2 (eligibility itself) pins its own, separate clocks per case. */
+const MDC_NOW_ISO = '2026-08-06T12:00:00.000Z';
+const mdcNowFn = (): Date => new Date(MDC_NOW_ISO);
+
+function makeMarkDayCompleteLoadData(
+  overrides: Partial<OutreachDetailData> = {},
+): LoadOutreachDetailFn {
+  return async () => ({
+    event: {
+      id: MARK_DAY_EVENT_ID,
+      seasonId: 'season-1',
+      type: 'outreach',
+      title: 'Riverside Trail Build',
+      description: '',
+      locationName: 'Riverside Trail',
+      address: '200 Trail Rd',
+      teamIds: null,
+      createdBy: null,
+      countsParticipation: false,
+      countsVolunteerHours: true,
+      adultVolunteersCount: 0,
+      adultVolunteerHours: 0,
+    },
+    sessions: [MDC_SESSION_1, MDC_SESSION_2, MDC_SESSION_3],
+    rsvps: [],
+    students: MDC_ROSTER,
+    teams: [{ id: 'team-comets', name: 'Comets', color: 'purple' }],
+    profiles: [],
+    ...overrides,
+  });
+}
+
+/** `loadRoster` is stubbed to `[]` -- same reasoning `renderParentDetail`
+ * above already documents: left at its real default it rejects in this
+ * environment (no configured Supabase client), which would render this
+ * page's own unrelated T147 roster-failure Banner. Stubbing it also means
+ * `eventDialogRoster` (`OutreachEventDialog`'s OWN, unrelated checklist
+ * roster, module doc #10) is a real, empty array -- deliberately NOT
+ * `MDC_ROSTER` -- so B4's mutation (passing `eventDialogRoster` instead of
+ * `roster` at the `MarkDayCompleteDialog` call site) is genuinely
+ * observable: it would render an EMPTY checklist, not a differently-named
+ * one. */
+function renderMarkDayCompleteDetail(
+  props: Parameters<typeof OutreachDetail>[0] = {},
+  user: AuthUser | null = COACH_USER,
+): void {
+  renderDetail(
+    MARK_DAY_EVENT_ID,
+    {
+      loadData: makeMarkDayCompleteLoadData(),
+      loadRoster: async () => [],
+      nowFn: mdcNowFn,
+      ...props,
+    },
+    user,
+  );
+}
+
+/** Every "Mark day complete" trigger currently in the DOM, located by
+ * `aria-label` STARTING WITH the literal (Trap 9/B1/item 15) -- never exact
+ * `textContent`, which is the SAME literal string across every trigger by
+ * design (module doc #15(d), Astryx `Button`'s `label`/`children` split). */
+function findMarkDayCompleteTriggers(): HTMLButtonElement[] {
+  return Array.from(container.querySelectorAll('button')).filter((btn) =>
+    (btn.getAttribute('aria-label') ?? '').startsWith('Mark day complete'),
+  );
+}
+
+/** The one `<dialog>` whose own text starts with "Mark day complete" (Trap
+ * 10) -- this page ALSO mounts `MarkEventCompleteDialog` ("Mark event
+ * complete"…), `OutreachEventDialog`, and `AlertDialog`, all present in the
+ * DOM whether open or not. A bare `container.querySelector('dialog')`
+ * returns the FIRST of the four, which this task's own premise gate measured
+ * is the wrong one. */
+function findMarkDayCompleteDialogElement(): Element | undefined {
+  return Array.from(container.querySelectorAll('dialog')).find((d) =>
+    d.textContent?.trim().startsWith('Mark day complete'),
+  );
+}
+
+function findMarkDayCompleteConfirmButton(): HTMLButtonElement | undefined {
+  return Array.from(findMarkDayCompleteDialogElement()?.querySelectorAll('button') ?? []).find(
+    (btn) => btn.textContent?.trim().startsWith('Mark complete'),
+  );
+}
+
+describe('"Mark day complete" per-session trigger -- staff-only, distinct accessible names (B1)', () => {
+  it('shows one trigger per session for a coach, with THREE DISTINCT accessible names (Trap 9)', async () => {
+    renderMarkDayCompleteDetail();
+    await flushMicrotasks();
+
+    const triggers = findMarkDayCompleteTriggers();
+    expect(triggers).toHaveLength(3);
+    const accessibleNames = triggers.map((btn) => btn.getAttribute('aria-label'));
+    expect(new Set(accessibleNames).size).toBe(3);
+    // Visible text stays the SAME literal "Mark day complete" for every
+    // trigger -- only the accessible name carries the disambiguating date.
+    for (const trigger of triggers) {
+      expect(trigger.textContent?.trim()).toBe('Mark day complete');
+    }
+  });
+
+  it('shows one trigger per session for a signed-in admin too', async () => {
+    renderMarkDayCompleteDetail({}, ADMIN_USER);
+    await flushMicrotasks();
+    expect(findMarkDayCompleteTriggers()).toHaveLength(3);
+  });
+
+  it('is absent for a signed-in parent -- Signups still renders (absence is not a failed load)', async () => {
+    renderMarkDayCompleteDetail({ loadGuardianLinksForParent: async () => [] }, PARENT_USER);
+    await flushMicrotasks();
+    expect(findMarkDayCompleteTriggers()).toHaveLength(0);
+    expect(container.textContent).toContain('Signups');
+  });
+
+  it('is absent for a signed-in student -- Signups still renders', async () => {
+    renderMarkDayCompleteDetail({}, STUDENT_USER);
+    await flushMicrotasks();
+    expect(findMarkDayCompleteTriggers()).toHaveLength(0);
+    expect(container.textContent).toContain('Signups');
+  });
+
+  it('is absent for a signed-out visitor -- Signups still renders', async () => {
+    renderMarkDayCompleteDetail({}, null);
+    await flushMicrotasks();
+    expect(findMarkDayCompleteTriggers()).toHaveLength(0);
+    expect(container.textContent).toContain('Signups');
+  });
+});
+
+describe('"Mark day complete" eligibility gates the trigger, wired end to end (B2)', () => {
+  const TOMORROW_SESSION: OutreachDetailSession = {
+    id: 'session-mdc-tomorrow',
+    eventId: MARK_DAY_EVENT_ID,
+    sessionDate: '2026-08-10',
+    startsAt: '2026-08-10T14:00:00.000Z',
+    endsAt: '2026-08-10T17:00:00.000Z',
+    status: 'scheduled',
+    peopleReached: null,
+    notes: '',
+  };
+  const beforeTheDateNowFn = (): Date => new Date('2026-08-09T12:00:00.000Z'); // Aug 9 in Chicago
+  const onTheDateNowFn = (): Date => new Date('2026-08-10T18:00:00.000Z'); // Aug 10 in Chicago
+
+  it('a scheduled session whose date is TOMORROW (relative to nowFn) shows NO trigger', async () => {
+    renderMarkDayCompleteDetail({
+      loadData: makeMarkDayCompleteLoadData({ sessions: [TOMORROW_SESSION] }),
+      nowFn: beforeTheDateNowFn,
+    });
+    await flushMicrotasks();
+    expect(findMarkDayCompleteTriggers()).toHaveLength(0);
+  });
+
+  it('the SAME session shows a trigger once nowFn reaches that date', async () => {
+    renderMarkDayCompleteDetail({
+      loadData: makeMarkDayCompleteLoadData({ sessions: [TOMORROW_SESSION] }),
+      nowFn: onTheDateNowFn,
+    });
+    await flushMicrotasks();
+    expect(findMarkDayCompleteTriggers()).toHaveLength(1);
+  });
+
+  it('a COMPLETED session shows NO trigger regardless of the clock', async () => {
+    renderMarkDayCompleteDetail({
+      loadData: makeMarkDayCompleteLoadData({
+        sessions: [{ ...MDC_SESSION_1, status: 'completed' }],
+      }),
+      nowFn: mdcNowFn, // far after MDC_SESSION_1's own date
+    });
+    await flushMicrotasks();
+    expect(findMarkDayCompleteTriggers()).toHaveLength(0);
+  });
+});
+
+describe('"Mark day complete" dialog resolves to the SESSION whose trigger was clicked (B3)', () => {
+  it('activating the SECOND of three triggers opens the dialog for the SECOND session, not the first or third', async () => {
+    renderMarkDayCompleteDetail();
+    await flushMicrotasks();
+
+    const triggers = findMarkDayCompleteTriggers();
+    expect(triggers).toHaveLength(3);
+    act(() => {
+      triggers[1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const dialogEl = findMarkDayCompleteDialogElement();
+    expect(dialogEl).toBeTruthy();
+    expect(dialogEl?.textContent).toContain(formatSessionDateOnly(MDC_SESSION_2));
+    expect(dialogEl?.textContent).not.toContain(formatSessionDateOnly(MDC_SESSION_1));
+    expect(dialogEl?.textContent).not.toContain(formatSessionDateOnly(MDC_SESSION_3));
+  });
+});
+
+describe('"Mark day complete" dialog receives THIS page’s real roster, not a fixture or another roster (B4)', () => {
+  it('the attendee checklist shows this event’s own real roster names', async () => {
+    renderMarkDayCompleteDetail();
+    await flushMicrotasks();
+
+    act(() => {
+      findMarkDayCompleteTriggers()[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const dialogEl = findMarkDayCompleteDialogElement();
+    expect(dialogEl?.textContent).toContain('Priya Shah');
+    expect(dialogEl?.textContent).toContain('Devon Osei');
+  });
+});
+
+// T179 follow-up round (checker MINOR #3): the shared `makeMarkDayCompleteLoadData`
+// fixture (used by B1/B2/B3/B4/B5/B6 above) passes `rsvps: []`, so nothing at
+// page level ever exercised the going-RSVP-pre-check path -- `rsvps={[]}` at
+// the `<MarkDayCompleteDialog>` call site left the whole suite green. This
+// block gives the fixture a real, non-empty `rsvps` array with a `going` row
+// and asserts the corresponding student is pre-checked when the dialog opens,
+// proving the page's real `rsvps` prop (not an empty array) reaches the
+// dialog.
+describe('"Mark day complete" dialog receives THIS page’s real rsvps -- going RSVP pre-checks the roster row', () => {
+  it('pre-checks the student with a real going RSVP for the clicked session; the other student starts unchecked', async () => {
+    const goingRsvps: RsvpRow[] = [
+      {
+        id: 'rsvp-priya-going',
+        sessionId: MDC_SESSION_1.id,
+        studentId: 'student-priya-shah',
+        status: 'going',
+        respondedBy: 'profile-priya-shah',
+        updatedAt: '2026-08-01T00:00:00.000Z',
+        createdAt: '2026-08-01T00:00:00.000Z',
+      },
+    ];
+    renderMarkDayCompleteDetail({
+      loadData: makeMarkDayCompleteLoadData({ rsvps: goingRsvps }),
+    });
+    await flushMicrotasks();
+
+    act(() => {
+      findMarkDayCompleteTriggers()[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    // Scoped to the dialog itself (Trap 10) -- the same page also mounts a
+    // staff-only <AttendancePanel> using this SAME roster, which renders its
+    // own, unrelated "Priya Shah"-labeled checkbox earlier in the DOM. A
+    // page-wide label lookup would silently resolve to that one instead.
+    const dialogEl = findMarkDayCompleteDialogElement();
+    expect(dialogEl).toBeTruthy();
+    const dialogLabels = Array.from(dialogEl?.querySelectorAll('label') ?? []);
+    function getDialogFieldControl(labelText: string): HTMLInputElement {
+      const label = dialogLabels.find((el) => el.textContent?.trim() === labelText);
+      if (!label) throw new Error(`No dialog label found for "${labelText}"`);
+      const forId = label.getAttribute('for');
+      if (!forId) throw new Error(`Label "${labelText}" has no htmlFor`);
+      const control = document.getElementById(forId);
+      if (!control) throw new Error(`No control found for id "${forId}"`);
+      return control as HTMLInputElement;
+    }
+
+    const priyaCheckbox = getDialogFieldControl('Priya Shah');
+    const devonCheckbox = getDialogFieldControl('Devon Osei');
+    expect(priyaCheckbox.checked).toBe(true);
+    expect(devonCheckbox.checked).toBe(false);
+  });
+});
+
+describe('"Mark day complete" threads the real signed-in coach’s profiles.id, not a placeholder (B5)', () => {
+  // T179 follow-up round (checker MINOR #2 -- the most important of the
+  // four): driven from `triggers[1]`, NOT `triggers[0]`. `triggers[0]`
+  // resolves to `orderedSessions[0]`, so it cannot distinguish "the write
+  // targets the session whose trigger was clicked" from "the write always
+  // targets the first session" -- a mutation that swaps in
+  // `orderedSessions[0].id` for the resolved session's `id` is a no-op
+  // against `triggers[0]` (`orderedSessions[0].id` IS already correct
+  // there) and left the whole suite green. Using the SECOND trigger means
+  // the payload's `sessionId` can only equal `MDC_SESSION_2.id` if the
+  // clicked trigger actually determined which session's data was written --
+  // the UI showing one session while the write targets another is a
+  // data-integrity gap on this write path.
+  it('confirming the SECOND trigger calls the real markDayComplete mutation with the SECOND session’s id and recordedBy = the signed-in coach’s own id', async () => {
+    mockedMarkDayComplete.mockResolvedValueOnce(undefined);
+    renderMarkDayCompleteDetail();
+    await flushMicrotasks();
+
+    const triggers = findMarkDayCompleteTriggers();
+    expect(triggers).toHaveLength(3);
+    act(() => {
+      triggers[1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const confirmButton = findMarkDayCompleteConfirmButton();
+    expect(confirmButton).toBeTruthy();
+    act(() => {
+      confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    expect(mockedMarkDayComplete).toHaveBeenCalledTimes(1);
+    expect(mockedMarkDayComplete.mock.calls[0][0].recordedBy).toBe(COACH_USER.id);
+    expect(mockedMarkDayComplete.mock.calls[0][0].sessionId).toBe(MDC_SESSION_2.id);
+  });
+});
+
+describe('"Mark day complete" write/reload composition -- Trap 6, two tests, one per half (B6)', () => {
+  it('(a) a REJECTING write surfaces the dialog’s own error banner', async () => {
+    mockedMarkDayComplete.mockRejectedValueOnce(new Error('RLS denied this write'));
+    renderMarkDayCompleteDetail();
+    await flushMicrotasks();
+
+    act(() => {
+      findMarkDayCompleteTriggers()[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const confirmButton = findMarkDayCompleteConfirmButton();
+    act(() => {
+      confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    expect(findMarkDayCompleteDialogElement()?.textContent ?? '').toContain(
+      "Couldn't mark this day complete",
+    );
+  });
+
+  it('(b) a REJECTING reload after a SUCCESSFUL write does NOT surface as a write failure', async () => {
+    mockedMarkDayComplete.mockResolvedValueOnce(undefined);
+    let loadCount = 0;
+    const rejectingReloadLoadData: LoadOutreachDetailFn = async (eventId) => {
+      loadCount += 1;
+      if (loadCount === 1) return makeMarkDayCompleteLoadData()(eventId);
+      throw new Error('refetch exploded');
+    };
+
+    renderMarkDayCompleteDetail({ loadData: rejectingReloadLoadData });
+    await flushMicrotasks();
+    expect(loadCount).toBe(1);
+
+    act(() => {
+      findMarkDayCompleteTriggers()[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const confirmButton = findMarkDayCompleteConfirmButton();
+    act(() => {
+      confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+    await flushMicrotasks();
+
+    // The write succeeded and the dialog closed itself on success -- no
+    // write-failure banner anywhere on the page, despite the reload that
+    // followed genuinely rejecting.
+    expect(container.textContent).not.toContain("Couldn't mark this day complete");
+    // The reload was genuinely attempted (and genuinely rejected) -- this
+    // is not a vacuous "the reload never ran" pass.
+    expect(loadCount).toBe(2);
+  });
+});
+
+// T179 follow-up round (checker MINOR #4): the page's own `onOpenChange`
+// handler (`(isOpen) => { if (!isOpen) setMarkDayCompleteSessionId(null); }`)
+// is what actually lets the coach dismiss the dialog -- the module doc's own
+// #15(b) claims the dialog can be closed this way. A no-op `onOpenChange`
+// (`() => {}`) left the whole suite green because nothing asserted the
+// dialog ever goes away. This test drives the dialog's real Cancel button
+// (which calls `onOpenChange(false)` internally -- `MarkDayCompleteDialog.tsx`'s
+// own `handleClose`) and asserts the whole `<MarkDayCompleteDialog>` element
+// unmounts, per Trap 5's "whole element gated, not just isOpen" design.
+describe('"Mark day complete" dialog Cancel really closes/unmounts it (module doc #15(b))', () => {
+  it('clicking Cancel unmounts the dialog -- it is not stuck open forever', async () => {
+    renderMarkDayCompleteDetail();
+    await flushMicrotasks();
+
+    act(() => {
+      findMarkDayCompleteTriggers()[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(findMarkDayCompleteDialogElement()).toBeTruthy();
+
+    const cancelButton = Array.from(
+      findMarkDayCompleteDialogElement()?.querySelectorAll('button') ?? [],
+    ).find((btn) => btn.textContent?.trim() === 'Cancel');
+    expect(cancelButton).toBeTruthy();
+    act(() => {
+      cancelButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    expect(findMarkDayCompleteDialogElement()).toBeUndefined();
   });
 });

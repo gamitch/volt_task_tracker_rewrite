@@ -470,6 +470,146 @@
  * distinct empty-state message -- the same deliberate, tested "nothing to
  * RSVP for" choice (c) above already made for a parent with zero linked
  * students.
+ *
+ * -----------------------------------------------------------------------
+ * 15. T179 (OUT-05, `docs/swarm/VOLT_Portal_PRD.md:318`): the per-session
+ *     "Mark day complete" dialog, mounted here for the first time.
+ *
+ * `MarkDayCompleteDialog.tsx` (T042) was finished/tested since T042 but had
+ * ZERO production importers -- its own module doc previously stated (now
+ * corrected, since this task IS that wiring) that `OutreachDetail.tsx`
+ * connects it "with its real fetched session/roster/rsvps data". This task is
+ * that connection.
+ *
+ * (a) PART A -- REQUIRED PROPS, NOT FIXTURE DEFAULTS. `MarkDayCompleteDialog`'s
+ * `eventTitle`/`session`/`roster`/`rsvps`/`currentUserProfileId` (and
+ * `MarkEventCompleteDialog`'s `currentUserProfileId`, which shared the same
+ * exported placeholder) were all optional-with-a-fixture-default -- a call
+ * site that forgot one compiled cleanly and silently wrote real `attendance`
+ * rows for FIXTURE students under a FAKE `recorded_by`. Both files' module
+ * docs have the full per-file writeup; this page is the proof the compiler
+ * now catches the omission (`tsc` `TS2739`/`TS2741` at the two call sites
+ * below if any of these props is dropped).
+ *
+ * (b) PER-SESSION, NOT PER-EVENT (contrast with module doc #12). Unlike
+ * `MarkEventCompleteDialog` (one instance, driven by the staff-only
+ * `MoreMenu`, runs every remaining session of the event in one sequential
+ * batch), `MarkDayCompleteDialog` takes ONE `session` -- its trigger lives
+ * INSIDE this page's own `orderedSessions.map(...)` loop (module doc #4's
+ * per-session discipline), never in `menuItems`. `markDayCompleteSessionId:
+ * string | null` drives a SINGLE dialog instance, resolved to a real session
+ * BY ID at render (`markDayCompleteSession` above) -- not N dialogs inside
+ * the loop, which would mean N mounted subtrees, N duplicated labels, N
+ * copies of form state for what is, at any moment, at most one open dialog.
+ * The whole element (not just `isOpen`) is gated on
+ * `markDayCompleteSession !== null`, because `session` is a required prop
+ * (a) above -- there is no fixture session left to render against while
+ * closed. This still composes correctly with the dialog's own lifecycle: its
+ * `onOpenChange(false)` call on a successful submit unmounts this element
+ * (this page's own `onOpenChange` handler clears `markDayCompleteSessionId`
+ * in response), and its own reset-on-open `useEffect` still fires the next
+ * time a different session's trigger mounts it fresh.
+ *
+ * (c) ELIGIBILITY -- GATED ON THE SESSION *DATE*, NOT `startsAt`. OUT-05's own
+ * text (quoted above) reads "on/after a session **date**". `event_sessions
+ * .session_date` (module doc #1) is a SQL `date`, a genuinely different
+ * column from `starts_at` (a `timestamptz`) -- gating on `startsAt` instead
+ * would be a NARROWING of the PRD requirement (constitution item 1: PRD
+ * outranks any other prescription), hiding the trigger from a coach standing
+ * at a session on its own morning (e.g. 8 AM for a 9 AM session), which
+ * "on/after a session date" plainly permits. `isSessionMarkDayCompleteEligible`
+ * (exported, own `describe` block in the test file -- matching this file's own
+ * convention for `sortSessionsByStart`/`groupSessionSignups`/
+ * `resolveOwnRosterStudent`) is the ONE place this is computed: TWO
+ * independent halves, `session.status === 'scheduled'` AND
+ * `formatChicagoDateOnly(now) >= session.sessionDate` -- a plain ISO-string
+ * comparison (both sides are already `YYYY-MM-DD`), needing no `Date`
+ * arithmetic and no DST edge case. `formatChicagoDateOnly` reuses this file's
+ * own already-declared `CHICAGO_TIME_ZONE` (module doc #9) via
+ * `Intl.DateTimeFormat('en-CA', ...)` -- `en-CA` is the one built-in locale
+ * whose default format IS `YYYY-MM-DD`. `nowFn` (module doc #13(g)'s own
+ * clock seam, already threaded to every `<ParentRsvp>`/`<RsvpControl>`) is
+ * reused here rather than a second seam -- `new Date()` is never called
+ * directly at this trigger. The dialog's OWN `isSessionEligible = session
+ * .status === 'scheduled'` (its own module doc #5(ii)) is an unrelated
+ * backstop, unchanged by this task, that only ever checks status -- it is not
+ * a duplicate of the date half.
+ *
+ * (d) N TRIGGERS NEED N DISTINGUISHABLE ACCESSIBLE NAMES (item 15). A
+ * multi-session event renders one trigger per session inside the same loop;
+ * following OUT-05's literal "Mark day complete" wording alone would render
+ * every trigger with the SAME `aria-label` -- indistinguishable to a screen
+ * reader and to a test locator alike, the EXACT defect module doc #13(f)
+ * above already identified and solved for `<ParentRsvp>`'s own heading. The
+ * fix here uses Astryx `Button`'s own documented `label`/`children` split
+ * (`astryx-api.md`, Button props: `children` is an optional override for
+ * VISIBLE text only; `label` is still required and is what provides the
+ * accessible name) -- `label={\`Mark day complete — ${formatSessionDateOnly
+ * (session)}\`}` (three sessions -> three distinct accessible names) while
+ * `children` keeps the VISIBLE text the same literal "Mark day complete" for
+ * every trigger. `formatSessionDateOnly` is the same already-exported
+ * function this file already uses for the identical purpose at the
+ * `<ParentRsvp>` heading above.
+ *
+ * (e) NO RESHAPING (Trap 8). This page's `OutreachDetailSession` (module doc
+ * #1) is field-for-field `MarkDayCompleteDialog.tsx`'s own
+ * `MarkDayCompleteSession`, and this page's `RosterStudent` carries only one
+ * EXTRA field (`profileId`, module doc #13) beyond that dialog's own
+ * `RosterStudent` -- both assign straight through with no cast, no `as
+ * unknown as`, no hand-written mapper. `roster`/`rsvps` passed to the new
+ * dialog are the SAME page-level arrays the `MarkEventCompleteDialog` mount
+ * (module doc #12) already passes, unfiltered by session -- the dialog's own
+ * `computeInitialAttendedStudentIds` filters by `sessionId` itself (that
+ * file's own module doc #6), so pre-filtering here would be a second place
+ * for that filter to drift out of sync.
+ *
+ * (f) THE WRITE-THEN-REFETCH COMPOSITION, AND THE `void` DEFECT IT REPLACES.
+ * `MarkDayCompleteDialog` has no `onFinished` prop (unlike
+ * `MarkEventCompleteDialog`) -- it closes itself on success and surfaces
+ * failures in its own error `Banner`, so the page's post-write refetch must
+ * be composed INTO `onMarkComplete` itself: `await markDayComplete(payload);
+ * reloadDetail().catch(() => {})`. Both halves are load-bearing. `await` on
+ * the WRITE means a real write failure still rejects `onMarkComplete`, so the
+ * dialog's own `catch` sets its error banner (B6(a)) -- an un-awaited write
+ * would let the dialog treat every submission as successful regardless of
+ * whether it actually was. `.catch(() => {})` on the RELOAD, not `void`
+ * -- `void reloadDetail()` was measured (this task's own premise gate) to
+ * leave an unhandled promise rejection whenever the refetch itself rejected
+ * after a successful write: `void` discards a promise's VALUE, not its
+ * REJECTION. That produced a fully green test file (every assertion passing)
+ * that still failed the overall vitest run (`Errors 1 error`, process exit
+ * 1) -- green tests, red suite, silently. `.catch(() => {})` absorbs a
+ * refetch failure without reporting it as a write failure, which is the
+ * correct behavior regardless: the write already committed by the time the
+ * refetch runs, so surfacing a refetch failure as "couldn't mark this day
+ * complete" would be false AND would invite the coach to retry a write that
+ * already succeeded. Part C of this task applies the identical one-line fix
+ * to the pre-existing `MarkEventCompleteDialog` mount's own `onFinished`
+ * (module doc #12), which had the same defect, latent only because no
+ * existing test rejected its reload.
+ *
+ * (g) THE `user !== null` GATE AT THIS DIALOG (AND AT THE
+ * `MarkEventCompleteDialog` MOUNT ABOVE, Part C) IS DEFENSIVE, NOT
+ * COMPILER-REQUIRED -- CORRECTING A CLAIM THIS FILE'S OWN PRE-EXISTING
+ * COMMENTS MAKE. Three pre-existing gates at this file's other role-scoped
+ * render sites (the `<ParentRsvp>`/`<RsvpControl>`/`<AttendancePanel>` call
+ * sites above) carry comments stating their own `user !== null` checks are
+ * "LOAD-BEARING" because `isParentViewer`/`isStudentViewer`/`isStaffViewer`
+ * are "plain booleans, not type predicates," and therefore "do not narrow
+ * `user`." That claim does not hold: TypeScript 4.4+ narrows through ALIASED
+ * conditions, and `user` is a `const` destructured binding (`const { user } =
+ * useAuth()`, module doc #11) -- `isStaffViewer` itself narrows `user` at
+ * every one of its own uses, including inside this dialog's gate, with no
+ * separate check. This task's own premise gate measured `tsc exit=0` after
+ * deleting all three of those pre-existing null checks at once. The explicit
+ * `user !== null` checks at THIS task's two new/touched gates are still
+ * written -- they are DEFENSIVE and match this file's own established
+ * convention, not because the compiler demands them. The three pre-existing
+ * comments making the stronger, false claim are a separate, pre-existing
+ * defect, out of this task's Allowed Files, and are deliberately left
+ * unedited here (filed for the ledger, not fixed in place, so this file does
+ * not end this task with two contradicting explanations of the same
+ * mechanism sitting a few hundred lines apart from each other).
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
@@ -508,6 +648,10 @@ import {
   loadGuardianLinksForParent as defaultLoadGuardianLinksForParent,
   loadOutreachDetail,
   loadOutreachEventRoster,
+  // T179 (module doc #15) -- the real `MarkDayCompleteDialog` onMarkComplete
+  // mutation, composed into the page's own `reloadDetail()` at the new mount
+  // below (module doc #15 has the full write-then-refetch writeup).
+  markDayComplete,
   saveOutreachEvent,
   type LoadGuardianLinksForParentFn,
   type LoadOutreachEventRosterFn,
@@ -527,6 +671,13 @@ import { AttendancePanel } from './AttendancePanel';
 // own `onMarkSessionComplete` prop already defaults to the real
 // `markDayComplete` mutation internally.
 import { MarkEventCompleteDialog } from './MarkEventCompleteDialog';
+// T179 (PRD OUT-05, line 318): the per-session "Mark day complete" dialog --
+// finished/tested since T042 but, until this task, had zero production
+// importers. Module doc #15 has the full wiring writeup, including why this
+// mount is separate from `MarkEventCompleteDialog` above (that one runs the
+// whole event's remaining sessions in one bulk batch; this one is the
+// single-session flow it is modeled on).
+import { MarkDayCompleteDialog, type MarkDayCompletePayload } from './MarkDayCompleteDialog';
 // T157 (OUT-06): the parent-facing RSVP-on-behalf control -- module doc #13.
 // `GuardianLinkRow` is REUSED from that component's own export rather than
 // redeclared page-locally: this page must import the component anyway, so
@@ -1117,6 +1268,41 @@ export function formatChicagoWallTime(isoDateTime: string): string {
   return `${hour}:${minute}`;
 }
 
+/** T179 (module doc #15) -- `now` (an `Intl`-formattable instant) rendered as
+ * a plain `YYYY-MM-DD` Chicago-local calendar date, via `Intl.DateTimeFormat`'s
+ * `'en-CA'` locale (the one built-in locale whose default date format IS
+ * `YYYY-MM-DD`, so no manual zero-padding/reassembly is needed). Reuses this
+ * file's own `CHICAGO_TIME_ZONE` (declared above, module doc #9) -- not
+ * redeclared. Used ONLY to compare against `event_sessions.session_date`
+ * (already a `YYYY-MM-DD` SQL `date`, module doc #1), which sorts correctly
+ * as a plain ISO string -- no `Date` arithmetic, no DST edge case. */
+const CHICAGO_DATE_ONLY_FORMATTER = new Intl.DateTimeFormat('en-CA', {
+  timeZone: CHICAGO_TIME_ZONE,
+});
+
+function formatChicagoDateOnly(now: Date): string {
+  return CHICAGO_DATE_ONLY_FORMATTER.format(now);
+}
+
+/** T179 (module doc #15) -- OUT-05 (`docs/swarm/VOLT_Portal_PRD.md:318`):
+ * "on/after a session **date**, Mark day complete opens a `Dialog`". The PRD
+ * says DATE, not `starts_at` (a `timestamptz`) -- gating on `startsAt` would
+ * be a narrowing that hides the trigger from a coach on the session's own
+ * morning (e.g. 8 AM for a 9 AM session), which "on/after a session date"
+ * plainly permits. `sessionDate`/`now` are compared as plain
+ * `YYYY-MM-DD` strings, which sorts correctly since both are ISO dates
+ * (module doc #1 / `formatChicagoDateOnly` above) -- never `Date` arithmetic.
+ * `session.status === 'scheduled'` is the second, independent half: an
+ * already-`completed`/`canceled` session is never eligible regardless of the
+ * clock (this dialog's own `isSessionEligible` backstop, unchanged, restates
+ * this same rule one layer down -- module doc #15 below). */
+export function isSessionMarkDayCompleteEligible(
+  session: OutreachDetailSession,
+  now: Date,
+): boolean {
+  return session.status === 'scheduled' && formatChicagoDateOnly(now) >= session.sessionDate;
+}
+
 /**
  * T121 item (b) (UXP-04 outreach half) -- distinct student ids with an
  * existing `status='going'` RSVP on ANY of the given sessions. The ONE
@@ -1380,6 +1566,12 @@ export function OutreachDetail({
   // T127 (module doc #12) -- drives the one rendered
   // `<MarkEventCompleteDialog>` instance.
   const [isMarkEventCompleteDialogOpen, setIsMarkEventCompleteDialogOpen] = useState(false);
+  // T179 (module doc #15) -- drives the one rendered `<MarkDayCompleteDialog>`
+  // instance, resolved to a session BY ID at render (Trap 5 in the packet):
+  // `null` = closed; a real session id = open, showing that session. One
+  // instance, not N inside the per-session loop -- N would mean N mounted
+  // subtrees, N duplicated labels, N copies of form state.
+  const [markDayCompleteSessionId, setMarkDayCompleteSessionId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<FeedbackBanner | null>(null);
   // T121 item (a) -- best-effort roster fetch for the edit-mode dialog's
   // "Expected attendees" checklist. Deliberately named `eventDialogRoster`
@@ -1692,6 +1884,16 @@ export function OutreachDetail({
   // renders at all.
   const ownRosterStudent =
     isStudentViewer && user !== null ? resolveOwnRosterStudent(roster, user.id) : null;
+  // T179 (module doc #15, Trap 5) -- the ONE place `markDayCompleteSessionId`
+  // is resolved to a real session, by id, at render. `null` (closed, or a
+  // stale/removed id after a reload) means the dialog element below isn't
+  // rendered at all -- gating the WHOLE element (not just `isOpen`) is
+  // required because `MarkDayCompleteDialog`'s `session` prop is required
+  // (T179 Part A), so there is no fixture session left to fall back to.
+  const markDayCompleteSession =
+    markDayCompleteSessionId === null
+      ? null
+      : (orderedSessions.find((session) => session.id === markDayCompleteSessionId) ?? null);
   const menuItems: DropdownMenuOption[] = [
     { label: 'Edit', onClick: openEditDialog },
     { label: 'Cancel event', onClick: openCancelConfirm },
@@ -1806,6 +2008,28 @@ export function OutreachDetail({
           orderedSessions.map((session) => (
             <VStack key={session.id} gap={4}>
               <SessionSignupList session={session} roster={roster} rsvps={rsvps} />
+              {/* T179 (module doc #15, Trap 9) -- staff-only, per-session
+                  "Mark day complete" trigger, INSIDE this page's own
+                  per-session loop (`MarkDayCompleteDialog` takes one
+                  `session`, unlike `MarkEventCompleteDialog`'s plural
+                  `sessions` from `menuItems` above) -- never in `menuItems`.
+                  `isSessionMarkDayCompleteEligible` (module doc #15) gates on
+                  PRD OUT-05's own "on/after a session date" wording, not
+                  `startsAt`. `label` carries the session date so a
+                  multi-session event's N triggers get N DISTINCT accessible
+                  names (item 15) -- `children` overrides only the VISIBLE
+                  text, which stays the same literal "Mark day complete" for
+                  every trigger (Astryx `Button`'s documented `children`/
+                  `label` split, `astryx-api.md:1810`). */}
+              {isStaffViewer && isSessionMarkDayCompleteEligible(session, nowFn()) && (
+                <Button
+                  label={`Mark day complete — ${formatSessionDateOnly(session)}`}
+                  variant="secondary"
+                  onClick={() => setMarkDayCompleteSessionId(session.id)}
+                >
+                  Mark day complete
+                </Button>
+              )}
               {/* T157 (module doc #13(d)/(f)) -- one `<ParentRsvp>` per
                   (session x qualifying linked student), inside this page's own
                   per-session loop (OUT-04 is per-session, module doc #4). The
@@ -1895,19 +2119,96 @@ export function OutreachDetail({
       {/* T127 (module doc #12) -- "Mark event complete" bulk action,
           staff-only trigger (the `MoreMenu` item above), same
           `sessions`/`roster`/`rsvps` this page already fetched/derived for
-          the Signups section, no reshaping needed (module doc #12). */}
-      <MarkEventCompleteDialog
-        isOpen={isMarkEventCompleteDialogOpen}
-        onOpenChange={setIsMarkEventCompleteDialogOpen}
-        eventTitle={event.title}
-        sessions={sessions}
-        roster={roster}
-        rsvps={rsvps}
-        currentUserProfileId={user?.id}
-        onFinished={() => {
-          void reloadDetail();
-        }}
-      />
+          the Signups section, no reshaping needed (module doc #12).
+          T179: `currentUserProfileId` is now a required prop on
+          `MarkEventCompleteDialog` (that file's own module doc has the full
+          writeup) -- gated here by an explicit `user !== null` check, same
+          shape this file's other three role gates (`isParentViewer`/
+          `isStudentViewer`/`isStaffViewer`) already use. This is defensive
+          and matches the file's convention; it is not required by the
+          compiler to narrow `user` -- `isStaffViewer` (a `const` derived from
+          the same destructured `user` binding) narrows it too, TypeScript
+          4.4+ narrows through aliased conditions (module doc #15 below has
+          the full writeup, T179). Reachability is honest: this dialog's only
+          trigger is the staff-only `MoreMenu` item above, which already
+          requires `user !== null`, so this branch is latent (unreachable
+          today), not live-firing -- it becomes impossible, not merely
+          unreachable, once the prop is required. */}
+      {user !== null && (
+        <MarkEventCompleteDialog
+          isOpen={isMarkEventCompleteDialogOpen}
+          onOpenChange={setIsMarkEventCompleteDialogOpen}
+          eventTitle={event.title}
+          sessions={sessions}
+          roster={roster}
+          rsvps={rsvps}
+          currentUserProfileId={user.id}
+          onFinished={() => {
+            // T179 (Part C) -- same one-character defect Trap 6 fixed at the
+            // new `MarkDayCompleteDialog` mount below: `void` discards the
+            // promise's VALUE, not its REJECTION, so a rejecting refetch here
+            // was an unhandled rejection that failed the whole test run
+            // (vitest `Errors 1 error`, exit 1) despite every assertion
+            // passing. `.catch(() => {})` absorbs a refetch failure without
+            // reporting it as a write failure -- the bulk write already
+            // committed (per-session, module doc on `MarkEventCompleteDialog
+            // .tsx`), so telling the coach it failed would invite a duplicate
+            // attempt. No new test is added for this fix -- B6 on the new
+            // `MarkDayCompleteDialog` mount already proves the mechanism, and
+            // this is the identical one-line fix applied a second place.
+            reloadDetail().catch(() => {});
+          }}
+        />
+      )}
+
+      {/* T179 (module doc #15, Trap 5) -- the single, staff-only
+          "Mark day complete" dialog instance, driven by
+          `markDayCompleteSessionId` resolved to `markDayCompleteSession`
+          above. The WHOLE element is gated (not just `isOpen`) because
+          `session`/`roster`/`rsvps`/`eventTitle`/`currentUserProfileId` are
+          now all required props (T179 Part A) -- there is no fixture value
+          left to render against while closed. This still works end to end:
+          the dialog's own `onOpenChange(false)` on success unmounts it
+          (clearing `markDayCompleteSessionId` below) and its reset-on-open
+          `useEffect` still fires the next time it mounts for a different
+          session. `roster`/`rsvps` are passed the SAME page-level arrays the
+          `MarkEventCompleteDialog` mount above passes, unfiltered --
+          `computeInitialAttendedStudentIds` filters by `sessionId` itself
+          (that dialog's own module doc #6), so pre-filtering here would be a
+          second place for the filter to drift (Trap 8). No reshaping: this
+          page's `OutreachDetailSession` is field-for-field
+          `MarkDayCompleteSession`, and `RosterStudent` carries only an EXTRA
+          `profileId` field, which assigns fine. */}
+      {user !== null && markDayCompleteSession !== null && (
+        <MarkDayCompleteDialog
+          isOpen
+          onOpenChange={(isOpen) => {
+            if (!isOpen) setMarkDayCompleteSessionId(null);
+          }}
+          eventTitle={event.title}
+          session={markDayCompleteSession}
+          roster={roster}
+          rsvps={rsvps}
+          currentUserProfileId={user.id}
+          onMarkComplete={async (payload: MarkDayCompletePayload) => {
+            // Trap 6 -- the `await`/`.catch()` split is both halves
+            // load-bearing. `await` the WRITE so a real failure still
+            // rejects and the dialog shows its own error `Banner` (B6(a)).
+            // `.catch(() => {})` the RELOAD -- `void reloadDetail()` was
+            // measured to leave the write's own promise rejection
+            // unhandled whenever the refetch itself rejected: `void` only
+            // discards the promise's VALUE, not its REJECTION. That
+            // produced a green test suite (every assertion passing) with
+            // vitest still exiting 1 on an "Unhandled Rejection" (B6(b));
+            // `.catch()` absorbs a refetch failure without reporting it as
+            // a write failure, which matters because the write already
+            // committed -- telling the coach it failed would invite a
+            // duplicate attempt.
+            await markDayComplete(payload);
+            reloadDetail().catch(() => {});
+          }}
+        />
+      )}
 
       <AlertDialog
         isOpen={isCancelConfirmOpen}

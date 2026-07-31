@@ -5739,3 +5739,64 @@ redid it. Both behaviours are why these reports are usable.
 `attendance` UPDATE. The shipped code is correct and the path is unreachable today, so it is filed
 rather than fixed in place — but it is a **gate on T196**, not an optional companion, because T196
 is blocked indefinitely and that path must not be mounted unguarded.
+
+---
+
+## T179 — mount `MarkDayCompleteDialog`, and make its placeholder defaults impossible
+
+**Merged `a5958b0`. PASS-with-MINORs, first attempt, plus one test-only follow-up round.**
+Gates re-measured a third time in the shared tree with `.env.local` absent: `tsc` exit 0 ·
+`vite build` ✓ · `format:check` clean · eslint **0 errors / 359 warnings** · vitest
+**70 files / 1689 tests** · `OutreachDetail.test.tsx` alone exits **0**.
+
+**The +1 eslint warning is expected and traced.** Exporting `isSessionMarkDayCompleteEligible`
+costs one `react-refresh/only-export-components`. The checker diffed per-file JSON across both
+trees: exactly one file moved (`OutreachDetail.tsx` 17 → 18), and no file lost a warning to
+offset a gain elsewhere.
+
+**The premise gate found a defect in the packet's own prescribed code.** Revision 1 specified
+`void reloadDetail()` and claimed it stops a refetch failure masquerading as a write failure.
+`void` discards the promise's *value*, not its *rejection*. Measured: the test written to prove
+that behaviour left **86 tests green and the suite at exit code 1**, with vitest warning "This
+might cause false positive tests." Now `.catch(() => {})` — and the identical latent leak already
+sat at `OutreachDetail.tsx:1907-1909`, the very mount revision 1 cited as the pattern to mirror,
+so it was folded in.
+
+**Three more packet errors the gate caught, all mine.** (a) I asserted `isStaffViewer` cannot
+narrow `user`, quoting three source comments that say so; the gate deleted all three checks and
+`tsc` exited 0 — TS 4.4+ narrows through aliased conditions. The code stays, the reason was false,
+and revision 1 would have had the worker write a fourth copy of it (**T301**). (b) I cited OUT-05
+at PRD line 296 (it is **318**) and gated on `startsAt` while presenting it as a quotation of "on/
+after a session **date**" — a silent narrowing that would hide the trigger from a coach at 8 AM on
+the session's own morning. Now gates on `sessionDate` in America/Chicago by ISO string comparison.
+(c) My per-session trigger rendered **one accessible name for three buttons**, the exact item-15
+defect this file's own module doc already solves for `ParentRsvp` — which I cited twice without
+applying.
+
+**An absence assertion with no possible mutation, again.** Criterion B4 asked the dialog to show
+none of the deleted fixture names; after Part A there is no fixture branch left to break, so it
+tested the test fixture. The gate also measured that the page's **own** `FIXTURE_STUDENTS`
+(`OutreachDetail.tsx:683-714`) carries all four of those names verbatim, so a worker taking the
+obvious path would have got a red test blaming the wiring for something else entirely.
+
+**The checker invented six mutations the packet never named; four were caught, four survived.**
+Caught: a *student's* profile id reaching `attendance.recorded_by`, and the session id swapped for
+the event id (which reddened twice). Survived — and the checker proved with its own DOM probes
+that the shipped code is correct on every one, so these were coverage gaps, not defects:
+swapping `America/Chicago` for `'UTC'` (every existing instant was one where the two agree,
+including the case commented "still Aug 2 in Chicago"); the UI showing one session while the write
+targets another; `rsvps={[]}` at the call site; and a no-op `onOpenChange` leaving the dialog
+undismissable.
+
+**All four were closed rather than filed** — four small test additions in an already-Allowed file,
+each proven against the exact mutation the checker verified survives. Filing them would have grown
+the backlog for work cheaper to finish than to track (item 25).
+
+**A new test-authoring trap, found while closing them and worth carrying:** a page-wide label
+lookup for a roster student resolves to the **wrong** checkbox, because the staff-only
+`<AttendancePanel>` is fed the identical roster and renders a same-named control earlier in the
+DOM. Same shape as this task's Trap 10 for `<dialog>` elements — on this page, scope every lookup.
+
+**One correction to the gate, recorded so it is not re-derived:** revision 1 warned that a
+two-session fixture could pass criterion B3 by luck. Measured, it goes red. Three sessions is
+still required, for the real reason — last-element and off-by-one resolutions.

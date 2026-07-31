@@ -31,12 +31,19 @@ import {
   computeTotalHoursForCheckedStudents,
   formatHours,
   MarkDayCompleteDialog,
-  PLACEHOLDER_CURRENT_COACH_PROFILE_ID,
   type MarkDayCompletePayload,
   type MarkDayCompleteSession,
   type RosterStudent,
   type RsvpRow,
 } from './MarkDayCompleteDialog';
+
+// T179 (A1-A4): the props these tests pass are now REQUIRED, not
+// fixture-defaulted. `EVENT_TITLE`/`COACH_PROFILE_ID` are this test file's
+// own explicit values -- `COACH_PROFILE_ID` is deliberately distinctive (not
+// also a student id) so A4 can assert the exact value threaded through to
+// `payload.recordedBy`.
+const EVENT_TITLE = 'Community Food Bank Sort';
+const COACH_PROFILE_ID = 'profile-coach-quill-7f3a';
 
 // ---------------------------------------------------------------------------
 // jsdom gap: `Dialog` renders a native `<dialog>` and calls
@@ -294,6 +301,8 @@ describe('<MarkDayCompleteDialog /> checklist pre-check from RSVPs (module doc #
         <MarkDayCompleteDialog
           isOpen
           onOpenChange={() => {}}
+          eventTitle={EVENT_TITLE}
+          currentUserProfileId={COACH_PROFILE_ID}
           session={SESSION}
           roster={ROSTER}
           rsvps={RSVPS}
@@ -318,6 +327,8 @@ describe('<MarkDayCompleteDialog /> checklist pre-check from RSVPs (module doc #
         <MarkDayCompleteDialog
           isOpen
           onOpenChange={() => {}}
+          eventTitle={EVENT_TITLE}
+          currentUserProfileId={COACH_PROFILE_ID}
           session={SESSION}
           roster={ROSTER}
           rsvps={RSVPS}
@@ -345,6 +356,8 @@ describe('<MarkDayCompleteDialog /> BEH-07 live-computed confirm button', () => 
         <MarkDayCompleteDialog
           isOpen
           onOpenChange={() => {}}
+          eventTitle={EVENT_TITLE}
+          currentUserProfileId={COACH_PROFILE_ID}
           session={SESSION}
           roster={ROSTER}
           rsvps={RSVPS}
@@ -360,6 +373,8 @@ describe('<MarkDayCompleteDialog /> BEH-07 live-computed confirm button', () => 
         <MarkDayCompleteDialog
           isOpen
           onOpenChange={() => {}}
+          eventTitle={EVENT_TITLE}
+          currentUserProfileId={COACH_PROFILE_ID}
           session={SESSION}
           roster={ROSTER}
           rsvps={RSVPS}
@@ -376,6 +391,8 @@ describe('<MarkDayCompleteDialog /> BEH-07 live-computed confirm button', () => 
         <MarkDayCompleteDialog
           isOpen
           onOpenChange={() => {}}
+          eventTitle={EVENT_TITLE}
+          currentUserProfileId={COACH_PROFILE_ID}
           session={SESSION}
           roster={ROSTER}
           rsvps={RSVPS}
@@ -400,6 +417,8 @@ describe('<MarkDayCompleteDialog /> BEH-07 live-computed confirm button', () => 
         <MarkDayCompleteDialog
           isOpen
           onOpenChange={() => {}}
+          eventTitle={EVENT_TITLE}
+          currentUserProfileId={COACH_PROFILE_ID}
           session={SESSION}
           roster={ROSTER}
           rsvps={RSVPS}
@@ -416,6 +435,8 @@ describe('<MarkDayCompleteDialog /> BEH-07 live-computed confirm button', () => 
         <MarkDayCompleteDialog
           isOpen
           onOpenChange={() => {}}
+          eventTitle={EVENT_TITLE}
+          currentUserProfileId={COACH_PROFILE_ID}
           session={SESSION}
           roster={ROSTER}
           rsvps={RSVPS}
@@ -438,6 +459,8 @@ describe('<MarkDayCompleteDialog /> submit payload + irreversibility guard (modu
         <MarkDayCompleteDialog
           isOpen
           onOpenChange={() => {}}
+          eventTitle={EVENT_TITLE}
+          currentUserProfileId={COACH_PROFILE_ID}
           session={SESSION}
           roster={ROSTER}
           rsvps={RSVPS}
@@ -473,7 +496,9 @@ describe('<MarkDayCompleteDialog /> submit payload + irreversibility guard (modu
     expect(payload.peopleReached).toBe(120);
     expect(payload.adultVolunteersCountThisSession).toBe(4);
     expect(payload.adultVolunteerHoursThisSession).toBe(12);
-    expect(payload.recordedBy).toBe(PLACEHOLDER_CURRENT_COACH_PROFILE_ID);
+    // A4 -- the specific profile id THIS test passed (COACH_PROFILE_ID), not
+    // a fixture placeholder.
+    expect(payload.recordedBy).toBe(COACH_PROFILE_ID);
     expect(payload.attendance).toHaveLength(1);
     expect(payload.attendance[0].studentId).toBe('student-going');
     expect(payload.attendance[0].status).toBe('present');
@@ -490,6 +515,8 @@ describe('<MarkDayCompleteDialog /> submit payload + irreversibility guard (modu
         <MarkDayCompleteDialog
           isOpen
           onOpenChange={() => {}}
+          eventTitle={EVENT_TITLE}
+          currentUserProfileId={COACH_PROFILE_ID}
           session={SESSION}
           roster={ROSTER}
           rsvps={RSVPS}
@@ -507,6 +534,8 @@ describe('<MarkDayCompleteDialog /> submit payload + irreversibility guard (modu
         <MarkDayCompleteDialog
           isOpen
           onOpenChange={() => {}}
+          eventTitle={EVENT_TITLE}
+          currentUserProfileId={COACH_PROFILE_ID}
           session={{ ...SESSION, status: 'completed' }}
           roster={ROSTER}
           rsvps={RSVPS}

@@ -20,6 +20,10 @@ import {
   type MarkEventCompleteDialogProps,
 } from './MarkEventCompleteDialog';
 
+// T179 -- `currentUserProfileId` is now required (no fixture placeholder
+// default); this test file's own explicit value.
+const COACH_PROFILE_ID = 'profile-coach-quill-7f3a';
+
 if (
   typeof HTMLDialogElement !== 'undefined' &&
   typeof HTMLDialogElement.prototype.showModal !== 'function'
@@ -258,6 +262,7 @@ describe('<MarkEventCompleteDialog /> listing (packet Objective)', () => {
         <MarkEventCompleteDialog
           isOpen
           onOpenChange={() => {}}
+          currentUserProfileId={COACH_PROFILE_ID}
           eventTitle="Community Food Bank Sort"
           sessions={[SESSION_1, SESSION_2, SESSION_COMPLETED, SESSION_CANCELED]}
           roster={ROSTER}
@@ -284,6 +289,7 @@ describe('<MarkEventCompleteDialog /> listing (packet Objective)', () => {
         <MarkEventCompleteDialog
           isOpen
           onOpenChange={() => {}}
+          currentUserProfileId={COACH_PROFILE_ID}
           sessions={[SESSION_2]}
           roster={ROSTER}
           rsvps={RSVPS}
@@ -300,6 +306,7 @@ describe('<MarkEventCompleteDialog /> listing (packet Objective)', () => {
         <MarkEventCompleteDialog
           isOpen
           onOpenChange={() => {}}
+          currentUserProfileId={COACH_PROFILE_ID}
           sessions={[SESSION_COMPLETED, SESSION_CANCELED]}
           roster={ROSTER}
           rsvps={RSVPS}
@@ -322,6 +329,7 @@ describe('<MarkEventCompleteDialog /> confirm -> per-session mutation (module do
         <MarkEventCompleteDialog
           isOpen
           onOpenChange={() => {}}
+          currentUserProfileId={COACH_PROFILE_ID}
           sessions={[SESSION_1, SESSION_2, SESSION_COMPLETED]}
           roster={ROSTER}
           rsvps={RSVPS}
@@ -348,6 +356,7 @@ describe('<MarkEventCompleteDialog /> confirm -> per-session mutation (module do
         <MarkEventCompleteDialog
           isOpen
           onOpenChange={() => {}}
+          currentUserProfileId={COACH_PROFILE_ID}
           sessions={[SESSION_1]}
           roster={ROSTER}
           rsvps={RSVPS}
@@ -376,6 +385,7 @@ describe('<MarkEventCompleteDialog /> partial-failure honesty (module doc #3)', 
         <MarkEventCompleteDialog
           isOpen
           onOpenChange={() => {}}
+          currentUserProfileId={COACH_PROFILE_ID}
           sessions={[SESSION_1, SESSION_2]}
           roster={ROSTER}
           rsvps={RSVPS}
@@ -411,6 +421,7 @@ describe('<MarkEventCompleteDialog /> partial-failure honesty (module doc #3)', 
         <MarkEventCompleteDialog
           isOpen
           onOpenChange={() => {}}
+          currentUserProfileId={COACH_PROFILE_ID}
           sessions={[SESSION_1, SESSION_2]}
           roster={ROSTER}
           rsvps={RSVPS}
@@ -437,6 +448,7 @@ describe('<MarkEventCompleteDialog /> partial-failure honesty (module doc #3)', 
         <MarkEventCompleteDialog
           isOpen
           onOpenChange={() => {}}
+          currentUserProfileId={COACH_PROFILE_ID}
           sessions={[SESSION_1]}
           roster={ROSTER}
           rsvps={RSVPS}

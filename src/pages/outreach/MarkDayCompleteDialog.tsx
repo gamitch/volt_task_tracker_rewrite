@@ -17,12 +17,13 @@
  * #3 below), not silently papered over.
  *
  * This is a standalone dialog component with its own injectable
- * `onMarkComplete` prop and its own fixture roster/session (Known Context/
- * Traps #7 / this task's Forbidden Files) -- `OutreachDetail.tsx` (T041) is a
- * forbidden/read-only file here and is NOT wired to this dialog by this task;
- * a future wiring task connects that page's own (currently-stubbed)
- * "Mark day complete" action to this component with its real fetched
- * session/roster/rsvps data.
+ * `onMarkComplete` prop (Known Context/Traps #7). T179 UPDATE: `eventTitle`,
+ * `session`, `roster`, `rsvps` and `currentUserProfileId` are no longer
+ * optional-with-a-fixture-default -- see module doc #7 below for the full
+ * writeup. `OutreachDetail.tsx` (T041) now mounts this dialog per-session,
+ * staff-only, passing its own already-fetched session/roster/rsvps data and
+ * the signed-in coach's real `profiles.id` straight through (T179, that
+ * page's own module doc has the wiring writeup).
  *
  * -----------------------------------------------------------------------
  * 1. Ground truth -- `attendance`/`event_sessions`/`events` column shapes,
@@ -267,20 +268,25 @@
  * for callers/tests that want an explicit no-network, log-only stub, but is
  * no longer this component's own runtime default. `currentUserProfileId`
  * (attributed to `attendance.recorded_by`, a real `profiles.id`, module doc
- * #1) is a SEPARATE injectable prop defaulting to a disclosed, obviously-
- * fake placeholder (`PLACEHOLDER_CURRENT_COACH_PROFILE_ID`) -- the same
- * auth-seam pattern `RsvpControl.tsx`'s own `currentUserProfileId`/
- * `PLACEHOLDER_CURRENT_USER_PROFILE_ID` already established, deliberately
- * given a different literal placeholder string here (this dialog's
- * `recorded_by` is always a COACH's own profile id, never a student's own
- * `responded_by`, a different real-world attribution even though both
- * ultimately resolve to the same `profiles.id` column) so the two files'
- * placeholders are never accidentally interchangeable. This dialog remains
- * standalone (not imported/rendered by `OutreachDetail.tsx`) -- same
- * reasoning `OutreachList.tsx`'s own T101 module doc #8b already states for
- * `RsvpControl.tsx`/`ParentRsvp.tsx`: the packet's own Objective asks for
- * "a real Mark-Day-Complete mutation", wiring THIS component's own default,
- * not new page-level integration work.
+ * #1) is a SEPARATE injectable prop.
+ *
+ * T179 UPDATE: `eventTitle`/`session`/`roster`/`rsvps`/`currentUserProfileId`
+ * are now REQUIRED, not optional-with-a-fixture-default. Before this task
+ * each one defaulted to its own hardcoded fixture value (a fabricated event
+ * title, session, four-student roster, rsvp set, and a disclosed-but-fake
+ * coach profile id, respectively -- deliberately not named here by their old
+ * identifiers, since A3 of this task requires zero occurrences of those
+ * identifiers anywhere in this file, prose included). A call site that
+ * forgot one of these compiled cleanly and silently wrote real `attendance`
+ * rows for fixture students under a fake `recorded_by`. Deleting the
+ * defaults turns that omission into a `tsc` error instead. `OutreachDetail.tsx`
+ * (T179) now mounts this dialog per-session, staff-only, and passes its own
+ * real already-fetched session/roster/rsvps and the signed-in coach's real
+ * `profiles.id` -- see that page's own module doc for the wiring writeup.
+ * `defaultOnMarkComplete`/`onMarkComplete` are unaffected by this change and
+ * remain optional (that seam has no fixture-fabrication risk: an omitted
+ * `onMarkComplete` still resolves to the real `markDayComplete` mutation, not
+ * a fake value).
  *
  * -----------------------------------------------------------------------
  * 8. Astryx prop sourcing (constitution item 2) -- every prop used below,
@@ -418,79 +424,6 @@ export interface MarkDayCompletePayload {
 export type OnMarkDayCompleteFn = (payload: MarkDayCompletePayload) => Promise<void>;
 
 // ---------------------------------------------------------------------------
-// Placeholder identifiers -- module doc #7.
-// ---------------------------------------------------------------------------
-
-/** Disclosed, obviously-fake stand-in for "the signed-in coach's own
- * `profiles.id`" until a real Supabase-backed auth context is wired into
- * this batch. Deliberately a different literal string than
- * `RsvpControl.tsx`'s `PLACEHOLDER_CURRENT_USER_PROFILE_ID` (module doc #7)
- * -- distinct real-world attribution (coach `recorded_by` vs. student
- * `responded_by`), even though both are `profiles.id` values. */
-export const PLACEHOLDER_CURRENT_COACH_PROFILE_ID = 'profile-placeholder-current-coach';
-
-// ---------------------------------------------------------------------------
-// Fixture data (constitution item 6: fabricated names only). Module doc #7 /
-// standalone-render defaults, same posture `ScheduleMeetingsDialog.tsx`'s
-// `DEFAULT_TEAMS` already established.
-// ---------------------------------------------------------------------------
-
-const DEFAULT_EVENT_TITLE = 'Community Food Bank Sort';
-
-const DEFAULT_SESSION: MarkDayCompleteSession = {
-  id: 'session-food-bank-day1',
-  eventId: 'event-food-bank-sort',
-  sessionDate: '2026-08-02',
-  startsAt: '2026-08-02T14:00:00.000Z', // 9:00 AM America/Chicago (CDT)
-  endsAt: '2026-08-02T21:00:00.000Z', // 4:00 PM America/Chicago -- 7h duration.
-  status: 'scheduled',
-  peopleReached: null,
-  notes: '',
-};
-
-const DEFAULT_ROSTER: readonly RosterStudent[] = [
-  { id: 'student-amara-chen', name: 'Amara Chen', teamId: 'team-ravens' },
-  { id: 'student-marcus-bello', name: 'Marcus Bello', teamId: 'team-ravens' },
-  { id: 'student-nina-ortiz', name: 'Nina Ortiz', teamId: 'team-ravens' },
-  { id: 'student-sofia-delgado', name: 'Sofia Delgado', teamId: 'team-titans' },
-];
-
-const DEFAULT_RSVPS: readonly RsvpRow[] = [
-  // Amara -- going, starts checked (module doc #6).
-  {
-    id: 'rsvp-1',
-    sessionId: 'session-food-bank-day1',
-    studentId: 'student-amara-chen',
-    status: 'going',
-    respondedBy: 'student-amara-chen',
-    updatedAt: '2026-07-20T09:00:00.000Z',
-    createdAt: '2026-07-20T09:00:00.000Z',
-  },
-  // Marcus -- maybe, starts unchecked.
-  {
-    id: 'rsvp-2',
-    sessionId: 'session-food-bank-day1',
-    studentId: 'student-marcus-bello',
-    status: 'maybe',
-    respondedBy: 'student-marcus-bello',
-    updatedAt: '2026-07-20T09:05:00.000Z',
-    createdAt: '2026-07-20T09:05:00.000Z',
-  },
-  // Nina -- declined, starts unchecked.
-  {
-    id: 'rsvp-3',
-    sessionId: 'session-food-bank-day1',
-    studentId: 'student-nina-ortiz',
-    status: 'declined',
-    respondedBy: 'student-nina-ortiz',
-    updatedAt: '2026-07-20T09:10:00.000Z',
-    createdAt: '2026-07-20T09:10:00.000Z',
-  },
-  // Sofia -- deliberately no rsvp row at all for this session -- "no
-  // response", also starts unchecked (module doc #6).
-];
-
-// ---------------------------------------------------------------------------
 // Pure functions -- exported for direct testing. Module docs #2/#4/#6.
 // ---------------------------------------------------------------------------
 
@@ -625,19 +558,24 @@ export const defaultOnMarkComplete: OnMarkDayCompleteFn = async (payload) => {
 export interface MarkDayCompleteDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  /** Display context only, e.g. `events.title`. */
-  eventTitle?: string;
-  session?: MarkDayCompleteSession;
+  /** Display context only, e.g. `events.title`. T179: required -- see module
+   * doc #7's "T179 UPDATE" paragraph. */
+  eventTitle: string;
+  /** T179: required -- see module doc #7's "T179 UPDATE" paragraph. */
+  session: MarkDayCompleteSession;
   /** The session's resolvable roster (module doc #1 -- already resolved by
    * the caller the same way `OutreachDetail.tsx`'s own `resolveEventRoster`
-   * does; not re-derived here since that logic is a Forbidden File). */
-  roster?: readonly RosterStudent[];
+   * does; not re-derived here since that logic is a Forbidden File). T179:
+   * required -- see module doc #7's "T179 UPDATE" paragraph. */
+  roster: readonly RosterStudent[];
   /** Every `rsvps` row for this session (and, harmlessly, any others --
-   * `computeInitialAttendedStudentIds` filters by `sessionId` itself). */
-  rsvps?: readonly RsvpRow[];
-  /** Injectable auth seam (module doc #7). Defaults to a disclosed
-   * placeholder `profiles.id`. */
-  currentUserProfileId?: string;
+   * `computeInitialAttendedStudentIds` filters by `sessionId` itself). T179:
+   * required -- see module doc #7's "T179 UPDATE" paragraph. */
+  rsvps: readonly RsvpRow[];
+  /** Injectable auth seam (module doc #7). T179: required, no longer
+   * defaults to a placeholder `profiles.id` -- see module doc #7's "T179
+   * UPDATE" paragraph. */
+  currentUserProfileId: string;
   /** Injectable persistence seam (module doc #7). T101: defaults to a real
    * mutation (`markDayComplete`, `../../lib/supabase/loaders/outreach.ts`);
    * `defaultOnMarkComplete` (log-only) remains exported for callers/tests
@@ -648,11 +586,11 @@ export interface MarkDayCompleteDialogProps {
 export function MarkDayCompleteDialog({
   isOpen,
   onOpenChange,
-  eventTitle = DEFAULT_EVENT_TITLE,
-  session = DEFAULT_SESSION,
-  roster = DEFAULT_ROSTER,
-  rsvps = DEFAULT_RSVPS,
-  currentUserProfileId = PLACEHOLDER_CURRENT_COACH_PROFILE_ID,
+  eventTitle,
+  session,
+  roster,
+  rsvps,
+  currentUserProfileId,
   onMarkComplete = markDayComplete,
 }: MarkDayCompleteDialogProps): ReactNode {
   // Module doc #5(ii) -- only a scheduled session can be (re-)completed from
