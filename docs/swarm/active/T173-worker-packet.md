@@ -1,11 +1,22 @@
 # Worker Packet: T173
 
-**Status: ROUND 2 of `checker-premise`, revised in place (constitution item
-19a — 2-round cap).** Round 1 returned REVISE: 1 BLOCKER, 1 MAJOR, 4 MINOR, 1
-NIT. Every point is addressed below; see "Round 2 revision notes" immediately
-below for a compact map of what changed and where. Tier (**sonnet**),
-checker (**checker-reviewer, opus**), and gate scope (**light/narrow**) were
-all independently confirmed correct in round 1 — unchanged.
+**Status: FINAL REVISION (round 3), a bounded exception to constitution item
+19a's 2-round `checker-premise` cap** — authorized by George; see
+`docs/swarm/auto-mode-decisions.md`, entry "2026-07-31 — George's ruling on
+T173's item-19a escalation". Round 1 returned REVISE (1 BLOCKER, 1 MAJOR, 4
+MINOR, 1 NIT — see "Round 2 revision notes" below for the fix map). Round 2
+independently re-applied and mutation-tested the entire round-2 prescription,
+confirmed it genuinely correct (BLOCKER closed, redesign byte-exact against
+its T176 precedent, zero scope creep in the 8-region `CoachHome.tsx` diff) —
+then found ONE NEW BLOCKER the redesign itself introduces (a pre-existing,
+unrelated, currently-green test's denominator changes), plus small hygiene
+fixes; see "Round 3 revision notes" immediately below for the fix map. Every
+point from both rounds is addressed in this document. **Per George's ruling,
+this packet goes directly to `worker-implementer` after this revision — there
+is no third `checker-premise` round.** Tier (**sonnet**), checker
+(**checker-reviewer, opus** — for the post-implementation review), and gate
+scope were all independently confirmed correct in round 1 and re-confirmed in
+round 2 — unchanged.
 
 ## Round 2 revision notes (map of every round-1 finding to its fix)
 
@@ -27,12 +38,15 @@ all independently confirmed correct in round 1 — unchanged.
    row-not-found handling/test entirely (old criterion 3 is gone). Full
    redesign below — this touches more of `CoachHome.tsx` than round 1's
    "exactly THREE edits" (now eight named, still narrow, edit regions — see
-   Allowed Files), which is the real cost of adopting this; independently
-   verified every other test in `CoachHome.test.tsx`/`DashboardPage.test.tsx`
-   stays unaffected (see verification notes inline).
+   Allowed Files), which is the real cost of adopting this. **Round 3
+   correction:** this round's own safety claim that every other test "stays
+   unaffected" was checked by grepping for two literal display strings and
+   was WRONG — it missed a test whose behavior changes for a reason a grep
+   cannot see (see "Round 3 revision notes" below). Corrected there; the
+   claim now rests on running the suite, not on grepping.
 3. **MINOR (harness-hazard scan):** `CoachHome.test.tsx:1295` (a zero-props
    `<CoachHome />` mount inside the "T155 — fail-loud without a
-   `<SeasonProvider>` ancestor" block, `:1283-1309`) is now named explicitly
+   `<SeasonProvider>` ancestor" block, `:1283-1333`) is now named explicitly
    below, with the safety reasoning stated in the packet, not just implied.
 4. **MINOR (PRD claim):** citation fixed to `VOLT_Portal_PRD.md:275` (not
    `:274`); the claim reworded to not overstate what the PRD says. Corrected
@@ -49,6 +63,94 @@ all independently confirmed correct in round 1 — unchanged.
 7. **NIT:** the Test A/B rewrite instructions now say explicitly, in two
    places, that the existing `loadDashboardData: defaultLoadDashboardData`
    pin (currently `:1364`) must be RETAINED, not dropped.
+
+## Round 3 revision notes (map of round 2's finding to its fix — this is the
+final revision; see Status above)
+
+1. **BLOCKER (fixed):** `CoachHome.test.tsx`'s BEH-01 milestone-toast test
+   (`:1999-2021`, describe `"<CoachHome /> BEH-01 milestone toast on this
+   page's own hours-vs-goal bar"`, one `it('fires a "reached 25%" toast on
+   first render, then does not re-fire on remount (deduped via
+   localStorage)')`) DIs `loadData: fixtureLoadData` but does NOT override the
+   season fixture, so under the Round 2 redesign it now resolves
+   `FIXTURE_ACTIVE_SEASON.defaultGoalHours` (`100`, `CoachHome.test.tsx:117`)
+   instead of the old in-file `FIXTURE_DEFAULT_GOAL_HOURS` (`10`,
+   `CoachHome.tsx:956`). Measured, not re-derived: for the 4 active
+   placeholder-team students (`FIXTURE_STUDENTS`, `CoachHome.tsx:720-767` —
+   Amara Webb, Cole Jennings with `goalHoursOverride: 8`, Priya Patel, Jordan
+   Cole; Devon Marsh is inactive and excluded), `sumGoalHours` goes from
+   `10+8+10+10=38` to `100+8+100+100=308`; `sumConfirmedHours`
+   (`FIXTURE_STUDENT_HOURS`, `CoachHome.tsx:950-954`) is unaffected by this
+   redesign and stays `12`. `12/38=31.6%` crosses the 25% milestone (toast
+   fires — current, pre-task behavior, which the test asserts); `12/308=3.9%`
+   crosses nothing (no toast — what the redesign alone would silently break,
+   with no edit to this test). Fixed by naming this test as a **third**
+   authorized `CoachHome.test.tsx` region (see Allowed Files) with the exact
+   fix: pin `renderAsUser`'s third argument (`loadActiveSeason`, signature at
+   `:131-134`) at both of this test's call sites (currently `:2003` and
+   `:2015`) to `async () => ({ ...FIXTURE_ACTIVE_SEASON, defaultGoalHours: 10
+   })`. Verified by applying it: returns the file to `1 failed | 99 passed
+   (100)`, the one remaining failure being the already-authorized
+   `:1358-1389` rewrite (a known, in-progress change from this same packet —
+   not a new regression).
+2. **Criterion 5 amended** to name all three authorized regions (the new
+   import line, `:1358-1389`, and the new BEH-01 region) and require
+   byte-identity + green for everything else in the file.
+3. **Relevant Constitution Excerpt amended** — the Non-Negotiables bullet now
+   pre-authorizes all three `CoachHome.test.tsx` regions, not just
+   `:1358-1389`.
+4. **False blast-radius safety claim corrected**, in both places it appeared
+   (the "Round 2 redesign" section's point 1, and the item-19c constitution
+   bullet). Both previously claimed safety on the basis of a grep for the
+   literal display strings `Default goal 10h`/`0 / 38 hrs` finding zero other
+   matches. That reasoning cannot see this defect: the redesign's actual
+   mechanism is that `defaultGoalHours` stops flowing through `loadData` AT
+   ALL for every render of `CoachHomeContent` — in production and in every
+   test — regardless of what any individual test's own `loadData` override
+   returns. A grep for old on-screen text cannot detect a value that changed
+   *where it comes from*, only a value that changed *what it displays as*.
+   The correct blast radius is "every test that renders `CoachHomeContent`
+   and asserts anything derived from `sumGoalHours`" (the hours-vs-goal bar,
+   and the milestone toasts it drives) — found by running the full suite and
+   reading the failures, not by grepping for text that used to appear on
+   screen. Both locations corrected below.
+5. **Module doc section 15 (edit 8) gets one more disclosure sentence:**
+   `defaultLoadCoachHomeData` itself is untouched and still returns
+   `defaultGoalHours: 10`; its own describe block
+   (`CoachHome.test.tsx:999-1064`, `defaultLoadCoachHomeData (shipped fixture
+   composition…)`) still asserts `goalHours === 38`, `percent === 31.6`, and
+   `crossedMilestones(percent)` equal to `[25]` — correctly green (it calls
+   the fixture function directly and never touches the render path), but it
+   no longer describes what the actual rendered UI shows once this task
+   ships. Say so.
+6. **Citation fixes, re-verified directly against this worktree (not
+   transcribed):** the "T155 — fail-loud without a `<SeasonProvider>`
+   ancestor" describe block is `:1283-1333` (not `:1283-1309`, which lands on
+   the blank line between its two `it()`s); `sumGoalHours`/`sumConfirmedHours`
+   (function definitions) span `:979-1007` (not `:979-1010`, which pulls in
+   `hoursVsGoalPercent`'s own doc comment at `:1009-1010`); the
+   `defaultLoadCoachHomeData (shipped fixture composition…)` describe block
+   is `:999-1064`. **Note on this last one, verified directly rather than
+   transcribed:** an earlier draft of this fix suggested `:1001-1064` on the
+   grounds that "`:999` is a comment" — that is not what this worktree shows.
+   Line `:999` is the `describe(...)` statement itself (the preceding comment
+   block ends at `:997`, with a blank line at `:998`). The other half of that
+   same draft's reasoning — that `:1030` (the old end citation) lands
+   mid-block, between the `'hours vs goal…'` test (ending `:1026`) and the
+   `'last completed meeting…'` test (starting `:1028`) — is correct and still
+   holds; only the start-of-range citation needed a further correction here.
+7. **`SeasonSettings.tsx` wording fix:** the field re-seed happens
+   specifically when the create form is opened (`openCreateForm()`, `:754`,
+   which sets `defaultGoalHours: DEFAULT_GOAL_HOURS` at `:756`) — NOT "after
+   every successful create". A successful create calls `closeForm()` (`:813`)
+   on its way out, which does not touch `formValues` at all — the field is
+   only ever re-seeded on the next `openCreateForm()` call (e.g. the "Create
+   season" button, `:928`/`:955`). Wording fixed; the conclusion (the field is
+   pre-filled and un-blankable) is unaffected.
+8. **`DashboardPage.test.tsx` region-count wording made explicit and
+   unambiguous:** "two regions, the first of which contains two `vi.mock`
+   blocks" — not three regions. Stated plainly in Allowed Files below so a
+   worker and a future checker count the same way.
 
 ## Task ID
 T173
@@ -162,8 +264,10 @@ yourself before relying on it:
   value.
 - `SeasonSettings.tsx` (`src/pages/settings/SeasonSettings.tsx`) is the only
   place a season is created. `DEFAULT_GOAL_HOURS = 100` (`:435`) pre-fills
-  the create form's initial state (`:742`) and re-seeds it again after every
-  successful create (`:756`) — the field is **pre-filled and un-blankable**,
+  the create form's initial state (`:742`) and re-seeds it again whenever the
+  create form is opened (`openCreateForm()`, `:754`, which sets
+  `defaultGoalHours: DEFAULT_GOAL_HOURS` at `:756`) — the field is
+  **pre-filled and un-blankable**,
   not merely "explicitly set by a human": `isSeasonFormValid` (`:471-478`)
   requires `defaultGoalHours !== null && defaultGoalHours >= 0`, and
   `buildCreateSeasonPayload` (`:481-491`) returns `null` — blocking the
@@ -249,12 +353,27 @@ REAL production render path no longer consults it.
    byte-unchanged, on the interface — `defaultLoadCoachHomeData`'s own
    fixture return (`:1465-1479`, including `defaultGoalHours:
    FIXTURE_DEFAULT_GOAL_HOURS` at `:1468`) and the `defaultLoadCoachHomeData
-   (shipped fixture composition...)` describe block (`:999-1030`, which reads
+   (shipped fixture composition...)` describe block (`:999-1064`, which reads
    `data.defaultGoalHours` directly, bypassing any render-path change) both
-   stay completely unaffected — independently verified: no other test in
-   `CoachHome.test.tsx` asserts the literal text `Default goal 10h` or `0 /
-   38 hrs` outside the one describe block you're already rewriting (grepped
-   directly, zero other matches).
+   stay completely unaffected, because they call `defaultLoadCoachHomeData`
+   directly rather than going through `CoachHome`'s render path. **Round 3
+   correction: the broader safety claim that follows cannot rest on grepping
+   for the literal display strings `Default goal 10h`/`0 / 38 hrs`.** That
+   was tried and is the wrong test — it found zero other matches and was
+   still wrong. The redesign's actual mechanism is that `defaultGoalHours`
+   stops flowing through `loadData` AT ALL for every render of
+   `CoachHomeContent`, in production and in every test, regardless of what
+   any individual test's own `loadData` override returns — a grep for old
+   on-screen text cannot see a value that changed *where it comes from*
+   rather than *what it displays as*. The real blast radius is "every test
+   that renders `CoachHomeContent` and asserts anything derived from
+   `sumGoalHours`" (the hours-vs-goal bar, and the milestone toasts it
+   drives) — found by running the full suite and reading the failures, not
+   by grepping. Doing so surfaces exactly one more affected test,
+   `CoachHome.test.tsx`'s BEH-01 milestone-toast test (now the third Allowed
+   Files region — see below), fixed the same way this section's own point 2
+   already fixes the `:1358-1389` block: pin the fixture season this test
+   uses.
 2. Your new loader's `Promise<CoachHomeData>` still populates this field —
    with the literal `0`, not a query result — documented in a doc comment
    citing `loaders/students.ts:538`'s identical precedent and stating
@@ -277,7 +396,7 @@ REAL production render path no longer consults it.
    - `:2477` — `Default goal {data.defaultGoalHours}h` → `Default goal
      {defaultGoalHours}h` (the new prop, not `data`).
    The FUNCTION DEFINITIONS of `sumGoalHours`/`sumConfirmedHours`
-   (`:979-1010`) do not change at all — only this one call site's third
+   (`:979-1007`) do not change at all — only this one call site's third
    argument changes.
 
 **Net effect on the new loader:** it now performs exactly TWO real queries
@@ -326,25 +445,89 @@ to have a missing row.
      (Scope ruling #2), briefly, with a pointer to the fuller reasoning in
      the new loader file's own doc comment; `events`/`sessions`/`rsvps`/
      `attendance`/`teamParticipation`/`studentHours` still literal
-     honest-empty (not real queries), filed as T198.
+     honest-empty (not real queries), filed as T198. **Round 3 addition:**
+     also disclose that `defaultLoadCoachHomeData` itself is untouched and
+     still returns `defaultGoalHours: 10` (`FIXTURE_DEFAULT_GOAL_HOURS`,
+     `:956`, `:1468`), and its own describe block
+     (`CoachHome.test.tsx:999-1064`, `defaultLoadCoachHomeData (shipped
+     fixture composition...)`) still asserts `goalHours === 38`, `percent ===
+     31.6`, and `crossedMilestones(percent)` equal to `[25]` — correctly
+     green (it calls the fixture function directly, never the render path),
+     but no longer describing what the actual rendered UI shows once this
+     task ships. One or two sentences suffice.
   `defaultLoadCoachHomeData` (lines 1465-1479), `isSeasonMissingSetup`
   (`:1446-1451`), the FUNCTION DEFINITIONS of `sumGoalHours`/
-  `sumConfirmedHours` (`:979-1010` — NOT their call site at `:2235`, which is
+  `sumConfirmedHours` (`:979-1007` — NOT their call site at `:2235`, which is
   edit 6 above), `CoachHomeData` (`:688-700`, the interface itself, including
   its still-declared `defaultGoalHours` field), and every other pure
   function/render line are byte-unchanged — diff the file and confirm
   nothing else moved.
-- `src/pages/home/CoachHome.test.tsx` — ONLY the describe block at (current)
-  lines 1358-1389 (the "T155 -- measured-reality proof" block) plus one new
-  import line for whatever you export from `coachHome.ts` (e.g.
-  `makeLoadCoachHomeData`). Do not touch any other test in this file — all
-  ~30 other `renderAsUser(...)` call sites explicitly pass `loadData:
-  fixtureLoadData` (which calls `defaultLoadCoachHomeData` directly,
-  independent of `CoachHome`'s own default parameter) and are unaffected;
-  confirm this yourself before you rely on it (see "The one test that must
-  change on purpose" below for the full verification, including a completed
-  harness-hazard scan).
-- `src/pages/home/DashboardPage.test.tsx` — scoped to exactly TWO regions:
+- `src/pages/home/CoachHome.test.tsx` — exactly THREE regions, nothing else:
+  1. One new import line for whatever you export from `coachHome.ts` (e.g.
+     `makeLoadCoachHomeData`).
+  2. The describe block at (current) lines 1358-1389 (the "T155 --
+     measured-reality proof" block) — see "The one test that must change on
+     purpose" below for the full Test A/B rewrite.
+  3. **NEW (round 3, closing round 2's own new BLOCKER):** the BEH-01
+     milestone-toast describe block, currently `:1999-2021`
+     (`describe("<CoachHome /> BEH-01 milestone toast on this page's own
+     hours-vs-goal bar", ...)`, one `it('fires a "reached 25%" toast on first
+     render, then does not re-fire on remount (deduped via localStorage)')`).
+     This test DIs `loadData: fixtureLoadData` but does NOT override the
+     season fixture, so under the Round 2 redesign its `defaultGoalHours` now
+     resolves to `FIXTURE_ACTIVE_SEASON.defaultGoalHours` (`100`, `:117`)
+     instead of the old in-file `FIXTURE_DEFAULT_GOAL_HOURS` (`10`,
+     `CoachHome.tsx:956`). Measured, not re-derived: for the 4 active
+     placeholder-team students (`FIXTURE_STUDENTS`, `CoachHome.tsx:720-767`
+     — Amara Webb, Cole Jennings with `goalHoursOverride: 8`, Priya Patel,
+     Jordan Cole; Devon Marsh is inactive and excluded), `sumGoalHours` goes
+     from `10+8+10+10=38` to `100+8+100+100=308`; `sumConfirmedHours`
+     (`FIXTURE_STUDENT_HOURS`, `CoachHome.tsx:950-954`) is unaffected by this
+     redesign and stays `12`. `12/38=31.6%` crosses the 25% milestone (toast
+     fires — the current, pre-task behavior this test asserts);
+     `12/308=3.9%` crosses nothing (no toast — what the redesign alone would
+     silently break, with no edit to this test). **Fix, verified by applying
+     it** (returns the file to `1 failed | 99 passed (100)`, the one
+     remaining failure being the already-authorized `:1358-1389` rewrite,
+     region 2 above — not a new regression): pin `renderAsUser`'s third
+     argument (`loadActiveSeason`, signature at `:131-134` — confirm it's
+     still the season-resolver seam yourself) at BOTH of this test's
+     `renderAsUser` call sites (currently `:2003` and `:2015` — verify
+     current exact line numbers yourself, they may have shifted since this
+     packet was written):
+     ```tsx
+     renderAsUser(
+       COACH_USER,
+       { loadData: fixtureLoadData, nowFn: () => FIXTURE_REFERENCE_NOW },
+       async () => ({ ...FIXTURE_ACTIVE_SEASON, defaultGoalHours: 10 }),
+     );
+     ```
+     Apply this at both call sites; the rest of the test body (the remount,
+     and the two post-remount assertions currently at `:2017`/`:2019`) is
+     untouched. This restores the original `10`-based denominator (`38`,
+     `31.6%`) so the test keeps proving what it always proved (a milestone
+     toast fires once and dedupes on remount via `localStorage`), independent
+     of the Round 2 redesign's unrelated change to where `defaultGoalHours`
+     comes from in production.
+
+  Do not touch any other test in this file — all ~30 other
+  `renderAsUser(...)` call sites explicitly pass `loadData: fixtureLoadData`
+  (which calls `defaultLoadCoachHomeData` directly, independent of
+  `CoachHome`'s own default parameter) and are unaffected; confirm this
+  yourself before you rely on it (see "The one test that must change on
+  purpose" below for the full verification, including a completed
+  harness-hazard scan). **The blast radius that actually matters is "every
+  test asserting anything derived from `sumGoalHours`"** (equivalently: the
+  hours-vs-goal bar and the milestone toasts it drives) — confirmed by
+  running the full file, which finds exactly these three regions' worth of
+  impact and no more. Do not rely on grepping for old literal display
+  strings to find this class of impact; the Round 2 redesign changes what a
+  render's `defaultGoalHours` actually IS, not just how it happens to be
+  displayed, and a grep already missed this once (see "Round 3 revision
+  notes" above).
+- `src/pages/home/DashboardPage.test.tsx` — scoped to exactly TWO regions
+  (stated unambiguously, round 3: two regions total, region 1 contains TWO
+  `vi.mock` blocks — do not miscount this as three regions):
   1. TWO new `vi.mock` blocks, added alongside the file's existing
      `loaders/meetings`/`loaders/students`/`loaders/parentHome` mocks (lines
      52-122): `vi.mock('../../lib/supabase/loaders/coachHome', ...)` and
@@ -485,7 +668,7 @@ before `loadData` would ever be called).
 **Harness-hazard scan, completed (round-1 MINOR fix — named explicitly, not
 just implied by the grep methodology):** `CoachHome.test.tsx:1295` is a
 zero-props `<CoachHome />` JSX mount, inside the `<CoachHome /> T155 --
-fail-loud without a <SeasonProvider> ancestor` block (`:1283-1309`). This
+fail-loud without a <SeasonProvider> ancestor` block (`:1283-1333`). This
 site is safe and needs no change: it renders with no `<SeasonProvider>`
 ancestor at all, so `useActiveSeason()` (`CoachHome.tsx:2120`) throws
 synchronously before `loadData` is ever invoked — the new module-level
@@ -720,16 +903,22 @@ fix):**
    consumption-site edits; the module-doc correction plus new section 15).
    `defaultLoadCoachHomeData` (lines 1465-1479), `isSeasonMissingSetup`
    (`:1446-1451`), the FUNCTION DEFINITIONS of `sumGoalHours`/
-   `sumConfirmedHours` (`:979-1010`), and `CoachHomeData` (`:688-700`,
+   `sumConfirmedHours` (`:979-1007`), and `CoachHomeData` (`:688-700`,
    including its still-declared `defaultGoalHours` field) are byte-identical
    before/after — diff them directly to confirm.
 5. `CoachHome.test.tsx`'s rewritten describe block (Test A + Test B, per
    above) passes, using a DI'd stub client for `teams`/`students` (not a
    module-level `vi.mock`) and a custom third `loadActiveSeason` argument for
    Test A's `defaultGoalHours` proof. The `loadDashboardData:
-   defaultLoadDashboardData` pin is retained in both tests. Every other test
-   in this file is byte-unchanged AND passes unmodified — confirm by running
-   the full file, not by inspection alone.
+   defaultLoadDashboardData` pin is retained in both tests. The BEH-01
+   milestone-toast test's two `renderAsUser` call sites both pin
+   `loadActiveSeason` to `async () => ({ ...FIXTURE_ACTIVE_SEASON,
+   defaultGoalHours: 10 })` (per the third Allowed Files region above), and
+   both its assertions pass. **Every other test in this file, outside these
+   three named regions (the new import line; the `:1358-1389` Test A/B
+   rewrite; the BEH-01 test's two `renderAsUser` calls), is byte-unchanged
+   AND passes unmodified** — confirm by running the full file, not by
+   inspection alone.
 6. `DashboardPage.test.tsx`'s two new `vi.mock` blocks (`loaders/coachHome`
    AND `loaders/dashboard`) and the new assertions (per above — `'Default
    goal 100h'` in both tests, `'The active season is missing teams.'` in the
@@ -750,25 +939,34 @@ fix):**
    baseline directly at the start (`npm test` or equivalent) — do not trust
    any number cited in this packet or elsewhere in `docs/swarm/`, they will
    have drifted on this branch since this packet was written. Zero
-   newly-failing tests anywhere outside the two describe blocks you
-   deliberately edited (criteria 5/6). Zero `.skip`/`.only`/`.todo`
-   introduced.
+   newly-failing tests anywhere outside the describe blocks you deliberately
+   edited (criteria 5/6, which together cover three: the `:1358-1389` Test
+   A/B rewrite, the BEH-01 milestone-toast test, and `DashboardPage.test.tsx`'s
+   two role-dispatch tests). Zero `.skip`/`.only`/`.todo` introduced.
 9. `tsc`, eslint, and prettier all clean (or unchanged from your measured
    baseline, with any delta explained).
 10. Zero diff on every Forbidden file. Zero diff outside the Allowed list —
     confirm the `CoachHome.tsx`/`CoachHome.test.tsx`/`DashboardPage.test.tsx`
     diffs are each scoped exactly as described above (`CoachHome.tsx`: the
-    eight named regions; `DashboardPage.test.tsx`: the two `vi.mock` blocks
-    plus the named assertion/comment edits); diff each file directly and
-    confirm nothing else moved.
+    eight named regions; `CoachHome.test.tsx`: the three named regions — the
+    new import line, the `:1358-1389` rewrite, and the BEH-01 test's two
+    `renderAsUser` call sites; `DashboardPage.test.tsx`: two regions, the
+    first of which contains the two `vi.mock` blocks, plus the named
+    assertion/comment edits); diff each file directly and confirm nothing
+    else moved.
 
 ## Relevant Constitution Excerpt
 - Non-Negotiables: "Existing tests must pass unless the boss explicitly
   approves a test update." This packet pre-authorizes content updates to a
   bounded, named set: `CoachHome.test.tsx`'s lines 1358-1389 (split into
-  Test A/B, criterion 5) and `DashboardPage.test.tsx`'s two named regions
-  (criterion 6). All other tests, including every other `CoachHome.test.tsx`
-  render, must remain green AND unedited.
+  Test A/B, criterion 5), `CoachHome.test.tsx`'s BEH-01 milestone-toast test
+  (currently `:1999-2021`, its two `renderAsUser` call sites currently at
+  `:2003`/`:2015` — the third Allowed Files region, added in round 3 and
+  authorized under the same bounded exception recorded in
+  `docs/swarm/auto-mode-decisions.md`'s "2026-07-31 — George's ruling on
+  T173's item-19a escalation"), and `DashboardPage.test.tsx`'s two named
+  regions (criterion 6). All other tests, including every other
+  `CoachHome.test.tsx` render, must remain green AND unedited.
 - Item 3: RLS/metric SQL come only from real migrations, copied verbatim; no
   re-deriving. The `staff_all` policies are quoted verbatim in Scope ruling
   #1 and the Context section above — cite them exactly as shown, not
@@ -789,13 +987,21 @@ fix):**
   risk class — still no migration, no RLS, no auth logic.
 - Item 19c: "Verify your own citations before submitting." Every line number
   in this packet was re-read against this worktree's current HEAD, not
-  inherited from the ledger row or from round 1's checker findings blindly
-  (both were independently re-verified during this round-2 revision,
-  including one instrumented consequence check: confirming no other
-  `CoachHome.test.tsx` assertion depends on the literal text `Default goal
-  10h`/`0 / 38 hrs` before relying on that as a safety claim for the Round 2
-  redesign) — do the same before you rely on any of them; they may drift
-  further before you start.
+  inherited from the ledger row or from earlier rounds' findings blindly.
+  **Round 2's own safety claim is the worked example of the failure mode
+  this item exists to prevent, kept here rather than deleted:** it stated
+  "no other `CoachHome.test.tsx` assertion depends on the literal text
+  `Default goal 10h`/`0 / 38 hrs`, grepped directly, zero other matches" —
+  independently re-checked in round 3 by mutation-testing the actual
+  redesign (not by grepping again), and found false. It missed the BEH-01
+  milestone-toast test, whose denominator changes for a reason a literal-text
+  grep cannot detect: the value stops flowing through `loadData` entirely,
+  it doesn't just change what text renders. Fixed as the third
+  `CoachHome.test.tsx` Allowed Files region. **Do the same discipline before
+  you rely on any citation or safety claim in this packet: prefer running the
+  suite over grepping, and re-derive rather than transcribe** — citations may
+  have drifted further before you start, and a claim that "looks" verified by
+  a grep is not the same as one verified by execution.
 - Item 20: any deliberate narrowing beyond this packet's own scope decisions
   must produce a follow-up ledger row, not just a code comment. The
   `teamId`/team-linkage question (Scope ruling #1) and the
@@ -844,8 +1050,8 @@ Forbidden to this packet's author**):
 > question resolves risks building the wrong shape twice.
 
 ## Most Recent Failure
-Round 1 `checker-premise` (light/narrow scope, as recommended): REVISE — 1
-BLOCKER (the prescribed `DashboardPage.test.tsx` assertion couldn't pass,
+**Round 1** `checker-premise` (light/narrow scope, as recommended): REVISE —
+1 BLOCKER (the prescribed `DashboardPage.test.tsx` assertion couldn't pass,
 proven by an instrumented test run: `Default goal Xh` sits inside a gate
 that never opens without a `loaders/dashboard` mock this file didn't have),
 1 MAJOR (a cheaper, T176-precedented design — thread `defaultGoalHours` from
@@ -853,9 +1059,37 @@ the already-fetched `activeSeason.season` instead of a third new query — was
 available and not considered), 4 MINOR (a harness-hazard site not named
 explicitly; an overstated PRD claim; imprecise `hasGoalsConfigured` wording;
 several citation-drift errors), 1 NIT (an existing test pin that must
-survive a rewrite, stated only implicitly). All addressed in this revision —
-see "Round 2 revision notes" at the top. Per constitution item 19a, this is
-the second and final `checker-premise` round for this packet.
+survive a rewrite, stated only implicitly). All addressed in the round-2
+revision — see "Round 2 revision notes" above.
+
+**Round 2** `checker-premise`: REVISE — 0 BLOCKER carried forward from round
+1 (independently re-applied and mutation-tested the full round-2
+prescription; confirmed the BLOCKER genuinely closed, the adopted
+`activeSeason.season.defaultGoalHours` design byte-exact against T176's
+precedent, and the 8-region `CoachHome.tsx` widening free of scope creep) —
+but 1 NEW BLOCKER the redesign itself introduces: threading `defaultGoalHours`
+from the real active season (`100`) instead of the old in-file fixture (`10`)
+changes the denominator `CoachHome.test.tsx`'s BEH-01 milestone-toast test
+depends on (`12/38=31.6%`, crosses 25% and fires a toast → `12/308=3.9%`, no
+toast), proven by an instrumented probe (`PROBE_HRS: 12 / 308 hrs | PCT:
+undefined | TOAST: false`) and by running the actual test (fails at the
+assertion around `:2005`, a second assertion at `:2019` also fails) — the
+same failure shape as T183's own round-1 BLOCKER and this task's own round-1
+BLOCKER, a third occurrence of one pattern this session (a fix changing
+behavior a test outside the packet's Allowed Files depends on). Plus small
+hygiene fixes (citation drift, an inaccurate `SeasonSettings.tsx` wording
+claim, an ambiguous region-count description). The gate wrote, applied, and
+verified the fix itself before reporting (pin the fixture season's
+`defaultGoalHours` to `10` at both `renderAsUser` call sites in that one
+test, returning the file to `1 failed | 99 passed (100)`, the one remaining
+failure being the already-known `:1358-1389` rewrite). All addressed in this
+round-3 revision — see "Round 3 revision notes" above.
+
+Per constitution item 19a this caps at two rounds; George authorized one
+bounded exception round (`docs/swarm/auto-mode-decisions.md`, entry
+"2026-07-31 — George's ruling on T173's item-19a escalation"). **This is
+that round-3 revision, applied in full above. Per his ruling it is dispatched
+directly to `worker-implementer` with no third `checker-premise` round.**
 
 ## Required Worker Output
 - Files changed (exact list).
