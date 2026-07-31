@@ -93,31 +93,42 @@
  *
  * -----------------------------------------------------------------------
  * 2. The real ICS URL shape (Known Context/Traps #2) -- built from CAL-04's
- *    own literal spec, not guessed, via an injectable base-URL seam.
+ *    own literal spec, now wired to the REAL, deployed Functions base URL
+ *    (T177).
  * -----------------------------------------------------------------------
  *
  * CAL-04 (PRD line 312, cited verbatim by this task's packet): "GET
- * `/functions/v1/ics?token=<uuid>`". `supabase/functions/ics/**` does not
- * exist yet (T047, a separate parallel task, and this task's own Forbidden
- * Files) -- this file only CONSTRUCTS and DISPLAYS the URL a caller would
- * use, it never calls it. The real Supabase Edge Function invocation shape
- * is `${SUPABASE_FUNCTIONS_URL}/ics?token=${token}` (a Supabase project's
- * Functions base URL, e.g. `https://<project-ref>.functions.supabase.co`,
- * with the literal `/ics` path CAL-04 names and the `token` query param).
- * `buildIcsUrl` below is a pure function taking `(functionsBaseUrl, token)`
- * so the shape is exercised directly in tests without a real project ref.
+ * `/functions/v1/ics?token=<uuid>`". `supabase/functions/ics/index.ts` is a
+ * real, finished, deployed Edge Function (T047, landed) -- this file only
+ * CONSTRUCTS and DISPLAYS the URL a caller would use, it never calls it
+ * itself (an external calendar app does). `buildIcsUrl` below is a pure
+ * function taking `(functionsBaseUrl, token)` so the shape is exercised
+ * directly in tests without a real project ref.
+ *
+ * T177 replaced the original "not wired in yet" disclosure below with the
+ * real convention: this repo's Functions-base-URL shape is
+ * `${VITE_SUPABASE_URL}/functions/v1` (NOT the legacy
+ * `https://<project-ref>.functions.supabase.co` domain form this doc
+ * originally assumed) -- the same convention `CheckinResult.tsx`/
+ * `StudentHome.tsx` already independently established and agree with each
+ * other on, derived from the one `VITE_SUPABASE_URL` env var already
+ * committed to `.env.example` and already read by `client.ts`.
+ * `resolveFunctionsBaseUrl` below is a private `readViteEnvVar('VITE_SUPABASE_URL')`
+ * read wrapped in an INJECTABLE-PARAMETER seam (matching
+ * `CheckinResult.tsx`'s own `CallCheckinConfig.supabaseUrl?: string`
+ * shape) -- not environment stubbing; tests call it with a plain string
+ * argument. Passing `${VITE_SUPABASE_URL}/functions/v1` as
+ * `functionsBaseUrl` makes `buildIcsUrl`'s final URL
+ * `${VITE_SUPABASE_URL}/functions/v1/ics?token=...`, CAL-04's own literal
+ * spec satisfied exactly, with zero change to `buildIcsUrl` itself.
  * `PLACEHOLDER_SUPABASE_FUNCTIONS_URL` ("https://volt-placeholder-project.
- * functions.supabase.co") is an OBVIOUSLY-fake default for the injectable
- * `functionsBaseUrl` prop -- the same "honest placeholder" posture
- * `MeetingsList.tsx`'s `PLACEHOLDER_CURRENT_SEASON_ID` and
- * `CalendarPage.tsx`'s `PLACEHOLDER_SEASON_ID` already established. A real
- * wiring task (not this one -- `src/lib/supabase/**` is this task's
- * Forbidden Files, read-only reference only) would supply the real
- * project's Functions URL, most likely via a build-time env var (e.g.
- * `import.meta.env.VITE_SUPABASE_FUNCTIONS_URL`) threaded down as this same
- * `functionsBaseUrl` prop -- this file does not read `import.meta.env`
- * itself (no such wiring exists in this repo yet), it only exposes the seam
- * a real caller would fill in.
+ * functions.supabase.co") is KEPT as a named export (T105 precedent, packet
+ * §3c) but is no longer the default `functionsBaseUrl` value -- it is now
+ * only `resolveFunctionsBaseUrl`'s own defensive fallback for a blank/absent
+ * `VITE_SUPABASE_URL`, unreachable in practice once `loadCalendarFeed` is
+ * real (an unconfigured Supabase client already throws
+ * `SupabaseNotConfiguredError` before this line is ever reached -- this
+ * line only runs in the `'success'` branch, module doc section 10 below).
  *
  * -----------------------------------------------------------------------
  * 3. `Popover` -- real, documented component (Known Context/Traps #3),
@@ -195,28 +206,48 @@
  * CAL-04 scope," not "copy this exact sentence."
  *
  * -----------------------------------------------------------------------
- * 7. No shared Supabase client wired in (Known Context/Traps #7) -- same
- *    posture as every prior content page in this batch.
+ * 7. `loadCalendarFeed` is now wired to a REAL Supabase read (T177);
+ *    `onResetFeedToken` is UNCHANGED, still a fixture-shaped stub
+ *    (Known Context/Traps #7, disclosed scope boundary).
  * -----------------------------------------------------------------------
  *
- * `loadCalendarFeed`/`onResetFeedToken` are both injectable props, each
- * defaulting to an obviously-fake stub (`defaultLoadCalendarFeed` returns
- * fixture data; `defaultOnResetFeedToken` only `console.warn`s the payload
- * it would have sent, then fabricates a locally-generated new row via
- * `crypto.randomUUID()` -- the same injectable-default-generator idiom
- * `TeamsTab.tsx`'s own `generateId = () => \`team-${crypto.randomUUID()}\`\`
- * already established in this repo -- purely so this stub's own return
- * value is well-formed for local-state purposes; a real implementation
- * would return the DB's own `insert ... returning *` row instead). No
- * `src/lib/supabase/**` import exists anywhere in this file (that directory
- * is read-only/reference-only per this task's Forbidden Files). This file
- * also does NOT read `useAuth()`/any auth context to discover "the current
- * profile" -- `profileId` is a required prop the caller supplies (the same
- * "caller-supplied id, not self-discovered" posture `EndMeetingDialog.tsx`'s
- * `sessionId` prop and `SubscribePopover`'s own sibling widgets already
- * take), since `src/app/guards.tsx` is import-only for the single
- * `pushToast` import this task's Forbidden Files clause names -- not a
- * general read-write reference for auth state.
+ * `loadCalendarFeed`'s default is now `../../lib/supabase/loaders/
+ * calendarFeed`'s own real `loadCalendarFeed` export (`makeLoadCalendarFeed`,
+ * built on `createLoader`/`getSupabaseClient` -- the same `loaders/*.ts`
+ * shape `settings.ts` already established). `defaultLoadCalendarFeed` (the
+ * original fixture stub, returning `FIXTURE_ACTIVE_FEED`) is KEPT as a named
+ * export, no longer the default (T105 precedent, packet §3c) -- see its own
+ * updated doc comment below.
+ *
+ * `onResetFeedToken` is explicitly OUT OF SCOPE for T177 (packet §1/§2/§5
+ * point 7) and remains exactly what it was: `defaultOnResetFeedToken` only
+ * `console.warn`s the payload it would have sent, then fabricates a
+ * locally-generated new row via `crypto.randomUUID()` -- the same
+ * injectable-default-generator idiom `TeamsTab.tsx`'s own
+ * `generateId = () => \`team-${crypto.randomUUID()}\`\` already established
+ * in this repo -- purely so this stub's own return value is well-formed for
+ * local-state purposes; a real implementation would return the DB's own
+ * `insert ... returning *` row instead. This is a real, un-closed follow-up
+ * (same fixture-default-shaped bug as the one T177 fixed for
+ * `loadCalendarFeed`), named here and in T177's own worker output rather
+ * than silently left as only a code comment.
+ *
+ * DISCLOSED SCOPE, stated plainly (packet §1/§3f): nothing anywhere in this
+ * codebase provisions a `calendar_feeds` row for any profile -- not the
+ * invite trigger, not any migration backfill, not any app code. So even
+ * with the real `loadCalendarFeed` wired in, every real user today still
+ * hits the fail-loud DES-12 error Banner state below (module doc section
+ * 10), not a working link -- T177 makes this widget's failure HONEST, not
+ * FUNCTIONAL. Building that provisioning path is a separate follow-up task,
+ * not this one.
+ *
+ * This file still does NOT read `useAuth()`/any auth context to discover
+ * "the current profile" -- `profileId` is a required prop the caller
+ * supplies (the same "caller-supplied id, not self-discovered" posture
+ * `EndMeetingDialog.tsx`'s `sessionId` prop and `SubscribePopover`'s own
+ * sibling widgets already take), since `src/app/guards.tsx` is import-only
+ * for the single `pushToast` import this task's Forbidden Files clause
+ * names -- not a general read-write reference for auth state.
  *
  * -----------------------------------------------------------------------
  * 8. Astryx prop sourcing (constitution item 2) -- every prop below,
@@ -265,7 +296,8 @@
  *
  * -----------------------------------------------------------------------
  * 10. DES-12 states -- loading / error / populated only, no separate
- *     "empty" state (disclosed scope decision, not an oversight).
+ *     "empty" state (disclosed scope decision, not an oversight). T177:
+ *     this is the REAL state every real profile is in today.
  * -----------------------------------------------------------------------
  *
  * Unlike `CalendarPage.tsx` (whose data can genuinely be zero sessions),
@@ -277,6 +309,15 @@
  * task's packet never asks this file to solve). If `loadCalendarFeed`
  * rejects OR resolves in a way this file cannot use, the error Banner state
  * covers it; there is no third "no feed yet, create one" UI here.
+ *
+ * T177 wired `loadCalendarFeed`'s default to a real Supabase read
+ * (`../../lib/supabase/loaders/calendarFeed.ts`), which fails loud (throws)
+ * on zero active rows rather than fabricating fixture data (module doc
+ * section 7 above). Since NOTHING anywhere in this codebase provisions a
+ * `calendar_feeds` row for any profile yet, this error Banner state is not
+ * a rare edge case -- it is the outcome every real signed-in user actually
+ * sees on `/settings` today, until a provisioning path is built (a
+ * disclosed follow-up, not this task's job).
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import {
@@ -290,6 +331,7 @@ import {
   VStack,
 } from '@astryxdesign/core';
 import { pushToast } from '../../app/guards';
+import { loadCalendarFeed as loadCalendarFeedReal } from '../../lib/supabase/loaders/calendarFeed';
 
 // ---------------------------------------------------------------------------
 // Ground truth -- module doc section 1. Re-derived locally, camelCase
@@ -350,6 +392,43 @@ export function buildResetFeedTokenPayload(
   return { profileId, revokeFeedId: activeFeed.id };
 }
 
+/**
+ * Module doc section 2 -- reads a Vite-injected `import.meta.env` var
+ * without requiring a new `vite-env.d.ts` ambient-types file (out of this
+ * task's Allowed Files). Independently authored, same idiom
+ * `CheckinResult.tsx`/`StudentHome.tsx` each already established for
+ * themselves (that file's own module doc: "INDEPENDENTLY-AUTHORED... never
+ * imported from... same envs") -- not a new shared helper module.
+ */
+function readViteEnvVar(key: string): string | undefined {
+  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+  return env?.[key];
+}
+
+/**
+ * Module doc section 2 -- the real Functions-base-URL convention this repo
+ * already established, twice, independently (`CheckinResult.tsx`/
+ * `StudentHome.tsx`): `${VITE_SUPABASE_URL}/functions/v1`. An
+ * INJECTABLE-PARAMETER seam (matching `CheckinResult.tsx`'s own
+ * `CallCheckinConfig.supabaseUrl?: string`), not environment stubbing --
+ * `vi.stubEnv` does not reach this module's `import.meta.env` read (measured
+ * directly). Trims the input and strips a trailing slash (same
+ * `.replace(/\/+$/, '')` treatment `CheckinResult.tsx` already applies to
+ * its own raw `VITE_SUPABASE_URL` value, avoiding a double slash before
+ * `/functions/v1` -- a distinct concern from `buildIcsUrl`'s own separate
+ * trailing-slash strip on the FINAL `functionsBaseUrl`, right before
+ * appending `/ics`, above). Falls back to
+ * `PLACEHOLDER_SUPABASE_FUNCTIONS_URL` for a blank/absent env var
+ * (defensive; unreachable in practice once `loadCalendarFeed` is real -- see
+ * module doc section 2).
+ */
+export function resolveFunctionsBaseUrl(
+  rawSupabaseUrl: string | undefined = readViteEnvVar('VITE_SUPABASE_URL'),
+): string {
+  const trimmedBase = (rawSupabaseUrl ?? '').trim().replace(/\/+$/, '');
+  return trimmedBase ? `${trimmedBase}/functions/v1` : PLACEHOLDER_SUPABASE_FUNCTIONS_URL;
+}
+
 // ---------------------------------------------------------------------------
 // Literal copy -- module doc sections 5/6/9.
 // ---------------------------------------------------------------------------
@@ -375,7 +454,11 @@ const RESET_CONFIRM_TITLE = 'Reset your calendar link?';
 // Injectable defaults -- module doc section 2/7. Obviously-fake, fixture-only.
 // ---------------------------------------------------------------------------
 
-/** Module doc section 2. */
+/** Module doc section 2 -- T177: KEPT as a named export (T105 precedent,
+ * packet §3c), but this is NO LONGER the default `functionsBaseUrl` value.
+ * `resolveFunctionsBaseUrl`'s own defensive fallback for a blank/absent
+ * `VITE_SUPABASE_URL` env var, unreachable in practice once
+ * `loadCalendarFeed` is real. */
 export const PLACEHOLDER_SUPABASE_FUNCTIONS_URL =
   'https://volt-placeholder-project.functions.supabase.co';
 
@@ -387,8 +470,11 @@ const FIXTURE_ACTIVE_FEED: CalendarFeedRow = {
   createdAt: '2026-07-01T12:00:00.000Z',
 };
 
-/** Module doc section 10 -- assumes a row is already provisioned for
- * `profileId`; not a real Supabase read. */
+/** Module doc section 10 -- T177: KEPT as a named export (T105 precedent,
+ * packet §3c), but this is NO LONGER the default `loadCalendarFeed` value
+ * (see `../../lib/supabase/loaders/calendarFeed.ts`'s own real
+ * `loadCalendarFeed` export for the current default). Still assumes a row is
+ * already provisioned for `profileId`; not a real Supabase read. */
 export async function defaultLoadCalendarFeed(profileId: string): Promise<CalendarFeedRow> {
   return { ...FIXTURE_ACTIVE_FEED, profileId: profileId || FIXTURE_ACTIVE_FEED.profileId };
 }
@@ -463,24 +549,28 @@ export interface SubscribePopoverProps {
   /** The current profile's id (module doc section 7 -- caller-supplied, not
    * self-discovered from an auth context). */
   profileId: string;
-  /** Injectable data-loading seam (module doc section 7). Defaults to fixture data. */
+  /** Injectable data-loading seam (module doc section 7). Defaults to the
+   * real Supabase-backed `loadCalendarFeed` (`../../lib/supabase/loaders/
+   * calendarFeed.ts`), T177. */
   loadCalendarFeed?: LoadCalendarFeedFn;
   /**
    * Injectable atomic reset seam (module doc section 1). Defaults to a
-   * `console.warn` stub. See `ResetFeedTokenPayload` for the single-payload
-   * revoke-old + create-new contract.
+   * `console.warn` stub -- UNCHANGED, explicitly out of scope for T177
+   * (module doc section 7). See `ResetFeedTokenPayload` for the
+   * single-payload revoke-old + create-new contract.
    */
   onResetFeedToken?: OnResetFeedTokenFn;
   /** Injectable Supabase Functions base URL (module doc section 2). Defaults
-   * to an obviously-fake placeholder. */
+   * to `resolveFunctionsBaseUrl()`, which reads the real `VITE_SUPABASE_URL`
+   * env var (T177). */
   functionsBaseUrl?: string;
 }
 
 export function SubscribePopover({
   profileId,
-  loadCalendarFeed = defaultLoadCalendarFeed,
+  loadCalendarFeed = loadCalendarFeedReal,
   onResetFeedToken = defaultOnResetFeedToken,
-  functionsBaseUrl = PLACEHOLDER_SUPABASE_FUNCTIONS_URL,
+  functionsBaseUrl = resolveFunctionsBaseUrl(),
 }: SubscribePopoverProps): ReactNode {
   const loadState = useLoadState(() => loadCalendarFeed(profileId), [loadCalendarFeed, profileId]);
   const [feed, setFeed] = useState<CalendarFeedRow | null>(null);

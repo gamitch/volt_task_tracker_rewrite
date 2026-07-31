@@ -62,7 +62,9 @@ import {
   buildResetFeedTokenPayload,
   FEED_CONTENTS_DESCRIPTION,
   GOOGLE_CALENDAR_HELPER_TEXT,
+  PLACEHOLDER_SUPABASE_FUNCTIONS_URL,
   RESET_CONFIRM_DESCRIPTION,
+  resolveFunctionsBaseUrl,
   SubscribePopover,
   type CalendarFeedRow,
   type ResetFeedTokenPayload,
@@ -182,6 +184,28 @@ describe('buildResetFeedTokenPayload (module doc section 1 -- the atomicity cont
       profileId: TEST_PROFILE_ID,
       revokeFeedId: 'feed-test-001',
     });
+  });
+});
+
+describe('resolveFunctionsBaseUrl (T177 criterion 1 -- injectable-parameter seam, NOT env stubbing)', () => {
+  it('derives the real Functions URL from a plain string argument', () => {
+    expect(resolveFunctionsBaseUrl('https://example.supabase.co')).toBe(
+      'https://example.supabase.co/functions/v1',
+    );
+  });
+
+  it('strips a trailing slash on the input before appending /functions/v1', () => {
+    expect(resolveFunctionsBaseUrl('https://example.supabase.co/')).toBe(
+      'https://example.supabase.co/functions/v1',
+    );
+  });
+
+  it('falls back to PLACEHOLDER_SUPABASE_FUNCTIONS_URL for a blank input', () => {
+    expect(resolveFunctionsBaseUrl('')).toBe(PLACEHOLDER_SUPABASE_FUNCTIONS_URL);
+  });
+
+  it('falls back to PLACEHOLDER_SUPABASE_FUNCTIONS_URL for an undefined input', () => {
+    expect(resolveFunctionsBaseUrl(undefined)).toBe(PLACEHOLDER_SUPABASE_FUNCTIONS_URL);
   });
 });
 
