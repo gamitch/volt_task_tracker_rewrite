@@ -18,6 +18,7 @@ import {
   MarkEventCompleteDialog,
   partitionEventSessions,
   type MarkEventCompleteDialogProps,
+  ATTENDANCE_ROW_CAP,
 } from './MarkEventCompleteDialog';
 // T307 -- the loaded-attendance fixture shape this dialog's new load seam
 // resolves to.
@@ -756,5 +757,108 @@ describe('<MarkEventCompleteDialog /> attendance load -- L1 (called once, exactl
 
     expect(loadAttendance).toHaveBeenCalledTimes(1);
     expect(loadAttendance.mock.calls[0][0]).toEqual(['session-1', 'session-2']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T307 checker follow-ups (MAJOR + MINOR), fixed in place rather than filed.
+// ---------------------------------------------------------------------------
+
+describe('<MarkEventCompleteDialog /> F4 -- a silently TRUNCATED load must block the write, not look like success', () => {
+  it('routes a resolve at the PostgREST max_rows cap to the error state and writes nothing', async () => {
+    // A capped response is not an error: PostgREST returns 200 with a
+    // partial Content-Range, so `createLoader` resolves a truncated array
+    // and the block-on-failure rule would never engage. A student whose row
+    // was truncated away is indistinguishable from one who never had a row,
+    // so the write would null their real check-in/hours/method.
+    const cappedRows = Array.from({ length: ATTENDANCE_ROW_CAP }, (_, i) =>
+      makeAttendanceRow({ studentId: `student-filler-${i}`, method: 'qr', hoursOverride: 3 }),
+    );
+    const loadAttendance = vi.fn<LoadAttendanceForSessionsFn>(async () => cappedRows);
+    const onMarkSessionComplete = vi.fn<(payload: MarkDayCompletePayload) => Promise<void>>(
+      async () => {},
+    );
+    act(() => {
+      root.render(
+        <MarkEventCompleteDialog
+          isOpen
+          onOpenChange={() => {}}
+          currentUserProfileId={COACH_PROFILE_ID}
+          sessions={[SESSION_1]}
+          roster={ROSTER}
+          rsvps={RSVPS}
+          onMarkSessionComplete={onMarkSessionComplete}
+          loadAttendance={loadAttendance}
+        />,
+      );
+    });
+    await flushMicrotasks();
+
+    const confirmButton = findButtonByText('Mark 1 session complete');
+    expect(confirmButton).toBeDefined();
+    expect(confirmButton?.disabled).toBe(true);
+    expect(container.textContent).toContain("Couldn't load recorded attendance");
+
+    clickElement(confirmButton as HTMLButtonElement);
+    await flushMicrotasks();
+
+    // Mock-hardening: prove the mock intercepted, so this is not passing
+    // because the real loader rejected for an unrelated reason.
+    expect(loadAttendance).toHaveBeenCalledTimes(1);
+    expect(onMarkSessionComplete).toHaveBeenCalledTimes(0);
+  });
+
+  it('still succeeds normally one row below the cap -- the guard is not a blanket block', async () => {
+    const belowCap = Array.from({ length: ATTENDANCE_ROW_CAP - 1 }, (_, i) =>
+      makeAttendanceRow({ studentId: `student-filler-${i}` }),
+    );
+    const loadAttendance = vi.fn<LoadAttendanceForSessionsFn>(async () => belowCap);
+    act(() => {
+      root.render(
+        <MarkEventCompleteDialog
+          isOpen
+          onOpenChange={() => {}}
+          currentUserProfileId={COACH_PROFILE_ID}
+          sessions={[SESSION_1]}
+          roster={ROSTER}
+          rsvps={RSVPS}
+          onMarkSessionComplete={async () => {}}
+          loadAttendance={loadAttendance}
+        />,
+      );
+    });
+    await flushMicrotasks();
+
+    expect(loadAttendance).toHaveBeenCalledTimes(1);
+    expect(container.textContent).not.toContain("Couldn't load recorded attendance");
+    expect(findButtonByText('Mark 1 session complete')?.disabled).toBe(false);
+  });
+});
+
+describe('<MarkEventCompleteDialog /> the load effect is gated on isOpen', () => {
+  it('does not fire an attendance query while the dialog is closed', async () => {
+    // This dialog is mounted whenever `user !== null` (OutreachDetail.tsx),
+    // so an ungated load would issue an `attendance` SELECT for every
+    // signed-in viewer on every outreach detail page. The packet cited
+    // `OutreachDetail.test.tsx:1063` as covering this; it does not -- that
+    // test has `user === null`, so this dialog is never mounted there.
+    const loadAttendance = vi.fn<LoadAttendanceForSessionsFn>(async () => []);
+    act(() => {
+      root.render(
+        <MarkEventCompleteDialog
+          isOpen={false}
+          onOpenChange={() => {}}
+          currentUserProfileId={COACH_PROFILE_ID}
+          sessions={[SESSION_1]}
+          roster={ROSTER}
+          rsvps={RSVPS}
+          onMarkSessionComplete={async () => {}}
+          loadAttendance={loadAttendance}
+        />,
+      );
+    });
+    await flushMicrotasks();
+
+    expect(loadAttendance).toHaveBeenCalledTimes(0);
   });
 });

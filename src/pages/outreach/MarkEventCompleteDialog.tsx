@@ -436,6 +436,17 @@ export interface MarkEventCompleteDialogProps {
  * already-open dialog, same shape `AttendancePanel.tsx`'s own
  * `AttendanceLoadState` (`:523-527`) already established. Deliberately NOT
  * exported -- private to this component's own load gating. */
+/**
+ * `supabase/config.toml`'s `[api] max_rows`, mirrored here because a
+ * response at this length may have been silently truncated by PostgREST and
+ * this dialog's write path cannot tell a truncated-away row from a
+ * never-recorded one. Kept as a named constant, not an inline literal, so
+ * the tie to that config value is greppable from both ends. If `max_rows`
+ * changes, this must change with it -- T320 (loader-side `.range()`
+ * pagination) removes the need for it entirely.
+ */
+export const ATTENDANCE_ROW_CAP = 1000;
+
 type AttendanceLoadState =
   | { status: 'loading' }
   | { status: 'error'; retry: () => void }
@@ -508,7 +519,39 @@ export function MarkEventCompleteDialog({
     const remainingSessionIds = remaining.map((session) => session.id);
     loadAttendance(remainingSessionIds)
       .then((rows) => {
-        if (isMounted) setAttendanceState({ status: 'success', rows });
+        if (!isMounted) return;
+        // T307 checker (MAJOR): PostgREST TRUNCATION IS A THIRD STATE this
+        // design otherwise does not model, and it is the one surviving way
+        // this dialog could still destroy a recorded row.
+        //
+        // `supabase/config.toml`'s `[api] max_rows = 1000` caps every
+        // response, and `queryAttendanceForSessions`
+        // (`loaders/attendance.ts`) issues a bare `.select('*').in(...)`
+        // with no `.range()`/`.limit()`. A capped response is **not an
+        // error** -- PostgREST returns 200 with a partial `Content-Range`,
+        // so `result.error` is null, `createLoader` resolves the truncated
+        // array (`loader.ts:174-176` only throws on `result.error`), and we
+        // would land in `'success'` holding rows for only SOME students.
+        // §3's block-on-failure rule never engages, because nothing failed
+        // -- and a student whose row was truncated away is indistinguishable
+        // from one who never had a row, so the write nulls their real
+        // check-in/check-out/hours/method. That is exactly the payload this
+        // whole task exists to eliminate.
+        //
+        // Fail CLOSED: a resolve at or above the cap is treated as a failed
+        // load, not a successful one. This can only ever block a write,
+        // never permit one, and it turns the design's own assumption -- that
+        // the resolved array is COMPLETE -- from assumed into checked.
+        // The proper fix is `.range()` pagination in the loader, which is a
+        // Forbidden file here and is filed as T320.
+        if (rows.length >= ATTENDANCE_ROW_CAP) {
+          setAttendanceState({
+            status: 'error',
+            retry: () => setRetryToken((token) => token + 1),
+          });
+          return;
+        }
+        setAttendanceState({ status: 'success', rows });
       })
       .catch(() => {
         if (isMounted) {

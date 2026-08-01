@@ -6405,3 +6405,92 @@ correct.
 pre-existing, but T305 makes it materially more reachable now that recorded attendance drives the
 checkbox). **T307** and **T308** were already filed during packeting and were confirmed not
 silently reintroduced.
+
+---
+
+## T307 — "Mark event complete" stops destroying recorded attendance (2026-08-01)
+
+**Result: FAIL on attempt 1 (1 MAJOR), reworked and closed by the orchestrator.** Worker
+`worker-implementer` (sonnet, own worktree) → `0f888a8`; checker `checker-reviewer` (opus) → FAIL;
+orchestrator rework commit follows. Gates after rework, `.env.local` absent: `tsc` 0 ·
+`vite build` ✓ · prettier clean · eslint **0 errors / 361 warnings** · vitest **72 files / 1777
+tests** exit 0 · both targeted files exit 0. Sabotage check clean both rounds.
+
+**The MAJOR: PostgREST truncation is a third state the design did not model, and it was the one
+surviving way this dialog could still destroy a row.** `supabase/config.toml`'s `[api] max_rows =
+1000` caps every response, and `queryAttendanceForSessions` (`loaders/attendance.ts`) issues a bare
+`.select('*').in(...)` with no `.range()`/`.limit()`. **A capped response is not an error** —
+PostgREST returns 200 with a partial `Content-Range`, so `result.error` is null, `createLoader`
+(`loader.ts:174-176`, which throws only on `result.error`) resolves the truncated array, and the
+dialog lands in `'success'` holding rows for only some students. §3's entire block-on-failure rule
+never engages, because nothing failed — and a student whose row was truncated away is
+indistinguishable from one who never had a row, so the write nulls their real
+check-in/check-out/hours/method. The checker demonstrated the consequence with truncation simulated,
+producing byte-for-byte the payload the task exists to eliminate.
+
+**Verified independently by the orchestrator before acting**: `max_rows = 1000` present, the query
+carries no limit, and `createLoader` throws only on `result.error`.
+
+**Rework, per the checker's own option (a) — fail closed.** A resolve at or above
+`ATTENDANCE_ROW_CAP` is routed to the **error** state rather than `success`. It can only ever block
+a write, never permit one, and it turns the design's own assumption — that the resolved array is
+complete — from assumed into checked. Entirely inside Allowed Files. **Both mutations reproduced by
+the orchestrator, not relayed:** forcing the guard off reddens exactly the new F4 test
+(`1 failed | 24 passed`), and a companion test one row *below* the cap proves the guard is not a
+blanket block. The proper fix — `.range()` pagination at the loader — needs a Forbidden file and is
+filed as **T320**.
+
+**Also fixed: the load-effect `isOpen` gate was completely unpinned, and the packet's cited
+criterion did not exist.** §3 cited `OutreachDetail.test.tsx:1063` as covering it; that test has
+`user === null`, so this dialog is never mounted there and it cannot exercise the gate. Measured:
+removing `if (!isOpen) return undefined;` left **both** suites fully green. Shipped behaviour was
+correct, only the coverage was missing — an ungated load would fire an `attendance` SELECT for every
+signed-in viewer on every outreach detail page. Closed with one test; mutation reproduced
+(`1 failed | 24 passed`).
+
+**Twelve of thirteen adversarial paths were already safe**, and the checker wrote its own fixtures
+rather than re-running the packet's: load resolving after the click, retry-after-failure, multi
+session, dialog re-keyed mid-flight, closed dialog, close-then-reopen, cross-session leakage. It also
+closed off two mechanisms that would have made the whole failure rule vacuous — `createLoader`
+throws on `result.error` so a failed query cannot resolve `[]` and masquerade as "nobody attended",
+and RLS `staff_all on attendance for all` means read visibility equals write reach, so there is no
+partial-visibility gap for the acting coach.
+
+**The checker disproved the packet's own F1b claim.** The packet stated the `handleConfirm` guard was
+untestable because jsdom's `disabled` suppresses clicks. The real reason a DOM-level force fails is
+different — Astryx's `Button` guards on the `isDisabled` **prop**, not the attribute. By mutation
+layering the checker proved the guard is live and load-bearing: removing *only* the button's
+`isDisabled` clause still blocks the write (so `handleConfirm`'s guard is doing real work), and
+removing *both* lets one write through. §3's rule holds at two independent layers. The worker
+correctly followed the packet in not inventing a criterion here; the packet was wrong, not the
+worker.
+
+**The worker found a real fact the packet did not know, and its fix solves rather than masks.**
+`MarkEventCompleteDialog` is mounted for *any* signed-in user and its content sits in the DOM even
+when `isOpen={false}` — `Dialog` only hides it visually — so the first loading-state implementation
+leaked `aria-busy="true"` onto every page. The checker confirmed the `isOpen` render gate is
+load-bearing by removing it and reddening **two pre-existing accessibility tests** (T157 parent,
+T169 student), not the one the worker reported. Pinned by tests that predate the fix and assert the
+real user-visible property.
+
+**`aria-busy` cleared against constitution item 2** by the orchestrator: it is a native ARIA
+attribute, not an Astryx prop, and `<VStack aria-busy="true">` already exists at
+`AttendancePanel.tsx:835`, `Leaderboard.tsx:483` and `OutreachDetail.tsx:1801` with tests asserting
+it in the DOM. The worker was right to flag it and right to use it.
+
+**P2 was not unpinned.** The worker declined to run P2's mutation because it lives in a Forbidden
+file; the checker ran it in its own worktree — which item 23 explicitly authorizes — and confirmed
+P2 catches it directly. The worker's conclusion was right, its reasoning was not.
+
+**Zero eslint rise explained:** the new `ATTENDANCE_ROW_CAP` export adds no
+`react-refresh/only-export-components` warning because `eslint.config.js:39` sets
+`allowConstantExport: true`.
+
+**No fresh checker round was run on the rework** (item 25): the remedy was specified by the checker
+itself, is ~4 lines plus three tests inside Allowed Files, and both mutations were reproduced
+directly by the orchestrator. Same posture as T302 and T303. Recorded rather than assumed.
+
+**Follow-up: T320.** The checker's three NITs are recorded here rather than filed as rows — the F1b
+guard is pinnable by mutation layering and worth adding when the file is next opened; a
+delete-then-bulk-complete TOCTOU can resurrect a deleted row with its true historical values; and
+the worker under-reported the render-gate blast radius as one test when it is two.
