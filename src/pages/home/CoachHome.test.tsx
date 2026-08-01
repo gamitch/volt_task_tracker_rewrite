@@ -78,6 +78,7 @@ import {
   type HomeTeamRow,
   type SeasonSetupStatus,
 } from './CoachHome';
+import { defaultLoadLeaderboardData, defaultLoadPrivacySetting } from '../outreach/Leaderboard';
 
 // ---------------------------------------------------------------------------
 // Render harness -- mirrors OutreachList.test.tsx / MeetingsList.test.tsx.
@@ -135,16 +136,29 @@ function renderAsUser(
   props: Parameters<typeof CoachHome>[0] = {},
   loadActiveSeason: LoadActiveSeasonFn = async () => FIXTURE_ACTIVE_SEASON,
 ): void {
+  // T203: CoachHome's own default `loadLeaderboardData`/
+  // `loadLeaderboardPrivacySetting` are now the real, unconfigured-in-jsdom
+  // Supabase loaders (gate round 1, BLOCKER 1: `Leaderboard` fetches BOTH
+  // via `Promise.all`, so BOTH need a fixture default here, not just one).
+  // Every pre-existing call site below predates both props and cannot have
+  // overridden either, so the fixture defaults are merged here once rather
+  // than touching ~90 call sites; a caller-supplied override of either prop
+  // in `props` still wins (spread order below).
+  const mergedProps: Parameters<typeof CoachHome>[0] = {
+    loadLeaderboardData: defaultLoadLeaderboardData,
+    loadLeaderboardPrivacySetting: defaultLoadPrivacySetting,
+    ...props,
+  };
   act(() => {
     root.render(
       <MemoryRouter>
         <SeasonProvider loadActiveSeason={loadActiveSeason}>
           <AuthProvider>
             {user === null ? (
-              <CoachHome {...props} />
+              <CoachHome {...mergedProps} />
             ) : (
               <LoginAs user={user}>
-                <CoachHome {...props} />
+                <CoachHome {...mergedProps} />
               </LoginAs>
             )}
           </AuthProvider>
@@ -1117,6 +1131,18 @@ describe('<CoachHome /> DES-12 states', () => {
     expect(container.textContent).toContain('Regionals Qualifier');
     // Titans-scoped session must never appear (team-scope exclusion).
     expect(container.textContent).not.toContain('Titans Strategy Session');
+
+    // T203 (criterion 3): `renderAsUser`'s harness merge (§7a) supplies the
+    // fixture `loadLeaderboardData`/`loadLeaderboardPrivacySetting` defaults
+    // here (neither is overridden by this test's own props) -- proving the
+    // merge is load-bearing, not decorative. `defaultLoadLeaderboardData`
+    // filters its fixture hours by the REAL, non-placeholder seasonId
+    // (`FIXTURE_ACTIVE_SEASON.id`), which none of `Leaderboard.tsx`'s own
+    // shipped fixture rows are scoped to, so the filtered result is
+    // genuinely empty -- `Leaderboard`'s own honest empty state, not its
+    // error state.
+    expect(container.textContent).toContain('No volunteer hours recorded yet');
+    expect(container.textContent).not.toContain("Couldn't load the leaderboard");
   });
 });
 
@@ -2120,5 +2146,65 @@ describe("<CoachHome /> BEH-01 milestone toast on this page's own hours-vs-goal 
     expect(container.textContent).not.toContain('reached 25% of the season goal');
     // The milestone tick itself is still shown as a current fact.
     expect(container.textContent).toContain('25% reached');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T203: `Leaderboard` (OUT-08, T044/T158) embedded in this page's dashboard
+// (criteria 1/4). `Leaderboard.tsx` itself is Forbidden -- these tests only
+// prove the EMBED (real `seasonId` threading, the `Card` CSS-nesting fix),
+// never re-testing `Leaderboard`'s own internal state machine/formatting/
+// privacy logic (that is `Leaderboard.test.tsx`'s job, not this file's).
+// ---------------------------------------------------------------------------
+
+describe('<CoachHome /> T203 -- embedded Leaderboard reachability + real seasonId threading (criterion 1)', () => {
+  it('renders the populated leaderboard, sourced from the real, non-placeholder resolved seasonId', async () => {
+    // Fabricated fixture, distinct from Leaderboard.tsx's own shipped
+    // fixture names and from this file's/DashboardPage.test.tsx's existing
+    // fixture names (constitution item 6 / packet criterion 8).
+    const loadLeaderboardDataSpy = vi.fn(async (seasonId: string) => ({
+      hours:
+        seasonId === FIXTURE_ACTIVE_SEASON.id
+          ? [
+              {
+                studentId: 'student-t203-quillon-bramwell',
+                seasonId,
+                confirmedHours: 12.5,
+              },
+            ]
+          : [],
+      students: [{ id: 'student-t203-quillon-bramwell', displayName: 'Quillon Bramwell' }],
+    }));
+    renderAsUser(COACH_USER, {
+      loadData: fixtureLoadData,
+      loadDashboardData: fixtureLoadDashboardData,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+      loadLeaderboardData: loadLeaderboardDataSpy,
+    });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('Season Volunteer Leaderboard');
+    // `formatDisplayName` (Leaderboard.tsx:365-375) is the only render-time
+    // boundary a name crosses -- with the default privacy setting ON
+    // (this test leaves `loadLeaderboardPrivacySetting` un-overridden, so
+    // the harness merge's `defaultLoadPrivacySetting` resolves `true`), the
+    // fabricated 'Quillon Bramwell' reaches the DOM only as '1. Quillon B.'.
+    expect(container.textContent).toContain('1. Quillon B.');
+    expect(loadLeaderboardDataSpy).toHaveBeenCalledWith(FIXTURE_ACTIVE_SEASON.id);
+    // The genuinely discriminating assertion: never the retired/unrelated
+    // Leaderboard-internal placeholder default.
+    expect(loadLeaderboardDataSpy.mock.calls[0]?.[0]).not.toBe('season-placeholder-current');
+  });
+});
+
+describe('<CoachHome /> T203 -- Leaderboard CSS-nesting fix, jsdom-provable structural proof (criterion 4)', () => {
+  it("Card is a genuine DOM ancestor of the embedded Leaderboard's own Section root (astryx-card/astryx-section)", async () => {
+    renderAsUser(COACH_USER, { loadData: fixtureLoadData, nowFn: () => FIXTURE_REFERENCE_NOW });
+    await flushMicrotasks();
+    // CoachHome.tsx uses no Section anywhere else, so this uniquely
+    // resolves to Leaderboard's own root (Section.js, `astryx-section`).
+    const section = container.querySelector('.astryx-section');
+    expect(section).not.toBeNull();
+    expect(section!.closest('.astryx-card')).not.toBeNull();
   });
 });

@@ -650,6 +650,13 @@ import {
   type TeamHoursEntry,
 } from '../../lib/supabase/loaders/dashboard';
 import { loadCoachHomeData } from '../../lib/supabase/loaders/coachHome';
+import { loadLeaderboardData } from '../../lib/supabase/loaders/leaderboard';
+import { loadPrivacySetting } from '../../lib/supabase/loaders/leaderboard_privacy';
+import {
+  Leaderboard,
+  type LoadLeaderboardDataFn,
+  type LoadPrivacySettingFn,
+} from '../outreach/Leaderboard';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real columns/views. Module docs #3/#4.
@@ -2100,6 +2107,23 @@ export interface CoachHomeProps {
    * already established -- pass `defaultLoadDashboardData` explicitly (as
    * this file's own tests do) for fixture behavior. */
   loadDashboardData?: LoadDashboardDataFn;
+  /** T203: injectable data-loading seam for the embedded season volunteer
+   * leaderboard (`Leaderboard.tsx`, OUT-08). Defaults to the real,
+   * Supabase-backed `loadLeaderboardData` (`../../lib/supabase/loaders/
+   * leaderboard`, built by T158) -- same "prop defaults to the real loader"
+   * convention `loadDashboardData` above already established. */
+  loadLeaderboardData?: LoadLeaderboardDataFn;
+  /** T203 (gate round 1, BLOCKER 1): `Leaderboard` itself fetches TWO
+   * things internally via `Promise.all` (`Leaderboard.tsx`'s own
+   * `useLeaderboardData`) -- `loadData` (above) and `loadPrivacySetting`.
+   * Both must be independently injectable, or `Leaderboard` can never reach
+   * its populated state in any test (the real, unconfigured
+   * `loadPrivacySetting` always rejects in jsdom, and `Promise.all` fails
+   * if either promise rejects). Defaults to the real, SHARED
+   * `loadPrivacySetting` (`../../lib/supabase/loaders/leaderboard_privacy`,
+   * built by T104) -- same "prop defaults to the real loader" convention as
+   * `loadLeaderboardData` immediately above. */
+  loadLeaderboardPrivacySetting?: LoadPrivacySettingFn;
   /** Which team this Coach/Admin Home is scoped to (module doc #8) --
    * scopes ONLY the pre-existing primary KPI grid / Next up / Recent-feed
    * team filter / check-in / season-setup card. T124's new season-wide
@@ -2169,6 +2193,8 @@ function CoachHomeLoadingSkeleton(): ReactNode {
 export function CoachHome({
   loadData = loadCoachHomeData,
   loadDashboardData: loadDashboardDataProp = loadDashboardData,
+  loadLeaderboardData: loadLeaderboardDataProp = loadLeaderboardData,
+  loadLeaderboardPrivacySetting: loadLeaderboardPrivacySettingProp = loadPrivacySetting,
   teamId = PLACEHOLDER_CURRENT_TEAM_ID,
   nowFn = () => new Date(),
 }: CoachHomeProps = {}): ReactNode {
@@ -2219,6 +2245,8 @@ export function CoachHome({
           teamId={teamId}
           loadData={loadData}
           loadDashboardData={loadDashboardDataProp}
+          loadLeaderboardData={loadLeaderboardDataProp}
+          loadLeaderboardPrivacySetting={loadLeaderboardPrivacySettingProp}
           defaultGoalHours={activeSeason.season.defaultGoalHours}
           nowFn={nowFn}
         />
@@ -2241,6 +2269,8 @@ interface CoachHomeContentProps {
   teamId: string;
   loadData: LoadCoachHomeDataFn;
   loadDashboardData: LoadDashboardDataFn;
+  loadLeaderboardData: LoadLeaderboardDataFn;
+  loadLeaderboardPrivacySetting: LoadPrivacySettingFn;
   defaultGoalHours: number;
   nowFn: () => Date;
 }
@@ -2251,6 +2281,8 @@ function CoachHomeContent({
   teamId,
   loadData,
   loadDashboardData: loadDashboardDataProp,
+  loadLeaderboardData: loadLeaderboardDataProp,
+  loadLeaderboardPrivacySetting: loadLeaderboardPrivacySettingProp,
   defaultGoalHours,
   nowFn,
 }: CoachHomeContentProps): ReactNode {
@@ -2782,6 +2814,49 @@ function CoachHomeContent({
                   )}
                 </div>
               </VStack>
+
+              <Divider />
+
+              {/* T203: `Leaderboard` (OUT-08, T044/T158) embedded per the
+                owner's ruling ("embed the leaderboard in the dashboard").
+                Wrapped in `Card` -- NOT mounted bare -- because `Section`
+                (which `Leaderboard` renders internally) unconditionally
+                applies a negative inline/block margin sized from whichever
+                ancestor most recently set `--container-padding-*`
+                (`Section.js`'s own `nestedStyles.outer`, confirmed against
+                the package's own precompiled `astryx.css`:
+                `margin-inline-start/-end: calc(-1 * var(--container-
+                padding-inline-start/-end, 0px))`). This page's
+                `LayoutContent padding={6}` is the nearest ancestor setting
+                those vars (directly, via its own `padding.stylex.js`
+                mechanism -- NOT via the shared `container(...)` helper,
+                which only `Section`/`Card`/`Dialog` call), and nothing
+                between it and here resets them (not the intervening
+                `VStack`s) -- so a bare mount would bleed the leaderboard
+                ~24px wider than every sibling section on this page
+                (`--spacing-6`, this page's own ambient padding). `Card`'s
+                own div re-declares those vars to its own, smaller,
+                theme-overridden value (`--astryx-card-padding:
+                var(--spacing-3)`, 12px, `theme.css:518-519`) before
+                `Section` reads them, and `Card` itself carries no negative
+                margin of its own -- so wrapping here makes the
+                leaderboard's outer edge line up with every sibling
+                section's edge instead of bleeding past it. Same
+                nesting-hazard class this file's own T129 fix (module doc
+                #14, `:2271-2278`) already found and fixed for a different
+                wrapper. See this task's worker output for the live-browser
+                measurement closing this out numerically (jsdom does not
+                load real CSS in this project's test setup -- confirmed,
+                `test-setup.ts`/`vite.config.ts` -- so a jsdom computed-style
+                check cannot resolve the `calc()` math; see the acceptance
+                criteria). */}
+              <Card>
+                <Leaderboard
+                  loadData={loadLeaderboardDataProp}
+                  loadPrivacySetting={loadLeaderboardPrivacySettingProp}
+                  seasonId={seasonId}
+                />
+              </Card>
 
               {showSeasonSetupCard && (
                 <>
