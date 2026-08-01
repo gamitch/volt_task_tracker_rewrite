@@ -1427,3 +1427,35 @@ displayed 7h, totalled 14h against a true 10h, and confirming wrote
 `checkInAt`, `checkOutAt` and `method` through the write**, using the existing
 `resolveAttendanceWriteMethod` (`loaders/attendance.ts:218-222`) rather than a hardcoded `'coach'`.
 Showing the truth and then overwriting it is worse than not showing it.
+
+---
+
+## 2026-08-01 — George: season goal is 90 hours; test-migrate now, drop the data, re-migrate at cutover
+
+**Two rulings, both from the migration thread.**
+
+**1. Season goal = 90 hours.** Verbatim: *"the goal is 90 hours."* This matches the old system's
+`app_settings.season_goal = 90` exactly, so the ETL carries the old value across rather than
+substituting the `200` currently showing in the new app. **This one number sets every student's goal
+bar** — all 20 migrated students have `goal_hours = null` and therefore inherit the season default.
+
+**2. Test migration now, teardown after, real migration at cutover.** Verbatim: *"can we do a test
+migration while we are testing out the app, then drop all data once we finish testing."*
+**Authorized.** The ETL was built idempotent with natural-key upserts (`scripts/migrate.ts` header),
+so re-running at cutover is the designed path, not a workaround.
+
+**Constraints that go with it, recorded so a later session does not get them wrong:**
+
+- **Never truncate `profiles`.** It is `references auth.users (id) on delete restrict`, and it holds
+  the owner's own sign-in. Truncating it locks him out of his own project. Teardown covers the 14
+  data tables and stops there.
+- **Auth users are not the ETL's to clean.** The old `students` rows carry **no email column**, so
+  the migration creates zero accounts. Any test accounts made by hand during testing must be removed
+  from the Supabase Auth dashboard separately.
+- **The teardown SQL becomes dangerous the moment real users exist.** It is safe now only because
+  nothing is deployed. After cutover it must never be run.
+
+**A gap this surfaced, not a migration defect:** the old system has no student emails, so T064
+(roster → accounts) cannot proceed on migrated data alone. The owner will need to supply ~20
+addresses — likely guardian addresses given the ages — before anyone can be invited. The data
+migration itself is unaffected.
