@@ -1493,9 +1493,43 @@ delete from students where profile_id is null;
 key, so leaving them is harmless and re-running is idempotent. `profiles`, `guardian_links` and
 `auth.users` are never touched.
 
-**Known limitation, disclosed rather than hidden:** this also removes any student the owner created
-*without* an account (his `Test` / `dgdgddgdg` rows). Correct for the current cleanup; it would be
-wrong if he ever hand-creates a real accountless student he wants to keep.
+**AMENDED 2026-08-01, same session — the rule above was too narrow and would have failed.**
+
+The owner: *"keep Test student account. i use this as a second child to the parent account to test a
+parent who has multiple students on the team."* `Test` has **no account of its own** but **is
+depended on by his parent account** through `guardian_links`.
+
+`profile_id is null` alone would have targeted it — and because
+`guardian_links.student_id references public.students (id) on delete restrict`
+(`identity_roster.sql:75`), the delete would not have silently removed it but **failed with a
+foreign-key error mid-teardown**, leaving the database half-cleared. Loud rather than lossy, but
+still wrong, and it would have destroyed a fixture he deliberately built to test the
+multi-student parent view — a case the app genuinely has (`ParentHome` renders a card per child).
+
+**The correct rule is broader: keep any student that ANY account depends on** — its own
+(`profile_id`) or a guardian's (`guardian_links`):
+
+```sql
+delete from attendance;
+delete from rsvps;
+delete from event_sessions;
+delete from events;
+
+delete from student_teams
+ where student_id in (
+   select id from students
+    where profile_id is null
+      and id not in (select student_id from guardian_links));
+
+delete from students
+ where profile_id is null
+   and id not in (select student_id from guardian_links);
+```
+
+This keeps `Test` and every other account-reachable student, and still removes all 20 migrated rows
+(none has a `profile_id`, and none is guardian-linked, since the migration creates no accounts and
+no links). It also cannot hit the `on delete restrict` error, because the only rows it targets are
+ones nothing references.
 
 **The durable fix, queued not yet built:** have the ETL emit a **manifest** of every id it writes
 during a real run, and add a `--teardown=<manifest>` mode that deletes exactly those rows and
