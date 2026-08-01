@@ -176,6 +176,15 @@
  *    rows, not an unexamined coincidence, same proof shape that dialog's
  *    own module doc #2(c) already spelled out.
  *
+ *    AMENDED 2026-07-31 (T303, owner ruling on the cross-surface
+ *    inconsistency filed against this exact badge): the event-total
+ *    badge's NOUN is now status-aware (`resolveEventHoursNoun`, near
+ *    `computeSessionAttendanceTotalHours` below) -- "recorded" only once
+ *    every contributing session is `completed`; "scheduled" while any
+ *    still is. The SUM itself (`eventTotalHours`) is untouched by this
+ *    amendment -- the owner's ruling was that the number was already
+ *    right and only the word next to it lied.
+ *
  * -----------------------------------------------------------------------
  * 8. Astryx prop sourcing (constitution item 2) -- every prop used below,
  *    cross-checked directly against `docs/swarm/astryx-api.md` PLUS the
@@ -443,6 +452,30 @@ export function computeSessionAttendanceTotalHours(
     if (!isAttendingStatus(row?.status)) return sum;
     return sum + (row?.hoursOverride ?? durationHours);
   }, 0);
+}
+
+/** T303 (owner ruling, verbatim: "12h recorded is right, just fix the
+ * wording to say 'scheduled'" -- `docs/swarm/task-ledger.md` T303 row).
+ * `eventTotalHours`'s arithmetic is unchanged by this task (module doc
+ * #7) -- this decides ONLY the badge's noun, over the same `sessions`
+ * array (`eligibleSessions`, this file's own canceled-day filter, already
+ * applied before either this function or `eventTotalHours` ever sees it)
+ * that feeds that sum, so "contributing session" means the identical set
+ * for both.
+ *
+ * `'scheduled'` when at least one contributing session is still
+ * `status === 'scheduled'` -- those are exactly the hours
+ * `v_student_hours` (`20260717000003_metric_views.sql:16`, joined on
+ * `es.status = 'completed'`) excludes from season totals until the day is
+ * marked complete, so "recorded" would be the lie the owner's ruling was
+ * pointed at. `'recorded'` once every contributing session is
+ * `completed` (a canceled session never reaches this function --
+ * `eligibleSessions` already dropped it) -- those hours really do count
+ * by then, and "scheduled" would be the lie in that case instead. */
+export function resolveEventHoursNoun(
+  sessions: readonly AttendancePanelSession[],
+): 'scheduled' | 'recorded' {
+  return sessions.some((session) => session.status === 'scheduled') ? 'scheduled' : 'recorded';
 }
 
 // ---------------------------------------------------------------------------
@@ -791,7 +824,10 @@ export function AttendancePanel({
       <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
         <Heading level={2}>Attendance</Heading>
         {loadState.status === 'success' && (
-          <Badge variant="neutral" label={`${formatHours(eventTotalHours)}h recorded`} />
+          <Badge
+            variant="neutral"
+            label={`${formatHours(eventTotalHours)}h ${resolveEventHoursNoun(eligibleSessions)}`}
+          />
         )}
       </HStack>
 

@@ -6159,3 +6159,36 @@ hours" ruling. George ruled "close it off" — a one-line follow-up migration, n
 **T204 also carried in this task's filing** (a second, previously-undisclosed instance of the
 `dashboard_views.sql:49-52` stale-comment class, found in `loaders/students.ts` while re-tracing
 this task's own RLS reasoning — documentation accuracy only, no functional defect).
+
+---
+
+## T303 — the event Attendance badge's noun
+
+**Merged `82da973`. First attempt, no findings.** Found by the owner running the app against real
+data, not by any test: an event read `12h recorded` while the KPI strip directly above it read
+`Season hours 0.0`. Both were correct under their own rule — `eventTotalHours` sums over eligible
+sessions with no status filter, while `v_student_hours` joins `es.status = 'completed'` — and they
+contradicted each other in one viewport.
+
+**Owner ruling: "12h recorded is right, just fix the wording to say 'scheduled'."** Implemented as a
+status-aware noun rather than a literal swap, because a blind swap moves the lie instead of removing
+it: once a day is marked complete those hours genuinely do count, and *scheduled* would be false in
+exactly that case. `resolveEventHoursNoun` is a small exported pure function; `eventTotalHours` is
+byte-for-byte unchanged.
+
+**Both mutations reproduced by the orchestrator rather than relayed.** Forcing `'recorded'` →
+**3 of 41** red, including the render-level test; forcing `'scheduled'` → **2 of 41** red. The worker
+proved only the first direction. Adding the reverse is the difference between "the test fails when
+the code is wrong" and "the test fails when the code is wrong **in either direction**" — with a
+two-valued return, one mutation leaves the other branch resting on an unmutated assertion.
+
+Gates in the shared tree: `tsc` 0, build ✓, prettier clean, eslint **0 errors / 360 warnings**,
+vitest **70 files / 1701 tests**, targeted exit 0.
+
+**Disclosed rather than buried:** the warning count rose by one. Adding an export to a file that also
+exports components triggers another `react-refresh/only-export-components` — a pattern this file
+already carries many times. Zero errors, and the alternative (a new file for one 3-line function)
+costs more than the warning.
+
+**No checker round** (item 25) — one noun, one pure function, both mutation directions verified
+directly.

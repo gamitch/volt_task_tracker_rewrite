@@ -1314,3 +1314,40 @@ doesn't need to be open" grounds). George selected **"Close it off."**
 (`revoke select on public.v_leaderboard_students from anon;` or equivalent), which per constitution
 item 18 trigger 1 requires opus tier and a full `checker-premise` round regardless of the change's
 size, no exception for a one-line revoke. Not yet packeted or dispatched as of this ruling.
+
+---
+
+## 2026-07-31 — George's ruling on T304: keep two buckets, no third bucket
+
+**Context.** `buildEventGroups` (`OutreachList.tsx:1650-1670`) partitions outreach events on
+session **status alone and never consults the date**, so an event whose sessions all ran on Jul 6–10
+was still listed under **Upcoming** on Jul 31 because nobody had marked those days complete. Found
+by the owner running the app against real data.
+
+**He first ruled for a third bucket** ("Needs recording", sorted above Upcoming). Scoping then
+surfaced that `buildEventGroups` has **two** consumers — the coach view (`:3023`) and the
+student/parent view (`:3645`) — each rendering its own Upcoming/Past pair, four section sites in
+total, plus a `now` parameter the function does not currently take. That was put to him.
+
+**He reversed, and this ruling supersedes the earlier one:** *"having a 3rd bucket may make things
+more difficult. keep the current two buckets and i'll have to remember to close the days as they go
+by in order for them to move to 'past'."*
+
+**T304 is therefore CLOSED as no-change.** Current behaviour is correct as specified. An event
+leaves *Upcoming* when a coach marks its days complete, and not before. **Do not re-file this as a
+bug.** A future session noticing a stale event under *Upcoming* is looking at intended behaviour;
+it should read this entry rather than open a new row.
+
+**Residual risk, recorded honestly and accepted by the owner.** The rule now depends on the coach
+remembering to close each day. When they do not, three things follow, and they compound: the event
+sits under *Upcoming* indefinitely; its hours never reach `v_student_hours`, which joins
+`es.status = 'completed'` (`20260717000003_metric_views.sql:16`), so season totals under-report;
+and the `Nh` badge on the event keeps showing hours that count toward nothing — the T303 wording
+change makes that visible but does not make it counted. **The owner has accepted this.**
+
+**A cheaper middle ground exists if the risk ever bites** — worth recording so it does not have to
+be rediscovered: keep exactly two buckets and add a per-row marker (a badge, or the date in a
+warning tone) on any *Upcoming* row whose sessions have all passed. That keeps the nag without a
+new bucket, without a second consumer to update, and without changing the partition function's
+signature. **Not authorized now.** Raise it only if under-reported season hours become a real
+complaint.
