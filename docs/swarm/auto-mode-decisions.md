@@ -1459,3 +1459,46 @@ so re-running at cutover is the designed path, not a workaround.
 (roster → accounts) cannot proceed on migrated data alone. The owner will need to supply ~20
 addresses — likely guardian addresses given the ages — before anyone can be invited. The data
 migration itself is unaffected.
+
+---
+
+## 2026-08-01 — George: the migration teardown MUST preserve his accounts
+
+**Requirement, verbatim:** *"please have the migration scripts keep my accounts."*
+
+**This corrects teardown SQL the orchestrator had already given him**, which would have cost him
+working accounts. That SQL excluded `profiles` (so sign-in survived) but truncated `students` and
+`guardian_links`. Since `students.profile_id references profiles (id)`
+(`identity_roster.sql:61`) and `guardian_links.parent_profile_id` likewise (`:74`), the account
+would survive with **its role linkage destroyed** — the owner would sign in and land on "No student
+account linked yet". Logins preserved, roles broken. Not what was asked for, and not what was
+advertised.
+
+**What makes precise teardown possible.** The old `students` table has **no email column**, so the
+ETL creates every migrated student with **`profile_id = null`**. The owner's hand-made accounts are
+the only rows carrying a non-null `profile_id`. Migrated rows are therefore exactly identifiable
+without a manifest:
+
+```sql
+delete from attendance;
+delete from rsvps;
+delete from event_sessions;
+delete from events;
+delete from student_teams
+  where student_id in (select id from students where profile_id is null);
+delete from students where profile_id is null;
+```
+
+`teams` and `seasons` are deliberately **not** deleted — small config the ETL upserts by natural
+key, so leaving them is harmless and re-running is idempotent. `profiles`, `guardian_links` and
+`auth.users` are never touched.
+
+**Known limitation, disclosed rather than hidden:** this also removes any student the owner created
+*without* an account (his `Test` / `dgdgddgdg` rows). Correct for the current cleanup; it would be
+wrong if he ever hand-creates a real accountless student he wants to keep.
+
+**The durable fix, queued not yet built:** have the ETL emit a **manifest** of every id it writes
+during a real run, and add a `--teardown=<manifest>` mode that deletes exactly those rows and
+nothing else. That removes the reliance on `profile_id is null` as a proxy and stays correct even
+once students do have accounts. **This must exist before any teardown is run post-cutover** — at
+that point the `profile_id is null` heuristic would delete real, account-less student records.
