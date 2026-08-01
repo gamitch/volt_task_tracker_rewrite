@@ -21,7 +21,11 @@
 // directory's own first test file, T146) already established.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
-import { makeLoadStudentHomeData, makeResolveStudentScope } from './students';
+import {
+  makeLoadStudentHomeData,
+  makeResolveStudentIsActive,
+  makeResolveStudentScope,
+} from './students';
 
 /**
  * Records `.select()`/`.eq()`/`.maybeSingle()` for the
@@ -282,6 +286,100 @@ describe('makeLoadStudentHomeData (T183 criterion 8)', () => {
     });
     expect(maybeSingleSpy).toHaveBeenCalledTimes(1);
     // The intended guard: eqSpy was never called under the mutated path.
+    expect(eqSpy).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * T189 -- new tests for `makeResolveStudentIsActive`, same shape as
+ * `makeLoadStudentHomeData`'s own describe block above (`.eq('id',
+ * studentId).maybeSingle()` against the raw `students` table), reusing
+ * `makeStudentsRecordingClient`'s own shape since both read the same table
+ * via the same chain, just a different column.
+ */
+function makeStudentsIsActiveRecordingClient(row: { is_active: boolean } | null) {
+  const maybeSingleSpy = vi.fn().mockResolvedValue({ data: row, error: null });
+  const eqSpy = vi.fn(() => ({ maybeSingle: maybeSingleSpy }));
+  const selectSpy = vi.fn(() => ({ eq: eqSpy, maybeSingle: maybeSingleSpy }));
+  const fromSpy = vi.fn((table: string) => {
+    if (table === 'students') return { select: selectSpy };
+    throw new Error(`unexpected table: ${table}`);
+  });
+  return {
+    client: { from: fromSpy } as unknown as SupabaseClient,
+    fromSpy,
+    selectSpy,
+    eqSpy,
+    maybeSingleSpy,
+  };
+}
+
+describe('makeResolveStudentIsActive (T189)', () => {
+  it("reads students, scoped by exactly .eq('id', studentId), selecting only is_active", async () => {
+    const { client, fromSpy, selectSpy, eqSpy } = makeStudentsIsActiveRecordingClient({
+      is_active: true,
+    });
+    const resolveStudentIsActive = makeResolveStudentIsActive(() => client);
+
+    await resolveStudentIsActive('student-real-1');
+
+    expect(fromSpy).toHaveBeenCalledWith('students');
+    expect(selectSpy).toHaveBeenCalledWith('is_active');
+    expect(selectSpy).toHaveBeenCalledTimes(1);
+    expect(eqSpy).toHaveBeenCalledTimes(1);
+    expect(eqSpy).toHaveBeenCalledWith('id', 'student-real-1');
+  });
+
+  it('resolves true for an active student (real, verbatim column passthrough)', async () => {
+    const { client } = makeStudentsIsActiveRecordingClient({ is_active: true });
+    const resolveStudentIsActive = makeResolveStudentIsActive(() => client);
+
+    await expect(resolveStudentIsActive('student-active')).resolves.toBe(true);
+  });
+
+  it('resolves false for a deactivated student -- the ONE outcome this task exists to make reachable, never collapsed into null', async () => {
+    const { client } = makeStudentsIsActiveRecordingClient({ is_active: false });
+    const resolveStudentIsActive = makeResolveStudentIsActive(() => client);
+
+    await expect(resolveStudentIsActive('student-inactive')).resolves.toBe(false);
+  });
+
+  it('resolves null (never throws, never coerced to false) when no student row is found -- distinct from a real deactivated row', async () => {
+    const { client } = makeStudentsIsActiveRecordingClient(null);
+    const resolveStudentIsActive = makeResolveStudentIsActive(() => client);
+
+    await expect(resolveStudentIsActive('student-does-not-exist')).resolves.toBeNull();
+  });
+
+  it('filters server-side by the REAL supplied studentId, never a hardcoded or omitted one (defense in depth on top of own_or_linked_read RLS)', async () => {
+    const { client, eqSpy } = makeStudentsIsActiveRecordingClient({ is_active: false });
+    const resolveStudentIsActive = makeResolveStudentIsActive(() => client);
+
+    await resolveStudentIsActive('student-somebody-else');
+
+    expect(eqSpy).toHaveBeenCalledTimes(1);
+    expect(eqSpy).toHaveBeenCalledWith('id', 'student-somebody-else');
+  });
+
+  /**
+   * Same eq-drop filter-guard mutation technique as the two describe blocks
+   * above -- confirms the intended guard assertion is genuinely what goes
+   * red, not a `TypeError` from a stub that doesn't expose `maybeSingle` on
+   * the unfiltered chain position.
+   */
+  it('the eq-drop mutation fails on the intended eqSpy assertion, not a TypeError', async () => {
+    const { client, eqSpy, maybeSingleSpy } = makeStudentsIsActiveRecordingClient({
+      is_active: false,
+    });
+    const mutatedResult = await (
+      client.from('students') as unknown as { select: (columns: string) => unknown }
+    ).select('is_active');
+    const mutatedRow = await (
+      mutatedResult as { maybeSingle: () => Promise<unknown> }
+    ).maybeSingle();
+
+    expect(mutatedRow).toEqual({ data: { is_active: false }, error: null });
+    expect(maybeSingleSpy).toHaveBeenCalledTimes(1);
     expect(eqSpy).not.toHaveBeenCalled();
   });
 });
