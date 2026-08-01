@@ -180,6 +180,45 @@ vi.mock('../../lib/supabase/loaders/dashboard', async (importOriginal) => {
   };
 });
 
+// T203: `CoachHome` (routed here for coach/admin) now also embeds a real
+// leaderboard (`loaders/leaderboard.ts`'s `loadLeaderboardData`,
+// `CoachHome.tsx`'s own new prop default), which hits the real,
+// unconfigured-in-jsdom `getSupabaseClient()` unless mocked at the module
+// level -- same class of gap the five mocks above already close for their
+// own real defaults.
+vi.mock('../../lib/supabase/loaders/leaderboard', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/supabase/loaders/leaderboard')>();
+  return {
+    ...actual,
+    // Deliberately narrower than `LoadLeaderboardDataFn`'s own
+    // `(seasonId: string) => ...` signature (same structural-typing
+    // convention this file's sibling `CoachHome.test.tsx` already
+    // documents for its own `fixtureLoadData`/`fixtureLoadDashboardData`) --
+    // avoids an unused-`seasonId`-param ESLint error the packet's own
+    // literal `(_seasonId: string) => ...` prescription would trip (this
+    // repo's eslint config has no `argsIgnorePattern` for `no-unused-vars`,
+    // and `_seasonId` here is the sole parameter, not one preceding a later
+    // used one).
+    loadLeaderboardData: async () => ({ hours: [], students: [] }),
+  };
+});
+// T203 (gate round 1, BLOCKER 1 / BLOCKER 2): `Leaderboard`'s own
+// `useLeaderboardData` fetches BOTH `loadData` and `loadPrivacySetting` via
+// `Promise.all` (`Leaderboard.tsx:434`) -- mocking only `loaders/leaderboard`
+// above still leaves the real, unconfigured `loaders/leaderboard_privacy`
+// rejecting in jsdom, and `Promise.all` fails if either promise rejects, so
+// the embed would stay in its error state and never actually prove
+// reachability. Same class of gap the mock immediately above closes for
+// `loaders/leaderboard` itself.
+vi.mock('../../lib/supabase/loaders/leaderboard_privacy', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../lib/supabase/loaders/leaderboard_privacy')>();
+  return {
+    ...actual,
+    loadPrivacySetting: async () => true,
+  };
+});
+
 // ---------------------------------------------------------------------------
 // Render harness -- mirrors CoachHome.test.tsx.
 //
@@ -301,6 +340,15 @@ describe('DashboardPage role dispatch', () => {
     // render-source edit were missing this would show 'Default goal 0h'
     // (the new loader's own inert literal) instead of '100h'.
     expect(container.textContent).toContain('Default goal 100h');
+    // T203: the embedded Leaderboard is reachable via the real dispatcher
+    // (not just CoachHome.test.tsx's own isolated harness). With both new
+    // module-level mocks above wired, the empty `hours: []` fixture plus
+    // `true` privacy setting resolves to Leaderboard's own honest
+    // empty-state text, not its error text -- the heading alone is not
+    // sufficient (see the mutation proof in this task's worker output).
+    expect(container.textContent).toContain('Season Volunteer Leaderboard');
+    expect(container.textContent).toContain('No volunteer hours recorded yet');
+    expect(container.textContent).not.toContain("Couldn't load the leaderboard");
   });
 
   it('renders CoachHome for role "admin" (HOME-04 handled internally by CoachHome, not duplicated here)', async () => {
@@ -329,6 +377,10 @@ describe('DashboardPage role dispatch', () => {
     expect(container.textContent).not.toContain('Hi Ada Reyes');
     expect(container.textContent).not.toContain('Hi Jordan Blake');
     expect(container.textContent).not.toContain('Dashboard Fixture Linked Student');
+    // T203: same reachability proof as the "coach" case above.
+    expect(container.textContent).toContain('Season Volunteer Leaderboard');
+    expect(container.textContent).toContain('No volunteer hours recorded yet');
+    expect(container.textContent).not.toContain("Couldn't load the leaderboard");
   });
 
   it('renders StudentHome for role "student"', async () => {

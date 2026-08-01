@@ -6245,3 +6245,66 @@ Gates: `tsc` 0, build ✓, prettier clean, eslint **0 errors / 360 warnings (unc
 **Worker disclosed** that under its `Promise.all` shape only 3 of the packet's 5 named call sites
 actually failed pre-injection. Reported rather than smoothed over — the right instinct, and the
 remedy was identical.
+## T203 — `<Leaderboard>` embedded in `CoachHome`'s dashboard (merged 2026-07-31)
+
+| Field | Value |
+|---|---|
+| Merged commit | `cfa438e` (branch `claude/t203-leaderboard-embed`) |
+| Verdict | **PASS** — 2 NIT, no BLOCKER/MAJOR/MINOR, first attempt |
+| Attempts | 1 |
+| Worker / checker | `worker-implementer` (sonnet, own worktree) / `checker-reviewer` (default tier — no PII/security dimension, item 25) |
+| Premise gate | 2 rounds (item 19a cap) — round 1 REVISE (2 BLOCKER), round 2 REVISE (1 BLOCKER, narrower), then one owner-authorized bounded revision round, dispatched with no 3rd gate round |
+| tsc / build / format | 0 errors / ✓ / clean |
+| eslint | 0 errors, 359 warnings (unchanged) |
+| vitest | CoachHome 101→103, DashboardPage 5→5 (+6 assertion lines), full suite 1730/1730 |
+
+**Second half of T158, deliberately split off at packeting time.** `Leaderboard.tsx` (T044, real
+data via T158) was finished, tested, and mounted nowhere. This task embeds it in `CoachHome.tsx`'s
+dashboard, rolling out the same "mount a finished, tested, previously-unmounted component" pattern
+T157 already proved for `ParentRsvp`/`OutreachDetail.tsx`.
+
+**Premise gate found the real defect this split was meant to prevent from shipping blind: `Leaderboard`
+fetches two things internally, not one.** `Leaderboard.tsx`'s own `useLeaderboardData` does
+`Promise.all([loadData(seasonId), loadPrivacySetting()])` — round 1's packet threaded only
+`loadData` as an injectable prop and explicitly told the worker to leave `loadPrivacySetting`
+alone, so the real, unconfigured Supabase-backed privacy loader always rejected first and the
+embed could never reach a populated state in any test, regardless of how correctly the hours data
+was mocked. The gate proved this by literally rendering the packet's own prescribed mount and
+getting the error state every time — not by inspection. A second BLOCKER in the same round: the
+new `DashboardPage.test.tsx` assertion was decorative, staying green even with the embed completely
+non-functional, because it only checked for an always-rendered heading string. Round 2 independently
+re-executed the full revision end to end (six mutation points, all individually reproduced and
+confirmed genuinely discriminating) and found one narrower issue: the live-Playwright acceptance
+criterion cited a Playwright-acquisition mechanism specific to a different, Linux sandbox
+(transcribed from an unrelated task's module doc without re-checking it against this — macOS —
+execution environment). Owner-authorized bounded revision closed it with the gate's own verified
+replacement facts.
+
+**The CSS-nesting fix was traced to exact numbers before a worker ever touched code, then confirmed
+live.** `Leaderboard` renders its own top-level `Section`, which unconditionally applies a negative
+margin sized from whichever ancestor last set `--container-padding-*` — the same defect class an
+earlier task (T129) already fixed once elsewhere in this same file. The packet traced this through
+the installed Astryx package's own precompiled stylesheet (not the obfuscated component source) to
+an exact prediction: a bare mount bleeds 24px per side past its siblings; wrapping in `Card` (which
+re-declares the same CSS vars to a smaller, theme-overridden value before `Section` reads them)
+fully cancels the bleed rather than merely shrinking it. The worker's own live-Chromium measurement
+confirmed both numbers precisely: **0px delta** for the shipped `Card`-wrapped mount vs. sibling
+sections, **exactly 24px bleed per side** for a bare counterfactual mount — and the checker
+independently re-derived the same math from the installed package's compiled CSS rather than
+trusting either number.
+
+**Worker found and disclosed a real environment risk mid-task, not just a code defect.** The
+packet's own primary Playwright-acquisition instruction (`npm install --no-save --no-package-lock
+playwright`) turned out to silently mutate transitive `node_modules` package versions while leaving
+`package.json`/`package-lock.json` byte-identical — invisible to the packet's own prescribed
+`git diff` verification step — and broke `tsc` on several unrelated files. The worker caught it,
+recovered via `npm ci`, and switched to the packet's own offered fallback (`npx -y
+playwright@<version>`, which touches neither file). The checker independently audited all 340
+`package-lock.json` entries against installed `node_modules` versions post-merge and confirmed zero
+drift remained — the repo is genuinely clean, not just reported clean. Logged as process feedback
+(not a ledger row) for any future packet reusing this acquisition text.
+
+**No follow-up ledger rows filed** — both NIT findings (the checker declining to re-run the live
+Playwright measurement itself, having independently re-derived the same CSS math from source
+instead; a cosmetic mismatch between the packet's stated mutation-assertion order and actual test
+execution order) were resolved by equivalent evidence within this task's own check, not deferred.
