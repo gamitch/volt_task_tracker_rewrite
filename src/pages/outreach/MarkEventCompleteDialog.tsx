@@ -19,8 +19,11 @@
  *    is the ONE place a per-session `MarkDayCompletePayload` is constructed
  *    for bulk mode, and it does so by calling
  *    `MarkDayCompleteDialog.tsx`'s own exported pure functions --
- *    `computeInitialAttendedStudentIds` (the checklist-seeding derivation)
- *    and `buildAttendanceWriteRows` (the attendance-row constructor) --
+ *    `computeInitialAttendedStudentIds` (T305 UPDATE: the per-day dialog's
+ *    RSVP-only FALLBACK derivation, not its checklist-seeding entry point --
+ *    see that file's own module doc #9; unchanged here, still the only
+ *    derivation this bulk path uses, per (2)(a) below) and
+ *    `buildAttendanceWriteRows` (the attendance-row constructor) --
  *    imported directly from that file, never reimplemented. There is no
  *    second, parallel field list anywhere in this file: every field on the
  *    `MarkDayCompletePayload` this file builds is produced by that same
@@ -41,14 +44,24 @@
  *        the bulk confirmation surface as listing "date/time and, where the
  *        existing per-day flow collects people-reached, a per-day
  *        people-reached input" -- no per-session editable checklist is
- *        named. `buildMarkEventCompletePayload` therefore always uses the
- *        SAME derivation the per-day dialog seeds its own checklist from
- *        (`computeInitialAttendedStudentIds` -- roster students with a
- *        `going` RSVP for that session), with no manual per-session
- *        adjustment surface in bulk mode. This does not invent attendance
- *        (Trap #3): it writes exactly the RSVP-derived default the per-day
- *        flow itself would show pre-checked before a coach makes any manual
- *        edit.
+ *        named. `buildMarkEventCompletePayload` therefore always uses
+ *        `computeInitialAttendedStudentIds` (roster students with a `going`
+ *        RSVP for that session), with no manual per-session adjustment
+ *        surface in bulk mode. **T305 UPDATE, both clauses below corrected
+ *        (found by that task's gate round 2):** this is NO LONGER "the SAME
+ *        derivation the per-day dialog seeds its own checklist from" --
+ *        that dialog now seeds from RECORDED attendance first, falling back
+ *        to this RSVP derivation only per-student when no attendance row
+ *        exists (`MarkDayCompleteDialog.tsx` module doc #9). Nor does this
+ *        still "write exactly the RSVP-derived default the per-day flow
+ *        itself would show pre-checked": a student with a real recorded
+ *        check-in/hours-override and a `going` RSVP is checked and
+ *        overwritten by THIS bulk path today, which the per-day flow itself
+ *        no longer does. That is a live, disclosed, deliberately
+ *        out-of-scope data-loss bug -- filed as **T307**, not fixed by
+ *        T305 (see that task's own §0.2/§5.1). This bulk path's own emitted
+ *        payload is unchanged and still pinned byte-for-byte by
+ *        `MarkEventCompleteDialog.test.tsx:206-216`.
  *    (b) Adult volunteers count/hours (this-session deltas) -- also absent
  *        from the packet's named bulk fields. `buildMarkEventCompletePayload`
  *        always passes `0`/`0` for these, and `markDayComplete`'s own module
@@ -167,12 +180,16 @@ export function computeMarkEventCompleteConfirmLabel(remainingCount: number): st
 /** Module doc #1/#2 -- THE ONE place a bulk-mode per-session
  * `MarkDayCompletePayload` is built. Reuses `computeInitialAttendedStudentIds`
  * + `buildAttendanceWriteRows` (`MarkDayCompleteDialog.tsx`'s own pure
- * functions, unchanged) for the attendance rows; `hoursOverrideByStudentId`
- * is always `{}` (module doc #2(a) -- no bulk-mode per-student override
- * surface, so every row's `hoursOverride` is genuinely `null`, falling back
- * to the same MET-03 tier-3 session-duration default an untouched per-day
- * row already falls back to); adult-volunteer deltas are always `0`/`0`
- * (module doc #2(b)). */
+ * functions) for the attendance rows -- **T305 UPDATE: `buildAttendanceWriteRows`
+ * itself is NOT unchanged, it gained a required fifth parameter (that
+ * file's own module doc #9); this call site passes an empty recorded-rows
+ * argument, preserving this bulk path's exact pre-T305 behaviour. Filed as
+ * T307, not fixed here -- see this file's own module doc #2(a).**
+ * `hoursOverrideByStudentId` is always `{}` (module doc #2(a) -- no
+ * bulk-mode per-student override surface, so every row's `hoursOverride` is
+ * genuinely `null`, falling back to the same MET-03 tier-3 session-duration
+ * default an untouched per-day row already falls back to); adult-volunteer
+ * deltas are always `0`/`0` (module doc #2(b)). */
 export function buildMarkEventCompletePayload(
   session: MarkDayCompleteSession,
   peopleReached: number | null,
@@ -184,7 +201,13 @@ export function buildMarkEventCompletePayload(
   return {
     sessionId: session.id,
     peopleReached,
-    attendance: buildAttendanceWriteRows(session.id, checkedStudentIds, {}, recordedBy),
+    // T305: `buildAttendanceWriteRows` gained a required fifth parameter
+    // (recorded rows keyed by student id, `MarkDayCompleteDialog.tsx` module
+    // doc #9). An empty object here preserves this bulk path's exact
+    // pre-T305 behaviour -- it does NOT load or preserve recorded
+    // attendance. T307 owns the real fix (see module doc #2(a) above);
+    // deliberately not built here.
+    attendance: buildAttendanceWriteRows(session.id, checkedStudentIds, {}, recordedBy, {}),
     adultVolunteersCountThisSession: 0,
     adultVolunteerHoursThisSession: 0,
     recordedBy,

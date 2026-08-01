@@ -26,6 +26,7 @@ import { makeMarkDayComplete } from '../../lib/supabase/loaders/outreach';
 import {
   buildAttendanceWriteRows,
   computeInitialAttendedStudentIds,
+  computeInitialFormSeed,
   computeMarkCompleteConfirmLabel,
   computeSessionDurationHours,
   computeTotalHoursForCheckedStudents,
@@ -36,6 +37,24 @@ import {
   type RosterStudent,
   type RsvpRow,
 } from './MarkDayCompleteDialog';
+// T305: partial-mock so tests can control the resolved/rejected value of
+// this dialog's own `loadAttendance` default, mirroring
+// `OutreachDetail.test.tsx:110-118`'s established `importOriginal` +
+// `vi.mocked(...)` convention for the identical module.
+import {
+  loadAttendanceForSessions,
+  type AttendanceRow,
+} from '../../lib/supabase/loaders/attendance';
+
+vi.mock('../../lib/supabase/loaders/attendance', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/supabase/loaders/attendance')>();
+  return {
+    ...actual,
+    loadAttendanceForSessions: vi.fn(async () => []),
+  };
+});
+
+const mockedLoadAttendanceForSessions = vi.mocked(loadAttendanceForSessions);
 
 // T179 (A1-A4): the props these tests pass are now REQUIRED, not
 // fixture-defaulted. `EVENT_TITLE`/`COACH_PROFILE_ID` are this test file's
@@ -75,6 +94,13 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
+  // T305 -- `vi.restoreAllMocks()` below would otherwise clear this mock's
+  // own factory-set default implementation between tests (it has no spied
+  // "original" to restore to). Re-establish the default explicitly on every
+  // test; individual tests override with `mockResolvedValueOnce`/
+  // `mockRejectedValueOnce`/`mockImplementation` as needed.
+  mockedLoadAttendanceForSessions.mockReset();
+  mockedLoadAttendanceForSessions.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -252,12 +278,19 @@ describe('computeMarkCompleteConfirmLabel (BEH-07)', () => {
 });
 
 describe('buildAttendanceWriteRows (module doc #2/#5 -- the write-path proof)', () => {
-  it('writes status "present" and method "coach" for every checked student, never anything else', () => {
+  // T305: these four pre-existing tests gain the required fifth parameter
+  // (an empty recorded-rows object -- the no-recorded-row case), per the
+  // packet's own explicit authorization (§9's "Existing tests you are
+  // authorized to change"). Assertions are unchanged; only the two titles
+  // below are narrowed to name the no-recorded-row case they actually cover
+  // now that a recorded row can change these fields (module doc #9).
+  it('writes status "present" and method "coach" for every checked student with no recorded row', () => {
     const rows = buildAttendanceWriteRows(
       SESSION.id,
       ['student-going', 'student-maybe'],
       {},
       'profile-x',
+      {},
     );
     expect(rows).toHaveLength(2);
     for (const row of rows) {
@@ -267,14 +300,14 @@ describe('buildAttendanceWriteRows (module doc #2/#5 -- the write-path proof)', 
     }
   });
 
-  it('never writes check_in_at/check_out_at (module doc #2(c) -- the reason the local sum cannot diverge from the real MET-03 SQL result)', () => {
-    const [row] = buildAttendanceWriteRows(SESSION.id, ['student-going'], {}, 'profile-x');
+  it('never writes check_in_at/check_out_at for a student with no recorded row (module doc #2(c))', () => {
+    const [row] = buildAttendanceWriteRows(SESSION.id, ['student-going'], {}, 'profile-x', {});
     expect(row.checkInAt).toBeNull();
     expect(row.checkOutAt).toBeNull();
   });
 
   it('leaves hoursOverride genuinely null for an untouched student (never back-filled with the computed default)', () => {
-    const [row] = buildAttendanceWriteRows(SESSION.id, ['student-going'], {}, 'profile-x');
+    const [row] = buildAttendanceWriteRows(SESSION.id, ['student-going'], {}, 'profile-x', {});
     expect(row.hoursOverride).toBeNull();
   });
 
@@ -284,6 +317,7 @@ describe('buildAttendanceWriteRows (module doc #2/#5 -- the write-path proof)', 
       ['student-going'],
       { 'student-going': 3.5 },
       'profile-x',
+      {},
     );
     expect(row.hoursOverride).toBe(3.5);
   });
@@ -550,6 +584,444 @@ describe('<MarkDayCompleteDialog /> submit payload + irreversibility guard (modu
     ).toBe(false);
     expect(findButtonByText('Close')).toBeDefined();
     expect(container.textContent).toContain("can't be marked complete from here");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T305: seed from recorded attendance, preserve it through the write.
+// `docs/swarm/active/T305-worker-packet.md` §8. Fixtures are deliberately
+// SEPARATE from `ROSTER`/`RSVPS` above so each criterion's checked-count
+// (and therefore its BEH-07 confirm label) is unambiguous -- `rsvps`
+// defaults to `[]` in `renderDialog` below so only the scenario each test
+// actually names drives who starts checked; T305_RSVPS (a single `going`
+// RSVP) is passed explicitly only where the test needs one.
+// ---------------------------------------------------------------------------
+
+const T305_ROSTER: readonly RosterStudent[] = [
+  { id: 'student-amara', name: 'Amara NoRsvp', teamId: 'team-a' },
+  { id: 'student-brody', name: 'Brody GoingNoRow', teamId: 'team-a' },
+  { id: 'student-cora', name: 'Cora LateQr', teamId: 'team-a' },
+  { id: 'student-drew', name: 'Drew NoneAtAll', teamId: 'team-a' },
+];
+
+const T305_RSVPS: readonly RsvpRow[] = [
+  {
+    id: 'rsvp-brody',
+    sessionId: SESSION.id,
+    studentId: 'student-brody',
+    status: 'going',
+    respondedBy: 'student-brody',
+    updatedAt: '2026-07-20T09:00:00.000Z',
+    createdAt: '2026-07-20T09:00:00.000Z',
+  },
+];
+
+const SESSION_B: MarkDayCompleteSession = { ...SESSION, id: 'session-b-different' };
+
+function makeAttendanceRow(
+  overrides: Partial<AttendanceRow> & { studentId: string },
+): AttendanceRow {
+  return {
+    id: `att-${overrides.studentId}`,
+    sessionId: SESSION.id,
+    status: 'present',
+    checkInAt: null,
+    checkOutAt: null,
+    hoursOverride: null,
+    method: 'coach',
+    recordedBy: 'profile-someone-else',
+    updatedAt: '2026-08-01T00:00:00.000Z',
+    createdAt: '2026-08-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
+function renderDialog(
+  overrides: {
+    session?: MarkDayCompleteSession;
+    roster?: readonly RosterStudent[];
+    rsvps?: readonly RsvpRow[];
+    onMarkComplete?: (payload: MarkDayCompletePayload) => Promise<void>;
+  } = {},
+): void {
+  act(() => {
+    root.render(
+      <MarkDayCompleteDialog
+        isOpen
+        onOpenChange={() => {}}
+        eventTitle={EVENT_TITLE}
+        currentUserProfileId={COACH_PROFILE_ID}
+        session={overrides.session ?? SESSION}
+        roster={overrides.roster ?? T305_ROSTER}
+        rsvps={overrides.rsvps ?? []}
+        onMarkComplete={overrides.onMarkComplete}
+      />,
+    );
+  });
+}
+
+describe('S1 -- recorded attending row with no RSVP starts checked (the owner’s exact screenshot)', () => {
+  it('checks the recorded student and the button does not read 0 attended', async () => {
+    mockedLoadAttendanceForSessions.mockResolvedValueOnce([
+      makeAttendanceRow({ studentId: 'student-amara', status: 'present' }),
+    ]);
+    renderDialog();
+    await flushMicrotasks();
+
+    expect(mockedLoadAttendanceForSessions).toHaveBeenCalledWith([SESSION.id]);
+    const checkbox = getFieldControl('Amara NoRsvp') as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+    expect(findButtonByText('Mark complete — 0 attended · 0 h')).toBeUndefined();
+  });
+});
+
+describe('S2 -- recorded absent + going RSVP -> starts unchecked', () => {
+  it('unchecks the recorded-absent student despite the going RSVP', async () => {
+    mockedLoadAttendanceForSessions.mockResolvedValueOnce([
+      makeAttendanceRow({ studentId: 'student-brody', status: 'absent' }),
+    ]);
+    renderDialog({ rsvps: T305_RSVPS });
+    await flushMicrotasks();
+
+    expect(mockedLoadAttendanceForSessions).toHaveBeenCalledWith([SESSION.id]);
+    const checkbox = getFieldControl('Brody GoingNoRow') as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+  });
+});
+
+describe('S3 -- loader resolves [] -> today’s RSVP-only behaviour', () => {
+  it('going RSVPs still start checked when nothing is recorded', async () => {
+    mockedLoadAttendanceForSessions.mockResolvedValueOnce([]);
+    renderDialog({ rsvps: T305_RSVPS });
+    await flushMicrotasks();
+
+    expect(mockedLoadAttendanceForSessions).toHaveBeenCalledWith([SESSION.id]);
+    const checkbox = getFieldControl('Brody GoingNoRow') as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+  });
+});
+
+describe('S3b -- recordedRows === null reproduces computeInitialAttendedStudentIds verbatim (pure)', () => {
+  it('returns the exact same checked ids, with an empty hours map', () => {
+    const seed = computeInitialFormSeed(SESSION.id, T305_ROSTER, T305_RSVPS, null);
+    expect(seed.checkedStudentIds).toEqual(
+      computeInitialAttendedStudentIds(SESSION.id, T305_ROSTER, T305_RSVPS),
+    );
+    expect(seed.hoursOverrideByStudentId).toEqual({});
+  });
+});
+
+describe('S4 -- loader rejects -> graceful RSVP-only fallback, no error surface', () => {
+  it('still opens, still seeds from RSVPs, shows no error banner, confirm not disabled', async () => {
+    mockedLoadAttendanceForSessions.mockRejectedValueOnce(new Error('boom'));
+    renderDialog({ rsvps: T305_RSVPS });
+    await flushMicrotasks();
+
+    expect(mockedLoadAttendanceForSessions).toHaveBeenCalledWith([SESSION.id]);
+    const checkbox = getFieldControl('Brody GoingNoRow') as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+    // "No error surface" asserted by the Banner's own copy, not by
+    // `[role="alert"]` presence -- Astryx `NumberInput` renders empty
+    // `role="alert"` live regions unconditionally (packet §8).
+    expect(container.textContent).not.toContain("Couldn't mark this day complete");
+    const confirmButton = findButtonByText('Mark complete — 1 attended · 7 h') as
+      HTMLButtonElement | undefined;
+    expect(confirmButton).toBeDefined();
+    expect(confirmButton?.disabled).toBe(false);
+  });
+});
+
+describe('S5 -- no RSVP and no recorded row -> stays unchecked', () => {
+  it('stays unchecked', async () => {
+    mockedLoadAttendanceForSessions.mockResolvedValueOnce([]);
+    renderDialog();
+    await flushMicrotasks();
+
+    const checkbox = getFieldControl('Drew NoneAtAll') as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+  });
+});
+
+describe('S6 -- loadAttendance is called with exactly [session.id], exactly once', () => {
+  it('passes only this session id even when rsvps span two session ids', async () => {
+    const multiSessionRsvps: RsvpRow[] = [
+      ...T305_RSVPS,
+      {
+        id: 'rsvp-other-session',
+        sessionId: 'some-other-session',
+        studentId: 'student-drew',
+        status: 'going',
+        respondedBy: 'student-drew',
+        updatedAt: '2026-07-20T09:00:00.000Z',
+        createdAt: '2026-07-20T09:00:00.000Z',
+      },
+    ];
+    mockedLoadAttendanceForSessions.mockResolvedValueOnce([]);
+    renderDialog({ rsvps: multiSessionRsvps });
+    await flushMicrotasks();
+
+    expect(mockedLoadAttendanceForSessions).toHaveBeenCalledWith([SESSION.id]);
+    expect(mockedLoadAttendanceForSessions).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('S7 -- a row for a different session does not seed this dialog (pure)', () => {
+  it('drops a recorded row whose sessionId does not match', () => {
+    const seed = computeInitialFormSeed(SESSION.id, T305_ROSTER, T305_RSVPS, [
+      makeAttendanceRow({
+        studentId: 'student-drew',
+        status: 'present',
+        sessionId: 'some-other-session',
+      }),
+    ]);
+    expect(seed.checkedStudentIds).not.toContain('student-drew');
+  });
+});
+
+describe('S8 -- touched-ref guard: late-arriving rows do not clobber the coach; early-arriving rows do apply', () => {
+  it('does not override a checklist row the coach already toggled before the load resolved', async () => {
+    const deferred = createDeferred<AttendanceRow[]>();
+    mockedLoadAttendanceForSessions.mockImplementationOnce(() => deferred.promise);
+    renderDialog();
+
+    // The coach checks Drew BEFORE the load resolves.
+    clickElement(getFieldControl('Drew NoneAtAll'));
+    expect((getFieldControl('Drew NoneAtAll') as HTMLInputElement).checked).toBe(true);
+
+    await act(async () => {
+      deferred.resolve([makeAttendanceRow({ studentId: 'student-drew', status: 'absent' })]);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockedLoadAttendanceForSessions).toHaveBeenCalledWith([SESSION.id]);
+    const drewCheckbox = getFieldControl('Drew NoneAtAll') as HTMLInputElement;
+    expect(drewCheckbox.checked).toBe(true); // the coach's own edit survives.
+  });
+
+  it('applies recorded rows normally when they arrive before any coach edit', async () => {
+    mockedLoadAttendanceForSessions.mockResolvedValueOnce([
+      makeAttendanceRow({ studentId: 'student-drew', status: 'present' }),
+    ]);
+    renderDialog();
+    await flushMicrotasks();
+
+    const drewCheckbox = getFieldControl('Drew NoneAtAll') as HTMLInputElement;
+    expect(drewCheckbox.checked).toBe(true);
+  });
+});
+
+describe('S8b -- a load still in flight for one session does not seed a DIFFERENT session reopened before it resolves', () => {
+  it("ignores the stale session's late-arriving rows", async () => {
+    const deferredA = createDeferred<AttendanceRow[]>();
+    mockedLoadAttendanceForSessions.mockImplementationOnce(() => deferredA.promise);
+    renderDialog({ session: SESSION });
+
+    // Reopen (same mounted instance) for a DIFFERENT session before A's load
+    // resolves.
+    mockedLoadAttendanceForSessions.mockResolvedValueOnce([]);
+    renderDialog({ session: SESSION_B });
+    await flushMicrotasks();
+
+    // A's stale load resolves with a row that would check a student who is
+    // otherwise never checked for session B.
+    await act(async () => {
+      deferredA.resolve([makeAttendanceRow({ studentId: 'student-drew', status: 'present' })]);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockedLoadAttendanceForSessions).toHaveBeenCalledWith([SESSION.id]);
+    expect(mockedLoadAttendanceForSessions).toHaveBeenCalledWith([SESSION_B.id]);
+    const drewCheckbox = getFieldControl('Drew NoneAtAll') as HTMLInputElement;
+    expect(drewCheckbox.checked).toBe(false);
+  });
+});
+
+describe('S9 -- a recorded hoursOverride seeds the per-student hours input', () => {
+  it('shows 3 in the hours input and counts 3 in the confirm total, not the 7h default', async () => {
+    mockedLoadAttendanceForSessions.mockResolvedValueOnce([
+      makeAttendanceRow({ studentId: 'student-amara', status: 'present', hoursOverride: 3 }),
+    ]);
+    renderDialog();
+    await flushMicrotasks();
+
+    const hoursInput = getFieldControl('Amara NoRsvp hours') as HTMLInputElement;
+    expect(hoursInput.value).toBe('3');
+    expect(findButtonByText('Mark complete — 1 attended · 3 h')).toBeDefined();
+  });
+});
+
+describe('W1 -- recorded late/qr/timestamps are carried through the payload untouched', () => {
+  it('payload carries status late, method qr, and the exact recorded timestamps', async () => {
+    const onMarkComplete = vi.fn<(payload: MarkDayCompletePayload) => Promise<void>>(
+      async () => {},
+    );
+    mockedLoadAttendanceForSessions.mockResolvedValueOnce([
+      makeAttendanceRow({
+        studentId: 'student-cora',
+        status: 'late',
+        method: 'qr',
+        checkInAt: '2026-08-02T14:05:00.000Z',
+        checkOutAt: '2026-08-02T20:55:00.000Z',
+      }),
+    ]);
+    renderDialog({ onMarkComplete });
+    await flushMicrotasks();
+
+    const confirmButton = findButtonByText('Mark complete — 1 attended · 7 h') as HTMLButtonElement;
+    clickElement(confirmButton);
+    await flushMicrotasks();
+
+    expect(onMarkComplete).toHaveBeenCalledTimes(1);
+    const row = onMarkComplete.mock.calls[0][0].attendance.find(
+      (r) => r.studentId === 'student-cora',
+    );
+    expect(row).toBeDefined();
+    expect(row?.status).toBe('late');
+    expect(row?.method).toBe('qr');
+    expect(row?.checkInAt).toBe('2026-08-02T14:05:00.000Z');
+    expect(row?.checkOutAt).toBe('2026-08-02T20:55:00.000Z');
+  });
+});
+
+describe('W2 -- an empty coach hours map still preserves the recorded override (pure, W2 fixture)', () => {
+  it('returns hoursOverride 3 even though the coach hours map passed is explicitly empty', () => {
+    const recordedRow = makeAttendanceRow({
+      studentId: 'student-cora',
+      status: 'present',
+      hoursOverride: 3,
+    });
+    const [row] = buildAttendanceWriteRows(SESSION.id, ['student-cora'], {}, COACH_PROFILE_ID, {
+      'student-cora': recordedRow,
+    });
+    expect(row.hoursOverride).toBe(3);
+  });
+});
+
+describe('W3 -- the coach’s own hours edit wins over a recorded override', () => {
+  it('payload carries 5, not the recorded 3', async () => {
+    const onMarkComplete = vi.fn<(payload: MarkDayCompletePayload) => Promise<void>>(
+      async () => {},
+    );
+    mockedLoadAttendanceForSessions.mockResolvedValueOnce([
+      makeAttendanceRow({ studentId: 'student-amara', status: 'present', hoursOverride: 3 }),
+    ]);
+    renderDialog({ onMarkComplete });
+    await flushMicrotasks();
+
+    const hoursInput = getFieldControl('Amara NoRsvp hours') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(hoursInput, '5');
+    });
+
+    const confirmButton = findButtonByText('Mark complete — 1 attended · 5 h') as HTMLButtonElement;
+    clickElement(confirmButton);
+    await flushMicrotasks();
+
+    const row = onMarkComplete.mock.calls[0][0].attendance.find(
+      (r) => r.studentId === 'student-amara',
+    );
+    expect(row?.hoursOverride).toBe(5);
+  });
+});
+
+describe('W4 -- a checked student with no recorded row is written exactly as today', () => {
+  it('status present, both timestamps null, method coach, hoursOverride null', async () => {
+    const onMarkComplete = vi.fn<(payload: MarkDayCompletePayload) => Promise<void>>(
+      async () => {},
+    );
+    mockedLoadAttendanceForSessions.mockResolvedValueOnce([]);
+    renderDialog({ onMarkComplete, rsvps: T305_RSVPS }); // Brody: going RSVP, no recorded row.
+    await flushMicrotasks();
+
+    const confirmButton = findButtonByText('Mark complete — 1 attended · 7 h') as HTMLButtonElement;
+    clickElement(confirmButton);
+    await flushMicrotasks();
+
+    const row = onMarkComplete.mock.calls[0][0].attendance.find(
+      (r) => r.studentId === 'student-brody',
+    );
+    expect(row?.status).toBe('present');
+    expect(row?.checkInAt).toBeNull();
+    expect(row?.checkOutAt).toBeNull();
+    expect(row?.method).toBe('coach');
+    expect(row?.hoursOverride).toBeNull();
+  });
+});
+
+describe('W5 -- a deliberately-checked recorded-absent row writes present, recordedBy is the acting coach, method preserved', () => {
+  it('written present, recordedBy is the acting coach, method stays qr', async () => {
+    const onMarkComplete = vi.fn<(payload: MarkDayCompletePayload) => Promise<void>>(
+      async () => {},
+    );
+    mockedLoadAttendanceForSessions.mockResolvedValueOnce([
+      makeAttendanceRow({
+        studentId: 'student-cora',
+        status: 'absent',
+        method: 'qr',
+        recordedBy: 'profile-someone-else',
+      }),
+    ]);
+    renderDialog({ onMarkComplete });
+    await flushMicrotasks();
+
+    const coraCheckbox = getFieldControl('Cora LateQr') as HTMLInputElement;
+    expect(coraCheckbox.checked).toBe(false); // recorded absent -> starts unchecked.
+    clickElement(coraCheckbox); // the coach deliberately checks her.
+
+    const confirmButton = findButtonByText('Mark complete — 1 attended · 7 h') as HTMLButtonElement;
+    clickElement(confirmButton);
+    await flushMicrotasks();
+
+    const row = onMarkComplete.mock.calls[0][0].attendance.find(
+      (r) => r.studentId === 'student-cora',
+    );
+    expect(row?.status).toBe('present');
+    expect(row?.method).toBe('qr');
+    expect(row?.recordedBy).toBe(COACH_PROFILE_ID);
+  });
+});
+
+describe('W6 -- the confirm label never disagrees with what the write emits', () => {
+  it('reads "1 attended · 3 h", not 7, and the payload carries hoursOverride 3/status present/method qr', async () => {
+    const onMarkComplete = vi.fn<(payload: MarkDayCompletePayload) => Promise<void>>(
+      async () => {},
+    );
+    mockedLoadAttendanceForSessions.mockResolvedValueOnce([
+      makeAttendanceRow({
+        studentId: 'student-cora',
+        status: 'absent',
+        method: 'qr',
+        hoursOverride: 3,
+      }),
+    ]);
+    renderDialog({ onMarkComplete });
+    await flushMicrotasks();
+
+    const coraCheckbox = getFieldControl('Cora LateQr') as HTMLInputElement;
+    expect(coraCheckbox.checked).toBe(false); // recorded absent -> starts unchecked.
+    clickElement(coraCheckbox); // the coach deliberately checks her.
+
+    expect(findButtonByText('Mark complete — 1 attended · 3 h')).toBeDefined();
+    const confirmButton = findButtonByText('Mark complete — 1 attended · 3 h') as HTMLButtonElement;
+    clickElement(confirmButton);
+    await flushMicrotasks();
+
+    const row = onMarkComplete.mock.calls[0][0].attendance.find(
+      (r) => r.studentId === 'student-cora',
+    );
+    expect(row?.status).toBe('present');
+    expect(row?.method).toBe('qr');
+    expect(row?.hoursOverride).toBe(3);
   });
 });
 

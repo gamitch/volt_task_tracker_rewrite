@@ -9,6 +9,15 @@
  * get `attendance` rows (`method='coach'`, status `present`); hours computed
  * per MET-03. Not reversible without edit (audit-logged)."
  *
+ * T305 UPDATE (module doc #9 below has the full writeup): the PRD quotation
+ * above is left VERBATIM per constitution "Protected source text must remain
+ * verbatim" -- it is superseded, not edited. The owner's T305 ruling
+ * (`docs/swarm/auto-mode-decisions.md`, "2026-08-01 -- George's ruling on
+ * T305") overrides the "pre-checked from `going` RSVPs" reading: the
+ * checklist now seeds from RECORDED `attendance` when it exists for this
+ * session, falling back to `going` RSVPs only where no attendance row exists
+ * for a student.
+ *
  * The PRD's own wireframe (line 469-481) additionally shows an "Adult
  * volunteers [4] count · [12] hours" row inside this same dialog (between
  * "People reached" and "Hours per student") -- this task's own packet
@@ -79,8 +88,9 @@
  *    This dialog is a WRITE path, not a read path -- it does not compute a
  *    student's real confirmed-hours total, ever. It writes (up to) THREE of
  *    that coalesce chain's raw inputs per checked student -- `hours_override`
- *    (tier 1), `check_in_at`/`check_out_at` (tier 2, both always `null` here,
- *    see below), and implicitly relies on `starts_at`/`ends_at` (tier 3,
+ *    (tier 1), `check_in_at`/`check_out_at` (tier 2, T305 UPDATE: no longer
+ *    always `null` -- see module doc #9), and implicitly relies on
+ *    `starts_at`/`ends_at` (tier 3,
  *    already stored on `event_sessions`, never rewritten by this dialog) --
  *    and NEVER reproduces the SQL `coalesce`/`case`/`greatest`/`extract`
  *    chain itself in TypeScript. Two, and only two, genuinely legitimate
@@ -103,8 +113,11 @@
  *        `coalesce`/conditional structure that decides WHICH tier wins for a
  *        given row, which this file does not do anywhere (grep-provable: no
  *        `??`/ternary chain here ever inspects `checkInAt`/`checkOutAt` to
- *        decide a fallback -- this dialog never collects check-in/check-out
- *        timestamps at all, see (c) below).
+ *        decide a fallback -- T305 UPDATE: this dialog still never COLLECTS
+ *        check-in/check-out timestamps from the coach (no UI field for them
+ *        exists anywhere in this file), but it now CARRIES a previously
+ *        recorded pair through unchanged for a student whose row already had
+ *        them -- see (c) below and module doc #9).
  *
  *    (b) `computeTotalHoursForCheckedStudents(checkedStudentIds,
  *        hoursByStudentId)` -- the BEH-07 confirm button's live "N attended
@@ -118,36 +131,41 @@
  *        cross-session aggregation. It is legitimate specifically BECAUSE
  *        every value it sums is a value this exact submit is constructing.
  *
- *    (c) The reason (a)+(b) can never silently drift from the real SQL
- *        result for THESE particular rows: `buildAttendanceWriteRows` below
- *        always writes `checkInAt: null, checkOutAt: null` (module doc #6 --
- *        this dialog collects no check-in/check-out timestamps, that is
- *        `CheckinResult.tsx`/`LiveConsole.tsx`'s (T033-adjacent) territory,
- *        not this task's). With `check_in_at`/`check_out_at` both `null` for
- *        every row this dialog creates, `v_student_hours`'s own tier-2 CASE
- *        branch necessarily evaluates to SQL `NULL` for these rows (its
- *        `when` clause literally requires both to be non-null) and
- *        `coalesce` falls through to tier 3 -- so the REAL SQL result for
- *        each of these rows is provably `hours_override ?? tier-3-duration`,
- *        which is EXACTLY the two-tier expression `hoursOverrideByStudentId[id]
- *        ?? defaultDurationHours` this file computes locally. This isn't
- *        "our guess happens to usually match" -- it is a structural
- *        guarantee for rows shaped the way this dialog shapes them, stated
- *        explicitly rather than left as an unexamined coincidence.
+ *    (c) T305 UPDATE -- **genuinely weaker now, disclosed honestly rather
+ *        than silently left stale (see module doc #9 and this task's own
+ *        ledger deferral, T308).** Before this task, (a)+(b) could never
+ *        silently drift from the real SQL result for ANY row this dialog
+ *        wrote, because `buildAttendanceWriteRows` unconditionally wrote
+ *        `checkInAt: null, checkOutAt: null` for every row, forcing
+ *        `v_student_hours`'s own tier-2 CASE branch to evaluate to SQL
+ *        `NULL` (its `when` clause literally requires both non-null) so
+ *        `coalesce` always fell through to tier 3 -- a structural guarantee,
+ *        not a coincidence. **That guarantee no longer holds.**
+ *        `buildAttendanceWriteRows` now CARRIES a previously-recorded
+ *        row's real `checkInAt`/`checkOutAt` through unchanged (module doc
+ *        #9) -- so a checked student who already had both timestamps
+ *        recorded (typically via QR check-in/out) can make tier 2 fire in
+ *        the real SQL, while this file's own local sum ((a)+(b)) still only
+ *        ever computes `hoursOverride ?? tier-3-duration` and has no way to
+ *        evaluate tier 2 itself (doing so would be the actual re-derivation
+ *        constitution item 3 forbids). The confirm button's total can
+ *        therefore legitimately disagree with `v_student_hours` for such a
+ *        student. This is disclosed, not fixed, here -- filed as T308 (see
+ *        module doc #9); the alternative silently written by the PRE-T305
+ *        code was "agrees with SQL only because the write destroyed the
+ *        real timestamps first", which is a worse kind of agreement.
  *
- *    Per Ground Truth/module doc #1: `hoursOverrideByStudentId` only ever
- *    holds an entry for a student the coach has EXPLICITLY edited the
- *    per-row `NumberInput` for -- an untouched student's write gets
- *    `hoursOverride: null` (module doc #1's "or leaves it unset to fall back
- *    to session duration" -- a real, provable `null`, not the numeric
- *    default silently written in its place), so the real
- *    `attendance.hours_override` column stays honestly `NULL` for anyone the
- *    coach didn't deliberately override, letting a future season-duration
- *    change (if `event_sessions.starts_at`/`ends_at` were ever corrected)
- *    still flow through `v_student_hours` correctly for that row -- writing
- *    the numeric default unconditionally would have frozen a stale duration
- *    into every row forever, a strictly worse, silent behavior this dialog
- *    deliberately avoids.
+ *    Per Ground Truth/module doc #1: T305 UPDATE -- `hoursOverrideByStudentId`
+ *    no longer holds an entry ONLY for a student the coach has explicitly
+ *    edited. On open, it is also seeded with every recorded row's own
+ *    non-null `hoursOverride` (module doc #9), independent of whether that
+ *    student starts checked -- so an untouched-by-the-coach student's write
+ *    can now legitimately carry a real, previously-recorded, non-null
+ *    `hoursOverride` that this dialog itself never invented (it is a
+ *    read-then-preserve, not a fabrication). A student with genuinely no
+ *    recorded override and no coach edit still writes `hoursOverride: null`,
+ *    letting `v_student_hours` fall back to the real session-duration tier
+ *    for that row exactly as before.
  *
  * -----------------------------------------------------------------------
  * 3. THE ADULT-VOLUNTEERS EVENT-VS-SESSION GRANULARITY MISMATCH (Known
@@ -240,17 +258,23 @@
  *
  * -----------------------------------------------------------------------
  * 6. Attendee checklist pre-checked from `going` RSVPs, coach adjusts (Known
- *    Context/Traps #4).
+ *    Context/Traps #4). T305 UPDATE: this is now the FALLBACK derivation,
+ *    not the checklist's one seeding entry point -- see module doc #9.
  *
- * `computeInitialAttendedStudentIds(sessionId, roster, rsvps)` is the ONE
- * place the checklist's starting state is derived: a roster student with a
- * `rsvps` row `status === 'going'` for this session starts checked; a
- * student with `'maybe'`/`'declined'`/no `rsvps` row at all starts unchecked
- * -- proven directly in the test file with a four-student fixture spanning
- * all four cases. `CheckboxList`'s own `value`/`onChange` (module doc #8)
- * then lets the coach freely re-check/uncheck ANY row afterward regardless
- * of its starting state, proven by toggling both a pre-checked and a
- * not-pre-checked row.
+ * `computeInitialAttendedStudentIds(sessionId, roster, rsvps)` remains
+ * exported and behaviourally unchanged: a roster student with a `rsvps` row
+ * `status === 'going'` for this session starts checked; a student with
+ * `'maybe'`/`'declined'`/no `rsvps` row at all starts unchecked -- proven
+ * directly in the test file with a four-student fixture spanning all four
+ * cases. It is still directly tested, and `MarkEventCompleteDialog.tsx`
+ * still imports it (its own bulk-mode seeding, unchanged -- see module doc
+ * #9's T307 note). T305 UPDATE: within THIS dialog it is no longer the sole
+ * derivation -- `computeInitialFormSeed` (module doc #9) calls it only as
+ * the per-student "no recorded row" fallback and as the whole seed when no
+ * attendance has been loaded yet or the load failed. `CheckboxList`'s own
+ * `value`/`onChange` (module doc #8) still lets the coach freely re-check/
+ * uncheck ANY row afterward regardless of its starting state, proven by
+ * toggling both a pre-checked and a not-pre-checked row.
  *
  * -----------------------------------------------------------------------
  * 7. T101 (ED-1 Packet P10) UPDATE: `onMarkComplete` now defaults to a REAL
@@ -329,8 +353,106 @@
  *    `gap`, `hAlign`, `wrap` used.
  *  - `Text` ("Text" section, Props table): `type` (`'supporting'`), `color`
  *    used.
+ *
+ * -----------------------------------------------------------------------
+ * 9. T305 (owner ruling "show attendance for T305",
+ *    `docs/swarm/auto-mode-decisions.md` "2026-08-01 -- George's ruling on
+ *    T305") -- seed from RECORDED attendance, not just RSVP intent, and
+ *    carry recorded provenance through the write. NOT authorized: writing
+ *    `rsvps` rows from attendance (`OutreachList.tsx:1685-1687`'s T121
+ *    finding, verbatim, still governs: "RSVP is intent, not a real
+ *    attendance record.") -- attendance and RSVP stay separate records,
+ *    only the display/seed changes.
+ *
+ * Load seam: `loadAttendance?: LoadAttendanceForSessionsFn`
+ * (`../../lib/supabase/loaders/attendance.ts`), defaulting to the real
+ * `loadAttendanceForSessions` -- the same real-default-injectable
+ * convention `onMarkComplete` already established on this same props
+ * interface. Loads THIS session only (`loadAttendance([session.id])`) on
+ * open. On failure, or while still in flight, the checklist/hours state
+ * falls back to exactly today's RSVP-only seeding -- no error banner, no
+ * blocked confirm, no spinner. This is deliberately different from the
+ * bulk "Mark event complete" path (`MarkEventCompleteDialog.tsx`, T307),
+ * where a failed load must ABORT the write rather than fall back: THIS
+ * dialog only ever *displays* the seed for a coach to confirm deliberately,
+ * so a degraded display is recoverable; a silent bulk write under a failed
+ * load is not.
+ *
+ * `computeInitialFormSeed(sessionId, roster, rsvps, recordedRows)` is the
+ * new, single seeding entry point: `recordedRows === null` (not loaded yet,
+ * or the load failed) reproduces `computeInitialAttendedStudentIds`'s
+ * result verbatim with an empty hours map (today's behaviour, unchanged).
+ * Otherwise, per roster student: a recorded row exists -> checked iff
+ * `isAttendingStatus(row.status)` (imported from `./AttendancePanel`, the
+ * semantic owner of that decision -- NOT re-derived here), and
+ * independently, if that row's `hoursOverride` is non-null, the hours map
+ * carries it regardless of checked state (this is load-bearing, not
+ * tidiness -- see W6/§4's own writeup: seeding the hours map only for
+ * students who start checked lets the confirm label and the actual write
+ * diverge for a student the coach deliberately checks after the fact). No
+ * recorded row -> checked iff a `going` RSVP exists (today's rule, applied
+ * per student, not just as the null-branch fallback). A recorded `absent`
+ * row starts UNCHECKED even if the student RSVP'd `going`. `recordedRows`
+ * carries `AttendanceRow` from `../../lib/supabase/loaders/attendance.ts` --
+ * note that file declares its OWN `AttendanceStatus`/`AttendanceMethod`
+ * unions, textually identical to (but a distinct declaration from) this
+ * file's own `AttendanceStatus`/`AttendanceMethod` below; values cross that
+ * boundary and compile only because the unions are structurally identical.
+ * Deliberately NOT unified/deleted -- that would be scope growth beyond
+ * this task.
+ *
+ * Applying the seed without clobbering the coach: the hours map is merged
+ * UNCONDITIONALLY on every load resolution (`setHoursOverrideByStudentId(
+ * prev => ({ ...recordedOverrides, ...prev }))` -- recorded values win at
+ * open (`prev` is `{}`), anything the coach has since typed is already in
+ * `prev` and survives; this merge is NOT gated by the touched-ref below,
+ * since gating it would reopen the exact label-vs-write divergence W6
+ * exists to close for a late-arriving load). The checklist itself DOES need
+ * an explicit guard -- "unchecked everyone" and "did nothing yet" are both
+ * just an empty/partial array -- so a `useRef(false)` is set true by the
+ * checklist's own `onChange` or by an hours edit, cleared on every
+ * open/session-reset, and the recorded `checkedStudentIds` are only applied
+ * if the dialog is still open, still showing the SAME session, and that ref
+ * is still false. This guard governs the CHECKLIST ONLY -- loaded rows
+ * still drive the write-preservation rule below whether or not the seed was
+ * actually applied to the checklist.
+ *
+ * Write preservation: `buildAttendanceWriteRows` gains a REQUIRED fifth
+ * parameter, the loaded rows keyed by student id -- required, not optional,
+ * because a call site that forgets the recorded rows is the exact bug this
+ * task exists to prevent, and it must not compile (same T151/T179
+ * mechanism this file already uses for its other required props). Per
+ * checked student, with `existing` its loaded row (may be absent): `status`
+ * stays the recorded status iff `isAttendingStatus(existing.status)` (a
+ * recorded `'late'` stays `'late'`; a recorded `'absent'` the coach
+ * deliberately checks becomes `'present'`), else `'present'`; `checkInAt`/
+ * `checkOutAt` carry the recorded values (`?? null` -- see module doc
+ * #2(c)'s now-honest writeup); `hoursOverride` is the coach's own edit if
+ * present, else the recorded override, else `null`; `method` is
+ * `resolveAttendanceWriteMethod(existing?.method ?? null)`
+ * (`../../lib/supabase/loaders/attendance.ts`) -- NEVER the hardcoded
+ * `'coach'` this file wrote before T305; `recordedBy` stays
+ * `currentUserProfileId`, the ACTING coach, deliberately UNCHANGED even
+ * when `method` itself is preserved as `'qr'`/`'import'` (matching
+ * `UpsertAttendanceParams.recordedBy`'s own doc and `AttendancePanel.tsx`'s
+ * two write paths, `:718`/`:791`) -- so a later reader does not "fix" this
+ * into the recorded row's own `recordedBy`. A student with NO recorded row
+ * is written exactly as before this task: `status: 'present'`, both
+ * timestamps `null`, `method: 'coach'`, `hoursOverride` from the coach's map
+ * or `null`.
+ *
+ * Two consequences disclosed, not solved, here: (a) T308 -- the confirm
+ * button's local hours sum (module doc #2(b)) can now legitimately disagree
+ * with `v_student_hours` for a student whose preserved timestamps make the
+ * SQL view's tier 2 fire, since this dialog computes only `hoursOverride ??
+ * tier-3-duration` and must not re-derive the view's tier selection in
+ * TypeScript (constitution item 3) -- see module doc #2(c)'s rewrite. (b)
+ * T307 -- `MarkEventCompleteDialog.tsx`'s bulk path still seeds from RSVPs
+ * only and writes an empty recorded-rows argument (its own module doc has
+ * the three corrected clauses); it is a live, filed, deliberately
+ * out-of-scope data-loss bug this task does not touch.
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Banner,
   Button,
@@ -349,6 +471,19 @@ import {
 } from '@astryxdesign/core';
 // T101 (ED-1 Packet P10): real `onMarkComplete` default -- module doc #7.
 import { markDayComplete } from '../../lib/supabase/loaders/outreach';
+// T305: recorded-attendance load seam + the write-method decision this file
+// no longer hardcodes -- module doc #9.
+import {
+  loadAttendanceForSessions,
+  resolveAttendanceWriteMethod,
+  type AttendanceRow,
+  type LoadAttendanceForSessionsFn,
+} from '../../lib/supabase/loaders/attendance';
+// T305: `isAttendingStatus` is imported, not re-derived -- `AttendancePanel.tsx`
+// is the semantic owner of "which recorded statuses count as attending"
+// (module doc #9). No import cycle: `AttendancePanel.tsx` never imports from
+// this file.
+import { isAttendingStatus } from './AttendancePanel';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets. Module doc #1.
@@ -356,11 +491,18 @@ import { markDayComplete } from '../../lib/supabase/loaders/outreach';
 
 export type SessionStatus = 'scheduled' | 'completed' | 'canceled';
 export type RsvpStatus = 'going' | 'maybe' | 'declined';
-/** `attendance.status` -- this dialog only ever writes `'present'` (module
- * doc #5/OUT-05's own literal text), the other three values are real but not
- * produced by this file. */
+/** `attendance.status` -- T305 UPDATE: this dialog now writes `'late'` too,
+ * when preserving a recorded `'late'` row through a coach-confirmed submit
+ * (module doc #9) -- `'excused'` remains real but not produced by this
+ * file. Textually identical to, but a distinct declaration from,
+ * `../../lib/supabase/loaders/attendance.ts`'s own `AttendanceStatus`
+ * (module doc #9's shadowing note) -- deliberately not unified here. */
 export type AttendanceStatus = 'present' | 'late' | 'excused' | 'absent';
-/** `attendance.method` -- this dialog only ever writes `'coach'`. */
+/** `attendance.method` -- T305 UPDATE: this dialog now writes `'qr'`/
+ * `'import'` too, when preserving a recorded row's real provenance (module
+ * doc #9) via `resolveAttendanceWriteMethod`, never a hardcoded `'coach'`.
+ * Textually identical to, but a distinct declaration from,
+ * `../../lib/supabase/loaders/attendance.ts`'s own `AttendanceMethod`. */
 export type AttendanceMethod = 'qr' | 'coach' | 'import';
 
 export interface RosterStudent {
@@ -395,12 +537,15 @@ export interface AttendanceWriteRow {
   sessionId: string;
   studentId: string;
   status: AttendanceStatus;
-  /** Always `null` here (module doc #2(c)) -- this dialog collects no
-   * check-in/check-out timestamps. */
+  /** T305 UPDATE: no longer always `null` -- carries a preserved recorded
+   * row's real value through unchanged (module doc #9); still never
+   * COLLECTED from the coach in this dialog's own UI (module doc #2(c)). */
   checkInAt: string | null;
   checkOutAt: string | null;
-  /** `null` = the coach never touched this student's row -- MET-03's SQL
-   * falls back to the real session-duration tier itself (module doc #2),
+  /** T305 UPDATE: `null` no longer means "the coach never touched this
+   * student's row" -- it can also be a genuinely preserved recorded
+   * override the coach never touched (module doc #9). MET-03's SQL falls
+   * back to the real session-duration tier for a genuinely-null value,
    * never silently written here as a frozen numeric default. */
   hoursOverride: number | null;
   method: AttendanceMethod;
@@ -436,9 +581,13 @@ export function computeSessionDurationHours(session: { startsAt: string; endsAt:
   return Math.max(ms, 0) / (1000 * 60 * 60);
 }
 
-/** Module doc #6 -- THE ONE place the checklist's starting state is
- * derived: a roster student with a `'going'` `rsvps` row for this session
- * starts checked; `'maybe'`/`'declined'`/no row at all starts unchecked. */
+/** Module doc #6 -- T305 UPDATE: no longer the one place the checklist's
+ * starting state is derived (that is now `computeInitialFormSeed`, module
+ * doc #9) -- this is its RSVP-only fallback branch, still exported,
+ * behaviourally unchanged, and still directly tested/imported by
+ * `MarkEventCompleteDialog.tsx`. A roster student with a `'going'` `rsvps`
+ * row for this session starts checked; `'maybe'`/`'declined'`/no row at all
+ * starts unchecked. */
 export function computeInitialAttendedStudentIds(
   sessionId: string,
   roster: readonly RosterStudent[],
@@ -450,6 +599,66 @@ export function computeInitialAttendedStudentIds(
       .map((rsvp) => rsvp.studentId),
   );
   return roster.filter((student) => goingStudentIds.has(student.id)).map((student) => student.id);
+}
+
+/** T305, module doc #9 -- filters the loaded rows to THIS session and keys
+ * them by student id. Does not trust the caller to have pre-filtered
+ * (§4/module doc #9). Not exported -- internal to this file's own seeding/
+ * write-preservation, both of which take the raw `recordedRows` array. */
+function buildRecordedRowsByStudentId(
+  sessionId: string,
+  recordedRows: readonly AttendanceRow[],
+): Record<string, AttendanceRow> {
+  const rowsByStudentId: Record<string, AttendanceRow> = {};
+  for (const row of recordedRows) {
+    if (row.sessionId === sessionId) rowsByStudentId[row.studentId] = row;
+  }
+  return rowsByStudentId;
+}
+
+/** T305, module doc #9 -- THE new single entry point for the checklist's
+ * starting state and its seeded hours overrides. `recordedRows === null`
+ * (not loaded yet, or the load failed) reproduces
+ * `computeInitialAttendedStudentIds`'s result verbatim with an empty hours
+ * map -- today's behaviour, unchanged. Otherwise, per roster student: a
+ * recorded row -> checked iff `isAttendingStatus(row.status)`,
+ * INDEPENDENTLY seeding the hours map with that row's own non-null
+ * `hoursOverride` regardless of checked state (load-bearing -- see module
+ * doc #9's W6 writeup); no recorded row -> checked iff a `going` RSVP
+ * exists for this session (today's per-student rule). Filters by
+ * `sessionId` itself -- does not trust the caller. */
+export function computeInitialFormSeed(
+  sessionId: string,
+  roster: readonly RosterStudent[],
+  rsvps: readonly RsvpRow[],
+  recordedRows: readonly AttendanceRow[] | null,
+): { checkedStudentIds: string[]; hoursOverrideByStudentId: Record<string, number> } {
+  if (recordedRows === null) {
+    return {
+      checkedStudentIds: computeInitialAttendedStudentIds(sessionId, roster, rsvps),
+      hoursOverrideByStudentId: {},
+    };
+  }
+  const recordedRowByStudentId = buildRecordedRowsByStudentId(sessionId, recordedRows);
+  const goingStudentIds = new Set(
+    rsvps
+      .filter((rsvp) => rsvp.sessionId === sessionId && rsvp.status === 'going')
+      .map((rsvp) => rsvp.studentId),
+  );
+  const checkedStudentIds: string[] = [];
+  const hoursOverrideByStudentId: Record<string, number> = {};
+  for (const student of roster) {
+    const recorded = recordedRowByStudentId[student.id];
+    if (recorded !== undefined) {
+      if (isAttendingStatus(recorded.status)) checkedStudentIds.push(student.id);
+      if (recorded.hoursOverride !== null) {
+        hoursOverrideByStudentId[student.id] = recorded.hoursOverride;
+      }
+    } else if (goingStudentIds.has(student.id)) {
+      checkedStudentIds.push(student.id);
+    }
+  }
+  return { checkedStudentIds, hoursOverrideByStudentId };
 }
 
 /** Module doc #2(b) -- a plain local SUM over the exact per-student hours
@@ -482,26 +691,39 @@ export function computeMarkCompleteConfirmLabel(attendedCount: number, totalHour
 }
 
 /** Module doc #2/#5 -- THE ONE place `attendance` rows are constructed.
- * Always `status: 'present'`, `method: 'coach'`, `checkInAt`/`checkOutAt:
- * null` (module doc #2(c)); `hoursOverride` is the raw, honest per-student
- * override map value (possibly genuinely absent -> `null`), never
- * back-filled with the computed default duration. */
+ * T305 UPDATE (module doc #9): gains a REQUIRED fifth parameter, the loaded
+ * recorded rows keyed by student id -- required, not optional, so a call
+ * site that forgets the recorded rows does not compile (T151/T179's own
+ * mechanism). For a student with NO recorded row, this writes exactly what
+ * it always did: `status: 'present'`, `method: 'coach'`, `checkInAt`/
+ * `checkOutAt: null`, `hoursOverride` from the coach's own map or `null`.
+ * For a student WITH a recorded row, real provenance (`status` when
+ * attending, `checkInAt`/`checkOutAt`, `method` via
+ * `resolveAttendanceWriteMethod`) is carried through; `hoursOverride`
+ * prefers the coach's own edit over the recorded value; `recordedBy` is
+ * always `recordedBy` (the acting coach), never the recorded row's own
+ * value. */
 export function buildAttendanceWriteRows(
   sessionId: string,
   checkedStudentIds: readonly string[],
   hoursOverrideByStudentId: Readonly<Record<string, number>>,
   recordedBy: string,
+  recordedRowByStudentId: Readonly<Record<string, AttendanceRow>>,
 ): AttendanceWriteRow[] {
-  return checkedStudentIds.map((studentId) => ({
-    sessionId,
-    studentId,
-    status: 'present',
-    checkInAt: null,
-    checkOutAt: null,
-    hoursOverride: hoursOverrideByStudentId[studentId] ?? null,
-    method: 'coach',
-    recordedBy,
-  }));
+  return checkedStudentIds.map((studentId) => {
+    const existing = recordedRowByStudentId[studentId];
+    return {
+      sessionId,
+      studentId,
+      status:
+        existing !== undefined && isAttendingStatus(existing.status) ? existing.status : 'present',
+      checkInAt: existing?.checkInAt ?? null,
+      checkOutAt: existing?.checkOutAt ?? null,
+      hoursOverride: hoursOverrideByStudentId[studentId] ?? existing?.hoursOverride ?? null,
+      method: resolveAttendanceWriteMethod(existing?.method ?? null),
+      recordedBy,
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -581,6 +803,13 @@ export interface MarkDayCompleteDialogProps {
    * `defaultOnMarkComplete` (log-only) remains exported for callers/tests
    * that want to inject it explicitly. */
   onMarkComplete?: OnMarkDayCompleteFn;
+  /** T305 (module doc #9) -- injectable load seam for this session's
+   * recorded attendance, mirroring `AttendancePanelProps.loadAttendance`.
+   * Defaults to the real `loadAttendanceForSessions`
+   * (`../../lib/supabase/loaders/attendance.ts`). NOT the placeholder-
+   * default family T151/T179 closed -- an omitted value still resolves to
+   * the real query, not a fixture. */
+  loadAttendance?: LoadAttendanceForSessionsFn;
 }
 
 export function MarkDayCompleteDialog({
@@ -592,6 +821,7 @@ export function MarkDayCompleteDialog({
   rsvps,
   currentUserProfileId,
   onMarkComplete = markDayComplete,
+  loadAttendance = loadAttendanceForSessions,
 }: MarkDayCompleteDialogProps): ReactNode {
   // Module doc #5(ii) -- only a scheduled session can be (re-)completed from
   // this dialog.
@@ -608,6 +838,20 @@ export function MarkDayCompleteDialog({
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // T305 (module doc #9) -- this session's loaded recorded attendance, or
+  // `null` while in flight/on failure (the RSVP-only seed stands, §3).
+  const [recordedRows, setRecordedRows] = useState<readonly AttendanceRow[] | null>(null);
+  // T305 -- "unchecked everyone" and "did nothing yet" are both just an
+  // array; this distinguishes them so a late-arriving load never clobbers a
+  // coach's own edit (module doc #9).
+  const hasCoachTouchedChecklistRef = useRef(false);
+  // T305 -- updated every render (not in an effect) so a `.then()` callback
+  // from a stale in-flight load can read the truly CURRENT `isOpen`/
+  // `session.id`, not the value closed over when that load started (S8b).
+  const latestIsOpenRef = useRef(isOpen);
+  const latestSessionIdRef = useRef(session.id);
+  latestIsOpenRef.current = isOpen;
+  latestSessionIdRef.current = session.id;
 
   function resetForm(): void {
     setCheckedStudentIds(computeInitialAttendedStudentIds(session.id, roster, rsvps));
@@ -616,16 +860,64 @@ export function MarkDayCompleteDialog({
     setAdultVolunteerHours(0);
     setHoursOverrideByStudentId({});
     setSubmitError(null);
+    setRecordedRows(null);
+    hasCoachTouchedChecklistRef.current = false;
   }
 
   // Nothing persists across opens -- every fresh open re-derives the
   // checklist from the current `going` RSVPs (module doc #6), same
   // "reset-on-open-transition" pattern `ScheduleMeetingsDialog.tsx` already
-  // established.
+  // established. T305: this is the RSVP-only seed; the effect below layers
+  // the recorded-attendance seed on top once/if it loads (module doc #9).
   useEffect(() => {
     if (isOpen) resetForm();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only on the isOpen transition.
   }, [isOpen, session.id]);
+
+  // T305 (module doc #9) -- load this ONE session's recorded attendance.
+  // Shape mirrors `useAttendanceLoadState` (`AttendancePanel.tsx`): `let
+  // isMounted`, `.then`/`.catch`, cleanup sets `isMounted = false`; no
+  // `retryToken`/three-state union needed here (§3 -- failure falls back
+  // silently, it never surfaces a retry). Dependency array is deliberately
+  // `[isOpen, session.id, loadAttendance]`, NOT including `roster`/`rsvps`:
+  // those are unmemoized page-level arrays at the live call site
+  // (`OutreachDetail.tsx:2183-2190`), so including them would re-fire this
+  // load on every parent render.
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    let isMounted = true;
+    const loadedSessionId = session.id;
+    loadAttendance([loadedSessionId])
+      .then((rows) => {
+        if (!isMounted) return;
+        setRecordedRows(rows);
+        const seed = computeInitialFormSeed(loadedSessionId, roster, rsvps, rows);
+        // Hours map: merge unconditionally, the coach's own edits win --
+        // NOT gated by the touched-ref below (module doc #9; gating it
+        // would reopen the exact label-vs-write divergence W6 closes).
+        setHoursOverrideByStudentId((prev) => ({ ...seed.hoursOverrideByStudentId, ...prev }));
+        // Checklist: only if still open, still the SAME session, and the
+        // coach hasn't already touched it. This guard governs the
+        // checklist only -- `recordedRows` above still drives §5's write
+        // preservation whether or not this branch actually applies.
+        if (
+          latestIsOpenRef.current &&
+          latestSessionIdRef.current === loadedSessionId &&
+          !hasCoachTouchedChecklistRef.current
+        ) {
+          setCheckedStudentIds(seed.checkedStudentIds);
+        }
+      })
+      .catch(() => {
+        // Graceful (§3): `recordedRows` stays `null`, so the RSVP-only seed
+        // `resetForm` already applied stands -- no error surface, no
+        // blocked confirm, no spinner over the checklist.
+      });
+    return () => {
+      isMounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- roster/rsvps intentionally excluded, see comment above.
+  }, [isOpen, session.id, loadAttendance]);
 
   const defaultDurationHours = useMemo(() => computeSessionDurationHours(session), [session]);
 
@@ -651,7 +943,15 @@ export function MarkDayCompleteDialog({
     onOpenChange(false);
   }
 
+  // T305 -- marks the touched-ref so a late-arriving recorded-attendance
+  // load never clobbers the coach's own checklist edit (module doc #9).
+  function handleCheckedStudentIdsChange(next: string[]): void {
+    hasCoachTouchedChecklistRef.current = true;
+    setCheckedStudentIds(next);
+  }
+
   function setStudentHoursOverride(studentId: string, value: number): void {
+    hasCoachTouchedChecklistRef.current = true;
     setHoursOverrideByStudentId((prev) => ({ ...prev, [studentId]: value }));
   }
 
@@ -667,6 +967,7 @@ export function MarkDayCompleteDialog({
         checkedStudentIds,
         hoursOverrideByStudentId,
         currentUserProfileId,
+        buildRecordedRowsByStudentId(session.id, recordedRows ?? []),
       ),
       adultVolunteersCountThisSession: adultVolunteersCount ?? 0,
       adultVolunteerHoursThisSession: adultVolunteerHours ?? 0,
@@ -714,7 +1015,7 @@ export function MarkDayCompleteDialog({
                 <CheckboxList
                   label="Attendee checklist"
                   value={checkedStudentIds}
-                  onChange={setCheckedStudentIds}
+                  onChange={handleCheckedStudentIdsChange}
                   hasDividers
                 >
                   {roster.map((student) => (
