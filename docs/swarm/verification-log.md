@@ -6494,3 +6494,35 @@ directly by the orchestrator. Same posture as T302 and T303. Recorded rather tha
 guard is pinnable by mutation layering and worth adding when the file is next opened; a
 delete-then-bulk-complete TOCTOU can resurrect a deleted row with its true historical values; and
 the worker under-reported the render-gate blast radius as one test when it is two.
+
+---
+
+## T063 — MIG-04 validation, unblocked by changing the source rather than chasing the credential
+
+**Merged `56a9574`. Owner-signed-off: "looks good to me."**
+
+This gate was blocked for weeks on old-project Supabase credentials. The credentials **do not
+exist**: the old app runs on Lovable Cloud, which keeps its Postgres inside its own platform and
+never exposes a service-role key. That was established by checking, not assuming — the owner's
+Supabase org holds only `volt-timetracker`, and Lovable's Secrets page holds only `LOVABLE_API_KEY`.
+
+**The unlock was recognising that the ETL's source was already pluggable.** `scripts/migrate/`
+defines an `OldDataSource` interface with a Supabase implementation and a fixture implementation. A
+third — reading the owner's JSON exports from Lovable's SQL editor — required no change to
+`transform.ts` and no change to a single mapping rule.
+
+**Report, reproduced by the orchestrator with the old-project env vars explicitly unset:**
+teams 4 · seasons 1 · students 20 · events 16 · event_sessions 117 · rsvps 254 · attendance 79,
+with **zero** unmatched teams, **zero** unparseable times and **zero** attendees-backfill
+mismatches. The 79 attendance rows carry **341.75 hours**.
+
+All eight figures match measurements taken from the raw JSON *before the ETL was built* — an
+independent check, not a restatement.
+
+**What it does not prove.** The dry run writes nothing. The transform is verified; the write path is
+not. That needs `NEW_SERVICE_ROLE_KEY` and the owner's cutover decision, which is exactly the split
+constitution item 16 requires.
+
+**Worth recording: the worker corrected the orchestrator.** The packet stated a 1746-test baseline;
+`main` is 1777. Rather than quietly matching the stated figure, it measured, found the discrepancy,
+and reported it. That is the behaviour the packet asked for and rarely gets.
