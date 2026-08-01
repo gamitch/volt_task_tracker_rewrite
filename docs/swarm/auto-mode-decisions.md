@@ -1427,3 +1427,112 @@ displayed 7h, totalled 14h against a true 10h, and confirming wrote
 `checkInAt`, `checkOutAt` and `method` through the write**, using the existing
 `resolveAttendanceWriteMethod` (`loaders/attendance.ts:218-222`) rather than a hardcoded `'coach'`.
 Showing the truth and then overwriting it is worse than not showing it.
+
+---
+
+## 2026-08-01 — George: season goal is 90 hours; test-migrate now, drop the data, re-migrate at cutover
+
+**Two rulings, both from the migration thread.**
+
+**1. Season goal = 90 hours.** Verbatim: *"the goal is 90 hours."* This matches the old system's
+`app_settings.season_goal = 90` exactly, so the ETL carries the old value across rather than
+substituting the `200` currently showing in the new app. **This one number sets every student's goal
+bar** — all 20 migrated students have `goal_hours = null` and therefore inherit the season default.
+
+**2. Test migration now, teardown after, real migration at cutover.** Verbatim: *"can we do a test
+migration while we are testing out the app, then drop all data once we finish testing."*
+**Authorized.** The ETL was built idempotent with natural-key upserts (`scripts/migrate.ts` header),
+so re-running at cutover is the designed path, not a workaround.
+
+**Constraints that go with it, recorded so a later session does not get them wrong:**
+
+- **Never truncate `profiles`.** It is `references auth.users (id) on delete restrict`, and it holds
+  the owner's own sign-in. Truncating it locks him out of his own project. Teardown covers the 14
+  data tables and stops there.
+- **Auth users are not the ETL's to clean.** The old `students` rows carry **no email column**, so
+  the migration creates zero accounts. Any test accounts made by hand during testing must be removed
+  from the Supabase Auth dashboard separately.
+- **The teardown SQL becomes dangerous the moment real users exist.** It is safe now only because
+  nothing is deployed. After cutover it must never be run.
+
+**A gap this surfaced, not a migration defect:** the old system has no student emails, so T064
+(roster → accounts) cannot proceed on migrated data alone. The owner will need to supply ~20
+addresses — likely guardian addresses given the ages — before anyone can be invited. The data
+migration itself is unaffected.
+
+---
+
+## 2026-08-01 — George: the migration teardown MUST preserve his accounts
+
+**Requirement, verbatim:** *"please have the migration scripts keep my accounts."*
+
+**This corrects teardown SQL the orchestrator had already given him**, which would have cost him
+working accounts. That SQL excluded `profiles` (so sign-in survived) but truncated `students` and
+`guardian_links`. Since `students.profile_id references profiles (id)`
+(`identity_roster.sql:61`) and `guardian_links.parent_profile_id` likewise (`:74`), the account
+would survive with **its role linkage destroyed** — the owner would sign in and land on "No student
+account linked yet". Logins preserved, roles broken. Not what was asked for, and not what was
+advertised.
+
+**What makes precise teardown possible.** The old `students` table has **no email column**, so the
+ETL creates every migrated student with **`profile_id = null`**. The owner's hand-made accounts are
+the only rows carrying a non-null `profile_id`. Migrated rows are therefore exactly identifiable
+without a manifest:
+
+```sql
+delete from attendance;
+delete from rsvps;
+delete from event_sessions;
+delete from events;
+delete from student_teams
+  where student_id in (select id from students where profile_id is null);
+delete from students where profile_id is null;
+```
+
+`teams` and `seasons` are deliberately **not** deleted — small config the ETL upserts by natural
+key, so leaving them is harmless and re-running is idempotent. `profiles`, `guardian_links` and
+`auth.users` are never touched.
+
+**AMENDED 2026-08-01, same session — the rule above was too narrow and would have failed.**
+
+The owner: *"keep Test student account. i use this as a second child to the parent account to test a
+parent who has multiple students on the team."* `Test` has **no account of its own** but **is
+depended on by his parent account** through `guardian_links`.
+
+`profile_id is null` alone would have targeted it — and because
+`guardian_links.student_id references public.students (id) on delete restrict`
+(`identity_roster.sql:75`), the delete would not have silently removed it but **failed with a
+foreign-key error mid-teardown**, leaving the database half-cleared. Loud rather than lossy, but
+still wrong, and it would have destroyed a fixture he deliberately built to test the
+multi-student parent view — a case the app genuinely has (`ParentHome` renders a card per child).
+
+**The correct rule is broader: keep any student that ANY account depends on** — its own
+(`profile_id`) or a guardian's (`guardian_links`):
+
+```sql
+delete from attendance;
+delete from rsvps;
+delete from event_sessions;
+delete from events;
+
+delete from student_teams
+ where student_id in (
+   select id from students
+    where profile_id is null
+      and id not in (select student_id from guardian_links));
+
+delete from students
+ where profile_id is null
+   and id not in (select student_id from guardian_links);
+```
+
+This keeps `Test` and every other account-reachable student, and still removes all 20 migrated rows
+(none has a `profile_id`, and none is guardian-linked, since the migration creates no accounts and
+no links). It also cannot hit the `on delete restrict` error, because the only rows it targets are
+ones nothing references.
+
+**The durable fix, queued not yet built:** have the ETL emit a **manifest** of every id it writes
+during a real run, and add a `--teardown=<manifest>` mode that deletes exactly those rows and
+nothing else. That removes the reliance on `profile_id is null` as a proxy and stays correct even
+once students do have accounts. **This must exist before any teardown is run post-cutover** — at
+that point the `profile_id is null` heuristic would delete real, account-less student records.
