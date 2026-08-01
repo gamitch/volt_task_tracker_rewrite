@@ -548,3 +548,89 @@ export function makeLoadStudentHomeData(
 
 /** `StudentHome.tsx`'s own real, production default `loadData`. */
 export const loadStudentHomeData: LoadStudentHomeDataFn = makeLoadStudentHomeData();
+
+/**
+ * T189 -- additive only (this task's own Allowed Files instruction: no
+ * existing export's name, signature, or behavior changes). New narrow read
+ * for `MeetingsList.tsx`'s student/parent view (packet v2 §3): reads
+ * `students.is_active` DIRECTLY for a resolved `studentId`, never inferred
+ * from a view or another metric.
+ *
+ * Packet v2's own reasoning for why this must read the column instead of
+ * reusing `resolveStudentScope`'s inference (both are worth carrying here,
+ * not just in the packet, since a future caller of this file could
+ * otherwise repeat the mistake): `v_student_goal_projection`
+ * (`dashboard_views.sql:322-334`) inner-joins `seasons se on se.is_active`
+ * (`:331`), so with zero active seasons the view returns no row for ANY
+ * student, active or not -- `null` from that view does not mean inactive.
+ * `v_student_participation`'s own `expected` CTE inner-joins
+ * `event_sessions ... and es.status = 'completed'`
+ * (`membership_views.sql:59-81`), so a brand-new ACTIVE student with
+ * nothing completed also produces no row -- null does not mean inactive
+ * there either. Only the raw column is unambiguous.
+ *
+ * `null` (this function's own return value) means "no such student row" --
+ * genuinely distinct from `false` ("row exists, deactivated"). Callers must
+ * not collapse the two; `MeetingsList.tsx`'s own `ResolvedStudentMeetingsView`
+ * already has its own separate "no student account linked" state for the
+ * "no such student" case, reached via a completely different seam
+ * (`resolveStudentId` resolving `null`), so this function only ever needs to
+ * disambiguate for a studentId that has ALREADY resolved to a real row.
+ *
+ * Column -- `students.is_active boolean not null default true`
+ * (`identity_roster.sql:65`). RLS -- `own_or_linked_read`
+ * (`rls.sql:100-102`, `id in (select my_student_ids())`) already grants a
+ * signed-in student read access to exactly their own row; no new policy
+ * needed, same reasoning `queryStudentDisplayNameById` above already
+ * establishes for this same table/policy pair.
+ *
+ * Same shape as `queryStudentDisplayNameById`/`makeLoadStudentHomeData`
+ * immediately above: a single-row query via `createLoader`, injectable
+ * `getClient`, `.eq('id', studentId).maybeSingle()`. Selects only
+ * `is_active` -- same "select only what this screen needs" discipline as
+ * both siblings above.
+ */
+interface StudentIsActiveDbRow {
+  is_active: boolean;
+}
+
+async function queryStudentIsActiveById(
+  client: SupabaseClient,
+  studentId: string,
+): Promise<LoaderQueryResult<StudentIsActiveDbRow>> {
+  const result = await client
+    .from('students')
+    .select('is_active')
+    .eq('id', studentId)
+    .maybeSingle();
+  return { data: (result.data as StudentIsActiveDbRow | null) ?? null, error: result.error };
+}
+
+/**
+ * `null` = no such student row; `false` = row exists, deactivated; `true` =
+ * row exists, active. See module doc immediately above for why these three
+ * outcomes must not be collapsed.
+ */
+export type ResolveStudentIsActiveFn = (studentId: string) => Promise<boolean | null>;
+
+/**
+ * `getClient` is injectable (defaults to the shared singleton), same
+ * convention every export above already established, so tests can supply a
+ * stubbed transport with zero real network calls -- see this task's own
+ * `students.test.ts` coverage (scoped to this one function only, same
+ * disclosed-narrow-scope posture `makeResolveStudentScope`/
+ * `makeLoadStudentHomeData` above already established for their own tests).
+ */
+export function makeResolveStudentIsActive(
+  getClient: () => SupabaseClient = getSupabaseClient,
+): ResolveStudentIsActiveFn {
+  const loadRow = createLoader<string, StudentIsActiveDbRow>(queryStudentIsActiveById, getClient);
+  return async (studentId: string) => {
+    const row = await loadRow(studentId);
+    if (row === null) return null;
+    return row.is_active;
+  };
+}
+
+/** `MeetingsList.tsx`'s own real, production default `resolveStudentIsActive`. */
+export const resolveStudentIsActive: ResolveStudentIsActiveFn = makeResolveStudentIsActive();

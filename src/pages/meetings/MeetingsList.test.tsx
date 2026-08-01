@@ -47,10 +47,13 @@ import {
   summarizeCoachMeetingRow,
   type CoachMeetingsData,
   type ResolveCurrentStudentIdFn,
+  type StudentMeetingHistoryRow,
   type StudentMeetingsData,
+  type StudentParticipationMetric,
 } from './MeetingsList';
 import { defaultLoadConsistencyStripData, type ConsistencyStripData } from './StudentMeetingView';
 import type { CreateMeetingsPayload } from './ScheduleMeetingsDialog';
+import type { ResolveStudentIsActiveFn } from '../../lib/supabase/loaders/students';
 
 // ---------------------------------------------------------------------------
 // T180 §3a (BLOCKER 1, gate round 1) -- the mount this task adds uses
@@ -260,6 +263,20 @@ function expandRow(eventTitle: string): void {
  * prop, so those tests never hit the real (network-backed) default. */
 function fakeResolveStudentId(studentId: string | null): ResolveCurrentStudentIdFn {
   return () => Promise.resolve(studentId);
+}
+
+/** T189 (packet v2 §7) -- same "inject the fixture explicitly through the
+ * seam" pattern as `fakeResolveStudentId` immediately above, for the new
+ * `resolveStudentIsActive` seam. Injected at every resolved-path test below
+ * that does NOT pass an explicit `studentId` prop, so those tests never hit
+ * the real (network-backed) default -- same trap `fakeResolveStudentId`'s
+ * own doc names, now a second, independent seam that reaches the same real
+ * loader shape (`createLoader`, `.env.local`-dependent) if left
+ * un-injected. Defaults every pre-existing (pre-T189) test back to `true`
+ * ("active", i.e. today's behavior, unchanged) rather than leaving them to
+ * hit the real default. */
+function fakeResolveStudentIsActive(isActive: boolean | null = true): ResolveStudentIsActiveFn {
+  return () => Promise.resolve(isActive);
 }
 
 /** T180 C3/C7 -- `[role="progressbar"]`'s accessible name resolves through
@@ -1161,6 +1178,7 @@ describe('<MeetingsList /> student/parent view', () => {
   it('loading state', async () => {
     renderAsUser(STUDENT_OR_PARENT_USER, {
       resolveStudentId: fakeResolveStudentId('student-fixture'),
+      resolveStudentIsActive: fakeResolveStudentIsActive(true),
       loadStudentData: () => new Promise<StudentMeetingsData>(() => {}),
     });
     // T073b2: auth resolution (even via the fake `authModule` this
@@ -1177,6 +1195,7 @@ describe('<MeetingsList /> student/parent view', () => {
   it('error state', async () => {
     renderAsUser(STUDENT_OR_PARENT_USER, {
       resolveStudentId: fakeResolveStudentId('student-fixture'),
+      resolveStudentIsActive: fakeResolveStudentIsActive(true),
       loadStudentData: () => Promise.reject(new Error('boom')),
     });
     await flushMicrotasks();
@@ -1187,6 +1206,7 @@ describe('<MeetingsList /> student/parent view', () => {
   it('empty state (no history, no participation row)', async () => {
     renderAsUser(STUDENT_OR_PARENT_USER, {
       resolveStudentId: fakeResolveStudentId('student-fixture'),
+      resolveStudentIsActive: fakeResolveStudentIsActive(true),
       loadStudentData: () => Promise.resolve({ history: [], participation: null }),
     });
     await flushMicrotasks();
@@ -1214,6 +1234,7 @@ describe('<MeetingsList /> student/parent view', () => {
   it('a student with zero history rows but a real participation row does not render the empty state', async () => {
     renderAsUser(STUDENT_OR_PARENT_USER, {
       resolveStudentId: fakeResolveStudentId('student-fixture'),
+      resolveStudentIsActive: fakeResolveStudentIsActive(true),
       loadStudentData: () =>
         Promise.resolve({
           history: [],
@@ -1274,6 +1295,7 @@ describe('<MeetingsList /> student/parent view', () => {
     const loadStudentDataSpy = vi.fn(defaultLoadStudentMeetingsData);
     renderAsUser(STUDENT_OR_PARENT_USER, {
       resolveStudentId: fakeResolveStudentId(PLACEHOLDER_CURRENT_STUDENT_ID),
+      resolveStudentIsActive: fakeResolveStudentIsActive(true),
       loadStudentData: loadStudentDataSpy,
     });
     await flushMicrotasks();
@@ -1619,6 +1641,150 @@ describe('<MeetingsList /> student/parent view', () => {
         'H2:Past',
         'H2:Recent attendance',
       ]);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // T189 (packet v2 §6) -- honest "your account is inactive" copy. Only C1
+  // discriminates against today's defect (a deactivated student's real
+  // history/dots sitting directly beside a "no completed meetings"
+  // participation claim); C2-C6 are regression guards, not proofs of the
+  // fix, per the packet's own disclosure. Every criterion below still has a
+  // named production-code mutation run against it (worker output records
+  // the real red output for each).
+  // ---------------------------------------------------------------------------
+  describe('T189 -- honest copy for a deactivated student', () => {
+    const REAL_UPCOMING_ROW: StudentMeetingHistoryRow = {
+      sessionId: 'session-t189-upcoming',
+      title: 'Upcoming Robotics Session',
+      sessionDate: '2026-08-10',
+      startsAt: '2026-08-10T18:00:00.000Z',
+      endsAt: '2026-08-10T20:00:00.000Z',
+      status: 'scheduled',
+      myAttendanceStatus: null,
+    };
+    const REAL_PAST_ROW: StudentMeetingHistoryRow = {
+      sessionId: 'session-t189-past',
+      title: 'Past Robotics Session',
+      sessionDate: '2026-01-12',
+      startsAt: '2026-01-12T18:00:00.000Z',
+      endsAt: '2026-01-12T20:00:00.000Z',
+      status: 'completed',
+      myAttendanceStatus: 'present',
+    };
+    const REAL_PARTICIPATION: StudentParticipationMetric = {
+      studentId: 'student-t189-inactive',
+      teamId: 'team-ravens',
+      seasonId: 'season-placeholder-current',
+      expectedCt: 5,
+      presentCt: 4,
+      lateCt: 0,
+      excusedCt: 0,
+      participationPct: 80,
+    };
+
+    // C1 -- the ONE criterion that discriminates against today's defect.
+    // Mutation: delete the `isActive === false` branch.
+    it('C1: inactive renders the honest copy; the strip\'s own "no completed meetings" copy is absent', async () => {
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        resolveStudentId: fakeResolveStudentId('student-t189-inactive'),
+        resolveStudentIsActive: fakeResolveStudentIsActive(false),
+        loadStudentData: () =>
+          Promise.resolve({ history: [REAL_PAST_ROW], participation: REAL_PARTICIPATION }),
+      });
+      await flushMicrotasks();
+      await flushMicrotasks();
+      expect(container.textContent).toContain('Your student account is inactive');
+      expect(container.textContent).toContain(
+        "Participation isn't tracked while your account is inactive.",
+      );
+      expect(container.textContent).not.toContain('no completed meetings recorded yet');
+    });
+
+    // C2 -- the owner ruling's own most-likely-to-be-silently-dropped half:
+    // Upcoming/Past keep their REAL rows even while inactive.
+    // Mutation: drop the two `StudentHistorySection`s from the inactive branch.
+    it('C2: inactive -- Upcoming and Past still render their real rows', async () => {
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        resolveStudentId: fakeResolveStudentId('student-t189-inactive'),
+        resolveStudentIsActive: fakeResolveStudentIsActive(false),
+        loadStudentData: () =>
+          Promise.resolve({
+            history: [REAL_UPCOMING_ROW, REAL_PAST_ROW],
+            participation: null,
+          }),
+      });
+      await flushMicrotasks();
+      await flushMicrotasks();
+      expect(container.textContent).toContain('Upcoming Robotics Session');
+      expect(container.textContent).toContain('Past Robotics Session');
+      expect(headingOutline()).toContain('H2:Upcoming');
+      expect(headingOutline()).toContain('H2:Past');
+    });
+
+    // C3 -- active with a real scope renders exactly as today; honest copy absent.
+    // Mutation: invert the branch to `isActive !== false`.
+    it('C3: active renders as today; honest copy is absent', async () => {
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        resolveStudentId: fakeResolveStudentId('student-t189-active'),
+        resolveStudentIsActive: fakeResolveStudentIsActive(true),
+        loadStudentData: () =>
+          Promise.resolve({ history: [REAL_PAST_ROW], participation: REAL_PARTICIPATION }),
+      });
+      await flushMicrotasks();
+      await flushMicrotasks();
+      expect(container.textContent).not.toContain('Your student account is inactive');
+      expect(headingOutline()).toContain('H2:Recent attendance');
+    });
+
+    // C4 -- the exact trap packet v2 §3 names: an ACTIVE student with zero
+    // completed sessions also has `participation === null`, same as an
+    // inactive student. Mutation: use `participation === null` as the
+    // detector instead of `isActive === false`.
+    it('C4: active with zero completed sessions (participation null) does not trigger the honest copy', async () => {
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        resolveStudentId: fakeResolveStudentId('student-t189-active-new'),
+        resolveStudentIsActive: fakeResolveStudentIsActive(true),
+        loadStudentData: () => Promise.resolve({ history: [], participation: null }),
+      });
+      await flushMicrotasks();
+      await flushMicrotasks();
+      expect(container.textContent).not.toContain('Your student account is inactive');
+      expect(container.textContent).toContain('No meeting history yet');
+    });
+
+    // C5 -- absence-only by nature (v1's blanket pairing rule was wrong,
+    // packet v2 §6). Mutation: call it in the explicit-studentId branch too.
+    it('C5: resolveStudentIsActive is never called when an explicit studentId prop is supplied', async () => {
+      const resolveStudentIsActiveSpy = vi.fn(fakeResolveStudentIsActive(false));
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
+        resolveStudentIsActive: resolveStudentIsActiveSpy,
+        loadStudentData: defaultLoadStudentMeetingsData,
+      });
+      await flushMicrotasks();
+      await flushMicrotasks();
+      expect(resolveStudentIsActiveSpy).not.toHaveBeenCalled();
+      // Also proves the page did not somehow honor the spy's `false` return
+      // despite never calling it -- would indicate a stale/wrong wiring.
+      expect(container.textContent).not.toContain('Your student account is inactive');
+    });
+
+    // C6 -- MAJOR 3 (gate round 1): fails today if the inactive check sits
+    // BELOW the `isEmpty` ternary -- a deactivated student with zero
+    // history and null participation would fall into "No meeting history
+    // yet" instead, since the branch would be unreachable in that state.
+    // Mutation: move the inactive check below the `isEmpty` ternary.
+    it('C6: inactive AND zero history rows AND null participation -- honest copy renders, "No meeting history yet" is absent', async () => {
+      renderAsUser(STUDENT_OR_PARENT_USER, {
+        resolveStudentId: fakeResolveStudentId('student-t189-inactive-empty'),
+        resolveStudentIsActive: fakeResolveStudentIsActive(false),
+        loadStudentData: () => Promise.resolve({ history: [], participation: null }),
+      });
+      await flushMicrotasks();
+      await flushMicrotasks();
+      expect(container.textContent).toContain('Your student account is inactive');
+      expect(container.textContent).not.toContain('No meeting history yet');
     });
   });
 });

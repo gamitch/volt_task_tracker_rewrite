@@ -534,6 +534,19 @@ import {
   type CreateMeetingsPayload,
   type OnCreateMeetingsFn,
 } from './ScheduleMeetingsDialog';
+// T189 -- honest "your account is inactive" copy (packet v2). Reads
+// `students.is_active` directly (`loaders/students.ts`'s own module doc has
+// the full reasoning for why this is NOT inferred from `resolveStudentScope`
+// or the participation figure). Aliased on import so the local default
+// parameter below can share the prop's own name, same "import under a
+// different local name, default param reuses the prop name" shape this
+// file's own `resolveStudentId = resolveCurrentStudentId` line already uses
+// (there the names simply already differ; here they don't, so an explicit
+// alias is needed).
+import {
+  resolveStudentIsActive as defaultResolveStudentIsActive,
+  type ResolveStudentIsActiveFn,
+} from '../../lib/supabase/loaders/students';
 // T180 (module doc #7d) -- T037's already-built, already-Passed BEH-06
 // consistency-strip widget, mounted directly beneath this view's own
 // Upcoming/Past history. `StudentMeetingView.tsx` is Trap #5's forbidden-
@@ -2319,10 +2332,29 @@ function StudentHistorySection({
 export interface StudentMeetingsViewProps {
   studentId: string;
   loadData: LoadStudentMeetingsDataFn;
+  /** T189 (module doc, "explicit-studentId branch never calls it" below).
+   * Required, not defaulted, here -- both call sites (`StudentMeetingsViewContainer`'s
+   * two branches) always supply one explicitly: the real seam on the
+   * resolved path, `NOOP_RESOLVE_STUDENT_IS_ACTIVE` on the explicit-`studentId`
+   * path. */
+  resolveStudentIsActive: ResolveStudentIsActiveFn;
 }
 
-function StudentMeetingsView({ studentId, loadData }: StudentMeetingsViewProps): ReactNode {
-  const loadState = useLoadState(() => loadData(studentId), [loadData, studentId]);
+function StudentMeetingsView({
+  studentId,
+  loadData,
+  resolveStudentIsActive,
+}: StudentMeetingsViewProps): ReactNode {
+  // T189 -- issued alongside `loadData` (not a second independent DES-12
+  // state machine): this page never needed a distinct loading/error state
+  // for the is-active check itself, and combining it here means a failure
+  // to read `is_active` surfaces through the SAME error Banner
+  // `loadData`'s own failures already use, rather than inventing a new one
+  // the packet never named.
+  const loadState = useLoadState(
+    () => Promise.all([loadData(studentId), resolveStudentIsActive(studentId)]),
+    [loadData, resolveStudentIsActive, studentId],
+  );
 
   if (loadState.status === 'loading') {
     return (
@@ -2354,7 +2386,7 @@ function StudentMeetingsView({ studentId, loadData }: StudentMeetingsViewProps):
     );
   }
 
-  const { history, participation } = loadState.data;
+  const [{ history, participation }, isActive] = loadState.data;
   const { upcoming, past } = partitionByStatus(history);
   const isEmpty = history.length === 0 && participation === null;
 
@@ -2362,7 +2394,47 @@ function StudentMeetingsView({ studentId, loadData }: StudentMeetingsViewProps):
     <VStack gap={6}>
       <Heading level={1}>Meetings</Heading>
 
-      {isEmpty ? (
+      {/* T189 -- the inactive branch sits ABOVE the `isEmpty` ternary, not
+          below it (packet v2 §5, gate-measured MAJOR 3): placing it below
+          leaves a deactivated student with zero history rows falling into
+          the `isEmpty` branch instead, where "No meeting history yet" would
+          render and the honest copy never would -- the branch would be
+          unreachable in that state. `true`/`null` both fall through exactly
+          as before this task (`isActive === false`, not a bare falsy
+          check). */}
+      {isActive === false ? (
+        <>
+          <StudentHistorySection
+            title="Upcoming"
+            rows={upcoming}
+            emptyDescription="You have no upcoming meetings scheduled."
+          />
+          <StudentHistorySection
+            title="Past"
+            rows={past}
+            emptyDescription="Your past meeting attendance will show up here."
+          />
+
+          {/* Owner ruling (auto-mode-decisions.md:1151-1162, "honest
+              copy"): say once, honestly, that the account is inactive and
+              participation is therefore not tracked. Upcoming/Past history
+              (above) stay visible -- hiding or blanking the page is not
+              authorized. Neither the "Recent attendance" heading nor the
+              real BEH-06 strip (`StudentMeetingView`) render here -- both
+              would only re-surface the same contradiction this task closes
+              (module doc #1 / the defect this task fixes: a deactivated
+              student's real attendance dots sitting directly beside a
+              "no completed meetings" participation claim). Same
+              `EmptyState`-shaped honest block T184 already shipped for
+              `StudentHome.tsx` (`:1690-1694`), copy extended (per packet v2
+              §5) to also name participation. */}
+          <EmptyState
+            headingLevel={2}
+            title="Your student account is inactive"
+            description="Your student account has been deactivated. If you think this is a mistake, contact your coach or team admin. Participation isn't tracked while your account is inactive."
+          />
+        </>
+      ) : isEmpty ? (
         <EmptyState
           headingLevel={2}
           title="No meeting history yet"
@@ -2410,12 +2482,14 @@ function StudentMeetingsView({ studentId, loadData }: StudentMeetingsViewProps):
 interface ResolvedStudentMeetingsViewProps {
   viewer: CurrentViewerIdentity;
   resolveStudentId: ResolveCurrentStudentIdFn;
+  resolveStudentIsActive: ResolveStudentIsActiveFn;
   loadData: LoadStudentMeetingsDataFn;
 }
 
 function ResolvedStudentMeetingsView({
   viewer,
   resolveStudentId,
+  resolveStudentIsActive,
   loadData,
 }: ResolvedStudentMeetingsViewProps): ReactNode {
   const loadState = useLoadState(
@@ -2456,33 +2530,67 @@ function ResolvedStudentMeetingsView({
     );
   }
 
-  return <StudentMeetingsView studentId={loadState.data} loadData={loadData} />;
+  return (
+    <StudentMeetingsView
+      studentId={loadState.data}
+      loadData={loadData}
+      resolveStudentIsActive={resolveStudentIsActive}
+    />
+  );
 }
+
+/**
+ * T189 (C5) -- the explicit-`studentId` branch of `StudentMeetingsViewContainer`
+ * below is a fixture-driven path (every pre-existing test, and any future
+ * caller that already knows the exact student it wants) that never resolves
+ * anything for real -- module doc #6 already establishes this for
+ * `resolveStudentId`, and this task deliberately does not widen that: the
+ * is-active check is resolution-adjacent, not resolution itself, but is
+ * bypassed the same way for the same reason. This local no-op stands in on
+ * that branch instead of the caller-supplied `resolveStudentIsActive` seam,
+ * so a test's spy on that seam can assert it is genuinely never called
+ * there (never a stubbed call count of 1 that merely resolves to a
+ * "doesn't matter" value). `null` renders identically to `true` (module doc
+ * above), so this has no visible effect on the explicit-`studentId` path.
+ */
+const NOOP_RESOLVE_STUDENT_IS_ACTIVE: ResolveStudentIsActiveFn = () => Promise.resolve(null);
 
 interface StudentMeetingsViewContainerProps {
   viewer: CurrentViewerIdentity;
   explicitStudentId: string | undefined;
   resolveStudentId: ResolveCurrentStudentIdFn;
+  resolveStudentIsActive: ResolveStudentIsActiveFn;
   loadData: LoadStudentMeetingsDataFn;
 }
 
 /** Module doc #6 -- an explicit `studentId` (every pre-existing test case)
  * renders `StudentMeetingsView` directly, exactly as before this task;
  * `undefined` (the new real-world default) routes through
- * `ResolvedStudentMeetingsView`'s own real `resolveStudentId` load state. */
+ * `ResolvedStudentMeetingsView`'s own real `resolveStudentId` load state.
+ * T189 (C5): the explicit branch passes `NOOP_RESOLVE_STUDENT_IS_ACTIVE`,
+ * never the caller-supplied `resolveStudentIsActive` -- see that constant's
+ * own doc immediately above. */
 function StudentMeetingsViewContainer({
   viewer,
   explicitStudentId,
   resolveStudentId,
+  resolveStudentIsActive,
   loadData,
 }: StudentMeetingsViewContainerProps): ReactNode {
   if (explicitStudentId !== undefined) {
-    return <StudentMeetingsView studentId={explicitStudentId} loadData={loadData} />;
+    return (
+      <StudentMeetingsView
+        studentId={explicitStudentId}
+        loadData={loadData}
+        resolveStudentIsActive={NOOP_RESOLVE_STUDENT_IS_ACTIVE}
+      />
+    );
   }
   return (
     <ResolvedStudentMeetingsView
       viewer={viewer}
       resolveStudentId={resolveStudentId}
+      resolveStudentIsActive={resolveStudentIsActive}
       loadData={loadData}
     />
   );
@@ -2505,6 +2613,15 @@ export interface MeetingsListProps {
   /** T096 (module doc #6, Trap #4). Defaults to a real resolution, same
    * module. Only ever invoked when `studentId` below is NOT supplied. */
   resolveStudentId?: ResolveCurrentStudentIdFn;
+  /** T189. Defaults to a real query,
+   * `../../lib/supabase/loaders/students.ts` -- reads `students.is_active`
+   * directly for the resolved student id (packet v2 §3: NOT inferred from
+   * `resolveStudentScope` or the participation figure -- both are unsound
+   * detectors, see that loader's own module doc). Only ever invoked on the
+   * resolved path -- when `studentId` below IS supplied, this seam is never
+   * called (`StudentMeetingsViewContainer`'s own `NOOP_RESOLVE_STUDENT_IS_ACTIVE`,
+   * C5). */
+  resolveStudentIsActive?: ResolveStudentIsActiveFn;
   /**
    * Which student the student/parent view is currently scoped to (module
    * doc #6). When omitted (the real-world default), this is resolved for
@@ -2521,6 +2638,7 @@ export function MeetingsList({
   onCancelSession = cancelMeetingSession,
   onCreateMeetings = createMeetings,
   resolveStudentId = resolveCurrentStudentId,
+  resolveStudentIsActive = defaultResolveStudentIsActive,
   studentId,
 }: MeetingsListProps = {}): ReactNode {
   const { user } = useAuth();
@@ -2555,6 +2673,7 @@ export function MeetingsList({
           viewer={{ id: user.id, role: user.role }}
           explicitStudentId={studentId}
           resolveStudentId={resolveStudentId}
+          resolveStudentIsActive={resolveStudentIsActive}
           loadData={loadStudentData}
         />
       )}
