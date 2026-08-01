@@ -1,4 +1,4 @@
-# Resume here — state of play at `main` = `79e159d` (read the UPDATE sections top-down; each supersedes the ones below it)
+# Resume here — state of play at `main` = `1aede0c` (read the UPDATE sections top-down; each supersedes the ones below it)
 
 Written 2026-07-30 so this session's context can be cleared without losing anything.
 Fresh orchestrator session: read this, then `constitution.md`, then the open rows in
@@ -7,6 +7,79 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 **Several dated UPDATE sections sit near the top of this file. Read them top-down — the
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
+
+## UPDATE — 2026-08-01: T307 is LIVE DATA LOSS, found while packeting T305. Read this first.
+
+**`main` = `1aede0c`.** Gates there, measured twice independently with `.env.local` absent: `tsc` 0 ·
+`vite build` ✓ · prettier clean · eslint **0 errors / 360 warnings** · vitest **72 files / 1746
+tests, exit 0**. Merged since the last update: **T189**, **T203**, **T302**, **T303**; **T304**
+closed by owner ruling as no-change.
+
+### The one thing in this file that is actively costing the owner data
+
+**T307 — "Mark event complete" destroys recorded attendance, today, with one click.**
+`buildMarkEventCompletePayload` (`MarkEventCompleteDialog.tsx:176-192`) seeds its attendance rows
+from `computeInitialAttendedStudentIds` — **`going` RSVPs** — and passes them to
+`buildAttendanceWriteRows` with an empty hours map (`:187`). Those rows go to `markDayComplete`,
+whose upsert (`loaders/outreach.ts:1136-1152`) names `check_in_at`/`check_out_at`/`hours_override`/
+`method`/`recorded_by` and passes `{onConflict:'session_id,student_id'}` with **no
+`ignoreDuplicates`** (`:1150`). Measured payload at unmodified HEAD:
+`{status:'present', check_in_at:null, check_out_at:null, hours_override:null, method:'coach'}`.
+
+So a student who RSVP'd `going` and then checked in by QR — or had hours typed into the
+`AttendancePanel` — is overwritten the moment a coach clicks "Mark event complete". **No coach
+intent beyond that click. This is the owner's own workflow**; T305 was filed off a screenshot of him
+typing 3h into that panel.
+
+**Why it went unnoticed for so long:** the *per-day* dialog has the identical defect but it is
+latent — nobody with recorded attendance ever starts checked there, so no row is emitted for them.
+Two packets in a row (T305 v1 and v2) reasoned about the per-day dialog and generalised its
+accident-of-safety to the whole file. **The bulk path has no such accident.**
+
+**The owner has ruled on sequencing (2026-08-01): finish T305's gate round 2 first, then T307.**
+T305 does not make T307 worse and establishes the load seam and recorded-beats-intent rule that
+T307's fix reuses. **Do not treat that as permission to leave T307 open indefinitely** — it is the
+next task after T305, and it is a bug, not debt.
+
+**When you packet it:** it needs its own load seam across N sessions and — critically — a
+**different failure rule** from T305. The per-day dialog may fall back to RSVP seeding when the load
+fails, because it only *displays* the seed to a coach who then confirms deliberately. The bulk path
+has no display, so **a failed load must abort the write, not fall back.** Do not copy T305's
+fallback into it. T307 also owns `loaders/outreach.ts:125-128`'s now-false *"`checkInAt`/`checkOutAt`
+pass through as `null` verbatim"*, and the open question of whether the bulk path should also seed
+from recorded attendance (the owner's T305 ruling is written in display terms and the bulk dialog
+shows no checklist, so the ruling does not cleanly reach it).
+
+### T305 — packet v3 written, gate round 2 of 2 in flight
+
+Three packet revisions, two of them forced by the gate. **Both gate rounds earned their cost, and
+both found things no amount of reading would have.** Sequence worth copying:
+
+- **v1** claimed the change was non-destructive, citing `loaders/endMeeting.ts`'s
+  `ignoreDuplicates: true`. Accurate citation, **wrong loader** — that is T178's meetings backend,
+  not this dialog's write path.
+- **v2** fixed that but was **not implementable inside its own Allowed Files**: making
+  `buildAttendanceWriteRows`' new parameter required breaks a fifth, *production* call site at
+  `MarkEventCompleteDialog.tsx:187`. Measured `TS2554`, `tsc` exit 2. Every worker would have hit a
+  mandatory dispute on its first typecheck. v2 also had **four of fourteen criteria that could not
+  fail**, two of which its own text argued were sound.
+- **v3** adds that file under a two-line authorization, splits the vacuous criterion into a
+  pure-function call with an explicitly empty hours map, replaces an impossible mutation, and
+  inverts the mock-hardening list (measured: S6/I1 self-protect; S3/S4/S5/S8-late/W2/W3 silently
+  pass a broken mock).
+
+**The technique that produced every one of those findings: the gate BUILDS the prescription in its
+own worktree instead of reading it.** A gate that only reads returns opinions. Budget for it.
+
+### Process failures recorded this session, both the orchestrator's
+
+- **A ruling that is not written down did not happen.** George's T305 ruling was given 2026-07-31,
+  the orchestrator replied "both rulings recorded", and recorded only T304. The T305 packet then
+  cited an `auto-mode-decisions.md` entry that did not exist and the gate caught the dangling
+  citation. Now recorded, with the failure attached rather than quietly fixed.
+- **A green pass count with a nonzero exit code is still the recurring trap.** T305's criterion S4
+  reproduces it deliberately: dropping the `.catch` leaves every criterion green at suite **exit 1**.
+  Assert exit codes, not just counts.
 
 ## UPDATE — 2026-07-31 evening: T179 and T180 merged; T189 diagnosed and waiting on the owner
 

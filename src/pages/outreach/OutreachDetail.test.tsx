@@ -1200,6 +1200,12 @@ describe('"Mark event complete" confirm -> real markDayComplete mutation + page 
     act(() => {
       findMarkEventCompleteMenuItem()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    // T307 -- this dialog now loads recorded attendance on open (module doc
+    // #6) and disables confirm until that settles; this file's shared
+    // `loadAttendanceForSessions` mock (`:110-118`) resolves `[]`, so one
+    // flush is enough. New line, not a regression -- the packet's own §8
+    // measured this exact fix.
+    await flushMicrotasks();
 
     const confirmButton = Array.from(container.querySelectorAll('button')).find(
       (btn) => btn.textContent?.trim() === 'Mark 2 sessions complete',
@@ -1243,6 +1249,9 @@ describe('"Mark event complete" confirm -> real markDayComplete mutation + page 
     act(() => {
       findMarkEventCompleteMenuItem()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    // T307 -- see the twin comment above; this dialog's load must settle
+    // before the confirm button is enabled.
+    await flushMicrotasks();
     const confirmButton = Array.from(container.querySelectorAll('button')).find(
       (btn) => btn.textContent?.trim() === 'Mark 2 sessions complete',
     );
@@ -2927,6 +2936,74 @@ describe('"Mark day complete" dialog receives THIS page’s real rsvps -- going 
     const devonCheckbox = getDialogFieldControl('Devon Osei');
     expect(priyaCheckbox.checked).toBe(true);
     expect(devonCheckbox.checked).toBe(false);
+  });
+});
+
+// T305 (I1) -- the only proof, through the REAL `OutreachDetail` mount, that
+// `MarkDayCompleteDialog`'s new `loadAttendance` seam is actually reached in
+// production wiring (this page passes no override prop for it, by design --
+// `MarkDayCompleteDialog.tsx` module doc #9). `mockedLoadAttendanceForSessions`
+// is this file's own existing partial-mock (`:110-118`) for the identical
+// module `AttendancePanel` already uses -- no new mock is introduced.
+describe('"Mark day complete" dialog seeds from RECORDED attendance through the real page wiring (T305, I1)', () => {
+  it('shows the recorded-attending student checked, and loadAttendance is called with exactly [session.id]', async () => {
+    // T305 (I1): this page ALSO mounts a staff-only `<AttendancePanel>`
+    // (T117) that calls this SAME mocked loader with every session id on
+    // this event, unconditionally, on initial render -- well before the
+    // "Mark day complete" trigger is ever clicked. `mockImplementation`
+    // (not `mockResolvedValueOnce`) discriminates by the argument actually
+    // passed, so the panel's own multi-session call still gets `[]`
+    // (harmless, matches this file's existing baseline everywhere else) and
+    // ONLY `MarkDayCompleteDialog`'s own single-session
+    // `[MDC_SESSION_1.id]` call gets the recorded row.
+    mockedLoadAttendanceForSessions.mockImplementation(async (sessionIds) => {
+      if (sessionIds.length === 1 && sessionIds[0] === MDC_SESSION_1.id) {
+        return [
+          {
+            id: 'attendance-priya-mdc-1',
+            sessionId: MDC_SESSION_1.id,
+            studentId: 'student-priya-shah',
+            status: 'present',
+            checkInAt: null,
+            checkOutAt: null,
+            hoursOverride: null,
+            method: 'coach',
+            recordedBy: 'profile-some-other-coach',
+            updatedAt: '2026-08-01T00:00:00.000Z',
+            createdAt: '2026-08-01T00:00:00.000Z',
+          },
+        ];
+      }
+      return [];
+    });
+    // No RSVPs at all -- proves the seed comes from RECORDED attendance, not
+    // an RSVP fallback (module doc #9's own S1 scenario, through real
+    // wiring).
+    renderMarkDayCompleteDetail({ loadData: makeMarkDayCompleteLoadData({ rsvps: [] }) });
+    await flushMicrotasks();
+
+    act(() => {
+      findMarkDayCompleteTriggers()[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    expect(mockedLoadAttendanceForSessions).toHaveBeenCalledWith([MDC_SESSION_1.id]);
+
+    const dialogEl = findMarkDayCompleteDialogElement();
+    expect(dialogEl).toBeTruthy();
+    const dialogLabels = Array.from(dialogEl?.querySelectorAll('label') ?? []);
+    function getDialogFieldControl(labelText: string): HTMLInputElement {
+      const label = dialogLabels.find((el) => el.textContent?.trim() === labelText);
+      if (!label) throw new Error(`No dialog label found for "${labelText}"`);
+      const forId = label.getAttribute('for');
+      if (!forId) throw new Error(`Label "${labelText}" has no htmlFor`);
+      const control = document.getElementById(forId);
+      if (!control) throw new Error(`No control found for id "${forId}"`);
+      return control as HTMLInputElement;
+    }
+
+    const priyaCheckbox = getDialogFieldControl('Priya Shah');
+    expect(priyaCheckbox.checked).toBe(true);
   });
 });
 

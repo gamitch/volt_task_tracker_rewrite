@@ -19,17 +19,22 @@
  *    is the ONE place a per-session `MarkDayCompletePayload` is constructed
  *    for bulk mode, and it does so by calling
  *    `MarkDayCompleteDialog.tsx`'s own exported pure functions --
- *    `computeInitialAttendedStudentIds` (the checklist-seeding derivation)
- *    and `buildAttendanceWriteRows` (the attendance-row constructor) --
- *    imported directly from that file, never reimplemented. There is no
- *    second, parallel field list anywhere in this file: every field on the
- *    `MarkDayCompletePayload` this file builds is produced by that same
- *    dialog's own already-tested functions, or is a plain pass-through
- *    (`sessionId`, `recordedBy`) of a value this file already has. Zero
- *    metric math happens here (constitution item 3) -- this file never sums
- *    hours, never touches `v_student_hours`, and the "per-day summary"
- *    required below is a plain count of done/failed/skipped outcomes, not a
- *    computed metric.
+ *    **T307 UPDATE:** `computeInitialFormSeed` (that file's own module doc
+ *    #9 -- recorded attendance first, falling back to a `going` RSVP
+ *    per-student only when no recorded row exists) is now the checklist
+ *    derivation this bulk path uses, replacing the RSVP-only
+ *    `computeInitialAttendedStudentIds` this file used pre-T307 (see (2)(a)
+ *    below) -- and `buildAttendanceWriteRows` (the attendance-row
+ *    constructor, now fed REAL loaded rows instead of an empty map, see
+ *    §3/§4 below) -- imported directly from that file, never reimplemented.
+ *    There is no second, parallel field list anywhere in this file: every
+ *    field on the `MarkDayCompletePayload` this file builds is produced by
+ *    that same dialog's own already-tested functions, or is a plain
+ *    pass-through (`sessionId`, `recordedBy`) of a value this file already
+ *    has. Zero metric math happens here (constitution item 3) -- this file
+ *    never sums hours, never touches `v_student_hours`, and the "per-day
+ *    summary" required below is a plain count of done/failed/skipped
+ *    outcomes, not a computed metric.
  *
  * -----------------------------------------------------------------------
  * 2. DISCLOSED SCOPE NARROWING vs. the per-day dialog -- two fields the
@@ -41,14 +46,34 @@
  *        the bulk confirmation surface as listing "date/time and, where the
  *        existing per-day flow collects people-reached, a per-day
  *        people-reached input" -- no per-session editable checklist is
- *        named. `buildMarkEventCompletePayload` therefore always uses the
- *        SAME derivation the per-day dialog seeds its own checklist from
- *        (`computeInitialAttendedStudentIds` -- roster students with a
- *        `going` RSVP for that session), with no manual per-session
- *        adjustment surface in bulk mode. This does not invent attendance
- *        (Trap #3): it writes exactly the RSVP-derived default the per-day
- *        flow itself would show pre-checked before a coach makes any manual
- *        edit.
+ *        named, so bulk mode still has NO manual per-session
+ *        check/uncheck surface. **T307 UPDATE (this task; both T305-era
+ *        clauses below are now corrected a second time):** what changed is
+ *        NOT the absence of a checklist UI -- that remains true -- but
+ *        WHERE the (still non-editable) checklist's membership comes from
+ *        and, critically, what gets WRITTEN for a student already on it.
+ *        Before this task, `buildMarkEventCompletePayload` seeded
+ *        membership from `computeInitialAttendedStudentIds` (`going` RSVPs
+ *        only) and wrote every checked student with a hardcoded
+ *        `hoursOverride: null`, `checkInAt`/`checkOutAt: null`,
+ *        `method: 'coach'` -- so a student who RSVP'd `going` **and** had
+ *        real recorded attendance (a QR check-in, a coach-typed hours
+ *        override, or both) had that record **destroyed** the moment a
+ *        coach clicked "Mark event complete", with no checklist and no
+ *        review step to catch it. That was a live, reachable data-loss bug
+ *        (filed as **T307**, this task). It is now fixed on two fronts:
+ *        §4's seeding decision (membership now ALSO includes a student with
+ *        a recorded attending row and no RSVP, via `computeInitialFormSeed`
+ *        -- the same rule T305 gave the per-day dialog) and §5's
+ *        write-preservation (a checked student's real `status`/
+ *        `checkInAt`/`checkOutAt`/`hoursOverride`/`method` are now carried
+ *        through instead of overwritten, via `buildAttendanceWriteRows`'
+ *        now-populated fifth parameter). `MarkEventCompleteDialog.test.tsx`'s
+ *        old byte-for-byte pin at `:206-216` (a `going`-RSVP student with NO
+ *        recorded row, written as `present`/`coach`/`null`/`null`) is
+ *        EXTENDED, not dropped -- that exact case is still correct today,
+ *        it is simply no longer the ONLY case this file's write path
+ *        produces correctly.
  *    (b) Adult volunteers count/hours (this-session deltas) -- also absent
  *        from the packet's named bulk fields. `buildMarkEventCompletePayload`
  *        always passes `0`/`0` for these, and `markDayComplete`'s own module
@@ -101,6 +126,74 @@
  *    Layout/LayoutContent/LayoutFooter, FormLayout, NumberInput, Button,
  *    Banner, HStack/VStack, Text) -- re-verified live for this task, no new
  *    component/prop introduced.
+ *
+ * -----------------------------------------------------------------------
+ * 6. T307 -- the load seam, and why its failure rule is the OPPOSITE of
+ *    T305's, on purpose.
+ *
+ *    This dialog now loads `attendance` for every `remaining` session
+ *    (`loadAttendance`, defaulting to the real `loadAttendanceForSessions`,
+ *    `../../lib/supabase/loaders/attendance.ts`) -- ONE call, keyed on
+ *    `remaining`'s ids, never `skipped`'s and never one call per session.
+ *    The load fires on the `isOpen` transition (this component's existing
+ *    `sessionsKey`-keyed effect pattern, reused rather than a new key), NOT
+ *    on mount -- this component is mounted whenever `user !== null`
+ *    (`OutreachDetail.tsx`), so an ungated load would fire on every staff
+ *    page load regardless of whether this dialog is ever opened.
+ *
+ *    `attendanceState` is a three-state union (`'loading' | 'error' |
+ *    'success'`), the same shape `AttendancePanel.tsx`'s own
+ *    `useAttendanceLoadState` (`:523-554`) already established as "a
+ *    second, smaller DES-12 seam" nested inside an already-loaded page
+ *    (that file's own comment at `:515-521` is the precedent this dialog
+ *    cites rather than re-deriving the justification).
+ *
+ *    **THE FAILURE RULE IS DELIBERATELY THE OPPOSITE OF
+ *    `MarkDayCompleteDialog.tsx`'s (T305, module doc #9).** That per-day
+ *    dialog MAY fall back to RSVP-only seeding when its load fails or is
+ *    still in flight, because it shows the coach an editable checklist he
+ *    reviews and can correct before confirming -- a degraded *display*, not
+ *    a silent write. THIS dialog shows no checklist and no review step at
+ *    all, so the same fallback here would mean writing an RSVP-only payload
+ *    over a student's real recorded attendance with nobody able to catch
+ *    it -- reintroducing the exact bug this task exists to fix, on the one
+ *    path where it is unrecoverable. So here: **a load that is in flight or
+ *    has failed BLOCKS the write.** `handleConfirm` refuses to run
+ *    (guarded twice -- once by the disabled confirm button, once
+ *    defensively inside `handleConfirm` itself, since jsdom's `disabled`
+ *    attribute alone already suppresses a dispatched click and this second
+ *    guard is therefore untestable, defence-in-depth only) unless
+ *    `attendanceState.status === 'success'`. A future reader must NOT
+ *    "harmonise" these two dialogs' failure rules -- they differ because
+ *    what the coach can see and correct before the write differs, not
+ *    because of an oversight in either file.
+ *
+ *    **Seeding (module doc #2(a) above) also changed, and it is an
+ *    ORCHESTRATOR decision, not one the human product owner has ruled on.**
+ *    His T305 ruling on recorded-attendance-over-RSVP is written in display
+ *    terms ("where a screen currently shows RSVP intent... show what was
+ *    actually recorded") and this dialog shows no checklist, so the ruling
+ *    does not cleanly reach here. This file nonetheless seeds and writes
+ *    using T305's exact rule (`computeInitialFormSeed`) so the per-day and
+ *    bulk paths never disagree about who attended the same session (the
+ *    T188/T303 two-numbers-for-one-fact family) -- cheap for him to
+ *    overrule if he disagrees, since it is one seeding call, not scattered
+ *    logic. **One real, disclosed cost:** once a session's rows are
+ *    loaded, a student with an existing recorded row is written back
+ *    exactly as they already are, EXCEPT `attendance.recorded_by` (and
+ *    `updated_at`), which `makeMarkDayComplete`'s upsert also names
+ *    (`loaders/outreach.ts:1139-1149`) -- so this write re-attributes that
+ *    row to whoever clicked "Mark event complete" today, on a row this path
+ *    never displayed and the coach never actively edited. This is
+ *    consistent with `UpsertAttendanceParams.recordedBy`'s own documented
+ *    convention ("always re-attributed to whoever is editing right now")
+ *    and with T305's own W5, but every prior instance of that convention
+ *    involved a coach actively editing that specific student's row, which
+ *    this path does not. Reassuring corollary: this path can never
+ *    FABRICATE a row for a student who had none -- qualifying for
+ *    inclusion via the recorded-attendance branch requires already having
+ *    a recorded row (`isAttendingStatus(existing.status)`); nothing is
+ *    invented, only re-attributed.
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import {
@@ -119,7 +212,7 @@ import {
 } from '@astryxdesign/core';
 import {
   buildAttendanceWriteRows,
-  computeInitialAttendedStudentIds,
+  computeInitialFormSeed,
   formatSessionDateTime,
   type MarkDayCompletePayload,
   type MarkDayCompleteSession,
@@ -131,6 +224,15 @@ import {
 // own `onMarkComplete` prop already defaults to, imported from the SAME
 // loader module (not re-derived, not reimplemented).
 import { markDayComplete } from '../../lib/supabase/loaders/outreach';
+// Module doc #6 (T307) -- the load seam, mirroring `AttendancePanel.tsx`'s
+// own `loadAttendance` injection convention. `AttendanceRow` is the loaded
+// row shape `buildAttendanceWriteRows`' required fifth parameter is keyed
+// against.
+import {
+  loadAttendanceForSessions,
+  type AttendanceRow,
+  type LoadAttendanceForSessionsFn,
+} from '../../lib/supabase/loaders/attendance';
 
 // ---------------------------------------------------------------------------
 // Pure functions -- exported for direct testing. Module docs #1/#3/#4.
@@ -164,27 +266,72 @@ export function computeMarkEventCompleteConfirmLabel(remainingCount: number): st
   return `Mark ${remainingCount} ${noun} complete`;
 }
 
-/** Module doc #1/#2 -- THE ONE place a bulk-mode per-session
- * `MarkDayCompletePayload` is built. Reuses `computeInitialAttendedStudentIds`
- * + `buildAttendanceWriteRows` (`MarkDayCompleteDialog.tsx`'s own pure
- * functions, unchanged) for the attendance rows; `hoursOverrideByStudentId`
- * is always `{}` (module doc #2(a) -- no bulk-mode per-student override
- * surface, so every row's `hoursOverride` is genuinely `null`, falling back
- * to the same MET-03 tier-3 session-duration default an untouched per-day
- * row already falls back to); adult-volunteer deltas are always `0`/`0`
- * (module doc #2(b)). */
+/** T307, module doc #9 (`MarkDayCompleteDialog.tsx`)'s own
+ * `buildRecordedRowsByStudentId` filters/keys loaded rows for exactly this
+ * purpose but is deliberately NOT exported, and that file is a Forbidden
+ * File for this task (packet §9) -- so this is an AUTHORIZED local
+ * re-derivation of that same four-line filter-and-key, not a new design.
+ * This is in mild, disclosed tension with this file's own module doc #1
+ * ("REUSE, DON'T RE-DERIVE... the single most important discipline in this
+ * file") -- the packet names the tension explicitly and authorizes it
+ * rather than widening a Forbidden file's exports. */
+function buildRecordedRowsByStudentIdForSession(
+  sessionId: string,
+  recordedRows: readonly AttendanceRow[],
+): Record<string, AttendanceRow> {
+  const rowsByStudentId: Record<string, AttendanceRow> = {};
+  for (const row of recordedRows) {
+    if (row.sessionId === sessionId) rowsByStudentId[row.studentId] = row;
+  }
+  return rowsByStudentId;
+}
+
+/** Module doc #1/#2/#6 -- THE ONE place a bulk-mode per-session
+ * `MarkDayCompletePayload` is built. Reuses `computeInitialFormSeed` +
+ * `buildAttendanceWriteRows` (`MarkDayCompleteDialog.tsx`'s own pure
+ * functions) for the attendance rows. **T307 UPDATE:** `recordedRows` is a
+ * REQUIRED sixth parameter -- this session's loaded `attendance` rows (any
+ * session, this function filters by `session.id` itself) -- so a call site
+ * that forgets to load/pass them does not compile (the T151/T179
+ * mechanism, same discipline `buildAttendanceWriteRows`' own required
+ * fifth parameter already applies). The only production call site
+ * (`handleConfirm` below) only ever calls this once `attendanceState.status
+ * === 'success'` (module doc #6's block-on-failure rule), so `recordedRows`
+ * is always the real loaded array there, never a stand-in for "not loaded
+ * yet". `computeInitialFormSeed` implements module doc #6's seeding rule
+ * (recorded attending row -> included; no row -> included iff a `going`
+ * RSVP exists) -- its returned `hoursOverrideByStudentId` is intentionally
+ * DISCARDED here, not threaded through: module doc #2(a) still holds, this
+ * bulk path has no per-student hours-override input, and
+ * `buildAttendanceWriteRows`' own fallback
+ * (`hoursOverrideByStudentId[studentId] ?? existing?.hoursOverride ?? null`)
+ * already recovers a recorded student's real override from `recordedRows`
+ * directly when the coach map is `{}` -- computing it twice would be the
+ * exact re-derivation module doc #1 forbids. Adult-volunteer deltas are
+ * always `0`/`0` (module doc #2(b)). */
 export function buildMarkEventCompletePayload(
   session: MarkDayCompleteSession,
   peopleReached: number | null,
   roster: readonly RosterStudent[],
   rsvps: readonly RsvpRow[],
   recordedBy: string,
+  recordedRows: readonly AttendanceRow[],
 ): MarkDayCompletePayload {
-  const checkedStudentIds = computeInitialAttendedStudentIds(session.id, roster, rsvps);
+  const { checkedStudentIds } = computeInitialFormSeed(session.id, roster, rsvps, recordedRows);
+  const recordedRowByStudentId = buildRecordedRowsByStudentIdForSession(session.id, recordedRows);
   return {
     sessionId: session.id,
     peopleReached,
-    attendance: buildAttendanceWriteRows(session.id, checkedStudentIds, {}, recordedBy),
+    // T307: real recorded rows, keyed by student id for exactly this
+    // session -- replaces the empty map T305 left here (that file's own
+    // module doc #5.1) with the preserving write module doc #6 describes.
+    attendance: buildAttendanceWriteRows(
+      session.id,
+      checkedStudentIds,
+      {},
+      recordedBy,
+      recordedRowByStudentId,
+    ),
     adultVolunteersCountThisSession: 0,
     adultVolunteerHoursThisSession: 0,
     recordedBy,
@@ -278,7 +425,32 @@ export interface MarkEventCompleteDialogProps {
    * attempted (success or partial failure), so the caller can refetch its
    * own data. */
   onFinished?: () => void;
+  /** T307, module doc #6 -- injectable load seam for this event's recorded
+   * `attendance` (loaded once for every `remaining` session id). Defaults
+   * to the real `loadAttendanceForSessions` -- the SAME query
+   * `AttendancePanel.tsx`'s own matching prop already defaults to. */
+  loadAttendance?: LoadAttendanceForSessionsFn;
 }
+
+/** T307, module doc #6 -- a second, smaller DES-12 seam nested inside this
+ * already-open dialog, same shape `AttendancePanel.tsx`'s own
+ * `AttendanceLoadState` (`:523-527`) already established. Deliberately NOT
+ * exported -- private to this component's own load gating. */
+/**
+ * `supabase/config.toml`'s `[api] max_rows`, mirrored here because a
+ * response at this length may have been silently truncated by PostgREST and
+ * this dialog's write path cannot tell a truncated-away row from a
+ * never-recorded one. Kept as a named constant, not an inline literal, so
+ * the tie to that config value is greppable from both ends. If `max_rows`
+ * changes, this must change with it -- T320 (loader-side `.range()`
+ * pagination) removes the need for it entirely.
+ */
+export const ATTENDANCE_ROW_CAP = 1000;
+
+type AttendanceLoadState =
+  | { status: 'loading' }
+  | { status: 'error'; retry: () => void }
+  | { status: 'success'; rows: AttendanceRow[] };
 
 export function MarkEventCompleteDialog({
   isOpen,
@@ -290,6 +462,7 @@ export function MarkEventCompleteDialog({
   currentUserProfileId,
   onMarkSessionComplete = markDayComplete,
   onFinished,
+  loadAttendance = loadAttendanceForSessions,
 }: MarkEventCompleteDialogProps): ReactNode {
   const { remaining, skipped } = partitionEventSessions(sessions);
 
@@ -299,6 +472,14 @@ export function MarkEventCompleteDialog({
   const [outcomeBySessionId, setOutcomeBySessionId] = useState<Record<string, SessionOutcome>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  // T307, module doc #6 -- this event's loaded recorded attendance for
+  // every `remaining` session, or the in-flight/failed state that BLOCKS
+  // the write (the opposite of `MarkDayCompleteDialog.tsx`'s graceful
+  // fallback -- see module doc #6 for why).
+  const [attendanceState, setAttendanceState] = useState<AttendanceLoadState>({
+    status: 'loading',
+  });
+  const [retryToken, setRetryToken] = useState(0);
 
   function resetForm(): void {
     const seededPeopleReached: Record<string, number | null> = {};
@@ -323,6 +504,69 @@ export function MarkEventCompleteDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only on the isOpen transition / session-set change.
   }, [isOpen, sessionsKey]);
 
+  // T307, module doc #6 -- load ONCE for every `remaining` session id
+  // (never `skipped`, never one call per session), gated on `isOpen` (not
+  // mount -- this component is mounted whenever `user !== null`,
+  // `OutreachDetail.tsx`). Shape mirrors `AttendancePanel.tsx`'s own
+  // `useAttendanceLoadState` (`let isMounted`, `.then`/`.catch`, cleanup
+  // sets `isMounted = false`) -- unlike `MarkDayCompleteDialog.tsx`'s
+  // per-session load (which is allowed to fail silently, §3/module doc #6),
+  // this one surfaces `'error'` with a retry rather than falling back.
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    let isMounted = true;
+    setAttendanceState({ status: 'loading' });
+    const remainingSessionIds = remaining.map((session) => session.id);
+    loadAttendance(remainingSessionIds)
+      .then((rows) => {
+        if (!isMounted) return;
+        // T307 checker (MAJOR): PostgREST TRUNCATION IS A THIRD STATE this
+        // design otherwise does not model, and it is the one surviving way
+        // this dialog could still destroy a recorded row.
+        //
+        // `supabase/config.toml`'s `[api] max_rows = 1000` caps every
+        // response, and `queryAttendanceForSessions`
+        // (`loaders/attendance.ts`) issues a bare `.select('*').in(...)`
+        // with no `.range()`/`.limit()`. A capped response is **not an
+        // error** -- PostgREST returns 200 with a partial `Content-Range`,
+        // so `result.error` is null, `createLoader` resolves the truncated
+        // array (`loader.ts:174-176` only throws on `result.error`), and we
+        // would land in `'success'` holding rows for only SOME students.
+        // §3's block-on-failure rule never engages, because nothing failed
+        // -- and a student whose row was truncated away is indistinguishable
+        // from one who never had a row, so the write nulls their real
+        // check-in/check-out/hours/method. That is exactly the payload this
+        // whole task exists to eliminate.
+        //
+        // Fail CLOSED: a resolve at or above the cap is treated as a failed
+        // load, not a successful one. This can only ever block a write,
+        // never permit one, and it turns the design's own assumption -- that
+        // the resolved array is COMPLETE -- from assumed into checked.
+        // The proper fix is `.range()` pagination in the loader, which is a
+        // Forbidden file here and is filed as T320.
+        if (rows.length >= ATTENDANCE_ROW_CAP) {
+          setAttendanceState({
+            status: 'error',
+            retry: () => setRetryToken((token) => token + 1),
+          });
+          return;
+        }
+        setAttendanceState({ status: 'success', rows });
+      })
+      .catch(() => {
+        if (isMounted) {
+          setAttendanceState({
+            status: 'error',
+            retry: () => setRetryToken((token) => token + 1),
+          });
+        }
+      });
+    return () => {
+      isMounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `remaining` intentionally excluded: it is re-derived from `sessions` every render (rebuilt by callers, same as the effect above), so `sessionsKey` is the correct, stable key; `retryToken` is read only to re-trigger this effect.
+  }, [isOpen, sessionsKey, loadAttendance, retryToken]);
+
   const hasStarted = isSubmitting || hasSubmitted;
 
   function handleClose(): void {
@@ -335,6 +579,14 @@ export function MarkEventCompleteDialog({
 
   async function handleConfirm(): Promise<void> {
     if (isSubmitting || hasSubmitted || remaining.length === 0) return;
+    // T307, module doc #6 (F1b) -- defence in depth. The confirm button is
+    // already natively `disabled` whenever `attendanceState.status !==
+    // 'success'`, which suppresses the dispatched click before this ever
+    // runs (jsdom included) -- this guard has no reachable failure mode to
+    // pin a criterion on, and is kept anyway rather than treated as dead
+    // code (the same trap T305's own W2 guard set).
+    if (attendanceState.status !== 'success') return;
+    const recordedRows = attendanceState.rows;
     setIsSubmitting(true);
     // Module doc #3 -- sequential, every session attempted regardless of an
     // earlier one's outcome; state updates land incrementally, per session.
@@ -345,6 +597,7 @@ export function MarkEventCompleteDialog({
         roster,
         rsvps,
         currentUserProfileId,
+        recordedRows,
       );
       try {
         await onMarkSessionComplete(payload);
@@ -405,6 +658,31 @@ export function MarkEventCompleteDialog({
                     Confirming applies the same treatment as Mark day complete to every session
                     below.
                   </Text>
+                  {/* T307, module doc #6 -- suppressed once `remaining.length === 0` by
+                      being nested inside this branch (packet §3's cosmetic requirement:
+                      never stack this next to "No sessions to mark complete"). Not a
+                      bare spinner over the whole dialog -- the people-reached inputs
+                      below stay usable while this loads. Also gated on `isOpen`: this
+                      dialog's own `Dialog`/`Layout` content is present in the DOM even
+                      while closed (this component is mounted whenever `user !== null`,
+                      module doc #6 -- Dialog only hides it visually), so an ungated
+                      "Loading…" region here would leak an `aria-busy` marker onto every
+                      page this dialog is mounted on, for every viewer, at all times. */}
+                  {isOpen && !hasStarted && attendanceState.status === 'loading' && (
+                    <Text type="supporting" color="secondary" aria-busy="true">
+                      Loading recorded attendance…
+                    </Text>
+                  )}
+                  {isOpen && !hasStarted && attendanceState.status === 'error' && (
+                    <Banner
+                      status="error"
+                      title="Couldn't load recorded attendance"
+                      description="Something went wrong loading this event's recorded attendance. Marking sessions complete is disabled until this loads, so nothing recorded gets overwritten."
+                      endContent={
+                        <Button variant="ghost" label="Retry" onClick={attendanceState.retry} />
+                      }
+                    />
+                  )}
                   {remaining.map((session) => (
                     <VStack key={session.id} gap={1}>
                       {hasStarted ? (
@@ -474,7 +752,11 @@ export function MarkEventCompleteDialog({
                   <Button
                     label={computeMarkEventCompleteConfirmLabel(remaining.length)}
                     variant="primary"
-                    isDisabled={isSubmitting}
+                    // T307, module doc #6 -- blocks the write whenever the
+                    // recorded-attendance load has not yet succeeded
+                    // (loading OR error), the opposite of
+                    // `MarkDayCompleteDialog.tsx`'s graceful fallback (§3).
+                    isDisabled={isSubmitting || attendanceState.status !== 'success'}
                     isLoading={isSubmitting}
                     clickAction={handleConfirm}
                   />

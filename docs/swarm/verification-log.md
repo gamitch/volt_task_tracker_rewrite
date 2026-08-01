@@ -6308,3 +6308,189 @@ drift remained — the repo is genuinely clean, not just reported clean. Logged 
 Playwright measurement itself, having independently re-derived the same CSS math from source
 instead; a cosmetic mismatch between the packet's stated mutation-assertion order and actual test
 execution order) were resolved by equivalent evidence within this task's own check, not deferred.
+
+---
+
+## T305 — the mark-day-complete dialog seeds from, and preserves, recorded attendance (2026-08-01)
+
+**Result: PASS-with-MINORs, first worker attempt.** Worker `worker-implementer` (sonnet, own
+worktree), checker `checker-reviewer` (opus). Commit `ee2ea5e`, plus a close-out commit for the
+checker's two fix-now findings. Highest checker finding: **MINOR** (2 MINOR, 3 NIT). No BLOCKER, no
+MAJOR. Gates re-measured three times independently (worker, checker, orchestrator) with `.env.local`
+absent: `tsc` 0 · `vite build` ✓ · prettier clean · eslint **0 errors / 361 warnings** (+1, the one
+new value export `computeInitialFormSeed`) · vitest **72 files / 1767 tests** exit 0 · both targeted
+files exit 0. Sabotage check clean: exactly the five Allowed paths, `MarkEventCompleteDialog.tsx`
+confined to its authorized call site plus three doc clauses, and
+`git diff | grep '^-' | grep -E 'expect|toBe|toEqual|toHave'` returns **nothing** — no assertion
+removed or weakened anywhere.
+
+**The task took four packet revisions and two full gate rounds, and the gates are why it shipped
+correct.** Both rounds were run by an agent that **built the prescription in its own worktree
+instead of reading it**. That single methodological choice produced every significant finding:
+
+- **v1** claimed the change was non-destructive, citing `loaders/endMeeting.ts`'s
+  `ignoreDuplicates: true`. Accurate citation, **wrong loader** — that is T178's meetings backend,
+  not this dialog's write path.
+- **v2 was not implementable inside its own Allowed Files.** Making `buildAttendanceWriteRows`' new
+  parameter required breaks a fifth, *production* call site at `MarkEventCompleteDialog.tsx:187`.
+  Measured `TS2554`, `tsc` exit 2. Every worker would have hit a mandatory dispute on first
+  typecheck — Definition of Ready item 3.
+- **v2's scoping of the destruction was also wrong, and the truth was worse.** The gate found the
+  *bulk* path destroys recorded rows **today**, with one click and no coach intent. Split out as
+  **T307** and upgraded from contained debt to a live bug.
+- **Six criteria across v2/v3 could not fail**, two of which the packet's own text argued were
+  sound. W1's override arm went green under its own mutation because the seeding put the recorded
+  value into the coach map, so correct and mutated coincided. W2's named mutation was *impossible* —
+  the guard it targeted is dead code, since `isAttendingStatus` returns `false` for `undefined`.
+  S3's mutation was ambiguous across two distinct RSVP fallbacks. S3b was vacuous through the DOM.
+  And v2's mock-hardening list was **inverted**: measured against a broken mock, the two criteria it
+  named fail on their own while six it omitted pass silently.
+- **v3 shipped a real design bug that round 2 caught by execution.** Seeding the hours map only for
+  students who *start* checked meant an `absent`-recorded student with `hoursOverride: 3`, whom the
+  coach then deliberately checks, displayed **7 h** and counted **7 h** on the confirm button while
+  the write emitted **3** — `LABEL: 1 attended · 7 h` vs `WRITTEN hoursOverride: 3`. That also
+  falsified module doc #2(b), the constitution-item-3 legitimacy argument for
+  `computeTotalHoursForCheckedStudents` existing at all. v4 seeds unconditionally (inert for
+  unchecked students, since label, write and inputs all read the map only for checked ones) and
+  criterion W6 pins label == write.
+
+**The worker refused a bad criterion rather than shipping past it.** §8's S8b named a mutation
+("drop the same-session check from the guard") that leaves the suite green. The worker measured
+that, found a different mutation that *does* redden (proving the protection real but differently
+sourced), and reported it — the packet's own "report a green mutation instead of shipping it" rule,
+honoured. **The checker then reached a stronger conclusion than the worker's:** the two stale-load
+guards are *mutually redundant*, not one-dead-one-live. Deleting either alone leaves 44/44 green;
+only deleting both reddens. `isMounted` wins the race in tests only because `act()` flushes passive
+effects synchronously — under React 18's real async scheduling the refs update during render while
+cleanup is still pending, which is exactly the window the same-session check covers. **Both stay**,
+and the mutual redundancy is now documented in-source so a future reader who sees green after
+deleting one does not then delete the other (checker NIT-1, fixed in place, item 25).
+
+**Checker MINOR-1, fixed in place rather than filed.** Two properties §4 prescribes and calls
+load-bearing had *no* criterion: reversing the hours merge so recorded values clobber a coach's
+typed hours left the suite fully green, as did removing the touched-ref set from
+`setStudentHoursOverride`. Shipped code was correct; the coverage was missing. Closed with one
+`describe` (`W3b`, two tests) using the existing `createDeferred` harness. **Both mutations
+reproduced by the orchestrator, not relayed** — reversing the merge reddens exactly the first test
+(`1 failed | 45 passed`), dropping the touched-ref set reddens exactly the second
+(`1 failed | 45 passed`). Suite 1765 → **1767**, exact.
+
+**The checker invented edge cases the packet never named; all behaved correctly.** An `'excused'`
+recorded row starts unchecked and, if deliberately checked, writes `present` with `method: 'import'`
+and timestamps preserved. Two rows for one student resolve last-wins deterministically, and because
+the *same* keyed map drives both the seed and the write, label and payload cannot disagree (moot in
+production — `attendance` has `unique(session_id, student_id)`). A recorded row for a non-roster
+student is ignored by the seed and structurally unwritable. `hoursOverride: 0` survives both, the
+code correctly using `!== null`/`??` rather than truthiness. **And the T179-class defect — a
+student's profile id reaching `attendance.recorded_by` — is structurally impossible here**, since
+`recordedBy` is always the acting coach's parameter.
+
+**All fourteen module-doc corrections landed and are true, not merely edited.** The PRD quotation at
+`:4-10` is **byte-identical**, verified by hash (`d173f86c…` at both `79d9509` and `ee2ea5e`) rather
+than assumed, with the supersession annotation added below it. The checker grepped every old false
+claim string: all nine distinctive phrases are gone, none half-corrected.
+
+**Proportionality (item 25):** `MarkDayCompleteDialog.tsx` +374/−73, of which **263 lines are
+comment/doc** (the fourteen mandated corrections plus the required disclosures) and **107 are code**.
+No logic duplicated — `isAttendingStatus` and `resolveAttendanceWriteMethod` imported not
+re-derived, `computeInitialAttendedStudentIds` reused in the null branch. In convention for a file
+that documents this heavily.
+
+**One gate finding rejected as wrong**, recorded so it is not re-applied: round 2's F5 claimed
+`onMarkSessionComplete`'s default sits at `MarkEventCompleteDialog.tsx:294`. Verified `:291` is the
+default parameter and `:294` is `partitionEventSessions` — the existing citation was already
+correct.
+
+**Follow-ups: T309** (checker MINOR-2 — unchecking a recorded-attending student is a silent no-op;
+pre-existing, but T305 makes it materially more reachable now that recorded attendance drives the
+checkbox). **T307** and **T308** were already filed during packeting and were confirmed not
+silently reintroduced.
+
+---
+
+## T307 — "Mark event complete" stops destroying recorded attendance (2026-08-01)
+
+**Result: FAIL on attempt 1 (1 MAJOR), reworked and closed by the orchestrator.** Worker
+`worker-implementer` (sonnet, own worktree) → `0f888a8`; checker `checker-reviewer` (opus) → FAIL;
+orchestrator rework commit follows. Gates after rework, `.env.local` absent: `tsc` 0 ·
+`vite build` ✓ · prettier clean · eslint **0 errors / 361 warnings** · vitest **72 files / 1777
+tests** exit 0 · both targeted files exit 0. Sabotage check clean both rounds.
+
+**The MAJOR: PostgREST truncation is a third state the design did not model, and it was the one
+surviving way this dialog could still destroy a row.** `supabase/config.toml`'s `[api] max_rows =
+1000` caps every response, and `queryAttendanceForSessions` (`loaders/attendance.ts`) issues a bare
+`.select('*').in(...)` with no `.range()`/`.limit()`. **A capped response is not an error** —
+PostgREST returns 200 with a partial `Content-Range`, so `result.error` is null, `createLoader`
+(`loader.ts:174-176`, which throws only on `result.error`) resolves the truncated array, and the
+dialog lands in `'success'` holding rows for only some students. §3's entire block-on-failure rule
+never engages, because nothing failed — and a student whose row was truncated away is
+indistinguishable from one who never had a row, so the write nulls their real
+check-in/check-out/hours/method. The checker demonstrated the consequence with truncation simulated,
+producing byte-for-byte the payload the task exists to eliminate.
+
+**Verified independently by the orchestrator before acting**: `max_rows = 1000` present, the query
+carries no limit, and `createLoader` throws only on `result.error`.
+
+**Rework, per the checker's own option (a) — fail closed.** A resolve at or above
+`ATTENDANCE_ROW_CAP` is routed to the **error** state rather than `success`. It can only ever block
+a write, never permit one, and it turns the design's own assumption — that the resolved array is
+complete — from assumed into checked. Entirely inside Allowed Files. **Both mutations reproduced by
+the orchestrator, not relayed:** forcing the guard off reddens exactly the new F4 test
+(`1 failed | 24 passed`), and a companion test one row *below* the cap proves the guard is not a
+blanket block. The proper fix — `.range()` pagination at the loader — needs a Forbidden file and is
+filed as **T320**.
+
+**Also fixed: the load-effect `isOpen` gate was completely unpinned, and the packet's cited
+criterion did not exist.** §3 cited `OutreachDetail.test.tsx:1063` as covering it; that test has
+`user === null`, so this dialog is never mounted there and it cannot exercise the gate. Measured:
+removing `if (!isOpen) return undefined;` left **both** suites fully green. Shipped behaviour was
+correct, only the coverage was missing — an ungated load would fire an `attendance` SELECT for every
+signed-in viewer on every outreach detail page. Closed with one test; mutation reproduced
+(`1 failed | 24 passed`).
+
+**Twelve of thirteen adversarial paths were already safe**, and the checker wrote its own fixtures
+rather than re-running the packet's: load resolving after the click, retry-after-failure, multi
+session, dialog re-keyed mid-flight, closed dialog, close-then-reopen, cross-session leakage. It also
+closed off two mechanisms that would have made the whole failure rule vacuous — `createLoader`
+throws on `result.error` so a failed query cannot resolve `[]` and masquerade as "nobody attended",
+and RLS `staff_all on attendance for all` means read visibility equals write reach, so there is no
+partial-visibility gap for the acting coach.
+
+**The checker disproved the packet's own F1b claim.** The packet stated the `handleConfirm` guard was
+untestable because jsdom's `disabled` suppresses clicks. The real reason a DOM-level force fails is
+different — Astryx's `Button` guards on the `isDisabled` **prop**, not the attribute. By mutation
+layering the checker proved the guard is live and load-bearing: removing *only* the button's
+`isDisabled` clause still blocks the write (so `handleConfirm`'s guard is doing real work), and
+removing *both* lets one write through. §3's rule holds at two independent layers. The worker
+correctly followed the packet in not inventing a criterion here; the packet was wrong, not the
+worker.
+
+**The worker found a real fact the packet did not know, and its fix solves rather than masks.**
+`MarkEventCompleteDialog` is mounted for *any* signed-in user and its content sits in the DOM even
+when `isOpen={false}` — `Dialog` only hides it visually — so the first loading-state implementation
+leaked `aria-busy="true"` onto every page. The checker confirmed the `isOpen` render gate is
+load-bearing by removing it and reddening **two pre-existing accessibility tests** (T157 parent,
+T169 student), not the one the worker reported. Pinned by tests that predate the fix and assert the
+real user-visible property.
+
+**`aria-busy` cleared against constitution item 2** by the orchestrator: it is a native ARIA
+attribute, not an Astryx prop, and `<VStack aria-busy="true">` already exists at
+`AttendancePanel.tsx:835`, `Leaderboard.tsx:483` and `OutreachDetail.tsx:1801` with tests asserting
+it in the DOM. The worker was right to flag it and right to use it.
+
+**P2 was not unpinned.** The worker declined to run P2's mutation because it lives in a Forbidden
+file; the checker ran it in its own worktree — which item 23 explicitly authorizes — and confirmed
+P2 catches it directly. The worker's conclusion was right, its reasoning was not.
+
+**Zero eslint rise explained:** the new `ATTENDANCE_ROW_CAP` export adds no
+`react-refresh/only-export-components` warning because `eslint.config.js:39` sets
+`allowConstantExport: true`.
+
+**No fresh checker round was run on the rework** (item 25): the remedy was specified by the checker
+itself, is ~4 lines plus three tests inside Allowed Files, and both mutations were reproduced
+directly by the orchestrator. Same posture as T302 and T303. Recorded rather than assumed.
+
+**Follow-up: T320.** The checker's three NITs are recorded here rather than filed as rows — the F1b
+guard is pinnable by mutation layering and worth adding when the file is next opened; a
+delete-then-bulk-complete TOCTOU can resurrect a deleted row with its true historical values; and
+the worker under-reported the render-gate blast radius as one test when it is two.
