@@ -900,6 +900,17 @@ export function MarkDayCompleteDialog({
         // coach hasn't already touched it. This guard governs the
         // checklist only -- `recordedRows` above still drives §5's write
         // preservation whether or not this branch actually applies.
+        //
+        // DELIBERATELY REDUNDANT with the `if (!isMounted) return;` above,
+        // and both must stay. T305's checker measured that deleting EITHER
+        // one alone leaves the whole suite green (44/44) and only deleting
+        // BOTH reddens the anti-clobber assertion -- so a future reader who
+        // drops one will see green and may then drop the other. They cover
+        // different windows: `isMounted` only wins the race here because
+        // `act()` flushes passive effects synchronously in tests, whereas
+        // under React 18's real async passive-effect scheduling the refs
+        // below are updated during render while cleanup is still pending.
+        // That window is exactly what the same-session check covers.
         if (
           latestIsOpenRef.current &&
           latestSessionIdRef.current === loadedSessionId &&

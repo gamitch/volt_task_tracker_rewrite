@@ -934,6 +934,56 @@ describe('W3 -- the coach’s own hours edit wins over a recorded override', () 
   });
 });
 
+// T305 checker MINOR-1: §4 prescribes BOTH of these properties and §8 named
+// no criterion for either, so each was shipped green-but-unpinned. Verified
+// red under its own mutation before landing (see the ledger row).
+describe("W3b -- a late-arriving load never clobbers the coach's own hours edit", () => {
+  it('keeps the typed 5 when recorded rows carrying 3 resolve afterwards', async () => {
+    const deferred = createDeferred<AttendanceRow[]>();
+    mockedLoadAttendanceForSessions.mockImplementationOnce(() => deferred.promise);
+    renderDialog({ rsvps: T305_RSVPS }); // Brody: going RSVP, so checked (and his hours input rendered) immediately.
+
+    // The coach types hours BEFORE the load resolves.
+    act(() => {
+      setNativeInputValue(getFieldControl('Brody GoingNoRow hours') as HTMLInputElement, '5');
+    });
+
+    await act(async () => {
+      deferred.resolve([
+        makeAttendanceRow({ studentId: 'student-brody', status: 'present', hoursOverride: 3 }),
+      ]);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Mock-hardening (§9): a mock that never intercepts would leave the
+    // real loader rejecting, which produces this same green by fallback.
+    expect(mockedLoadAttendanceForSessions).toHaveBeenCalledWith([SESSION.id]);
+    expect((getFieldControl('Brody GoingNoRow hours') as HTMLInputElement).value).toBe('5');
+    expect(findButtonByText('Mark complete — 1 attended · 5 h')).toBeDefined();
+    expect(findButtonByText('Mark complete — 1 attended · 3 h')).toBeUndefined();
+  });
+
+  it('treats an hours edit as a coach touch, so a late absent row does not uncheck them', async () => {
+    const deferred = createDeferred<AttendanceRow[]>();
+    mockedLoadAttendanceForSessions.mockImplementationOnce(() => deferred.promise);
+    renderDialog({ rsvps: T305_RSVPS });
+
+    act(() => {
+      setNativeInputValue(getFieldControl('Brody GoingNoRow hours') as HTMLInputElement, '5');
+    });
+
+    await act(async () => {
+      deferred.resolve([makeAttendanceRow({ studentId: 'student-brody', status: 'absent' })]);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockedLoadAttendanceForSessions).toHaveBeenCalledWith([SESSION.id]);
+    expect((getFieldControl('Brody GoingNoRow') as HTMLInputElement).checked).toBe(true);
+  });
+});
+
 describe('W4 -- a checked student with no recorded row is written exactly as today', () => {
   it('status present, both timestamps null, method coach, hoursOverride null', async () => {
     const onMarkComplete = vi.fn<(payload: MarkDayCompletePayload) => Promise<void>>(
