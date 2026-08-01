@@ -1381,3 +1381,49 @@ gate's verified environment facts (local install command, existing Chromium cach
 MINOR/NIT citation fixes — dispatched directly to `worker-implementer` afterward **without** a
 third `checker-premise` round. Bounded to this packet only, per the same non-precedent-setting
 terms as every prior ruling.
+
+---
+
+## 2026-08-01 — George's ruling on T305: show attendance (recorded late; see the process note)
+
+**Ruling, verbatim:** *"show attendance for T305"*, given 2026-07-31 in the same message that
+reversed T304 to two buckets.
+
+**Process failure, recorded because it caused a downstream error.** The orchestrator replied "Both
+rulings recorded" and then recorded **only T304**. T305's ruling was never written down. The T305
+packet subsequently cited "the owner ruling (2026-07-31, recorded in `auto-mode-decisions.md`)" for
+a file that contained no such entry, and the premise gate caught the dangling citation. **A ruling
+that is not written down did not happen** — the orchestrator's own summary of it is not the record.
+
+**What it authorizes.** Where a screen currently shows RSVP *intent* for a session that has already
+happened, show what was actually **recorded** instead. Two consumers:
+
+- **The mark-complete dialog** (this task, T305): seed the attendee checklist from the `attendance`
+  table, falling back to `going` RSVPs only where no attendance row exists. A recorded `absent`
+  starts **unchecked** even if the student RSVP'd `going`.
+- **The Signups section** on a past session (deferred — **T306**, filed 2026-08-01): show attendance
+  in place of, or explicitly alongside, the RSVP tallies. Not yet packeted.
+
+**What it does NOT authorize — and this has an in-repo reason, not a preference.** Writing `rsvps`
+rows from attendance. `OutreachList.tsx:1685-1687` records a checker's finding from T121's rework:
+*"RSVP is intent, not a real attendance record."* Synthesising a `going` RSVP because a coach ticked
+an attendance box would claim a student said yes in advance when they never responded. **The two
+records stay separate; only the display changes.**
+
+**Constraint discovered while packeting, recorded here because it nearly shipped.** The obvious
+implementation is destructive. The dialog's write path is `markDayComplete`
+(`loaders/outreach.ts:1125`), whose upsert is `{ onConflict: 'session_id,student_id' }` with **no
+`ignoreDuplicates`** (`:1150`) — a full-column overwrite — and `buildAttendanceWriteRows`
+(`MarkDayCompleteDialog.tsx:489-505`) hardcodes `checkInAt: null, checkOutAt: null,
+method: 'coach'` and takes `hoursOverride` from a map `resetForm` empties. Today that is harmless
+only because no student with recorded attendance ever starts checked, so no row is emitted for them.
+
+**Making them start checked — the entire point of this ruling — makes the same code destroy the
+record it was meant to respect.** The premise gate measured it: a student with `present`/3h/`qr`
+displayed 7h, totalled 14h against a true 10h, and confirming wrote
+`{hoursOverride: null, checkInAt: null, checkOutAt: null, method: 'coach'}`.
+
+**Therefore any T305 implementation MUST also carry the loaded row's `hoursOverride`,
+`checkInAt`, `checkOutAt` and `method` through the write**, using the existing
+`resolveAttendanceWriteMethod` (`loaders/attendance.ts:218-222`) rather than a hardcoded `'coach'`.
+Showing the truth and then overwriting it is worse than not showing it.
