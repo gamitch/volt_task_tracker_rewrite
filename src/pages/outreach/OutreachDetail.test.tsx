@@ -1200,6 +1200,12 @@ describe('"Mark event complete" confirm -> real markDayComplete mutation + page 
     act(() => {
       findMarkEventCompleteMenuItem()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    // T307 -- this dialog now loads recorded attendance on open (module doc
+    // #6) and disables confirm until that settles; this file's shared
+    // `loadAttendanceForSessions` mock (`:110-118`) resolves `[]`, so one
+    // flush is enough. New line, not a regression -- the packet's own §8
+    // measured this exact fix.
+    await flushMicrotasks();
 
     const confirmButton = Array.from(container.querySelectorAll('button')).find(
       (btn) => btn.textContent?.trim() === 'Mark 2 sessions complete',
@@ -1243,6 +1249,9 @@ describe('"Mark event complete" confirm -> real markDayComplete mutation + page 
     act(() => {
       findMarkEventCompleteMenuItem()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    // T307 -- see the twin comment above; this dialog's load must settle
+    // before the confirm button is enabled.
+    await flushMicrotasks();
     const confirmButton = Array.from(container.querySelectorAll('button')).find(
       (btn) => btn.textContent?.trim() === 'Mark 2 sessions complete',
     );

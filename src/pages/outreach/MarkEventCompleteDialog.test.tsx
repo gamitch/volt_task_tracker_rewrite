@@ -19,6 +19,12 @@ import {
   partitionEventSessions,
   type MarkEventCompleteDialogProps,
 } from './MarkEventCompleteDialog';
+// T307 -- the loaded-attendance fixture shape this dialog's new load seam
+// resolves to.
+import type {
+  AttendanceRow,
+  LoadAttendanceForSessionsFn,
+} from '../../lib/supabase/loaders/attendance';
 
 // T179 -- `currentUserProfileId` is now required (no fixture placeholder
 // default); this test file's own explicit value.
@@ -93,6 +99,18 @@ function setNativeInputValue(input: HTMLInputElement, value: string): void {
   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
   setter?.call(input, value);
   input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+/** T307 -- this file has no `vi.mock` of `loaders/attendance` (unlike
+ * `OutreachDetail.test.tsx`), so every test that clicks the real confirm
+ * button now needs an injected `loadAttendance` that resolves, plus a
+ * flush BEFORE the click so the load has settled and the button is no
+ * longer natively `disabled` (module doc #6's block-on-failure rule --
+ * this is the exact new contract the packet names, not a regression). */
+function makeResolvedLoadAttendance(
+  rows: AttendanceRow[] = [],
+): ReturnType<typeof vi.fn<LoadAttendanceForSessionsFn>> {
+  return vi.fn<LoadAttendanceForSessionsFn>(async () => rows);
 }
 
 // ---------------------------------------------------------------------------
@@ -179,6 +197,25 @@ const RSVPS: MarkEventCompleteDialogProps['rsvps'] = [
   },
 ];
 
+/** T307 -- fabricated fixture, no real student PII (constitution item 6). */
+function makeAttendanceRow(
+  overrides: Partial<AttendanceRow> & Pick<AttendanceRow, 'studentId'>,
+): AttendanceRow {
+  return {
+    id: `attendance-${overrides.studentId}`,
+    sessionId: 'session-1',
+    status: 'present',
+    checkInAt: null,
+    checkOutAt: null,
+    hoursOverride: null,
+    method: 'coach',
+    recordedBy: 'profile-original-recorder',
+    updatedAt: '2026-07-20T09:00:00.000Z',
+    createdAt: '2026-07-20T09:00:00.000Z',
+    ...overrides,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Pure functions.
 // ---------------------------------------------------------------------------
@@ -204,8 +241,20 @@ describe('computeMarkEventCompleteConfirmLabel', () => {
 });
 
 describe('buildMarkEventCompletePayload (module doc #1/#2 -- reuse evidence)', () => {
-  it('derives the attendance checklist from going RSVPs, same as the per-day dialog, with no manual override', () => {
-    const payload = buildMarkEventCompletePayload(SESSION_1, 120, ROSTER, RSVPS, 'profile-coach-1');
+  // T307/P2 -- this is the exact pre-existing pin `MarkEventCompleteDialog.test.tsx:206-216`
+  // named in the packet; EXTENDED (per §5's own instruction) with the new
+  // `recordedRows` argument rather than duplicated. An empty array here
+  // means "no recorded row for this student", so the written row is
+  // unchanged from today: present/coach/no hours/no timestamps.
+  it('derives the attendance checklist from going RSVPs, same as the per-day dialog, with no manual override, when no recorded row exists (P2)', () => {
+    const payload = buildMarkEventCompletePayload(
+      SESSION_1,
+      120,
+      ROSTER,
+      RSVPS,
+      'profile-coach-1',
+      [],
+    );
     expect(payload.sessionId).toBe('session-1');
     expect(payload.peopleReached).toBe(120);
     expect(payload.recordedBy).toBe('profile-coach-1');
@@ -213,6 +262,8 @@ describe('buildMarkEventCompletePayload (module doc #1/#2 -- reuse evidence)', (
     expect(payload.attendance[0].studentId).toBe('student-going-1');
     expect(payload.attendance[0].status).toBe('present');
     expect(payload.attendance[0].method).toBe('coach');
+    expect(payload.attendance[0].checkInAt).toBeNull();
+    expect(payload.attendance[0].checkOutAt).toBeNull();
     expect(payload.attendance[0].hoursOverride).toBeNull();
   });
 
@@ -223,6 +274,7 @@ describe('buildMarkEventCompletePayload (module doc #1/#2 -- reuse evidence)', (
       ROSTER,
       RSVPS,
       'profile-coach-1',
+      [],
     );
     expect(payload.adultVolunteersCountThisSession).toBe(0);
     expect(payload.adultVolunteerHoursThisSession).toBe(0);
@@ -235,8 +287,81 @@ describe('buildMarkEventCompletePayload (module doc #1/#2 -- reuse evidence)', (
       ROSTER,
       RSVPS,
       'profile-coach-1',
+      [],
     );
     expect(payload.peopleReached).toBeNull();
+  });
+
+  // T307/P1 -- THE bug this task exists to fix: a student who RSVP'd
+  // `going` AND has real recorded attendance must have every one of those
+  // five fields carried through unchanged, not overwritten with
+  // nulls/'coach'.
+  it('P1 -- preserves a going-RSVP student’s real recorded status/method/hoursOverride/checkInAt/checkOutAt unchanged', () => {
+    const recordedRows: AttendanceRow[] = [
+      makeAttendanceRow({
+        studentId: 'student-going-1',
+        status: 'present',
+        method: 'qr',
+        hoursOverride: 3,
+        checkInAt: '2026-08-02T14:05:00.000Z',
+        checkOutAt: '2026-08-02T20:55:00.000Z',
+      }),
+    ];
+    const payload = buildMarkEventCompletePayload(
+      SESSION_1,
+      null,
+      ROSTER,
+      RSVPS,
+      'profile-coach-1',
+      recordedRows,
+    );
+    expect(payload.attendance).toHaveLength(1);
+    const row = payload.attendance[0];
+    expect(row.studentId).toBe('student-going-1');
+    expect(row.status).toBe('present');
+    expect(row.method).toBe('qr');
+    expect(row.hoursOverride).toBe(3);
+    expect(row.checkInAt).toBe('2026-08-02T14:05:00.000Z');
+    expect(row.checkOutAt).toBe('2026-08-02T20:55:00.000Z');
+  });
+
+  // T307/P3 -- §4's seeding decision: a recorded ATTENDING row includes a
+  // student even with no `going` RSVP at all (`student-maybe` RSVP'd
+  // `maybe` for session-1).
+  it('P3 -- includes a student with a recorded attending row and no going RSVP', () => {
+    const recordedRows: AttendanceRow[] = [
+      makeAttendanceRow({ studentId: 'student-maybe', status: 'late' }),
+    ];
+    const payload = buildMarkEventCompletePayload(
+      SESSION_1,
+      null,
+      ROSTER,
+      RSVPS,
+      'profile-coach-1',
+      recordedRows,
+    );
+    const studentIds = payload.attendance.map((row) => row.studentId);
+    expect(studentIds).toContain('student-maybe');
+    const row = payload.attendance.find((r) => r.studentId === 'student-maybe');
+    expect(row?.status).toBe('late');
+  });
+
+  // T307/P4 -- a recorded `absent` row is NOT "any recorded row" -- it must
+  // still exclude the student even though they RSVP'd `going`.
+  it('P4 -- excludes a going-RSVP student whose recorded row is absent', () => {
+    const recordedRows: AttendanceRow[] = [
+      makeAttendanceRow({ studentId: 'student-going-1', status: 'absent' }),
+    ];
+    const payload = buildMarkEventCompletePayload(
+      SESSION_1,
+      null,
+      ROSTER,
+      RSVPS,
+      'profile-coach-1',
+      recordedRows,
+    );
+    const studentIds = payload.attendance.map((row) => row.studentId);
+    expect(studentIds).not.toContain('student-going-1');
   });
 });
 
@@ -334,9 +459,13 @@ describe('<MarkEventCompleteDialog /> confirm -> per-session mutation (module do
           roster={ROSTER}
           rsvps={RSVPS}
           onMarkSessionComplete={onMarkSessionComplete}
+          loadAttendance={makeResolvedLoadAttendance()}
         />,
       );
     });
+    // T307 -- the load must settle before the confirm button is enabled
+    // (module doc #6); this flush is new, the one after the click is not.
+    await flushMicrotasks();
 
     clickElement(findButtonByText('Mark 2 sessions complete') as HTMLButtonElement);
     await flushMicrotasks();
@@ -391,9 +520,12 @@ describe('<MarkEventCompleteDialog /> partial-failure honesty (module doc #3)', 
           rsvps={RSVPS}
           onMarkSessionComplete={onMarkSessionComplete}
           onFinished={onFinished}
+          loadAttendance={makeResolvedLoadAttendance()}
         />,
       );
     });
+    // T307 -- the load must settle before the confirm button is enabled.
+    await flushMicrotasks();
 
     clickElement(findButtonByText('Mark 2 sessions complete') as HTMLButtonElement);
     await flushMicrotasks();
@@ -427,9 +559,12 @@ describe('<MarkEventCompleteDialog /> partial-failure honesty (module doc #3)', 
           rsvps={RSVPS}
           onMarkSessionComplete={onMarkSessionComplete}
           onFinished={onFinished}
+          loadAttendance={makeResolvedLoadAttendance()}
         />,
       );
     });
+    // T307 -- the load must settle before the confirm button is enabled.
+    await flushMicrotasks();
 
     clickElement(findButtonByText('Mark 2 sessions complete') as HTMLButtonElement);
     await flushMicrotasks();
@@ -453,9 +588,14 @@ describe('<MarkEventCompleteDialog /> partial-failure honesty (module doc #3)', 
           roster={ROSTER}
           rsvps={RSVPS}
           onMarkSessionComplete={onMarkSessionComplete}
+          loadAttendance={makeResolvedLoadAttendance()}
         />,
       );
     });
+    // T307 -- the load must settle before the confirm button is enabled;
+    // the people-reached input itself stays usable regardless (module doc
+    // #6 -- not a bare spinner over the whole dialog).
+    await flushMicrotasks();
     const input = getFieldControl('People reached') as HTMLInputElement;
     act(() => {
       setNativeInputValue(input, '77');
@@ -465,5 +605,156 @@ describe('<MarkEventCompleteDialog /> partial-failure honesty (module doc #3)', 
 
     expect(onMarkSessionComplete).toHaveBeenCalledTimes(1);
     expect(onMarkSessionComplete.mock.calls[0][0].peopleReached).toBe(77);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T307 -- the load seam and its failure rule (module doc #6). Deliberately
+// the OPPOSITE of `MarkDayCompleteDialog.tsx`'s graceful fallback: this
+// dialog shows no checklist and no review step, so a load that is in
+// flight or has failed must BLOCK the write, never fall back to
+// RSVP-only seeding.
+// ---------------------------------------------------------------------------
+
+describe('<MarkEventCompleteDialog /> attendance load -- F1 (load rejects blocks the write)', () => {
+  it('disables confirm, shows an error Banner, and calls onMarkSessionComplete zero times when the load rejects', async () => {
+    const loadAttendance = vi.fn<LoadAttendanceForSessionsFn>(async () => {
+      throw new Error('network down');
+    });
+    const onMarkSessionComplete = vi.fn<(payload: MarkDayCompletePayload) => Promise<void>>(
+      async () => {},
+    );
+    act(() => {
+      root.render(
+        <MarkEventCompleteDialog
+          isOpen
+          onOpenChange={() => {}}
+          currentUserProfileId={COACH_PROFILE_ID}
+          sessions={[SESSION_1]}
+          roster={ROSTER}
+          rsvps={RSVPS}
+          onMarkSessionComplete={onMarkSessionComplete}
+          loadAttendance={loadAttendance}
+        />,
+      );
+    });
+    await flushMicrotasks();
+
+    // Clause 1 -- a real fixture with >= 1 scheduled session, and a button
+    // genuinely exists to be disabled (not "no button because remaining is
+    // empty", which would make this criterion vacuous).
+    const confirmButton = findButtonByText('Mark 1 session complete');
+    expect(confirmButton).toBeDefined();
+    expect(confirmButton?.disabled).toBe(true);
+    expect(container.textContent).toContain("Couldn't load recorded attendance");
+
+    // Clause 2 -- an ACTUAL click on the disabled button.
+    clickElement(confirmButton as HTMLButtonElement);
+    await flushMicrotasks();
+
+    // Clause 3 -- the mock genuinely intercepted (mock-hardening rule, §5):
+    // a mock that never intercepts leaves the real loader rejecting, which
+    // produces an identical error state and would pass this criterion for
+    // the wrong reason.
+    expect(loadAttendance).toHaveBeenCalledTimes(1);
+
+    // Clause 4 -- the write never fires.
+    expect(onMarkSessionComplete).toHaveBeenCalledTimes(0);
+  });
+});
+
+describe('<MarkEventCompleteDialog /> attendance load -- F2 (load in flight blocks the write)', () => {
+  it('disables confirm and calls onMarkSessionComplete zero times while the load has not yet settled', async () => {
+    const loadAttendance = vi.fn<LoadAttendanceForSessionsFn>(
+      () => new Promise<AttendanceRow[]>(() => {}), // never settles
+    );
+    const onMarkSessionComplete = vi.fn<(payload: MarkDayCompletePayload) => Promise<void>>(
+      async () => {},
+    );
+    act(() => {
+      root.render(
+        <MarkEventCompleteDialog
+          isOpen
+          onOpenChange={() => {}}
+          currentUserProfileId={COACH_PROFILE_ID}
+          sessions={[SESSION_1]}
+          roster={ROSTER}
+          rsvps={RSVPS}
+          onMarkSessionComplete={onMarkSessionComplete}
+          loadAttendance={loadAttendance}
+        />,
+      );
+    });
+
+    const confirmButton = findButtonByText('Mark 1 session complete');
+    expect(confirmButton).toBeDefined();
+    expect(confirmButton?.disabled).toBe(true);
+    // The people-reached input itself stays usable while loading (module
+    // doc #6 -- not a bare spinner over the whole dialog).
+    expect(() => getFieldControl('People reached')).not.toThrow();
+    expect(container.textContent).toContain('Loading recorded attendance');
+
+    clickElement(confirmButton as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(onMarkSessionComplete).toHaveBeenCalledTimes(0);
+  });
+});
+
+describe('<MarkEventCompleteDialog /> attendance load -- F3 (retry re-runs the load)', () => {
+  it('re-runs the load on retry, and confirm becomes enabled once the retry succeeds', async () => {
+    let callCount = 0;
+    const loadAttendance = vi.fn<LoadAttendanceForSessionsFn>(async () => {
+      callCount += 1;
+      if (callCount === 1) throw new Error('network down');
+      return [];
+    });
+    act(() => {
+      root.render(
+        <MarkEventCompleteDialog
+          isOpen
+          onOpenChange={() => {}}
+          currentUserProfileId={COACH_PROFILE_ID}
+          sessions={[SESSION_1]}
+          roster={ROSTER}
+          rsvps={RSVPS}
+          loadAttendance={loadAttendance}
+        />,
+      );
+    });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain("Couldn't load recorded attendance");
+    expect(findButtonByText('Mark 1 session complete')?.disabled).toBe(true);
+
+    clickElement(findButtonByText('Retry') as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(loadAttendance).toHaveBeenCalledTimes(2);
+    expect(container.textContent).not.toContain("Couldn't load recorded attendance");
+    expect(findButtonByText('Mark 1 session complete')?.disabled).toBe(false);
+  });
+});
+
+describe('<MarkEventCompleteDialog /> attendance load -- L1 (called once, exactly the remaining ids)', () => {
+  it('calls loadAttendance exactly once, with only the remaining (scheduled) session ids -- never skipped ones, never one call per session', async () => {
+    const loadAttendance = makeResolvedLoadAttendance();
+    act(() => {
+      root.render(
+        <MarkEventCompleteDialog
+          isOpen
+          onOpenChange={() => {}}
+          currentUserProfileId={COACH_PROFILE_ID}
+          sessions={[SESSION_1, SESSION_2, SESSION_COMPLETED, SESSION_CANCELED]}
+          roster={ROSTER}
+          rsvps={RSVPS}
+          loadAttendance={loadAttendance}
+        />,
+      );
+    });
+    await flushMicrotasks();
+
+    expect(loadAttendance).toHaveBeenCalledTimes(1);
+    expect(loadAttendance.mock.calls[0][0]).toEqual(['session-1', 'session-2']);
   });
 });
