@@ -154,7 +154,7 @@ Packets P0–P13 plus regression fixes and live hotfixes:
 - T128 — wave-3 debt: format gate, meetings label wording, `astryx-api.md` accuracy,
   `v_planned_rsvp_hours` future guard.
 
-## Active (2026-07-31 — see T158 note directly below, then T191; older entries in this section are 2026-07-29/30 and otherwise stale)
+## Active (2026-07-31 — see T158 note directly below, then T203, then T191; older entries in this section are 2026-07-29/30 and otherwise stale)
 
 **2026-07-31 — T158 packet, revision 2, awaiting `checker-premise` round 2 of 2
 (item 19a cap):** `docs/swarm/active/T158-worker-packet.md`. Scope narrowed at
@@ -191,6 +191,31 @@ overclaim, acceptance criterion 4 rewritten to prescribe PGlite as the method
 with a new third sub-check, a stub-shape gap in criterion 5, and an unedited
 self-correction artifact in §3). See `task-ledger.md`'s T158/T203/T204 rows for
 full detail.
+
+**2026-07-31 — T203 packet, revision 3 (final), DISPATCH-ready:**
+`docs/swarm/active/T203-worker-packet.md`. Embeds the finished, tested
+`Leaderboard` (T044/T158) into `CoachHome.tsx`'s dashboard (owner ruling:
+"embed in the dashboard," not a standalone route). Sonnet tier,
+`checker-reviewer` at checkout. **Round 1 `checker-premise` returned REVISE
+(2 BLOCKER, 2 MAJOR, 3 MINOR, 1 NIT) — central finding: `Leaderboard`
+fetches hours data AND a privacy setting via `Promise.all`, but the packet
+only threaded the first as an injectable prop, so the embed could never
+reach a populated state in any test. Round 2 independently re-executed the
+full revised prescription end to end (`tsc` clean, 1731/1731 tests green,
+all six mutation points reproduced and confirmed discriminating) and found
+one remaining BLOCKER — criterion 5(i)'s Playwright-acquisition paragraph
+named a Linux-sandbox global-install path that doesn't exist on this
+(macOS) machine, transcribed from an unrelated task's module doc without
+re-checking it here — plus 6 MINOR/NIT precision fixes.** This spent item
+19a's 2-round cap; George authorized one bounded additional revision round
+rather than a third gate round (`auto-mode-decisions.md`, "2026-07-31 —
+George's ruling on T203's item-19a escalation"). **Revision 3 rewrites
+criterion 5(i) with the gate's own verified facts (local
+`npm install --no-save --no-package-lock playwright`, the Chromium build
+already cached at `~/Library/Caches/ms-playwright/chromium-1228/`, a
+fallback/defer clause) and folds in the smaller fixes. Per the owner's
+ruling this now dispatches straight to `worker-implementer` — no round 3
+gate.** See `task-ledger.md`'s T203 row for full detail.
 
 **2026-07-31 — T191 packet, revision 2, DISPATCH-ready:**
 `docs/swarm/active/T191-worker-packet.md`. Replaces the fabricated `0 / 1 h

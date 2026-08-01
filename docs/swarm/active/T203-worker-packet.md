@@ -203,8 +203,10 @@ before T158 actually landed. Re-verified against the real, current file
   `export const loadLeaderboardData: LoadLeaderboardDataFn =
   makeLoadLeaderboardData();` — real, Supabase-backed (T158), same
   "prop defaults to the real loader" convention `loadDashboardData`
-  already established on this exact file (`CoachHome.tsx:2102`'s own doc
-  comment: *"Defaults to the REAL Supabase-backed `loadDashboardData`...
+  already established on this exact file (**gate round 2 NIT — corrected
+  citation**: `CoachHome.tsx:2096-2101`'s own doc comment, immediately
+  above the `loadDashboardData?: LoadDashboardDataFn;` declaration itself
+  at `:2102`: *"Defaults to the REAL Supabase-backed `loadDashboardData`...
   same 'prop defaults to the real loader' convention... already
   established."*).
 - `defaultLoadLeaderboardData` (`Leaderboard.tsx:394-399`) — the **fixture**
@@ -274,10 +276,12 @@ before T158 actually landed. Re-verified against the real, current file
 - `docs/swarm/**`, `.claude/**` — standard, every task.
 - Any file not listed above as Allowed.
 
-**Environment note:** this worktree had no `node_modules/` installed as of
-packeting time (a fresh worktree off `16fd9df`) — run your package
-manager's install step before anything else; do not treat a missing
-`node_modules/` as a repo defect.
+**Environment note (gate round 2 — reworded, was stale):** verify
+`node_modules/` is present before starting — it is, as of gate round 2 (a
+prior gate round installed it in this worktree during its own execution
+pass); do not assume it is still missing. Reinstall only if you actually
+find it missing when you check; either way, do not treat a missing
+`node_modules/` as a repo defect if you do need to reinstall it.
 
 ## 6. Design — `CoachHome.tsx`
 
@@ -602,7 +606,20 @@ confirm green again — "I predict this would fail" is not evidence.
    distinct, fabricated fixture (hours + a matching student, names not
    reused from `Leaderboard.tsx`'s own shipped fixtures or this file's
    existing ones — item 6), assert the populated leaderboard list renders
-   with the expected entry, and assert your `loadLeaderboardData` spy was
+   with the expected entry. **Gate round 2 MINOR — name-formatting trap,
+   named explicitly so it doesn't cost you a debugging cycle:**
+   `Leaderboard.tsx`'s own `formatDisplayName` (`:365-375`) is the only
+   render-time boundary a name ever crosses — that file's own module doc
+   states the raw `displayName` is "intentionally never rendered directly
+   anywhere in this file" (`:224-227`). With the default privacy setting ON
+   (`DEFAULT_PRIVACY_ON = true`, `:244` — also this test's own harness
+   default via `defaultLoadPrivacySetting`, §7a, since criterion 8 below
+   has you leave it un-overridden), a fabricated fixture name like
+   `'Quillon Bramwell'` reaches the DOM only as `'1. Quillon B.'` (first
+   name + last-initial, `formatDisplayName`'s own logic, plus the `${index
+   + 1}. ` rank prefix `Leaderboard.tsx:523` renders inline) — assert
+   against that formatted string, not the raw fabricated name. And assert
+   your `loadLeaderboardData` spy was
    called with `FIXTURE_ACTIVE_SEASON.id` — never `'season-placeholder-
    current'` (mirrors T155's own established idiom, `CoachHome.test.tsx:1197`).
    Leave `loadLeaderboardPrivacySetting` un-overridden in this test — the
@@ -680,26 +697,67 @@ confirm green again — "I predict this would fail" is not evidence.
    prerequisites made concrete, citing this project's own established
    mechanism rather than left implicit.**
 
-   **(i) Getting Playwright itself — do not `npm install` it, and do not
-   add it to `package.json`/`package-lock.json`.** Constitution item 9
-   pre-authorizes "dev tooling (vitest, playwright, eslint, prettier)" with
-   no boss-architect approval needed — but this project's own actual,
-   already-shipped mechanism (`playwright.config.ts`'s own module doc,
-   T066) is more specific than a plain install: the sandbox has a
-   **globally-installed** `playwright` package
-   (`/opt/node22/lib/node_modules/playwright`, Chromium pre-installed at
-   `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`), reached via a single
-   symlink, `node_modules/playwright -> /opt/node22/lib/node_modules/
-   playwright` (plain `ln -s`, not tracked by git since `node_modules/` is
-   already gitignored) — `package.json`/`package-lock.json` stay
-   byte-unchanged. T142's own worker output (`docs/swarm/active/
-   T142-worker-output.md`) independently confirms the same global package is
-   reachable this way and used a raw driver script (`node measure.mjs`,
-   kept only in scratch, never committed) against it rather than the full
-   `playwright/test` runner — that is the right level of machinery for a
-   one-off numeric measurement like this criterion, not a new permanent spec
-   file (`tests/e2e/**`/`playwright.config.ts` are both outside this task's
-   Allowed Files, §5 — do not add a spec there).
+   **(i) Getting Playwright itself — corrected, gate round 2 BLOCKER.** The
+   previous paragraph here claimed a **globally-installed** `playwright`
+   package at `/opt/node22/lib/node_modules/playwright` (Chromium at
+   `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`), reached via a
+   `node_modules/playwright` symlink. **This is false in this execution
+   environment and must not be attempted.** It was transcribed from
+   `playwright.config.ts`'s own T066 module doc without independently
+   re-checking it here — that doc is accurate, but for a **different,
+   Linux** sandbox: T142's own worker output drives Chromium from
+   `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`
+   (`docs/swarm/active/T142-worker-output.md:156`, a Linux binary layout),
+   whereas this execution environment is macOS. Directly re-verified here:
+   `/opt` is empty on this machine, no global `node_modules/playwright`
+   exists in any of the usual global-install locations, and
+   `node_modules/playwright` does not exist in this worktree or any sibling
+   worktree. **Do not look for a global package or create a symlink to
+   one.**
+
+   **Corrected acquisition method: run `npm install --no-save
+   --no-package-lock playwright`** (equivalently, a one-off `npx -y
+   playwright@1.62.1` invocation is also fine if you prefer not to touch
+   `node_modules/` at all) **to make `playwright` resolvable for your driver
+   script.** This is the real, project-authorized route — constitution item
+   9 pre-authorizes "dev tooling (vitest, playwright, eslint, prettier)"
+   with no boss-architect approval needed; only the previous paragraph's
+   *acquisition mechanism* was wrong, not the underlying permission. **The
+   constraint the original (wrong) paragraph was actually protecting is
+   still absolute: `package.json` and `package-lock.json` must remain
+   byte-unchanged** — `--no-save --no-package-lock` (or `npx -y`, which
+   touches neither file) is how you keep that true; verify with `git diff`
+   before your final commit, and do not run a plain `npm install
+   playwright` without those flags.
+
+   **No browser-download step is needed.** A macOS Chromium build is
+   already present in Playwright's own default cache location — directly
+   confirmed here: `~/Library/Caches/ms-playwright/chromium-1228/
+   chrome-mac-x64/` exists with its `INSTALLATION_COMPLETE` marker file
+   present. Do **not** run `playwright install`, and do **not** set
+   `PLAYWRIGHT_BROWSERS_PATH` — the populated cache above is Playwright's
+   own default location, not the `/opt/pw-browsers` path the original,
+   incorrect paragraph named; setting that variable would point Playwright
+   away from the browser build that is actually there. (If the specific
+   `playwright` version `npm install` resolves expects a different Chromium
+   revision than the already-cached `chromium-1228` and a redownload is
+   triggered, that is a real environment surprise, not something to work
+   around by hand — treat it the same as the fallback clause below.)
+
+   **Everything else about this criterion that was already correct is
+   unchanged:** keep the raw driver script (a one-off `node measure.mjs`-
+   style script, the same level of machinery T142's own worker output used
+   for an identical one-off numeric measurement) in scratch/temp only,
+   never committed; do not add a new spec file under `tests/e2e/**`; do not
+   touch `playwright.config.ts` (outside this task's Allowed Files, §5).
+
+   **Fallback — do not let this stall the whole packet.** If, when you
+   actually run it, `playwright` genuinely cannot be acquired this way
+   (registry unreachable, network-restricted, or any other real blocker),
+   stop trying to work around it. Report it under §10's `FOLLOW-UP NEEDED`
+   template and treat criterion 5 in its entirety — (i)/(ii)/(iii) — as its
+   own deferred follow-up; land the rest of this task's work normally
+   rather than blocking on it.
 
    **(ii) Getting a signed-in coach with a real active season — do not look
    for `.env`/real Supabase credentials, and do not try to sign in through
@@ -710,13 +768,28 @@ confirm green again — "I predict this would fail" is not evidence.
    that is exactly why `tests/e2e/**` only covers unauthenticated
    routing/guard behavior. T142 solved the identical problem (a
    live-Chromium, real-CSS measurement of a signed-in coach's dashboard) a
-   different way, and that is the mechanism to reuse here: build a
-   **throwaway** custom entry (`*.throwaway.html` + `*.throwaway.tsx`, §5's
-   carve-out) that mounts the real component tree directly — same shape as
+   different way, and that is the mechanism to reuse here — **with one
+   addition T142 itself did not need and did not prove, gate round 2
+   MINOR**: T142's own rig deliberately ran with no `loadActiveSeason`
+   override, so `SeasonProvider` fell back to its real, unconfigured
+   default and failed safe to a no-active-season state
+   (`docs/swarm/active/T142-worker-output.md:151`, `:374-380`) — and
+   post-T155, that state renders only `CoachHome.tsx`'s own `'none'` branch
+   (`:2193-2202`: a bare `Banner` titled "No active season yet") and
+   nothing else. T142's rig therefore never actually rendered any dashboard
+   section, let alone measured one — the `loadActiveSeason` fixture-season
+   override below is a **new extension** of T142's rig shape that this
+   task's worker must build and verify, not something T142 itself already
+   demonstrated works; do not assume it is free. Build a **throwaway**
+   custom entry (`*.throwaway.html` + `*.throwaway.tsx`, §5's carve-out)
+   that mounts the real component tree directly — same shape as
    `CoachHome.test.tsx`'s own `renderAsUser` harness (`MemoryRouter` →
    `SeasonProvider loadActiveSeason={...}` resolving a fixture active
-   season → `AuthProvider` → `LoginAs({ id, email, role: 'coach' }, ...)`
-   from `src/test-utils/authHarness.tsx`) → `CoachHome`, with fixture
+   season → `AuthProvider` → `<LoginAs user={{ id, email, role: 'coach' }}>
+   ...</LoginAs>` — gate round 2 NIT: the real signature of `LoginAs`,
+   `src/test-utils/authHarness.tsx:131`, is `export function LoginAs({
+   user, children }: { user: AuthUser; children: ReactNode })`, a single
+   props object, not two positional arguments) → `CoachHome`, with fixture
    `loadData`/`loadDashboardData` props supplied directly so
    "Top events by student hours" (and whatever else you need for the
    sibling-width comparison) actually renders. Serve it with the Vite **dev
@@ -772,7 +845,9 @@ one of two things, kept distinguishable:
 - **Read-verified by me, directly, this packet**: the literal compiled CSS
   rules in `node_modules/@astryxdesign/core/dist/astryx.css` (a different
   worktree with `node_modules/` installed, same lockfile lineage — this
-  worktree itself has no `node_modules/` yet, see §5), the theme override in
+  worktree itself had no `node_modules/` at original packeting time; it
+  does now, gate round 2 installed it, see §5's updated environment note),
+  the theme override in
   `theme.css:518-519`, the spacing token values in `dist/theme/
   tokens.stylex.js`, and the fact that nothing in this page's own ancestor
   chain between `LayoutContent` and the `<Leaderboard>` mount point rewrites
@@ -791,9 +866,9 @@ one of two things, kept distinguishable:
   incorrectly described as unverifiable (§3).
 - **Not executable by me at all, stated plainly**: whether the real,
   running app actually renders the numbers I traced (a live Playwright
-  measurement requires a running dev server, which requires `npm install`
-  in a worktree that doesn't have `node_modules/` yet, which requires Bash).
-  Criterion 5 is where this gets closed out — by the worker, who has Bash.
+  measurement requires a running dev server and Playwright itself, both of
+  which require Bash to acquire/run — I have none). Criterion 5 is where
+  this gets closed out — by the worker, who has Bash.
   Do not skip it on the reasoning that the mechanism is "already proven" by
   this packet's source tracing; source tracing and a live render measuring
   the same thing are different claims, and this project's own item 21
@@ -803,7 +878,9 @@ one of two things, kept distinguishable:
 ## 9. Worker tier and checker assignment
 
 **Worker: `worker-implementer`, tier `sonnet`, own worktree** (item 23 — this
-packet has five mutation-marked criteria). Checked explicitly against all
+packet has four mutation-marked criteria, six mutation points total across
+them — gate round 2 NIT: corrected from a "five" that didn't match §11's
+own six-item enumeration; see §11). Checked explicitly against all
 four of item 18's opus triggers, not merely accepted from the ledger row:
 - Not a migration file.
 - Not an RLS policy or `security definer` helper.
@@ -821,8 +898,9 @@ no PII/security dimension (item 25 — this is a UI mount plus a test-harness
 fix), and the CSS mechanism this checker must verify is now traced to exact,
 numeric, sourced values (§3/§8 criterion 5) rather than left as an open
 question requiring senior judgment to resolve from scratch. The checker's
-job is to re-execute all five mutation-marked criteria independently
-(including criterion 5's live-browser measurement) and confirm the numbers,
+job is to re-execute all four mutation-marked criteria (six mutation points
+total, per §11) independently (including criterion 5's live-browser
+measurement) and confirm the numbers,
 not to re-derive the CSS mechanism from zero.
 
 **Premise gate scope (item 19b): light gate, one round, not skipped.**
@@ -840,6 +918,23 @@ else in this packet, which is either read-verified against real files or a
 direct rollout of a proven pattern), and a gate with Bash access can
 actually execute it against a real `npm test` run before a worker's time is
 spent on it, which I could not.
+
+**Gate status (final, as of this revision) — the above "one round" framing
+predates execution; recorded here so it isn't misread as still open.** The
+gate actually ran two rounds under item 19b's light-gate scope: round 1
+found 2 BLOCKER/2 MAJOR/3 MINOR/1 NIT (all §6-§8 fixed in this packet,
+citations marked inline throughout); round 2 independently re-executed the
+entire revised prescription end to end (`tsc` clean, 1731/1731 tests green,
+all six mutation points individually reproduced and confirmed genuinely
+discriminating) and found exactly one remaining BLOCKER — criterion 5(i)'s
+now-corrected Playwright-acquisition paragraph — plus the small MINOR/NIT
+fixes applied throughout this revision. Per item 19a's 2-round cap this
+escalated to the owner; George authorized one bounded additional revision
+round rather than a third gate round (`docs/swarm/auto-mode-decisions.md`,
+"2026-07-31 — George's ruling on T203's item-19a escalation"). **This is
+that authorized revision. Per that ruling, this packet goes directly to
+`worker-implementer` after this revision — no round 3 `checker-premise`
+gate.**
 
 ## 10. Deferral policy
 
@@ -863,8 +958,10 @@ here.
 - Every commit states its SHA (item 21); explicit pathspecs only, never
   `git add -A`/`git add .` (item 22).
 - Your output doc includes: files touched, the executed mutation output for
-  all mutation points across the five mutation-marked criteria (1a, 1b, 2a,
-  2b, 3, 4 — six total; criterion 2 now has two sub-mutations per gate
+  all mutation points across this packet's four mutation-marked criteria —
+  criteria 1-4, six mutation points total (1a, 1b, 2a, 2b, 3, 4 — gate
+  round 2 NIT: corrected from a "five" that didn't match this same
+  six-item enumeration; criterion 2 has two sub-mutations per gate
   round 1, BLOCKER 2), criterion 5's actual measured numbers from both the
   shipped and throwaway-probe renders, the `tsc` result, before/after test
   counts for both files (criterion 7), and any `FOLLOW-UP NEEDED` items.
@@ -880,9 +977,11 @@ here.
 - Item 6: no PII — fabricated names only (§8 criterion 8).
 - Item 9: dependency allowlist explicitly includes "dev tooling (vitest,
   playwright, eslint, prettier)" — criterion 5's live-browser measurement is
-  pre-authorized, no boss-architect approval needed; use this project's own
-  established global-symlink mechanism in preference to a fresh install
-  (§8 criterion 5(i)).
+  pre-authorized, no boss-architect approval needed. **Gate round 2
+  correction: there is no global-symlink mechanism available in this
+  execution environment** — acquire `playwright` via a local, `package.json`/
+  `package-lock.json`-unchanged `npm install --no-save --no-package-lock`
+  (or `npx -y`) instead (§8 criterion 5(i)).
 - Item 10: existing tests must pass; this task adds tests/fixture plumbing
   and edits two `it(` bodies to append three new assertion lines each (§7b,
   corrected from one line per gate round 1, BLOCKER 2) — no existing
