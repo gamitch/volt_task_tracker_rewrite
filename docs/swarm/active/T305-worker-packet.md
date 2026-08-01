@@ -1,8 +1,15 @@
 # T305 — the mark-complete dialog must seed from, and preserve, recorded attendance
 
-**Packet v3.** v1 (`0525378`) was stopped by the premise gate; v2 (`232dacf`) was stopped by round 1
-of the gate on v3's behalf. **Round 2 of 2 under constitution item 19a** — a third REVISE escalates
-to the human owner instead of looping.
+**Packet v4 — GATED, CLEARED FOR DISPATCH.** `checker-premise` round 2 of 2 returned **DISPATCH**
+against v3 (`5726d90`) with findings attached; v4 folds every one of them in. v1 (`0525378`) and v2
+(`232dacf`) were both REVISE. No further gate round — item 19a's cap is spent, and round 2's own
+verdict was that its remaining findings are criterion-quality notes fixable inside the Allowed
+Files, not false premises.
+
+**Both gate rounds were run by an agent that BUILT the prescription in its own worktree.** Every
+figure below marked "measured" was executed. Round 2 built the complete implementation and all six
+gates came back green — `tsc` 0, `vite build` ✓, prettier clean, eslint 361, **73 files / 1757
+tests exit 0** (its own scratch criteria file included). The prescription is known to work.
 
 **Branch:** `claude/t305-attendance-over-rsvp` (off `main` = `1aede0c`)
 **Worker tier:** sonnet. None of item 18's four triggers fire — no migration, no RLS, no
@@ -18,7 +25,7 @@ which you must read even though you will not fix it).
 
 ---
 
-## 0. Why there is a v3
+## 0. Why this packet took four revisions
 
 ### 0.1 The destructive-write premise is TRUE — confirmed by execution
 
@@ -145,9 +152,22 @@ computeInitialFormSeed(
 - `recordedRows === null` (**not loaded yet, or the load failed**) → `checkedStudentIds` is exactly
   `computeInitialAttendedStudentIds(sessionId, roster, rsvps)`; hours map `{}`.
 - Otherwise, per roster student, resolve the row for `(sessionId, studentId)`:
-  1. **A row exists** → checked iff `isAttendingStatus(row.status)`. If checked and
+  1. **A row exists** → checked iff `isAttendingStatus(row.status)`. **Independently of that**, if
      `row.hoursOverride !== null`, the map carries that value.
   2. **No row** → checked iff a `going` RSVP exists for this session (today's rule).
+
+**The hours map is seeded for every recorded row with a non-null override, checked or not — this is
+load-bearing, not tidiness.** Gate round 2 measured the alternative: seeding only *checked* students
+means an `absent`-recorded student with `hoursOverride: 3`, whom the coach then deliberately checks,
+shows **7 h** in the input and counts **7 h** in the confirm label while §5's write emits **3**:
+
+```
+LABEL: Mark complete — 1 attended · 7 h  |  WRITTEN hoursOverride: 3
+```
+
+Extra map entries are inert — `computeTotalHoursForCheckedStudents`, `buildAttendanceWriteRows` and
+the per-student `NumberInput`s all read the map only for *checked* students — so seeding
+unconditionally costs nothing and removes the divergence. **Criterion W6 pins it.**
 - **Filter by `sessionId` inside the function.** Do not trust the caller.
 
 A recorded `absent` row starts **unchecked** even when the student RSVP'd `going`.
@@ -172,7 +192,9 @@ aware you are crossing two same-shaped types and say so in a comment.
 
 - **Hours map:** merge with the coach's edits winning —
   `setHoursOverrideByStudentId(prev => ({ ...recordedOverrides, ...prev }))`. At open `prev` is
-  `{}`, so recorded values win; anything typed is in `prev` and survives.
+  `{}`, so recorded values win; anything typed is in `prev` and survives. **This merge is
+  unconditional — it is NOT gated by the touched-ref below.** Gating it would reopen the
+  label-vs-write divergence for the late-arrival case.
 - **Checklist:** needs an explicit guard, because "unchecked everyone" and "did nothing" are both
   just an array. One `useRef(false)`, set true by the `CheckboxList`'s `onChange` and by
   `setStudentHoursOverride`, cleared in `resetForm`. Apply the recorded `checkedStudentIds` **only**
@@ -231,11 +253,25 @@ the real fix. Do **not** add a load seam there. Do **not** change
 `buildMarkEventCompletePayload`'s own signature — its test calls it with five arguments
 (`MarkEventCompleteDialog.test.tsx:208`) and must not need editing.
 
-Also correct that file's module doc `:168-170`, which claims it *"Reuses
-`computeInitialAttendedStudentIds` + `buildAttendanceWriteRows` … **unchanged**"* — after this task
-it passes a new argument. One clause; do not rewrite the paragraph.
+Also correct **three** stale doc claims in that file — one clause each, do not rewrite the
+paragraphs:
 
-Criterion **W6** pins that the bulk path's emitted payload is byte-identical to today's.
+- `:168-170` — *"Reuses `computeInitialAttendedStudentIds` + `buildAttendanceWriteRows` …
+  **unchanged**"*. After this task it passes a new argument.
+- `:22` — *"`computeInitialAttendedStudentIds` (**the** checklist-seeding derivation)"*. It becomes
+  the per-day dialog's RSVP *fallback*, not its seeding derivation.
+- `:44-51` — module doc #2(a): *"always uses the SAME derivation the per-day dialog seeds its own
+  checklist from"* and *"it writes exactly the RSVP-derived default the per-day flow itself would
+  show pre-checked."* **Both false after this task**, and the second is specifically the "this does
+  not invent attendance" argument a future T307 implementer will read and rely on. Found by gate
+  round 2.
+
+**The bulk payload needs no new criterion.** An existing test already pins it byte-for-byte —
+`MarkEventCompleteDialog.test.tsx:206-216` asserts the emitted row is
+`present` / `coach` / `hoursOverride: null` for a `going`-RSVP student. Gate round 2 measured that
+passing real recorded rows at `:187` turns that test red (`1 failed | 14 passed`). It is in the
+1746-test baseline, it is in a Forbidden file, and it costs you nothing — **leave it green and cite
+it in your output as the pin.**
 
 **Forbidden:** changing `MarkDayCompletePayload`'s or `AttendanceWriteRow`'s field shape; touching
 `loaders/outreach.ts`, `loaders/attendance.ts`, `loaders/endMeeting.ts`, `AttendancePanel.tsx`,
@@ -301,11 +337,18 @@ that instead of shipping it.** Use `container.textContent`, never `innerHTML`.
 
 > **Mock-hardening requirement (read before writing any of these).** Because §3's fallback is
 > *graceful*, a mock that never intercepts and a load that returns no rows are **indistinguishable**
-> for any criterion that asserts *fallback* behaviour. The gate measured which ones: with the mock
-> deliberately broken, **S3, S4, S5, S8's late-arrival arm, W2 and W3 all still pass**. Each of those
-> six must additionally assert `expect(mockedLoad).toHaveBeenCalledWith([session.id])`.
-> **S6 and I1 need no hardening** — they already fail on their own against a broken mock. (v2 said
-> the opposite; it was inverted.)
+> for any DOM-level criterion that asserts *fallback* behaviour. Gate round 2 measured this directly,
+> by breaking the mock and re-running every criterion:
+>
+> - **Must assert `expect(mockedLoad).toHaveBeenCalledWith([session.id])`** — otherwise they pass
+>   against a broken mock: **S4, S5, S8's late-arrival arm, S8b**, and **S3, W3, W4 whenever written
+>   at DOM level**.
+> - **Need no hardening, measured red on their own:** **S6, W1, I1**.
+> - **Cannot be hardened, and do not need it: any criterion written as a direct pure-function call**
+>   — **S3b and W2** never invoke the loader at all, so a broken mock cannot reach them.
+>
+> (v2 inverted this list; v3 fixed the inversion but kept v2's numbering, so it named "W2" — which
+> v3 had renamed W4 — and omitted both new criteria. This is the corrected list.)
 
 ### Seeding and display
 
@@ -317,8 +360,15 @@ that instead of shipping it.** Use `container.textContent`, never `innerHTML`.
 - **S3** — Loader resolves **`[]`**: behaviour is exactly as today — `going` RSVPs start checked.
   **Mutation:** remove the RSVP check from the **per-student no-row branch** specifically.
   *(v2 said "the fallback"; there are two, and mutating the null branch leaves S3 green — measured.)*
-- **S3b** — Loader is still **in flight**: `going` RSVPs start checked via the
-  **`recordedRows === null`** branch. **Mutation:** make that branch return `[]`.
+- **S3b** — The **`recordedRows === null`** branch (load in flight, or failed) returns exactly
+  `computeInitialAttendedStudentIds`' result. **Write this as a direct pure-function call** —
+  `computeInitialFormSeed(sessionId, roster, rsvps, null)` — **not through the DOM.**
+  **Mutation:** make that branch return `[]`.
+  *Measured by gate round 2: asserted through the DOM this criterion is **vacuous**. Under §4's
+  prescribed imperative shape the component only ever calls `computeInitialFormSeed` from inside
+  `.then()`, always with a non-null array — the in-flight seed comes from the pre-existing
+  `resetForm()`, so the null branch is dead in the DOM path and the mutation leaves all 11 criteria
+  green. A pure call is unambiguous and does not constrain your implementation shape.*
 - **S4** — Loader **rejects**: the dialog still opens, still seeds from RSVPs, shows **no** error
   surface, confirm **not** disabled. **Mutation:** drop the `.catch`. **Assert the suite's exit
   code, not just the pass count** — measured: all criteria stay green at **exit 1**. This is the
@@ -368,11 +418,19 @@ that instead of shipping it.** Use `container.textContent`, never `innerHTML`.
 - **W5** — A recorded `absent` row the coach deliberately checks is written `status: 'present'`, and
   `recordedBy` is the **acting coach's** `currentUserProfileId` even though `method` is preserved as
   `'qr'`. **Mutation:** `recordedBy: existing?.recordedBy ?? currentUserProfileId`.
-- **W6** — **The bulk path is unchanged.** `buildMarkEventCompletePayload`'s emitted `attendance`
-  rows are byte-identical to today's for a fixture where a checked student *does* have a recorded
-  row. **Mutation:** pass real recorded rows at `MarkEventCompleteDialog.tsx:187` instead of an
-  empty map. *(This pins §5.1's deliberate non-fix so T307 stays a real, findable row rather than
-  being half-done here.)*
+- **W6** — **The confirm label never disagrees with what the write emits.** Fixture: a student
+  recorded `absent` with `hoursOverride: 3` and `method: 'qr'` on a **7 h** session, whom the coach
+  **deliberately checks**. The confirm button must read `1 attended · 3 h` — not 7 — and the payload
+  must carry `hoursOverride: 3`, `status: 'present'`, `method: 'qr'`.
+  **Mutation:** seed the hours map only for students who *start* checked (v3's rule).
+  *This is the divergence gate round 2 measured: label `7 h`, written `3`. §4's unconditional
+  seeding is what closes it, and this criterion is the only thing holding that open. It also keeps
+  module doc #2(b) (`:109-119`, `:455-458`) — "a SUM over the exact values this dialog is ABOUT TO
+  WRITE", the constitution-item-3 legitimacy argument for `computeTotalHoursForCheckedStudents`
+  existing at all — **true**. If your implementation cannot satisfy W6, that doc claim becomes false
+  and you must correct it and say so rather than shipping past it.*
+  *(§5.1's deliberate non-fix of the bulk path needs no criterion — `MarkEventCompleteDialog.test.tsx:206-216`
+  already pins it. See §5.1.)*
 
 ### Integration
 
@@ -458,9 +516,11 @@ Both targeted exits must be `0`. A gate omitted from your report is treated as n
 pass count with a nonzero exit code is a real failure on this project** — S4's own mutation produces
 exactly that.
 
-**Expected eslint delta: 360 → 362**, one `react-refresh/only-export-components` per new *value*
-export. The gate measured exactly +2 with two new exports. A rise equal to your new value exports is
-expected; anything beyond must be explained. Zero errors either way.
+**Expected eslint delta: +1 `react-refresh/only-export-components` per new *value* export**, from a
+base of **360**. Gate round 2's implementation needed exactly one new export
+(`computeInitialFormSeed`) and measured **361**; a second helper export would make it 362. Report
+your count and name the exports; anything beyond one-per-export must be explained. Zero errors
+either way.
 
 ---
 
