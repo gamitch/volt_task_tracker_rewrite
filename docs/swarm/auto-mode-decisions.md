@@ -1314,3 +1314,34 @@ doesn't need to be open" grounds). George selected **"Close it off."**
 (`revoke select on public.v_leaderboard_students from anon;` or equivalent), which per constitution
 item 18 trigger 1 requires opus tier and a full `checker-premise` round regardless of the change's
 size, no exception for a one-line revoke. Not yet packeted or dispatched as of this ruling.
+
+## 2026-07-31 — George's ruling on T203's item-19a escalation (owner input, structured selection)
+
+**Mechanism, same as prior escalations — not free-text input.** `T203-worker-packet.md`'s
+`checker-premise` gate ran two light-gate rounds (item 19b: light, since this rolls out T157/T177's
+already-proven "mount a finished, tested component" pattern). Round 1 REVISE (2 BLOCKER, both real
+and execution-proven: `Leaderboard` internally fetches both hours data and a privacy setting via
+`Promise.all`, but the packet only threaded the first as an injectable prop, so the embed could
+never reach a populated state in any test; and a `DashboardPage.test.tsx` assertion that stayed
+green even with the embed completely broken, proven by deliberately breaking it and watching the
+test pass anyway). Round 2 (after both fixes) independently re-executed the full revised
+prescription — `tsc` clean, 1731/1731 tests green, all six mutation-marked criteria individually
+reproduced and confirmed discriminating — and found exactly one remaining issue: the live-browser
+measurement criterion's Playwright-acquisition paragraph cited a Linux-sandbox file path
+(`/opt/node22/lib/node_modules/playwright`) that the gate measured does not exist on this machine
+(macOS), traced to a paragraph transcribed from an unrelated task's module doc without re-checking
+it against the current environment. The gate also found and verified a working alternative (a
+local, `package.json`-unchanged Playwright install, using Chromium already cached on this machine).
+Per item 19a this caps at two rounds and escalates. I presented the same three-option structured
+question used on every prior escalation (authorize one more revision round / pause for review /
+drop T203), Recommended the first on the gate's own framing: narrow, mechanical, fully
+execution-proven except one factual paragraph. He selected **"Authorize one more revision round."**
+No free-text notes added.
+
+**What this authorizes:** one additional `foreman-planner` revision pass on T203's packet —
+rewriting only the live-browser measurement criterion's Playwright-acquisition paragraph with the
+gate's verified environment facts (local install command, existing Chromium cache path, explicit
+`package.json`/`package-lock.json`-unchanged constraint preserved) plus the gate's four smaller
+MINOR/NIT citation fixes — dispatched directly to `worker-implementer` afterward **without** a
+third `checker-premise` round. Bounded to this packet only, per the same non-precedent-setting
+terms as every prior ruling.
