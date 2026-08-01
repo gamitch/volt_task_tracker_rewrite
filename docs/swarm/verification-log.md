@@ -6162,6 +6162,89 @@ this task's own RLS reasoning — documentation accuracy only, no functional def
 
 ---
 
+## T303 — the event Attendance badge's noun
+
+**Merged `82da973`. First attempt, no findings.** Found by the owner running the app against real
+data, not by any test: an event read `12h recorded` while the KPI strip directly above it read
+`Season hours 0.0`. Both were correct under their own rule — `eventTotalHours` sums over eligible
+sessions with no status filter, while `v_student_hours` joins `es.status = 'completed'` — and they
+contradicted each other in one viewport.
+
+**Owner ruling: "12h recorded is right, just fix the wording to say 'scheduled'."** Implemented as a
+status-aware noun rather than a literal swap, because a blind swap moves the lie instead of removing
+it: once a day is marked complete those hours genuinely do count, and *scheduled* would be false in
+exactly that case. `resolveEventHoursNoun` is a small exported pure function; `eventTotalHours` is
+byte-for-byte unchanged.
+
+**Both mutations reproduced by the orchestrator rather than relayed.** Forcing `'recorded'` →
+**3 of 41** red, including the render-level test; forcing `'scheduled'` → **2 of 41** red. The worker
+proved only the first direction. Adding the reverse is the difference between "the test fails when
+the code is wrong" and "the test fails when the code is wrong **in either direction**" — with a
+two-valued return, one mutation leaves the other branch resting on an unmutated assertion.
+
+Gates in the shared tree: `tsc` 0, build ✓, prettier clean, eslint **0 errors / 360 warnings**,
+vitest **70 files / 1701 tests**, targeted exit 0.
+
+**Disclosed rather than buried:** the warning count rose by one. Adding an export to a file that also
+exports components triggers another `react-refresh/only-export-components` — a pattern this file
+already carries many times. Zero errors, and the alternative (a new file for one 3-line function)
+costs more than the warning.
+
+**No checker round** (item 25) — one noun, one pure function, both mutation directions verified
+directly.
+
+---
+
+## T189 — honest copy for a deactivated student on `/meetings`
+
+**Merged `f19992f`.** One worker attempt; the **packet** needed two rounds.
+
+The defect: real last-5 attendance dots rendered directly beside *"— (no completed meetings
+recorded yet this season)"*. Neither the id resolution nor the dot row filters `is_active`; only the
+participation figure does.
+
+### The premise gate rejected v1 with two BLOCKERs and was right both times
+
+**v1's detector was unsound.** It reused T184's inference — `resolveStudentScope` returning `null`
+means inactive. The gate read `v_student_goal_projection` properly and found
+`join seasons se on se.is_active` (`dashboard_views.sql:331`): an **inner** join. With zero active
+seasons the view returns no row for **anyone**. `StudentHome` is immune only because it gates on
+`activeSeason.status === 'ready'`; `MeetingsList` consumes no season context at all. **v1 would have
+told every student their account was deactivated the moment a season lapsed** — worse than the bug.
+
+The orchestrator's error underneath it: **following a precedent past the point where its
+preconditions hold.** T184's inference was sound *for StudentHome*, never in general. v2 reads
+`students.is_active` directly — no season coupling, no false-positive state, no migration.
+
+**v1 also broke five green tests without disclosing it** (76 → 71). They take the resolved path and
+reach the real client with `.env.local` absent. This trap is documented **verbatim** in
+`DashboardPage.test.tsx:39-42` and again in `OutreachList.test.tsx:158-165`, and this is the **third
+consecutive task** in which the orchestrator wrote criteria against an imagined harness rather than
+reading the real one. Two of the five belong to merged tasks (T302, T096).
+
+Plus: the branch had to sit **above** the `isEmpty` ternary or it was unreachable for a student with
+no history (**C6** pins it), and **four of five v1 criteria passed against the defective code** —
+regression guards mislabelled as proofs.
+
+### Verification
+
+Three mutations replayed by the orchestrator rather than relayed:
+
+| Mutation | Result |
+|---|---|
+| kill the inactive branch | **C1 + C6 red** |
+| detect via `participation === null` (the newcomer trap) | **C4 red**, plus 7 pre-existing tests |
+| drop the history sections from the inactive branch | **C2 red** |
+
+The second is the one that matters: it is the exact wrong design v1 nearly shipped, and C4 exists
+solely to make it fail loudly.
+
+Gates: `tsc` 0, build ✓, prettier clean, eslint **0 errors / 360 warnings (unchanged)**, vitest
+**72 files / 1744 tests** (+12), targeted exit 0.
+
+**Worker disclosed** that under its `Promise.all` shape only 3 of the packet's 5 named call sites
+actually failed pre-injection. Reported rather than smoothed over — the right instinct, and the
+remedy was identical.
 ## T203 — `<Leaderboard>` embedded in `CoachHome`'s dashboard (merged 2026-07-31)
 
 | Field | Value |

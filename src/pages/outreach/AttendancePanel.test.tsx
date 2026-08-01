@@ -38,6 +38,7 @@ import {
   isAttendingStatus,
   mapStoredColorToBadgeVariant,
   pickTeamBadgeVariant,
+  resolveEventHoursNoun,
   resolveTeamBadgeVariant,
   resolveTeamName,
   rowKey,
@@ -137,6 +138,15 @@ const CANCELED_SESSION: AttendancePanelSession = {
   startsAt: '2026-08-03T14:00:00.000Z',
   endsAt: '2026-08-03T20:00:00.000Z',
   status: 'canceled',
+};
+
+// T303 -- same window as SESSION_1, `status: 'completed'` only, so the two
+// fixtures isolate the noun decision (`resolveEventHoursNoun`) from every
+// other field.
+const COMPLETED_SESSION: AttendancePanelSession = {
+  ...SESSION_1,
+  id: 'session-completed',
+  status: 'completed',
 };
 
 // T143 -- `color` required. These two values are picked ONLY to exercise the
@@ -344,6 +354,20 @@ describe('rowKey / computeSessionAttendanceTotalHours (module doc #7 -- legitima
       [rowKey(SESSION_1.id, 'student-amara')]: makeRow({ hoursOverride: null }),
     };
     expect(computeSessionAttendanceTotalHours(SESSION_1, ROSTER, byKey)).toBe(8);
+  });
+});
+
+describe('resolveEventHoursNoun (T303 -- badge noun, eventTotalHours arithmetic unchanged)', () => {
+  it('all sessions still scheduled -> "scheduled"', () => {
+    expect(resolveEventHoursNoun([SESSION_1])).toBe('scheduled');
+  });
+
+  it('all sessions completed -> "recorded"', () => {
+    expect(resolveEventHoursNoun([COMPLETED_SESSION])).toBe('recorded');
+  });
+
+  it('mixed -- at least one still scheduled among completed -> "scheduled"', () => {
+    expect(resolveEventHoursNoun([COMPLETED_SESSION, SESSION_1])).toBe('scheduled');
   });
 });
 
@@ -777,7 +801,8 @@ describe('<AttendancePanel /> hours edit persists on blur, only when actually ch
 });
 
 describe('<AttendancePanel /> running totals (module doc #7 -- local sum, not a v_student_hours query)', () => {
-  it('shows per-day "N attending · M h" and an event "recorded" total', async () => {
+  it('shows per-day "N attending · M h", and the event badge (T303: still scheduled -> "scheduled", never "recorded")', async () => {
+    // SESSION_1 (default `renderPanel` session) is `status: 'scheduled'`.
     renderPanel({
       loadAttendance: async () => [makeRow({ status: 'present', hoursOverride: 4 })],
     });
@@ -785,6 +810,25 @@ describe('<AttendancePanel /> running totals (module doc #7 -- local sum, not a 
 
     expect(container.textContent).toContain('1 attending');
     expect(container.textContent).toContain('4 h');
+    // Paired assertion (packet requirement): the expected noun is present
+    // AND the other noun is absent, so this cannot pass on a badge that
+    // simply failed to render.
+    expect(container.textContent).toContain('4h scheduled');
+    expect(container.textContent).not.toContain('recorded');
+  });
+
+  it('event badge reads "recorded" once every contributing session is completed (T303)', async () => {
+    renderPanel({
+      sessions: [COMPLETED_SESSION],
+      loadAttendance: async () => [
+        makeRow({ sessionId: COMPLETED_SESSION.id, status: 'present', hoursOverride: 4 }),
+      ],
+    });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('1 attending');
+    expect(container.textContent).toContain('4 h');
     expect(container.textContent).toContain('4h recorded');
+    expect(container.textContent).not.toContain('scheduled');
   });
 });
