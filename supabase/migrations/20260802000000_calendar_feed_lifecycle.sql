@@ -22,8 +22,10 @@ where feed.id = ranked.id
   and ranked.active_rank > 1;
 
 -- CAL-05: concurrency-safe enforcement of at most one active feed per
--- profile. Revoked rows are deliberately outside the index predicate.
-create unique index if not exists calendar_feeds_one_active_per_profile_idx
+-- profile. Revoked rows are deliberately outside the index predicate. Do not
+-- use IF NOT EXISTS here: a same-named index with the wrong definition is
+-- schema drift and must fail loudly rather than being accepted silently.
+create unique index calendar_feeds_one_active_per_profile_idx
   on public.calendar_feeds (profile_id)
   where revoked_at is null;
 
