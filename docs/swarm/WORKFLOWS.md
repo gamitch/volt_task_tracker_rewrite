@@ -9,6 +9,10 @@ time**, because that is decided by file overlap, not by topic.
 status; `AUDIT-TRIAGE.md` remains authoritative for the audit reconciliation. If they disagree with
 this file, they win and this file is stale.
 
+**To actually dispatch a machine, use `KICKOFF-PROMPTS.md`** — one copy-pasteable standalone prompt
+per workflow, carrying that workflow's owned files, row-number block, do-not-touch list, and task
+order. This file holds the reasoning; that one is the operational surface.
+
 ---
 
 ## Read this before you assign anything

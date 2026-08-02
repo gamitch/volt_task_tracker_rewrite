@@ -26,6 +26,11 @@ Blocks are deliberately over-sized: one that can run out reintroduces the failur
 **Best three-machine split: W1 (check in) + W4 (hours) + W7 (roster)** — no shared files. **Best
 two-machine split: W1 + W2**, which between them hold every remaining data-loss row.
 
+**`docs/swarm/KICKOFF-PROMPTS.md` is the operational half** — one copy-pasteable standalone prompt
+per workflow, each carrying its owned files, row block, do-not-touch list, task order with tiers, and
+the non-optional constitution rules (22/23/24/26). A fresh session starts cold, so each prompt
+repeats what it needs rather than assuming any of this.
+
 ### Three bookkeeping corrections, all item-24 drift
 
 Found while re-reading the ledger; **all three are the orchestrator's own process failing, not new
