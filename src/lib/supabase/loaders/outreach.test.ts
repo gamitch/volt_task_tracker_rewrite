@@ -13,7 +13,13 @@
 // default node environment.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
-import { makeLoadGuardianLinksForParent, makeLoadOutreachDetail } from './outreach';
+import {
+  makeLoadGuardianLinksForParent,
+  makeLoadOutreachDetail,
+  makeMarkDayComplete,
+  type OutreachAttendanceWriteRow,
+  type OutreachMarkDayCompletePayload,
+} from './outreach';
 
 /**
  * Splits a recorded `.select()` argument into a normalised set of column
@@ -307,5 +313,228 @@ describe('queryGuardianLinksWithRelationshipForParent (via makeLoadGuardianLinks
     // `[]`, not `null`/`undefined` -- so a caller can never read "no rows" as
     // "fall back to something."
     await expect(load('profile-parent-1')).resolves.toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T327: `makeMarkDayComplete`'s write ORDER. First coverage of this mutation
+// (T165: 21/23 exports in this loader were untested before this) -- nothing
+// existing pins the old order, which is why the reorder was safe to make and
+// why C1/C4's recorded-order assertions are the criteria that matter.
+// ---------------------------------------------------------------------------
+
+interface MarkDayCompleteRecordedCall {
+  table: string;
+  method: 'update' | 'select' | 'upsert';
+}
+
+/**
+ * Records table AND METHOD (`endMeeting.test.ts:353`'s "dispatches on the
+ * METHOD called" shape), not table alone -- with nonzero adult-volunteer
+ * deltas, `event_sessions` receives BOTH an `update` (the status flip) and a
+ * `select` (step 3's `querySessionEventId` read, `outreach.ts:866-876`). A
+ * table-only recorder cannot distinguish the flip from that read, and C1
+ * would assert on the wrong call. Also copies `endMeeting.test.ts:613`'s
+ * `{ client, fromSpy, updateArgs, eqArgs }` helper shape (here widened per
+ * table) so a test can assert both the write's exact payload and the order
+ * writes were dispatched in.
+ */
+function makeMarkDayCompleteRecordingClient(
+  options: {
+    attendanceError?: { message: string; code?: string } | null;
+    sessionFlipError?: { message: string; code?: string } | null;
+    sessionEventId?: string | null;
+    volunteerTotals?: { adult_volunteers_count: number; adult_volunteer_hours: number };
+  } = {},
+): {
+  client: SupabaseClient;
+  fromSpy: ReturnType<typeof vi.fn>;
+  order: MarkDayCompleteRecordedCall[];
+  eventSessionsUpdateArgs: unknown[];
+  eventSessionsEqArgs: [string, unknown][];
+  attendanceUpsertArgs: [unknown, unknown][];
+  eventsUpdateArgs: unknown[];
+} {
+  const order: MarkDayCompleteRecordedCall[] = [];
+  const eventSessionsUpdateArgs: unknown[] = [];
+  const eventSessionsEqArgs: [string, unknown][] = [];
+  const attendanceUpsertArgs: [unknown, unknown][] = [];
+  const eventsUpdateArgs: unknown[] = [];
+
+  const resolvedSessionEventId =
+    options.sessionEventId === undefined ? 'event-1' : options.sessionEventId;
+  const resolvedVolunteerTotals = options.volunteerTotals ?? {
+    adult_volunteers_count: 3,
+    adult_volunteer_hours: 6,
+  };
+
+  const fromSpy = vi.fn((table: string) => {
+    if (table === 'event_sessions') {
+      return {
+        update: (patch: unknown) => {
+          order.push({ table, method: 'update' });
+          eventSessionsUpdateArgs.push(patch);
+          return {
+            eq: (column: string, value: unknown) => {
+              eventSessionsEqArgs.push([column, value]);
+              return Promise.resolve({ data: null, error: options.sessionFlipError ?? null });
+            },
+          };
+        },
+        select: () => {
+          order.push({ table, method: 'select' });
+          return {
+            eq: () => ({
+              maybeSingle: () =>
+                Promise.resolve({
+                  data:
+                    resolvedSessionEventId === null ? null : { event_id: resolvedSessionEventId },
+                  error: null,
+                }),
+            }),
+          };
+        },
+      };
+    }
+    if (table === 'attendance') {
+      return {
+        upsert: (rows: unknown, opts: unknown) => {
+          order.push({ table, method: 'upsert' });
+          attendanceUpsertArgs.push([rows, opts]);
+          return Promise.resolve({ data: null, error: options.attendanceError ?? null });
+        },
+      };
+    }
+    if (table === 'events') {
+      return {
+        select: () => {
+          order.push({ table, method: 'select' });
+          return {
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({ data: resolvedVolunteerTotals, error: null }),
+            }),
+          };
+        },
+        update: (patch: unknown) => {
+          order.push({ table, method: 'update' });
+          eventsUpdateArgs.push(patch);
+          return { eq: () => Promise.resolve({ data: null, error: null }) };
+        },
+      };
+    }
+    throw new Error(`unexpected table: ${table}`);
+  });
+
+  return {
+    client: { from: fromSpy } as unknown as SupabaseClient,
+    fromSpy,
+    order,
+    eventSessionsUpdateArgs,
+    eventSessionsEqArgs,
+    attendanceUpsertArgs,
+    eventsUpdateArgs,
+  };
+}
+
+const SAMPLE_ATTENDANCE_ROW: OutreachAttendanceWriteRow = {
+  sessionId: 'session-day-1',
+  studentId: 'student-1',
+  status: 'present',
+  checkInAt: null,
+  checkOutAt: null,
+  hoursOverride: null,
+  method: 'coach',
+  recordedBy: 'coach-1',
+};
+
+function makeMarkDayCompletePayload(
+  overrides: Partial<OutreachMarkDayCompletePayload> = {},
+): OutreachMarkDayCompletePayload {
+  return {
+    sessionId: 'session-day-1',
+    peopleReached: 12,
+    attendance: [SAMPLE_ATTENDANCE_ROW],
+    adultVolunteersCountThisSession: 2,
+    adultVolunteerHoursThisSession: 4,
+    recordedBy: 'coach-1',
+    ...overrides,
+  };
+}
+
+describe('makeMarkDayComplete (T327) -- completion write ordering', () => {
+  it("C1: writes attendance BEFORE flipping event_sessions to completed -- asserts on the recorded ORDER of client.from(...) calls, distinguishing the flip UPDATE from step 3's event_sessions SELECT", async () => {
+    const setup = makeMarkDayCompleteRecordingClient();
+    const markDayComplete = makeMarkDayComplete(() => setup.client);
+
+    await markDayComplete(makeMarkDayCompletePayload());
+
+    expect(setup.order).toEqual([
+      { table: 'attendance', method: 'upsert' },
+      { table: 'event_sessions', method: 'update' },
+      { table: 'event_sessions', method: 'select' },
+      { table: 'events', method: 'select' },
+      { table: 'events', method: 'update' },
+    ]);
+  });
+
+  it('C2: when the attendance write rejects, event_sessions is never flipped to completed -- and the attendance write WAS attempted', async () => {
+    const setup = makeMarkDayCompleteRecordingClient({
+      attendanceError: { message: 'boom', code: 'ATTENDANCE_FAIL' },
+    });
+    const markDayComplete = makeMarkDayComplete(() => setup.client);
+
+    await expect(markDayComplete(makeMarkDayCompletePayload())).rejects.toBeTruthy();
+
+    // Presence: the attendance write was attempted (not a fake-client throw
+    // before either call).
+    expect(setup.attendanceUpsertArgs).toHaveLength(1);
+    // Absence: no update carrying status:'completed' was ever issued.
+    expect(setup.eventSessionsUpdateArgs).toHaveLength(0);
+  });
+
+  it('C3: with no attendance rows, the session still flips to completed -- the length>0 guard is preserved', async () => {
+    const setup = makeMarkDayCompleteRecordingClient();
+    const markDayComplete = makeMarkDayComplete(() => setup.client);
+
+    await markDayComplete(
+      makeMarkDayCompletePayload({
+        attendance: [],
+        adultVolunteersCountThisSession: 0,
+        adultVolunteerHoursThisSession: 0,
+      }),
+    );
+
+    expect(setup.attendanceUpsertArgs).toHaveLength(0);
+    expect(setup.eventSessionsUpdateArgs).toEqual([{ status: 'completed', people_reached: 12 }]);
+  });
+
+  it('C4: the adult-volunteer update still runs LAST, after the status flip, and the happy path resolves normally', async () => {
+    const setup = makeMarkDayCompleteRecordingClient();
+    const markDayComplete = makeMarkDayComplete(() => setup.client);
+
+    await expect(markDayComplete(makeMarkDayCompletePayload())).resolves.toBeUndefined();
+
+    expect(setup.order).toEqual([
+      { table: 'attendance', method: 'upsert' },
+      { table: 'event_sessions', method: 'update' },
+      { table: 'event_sessions', method: 'select' },
+      { table: 'events', method: 'select' },
+      { table: 'events', method: 'update' },
+    ]);
+  });
+
+  it('C5: the adult-volunteer update is skipped entirely when both deltas are 0', async () => {
+    const setup = makeMarkDayCompleteRecordingClient();
+    const markDayComplete = makeMarkDayComplete(() => setup.client);
+
+    await markDayComplete(
+      makeMarkDayCompletePayload({
+        adultVolunteersCountThisSession: 0,
+        adultVolunteerHoursThisSession: 0,
+      }),
+    );
+
+    expect(setup.order.some((call) => call.table === 'events')).toBe(false);
+    expect(setup.eventsUpdateArgs).toHaveLength(0);
   });
 });
