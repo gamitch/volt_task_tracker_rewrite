@@ -1,4 +1,4 @@
-# Resume here — state of play at `main` = `1aede0c` (read the UPDATE sections top-down; each supersedes the ones below it)
+# Resume here — state of play at `main` = `4b951c5` (read the UPDATE sections top-down; each supersedes the ones below it)
 
 Written 2026-07-30 so this session's context can be cleared without losing anything.
 Fresh orchestrator session: read this, then `constitution.md`, then the open rows in
@@ -7,6 +7,71 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 **Several dated UPDATE sections sit near the top of this file. Read them top-down — the
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
+
+## UPDATE — 2026-08-02: T307 is FIXED. The migration has RUN. Two new docs own the state.
+
+**`main` = `4b951c5`.** Gates measured there with `.env.local` absent: `tsc` 0 · `vite build` ✓ ·
+prettier clean · eslint **0 errors / 361 warnings** · vitest **75 files / 1817 tests, exit 0**.
+Ledger integrity verified: no duplicate row numbers. **Zero open PRs.**
+
+### ⚠️ The section below this one is now HISTORICAL — do not act on it
+
+**T307 is fixed and merged.** The next UPDATE down opens with *"T307 is LIVE DATA LOSS … Read this
+first"*, which was true on 2026-08-01 and is **no longer true**. Both halves of that write path
+shipped: **T305** (the per-day dialog seeds from recorded attendance and carries `hoursOverride`,
+`checkInAt`, `checkOutAt` and `method` through the write) and **T307** (the bulk path no longer
+destroys recorded rows). Read that section for the reasoning; do not re-open the work.
+
+### Two documents now own state this file used to carry
+
+- **`docs/migration/RUNBOOK.md`** — the migration end to end. **It has been RUN for real**
+  (2026-08-02): 20 students, 4 teams, 16 events, 117 sessions, 254 rsvps, 79 attendance rows
+  carrying **341.75 hours**, all in the owner's live project. Includes both failures encountered,
+  the account-preserving teardown SQL with the reason behind every clause, and the known gaps.
+- **`docs/swarm/AUDIT-TRIAGE.md`** — an external UX audit (4 P0 / 8 P1 / 3 P2) reconciled against
+  the ledger. **Start here for what to work on next**, not the raw ledger: it dedupes three findings
+  against existing rows, adjusts two severities with reasons, and records what the audit missed.
+
+### The process changed — read constitution item 26 before picking up any task
+
+**Three tiers, triggered by risk, not by topic or ticket size.** The full
+packet → premise gate → worker → checker chain is the **heavy** tier and is **no longer the
+default**. Authorized by the owner after he observed it was disproportionate for a few-line fix.
+**T323 was the first fast-tier task** — direct edit, paired test, mutation, six gates, PR, done in
+minutes — and it found something a packet round would have charged full price for: an existing
+*passing* test was pinning the bug as correct behaviour.
+
+**Heavy tier is still mandatory for write paths, auth/RLS, migrations, metric-view SQL, and exports
+another session imports.** It earned that twice this session — on T305 and T189 the gate *built* the
+prescription and caught a data-correctness defect invisible to reading the code.
+
+### Merged since the last update
+
+**T305**, **T307**, **T323**, **T063** (migration validation — the old-project credential blocker is
+**closed permanently**; Lovable Cloud exposes no service-role key, so the ETL reads exported JSON via
+`--from-dir`), **T063b** (write manifest + `--teardown`), plus the audit triage and constitution
+item 26.
+
+**T333** (migrated events landed on a new *inactive* season and were invisible) was **fixed by the
+owner** with the repoint SQL. The ETL still hardcodes `is_active: false` — the row stays open for
+the tooling half.
+
+### Next, in order — full reasoning in `AUDIT-TRIAGE.md`
+
+1. **T321** — manual short-code entry on `/checkin`. **Standard tier.** UI-only: T032 already
+   shipped the short-code HMAC backend. Best effort-to-impact ratio on the list.
+2. **T324** — the calendar renders fixture events on a live route. The *fabricated-data* family that
+   caused nearly every real bug here, previously declared closed.
+3. **T193** — a student changing their RSVP on `/outreach` writes nothing to the database. **The
+   audit never found this one.**
+4. **T196** — the live console is a fixture shell. **Still the one thing between this and a
+   launchable product.** A project, not a ticket; bring `loaders/checkin.ts` (521 lines, zero tests)
+   under test as part of it.
+
+### Owner-only, still open
+
+**~20 student email addresses** (T064 — the migration creates no accounts, so the roster is correct
+and entirely unlinked) and **Vercel domain go-live** (T070).
 
 ## UPDATE — 2026-08-01: T307 is LIVE DATA LOSS, found while packeting T305. Read this first.
 
