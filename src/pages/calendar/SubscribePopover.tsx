@@ -10,9 +10,7 @@
  * `SeasonSettings.tsx`/T029) already disclosed).
  *
  * -----------------------------------------------------------------------
- * 1. THE CENTRAL DESIGN QUESTION -- Reset is NOT an UPDATE, it's
- *    revoke-old + create-new, and `calendar_feeds` has NO uniqueness
- *    constraint on `profile_id` (Known Context/Traps #1, Ground Truth).
+ * 1. Reset is one persisted lifecycle transition: revoke-old + create-new.
  * -----------------------------------------------------------------------
  *
  * `supabase/migrations/20260717000001_support_audit.sql` lines 45-52 (read
@@ -26,22 +24,10 @@
  *     created_at timestamptz not null default now()
  *   );
  *
- * `token` is `unique` -- no two rows can ever share the same token -- but
- * `profile_id` carries NO uniqueness constraint of any kind, unlike
- * `notification_prefs.profile_id` (same migration, `unique`, "one row per
- * profile" enforced by Postgres itself) and unlike `seasons_single_active_idx`
- * (`SeasonSettings.tsx`/T029's own precedent -- a real partial unique index
- * enforcing "at most one `is_active=true` season" at the DATABASE layer).
- * This is a DELIBERATE difference this file must not paper over: a profile
- * CAN accumulate multiple `calendar_feeds` rows over time (one per reset),
- * and nothing in Postgres stops a caller from inserting a second
- * non-revoked row for the same profile. CAL-05's "tokens are UUIDv4,
- * revocable, one active per profile" requirement is therefore an
- * APPLICATION-level invariant this file's callback contract must maintain
- * by construction, not something a unique index guarantees for free the way
- * `SeasonSettings.tsx`/T029 could lean on `seasons_single_active_idx`.
- *
- * The consequence: Reset can NEVER be represented as a plain
+ * The lifecycle migration adds a partial unique index on `profile_id` where
+ * `revoked_at is null`, so PostgreSQL enforces CAL-05's at-most-one-active
+ * invariant under concurrent requests while still retaining every revoked
+ * historical row. Reset can never be represented as a plain
  * `update calendar_feeds set token = gen_random_uuid() where id = ...` --
  * that would violate the soft-revoke convention every other status field in
  * this codebase already follows (`invites.status = 'revoked'` from T027,
@@ -55,10 +41,11 @@
  * "one coherent multi-part atomic action, not two independently-dispatchable
  * calls the UI could leave half-done between them":
  *   (a) `revokeFeedId` -- the CURRENTLY-active row's `id`. A real
- *       implementation stamps that exact row's `revoked_at = now()` --
+ *       the RPC stamps that exact row's `revoked_at = now()` --
  *       never deletes it (soft-revoke, matching `invites.status='revoked'`).
- *   (b) `profileId` -- the profile a brand-new row (fresh `token`,
- *       `revoked_at = null`) gets created for.
+ *   (b) `profileId` -- retained at the page seam for a defensive result
+ *       consistency check. It is never sent as server authorization; the
+ *       RPC derives the profile exclusively from `auth.uid()`.
  * `OnResetFeedTokenFn` takes this ONE payload and resolves with the newly
  * created row. This is a DISCLOSED, NECESSARY deviation from
  * `OnSetActiveSeasonFn`/`OnEndMeetingFn`'s own `Promise<void>` shape: those
@@ -78,18 +65,11 @@
  * `withActiveSeason` / `EndMeetingDialog.tsx`'s `applyEndMeetingResult` --
  * "the one place a derived mutation is ever applied to local state," only
  * ever run after the awaited call has already resolved, never optimistically).
- * A real backend implementation (a future wiring task, not this one) is
- * expected to implement `onResetFeedToken` as a single transaction (an RPC
- * running the `update ... set revoked_at = now() where id = $revokeFeedId`
- * and the `insert into calendar_feeds (profile_id) values ($profileId)
- * returning *` together) so a real DB never observes a moment where either
- * zero or two non-revoked rows exist for this profile -- this file cannot
- * prove that transactional detail (no Supabase client is wired in here,
- * section 5 below), but the callback's own single-payload shape is
- * deliberately built so a real implementation CAN satisfy the "exactly one
- * active row" invariant atomically, the same disclosed-but-unprovable
- * posture `SeasonSettings.tsx`/`EndMeetingDialog.tsx` already took for their
- * own multi-statement atomic actions.
+ * The production default is `resetCalendarFeed`, which invokes
+ * `reset_calendar_feed(p_revoke_feed_id)` once. PostgreSQL performs the
+ * ownership check, soft revoke, replacement insert, and `returning *` in one
+ * function transaction. If the response is lost, the component re-reads the
+ * active feed before showing any URL as current.
  *
  * -----------------------------------------------------------------------
  * 2. The real ICS URL shape (Known Context/Traps #2) -- built from CAL-04's
@@ -206,9 +186,7 @@
  * CAL-04 scope," not "copy this exact sentence."
  *
  * -----------------------------------------------------------------------
- * 7. `loadCalendarFeed` is now wired to a REAL Supabase read (T177);
- *    `onResetFeedToken` is UNCHANGED, still a fixture-shaped stub
- *    (Known Context/Traps #7, disclosed scope boundary).
+ * 7. Both production defaults use real Supabase persistence.
  * -----------------------------------------------------------------------
  *
  * `loadCalendarFeed`'s default is now `../../lib/supabase/loaders/
@@ -219,27 +197,11 @@
  * export, no longer the default (T105 precedent, packet §3c) -- see its own
  * updated doc comment below.
  *
- * `onResetFeedToken` is explicitly OUT OF SCOPE for T177 (packet §1/§2/§5
- * point 7) and remains exactly what it was: `defaultOnResetFeedToken` only
- * `console.warn`s the payload it would have sent, then fabricates a
- * locally-generated new row via `crypto.randomUUID()` -- the same
- * injectable-default-generator idiom `TeamsTab.tsx`'s own
- * `generateId = () => \`team-${crypto.randomUUID()}\`\` already established
- * in this repo -- purely so this stub's own return value is well-formed for
- * local-state purposes; a real implementation would return the DB's own
- * `insert ... returning *` row instead. This is a real, un-closed follow-up
- * (same fixture-default-shaped bug as the one T177 fixed for
- * `loadCalendarFeed`), named here and in T177's own worker output rather
- * than silently left as only a code comment.
- *
- * DISCLOSED SCOPE, stated plainly (packet §1/§3f): nothing anywhere in this
- * codebase provisions a `calendar_feeds` row for any profile -- not the
- * invite trigger, not any migration backfill, not any app code. So even
- * with the real `loadCalendarFeed` wired in, every real user today still
- * hits the fail-loud DES-12 error Banner state below (module doc section
- * 10), not a working link -- T177 makes this widget's failure HONEST, not
- * FUNCTIONAL. Building that provisioning path is a separate follow-up task,
- * not this one.
+ * `onResetFeedToken` defaults to the same module's `resetCalendarFeed`, a
+ * one-call RPC writer that sends only the active row id and returns the
+ * database-created replacement. Profile-insert provisioning and migration
+ * backfill ensure real profiles have an active row; no production path
+ * fabricates ids or tokens in the browser.
  *
  * This file still does NOT read `useAuth()`/any auth context to discover
  * "the current profile" -- `profileId` is a required prop the caller
@@ -302,22 +264,16 @@
  *
  * Unlike `CalendarPage.tsx` (whose data can genuinely be zero sessions),
  * this file assumes a `calendar_feeds` row already exists for `profileId`
- * by the time this widget renders -- the same "provisioned elsewhere"
- * assumption `notification_prefs`' own one-row-per-profile precedent
- * implies (a real app would provision the first `calendar_feeds` row at
- * signup/first-visit-to-`/calendar`, a separate, not-yet-built concern this
- * task's packet never asks this file to solve). If `loadCalendarFeed`
+ * by the time this widget renders. The lifecycle migration provisions
+ * existing and future profiles. If `loadCalendarFeed`
  * rejects OR resolves in a way this file cannot use, the error Banner state
  * covers it; there is no third "no feed yet, create one" UI here.
  *
  * T177 wired `loadCalendarFeed`'s default to a real Supabase read
  * (`../../lib/supabase/loaders/calendarFeed.ts`), which fails loud (throws)
  * on zero active rows rather than fabricating fixture data (module doc
- * section 7 above). Since NOTHING anywhere in this codebase provisions a
- * `calendar_feeds` row for any profile yet, this error Banner state is not
- * a rare edge case -- it is the outcome every real signed-in user actually
- * sees on `/settings` today, until a provisioning path is built (a
- * disclosed follow-up, not this task's job).
+ * section 7 above). A missing row therefore remains an honest invariant-
+ * failure state rather than a reason to synthesize a token in the browser.
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import {
@@ -331,7 +287,10 @@ import {
   VStack,
 } from '@astryxdesign/core';
 import { pushToast } from '../../app/guards';
-import { loadCalendarFeed as loadCalendarFeedReal } from '../../lib/supabase/loaders/calendarFeed';
+import {
+  loadCalendarFeed as loadCalendarFeedReal,
+  resetCalendarFeed as resetCalendarFeedReal,
+} from '../../lib/supabase/loaders/calendarFeed';
 
 // ---------------------------------------------------------------------------
 // Ground truth -- module doc section 1. Re-derived locally, camelCase
@@ -479,31 +438,6 @@ export async function defaultLoadCalendarFeed(profileId: string): Promise<Calend
   return { ...FIXTURE_ACTIVE_FEED, profileId: profileId || FIXTURE_ACTIVE_FEED.profileId };
 }
 
-/**
- * Module doc section 1/7. Represents "the real single transaction that
- * revokes the old row and inserts a new one happened" -- nothing else. Logs
- * the atomic payload it would have sent, then fabricates a well-formed new
- * row locally (via `crypto.randomUUID()`, the same idiom `TeamsTab.tsx`'s
- * own `generateId` already established) purely so this stub's return value
- * is usable by the caller; a real implementation returns the DB's own
- * `insert ... returning *` row instead.
- */
-export const defaultOnResetFeedToken: OnResetFeedTokenFn = async (payload) => {
-  console.warn(
-    '[SubscribePopover] No Supabase client wired in yet (module doc section 7) -- this stub ' +
-      'only logs the atomic reset payload (revoke old row + create new row, module doc ' +
-      'section 1) a real single transaction would have applied.',
-    payload,
-  );
-  return {
-    id: `feed-fixture-${crypto.randomUUID()}`,
-    profileId: payload.profileId,
-    token: crypto.randomUUID(),
-    revokedAt: null,
-    createdAt: new Date().toISOString(),
-  };
-};
-
 // ---------------------------------------------------------------------------
 // Generic DES-12 load-state hook -- same shape every prior content page in
 // this batch already establishes locally (no shared hook module exists yet).
@@ -554,10 +488,9 @@ export interface SubscribePopoverProps {
    * calendarFeed.ts`), T177. */
   loadCalendarFeed?: LoadCalendarFeedFn;
   /**
-   * Injectable atomic reset seam (module doc section 1). Defaults to a
-   * `console.warn` stub -- UNCHANGED, explicitly out of scope for T177
-   * (module doc section 7). See `ResetFeedTokenPayload` for the
-   * single-payload revoke-old + create-new contract.
+   * Injectable atomic reset seam (module doc section 1). Defaults to the
+   * real `reset_calendar_feed` RPC writer. See `ResetFeedTokenPayload` for
+   * the single-payload revoke-old + create-new contract.
    */
   onResetFeedToken?: OnResetFeedTokenFn;
   /** Injectable Supabase Functions base URL (module doc section 2). Defaults
@@ -569,7 +502,7 @@ export interface SubscribePopoverProps {
 export function SubscribePopover({
   profileId,
   loadCalendarFeed = loadCalendarFeedReal,
-  onResetFeedToken = defaultOnResetFeedToken,
+  onResetFeedToken = resetCalendarFeedReal,
   functionsBaseUrl = resolveFunctionsBaseUrl(),
 }: SubscribePopoverProps): ReactNode {
   const loadState = useLoadState(() => loadCalendarFeed(profileId), [loadCalendarFeed, profileId]);
@@ -583,6 +516,7 @@ export function SubscribePopover({
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+  const [isResetStatusUnknown, setIsResetStatusUnknown] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
 
   async function handleConfirmReset(): Promise<void> {
@@ -598,12 +532,33 @@ export function SubscribePopover({
       // new row -- no optimistic half-flip, no client-guessed token.
       const newFeed = await onResetFeedToken(payload);
       setFeed(newFeed);
+      setIsResetStatusUnknown(false);
       setCopyError(null);
       setIsResetConfirmOpen(false);
     } catch (error) {
-      setResetError(
-        error instanceof Error ? error.message : 'Something went wrong resetting this link.',
-      );
+      const resetMessage =
+        error instanceof Error ? error.message : 'Something went wrong resetting this link.';
+
+      // An HTTP rejection has unknown commit status: PostgreSQL may have
+      // committed the reset before the response was lost. Read the active row
+      // back before showing any URL as current.
+      try {
+        const authoritativeFeed = await loadCalendarFeed(profileId);
+        setFeed(authoritativeFeed);
+        setIsResetStatusUnknown(false);
+        setCopyError(null);
+        setIsResetConfirmOpen(false);
+        setResetError(`${resetMessage} We refreshed the current link below.`);
+      } catch {
+        // Neither the old nor a replacement URL can be called current when
+        // reconciliation also fails. Clearing the row hides copy/reset actions
+        // until the page can load authoritative state again.
+        setFeed(null);
+        setResetError(null);
+        setIsResetStatusUnknown(true);
+        setCopyError(null);
+        setIsResetConfirmOpen(false);
+      }
     } finally {
       setIsResetting(false);
     }
@@ -626,6 +581,16 @@ export function SubscribePopover({
 
   if (loadState.status === 'loading') {
     return <Spinner label="Loading your calendar link..." />;
+  }
+
+  if (isResetStatusUnknown) {
+    return (
+      <Banner
+        status="error"
+        title="Couldn't confirm your calendar link"
+        description="The reset request may have succeeded, but the current link status could not be confirmed. Refresh before copying or sharing a calendar link."
+      />
+    );
   }
 
   if (loadState.status === 'error' || feed === null) {

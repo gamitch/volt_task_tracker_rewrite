@@ -8,8 +8,9 @@
 // `outreach.test.ts` (this directory's own existing test files) already
 // established.
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { describe, expect, it } from 'vitest';
-import { makeLoadCalendarFeed } from './calendarFeed';
+import { describe, expect, it, vi } from 'vitest';
+import { isSupabaseLoaderError } from '../loader';
+import { makeLoadCalendarFeed, makeResetCalendarFeed } from './calendarFeed';
 
 // ---------------------------------------------------------------------------
 // A fake `.from('calendar_feeds')` chain that ACTUALLY enforces cardinality
@@ -240,6 +241,106 @@ describe('makeLoadCalendarFeed (T177 criterion 4 -- missing-row posture, packet 
 
     await expect(loadCalendarFeed('profile-real-all-revoked')).rejects.toThrow(
       'No calendar feed was found for your account.',
+    );
+  });
+});
+
+interface FakeRpcResult {
+  data: FakeCalendarFeedRow | null;
+  error: { message: string; code?: string } | null;
+}
+
+function makeFakeRpcClient(singleResult: FakeRpcResult | Error): {
+  client: SupabaseClient;
+  rpc: ReturnType<typeof vi.fn>;
+  single: ReturnType<typeof vi.fn>;
+} {
+  const single = vi.fn(() =>
+    singleResult instanceof Error ? Promise.reject(singleResult) : Promise.resolve(singleResult),
+  );
+  const rpc = vi.fn(() => ({ single }));
+  return { client: { rpc } as unknown as SupabaseClient, rpc, single };
+}
+
+describe('makeResetCalendarFeed (T194 real atomic RPC writer)', () => {
+  const payload = {
+    profileId: 'profile-client-consistency-only',
+    revokeFeedId: 'feed-current-active',
+  };
+  const databaseRow: FakeCalendarFeedRow = {
+    id: 'feed-new-from-database',
+    profile_id: payload.profileId,
+    token: '99999999-9999-4999-8999-999999999999',
+    revoked_at: null,
+    created_at: '2026-08-02T12:00:00.000Z',
+  };
+
+  it('calls reset_calendar_feed exactly once with only the named active feed id and maps its row', async () => {
+    const { client, rpc, single } = makeFakeRpcClient({ data: databaseRow, error: null });
+    const resetCalendarFeed = makeResetCalendarFeed(() => client);
+
+    await expect(resetCalendarFeed(payload)).resolves.toEqual({
+      id: 'feed-new-from-database',
+      profileId: 'profile-client-consistency-only',
+      token: '99999999-9999-4999-8999-999999999999',
+      revokedAt: null,
+      createdAt: '2026-08-02T12:00:00.000Z',
+    });
+
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('reset_calendar_feed', {
+      p_revoke_feed_id: 'feed-current-active',
+    });
+    expect(rpc.mock.calls[0]?.[1]).not.toHaveProperty('profile_id');
+    expect(rpc.mock.calls[0]?.[1]).not.toHaveProperty('profileId');
+    expect(single).toHaveBeenCalledTimes(1);
+  });
+
+  it('normalizes a Supabase-declared RPC error through runMutation', async () => {
+    const { client } = makeFakeRpcClient({
+      data: null,
+      error: { code: '42501', message: 'permission denied' },
+    });
+    const resetCalendarFeed = makeResetCalendarFeed(() => client);
+
+    await expect(resetCalendarFeed(payload)).rejects.toMatchObject({
+      code: '42501',
+      message: expect.any(String),
+    });
+  });
+
+  it('normalizes a thrown transport failure through runMutation', async () => {
+    const { client } = makeFakeRpcClient(new TypeError('Failed to fetch'));
+    const resetCalendarFeed = makeResetCalendarFeed(() => client);
+
+    try {
+      await resetCalendarFeed(payload);
+      expect.unreachable('resetCalendarFeed should reject');
+    } catch (error) {
+      expect(isSupabaseLoaderError(error)).toBe(true);
+      expect(error).toMatchObject({ code: 'UNKNOWN', message: expect.any(String) });
+    }
+  });
+
+  it('rejects a successful response that contains no replacement row', async () => {
+    const { client } = makeFakeRpcClient({ data: null, error: null });
+    const resetCalendarFeed = makeResetCalendarFeed(() => client);
+
+    await expect(resetCalendarFeed(payload)).rejects.toMatchObject({
+      code: 'PGRST116',
+      message: expect.any(String),
+    });
+  });
+
+  it('rejects a replacement row whose profile does not match the page payload', async () => {
+    const { client } = makeFakeRpcClient({
+      data: { ...databaseRow, profile_id: 'profile-unexpected' },
+      error: null,
+    });
+    const resetCalendarFeed = makeResetCalendarFeed(() => client);
+
+    await expect(resetCalendarFeed(payload)).rejects.toThrow(
+      'The reset calendar feed did not match your account.',
     );
   });
 });

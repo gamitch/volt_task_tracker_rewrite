@@ -14,10 +14,9 @@
  *    `.maybeSingle()`.
  * -----------------------------------------------------------------------
  *
- * `calendar_feeds` (`supabase/migrations/20260717000001_support_audit.sql:
- * 47-53`) has a `unique` constraint on `token` but NONE on `profile_id` --
- * `SubscribePopover.tsx`'s own module doc section 1 already establishes in
- * detail that a profile CAN accumulate multiple non-revoked rows over time.
+ * The lifecycle migration now enforces one active row per profile. This
+ * defensive order + limit remains useful during rolling deployment and for
+ * diagnosing any historical state that predates that migration.
  * `postgrest-js` (the installed client library) does not enforce
  * single-row cardinality server-side for `.maybeSingle()` -- it fetches the
  * response as an ordinary list and enforces cardinality CLIENT-SIDE,
@@ -29,7 +28,7 @@
  * so the array the client-side cardinality check ever inspects never has
  * more than one element -- resolving the most-recently-created active row
  * rather than ever synthesizing a spurious `PGRST116` rejection on a real,
- * legitimate duplicate.
+ * historical duplicate.
  *
  * -----------------------------------------------------------------------
  * 2. Missing-row posture -- fail loud (packet §3e/§3f).
@@ -49,17 +48,19 @@
  * matching `settings.ts`'s own `loadSettingsData` "missing profiles row"
  * precedent (`settings.ts:358-360`), never bridged to fixture data.
  *
- * DISCLOSED SCOPE (packet §1/§3f): nothing anywhere in this codebase
- * currently inserts a `calendar_feeds` row for any profile -- not the
- * invite trigger, not any migration backfill, not any app code. So this
- * fail-loud path is not a rare edge case this loader defends against -- it
- * is the outcome for EVERY real profile today, until a provisioning path is
- * built (a follow-up, not this task's job -- see the worker output doc).
+ * The lifecycle migration backfills existing profiles and provisions future
+ * inserts. A null result is therefore an invariant failure, and this loader
+ * still fails loudly instead of fabricating a browser-only token.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { createLoader, type LoaderQueryResult } from '../loader';
+import { createLoader, runMutation, type LoaderQueryResult } from '../loader';
 import { getSupabaseClient } from '../client';
-import type { CalendarFeedRow, LoadCalendarFeedFn } from '../../../pages/calendar/SubscribePopover';
+import type {
+  CalendarFeedRow,
+  LoadCalendarFeedFn,
+  OnResetFeedTokenFn,
+  ResetFeedTokenPayload,
+} from '../../../pages/calendar/SubscribePopover';
 
 // ---------------------------------------------------------------------------
 // Raw DB row shape, exactly as Postgrest returns it (snake_case) -- column
@@ -134,3 +135,56 @@ export function makeLoadCalendarFeed(
 
 /** `SubscribePopover.tsx`'s own real default `loadCalendarFeed`. */
 export const loadCalendarFeed: LoadCalendarFeedFn = makeLoadCalendarFeed();
+
+async function resetCalendarFeedRpc(
+  client: SupabaseClient,
+  payload: ResetFeedTokenPayload,
+): Promise<LoaderQueryResult<CalendarFeedDbRow>> {
+  const result = await client
+    .rpc('reset_calendar_feed', { p_revoke_feed_id: payload.revokeFeedId })
+    .single();
+
+  if (result.data === null && result.error === null) {
+    return {
+      data: null,
+      error: {
+        code: 'PGRST116',
+        message: 'The calendar feed reset did not return a replacement row.',
+      },
+    };
+  }
+
+  return {
+    data: (result.data as CalendarFeedDbRow | null) ?? null,
+    error: result.error,
+  };
+}
+
+/**
+ * Builds the atomic calendar-feed reset writer. The RPC accepts only the
+ * active row id; PostgreSQL derives authorization and replacement ownership
+ * from auth.uid(). The payload profile id is used only to reject an
+ * inconsistent server result before it reaches the UI.
+ */
+export function makeResetCalendarFeed(
+  getClient: () => SupabaseClient = getSupabaseClient,
+): OnResetFeedTokenFn {
+  const resetFeed = runMutation<ResetFeedTokenPayload, CalendarFeedDbRow>(
+    resetCalendarFeedRpc,
+    getClient,
+  );
+
+  return async (payload: ResetFeedTokenPayload): Promise<CalendarFeedRow> => {
+    const row = await resetFeed(payload);
+    const mappedRow = mapCalendarFeedDbRowToRow(row);
+
+    if (mappedRow.profileId !== payload.profileId) {
+      throw new Error('The reset calendar feed did not match your account. Refresh and try again.');
+    }
+
+    return mappedRow;
+  };
+}
+
+/** `SubscribePopover.tsx`'s production atomic reset default. */
+export const resetCalendarFeed: OnResetFeedTokenFn = makeResetCalendarFeed();

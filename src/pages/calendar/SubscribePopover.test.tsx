@@ -56,6 +56,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetCalendarFeed } from '../../lib/supabase/loaders/calendarFeed';
 import { subscribeToast } from '../../app/guards';
 import {
   buildIcsUrl,
@@ -69,6 +70,15 @@ import {
   type CalendarFeedRow,
   type ResetFeedTokenPayload,
 } from './SubscribePopover';
+
+vi.mock('../../lib/supabase/loaders/calendarFeed', async () => {
+  const actual = await vi.importActual<typeof import('../../lib/supabase/loaders/calendarFeed')>(
+    '../../lib/supabase/loaders/calendarFeed',
+  );
+  return { ...actual, resetCalendarFeed: vi.fn() };
+});
+
+const resetCalendarFeedMock = vi.mocked(resetCalendarFeed);
 
 // ---------------------------------------------------------------------------
 // jsdom gap: `AlertDialog` renders a native `<dialog>` and calls
@@ -96,6 +106,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  resetCalendarFeedMock.mockReset();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -392,11 +403,48 @@ describe('<SubscribePopover /> Reset link confirm flow', () => {
     expect(document.querySelector('dialog[open]')).toBeNull();
   });
 
-  it('shows an error banner and leaves the active row unchanged when onResetFeedToken rejects', async () => {
-    const onResetFeedToken = vi.fn().mockRejectedValue(new Error('write failed'));
+  it('uses the production reset writer by default after confirmation', async () => {
+    const newFeed: CalendarFeedRow = {
+      id: 'feed-production-default-new',
+      profileId: TEST_PROFILE_ID,
+      token: 'abababab-abab-4bab-8bab-abababababab',
+      revokedAt: null,
+      createdAt: '2026-08-02T12:30:00.000Z',
+    };
+    resetCalendarFeedMock.mockResolvedValue(newFeed);
+
     renderPopover({
       profileId: TEST_PROFILE_ID,
       loadCalendarFeed: () => Promise.resolve(TEST_FEED),
+      functionsBaseUrl: TEST_FUNCTIONS_BASE_URL,
+    });
+    await flushMicrotasks();
+
+    clickButtonWithText('Subscribe');
+    clickButtonWithText('Reset link');
+    const dialogEl = document.querySelector('dialog[open]') as HTMLElement;
+    const actionButton = Array.from(dialogEl.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Reset link',
+    );
+    clickButton(actionButton as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(resetCalendarFeedMock).toHaveBeenCalledTimes(1);
+    expect(resetCalendarFeedMock).toHaveBeenCalledWith({
+      profileId: TEST_PROFILE_ID,
+      revokeFeedId: TEST_FEED.id,
+    });
+    expect(document.body.textContent).toContain(
+      'https://test-project-ref.functions.supabase.co/ics?token=abababab-abab-4bab-8bab-abababababab',
+    );
+  });
+
+  it('shows the reset error and keeps the old URL after reconciliation confirms the old row is still active', async () => {
+    const onResetFeedToken = vi.fn().mockRejectedValue(new Error('write failed'));
+    const loadCalendarFeed = vi.fn().mockResolvedValue(TEST_FEED);
+    renderPopover({
+      profileId: TEST_PROFILE_ID,
+      loadCalendarFeed,
       onResetFeedToken,
       functionsBaseUrl: TEST_FUNCTIONS_BASE_URL,
     });
@@ -413,7 +461,76 @@ describe('<SubscribePopover /> Reset link confirm flow', () => {
 
     expect(document.body.textContent).toContain("Couldn't reset your calendar link");
     expect(document.body.textContent).toContain('write failed');
-    // The old token is still the one displayed -- the row was never replaced.
+    expect(document.body.textContent).toContain('We refreshed the current link below.');
+    expect(loadCalendarFeed).toHaveBeenCalledTimes(2);
     expect(document.body.textContent).toContain('token=12345678-1234-4234-8234-123456789abc');
+  });
+
+  it('installs the authoritative new URL when the reset response is lost after commit', async () => {
+    const newFeed: CalendarFeedRow = {
+      id: 'feed-committed-before-response-loss',
+      profileId: TEST_PROFILE_ID,
+      token: 'cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd',
+      revokedAt: null,
+      createdAt: '2026-08-02T13:00:00.000Z',
+    };
+    const loadCalendarFeed = vi
+      .fn()
+      .mockResolvedValueOnce(TEST_FEED)
+      .mockResolvedValueOnce(newFeed);
+    const onResetFeedToken = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+
+    renderPopover({
+      profileId: TEST_PROFILE_ID,
+      loadCalendarFeed,
+      onResetFeedToken,
+      functionsBaseUrl: TEST_FUNCTIONS_BASE_URL,
+    });
+    await flushMicrotasks();
+
+    clickButtonWithText('Subscribe');
+    clickButtonWithText('Reset link');
+    const dialogEl = document.querySelector('dialog[open]') as HTMLElement;
+    const actionButton = Array.from(dialogEl.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Reset link',
+    );
+    clickButton(actionButton as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(loadCalendarFeed).toHaveBeenCalledTimes(2);
+    expect(document.body.textContent).toContain('token=cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd');
+    expect(document.body.textContent).not.toContain('token=12345678-1234-4234-8234-123456789abc');
+    expect(document.body.textContent).toContain("Couldn't reset your calendar link");
+  });
+
+  it('hides the possibly revoked URL and discloses unknown status when reset and reconciliation both reject', async () => {
+    const loadCalendarFeed = vi
+      .fn()
+      .mockResolvedValueOnce(TEST_FEED)
+      .mockRejectedValueOnce(new Error('reconciliation unavailable'));
+    const onResetFeedToken = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+
+    renderPopover({
+      profileId: TEST_PROFILE_ID,
+      loadCalendarFeed,
+      onResetFeedToken,
+      functionsBaseUrl: TEST_FUNCTIONS_BASE_URL,
+    });
+    await flushMicrotasks();
+
+    clickButtonWithText('Subscribe');
+    clickButtonWithText('Reset link');
+    const dialogEl = document.querySelector('dialog[open]') as HTMLElement;
+    const actionButton = Array.from(dialogEl.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Reset link',
+    );
+    clickButton(actionButton as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(loadCalendarFeed).toHaveBeenCalledTimes(2);
+    expect(document.body.textContent).toContain("Couldn't confirm your calendar link");
+    expect(document.body.textContent).toContain('current link status could not be confirmed');
+    expect(document.body.textContent).not.toContain(TEST_FEED.token);
+    expect(findButtonByText('Copy link')).toBeUndefined();
   });
 });
