@@ -6702,3 +6702,73 @@ arithmetic, which is why the SQL-pinning test exists.
 **Gates** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier **clean** · eslint
 **0 errors / 364 warnings (unchanged — no new warnings)** · vitest **76 files / 1851 tests (+20),
 exit 0**.
+
+## T320 — `.range()` pagination on the attendance read (silent truncation)
+
+**Third task of the W1 workflow, on `claude/w1-checkin`. STANDARD tier.**
+
+**The defect.** `supabase/config.toml:18` sets `[api] max_rows = 1000`. PostgREST truncates any
+response at that cap and returns **200 with a partial `Content-Range`** — not an error — so
+`createLoader` (`loader.ts:174-176`, which throws only on `result.error`) resolved a partial array
+that every caller read as complete. Requesting a larger page does not help: the server clamps it.
+Paginating is the only way to see past the cap.
+
+**Fix — pagination, the stronger of the two options the row offered** (the other was
+detect-and-error). `makeLoadAttendanceForSessions` pages until a **short** page returns. A full page
+means *"at least this many"*, never *"exactly this many"* — that ambiguity **is** the bug — so a
+result set that is an exact multiple of the page size costs one extra empty request rather than
+silently dropping whatever followed it. Disclosed, and asserted by its own test.
+
+**`.order('id')` is load-bearing, not cosmetic.** Page N+1 is defined as an offset into a result
+set, and Postgres guarantees no ordering without an explicit `order by`. Paginating an unordered
+query can return the same row on two pages and never return another — a subtler corruption than the
+bug being fixed. `id` is the table's uuid primary key (migration lines 82-95), so it is total,
+stable, and always present.
+
+**The page-count bound throws rather than returning what it gathered.** Returning a partial set at
+the bound would reintroduce exactly the silent truncation this row exists to remove. 100 pages is
+100,000 rows against a live database holding 79, so tripping it means the transport is broken, not
+the data.
+
+**Scope discovery, and the reason this needed an owner call.** `loaders/attendance.ts` turned out to
+be **shared across three workflows**: `endMeeting.ts:191` (W3) imports
+`makeLoadAttendanceForSessions` directly, and three W2 pages consume it. Changing the PostgREST
+chain broke **six tests in two files W1 does not own** — `endMeeting.test.ts` (5) and
+`AttendancePanel.test.tsx` (1) — all with the same
+`TypeError: client.from(...).select(...).in(...).order is not a function`. **Stub-shape breakage,
+not a behaviour regression**, diagnosed before any file was touched.
+
+Coordination rule 2 says the second workflow waits, and W2 is running right now, so the choice went
+to the owner rather than being made unilaterally. **He authorized crossing the boundary rather than
+weakening the fix.** Both edits are stub-only; neither page's production source is touched.
+
+**Mutations — all four run after committing (item 26), reverted and re-verified. Exit codes
+asserted:**
+
+| Mutation | Result |
+|---|---|
+| stop after page 0 (restore the original bug) | **4 red, exit 1** |
+| drop `.order('id')` — paginate without a stable sort | **8 red, exit 1** |
+| never advance the range offset (page 0 forever) | **1 red, exit 1** |
+| return a partial set at the page bound instead of throwing | **1 red, exit 1** |
+
+**Two follow-ups filed, both in W2's files and both W2's to execute:**
+
+- **T401** — T307's `ATTENDANCE_ROW_CAP` guard is now a **false positive**. `rows.length >= 1000`
+  was a correct proxy for "possibly truncated" while the loader stopped at one page; after
+  pagination it blocks a write whose data is complete. T320's own row anticipated deleting that
+  duplication but not that the deletion falls outside W1's files.
+- **T402** — **there are two functions named `queryAttendanceForSessions`.** T320 named only the one
+  in `attendance.ts`. `loaders/outreach.ts:745-754` carries the identical bare
+  `.select(...).in(...)` shape and has been invisible since it was written — neither T307's checker
+  nor the T320 row spotted it. The fix is a direct copy of this one.
+
+**Tier justification (item 26).** STANDARD: single loader module, no write path (this is a read),
+no schema/RLS/auth/migration. Not FAST — it exceeds ~20 lines and changes behaviour that four
+consumer modules depend on. A reviewer could argue HEAVY on the grounds that truncated attendance
+feeds a write path in `MarkEventCompleteDialog`; the counter is that T307's fail-closed guard
+already sits between this loader and that write, and this change only ever gives that guard *more*
+complete data. Flagging it rather than leaving the call silent.
+
+**Gates** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier **clean** · eslint
+**0 errors / 364 warnings (unchanged)** · vitest **77 files / 1860 tests (+9), exit 0**.
