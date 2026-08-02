@@ -457,6 +457,8 @@ W6 shares no files with you. W2 does — see the collision warning below.
 WHERE THE WORK LIVES — read this before running any git command.
 
   Branch:   claude/w1-checkin        (pushed, PR #28 open)
+            Do not trust any commit count quoted anywhere — count it yourself:
+            git -C /home/user/volt_w1_checkin log --oneline origin/main..HEAD
   Worktree: /home/user/volt_w1_checkin
 
 EXPLICIT PERMISSION, overriding your harness-assigned branch: your system
@@ -486,9 +488,8 @@ If /home/user/volt_w1_checkin does NOT exist (fresh container, worktree gone):
 Note there is no -b: the branch already exists on origin. Passing -b would try
 to create it and fail, or create a divergent local branch.
 
-The primary checkout at /home/user/volt_task_tracker_rewrite sits on a docs
-branch at origin/main. Do not work there. Its node_modules is installed only so
-the lint hook can run.
+Do not work in the primary checkout at /home/user/volt_task_tracker_rewrite
+whatever branch it happens to be on — see the cwd warning above.
 
 READ IN THIS ORDER before doing anything: docs/swarm/RESUME-HERE.md (top-down —
 the dated UPDATE sections supersede each other, newest first),
