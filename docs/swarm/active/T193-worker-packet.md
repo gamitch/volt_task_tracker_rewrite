@@ -28,7 +28,7 @@ function handleRsvpChange(sessionId: string, status: RsvpStatus): void {
 **The comment's premise expired.** `RsvpControl.tsx`/`ParentRsvp.tsx` are no longer blocked — T101
 wired their real default. This row is the `OutreachList` half of T169, split off at merge.
 
-**The owner's dashboard shows `11 pending RSVPs`.** Responses from this page are being discarded.
+**The owner's dashboard shows `11 pending RSVPs`** (a live-DB observation, not repo-verifiable). Responses from this page are being discarded.
 
 ---
 
@@ -55,13 +55,28 @@ Give this component the same injectable-seam convention the file already uses: a
 this file's own `resolveStudentId` default. **Do not make it required** — that forces a change at
 the router call site, which is out of scope.
 
-**Mirror `RsvpControl.tsx:485-505` exactly** — it is the in-repo pattern for this and it is correct:
+**Follow `RsvpControl.tsx:482-506`'s *sequence*, but NOT its rollback value.** The gate built both
+shapes and proved the literal mirror is impossible here:
 
-1. capture `previousStatus`
-2. set the new status optimistically
+1. **snapshot the previous `rsvps` ARRAY** (not a scalar `previousStatus`)
+2. set the new status optimistically via `withRsvpOverride`
 3. `await onRsvpChange({...})`
-4. **on rejection, roll the optimistic update back** and surface an honest error
-5. clear the in-flight flag in `finally`
+4. **on rejection, restore the snapshot array** and surface an honest error
+5. clear a single component-wide in-flight flag in `finally` (ignore clicks while submitting — this
+   also makes the snapshot rollback concurrency-safe)
+
+**Why a scalar rollback cannot work here, measured:** `RsvpControl` rolls back a
+`displayedStatus` that may be `null` (unanswered). This component's state is the shared `rsvps`
+array, and `withRsvpOverride` (`OutreachList.tsx:1390-1412`, signature frozen by §4) takes a
+**concrete `RsvpStatus`** and, when no row exists, **appends** one — it cannot remove a row, so it
+cannot express "back to unanswered". A captured `previousStatus` is `undefined` in exactly the
+dominant case: a student answering for the first time. A worker taking "capture `previousStatus`"
+literally produces a **stuck phantom RSVP** — the failure §3 warns is worse than today's bug.
+
+**Disclosed, do not fix here:** `withRsvpOverride`'s locally-appended row sets
+`respondedBy: studentId` (`:1407`) — a `students.id` in a field that mirrors a `profiles.id` column.
+That is **T174's exact open defect**, so the optimistic row and the persisted row disagree on that
+one field until reload. It is local-only display state and out of scope; do not widen toward it.
 
 **The rollback is the whole point of the tier.** An optimistic update with no rollback is *worse*
 than today's bug: today the student loses the change on reload; a failed write with no rollback
@@ -97,11 +112,14 @@ not evidence — report that instead of shipping it.**
   *Mutation: pass `viewerStudentId` as `respondedBy`.*
 - **C3** On a **rejected** write the control returns to its previous status and an honest error is
   visible. *Mutation: delete the rollback line in the `catch`.*
-- **C4** On a rejected write the suite still exits **0** — no unhandled rejection.
-  *Mutation: replace `await`/`try` with `void`.* Assert this explicitly; a green pass count with a
-  nonzero exit is a real failure on this project.
-- **C5** A **coach/admin** viewer's path is untouched — this control is student/parent only.
-  *Mutation: call the writer from the coach branch too.*
+- **C4** On a rejected write there is **no unhandled rejection**. **This is a gate-level check, not
+  an in-suite assertion** — no test can assert its own suite's exit code. Verify by applying the
+  mutation and running §7's `npx vitest run …; echo $?`.
+  *Mutation: replace `await`/`try` with `void`.* T179 precedent: 86 tests green, suite exit 1.
+- **C5** A **coach/admin** viewer never triggers the writer — assert the spy is uncalled for a
+  `COACH_USER` render. **Honest framing: this also passes against current code**, because the coach
+  branch contains no RSVP handler at all. It is a **regression guard**, not a defect discriminator.
+  *Mutation, since no natural site exists: fire the writer on coach-view mount.*
 - **C6** The optimistic update still happens **before** the promise settles (the control must not
   feel laggy). *Mutation: move the state set after the `await`.*
 
@@ -109,20 +127,34 @@ not evidence — report that instead of shipping it.**
 
 ---
 
-## 6. The harness trap — read before touching the test file
+## 6. The harness reality — MEASURED by the gate, not assumed
 
-Adding a **defaulted loader prop** makes every existing test that renders this component reach the
-**real** `submitRsvpChange`, which with `.env.local` absent rejects
-(`loader.ts:168-175`) — landing the page in an error state. This exact seam has bitten the project
-**three times**: `DashboardPage.test.tsx:39-42` and `OutreachList.test.tsx:158-165` both document it
-verbatim, and T189 hit it again anyway.
+**An earlier draft of this packet claimed that adding a defaulted loader prop would make every
+existing test reach the real writer and fail. The gate built it and proved that FALSE.**
 
-**Before writing anything:** run `OutreachList.test.tsx`, record the passing count, and **pin it
-back** by injecting a fake at every affected call site. Report the before/after counts explicitly.
-**Do not weaken or delete an existing assertion to make a count match** — if you find yourself
-editing what a test asserts, stop and file a dispute.
+Measured at `e422123` with `.env.local` absent, implementing §3 with **zero** test pinning:
 
----
+```
+OutreachList.test.tsx  before: 92 passed, exit 0
+OutreachList.test.tsx  after : 92 passed, exit 0
+full suite             after : 1817 passed (75 files), exit 0   ·  tsc exit 0
+```
+
+**Why the analogy failed:** `DashboardPage.test.tsx:39-42` and `OutreachList.test.tsx:158-165`
+document a **mount-time loader** trap. `submitRsvpChange` is a **click-time mutation** — it fires
+only on interaction, and exactly **one** of 92 tests clicks an RSVP segment. Count-delta pinning
+detects nothing here, and **must not be treated as evidence of safety.**
+
+**The real hazard is one named test, and it is worse than a failure.**
+`OutreachList.test.tsx` → *"selecting a real RSVP segment updates the goal bar and the
+unanswered-RSVP badge live (module doc #8b)"* (~`:1652-1673`) asserts the old local-only semantics.
+Under this change it stays green **only by racing the rejection** — the gate added a single
+`await flushMicrotasks()` after the click and it went **1 failed | 91 passed**, because the rollback
+reverts the state it asserts.
+
+**You are explicitly authorized to adapt that one test**, and §8's "do not weaken an assertion" does
+not bar it: inject a **resolving** fake writer, flush after the click, and keep its live-update
+assertions against that fake. Name it in your report. **Do not** silently leave it green-by-race.
 
 ## 7. Gates — all six, `.env.local` ABSENT, report every one
 
