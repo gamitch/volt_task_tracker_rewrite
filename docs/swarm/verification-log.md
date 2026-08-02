@@ -6934,3 +6934,110 @@ on Fable building its prescription in its own worktree.
 **Gates** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier **clean** · eslint
 **0 errors / 363 warnings** (was 364 — deleting the exported `defaultLoadLiveConsoleData` removed one
 `react-refresh/only-export-components` warning) · vitest **77 files / 1868 tests, exit 0**.
+
+## T403 step 3 — attendance write: checker FAIL, and the packet was the defect
+
+**W1, on `claude/w1-checkin`. HEAVY tier**, full chain run: packet → `checker-premise` (Fable,
+building) → `worker-implementer` → `checker-reviewer`. **Verdict: FAIL, MAJOR. Not merged as done.**
+Worker's diff is on the branch at `3a14453` with all six gates green; it is NOT complete.
+
+### The chain earned its cost, in the way that matters least comfortably
+
+**MAJOR-1 originates in this packet's own prescription**, was endorsed by the premise gate, was
+implemented faithfully by the worker, and was caught only by the checker — the fourth stage.
+
+§4c Trap 2 prescribed a wire/local split: local state keeps `method: 'coach'` so MTG-11's
+coach-precedence survives, while the wire sends
+`resolveAttendanceWriteMethod(existing?.method ?? null)`. But `existing` **is** that local record,
+and `defaultSetAttendanceStatus` returns `Promise<void>`, discarding the `AttendanceRow` the loader
+returns — so local state is never reconciled against the database. After the first click, the only
+source the provenance resolution reads has already been overwritten with `'coach'`.
+
+Captured by driving the real component: six sequential coach edits on a genuine `qr` row send
+`["qr","coach","coach","coach","coach","coach"]`.
+
+**This re-inflicts half the harm the premise gate had just proven on real PostgreSQL.** §0 recorded
+that the original defect nulls `hours_override` **and** downgrades `method` `qr`→`coach` in one
+statement. The prescription fixed the first half and reintroduced the second, from the second click
+onward, on a roll-call console whose entire purpose is repeated clicking.
+
+**Two compounding process facts, both worth keeping:**
+
+1. **The gate returned DISPATCH on a prescription it never exercised across repeated edits.** It
+   built the fix and proved it correct for one write. The defect only exists on the second.
+   *Building the prescription is necessary but not sufficient — it must be built against the usage
+   pattern, not a single call.*
+2. **The packet's own instruction would have made it worse.** "Capture `previousRecord` inside the
+   functional updater, not in render scope" — extended to `wireMethod`, as it implicitly steered —
+   is strictly worse, because `prev[studentId].method` is `'coach'` the instant the first updater
+   runs. The worker's render-scope choice beat the packet's instruction. It disclosed that choice as
+   a risk and argued equivalence with `AttendancePanel`; the checker showed the idioms are **not**
+   equivalent (`AttendancePanel` stores the server-returned row, so its `existing?.method` stays
+   real across unlimited edits) — so the worker was right to deviate and wrong about why.
+
+### MAJOR-2 — the fifth exit-0 mutation of this session
+
+`defaultSetAttendanceStatus` closes over a module-level const with no injection point, so the adapter
+joining the two proven halves — payload correctness and coach-action behaviour — is untested.
+Mutation M7 swapped `sessionId`/`studentId` and hardcoded status and method:
+
+```
+M7_TARGETED_EXIT=0
+M7_FULL_SUITE_EXIT=0     (77 files / 1878 tests, all passing)
+```
+
+Same family as T161, T403 step 1, T403 step 2's fixture, and the pre-existing microtask-timing
+tests. **Five instances in one session.** The recurring shape is now well enough evidenced to
+promote into the constitution: *a boundary that cannot be stubbed cannot be tested, and an untestable
+boundary is where the exit-0 mutation lives.*
+
+### What the checker confirmed was RIGHT
+
+- **§4b microtask hazard genuinely fixed, and proven load-bearing** — not asserted. Adding
+  `flushMicrotasks` to a converted test: still passes. Removing the injected seam and adding
+  `flushMicrotasks`: fails. Leaving the seam out without the flush: passes — reproducing the exact
+  "green suite proving nothing" the packet warned about.
+- **`makeUpsertAttendance` byte-identical**, verified independently by sha256 over the extracted
+  byte range (`bbd3c4f6…` both sides, 0 deleted lines in the whole file). W2's `AttendancePanel`
+  blast radius is genuinely zero.
+- Criteria 2, 4, 5, 6 PASS, each with a red-at-exit-1 mutation behind it. Six gates reproduced
+  independently: vitest **77 files / 1878 tests, exit 0**.
+
+### Ruling A — the deviation was not just acceptable, it was necessary
+
+The worker added tests to `attendance.test.ts`, outside the packet's literal §2 Allowed Files test
+list, and disclosed it in the file header rather than hiding it. **Mutation M2 — §5.7's own named
+"null the `hours_override`" mutation — fails ONLY in that file**; `LiveConsole.test.tsx` passed clean
+under it. Had the worker complied literally, the packet's own mandated mutation would have been
+**green at exit 0** and criterion 2 unverifiable.
+
+**The packet's file list would have forbidden the only evidence the packet demands.** Template to be
+amended: the colocated test module of any Allowed source file is allowed by default.
+
+### Ruling B — PostgREST residual honoured
+
+`attendance.ts` module doc #5 carries the disclosure verbatim, attributed, stating the payload-keys →
+`DO UPDATE SET` translation is inferred and "stated as a residual, not a proven fact." NIT: two
+sentences elsewhere state the inferred part without a local hedge.
+
+### Two checker findings I checked rather than accepted
+
+- **T405's headline was over-general — upheld, and narrowed.** The row's body already recorded that
+  `outreach.ts` sends `updated_at` explicitly, but the summary line claimed it of the whole table.
+  Headline now scoped to `attendance.ts`'s write paths.
+- **The proposed new row for the `outreach.ts` `hours_override` sibling — declined as a duplicate.**
+  T406 already enumerates that payload's full column list, `hours_override` included, by name.
+  Filing a second row would split one W2-owned finding across two. T406 stands.
+
+### Rework required before step 3 can be called done
+
+1. Resolve wire provenance from the row's **true DB** method — carry it as a separate field, or stop
+   discarding the returned `AttendanceRow` as `AttendancePanel:720` already does. **This is a spec
+   change and should go back through the packet, since the current design came from §4c.**
+2. Add a test driving **≥2 sequential** coach edits on a `qr` row, asserting **both** wire calls send
+   `'qr'`. The current criterion-3 test is single-shot and structurally cannot see this.
+3. Make `defaultSetAttendanceStatus` injectable; re-run M7 and report it **red at exit 1**.
+
+**Gates at this commit** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier
+**clean** · eslint **0 errors / 363 warnings** · vitest **77 files / 1878 tests, exit 0**. Green
+gates on a FAILED review — which is the point: the gates never had a chance of catching MAJOR-1.
