@@ -39,5 +39,18 @@ export default [
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
+  // `scripts/**/*.mjs` are Node CLI utilities (setup/diagnostic tooling), not
+  // part of the browser bundle. They legitimately use `console` and `process`,
+  // which `js.configs.recommended`'s `no-undef` reports as errors without Node
+  // globals declared -- and `eslint .` gating on 0 errors means that would
+  // break the gate rather than merely warn.
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: globals.node,
+    },
+  },
   eslintConfigPrettier,
 ];

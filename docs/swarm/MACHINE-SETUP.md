@@ -4,7 +4,7 @@
 **different computers on different workflows** (`WORKFLOWS.md`), so this stops being a one-time
 note and becomes the Nth-machine checklist.
 
-**The short version:** clone, install Node 22.22.2, `npm ci`, run `bash scripts/doctor.sh`, then
+**The short version:** clone, install Node 22.22.2, `npm ci`, run `node scripts/doctor.mjs`, then
 paste one block from `KICKOFF-PROMPTS.md` into a fresh Claude Code session. Nothing else is
 required to work on most of the backlog — no Supabase account, no `.env.local`, no database.
 
@@ -36,11 +36,15 @@ migration work.
 git clone https://github.com/gamitch/volt_task_tracker_rewrite.git
 cd volt_task_tracker_rewrite
 npm ci
-bash scripts/doctor.sh
+node scripts/doctor.mjs
 ```
 
 `npm ci` needs no registry auth. `@astryxdesign/*` resolves from public npmjs.org despite looking
 private.
+
+`doctor.mjs` is Node rather than bash on purpose — machines here run Windows too, and Windows has no
+bash outside the one Git bundles. **The `.sh` runners under `tests/rls/` and `supabase/tests/` still
+need bash**, so a Windows machine assigned W4 or W9 should run them from Git Bash (or WSL).
 
 ### The install-script prompt on npm 11
 
@@ -61,7 +65,7 @@ Re-approve with `npm approve-scripts esbuild` and commit the one-line `package.j
 reach for `--no-allow-scripts-pin`, which approves every future version sight-unseen.
 
 **If a machine sees npm 11 at all, check its Node.** Node 22.22.2 ships npm 10.9.x, so npm 11 means
-either a separately-installed npm or the wrong Node. `scripts/doctor.sh` reports both.
+either a separately-installed npm or the wrong Node. `scripts/doctor.mjs` reports both.
 
 ## Optional, per workflow
 
@@ -88,13 +92,13 @@ Both values are in the Supabase dashboard under Project Settings → API. `.env`
 gitignored (the old repo leaked a `.env` — that is why the rule exists).
 
 **Move `.env.local` aside before running gates.** Every baseline in `docs/swarm/` was measured
-without it, and `scripts/doctor.sh` warns when it finds one.
+without it, and `scripts/doctor.mjs` warns when it finds one.
 
 ---
 
 ## The six gates
 
-Run before any PR. `scripts/doctor.sh --gates` runs the first five.
+Run before any PR. `node scripts/doctor.mjs --gates` runs the first five.
 
 ```bash
 npx tsc --noEmit          # exit 0
