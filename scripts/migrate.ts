@@ -41,6 +41,17 @@
 //   node --experimental-strip-types scripts/migrate.ts --dry-run --from-dir=/path/to/export --cutover-date=2026-07-19
 //     (T063/MIG-04: real old-project data read from George's Lovable Cloud SQL-editor
 //     JSON export directory instead of a live connection -- no env vars required)
+//   node --experimental-strip-types scripts/migrate.ts --from-dir=/path/to/export --cutover-date=2026-07-19 --manifest-out=/tmp/manifest.json
+//     (real run -- writes a manifest recording exactly what was created; see
+//     scripts/migrate/manifest.ts. --manifest-out is optional -- a sensible
+//     default path is used and printed if omitted. A real run never
+//     completes without leaving a manifest behind.)
+//   node --experimental-strip-types scripts/migrate.ts --teardown=/tmp/manifest.json --dry-run
+//     (T063b: manifest-driven teardown -- deletes exactly the ids the named
+//     manifest recorded, in FK-safe order, never touching profiles/
+//     guardian_links/auth.users. --dry-run previews without deleting.
+//     Requires NEW_SUPABASE_URL / NEW_SERVICE_ROLE_KEY, same as a real
+//     migration run. See scripts/migrate/teardown.ts.)
 
 declare const process: {
   env: Record<string, string | undefined>;
@@ -55,8 +66,17 @@ import { SupabaseOldDataSource } from './migrate/dataSource.ts';
 import { SupabaseNewDataSink } from './migrate/dataSink.ts';
 import { FixtureOldDataSource, InMemoryNewDataSink } from './migrate/fixtures.ts';
 import { JsonFileOldDataSource } from './migrate/jsonFileSource.ts';
+import {
+  ManifestRecordingSink,
+  buildManifest,
+  defaultManifestPath,
+  writeManifest,
+  ManifestValidationError,
+} from './migrate/manifest.ts';
+import { performTeardown, TeardownProjectMismatchError } from './migrate/teardown.ts';
 import type { OldDataSource } from './migrate/dataSource.ts';
 import type { NewDataSink } from './migrate/dataSink.ts';
+import type { MigrationManifestSource } from './migrate/manifest.ts';
 import type { MigrationOptions } from './migrate/types.ts';
 
 interface CliArgs {
@@ -64,11 +84,21 @@ interface CliArgs {
   fixture: boolean;
   fromDir: string | null;
   cutoverDate: string | null;
+  manifestOut: string | null;
+  teardown: string | null;
   help: boolean;
 }
 
 function parseArgs(argv: string[]): CliArgs {
-  const args: CliArgs = { dryRun: false, fixture: false, fromDir: null, cutoverDate: null, help: false };
+  const args: CliArgs = {
+    dryRun: false,
+    fixture: false,
+    fromDir: null,
+    cutoverDate: null,
+    manifestOut: null,
+    teardown: null,
+    help: false,
+  };
   for (const arg of argv) {
     if (arg === '--dry-run') {
       args.dryRun = true;
@@ -80,6 +110,10 @@ function parseArgs(argv: string[]): CliArgs {
       args.cutoverDate = arg.slice('--cutover-date='.length);
     } else if (arg.startsWith('--from-dir=')) {
       args.fromDir = arg.slice('--from-dir='.length);
+    } else if (arg.startsWith('--manifest-out=')) {
+      args.manifestOut = arg.slice('--manifest-out='.length);
+    } else if (arg.startsWith('--teardown=')) {
+      args.teardown = arg.slice('--teardown='.length);
     }
   }
   return args;
@@ -105,8 +139,21 @@ function printHelp(): void {
       '                           path, not a demo. Mutually exclusive with --fixture. Does',
       '                           not require OLD_SUPABASE_URL / OLD_SERVICE_ROLE_KEY;',
       '                           combined with --dry-run, no env vars are required at all.',
-      '  --cutover-date=YYYY-MM-DD  Required. Wall-clock America/Chicago cutover date used',
-      '                           for the event_sessions.status rule (mapping.md).',
+      '  --cutover-date=YYYY-MM-DD  Required (unless --teardown is given). Wall-clock',
+      '                           America/Chicago cutover date used for the',
+      '                           event_sessions.status rule (mapping.md).',
+      '  --manifest-out=<path>    Where to write the manifest recording exactly which rows',
+      '                           this real (non-dry-run) run created. Optional -- if',
+      '                           omitted, a real run writes to a sensible default path and',
+      '                           prints it. Never written on --dry-run (nothing was',
+      '                           created). See scripts/migrate/manifest.ts.',
+      '  --teardown=<path>        Manifest-driven teardown instead of a migration run:',
+      '                           deletes exactly the ids the named manifest recorded, in',
+      '                           FK-safe order, never touching profiles/guardian_links/',
+      '                           auth.users. Mutually exclusive with --fixture/--from-dir/',
+      '                           --cutover-date. Requires NEW_SUPABASE_URL /',
+      '                           NEW_SERVICE_ROLE_KEY. Combine with --dry-run to preview',
+      '                           without deleting. See scripts/migrate/teardown.ts.',
       '  --help, -h               Print this message.',
     ].join('\n'),
   );
@@ -119,6 +166,34 @@ async function main(): Promise<void> {
 
   if (args.help) {
     printHelp();
+    return;
+  }
+
+  // --teardown short-circuits everything else: it is not a migration run
+  // (no old-project source, no cutover date, no --fixture/--from-dir) --
+  // see scripts/migrate/teardown.ts.
+  if (args.teardown) {
+    if (args.fixture || args.fromDir || args.cutoverDate) {
+      console.log(
+        'Error: --teardown is mutually exclusive with --fixture / --from-dir / --cutover-date -- ' +
+          'it does not run a migration.',
+      );
+      printHelp();
+      process.exit(1);
+    }
+    try {
+      await performTeardown(args.teardown, args.dryRun);
+    } catch (err) {
+      if (
+        err instanceof MissingEnvError ||
+        err instanceof ManifestValidationError ||
+        err instanceof TeardownProjectMismatchError
+      ) {
+        console.log(`Error: ${err.message}`);
+        process.exit(1);
+      }
+      throw err;
+    }
     return;
   }
 
@@ -142,6 +217,13 @@ async function main(): Promise<void> {
 
   let source: OldDataSource;
   let sink: NewDataSink;
+  // Set only when `sink` is a real SupabaseNewDataSink wrapped for manifest
+  // recording (never for --fixture, never for a dry-run --from-dir, both of
+  // which use the in-memory sink and never touch the real project) -- see
+  // this function's post-runMigration manifest-write step below.
+  let manifestSink: ManifestRecordingSink | null = null;
+  let manifestSource: MigrationManifestSource | null = null;
+  let manifestNewProjectUrl: string | null = null;
 
   if (args.fixture) {
     console.log(
@@ -189,7 +271,11 @@ async function main(): Promise<void> {
       try {
         const newEnv = loadNewSupabaseEnv();
         console.log(`Connecting to new project ${newEnv.url} (key ${redactSecret(newEnv.serviceRoleKey)})`);
-        sink = new SupabaseNewDataSink(newEnv);
+        const recordingSink = new ManifestRecordingSink(new SupabaseNewDataSink(newEnv));
+        sink = recordingSink;
+        manifestSink = recordingSink;
+        manifestSource = { kind: 'from-dir', path: args.fromDir };
+        manifestNewProjectUrl = newEnv.url;
       } catch (err) {
         if (err instanceof MissingEnvError) {
           console.log(`Error: ${err.message}`);
@@ -206,7 +292,17 @@ async function main(): Promise<void> {
         `Connecting to old project ${oldEnv.url} (key ${redactSecret(oldEnv.serviceRoleKey)}) and new project ${newEnv.url} (key ${redactSecret(newEnv.serviceRoleKey)})`,
       );
       source = new SupabaseOldDataSource(oldEnv);
-      sink = new SupabaseNewDataSink(newEnv);
+      // Wrapped for manifest recording even on a live dry run (this branch
+      // is the only one that reuses the same SupabaseNewDataSink for both
+      // modes) -- harmless, since ManifestRecordingSink only ever records
+      // what its inner sink reports as created, which dataSink.ts already
+      // makes `[]` on a dry run. The manifest is only ever WRITTEN below
+      // when `!options.dryRun`.
+      const recordingSink = new ManifestRecordingSink(new SupabaseNewDataSink(newEnv));
+      sink = recordingSink;
+      manifestSink = recordingSink;
+      manifestSource = { kind: 'live' };
+      manifestNewProjectUrl = newEnv.url;
     } catch (err) {
       if (err instanceof MissingEnvError) {
         console.log(`Error: ${err.message}`);
@@ -225,6 +321,24 @@ async function main(): Promise<void> {
     printReport(report);
     if (!options.dryRun) {
       console.log('Real run complete. Rows above were written to the new project.');
+      // A real migration run must never complete without leaving a record
+      // of what it did (this task's spec) -- write a manifest whenever the
+      // sink actually reached the real project (never for --fixture, never
+      // for a dry-run --from-dir -- both stay on the in-memory sink and
+      // never set `manifestSink`).
+      if (manifestSink && manifestSource && manifestNewProjectUrl) {
+        const runAt = new Date();
+        const manifest = buildManifest({
+          runAt,
+          cutoverDate: options.cutoverDate,
+          source: manifestSource,
+          newProjectUrl: manifestNewProjectUrl,
+          tables: manifestSink.snapshotTables(),
+        });
+        const manifestPath = args.manifestOut ?? defaultManifestPath(runAt);
+        await writeManifest(manifest, manifestPath);
+        console.log(`Manifest written: ${manifestPath}`);
+      }
     }
   } catch (err) {
     if (err instanceof AttendeesBackfillAssertionError) {

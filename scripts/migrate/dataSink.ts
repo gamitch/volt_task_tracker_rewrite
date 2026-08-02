@@ -49,6 +49,45 @@ export interface NewDataSink {
   upsertAttendance(rows: NewAttendanceRow[], dryRun: boolean): Promise<UpsertResult>;
 }
 
+// ---------------------------------------------------------------------------
+// T063b (manifest write path): additive-only "which ids did this call
+// actually create" variants of the two result shapes above. `UpsertResult`
+// and `TeamsUpsertOutcome` (and therefore the `NewDataSink` interface) are
+// left completely untouched on purpose -- every other implementation of
+// `NewDataSink` (scripts/migrate/fixtures.ts's `InMemoryNewDataSink`) and
+// every caller that only holds a `NewDataSink`-typed reference (core.ts,
+// migrate.ts) is unaffected by what follows. Only `SupabaseNewDataSink`'s
+// own concrete methods below declare the wider return type, so only a
+// caller that holds a `SupabaseNewDataSink`-typed (or
+// `IdentifyingNewDataSink`-typed) reference can see `createdIds` -- which
+// is exactly and only `scripts/migrate/manifest.ts`'s
+// `ManifestRecordingSink`. This is what lets the manifest distinguish
+// "created" from "matched": each helper below already computes the id set
+// that was NOT pre-existing before deciding whether to write; the only
+// change here is returning that set instead of throwing it away.
+export interface UpsertResultWithIds extends UpsertResult {
+  createdIds: string[];
+}
+
+export interface TeamsUpsertOutcomeWithIds extends TeamsUpsertOutcome {
+  createdIds: string[];
+}
+
+/** Structural (not `implements`-declared) supertype of `SupabaseNewDataSink`
+ * that exposes the id-carrying result shapes above. Consumers that need to
+ * know exactly which rows a real run created -- currently only
+ * `ManifestRecordingSink` -- depend on this instead of the plain
+ * `NewDataSink` interface. */
+export interface IdentifyingNewDataSink {
+  upsertTeams(rows: NewTeamUpsert[], dryRun: boolean): Promise<TeamsUpsertOutcomeWithIds>;
+  findOrCreateSeason(row: NewSeasonUpsert, dryRun: boolean): Promise<{ id: string; created: boolean }>;
+  upsertStudents(rows: NewStudentRow[], dryRun: boolean): Promise<UpsertResultWithIds>;
+  upsertEvents(rows: NewEventRow[], dryRun: boolean): Promise<UpsertResultWithIds>;
+  upsertEventSessions(rows: NewEventSessionRow[], dryRun: boolean): Promise<UpsertResultWithIds>;
+  upsertRsvps(rows: NewRsvpRow[], dryRun: boolean): Promise<UpsertResultWithIds>;
+  upsertAttendance(rows: NewAttendanceRow[], dryRun: boolean): Promise<UpsertResultWithIds>;
+}
+
 const DRY_RUN_PLACEHOLDER_PREFIX = 'dry-run-placeholder:';
 
 async function idUpsert<T extends { id: string }>(
@@ -56,9 +95,9 @@ async function idUpsert<T extends { id: string }>(
   table: string,
   rows: T[],
   dryRun: boolean,
-): Promise<UpsertResult> {
+): Promise<UpsertResultWithIds> {
   if (rows.length === 0) {
-    return { createdCount: 0, updatedCount: 0 };
+    return { createdCount: 0, updatedCount: 0, createdIds: [] };
   }
   const ids = rows.map((r) => r.id);
   const { data: existingRows, error: selectError } = await client.from(table).select('id').in('id', ids);
@@ -66,7 +105,8 @@ async function idUpsert<T extends { id: string }>(
     throw new Error(`New project: failed to read existing ${table} rows: ${selectError.message}`);
   }
   const existingIds = new Set((existingRows ?? []).map((r) => (r as { id: string }).id));
-  const createdCount = rows.filter((r) => !existingIds.has(r.id)).length;
+  const createdRows = rows.filter((r) => !existingIds.has(r.id));
+  const createdCount = createdRows.length;
   const updatedCount = rows.length - createdCount;
 
   if (!dryRun) {
@@ -76,7 +116,11 @@ async function idUpsert<T extends { id: string }>(
     }
   }
 
-  return { createdCount, updatedCount };
+  // Ids are deterministic (uuidv5 derived from the old row's id, computed
+  // before this function is ever called -- see transform.ts/uuid.ts), so
+  // "created" ids are already fully known from `createdRows` without a
+  // second query. On a dry run nothing was actually created, so report none.
+  return { createdCount, updatedCount, createdIds: dryRun ? [] : createdRows.map((r) => r.id) };
 }
 
 async function compositeKeyUpsert<T extends { session_id: string; student_id: string }>(
@@ -84,9 +128,9 @@ async function compositeKeyUpsert<T extends { session_id: string; student_id: st
   table: string,
   rows: T[],
   dryRun: boolean,
-): Promise<UpsertResult> {
+): Promise<UpsertResultWithIds> {
   if (rows.length === 0) {
-    return { createdCount: 0, updatedCount: 0 };
+    return { createdCount: 0, updatedCount: 0, createdIds: [] };
   }
   const sessionIds = Array.from(new Set(rows.map((r) => r.session_id)));
   const { data: existingRows, error: selectError } = await client
@@ -104,16 +148,34 @@ async function compositeKeyUpsert<T extends { session_id: string; student_id: st
   const createdCount = rows.filter((r) => !existingKeys.has(`${r.session_id}:${r.student_id}`)).length;
   const updatedCount = rows.length - createdCount;
 
+  let createdIds: string[] = [];
   if (!dryRun) {
-    const { error: upsertError } = await client
+    // Unlike `idUpsert`'s tables, these rows carry no `id` field of their
+    // own (the natural key is the session_id/student_id pair; `id` is a
+    // separate DB-assigned uuid -- see the migration's `default
+    // gen_random_uuid()`). `.select()` chained onto `.upsert()` is a single
+    // round trip (no extra query), the same pattern `upsertTeams` below
+    // already uses to recover DB-assigned ids after a natural-key upsert.
+    const { data: upserted, error: upsertError } = await client
       .from(table)
-      .upsert(rows, { onConflict: 'session_id,student_id' });
+      .upsert(rows, { onConflict: 'session_id,student_id' })
+      .select('id, session_id, student_id');
     if (upsertError) {
       throw new Error(`New project: failed to upsert ${table}: ${upsertError.message}`);
     }
+    const idByKey = new Map<string, string>(
+      (upserted ?? []).map((r) => [
+        `${(r as { session_id: string }).session_id}:${(r as { student_id: string }).student_id}`,
+        (r as { id: string }).id,
+      ]),
+    );
+    createdIds = rows
+      .filter((r) => !existingKeys.has(`${r.session_id}:${r.student_id}`))
+      .map((r) => idByKey.get(`${r.session_id}:${r.student_id}`))
+      .filter((id): id is string => id !== undefined);
   }
 
-  return { createdCount, updatedCount };
+  return { createdCount, updatedCount, createdIds };
 }
 
 export class SupabaseNewDataSink implements NewDataSink {
@@ -125,9 +187,9 @@ export class SupabaseNewDataSink implements NewDataSink {
     });
   }
 
-  async upsertTeams(rows: NewTeamUpsert[], dryRun: boolean): Promise<TeamsUpsertOutcome> {
+  async upsertTeams(rows: NewTeamUpsert[], dryRun: boolean): Promise<TeamsUpsertOutcomeWithIds> {
     if (rows.length === 0) {
-      return { idByName: new Map(), result: { createdCount: 0, updatedCount: 0 } };
+      return { idByName: new Map(), result: { createdCount: 0, updatedCount: 0 }, createdIds: [] };
     }
     const names = rows.map((r) => r.name);
     const { data: existingRows, error: selectError } = await this.client
@@ -140,6 +202,10 @@ export class SupabaseNewDataSink implements NewDataSink {
     const idByName = new Map<string, string>(
       (existingRows ?? []).map((r) => [(r as { name: string }).name, (r as { id: string }).id]),
     );
+    // Snapshot which names were already known BEFORE this upsert runs -- the
+    // only reliable way to say "created" afterward, since `idByName` below
+    // gets filled in for both created and matched rows alike.
+    const preExistingNames = new Set(idByName.keys());
     const createdCount = rows.filter((r) => !idByName.has(r.name)).length;
     const updatedCount = rows.length - createdCount;
 
@@ -162,7 +228,14 @@ export class SupabaseNewDataSink implements NewDataSink {
       }
     }
 
-    return { idByName, result: { createdCount, updatedCount } };
+    const createdIds = dryRun
+      ? []
+      : rows
+          .filter((r) => !preExistingNames.has(r.name))
+          .map((r) => idByName.get(r.name))
+          .filter((id): id is string => id !== undefined);
+
+    return { idByName, result: { createdCount, updatedCount }, createdIds };
   }
 
   async findOrCreateSeason(
@@ -195,23 +268,23 @@ export class SupabaseNewDataSink implements NewDataSink {
     return { id: (inserted as { id: string }).id, created: true };
   }
 
-  async upsertStudents(rows: NewStudentRow[], dryRun: boolean): Promise<UpsertResult> {
+  async upsertStudents(rows: NewStudentRow[], dryRun: boolean): Promise<UpsertResultWithIds> {
     return idUpsert(this.client, 'students', rows, dryRun);
   }
 
-  async upsertEvents(rows: NewEventRow[], dryRun: boolean): Promise<UpsertResult> {
+  async upsertEvents(rows: NewEventRow[], dryRun: boolean): Promise<UpsertResultWithIds> {
     return idUpsert(this.client, 'events', rows, dryRun);
   }
 
-  async upsertEventSessions(rows: NewEventSessionRow[], dryRun: boolean): Promise<UpsertResult> {
+  async upsertEventSessions(rows: NewEventSessionRow[], dryRun: boolean): Promise<UpsertResultWithIds> {
     return idUpsert(this.client, 'event_sessions', rows, dryRun);
   }
 
-  async upsertRsvps(rows: NewRsvpRow[], dryRun: boolean): Promise<UpsertResult> {
+  async upsertRsvps(rows: NewRsvpRow[], dryRun: boolean): Promise<UpsertResultWithIds> {
     return compositeKeyUpsert(this.client, 'rsvps', rows, dryRun);
   }
 
-  async upsertAttendance(rows: NewAttendanceRow[], dryRun: boolean): Promise<UpsertResult> {
+  async upsertAttendance(rows: NewAttendanceRow[], dryRun: boolean): Promise<UpsertResultWithIds> {
     return compositeKeyUpsert(this.client, 'attendance', rows, dryRun);
   }
 }
