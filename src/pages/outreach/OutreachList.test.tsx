@@ -1809,8 +1809,8 @@ describe('<OutreachList /> student/parent view', () => {
 
 describe('<OutreachList /> T193: real RSVP writer wiring (packet §5)', () => {
   function clickFoodBankGoing(): void {
-    const foodBankGroup = Array.from(container.querySelectorAll('[role="radiogroup"]')).find(
-      (el) => el.getAttribute('aria-label')?.startsWith('Your RSVP for Community Food Bank Sort'),
+    const foodBankGroup = Array.from(container.querySelectorAll('[role="radiogroup"]')).find((el) =>
+      el.getAttribute('aria-label')?.startsWith('Your RSVP for Community Food Bank Sort'),
     );
     const goingButton = foodBankGroup?.querySelector('button[data-value="going"]');
     expect(goingButton).toBeTruthy();
@@ -1852,8 +1852,8 @@ describe('<OutreachList /> T193: real RSVP writer wiring (packet §5)', () => {
     clickFoodBankGoing();
     await flushMicrotasks();
 
-    const foodBankGroup = Array.from(container.querySelectorAll('[role="radiogroup"]')).find(
-      (el) => el.getAttribute('aria-label')?.startsWith('Your RSVP for Community Food Bank Sort'),
+    const foodBankGroup = Array.from(container.querySelectorAll('[role="radiogroup"]')).find((el) =>
+      el.getAttribute('aria-label')?.startsWith('Your RSVP for Community Food Bank Sort'),
     );
     // Rolled back to unanswered -- no segment checked, same as before the
     // click. A scalar `previousStatus` rollback cannot reach this state for
@@ -1898,8 +1898,8 @@ describe('<OutreachList /> T193: real RSVP writer wiring (packet §5)', () => {
     // The write is still outstanding (never resolved) -- the optimistic
     // update must already be visible, not gated behind the `await`.
     expect(container.textContent).toContain('0 awaiting your RSVP');
-    const foodBankGroup = Array.from(container.querySelectorAll('[role="radiogroup"]')).find(
-      (el) => el.getAttribute('aria-label')?.startsWith('Your RSVP for Community Food Bank Sort'),
+    const foodBankGroup = Array.from(container.querySelectorAll('[role="radiogroup"]')).find((el) =>
+      el.getAttribute('aria-label')?.startsWith('Your RSVP for Community Food Bank Sort'),
     );
     expect(
       foodBankGroup?.querySelector('button[data-value="going"]')?.getAttribute('aria-checked'),
