@@ -19,8 +19,9 @@ outreach event, run a meeting, hours accounting, home dashboards, calendar, rost
 cross-cutting hygiene). **Its most important content is not the grouping — it is which workflows can
 safely run at the same time**, which is decided by file overlap, not topic. Three files are collision
 magnets (`OutreachList.tsx` at 4164 lines, `OutreachDetail.tsx`, `StudentHome.tsx`) and the file
-proposes per-workflow row-number blocks so the T196/T197 numbering collision cannot recur across N
-machines.
+reserves **a row-number block of 100 per workflow** (W1 → T400-499, W2 → T500-599, and so on to
+W10 → T1300-1399; owner's call) so the T196/T197 numbering collision cannot recur across N machines.
+Blocks are deliberately over-sized: one that can run out reintroduces the failure it prevents.
 
 **Best three-machine split: W1 (check in) + W4 (hours) + W7 (roster)** — no shared files. **Best
 two-machine split: W1 + W2**, which between them hold every remaining data-loss row.

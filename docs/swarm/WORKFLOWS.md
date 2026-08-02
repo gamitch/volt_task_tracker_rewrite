@@ -306,8 +306,24 @@ These are not suggestions. Each one is written against a failure this project ha
 
 1. **Reserve a row-number block per workflow before starting.** "Next free row number" read from a
    shared file is not a reservation — that is exactly how two different tasks both became T196 and
-   both became T197. Proposed blocks: **W1 → T400-419 · W2 → T420-439 · W3 → T440-449 ·
-   W4 → T450-469 · W5 → T470-489 · W6 → T490-499 · W7 → T500-509 · W9 → T510-519.**
+   both became T197.
+
+   **Blocks of 100, one per workflow** (owner's call, 2026-08-02). The existing ledger ends at
+   **T333**, so T400 is a clean start with room left below it:
+
+   | | | | | |
+   |---|---|---|---|---|
+   | **W1** T400-499 | **W2** T500-599 | **W3** T600-699 | **W4** T700-799 | **W5** T800-899 |
+   | **W6** T900-999 | **W7** T1000-1099 | **W8** T1100-1199 | **W9** T1200-1299 | **W10** T1300-1399 |
+
+   **Why 100 and not 20:** a block that can run out reintroduces the exact failure it prevents — the
+   moment a workflow exhausts its range, someone reaches for a number outside it and the reservation
+   is gone. At 100 no workflow here can plausibly exhaust one; the largest, W2, holds 13 open rows
+   today. Blocks are deliberately over-sized because unused numbers cost nothing and a collision
+   costs a corrupted ledger.
+
+   **Row IDs go to four digits from W7 on.** That is fine — nothing parses these — but do not
+   "helpfully" renumber T1000 back down into a gap. Gaps are the point.
 
 2. **One machine owns a file, not a workflow.** If two workflows need `OutreachList.tsx`, the second
    one waits. Check the collision table at the top before dispatching.
