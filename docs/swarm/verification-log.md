@@ -6562,3 +6562,78 @@ student test).
 
 **Gates:** `tsc` 0 · `vite build` ✓ · prettier clean · eslint **0 errors / 361 warnings**
 (unchanged) · vitest **73 files / 1786 tests**, exit 0.
+
+## T321 — manual short-code entry on `/checkin` (audit LIVE-002)
+
+**First task of the W1 (check in) workflow, on `claude/w1-checkin`. STANDARD tier.**
+
+**The defect.** An expired check-in credential was a dead end. The error state's only action was
+"Try again", which called `runCheckin()` — a function whose only credential source was
+`searchParamsKey`, the URL. So it re-sent the *same expired token* and could never succeed. Nothing
+anywhere let a student type the 6-character short code the kiosk displays, even though `callCheckin`
+has always known how to send one (`body.code`) and T032's backend has always accepted it.
+
+**Why it was untracked.** The file pointed twice at *"T054's future manual-entry sub-path"*
+(module doc and the query-param section). **T054 is Student Home / HOME-02** — unrelated. The
+pointer tracked nothing, so no row existed until the external audit re-found it as LIVE-002. Both
+references are corrected.
+
+**The scoping finding, which neither the audit nor the ledger row had.** Both describe this as a
+*"UI-only gap on a working backend"*. That is true for the expiry case and **false** for the case
+the audit actually named — *"a student who cannot scan has no fallback."* Verified rather than
+assumed, by reading T032's shipped code:
+
+- `validateCheckinRequest` (`validation.ts`) rejects any body without a **uuid `session_id`**
+  (`MISSING_SESSION_ID` / `INVALID_SESSION_ID`).
+- `verifyShortCode` (`hmac.ts:133-145`) HMACs the presented code over `` `${sessionId}:${bucket}` ``.
+
+**A short code is meaningful only relative to one specific session.** A student who scanned and then
+expired still has `?s=` in the URL, so the form reuses it and works. A student who never scanned has
+no session id, and `Kiosk.tsx` shows the QR and the code but never a readable session identifier.
+For that student, a form could only ever fail — so **the form is not rendered when `s` is absent**,
+and the gap is filed as **T400** with three candidate fixes, none of them UI-only. Shipping a form
+that silently could not work would have been the more impressive-looking outcome and the wrong one.
+
+**Client-side normalization.** Trim, upper-case, and map `0`→`O` / `1`→`I`. This is **lossless by
+construction**: the alphabet is `A-Z2-9` (34 chars) and contains neither digit, so the mapping can
+never rewrite one valid code into a different valid code. A test pins the alphabet and length
+against the backend constants, so a backend change fails a test here rather than silently rejecting
+codes students typed correctly.
+
+**Malformed codes never reach the network.** `rate_limit.ts` caps short-code attempts at 5/min/user
+(MTG-06). A typo must not burn one of five.
+
+**Keyboard path.** A real `<form onSubmit>` with `Button type="submit"`, so Enter submits via browser
+behaviour rather than a keydown handler. The test asserts that **mechanism** rather than simulating
+Enter, because jsdom does not implement implicit form submission — an honest structural assertion,
+not a simulated-browser claim.
+
+**Mutations — all four run in the worktree after committing (item 26's "commit before mutating"),
+each reverted and re-verified. Exit codes asserted, not just pass counts:**
+
+| Mutation | Result |
+|---|---|
+| manual submit calls `runCheckin()` (replays URL credential — the pre-T321 bug) | **2 red, exit 1** |
+| drop `isWellFormedShortCode` guard | **1 red, exit 1** |
+| render the form regardless of `manualSessionId` | **1 red, exit 1** |
+| drop the `0`→`O` / `1`→`I` mapping | **2 red, exit 1** |
+
+**Tier justification (item 26 requires this be stated and defended).** STANDARD, not FAST: the change
+exceeds ~20 lines of production code and adds five new exported symbols. Not HEAVY: it introduces no
+write path of its own — the attendance write is server-side in T032's already-shipped, HMAC-gated
+function, unchanged here — touches no schema, RLS, migration, metric SQL, or auth logic, and cannot
+corrupt data or misreport a user's own data. The one judgement worth flagging for correction: a
+reasonable reviewer could argue check-in *is* a write path and demand HEAVY. The counter is that the
+credential plumbing already existed and this change only supplies an alternative credential to an
+existing call; the server remains the sole authority on whether the write happens.
+
+**Disclosed residual:** eslint warnings in `src/pages/checkin/` go 2 → 5. All three additions are
+`react-refresh/only-export-components`, fired by exporting helpers from a file that also exports a
+component — the identical rule the file already carried 2 of, for `callCheckin` and
+`parseCheckinCredential`. Kept for consistency with the file's existing convention rather than split
+into a new module. Zero errors either way.
+
+**Gates** (measured with `.env.local` absent, the mandated gate state): `tsc` **0** · `vite build`
+**✓** · prettier **clean** · eslint **0 errors / 364 warnings** · vitest **75 files / 1831 tests
+(+14), exit 0**. Baseline at `origin/main` `e422123` measured independently first: 75 files / 1817
+tests, exit 0.
