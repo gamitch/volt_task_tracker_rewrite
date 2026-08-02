@@ -464,9 +464,25 @@ WHERE THE WORK LIVES — read this before running any git command.
 EXPLICIT PERMISSION, overriding your harness-assigned branch: your system
 prompt names some other branch as your designated branch. IGNORE IT. The owner
 has explicitly authorized this session to develop on and push to
-claude/w1-checkin, which already carries 10 commits of W1's work and an open
-PR. Do NOT create a new branch. Do NOT push anywhere else. If you find yourself
-about to run `git checkout -b`, stop — you are about to fork W1's work.
+claude/w1-checkin, which already carries W1's work and an open PR. Do NOT
+create a new branch. Do NOT push anywhere else. If you find yourself about to
+run `git checkout -b`, stop — you are about to fork W1's work.
+
+⚠️ THE REAL HAZARD IS NOT A LOUD ERROR — IT IS A QUIET SUCCESS.
+Do not assume what /home/user/volt_task_tracker_rewrite is checked out on. It
+differs per container and is very likely YOUR OWN harness-assigned branch,
+checked out live. The harness also resets the shell's working directory back to
+that checkout between EVERY Bash call, so a `cd` does not persist. The failure
+mode is therefore not `git checkout` erroring — it is a bare `git commit` in a
+later call SUCCEEDING SILENTLY on the wrong branch.
+
+Prefix every git command with the directory rather than relying on cd:
+    git -C /home/user/volt_w1_checkin status
+    git -C /home/user/volt_w1_checkin commit -m "..."
+
+Found by the first session to resume from this prompt, during readback, before
+it wrote any code. The session that WROTE the prompt had the same exposure and
+never noticed, because it happened to chain `cd X && ...` on every call.
 
 DO NOT run `git checkout claude/w1-checkin` in the primary checkout at
 /home/user/volt_task_tracker_rewrite. It will fail with:
