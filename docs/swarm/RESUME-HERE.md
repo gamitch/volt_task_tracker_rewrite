@@ -1,4 +1,4 @@
-# Resume here — state of play at `main` = `4b951c5` (read the UPDATE sections top-down; each supersedes the ones below it)
+# Resume here — state of play at `main` = `7c7eb30` (read the UPDATE sections top-down; each supersedes the ones below it)
 
 Written 2026-07-30 so this session's context can be cleared without losing anything.
 Fresh orchestrator session: read this, then `constitution.md`, then the open rows in
@@ -7,6 +7,40 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 **Several dated UPDATE sections sit near the top of this file. Read them top-down — the
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
+
+## UPDATE — 2026-08-02 (latest): W2 is three rows further on, and W2 sessions start from `W2-KICKOFF.md`
+
+**`main` = `7c7eb30`**, green: `tsc` 0 · eslint **0 errors / 361 warnings** · vitest
+**76 files / 1842 tests**.
+
+**If you are picking up W2, read `docs/swarm/W2-KICKOFF.md` — it supersedes `KICKOFF-PROMPTS.md`'s
+W2 block**, which is now marked SUPERSEDED in place. Three W2 rows shipped after that block was
+written.
+
+| Row | Shipped | PR |
+|---|---|---|
+| **T193** | A student's RSVP on `/outreach` now actually persists — it was writing nothing | #30 |
+| **T309** | Unchecking a student in "Mark day complete" now records `status: 'absent'` | #33 |
+| **T327** | Completion writes attendance **before** the status flip, so a failed write is retryable | #35 |
+
+**T330's severity was RAISED, not closed.** A packet proposed closing it as no-change; the premise
+gate refuted the argument and the refutation was verified. `buildEventGroups` drops zero-session
+events from **both** buckets (`OutreachList.tsx:1730`), so an orphan event is **invisible on the
+coach list and unreachable without a remembered URL** — and a failed-create-then-retry
+**double-counts adult-volunteer totals** in `HoursTab`, which sums them across all season events
+with no session filter. **The corrected facts are in full on the T330 ledger row.** It is the next
+W2 row and needs an owner ruling on what a dateless event row should display.
+
+**Other machines, as of this writing:** W1 (another laptop) has completed T321, T161 and T320, open
+in **PR #28**. A third machine runs the Codex adapter and W6; its work merged as #29 and #32
+(T324 — calendar real data). **Do not touch `loaders/attendance.ts`** — it is W1's and live.
+
+**Three failure modes this project keeps repeating**, all caught by the premise gate today:
+writing criteria against an **imagined harness** instead of the real one (four consecutive tasks);
+**citing code that exists but never runs**; and **recommending on a question already settled** by an
+owner ruling. All three are written up in `W2-KICKOFF.md` §6.
+
+---
 
 ## UPDATE — 2026-08-02 (later): the backlog is now also cut by WORKFLOW, for parallel machines
 
