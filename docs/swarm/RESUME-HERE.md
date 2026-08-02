@@ -1,4 +1,4 @@
-# Resume here — state of play at `main` = `7c7eb30` (read the UPDATE sections top-down; each supersedes the ones below it)
+# Resume here — state of play at `main` = `fb3d068` (read the UPDATE sections top-down; each supersedes the ones below it)
 
 Written 2026-07-30 so this session's context can be cleared without losing anything.
 Fresh orchestrator session: read this, then `constitution.md`, then the open rows in
@@ -7,6 +7,32 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 **Several dated UPDATE sections sit near the top of this file. Read them top-down — the
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
+
+## UPDATE — 2026-08-02 (newest): W6 T195 + T194 independently passed; integration PR #37 open
+
+Branch `codex/t195-t194-calendar-feed-lifecycle` is rebased onto `main = fb3d068` and independently
+checked. T195 and T194 were implemented together under the HEAVY process: existing profiles are
+backfilled, future profile inserts receive a feed, historical duplicate active feeds are
+deterministically reconciled, a partial unique index enforces one active feed per profile, and
+Reset now calls one authenticated security-invoker RPC that revokes the named row and inserts a
+database-generated replacement atomically.
+
+The transport-ambiguity case is handled explicitly: if the RPC response is lost, the component
+re-reads the authoritative active feed; if that read also fails, it hides the possibly revoked URL
+instead of presenting it as current. No ICS edit was needed because the Edge Function already
+rejects persisted revoked tokens.
+
+**Verification:** owner-authorized premise round 3 returned DISPATCH. The Sol worker's first
+candidate passed all named mutations and gates; the independent Sol checker then found one MAJOR:
+`CREATE UNIQUE INDEX IF NOT EXISTS` could silently accept a wrong same-named index and break Reset.
+The rework removed that drift-masking clause. The checker reproduced fail-loud SQLSTATE `42P07`,
+then returned PASS. After the final source rebase: targeted 29/29, PostgreSQL lifecycle/security
+10/10, full suite 1850/1850, typecheck/format/lint/build all exit 0 (lint 0 errors / 360 warnings).
+
+**W6 next:** merge/deploy the integration PR and smoke-test initial provisioning plus one reset on
+hosted Supabase. Do not reopen T177, T324, T195, or T194 from the older sections below.
+
+---
 
 ## UPDATE — 2026-08-02 (latest): W2 is three rows further on, and W2 sessions start from `W2-KICKOFF.md`
 
@@ -41,6 +67,21 @@ writing criteria against an **imagined harness** instead of the real one (four c
 owner ruling. All three are written up in `W2-KICKOFF.md` §6.
 
 ---
+
+## UPDATE — 2026-08-02 (latest): T193 and T324 merged; Codex adapter merged
+
+**`main` = `690e757`.** PR #29 added the Codex adapter (`AGENTS.md` and
+`docs/swarm/CODEX.md`). PR #30 merged T193's real student RSVP persistence. PR #32 merged T324:
+`/calendar` no longer renders production fixtures and now loads the resolved active season's
+role-visible events and sessions from Supabase.
+
+**W6 next:** scope **T195 + T194 together** under the HEAVY process. No code provisions an initial
+`calendar_feeds` row, and `SubscribePopover` still fabricates reset results locally. The combined
+fix is expected to include migration-backed first-use provisioning and an atomic persisted reset.
+
+**Process correction:** PR #32 merged without moving T324's ledger row or adding its verification
+entry. The next W6 branch backfills those records explicitly as item-24 drift; do not interpret the
+old row lower in history as an open task.
 
 ## UPDATE — 2026-08-02 (later): the backlog is now also cut by WORKFLOW, for parallel machines
 

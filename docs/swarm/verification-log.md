@@ -6775,3 +6775,132 @@ reddened unless C1 or C4 already had, so its one unique assertion was folded int
 **Deferred, filed rather than built:** an atomic SQL increment
 (`set adult_volunteers_count = adult_volunteers_count + $1`) exposed as an RPC, which is the only
 correct fix for step (3)'s non-idempotence. That is a migration and a different tier.
+
+---
+
+## T324 — calendar live route now loads active-season Supabase data
+
+**Merged `690e757` (PR #32, source commit `16e2f5d`). STANDARD tier.** Entry written as an
+item-24 backfill: the source merged before its ledger row and verification record were updated.
+The omission is recorded here rather than silently presented as an on-time closeout.
+
+**The defect.** `CalendarPage.tsx` defaulted its injectable loader to five hard-coded sessions and
+three hard-coded events under `season-placeholder-current`, so every real user saw fabricated data
+on `/calendar` regardless of database contents or active season.
+
+**The fix.** A calendar-specific `createLoader` implementation now queries `events` with the
+resolved active-season UUID, then queries `event_sessions` only for the visible event ids. The page
+uses the shared `SeasonProvider` states (`loading`, `none`, `error`, `ready`), invokes the loader only
+when ready, and leaves role visibility to the existing RLS policies. Production fixtures were
+removed; deterministic equivalents live only in tests.
+
+**Delegation evidence.** The first Terra dispatch stalled during analysis and produced no files;
+it was interrupted without changing the worktree. A replacement `gpt-5.6-terra` worker completed
+the bounded four-file implementation and committed it. The primary orchestrator independently
+reviewed the committed diff and replayed both named mutations.
+
+| Evidence | Result |
+|---|---|
+| Remove `.eq('season_id', seasonId)` | Loader scope test red, exit 1 |
+| Disconnect the real production default loader | Production-default UUID test red, exit 1 |
+| Targeted calendar suites after restoration | 39/39, exit 0 |
+| Full Vitest suite | 76 files / 1825 tests, exit 0 |
+| Typecheck / format / lint / build | all exit 0; lint 0 errors with existing warnings |
+
+**Scope:** five changed paths including the active worker packet; no subscription, calendar-feed,
+ICS, migration, router, provider, W1, or W2 source changed. T195/T194 remain the next W6 work and
+must be scoped together.
+
+---
+
+## T195 + T194 — provision calendar feeds and persist atomic reset
+
+**PASS on `codex/t195-t194-calendar-feed-lifecycle`; integration PR #37 open. HEAVY tier.** The
+branch was rebased onto `main = 0016780` after independent review. Rebased implementation commits:
+`02b2cc1` (lifecycle/RPC/UI/tests), `1fa1db3` (partial-mock compatibility), and `5ac900b`
+(checker-MAJOR schema-drift rework). Worker evidence tip: `2f266e3`.
+
+### The paired defect
+
+T177 made the subscription reader honest but exposed that no production path ever inserted a
+`calendar_feeds` row. Every real profile therefore reached the missing-row error. In the same
+widget, Reset still defaulted to `defaultOnResetFeedToken`, which logged a payload and returned
+browser-generated fake ids/tokens without revoking or inserting anything. T195 and T194 were
+implemented together because provisioning without Reset and Reset without an initial row are two
+halves of the same broken lifecycle.
+
+### What changed
+
+- One additive migration deterministically keeps the greatest `(created_at, id)` active row for
+  each profile and soft-revokes older duplicates without deleting history.
+- The migration installs a partial unique index on `profile_id WHERE revoked_at IS NULL`, a locked
+  trigger-only `SECURITY DEFINER` provisioner for every future profile insert, and a conflict-safe
+  backfill for existing profiles.
+- `reset_calendar_feed(p_revoke_feed_id uuid)` is `SECURITY INVOKER`, accepts no client profile id,
+  derives ownership from `auth.uid()`, soft-revokes exactly the caller's named active row, inserts
+  a database-generated replacement, and returns exactly that row in one PostgreSQL transaction.
+  `PUBLIC`/`anon` execution is revoked; `authenticated` is granted the exact signature.
+- `calendarFeed.ts` adds the real `.rpc(...).single()` writer with shared mutation error
+  normalization, explicit row mapping, null-result rejection, and a defensive returned-profile
+  check. `SubscribePopover` now defaults to that writer; the fake reset implementation is gone.
+- An HTTP rejection does not prove rollback. The component therefore reloads the authoritative
+  active feed after any reset rejection. If the server committed before losing the response, the
+  new row is installed. If reconciliation also fails, the possibly revoked URL and its copy/reset
+  actions are hidden behind an honest unknown-status state.
+- The existing ICS Edge Function required no change: it already resolves persisted tokens and
+  rejects missing or revoked rows uniformly.
+
+### HEAVY process and checker rework
+
+The initial premise gate returned REVISE because the packet incorrectly treated every rejected
+HTTP promise as proof of database rollback, proposed a non-discriminating RLS mutation, and relied
+on a superuser/null-identity SQL stub. Round two accepted those corrections but found the plain
+PostgreSQL gate could not install the unrelated Supabase-only cron migration and that the revised
+hostile mutation was still neutralized by the partial unique index. The owner explicitly authorized
+round three under constitution item 19a; it experimentally verified the exact cron-only skip and
+the corrected hostile mutation, then returned **DISPATCH**.
+
+The Sol worker produced a clean candidate and all eight named mutations went red. The independent
+Sol checker replayed the source, SQL, gates, and every mutation, then returned **FAIL — MAJOR** for
+one issue not covered by the packet's named mutations: `CREATE UNIQUE INDEX IF NOT EXISTS` could
+silently accept a wrong same-named full index. The checker reproduced a migration that appeared to
+succeed but whose first Reset failed SQLSTATE `23505`, because the wrong index also covered revoked
+history. Rework removed `IF NOT EXISTS`; the same counterexample now stops migration immediately
+with SQLSTATE `42P07`. The checker independently reran the counterexample, normal lifecycle,
+affected mutations, targeted suite, and gates, then returned **PASS — no findings**.
+
+### Mutation evidence
+
+| Mutation | Required red result |
+|---|---|
+| Remove existing-profile backfill | SQL lifecycle fails existing-profile assertion |
+| Remove provisioning trigger | Invite/future provisioning assertion fails |
+| Remove partial unique index | Migration/backfill or invariant assertion fails |
+| Defeat RLS + ownership and replace the target profile's row | Cross-owner assertion fails |
+| Send profile id instead of named active feed id | RPC argument test fails |
+| Replace the production reset default with a local fake | Real-writer default test fails |
+| Remove rejection reconciliation | lost-response and unknown-status UI tests fail |
+| Remove `PUBLIC` execute revoke | privilege/anonymous assertion fails |
+
+No mutation stayed green. The independent checker replayed all eight before rework and the five
+SQL-sensitive mutations after rework; TypeScript blobs were byte-identical for the remaining three.
+
+### Final post-rebase verification
+
+| Gate | Result |
+|---|---|
+| Calendar feed loader + popover suites | 2 files / 29 tests, exit 0 |
+| PostgreSQL 17 lifecycle/security runner | 10 named assertions, exit 0; skips exactly `20260719000000_cron.sql` |
+| Wrong same-named index drift probe | migration fails loudly, SQLSTATE `42P07` |
+| Typecheck | exit 0 |
+| Format check | exit 0 |
+| Lint | exit 0; 0 errors / 360 warnings |
+| Full Vitest suite, run alone | 76 files / 1850 tests, exit 0 |
+| Production build | exit 0; 2,397 modules transformed |
+
+One earlier parallel full-suite run had a single existing OutreachList test hit its 5-second
+timeout while duplicate suite/lint/build processes competed for resources; the isolated rerun above
+passed all tests. The branch was then rebased again for PR #35/T327 and the final isolated run
+passed all 1850 tests. No source outside W6, no existing migration, no RLS policy, and no ICS file
+changed. No live hosted migration or deployment was attempted; after merge, smoke-test one initial
+provision and one reset on hosted Supabase.

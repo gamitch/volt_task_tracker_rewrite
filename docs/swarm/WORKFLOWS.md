@@ -49,7 +49,7 @@ Tier is the **heaviest** item in the workflow, per constitution item 26.
 | **W3** | **Run a meeting** — schedule → attendance → participation % | 4 | HEAVY | Backend built, mount parked | W2, W4, W6, W7 |
 | **W4** | **Hours & goal accounting** — the numbers users are shown | 10 | HEAVY | **One confirmed bug** | W1, W3, W6, W7 |
 | **W5** | **Home dashboards** — student/parent/coach landing state | 10 | STANDARD | Mostly real | W6, W7, W8 |
-| **W6** | **Calendar & subscribe** | 4 | STANDARD | **Non-functional end to end** | everything |
+| **W6** | **Calendar & subscribe** | 4 | STANDARD | **PASS on branch; PR #37 open** | everything |
 | **W7** | **Roster & invites** | 5 | STANDARD | Working | everything |
 | **W8** | **Email & notifications** | 2 | — | **Blocked on owner** | everything |
 | **W9** | **Migration & go-live** | 4 | HEAVY | Migration has run | everything |
@@ -218,20 +218,21 @@ student) precisely to exercise this path, so it is testable in the real app.
 
 > A student subscribes to the team calendar and it stays current in their phone.
 
-**Non-functional end to end, and worse than the audit found.**
+**Implementation complete and independently checked; integration PR #37 is open.**
 
 | Row | What | Tier |
 |---|---|---|
-| **T324** | The calendar renders **hard-coded fixture events on a live route** | STANDARD |
-| **T195** | **Nothing anywhere in the codebase ever creates a `calendar_feeds` row** | HEAVY |
-| **T194** | `SubscribePopover`'s reset fabricates a new feed token locally instead of writing one | HEAVY |
+| **T324** | **MERGED in PR #32** — calendar now loads active-season Supabase data | STANDARD |
+| **T195** | **PASS on `codex/t195-t194-calendar-feed-lifecycle`** — migration provisions/backfills real feeds and enforces one active row | HEAVY |
+| **T194** | **PASS on the same branch** — Reset is one authenticated atomic RPC with authoritative failure reconciliation | HEAVY |
 | **T177** | *(cross-surface; check the row before scoping)* | STANDARD |
 
 **Owns:** `pages/calendar/**`, `loaders/calendarFeed.ts`, the `ical-generator` edge function
 
-**Rank T324 above the rest of P1.** It is a surviving member of the fabricated-data family that
-caused nearly every real bug in this project, on a live route, after that family was declared closed.
-`CalendarPage.tsx` still carries `FIXTURE_EVENTS`/`FIXTURE_SESSIONS` at 902 lines.
+**Next: merge and deploy paired T195/T194 integration PR #37, then smoke-test one initial feed and
+one reset against hosted Supabase.** No open W6 implementation row remains after this pair. The
+plain-PostgreSQL lifecycle/security suite, all eight named mutations, the full application suite,
+and an independent Frontier checker are green on the branch.
 
 **W6 collides with nothing.** It is the cleanest workflow to hand to a spare machine.
 
