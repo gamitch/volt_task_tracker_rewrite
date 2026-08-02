@@ -67,8 +67,13 @@ console.log('');
 // require(esm), which landed on 20.19.0 / 22.12.0. CI pins 22.22.2 exactly.
 const [major, minor] = process.versions.node.split('.').map(Number);
 if (major > 22) {
-  ok(`node v${process.versions.node}`);
-  note('CI runs 22.22.2; a newer major is untested here');
+  // Not a failure — the app may well run fine. But this machine's gate results
+  // stop being comparable to CI's, and every packet in docs/swarm/ gates on
+  // exact test counts measured on 22.22.2. A local green that CI disagrees with
+  // is the expensive kind of wrong here, so this reads as a warning, not an OK.
+  warn(`node v${process.versions.node} is above the pinned major`);
+  note('CI runs 22.22.2 — install it so local gate results match CI');
+  note('this also explains npm 11: Node 24 bundles it, Node 22.22.2 bundles 10.9.x');
 } else if (major === 22 && minor >= 12) {
   ok(`node v${process.versions.node}`);
 } else {
