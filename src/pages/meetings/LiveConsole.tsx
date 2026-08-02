@@ -109,15 +109,20 @@
  * token/code; there is still no endpoint anywhere in this repo that MINTS
  * one for a given `sessionId` -- the exact GAP #1 `Kiosk.tsx`/T034 already
  * identified and disclosed for its own QR panel. This file applies the
- * identical treatment `Kiosk.tsx` established (cited, not re-solved
- * differently, per the packet's explicit instruction): a real
- * `QRCodeSVG`-rendered QR + real short-code display, wired against an
- * injectable `loadDisplayToken` seam whose shipped default
- * (`fixtureLoadLiveConsoleDisplayToken`) resolves obviously-fake,
- * non-hex/non-alphabet-producible placeholder values
- * (`FIXTURE_QR_TOKEN`/`FIXTURE_SHORT_CODE` below), paired with a permanent,
- * non-dismissable `Banner` disclosing this is fixture data -- never made to
- * look production-real.
+ * identical treatment `Kiosk.tsx` established: a real `QRCodeSVG`-rendered QR
+ * + real short-code display, wired against an injectable `loadDisplayToken`
+ * seam.
+ *
+ * **T403 step 1 CLOSED THIS GAP.** The paragraph above describes the state
+ * when T033 shipped, and step 7's "there is still no endpoint anywhere in this
+ * repo that MINTS one" has been false since T103, which added the
+ * `checkin-token` Edge Function. `loadDisplayToken` now defaults to
+ * `loadKioskDisplayToken` (`../../lib/supabase/loaders/kiosk.ts`) -- the same
+ * real loader `Kiosk.tsx` uses -- so this panel shows the genuine token and
+ * short code that T032's `/checkin` verifies. The fixture constants, their
+ * loader, and the "aren't live yet" `Banner` are all deleted rather than kept
+ * as a fallback: a fallback is how a fixture reaches a live route, which is
+ * the defect family this console was itself an instance of.
  *
  * The same "missing wiring, not fabricated" treatment `Kiosk.tsx`'s GAP #2
  * established for ITS live tally applies here to BOTH this console's live
@@ -412,6 +417,7 @@ import {
 } from '@astryxdesign/core';
 import { RequireRole, useAuth } from '../../app/guards';
 import { routePaths } from '../../app/router';
+import { loadKioskDisplayToken } from '../../lib/supabase/loaders/kiosk';
 
 // ---------------------------------------------------------------------------
 // Ground truth -- `attendance` real column shapes, camelCase renames cited
@@ -439,10 +445,13 @@ export interface AttendanceRecordState {
 // constants that do not require the server-only secret live here.
 // ---------------------------------------------------------------------------
 
-/** hmac.ts step 6 (module doc section 2): the QR payload's URL shape. */
-function buildCheckinUrl(sessionId: string, token: string): string {
-  return `https://portal.voltfrc.org/checkin?s=${encodeURIComponent(sessionId)}&t=${encodeURIComponent(token)}`;
-}
+/* T403 step 1: this file's own `buildCheckinUrl` is DELETED. It was a
+ * deliberate duplicate of `Kiosk.tsx`'s — the module doc above records that it
+ * was "re-implemented independently below rather than imported" only because
+ * `Kiosk.tsx` was a forbidden file for T033. Its sole caller was the fixture
+ * loader, and `loaders/kiosk.ts:134` already imports the real one from
+ * `Kiosk.tsx`, so the QR payload's URL shape now has exactly one definition
+ * again instead of two that could drift. */
 
 const QR_REFRESH_INTERVAL_MS = 45_000; // PRD MTG-06's ~45s client display refresh.
 
@@ -454,19 +463,25 @@ export type LoadLiveConsoleDisplayTokenFn = (
   sessionId: string,
 ) => Promise<LiveConsoleDisplayToken | null>;
 
-/** Obviously-fake: neither valid hex nor producible by the real `byte % 34`
- * alphabet mapping (module doc section 2 GAP #1). */
-const FIXTURE_QR_TOKEN = 'FIXTURE-LIVE-CONSOLE-NOT-A-REAL-TOKEN';
-const FIXTURE_SHORT_CODE = 'FXTURE';
-
-async function fixtureLoadLiveConsoleDisplayToken(
-  sessionId: string,
-): Promise<LiveConsoleDisplayToken | null> {
-  return {
-    qrUrl: buildCheckinUrl(sessionId, FIXTURE_QR_TOKEN),
-    shortCode: FIXTURE_SHORT_CODE,
-  };
-}
+/**
+ * T403 step 1: `FIXTURE_QR_TOKEN` / `FIXTURE_SHORT_CODE` and their loader are
+ * DELETED, not kept alongside the real one.
+ *
+ * `loadKioskDisplayToken` (`../../lib/supabase/loaders/kiosk.ts`) already
+ * calls the deployed `checkin-token` Edge Function and returns the same real
+ * HMAC token and 6-character short code `Kiosk.tsx` displays and T032's
+ * `/checkin` function verifies. It has been real since T103; this console
+ * simply never used it.
+ *
+ * `KioskDisplayToken` is a structural superset of `LiveConsoleDisplayToken`
+ * (it adds `refreshesInSeconds`), so it satisfies this seam directly — no
+ * adapter, no re-derivation of the token math, which lives in exactly one
+ * place (`supabase/functions/checkin/hmac.ts`) and must stay there.
+ *
+ * Deleting the fixtures rather than leaving them as a fallback is deliberate:
+ * a fallback is how a fixture reaches a live route, which is the family that
+ * produced T155/T176/T181/T324 and this console itself.
+ */
 
 // ---------------------------------------------------------------------------
 // Roster/session data seam -- module doc section 2's second gap (no shared
@@ -797,11 +812,13 @@ function QrPanel({
   return (
     <VStack gap={4} padding={4} hAlign="center" width={280}>
       <Heading level={2}>Check-in</Heading>
-      <Banner
-        status="warning"
-        title="This QR code and check-in code aren't live yet"
-        description="Scanning or entering them won't check anyone in. A real, working code isn't ready yet."
-      />
+      {/* T403 step 1: the "aren't live yet" Banner that used to sit here is
+          deleted, not reworded. `loadDisplayToken` now defaults to the real
+          `loadKioskDisplayToken`, so the code on screen is the same HMAC
+          token/short code the kiosk shows and `/checkin` accepts. Leaving the
+          warning would be the same defect in the opposite direction: honest
+          copy about dishonest data is the point, and dishonest copy about
+          honest data is just as wrong. */}
       {token === null ? (
         <Text type="supporting">QR not available yet.</Text>
       ) : (
@@ -896,7 +913,7 @@ export interface LiveConsoleBodyProps {
 
 export function LiveConsoleBody({
   loadData = defaultLoadLiveConsoleData,
-  loadDisplayToken = fixtureLoadLiveConsoleDisplayToken,
+  loadDisplayToken = loadKioskDisplayToken,
   onSetAttendanceStatus = notWiredSetAttendanceStatus,
   subscribeToAttendanceChanges = notWiredSubscribeToAttendanceChanges,
 }: LiveConsoleBodyProps): ReactNode {

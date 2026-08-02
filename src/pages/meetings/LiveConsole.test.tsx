@@ -94,10 +94,68 @@ const TEST_PATH = `/meetings/live/${TEST_SESSION_ID}`;
 /** Renders the UNGATED `LiveConsoleBody` directly (bypasses `RequireRole`,
  * per that component's own module doc section 1/4) inside a real matched
  * route so `useParams()` resolves `sessionId`. */
+/**
+ * T403 step 1: `loadDisplayToken` now defaults to the REAL
+ * `loadKioskDisplayToken`, which calls the deployed `checkin-token` Edge
+ * Function. With no Supabase configured (the mandated gate state) that
+ * resolves nothing, and the panel honestly renders "QR not available yet"
+ * instead of a QR code.
+ *
+ * That is the correct production behaviour, so tests that want a QR on screen
+ * must now say so by injecting through the seam — the same "inject the fixture
+ * explicitly, never inherit one by default" discipline T151 established. These
+ * values are test-local and deliberately not exported from the component:
+ * before this change the component shipped its own fixture and every call site
+ * inherited it silently, which is how a fixture reaches a live route.
+ */
+const TEST_DISPLAY_TOKEN = {
+  qrUrl: `https://portal.voltfrc.org/checkin?s=${TEST_SESSION_ID}&t=abc123`,
+  shortCode: 'ABC234',
+};
+
+async function stubLoadDisplayToken(): Promise<typeof TEST_DISPLAY_TOKEN | null> {
+  return TEST_DISPLAY_TOKEN;
+}
+
+/**
+ * Renders `LiveConsoleBody` with NO props at all, so the component's own
+ * parameter defaults are what run. `renderBody` deliberately injects a display
+ * token; this path deliberately does not, and is the only way to assert on
+ * what the component ships as its default.
+ */
+function renderBodyNoInjection(user: AuthUser | null): void {
+  act(() => {
+    root.render(
+      <MemoryRouter initialEntries={[TEST_PATH]}>
+        <AuthProvider>
+          <Routes>
+            <Route
+              path="/meetings/live/:sessionId"
+              element={
+                user === null ? (
+                  <LiveConsoleBody />
+                ) : (
+                  <LoginAs user={user}>
+                    <LiveConsoleBody />
+                  </LoginAs>
+                )
+              }
+            />
+          </Routes>
+        </AuthProvider>
+      </MemoryRouter>,
+    );
+  });
+}
+
 function renderBody(
   user: AuthUser | null,
   props: Parameters<typeof LiveConsoleBody>[0] = {},
 ): void {
+  // Injected as a DEFAULT, not an override — an individual test can still pass
+  // its own `loadDisplayToken` (including one that resolves null) to exercise
+  // the unavailable path.
+  props = { loadDisplayToken: stubLoadDisplayToken, ...props };
   act(() => {
     root.render(
       <MemoryRouter initialEntries={[TEST_PATH]}>
@@ -864,5 +922,51 @@ describe('defaultLoadLiveConsoleData fixture', () => {
     const data = await defaultLoadLiveConsoleData(TEST_SESSION_ID);
     expect(data.session.id).toBe(TEST_SESSION_ID);
     expect(data.roster.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T403 step 1: the QR panel shows the REAL check-in credential.
+// ---------------------------------------------------------------------------
+
+describe('T403 step 1 — real display token', () => {
+  it("renders NO fabricated code from the COMPONENT'S OWN default (was 'FXTURE')", async () => {
+    // Renders through `renderBodyNoInjection`, NOT `renderBody`. That matters:
+    // `renderBody` supplies a token by default, so a test using it never
+    // exercises the component's own default and cannot detect a fixture being
+    // reintroduced there. Measured — with `renderBody` and an explicit
+    // `loadDisplayToken: async () => null`, restoring a fixture default left
+    // this whole block green at exit 0.
+    //
+    // Here the component falls back to its real default
+    // (`loadKioskDisplayToken`), which needs a configured Supabase and has
+    // none in the gate state, so the honest answer is that there is no code.
+    renderBodyNoInjection(COACH_USER);
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('QR not available yet');
+    expect(container.textContent).not.toContain('FXTURE');
+    expect(container.textContent).not.toContain('FIXTURE');
+    // The placeholder dashes, never six plausible-looking characters.
+    expect(container.textContent).toContain('------');
+    expect(container.querySelector('svg[role="img"]')).toBeNull();
+  });
+
+  it('no longer claims the code "isn\'t live yet" — that Banner would now be false', async () => {
+    renderBody(COACH_USER);
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('Check-in');
+    expect(container.textContent).not.toContain("aren't live yet");
+    expect(container.textContent).not.toContain('A real, working code');
+  });
+
+  it('displays the token and short code it is given, verbatim', async () => {
+    renderBody(COACH_USER);
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain(TEST_DISPLAY_TOKEN.shortCode);
+    const qr = container.querySelector('svg[role="img"]');
+    expect(qr).toBeTruthy();
   });
 });
