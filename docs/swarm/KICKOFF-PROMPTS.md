@@ -75,6 +75,10 @@ RULES THAT ARE NOT OPTIONAL:
 
 ## W2 — Run an outreach event
 
+> **SUPERSEDED 2026-08-02 — use `docs/swarm/W2-KICKOFF.md` instead.** T193, T309 and T327 have all
+> shipped since the prompt below was written, and T330's framing was refuted by a premise gate.
+> The block below is kept only as a record of the original cut; **do not paste it into a session.**
+
 > The most-worked path in the project and still the most defect-dense.
 
 ```
