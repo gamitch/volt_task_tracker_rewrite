@@ -329,20 +329,39 @@ These are not suggestions. Each one is written against a failure this project ha
    **Row IDs go to four digits from W7 on.** That is fine — nothing parses these — but do not
    "helpfully" renumber T1000 back down into a gap. Gaps are the point.
 
-2. **One machine owns a file, not a workflow.** If two workflows need `OutreachList.tsx`, the second
+2. **Branch names are task-scoped, never session-scoped: `claude/t<row>-<short-slug>`.**
+   `claude/t193-persist-rsvp`, `claude/t321-manual-code`. **Never a session-plan name** like
+   `claude/swarm-plan-<id>`.
+
+   **This is the row-number failure wearing different clothes.** A generic branch name looks
+   reserved and is not. `claude/swarm-plan-zl575z` was used by one session for PR #27 and, the same
+   afternoon, by another session as the working branch for T193 — two machines pointed at one
+   mutable ref with nothing announcing the overlap. It was caught by the owner asking whether T193
+   would get its own branch, not by any check. T193 was moved to `claude/t193-persist-rsvp` before
+   its PR.
+
+   **Corollary, from the same incident:** when the PR for a branch has already merged, **do not
+   reuse the branch for follow-up work.** Restart it from `main` (`git checkout -B <name>
+   origin/main`) so no merged history is re-proposed, and open a **new** PR — a merged PR cannot
+   track new work. Better still, use a new task-scoped name and leave the old branch to be deleted.
+
+   **Delete merged branches.** Sixteen had accumulated by 2026-08-02. Turning on GitHub's
+   *Settings → General → Automatically delete head branches* removes the whole class.
+
+3. **One machine owns a file, not a workflow.** If two workflows need `OutreachList.tsx`, the second
    one waits. Check the collision table at the top before dispatching.
 
-3. **Never resolve a `task-ledger.md` conflict by taking one side wholesale.** Both sides are real
+4. **Never resolve a `task-ledger.md` conflict by taking one side wholesale.** Both sides are real
    rows. This is written in the ledger's own history and it has bitten once already.
 
-4. **Record and merge in the same commit** (item 24). Two of the three most recent merges drifted
+5. **Record and merge in the same commit** (item 24). Two of the three most recent merges drifted
    from their ledger rows — T303 recorded into the wrong column, T323 merged with no
    verification-log entry at all. With N machines running, that drift multiplies by N.
 
-5. **State the tier in the PR and defend it** (item 26). If two tiers are arguable, take the heavier
+6. **State the tier in the PR and defend it** (item 26). If two tiers are arguable, take the heavier
    one — but "it sounds important" is not a trigger and neither is file count.
 
-6. **Mutation experiments run in the agent's own worktree** (item 23), and **commit before mutating**
+7. **Mutation experiments run in the agent's own worktree** (item 23), and **commit before mutating**
    — T323's mutation revert also reverted the uncommitted fix, and only the full suite caught it.
 </content>
 </invoke>
