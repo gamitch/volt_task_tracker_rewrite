@@ -499,10 +499,16 @@ export interface SubscribePopoverProps {
   functionsBaseUrl?: string;
 }
 
+// Keep a callable component default even in tests that partially mock the
+// loader module only to replace its read export. Production still delegates
+// directly to the real singleton writer, and invocation under an incomplete
+// mock fails rather than fabricating a result.
+const callResetCalendarFeed: OnResetFeedTokenFn = (payload) => resetCalendarFeedReal(payload);
+
 export function SubscribePopover({
   profileId,
   loadCalendarFeed = loadCalendarFeedReal,
-  onResetFeedToken = resetCalendarFeedReal,
+  onResetFeedToken = callResetCalendarFeed,
   functionsBaseUrl = resolveFunctionsBaseUrl(),
 }: SubscribePopoverProps): ReactNode {
   const loadState = useLoadState(() => loadCalendarFeed(profileId), [loadCalendarFeed, profileId]);
