@@ -82,15 +82,37 @@ separate payload shape) and state its cost.
 **⚠️ SCOPE DECISION THIS TRAP HIDES — the collision rule in §2 does NOT catch it.** If the fix lands
 in `makeUpsertAttendance`, it changes **behaviour** for every existing caller **without changing any
 signature**, so "prefer adding a new call site over changing an existing signature" gives no
-protection here. `makeUpsertAttendance` has four call sites across three workflows: `LiveConsole`
-(this step, W1) plus W2's `AttendancePanel`, `MarkEventCompleteDialog` and `MarkDayCompleteDialog`.
-A read-modify-write inside it silently alters what all three W2 pages do.
+protection here.
 
-**Therefore: if your prescription touches `makeUpsertAttendance`'s behaviour, enumerate the effect on
-all four call sites individually and flag it for W2 before anything lands.** State explicitly whether
-a W1-local fix (a new function, or resolving the value at the LiveConsole call site) is achievable
-instead, and what it costs. W2 is ACTIVE in `src/pages/outreach/**` right now — a behaviour change
-under them is the T320 failure mode repeating.
+**The real blast radius is ONE consumer, not four.** An earlier revision of this packet said "four
+call sites across three workflows." That was wrong, asserted without grepping — the same failure this
+packet exists to prevent. Verified:
+
+| File | Imports from `loaders/attendance.ts` | Affected by a `makeUpsertAttendance` behaviour change? |
+|---|---|---|
+| `AttendancePanel.tsx` (W2) | `loadAttendanceForSessions`, `removeAttendance`, `resolveAttendanceWriteMethod`, **`upsertAttendance`**, + types | **YES — the only real consumer** (default for `onUpsertAttendance` at `:641`) |
+| `MarkEventCompleteDialog.tsx` (W2) | `loadAttendanceForSessions` + types only | No |
+| `MarkDayCompleteDialog.tsx` (W2) | `loadAttendanceForSessions`, `resolveAttendanceWriteMethod` + types | No |
+
+**🚨 DECOY — `loaders/outreach.ts:1136` declares its OWN `upsertAttendance` and is NOT a call site.**
+Grepping `upsertAttendance` to find the blast radius lands on it. It is an unrelated local
+`runMutation<readonly OutreachAttendanceWriteRow[], void>` — batch-of-rows in, `void` out, versus
+`attendance.ts`'s single-`UpsertAttendanceParams` in, `AttendanceRow` out. This is the **third
+same-name-different-thing on this branch**, after the two `AttendanceRecordState`s and the two
+`queryAttendanceForSessions`. It lives in **W2's actively-edited files** and it is the
+`markDayComplete` path that **T305 and T307 just repaired** — touching it reopens settled
+destructive-write work. **Do not modify it. Do not count it.**
+
+**Therefore: if your prescription touches `makeUpsertAttendance`'s behaviour, the enumeration is TWO
+call sites — `AttendancePanel` (existing, W2's, must be told) and `LiveConsole` (new, W1's, yours).**
+State explicitly whether a W1-local fix (a new function, or resolving the value at the `LiveConsole`
+call site) is achievable instead, and what it costs. W2 is ACTIVE in `src/pages/outreach/**` right
+now — a behaviour change under them is the T320 failure mode repeating.
+
+**Sibling observation, NOT in scope for this step — report it, do not fix it.** That decoy's payload
+also carries `hours_override: row.hoursOverride` under the same `onConflict: 'session_id,student_id'`.
+If Trap 1 confirms, note in your report whether the same shape is reachable there so W2 can be told;
+it is W2's file and W1 does not own it.
 
 ### Trap 2 — provenance is currently hardcoded, and `resolveAttendanceWriteMethod` is not reachable
 
