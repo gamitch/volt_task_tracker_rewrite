@@ -33,6 +33,18 @@ Three files are collision magnets, and they are the reason the cut below is shap
 Plus `src/lib/supabase/loaders/outreach.ts` (T152, T157, T165, T169, T309, T327, T330) and the
 metric-view SQL (T186, T187, T188, T201, T204, T308, T322).
 
+**`src/lib/supabase/loaders/attendance.ts` is a fourth collision magnet, and this table missed it
+until W1 walked into it on T320 (2026-08-02).** It is imported at *runtime* by three workflows:
+`endMeeting.ts:191` (**W3**) calls `makeLoadAttendanceForSessions` directly, and three **W2** pages
+consume it (`AttendancePanel`, `MarkEventCompleteDialog`, `MarkDayCompleteDialog`). It sits in
+`loaders/`, which reads like W1 territory, and nothing on the row or in this file said otherwise —
+so a change W1 correctly scoped to its own files broke six tests in two other workflows' files.
+
+**The lesson generalises past this one file:** a shared *loader* is more dangerous than a shared
+*page*, because the coupling is invisible from the filename and the ownership lists here are written
+per-directory. Before editing anything under `src/lib/supabase/loaders/`, grep for importers across
+`src/` first — the owning workflow is whoever *imports* it, not whoever the directory suggests.
+
 **`docs/swarm/task-ledger.md` is edited by every task and is the one guaranteed conflict.** See
 *Coordination rules* at the bottom — do not skip it.
 
