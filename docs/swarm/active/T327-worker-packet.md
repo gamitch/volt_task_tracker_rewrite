@@ -1,4 +1,4 @@
-# T327 — outreach completion must not be a one-way trap door
+# T327 — complete the day in an order a failed write can recover from
 
 **Branch:** `claude/t327-completion-ordering` (off `main` = `0016780`)
 **Tier:** **HEAVY** (constitution item 26) — it changes the order of writes on a live write path.
