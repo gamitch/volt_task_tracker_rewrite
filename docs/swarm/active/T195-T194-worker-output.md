@@ -8,6 +8,8 @@ Worker implementation only; independent checker/orchestrator acceptance is still
   component reconciliation, and deterministic tests.
 - `5a88c26f8a9085f06a74c84ca68ec5be90a60cf7` — keep the real reset default
   callable when an existing test partially mocks only the loader module's read export.
+- `2b623660667e51b003809745ec67b428574da6f5` — checker-MAJOR rework: remove
+  `IF NOT EXISTS` so a wrong same-named active-feed index fails migration loudly.
 - The eight mutations were replayed against exact candidate `5a88c26` after this
   compatibility commit; its detached mutation worktree was restored, verified clean,
   and removed.
@@ -32,7 +34,9 @@ other forbidden path was changed.
 
 - Reconciles duplicate active feeds by retaining greatest `(created_at, id)` and
   soft-revoking every other row without deleting history.
-- Enforces at most one active feed per profile with a partial unique index.
+- Enforces at most one active feed per profile with a partial unique index. Index
+  creation deliberately has no `IF NOT EXISTS`, so a wrong same-named definition is
+  rejected as schema drift rather than silently accepted.
 - Backfills existing profiles and provisions future profile inserts through a locked,
   trigger-only `SECURITY DEFINER` function with `PUBLIC` execution revoked.
 - Adds `reset_calendar_feed(uuid)` as an explicit `SECURITY INVOKER` SETOF RPC. It
@@ -67,6 +71,27 @@ other forbidden path was changed.
 
 The component tests continue to emit the repository's existing jsdom `act`, canvas, and
 `scrollTo` diagnostics; they do not change exit status or assertions.
+
+## Checker-MAJOR rework verification at `2b62366`
+
+- Counterexample setup applied every earlier non-cron production migration unchanged,
+  then created the wrong full unique index
+  `calendar_feeds_one_active_per_profile_idx on calendar_feeds(profile_id)`. Applying
+  the lifecycle migration exited `3` with PostgreSQL SQLSTATE `42P07`:
+  `relation "calendar_feeds_one_active_per_profile_idx" already exists`. It no longer
+  prints a skip or reaches reset with the wrong constraint.
+- The normal lifecycle runner exited `0` with all 10 assertions passed and the same
+  exact cron-only skip.
+- A detached worktree replayed affected SQL mutations 1, 2, 3, 4, and 8 against exact
+  `2b62366`; all remained red with exits `3`, `3`, `3`, `3`, and `3` at their original
+  failure points. The worktree was restored, verified clean at `2b62366`, and removed.
+- TypeScript mutations 5–7 were not re-run because the rework changes only the new SQL
+  migration. The four production/test TypeScript blobs are byte-identical between
+  `5a88c26` and `2b62366` (matching blob ids), so their previously recorded mutation
+  results apply unchanged. The targeted TypeScript suite was nevertheless replayed and
+  exited `0` with 2 files / 29 tests.
+- Repeated final gates: typecheck `0`; format check `0`; lint `0` with 0 errors / 359
+  warnings; full test `0` with 76 files / 1,837 tests; build `0` with 2,397 modules.
 
 ## Mutation evidence at exact candidate `5a88c26`
 
