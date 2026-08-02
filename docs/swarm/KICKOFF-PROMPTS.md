@@ -9,6 +9,10 @@ collision table, and the coordination rules. These prompts are the operational s
 **Before dispatching two machines at once**, check `WORKFLOWS.md`'s *Assignment table* — the "safe to
 run beside" column is the only thing standing between you and a merge conflict in a 4164-line file.
 
+**Setting up a machine that has never run this repo:** `MACHINE-SETUP.md`, then
+`bash scripts/doctor.sh`. It is a short list — Node 22.22.2 and `npm ci` cover every workflow but
+W8 and W9, and no credentials are needed to run the gates.
+
 **Recommended pairings:** three machines → **W1 + W4 + W7** (zero shared files). Two → **W1 + W2**
 (every remaining data-loss row). One → **W1**, and stop reading here.
 
