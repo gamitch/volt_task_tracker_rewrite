@@ -24,6 +24,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeMarkDayComplete } from '../../lib/supabase/loaders/outreach';
 import {
+  buildAttendanceAbsenceRows,
   buildAttendanceWriteRows,
   computeInitialAttendedStudentIds,
   computeInitialFormSeed,
@@ -1076,6 +1077,187 @@ describe('W6 -- the confirm label never disagrees with what the write emits', ()
 });
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// T309: unchecking a student with a recorded attending row must actually
+// record the absence (`buildAttendanceAbsenceRows`, module doc #10).
+// `docs/swarm/active/T309-worker-packet.md` §5 (C1-C9). Fixtures are
+// deliberately SEPARATE from `ROSTER`/`T305_ROSTER` above -- C5 in
+// particular needs a roster containing ONLY students with a recorded
+// non-attending row (§5's own explicit constraint: over a roster with a
+// row-less student, the shared C4/C5 mutation crash-reds on that row-less
+// student first and masks C5's own assertion).
+// ---------------------------------------------------------------------------
+
+const T309_ACTING_COACH = 'profile-coach-acting-t309';
+
+const T309_ROSTER: readonly RosterStudent[] = [
+  { id: 'student-emmett', name: 'Emmett Present', teamId: 'team-a' },
+  { id: 'student-flora', name: 'Flora Late', teamId: 'team-a' },
+  { id: 'student-gale', name: 'Gale NoRow', teamId: 'team-a' },
+];
+
+// C5's own dedicated roster -- ONLY students with a recorded non-attending
+// row, per §5's explicit constraint. Reusing the natural 4-student ROSTER
+// (which has a row-less student) would crash-red the shared mutation on
+// that row-less student first, before C5's own assertion ever runs.
+const T309_C5_ROSTER: readonly RosterStudent[] = [
+  { id: 'student-hana', name: 'Hana AlreadyAbsent', teamId: 'team-a' },
+  { id: 'student-ira', name: 'Ira Excused', teamId: 'team-a' },
+];
+
+describe('buildAttendanceAbsenceRows (module doc #10 -- T309, the second attendance write path)', () => {
+  it('C1 -- an unchecked student with a recorded present row produces exactly one row, status absent (whole row object)', () => {
+    const recordedRow = makeAttendanceRow({
+      studentId: 'student-emmett',
+      status: 'present',
+      checkInAt: '2026-08-02T14:05:00.000Z',
+      checkOutAt: '2026-08-02T20:55:00.000Z',
+      hoursOverride: 5,
+      method: 'qr',
+      recordedBy: 'profile-someone-else',
+    });
+    const rows = buildAttendanceAbsenceRows(
+      SESSION.id,
+      T309_ROSTER,
+      ['student-flora'], // Emmett is NOT checked; Flora is (irrelevant here).
+      T309_ACTING_COACH,
+      {
+        'student-emmett': recordedRow,
+        'student-flora': makeAttendanceRow({ studentId: 'student-flora', status: 'late' }),
+      },
+    );
+    const emmettRow = rows.find((row) => row.studentId === 'student-emmett');
+    expect(rows.filter((row) => row.studentId === 'student-emmett')).toHaveLength(1);
+    expect(emmettRow).toEqual({
+      sessionId: SESSION.id,
+      studentId: 'student-emmett',
+      status: 'absent',
+      checkInAt: '2026-08-02T14:05:00.000Z',
+      checkOutAt: '2026-08-02T20:55:00.000Z',
+      hoursOverride: 5,
+      method: 'qr',
+      recordedBy: T309_ACTING_COACH,
+    });
+  });
+
+  it('C2 -- that row carries the recorded checkInAt/checkOutAt/hoursOverride/method, not the pre-T305 null/coach shape', () => {
+    const recordedRow = makeAttendanceRow({
+      studentId: 'student-emmett',
+      status: 'present',
+      checkInAt: '2026-08-02T14:05:00.000Z',
+      checkOutAt: '2026-08-02T20:55:00.000Z',
+      hoursOverride: 5,
+      method: 'qr',
+    });
+    const [row] = buildAttendanceAbsenceRows(SESSION.id, T309_ROSTER, [], T309_ACTING_COACH, {
+      'student-emmett': recordedRow,
+    });
+    expect(row.checkInAt).toBe('2026-08-02T14:05:00.000Z');
+    expect(row.checkOutAt).toBe('2026-08-02T20:55:00.000Z');
+    expect(row.hoursOverride).toBe(5);
+    expect(row.method).toBe('qr');
+  });
+
+  it("C3 -- recordedBy is the acting coach, never the recorded row's own recordedBy", () => {
+    const recordedRow = makeAttendanceRow({
+      studentId: 'student-emmett',
+      status: 'present',
+      recordedBy: 'profile-someone-else',
+    });
+    const [row] = buildAttendanceAbsenceRows(SESSION.id, T309_ROSTER, [], T309_ACTING_COACH, {
+      'student-emmett': recordedRow,
+    });
+    expect(row.recordedBy).toBe(T309_ACTING_COACH);
+    expect(row.recordedBy).not.toBe('profile-someone-else');
+  });
+
+  it('C4 -- an unchecked student with NO recorded row produces nothing for them', () => {
+    const rows = buildAttendanceAbsenceRows(SESSION.id, T309_ROSTER, [], T309_ACTING_COACH, {
+      'student-emmett': makeAttendanceRow({ studentId: 'student-emmett', status: 'present' }),
+      // student-gale (T309_ROSTER) has NO recorded row at all.
+    });
+    expect(rows.find((row) => row.studentId === 'student-gale')).toBeUndefined();
+  });
+
+  it('C5 -- unchecked students whose recorded row is already absent or excused produce nothing (dedicated roster, §5)', () => {
+    const rows = buildAttendanceAbsenceRows(SESSION.id, T309_C5_ROSTER, [], T309_ACTING_COACH, {
+      'student-hana': makeAttendanceRow({ studentId: 'student-hana', status: 'absent' }),
+      'student-ira': makeAttendanceRow({ studentId: 'student-ira', status: 'excused' }),
+    });
+    expect(rows).toHaveLength(0);
+  });
+
+  it('C6 -- a recorded attending row for a student NOT on the roster produces nothing (never keys off the recorded map)', () => {
+    const rosterWithoutOffRosterStudent: readonly RosterStudent[] = [
+      { id: 'student-emmett', name: 'Emmett Present', teamId: 'team-a' },
+    ];
+    const rows = buildAttendanceAbsenceRows(
+      SESSION.id,
+      rosterWithoutOffRosterStudent,
+      [],
+      T309_ACTING_COACH,
+      {
+        'student-emmett': makeAttendanceRow({ studentId: 'student-emmett', status: 'present' }),
+        'student-off-roster': makeAttendanceRow({
+          studentId: 'student-off-roster',
+          status: 'present',
+        }),
+      },
+    );
+    expect(rows.find((row) => row.studentId === 'student-off-roster')).toBeUndefined();
+  });
+
+  it('C7 -- a recorded late student who is unchecked becomes absent (the late arm, not assumed from C1)', () => {
+    const rows = buildAttendanceAbsenceRows(SESSION.id, T309_ROSTER, [], T309_ACTING_COACH, {
+      'student-flora': makeAttendanceRow({ studentId: 'student-flora', status: 'late' }),
+    });
+    const floraRow = rows.find((row) => row.studentId === 'student-flora');
+    expect(floraRow).toBeDefined();
+    expect(floraRow?.status).toBe('absent');
+  });
+});
+
+describe('<MarkDayCompleteDialog /> C9 -- end-to-end uncheck through the dialog actually writes the absence', () => {
+  it('unchecking a student who starts checked from recorded attendance writes their absent row alongside the remaining present row, and the label does not move', async () => {
+    const onMarkComplete = vi.fn<(payload: MarkDayCompletePayload) => Promise<void>>(
+      async () => {},
+    );
+    mockedLoadAttendanceForSessions.mockResolvedValueOnce([
+      makeAttendanceRow({ studentId: 'student-amara', status: 'present' }),
+      makeAttendanceRow({ studentId: 'student-brody', status: 'present' }),
+    ]);
+    renderDialog({ onMarkComplete });
+    await flushMicrotasks();
+
+    // Both start checked (both have recorded present rows) -- "2 attended".
+    expect(findButtonByText('Mark complete — 2 attended · 14 h')).toBeDefined();
+
+    // The coach unchecks Amara.
+    clickElement(getFieldControl('Amara NoRsvp'));
+
+    // The label reflects only the still-checked student -- an absent
+    // student is not "attended" and must not move the label.
+    expect(findButtonByText('Mark complete — 1 attended · 7 h')).toBeDefined();
+    expect(findButtonByText('Mark complete — 2 attended · 14 h')).toBeUndefined();
+
+    const confirmButton = findButtonByText('Mark complete — 1 attended · 7 h') as HTMLButtonElement;
+    clickElement(confirmButton);
+    await flushMicrotasks();
+
+    expect(onMarkComplete).toHaveBeenCalledTimes(1);
+    const payload = onMarkComplete.mock.calls[0][0];
+    expect(payload.attendance).toHaveLength(2);
+
+    const amaraRow = payload.attendance.find((row) => row.studentId === 'student-amara');
+    expect(amaraRow).toBeDefined();
+    expect(amaraRow?.status).toBe('absent');
+
+    const brodyRow = payload.attendance.find((row) => row.studentId === 'student-brody');
+    expect(brodyRow).toBeDefined();
+    expect(brodyRow?.status).toBe('present');
+  });
+});
+
 // T101 (ED-1 Packet P10): loader-level tests for the REAL `onMarkComplete`
 // default (`markDayComplete`, `../../lib/supabase/loaders/outreach.ts`,
 // module doc #4). Same "inject a fake SupabaseClient chain" pattern
