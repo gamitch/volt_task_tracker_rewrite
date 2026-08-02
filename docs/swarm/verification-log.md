@@ -6704,3 +6704,74 @@ explicitly rather than padding to match a number. The mutations are the evidence
 DELETEs on uncheck, so the same gesture in two places leaves different rows behind. Invisible today
 because the outreach side never renders `absent`. Reconciling them means reopening D-7 and editing
 `loaders/attendance.ts`, which belongs to **W1** and is under concurrent edit.
+
+---
+
+## T327 — completing a day now writes in an order a failed write can recover from
+
+**Merged `2f6a26a`. HEAVY tier (item 26) — it changes the order of writes on a live path. One worker
+attempt; the packet needed two.**
+
+`makeMarkDayComplete` flipped `event_sessions.status` to `'completed'` **before** writing attendance.
+The fix swaps them. Two lines of control flow; the reasoning is the deliverable.
+
+### Both of the gate's MAJORs were the orchestrator's, and both were overstatements of severity
+
+**MAJOR 1 — packet v1 called this an unrecoverable trap door. It is not.** v1 claimed a failed
+attendance write permanently stranded the day, since `isSessionEligible` and `partitionEventSessions`
+both refuse a `'completed'` session. **The gate measured two recovery paths v1 missed**, and the
+orchestrator verified both directly rather than relaying:
+
+- **The dialog does not close on failure.** `onOpenChange(false)` sits inside the `try`, after the
+  `await` (`MarkDayCompleteDialog.tsx:1112-1122`); the catch sets `submitError` and the dialog stays
+  open. The flip carries no `.eq('status','scheduled')` guard, so **an immediate re-click converges
+  today.** v1's "no error visible after the dialog closes" was simply false.
+- **`AttendancePanel` edits completed sessions.** Its `eligibleSessions` excludes only `'canceled'`
+  (`AttendancePanel.tsx:648-649`), so the day's student hours are recoverable there.
+
+**What is genuinely stranded, and only after the coach abandons the retry, is narrower but real:**
+T309's absence rows (`AttendancePanel`'s uncheck DELETEs per D-7 and never writes `'absent'`) and
+the adult-volunteer deltas. Neither has another writer anywhere. **The reorder buys
+retry-that-works-later, not rescue from total loss** — and the packet was rewritten to say so.
+
+**MAJOR 2 — v1's proposal to close T330 collapsed.** See the T330 ledger row; the short version is
+that the closure rested on a code branch that is **dead on the surface that mattered**.
+
+**The generalisable lesson, and it is the sibling of T193's:** *reading that a branch exists is not
+evidence that it renders.* Both citations v1 leaned on (`OutreachList.tsx:1565`, and the implied
+"dialog closed" behaviour) were real lines of real code that do not execute on the path being
+described.
+
+### The asymmetry that is the actual substance of the task
+
+The adult-volunteer update is an **additive read-modify-write** (`currentCount + delta`,
+`outreach.ts:1191-1192`). It is **not idempotent**, so it must stay last: moved above the flip, a
+retry after a failed flip would **double-count** volunteer hours — a grant-reporting figure. The
+packet forbade moving it and **C4 is its guard**.
+
+**Verified byte-identical**: `sha256` of the extracted step-(3) block matches at `0016780` and
+`9fb2b07`. The arithmetic was not touched.
+
+### Verification — every mutation replayed by the orchestrator, not relayed
+
+| Mutation | Result |
+|---|---|
+| restore flip-before-attendance | **3 red — C1, C2 and C4 each independently** |
+| drop the attendance `length > 0` guard | **1 red — C3** |
+| move the flip after step (3) | **2 red — C4** |
+| remove the adult-volunteer delta guard | **1 red — C5** |
+
+C2 is the one worth naming: it pairs *"`event_sessions` was never flipped"* with *"the attendance
+write **was** attempted"*, so the absence half cannot pass because the fake threw early. This repo
+has shipped 7+ absence-only assertions that passed for the wrong reason.
+
+Gates: `tsc` 0, `vite build` ✓, prettier clean, eslint **0 errors / 361 warnings — unchanged**,
+vitest **76 files / 1842 tests** (+5), targeted three-file gate exit 0. Both dialog test files green
+at 54 and 25 with **zero edits**. No assertion removed or weakened.
+
+**C6 was deleted from the packet before dispatch** (item 25): the gate measured that it never
+reddened unless C1 or C4 already had, so its one unique assertion was folded into C4.
+
+**Deferred, filed rather than built:** an atomic SQL increment
+(`set adult_volunteers_count = adult_volunteers_count + $1`) exposed as an RPC, which is the only
+correct fix for step (3)'s non-idempotence. That is a migration and a different tier.
