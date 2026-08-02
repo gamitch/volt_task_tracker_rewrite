@@ -222,16 +222,16 @@ student) precisely to exercise this path, so it is testable in the real app.
 
 | Row | What | Tier |
 |---|---|---|
-| **T324** | The calendar renders **hard-coded fixture events on a live route** | STANDARD |
+| **T324** | **MERGED in PR #32** — calendar now loads active-season Supabase data | STANDARD |
 | **T195** | **Nothing anywhere in the codebase ever creates a `calendar_feeds` row** | HEAVY |
 | **T194** | `SubscribePopover`'s reset fabricates a new feed token locally instead of writing one | HEAVY |
 | **T177** | *(cross-surface; check the row before scoping)* | STANDARD |
 
 **Owns:** `pages/calendar/**`, `loaders/calendarFeed.ts`, the `ical-generator` edge function
 
-**Rank T324 above the rest of P1.** It is a surviving member of the fabricated-data family that
-caused nearly every real bug in this project, on a live route, after that family was declared closed.
-`CalendarPage.tsx` still carries `FIXTURE_EVENTS`/`FIXTURE_SESSIONS` at 902 lines.
+**Next: scope T195 and T194 together.** They are the two halves of one broken token lifecycle:
+first-use provisioning does not exist, and reset still fabricates a replacement locally. Both are
+HEAVY because the combined fix changes a migration-backed write path and destructive reset.
 
 **W6 collides with nothing.** It is the cleanest workflow to hand to a spare machine.
 

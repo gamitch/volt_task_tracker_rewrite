@@ -6775,3 +6775,38 @@ reddened unless C1 or C4 already had, so its one unique assertion was folded int
 **Deferred, filed rather than built:** an atomic SQL increment
 (`set adult_volunteers_count = adult_volunteers_count + $1`) exposed as an RPC, which is the only
 correct fix for step (3)'s non-idempotence. That is a migration and a different tier.
+
+---
+
+## T324 — calendar live route now loads active-season Supabase data
+
+**Merged `690e757` (PR #32, source commit `16e2f5d`). STANDARD tier.** Entry written as an
+item-24 backfill: the source merged before its ledger row and verification record were updated.
+The omission is recorded here rather than silently presented as an on-time closeout.
+
+**The defect.** `CalendarPage.tsx` defaulted its injectable loader to five hard-coded sessions and
+three hard-coded events under `season-placeholder-current`, so every real user saw fabricated data
+on `/calendar` regardless of database contents or active season.
+
+**The fix.** A calendar-specific `createLoader` implementation now queries `events` with the
+resolved active-season UUID, then queries `event_sessions` only for the visible event ids. The page
+uses the shared `SeasonProvider` states (`loading`, `none`, `error`, `ready`), invokes the loader only
+when ready, and leaves role visibility to the existing RLS policies. Production fixtures were
+removed; deterministic equivalents live only in tests.
+
+**Delegation evidence.** The first Terra dispatch stalled during analysis and produced no files;
+it was interrupted without changing the worktree. A replacement `gpt-5.6-terra` worker completed
+the bounded four-file implementation and committed it. The primary orchestrator independently
+reviewed the committed diff and replayed both named mutations.
+
+| Evidence | Result |
+|---|---|
+| Remove `.eq('season_id', seasonId)` | Loader scope test red, exit 1 |
+| Disconnect the real production default loader | Production-default UUID test red, exit 1 |
+| Targeted calendar suites after restoration | 39/39, exit 0 |
+| Full Vitest suite | 76 files / 1825 tests, exit 0 |
+| Typecheck / format / lint / build | all exit 0; lint 0 errors with existing warnings |
+
+**Scope:** five changed paths including the active worker packet; no subscription, calendar-feed,
+ICS, migration, router, provider, W1, or W2 source changed. T195/T194 remain the next W6 work and
+must be scoped together.

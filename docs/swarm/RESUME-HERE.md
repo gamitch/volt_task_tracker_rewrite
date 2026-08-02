@@ -1,4 +1,4 @@
-# Resume here — state of play at `main` = `7c7eb30` (read the UPDATE sections top-down; each supersedes the ones below it)
+# Resume here — state of play at `main` = `fb3d068` (read the UPDATE sections top-down; each supersedes the ones below it)
 
 Written 2026-07-30 so this session's context can be cleared without losing anything.
 Fresh orchestrator session: read this, then `constitution.md`, then the open rows in
@@ -41,6 +41,21 @@ writing criteria against an **imagined harness** instead of the real one (four c
 owner ruling. All three are written up in `W2-KICKOFF.md` §6.
 
 ---
+
+## UPDATE — 2026-08-02 (latest): T193 and T324 merged; Codex adapter merged
+
+**`main` = `690e757`.** PR #29 added the Codex adapter (`AGENTS.md` and
+`docs/swarm/CODEX.md`). PR #30 merged T193's real student RSVP persistence. PR #32 merged T324:
+`/calendar` no longer renders production fixtures and now loads the resolved active season's
+role-visible events and sessions from Supabase.
+
+**W6 next:** scope **T195 + T194 together** under the HEAVY process. No code provisions an initial
+`calendar_feeds` row, and `SubscribePopover` still fabricates reset results locally. The combined
+fix is expected to include migration-backed first-use provisioning and an atomic persisted reset.
+
+**Process correction:** PR #32 merged without moving T324's ledger row or adding its verification
+entry. The next W6 branch backfills those records explicitly as item-24 drift; do not interpret the
+old row lower in history as an open task.
 
 ## UPDATE — 2026-08-02 (later): the backlog is now also cut by WORKFLOW, for parallel machines
 

@@ -339,12 +339,8 @@ Your workflow shares no files with any other. You are safe to run beside anythin
 YOUR ROW-NUMBER BLOCK: T900-T999.
 
 YOUR ROWS, in order:
-  T324 — the calendar renders HARD-CODED FIXTURE EVENTS ON A LIVE ROUTE. CalendarPage.tsx
-         still carries FIXTURE_EVENTS / FIXTURE_SESSIONS. STANDARD tier. START HERE, and
-         rank it above everything else you have: this is a surviving member of the
-         fabricated-data family that caused nearly every real bug in this project (T155
-         CoachHome, T176 StudentHome, T181 ParentHome) — on a live route, after that family
-         was declared closed.
+  T324 — MERGED in PR #32. CalendarPage now resolves the active season and loads real,
+         role-visible events/sessions through Supabase. Do not reopen it.
   T195 — NOTHING ANYWHERE IN THE CODEBASE EVER CREATES A calendar_feeds ROW. HEAVY. This is
          the deeper cause the audit missed: the feature cannot work, it is not merely
          lacking recovery.
