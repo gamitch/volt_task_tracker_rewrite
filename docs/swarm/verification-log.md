@@ -6562,3 +6562,60 @@ student test).
 
 **Gates:** `tsc` 0 · `vite build` ✓ · prettier clean · eslint **0 errors / 361 warnings**
 (unchanged) · vitest **73 files / 1786 tests**, exit 0.
+
+---
+
+## T193 — a student's RSVP on `/outreach` now actually persists
+
+**Merged `2c59874`. HEAVY tier (item 26) — a write path. One worker attempt; the packet needed two.**
+
+The control updated and wrote nothing. The comment said so, citing `RsvpControl`/`ParentRsvp` as
+"currently Blocked" — a premise that expired when T101 wired their real default. The fix reuses
+`submitRsvpChange`, the one real `rsvps` upsert, through a defaulted prop threaded to the
+student/parent view only.
+
+### The premise gate ran on fable, and BUILT the prescription
+
+Same result the opus gates produced on T305 and T189, for the same reason: **it executed rather than
+reviewed.** That remains the variable that predicts whether a gate finds anything — not the model.
+
+**MAJOR 1 — the packet's harness warning was false, and the falseness hid a worse hazard.** It
+predicted every existing test would reach the real writer and fail, reasoning by analogy from two
+**mount-time loader** traps. `submitRsvpChange` is a **click-time mutation**: measured **92 → 92,
+exit 0**, because exactly one of 92 tests clicks. And that one test then passed **only by racing the
+rejection** — one added `flushMicrotasks()` turned it red, since the rollback reverts the state it
+asserts. The packet's own procedure would have measured 92→92, concluded nothing needed doing, and
+shipped a green-by-race test.
+
+**The generalisable lesson: a count delta answers "did anything break", not "is anything now passing
+for the wrong reason".** This project has shipped seven-plus assertions that passed for the wrong
+reason; this is the first time the *detection procedure itself* was the thing passing for the wrong
+reason.
+
+**MAJOR 2 — "mirror `RsvpControl`'s rollback" was impossible here.** That component rolls back a
+scalar `displayedStatus` that may be `null`. This one's state is the shared `rsvps` array, and
+`withRsvpOverride` takes a **concrete** `RsvpStatus` and **appends** when no row exists — it cannot
+express "back to unanswered", and the captured previous status is `undefined` in exactly the
+dominant case, a student answering for the first time. Following the packet literally ships a
+**stuck phantom RSVP** on a failed write: the precise failure the packet itself called worse than
+the bug. The gate had already built and run the correct shape — an array snapshot.
+
+### Verification
+
+Two mutations replayed by the orchestrator rather than relayed:
+
+| Mutation | Result |
+|---|---|
+| delete the rollback | **C3 red** — the phantom RSVP survives a rejected write |
+| revert to local-only | **3 red**, including the pre-existing live-update test |
+
+Gates: `tsc` 0, build ✓, prettier clean, eslint **0 errors / 361 warnings (unchanged)**, vitest
+**75 files / 1821 tests** (+4), targeted file exit 0.
+
+**Worker disclosures kept rather than smoothed:** the error banner is page-level rather than
+per-row; C1/C2 share one test (both mutations independently red); no test for "second click while
+submitting is a no-op", which was not among the six named criteria.
+
+**Process note.** T323 merged without its ledger row or verification-log entry — item 26 removes
+coordination, **not bookkeeping**, and the other session had to backfill it. This entry was written
+before the PR, not after.
