@@ -14,6 +14,7 @@ are in `../swarm/auto-mode-decisions.md` — **cite that file, never a paraphras
 |---|---|
 | **T061/T062** — schema mapping + ETL script | Passed |
 | **T063** — MIG-04 validation dry run | **Passed, owner-signed-off 2026-08-01** |
+| **First real run** | **EXECUTED 2026-08-02 by the owner against the live project** — see §8 |
 | **T064** — roster → accounts verification | **Blocked** — see §6, no emails exist |
 | **T065** — cutover | Not started. Owner-only decision (item 16) |
 | Manifest + `--teardown` | **Built, branch `claude/t063b-manifest-teardown`, NOT merged and NOT verified** |
@@ -190,3 +191,55 @@ coaches* for those FLL teams, so the sessions are volunteer service they perform
 `category → type` maps **1:1**; recategorising them as meetings would strip the majority of the
 team's volunteer hours out of every student's goal progress. Full reasoning in `mapping.md`'s
 closing section. **This has already been proposed once from the event titles alone and was wrong.**
+
+
+---
+
+## 8. First real run — executed 2026-08-02
+
+The owner ran the migration against the live project (`ljuifkzktpqarndgxcxy`). It **succeeded**, and
+every figure matched the signed-off dry run exactly:
+
+```
+teams            : 4 created, 0 existing (0 unmatched-archived)
+seasons          : 1 created, 0 existing
+students         : 20
+events           : 16
+event_sessions   : 117
+rsvps            : 254
+attendance       : 79
+Unmatched teams (0) · Unparseable times (0) · Attendees-backfill mismatches (0)
+Real run complete. Rows above were written to the new project.
+```
+
+**341.75 hours of real volunteer history now live in the new app.**
+
+### Two failures on the way, both worth keeping
+
+**1. `~` is not expanded after `=`.** `--from-dir=~/volt-export` reaches Node as a literal tilde and
+fails with `ENOENT: ... open '~/volt-export/teams.json'`. zsh does not perform tilde expansion after
+an `=` in an ordinary argument. **Always `"$HOME/..."`.**
+
+**2. The publishable key looks like the secret key.** Passing `sb_publishable_…` as
+`NEW_SERVICE_ROLE_KEY` fails with
+`new row violates row-level security policy for table "teams"` — confusing, because it reads like a
+policy bug rather than a credential mistake. The publishable key is the public one and is subject to
+RLS; the migration needs `sb_secret_…` from **Settings → API Keys → Secret keys**.
+
+The script echoes a masked prefix (`key sb_p***` vs `sb_s***`) which is the tell, but only if you
+know to look. **This failed safely** — it stopped on `teams`, the first table, so nothing was
+written and there was no partial state. RLS did exactly its job.
+
+**Follow-up worth doing:** validate the key prefix at startup and fail with
+*"NEW_SERVICE_ROLE_KEY looks like a publishable key (sb_p…); the migration needs a secret key"*
+before touching the network.
+
+### State after this run
+
+The owner **did not** run the teardown first, so the project holds a **mixed** state: the four
+migrated teams alongside his pre-existing test teams, and the 16 migrated events alongside his two
+test events. Intentional and harmless for testing. The teardown SQL in §5 still applies and still
+protects every account.
+
+**T064 remains blocked**: the migration created **zero accounts**, because the old data has no
+emails. The roster is correct and entirely unlinked.
