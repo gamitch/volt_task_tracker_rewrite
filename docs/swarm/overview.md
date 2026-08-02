@@ -6,6 +6,7 @@ here, go to the specific doc — don't re-read `task-ledger.md`,
 
 | Need | File |
 |---|---|
+| Run this swarm with Codex (no slash commands required) | `CODEX.md` |
 | Project rules, severity rubric, Non-Negotiables, agent tiering, dispatch gate | `constitution.md` |
 | Per-task status, deps, Allowed Files, acceptance criteria | `task-ledger.md` |
 | Full evidence/reasoning for a specific task's PASS/FAIL | `verification-log.md` (search `## T0xx`) |
