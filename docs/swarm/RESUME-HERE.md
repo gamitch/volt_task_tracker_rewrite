@@ -8,6 +8,32 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
 
+## UPDATE — 2026-08-02 (newest): W6 T195 + T194 independently passed; integration PR pending
+
+Branch `codex/t195-t194-calendar-feed-lifecycle` is rebased onto `main = fb3d068` and independently
+checked. T195 and T194 were implemented together under the HEAVY process: existing profiles are
+backfilled, future profile inserts receive a feed, historical duplicate active feeds are
+deterministically reconciled, a partial unique index enforces one active feed per profile, and
+Reset now calls one authenticated security-invoker RPC that revokes the named row and inserts a
+database-generated replacement atomically.
+
+The transport-ambiguity case is handled explicitly: if the RPC response is lost, the component
+re-reads the authoritative active feed; if that read also fails, it hides the possibly revoked URL
+instead of presenting it as current. No ICS edit was needed because the Edge Function already
+rejects persisted revoked tokens.
+
+**Verification:** owner-authorized premise round 3 returned DISPATCH. The Sol worker's first
+candidate passed all named mutations and gates; the independent Sol checker then found one MAJOR:
+`CREATE UNIQUE INDEX IF NOT EXISTS` could silently accept a wrong same-named index and break Reset.
+The rework removed that drift-masking clause. The checker reproduced fail-loud SQLSTATE `42P07`,
+then returned PASS. After the final source rebase: targeted 29/29, PostgreSQL lifecycle/security
+10/10, full suite 1850/1850, typecheck/format/lint/build all exit 0 (lint 0 errors / 360 warnings).
+
+**W6 next:** merge/deploy the integration PR and smoke-test initial provisioning plus one reset on
+hosted Supabase. Do not reopen T177, T324, T195, or T194 from the older sections below.
+
+---
+
 ## UPDATE — 2026-08-02 (latest): W2 is three rows further on, and W2 sessions start from `W2-KICKOFF.md`
 
 **`main` = `7c7eb30`**, green: `tsc` 0 · eslint **0 errors / 361 warnings** · vitest

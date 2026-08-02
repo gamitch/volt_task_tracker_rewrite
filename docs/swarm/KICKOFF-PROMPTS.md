@@ -341,15 +341,16 @@ YOUR ROW-NUMBER BLOCK: T900-T999.
 YOUR ROWS, in order:
   T324 — MERGED in PR #32. CalendarPage now resolves the active season and loads real,
          role-visible events/sessions through Supabase. Do not reopen it.
-  T195 — NOTHING ANYWHERE IN THE CODEBASE EVER CREATES A calendar_feeds ROW. HEAVY. This is
-         the deeper cause the audit missed: the feature cannot work, it is not merely
-         lacking recovery.
-  T194 — SubscribePopover's onResetFeedToken fabricates a new feed token locally instead of
-         writing one to the database. HEAVY.
+  T195 — PASS on codex/t195-t194-calendar-feed-lifecycle. The additive migration backfills
+         existing profiles, provisions future profiles, reconciles duplicates, and enforces
+         one active feed. HEAVY.
+  T194 — PASS on the same branch. Reset is a persisted SECURITY INVOKER RPC, with the real
+         writer as production default and authoritative reconciliation after transport loss.
+         HEAVY.
   T177 — cross-surface; read the row carefully before scoping, it reaches outside your files.
 
-SCOPE T195 AND T194 TOGETHER. They are one broken mechanism described twice: nothing creates
-the row, and the reset button pretends to replace a token that never existed.
+DO NOT REDISPATCH T195/T194 while their integration PR is open. After merge, W6 has no remaining
+implementation row; perform a hosted-Supabase smoke test for first provisioning and one reset.
 
 RULES: item 24 (ledger + verification-log in the merge commit), item 22 (named pathspecs),
 item 23 (mutations in your own worktree; commit before mutating). State your tier. Assert
