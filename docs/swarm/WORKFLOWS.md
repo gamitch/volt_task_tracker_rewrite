@@ -49,7 +49,7 @@ Tier is the **heaviest** item in the workflow, per constitution item 26.
 | **W3** | **Run a meeting** — schedule → attendance → participation % | 4 | HEAVY | Backend built, mount parked | W2, W4, W6, W7 |
 | **W4** | **Hours & goal accounting** — the numbers users are shown | 10 | HEAVY | **One confirmed bug** | W1, W3, W6, W7 |
 | **W5** | **Home dashboards** — student/parent/coach landing state | 10 | STANDARD | Mostly real | W6, W7, W8 |
-| **W6** | **Calendar & subscribe** | 4 | STANDARD | **PASS on branch; PR #37 open** | everything |
+| **W6** | **Calendar & subscribe** | 0 | — | **Merged; database deployed; hosted smoke pending** | everything |
 | **W7** | **Roster & invites** | 5 | STANDARD | Working | everything |
 | **W8** | **Email & notifications** | 2 | — | **Blocked on owner** | everything |
 | **W9** | **Migration & go-live** | 4 | HEAVY | Migration has run | everything |
@@ -218,19 +218,20 @@ student) precisely to exercise this path, so it is testable in the real app.
 
 > A student subscribes to the team calendar and it stays current in their phone.
 
-**Implementation complete and independently checked; integration PR #37 is open.**
+**Implementation merged in PR #37 and migration `20260802000000` deployed to hosted Supabase;
+hosted application smoke test pending.**
 
 | Row | What | Tier |
 |---|---|---|
 | **T324** | **MERGED in PR #32** — calendar now loads active-season Supabase data | STANDARD |
-| **T195** | **PASS on `codex/t195-t194-calendar-feed-lifecycle`** — migration provisions/backfills real feeds and enforces one active row | HEAVY |
-| **T194** | **PASS on the same branch** — Reset is one authenticated atomic RPC with authoritative failure reconciliation | HEAVY |
-| **T177** | *(cross-surface; check the row before scoping)* | STANDARD |
+| **T195** | **MERGED in PR #37; DATABASE DEPLOYED** — migration provisions/backfills real feeds and enforces one active row | HEAVY |
+| **T194** | **MERGED in PR #37** — Reset is one authenticated atomic RPC with authoritative failure reconciliation | HEAVY |
+| **T177** | **MERGED** — real subscription loader/link; do not reopen | STANDARD |
 
 **Owns:** `pages/calendar/**`, `loaders/calendarFeed.ts`, the `ical-generator` edge function
 
-**Next: merge and deploy paired T195/T194 integration PR #37, then smoke-test one initial feed and
-one reset against hosted Supabase.** No open W6 implementation row remains after this pair. The
+**Next: confirm the hosted application release includes PR #37, then smoke-test one initial feed
+and one reset against hosted Supabase.** No open W6 implementation row remains. The
 plain-PostgreSQL lifecycle/security suite, all eight named mutations, the full application suite,
 and an independent Frontier checker are green on the branch.
 

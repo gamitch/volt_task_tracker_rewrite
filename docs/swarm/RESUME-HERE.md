@@ -1,4 +1,4 @@
-# Resume here — state of play at `main` = `fb3d068` (read the UPDATE sections top-down; each supersedes the ones below it)
+# Resume here — state of play at `main` = `d0d1aa0` (read the UPDATE sections top-down; each supersedes the ones below it)
 
 Written 2026-07-30 so this session's context can be cleared without losing anything.
 Fresh orchestrator session: read this, then `constitution.md`, then the open rows in
@@ -8,10 +8,12 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
 
-## UPDATE — 2026-08-02 (newest): W6 T195 + T194 independently passed; integration PR #37 open
+## UPDATE — 2026-08-02 (newest): W6 merged; calendar lifecycle migration deployed; hosted smoke pending
 
-Branch `codex/t195-t194-calendar-feed-lifecycle` is rebased onto `main = fb3d068` and independently
-checked. T195 and T194 were implemented together under the HEAVY process: existing profiles are
+PR #37 merged `codex/t195-t194-calendar-feed-lifecycle` into `main` at `d0d1aa0`. Migration
+`20260802000000_calendar_feed_lifecycle.sql` was then successfully pushed to hosted Supabase;
+`supabase migration list --linked` showed version `20260802000000` in both Local and Remote.
+T195 and T194 were implemented together under the HEAVY process: existing profiles are
 backfilled, future profile inserts receive a feed, historical duplicate active feeds are
 deterministically reconciled, a partial unique index enforces one active feed per profile, and
 Reset now calls one authenticated security-invoker RPC that revokes the named row and inserts a
@@ -29,8 +31,8 @@ The rework removed that drift-masking clause. The checker reproduced fail-loud S
 then returned PASS. After the final source rebase: targeted 29/29, PostgreSQL lifecycle/security
 10/10, full suite 1850/1850, typecheck/format/lint/build all exit 0 (lint 0 errors / 360 warnings).
 
-**W6 next:** merge/deploy the integration PR and smoke-test initial provisioning plus one reset on
-hosted Supabase. Do not reopen T177, T324, T195, or T194 from the older sections below.
+**W6 next:** confirm the hosted application release includes PR #37, then smoke-test initial
+provisioning plus one reset. Do not reopen T177, T324, T195, or T194 from older sections below.
 
 ---
 
