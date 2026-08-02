@@ -6815,7 +6815,7 @@ must be scoped together.
 
 ## T195 + T194 — provision calendar feeds and persist atomic reset
 
-**PASS on `codex/t195-t194-calendar-feed-lifecycle`; integration PR #37 open. HEAVY tier.** The
+**MERGED in PR #37; database migration deployed to hosted Supabase. HEAVY tier.** The
 branch was rebased onto `main = 0016780` after independent review. Rebased implementation commits:
 `02b2cc1` (lifecycle/RPC/UI/tests), `1fa1db3` (partial-mock compatibility), and `5ac900b`
 (checker-MAJOR schema-drift rework). Worker evidence tip: `2f266e3`.
@@ -6902,5 +6902,15 @@ One earlier parallel full-suite run had a single existing OutreachList test hit 
 timeout while duplicate suite/lint/build processes competed for resources; the isolated rerun above
 passed all tests. The branch was then rebased again for PR #35/T327 and the final isolated run
 passed all 1850 tests. No source outside W6, no existing migration, no RLS policy, and no ICS file
-changed. No live hosted migration or deployment was attempted; after merge, smoke-test one initial
-provision and one reset on hosted Supabase.
+changed.
+
+### Merge and hosted migration deployment
+
+PR #37 merged into `main` at `d0d1aa0` on 2026-08-02 after both CI runs passed. The owner linked a
+fresh `origin/main` deployment worktree to the hosted Supabase project, and
+`supabase db push --linked --dry-run` listed exactly one pending migration:
+`20260802000000_calendar_feed_lifecycle.sql`. The subsequent push completed successfully. The
+expected idempotent `DROP TRIGGER IF EXISTS` notice reported that the old trigger did not exist;
+no error occurred. `supabase migration list --linked` then showed `20260802000000` in both Local
+and Remote. Remaining W6 verification is the hosted application smoke test for one initial feed
+and one reset; no implementation row remains open.

@@ -317,7 +317,7 @@ exit codes.
 
 ## W6 — Calendar & subscribe
 
-> The cleanest workflow to hand to a spare machine — it collides with nothing.
+> Implementation closed; hosted first-feed/reset smoke test pending.
 
 ```
 You are the orchestrator for the CALENDAR workflow on the VOLT team portal.
@@ -326,7 +326,8 @@ Read in this order: docs/swarm/RESUME-HERE.md (top-down, newest UPDATE first),
 docs/swarm/constitution.md (item 26), then docs/swarm/WORKFLOWS.md section W6.
 
 YOUR WORKFLOW: a student subscribes to the team calendar and it stays current on their
-phone. It is NON-FUNCTIONAL END TO END today, and worse than the external audit found.
+phone. Implementation is merged and the database migration is deployed. Do not dispatch
+new implementation work; only the hosted application smoke test remains.
 
 FILES YOU OWN:
   src/pages/calendar/CalendarPage.tsx      (902 lines)
@@ -341,16 +342,15 @@ YOUR ROW-NUMBER BLOCK: T900-T999.
 YOUR ROWS, in order:
   T324 — MERGED in PR #32. CalendarPage now resolves the active season and loads real,
          role-visible events/sessions through Supabase. Do not reopen it.
-  T195 — PASS on codex/t195-t194-calendar-feed-lifecycle. The additive migration backfills
-         existing profiles, provisions future profiles, reconciles duplicates, and enforces
-         one active feed. HEAVY.
-  T194 — PASS on the same branch. Reset is a persisted SECURITY INVOKER RPC, with the real
-         writer as production default and authoritative reconciliation after transport loss.
-         HEAVY.
-  T177 — cross-surface; read the row carefully before scoping, it reaches outside your files.
+  T195 — MERGED in PR #37; migration 20260802000000 DEPLOYED to hosted Supabase. The
+         migration backfills existing profiles, provisions future profiles, reconciles
+         duplicates, and enforces one active feed. HEAVY.
+  T194 — MERGED in PR #37. Reset is a persisted SECURITY INVOKER RPC, with the real writer
+         as production default and authoritative reconciliation after transport loss. HEAVY.
+  T177 — MERGED. Real subscription loader/link; do not reopen it.
 
-DO NOT REDISPATCH T195/T194 while integration PR #37 is open. After merge, W6 has no remaining
-implementation row; perform a hosted-Supabase smoke test for first provisioning and one reset.
+DO NOT REDISPATCH T177/T324/T195/T194. W6 has no remaining implementation row. Confirm the
+hosted app includes PR #37, then smoke-test first provisioning and one reset.
 
 RULES: item 24 (ledger + verification-log in the merge commit), item 22 (named pathspecs),
 item 23 (mutations in your own worktree; commit before mutating). State your tier. Assert
