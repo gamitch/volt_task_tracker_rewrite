@@ -1648,9 +1648,27 @@ describe('<OutreachList /> student/parent view', () => {
     }
   });
 
+  // T193: this test's own `onRsvpChange` used to be entirely absent, which
+  // meant a click here fell through to `OutreachList`'s real default
+  // (`submitRsvpChange`, an unmocked Supabase upsert that rejects in this
+  // harness). Before T193 that was harmless -- the old `handleRsvpChange`
+  // was local-only and never called any injected writer at all. Under T193
+  // the same click now awaits that rejection and rolls the optimistic
+  // update back, so this test's assertions -- taken immediately after a
+  // synchronous `act()`, with no flush -- were passing only by racing
+  // ahead of the rejection's microtask: `await flushMicrotasks()` inserted
+  // here turns it `1 failed | 91 passed` (T193 gate finding, packet §6).
+  // Fixed by injecting a real RESOLVING fake writer and flushing after the
+  // click, so the assertions below now hold for the right reason (the
+  // write succeeded) rather than the wrong one (racing an unhandled
+  // rejection). The live-update assertions themselves are unchanged.
   it('selecting a real RSVP segment updates the goal bar and the unanswered-RSVP badge live (module doc #8b)', async () => {
     window.localStorage.clear();
-    renderAsUser(STUDENT_OR_PARENT_USER, { loadData: defaultLoadOutreachData });
+    const fakeOnRsvpChange = vi.fn().mockResolvedValue(undefined);
+    renderAsUser(STUDENT_OR_PARENT_USER, {
+      loadData: defaultLoadOutreachData,
+      onRsvpChange: fakeOnRsvpChange,
+    });
     await flushMicrotasks();
 
     const foodBankGroup = Array.from(container.querySelectorAll('[role="radiogroup"]')).find((el) =>
@@ -1662,12 +1680,14 @@ describe('<OutreachList /> student/parent view', () => {
     act(() => {
       goingButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    await flushMicrotasks();
 
     // session-food-bank-upcoming is `scheduled` (3h) -- a fresh "going" RSVP
     // on it adds to PLANNED hours only, never to confirmed (BEH-02).
     expect(container.textContent).toContain('3 hrs confirmed'); // unchanged
     expect(container.textContent).toContain('3 hrs planned'); // was 0, now 3
     expect(container.textContent).toContain('0 awaiting your RSVP'); // was 1, now answered
+    expect(fakeOnRsvpChange).toHaveBeenCalledTimes(1);
   });
 
   it('BEH-01: milestone toast fires once per season+goal-bar, deduped via localStorage across remounts', async () => {
@@ -1775,6 +1795,118 @@ describe('<OutreachList /> student/parent view', () => {
         expect(resolvedText).toBe(title);
       }
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T193: the student/parent RSVP `SegmentedControl` now actually persists
+// (component module doc #16). Every test below drives the "answering for
+// the first time" case (`session-food-bank-upcoming` carries no RSVP row
+// for `PLACEHOLDER_CURRENT_STUDENT_ID` in `FIXTURE_RSVPS`) -- the dominant
+// case the packet's own §3 named, where a scalar `previousStatus` would be
+// `undefined`.
+// ---------------------------------------------------------------------------
+
+describe('<OutreachList /> T193: real RSVP writer wiring (packet §5)', () => {
+  function clickFoodBankGoing(): void {
+    const foodBankGroup = Array.from(container.querySelectorAll('[role="radiogroup"]')).find(
+      (el) => el.getAttribute('aria-label')?.startsWith('Your RSVP for Community Food Bank Sort'),
+    );
+    const goingButton = foodBankGroup?.querySelector('button[data-value="going"]');
+    expect(goingButton).toBeTruthy();
+    act(() => {
+      goingButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+  }
+
+  // C1 + C2 -- Mutation 1 (revert `handleRsvpChange` to local-only) and
+  // Mutation 2 (pass `viewerStudentId` as `respondedBy`) both turn this red:
+  // asserted on the spy's argument object, not just the call count.
+  it('C1/C2: changing an RSVP calls the injected writer exactly once, with studentId=viewerStudentId and respondedBy=viewerProfileId (the PROFILE id, not the student id)', async () => {
+    window.localStorage.clear();
+    const spy = vi.fn().mockResolvedValue(undefined);
+    renderAsUser(STUDENT_OR_PARENT_USER, { loadData: defaultLoadOutreachData, onRsvpChange: spy });
+    await flushMicrotasks();
+
+    clickFoodBankGoing();
+    await flushMicrotasks();
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith({
+      sessionId: 'session-food-bank-upcoming',
+      studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
+      status: 'going',
+      respondedBy: STUDENT_OR_PARENT_USER.id, // profiles.id -- T174's exact defect if swapped
+    });
+    expect(STUDENT_OR_PARENT_USER.id).not.toBe(PLACEHOLDER_CURRENT_STUDENT_ID);
+  });
+
+  // C3 -- Mutation: delete the rollback line in the `catch`.
+  it('C3: a rejected write restores the previous (unanswered) status and surfaces a visible, honest error', async () => {
+    window.localStorage.clear();
+    const spy = vi.fn().mockRejectedValue(new Error('network down'));
+    renderAsUser(STUDENT_OR_PARENT_USER, { loadData: defaultLoadOutreachData, onRsvpChange: spy });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('1 awaiting your RSVP');
+    clickFoodBankGoing();
+    await flushMicrotasks();
+
+    const foodBankGroup = Array.from(container.querySelectorAll('[role="radiogroup"]')).find(
+      (el) => el.getAttribute('aria-label')?.startsWith('Your RSVP for Community Food Bank Sort'),
+    );
+    // Rolled back to unanswered -- no segment checked, same as before the
+    // click. A scalar `previousStatus` rollback cannot reach this state for
+    // this session (it was `undefined`, not a real status); only restoring
+    // the snapshot array does.
+    for (const value of ['going', 'maybe', 'declined']) {
+      expect(
+        foodBankGroup?.querySelector(`button[data-value="${value}"]`)?.getAttribute('aria-checked'),
+      ).toBe('false');
+    }
+    expect(container.textContent).toContain('1 awaiting your RSVP'); // reverted, not "0"
+    expect(container.textContent).toContain("Couldn't save your RSVP");
+    expect(container.textContent).toContain('network down');
+  });
+
+  // C5 -- honest framing (packet §5): this also passes against current code,
+  // since the coach branch has no RSVP handler at all. Regression guard, not
+  // a defect discriminator; kept with its mutation site named (fire the
+  // writer on coach-view mount) rather than dressed up as a proof.
+  it('C5 (regression guard, not a defect discriminator -- see worker report): a coach/admin viewer never triggers the writer', async () => {
+    const spy = vi.fn().mockResolvedValue(undefined);
+    renderAsUser(COACH_USER, { loadData: defaultLoadOutreachData, onRsvpChange: spy });
+    await flushMicrotasks();
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  // C6 -- Mutation: move the state set after the `await`.
+  it('C6: the optimistic update is applied before the writer promise settles', async () => {
+    window.localStorage.clear();
+    let resolveWrite: (() => void) | undefined;
+    const spy = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveWrite = resolve;
+        }),
+    );
+    renderAsUser(STUDENT_OR_PARENT_USER, { loadData: defaultLoadOutreachData, onRsvpChange: spy });
+    await flushMicrotasks();
+
+    clickFoodBankGoing();
+
+    // The write is still outstanding (never resolved) -- the optimistic
+    // update must already be visible, not gated behind the `await`.
+    expect(container.textContent).toContain('0 awaiting your RSVP');
+    const foodBankGroup = Array.from(container.querySelectorAll('[role="radiogroup"]')).find(
+      (el) => el.getAttribute('aria-label')?.startsWith('Your RSVP for Community Food Bank Sort'),
+    );
+    expect(
+      foodBankGroup?.querySelector('button[data-value="going"]')?.getAttribute('aria-checked'),
+    ).toBe('true');
+
+    resolveWrite?.();
+    await flushMicrotasks();
   });
 });
 

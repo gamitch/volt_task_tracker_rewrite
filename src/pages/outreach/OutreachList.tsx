@@ -257,6 +257,17 @@
  *       list page (a genuinely separate, larger UI change this task's
  *       packet never asked for). This page's own inline row-level preview
  *       therefore deliberately stays local-only, unchanged by this task.
+ *       T193 UPDATE: this stub is CLOSED too. The premise above went stale
+ *       the same way (c) did -- RsvpControl.tsx/ParentRsvp.tsx are no
+ *       longer Blocked (T101 wired their real default). This file's own
+ *       inline SegmentedControl still is NOT replaced with <RsvpControl>
+ *       (that remains a separate, larger UI integration the owner has not
+ *       scoped), but its handleRsvpChange now also calls the SAME real
+ *       submitRsvpChange upsert those two components use (injectable via
+ *       this component's own onRsvpChange prop, defaulting to the real
+ *       writer -- same seam convention as resolveStudentId), with an
+ *       optimistic update and a snapshot-array rollback on a rejected write.
+ *       "No Supabase write happens anywhere in this file" is no longer true.
  *    c. T112 HOTFIX UPDATE: this stub is CLOSED, not still open. Event
  *       titles were plain `Heading`/`ListItem` `label` text with no
  *       `Link`/`href` to `/outreach/:eventId`, justified at the time by
@@ -684,6 +695,45 @@
  * legitimately disagrees with the attendance-backed `v_student_hours` a
  * student might see elsewhere in the app; that pre-existing formula
  * divergence is tracked separately as T188, not reconciled here.
+ *
+ * -----------------------------------------------------------------------
+ * 16. T193: the student/parent view's RSVP `SegmentedControl` (module doc
+ *     #8b) now actually persists -- closing the exact defect module doc #8b
+ *     disclosed. `handleRsvpChange` (`StudentParentOutreachView`) is now
+ *     `async`: it applies the same local `withRsvpOverride` optimistic
+ *     update, then `await`s a new injectable `onRsvpChange` prop (type
+ *     `SubmitRsvpChangeFn`, `loaders/outreach.ts`), defaulting at
+ *     `OutreachList` to the real `submitRsvpChange` -- the SAME `rsvps`
+ *     upsert `RsvpControl.tsx`/`ParentRsvp.tsx` already share (module doc
+ *     #3 there). No second upsert is built. `respondedBy` is
+ *     `viewerProfileId` (a `profiles.id`), never `viewerStudentId` -- T174
+ *     is exactly the defect of confusing those two columns.
+ *
+ * Rollback deliberately snapshots the whole `rsvps` ARRAY rather than a
+ * scalar previous status, unlike a literal mirror of
+ * `RsvpControl.tsx:482-506`: `withRsvpOverride` takes a concrete
+ * `RsvpStatus` and APPENDS a row when none exists, so it cannot express
+ * "back to unanswered", and a captured scalar would be `undefined` in
+ * exactly the dominant case (a student answering for the first time) --
+ * restoring `undefined` would leave a stuck phantom RSVP row on a failed
+ * write, worse than the pre-fix silent-discard bug. A single component-wide
+ * `isRsvpSubmitting` flag (`finally`-cleared) ignores clicks while a write
+ * is outstanding, which also makes the array-snapshot rollback
+ * concurrency-safe. A rejected write surfaces via a dismissable error
+ * `Banner` (same copy/shape as `RsvpControl.tsx`'s own), never silently.
+ *
+ * Not fixed here, disclosed (packet §3): `withRsvpOverride`'s own
+ * locally-appended row sets `respondedBy: studentId` (a `students.id` in a
+ * field that mirrors a `profiles.id` column) -- T174's exact open defect,
+ * so the optimistic row and the persisted row disagree on that one field
+ * until reload. Local-only display state, out of scope here;
+ * `withRsvpOverride`'s signature is unchanged (frozen by this same packet
+ * §4 -- `getUnansweredRsvpCount`/`computeStudentHours`/the goal bar all read
+ * the same `rsvps` state).
+ *
+ * Never wired into `CoachOutreachView`: that view has no RSVP handler of
+ * its own (a coach/admin viewer never triggers the writer).
+ * `RsvpControl.tsx`/`ParentRsvp.tsx`/`loaders/outreach.ts` are untouched.
  */
 import {
   useCallback,
@@ -735,13 +785,20 @@ import { routePaths } from '../../app/router';
 // ALREADY-BUILT, ALREADY-PASSED standalone dialog into this page for the
 // first time; nothing inside `OutreachEventDialog.tsx` itself is modified
 // (forbidden/read-only file).
+// T193: the ONE real `rsvps` upsert (module doc #3 on `loaders/outreach.ts`),
+// already shared by `RsvpControl.tsx`/`ParentRsvp.tsx` -- wired here as this
+// component's own injectable `onRsvpChange` seam, same convention as
+// `onSaveEvent`/`onCancelEvent`/`loadRoster` immediately below. This
+// component does not build a second `rsvps` upsert.
 import {
   cancelOutreachEvent,
   loadOutreachData,
   loadOutreachEventRoster,
   saveOutreachEvent,
+  submitRsvpChange,
   type CancelOutreachEventFn,
   type LoadOutreachEventRosterFn,
+  type SubmitRsvpChangeFn,
 } from '../../lib/supabase/loaders/outreach';
 // T170 (module doc #15): reuses the same, already-shipped, already-tested
 // viewer-identity resolution seam `MeetingsList.tsx`/`StudentHome.tsx`
@@ -1383,9 +1440,16 @@ export function getUnansweredRsvpCount(
 }
 
 /**
- * Applies a local (fixture-only, not persisted -- module doc #8b) RSVP
- * change for one student/session pair, synthesizing a new row when none
- * existed yet (the "unanswered" case being answered for the first time).
+ * Applies a local, optimistic-only RSVP change for one student/session pair
+ * (this function itself never persists anything), synthesizing a new row
+ * when none existed yet (the "unanswered" case being answered for the first
+ * time). T193 UPDATE: `StudentParentOutreachView`'s own `handleRsvpChange`
+ * now pairs this with a real, awaited `rsvps` upsert (module doc #8b) and
+ * rolls back to a full snapshot of the array -- not a scalar -- on
+ * rejection, because this function's own append-only shape (below) cannot
+ * express "back to unanswered". Signature frozen (packet §4):
+ * `getUnansweredRsvpCount`/`computeStudentHours`/the goal bar all read the
+ * same `rsvps` state this returns.
  */
 export function withRsvpOverride(
   rsvps: readonly RsvpRow[],
@@ -3617,6 +3681,11 @@ interface StudentParentOutreachViewProps {
   sessions: readonly OutreachSessionRow[];
   initialRsvps: readonly RsvpRow[];
   goalConfig: OutreachGoalConfig;
+  /** T193 -- injectable persistence seam (module doc #3 on
+   * `loaders/outreach.ts`). Defaults (at `OutreachList`) to the real
+   * `submitRsvpChange`, the SAME upsert `RsvpControl.tsx`/`ParentRsvp.tsx`
+   * already use. */
+  onRsvpChange: SubmitRsvpChangeFn;
 }
 
 function StudentParentOutreachView({
@@ -3627,8 +3696,16 @@ function StudentParentOutreachView({
   sessions,
   initialRsvps,
   goalConfig,
+  onRsvpChange,
 }: StudentParentOutreachViewProps): ReactNode {
   const [rsvps, setRsvps] = useState<readonly RsvpRow[]>(initialRsvps);
+  // T193 -- one component-wide in-flight flag (module doc #3/packet §3):
+  // ignores clicks while a write is outstanding, which is also what makes
+  // the snapshot-array rollback below concurrency-safe (no second click can
+  // start a second optimistic update before the first either commits or
+  // rolls back).
+  const [isRsvpSubmitting, setIsRsvpSubmitting] = useState(false);
+  const [rsvpError, setRsvpError] = useState<string | null>(null);
   // T126 (module doc #14) -- ONE shared `SelfCheckoffDialog` instance for
   // this whole view (matches `CoachOutreachView`'s own shared-dialog-plus-
   // target-state convention above); `null` = closed, non-null = which
@@ -3653,11 +3730,41 @@ function StudentParentOutreachView({
     [sessions, rsvps, viewerStudentId],
   );
 
-  function handleRsvpChange(sessionId: string, status: RsvpStatus): void {
-    // Module doc #8b: local-only. No Supabase write happens here -- the
-    // real persisted, validated RSVP flow is RsvpControl.tsx/ParentRsvp.tsx
-    // (T040/T042, Forbidden Files, currently Blocked).
-    setRsvps((prev) => withRsvpOverride(prev, viewerStudentId, sessionId, status));
+  // T193: real, persisted, rollback-on-failure RSVP write. Module doc #8b's
+  // former "local-only" premise expired -- `RsvpControl.tsx`/`ParentRsvp.tsx`
+  // are no longer blocked (T101), and `submitRsvpChange` (module doc #3,
+  // `loaders/outreach.ts`) is the ONE real `rsvps` upsert both already share.
+  //
+  // Deliberately snapshots the whole `rsvps` ARRAY, not a scalar previous
+  // status: `withRsvpOverride` takes a concrete `RsvpStatus` and, when no row
+  // exists yet, APPENDS one -- it cannot express "back to unanswered". A
+  // captured scalar `previousStatus` would be `undefined` in exactly the
+  // dominant case (a student answering for the first time), and restoring
+  // `undefined` on rejection would leave a stuck phantom RSVP row -- a
+  // failure worse than today's silent-discard bug. Restoring the whole
+  // snapshot array always removes that phantom row correctly, appended or
+  // updated alike.
+  async function handleRsvpChange(sessionId: string, status: RsvpStatus): Promise<void> {
+    if (isRsvpSubmitting) return; // ignore clicks while a write is outstanding
+    const previousRsvps = rsvps; // snapshot the ARRAY (not a scalar status)
+    setRsvps((prev) => withRsvpOverride(prev, viewerStudentId, sessionId, status)); // optimistic
+    setRsvpError(null);
+    setIsRsvpSubmitting(true);
+    try {
+      await onRsvpChange({
+        sessionId,
+        studentId: viewerStudentId,
+        status,
+        respondedBy: viewerProfileId, // profiles.id, NOT viewerStudentId (T174's exact defect)
+      });
+    } catch (error) {
+      setRsvps(previousRsvps); // rollback: restore the snapshot array
+      setRsvpError(
+        error instanceof Error ? error.message : 'Something went wrong saving your RSVP.',
+      );
+    } finally {
+      setIsRsvpSubmitting(false);
+    }
   }
 
   const hasAnyOutreach = sessions.length > 0;
@@ -3668,6 +3775,20 @@ function StudentParentOutreachView({
         <Heading level={1}>Outreach</Heading>
         <Badge variant="neutral" label={`${unansweredCount} awaiting your RSVP`} />
       </HStack>
+
+      {/* T193 -- honest error surfacing on a rejected RSVP write (packet
+          §3): an optimistic update with no visible rollback would tell the
+          student it saved when it did not. Same copy/shape as
+          `RsvpControl.tsx`'s own error `Banner`. */}
+      {rsvpError !== null && (
+        <Banner
+          status="error"
+          title="Couldn't save your RSVP"
+          description={rsvpError}
+          isDismissable
+          onDismiss={() => setRsvpError(null)}
+        />
+      )}
 
       {!hasAnyOutreach ? (
         <EmptyState
@@ -3821,6 +3942,10 @@ interface OutreachListLoadedProps {
    * non-null here (`OutreachList` only mounts this component once
    * `user !== null`). */
   viewerProfileId: string;
+  /** T193 -- threaded straight through to `ViewerStudentIdGate` /
+   * `StudentParentOutreachView`; never passed to `CoachOutreachView`, which
+   * has no RSVP handler of its own. */
+  onRsvpChange: SubmitRsvpChangeFn;
 }
 
 function OutreachListLoaded({
@@ -3834,6 +3959,7 @@ function OutreachListLoaded({
   onCancelEvent,
   loadRoster,
   viewerProfileId,
+  onRsvpChange,
 }: OutreachListLoadedProps): ReactNode {
   const loadState = useLoadState(() => loadData(seasonId), [loadData, seasonId]);
   // T101 (module doc #11) -- lets the coach view reload this page's own
@@ -3958,6 +4084,7 @@ function OutreachListLoaded({
           sessions={outreachSessions}
           initialRsvps={data.rsvps}
           goalConfig={data.goalConfig}
+          onRsvpChange={onRsvpChange}
         />
       )}
     </VStack>
@@ -3987,6 +4114,8 @@ interface ViewerStudentIdGateProps {
   sessions: readonly OutreachSessionRow[];
   initialRsvps: readonly RsvpRow[];
   goalConfig: OutreachGoalConfig;
+  /** T193 -- threaded straight through to `StudentParentOutreachView`. */
+  onRsvpChange: SubmitRsvpChangeFn;
 }
 
 function ViewerStudentIdGate({
@@ -3997,6 +4126,7 @@ function ViewerStudentIdGate({
   sessions,
   initialRsvps,
   goalConfig,
+  onRsvpChange,
 }: ViewerStudentIdGateProps): ReactNode {
   if (state.status === 'loading') {
     return (
@@ -4045,6 +4175,7 @@ function ViewerStudentIdGate({
       sessions={sessions}
       initialRsvps={initialRsvps}
       goalConfig={goalConfig}
+      onRsvpChange={onRsvpChange}
     />
   );
 }
@@ -4095,6 +4226,15 @@ export interface OutreachListProps {
    * any page), wired into the coach view's `OutreachEventDialog` `students`
    * prop. */
   loadRoster?: LoadOutreachEventRosterFn;
+  /** T193 -- injectable persistence seam for the student/parent view's own
+   * RSVP control, same convention as `RsvpControl.tsx:462`
+   * (`onRsvpChange = submitRsvpChange`) and this file's own
+   * `resolveStudentId` default. Defaults to the real `submitRsvpChange`
+   * (`../../lib/supabase/loaders/outreach.ts`), the SAME upsert
+   * `RsvpControl.tsx`/`ParentRsvp.tsx` already use -- this file builds no
+   * second `rsvps` upsert. Never invoked for a coach/admin viewer;
+   * `CoachOutreachView` has no RSVP handler of its own. */
+  onRsvpChange?: SubmitRsvpChangeFn;
 }
 
 export function OutreachList({
@@ -4105,6 +4245,7 @@ export function OutreachList({
   onSaveEvent = saveOutreachEvent,
   onCancelEvent = cancelOutreachEvent,
   loadRoster = loadOutreachEventRoster,
+  onRsvpChange = submitRsvpChange,
 }: OutreachListProps = {}): ReactNode {
   const { user } = useAuth();
   // T106 UPDATE (module doc #12): called unconditionally (React's
@@ -4157,6 +4298,7 @@ export function OutreachList({
       onCancelEvent={onCancelEvent}
       loadRoster={loadRoster}
       viewerProfileId={user.id}
+      onRsvpChange={onRsvpChange}
     />
   );
 }
