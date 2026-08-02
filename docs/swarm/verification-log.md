@@ -6772,3 +6772,58 @@ complete data. Flagging it rather than leaving the call silent.
 
 **Gates** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier **clean** · eslint
 **0 errors / 364 warnings (unchanged)** · vitest **77 files / 1860 tests (+9), exit 0**.
+
+## T403 step 1 — `LiveConsole` shows the real check-in credential
+
+**W1, on `claude/w1-checkin`. STANDARD tier.** Steps 2 and 3 are open; this entry covers step 1.
+
+**Scope correction, recorded because it was nearly got wrong.** The orchestrator initially framed
+"does the `EndMeetingDialog` mount land in this PR" as its own scoping decision. **It is not W1's
+call.** `EndMeetingDialog.tsx` is in W3's owned files; T196 sits on both workflow lists split in
+half, and W3's kickoff prompt says of the mount *"BLOCKED on W1 making LiveConsole real. Do not
+start it."* The owner caught it. T403 is W1's half; **T196 remains W3's row.**
+
+**The defect.** `loadDisplayToken` defaulted to a fixture resolving `FIXTURE_QR_TOKEN` and the short
+code `'FXTURE'`, under a `Banner` reading *"This QR code and check-in code aren't live yet."*
+`loadKioskDisplayToken` (`loaders/kiosk.ts`) has called the deployed `checkin-token` Edge Function
+since **T103** and returns the real HMAC token and short code that `Kiosk.tsx` displays and T032's
+`/checkin` verifies. This console simply never used it. The module doc still claimed *"there is
+still no endpoint anywhere in this repo that MINTS one"* — false since T103, now corrected.
+
+`KioskDisplayToken` is a structural superset of `LiveConsoleDisplayToken`, so the real loader
+satisfies the seam with no adapter and **no re-derivation of the token math**, which lives in one
+place (`supabase/functions/checkin/hmac.ts`) and must stay there.
+
+**Deleted, not kept as a fallback:** the fixture constants, their loader, and the Banner. A fallback
+is how a fixture reaches a live route — the family that produced T155/T176/T181/T324, and which this
+console was itself an instance of. The Banner was deleted rather than reworded: **dishonest copy
+about honest data is the same defect as honest copy about dishonest data.** Also deleted this file's
+own `buildCheckinUrl`, a deliberate duplicate whose only caller was the fixture; the QR URL shape now
+has one definition instead of two that could drift.
+
+**Three existing tests broke, correctly.** They had never passed a `loadDisplayToken` and so
+silently inherited the fixture; with the real default and no configured Supabase they got the honest
+"QR not available yet" render. That is T151's mechanism working — the call site must now declare its
+data. `renderBody` injects a token by default, overridable per test.
+
+### The finding: a mutation passed at exit 0, for the second time this session
+
+Restoring a fixture default left **all 42 tests green**. The cause was the fix for the breakage
+above: once `renderBody` injected a token by default, **no test exercised the component's own
+default**, and the test that claimed to prove there was no fabricated code was itself passing
+`loadDisplayToken: async () => null` — supplying the very thing it was meant to check.
+
+Fixed with `renderBodyNoInjection`, which renders `<LiveConsoleBody />` with no props at all. The
+mutation then went red.
+
+**This is the second instance in one session** (the first was T161's errored-session fixture, where
+the error branch and the no-session branch were indistinguishable). The shared shape is sharper than
+the vacuous-absence rule already recorded: **a test that supplies the thing it is checking cannot
+detect a change to it.** Both were written to be thorough, both looked right, and only running the
+mutation exposed either. Worth promoting into the constitution's process notes.
+
+**Mutation:** point `loadDisplayToken`'s default back at a fixture → **1 red, exit 1** (after the
+test fix; **0 red, exit 0** before it, which is why the test was rewritten).
+
+**Gates** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier **clean** · eslint
+**0 errors / 364 warnings (unchanged)** · vitest **77 files / 1863 tests (+3), exit 0**.
