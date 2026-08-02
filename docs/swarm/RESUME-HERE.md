@@ -8,6 +8,47 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
 
+## UPDATE — 2026-08-02 (latest): W1 mid-flight on T403 step 3, may have stopped on budget
+
+**If W1's session ended abruptly, it ran out of weekly usage credits, not into a problem.** The
+owner's allowance resets the same day; resume then. Nothing is broken and nothing is half-landed.
+
+**Everything through `d67f77f` on `claude/w1-checkin` is pushed and coherent.** Work in a worktree
+(`git worktree add /home/user/volt_w1_checkin claude/w1-checkin`, no `-b` — the branch exists on
+origin). Do NOT `git checkout claude/w1-checkin` in the primary checkout; it is already used by that
+worktree and the checkout will fail.
+
+**Done and in PR #28:** T403 **step 1** (real display token) and **step 2** (real roster/attendance —
+`makeLoadLiveConsoleData` in `loaders/kiosk.ts`, fixtures deleted, `4ee0c52`).
+
+**T403 step 3 (HEAVY) is IN PROGRESS.** State at the time of writing:
+
+- **Packet:** `docs/swarm/active/T403-step3-worker-packet.md` — complete, gated, and self-contained.
+  It is the full spec; **no context from the conversation is needed to continue.**
+- **Premise gate: DONE.** `checker-premise` on Fable gated `799827e` and returned **DISPATCH**, all
+  five traps CONFIRMED by building against a real PostgreSQL 16 database. Verdict and built
+  prescription are in **§0 of the packet** — read that first. Headline: a `LiveConsole` status write
+  through `makeUpsertAttendance` nulls `hours_override` **and** downgrades `method` `qr`→`coach` in
+  the same statement. The fix is a **parallel** `makeSetAttendanceStatus`; `makeUpsertAttendance`
+  must stay byte-identical — that is what keeps W2's `AttendancePanel` at zero blast radius.
+- **Worker: DISPATCHED.** If its diff is not on the branch, it did not land — **re-dispatch from the
+  packet.**
+- **`checker-reviewer`: NOT YET RUN.** It is required; HEAVY must not be diluted (owner, explicit).
+  If the worker's diff is on the branch but unreviewed, the ledger row says so — run the checker
+  before treating step 3 as done.
+
+**Watch for this specifically (packet §4b).** With the seam made real, the 43 existing `LiveConsole`
+coach-action tests still pass at exit 0 **only by microtask timing** — no `await` sits between the
+action and the assertions, so rejection microtasks land after the last assert. One `flushMicrotasks`
+flips them red. Every coach-action test must inject an explicit seam.
+
+**Filed this session, all open, none of them W1's to fix:** **T404** (post-completion INSERT is never
+audited — schema, owner call), **T405** (`attendance.updated_at` never moves on conflict-update),
+**T406** (TOCTOU on `markDayComplete` — **W2's file**; W2 notified via
+`docs/swarm/inbox/w1-to-w2-T406-markdaycomplete-toctou.md`).
+
+**Next free row number in W1's block: T407.**
+
 ## UPDATE — 2026-08-02 (later): the backlog is now also cut by WORKFLOW, for parallel machines
 
 **`main` = `66776cd`.** No source changed in this update — it is a re-view of the same backlog plus
