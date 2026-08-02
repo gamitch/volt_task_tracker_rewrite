@@ -6619,3 +6619,88 @@ submitting is a no-op", which was not among the six named criteria.
 **Process note.** T323 merged without its ledger row or verification-log entry — item 26 removes
 coordination, **not bookkeeping**, and the other session had to backfill it. This entry was written
 before the PR, not after.
+
+---
+
+## T309 — unchecking a student in "Mark day complete" now records the absence
+
+**Merged `e40d2d5`. HEAVY tier (item 26) — it changes what reaches `attendance`. One worker attempt;
+the packet needed two.**
+
+`buildAttendanceWriteRows` mapped only `checkedStudentIds`, and `markDayComplete` upserts exactly
+the rows it is handed — so unchecking a student emitted **nothing** for them and their recorded row
+survived. T305 is what made it reachable: before it, a recorded student never *started* checked, so
+there was nothing to uncheck.
+
+The fix is one new exported pure function, `buildAttendanceAbsenceRows`, plus a concat at
+`handleSubmit`'s single call site.
+
+### The owner ruling, and the D-7 question that nearly went unasked
+
+George ruled `status: 'absent'` over DELETE. **The orchestrator recommended it without discovering
+that the question was already settled** — `loaders/attendance.ts:34-50` records D-7, his own
+2026-07-20 override (*"As coach I am ultimate authority and should be able to overwrite an RSVP or
+check-ins"*), under which T119 **deleted** an earlier `status: 'absent'` branch in favour of an
+unconditional DELETE. He was asked to choose between two options, one of which he had already ruled
+against, with no indication that he had.
+
+**The answer survived the correction** — D-7 governs *authority*, not mechanism, and authority is
+untouched: `v_student_hours` sums `where a.status in ('present','late')`, so an `absent` row yields
+zero hours exactly as a deleted row does. `absent` also avoids a second write step in a path already
+disclosed as non-atomic (T327). **The process failure was real regardless of the outcome:
+recommending on a settled question without checking whether it was settled.**
+
+### The premise gate ran on fable, and BUILT the prescription
+
+**MAJOR — the packet's harness section described the wrong file.** §6 v1 claimed
+`MarkDayCompleteDialog.test.tsx` has **no `vi.mock`** and that a green count there proves nothing
+about the attendance seam. It partial-mocks exactly that seam at `:49-55`, re-defaults it in
+`beforeEach` at `:102-103`, and **four existing tests already assert the call** (S1, S2, S6, W3b).
+The file with no mock is `MarkEventCompleteDialog.test.tsx`. The two files were inverted, and the
+packet then told a worker to invent a second injection mechanism alongside the asserted-on one.
+
+**This is the fourth consecutive task in which the orchestrator wrote criteria against an imagined
+harness rather than the real one** — despite the trap being documented verbatim in two test files.
+The gate slot keeps paying for itself on exactly this failure.
+
+Four more findings folded into v2: **C5's fixture constraint** (under the shared guard-deletion
+mutation a row-less roster student crash-reds *first* and masks C5's assertion entirely, making the
+packet's own "at least one arm fails on an assertion" requirement unmeetable over the shared
+4-student roster); **C10 deleted** as redundant with C9 (item 25) after the gate measured C9's
+full-label button lookup already catching it; a **stale test-range citation** (`:206-216`) that had
+been propagating since T307's packet; and **five module-doc claims** this diff falsifies.
+
+### Verification — every mutation replayed by the orchestrator, not relayed
+
+| Criterion | Mutation | Result |
+|---|---|---|
+| C1/C7 | `return []` from `buildAttendanceAbsenceRows` | **5 red** |
+| C2 | pre-T305 hardcode (null timestamps, `method: 'coach'`) | **2 red** |
+| C3 | `recordedBy: existing.recordedBy` (vitest-only — does not typecheck) | **2 red** |
+| C4/C5 | delete the `isAttendingStatus` guard | **13 red**; C5 fails on an **AssertionError**, not a crash |
+| C6 | iterate `Object.keys(recordedRowByStudentId)` instead of `roster` | **1 red — exactly C6** |
+| C9 | drop the absence spread from `handleSubmit` | **1 red — exactly C9** |
+
+C5's assertion-red is the one that confirms the packet's fixture constraint was honoured rather than
+nominally satisfied: `AssertionError: expected [ …(2) ] to have a length of +0 but got 2`.
+
+**The trap of the task held.** `buildAttendanceWriteRows` is **byte-identical** — verified by
+`sha256` of the extracted function at both revisions, not by reading the diff. It is shared with
+`MarkEventCompleteDialog`'s bulk mode, which has no check/uncheck UI at all, so teaching it to emit
+absences would fabricate them from **no coach gesture** — recreating T307's shape in a new form.
+Bulk mode and its test are untouched and green at 25.
+
+Gates: `tsc` 0, `vite build` ✓, prettier clean, eslint **0 errors / 362 warnings (+1**, attributed
+to `react-refresh/only-export-components` on the new export at `:815`; the unrelated `ParentHome.tsx`
+unused-disable warning is pre-existing**)**, vitest **75 files / 1829 tests** (+8), two-file gate
+exit 0. No assertion removed or weakened (`git diff | grep '^-' | grep -E 'expect|toBe|toEqual|toHave'`
+returns nothing).
+
+**Worker disclosure kept rather than smoothed:** it shipped **8** new tests where the gate's
+reference implementation had 9 (1829 vs 1830) for the same nine lettered criteria, and said so
+explicitly rather than padding to match a number. The mutations are the evidence, not the count.
+
+**Disclosed and deliberately not fixed:** the `AttendancePanel` directly below this dialog still
+DELETEs on uncheck, so the same gesture in two places leaves different rows behind. Invisible today
+because the outreach side never renders `absent`. Reconciling them means reopening D-7 and editing
+`loaders/attendance.ts`, which belongs to **W1** and is under concurrent edit.
