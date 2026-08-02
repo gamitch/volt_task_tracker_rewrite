@@ -1576,3 +1576,35 @@ today. **It becomes a live wrong number the moment the first internal team meeti
 percentage, and label the card so it reads as volunteer hours rather than all hours. Meeting
 participation stays its own separate figure. **Not authorized:** changing which events are typed
 `outreach` (see above), or touching the FLL events.
+
+## 2026-08-02 — George's ruling on T400: option (a), the live-session picker
+
+**Structured selection, not a verbatim quote.** He was given T400's three options in plain
+language and answered *"let's go with option A for T400."* The wording of the options is the
+orchestrator's; the choice is his.
+
+**The question.** T321 shipped manual short-code entry for a student whose check-in credential
+expired, reusing the session id already in their URL. That leaves the case the external audit
+actually named — *"a student who cannot scan has no fallback"* — still open, because
+`validateCheckinRequest` rejects any body without a uuid `session_id` and `verifyShortCode` HMACs
+the presented code over `` `${sessionId}:${bucket}` ``. **A short code alone verifies against
+nothing.** The kiosk shows the QR and the 6-character code but never a readable session identifier,
+so that student has no way to supply one.
+
+**Chosen — (a): `/checkin` offers a picker of currently-open sessions.** The student taps the event
+they are at, which supplies the session id, then types the code from the kiosk. One tap plus one
+code.
+
+**Not chosen, and both are closed unless (a) fails:**
+
+- **(b) display a short session identifier on the kiosk too** — cheap to build, but it makes the
+  student type two things on a phone in a noisy shop, and doubles what they can get wrong.
+- **(c) let the edge function resolve a bare code against every live session** — best experience,
+  but it **breaks the code's session binding**: a code issued for one event could match another
+  running at the same time, and each attempt searches more ground against a 5/min/user rate limit.
+  It also lives in `supabase/functions/**`, which W1 does not own. **This is the one that needed a
+  ruling, and the ruling is no.**
+
+**Sequencing consequence.** (a) needs a loader that lists currently-open sessions — which is work
+**T196 has to build anyway** to make `LiveConsole` real. T400 is therefore folded into T196's wave
+rather than run as a separate row, and must not be started before it. Recorded on the T400 row.

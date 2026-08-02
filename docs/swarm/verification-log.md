@@ -6637,3 +6637,68 @@ into a new module. Zero errors either way.
 **✓** · prettier **clean** · eslint **0 errors / 364 warnings** · vitest **75 files / 1831 tests
 (+14), exit 0**. Baseline at `origin/main` `e422123` measured independently first: 75 files / 1817
 tests, exit 0.
+
+## T161 — `loaders/checkin.ts` under test (521 lines, zero tests)
+
+**Second task of the W1 workflow, on `claude/w1-checkin`. STANDARD tier.**
+
+**Why now, before T196.** `LiveConsole`'s roster is a fixture and its attendance marking is an
+intentional no-op. Making it real on top of a loader with no tests repeats the exact mistake that
+produced the fixture shell. T161 was sequenced ahead of T320 for this reason, per
+`KICKOFF-PROMPTS.md`.
+
+**Coverage — 20 tests across four surfaces**, chosen by risk rather than line count:
+
+- **`aggregateParticipationForStudent`** — the only arithmetic in the file, and the only place it
+  can lie to a student about their own participation. Pins empty → `null`, single-row → returned
+  **by identity** (so the short-circuit cannot regress into a recompute that happens to agree),
+  dual-member summing, the never-across-seasons rule, and the `greatest(expected - excused, 1)`
+  divide-by-zero guard. The formula itself is pinned against the view it mirrors,
+  `20260722000000_membership_views.sql:75-77`, so editing one side without the other fails here
+  rather than silently disagreeing on screen.
+- **`makeGetAccessToken`** — all three documented degrade-to-null paths plus no-session and happy.
+  This seam feeds `/checkin`; a rejection here would hide the deployed function's real 401 behind a
+  generic client-side error.
+- **`makeLoadLinkedStudents`** — both early returns (asserting the *later* queries are never issued,
+  not just the return value), parent scoping from the real session, the client-side join, and the
+  `''` display-name fallback. Ordering is asserted with the students response deliberately
+  **reversed**, proving order comes from `guardian_links` rather than from response coincidence.
+- **`makeLoadConsistencyStripData`** — query shapes, including that `event_sessions` stays
+  unfiltered (the completed-only rule lives in exactly one place) and that `attendance` carries its
+  `student_id` filter.
+
+**The finding worth recording: a mutation ran clean and caught the orchestrator's own vacuous test.**
+
+| Mutation | Result |
+|---|---|
+| drop the `greatest(…, 1)` divide-by-zero guard | **2 red, exit 1** |
+| aggregate across seasons (drop the season filter) | **1 red, exit 1** |
+| `getAccessToken` rejects on session error instead of returning `null` | **passed, exit 0** ❌ |
+| drop the `attendance` `student_id` filter | **1 red, exit 1** |
+
+The third mutation was first written as "throw inside the `try`", which the enclosing `catch`
+swallows — a badly chosen mutation, not a finding. Rewritten to **delete the `if (error)` check
+outright**, it *still* passed. The cause was the test's own fixture: it returned
+`{ session: null, error: {...} }`, so the error branch and the no-session branch produce the
+identical value and no edit to the error branch can be detected. Fixed by giving the errored lookup
+a **usable token** alongside the error; the mutation then went red.
+
+**This is the vacuous-absence shape this project has now paid for eight times, and it appeared in a
+test written specifically to be thorough.** Declaring an assertion "covers the error path" does not
+make it discriminate — only running the mutation does. Recorded rather than quietly corrected.
+
+**Measured, not assumed:** `aggregateParticipationForStudent` reimplements a metric formula in
+TypeScript, a shape that normally invites float-vs-`numeric` rounding divergence. Checked
+exhaustively — for every `present`/`denominator` pair with denominator 1..4000, JS
+`Math.round(x * 10) / 10` and Postgres `round(numeric, 1)` agree on **every** input, so the
+divergence is unreachable at any scale this team will reach (the live database holds 117
+`event_sessions` in total). No follow-up filed.
+
+**Tier justification (item 26).** STANDARD: test-only, no production change, no write path, no
+schema/RLS/auth. Not FAST because it adds a new test module rather than a ≤20-line edit. Not HEAVY
+because nothing it touches can corrupt data — though note the *subject* under test includes metric
+arithmetic, which is why the SQL-pinning test exists.
+
+**Gates** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier **clean** · eslint
+**0 errors / 364 warnings (unchanged — no new warnings)** · vitest **76 files / 1851 tests (+20),
+exit 0**.
