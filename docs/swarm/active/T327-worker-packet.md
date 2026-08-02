@@ -6,8 +6,9 @@
 **Gate:** `checker-premise` (fable) · **Worker:** sonnet · **Mutations replayed by the orchestrator**
 **Workflow:** W2 (run an outreach event). Row 3, after T193 and T309.
 
-**Also in scope, as an assessment rather than a change: T330.** See §9 — it is proposed for
-**closure as no-change**, and the gate is asked to attack that proposal specifically.
+**Also referenced, but NOT in scope: T330.** v1 proposed closing it as no-change; the gate refuted
+that and I verified the refutation. See §9 — **T330 stays open and needs its own packet.** No T330
+work is authorized here.
 
 ---
 
@@ -23,17 +24,35 @@ changes what the fix should be.**
 2. `upsertAttendance` — writes the attendance rows, **only if `payload.attendance.length > 0`**
 3. the adult-volunteer `events` read-modify-write, **only if either delta is `> 0`**
 
-**If (2) fails, the session is already `'completed'` and the attendance was never written.** That is
-not merely inconsistent — **it is unrecoverable from inside the app**:
+**If (2) fails, the session is already `'completed'` and the attendance was never written.**
 
-- `MarkDayCompleteDialog.tsx:941`: `isSessionEligible = session.status === 'scheduled'`. Opened
-  against a `'completed'` session the dialog renders **no checklist, no hours inputs and no
-  "Mark complete" action** — only an informational banner (its own module doc at `:261-267`).
-- `partitionEventSessions` gives bulk mode only `status === 'scheduled'` sessions
-  (`MarkEventCompleteDialog.tsx:242-243`), so **"Mark event complete" skips it too.**
+**Packet v1 called this an unrecoverable trap door. The gate measured that FALSE, and v2 states the
+real severity instead. Do not work from v1's framing.** Two recovery paths exist:
 
-So a single failed request permanently strands a day's hours, with **both** completion surfaces
-refusing to touch it and no error visible after the dialog closes. **A trap door, not a race.**
+1. **The dialog stays open on failure.** `handleSubmit` catches, sets `submitError`, and calls
+   `onOpenChange(false)` **only on success** (`MarkDayCompleteDialog.tsx:1112-1122`). The flip
+   carries no `.eq('status','scheduled')` guard, so **an immediate re-click retries and converges
+   today.** v1's claim that there is "no error visible after the dialog closes" is simply wrong.
+2. **`AttendancePanel` is a working post-completion editor.** Its `eligibleSessions` excludes only
+   `'canceled'` (`AttendancePanel.tsx:648-649`), so a **completed** session is still editable there,
+   under `staff_all` RLS. **The day's student hours are recoverable** by ticking students in the
+   panel below.
+
+**So the trap springs only if the coach abandons or reloads before a successful retry.** What is
+genuinely stranded at that point is narrower but real:
+
+- **T309's absence rows.** `AttendancePanel`'s uncheck **DELETEs** (T119/D-7) and never writes
+  `'absent'`, so the absence records T309 just shipped have **no other writer** anywhere.
+- **The adult-volunteer deltas.** Step (3) has no other writer either.
+
+Both completion surfaces do refuse the session afterwards — `isSessionEligible = session.status ===
+'scheduled'` (`MarkDayCompleteDialog.tsx:941`, module doc `:261-267`) and `partitionEventSessions`
+filters to `scheduled` (`MarkEventCompleteDialog.tsx:257`) — which is why recovery has to happen
+through a *different* surface that writes *less* than the dialog did.
+
+**The reorder's true value, stated honestly:** retry-in-place convergence without depending on the
+coach noticing, plus preservation of the two things nothing else can rewrite. That is worth doing.
+It is not a rescue from total data loss, and the packet must not sell it as one.
 
 **Reachability is ordinary**, not exotic: a dropped connection, an RLS rejection, a PostgREST error,
 or a timeout between two sequential `await`s on a phone in a school gym.
@@ -47,15 +66,16 @@ to the mutation's control flow.
 
 | Failure point | Today | After the reorder |
 |---|---|---|
-| attendance write fails | session `completed`, hours lost, **no retry path** | session still `scheduled`, nothing written — coach retries, **converges** |
-| status flip fails | (n/a — it is first) | session still `scheduled`, attendance written — coach retries, upsert is idempotent, **converges** |
+| attendance write fails | session flips to `completed` anyway; **an abandoned retry strands T309's absence rows and the adult-volunteer deltas** (§1) | session stays `scheduled`, nothing written — retry **converges**, and does so even if the coach comes back later |
+| status flip fails | (n/a — it is first) | session stays `scheduled`, attendance written — retry converges, upsert is idempotent |
 
 **Why this is enough, and why a real transaction is not authorized here.** Genuine atomicity needs a
 Postgres function or edge function — a migration, a new deploy surface, and a second place the write
-lives. For a ~20-student volunteer team (constitution item 25) the reorder removes the *unrecoverable*
-outcome entirely and leaves only *retryable* ones. **The retry is the recovery mechanism, and it works
-because the attendance upsert is idempotent** — `{ onConflict: 'session_id,student_id' }`
-(`:1150`), and T309's absence rows go through the same upsert.
+lives. For a ~20-student volunteer team (constitution item 25) the reorder makes **every** failure
+leave a state the existing UI can still act on, instead of one the coach must notice immediately or
+lose. **The retry is the recovery mechanism, and it works because the attendance upsert is
+idempotent** — `{ onConflict: 'session_id,student_id' }` (`:1150`), and T309's absence rows go
+through the same upsert.
 
 ---
 
@@ -111,13 +131,14 @@ not evidence — report that instead of shipping it.**
 - **C3** With **no** attendance rows (`attendance: []`) the session still flips to `'completed'` —
   the `length > 0` guard is preserved and an empty day can still be completed.
   *Mutation: drop the `length > 0` guard so an empty upsert is issued.*
-- **C4** The adult-volunteer update still runs **last**, after the status flip.
+- **C4** The adult-volunteer update still runs **last**, after the status flip, **and the happy path
+  resolves normally** with all three writes issued in the order attendance → session → events.
   *Mutation: move step (3) above the flip.* **This is the guard for §3 and is not optional.**
+  (v1 had the resolve-normally half as a separate C6; the gate measured that C6 never reddens unless
+  C1 or C4 already has, so it is folded in here under item 25. Its one unique assertion —
+  `.resolves.toBeUndefined()` — belongs on this criterion.)
 - **C5** The adult-volunteer update is still **skipped entirely** when both deltas are `0`.
   *Mutation: remove the delta guard.*
-- **C6** `markDayComplete` still resolves normally on the happy path with all three writes issued, in
-  the order attendance → session → events. *Mutation: covered by C1's; assert it explicitly anyway so
-  the happy path is pinned independently of the failure paths.*
 
 `container.textContent`, never `innerHTML`, for any DOM assertion. Pair presence with absence where
 both are meaningful — this repo has shipped 7+ absence-only assertions that passed for the wrong
@@ -134,19 +155,39 @@ work belongs. It already uses the repo's loader-test convention:
 const client = { from: fromSpy } as unknown as SupabaseClient;
 ```
 
-(`outreach.test.ts:94`, `:182`). **`endMeeting.test.ts` has the richer version of the same pattern**
-— `:127` and `:613` return `{ client, fromSpy, updateArgs, eqArgs }` from a helper, which is what
+(`outreach.test.ts:94`, `:182`, `:234`). **`endMeeting.test.ts:613` has the richer version of the
+same pattern** — it returns `{ client, fromSpy, updateArgs, eqArgs }` from a helper, which is what
 lets a test assert *what* was written and *in what order*. **Read `endMeeting.test.ts:600-620`
-before writing your fake**; it is the closest working model and it is a Forbidden file for editing
-but not for reading.
+before writing your fake**; it is the closest working model, and it is a Forbidden file for editing
+but not for reading. (v1 also cited `:127`; that helper returns `{ client, recordedByTable }` and is
+not the model you want.)
+
+**Harness caveat the gate hit while building it — heed this or C1 will lie.** Your fake must record
+**table *and* method**, not table alone: with nonzero adult-volunteer deltas, `event_sessions`
+receives **both** an `update` (the flip) **and** a `select` (step 3's read at `:866-876`). A
+table-only order recorder cannot tell the flip from the read, and C1 will assert on the wrong call.
+`endMeeting.test.ts:353` is the "dispatches on the METHOD called" shape to copy.
 
 **`makeMarkDayComplete` currently has no test of its own** — T165 records that 21 of 23 exports in
 this loader are untested. So you are adding the first coverage of this mutation, not extending
 existing coverage. **Nothing existing pins the current write order**, which is precisely why the
 reorder is safe to make and why C1 is the criterion that matters.
 
-**T307's gate already proved this is testable**: it drove the real `makeMarkDayComplete` over a
-stubbed transport and captured the exact upsert payload. You are repeating a known-possible thing.
+**T305's gate already proved this is testable**: it drove the real `makeMarkDayComplete` over a
+stubbed transport and captured the exact upsert payload (`T307-worker-packet.md:46`). You are
+repeating a known-possible thing. (v1 credited T307's gate; it was T305's.)
+
+### Two stale module-doc claims this reorder falsifies — fixing them is part of the deliverable
+
+Both are in `loaders/outreach.ts`, which is an Allowed File:
+
+| Line | Claim today | Why the diff falsifies it |
+|---|---|---|
+| `:117` | module doc #4: *"performs, **in order**: (a) `event_sessions` update … (b) `attendance` upsert …"* | The order is now (b) then (a). This one states an explicit order contract and must be rewritten, not annotated. |
+| `:1122-1124` | `makeMarkDayComplete`'s own doc lists *"status flip, attendance upsert, …"* in the old order | Same reorder. |
+
+Alongside these, record **§3's asymmetry** — idempotent writes may be reordered, non-idempotent ones
+may not — so the next reader does not "finish the job" by moving step (3) too.
 
 Baselines measured at `0016780`, `.env.local` absent — **verify them yourself and report the real
 numbers**:
@@ -194,40 +235,48 @@ You do not self-certify.
 
 ---
 
-## 9. T330 — assessed, and proposed for CLOSURE as no-change
+## 9. T330 — my closure proposal was WRONG. It needs its own packet.
 
-**This section asks the gate for a verdict, not the worker for a change.** No T330 work is
-authorized in this packet.
+**No T330 work is authorized in this packet.** This section exists so the corrected facts are on the
+record before anyone packets it.
 
-`WORKFLOWS.md` says to scope T327 and T330 together because they are the same "non-atomic" family.
-Scoping them together is what showed they are **not the same severity**, and the difference is
-recoverability.
+**Packet v1 proposed closing T330 as no-change**, on the argument that an orphan event (an `events`
+row whose `event_sessions` insert failed) renders gracefully and that *"the coach reopens the event,
+adds the days, and the state is correct."* **The gate refuted that, and I verified the refutation
+myself.**
 
-**The path:** `makeSaveOutreachEvent`'s returned function (`loaders/outreach.ts:1447-1465`) inserts
-the `events` row (`:1284-1292`, `.select('id').single()`), then inserts `event_sessions`
-(`:1300-1315`), then reconciles expected-attendee RSVPs. If the session insert fails, an **event row
-with no sessions** survives.
+**`buildEventGroups` drops the event entirely.** `OutreachList.tsx:1730` — `if
+(eventSessions.length === 0) continue;` — omits a zero-session event from **both** buckets, and its
+own module doc at `:1711-1712` says so outright. So:
 
-**Why that is not a trap door, unlike T327 — verified, not assumed:**
+- The `'No sessions scheduled yet.'` branch I cited at `OutreachList.tsx:1565` is **dead code on the
+  coach list.** It never renders there. (`OutreachDetail.tsx:1131`/`:2015` do render it — but only
+  if you already have the URL.)
+- **Every navigation affordance to `/outreach/:eventId` lives on a list row.** With no row, there is
+  no link. The orphan is reachable only by a remembered or guessed URL.
+- **"Self-correctable" is therefore false in-app.** That was the whole basis of the closure.
 
-- Both surfaces render a session-less event **gracefully**, not as an error:
-  `OutreachList.tsx:1565` and `OutreachDetail.tsx:1131` both return
-  `'No sessions scheduled yet.'`, and `OutreachDetail.tsx:2015` renders it as ordinary supporting
-  text.
-- **The event remains fully editable**, and the edit path inserts missing sessions through the same
-  `toInsert` → `insertSessions` branch (`:1384-1386`). The coach reopens the event, adds the days,
-  and the state is correct.
+**This is not an RLS problem.** `staff_all` on `events` (`rls.sql:149-151`) lets the coach read the
+row perfectly well. The row is invisible because the list omits it — which is worse, because nothing
+signals that anything is wrong.
 
-So T330's worst case is an **untidy but visible and self-correctable** row — no data is lost and no
-figure is wrong. Against a ~20-student volunteer team, constitution item 25 says that does not earn a
-mechanism. The audit itself graded it **P2**.
+**And there is a wrong-number path, which kills "no figure is wrong".** The create dialog collects
+adult-volunteer count and hours (`OutreachEventDialog.tsx:1000-1001`), and `HoursTab` sums
+`adult_volunteers_count`/`adult_volunteer_hours` across **all** season events **with no session
+filter** (`HoursTab.tsx:580-596`, called at `:1094`; `reports.ts:401-411`). A failed create followed
+by a successful retry leaves **two** events carrying the same volunteer figures — **double-counted in
+the season adult totals, invisible in the UI, and uneditable.** That is the same grant-reporting
+number §3 goes out of its way to protect from double-counting.
 
-**Proposed disposition: close T330 as no-change**, recording the recoverability reasoning above, in
-the manner of T144 (`ProgressBar` variants, D011). **Gate: attack this.** Specifically —
+**Disposition: T330 stays OPEN and needs its own packet.** `WORKFLOWS.md:109` already tiers it
+HEAVY.
 
-1. Is there any surface where a session-less event **does** error, that §9 missed?
-2. Can the `events` insert succeed while leaving state the coach cannot reach — e.g. is the event
-   visible to its creator under RLS before any session exists?
-3. Does the RSVP-reconciliation phase leave anything worse behind than the session insert does?
+**The cheapest credible fix is not a transaction** — it is deleting the `continue` at
+`OutreachList.tsx:1730` so a zero-session event renders as a visible "needs dates" row, activating
+the already-shipped `:1565` branch and restoring the edit path (`:1384-1386` already inserts missing
+sessions on save). Whoever packets it must decide what such a row shows for date/hours/count, which
+is exactly what `buildEventGroups` currently avoids by skipping it — that is the real design work,
+and it is why this is not a two-line change.
 
-**If any of those is a yes, T330 is not closeable and needs its own packet — say so.**
+**Process note for the ledger:** the closure was proposed on a citation (`:1565`) that was real but
+**dead on the surface that mattered**. Reading that a branch exists is not evidence that it renders.
