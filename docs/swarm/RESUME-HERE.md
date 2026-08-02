@@ -37,8 +37,30 @@ worktree and the checkout will fail.
   re-verified by the orchestrator, not just claimed by the worker: `tsc` 0 · build ✓ · prettier
   clean · eslint 0 errors / 363 warnings · vitest 77 files / 1878 tests, exit 0.** All four
   mutations red at exit 1 — no exit-0 survivor, the first step this session where that held.
-- **`checker-reviewer`: NOT YET RUN — THIS IS THE NEXT ACTION.** It is required; HEAVY must not be
-  diluted (owner, explicit). Step 3 is **not** done until it passes.
+- **`checker-reviewer`: DONE — returned FAIL, MAJOR. DO NOT RE-DISPATCH IT.** Step 3 is **NOT
+  done**. Full verdict is on the T403 ledger row and in the verification-log entry
+  *"T403 step 3 — attendance write: checker FAIL, and the packet was the defect"*. **Read that
+  entry before doing anything.**
+
+  **THE NEXT ACTION IS A SPEC DECISION, NOT A CODE FIX.** MAJOR-1 originates in the packet's own
+  §4c Trap 2 prescription — the wire/local `method` split resolves wire provenance from the same
+  local record MTG-11 has already overwritten with `'coach'`, and the adapter discards the
+  `AttendanceRow` the loader returns, so local state never reconciles with the DB. Six sequential
+  edits on a real `qr` row send `["qr","coach","coach","coach","coach","coach"]` — re-inflicting
+  half the harm the gate proved on real PostgreSQL. **Fix §4c first, then re-run worker → checker.
+  Do not hand the current packet to a new worker unchanged.**
+
+  Two candidate directions (owner should pick): carry the true DB `method` as a separate field on
+  `AttendanceRecordState` and resolve the wire value from that; or stop discarding the returned
+  `AttendanceRow` and reconcile from the server's own `method`, as `AttendancePanel:720` does.
+  Also required: a test driving **≥2 sequential** edits on a `qr` row asserting BOTH wire calls send
+  `'qr'` (the current test is single-shot and structurally cannot see this), and making
+  `defaultSetAttendanceStatus` injectable so mutation M7 — currently green at exit 0 on the full
+  suite — goes red.
+
+  **Note the packet's §2 Allowed Files list is itself defective** and should be amended before
+  reuse: literal compliance would have forbidden `attendance.test.ts`, the only place the packet's
+  own mandated `hours_override` mutation can be caught.
 - **One open question for the checker to rule on:** the worker added tests to
   `src/lib/supabase/loaders/attendance.test.ts`, which is not in the packet's literal §2 Allowed
   Files test list. It disclosed this loudly rather than hiding it, arguing `attendance.ts` is
