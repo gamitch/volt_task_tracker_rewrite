@@ -49,7 +49,7 @@ Tier is the **heaviest** item in the workflow, per constitution item 26.
 | **W3** | **Run a meeting** — schedule → attendance → participation % | 4 | HEAVY | Backend built, mount parked | W2, W4, W6, W7 |
 | **W4** | **Hours & goal accounting** — the numbers users are shown | 10 | HEAVY | **One confirmed bug** | W1, W3, W6, W7 |
 | **W5** | **Home dashboards** — student/parent/coach landing state | 10 | STANDARD | Mostly real | W6, W7, W8 |
-| **W6** | **Calendar & subscribe** | 4 | STANDARD | **PASS on branch; PR pending** | everything |
+| **W6** | **Calendar & subscribe** | 4 | STANDARD | **PASS on branch; PR #37 open** | everything |
 | **W7** | **Roster & invites** | 5 | STANDARD | Working | everything |
 | **W8** | **Email & notifications** | 2 | — | **Blocked on owner** | everything |
 | **W9** | **Migration & go-live** | 4 | HEAVY | Migration has run | everything |
@@ -218,7 +218,7 @@ student) precisely to exercise this path, so it is testable in the real app.
 
 > A student subscribes to the team calendar and it stays current in their phone.
 
-**Implementation complete and independently checked; integration PR pending.**
+**Implementation complete and independently checked; integration PR #37 is open.**
 
 | Row | What | Tier |
 |---|---|---|
@@ -229,7 +229,7 @@ student) precisely to exercise this path, so it is testable in the real app.
 
 **Owns:** `pages/calendar/**`, `loaders/calendarFeed.ts`, the `ical-generator` edge function
 
-**Next: merge and deploy the paired T195/T194 integration PR, then smoke-test one initial feed and
+**Next: merge and deploy paired T195/T194 integration PR #37, then smoke-test one initial feed and
 one reset against hosted Supabase.** No open W6 implementation row remains after this pair. The
 plain-PostgreSQL lifecycle/security suite, all eight named mutations, the full application suite,
 and an independent Frontier checker are green on the branch.

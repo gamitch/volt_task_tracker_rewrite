@@ -8,7 +8,7 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
 
-## UPDATE — 2026-08-02 (newest): W6 T195 + T194 independently passed; integration PR pending
+## UPDATE — 2026-08-02 (newest): W6 T195 + T194 independently passed; integration PR #37 open
 
 Branch `codex/t195-t194-calendar-feed-lifecycle` is rebased onto `main = fb3d068` and independently
 checked. T195 and T194 were implemented together under the HEAVY process: existing profiles are

@@ -6815,7 +6815,7 @@ must be scoped together.
 
 ## T195 + T194 — provision calendar feeds and persist atomic reset
 
-**PASS on `codex/t195-t194-calendar-feed-lifecycle`; integration PR pending. HEAVY tier.** The
+**PASS on `codex/t195-t194-calendar-feed-lifecycle`; integration PR #37 open. HEAVY tier.** The
 branch was rebased onto `main = 0016780` after independent review. Rebased implementation commits:
 `02b2cc1` (lifecycle/RPC/UI/tests), `1fa1db3` (partial-mock compatibility), and `5ac900b`
 (checker-MAJOR schema-drift rework). Worker evidence tip: `2f266e3`.

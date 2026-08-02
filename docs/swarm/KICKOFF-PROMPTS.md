@@ -349,7 +349,7 @@ YOUR ROWS, in order:
          HEAVY.
   T177 — cross-surface; read the row carefully before scoping, it reaches outside your files.
 
-DO NOT REDISPATCH T195/T194 while their integration PR is open. After merge, W6 has no remaining
+DO NOT REDISPATCH T195/T194 while integration PR #37 is open. After merge, W6 has no remaining
 implementation row; perform a hosted-Supabase smoke test for first provisioning and one reset.
 
 RULES: item 24 (ledger + verification-log in the merge commit), item 22 (named pathspecs),
