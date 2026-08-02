@@ -28,12 +28,22 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { productionDefaultLoader } = vi.hoisted(() => ({
+  productionDefaultLoader: vi.fn(),
+}));
+
+vi.mock('../../lib/supabase/loaders/calendar', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/supabase/loaders/calendar')>();
+  return { ...actual, loadCalendarSessions: productionDefaultLoader };
+});
+
+import { SeasonProvider, type LoadActiveSeasonFn } from '../../app/SeasonProvider';
 import { routePaths } from '../../app/router';
 import {
   buildEnrichedSessions,
   CALENDAR_FILTER_ITEMS,
   CalendarPage,
-  defaultLoadCalendarSessions,
   filterByType,
   formatTimeRangeWithDuration,
   formatWeekdayDate,
@@ -41,6 +51,7 @@ import {
   sessionsOnDay,
   todayIsoChicago,
   type CalendarEventRow,
+  type CalendarLoadResult,
   type CalendarSessionRow,
 } from './CalendarPage';
 
@@ -52,11 +63,111 @@ import {
 let container: HTMLDivElement;
 let root: Root;
 
-function renderPage(props: Parameters<typeof CalendarPage>[0] = {}): void {
+const FIXTURE_ACTIVE_SEASON = {
+  id: '00000000-0000-4000-8000-000000000324',
+  name: '2026 Season',
+  startsOn: '2026-01-01',
+  endsOn: '2026-12-31',
+  defaultGoalHours: 10,
+  isActive: true,
+  createdAt: '2026-01-01T00:00:00.000Z',
+};
+
+const FIXTURE_CALENDAR: CalendarLoadResult = {
+  events: [
+    {
+      id: 'event-weekly-build',
+      seasonId: FIXTURE_ACTIVE_SEASON.id,
+      type: 'meeting',
+      title: 'Weekly Build Meeting',
+      locationName: 'Clubhouse',
+    },
+    {
+      id: 'event-food-bank-sort',
+      seasonId: FIXTURE_ACTIVE_SEASON.id,
+      type: 'outreach',
+      title: 'Community Food Bank Sort',
+      locationName: 'Riverside Food Bank',
+    },
+    {
+      id: 'event-regional-qualifier',
+      seasonId: FIXTURE_ACTIVE_SEASON.id,
+      type: 'competition',
+      title: 'Regional Qualifier',
+      locationName: 'Midtown Arena',
+    },
+  ],
+  sessions: [
+    {
+      id: 'session-build-past',
+      eventId: 'event-weekly-build',
+      sessionDate: '2026-07-08',
+      startsAt: '2026-07-08T23:00:00.000Z',
+      endsAt: '2026-07-09T01:00:00.000Z',
+      status: 'completed',
+    },
+    {
+      id: 'session-build-upcoming',
+      eventId: 'event-weekly-build',
+      sessionDate: '2026-07-22',
+      startsAt: '2026-07-22T23:00:00.000Z',
+      endsAt: '2026-07-23T01:00:00.000Z',
+      status: 'scheduled',
+    },
+    {
+      id: 'session-food-bank',
+      eventId: 'event-food-bank-sort',
+      sessionDate: '2026-07-26',
+      startsAt: '2026-07-26T15:00:00.000Z',
+      endsAt: '2026-07-26T18:00:00.000Z',
+      status: 'scheduled',
+    },
+    {
+      id: 'session-regional-july',
+      eventId: 'event-regional-qualifier',
+      sessionDate: '2026-07-30',
+      startsAt: '2026-07-30T13:00:00.000Z',
+      endsAt: '2026-07-30T21:00:00.000Z',
+      status: 'scheduled',
+    },
+    {
+      id: 'session-regional-august',
+      eventId: 'event-regional-qualifier',
+      sessionDate: '2026-08-08',
+      startsAt: '2026-08-08T13:00:00.000Z',
+      endsAt: '2026-08-08T21:00:00.000Z',
+      status: 'scheduled',
+    },
+  ],
+};
+
+const loadFixtureCalendar = async (): Promise<CalendarLoadResult> => FIXTURE_CALENDAR;
+
+function renderPage(
+  props: Parameters<typeof CalendarPage>[0] = {},
+  loadActiveSeason: LoadActiveSeasonFn = async () => FIXTURE_ACTIVE_SEASON,
+): void {
+  const mergedProps = { loadSessions: loadFixtureCalendar, ...props };
   act(() => {
     root.render(
       <MemoryRouter initialEntries={['/calendar']}>
-        <CalendarPage {...props} />
+        <SeasonProvider loadActiveSeason={loadActiveSeason}>
+          <CalendarPage {...mergedProps} />
+        </SeasonProvider>
+      </MemoryRouter>,
+    );
+  });
+}
+
+function renderWithProductionDefault(
+  loadActiveSeason: LoadActiveSeasonFn = async () => FIXTURE_ACTIVE_SEASON,
+): void {
+  act(() => {
+    root.render(
+      <MemoryRouter initialEntries={['/calendar']}>
+        <SeasonProvider loadActiveSeason={loadActiveSeason}>
+          <CalendarPage />
+        </SeasonProvider>
       </MemoryRouter>,
     );
   });
@@ -201,10 +312,9 @@ describe('todayIsoChicago', () => {
   });
 });
 
-describe('the shipped fixture loader', () => {
-  it('spans all three event types (Known Context/Traps #6)', async () => {
-    const data = await defaultLoadCalendarSessions();
-    const types = new Set(data.events.map((e) => e.type));
+describe('test-only calendar fixture', () => {
+  it('spans all three event types for interaction coverage', () => {
+    const types = new Set(FIXTURE_CALENDAR.events.map((e) => e.type));
     expect(types).toEqual(new Set(['meeting', 'outreach', 'competition']));
   });
 });
@@ -218,9 +328,52 @@ describe('DES-12 states', () => {
     vi.setSystemTime(new Date('2026-07-19T12:00:00.000Z'));
   });
 
-  it('loading state shows a Skeleton (T081: calendar grid + session list have predictable dimensions)', () => {
+  it('loading state shows a Skeleton (T081: calendar grid + session list have predictable dimensions)', async () => {
     renderPage({ loadSessions: () => new Promise(() => {}) });
+    await flushMicrotasks();
     expect(container.textContent).toContain('Loading calendar');
+  });
+
+  it('waits for active-season resolution before requesting calendar data', () => {
+    const loadSessions = vi.fn(async () => FIXTURE_CALENDAR);
+    renderPage({ loadSessions }, () => new Promise(() => {}));
+    expect(container.textContent).toContain('Loading the active season');
+    expect(loadSessions).not.toHaveBeenCalled();
+  });
+
+  it('renders the honest no-active-season state without requesting calendar data', async () => {
+    const loadSessions = vi.fn(async () => FIXTURE_CALENDAR);
+    renderPage({ loadSessions }, async () => null);
+    await flushMicrotasks();
+    expect(container.textContent).toContain('No active season yet');
+    expect(loadSessions).not.toHaveBeenCalled();
+  });
+
+  it('keeps active-season failures distinct and retries the season provider', async () => {
+    const loadActiveSeason = vi
+      .fn<LoadActiveSeasonFn>()
+      .mockRejectedValueOnce(new Error('season unavailable'))
+      .mockResolvedValueOnce(FIXTURE_ACTIVE_SEASON);
+    const loadSessions = vi.fn(async () => FIXTURE_CALENDAR);
+    renderPage({ loadSessions }, loadActiveSeason);
+    await flushMicrotasks();
+    expect(container.textContent).toContain("Couldn't load the active season");
+    expect(container.textContent).not.toContain("Couldn't load the calendar");
+    const retry = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Retry',
+    );
+    expect(retry).toBeTruthy();
+    act(() => retry!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    await flushMicrotasks();
+    expect(loadActiveSeason).toHaveBeenCalledTimes(2);
+    expect(loadSessions).toHaveBeenCalledWith(FIXTURE_ACTIVE_SEASON.id);
+  });
+
+  it('uses the production default loader with the resolved active-season UUID', async () => {
+    productionDefaultLoader.mockResolvedValueOnce(FIXTURE_CALENDAR);
+    renderWithProductionDefault();
+    await flushMicrotasks();
+    expect(productionDefaultLoader).toHaveBeenCalledWith(FIXTURE_ACTIVE_SEASON.id);
   });
 
   it('error state shows an error Banner', async () => {
@@ -510,7 +663,7 @@ describe('row Link text is distinguishable per session (astryx-api.md Link Best 
     renderPage();
     await flushMicrotasks();
 
-    const { events } = await defaultLoadCalendarSessions();
+    const { events } = FIXTURE_CALENDAR;
     const eventById = new Map(events.map((event) => [event.id, event] as const));
     // T137 (D009): meeting rows now share one interim href
     // (`routePaths.meetings`), so a meeting row's expected title can no
