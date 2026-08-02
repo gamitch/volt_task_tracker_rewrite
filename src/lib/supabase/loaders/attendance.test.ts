@@ -12,9 +12,25 @@
 //
 // Mirrors `loaders/coachHome.test.ts`'s `.from(table)` dispatcher, extended
 // with `.order().range()` so each page request can be asserted individually.
+//
+// T403 step 3 (worker packet, not this task's own Allowed Files list, but a
+// natural extension of it — `attendance.ts` IS this task's own file, and this
+// is its own pre-existing colocated test module, the exact pairing
+// `LiveConsole.tsx`/`LiveConsole.test.tsx` already established for THIS same
+// task): adds a `makeSetAttendanceStatus` `describe` block below, proving the
+// EXACT payload it sends (module doc #5's Trap 1 fix — no `hours_override`
+// key at all). This is the only place that payload can be captured directly;
+// `LiveConsole.test.tsx` can only observe what it hands to the
+// `SetAttendanceStatusFn` seam, one layer above the real `.upsert(...)` call
+// this file makes. `makeUpsertAttendance` itself remains untested here, same
+// as before this addition — not this task's job, and unmodified besides.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
-import { ATTENDANCE_PAGE_SIZE, makeLoadAttendanceForSessions } from './attendance';
+import {
+  ATTENDANCE_PAGE_SIZE,
+  makeLoadAttendanceForSessions,
+  makeSetAttendanceStatus,
+} from './attendance';
 
 interface AttendanceRowFixture {
   id: string;
@@ -182,5 +198,134 @@ describe('makeLoadAttendanceForSessions — T320 pagination', () => {
     await expect(makeLoadAttendanceForSessions(() => stub.client)(['session-1'])).rejects.toThrow(
       /exceeded 100 pages/,
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// makeSetAttendanceStatus — T403 step 3, module doc #5, Trap 1's fix.
+// ---------------------------------------------------------------------------
+
+/** A `.upsert(payload, options).select().single()` stub, recording every
+ * `upsert` call so the exact payload/options this file sends can be
+ * asserted directly, the same "capture the real call" discipline
+ * `makePagingClient` above uses for `.range()`. */
+function makeUpsertStubClient(resolved: {
+  data: unknown;
+  error: { message: string; code?: string } | null;
+}) {
+  const singleSpy = vi.fn(() => Promise.resolve(resolved));
+  const selectSpy = vi.fn(() => ({ single: singleSpy }));
+  const upsertSpy = vi.fn((payload: unknown, options: unknown) => {
+    void payload;
+    void options;
+    return { select: selectSpy };
+  });
+  const fromSpy = vi.fn((table: string) => {
+    if (table === 'attendance') return { upsert: upsertSpy };
+    throw new Error(`unexpected table: ${table}`);
+  });
+  return {
+    client: { from: fromSpy } as unknown as SupabaseClient,
+    fromSpy,
+    upsertSpy,
+    selectSpy,
+    singleSpy,
+  };
+}
+
+const SET_STATUS_DB_ROW = {
+  id: 'row-1',
+  session_id: 'session-1',
+  student_id: 'student-1',
+  status: 'present' as const,
+  check_in_at: '2026-08-02T18:05:00Z',
+  check_out_at: null,
+  hours_override: 2.5,
+  method: 'qr' as const,
+  recorded_by: 'coach-1',
+  updated_at: '2026-08-02T00:00:00Z',
+  created_at: '2026-08-02T00:00:00Z',
+};
+
+describe('makeSetAttendanceStatus — T403 step 3 (Trap 1 fix)', () => {
+  it('sends a payload with EXACTLY session_id, student_id, status, method, recorded_by — no hours_override key at all', async () => {
+    const stub = makeUpsertStubClient({ data: SET_STATUS_DB_ROW, error: null });
+    const setStatus = makeSetAttendanceStatus(() => stub.client);
+
+    await setStatus({
+      sessionId: 'session-1',
+      studentId: 'student-1',
+      status: 'present',
+      method: 'coach',
+      recordedBy: 'coach-1',
+    });
+
+    expect(stub.fromSpy).toHaveBeenCalledWith('attendance');
+    expect(stub.upsertSpy).toHaveBeenCalledTimes(1);
+    const [payload, options] = stub.upsertSpy.mock.calls[0];
+    // The exact payload, captured — not described. This is Trap 1's fix: no
+    // `hours_override` key at all, so Postgrest's generated `ON CONFLICT DO
+    // UPDATE SET` cannot touch that column on an existing row.
+    expect(payload).toEqual({
+      session_id: 'session-1',
+      student_id: 'student-1',
+      status: 'present',
+      method: 'coach',
+      recorded_by: 'coach-1',
+    });
+    expect(Object.keys(payload as object)).not.toContain('hours_override');
+    // Same conflict target as `makeUpsertAttendance` (module doc #3) — same
+    // table, same real `unique (session_id, student_id)` constraint.
+    expect(options).toEqual({ onConflict: 'session_id,student_id' });
+  });
+
+  it('resolves the freshly-written row, mapped to the camelCase AttendanceRow shape', async () => {
+    const stub = makeUpsertStubClient({ data: SET_STATUS_DB_ROW, error: null });
+    const setStatus = makeSetAttendanceStatus(() => stub.client);
+
+    const result = await setStatus({
+      sessionId: 'session-1',
+      studentId: 'student-1',
+      status: 'present',
+      method: 'coach',
+      recordedBy: 'coach-1',
+    });
+
+    expect(result).toEqual({
+      id: 'row-1',
+      sessionId: 'session-1',
+      studentId: 'student-1',
+      status: 'present',
+      checkInAt: '2026-08-02T18:05:00Z',
+      checkOutAt: null,
+      // The server's own returned value, unmodified — proving this loader
+      // never re-sends/re-derives `hours_override` itself; it only reflects
+      // back whatever the row already had.
+      hoursOverride: 2.5,
+      method: 'qr',
+      recordedBy: 'coach-1',
+      updatedAt: '2026-08-02T00:00:00Z',
+      createdAt: '2026-08-02T00:00:00Z',
+    });
+    expect(stub.selectSpy).toHaveBeenCalledTimes(1);
+    expect(stub.singleSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('propagates a mutation error as a SupabaseLoaderError, same normalization every other write in this file uses', async () => {
+    const stub = makeUpsertStubClient({
+      data: null,
+      error: { message: 'db exploded', code: 'XX000' },
+    });
+    const setStatus = makeSetAttendanceStatus(() => stub.client);
+
+    await expect(
+      setStatus({
+        sessionId: 'session-1',
+        studentId: 'student-1',
+        status: 'absent',
+        method: 'coach',
+        recordedBy: 'coach-1',
+      }),
+    ).rejects.toMatchObject({ code: 'XX000' });
   });
 });

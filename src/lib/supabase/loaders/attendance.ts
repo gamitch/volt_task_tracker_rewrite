@@ -139,6 +139,64 @@
  *    locally over rows THIS panel itself just wrote (the same category of
  *    legitimate local aggregation `MarkDayCompleteDialog.tsx`'s own module
  *    doc #2(b) already established for this exact table).
+ *
+ * -----------------------------------------------------------------------
+ * 5. T403 step 3 -- `makeSetAttendanceStatus`, a PARALLEL upsert for
+ *    `LiveConsole.tsx`'s coach-driven roll-call, ADDED rather than folded
+ *    into `makeUpsertAttendance` above.
+ *
+ *    TRAP 1 (T403 step-3 worker packet, `checker-premise`-CONFIRMED on a
+ *    real PostgreSQL 16 database loaded with this repo's migrations, running
+ *    the exact `ON CONFLICT` statement Postgrest generates from
+ *    `makeUpsertAttendance`'s payload): `makeUpsertAttendance`'s payload
+ *    always includes `hours_override`, and Postgrest's `ON CONFLICT DO
+ *    UPDATE SET` touches every column present in the payload -- the SAME
+ *    mechanism #3 above relies on to preserve `check_in_at`/`check_out_at`
+ *    as history, proven from both directions on that real database:
+ *    `check_in_at` survived an upsert, `hours_override` did not. A
+ *    `LiveConsole` roll-call click has no `hoursOverride` value of its own
+ *    to send, so routing it through `makeUpsertAttendance` with
+ *    `hoursOverride: null` against a row where a coach had previously set a
+ *    manual override would silently null that override out on every status
+ *    change -- real data loss, not a display bug.
+ *
+ *    The fix is the same payload-OMISSION mechanism #3 already banks,
+ *    applied to `hours_override`: `makeSetAttendanceStatus`'s upsert payload
+ *    is exactly `{session_id, student_id, status, method, recorded_by}` --
+ *    no `hours_override` key at all. The insert path gets `hours_override
+ *    NULL` from the column's own default (there is no existing row, so
+ *    nothing to preserve); the update path never mentions the column, so
+ *    Postgrest's generated `SET` clause cannot touch it. A read-modify-write
+ *    (fetch the row, resend its existing `hoursOverride` verbatim) was
+ *    considered and rejected: it costs an extra round trip and opens a
+ *    TOCTOU window where a concurrent QR scan lands between the read and the
+ *    write and is silently clobbered by a stale snapshot -- the omission fix
+ *    has neither cost.
+ *
+ *    `makeUpsertAttendance` above is intentionally UNMODIFIED -- byte-
+ *    identical to before this addition. Its only real caller is
+ *    `AttendancePanel.tsx` (`onUpsertAttendance`'s default), which still
+ *    legitimately needs to write a coach's manual `hoursOverride`; changing
+ *    ITS payload shape was never this fix's job (packet: blast radius is
+ *    ZERO). Same `onConflict: 'session_id,student_id'` / `.select().single()`
+ *    shape as module doc #3 -- this is a second write path onto the same
+ *    table and constraint, not a new decision.
+ *
+ *    Disclosed limit (owner instruction, worker packet section 4c#1): this
+ *    file's own build could not run the Postgrest binary directly. The
+ *    payload-keys -> generated `DO UPDATE SET` translation is INFERRED here,
+ *    not observed end to end by this worker -- well-grounded (the shipped
+ *    `check_in_at` mechanism depends on the identical translation, and the
+ *    premise gate exercised it from both directions on a real database) but
+ *    stated as a residual, not a proven fact.
+ *
+ *    Sibling observation, NOT fixed here (packet Trap 1, explicitly out of
+ *    scope for this step): `loaders/outreach.ts`'s own unrelated,
+ *    locally-declared `upsertAttendance` (same table, different function,
+ *    different shape -- the packet's own disclosed "decoy") carries the
+ *    identical `hours_override` payload key under the same `onConflict`.
+ *    That file is W2's, actively edited right now, and out of scope here;
+ *    reported so W2 can weigh whether the same mechanism reaches it.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createLoader, runMutation, type LoaderQueryResult } from '../loader';
@@ -382,6 +440,65 @@ export function makeUpsertAttendance(
 
 /** Default `onUpsertAttendance` for `AttendancePanel.tsx` -- real upsert. */
 export const upsertAttendance: UpsertAttendanceFn = makeUpsertAttendance();
+
+// ---------------------------------------------------------------------------
+// Set status -- T403 step 3, module doc #5. A PARALLEL write path onto the
+// same table/constraint as the upsert above, added specifically so a coach
+// roll-call action in `LiveConsole.tsx` never has to send a `hours_override`
+// value it does not have.
+// ---------------------------------------------------------------------------
+
+export interface SetAttendanceStatusParams {
+  sessionId: string;
+  studentId: string;
+  status: AttendanceStatus;
+  method: AttendanceMethod;
+  /** `attendance.recorded_by` -- always the ACTING coach's own
+   * `profiles.id`, same contract as `UpsertAttendanceParams.recordedBy`
+   * above (module doc #2 -- always re-attributed to whoever is editing
+   * right now, even when `method` itself is preserved as `'qr'`/`'import'`). */
+  recordedBy: string;
+}
+
+export type SetAttendanceStatusFn = (params: SetAttendanceStatusParams) => Promise<AttendanceRow>;
+
+/**
+ * Module doc #5 -- T403 step 3's Trap 1 fix. Same `onConflict:
+ * 'session_id,student_id'` / `.select().single()` shape as
+ * `makeUpsertAttendance`, but the payload deliberately OMITS
+ * `hours_override`: the insert path gets the column's own default, the
+ * update path never mentions it, so Postgrest's generated `ON CONFLICT DO
+ * UPDATE SET` cannot touch it -- an existing coach-set hours override
+ * survives a later status change untouched. `makeUpsertAttendance` above is
+ * unmodified; this is a parallel write path, not a replacement.
+ */
+export function makeSetAttendanceStatus(
+  getClient: () => SupabaseClient = getSupabaseClient,
+): SetAttendanceStatusFn {
+  const mutate = runMutation<SetAttendanceStatusParams, AttendanceDbRow>(
+    (client, params) =>
+      client
+        .from('attendance')
+        .upsert(
+          {
+            session_id: params.sessionId,
+            student_id: params.studentId,
+            status: params.status,
+            method: params.method,
+            recorded_by: params.recordedBy,
+          },
+          { onConflict: 'session_id,student_id' },
+        )
+        .select()
+        .single(),
+    getClient,
+  );
+  return async (params) => mapAttendanceDbRowToAttendanceRow(await mutate(params));
+}
+
+/** Default `onSetAttendanceStatus` for `LiveConsole.tsx` -- real upsert that
+ * never touches `hours_override` (module doc #5). */
+export const setAttendanceStatus: SetAttendanceStatusFn = makeSetAttendanceStatus();
 
 // ---------------------------------------------------------------------------
 // Delete -- the ONE place the `'delete'` un-mark action (module doc #2) is

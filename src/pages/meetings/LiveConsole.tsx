@@ -137,9 +137,20 @@
  * T403 step 2 narrows that gap: `loadData`'s default is now the REAL
  * `loadLiveConsoleData` (`../../lib/supabase/loaders/kiosk.ts`) and the roster
  * fixtures are deleted, so this console reads the actual roster and the actual
- * `attendance` rows. What remains honestly unwired is `onSetAttendanceStatus`
- * (`notWiredSetAttendanceStatus`, an intentional no-op — T403 step 3 makes it
- * a real write) and the Realtime subscription, whose Banner stays accurate.
+ * `attendance` rows.
+ *
+ * T403 step 3 closes the write side: `onSetAttendanceStatus`'s default is now
+ * `defaultSetAttendanceStatus` (below), a real write through
+ * `../../lib/supabase/loaders/attendance.ts`'s `setAttendanceStatus`
+ * (`makeSetAttendanceStatus`) -- the parallel-upsert fix that file's own
+ * module doc #5 records, which deliberately never sends `hours_override` so a
+ * coach's roll-call click cannot null out a manual hours correction (Trap 1,
+ * this task's premise gate, confirmed on a real database). The old
+ * `notWiredSetAttendanceStatus` no-op is deleted, not kept as a fallback --
+ * with the roster/attendance now real (step 2), a no-op write silently
+ * discards every change a coach makes during an actual meeting, which is
+ * worse than the console not existing. What remains honestly unwired is only
+ * the Realtime subscription, whose Banner stays accurate.
  *
  * -----------------------------------------------------------------------
  * 3. DES-17 keyboard path -- BLOCKER-class per this task's own packet.
@@ -200,6 +211,20 @@
  * student is fed through the exact same `subscribeToAttendanceChanges`
  * callback contract the component itself uses, asserting the row stays
  * unchanged) in `LiveConsole.test.tsx`.
+ *
+ * T403 step 3 -- `handleSetStatus`'s LOCAL record vs. WIRE method are
+ * deliberately different values, not an oversight (settled by this task's
+ * worker packet section 4c, Trap 2): the LOCAL `incoming.method` fed into
+ * `mergeAttendanceUpdate` above stays hardcoded `'coach'` -- that is what
+ * makes this rule's "a coach-recorded value wins" precedence apply to a
+ * coach's OWN action in the first place. The value actually sent to
+ * `onSetAttendanceStatus` (the write) is instead
+ * `resolveAttendanceWriteMethod(existing?.method ?? null)`
+ * (`../../lib/supabase/loaders/attendance.ts`) -- the same idiom
+ * `AttendancePanel.tsx`/`MarkDayCompleteDialog.tsx` already use -- so a
+ * coach adjusting a student's hours/status does not silently erase that
+ * student's real `'qr'`/`'import'` check-in provenance in the database, even
+ * though the coach's own local view still displays/behaves as `'coach'`.
  *
  * MTG-12 ("only coach/admin may set `excused`"): `canSetExcused` is
  * computed from `useAuth().user.role` independently of the
@@ -423,6 +448,10 @@ import {
 import { RequireRole, useAuth } from '../../app/guards';
 import { routePaths } from '../../app/router';
 import { loadKioskDisplayToken, loadLiveConsoleData } from '../../lib/supabase/loaders/kiosk';
+import {
+  resolveAttendanceWriteMethod,
+  setAttendanceStatus,
+} from '../../lib/supabase/loaders/attendance';
 
 // ---------------------------------------------------------------------------
 // Ground truth -- `attendance` real column shapes, camelCase renames cited
@@ -522,13 +551,29 @@ export type SetAttendanceStatusFn = (
   recordedBy: string | null,
 ) => Promise<void>;
 
-/** Shipped default -- module doc section 2/5. No real `attendance` write
- * exists yet (no shared Supabase client in `src/`); this local state update
- * IS the real, provable behavior -- this seam is only where a real
- * `supabase.from('attendance').upsert(...)` call would go once a shared
- * client exists. */
-export async function notWiredSetAttendanceStatus(): Promise<void> {
-  // Intentional no-op -- see module doc section 2/5.
+/**
+ * Shipped default -- T403 step 3 (module doc section 2). Rejects BEFORE any
+ * network call when no signed-in coach identity is available (Trap 5),
+ * mirroring `makeOnEditAttendance`'s precondition-check-then-reject shape
+ * (`../../lib/supabase/loaders/endMeeting.ts:447-473`, read-only reference --
+ * that file itself is Forbidden Files for this task). Otherwise delegates to
+ * the real `setAttendanceStatus` loader
+ * (`../../lib/supabase/loaders/attendance.ts`), whose payload deliberately
+ * omits `hours_override` (that file's module doc #5 -- Trap 1's fix) so a
+ * roll-call status change can never null out a coach's earlier manual hours
+ * correction.
+ */
+export async function defaultSetAttendanceStatus(
+  sessionId: string,
+  studentId: string,
+  status: AttendanceStatus,
+  method: AttendanceMethod,
+  recordedBy: string | null,
+): Promise<void> {
+  if (recordedBy === null) {
+    throw new Error('No signed-in coach identity is available to record this attendance change.');
+  }
+  await setAttendanceStatus({ sessionId, studentId, status, method, recordedBy });
 }
 
 export interface AttendanceChangeEvent {
@@ -868,7 +913,7 @@ export interface LiveConsoleBodyProps {
 export function LiveConsoleBody({
   loadData = loadLiveConsoleData,
   loadDisplayToken = loadKioskDisplayToken,
-  onSetAttendanceStatus = notWiredSetAttendanceStatus,
+  onSetAttendanceStatus = defaultSetAttendanceStatus,
   subscribeToAttendanceChanges = notWiredSubscribeToAttendanceChanges,
 }: LiveConsoleBodyProps): ReactNode {
   const { sessionId: rawSessionId } = useParams<{ sessionId: string }>();
@@ -889,6 +934,12 @@ export function LiveConsoleBody({
   const [query, setQuery] = useState('');
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [endMeetingStub, setEndMeetingStub] = useState<StubNotice | null>(null);
+  // T403 step 3, Trap 3 -- a rejected `onSetAttendanceStatus` write must be
+  // visible to the coach, not silently swallowed (see `handleSetStatus`
+  // below). Holds the display name of the student whose write just failed;
+  // `null` means no error banner is showing. Only the most recent failure is
+  // shown, same "one slot" convention `endMeetingStub` above already uses.
+  const [attendanceWriteError, setAttendanceWriteError] = useState<string | null>(null);
   // NFR-06 fix (T072): QR visible by default -- pure addition of a collapse
   // affordance so a coach on a phone can reclaim screen space for the
   // roster. `{showQr && <QrPanel .../>}` below genuinely un/mounts the
@@ -952,19 +1003,53 @@ export function LiveConsoleBody({
       // the request was made (SegmentedControl click OR keyboard).
       return;
     }
+    const recordedBy = user?.id ?? null;
+    // T403 step 3, Trap 2 -- wire vs local method split (module doc section
+    // 4, settled by the worker packet, not re-derived here). Resolved from
+    // render-scope state, the SAME idiom `AttendancePanel.tsx`/
+    // `MarkDayCompleteDialog.tsx` already use for this exact call
+    // (`resolveAttendanceWriteMethod(existing?.method ?? null)`).
+    const wireMethod = resolveAttendanceWriteMethod(
+      attendanceByStudentId[studentId]?.method ?? null,
+    );
     const incoming: AttendanceRecordState = {
       status,
       method: 'coach',
-      recordedBy: user?.id ?? null,
+      recordedBy,
       updatedAt: new Date().toISOString(),
     };
+    // T403 step 3 -- `previousRecord`/`hadPreviousRecord` are captured
+    // INSIDE this functional updater, not read from the `attendanceByStudentId`
+    // render-scope variable above, so a rollback (below, in `.catch()`) is
+    // correct even across rapid clicks on the same row: the updater always
+    // receives the true, currently-queued `prev`, not a value that may
+    // already be stale by the time a later click's rollback needs it.
+    let previousRecord: AttendanceRecordState | null = null;
+    let hadPreviousRecord = false;
     setAttendanceByStudentId((prev) => {
-      const existing = prev[studentId] ?? null;
-      return { ...prev, [studentId]: mergeAttendanceUpdate(existing, incoming) };
+      hadPreviousRecord = studentId in prev;
+      previousRecord = prev[studentId] ?? null;
+      return { ...prev, [studentId]: mergeAttendanceUpdate(previousRecord, incoming) };
     });
-    onSetAttendanceStatus(sessionId, studentId, status, 'coach', user?.id ?? null).catch(() => {
-      // Persistence seam rejection -- see module doc section 2/5; the local
-      // state above is already the source of truth this UI shows.
+    onSetAttendanceStatus(sessionId, studentId, status, wireMethod, recordedBy).catch(() => {
+      // T403 step 3, Trap 3 -- a rejected write must not leave the console
+      // silently asserting a status that was never persisted (constitution
+      // item 26's "lie to a user about their own data" HEAVY trigger). Roll
+      // back the optimistic update to whatever was on screen immediately
+      // before THIS action (deleting the key if there was no prior record at
+      // all), and surface a dismissable, student-named error.
+      setAttendanceByStudentId((prev) => {
+        if (!hadPreviousRecord) {
+          if (!(studentId in prev)) return prev;
+          const next = { ...prev };
+          delete next[studentId];
+          return next;
+        }
+        return { ...prev, [studentId]: previousRecord as AttendanceRecordState };
+      });
+      const studentName =
+        roster.find((entry) => entry.studentId === studentId)?.name ?? 'this student';
+      setAttendanceWriteError(studentName);
     });
   }
 
@@ -1029,6 +1114,20 @@ export function LiveConsoleBody({
 
       {endMeetingStub !== null && (
         <StubBanner notice={endMeetingStub} onDismiss={() => setEndMeetingStub(null)} />
+      )}
+
+      {/* T403 step 3, Trap 3 -- a rejected `onSetAttendanceStatus` write is
+          visible here, by rendered text, naming the affected student. See
+          `handleSetStatus`'s rollback + this Banner's DES-16-style "what
+          happened" copy. */}
+      {attendanceWriteError !== null && (
+        <Banner
+          status="error"
+          title="Attendance not saved"
+          description={`${attendanceWriteError}'s attendance change couldn't be saved. Check your connection and try again.`}
+          isDismissable
+          onDismiss={() => setAttendanceWriteError(null)}
+        />
       )}
 
       <Banner

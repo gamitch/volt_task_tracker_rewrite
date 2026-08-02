@@ -47,15 +47,17 @@ import { AuthProvider, type AuthUser } from '../../app/guards';
 import { LoginAsDeferred as LoginAs } from '../../test-utils/authHarness';
 import {
   computeAttendanceTally,
+  defaultSetAttendanceStatus,
   filterRosterByQuery,
   formatSessionTimeRange,
   LiveConsoleBody,
   LiveConsolePage,
   mergeAttendanceUpdate,
-  notWiredSetAttendanceStatus,
   notWiredSubscribeToAttendanceChanges,
   type AttendanceChangeListener,
+  type AttendanceMethod,
   type AttendanceRecordState,
+  type AttendanceStatus,
   type LiveConsoleData,
   type LiveConsoleRosterEntry,
 } from './LiveConsole';
@@ -186,6 +188,60 @@ async function stubLoadData(sessionId: string): Promise<LiveConsoleData> {
     roster: [...TEST_ROSTER],
     attendance: { ...TEST_ATTENDANCE },
   };
+}
+
+/**
+ * T403 step 3, packet section 4b -- `onSetAttendanceStatus`'s shipped
+ * default (`defaultSetAttendanceStatus`) now makes a genuine write attempt.
+ * Every test below that drives a coach action (a `SegmentedControl` change
+ * or the DES-17 `1`-`4` keyboard path) injects one of these two seams
+ * EXPLICITLY rather than relying on that default -- with no Supabase
+ * configured (this suite's gate state), the real default's write would
+ * genuinely reject, and the packet's own disclosed hazard is that several of
+ * this file's pre-existing coach-action tests happened to pass anyway only
+ * because they never `await` between the action and their assertions, so
+ * the rejection microtask lands after the last assert.
+ */
+interface RecordedAttendanceWrite {
+  sessionId: string;
+  studentId: string;
+  status: AttendanceStatus;
+  method: AttendanceMethod;
+  recordedBy: string | null;
+}
+
+/** A resolving seam that records every call it is given, so a test can
+ * assert the exact arguments a coach action sent -- sessionId, studentId,
+ * status, method (the wire-resolved value, Trap 2), and recordedBy. */
+function spyResolvingSetAttendanceStatus(): {
+  onSetAttendanceStatus: (
+    sessionId: string,
+    studentId: string,
+    status: AttendanceStatus,
+    method: AttendanceMethod,
+    recordedBy: string | null,
+  ) => Promise<void>;
+  calls: RecordedAttendanceWrite[];
+} {
+  const calls: RecordedAttendanceWrite[] = [];
+  return {
+    calls,
+    onSetAttendanceStatus: async (sessionId, studentId, status, method, recordedBy) => {
+      calls.push({ sessionId, studentId, status, method, recordedBy });
+    },
+  };
+}
+
+/** A plain resolving seam for tests that only need the write to succeed
+ * without inspecting what was sent. */
+async function resolvingSetAttendanceStatus(): Promise<void> {
+  // Intentionally resolves -- an explicitly-injected happy-path seam per
+  // packet section 4b, not the component's own default.
+}
+
+/** An always-rejecting seam, for Trap 3's rollback + error-banner proof. */
+async function rejectingSetAttendanceStatus(): Promise<void> {
+  throw new Error('simulated persistence failure');
 }
 
 /**
@@ -498,7 +554,10 @@ describe('DES-17 keyboard path', () => {
   });
 
   it('digit keys 1/2/4 set Present/Late/Absent on the FOCUSED row while focus stays on the row itself (never the SegmentedControl)', async () => {
-    renderBody(COACH_USER);
+    // T403 step 3, packet section 4b: explicit resolving seam -- see the
+    // comment on `resolvingSetAttendanceStatus` above for why this is
+    // required on every coach-action test now that the default is real.
+    renderBody(COACH_USER, { onSetAttendanceStatus: resolvingSetAttendanceStatus });
     await flushMicrotasks();
 
     // student-cy starts with no attendance record at all (module doc: PRD
@@ -528,7 +587,7 @@ describe('DES-17 keyboard path', () => {
   });
 
   it('digit "3" sets Excused for a coach/admin role', async () => {
-    renderBody(COACH_USER);
+    renderBody(COACH_USER, { onSetAttendanceStatus: resolvingSetAttendanceStatus });
     await flushMicrotasks();
 
     const cy = row('student-cy');
@@ -573,6 +632,8 @@ describe('MTG-11 coach-override precedence', () => {
           capturedOnChange = null;
         };
       },
+      // T403 step 3, packet section 4b: explicit resolving seam.
+      onSetAttendanceStatus: resolvingSetAttendanceStatus,
     });
     await flushMicrotasks();
 
@@ -718,7 +779,8 @@ describe('LiveConsolePage role guard', () => {
 
 describe('aria-live tally', () => {
   it('renders an aria-live="polite" region and updates it when a row changes', async () => {
-    renderBody(COACH_USER);
+    // T403 step 3, packet section 4b: explicit resolving seam.
+    renderBody(COACH_USER, { onSetAttendanceStatus: resolvingSetAttendanceStatus });
     await flushMicrotasks();
 
     const liveRegion = container.querySelector('[data-testid="attendance-tally"]');
@@ -936,7 +998,7 @@ describe('NFR-06 QR show/hide toggle (T072)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// DES-12 states + persistence seam default.
+// DES-12 states.
 // ---------------------------------------------------------------------------
 
 describe('DES-12 states', () => {
@@ -1003,12 +1065,6 @@ describe('DES-12 states', () => {
     const headings = container.querySelectorAll('h1');
     expect(headings).toHaveLength(1);
     expect(headings[0].textContent).toBe(TEST_SESSION_TITLE);
-  });
-});
-
-describe('persistence seam default', () => {
-  it('notWiredSetAttendanceStatus resolves without throwing (no real write exists yet)', async () => {
-    await expect(notWiredSetAttendanceStatus()).resolves.toBeUndefined();
   });
 });
 
@@ -1102,5 +1158,185 @@ describe('T403 step 1 — real display token', () => {
     expect(container.textContent).toContain(TEST_DISPLAY_TOKEN.shortCode);
     const qr = container.querySelector('svg[role="img"]');
     expect(qr).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T403 step 3: a coach action is a real `attendance` write, not a no-op.
+// (Acceptance criteria 1/2/3/4/5 — see the worker packet.)
+// ---------------------------------------------------------------------------
+
+describe('defaultSetAttendanceStatus (T403 step 3, Trap 5)', () => {
+  it('rejects BEFORE any network call when no signed-in coach identity is available', async () => {
+    // If this reached the real `setAttendanceStatus` loader instead, the
+    // rejection would carry a DIFFERENT message (a `SupabaseLoaderError` from
+    // an unconfigured client, this suite's gate state) -- asserting THIS
+    // exact, hand-authored message is what proves the precondition check
+    // fired first, mirroring `makeOnEditAttendance`'s
+    // precondition-check-then-reject shape (`endMeeting.ts:447-473`,
+    // read-only reference).
+    await expect(
+      defaultSetAttendanceStatus('session-1', 'student-1', 'present', 'coach', null),
+    ).rejects.toThrow('No signed-in coach identity is available to record this attendance change.');
+  });
+});
+
+describe('T403 step 3 — real attendance write', () => {
+  it('sends the exact payload for a brand-new record: status, method "coach" (Trap 2), and the acting coach id (Trap 5)', async () => {
+    const spy = spyResolvingSetAttendanceStatus();
+    renderBody(COACH_USER, { onSetAttendanceStatus: spy.onSetAttendanceStatus });
+    await flushMicrotasks();
+
+    // student-cy has no attendance entry at all (module doc TEST_ATTENDANCE).
+    const cy = row('student-cy');
+    act(() => {
+      cy.focus();
+    });
+    dispatchKeyOn(cy, '1'); // Present
+
+    expect(spy.calls).toEqual([
+      {
+        sessionId: TEST_SESSION_ID,
+        studentId: 'student-cy',
+        status: 'present',
+        method: 'coach',
+        recordedBy: COACH_USER.id,
+      },
+    ]);
+  });
+
+  it('preserves real "qr" provenance on the WIRE (Trap 2) while the local row still flips to reflect the coach edit (MTG-11)', async () => {
+    const spy = spyResolvingSetAttendanceStatus();
+    renderBody(COACH_USER, { onSetAttendanceStatus: spy.onSetAttendanceStatus });
+    await flushMicrotasks();
+
+    // student-ada: existing method 'qr', status 'present' (module doc
+    // TEST_ATTENDANCE).
+    expect(checkedStatusOf('student-ada')).toBe('present');
+    const ada = row('student-ada');
+    act(() => {
+      ada.focus();
+    });
+    dispatchKeyOn(ada, '2'); // Late
+
+    // Local display: the coach's own edit always wins (MTG-11) and shows the
+    // new status.
+    expect(checkedStatusOf('student-ada')).toBe('late');
+    // The WRITE, however, preserves the real external provenance instead of
+    // overwriting it to 'coach' -- this is the entire point of Trap 2.
+    expect(spy.calls).toEqual([
+      {
+        sessionId: TEST_SESSION_ID,
+        studentId: 'student-ada',
+        status: 'late',
+        method: 'qr',
+        recordedBy: COACH_USER.id,
+      },
+    ]);
+  });
+
+  it('preserves real "import" provenance on the wire the same way', async () => {
+    const spy = spyResolvingSetAttendanceStatus();
+    renderBody(COACH_USER, { onSetAttendanceStatus: spy.onSetAttendanceStatus });
+    await flushMicrotasks();
+
+    // student-fay: existing method 'import' (module doc TEST_ATTENDANCE).
+    const fay = row('student-fay');
+    act(() => {
+      fay.focus();
+    });
+    dispatchKeyOn(fay, '1'); // Present
+
+    expect(spy.calls).toEqual([
+      {
+        sessionId: TEST_SESSION_ID,
+        studentId: 'student-fay',
+        status: 'present',
+        method: 'import',
+        recordedBy: COACH_USER.id,
+      },
+    ]);
+  });
+
+  it('a REJECTED write rolls a row with an existing record back to its previous status, and shows a dismissable error Banner naming the student (Trap 3)', async () => {
+    renderBody(COACH_USER, { onSetAttendanceStatus: rejectingSetAttendanceStatus });
+    await flushMicrotasks();
+
+    // student-ada starts Present (module doc TEST_ATTENDANCE).
+    expect(checkedStatusOf('student-ada')).toBe('present');
+    const ada = row('student-ada');
+    act(() => {
+      ada.focus();
+    });
+    dispatchKeyOn(ada, '4'); // Absent -- the optimistic update applies immediately.
+    expect(checkedStatusOf('student-ada')).toBe('absent');
+
+    await flushMicrotasks(); // let the rejection + rollback settle.
+
+    // Rolled back to the real previous value -- never left showing a status
+    // that was never persisted (constitution item 26's HEAVY trigger).
+    expect(checkedStatusOf('student-ada')).toBe('present');
+
+    // Asserted by RENDERED TEXT, not `data-testid` (packet section 4b's
+    // precision instruction -- `Banner`'s `data-testid` pass-through is
+    // unverified), and names the affected student.
+    expect(container.textContent).toContain('Attendance not saved');
+    expect(container.textContent).toContain('Ada Q.');
+  });
+
+  it('a REJECTED write for a student with NO prior record removes the optimistic entry entirely, not a stale status', async () => {
+    renderBody(COACH_USER, { onSetAttendanceStatus: rejectingSetAttendanceStatus });
+    await flushMicrotasks();
+
+    // student-cy has no attendance entry at all (module doc TEST_ATTENDANCE).
+    expect(checkedStatusOf('student-cy')).toBeNull();
+    const cy = row('student-cy');
+    act(() => {
+      cy.focus();
+    });
+    dispatchKeyOn(cy, '1'); // Present -- optimistic update applies immediately.
+    expect(checkedStatusOf('student-cy')).toBe('present');
+
+    await flushMicrotasks();
+
+    expect(checkedStatusOf('student-cy')).toBeNull();
+    expect(container.textContent).toContain('Attendance not saved');
+    expect(container.textContent).toContain('Cy T.');
+  });
+
+  it('the error Banner is dismissable and clears on dismiss', async () => {
+    renderBody(COACH_USER, { onSetAttendanceStatus: rejectingSetAttendanceStatus });
+    await flushMicrotasks();
+
+    const cy = row('student-cy');
+    act(() => {
+      cy.focus();
+    });
+    dispatchKeyOn(cy, '1');
+    await flushMicrotasks();
+    expect(container.textContent).toContain('Attendance not saved');
+
+    const dismissButton = container.querySelector('button[aria-label="Dismiss"]');
+    expect(dismissButton).toBeTruthy();
+    act(() => {
+      dismissButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.textContent).not.toContain('Attendance not saved');
+  });
+
+  it('MTG-12 excused-gating still holds: a non-coach/admin role never even attempts a write for "excused"', async () => {
+    const spy = spyResolvingSetAttendanceStatus();
+    renderBody(STUDENT_USER, { onSetAttendanceStatus: spy.onSetAttendanceStatus });
+    await flushMicrotasks();
+
+    const cy = row('student-cy');
+    act(() => {
+      cy.focus();
+    });
+    dispatchKeyOn(cy, '3'); // Excused -- no-op for this role (module doc section 4).
+
+    expect(spy.calls).toEqual([]);
+    expect(checkedStatusOf('student-cy')).toBeNull();
   });
 });
