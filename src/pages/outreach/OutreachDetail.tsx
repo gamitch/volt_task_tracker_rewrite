@@ -1894,12 +1894,21 @@ export function OutreachDetail({
     markDayCompleteSessionId === null
       ? null
       : (orderedSessions.find((session) => session.id === markDayCompleteSessionId) ?? null);
-  const menuItems: DropdownMenuOption[] = [
-    { label: 'Edit', onClick: openEditDialog },
-    { label: 'Cancel event', onClick: openCancelConfirm },
-  ];
+  // T323 (external audit LIVE-015) -- EVERY item in this menu is an
+  // event-management action and is staff-only. `Edit` and `Cancel event`
+  // used to be built unconditionally here while only `Mark event complete`
+  // was gated, so a parent opening "Actions for <event>" was offered real
+  // Edit and Cancel controls on a team-wide event. The server already
+  // refused them -- `events` and `event_sessions` both carry `staff_all
+  // ... using (is_staff()) with check (is_staff())` (`rls.sql:149-151`,
+  // `:172-174`), which is why this was a wrong-control defect rather than a
+  // data-integrity one -- but a control that always errors should not be
+  // offered at all.
+  const menuItems: DropdownMenuOption[] = [];
   // T127 (module doc #12) -- staff-only, this page only (packet Objective).
   if (isStaffViewer) {
+    menuItems.push({ label: 'Edit', onClick: openEditDialog });
+    menuItems.push({ label: 'Cancel event', onClick: openCancelConfirm });
     menuItems.push({ label: 'Mark event complete', onClick: openMarkEventCompleteDialog });
   }
 

@@ -634,9 +634,52 @@ function clickMenuItem(label: string): void {
   });
 }
 
+describe('T323 (audit LIVE-015) -- event-management actions are staff-only', () => {
+  it('a PARENT viewer is offered no Edit and no Cancel event action', async () => {
+    renderDetail('event-food-bank-sort', { loadData: defaultLoadOutreachDetail }, PARENT_USER);
+    await flushMicrotasks();
+
+    // Paired, not absence-only: the page itself must have rendered for this
+    // student's event, otherwise "no Edit" would pass on a blank screen.
+    expect(container.textContent).toContain('Community Food Bank Sort');
+
+    act(() => {
+      findMoreMenuButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // Scoped to the menu's own items, NOT the whole document: the cancel
+    // AlertDialog carries actionLabel="Cancel event" (OutreachDetail.tsx:2229)
+    // and is in the DOM regardless of role, so a document-wide scan matches
+    // it and passes for the wrong reason.
+    const items = Array.from(document.querySelectorAll('[role="menuitem"]')).map((el) =>
+      el.textContent?.trim(),
+    );
+    expect(items).not.toContain('Edit');
+    expect(items).not.toContain('Cancel event');
+    expect(items).not.toContain('Mark event complete');
+  });
+
+  it('a STAFF viewer still gets all three -- the gate is role-based, not a blanket removal', async () => {
+    renderDetail('event-food-bank-sort', { loadData: defaultLoadOutreachDetail }, ADMIN_USER);
+    await flushMicrotasks();
+    expect(container.textContent).toContain('Community Food Bank Sort');
+
+    act(() => {
+      findMoreMenuButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const items = Array.from(document.querySelectorAll('[role="menuitem"]')).map((el) =>
+      el.textContent?.trim(),
+    );
+    expect(items).toContain('Edit');
+    expect(items).toContain('Cancel event');
+    expect(items).toContain('Mark event complete');
+  });
+});
+
 describe('Edit -- real OutreachEventDialog wiring (Trap #5)', () => {
   it('opens the real OutreachEventDialog in EDIT mode, pre-filled from the fetched event', async () => {
-    renderDetail('event-food-bank-sort', { loadData: defaultLoadOutreachDetail });
+    renderDetail('event-food-bank-sort', { loadData: defaultLoadOutreachDetail }, ADMIN_USER);
     await flushMicrotasks();
 
     act(() => {
@@ -663,7 +706,7 @@ describe('Edit -- real OutreachEventDialog wiring (Trap #5)', () => {
       return defaultLoadOutreachDetail(eventId);
     }
 
-    renderDetail('event-food-bank-sort', { loadData: countingLoadData, onSaveEvent });
+    renderDetail('event-food-bank-sort', { loadData: countingLoadData, onSaveEvent }, ADMIN_USER);
     await flushMicrotasks();
     expect(loadCount).toBe(1);
 
@@ -695,7 +738,11 @@ describe('Edit -- real OutreachEventDialog wiring (Trap #5)', () => {
 describe('Cancel event -- real, event-level mutation (Trap #4)', () => {
   it('opens a real AlertDialog, then calls the injected onCancelEvent and optimistically flips scheduled sessions to canceled', async () => {
     const onCancelEvent = vi.fn().mockResolvedValue(undefined);
-    renderDetail('event-food-bank-sort', { loadData: defaultLoadOutreachDetail, onCancelEvent });
+    renderDetail(
+      'event-food-bank-sort',
+      { loadData: defaultLoadOutreachDetail, onCancelEvent },
+      ADMIN_USER,
+    );
     await flushMicrotasks();
 
     act(() => {
@@ -727,7 +774,11 @@ describe('Cancel event -- real, event-level mutation (Trap #4)', () => {
 
   it('rolls back the optimistic flip and shows an error Banner when the mutation rejects', async () => {
     const onCancelEvent = vi.fn().mockRejectedValue(new Error('network down'));
-    renderDetail('event-food-bank-sort', { loadData: defaultLoadOutreachDetail, onCancelEvent });
+    renderDetail(
+      'event-food-bank-sort',
+      { loadData: defaultLoadOutreachDetail, onCancelEvent },
+      ADMIN_USER,
+    );
     await flushMicrotasks();
 
     act(() => {
@@ -1143,12 +1194,17 @@ describe('"Mark event complete" MoreMenu item -- staff-only (packet Objective)',
       findMoreMenuButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(findMarkEventCompleteMenuItem()).toBeUndefined();
-    // Edit/Cancel event -- unaffected by this task -- still present.
+    // T323 (audit LIVE-015) -- INVERTED. This assertion previously read
+    // `.toBe(true)` with the comment "Edit/Cancel event -- unaffected by
+    // this task -- still present", which pinned the defect as correct
+    // behaviour: a student really was offered Edit. Every item in this menu
+    // is an event-management action and every one is staff-only, so a
+    // non-staff viewer must see NONE of them.
     expect(
-      Array.from(document.querySelectorAll('[role="menuitem"], button')).some(
+      Array.from(document.querySelectorAll('[role="menuitem"]')).some(
         (el) => el.textContent?.trim() === 'Edit',
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('is present, and opens the real MarkEventCompleteDialog, for a signed-in coach', async () => {
@@ -1378,7 +1434,7 @@ describe('T147: OutreachEventDialog (edit mode) submits real team UUIDs, not DEF
 
   it('deselecting one team submits a teamIds array of real UUIDs from the teams prop, never the fixture strings', async () => {
     const onSaveEvent = vi.fn().mockResolvedValue(undefined);
-    renderDetail('event-1', { loadData: loadDataWithRealTeams, onSaveEvent });
+    renderDetail('event-1', { loadData: loadDataWithRealTeams, onSaveEvent }, ADMIN_USER);
     await flushMicrotasks();
 
     act(() => {
