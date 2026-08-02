@@ -29,8 +29,13 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CheckinResult,
+  SHORT_CODE_ALPHABET,
+  SHORT_CODE_LENGTH,
   callCheckin,
+  isWellFormedShortCode,
+  normalizeShortCode,
   parseCheckinCredential,
+  parseCheckinSessionId,
   type CheckinCallResult,
   type CheckinResponsePayload,
 } from './CheckinResult';
@@ -117,6 +122,69 @@ describe('parseCheckinCredential', () => {
 
   it('returns null when both token and code are missing', () => {
     expect(parseCheckinCredential(new URLSearchParams('s=session-1'))).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T321: manual short-code entry -- helpers
+// ---------------------------------------------------------------------------
+
+describe('parseCheckinSessionId (T321)', () => {
+  it('reads the session id when NO usable credential is present -- the state parseCheckinCredential returns null for', () => {
+    const params = new URLSearchParams('s=session-1');
+    // The precise gap this helper exists to close: same URL, two answers.
+    expect(parseCheckinCredential(params)).toBeNull();
+    expect(parseCheckinSessionId(params)).toBe('session-1');
+  });
+
+  it('returns null when there is no session id at all (T400: manual entry cannot be offered)', () => {
+    expect(parseCheckinSessionId(new URLSearchParams(''))).toBeNull();
+    expect(parseCheckinSessionId(new URLSearchParams('code=ABC234'))).toBeNull();
+  });
+});
+
+describe('SHORT_CODE_CONTRACT (T321) — pinned to the shipped backend', () => {
+  // These two values are duplicated from `supabase/functions/checkin/hmac.ts`
+  // (a Deno module outside this tsconfig's reach). If the backend ever changes
+  // them, this test fails HERE rather than the browser silently rejecting
+  // codes a student correctly typed.
+  it('matches hmac.ts SHORT_CODE_LENGTH = 6 and SHORT_CODE_ALPHABET = A-Z2-9', () => {
+    expect(SHORT_CODE_LENGTH).toBe(6);
+    expect(SHORT_CODE_ALPHABET).toBe('ABCDEFGHIJKLMNOPQRSTUVWXYZ23456789');
+    expect(SHORT_CODE_ALPHABET).toHaveLength(34);
+    // The whole basis of the 0->O / 1->I normalization below.
+    expect(SHORT_CODE_ALPHABET).not.toContain('0');
+    expect(SHORT_CODE_ALPHABET).not.toContain('1');
+  });
+});
+
+describe('normalizeShortCode (T321)', () => {
+  it('trims and upper-cases, matching the server-side verifyShortCode normalization', () => {
+    expect(normalizeShortCode('  abc234 ')).toBe('ABC234');
+  });
+
+  it('maps 0 -> O and 1 -> I, which is lossless because neither is in the alphabet', () => {
+    expect(normalizeShortCode('0BC231')).toBe('OBC23I');
+  });
+
+  it('leaves an already-valid code byte-identical (the mapping cannot corrupt a real code)', () => {
+    const real = 'QRST89';
+    expect(normalizeShortCode(real)).toBe(real);
+  });
+});
+
+describe('isWellFormedShortCode (T321)', () => {
+  it('accepts a well-formed 6-char A-Z2-9 code', () => {
+    expect(isWellFormedShortCode('ABC234')).toBe(true);
+  });
+
+  it('rejects wrong lengths and out-of-alphabet characters', () => {
+    expect(isWellFormedShortCode('ABC23')).toBe(false);
+    expect(isWellFormedShortCode('ABC2345')).toBe(false);
+    expect(isWellFormedShortCode('ABC23-')).toBe(false);
+    expect(isWellFormedShortCode('')).toBe(false);
+    // Raw 0/1 never reach here well-formed -- normalizeShortCode runs first.
+    expect(isWellFormedShortCode('ABC230')).toBe(false);
   });
 });
 
@@ -403,6 +471,133 @@ describe('<CheckinResult />', () => {
 
     expect(checkin).toHaveBeenCalledTimes(2);
     expect(container.textContent).toContain("You're in");
+  });
+
+  // -------------------------------------------------------------------------
+  // T321: manual short-code entry, end to end through the component.
+  // -------------------------------------------------------------------------
+
+  /** React tracks its own value on the DOM node; the native setter is the only
+   * way to drive a controlled input from a raw dispatchEvent harness. */
+  function typeInto(input: HTMLInputElement, value: string): void {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+    act(() => {
+      setter?.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+
+  function submitManualForm(): void {
+    const form = container.querySelector('form');
+    expect(form).toBeTruthy();
+    act(() => {
+      form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+  }
+
+  const EXPIRED_ERROR: CheckinCallResult = {
+    ok: false,
+    error: {
+      code: 'INVALID_OR_EXPIRED_CREDENTIAL',
+      message:
+        'That check-in code expired. Codes refresh every minute — grab the new one from the screen.',
+    },
+  };
+
+  it('offers manual code entry after an expired-token error (the LIVE-002 dead end)', async () => {
+    const checkin = vi.fn<typeof callCheckin>().mockResolvedValue(EXPIRED_ERROR);
+    renderAt('/checkin?s=session-1&t=expired-token', { checkin });
+    await flushMicrotasks();
+
+    expect(container.querySelector('form')).toBeTruthy();
+    const input = container.querySelector('input');
+    expect(input).toBeTruthy();
+    // The label is the accessible name and must exist even if visually styled.
+    expect(container.textContent).toContain('Check-in code');
+  });
+
+  it('submits the TYPED CODE and NOT the expired token — the whole point of T321', async () => {
+    const checkin = vi
+      .fn<typeof callCheckin>()
+      .mockResolvedValueOnce(EXPIRED_ERROR)
+      .mockResolvedValueOnce({
+        ok: true,
+        data: {
+          already_checked_in: false,
+          attendance: { status: 'present', check_in_at: '2026-08-02T18:04:00Z', method: 'qr' },
+        },
+      });
+    renderAt('/checkin?s=session-1&t=expired-token', { checkin });
+    await flushMicrotasks();
+    expect(checkin).toHaveBeenCalledTimes(1);
+
+    typeInto(container.querySelector('input') as HTMLInputElement, 'abc234');
+    submitManualForm();
+    await flushMicrotasks();
+
+    expect(checkin).toHaveBeenCalledTimes(2);
+    // Discriminating assertion: pre-T321 the only credential source was the
+    // URL, so any regression that reuses it reinstates `token: 'expired-token'`
+    // here and fails this test.
+    expect(checkin.mock.calls[1][0]).toEqual({ sessionId: 'session-1', code: 'ABC234' });
+    expect(checkin.mock.calls[1][0].token).toBeUndefined();
+    expect(container.textContent).toContain("You're in");
+  });
+
+  it('does NOT spend a rate-limited attempt on a malformed code (backend allows 5/min)', async () => {
+    const checkin = vi.fn<typeof callCheckin>().mockResolvedValue(EXPIRED_ERROR);
+    renderAt('/checkin?s=session-1&t=expired-token', { checkin });
+    await flushMicrotasks();
+    expect(checkin).toHaveBeenCalledTimes(1);
+
+    typeInto(container.querySelector('input') as HTMLInputElement, 'AB2'); // too short
+    submitManualForm();
+    await flushMicrotasks();
+
+    expect(checkin).toHaveBeenCalledTimes(1); // still 1 -- no network attempt
+    expect(container.textContent).toContain('6-character code');
+  });
+
+  it('normalizes a code typed with 0/1 instead of O/I before sending it', async () => {
+    const checkin = vi.fn<typeof callCheckin>().mockResolvedValue(EXPIRED_ERROR);
+    renderAt('/checkin?s=session-1&t=expired-token', { checkin });
+    await flushMicrotasks();
+
+    typeInto(container.querySelector('input') as HTMLInputElement, '0bc231');
+    submitManualForm();
+    await flushMicrotasks();
+
+    expect(checkin).toHaveBeenCalledTimes(2);
+    expect(checkin.mock.calls[1][0]).toEqual({ sessionId: 'session-1', code: 'OBC23I' });
+  });
+
+  it('does NOT offer manual entry when the URL carries no session id (T400 — it could only fail)', async () => {
+    const checkin = vi.fn<typeof callCheckin>();
+    renderAt('/checkin', { checkin });
+    await flushMicrotasks();
+
+    expect(checkin).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('This check-in link is missing information.');
+    // A form here would be a lie: hmac.ts HMACs the code over the session id,
+    // so a code with no session verifies against nothing.
+    expect(container.querySelector('form')).toBeNull();
+  });
+
+  it('gives the Enter key a real submit path: a <form> with a type=submit button', async () => {
+    const checkin = vi.fn<typeof callCheckin>().mockResolvedValue(EXPIRED_ERROR);
+    renderAt('/checkin?s=session-1&t=expired-token', { checkin });
+    await flushMicrotasks();
+
+    // jsdom does not implement implicit form submission on Enter, so this
+    // asserts the MECHANISM the browser uses rather than simulating the key —
+    // an honest structural assertion, not a simulated-browser claim.
+    const form = container.querySelector('form');
+    expect(form).toBeTruthy();
+    const submitButton = Array.from(form?.querySelectorAll('button') ?? []).find(
+      (btn) => btn.getAttribute('type') === 'submit',
+    );
+    expect(submitButton).toBeTruthy();
+    expect(submitButton?.textContent).toContain('Check in with code');
   });
 
   it('surfaces a "late" status note distinctly from a "present" success render', async () => {
