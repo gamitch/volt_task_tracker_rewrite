@@ -42,6 +42,27 @@ bash scripts/doctor.sh
 `npm ci` needs no registry auth. `@astryxdesign/*` resolves from public npmjs.org despite looking
 private.
 
+### The install-script prompt on npm 11
+
+npm 11 gates package install scripts behind an `allowScripts` policy, so a machine on npm 11 sees
+this on every `npm ci` where npm 10 (what Node 22.22.2 bundles, and what CI runs) sees nothing:
+
+```
+npm warn allow-scripts 1 package has install scripts not yet covered by allowScripts:
+npm warn allow-scripts   esbuild@0.21.5 (postinstall: node install.js)
+```
+
+**Already handled** — `package.json` carries `"allowScripts": { "esbuild@0.21.5": true }`, committed,
+so every clone is covered without anyone running anything. npm 10 ignores the field.
+
+esbuild is vite's own bundler and the approval is pinned to the exact version, which is the point of
+the feature: bump vite, esbuild's version changes, and the prompt returns for a deliberate decision.
+Re-approve with `npm approve-scripts esbuild` and commit the one-line `package.json` change — don't
+reach for `--no-allow-scripts-pin`, which approves every future version sight-unseen.
+
+**If a machine sees npm 11 at all, check its Node.** Node 22.22.2 ships npm 10.9.x, so npm 11 means
+either a separately-installed npm or the wrong Node. `scripts/doctor.sh` reports both.
+
 ## Optional, per workflow
 
 Install these only if the machine is assigned the workflow that needs them.
