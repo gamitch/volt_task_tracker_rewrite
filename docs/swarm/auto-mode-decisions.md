@@ -1536,3 +1536,43 @@ during a real run, and add a `--teardown=<manifest>` mode that deletes exactly t
 nothing else. That removes the reliance on `profile_id is null` as a proxy and stays correct even
 once students do have accounts. **This must exist before any teardown is run post-cutover** — at
 that point the `profile_id is null` heuristic would delete real, account-less student records.
+
+---
+
+## 2026-08-02 — George's ruling on T322: meeting hours must NOT count toward volunteer hours
+
+**Verbatim:** *"NOT Generally, meeting hours should not count toward volunteer hours. I think this
+was confusing because we had a set of FLL Meetings in our outreach...this DOES count toward
+volunteer hours because the were fll outreach meetings our students run for the community."*
+
+**T322 is therefore a confirmed bug, not a labelling question.** The external audit (LIVE-003) was
+right on the substance. `v_season_kpis` computes `total_hours = sum(type_hours)` across **all**
+event types including `meeting` (`20260723000000_kpi_views.sql:180`), and the KPI card renders
+`Meetings · Outreach · Competitions` beneath a "Season hours" figure that also drives
+"% toward season goal". Meeting hours inflating a volunteer-hours goal is wrong.
+
+**The rule is by event TYPE, never by event NAME.** This distinction is the whole substance of the
+ruling and has now confused two separate reviewers:
+
+- **`type = 'meeting'`** — the team's own internal meetings. **Do not count** toward volunteer hours.
+  They produce a participation percentage instead.
+- **`type = 'outreach'`** — volunteer service the students perform for others. **Counts.** This
+  **includes** the `GG FLL Team Meetings` and `P3 FLL Team Meetings` events, despite the word
+  "Meetings" in their titles, because the team's own students are *student coaches* running those
+  sessions for younger FLL teams in the community. See `docs/migration/mapping.md`'s closing section.
+
+**Why the confusion is worth recording rather than just the answer.** The orchestrator proposed
+recategorising those two events as `meeting` from their titles alone — 72 of 117 sessions, 62% of
+the data — which would have stripped the majority of the team's volunteer hours out of every
+student's goal progress. The owner corrected it. The audit then read the same KPI card and reached
+for the same conclusion from the other direction. **Anyone touching this must read the type, not the
+title.**
+
+**Currently latent, not visible.** The team records no `meeting`-type events at all — the old system
+had no such category and the new app's meetings feature starts empty — so the figure reads `0.0h`
+today. **It becomes a live wrong number the moment the first internal team meeting is recorded.**
+
+**What T322 authorizes:** remove meeting hours from the volunteer-hours total and its goal
+percentage, and label the card so it reads as volunteer hours rather than all hours. Meeting
+participation stays its own separate figure. **Not authorized:** changing which events are typed
+`outreach` (see above), or touching the FLL events.
