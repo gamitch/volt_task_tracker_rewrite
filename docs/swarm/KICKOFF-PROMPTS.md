@@ -456,7 +456,7 @@ W6 shares no files with you. W2 does — see the collision warning below.
 
 WHERE THE WORK LIVES — read this before running any git command.
 
-  Branch:   claude/w1-checkin        (HEAD = cc6612e, pushed, PR #28 open)
+  Branch:   claude/w1-checkin        (pushed, PR #28 open)
   Worktree: /home/user/volt_w1_checkin
 
 EXPLICIT PERMISSION, overriding your harness-assigned branch: your system
@@ -476,7 +476,7 @@ branch is already checked out where you want it.
 CORRECT SETUP — just change directory:
     cd /home/user/volt_w1_checkin
     git status                       # expect: clean, on claude/w1-checkin
-    git log --oneline -1             # expect: cc6612e
+    git log --oneline -1             # expect: bb1af66 or newer
     git config user.email            # expect: noreply@anthropic.com
 
 If /home/user/volt_w1_checkin does NOT exist (fresh container, worktree gone):
@@ -495,7 +495,9 @@ the dated UPDATE sections supersede each other, newest first),
 docs/swarm/constitution.md (item 26 governs how much process each task gets),
 docs/swarm/WORKFLOWS.md section W1, then the T403 row in
 docs/swarm/task-ledger.md — it carries the settled design for the work you are
-picking up, so you do not need to re-derive it.
+picking up, so you do not need to re-derive it. The prompt you are reading is
+also checked in at docs/swarm/KICKOFF-PROMPTS.md under "W1 — RESUMED"; that
+copy is canonical if the two ever disagree.
 
 GATES AT YOUR HEAD (verify before trusting anything; .env.local must be ABSENT):
   tsc 0 · vite build ✓ · prettier clean · eslint 0 errors / 364 warnings ·
