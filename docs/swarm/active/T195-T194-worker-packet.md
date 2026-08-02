@@ -48,7 +48,9 @@ row.
 5. `SubscribePopover` already sends one `ResetFeedTokenPayload` containing the
    active row id and profile id, awaits one callback, installs the returned row
    only after success, and preserves the prior row while showing an error on
-   rejection. That UI state machine is already correct.
+   rejection. That is correct for a server-declared error, but incomplete for
+   an HTTP transport rejection: PostgreSQL may have committed before the
+   response was lost, so the displayed old token must be reconciled.
 6. The production default for that callback is still
    `defaultOnResetFeedToken`, which logs and returns browser-generated fake
    ids/tokens. This is the T194 defect.
@@ -73,8 +75,8 @@ row.
 The database, not the browser, owns the lifecycle.
 
 - At migration time, reconcile any historical duplicate active rows by
-  retaining one deterministic winner per profile and soft-revoking the rest.
-  Do not delete audit history.
+  retaining the row with greatest `(created_at, id)` per profile and
+  soft-revoking the rest. Do not delete audit history.
 - Backfill exactly one active feed for every existing profile that has none.
 - Provision one active feed for each future `profiles` insert. The trigger must
   work for the invite-acceptance path and direct administrative profile inserts.
@@ -87,30 +89,41 @@ The database, not the browser, owns the lifecycle.
 - Do not trust a client-supplied profile id for authorization or for selecting
   the row to revoke. Identity comes from `auth.uid()`. A caller must not reset
   another profile's feed, a revoked row, or an arbitrary nonexistent row.
-- Preserve RLS. Prefer a security-invoker function so the shipped `self_all`
-  policy remains the authorization boundary. If that is not feasible, stop and
-  file a dispute rather than silently introducing a security-definer bypass.
-- Revoke the function's default `PUBLIC` execute privilege and grant only the
-  role(s) that need the RPC. Anonymous callers must not execute it.
+- The user-callable reset RPC must be explicitly `SECURITY INVOKER`, so the
+  shipped `self_all` policy remains an authorization layer. Do not edit its RLS
+  policy.
+- The separate profile-insert trigger function must be a narrowly scoped
+  `SECURITY DEFINER`: an authenticated staff member is allowed to create a
+  different profile, whose feed insert would otherwise fail `self_all`. Lock
+  its search path, fully qualify objects, and revoke `PUBLIC` execution. This
+  trigger-only provisioner is the sole authorized definer exception.
+- Revoke the reset RPC's default `PUBLIC` execute privilege and grant only
+  `authenticated`. Anonymous callers must not execute it.
 - Keep UUID/token generation in PostgreSQL. The TypeScript reset path must not
   call `crypto.randomUUID()` or synthesize a successful row.
-- A rejected reset leaves the original row active. PostgreSQL function
-  transaction semantics must prevent a half-reset.
+- A database-declared reset error leaves the original row active; PostgreSQL
+  function transaction semantics prevent a server-side half-reset. A transport
+  rejection has unknown commit status and must trigger a read through the
+  existing `loadCalendarFeed(profileId)`. Install the authoritative returned
+  row. If that reconciliation also fails, hide the possibly stale URL and
+  disclose that its current status could not be confirmed.
 
 ## Required implementation
 
 ### 1. Additive lifecycle migration
 
-Create one migration later than the current migration set. It must:
+Create one migration later than the current migration set. In this safe order,
+it must:
 
-1. deterministically soft-revoke all but one active row for any profile with
-   duplicates;
-2. create an active feed for every pre-existing profile that lacks one;
-3. enforce at most one active row per profile;
-4. create a narrowly scoped profile-insert provisioning function and trigger;
-5. create an authenticated reset function callable through Supabase RPC;
+1. deterministically soft-revoke all but the greatest `(created_at, id)` active
+   row for each profile with duplicates;
+2. create the partial unique index enforcing at most one active row per profile;
+3. install the locked-down security-definer profile provisioner and trigger;
+4. conflict-safely backfill every pre-existing profile that lacks an active row;
+5. create `public.reset_calendar_feed(p_revoke_feed_id uuid)` as an explicit
+   security-invoker RPC returning exactly one `SETOF public.calendar_feeds` row;
 6. set safe function search paths and explicit execute privileges; and
-7. leave revoked rows present as audit history.
+7. leave every historical row present as audit history.
 
 Use idempotent migration constructs where PostgreSQL supports them without
 masking real schema drift. Do not edit an already-shipped migration.
@@ -126,8 +139,11 @@ Extend `src/lib/supabase/loaders/calendarFeed.ts` with the reset writer.
 - Send only the data the RPC needs. The server must derive the profile from
   `auth.uid()`; `payload.profileId` may be used for a defensive client/result
   consistency check, but never as server authorization.
-- Invoke the reset function once, map the returned snake_case database row to
-  `CalendarFeedRow`, and reject through the shared error-normalization posture.
+- Invoke
+  `.rpc('reset_calendar_feed', { p_revoke_feed_id: payload.revokeFeedId }).single()`
+  once through `runMutation`, matching the named `SETOF` wire contract. Map the
+  returned snake_case database row to `CalendarFeedRow` and reject through the
+  shared error-normalization posture.
 - Treat a successful response with no returned row as an error; never fabricate
   a fallback result.
 
@@ -138,7 +154,11 @@ In `SubscribePopover.tsx`:
 - default `onResetFeedToken` to the real `resetCalendarFeed`;
 - remove the production fake reset implementation and its stale documentation;
 - preserve the injectable prop, one-call payload builder, confirmation dialog,
-  awaited state replacement, failure UI, and existing copy/URL behavior; and
+  awaited state replacement, failure UI, and existing copy/URL behavior;
+- after any reset rejection, reconcile through the existing injectable
+  `loadCalendarFeed(profileId)`: install the returned authoritative row (old or
+  new). If reconciliation rejects, clear/hide the possibly stale link and show
+  an honest unknown-status message rather than calling it current; and
 - do not change T177's read loader or restore any fixture as a production
   fallback.
 
@@ -152,29 +172,47 @@ Add or extend TypeScript tests to prove:
   failures;
 - the component's production default reaches the real reset writer after
   confirmation, while injected reset tests remain deterministic; and
-- the existing successful replacement and rejection/no-local-half-flip tests
-  stay green.
+- the existing successful replacement test stays green;
+- a server-declared rejection followed by a successful reconciliation to the
+  old row keeps the old URL and shows the failure honestly;
+- a simulated commit-with-lost-response (reset callback rejects, reconciliation
+  returns a different new active row) installs the authoritative new URL; and
+- rejection of both reset and reconciliation hides the possibly revoked URL and
+  discloses unknown status.
 
 Add a dedicated scratch-Postgres lifecycle test using the existing
-`supabase/tests/auth_stub.sql` and `supabase/tests/run.sh` approach, without a
-new dependency. It must apply the repository migrations unchanged and prove:
+`supabase/tests/run.sh` approach, without a new dependency. Do not reuse its
+superuser/null-identity stub unchanged. Add a task-specific platform stub that
+supplements `auth.users` with every column current migrations reference,
+creates `anon`/`authenticated`, scaffolds the minimal `storage` objects and
+`storage.foldername()` required by existing migrations, and implements
+`auth.uid()` from a transaction/session setting. Apply production migrations
+unchanged. Security assertions must use `SET ROLE authenticated`/`anon`; a
+superuser call does not count. The suite must prove:
 
 - a profile that existed before the new migration is backfilled;
-- duplicate active rows present before migration are reconciled without
-  deletion;
-- a profile inserted after migration is provisioned;
+- duplicate active rows present before migration retain the greatest
+  `(created_at, id)` winner and are reconciled without deleting any row;
+- the existing invite-acceptance update path creates both profile and feed;
+- an authenticated staff/admin inserting another profile is allowed and the
+  security-definer trigger provisions that other profile's feed;
+- a profile inserted after migration is otherwise provisioned;
 - a second active row for one profile is rejected by the database;
 - an authenticated owner can reset the named active row and receives exactly
   one new active row while the old row remains revoked;
 - a different authenticated profile cannot revoke that row, and the failed
   attempt changes neither profile's active feed;
 - resetting a revoked or nonexistent row fails without changing active state;
-  and
-- `PUBLIC`/anonymous execution is denied.
+- `authenticated` has execute privilege on the exact reset signature; and
+- `PUBLIC`/anonymous lacks execute privilege and receives SQLSTATE `42501` when
+  attempting the RPC.
 
 The SQL harness may use a task-specific runner/assertion file rather than
 turning the existing NFR-03 runner into an unrelated omnibus suite. It must
-drop its scratch database on both success and failure.
+drop its scratch database on both success and failure. A disposable PostgreSQL
+17 gate is supplied at `/usr/local/opt/postgresql@17/bin`, socket `/tmp`, port
+`55432`, user `georgemitchom`; the runner must also remain portable through
+ordinary `PGHOST`/`PGPORT`/`PGUSER` variables.
 
 ## Allowed files
 
@@ -195,9 +233,13 @@ drop its scratch database on both success and failure.
 - Do not change profile/invite acceptance logic in the shipped migration.
   Provision from a new additive trigger instead.
 - Do not add a dependency or change package/build configuration.
-- Do not weaken or bypass `calendar_feeds` RLS.
+- Do not weaken or bypass `calendar_feeds` RLS in the user-callable reset RPC.
+  The narrowly scoped trigger-only provisioner described above is the sole
+  authorized security-definer path.
 - Do not hard-delete revoked feeds.
-- Do not create a browser-generated token or a multi-request reset sequence.
+- Do not create a browser-generated feed id/token or split reset into multiple
+  write requests. The required post-rejection read is reconciliation, not a
+  second reset write.
 - Do not touch W1/W2 files, routing, unrelated calendar behavior, `.claude/**`,
   `AGENTS.md`, or swarm governance/ledger/verification files.
 - Every file not listed under Allowed files is forbidden.
@@ -222,8 +264,9 @@ exit code, restore it, and prove the candidate commit is unchanged afterward.
      fail.
 4. **Authenticated ownership.** A caller cannot reset another profile's active
    row, and the target remains active.
-   - Mutation: remove the `auth.uid()` ownership predicate/validation from the
-     reset function. The SQL lifecycle test must fail.
+   - Mutation: change the RPC to `SECURITY DEFINER` **and** remove its
+     `auth.uid()` ownership restriction, defeating both independent protection
+     layers. The cross-owner SQL lifecycle test must fail.
 5. **Real RPC contract.** The TypeScript writer sends the current feed id once,
    maps the database result, and never authorizes with `payload.profileId`.
    - Mutation: send the profile id instead of the revoke id, or add it as the
@@ -232,12 +275,16 @@ exit code, restore it, and prove the candidate commit is unchanged afterward.
    the real reset writer; no `console.warn`/generated fake row is reachable.
    - Mutation: replace the real component default with a resolving local fake.
      The production-default test must fail.
-7. **Atomic failure posture.** Invalid, revoked, and cross-owner reset attempts
-   leave the previously active rows unchanged, and component-level RPC
-   rejection leaves the displayed link unchanged with an honest error.
-   - Mutation: make the server accept a cross-owner row or remove the
-     component's rejection preservation/error assertion. The relevant SQL or
-     component test must fail.
+7. **Atomic and ambiguous failure posture.** Database-declared invalid,
+   revoked, and cross-owner reset attempts leave active rows unchanged. An HTTP
+   rejection is reconciled: a committed replacement becomes the displayed
+   authoritative link, while a failed reconciliation hides the stale link.
+   - Mutation: remove the production rejection-reconciliation read. The
+     commit-with-lost-response component test must fail.
+8. **RPC privilege boundary.** Only `authenticated` may execute the exact reset
+   function signature.
+   - Mutation: remove `REVOKE EXECUTE ... FROM PUBLIC`. The privilege/anonymous
+     SQL test must fail.
 
 If any mutation stays green, report the test gap and stop; do not present it as
 evidence.
