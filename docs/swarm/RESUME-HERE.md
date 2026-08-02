@@ -31,11 +31,20 @@ worktree and the checkout will fail.
   through `makeUpsertAttendance` nulls `hours_override` **and** downgrades `method` `qr`→`coach` in
   the same statement. The fix is a **parallel** `makeSetAttendanceStatus`; `makeUpsertAttendance`
   must stay byte-identical — that is what keeps W2's `AttendancePanel` at zero blast radius.
-- **Worker: DISPATCHED.** If its diff is not on the branch, it did not land — **re-dispatch from the
-  packet.**
-- **`checker-reviewer`: NOT YET RUN.** It is required; HEAVY must not be diluted (owner, explicit).
-  If the worker's diff is on the branch but unreviewed, the ledger row says so — run the checker
-  before treating step 3 as done.
+- **Worker: DONE AND LANDED** at `3a14453` on `claude/w1-checkin`. Adds `makeSetAttendanceStatus` to
+  `attendance.ts` (`makeUpsertAttendance` verified byte-identical), makes the `LiveConsole` seam
+  real with rollback + error Banner, and deletes `notWiredSetAttendanceStatus`. **All six gates
+  re-verified by the orchestrator, not just claimed by the worker: `tsc` 0 · build ✓ · prettier
+  clean · eslint 0 errors / 363 warnings · vitest 77 files / 1878 tests, exit 0.** All four
+  mutations red at exit 1 — no exit-0 survivor, the first step this session where that held.
+- **`checker-reviewer`: NOT YET RUN — THIS IS THE NEXT ACTION.** It is required; HEAVY must not be
+  diluted (owner, explicit). Step 3 is **not** done until it passes.
+- **One open question for the checker to rule on:** the worker added tests to
+  `src/lib/supabase/loaders/attendance.test.ts`, which is not in the packet's literal §2 Allowed
+  Files test list. It disclosed this loudly rather than hiding it, arguing `attendance.ts` is
+  explicitly W1's, that file is its pre-existing colocated test module, and it is the only place the
+  exact bytes sent to Supabase can be captured. Reasonable, but it is a real deviation and the
+  checker should rule.
 
 **Watch for this specifically (packet §4b).** With the seam made real, the 43 existing `LiveConsole`
 coach-action tests still pass at exit 0 **only by microtask timing** — no `await` sits between the
