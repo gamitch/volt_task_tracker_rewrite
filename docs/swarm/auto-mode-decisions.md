@@ -1576,3 +1576,46 @@ today. **It becomes a live wrong number the moment the first internal team meeti
 percentage, and label the card so it reads as volunteer hours rather than all hours. Meeting
 participation stays its own separate figure. **Not authorized:** changing which events are typed
 `outreach` (see above), or touching the FLL events.
+
+---
+
+## 2026-08-02 — George's ruling on T309: an unchecked student is recorded `absent`, not deleted
+
+**The question, in his own framing:** *"IF a student marked they would be at the meeting and i, as
+coach, see they were not there i will change thier attendance to absent. I should have the ablility
+to do so."*
+
+**The capability is the ruling.** A coach must be able to correct a student's attendance downward,
+including a student who scanned in via QR. Today unchecking them in "Mark day complete" is a
+**silent no-op** — the row survives untouched — which is the T309 defect.
+
+**Storage mechanism: upsert `status: 'absent'`, preserving the row.** This was an orchestrator call,
+not the owner's; it is recorded here because it interacts with a prior owner ruling.
+
+**It does NOT reverse D-7.** `loaders/attendance.ts:34-50` records George's 2026-07-20 override —
+*"As coach I am ultimate authority and should be able to overwrite an RSVP or check-ins"* — under
+which T119 deleted an earlier `status: 'absent'` branch in favour of an unconditional DELETE.
+**D-7 is about authority, not mechanism**, and authority is fully preserved: `v_student_hours` sums
+`where a.status in ('present','late')`, so an `absent` row yields zero hours exactly as a deleted row
+does, and a `qr`-originated row remains overridable. **D-7 governs `AttendancePanel`'s uncheck, which
+T309 does not touch.**
+
+**Why `absent` over DELETE, so it is not re-litigated:** DELETE requires a second write step in
+`markDayComplete`, a path already disclosed as non-atomic (module doc #4(c); T327 covers that
+family). `absent` rides the existing single upsert — no new writer, no new partial-failure mode — and
+it preserves `check_in_at` as honest history. **Verified before deciding:** nothing on the outreach
+side renders `absent` distinctly, so the two mechanisms are indistinguishable to the coach.
+(`MeetingsList.tsx:937` does count `absent` rows, but that is the meetings flow, which this does not
+touch, and where `EndMeetingDialog.tsx:432` already writes `absent` for the same meaning.)
+
+**Disclosed divergence, deliberately not fixed here:** the Attendance panel directly below this
+dialog still DELETEs on uncheck, so the same gesture in two places leaves different rows behind, and
+a later panel uncheck erases an `absent` row this dialog wrote. Invisible today because neither is
+rendered. **If it ever becomes visible, file it as its own row** — reconciling them means reopening
+D-7 and editing `loaders/attendance.ts`, which belongs to W1.
+
+**Orchestrator error worth keeping:** the first recommendation ('absent') was made **without finding
+D-7**, and the owner was asked to choose between options one of which he had already ruled on in the
+opposite direction. The mistake was not the answer — it was recommending on a settled question
+without checking whether it was settled. **Search `auto-mode-decisions.md` and the target module's
+own doc header before framing any owner question.**

@@ -9,6 +9,11 @@
  * get `attendance` rows (`method='coach'`, status `present`); hours computed
  * per MET-03. Not reversible without edit (audit-logged)."
  *
+ * T309 UPDATE (module doc #10 below has the full writeup): this quotation
+ * only ever described the CHECKED half of the checklist. This dialog now
+ * also writes `status: 'absent'` for a student who is UNCHECKED but has a
+ * recorded attending row -- the coach's uncheck is no longer a silent no-op.
+ *
  * T305 UPDATE (module doc #9 below has the full writeup): the PRD quotation
  * above is left VERBATIM per constitution "Protected source text must remain
  * verbatim" -- it is superseded, not edited. The owner's T305 ruling
@@ -87,7 +92,10 @@
  *
  *    This dialog is a WRITE path, not a read path -- it does not compute a
  *    student's real confirmed-hours total, ever. It writes (up to) THREE of
- *    that coalesce chain's raw inputs per checked student -- `hours_override`
+ *    that coalesce chain's raw inputs per row it constructs (T309 UPDATE:
+ *    no longer only "per checked student" -- an unchecked student with a
+ *    recorded attending row now also gets a row, carrying these same three
+ *    tiers through unchanged; module doc #10) -- `hours_override`
  *    (tier 1), `check_in_at`/`check_out_at` (tier 2, T305 UPDATE: no longer
  *    always `null` -- see module doc #9), and implicitly relies on
  *    `starts_at`/`ends_at` (tier 3,
@@ -129,7 +137,13 @@
  *        `v_student_hours`, never a sum across other sessions/seasons, never
  *        anything resembling the view's `group by student_id, season_id`
  *        cross-session aggregation. It is legitimate specifically BECAUSE
- *        every value it sums is a value this exact submit is constructing.
+ *        every value it sums is a value this exact submit is constructing --
+ *        with one disclosed exception, T309 UPDATE: this submit now also
+ *        constructs `'absent'` rows for unchecked students with a recorded
+ *        attending row (module doc #10), and this sum deliberately EXCLUDES
+ *        them (an absent student is not "attended" and contributes no
+ *        hours) -- so "every value it sums" now describes the CHECKED
+ *        subset of what this submit writes, not everything it writes.
  *
  *    (c) T305 UPDATE -- **genuinely weaker now, disclosed honestly rather
  *        than silently left stale (see module doc #9 and this task's own
@@ -451,6 +465,59 @@
  * only and writes an empty recorded-rows argument (its own module doc has
  * the three corrected clauses); it is a live, filed, deliberately
  * out-of-scope data-loss bug this task does not touch.
+ *
+ * -----------------------------------------------------------------------
+ * 10. T309 (owner ruling `docs/swarm/auto-mode-decisions.md`, 2026-08-02) --
+ *     unchecking a student who has a recorded attending row must actually
+ *     record the absence, not silently do nothing.
+ *
+ * Before this task, `buildAttendanceWriteRows` (module doc #2/#5) maps ONLY
+ * `checkedStudentIds` -- so unchecking a student shown as attending (module
+ * doc #9's recorded-attendance seed) emitted NOTHING for them, and their
+ * existing `attendance` row survived untouched. `AttendancePanel.tsx`'s own
+ * uncheck path DELETEs the row (T119, under George's D-7 ruling, "coach is
+ * ultimate authority" -- authority, not mechanism); this dialog does not
+ * touch that path or reverse D-7. `v_student_hours` sums `where a.status in
+ * ('present','late')`, so a `'absent'` row contributes zero hours exactly as
+ * a deleted row does.
+ *
+ * `buildAttendanceAbsenceRows(sessionId, roster, checkedStudentIds,
+ * recordedBy, recordedRowByStudentId)` is the new, second place `attendance`
+ * rows are constructed (module doc #2/#5's `buildAttendanceWriteRows` stays
+ * BYTE-IDENTICAL -- it is shared with `MarkEventCompleteDialog.tsx`'s bulk
+ * mode, which has no check/uncheck UI at all and so cannot legitimately
+ * emit an absence from any coach gesture). Per ROSTER student (never
+ * `Object.keys(recordedRowByStudentId)` -- a recorded row for a student not
+ * on this event's roster must never be demoted; `computeInitialFormSeed`
+ * above never checks such a student either, so keying off the recorded map
+ * would fabricate a write from a list the coach never saw): if the student
+ * is checked, skip. Otherwise, if their recorded row's status is NOT
+ * `isAttendingStatus` (imported from `./AttendancePanel`, same semantic
+ * owner as module doc #9 -- a single guard, not a separate
+ * `existing === undefined` arm, since `isAttendingStatus` already returns
+ * `false` for `undefined`), skip -- no recorded row, or already
+ * `'absent'`/`'excused'`, means nothing changed. Otherwise, write `status:
+ * 'absent'`, carrying `checkInAt`/`checkOutAt`/`hoursOverride`/`method`
+ * (via `resolveAttendanceWriteMethod`, provenance preserved) through
+ * VERBATIM from the recorded row -- only `status` changes, which is the
+ * entire reason `'absent'` was chosen over DELETE (a DELETE needs a second,
+ * non-atomic write step in `markDayComplete`; `'absent'` rides the existing
+ * single upsert). `recordedBy` is the ACTING coach (`currentUserProfileId`),
+ * never the recorded row's own `recordedBy` -- matching module doc #9's same
+ * rule for `buildAttendanceWriteRows`. The coach's live
+ * `hoursOverrideByStudentId` map is deliberately NOT consulted here: an edit
+ * typed before unchecking belongs to a student the coach has now said was
+ * not present.
+ *
+ * `handleSubmit` concats both functions' output:
+ * `[...buildAttendanceWriteRows(...), ...buildAttendanceAbsenceRows(...)]`.
+ * The BEH-07 confirm label (module doc #4) is unaffected by design -- an
+ * absent student is not "attended" and contributes no hours, so
+ * `computeTotalHoursForCheckedStudents`/`checkedStudentIds.length` (which
+ * this label is built from) must not, and do not, see these rows.
+ * `loaders/outreach.ts`'s `markDayComplete` needs no change: it upserts
+ * whatever `payload.attendance` contains, and its `> 0` length guard now
+ * also (correctly) passes when the only rows present are absences.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
@@ -494,7 +561,9 @@ export type RsvpStatus = 'going' | 'maybe' | 'declined';
 /** `attendance.status` -- T305 UPDATE: this dialog now writes `'late'` too,
  * when preserving a recorded `'late'` row through a coach-confirmed submit
  * (module doc #9) -- `'excused'` remains real but not produced by this
- * file. Textually identical to, but a distinct declaration from,
+ * file. T309 UPDATE: this dialog now writes `'absent'` too, for an
+ * unchecked student with a recorded attending row (module doc #10).
+ * Textually identical to, but a distinct declaration from,
  * `../../lib/supabase/loaders/attendance.ts`'s own `AttendanceStatus`
  * (module doc #9's shadowing note) -- deliberately not unified here. */
 export type AttendanceStatus = 'present' | 'late' | 'excused' | 'absent';
@@ -690,7 +759,10 @@ export function computeMarkCompleteConfirmLabel(attendedCount: number, totalHour
   return `Mark complete — ${attendedCount} attended · ${formatHours(totalHours)} h`;
 }
 
-/** Module doc #2/#5 -- THE ONE place `attendance` rows are constructed.
+/** Module doc #2/#5 -- one of now TWO places `attendance` rows are
+ * constructed (T309 UPDATE: `buildAttendanceAbsenceRows`, module doc #10, is
+ * the other -- this function itself stays byte-identical to before T309;
+ * it constructs rows for CHECKED students only).
  * T305 UPDATE (module doc #9): gains a REQUIRED fifth parameter, the loaded
  * recorded rows keyed by student id -- required, not optional, so a call
  * site that forgets the recorded rows does not compile (T151/T179's own
@@ -724,6 +796,47 @@ export function buildAttendanceWriteRows(
       recordedBy,
     };
   });
+}
+
+/** Module doc #10 -- the second (and only other) place `attendance` rows are
+ * constructed. Writes `status: 'absent'` for a roster student who is
+ * UNCHECKED but has a recorded attending row -- the coach's uncheck is no
+ * longer a silent no-op. Iterates `roster`, NEVER
+ * `Object.keys(recordedRowByStudentId)` (a recorded row for a student not on
+ * this event's roster must never be demoted). `isAttendingStatus` is a
+ * single guard -- it already returns `false` for `undefined`, so a separate
+ * `existing === undefined` arm would be dead code. Only `status` changes:
+ * `checkInAt`/`checkOutAt`/`hoursOverride`/`method` carry through verbatim
+ * from the recorded row, never from the coach's live
+ * `hoursOverrideByStudentId` map (those hours belong to a student the coach
+ * has now said was not present). `recordedBy` is the ACTING coach, never
+ * the recorded row's own `recordedBy` (same rule as
+ * `buildAttendanceWriteRows` above). */
+export function buildAttendanceAbsenceRows(
+  sessionId: string,
+  roster: readonly RosterStudent[],
+  checkedStudentIds: readonly string[],
+  recordedBy: string,
+  recordedRowByStudentId: Readonly<Record<string, AttendanceRow>>,
+): AttendanceWriteRow[] {
+  const checked = new Set(checkedStudentIds);
+  const rows: AttendanceWriteRow[] = [];
+  for (const student of roster) {
+    if (checked.has(student.id)) continue;
+    const existing = recordedRowByStudentId[student.id];
+    if (!isAttendingStatus(existing?.status)) continue;
+    rows.push({
+      sessionId,
+      studentId: student.id,
+      status: 'absent',
+      checkInAt: existing.checkInAt,
+      checkOutAt: existing.checkOutAt,
+      hoursOverride: existing.hoursOverride,
+      method: resolveAttendanceWriteMethod(existing.method),
+      recordedBy,
+    });
+  }
+  return rows;
 }
 
 // ---------------------------------------------------------------------------
@@ -970,16 +1083,28 @@ export function MarkDayCompleteDialog({
     if (!isSessionEligible || isSubmitting) return; // extra guard; button already natively disabled.
     setIsSubmitting(true);
     setSubmitError(null);
+    // T309, module doc #10 -- hoisted so both write-path functions share the
+    // exact same recorded-rows snapshot for this submit.
+    const recordedRowByStudentId = buildRecordedRowsByStudentId(session.id, recordedRows ?? []);
     const payload: MarkDayCompletePayload = {
       sessionId: session.id,
       peopleReached,
-      attendance: buildAttendanceWriteRows(
-        session.id,
-        checkedStudentIds,
-        hoursOverrideByStudentId,
-        currentUserProfileId,
-        buildRecordedRowsByStudentId(session.id, recordedRows ?? []),
-      ),
+      attendance: [
+        ...buildAttendanceWriteRows(
+          session.id,
+          checkedStudentIds,
+          hoursOverrideByStudentId,
+          currentUserProfileId,
+          recordedRowByStudentId,
+        ),
+        ...buildAttendanceAbsenceRows(
+          session.id,
+          roster,
+          checkedStudentIds,
+          currentUserProfileId,
+          recordedRowByStudentId,
+        ),
+      ],
       adultVolunteersCountThisSession: adultVolunteersCount ?? 0,
       adultVolunteerHoursThisSession: adultVolunteerHours ?? 0,
       recordedBy: currentUserProfileId,
