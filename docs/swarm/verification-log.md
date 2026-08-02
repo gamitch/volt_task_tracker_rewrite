@@ -6526,3 +6526,39 @@ constitution item 16 requires.
 **Worth recording: the worker corrected the orchestrator.** The packet stated a 1746-test baseline;
 `main` is 1777. Rather than quietly matching the stated figure, it measured, found the discrepancy,
 and reported it. That is the behaviour the packet asked for and rarely gets.
+
+## T323 — event-management actions are staff-only (audit LIVE-015)
+
+**Merged `4fdcd1a` (PR #24). First task run at the FAST tier of constitution item 26.** Entry written
+2026-08-02 as a Definition-of-Done backfill: the work merged without its ledger row moving or this
+entry existing, which is exactly the drift item 24 was written to prevent. Recorded here with the
+omission attached rather than quietly closed.
+
+**The defect.** `OutreachDetail.tsx` built `menuItems` with **Edit** and **Cancel event**
+unconditionally; only "Mark event complete" sat behind `isStaffViewer`, three lines below. A parent
+opening the actions menu on a team-wide outreach event was offered both controls. The fix moves the
+two items inside the block that already existed.
+
+**Severity, and why it is not P0.** The external audit rated it P0 but flagged server enforcement as
+unobserved. It was then checked: `events` and `event_sessions` both carry
+`staff_all … using (is_staff()) with check (is_staff())` (`rls.sql:149-151`, `:172-174`), so a
+parent's action is rejected by RLS. A control that always errors should not be offered — but this is
+not data loss, and the downgrade rests on measured policy text, not on a judgement call.
+
+**Tier justification (item 26 requires this be stated).** FAST was permitted on all five conditions:
+no write path, no schema/RLS/auth change, no exported signature another module imports, well under
+20 lines of production change, and a named mutation that turns a test red. Verification was not
+reduced — the mutation was run, all six gates were run, and the change went through a PR.
+
+**What the fast tier caught that a packet round would have paid full price for.** An existing
+*passing* test was pinning the defect as correct behaviour: it asserted Edit is "still present" for a
+signed-in student with `.toBe(true)`, commented "unaffected by this task". It was inverted, with the
+reason recorded inline. Five further tests drove this menu with **no signed-in user at all** and
+passed only because the items were ungated; they now render as `ADMIN_USER`, which is what they were
+always meant to test. A green suite was actively defending the bug.
+
+**Mutation:** restore both items outside the gate → **2 red** (the new parent test and the corrected
+student test).
+
+**Gates:** `tsc` 0 · `vite build` ✓ · prettier clean · eslint **0 errors / 361 warnings**
+(unchanged) · vitest **73 files / 1786 tests**, exit 0.

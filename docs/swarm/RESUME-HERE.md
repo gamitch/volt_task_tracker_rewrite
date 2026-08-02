@@ -8,6 +8,45 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
 
+## UPDATE — 2026-08-02 (later): the backlog is now also cut by WORKFLOW, for parallel machines
+
+**`main` = `66776cd`.** No source changed in this update — it is a re-view of the same backlog plus
+three bookkeeping corrections.
+
+**`docs/swarm/WORKFLOWS.md` is new.** The owner intends to assign **different computers to different
+workflows**, so the ~60 open rows are re-cut into ten user-facing workflows (check in, run an
+outreach event, run a meeting, hours accounting, home dashboards, calendar, roster, email, migration,
+cross-cutting hygiene). **Its most important content is not the grouping — it is which workflows can
+safely run at the same time**, which is decided by file overlap, not topic. Three files are collision
+magnets (`OutreachList.tsx` at 4164 lines, `OutreachDetail.tsx`, `StudentHome.tsx`) and the file
+proposes per-workflow row-number blocks so the T196/T197 numbering collision cannot recur across N
+machines.
+
+**Best three-machine split: W1 (check in) + W4 (hours) + W7 (roster)** — no shared files. **Best
+two-machine split: W1 + W2**, which between them hold every remaining data-loss row.
+
+### Three bookkeeping corrections, all item-24 drift
+
+Found while re-reading the ledger; **all three are the orchestrator's own process failing, not new
+work**:
+
+- **T323's row said "not yet packeted"** for work merged at `4fdcd1a` (PR #24), and it had **no
+  `verification-log.md` entry at all** — Definition of Done items 3-4 unsatisfied. Row corrected, and
+  the entry written as a backfill with the omission recorded rather than quietly closed.
+- **T303's resolution was recorded into extra trailing table columns** instead of its Status cell, so
+  the row read `Filed 2026-07-31` for work merged at `82da973`. Malformed row repaired.
+- **`AUDIT-TRIAGE.md` still said T322 needed owner input.** He ruled the same day it was written.
+  A dated UPDATE now sits above its tables.
+
+**With N machines running, this drift multiplies by N.** Item 24 exists because the record step is
+the one always dropped under time pressure.
+
+### T322 is unblocked and is the one confirmed-wrong number on screen
+
+The owner ruled meeting hours must **not** count toward volunteer hours. **The rule is by event
+`type`, never by event name** — `GG FLL Team Meetings` and `P3 FLL Team Meetings` are typed
+`outreach` and **do** count. It edits metric-view SQL → **HEAVY tier**, no matter how small the diff.
+
 ## UPDATE — 2026-08-02: T307 is FIXED. The migration has RUN. Two new docs own the state.
 
 **`main` = `4b951c5`.** Gates measured there with `.env.local` absent: `tsc` 0 · `vite build` ✓ ·

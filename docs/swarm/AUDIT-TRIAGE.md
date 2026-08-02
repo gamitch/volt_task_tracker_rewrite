@@ -13,6 +13,26 @@ subsequently verified.
 
 ---
 
+## UPDATE — 2026-08-02: two rows have moved since this file was written. Read this before the tables.
+
+- **T323 (LIVE-015) is FIXED and merged** (`4fdcd1a`, PR #24). Ignore its row in the P0 table and
+  item 2 of the suggested order.
+- **T322 (LIVE-003) is no longer waiting on the owner.** The P0 table below says *"Owner input
+  needed"* and the suggested order ranks it last, *"after the owner rules."* **He ruled the same day**
+  (`auto-mode-decisions.md`, "George's ruling on T322"): meeting hours must **not** count toward
+  volunteer hours. T322 is a **confirmed bug**, not a product question, and it is unblocked now.
+
+  **The rule is by event `type`, never by event name — this has already confused two reviewers.**
+  `type = 'meeting'` (the team's own internal meetings) does not count and produces a participation
+  percentage instead; `type = 'outreach'` counts, and that **includes** `GG FLL Team Meetings` and
+  `P3 FLL Team Meetings` despite the word *Meetings* in their titles — they are service the students
+  run for the community. **Not authorized:** retyping any event, or touching the FLL events.
+
+  T322 edits metric-view SQL, so constitution item 26 puts it at **HEAVY** tier regardless of how
+  small the diff looks.
+
+---
+
 ## The one-line summary
 
 **The core attendance loop has no working path.** Roll call and QR check-in are a fixture shell
