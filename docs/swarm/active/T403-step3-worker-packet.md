@@ -5,6 +5,37 @@ path**, and a mistake here lies to a coach about whether a student's attendance 
 Chain: this packet → `checker-premise` (on Fable, building) → `worker-implementer` →
 `checker-reviewer`. Owner authorized the full chain for this step.
 
+## 0. GATE VERDICT — `checker-premise` on Fable, gated `799827e`
+
+**DISPATCH.** All five traps CONFIRMED by building; no false premise found. Severity MINOR (three
+packet gaps, each with a built resolution, folded in below).
+
+**Trap 1 is real and was reproduced on a real PostgreSQL 16 database** loaded with this repo's three
+real migrations, running the exact `ON CONFLICT` statement PostgREST generates from
+`makeUpsertAttendance`'s captured payload:
+
+```
+A-BEFORE  status present | check_in_at 18:05 | hours_override 2.5 | method qr    | recorded_by <null>
+A-AFTER   status absent  | check_in_at 18:05 | hours_override      | method coach | recorded_by 1111…
+```
+
+**`hours_override` → NULL, and `method` `qr` → `coach` destroyed by the same payload.** `check_in_at`
+survived, which proves the payload-key-omission mechanism the module doc banks (`:349-352`) works and
+that `hours_override` is lost *purely because it is present in the payload*.
+
+**Prescribed fix — do NOT modify `makeUpsertAttendance`.** Add a parallel
+`makeSetAttendanceStatus` to `attendance.ts` whose payload is exactly
+`{session_id, student_id, status, method, recorded_by}`. The insert path gets `hours_override` NULL
+by column default; the update path cannot touch it. Verified: `B-AFTER` preserved `hours_override
+2.5`, `check_in_at`, and `method qr` while re-attributing `recorded_by`.
+
+**Blast radius of the prescription: ZERO.** `makeUpsertAttendance` stays byte-identical, so
+`AttendancePanel` (W2's only real consumer) is untouched and T117/T119/T305/T307/T320 shipped
+behaviour is unaffected. **No W2 coordination is required for this fix.**
+
+Gate's own build: `tsc` 0, full suite **79 files / 1874 tests, exit 0**, and all four named mutations
+red at exit 1.
+
 ## 1. The defect
 
 `notWiredSetAttendanceStatus` (`src/pages/meetings/LiveConsole.tsx`) is an intentional no-op:
@@ -74,10 +105,12 @@ omitted.
 prescription, captured the real upsert payload, and proved the proposed fix would null a student's
 recorded hours and method. Treat the resemblance as a lead, not a conclusion.
 
-**Gate must:** build a real call and capture the actual payload/DB effect against an existing row
-carrying a non-null `hours_override`. Report the observed row before and after. If confirmed,
-prescribe the fix (a read-modify-write preserving the existing value, a narrower mutation, or a
-separate payload shape) and state its cost.
+**✅ CONFIRMED — see §0 for the observed before/after on a real database.**
+
+**A read-modify-write is NOT the fix and is struck from this packet.** The gate built and compared
+both routes: the omission-payload fix (a parallel `makeSetAttendanceStatus` that simply never sends
+`hours_override`) is strictly better — no extra round-trip, and no TOCTOU window in which a
+concurrent QR scan is clobbered by a stale snapshot. Use it.
 
 **⚠️ SCOPE DECISION THIS TRAP HIDES — the collision rule in §2 does NOT catch it.** If the fix lands
 in `makeUpsertAttendance`, it changes **behaviour** for every existing caller **without changing any
@@ -124,8 +157,22 @@ then adjusted by a coach would appear to lose their QR provenance.
 But `SetAttendanceStatusFn`'s signature passes only the NEW method — the existing row's method is
 known to the caller (`prev[studentId]`) and not threaded through.
 
-**Gate must:** determine whether the fix threads the existing method through the seam, changes the
-seam's signature, or resolves provenance inside the loader.
+**✅ CONFIRMED. No signature change is needed** — `SetAttendanceStatusFn` already carries `method`.
+Resolve provenance at the call site with `resolveAttendanceWriteMethod(existing?.method ?? null)`,
+the identical idiom `AttendancePanel.tsx:717` and `MarkDayCompleteDialog.tsx:723` already use.
+
+**⚠️ DECISION THIS PACKET LEFT OPEN, now settled — the local record and the wire diverge.**
+Trap 2 as originally written did not say what the *local* record's `method` becomes, and the naive
+answer (store the resolved `'qr'` locally) **changes MTG-11 merge behaviour**, because
+`mergeAttendanceUpdate` keys precedence off `method === 'coach'`. Adopt explicitly:
+
+- **On the wire:** `resolveAttendanceWriteMethod(existing?.method ?? null)` — preserves real external
+  provenance in the database.
+- **In local state:** `method: 'coach'` — preserves MTG-11's "a coach-recorded value wins over a
+  later non-coach update" precedence and keeps its existing green tests honest.
+
+Capture `previousRecord` **inside the functional state updater**, not in render scope — render-scope
+capture loses races on rapid clicks (the gate hit this while building).
 
 **On `recorded_by` — this is PARTLY PRE-ANSWERED, and you are checking a stated intent, not deriving
 one.** `UpsertAttendanceParams.recordedBy`'s own docstring (`attendance.ts:339-342`) is unambiguous:
@@ -167,11 +214,35 @@ does not, say so plainly and drop it from scope rather than inventing an un-mark
 ### Trap 5 — `recordedBy` is nullable at the call site but required by the loader
 
 `handleSetStatus` passes `user?.id ?? null`. `UpsertAttendanceParams.recordedBy` is a non-nullable
-`string`. `makeOnEditAttendance` (`endMeeting.ts:461-472`, read-only reference) handles the same
-mismatch by rejecting **before** any network call when identity is unavailable.
+`string`. `makeOnEditAttendance` (`endMeeting.ts:447-473`, read-only reference — the `:461-472` cited in an
+earlier revision is its inner closure) handles the same mismatch by rejecting **before** any network
+call when identity is unavailable.
 
 **Gate must:** confirm the precondition path and that MTG-12's existing `canSetExcused` role check
 is not bypassed by whatever it prescribes.
+
+## 4b. Test-seam hazard the gate found — READ BEFORE TOUCHING THE TESTS
+
+**The existing `LiveConsole.test.tsx` coach-action tests pass against a real failing default ONLY BY
+MICROTASK TIMING.** With the seam made real, every test that drives a coach action without injecting
+`onSetAttendanceStatus` triggers a genuine rejected write (no Supabase in the gate state), which
+fires the rollback. All 43 existing tests still passed at exit 0 in the gate's build — but only
+because tests like the MTG-11 one (`LiveConsole.test.tsx:566-599`) have **no `await` between
+`dispatchKeyOn` and their assertions**, so the rejection microtasks land after the last assert.
+**Adding a single `flushMicrotasks` flips them red.**
+
+That is a green suite that proves nothing about the path it appears to cover — the same family as the
+three exit-0 mutations already found this session.
+
+**Required:** every test exercising a coach action injects an explicit resolving *or* rejecting seam.
+Do not rely on the default in any coach-action test.
+
+**Authorized deletion:** the `persistence seam default` describe
+(`LiveConsole.test.tsx:1009-1013`, *"notWiredSetAttendanceStatus resolves without throwing"*) pins
+the no-op this step removes by design. Delete it along with `notWiredSetAttendanceStatus` itself.
+
+**Criterion 4 precision:** assert coach-visible errors by **rendered text**, not `data-testid` —
+`Banner`'s `data-testid` pass-through is unverified.
 
 ## 5. Acceptance criteria
 
