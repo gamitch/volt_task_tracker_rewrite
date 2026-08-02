@@ -296,3 +296,52 @@ After the third failure, the task must be escalated to boss-arbiter.
     to opus because a topic *sounds* sensitive. Tier follows genuine complexity
     (item 18's four triggers). T157 was bumped sonnet→opus on "minors' family
     linkage" reasoning that this item retires.
+
+26. **Three process tiers, triggered by risk — not by topic, ticket size, or
+    habit.** The full chain (packet → `checker-premise` → worker →
+    `checker-reviewer`) is the *heavy* tier and must not be the default. Choose
+    by asking one question: **can a mistake here corrupt data, or lie to a user
+    about their own data?** Authorized by the human owner 2026-08-02, verbatim:
+    *"For small fixes like items T321 and T323 is there a faster path we can
+    take to get those done? the Boss->Checker->Foreman->Worker->Checker path
+    seems to eat up alot of time for a few line bug fix"*.
+
+    **FAST — the orchestrator implements directly. No packet, no worker, no
+    checker.** Permitted only when **all** hold: no write path or destructive
+    operation; no schema, RLS, migration, or auth/role logic; no change to a
+    signature another module imports; roughly ≤20 lines of production change;
+    and a named mutation exists that turns a test red. **Verification is not
+    reduced** — the mutation is run and its real red output reported, all six
+    gates are run, and the result goes through a PR. What is removed is
+    *coordination*, not evidence.
+
+    **STANDARD — worker implements, orchestrator replays the mutation. No
+    separate checker round.** Single module, may add a test seam, still no
+    write path. This is what T302 (one test) and T303 (one noun) received;
+    both passed first time.
+
+    **HEAVY — packet + premise gate + worker + checker.** Required when the
+    change touches a **write path or destructive operation**, RLS/auth/role
+    logic, a migration or metric-view SQL, or an export another session builds
+    against. **This tier has earned its cost and must not be diluted:** on T305
+    the gate *built* the prescription and captured the real upsert payload,
+    proving the proposed fix would null a student's recorded hours and method;
+    on T189 it proved the proposed detector relied on a view that inner-joins on
+    an active season, so a lapsed season would have told **every** student their
+    account was deactivated. Both were data-correctness defects invisible to
+    reading the code.
+
+    **A gate that only reads is worth much less than one that runs.** Every
+    finding that changed an outcome this session came from an agent that
+    executed the prescription in its own worktree (item 23), not from one that
+    reviewed it.
+
+    **Fast-tier working rule, learned the hard way: commit before mutating.**
+    T323's mutation was reverted with `git checkout --`, which also reverted the
+    uncommitted fix; only the full suite revealed it. Commit, mutate, revert,
+    re-verify.
+
+    **Choosing the tier is a judgement the orchestrator must state and defend in
+    the PR**, so a wrong call is visible and correctable rather than silent. If
+    two tiers are arguable, take the heavier one — but "it sounds important" is
+    not a trigger, and neither is the number of files touched.
