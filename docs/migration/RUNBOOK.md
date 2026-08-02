@@ -57,11 +57,17 @@ Expected shapes, measured 2026-08-01: teams **4**, students **20**, events **16*
 
 ```bash
 node --experimental-strip-types scripts/migrate.ts \
-  --dry-run --from-dir=/path/to/exports --cutover-date=YYYY-MM-DD
+  --dry-run --from-dir="$HOME/volt-export" --cutover-date=YYYY-MM-DD
 ```
 
 **Requires no environment variables at all.** That is deliberate and is the property that unblocked
 this gate — verify it stays true.
+
+> ⚠️ **Use `"$HOME/..."`, never `~/...`.** zsh does **not** perform tilde expansion after an `=` in
+> an argument like `--from-dir=~/volt-export`, so Node receives a literal `~` and fails with
+> `ENOENT: no such file or directory, open '~/volt-export/teams.json'`. This bit the owner on his
+> first run, following instructions carrying the same defect. Extra files in the export directory
+> (e.g. `attendance_changes.json`) are harmless — the reader opens only the six names it needs.
 
 The 2026-08-01 run, which the owner signed off:
 
@@ -95,7 +101,7 @@ totals match the old system exactly.
 ```bash
 NEW_SUPABASE_URL=... NEW_SERVICE_ROLE_KEY=... \
 node --experimental-strip-types scripts/migrate.ts \
-  --from-dir=/path/to/exports --cutover-date=YYYY-MM-DD
+  --from-dir="$HOME/volt-export" --cutover-date=YYYY-MM-DD
 ```
 
 The service-role key is on the new project's **Settings → API Keys**. It bypasses RLS entirely:
