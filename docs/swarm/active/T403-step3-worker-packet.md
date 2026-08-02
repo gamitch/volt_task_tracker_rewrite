@@ -244,6 +244,28 @@ the no-op this step removes by design. Delete it along with `notWiredSetAttendan
 **Criterion 4 precision:** assert coach-visible errors by **rendered text**, not `data-testid` —
 `Banner`'s `data-testid` pass-through is unverified.
 
+## 4c. Standing instructions for the worker (owner-set, 2026-08-02)
+
+**1. The PostgREST caveat stays a stated residual — do not let it harden into "verified."**
+The gate could not run the PostgREST binary itself. The payload-keys → `DO UPDATE SET` translation
+is **inferred**, not observed end to end. The inference is well grounded — the shipped `check_in_at`
+preservation depends on the identical mechanism, and the gate exercised it from both directions on a
+real database — but your worker output must carry it as a **disclosed limit**, in those terms, not as
+a proven fact.
+
+**2. Do NOT start rendering `updatedAt`.** T405 (filed) established that `attendance.updated_at`
+never moves on conflict-update — there is no `moddatetime` trigger and `attendance.ts` omits the
+column. So a coach's own edit would display a **stale** timestamp. Nothing renders it today; step 3
+must not be the first thing that does. Local optimistic state may continue to stamp it, as it does
+now.
+
+**3. Treat every remaining number in this packet as a CLAIM, not a fact.** This packet carried a
+false *"four call sites across three workflows"* that was asserted **without grepping** — the exact
+failure the packet exists to prevent — and was corrected in place at `799827e`. Its own history is
+the best argument for its rules. **Verify any count, line cite, or file list before you rely on it,
+and report anything that does not hold.** Being right about the code beats being faithful to this
+document.
+
 ## 5. Acceptance criteria
 
 1. A coach action in `LiveConsole` writes a real `attendance` row with correct `status`, `method`,
