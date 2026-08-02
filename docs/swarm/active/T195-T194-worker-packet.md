@@ -187,8 +187,13 @@ supplements `auth.users` with every column current migrations reference,
 creates `anon`/`authenticated`, scaffolds the minimal `storage` objects and
 `storage.foldername()` required by existing migrations, and implements
 `auth.uid()` from a transaction/session setting. Apply production migrations
-unchanged. Security assertions must use `SET ROLE authenticated`/`anon`; a
-superuser call does not count. The suite must prove:
+byte-unchanged **except skip exactly**
+`20260719000000_cron.sql`: that unrelated platform-infrastructure migration
+requires Supabase-hosted `pg_cron`, `pg_net`, and Vault facilities unavailable
+in plain PostgreSQL. Name the skip in runner output; do not skip or rewrite any
+other migration. Security assertions must use
+`SET ROLE authenticated`/`anon`; a superuser call does not count. The suite
+must prove:
 
 - a profile that existed before the new migration is backfilled;
 - duplicate active rows present before migration retain the greatest
@@ -264,9 +269,11 @@ exit code, restore it, and prove the candidate commit is unchanged afterward.
      fail.
 4. **Authenticated ownership.** A caller cannot reset another profile's active
    row, and the target remains active.
-   - Mutation: change the RPC to `SECURITY DEFINER` **and** remove its
-     `auth.uid()` ownership restriction, defeating both independent protection
-     layers. The cross-owner SQL lifecycle test must fail.
+   - Mutation: change the RPC to `SECURITY DEFINER`, remove its `auth.uid()`
+     ownership restriction, **and create the replacement for the target row's
+     returned `profile_id`**. This defeats RLS, the explicit predicate, and the
+     otherwise-protective unique-index rollback. The cross-owner SQL lifecycle
+     test must fail because the target's feed is actually replaced.
 5. **Real RPC contract.** The TypeScript writer sends the current feed id once,
    maps the database result, and never authorizes with `payload.profileId`.
    - Mutation: send the profile id instead of the revoke id, or add it as the
