@@ -6827,3 +6827,110 @@ test fix; **0 red, exit 0** before it, which is why the test was rewritten).
 
 **Gates** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier **clean** · eslint
 **0 errors / 364 warnings (unchanged)** · vitest **77 files / 1863 tests (+3), exit 0**.
+
+## T403 step 2 — `LiveConsole` reads the real roster and attendance
+
+**W1, on `claude/w1-checkin`. STANDARD tier.** Step 3 remains open and is HEAVY. Tier defended
+below.
+
+### The settled design was wrong, and only building it exposed that
+
+The T403 row prescribed composing `makeLoadLiveConsoleData` from `loadEndMeetingSummary`
+(`loaders/endMeeting.ts`, W3's file, import-only), on the stated premise that *"`AttendanceRecordState`
+is already shared in the reverse direction, so the shapes line up."* **Both halves are false.**
+
+There is no sharing. `AttendanceRecordState` is declared **twice, independently** —
+`LiveConsole.tsx:436` and `EndMeetingDialog.tsx:313` — with no import between the files.
+`EndMeetingDialog.tsx`'s own module doc §6 says so outright: its ground truth is *"re-derived
+directly … NOT imported from `LiveConsole.tsx`."*
+
+And the shapes do not line up. `LiveConsole`'s requires **`updatedAt`**; `EndMeetingDialog`'s has no
+such field (`status`, `checkInAt`, `checkOutAt`, `method`, `recordedBy`). `endMeeting.ts:324-333`
+reads full `AttendanceRow`s — which **do** carry `updatedAt` — and drops it when narrowing. The
+prescribed composition therefore **cannot populate a required field**; it is a type error, not a
+style preference, and `endMeeting.ts` is W3's file, unfixable from W1.
+
+**The anti-duplication rationale was also inverted.** The row justified the import as avoiding
+re-derived roster logic. But `endMeeting.ts:127-130` describes its own roster resolution as *"the
+`loaders/kiosk.ts` pattern, **re-derived locally**"* — `kiosk.ts` is the **original**, `endMeeting.ts`
+the copy. `makeLoadKioskTally` already runs the identical active-student + team-scope filter; it only
+ever **counted** those rows instead of **naming** them. Importing the copy into the original to avoid
+duplication would have inverted the dependency direction.
+
+**Owner ruled** on the substitution (2026-08-02) after being shown the above, and separately ruled
+that the T403 row itself be rewritten rather than a new row filed. Replacement: kiosk.ts's own
+existing scope filter (extended with `display_name`) plus `makeLoadAttendanceForSessions`
+(`./attendance`, import-only) for the `updatedAt`-carrying rows. `starts_at, ends_at` on
+`querySessionEventId` survived unchanged from the original design — the end-meeting summary genuinely
+does not carry `startsAt`.
+
+**Independently reproduced, which is worth recording.** While this step was being built, another
+session pushed `309325d` to the same branch, correcting the same `updatedAt` premise on the T403 row
+from a read of the same two files. The two findings were reached separately and agree on premise (a);
+this session found premise (b), the inverted duplication direction, which `309325d` did not. Its
+corrected design named the redundant-read variant first but explicitly allowed *"or query the roster
+directly instead, but do NOT re-derive the event → team_ids → active-students filter"* — the branch
+taken here, and taken by **reusing** kiosk.ts's existing filter rather than re-deriving one, so that
+constraint holds. Rebased onto `309325d` rather than over it; both records are kept on the row.
+
+**Collision check ran first, per the `attendance.ts` lesson.** Importers of `loaders/kiosk.ts` are
+`Kiosk.tsx`, `LiveConsole.tsx`, `Kiosk.test.tsx` — all W1-owned. `./attendance` is imported, never
+edited. No file outside W1's list was touched.
+
+### The finding: a mutation passed at exit 0, for the THIRD time this session
+
+**Mutation 2** (`updatedAt: row.updatedAt` → `row.checkInAt ?? ''` — still a `string`, so `tsc`
+stays at 0) **passed all 18 tests at exit 0.** The cause was in the test fixture I had just written:
+`check_in_at`, `updated_at` and `created_at` all carried **the same timestamp**, so a loader reading
+the wrong column was indistinguishable from one reading the right column.
+
+This is the same shape recorded for T161 and T403 step 1, and it is worth stating in its sharper
+form: **it is not only that a test must not supply what it checks — distinct fields must hold
+distinct values, or the assertion cannot tell them apart.** The fixture looked realistic (a row
+created, checked in, and last touched at one moment is perfectly plausible) and that plausibility is
+exactly what hid the defect. Fixed by giving the row three different timestamps —
+`created_at` 23:01, `check_in_at` 23:05, `updated_at` 23:40, a row corrected mid-meeting. The
+mutation then went red.
+
+`updatedAt` is precisely the field the whole design decision turned on, so this mutation surviving
+would have meant the test suite could not detect the failure of the thing this task exists to fix.
+
+### Mutations (all run; committed at `ec4e340` before mutating, per item 23)
+
+| # | Mutation | Result |
+|---|---|---|
+| 1 | `loadData` default pointed back at a fixture roster | **1 red, exit 1** |
+| 2 | `updatedAt` sourced from `check_in_at` | **0 red, exit 0** → after fixture fix, **1 red, exit 1** |
+| 3 | team-scope filter dropped from the roster | **1 red, exit 1** |
+| 4 | `startsAt` sourced from `ends_at` | **1 red, exit 1** |
+
+Mutation 2 also confirms `tsc` alone cannot catch a same-typed wrong-column read: it exited **0**
+with the mutation in place.
+
+### Test-seam changes (T151's mechanism, working)
+
+`renderBody` now injects `loadData` as a default alongside `loadDisplayToken`, so the ~20 tests that
+silently inherited the component's fixture roster now declare their data. `renderBodyNoInjection`
+gained an optional `props` argument: with **nothing** injected the real loader rejects (no Supabase
+in the gate state) and the page renders its DES-12 error state, so the QR panel never mounts — step
+1's display-token test needed `loadData` held open while `loadDisplayToken` stayed at the
+component's own default. `renderPage` likewise forwards props; its role-guard test had been proving
+"a coach reaches a working console" via a student who does not exist.
+
+New coverage: `makeLoadLiveConsoleData` seam-level tests in `Kiosk.test.tsx` (session/roster/
+attendance mapping, `team_ids === null` open case, session-not-found and event-not-found rejections),
+and two `LiveConsole.test.tsx` tests — no fabricated students from the component's own default, and
+no fixture loader exported for any call site to inherit.
+
+### Tier
+
+**STANDARD, as the row prescribed, and it still fits after the design change.** Item 26's HEAVY
+trigger is a **write path or destructive operation**, RLS/auth/role logic, a migration, or an
+exported artifact another session builds against. This step is **read-only** — four `select`s and a
+client-side filter; it writes nothing. The design substitution changed *which* module is imported,
+not the risk class. **Step 3 is the write path and takes HEAVY**, undiluted, with the premise gate
+on Fable building its prescription in its own worktree.
+
+**Gates** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier **clean** · eslint
+**0 errors / 363 warnings** (was 364 — deleting the exported `defaultLoadLiveConsoleData` removed one
+`react-refresh/only-export-components` warning) · vitest **77 files / 1868 tests, exit 0**.

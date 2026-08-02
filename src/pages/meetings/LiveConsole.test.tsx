@@ -47,7 +47,6 @@ import { AuthProvider, type AuthUser } from '../../app/guards';
 import { LoginAsDeferred as LoginAs } from '../../test-utils/authHarness';
 import {
   computeAttendanceTally,
-  defaultLoadLiveConsoleData,
   filterRosterByQuery,
   formatSessionTimeRange,
   LiveConsoleBody,
@@ -57,6 +56,7 @@ import {
   notWiredSubscribeToAttendanceChanges,
   type AttendanceChangeListener,
   type AttendanceRecordState,
+  type LiveConsoleData,
   type LiveConsoleRosterEntry,
 } from './LiveConsole';
 
@@ -118,44 +118,93 @@ async function stubLoadDisplayToken(): Promise<typeof TEST_DISPLAY_TOKEN | null>
 }
 
 /**
- * Renders `LiveConsoleBody` with NO props at all, so the component's own
- * parameter defaults are what run. `renderBody` deliberately injects a display
- * token; this path deliberately does not, and is the only way to assert on
- * what the component ships as its default.
+ * T403 step 2: the roster/attendance fixtures the COMPONENT used to ship
+ * (`FIXTURE_ROSTER`/`FIXTURE_ATTENDANCE`/`defaultLoadLiveConsoleData`) now live
+ * here, test-local and deliberately not exported from the component — the same
+ * move step 1 made for the display token, for the same reason: a default the
+ * component ships is inherited silently by every call site, which is how a
+ * fixture reaches a live route.
+ *
+ * Names are the PRD 4.2 wireframe's own already-fabricated placeholders
+ * ("Ada Q.", "Bea R.", "Cy T."), not new PII (constitution item 6).
  */
-function renderBodyNoInjection(user: AuthUser | null): void {
-  act(() => {
-    root.render(
-      <MemoryRouter initialEntries={[TEST_PATH]}>
-        <AuthProvider>
-          <Routes>
-            <Route
-              path="/meetings/live/:sessionId"
-              element={
-                user === null ? (
-                  <LiveConsoleBody />
-                ) : (
-                  <LoginAs user={user}>
-                    <LiveConsoleBody />
-                  </LoginAs>
-                )
-              }
-            />
-          </Routes>
-        </AuthProvider>
-      </MemoryRouter>,
-    );
-  });
+const TEST_ROSTER: LiveConsoleRosterEntry[] = [
+  { studentId: 'student-ada', name: 'Ada Q.' },
+  { studentId: 'student-bea', name: 'Bea R.' },
+  { studentId: 'student-cy', name: 'Cy T.' },
+  { studentId: 'student-dee', name: 'Dee W.' },
+  { studentId: 'student-eli', name: 'Eli M.' },
+  { studentId: 'student-fay', name: 'Fay N.' },
+  { studentId: 'student-gia', name: 'Gia P.' },
+];
+
+const TEST_ATTENDANCE: Record<string, AttendanceRecordState> = {
+  'student-ada': {
+    status: 'present',
+    method: 'qr',
+    recordedBy: null,
+    updatedAt: '2026-07-19T23:03:00.000Z',
+  },
+  'student-bea': {
+    status: 'present',
+    method: 'qr',
+    recordedBy: null,
+    updatedAt: '2026-07-19T23:04:00.000Z',
+  },
+  // student-cy: deliberately no entry -- "not yet checked in" (open circle
+  // in the PRD wireframe).
+  'student-dee': {
+    status: 'late',
+    method: 'coach',
+    recordedBy: 'fixture-coach',
+    updatedAt: '2026-07-19T23:20:00.000Z',
+  },
+  'student-eli': {
+    status: 'excused',
+    method: 'coach',
+    recordedBy: 'fixture-coach',
+    updatedAt: '2026-07-19T23:00:00.000Z',
+  },
+  'student-fay': {
+    status: 'absent',
+    method: 'import',
+    recordedBy: null,
+    updatedAt: '2026-07-19T22:00:00.000Z',
+  },
+};
+
+const TEST_SESSION_TITLE = 'Tuesday Build Meeting';
+
+async function stubLoadData(sessionId: string): Promise<LiveConsoleData> {
+  return {
+    session: {
+      id: sessionId,
+      title: TEST_SESSION_TITLE,
+      startsAt: '2026-07-21T23:00:00.000Z', // 6:00 PM America/Chicago
+      endsAt: '2026-07-22T01:00:00.000Z', // 8:00 PM America/Chicago
+    },
+    roster: [...TEST_ROSTER],
+    attendance: { ...TEST_ATTENDANCE },
+  };
 }
 
-function renderBody(
+/**
+ * Renders `LiveConsoleBody` injecting NOTHING automatically, so every seam the
+ * caller does not name explicitly runs the component's own default.
+ * `renderBody` injects `loadDisplayToken` AND `loadData`; this path injects
+ * neither, and is the only way to assert on what the component actually ships.
+ *
+ * `props` exists so a test can hold ONE seam open while pinning another. T403
+ * step 2 made that necessary: with nothing injected the real `loadData` rejects
+ * (no Supabase in the gate state) and the page renders its DES-12 error state,
+ * so the QR panel never mounts — a test asserting on the component's own
+ * `loadDisplayToken` default has to get past the data load first, WITHOUT
+ * being handed a display token.
+ */
+function renderBodyNoInjection(
   user: AuthUser | null,
   props: Parameters<typeof LiveConsoleBody>[0] = {},
 ): void {
-  // Injected as a DEFAULT, not an override — an individual test can still pass
-  // its own `loadDisplayToken` (including one that resolves null) to exercise
-  // the unavailable path.
-  props = { loadDisplayToken: stubLoadDisplayToken, ...props };
   act(() => {
     root.render(
       <MemoryRouter initialEntries={[TEST_PATH]}>
@@ -180,8 +229,20 @@ function renderBody(
   });
 }
 
-/** Renders the GATED default export, for the role-guard proof. */
-function renderPage(user: AuthUser | null): void {
+function renderBody(
+  user: AuthUser | null,
+  props: Parameters<typeof LiveConsoleBody>[0] = {},
+): void {
+  // Injected as DEFAULTS, not overrides — an individual test can still pass its
+  // own `loadDisplayToken` (including one that resolves null) or its own
+  // `loadData` (including one that rejects) to exercise the other paths.
+  //
+  // T403 step 2 added `loadData` here. Before it, these tests inherited the
+  // component's own fixture roster silently; now the component's default is the
+  // real Supabase-backed loader, so a test that wants Ada/Bea/Cy on screen has
+  // to say so. `renderBodyNoInjection` remains the only path that exercises
+  // what the component actually ships.
+  props = { loadDisplayToken: stubLoadDisplayToken, loadData: stubLoadData, ...props };
   act(() => {
     root.render(
       <MemoryRouter initialEntries={[TEST_PATH]}>
@@ -191,10 +252,41 @@ function renderPage(user: AuthUser | null): void {
               path="/meetings/live/:sessionId"
               element={
                 user === null ? (
-                  <LiveConsolePage />
+                  <LiveConsoleBody {...props} />
                 ) : (
                   <LoginAs user={user}>
-                    <LiveConsolePage />
+                    <LiveConsoleBody {...props} />
+                  </LoginAs>
+                )
+              }
+            />
+          </Routes>
+        </AuthProvider>
+      </MemoryRouter>,
+    );
+  });
+}
+
+/** Renders the GATED default export, for the role-guard proof. `props` are
+ * forwarded to the underlying body — the guard is what is under test here, so
+ * a test may inject data seams to get a populated console behind it. */
+function renderPage(
+  user: AuthUser | null,
+  props: Parameters<typeof LiveConsolePage>[0] = {},
+): void {
+  act(() => {
+    root.render(
+      <MemoryRouter initialEntries={[TEST_PATH]}>
+        <AuthProvider>
+          <Routes>
+            <Route
+              path="/meetings/live/:sessionId"
+              element={
+                user === null ? (
+                  <LiveConsolePage {...props} />
+                ) : (
+                  <LoginAs user={user}>
+                    <LiveConsolePage {...props} />
                   </LoginAs>
                 )
               }
@@ -610,7 +702,10 @@ describe('LiveConsolePage role guard', () => {
   });
 
   it('renders the real console for a coach role', async () => {
-    renderPage(COACH_USER);
+    // T403 step 2: the roster is injected. Before it, this test inherited the
+    // component's fixture roster, so "the guard let a coach through to a
+    // working console" was proved by a student who does not exist.
+    renderPage(COACH_USER, { loadData: stubLoadData });
     await flushMicrotasks();
     expect(container.querySelector('[data-testid="redirected-home"]')).toBeNull();
     expect(row('student-ada')).toBeTruthy();
@@ -903,11 +998,11 @@ describe('DES-12 states', () => {
   });
 
   it('T134 (UXC-12): renders exactly one <h1>, with the real session title, in the populated state', async () => {
-    renderBody(COACH_USER, { loadData: defaultLoadLiveConsoleData });
+    renderBody(COACH_USER);
     await flushMicrotasks();
     const headings = container.querySelectorAll('h1');
     expect(headings).toHaveLength(1);
-    expect(headings[0].textContent).toBe('Tuesday Build Meeting');
+    expect(headings[0].textContent).toBe(TEST_SESSION_TITLE);
   });
 });
 
@@ -917,11 +1012,43 @@ describe('persistence seam default', () => {
   });
 });
 
-describe('defaultLoadLiveConsoleData fixture', () => {
-  it('resolves a non-empty roster and session for any sessionId', async () => {
-    const data = await defaultLoadLiveConsoleData(TEST_SESSION_ID);
-    expect(data.session.id).toBe(TEST_SESSION_ID);
-    expect(data.roster.length).toBeGreaterThan(0);
+// ---------------------------------------------------------------------------
+// T403 step 2: the roster comes from the database, not from this file.
+// ---------------------------------------------------------------------------
+
+describe('T403 step 2 — real roster/attendance', () => {
+  it("renders NO fabricated students from the COMPONENT'S OWN default", async () => {
+    // Through `renderBodyNoInjection`, NOT `renderBody` — `renderBody` now
+    // supplies `loadData`, so a test using it can never detect a fixture being
+    // reintroduced as the component's default. This is the same trap T403
+    // step 1 measured on the display token: with the injecting helper,
+    // restoring a fixture default left the block green at exit 0.
+    //
+    // Here the component falls back to the real `loadLiveConsoleData`, which
+    // needs a configured Supabase and has none in the gate state, so it
+    // rejects and the honest answer is the DES-12 error state — never a
+    // roster of people who do not exist.
+    renderBodyNoInjection(COACH_USER);
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain("Couldn't load this session");
+    for (const entry of TEST_ROSTER) {
+      expect(container.textContent).not.toContain(entry.name);
+    }
+    expect(container.querySelector('[data-testid="roster-row-student-ada"]')).toBeNull();
+  });
+
+  it('no longer exports a fixture loader for any call site to inherit', async () => {
+    // The DOM assertion above proves the fixture is not reachable through the
+    // component's default TODAY. This proves the seam it came through is gone
+    // for good: nothing can import `defaultLoadLiveConsoleData` and pass it
+    // back in, and no future default can quietly point at it again.
+    //
+    // Asserted on the module's exports rather than by scanning the source
+    // text, because the source legitimately NAMES the deleted symbols in the
+    // comment recording why they were deleted.
+    const mod = await import('./LiveConsole');
+    expect(Object.keys(mod)).not.toContain('defaultLoadLiveConsoleData');
   });
 });
 
@@ -941,7 +1068,14 @@ describe('T403 step 1 — real display token', () => {
     // Here the component falls back to its real default
     // (`loadKioskDisplayToken`), which needs a configured Supabase and has
     // none in the gate state, so the honest answer is that there is no code.
-    renderBodyNoInjection(COACH_USER);
+    //
+    // T403 step 2: `loadData` is injected so the page gets PAST the data load
+    // and actually mounts the QR panel — the real `loadData` default would
+    // reject here and render the error state instead, and this test would then
+    // pass for the wrong reason (no QR panel at all, rather than a QR panel
+    // honestly reporting no code). `loadDisplayToken` is still NOT injected:
+    // that is the seam under test.
+    renderBodyNoInjection(COACH_USER, { loadData: stubLoadData });
     await flushMicrotasks();
 
     expect(container.textContent).toContain('QR not available yet');

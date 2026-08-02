@@ -132,9 +132,14 @@
  * missing -- but nothing in this file calls it: no Realtime channel
  * subscription exists here yet, so roster/attendance changes made on this
  * screen do not sync live to other tabs or devices. Disclosed via a second
- * permanent Banner, with `defaultLoadLiveConsoleData` and
- * `notWiredSetAttendanceStatus` shipping honest fixture/no-op defaults
- * rather than fabricated network calls.
+ * permanent Banner.
+ *
+ * T403 step 2 narrows that gap: `loadData`'s default is now the REAL
+ * `loadLiveConsoleData` (`../../lib/supabase/loaders/kiosk.ts`) and the roster
+ * fixtures are deleted, so this console reads the actual roster and the actual
+ * `attendance` rows. What remains honestly unwired is `onSetAttendanceStatus`
+ * (`notWiredSetAttendanceStatus`, an intentional no-op — T403 step 3 makes it
+ * a real write) and the Realtime subscription, whose Banner stays accurate.
  *
  * -----------------------------------------------------------------------
  * 3. DES-17 keyboard path -- BLOCKER-class per this task's own packet.
@@ -417,7 +422,7 @@ import {
 } from '@astryxdesign/core';
 import { RequireRole, useAuth } from '../../app/guards';
 import { routePaths } from '../../app/router';
-import { loadKioskDisplayToken } from '../../lib/supabase/loaders/kiosk';
+import { loadKioskDisplayToken, loadLiveConsoleData } from '../../lib/supabase/loaders/kiosk';
 
 // ---------------------------------------------------------------------------
 // Ground truth -- `attendance` real column shapes, camelCase renames cited
@@ -547,75 +552,24 @@ export function notWiredSubscribeToAttendanceChanges(): () => void {
   return () => {};
 }
 
-// ---------------------------------------------------------------------------
-// Fixture data (constitution item 6: fabricated names only). Names below are
-// lifted directly from the PRD 4.2 wireframe itself ("Ada Q.", "Bea R.",
-// "Cy T.") -- already-fabricated placeholders in the ground truth, not new
-// PII, extended with a few more fabricated names for a workable roster.
-// ---------------------------------------------------------------------------
-
-const FIXTURE_SESSION_ID_FALLBACK = 'session-fixture-live-console';
-
-const FIXTURE_ROSTER: readonly LiveConsoleRosterEntry[] = [
-  { studentId: 'student-ada', name: 'Ada Q.' },
-  { studentId: 'student-bea', name: 'Bea R.' },
-  { studentId: 'student-cy', name: 'Cy T.' },
-  { studentId: 'student-dee', name: 'Dee W.' },
-  { studentId: 'student-eli', name: 'Eli M.' },
-  { studentId: 'student-fay', name: 'Fay N.' },
-  { studentId: 'student-gia', name: 'Gia P.' },
-];
-
-const FIXTURE_ATTENDANCE: Readonly<Record<string, AttendanceRecordState>> = {
-  'student-ada': {
-    status: 'present',
-    method: 'qr',
-    recordedBy: null,
-    updatedAt: '2026-07-19T23:03:00.000Z',
-  },
-  'student-bea': {
-    status: 'present',
-    method: 'qr',
-    recordedBy: null,
-    updatedAt: '2026-07-19T23:04:00.000Z',
-  },
-  // student-cy: deliberately no entry -- "not yet checked in" (open circle
-  // in the PRD wireframe).
-  'student-dee': {
-    status: 'late',
-    method: 'coach',
-    recordedBy: 'fixture-coach',
-    updatedAt: '2026-07-19T23:20:00.000Z',
-  },
-  'student-eli': {
-    status: 'excused',
-    method: 'coach',
-    recordedBy: 'fixture-coach',
-    updatedAt: '2026-07-19T23:00:00.000Z',
-  },
-  'student-fay': {
-    status: 'absent',
-    method: 'import',
-    recordedBy: null,
-    updatedAt: '2026-07-19T22:00:00.000Z',
-  },
-};
-
-/** Shipped default `LoadLiveConsoleDataFn` -- module doc section 2's second
- * gap. Real callers (once a shared Supabase client exists) or a
- * verification harness should pass their own. */
-export async function defaultLoadLiveConsoleData(sessionId: string): Promise<LiveConsoleData> {
-  return {
-    session: {
-      id: sessionId || FIXTURE_SESSION_ID_FALLBACK,
-      title: 'Tuesday Build Meeting',
-      startsAt: '2026-07-21T23:00:00.000Z', // 6:00 PM America/Chicago
-      endsAt: '2026-07-22T01:00:00.000Z', // 8:00 PM America/Chicago
-    },
-    roster: [...FIXTURE_ROSTER],
-    attendance: { ...FIXTURE_ATTENDANCE },
-  };
-}
+/**
+ * T403 step 2: `FIXTURE_ROSTER`, `FIXTURE_ATTENDANCE`,
+ * `FIXTURE_SESSION_ID_FALLBACK` and `defaultLoadLiveConsoleData` are DELETED,
+ * not kept as a fallback.
+ *
+ * They fabricated seven students ("Ada Q.", "Bea R.", …) and five attendance
+ * rows on a LIVE coach-facing route, so a real meeting showed a roster nobody
+ * on this team has ever been on. `loadLiveConsoleData`
+ * (`../../lib/supabase/loaders/kiosk.ts`) now resolves the real
+ * `event_sessions` → `events` → team-scoped active `students` roster and the
+ * real `attendance` rows for the session.
+ *
+ * Keeping them as a fallback is exactly how a fixture reaches a live route —
+ * the family that produced T155/T176/T181/T324 and this console. A test that
+ * wants a deterministic roster injects one through the `loadData` seam and
+ * says so (`LiveConsole.test.tsx`'s own `TEST_ROSTER`/`stubLoadData`), the
+ * discipline T151 established and T403 step 1 applied to the QR panel.
+ */
 
 // ---------------------------------------------------------------------------
 // Pure helpers -- exported for direct testing (module doc sections 3/4).
@@ -912,7 +866,7 @@ export interface LiveConsoleBodyProps {
 }
 
 export function LiveConsoleBody({
-  loadData = defaultLoadLiveConsoleData,
+  loadData = loadLiveConsoleData,
   loadDisplayToken = loadKioskDisplayToken,
   onSetAttendanceStatus = notWiredSetAttendanceStatus,
   subscribeToAttendanceChanges = notWiredSubscribeToAttendanceChanges,
