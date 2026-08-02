@@ -8,6 +8,38 @@
 
 ---
 
+## 0. Gate outcome — packet v2, and what NOT to re-litigate
+
+**Round 1: REVISE (1 MAJOR, 4 MINOR, 1 NIT). All six folded in; this is v2.** The gate did not read
+the packet — it **built** the prescription in its own worktree, replayed every mutation, and
+re-measured every baseline. **The prescription is therefore known to work before you see it.**
+
+**The MAJOR was §6: v1 described the wrong test file.** See §6 — it is rewritten from measurement.
+
+**Confirmed correct by execution — do not re-derive, re-check, or widen these:**
+
+- **§3 is implementable exactly as sketched inside §8's two Allowed Files.** Measured: `tsc` exit 0,
+  `vite build` ok, prettier clean, eslint **+1 exactly** (`react-refresh/only-export-components` on
+  the new export), full suite **1830/1830 exit 0**. The verbatim sketch compiles as written —
+  `noUncheckedIndexedAccess` is off, so the map index types as `AttendanceRow`.
+- **§3(b)'s single guard is right and a separate `existing === undefined` arm would be dead code** —
+  confirmed by reading *and* by execution.
+- **§4 in full.** Bulk mode genuinely has no uncheck gesture (no `CheckboxList` in the file);
+  `buildAttendanceWriteRows` stays byte-identical; C8 passes at 25 with zero edits. Only two
+  production call sites exist (`:976` and bulk `:328`).
+- **§2's ruling record.** The D-7 quote is verbatim at `attendance.ts:34-50`; `v_student_hours`'s
+  `where a.status in ('present','late')` verified at `20260717000003_metric_views.sql:18`;
+  `MeetingsList.tsx:937` and `EndMeetingDialog.tsx:432` both check out.
+- **Every §6/§7 baseline number**, re-measured independently.
+- **Mutations for C1, C2, C3, C4, C6, C7, C9 all discriminate as claimed.**
+- **The W1 collision is real** — `origin/claude/w1-checkin` edits `loaders/attendance.ts` (T320).
+
+**A reference implementation exists** on the gate's local branch `gate/t309-premise-verification`
+(`2bdb0aa`, unpushed, in its own worktree). You may consult it, but **build and measure your own** —
+you are accountable for the numbers you report, and a copied result you did not run is not evidence.
+
+---
+
 ## 1. The defect
 
 `markDayComplete` (`loaders/outreach.ts:1174-1179`) upserts exactly the rows the dialog hands it, and
@@ -100,12 +132,25 @@ verbatim; `method` via `resolveAttendanceWriteMethod` (provenance preserved — 
 Preserving the check-in timestamp is the entire reason `'absent'` was chosen over DELETE.
 
 **(d) `recordedBy` is the acting coach**, not the recorded row's own `recordedBy`. This matches
-`UpsertAttendanceParams.recordedBy`'s own doc, `AttendancePanel.tsx:718`/`:791`, and T305's W5. Do
+`UpsertAttendanceParams.recordedBy`'s own doc, `AttendancePanel.tsx:717`/`:790`, and T305's W5. Do
 not "fix" it to `existing.recordedBy`.
 
 **(e) The coach's live hours map is deliberately NOT consulted.** `hoursOverrideByStudentId` may hold
 an edit the coach typed before unchecking; those hours belong to a student they have now said was not
 present. Read `existing.hoursOverride` only.
+
+### The module-doc corrections this diff owes — five, each verified against the real file
+
+This file's header has been corrected twice already (T305, T307) and is load-bearing. **This diff
+falsifies five specific claims. Fix each in place; a stale doc claim is a defect here.**
+
+| Line | Claim today | Why the diff falsifies it |
+|---|---|---|
+| `:8-9` | *"checked students get `attendance` rows (`method='coach'`, status `present`)"* | **This is a verbatim OUT-05/PRD quote — do NOT edit the quote.** Add a `T309 UPDATE` note beside it, in the existing T305-UPDATE style at `:12-19`. |
+| `:90` | *"that coalesce chain's raw inputs **per checked student**"* | Rows are now also written for *unchecked* students. |
+| `:132` | *"every value it sums is a value this exact submit is constructing"* | The submit now constructs absence rows the sum deliberately **excludes**. One disclosed sentence — this is C9's label semantics. |
+| `:494-499` | `AttendanceStatus` doc: *"this dialog now writes `'late'` too … `'excused'` remains real but not produced by this file"* | Must add `'absent'` to what this dialog writes. |
+| `:693` | *"THE ONE place `attendance` rows are constructed"* | There are now **two**. |
 
 ---
 
@@ -115,8 +160,11 @@ present. Read `existing.hoursOverride` only.
   it, and bulk mode has **no check/uncheck UI at all** (its module doc #2(a)). T309 is *unreachable*
   there — so teaching that shared function to emit absences would fabricate absences from **no coach
   gesture whatsoever**, in the exact path T307 just fixed for destroying rows. Leave it byte-identical.
-- **Do not touch `MarkEventCompleteDialog.tsx` or its test.** The byte-for-byte payload pin at
-  `MarkEventCompleteDialog.test.tsx:206-216` must stay green **with zero edits**. That is C8.
+- **Do not touch `MarkEventCompleteDialog.tsx` or its test.** The byte-for-byte payload pin — the
+  `buildMarkEventCompletePayload` describe at `MarkEventCompleteDialog.test.tsx:244-269` — must stay
+  green **with zero edits**. That is C8. (v1 cited `:206-216`, which is the `makeAttendanceRow`
+  fixture; that range was inherited stale from T307's packet, as the file's own comment at `:245`
+  shows. Do not propagate it further.)
 - **Do not touch `loaders/outreach.ts`.** `markDayComplete` upserts whatever it is given; it needs no
   change. Its `if (payload.attendance.length > 0)` guard now also passes when the only rows are
   absences, which is correct.
@@ -128,7 +176,11 @@ present. Read `existing.hoursOverride` only.
 
 ---
 
-## 5. Acceptance criteria — each with the production-code mutation that must turn it red
+## 5. Acceptance criteria — nine, each with the production-code mutation that must turn it red
+
+**v1's C10 was deleted** (item 25) after the gate measured it redundant with C9; its label assertion
+is folded into C9. Numbering is otherwise unchanged, so C1–C9 with no C10.
+
 
 Run each mutation, paste the real red output. **A criterion whose mutation leaves the suite green is
 not evidence — report that instead of shipping it.**
@@ -137,12 +189,20 @@ not evidence — report that instead of shipping it.**
   'absent'`. Assert the whole row object. *Mutation: `return []` from `buildAttendanceAbsenceRows`.*
 - **C2** That row carries the recorded `checkInAt`, `checkOutAt`, `hoursOverride` and `method`.
   *Mutation: hardcode `checkInAt: null, checkOutAt: null, method: 'coach'` — the pre-T305 shape.*
-- **C3** `recordedBy` is the acting coach. *Mutation: `recordedBy: existing.recordedBy`.*
+- **C3** `recordedBy` is the acting coach. *Mutation: `recordedBy: existing.recordedBy`* — note this
+  is a **vitest-replay-only** mutation: it does not typecheck (`AttendanceRow.recordedBy` is
+  `string | null`, `AttendanceWriteRow.recordedBy` is `string`), but esbuild strips types so the
+  suite still runs. Replay it under `vitest`, not `tsc`.
 - **C4/C5** An unchecked student with **no** recorded row, and one whose recorded row is already
   `'absent'` or `'excused'`, both produce **nothing**. Two assertions, one shared mutation:
-  *delete the `isAttendingStatus` guard line.* (No-row students then throw on `existing.checkInAt`;
-  an error-red is still red, but **assert the already-`absent` case too** so at least one arm fails
-  on an assertion rather than a crash.)
+  *delete the `isAttendingStatus` guard line.*
+  **C5 needs its own fixture roster and this is not optional — measured by the gate.** Under the
+  shared mutation a row-less roster student throws first
+  (`TypeError: Cannot read properties of undefined (reading 'checkInAt')`), which **masks C5's
+  assertion entirely**. So C5's roster must contain **only** students who all have a recorded
+  non-attending row — e.g. exactly two, one `'absent'` and one `'excused'`. Over the natural shared
+  4-student roster the packet's "at least one arm fails on an assertion" requirement is
+  **unmeetable**. C4 crash-reds by design; that is expected and fine.
 - **C6** A student with a recorded attending row who is **not on the roster** produces nothing.
   *Mutation: iterate `Object.keys(recordedRowByStudentId)` instead of `roster`.* This is (a)'s guard.
 - **C7** A recorded `'late'` student who is unchecked becomes `'absent'` — `isAttendingStatus` covers
@@ -156,26 +216,54 @@ not evidence — report that instead of shipping it.**
   *Mutation: drop the absence spread from `handleSubmit`'s `attendance` array.*
   **This criterion is not optional.** T305's gate measured a pure-function criterion passing while its
   DOM path was dead code; C1–C7 alone cannot detect an unwired function.
-- **C10** The confirm label and total hours are **unchanged** by absence rows — an absent student is
-  not "attended" and contributes no hours. **Honest framing: this also passes against current code**
-  and is a **regression guard**, not a defect discriminator; there is no natural mutation site.
-  *Mutation, artificial: pass `payload.attendance.length` to `computeMarkCompleteConfirmLabel`.*
+  **C9 also carries the label guard** (v1 had this as a separate C10, deleted per item 25 after the
+  gate measured it redundant): locate the confirm button by its **full** label text
+  (`Mark complete — 1 attended · 7 h`) and additionally assert that a `2 attended` button is
+  **absent**. An absent student is not "attended" and contributes no hours, so the label must not
+  move when absence rows are added. The gate measured that C10's own emulated mutation reddens C9
+  anyway via the full-label lookup — one criterion, not two.
 
 `container.textContent`, never `innerHTML`. Pair presence with absence where both are meaningful —
 an absence-only assertion passes for the wrong reason, and this repo has shipped 7+ of those.
 
 ---
 
-## 6. The harness reality — verify, do not assume
+## 6. The harness reality — MEASURED by the gate, not assumed
 
-`MarkDayCompleteDialog.test.tsx` (**46 tests**) has **no `vi.mock`** and renders the dialog at ~13
-sites; T305 added a `loadAttendance` seam with a graceful fallback, **so those tests stay green
-whether or not the seam is honoured — a green count there proves nothing about the seam.** Any
-criterion that needs a controlled recorded-attendance load must inject its own resolving fake and
-assert it was called.
+**Packet v1 got this section wrong and described the wrong file. Corrected here; do not work from
+memory of it.** v1 claimed `MarkDayCompleteDialog.test.tsx` has no `vi.mock` and that a green count
+there proves nothing about the attendance seam. **Both halves are false.**
+
+`MarkDayCompleteDialog.test.tsx` (**46 tests**, ~28 render sites) **partial-mocks exactly this seam**
+at `:49-55`:
+
+```ts
+vi.mock('../../lib/supabase/loaders/attendance', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/supabase/loaders/attendance')>();
+  return { ...actual, loadAttendanceForSessions: vi.fn(async () => []) };
+});
+```
+
+re-established in `beforeEach` at `:102-103` (`mockReset()` then `mockResolvedValue([])`), and **four
+existing tests already assert the call** — S1 (`:679`), S2 (`:694`), S6 (`:771-772`), W3b (`:961`)
+all `toHaveBeenCalledWith([SESSION.id])`. **The seam is pinned and a green count there does mean it
+was honoured.**
+
+**Use the file's own convention: `mockedLoadAttendanceForSessions.mockResolvedValueOnce(...)`.** Do
+**not** invent a second injection mechanism — the one that exists is asserted-on and shared.
+
+It is **`MarkEventCompleteDialog.test.tsx`** that has no `vi.mock` (its own comment at `:105`). v1
+inverted the two files.
+
+**Measured by the gate: implementing §3 with ZERO test pinning leaves all 46 existing tests green.**
+No existing test pins the old silent-no-op semantics, so **there is no T193-style test adaptation in
+this task.** The one plausible pin (`:536`, `toHaveLength(1)`) survives because its scenario has no
+recorded rows. Full suite after the gate's reference implementation plus the new criteria:
+**1830/1830, exit 0.**
 
 **Measure the base yourself on the branch point before writing a line**, and report the real numbers
-rather than trusting these. Measured at `e76515f`, `.env.local` absent:
+rather than trusting these. Measured at `e76515f`, `.env.local` absent, and **independently
+re-verified by the gate**:
 
 ```
 tsc --noEmit                        exit 0
