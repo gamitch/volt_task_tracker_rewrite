@@ -103,6 +103,15 @@ function makeSummaryReadChain(
     recorded.inArgs.push([column, value]);
     return chain;
   };
+  // T320 (W1): `loaders/attendance.ts`'s `makeLoadAttendanceForSessions` --
+  // which `endMeeting.ts:191` imports and reuses -- now paginates its read as
+  // `.order('id').range(from, to)` so a >1000-row response is no longer
+  // silently truncated by PostgREST's `max_rows`. This shared chain has to
+  // accept both links. Returning `chain` (already thenable) resolves the
+  // configured `result` as page 0; every fixture here is far short of a full
+  // page, so the loader's loop exits after one request.
+  chain.order = () => chain;
+  chain.range = () => chain;
   chain.maybeSingle = () => Promise.resolve(result);
   chain.then = (
     onFulfilled: (value: typeof result) => unknown,

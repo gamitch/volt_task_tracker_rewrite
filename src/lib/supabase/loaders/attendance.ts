@@ -229,14 +229,50 @@ export type LoadAttendanceForSessionsFn = (
   sessionIds: readonly string[],
 ) => Promise<AttendanceRow[]>;
 
-async function queryAttendanceForSessions(
+/**
+ * T320: mirrors `supabase/config.toml:18`'s `[api] max_rows = 1000`.
+ *
+ * PostgREST silently truncates any response at that cap and returns **200
+ * with a partial `Content-Range`** -- not an error -- so `createLoader`
+ * (`../loader.ts`, which throws only on `result.error`) resolved a partial
+ * array that every caller read as complete. Requesting a page larger than
+ * `max_rows` does not help: the server clamps it. Paginating is the only
+ * way to see past the cap.
+ *
+ * Exported so the pagination boundary is assertable from a test rather than
+ * inferred from a magic number.
+ */
+export const ATTENDANCE_PAGE_SIZE = 1000;
+
+/**
+ * Upper bound on pages, so a server that ignores `.range()` produces a
+ * diagnosable error instead of an unbounded loop. 100 pages is 100,000
+ * attendance rows -- orders of magnitude beyond anything this deployment can
+ * reach (the live database holds 79), so tripping it means something is
+ * wrong with the transport, not with the data.
+ */
+const ATTENDANCE_MAX_PAGES = 100;
+
+/**
+ * T320: ONE page of the `attendance` rows for a set of session ids.
+ *
+ * `.order('id')` is **load-bearing, not cosmetic**. Page N+1 is defined as
+ * an offset into a result set, and Postgres gives no ordering guarantee
+ * without an explicit `order by` -- so paginating an unordered query can
+ * return the same row on two pages and never return another. `id` is the
+ * table's uuid primary key (migration lines 82-95, cited in module doc #1),
+ * so it is total, stable, and always present.
+ */
+async function queryAttendanceForSessionsPage(
   client: SupabaseClient,
-  sessionIds: readonly string[],
+  args: { sessionIds: readonly string[]; from: number },
 ): Promise<LoaderQueryResult<AttendanceDbRow[]>> {
   const result = await client
     .from('attendance')
     .select('*')
-    .in('session_id', [...sessionIds]);
+    .in('session_id', [...args.sessionIds])
+    .order('id', { ascending: true })
+    .range(args.from, args.from + ATTENDANCE_PAGE_SIZE - 1);
   return { data: (result.data as AttendanceDbRow[] | null) ?? null, error: result.error };
 }
 
@@ -251,14 +287,32 @@ async function queryAttendanceForSessions(
 export function makeLoadAttendanceForSessions(
   getClient: () => SupabaseClient = getSupabaseClient,
 ): LoadAttendanceForSessionsFn {
-  const loadRows = createLoader<readonly string[], AttendanceDbRow[]>(
-    queryAttendanceForSessions,
+  const loadPage = createLoader<{ sessionIds: readonly string[]; from: number }, AttendanceDbRow[]>(
+    queryAttendanceForSessionsPage,
     getClient,
   );
   return async (sessionIds) => {
     if (sessionIds.length === 0) return [];
-    const rows = await loadRows(sessionIds);
-    return (rows ?? []).map(mapAttendanceDbRowToAttendanceRow);
+    // T320: page until a SHORT page comes back. A full page is ambiguous --
+    // it means "at least this many", never "exactly this many" -- so a full
+    // final page costs one extra empty request rather than silently dropping
+    // whatever followed it. That ambiguity is the entire bug being fixed.
+    const rows: AttendanceDbRow[] = [];
+    for (let page = 0; page < ATTENDANCE_MAX_PAGES; page += 1) {
+      const pageRows = (await loadPage({ sessionIds, from: page * ATTENDANCE_PAGE_SIZE })) ?? [];
+      rows.push(...pageRows);
+      if (pageRows.length < ATTENDANCE_PAGE_SIZE) {
+        return rows.map(mapAttendanceDbRowToAttendanceRow);
+      }
+    }
+    // Only reachable if every one of ATTENDANCE_MAX_PAGES pages came back
+    // full. Throwing keeps this loader's contract honest -- returning the
+    // rows gathered so far would reintroduce exactly the silent-truncation
+    // behaviour T320 exists to remove.
+    throw new Error(
+      `loadAttendanceForSessions: exceeded ${ATTENDANCE_MAX_PAGES} pages of ` +
+        `${ATTENDANCE_PAGE_SIZE} rows without reaching the end of the result set`,
+    );
   };
 }
 
