@@ -6895,11 +6895,12 @@ SQL-sensitive mutations after rework; TypeScript blobs were byte-identical for t
 | Typecheck | exit 0 |
 | Format check | exit 0 |
 | Lint | exit 0; 0 errors / 360 warnings |
-| Full Vitest suite, run alone | 76 files / 1845 tests, exit 0 |
+| Full Vitest suite, run alone | 76 files / 1850 tests, exit 0 |
 | Production build | exit 0; 2,397 modules transformed |
 
 One earlier parallel full-suite run had a single existing OutreachList test hit its 5-second
 timeout while duplicate suite/lint/build processes competed for resources; the isolated rerun above
-passed all 1845 tests. No source outside W6, no existing migration, no RLS policy, and no ICS file
+passed all tests. The branch was then rebased again for PR #35/T327 and the final isolated run
+passed all 1850 tests. No source outside W6, no existing migration, no RLS policy, and no ICS file
 changed. No live hosted migration or deployment was attempted; after merge, smoke-test one initial
 provision and one reset on hosted Supabase.
