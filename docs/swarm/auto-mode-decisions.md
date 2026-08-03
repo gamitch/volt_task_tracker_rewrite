@@ -2706,3 +2706,54 @@ it.
   2026-08-03 ruling says so explicitly. They come out of the volunteer-hours **total** and its goal
   percentage — not out of the app. So the per-type breakdown columns in `v_season_kpis` must survive.
 - **Meeting participation %** is a separate figure and is untouched.
+
+---
+
+## 2026-08-03 — George lifts the T406 hold and picks the approach: NARROW THE WRITE
+
+**Two decisions, both his.** First he lifted the hold he set earlier that day (*"i'll wait on 406"*).
+Then, asked which of the two shapes to build, he chose: *"what's the simplest approach, narrow the
+write so it only touches the columns the dialog actually means to set?"* — and on confirmation,
+*"yes go ahead with T406"*.
+
+**He is right that it is the simpler one, and the reasoning is worth keeping** because it is not
+merely "smaller diff":
+
+- **Re-reading at submit ADDS things** — another round trip, a new failure mode (a re-read that fails
+  exactly when the coach hits Confirm), more state. And it only *shrinks* the race window; something
+  can still land between the re-read and the write.
+- **Narrowing REMOVES things.** You cannot overwrite a column you never send. Preservation stops being
+  something the code must remember to do and becomes something it cannot fail to do.
+- **It also retires work T305 had to add.** T305 made the dialog carry `hoursOverride`, `checkInAt`,
+  `checkOutAt` and `method` through the write *specifically to stop it nulling them*. Narrowing makes
+  the carrying unnecessary for the timestamp columns.
+
+### The sequencing hazard this row carried is RESOLVED — verified, not assumed
+
+The T406 ledger row warned that narrowing before W1's T405 trigger landed *"risks narrowing around a
+column whose behaviour is changing."* **The trigger has landed**:
+`trg_attendance_touch_updated_at`, `before insert or update`, setting `new.updated_at := now()`
+(`20260803000000_simplify_attendance_audit.sql:78-83`, on `main`). So `updated_at` is now DB-managed
+and the dialog's explicit `updated_at: new Date().toISOString()` is already dead weight the trigger
+overwrites. **Checked on `main`, the branch this will act on** — the T401 lesson.
+
+### What the schema permits, which decides the whole design
+
+| Column | Constraint | Droppable |
+|---|---|---|
+| `check_in_at`, `check_out_at` | nullable, no default | **YES** — INSERT → `NULL` (correct for a coach-marked student who never scanned); UPDATE → preserved |
+| `updated_at` | `not null default now()` | **YES** — the T405 trigger now sets it on both legs |
+| `method` | **`not null`, NO default** | **NO** — dropping it makes every INSERT violate the constraint |
+| `status`, `recorded_by`, `hours_override` | — | **NO** — these are the coach's actual gesture |
+
+### The residual this leaves, stated now so it is not discovered later
+
+Because `method` cannot be dropped, **a concurrent QR scan's `method: 'qr'` can still be clobbered**
+by the dialog's stale snapshot, even after this fix. The student's real `check_in_at` survives — which
+is the harm the owner described — but the *provenance* that they scanned rather than being marked by a
+coach does not.
+
+**This is a genuine partial fix and the packet must say so rather than imply the TOCTOU is closed.**
+Closing the `method` half needs either a schema default (a migration on a table W1 owns) or an
+insert/update split (which re-introduces the multi-step shape T327 exists to avoid). Neither is
+proportionate to a ~20-student team for a provenance flag; **file it, do not build it.**
