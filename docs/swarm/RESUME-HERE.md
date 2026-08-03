@@ -1,4 +1,4 @@
-# Resume here — state of play at `main` = `c9b4698` (read the UPDATE sections top-down; each supersedes the ones below it)
+# Resume here — state of play at `main` = `380266e` (read the UPDATE sections top-down; each supersedes the ones below it)
 
 Written 2026-07-30 so this session's context can be cleared without losing anything.
 Fresh orchestrator session: read this, then `constitution.md`, then the open rows in
@@ -8,7 +8,65 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
 
-## UPDATE — 2026-08-03 (LATEST): attendance schema settled. T404 CANCELLED, T405 CLOSED. W1 is clear; **W3 is the next wave.**
+## UPDATE — 2026-08-03 (LATEST): W2 shipped T330, T402 and T401. **T306 is the next W2 row.** Everything below about T330 is superseded.
+
+**`main` = `380266e`**, green and measured on it directly: `tsc` 0 · eslint **0 errors / 362
+warnings** · vitest **78 files / 1928 tests**. **Measure your own baseline anyway** — `main` moved
+five times on 2026-08-03 and every figure quoted in older sections of this file is stale.
+
+| Row | Shipped | PR |
+|---|---|---|
+| **T330** | A dateless (zero-session) event is now a visible, badged, em-dashed row pinned to the top of Upcoming on **both** views. It used to be dropped from both buckets and unreachable — no row meant no link. | #43 |
+| **T402** | `loaders/outreach.ts`'s own `queryAttendanceForSessions` now pages, as T320 did for `attendance.ts`. There were **two** functions with that name and T320 fixed only one. | #44 |
+| **T401** | `ATTENDANCE_ROW_CAP` deleted — T320's pagination made it a false positive blocking legitimate writes. | #47 |
+
+**The T330 paragraph in the 2026-08-02 W2 section below is now WRONG in both directions** — its
+severity is not merely raised, it is fixed and merged; and it no longer "needs an owner ruling",
+which was given on 2026-08-03 and is recorded in `auto-mode-decisions.md`. Read this section, not
+that one.
+
+### Three findings worth carrying, because none was findable by reading
+
+1. **T330's own prescription — in the ledger row AND in `W2-KICKOFF.md` — was wrong and would have
+   shipped a crash.** "Delete the `continue` at `OutreachList.tsx:1730`" routes the orphan into
+   `past`, whose comparator dereferences `.startsAt` on `undefined`. It does not throw with one
+   event in the bucket, so it would have surfaced only once a second event joined, taking out the
+   whole list. Both documents are corrected; the section is kept in `W2-KICKOFF.md` as the worked
+   example rather than deleted.
+2. **A fix can pass every criterion and still not fix its own headline scenario.** T330's first
+   scoping left both views gating the list on `sessions.length > 0`, so a season whose *first*
+   create failed stayed invisible — and all ten criteria passed on that build. Found by a gate that
+   probed a green tree.
+3. **A test can go VACUOUS rather than red.** Deleting T401's exported constant left a dependent
+   test passing while testing nothing (`Array.from({ length: undefined - 1 })` → `[]`). Only `tsc`
+   caught the dangling import. First recorded instance of that shape here; the 7+ "passed for the
+   wrong reason" assertions were all the other kind.
+
+### Also: a premise can be true on the branch that states it and false on the branch that acts on it
+
+W1's inbox note said T401's guard was already a false positive. It was — **on `claude/w1-checkin`**.
+On `main` T320's pagination had not landed, so the guard was still doing real work and deleting it
+would have re-opened T307's destructive bug. The row was held, the merge-order dependency was raised
+on PR #28, and it executed once #28 landed. **Check premises on the branch you will act on.**
+
+### Open W2 rows, in order
+
+**T306 is next** and is in flight (packet written, worker dispatched). Then T174, T300, T190, T325,
+T165, T152, T301. See `W2-KICKOFF.md` §4.
+
+**Filed by W2 this session, not yet packeted:** **T500** (an orphan event's adult-volunteer figures
+double-count in season totals — **W4's files**, `pages/reports/**`), **T501** (the bare `—`
+empty-stat glyph may be announced as nothing — repo-wide across five files, one task if taken),
+**T502** (a `{data: null, error: null}` page resolves as end-of-data, so a paged attendance load can
+still come back silently short — **W1's file**; T401 is what made it reachable on the write path).
+
+**T406 is known-real and deliberately unfiled** — W1's TOCTOU note on `markDayComplete`. Confirmed by
+reading the dialog: it loads attendance on open (`:1003`) and submits that same snapshot
+(`handleSubmit`, `:1082`), with no re-read and no lock. The owner asked to hold it.
+
+---
+
+## UPDATE — 2026-08-03 (earlier the same day): attendance schema settled. T404 CANCELLED, T405 CLOSED. W1 is clear; **W3 is the next wave.**
 
 **`main` = `c9b4698`. PRs #42 and #45 are merged. W1's branch work is fully landed — nothing is
 outstanding on `claude/w1-checkin` or `claude/w1-checkin-bmqs1f`; work from `main`.**
