@@ -8022,11 +8022,20 @@ branch point `380266e` is later and carries other merges, not this change) ·
 `tests/rls/run.sh` and `supabase/tests/run.sh` fail **identically on this branch and on `main`** —
 pre-existing rot, not caused by T205, filed as **T701**.
 
-### ⚠️ Not closed in production
+### Not closed in production — and a correction to how that was first framed
 
 The migration lands in the repo only. **Constitution item 16 reserves hosted-Supabase cutover for
-the human owner, so the unauthenticated roster-destruction path remains OPEN on the live project
-until he applies this migration.** No agent verified production grant state; none could.
+the human owner, so the grant remains open on the hosted project until he applies this migration.**
+No agent verified production grant state; none could.
+
+**CORRECTION, same day, owner input:** the orchestrator originally wrote this up as an urgent live
+exposure — "an anonymous internet request can wipe the roster today". **That overstated it.** The
+owner confirmed there is **no deployed application** at present, so the Supabase `anon` key is not
+published in any public frontend bundle; reaching the view at all requires that key to leak first.
+The grant is genuinely open and worth closing, and the mechanism (measured: `anon` `DELETE 2`,
+`students` emptied) is exactly as described above — but the reachability premise the urgency rested
+on was assumed, not verified. Recorded rather than quietly edited, because "measured, not assumed"
+has to apply to the orchestrator's own risk framing too, not just to the code.
 ## T306 — a session with recorded attendance shows what happened, not what was promised
 
 **STANDARD tier (item 26)** — display-only, single module, **no write path**. Worker implemented; the
