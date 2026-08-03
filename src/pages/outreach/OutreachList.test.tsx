@@ -293,6 +293,67 @@ function makeTestEvent(
   };
 }
 
+// ---------------------------------------------------------------------------
+// T330 -- shared full-page-render fixtures (used by both the coach-view and
+// student/parent-view DOM tests below, and by the T130 responsive block's
+// own narrow-mode assertion). A DATED event carries a real `going` RSVP +
+// roster student so its own row shows a real, NON-ZERO planned-hours/
+// expected-count value ("Planned2h" / "Expected1 students") -- this is
+// deliberate (worker packet §8's own "narrow-test fixture warning"): with
+// no RSVPs at all, the DATED comparator row would ALSO legitimately render
+// "Planned0h"/"Expected0 students", which would make a `not.toContain(
+// 'Planned0h')` proof that the DATELESS row's own em-dash fired
+// unsatisfiable (it would also match the unrelated dated row). Giving the
+// dated row real numbers keeps "0h"/"0 students" reachable ONLY through a
+// regression in the dateless row's own dash logic.
+// ---------------------------------------------------------------------------
+function orphanOnlySeasonLoadData(): Promise<OutreachLoadResult> {
+  return Promise.resolve({
+    events: [makeTestEvent({ id: 'orphan-e1', title: 'Orphaned Coat Drive' })],
+    sessions: [],
+    rsvps: [],
+    attendance: [],
+    students: [],
+    goalConfig: { seasonId: 's1', individualGoalHoursByStudentId: {} },
+    teams: [],
+  });
+}
+
+function orphanPlusDatedLoadData(): Promise<OutreachLoadResult> {
+  return Promise.resolve({
+    events: [
+      makeTestEvent({ id: 'orphan-e1', title: 'Orphaned Coat Drive' }),
+      makeTestEvent({ id: 'dated-e1', title: 'Scheduled Food Drive' }),
+    ],
+    sessions: [
+      {
+        id: 'dated-s1',
+        eventId: 'dated-e1',
+        sessionDate: '2026-09-01',
+        startsAt: '2026-09-01T14:00:00.000Z',
+        endsAt: '2026-09-01T16:00:00.000Z', // 2h
+        status: 'scheduled',
+        peopleReached: null,
+      },
+    ],
+    rsvps: [
+      {
+        id: 'rsvp-1',
+        sessionId: 'dated-s1',
+        studentId: 'student-1',
+        status: 'going',
+        respondedBy: null,
+        updatedAt: '2026-08-01T00:00:00.000Z',
+        createdAt: '2026-08-01T00:00:00.000Z',
+      },
+    ],
+    attendance: [],
+    students: [{ id: 'student-1', name: 'Student One' }],
+    goalConfig: { seasonId: 's1', individualGoalHoursByStudentId: {} },
+    teams: [],
+  });
+}
+
 describe('filterOutreachEvents (NAV-07)', () => {
   it('excludes non-outreach event types', () => {
     const events: OutreachEventRow[] = [
@@ -559,17 +620,102 @@ describe('buildEventGroups (UXD-02/03 per-event rows)', () => {
     // e3 has no sessions in this array at all.
   ];
 
-  it('groups by EVENT (one entry per event, not per session) -- "upcoming" = any scheduled session', () => {
+  // T330 AUTHORIZED AMENDMENT (worker packet §6, test 1 of 2) -- the
+  // routing change (module doc on `buildEventGroups`) pins `e3` (zero real
+  // sessions) into `upcoming`, ahead of every dated entry, per the owner's
+  // ruling. `e3` now shares this bucket with `e1`, so this test's own
+  // `upcoming` assertion grows from `['e1']` to `['e3', 'e1']` and the
+  // per-session assertion for `e1` moves from `upcoming[0]` to
+  // `upcoming[1]`. `past` is UNCHANGED (`['e2']`) -- this is the guard
+  // against §4's crash, kept exactly as it was.
+  it('groups by EVENT (one entry per event, not per session) -- "upcoming" = any scheduled session, pinned dateless entries first', () => {
     const { upcoming, past } = buildEventGroups(events, sessions);
-    expect(upcoming.map((entry) => entry.event.id)).toEqual(['e1']);
-    expect(upcoming[0].sessions.map((session) => session.id)).toEqual(['e1-past', 'e1-future']); // ascending
+    expect(upcoming.map((entry) => entry.event.id)).toEqual(['e3', 'e1']);
+    expect(upcoming[1].sessions.map((session) => session.id)).toEqual(['e1-past', 'e1-future']); // ascending
     expect(past.map((entry) => entry.event.id)).toEqual(['e2']);
   });
 
-  it('omits an event with zero real sessions from both buckets', () => {
+  // T330 AUTHORIZED AMENDMENT (worker packet §6, test 2 of 2) -- RENAMED
+  // (a test named "omits" that now asserts inclusion would be worse than no
+  // test at all, per the packet). `e3` (zero real sessions) is no longer
+  // omitted: it is a real, pinned-first `upcoming` row (C1/C11's whole
+  // point -- a failed first create must stay visible and reachable). The
+  // `past` half is KEPT, unchanged in meaning: `e3` must still never reach
+  // `past`, which is §4's crash guard ((c)'s own module doc -- `past`'s
+  // comparator is safe only because a zero-session entry can never land
+  // here after (a)).
+  it('routes a zero-real-session event into upcoming, pinned first -- and still never into past', () => {
     const { upcoming, past } = buildEventGroups(events, sessions);
-    expect(upcoming.some((entry) => entry.event.id === 'e3')).toBe(false);
+    expect(upcoming.some((entry) => entry.event.id === 'e3')).toBe(true);
+    expect(upcoming[0].event.id).toBe('e3');
+    expect(upcoming[0].sessions).toEqual([]);
     expect(past.some((entry) => entry.event.id === 'e3')).toBe(false);
+  });
+
+  // T330 (g)/(C4) -- NEW. Two dateless entries alongside a dated one must
+  // sort without throwing: both pin ahead of the dated entry and tie with
+  // each other (stable sort preserves their relative input order), then the
+  // dated entry sorts last by its own next-scheduled `startsAt`, exactly as
+  // before. Named mutation (packet §8 C4): removing the `aDateless ||
+  // bDateless` guard must throw a real `TypeError` here, because this
+  // fixture has 2 entries in `upcoming` (a 1-element bucket never invokes
+  // the comparator at all).
+  it('two dateless events plus one dated event sort without throwing -- both dateless pinned first, tied, dated last', () => {
+    const twoDatelessEvents: OutreachEventRow[] = [
+      makeTestEvent({ id: 'e4', title: 'Dateless A' }),
+      makeTestEvent({ id: 'e5', title: 'Dateless B' }),
+      makeTestEvent({ id: 'e6', title: 'Dated' }),
+    ];
+    const oneDatedSession: OutreachSessionRow[] = [
+      {
+        id: 'e6-s1',
+        eventId: 'e6',
+        sessionDate: '2026-09-01',
+        startsAt: '2026-09-01T00:00:00.000Z',
+        endsAt: '2026-09-01T01:00:00.000Z',
+        status: 'scheduled',
+        peopleReached: null,
+      },
+    ];
+    expect(() => buildEventGroups(twoDatelessEvents, oneDatedSession)).not.toThrow();
+    const { upcoming, past } = buildEventGroups(twoDatelessEvents, oneDatedSession);
+    expect(upcoming.map((entry) => entry.event.id)).toEqual(['e4', 'e5', 'e6']);
+    expect(past).toEqual([]);
+  });
+
+  // T330 (C5) -- NEW. `past` needs >=2 entries to actually invoke its own
+  // comparator (a 1-element bucket never does -- the baseline suite only
+  // ever had one). Named mutation (packet §8 C5): reversing the
+  // `bLast`/`aLast` operands must flip this descending (most-recent-first)
+  // order.
+  it('past with >=2 entries still sorts most-recent-last-session-first (descending)', () => {
+    const pastEvents: OutreachEventRow[] = [
+      makeTestEvent({ id: 'e7', title: 'Older past event' }),
+      makeTestEvent({ id: 'e8', title: 'Newer past event' }),
+    ];
+    const pastSessions: OutreachSessionRow[] = [
+      {
+        id: 'e7-s1',
+        eventId: 'e7',
+        sessionDate: '2026-01-01',
+        startsAt: '2026-01-01T00:00:00.000Z',
+        endsAt: '2026-01-01T01:00:00.000Z',
+        status: 'completed',
+        peopleReached: null,
+      },
+      {
+        id: 'e8-s1',
+        eventId: 'e8',
+        sessionDate: '2026-03-01',
+        startsAt: '2026-03-01T00:00:00.000Z',
+        endsAt: '2026-03-01T01:00:00.000Z',
+        status: 'completed',
+        peopleReached: null,
+      },
+    ];
+    const { upcoming, past } = buildEventGroups(pastEvents, pastSessions);
+    expect(upcoming).toEqual([]);
+    expect(past.map((entry) => entry.event.id)).toEqual(['e8', 'e7']); // e8 (Mar) before e7 (Jan)
   });
 });
 
@@ -624,6 +770,16 @@ describe('buildWeekdayChips / formatEventDateRangeLabel (UXD-02 recurrence chips
       peopleReached: null,
     };
     expect(formatEventDateRangeLabel([session])).toBe('Aug 3');
+  });
+
+  // T330 (C9) -- NEW. No baseline test pins the zero-session branch (module
+  // doc on `formatEventDateRangeLabel`: `'No sessions scheduled yet.'` for
+  // `[]`) -- (a)'s routing change is what makes this branch actually reach
+  // the list for the first time; the string itself was already there.
+  // Named mutation (packet §8 C9): making this function return `''` for
+  // `[]` must redden this directly.
+  it('an empty session array renders the honest "no sessions" copy, not a blank/undefined date', () => {
+    expect(formatEventDateRangeLabel([])).toBe('No sessions scheduled yet.');
   });
 });
 
@@ -3236,6 +3392,133 @@ describe('<OutreachList /> coach view -- T130 responsive (UXC-13)', () => {
     tables.forEach((table) => {
       expect(table.querySelectorAll('thead th').length).toBe(6);
     });
+  });
+
+  // T330 (C6/C7, narrow arm) -- NEW. The narrow stacked-card column
+  // (`isNarrow` branch, module doc on `buildCoachOutreachColumns`) is a
+  // SEPARATE render path from the desktop `hours`/`count` columns -- no
+  // baseline test exercised em-dash rendering here at all (this describe
+  // block predates T330), so without this test the narrow em-dash mutation
+  // has nothing to redden and a coach-on-a-phone regression (still seeing
+  // "0h"/"0 students" on a dateless row) would stay invisible. Uses the
+  // shared `orphanPlusDatedLoadData` fixture (module doc above it) so the
+  // dated row's own real "Planned2h"/"Expected1 students" stays reachable,
+  // keeping the "Planned0h"/"Expected0 students" negative assertions below
+  // meaningful (this file's own §8 fixture warning).
+  it('below 768px, a dateless row renders em-dash hours/count on the narrow stacked-card column, not "0h"/"0 students"', async () => {
+    stubMatchMedia(true);
+    renderAsUser(COACH_USER, { loadData: orphanPlusDatedLoadData });
+    await flushMicrotasks();
+
+    // Regression guard -- the dated row is unaffected on the narrow branch.
+    expect(container.textContent).toContain('Scheduled Food Drive');
+    expect(container.textContent).toContain('Planned2h');
+    expect(container.textContent).toContain('Expected1 students');
+
+    // The dateless row: em-dashed, never a fabricated "0h"/"0 students".
+    expect(container.textContent).toContain('Orphaned Coat Drive');
+    expect(container.textContent).toContain('Planned—');
+    expect(container.textContent).toContain('Expected—');
+    expect(container.textContent).not.toContain('Planned0h');
+    expect(container.textContent).not.toContain('Expected0 students');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T330 -- a dateless (zero-session) event is visible and fixable, on both
+// views. Fixtures (`orphanOnlySeasonLoadData`/`orphanPlusDatedLoadData`)
+// defined above, module doc there.
+// ---------------------------------------------------------------------------
+
+describe('<OutreachList /> T330: dateless (zero-session) events are visible and fixable', () => {
+  // C11 -- the criterion that makes this task fix its own headline
+  // scenario: without the `hasAnyOutreach` change (module doc on
+  // `CoachOutreachView`/`StudentParentOutreachView`), a season whose ONLY
+  // event has zero sessions still shows the EmptyState forever, even though
+  // every other criterion in this describe block passes. Paired assertion
+  // (packet §8): the row rendering AND the EmptyState NOT rendering, in the
+  // SAME test.
+  it('C11 (coach view): an orphan-only season (real events, zero sessions) renders the row, not the EmptyState', async () => {
+    renderAsUser(COACH_USER, { loadData: orphanOnlySeasonLoadData });
+    await flushMicrotasks();
+
+    expect(container.textContent).not.toContain('No outreach events yet');
+    expect(container.textContent).toContain('Orphaned Coat Drive');
+    expect(container.textContent).toContain('No sessions scheduled yet.'); // C9 DOM proof
+    expect(container.textContent).toContain('Needs dates');
+  });
+
+  it('C11 (student/parent view): an orphan-only season renders the row, not the EmptyState', async () => {
+    renderAsUser(STUDENT_OR_PARENT_USER, {
+      loadData: orphanOnlySeasonLoadData,
+      viewerStudentId: 'student-1',
+    });
+    await flushMicrotasks();
+
+    expect(container.textContent).not.toContain('No upcoming outreach yet.');
+    expect(container.textContent).toContain('Orphaned Coat Drive');
+    expect(container.textContent).toContain('No sessions scheduled yet.'); // C9 DOM proof
+    expect(container.textContent).toContain('Needs dates');
+  });
+
+  // C6/C7 (desktop arm) + C8 + C10. Paired assertions (packet §8): the
+  // dated row's real values prove C10 (regression guard -- nothing about
+  // the dated row changed), and the dateless row's dash + badge prove
+  // C6/C7/C8 together, with a negative assertion that rules out the
+  // "0h"/"0 students" fabrication a reverted dash would produce.
+  it('C6/C7/C8/C10 (coach view, desktop): a dateless row renders em-dash hours/count + "Needs dates" badge; a dated row is completely unchanged', async () => {
+    renderAsUser(COACH_USER, { loadData: orphanPlusDatedLoadData });
+    await flushMicrotasks();
+
+    // C10 regression guard: the DATED row's date/hours/count are real, and
+    // it carries no badge.
+    expect(container.textContent).toContain('Sep 1');
+    expect(container.textContent).toContain('Planned2h');
+    expect(container.textContent).toContain('Expected1 students');
+
+    // C6/C7/C8/C9: the DATELESS row -- visible, honest date-cell copy,
+    // badged, and its hours/count cells are a real em dash, never a
+    // fabricated "0h"/"0 students".
+    expect(container.textContent).toContain('Orphaned Coat Drive');
+    expect(container.textContent).toContain('No sessions scheduled yet.');
+    expect(container.textContent).toContain('Planned—');
+    expect(container.textContent).toContain('Expected—');
+    expect(container.textContent).not.toContain('Planned0h');
+    expect(container.textContent).not.toContain('Expected0 students');
+
+    // C8's absence arm must be paired with proof the row itself rendered
+    // (packet §8) -- and proof the badge appears EXACTLY once (on the
+    // dateless row only, never leaking onto the dated row).
+    const needsDatesMatches = container.textContent?.match(/Needs dates/g) ?? [];
+    expect(needsDatesMatches.length).toBe(1);
+  });
+
+  // C12 -- a real criterion, not a smoke test (packet §8): the inline
+  // "Edit" action must open the dialog on a dateless row without crashing,
+  // reusing the shipped T121 Edit-button idiom.
+  it('C12: the inline "Edit" action opens the dialog on a dateless row, pre-filled, without crashing', async () => {
+    renderAsUser(COACH_USER, { loadData: orphanPlusDatedLoadData });
+    await flushMicrotasks();
+
+    const editButton = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.getAttribute('aria-label') === 'Edit – Orphaned Coat Drive',
+    );
+    expect(editButton).toBeTruthy();
+    expect(() => {
+      act(() => {
+        editButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+    }).not.toThrow();
+
+    // Edit mode, real prefill, from an event with zero sessions
+    // (`buildInitialOutreachEventFromRow` is total over `sessions: []`).
+    expect(document.body.textContent).toContain('Save changes');
+    const labels = Array.from(document.querySelectorAll('label'));
+    const titleLabel = labels.find((el) => el.textContent?.trim().startsWith('Title'));
+    const titleInput = document.getElementById(
+      titleLabel?.getAttribute('for') ?? '',
+    ) as HTMLInputElement;
+    expect(titleInput.value).toBe('Orphaned Coat Drive');
   });
 });
 

@@ -1707,9 +1707,15 @@ export interface EnrichedOutreachEvent {
  * and unit-tested unchanged, at session granularity) -- UXD-02/03 call for
  * ONE dense row per EVENT, not one row per session. "Upcoming" = the event
  * has at least one still-`scheduled` session (even if some of its other
- * sessions already ran); "Past" = every session is `completed`/`canceled`.
- * An event with zero sessions yet is omitted from both buckets (nothing
- * real to show a date/hours/count for).
+ * sessions already ran), OR the event has zero sessions at all yet. "Past" =
+ * every session is `completed`/`canceled`.
+ *
+ * T330: a zero-session event (an `events` row whose `event_sessions` insert
+ * failed) is pinned into `upcoming`, never silently dropped -- the owner's
+ * ruling (`auto-mode-decisions.md`, "2026-08-03 -- George's ruling on T330")
+ * is that a dateless event is unfinished setup, not a finished event, and
+ * the coach must be able to see, reach and fix it. See (a)/(b)/(c) inline
+ * below for routing, sort and comparator-safety detail.
  */
 export function buildEventGroups(
   events: readonly OutreachEventRow[],
@@ -1727,15 +1733,41 @@ export function buildEventGroups(
     const eventSessions = (sessionsByEvent.get(event.id) ?? [])
       .slice()
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-    if (eventSessions.length === 0) continue;
+    // T330 (a) -- route, don't drop. A zero-session event goes straight to
+    // `upcoming` and skips the `hasScheduled` check entirely (there is
+    // nothing to check it against) -- it must NEVER reach `past`, whose
+    // comparator below unconditionally dereferences the last session
+    // (module doc (c) on that comparator, just below).
+    if (eventSessions.length === 0) {
+      upcoming.push({ event, sessions: eventSessions });
+      continue;
+    }
     const hasScheduled = eventSessions.some((session) => session.status === 'scheduled');
     (hasScheduled ? upcoming : past).push({ event, sessions: eventSessions });
   }
   upcoming.sort((a, b) => {
+    // T330 (b) -- empty-safe, pinned comparator. A dateless entry has no
+    // `startsAt` to compare on, so it sorts ahead of every dated entry (the
+    // owner's ruling: pinned to the top) and ties with any other dateless
+    // entry (stable sort keeps their relative input order). Only once
+    // neither side is dateless does the original next-scheduled-`startsAt`
+    // comparison run.
+    const aDateless = a.sessions.length === 0;
+    const bDateless = b.sessions.length === 0;
+    if (aDateless || bDateless) return Number(bDateless) - Number(aDateless);
     const aNext = a.sessions.find((session) => session.status === 'scheduled') ?? a.sessions[0];
     const bNext = b.sessions.find((session) => session.status === 'scheduled') ?? b.sessions[0];
     return aNext.startsAt.localeCompare(bNext.startsAt);
   });
+  // T330 (c) -- deliberately UNCHANGED. After (a) above, a zero-session
+  // event can no longer reach `past` at all: it is routed into `upcoming`
+  // unconditionally, before `hasScheduled` is even evaluated. This
+  // comparator's `a.sessions[a.sessions.length - 1]` dereference is
+  // therefore safe over every entry that actually reaches this array, but
+  // that safety depends ENTIRELY on (a) staying exactly as written above --
+  // this is NOT an independent guard on its own, and must never be
+  // described as load-bearing in isolation (that is T301's own recorded
+  // defect: an unreachable guard documented as though it does real work).
   past.sort((a, b) => {
     const aLast = a.sessions[a.sessions.length - 1];
     const bLast = b.sessions[b.sessions.length - 1];
@@ -2487,9 +2519,20 @@ function CoachEventTitleCell({ event }: { event: OutreachEventRow }): ReactNode 
 function CoachEventDateCell({
   event,
   stats,
+  isDateless,
 }: {
   event: OutreachEventRow;
   stats: EventRowStats;
+  /** T330 (e) -- `true` for a zero-session event (module doc on
+   * `buildEventGroups`). Renders the owner's "Needs dates" marker alongside
+   * the existing type `Badge`, reusing that shipped pattern rather than
+   * inventing a new one (owner's ruling #3, `auto-mode-decisions.md`).
+   * `variant="warning"` is confirmed in `astryx-api.md`'s own `Badge` props
+   * table (constitution item 2 -- verified from the source of truth, not
+   * merely the installed package). Shared by both the desktop `date` column
+   * and the narrow stacked-card column below -- this is the ONE component
+   * both render through, so this single change covers both branches. */
+  isDateless: boolean;
 }): ReactNode {
   return (
     <VStack gap={0.5}>
@@ -2499,6 +2542,7 @@ function CoachEventDateCell({
           variant="neutral"
           label={event.type === 'competition' ? 'Competition' : 'Outreach'}
         />
+        {isDateless && <Badge variant="warning" label="Needs dates" />}
         {stats.weekdayChips.map((chip) => (
           <Badge key={chip.key} variant="neutral" label={chip.label} />
         ))}
@@ -2684,6 +2728,12 @@ function buildCoachOutreachColumns({
             return renderSessionDetailCell(row, rsvps, studentNameById);
           }
           const isExpanded = expandedEventIds.has(row.event.id);
+          // T330 (d) -- em-dash cells, NARROW branch. This is a SEPARATE
+          // render path from the desktop `hours`/`count` columns below (the
+          // `isNarrow` branch above) -- both must be dashed independently,
+          // or a coach on a phone still sees `0h`/`0 students` for a
+          // dateless row even though the desktop table is fixed.
+          const isDateless = row.sessions.length === 0;
           const hoursValue =
             bucket === 'upcoming' ? row.stats.hours.plannedHours : row.stats.hours.confirmedHours;
           const countValue =
@@ -2691,15 +2741,15 @@ function buildCoachOutreachColumns({
           return (
             <VStack gap={2}>
               <CoachEventTitleCell event={row.event} />
-              <CoachEventDateCell event={row.event} stats={row.stats} />
+              <CoachEventDateCell event={row.event} stats={row.stats} isDateless={isDateless} />
               <HStack gap={4} wrap="wrap">
                 <StatCell
                   label={bucket === 'upcoming' ? 'Planned' : 'Logged'}
-                  value={`${hoursValue}h`}
+                  value={isDateless ? '—' : `${hoursValue}h`}
                 />
                 <StatCell
                   label={bucket === 'upcoming' ? 'Expected' : 'Attended'}
-                  value={`${countValue} students`}
+                  value={isDateless ? '—' : `${countValue} students`}
                   secondary={
                     bucket === 'past' && row.stats.reached !== null
                       ? `Reached ${row.stats.reached}`
@@ -2752,7 +2802,13 @@ function buildCoachOutreachColumns({
       header: 'Date',
       width: pixel(150),
       renderCell: (row) =>
-        row.kind === 'event' ? <CoachEventDateCell event={row.event} stats={row.stats} /> : null,
+        row.kind === 'event' ? (
+          <CoachEventDateCell
+            event={row.event}
+            stats={row.stats}
+            isDateless={row.sessions.length === 0}
+          />
+        ) : null,
     },
     {
       // An explicit `minWidth` (not the `proportional()` default of
@@ -2810,10 +2866,17 @@ function buildCoachOutreachColumns({
       align: 'end',
       renderCell: (row) => {
         if (row.kind !== 'event') return null;
+        // T330 (d) -- em-dash cells, DESKTOP branch. A SEPARATE render path
+        // from the narrow stacked-card column above -- both must be dashed
+        // independently (module doc there).
+        const isDateless = row.sessions.length === 0;
         const hoursValue =
           bucket === 'upcoming' ? row.stats.hours.plannedHours : row.stats.hours.confirmedHours;
         return (
-          <StatCell label={bucket === 'upcoming' ? 'Planned' : 'Logged'} value={`${hoursValue}h`} />
+          <StatCell
+            label={bucket === 'upcoming' ? 'Planned' : 'Logged'}
+            value={isDateless ? '—' : `${hoursValue}h`}
+          />
         );
       },
     },
@@ -2826,12 +2889,13 @@ function buildCoachOutreachColumns({
       align: 'end',
       renderCell: (row) => {
         if (row.kind !== 'event') return null;
+        const isDateless = row.sessions.length === 0;
         const countValue =
           bucket === 'upcoming' ? row.stats.expectedCount : row.stats.attendedCount;
         return (
           <StatCell
             label={bucket === 'upcoming' ? 'Expected' : 'Attended'}
-            value={`${countValue} students`}
+            value={isDateless ? '—' : `${countValue} students`}
             secondary={
               bucket === 'past' && row.stats.reached !== null
                 ? `Reached ${row.stats.reached}`
@@ -3238,7 +3302,14 @@ function CoachOutreachView({
     }
   }
 
-  const hasAnyOutreach = sessions.length > 0;
+  // T330 (g) -- gated on events AS WELL AS sessions, not sessions alone. A
+  // season whose only event's `event_sessions` insert failed has real
+  // `events` but zero `sessions`; gating on `sessions.length` alone would
+  // render the EmptyState over that event forever (a failed FIRST create
+  // stays invisible and unfixable), even though (a)-(f) above make a
+  // dateless event a real, rendered `upcoming` row once the list itself
+  // renders.
+  const hasAnyOutreach = events.length > 0 || sessions.length > 0;
   // T121 item (b) -- edit-mode prefill, including `expectedStudentIds`
   // derived from the event's own existing `going` RSVPs.
   const initialEvent =
@@ -3446,6 +3517,14 @@ function StudentOutreachEventRow({
           variant="neutral"
           label={event.type === 'competition' ? 'Competition' : 'Outreach'}
         />
+        {/* T330 (e) -- owner's ruling #4: the "Needs dates" marker shows on
+            BOTH views, not coach-only (against the orchestrator's own
+            recommendation -- `auto-mode-decisions.md`'s T330 entry). There
+            is nothing to mirror on this row's numeric cells (module doc on
+            `buildEventGroups`'s student-facing consumer) -- it reads only
+            `stats.dateRangeLabel`/`stats.weekdayChips`, both already total
+            over an empty `sessions` array. */}
+        {sessions.length === 0 && <Badge variant="warning" label="Needs dates" />}
         <Text type="supporting">{stats.dateRangeLabel}</Text>
         {stats.weekdayChips.map((chip) => (
           <Badge key={chip.key} variant="neutral" label={chip.label} />
@@ -3767,7 +3846,11 @@ function StudentParentOutreachView({
     }
   }
 
-  const hasAnyOutreach = sessions.length > 0;
+  // T330 (g) -- same fix as the coach view's own `hasAnyOutreach` above,
+  // and for the same reason: the owner ruled a dateless event visible on
+  // BOTH views (ruling #4), so both gates must consider `events` as well as
+  // `sessions`, or a failed first create stays invisible here too.
+  const hasAnyOutreach = events.length > 0 || sessions.length > 0;
 
   return (
     <>
