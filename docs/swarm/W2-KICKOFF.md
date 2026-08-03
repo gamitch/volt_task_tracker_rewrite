@@ -33,7 +33,7 @@ defect-dense.
 **Files you own — do not edit source outside this list:**
 
 ```
-src/pages/outreach/**                       (all 10 files; OutreachList.tsx is 4164 lines)
+src/pages/outreach/**                       (20 files = 10 components + 10 tests; OutreachList.tsx is 4164 lines)
 src/lib/supabase/loaders/outreach.ts
 src/lib/supabase/loaders/selfCheckoff.ts
 ```

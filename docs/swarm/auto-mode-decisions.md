@@ -1619,3 +1619,45 @@ D-7**, and the owner was asked to choose between options one of which he had alr
 opposite direction. The mistake was not the answer — it was recommending on a settled question
 without checking whether it was settled. **Search `auto-mode-decisions.md` and the target module's
 own doc header before framing any owner question.**
+
+---
+
+## 2026-08-03 — George's ruling on T322 (part 2): COMPETITION hours do NOT count toward volunteer hours
+
+**Volunteer hours = `type = 'outreach'` ONLY.**
+
+**Why this needed a second ruling.** The 2026-08-02 T322 ruling covered `meeting` (excluded) and
+`outreach` (counts) and was **silent on `competition`** — but the schema has three types
+(`scheduling_attendance.sql:36`: `check (type in ('meeting', 'outreach', 'competition'))`) and
+`v_season_kpis` computes `competition_hours` as its own filtered sum
+(`20260723000000_kpi_views.sql:183`, surfaced again at `:226`), which the KPI card renders.
+**Searched before asking** (item 11 discipline): the only occurrence of "competition" in this file
+was at `:1551`, inside the T322 problem statement's description of the card's own label list
+`Meetings · Outreach · Competitions` — **a description of the bug, not a ruling on it.** Genuinely
+unsettled, so it was put to the owner rather than inferred.
+
+**Found by the incoming W4+W5 orchestrator during its verification read, before packeting.** Had it
+not been caught, T322 would have shipped a two-way rule against a three-way enum and silently
+decided the third case by omission.
+
+**The rule, complete, in one place:**
+
+| `events.type` | Counts toward the volunteer-hours goal? |
+|---|---|
+| `outreach` | **Yes** — service the students perform for others |
+| `meeting` | **No** — the team's own internal meetings; produces a participation percentage instead |
+| `competition` | **No** — the team competing for itself is not service performed for the community |
+
+**The reasoning is the same one that excludes meetings**, extended consistently: the goal measures
+*community service*, not *time contributed to the team*. **Competition hours are still tracked and
+still displayed as their own figure** — they are removed from the volunteer-hours total and its goal
+percentage, not from the app.
+
+**Unchanged and not re-opened:** the rule is by event **`type`, never by event name**.
+`GG FLL Team Meetings` and `P3 FLL Team Meetings` are `type = 'outreach'` and **do** count, despite
+"Meetings" in their titles — the team's students are *student coaches* running those sessions for
+younger FLL teams. Those two events are 72 of 117 sessions, 62% of the migrated data. **Not
+authorized:** retyping any event, or touching the FLL events.
+
+**Cheap to implement once answered:** `kpi_views.sql:181-183` already computes all three as separate
+filtered sums, so this is column selection, not new arithmetic.
