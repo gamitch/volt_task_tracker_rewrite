@@ -8,6 +8,66 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
 
+## UPDATE — 2026-08-03 (latest): W1's T403 is COMPLETE and passed re-review
+
+**T403 is DONE — all three steps, HEAVY chain complete, re-review PASSED.** Nothing on T403 is
+outstanding. `LiveConsole` now shows the real roster, the real check-in credential, and records real
+`attendance` rows.
+
+**➡️ THIS UNBLOCKS T196, THE `EndMeetingDialog` MOUNT — W3's ROW, NOT W1's.** W3 is unstaffed. See
+`docs/swarm/inbox/w1-to-w3-T196-unblocked.md` for the handover. **W1 must not mount it** —
+`WORKFLOWS.md` W1 says so explicitly.
+
+**W1's own open rows: T404 and T405** (both schema-adjacent, both need an owner call) and **T400**
+(folded into T196's wave — do not start separately). **T406 is W2's.**
+
+**Everything W1 has done is pushed to `claude/w1-checkin` and coherent; work from the branch head.** Work in a worktree
+(`git worktree add /home/user/volt_w1_checkin claude/w1-checkin`, no `-b` — the branch exists on
+origin). Do NOT `git checkout claude/w1-checkin` in the primary checkout; it is already used by that
+worktree and the checkout will fail.
+
+**Done and in PR #28:** T403 **step 1** (real display token) and **step 2** (real roster/attendance —
+`makeLoadLiveConsoleData` in `loaders/kiosk.ts`, fixtures deleted, `4ee0c52`).
+
+**T403 step 3 (HEAVY) is IN PROGRESS.** State at the time of writing:
+
+- **Packet:** `docs/swarm/active/T403-step3-worker-packet.md` — complete, gated, and self-contained.
+  It is the full spec; **no context from the conversation is needed to continue.**
+- **Premise gate: DONE.** `checker-premise` on Fable gated `799827e` and returned **DISPATCH**, all
+  five traps CONFIRMED by building against a real PostgreSQL 16 database. Verdict and built
+  prescription are in **§0 of the packet** — read that first. Headline: a `LiveConsole` status write
+  through `makeUpsertAttendance` nulls `hours_override` **and** downgrades `method` `qr`→`coach` in
+  the same statement. The fix is a **parallel** `makeSetAttendanceStatus`; `makeUpsertAttendance`
+  must stay byte-identical — that is what keeps W2's `AttendancePanel` at zero blast radius.
+- **Worker: DONE AND LANDED** at `3a14453` on `claude/w1-checkin`. Adds `makeSetAttendanceStatus` to
+  `attendance.ts` (`makeUpsertAttendance` verified byte-identical), makes the `LiveConsole` seam
+  real with rollback + error Banner, and deletes `notWiredSetAttendanceStatus`. **All six gates
+  re-verified by the orchestrator, not just claimed by the worker: `tsc` 0 · build ✓ · prettier
+  clean · eslint 0 errors / 363 warnings · vitest 77 files / 1878 tests, exit 0.** All four
+  mutations red at exit 1 — no exit-0 survivor, the first step this session where that held.
+- **✅ `checker-reviewer` RE-RAN and PASSED** (MINOR + NITs, none blocking) against `b3ba93b`;
+  findings fixed in `aa900f3`. It reproduced all six gates independently and did **not** trust the
+  shipped tests — it drove its own probe of 6 sequential edits on the `qr` row, 6 on the `import`
+  row and 3 on a new row, asserting `method`/`status`/both ids on all 18 calls. It byte-compared
+  `makeUpsertAttendance` (746/746) and `resolveAttendanceWriteMethod` (204/204) as **IDENTICAL**,
+  and ran seven of its own mutations, all red at exit 1 — including M7, which had been green at
+  exit 0 and caused the earlier FAIL.
+
+- **Do NOT re-dispatch a checker for T403.** The earlier FAIL verdict against `3a14453` is
+  **historical**; the code it reviewed was reworked and the rework passed.
+
+**Watch for this specifically (packet §4b).** With the seam made real, the 43 existing `LiveConsole`
+coach-action tests still pass at exit 0 **only by microtask timing** — no `await` sits between the
+action and the assertions, so rejection microtasks land after the last assert. One `flushMicrotasks`
+flips them red. Every coach-action test must inject an explicit seam.
+
+**Filed this session, all open, none of them W1's to fix:** **T404** (post-completion INSERT is never
+audited — schema, owner call), **T405** (`attendance.updated_at` never moves on conflict-update),
+**T406** (TOCTOU on `markDayComplete` — **W2's file**; W2 notified via
+`docs/swarm/inbox/w1-to-w2-T406-markdaycomplete-toctou.md`).
+
+**Next free row number in W1's block: T407.**
+
 ## UPDATE — 2026-08-02 (newest): W6 merged; calendar lifecycle migration deployed; hosted smoke pending
 
 PR #37 merged `codex/t195-t194-calendar-feed-lifecycle` into `main` at `d0d1aa0`. Migration

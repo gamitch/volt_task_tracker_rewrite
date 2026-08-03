@@ -391,7 +391,14 @@ describe('makeLoadAttendanceForSessions', () => {
       updated_at: '2026-08-02T14:05:00.000Z',
       created_at: '2026-08-02T14:05:00.000Z',
     };
-    const inSpy = vi.fn().mockResolvedValue({ data: [dbRow], error: null });
+    // T320 (W1): the loader now paginates as `.order('id').range(from, to)`,
+    // so a >1000-row response is no longer silently truncated by PostgREST's
+    // `max_rows = 1000`. Stub extended to match; `.range()` resolves the one
+    // fixture row, which is a short page, so the loop exits after one request.
+    // Test-only change — `AttendancePanel.tsx` itself is untouched.
+    const rangeSpy = vi.fn().mockResolvedValue({ data: [dbRow], error: null });
+    const orderSpy = vi.fn(() => ({ range: rangeSpy }));
+    const inSpy = vi.fn(() => ({ order: orderSpy }));
     const selectSpy = vi.fn(() => ({ in: inSpy }));
     const fromSpy = vi.fn(() => ({ select: selectSpy }));
     const client = { from: fromSpy } as unknown as SupabaseClient;

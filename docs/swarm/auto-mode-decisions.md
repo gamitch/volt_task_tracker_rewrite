@@ -1577,6 +1577,149 @@ percentage, and label the card so it reads as volunteer hours rather than all ho
 participation stays its own separate figure. **Not authorized:** changing which events are typed
 `outreach` (see above), or touching the FLL events.
 
+## 2026-08-02 — George's ruling on T400: option (a), the live-session picker
+
+**Structured selection, not a verbatim quote.** He was given T400's three options in plain
+language and answered *"let's go with option A for T400."* The wording of the options is the
+orchestrator's; the choice is his.
+
+**The question.** T321 shipped manual short-code entry for a student whose check-in credential
+expired, reusing the session id already in their URL. That leaves the case the external audit
+actually named — *"a student who cannot scan has no fallback"* — still open, because
+`validateCheckinRequest` rejects any body without a uuid `session_id` and `verifyShortCode` HMACs
+the presented code over `` `${sessionId}:${bucket}` ``. **A short code alone verifies against
+nothing.** The kiosk shows the QR and the 6-character code but never a readable session identifier,
+so that student has no way to supply one.
+
+**Chosen — (a): `/checkin` offers a picker of currently-open sessions.** The student taps the event
+they are at, which supplies the session id, then types the code from the kiosk. One tap plus one
+code.
+
+**Not chosen, and both are closed unless (a) fails:**
+
+- **(b) display a short session identifier on the kiosk too** — cheap to build, but it makes the
+  student type two things on a phone in a noisy shop, and doubles what they can get wrong.
+- **(c) let the edge function resolve a bare code against every live session** — best experience,
+  but it **breaks the code's session binding**: a code issued for one event could match another
+  running at the same time, and each attempt searches more ground against a 5/min/user rate limit.
+  It also lives in `supabase/functions/**`, which W1 does not own. **This is the one that needed a
+  ruling, and the ruling is no.**
+
+**Sequencing consequence.** (a) needs a loader that lists currently-open sessions — which is work
+**T196 has to build anyway** to make `LiveConsole` real. T400 is therefore folded into T196's wave
+rather than run as a separate row, and must not be started before it. Recorded on the T400 row.
+
+## 2026-08-02 — George's ruling on MTG-11: LAST WRITE WINS, overturning coach precedence
+
+**Verbatim, unprompted — this is his own framing, not a menu he picked from.** Asked to choose
+between two ways of fixing a provenance defect, he rejected the premise of both and stated a rule:
+
+> *"why wouldn't we have the last record be what saves. If a coach touches absent, but then the
+> student comes late and scans the qr, the student entry should be saved. If a student said they
+> were present (by mistake or falsely), but the coach then marked them absent the last record should
+> win. if there is a ever a correction later the coach should be able to go in and update the
+> attendance, last record wins. in all cases, last record wins"*
+
+Asked to confirm whether the rule extends to the `attendance.method` label itself and not just the
+status, he answered:
+
+> *"it should follow last write wins so we do not have a mixmatching on the record."*
+
+### What this overturns
+
+**`VOLT_Portal_PRD.md:307`, MTG-11, second clause — now SUPERSEDED:**
+
+> *"A coach tap upserts with `method='coach'`, `recorded_by=coach`, and **always wins** over QR
+> values (QR writes never overwrite a `method='coach'` row)."*
+
+**Also supersedes `VOLT_Portal_PRD.md:794`'s acceptance item 4**, *"Coach override survives a
+subsequent QR write (MTG-11)."*
+
+**His late-scanner case is the one that breaks the written rule.** Coach marks a student absent
+before they arrive; the student turns up late and scans the kiosk. Under MTG-11 as written the scan
+is discarded and the student stays `absent` while standing in the room. Under last-write-wins the
+scan is recorded, which is the true state.
+
+### What this CONFIRMS — and why it shrinks T403 step 3's open defect
+
+**MTG-11's FIRST clause already said `method='coach'` on a coach tap.** The T403 step-3 packet's
+acceptance criterion 3 said the opposite — *"external `'qr'`/`'import'` provenance is preserved"* —
+which the orchestrator took from `resolveAttendanceWriteMethod`'s docstring and **never checked
+against the PRD.** That criterion was wrong.
+
+So the checker's MAJOR-1 (six sequential edits on a `qr` row send `["qr","coach","coach",…]`)
+describes code that is **wrong on the FIRST call only, in the opposite direction** from the finding.
+Correct under this ruling is `["coach","coach","coach",…]`. The fix is to stop calling
+`resolveAttendanceWriteMethod` in `LiveConsole` at all — smaller than either option offered.
+
+### Scope, stated honestly
+
+`method` now means **"who set the value that is there now"**, not "how did this student physically
+check in". One meaning, per his "no mismatching" instruction — no second field, and no row that
+claims `method='qr'` while naming a coach in `recorded_by`.
+
+**`resolveAttendanceWriteMethod` (`loaders/attendance.ts`) implements the OTHER meaning** — "a row
+that already carries real external provenance keeps that provenance" — and **two of W2's screens use
+it** (`AttendancePanel.tsx:717`, `MarkDayCompleteDialog.tsx:723`). If this ruling is meant to apply
+to the whole table rather than just `LiveConsole`, that function is wrong everywhere and W2's files
+must change. **W1 does not own those files and is not touching them.** Filed as a row for W2 rather
+than acted on; this ruling is applied to `LiveConsole` only until W2 and the owner decide.
+
+### Consequent test change, disclosed under constitution item 10
+
+`LiveConsole.test.tsx`'s MTG-11 precedence test asserts the now-superseded rule (a coach value
+surviving a later QR update). **It must be inverted, not deleted** — the new rule deserves a test
+that a later QR update DOES win. Item 10 requires boss approval to change an existing green test;
+this ruling is that approval, recorded here.
+
+## 2026-08-02 — George's ruling: LAST WRITE WINS applies to `LiveConsole` ONLY, not table-wide
+
+**Structured selection.** Given three options in plain language — (A) leave the divergence, documented;
+(B) send W2 a note and let them decide; (C) rule it table-wide now — he answered **"A"**. The wording
+of the options is the orchestrator's; the choice is his. The orchestrator had leaned toward B or C;
+**he chose A and that is the decision.**
+
+### What this settles
+
+The LAST WRITE WINS ruling (see the MTG-11 entry above) is **scoped to
+`src/pages/meetings/LiveConsole.tsx`**. It does **not** extend to
+`loaders/attendance.ts`'s `resolveAttendanceWriteMethod`, and it does **not** extend to W2's
+`AttendancePanel.tsx` or `MarkDayCompleteDialog.tsx`.
+
+### ⚠️ THE RESULTING DIVERGENCE IS DELIBERATE. DO NOT "FIX" IT.
+
+`attendance.method` now means two different things depending on which screen wrote the row:
+
+| Screen | Coach edits a row that a student originally scanned | `method` becomes |
+|---|---|---|
+| `LiveConsole` (W1, meetings) | last writer wins | **`'coach'`** |
+| `AttendancePanel` (W2, outreach) | original provenance preserved | **`'qr'`** |
+| `MarkDayCompleteDialog` (W2, outreach) | original provenance preserved | **`'qr'`** |
+
+**A future session WILL find this and think it is an inconsistency bug.** It is not. It is an owner
+ruling. Anyone tempted to unify it must get a new owner decision first and cite it — this entry is
+not that decision, it is the opposite.
+
+### Why A is defensible, stated so the reasoning survives
+
+The ruling arose from the meeting console, where a coach taps a student's status during roll call and
+"who set this" is the useful fact. W2's screens are outreach events with volunteer hours attached,
+where "how did this student originally arrive" may carry weight the meeting console does not have.
+**W1 does not know W2's feature well enough to decide for it**, and the owner declined to force the
+question. Leaving each surface with the meaning its own feature needs is a legitimate outcome, not a
+deferral.
+
+### Consequences accepted with this choice
+
+- `resolveAttendanceWriteMethod` (`loaders/attendance.ts`) stays, unchanged, with its existing
+  "keeps that provenance" contract intact. It is simply **no longer called from `LiveConsole`**.
+- **No W2 inbox note is being sent for this.** W2 has nothing to do; sending them an ask would imply
+  otherwise. (T406, filed separately, still stands — that is a real defect in their file and is
+  unrelated to this.)
+- **No ledger row is filed**, because there is no pending work. A row would misrepresent a settled
+  decision as an open task.
+- Nothing in `src/pages/outreach/**` was read for behaviour or modified in reaching this decision.
+
 ---
 
 ## 2026-08-02 — George's ruling on T309: an unchecked student is recorded `absent`, not deleted

@@ -433,3 +433,211 @@ T1300-T1399. Two rows are worth pulling forward because they are cheap and preve
   sweeping for it. This is the durable fix for the family behind T155/T176/T181/T324.
 </content>
 </invoke>
+
+---
+
+## W1 — Check in (RESUMED, 2026-08-02)
+
+> **This supersedes the cold-start W1 block above.** W1 is partly done: three rows are complete and
+> a fourth is half-built on an open PR. Use this prompt, not the one at the top of the file.
+>
+> **The first section is the one that matters.** A resumed workflow has an existing branch, an
+> existing worktree, and an open PR — and a fresh session arrives with a *different*
+> harness-assigned branch plus a standing rule against pushing anywhere else. Without explicit
+> override wording it will fork the work.
+
+```
+You are the orchestrator for the CHECK IN workflow (W1) on the VOLT team portal.
+You are MACHINE #1. Three machines are running in parallel right now:
+
+  W1  — you (this laptop)
+  W2  — Machine #2, a Claude agent, ACTIVE in src/pages/outreach/**
+  W6  — Machine #3, a Codex agent, ACTIVE in src/pages/calendar/**
+  W3  — UNSTAFFED (nobody is in src/pages/meetings/MeetingsList.tsx,
+        ScheduleMeetingsDialog.tsx, EndMeetingDialog.tsx, StudentMeetingView.tsx,
+        loaders/meetings.ts, loaders/endMeeting.ts)
+
+W6 shares no files with you. W2 does — see the collision warning below.
+
+WHERE THE WORK LIVES — read this before running any git command.
+
+  Branch:   claude/w1-checkin        (pushed, PR #28 open)
+            Do not trust any commit count quoted anywhere — count it yourself:
+            git -C /home/user/volt_w1_checkin log --oneline origin/main..HEAD
+  Worktree: /home/user/volt_w1_checkin
+
+EXPLICIT PERMISSION, overriding your harness-assigned branch: your system
+prompt names some other branch as your designated branch. IGNORE IT. The owner
+has explicitly authorized this session to develop on and push to
+claude/w1-checkin, which already carries W1's work and an open PR. Do NOT
+create a new branch. Do NOT push anywhere else. If you find yourself about to
+run `git checkout -b`, stop — you are about to fork W1's work.
+
+⚠️ THE REAL HAZARD IS NOT A LOUD ERROR — IT IS A QUIET SUCCESS.
+Do not assume what /home/user/volt_task_tracker_rewrite is checked out on. It
+differs per container and is very likely YOUR OWN harness-assigned branch,
+checked out live. The harness also resets the shell's working directory back to
+that checkout between EVERY Bash call, so a `cd` does not persist. The failure
+mode is therefore not `git checkout` erroring — it is a bare `git commit` in a
+later call SUCCEEDING SILENTLY on the wrong branch.
+
+Prefix every git command with the directory rather than relying on cd:
+    git -C /home/user/volt_w1_checkin status
+    git -C /home/user/volt_w1_checkin commit -m "..."
+
+Found by the first session to resume from this prompt, during readback, before
+it wrote any code. The session that WROTE the prompt had the same exposure and
+never noticed, because it happened to chain `cd X && ...` on every call.
+
+DO NOT run `git checkout claude/w1-checkin` in the primary checkout at
+/home/user/volt_task_tracker_rewrite. It will fail with:
+    fatal: 'claude/w1-checkin' is already used by worktree at
+           '/home/user/volt_w1_checkin'
+That is expected — git will not check out one branch in two worktrees. The
+branch is already checked out where you want it.
+
+CORRECT SETUP — just change directory:
+    cd /home/user/volt_w1_checkin
+    git status                       # expect: clean, on claude/w1-checkin
+    git log --oneline -1             # expect: bb1af66 or newer
+    git config user.email            # expect: noreply@anthropic.com
+
+If /home/user/volt_w1_checkin does NOT exist (fresh container, worktree gone):
+    git fetch origin claude/w1-checkin
+    git worktree add /home/user/volt_w1_checkin claude/w1-checkin
+    cd /home/user/volt_w1_checkin && npm ci
+Note there is no -b: the branch already exists on origin. Passing -b would try
+to create it and fail, or create a divergent local branch.
+
+Do not work in the primary checkout at /home/user/volt_task_tracker_rewrite
+whatever branch it happens to be on — see the cwd warning above.
+
+READ IN THIS ORDER before doing anything: docs/swarm/RESUME-HERE.md (top-down —
+the dated UPDATE sections supersede each other, newest first),
+docs/swarm/constitution.md (item 26 governs how much process each task gets),
+docs/swarm/WORKFLOWS.md section W1, then the T403 row in
+docs/swarm/task-ledger.md — it carries the settled design for the work you are
+picking up, so you do not need to re-derive it. The prompt you are reading is
+also checked in at docs/swarm/KICKOFF-PROMPTS.md under "W1 — RESUMED"; that
+copy is canonical if the two ever disagree.
+
+GATES AT YOUR HEAD (verify before trusting anything; .env.local must be ABSENT):
+  tsc 0 · vite build ✓ · prettier clean · eslint 0 errors / 364 warnings ·
+  vitest 77 files / 1863 tests, exit 0
+  (origin/main baseline for comparison: 75 files / 1817 tests, exit 0)
+
+FILES YOU OWN — do not edit source outside this list:
+  src/pages/checkin/CheckinResult.tsx
+  src/pages/meetings/Kiosk.tsx
+  src/pages/meetings/LiveConsole.tsx
+  src/lib/supabase/loaders/checkin.ts
+  src/lib/supabase/loaders/kiosk.ts
+  src/lib/supabase/loaders/attendance.ts
+
+DO NOT TOUCH: src/pages/outreach/** (W2 is in there right now),
+src/pages/calendar/** (W6), src/pages/home/** (W5),
+supabase/migrations/*metric_views.sql and *kpi_views.sql (W4).
+
+⚠️ COLLISION WARNING, learned the expensive way:
+src/lib/supabase/loaders/attendance.ts is imported at RUNTIME by three
+workflows — endMeeting.ts:191 (W3) and three W2 pages (AttendancePanel,
+MarkEventCompleteDialog, MarkDayCompleteDialog). It sits in loaders/, which
+reads like W1 territory, and WORKFLOWS.md's collision table did not list it
+until T320 added it. A change correctly scoped to W1's own files broke six
+tests in two other workflows' files. BEFORE editing anything under
+src/lib/supabase/loaders/, grep for importers across src/ first — the owning
+workflow is whoever IMPORTS the module, not whoever the directory suggests.
+
+YOUR ROW-NUMBER BLOCK: T400–T499. Next free number is T404. File every new row
+inside the block. Never take a number from outside it, even if it looks free.
+
+DONE ALREADY — do not redo:
+  T321 — manual short-code entry on /checkin. In PR #28.
+  T161 — loaders/checkin.ts brought under test (was 521 lines, zero tests).
+  T320 — .range() pagination on the attendance read; PostgREST was silently
+         truncating at max_rows = 1000 and returning 200.
+  T403 step 1 — LiveConsole's QR panel now shows the REAL check-in credential
+         (loadKioskDisplayToken) instead of FIXTURE_QR_TOKEN / 'FXTURE'.
+
+YOUR NEXT TASK — T403 step 2. STANDARD tier. Read the T403 ledger row first.
+
+  LiveConsole's loadData still defaults to defaultLoadLiveConsoleData, which
+  returns 7 fabricated students and fixture attendance on a live route. This is
+  the fabricated-data family that produced T155 / T176 / T181 / T324, and this
+  console is a surviving member of it.
+
+  The design is already settled and recorded on the T403 row:
+    - Extend querySessionEventId in loaders/kiosk.ts (YOUR file) to also select
+      starts_at, ends_at. LiveConsoleData needs startsAt; the end-meeting
+      summary does not carry it.
+    - Compose makeLoadLiveConsoleData in loaders/kiosk.ts from that session
+      query plus loadEndMeetingSummary (loaders/endMeeting.ts — W3's file,
+      IMPORT-ONLY, do not edit it). Importing avoids duplicating the roster
+      logic (event → team_ids → active students), which the constitution
+      forbids re-deriving. W3 is unstaffed, so the import carries no
+      concurrent-edit risk. AttendanceRecordState is already shared in the
+      reverse direction, so the shapes line up.
+    - Swap LiveConsole's default, then DELETE FIXTURE_ROSTER and
+      FIXTURE_ATTENDANCE. Delete them — do not keep them as a fallback. A
+      fallback is how a fixture reaches a live route.
+    - Expect existing LiveConsole.test.tsx tests to break by inheriting the
+      real loader where they silently inherited a fixture. That is T151's
+      mechanism working. The file already has renderBody (injects a display
+      token) and renderBodyNoInjection (does not) — use the latter for anything
+      asserting on the component's own default.
+
+THEN T403 step 3. HEAVY tier — do not dilute it.
+  notWiredSetAttendanceStatus (LiveConsole.tsx) is an intentional no-op, so a
+  meeting run through this console records ZERO real attendance rows no matter
+  what a coach clicks. Making it real is a WRITE PATH.
+    - The pieces exist and are tested: upsertAttendance / removeAttendance
+      (loaders/attendance.ts) and resolveAttendanceWriteMethod for qr/coach
+      provenance. recordedBy is useAuth().user.id — that IS the profile id;
+      loaders/checkin.ts already uses the session user id as parent_profile_id.
+    - The OWNER HAS AUTHORIZED the full chain for this step: packet →
+      checker-premise → worker → checker-reviewer, with the premise gate
+      running on FABLE (model: "fable" on the Agent dispatch). Item 26 is
+      explicit that a gate which only reads is worth much less than one that
+      runs — have it BUILD the prescription in its own worktree (item 23).
+
+AFTER STEP 3 LANDS, TELL THE OWNER: it unblocks T196, the EndMeetingDialog
+mount, which is W3's row and NOT yours. WORKFLOWS.md W1 says so explicitly.
+Do not mount it yourself.
+
+ALSO OPEN IN YOUR BLOCK:
+  T400 — a student who cannot scan has no session id, so the kiosk short code
+         alone verifies against nothing. OWNER RULED option (a): /checkin
+         offers a picker of currently-open sessions. Folded into T196's wave
+         because it needs the same open-sessions query. Ruling is recorded in
+         auto-mode-decisions.md — cite it, never paraphrase.
+  T401, T402 — both filed by W1 but belong to W2. Do not execute them.
+
+RULES THAT ARE NOT OPTIONAL:
+- State your tier choice per constitution item 26 in the PR and defend it. If
+  two tiers are arguable, take the heavier one.
+- Update the ledger row AND the verification-log entry in the SAME commit that
+  merges the work (item 24).
+- Stage named paths only. Never `git add -A` or `git add .` (item 22).
+- Run mutation experiments in your own git worktree (item 23), and COMMIT
+  BEFORE MUTATING.
+- Assert exit codes, not just pass counts. A green count at exit 1 is this
+  project's recurring trap.
+- An owner-approval claim must cite a section of auto-mode-decisions.md, or it
+  is your decision and must say so.
+
+TWO LESSONS THIS WORKFLOW PAID FOR — both cost a mutation that passed at exit 0:
+1. A test that SUPPLIES the thing it is checking cannot detect a change to it.
+   T161: an errored-session fixture returned {session: null, error}, making the
+   error branch indistinguishable from the no-session branch. T403 step 1: a
+   render helper injected a display token by default, so no test exercised the
+   component's own default — including the test that claimed to prove there was
+   no fabricated code. Both looked thorough. Only the mutation exposed either.
+2. Run the mutation before believing the test. Every finding that changed an
+   outcome came from executing, never from reading.
+
+A NOTE ON THE STOP HOOK: it will report four commits as "Unverified"
+(e422123, 187a6b2, 0c2c664, c7a3980). All four are ancestors of origin/main and
+were not authored by any W1 session. Do NOT run the suggested rebase — it would
+rewrite published history that W2 and W6 are branched from. Just confirm
+`git config user.email` is noreply@anthropic.com and continue.
+```
