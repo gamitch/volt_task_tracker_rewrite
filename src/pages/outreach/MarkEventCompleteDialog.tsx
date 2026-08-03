@@ -159,11 +159,19 @@
  *    it -- reintroducing the exact bug this task exists to fix, on the one
  *    path where it is unrecoverable. So here: **a load that is in flight or
  *    has failed BLOCKS the write.** `handleConfirm` refuses to run
- *    (guarded twice -- once by the disabled confirm button, once
- *    defensively inside `handleConfirm` itself, since jsdom's `disabled`
- *    attribute alone already suppresses a dispatched click and this second
- *    guard is therefore untestable, defence-in-depth only) unless
- *    `attendanceState.status === 'success'`. A future reader must NOT
+ *    (guarded twice -- once by the disabled confirm button, once inside
+ *    `handleConfirm` itself) unless `attendanceState.status === 'success'`.
+ *    **Both layers are independently load-bearing, and neither is dead
+ *    code.** This sentence previously claimed the second guard was
+ *    "untestable" because "jsdom's `disabled` attribute alone already
+ *    suppresses a dispatched click" -- that is FALSE and was disproved by
+ *    T307's own checker (`verification-log.md:6458-6465`): Astryx's
+ *    `Button` guards on the `isDisabled` **prop**, not the DOM attribute,
+ *    so a DOM-level forced click is not what makes it hard to reach.
+ *    Removing only the button's clause still blocks the write; removing
+ *    only `handleConfirm`'s still blocks it; removing BOTH lets a write
+ *    through. See `:560-567` for the T401 re-proof rather than restating
+ *    the measurement here. A future reader must NOT
  *    "harmonise" these two dialogs' failure rules -- they differ because
  *    what the coach can see and correct before the write differs, not
  *    because of an oversight in either file.
@@ -436,17 +444,6 @@ export interface MarkEventCompleteDialogProps {
  * already-open dialog, same shape `AttendancePanel.tsx`'s own
  * `AttendanceLoadState` (`:523-527`) already established. Deliberately NOT
  * exported -- private to this component's own load gating. */
-/**
- * `supabase/config.toml`'s `[api] max_rows`, mirrored here because a
- * response at this length may have been silently truncated by PostgREST and
- * this dialog's write path cannot tell a truncated-away row from a
- * never-recorded one. Kept as a named constant, not an inline literal, so
- * the tie to that config value is greppable from both ends. If `max_rows`
- * changes, this must change with it -- T320 (loader-side `.range()`
- * pagination) removes the need for it entirely.
- */
-export const ATTENDANCE_ROW_CAP = 1000;
-
 type AttendanceLoadState =
   | { status: 'loading' }
   | { status: 'error'; retry: () => void }
@@ -520,37 +517,26 @@ export function MarkEventCompleteDialog({
     loadAttendance(remainingSessionIds)
       .then((rows) => {
         if (!isMounted) return;
-        // T307 checker (MAJOR): PostgREST TRUNCATION IS A THIRD STATE this
-        // design otherwise does not model, and it is the one surviving way
-        // this dialog could still destroy a recorded row.
+        // T401: this used to fail CLOSED here whenever `rows.length >=
+        // ATTENDANCE_ROW_CAP` (a now-deleted exported `const` of `1000`,
+        // `supabase/config.toml`'s `[api] max_rows`), because
+        // `queryAttendanceForSessions` (`loaders/attendance.ts`) issued a
+        // bare `.select('*').in(...)` with no `.range()`/`.limit()`, so a
+        // capped PostgREST response (200 with a partial `Content-Range`, not
+        // an error) resolved a truncated array `createLoader`
+        // (`loader.ts:174-176`, which throws only on `result.error`) had no
+        // way to distinguish from a complete one -- a student whose row was
+        // truncated away looked identical to one who never had a row, so the
+        // write would have nulled their real check-in/check-out/hours/method.
         //
-        // `supabase/config.toml`'s `[api] max_rows = 1000` caps every
-        // response, and `queryAttendanceForSessions`
-        // (`loaders/attendance.ts`) issues a bare `.select('*').in(...)`
-        // with no `.range()`/`.limit()`. A capped response is **not an
-        // error** -- PostgREST returns 200 with a partial `Content-Range`,
-        // so `result.error` is null, `createLoader` resolves the truncated
-        // array (`loader.ts:174-176` only throws on `result.error`), and we
-        // would land in `'success'` holding rows for only SOME students.
-        // §3's block-on-failure rule never engages, because nothing failed
-        // -- and a student whose row was truncated away is indistinguishable
-        // from one who never had a row, so the write nulls their real
-        // check-in/check-out/hours/method. That is exactly the payload this
-        // whole task exists to eliminate.
-        //
-        // Fail CLOSED: a resolve at or above the cap is treated as a failed
-        // load, not a successful one. This can only ever block a write,
-        // never permit one, and it turns the design's own assumption -- that
-        // the resolved array is COMPLETE -- from assumed into checked.
-        // The proper fix is `.range()` pagination in the loader, which is a
-        // Forbidden file here and is filed as T320.
-        if (rows.length >= ATTENDANCE_ROW_CAP) {
-          setAttendanceState({
-            status: 'error',
-            retry: () => setRetryToken((token) => token + 1),
-          });
-          return;
-        }
+        // T320 removed the thing that guard was a proxy for:
+        // `makeLoadAttendanceForSessions` (`loaders/attendance.ts:303-375`)
+        // now pages with `.order('id', { ascending: true })` and
+        // `.range(...)`, looping until a short page returns, so the resolved
+        // array is complete regardless of its length. A resolve of 1000+
+        // rows is no longer evidence of truncation, so treating it as a
+        // failed load would now block a legitimate write on a correct one --
+        // the loader is the single place that knows about `max_rows` now.
         setAttendanceState({ status: 'success', rows });
       })
       .catch(() => {
@@ -580,11 +566,13 @@ export function MarkEventCompleteDialog({
   async function handleConfirm(): Promise<void> {
     if (isSubmitting || hasSubmitted || remaining.length === 0) return;
     // T307, module doc #6 (F1b) -- defence in depth. The confirm button is
-    // already natively `disabled` whenever `attendanceState.status !==
-    // 'success'`, which suppresses the dispatched click before this ever
-    // runs (jsdom included) -- this guard has no reachable failure mode to
-    // pin a criterion on, and is kept anyway rather than treated as dead
-    // code (the same trap T305's own W2 guard set).
+    // already `isDisabled` whenever `attendanceState.status !== 'success'`.
+    // T307's own checker disproved the original claim here that jsdom's
+    // `disabled` DOM attribute alone suppresses the dispatched click:
+    // Astryx's `Button` guards on the `isDisabled` PROP, not the attribute,
+    // so this guard and the button's are independently load-bearing, not
+    // redundant -- mutation-proven, removing only the button's `isDisabled`
+    // still blocks the write, and removing both lets one through.
     if (attendanceState.status !== 'success') return;
     const recordedRows = attendanceState.rows;
     setIsSubmitting(true);
