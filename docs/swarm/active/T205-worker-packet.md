@@ -66,35 +66,87 @@ supabase/tests/run_t205_anon_grant.sh                                    (NEW)
 migration (constitution item 10 — editing an applied migration is a BLOCKER). The fix is
 **additive**. Do not touch `src/**`.
 
-## Prescription
+## Prescription — REVISED after premise-gate round 1 (verdict REVISE, 1 BLOCKER)
 
-1. **New migration** `supabase/migrations/20260803000001_revoke_anon_leaderboard_students.sql`:
-   `revoke select on public.v_leaderboard_students from anon;`
-   Header comment must cite the ruling (`auto-mode-decisions.md:1297-1316`) and state that
-   `authenticated` is deliberately untouched.
-2. **Permanent regression test**, following the **already-proven T195 precedent** —
-   `supabase/tests/run_calendar_feed_lifecycle.sh` + `calendar_feed_platform_stub.sql`. Reuse that
-   stub; it already creates the `anon`/`authenticated` roles (`:7-13`) and stubs `auth` and
-   `storage` (`:35-51`). Skip `20260719000000_cron.sql` exactly as that runner does (`:29-31`,
-   "requires Supabase pg_cron, pg_net, and Vault").
-   Assertions, all three, so the proof is **paired** and not absence-only:
-   - `anon` SELECT on `v_leaderboard_students` → **denied**
-   - `authenticated` SELECT on `v_leaderboard_students` → **still returns the active row**
-   - `anon` SELECT on base `students` → **still 0 rows** (control)
+**The gate BUILT this prescription and found the original one-liner does not do what it says.
+The orchestrator independently replayed the measurement. Both are recorded below.**
 
-**Do not** add this to `tests/rls/run.sh`. That runner applies every migration unchanged and is
-**broken on bare Postgres** — `cron.sql` needs `pg_cron`+`pg_net` and `avatar_storage.sql` needs
-`storage.buckets`. Orchestrator measured it failing at three separate migrations. That rot is real
-but is **not this row's scope** — it is filed separately as **T701**.
+### The BLOCKER, measured three ways
+
+`v_leaderboard_students` is a **simple single-table view**, so Postgres makes it
+**auto-updatable** (`information_schema.views.is_updatable = YES` — the only such view in the
+whole schema, all 16 surveyed). It has no `security_invoker`, so it executes as its **owner**, a
+`BYPASSRLS` role. Supabase's stock default privileges grant `anon` INSERT/UPDATE/DELETE on it.
+An unqualified `DELETE` needs no `SELECT` privilege, so revoking reads does not incidentally
+block writes:
+
+| Revoke applied | `anon` runs `delete from public.v_leaderboard_students` | `students` rows |
+|---|---|---|
+| none | `DELETE 2` | 2 → **0** |
+| `revoke select ... from anon` *(the ruling's literal text)* | `DELETE 2` | 2 → **0** |
+| `revoke all ... from anon` | `ERROR: permission denied for view` | 2 → 2 |
+
+Shipping `revoke select` would have let the ledger record this exposure as "closed" while an
+anonymous internet request could still empty the students roster.
+
+### What to write
+
+**New migration** `supabase/migrations/20260803000001_revoke_anon_leaderboard_students.sql`:
+
+```sql
+revoke all on public.v_leaderboard_students from anon;
+revoke insert, update, delete on public.v_leaderboard_students from authenticated;
+```
+
+Line 1 closes the owner-ruled `anon` question completely.
+Line 2 closes the identical defect for a plain logged-in non-staff session — measured: base-table
+`delete from students` gives `DELETE 0` (RLS denies), but `delete from v_leaderboard_students`
+gives `DELETE 1`. **`authenticated` deliberately KEEPS SELECT** — the leaderboard depends on it,
+and revoking it breaks the feature.
+
+**Header comment must record:** the ruling citation (`auto-mode-decisions.md:1297-1316`), that
+line 1 uses the ruling's own "or equivalent" latitude, and that line 2 is an orchestrator scope
+extension logged in `auto-mode-decisions.md` under "W4+W5 auto-mode window", **D2** — reversible
+by the owner. **Do not describe line 2 as owner-authorized. It is not.**
+
+### Test — `supabase/tests/` following the T195 precedent
+
+Reuse `supabase/tests/calendar_feed_platform_stub.sql` (it creates the `anon`/`authenticated`
+roles at `:7-13` and stubs `auth` at `:16-33` and `storage` at `:35-61`). Skip
+`20260719000000_cron.sql` by name exactly as `run_calendar_feed_lifecycle.sh:29-31` does.
+
+**Critical setup step the first version of this packet omitted — the gate proved the suite is
+vacuous without it.** That stub grants nothing on public tables, so with it alone the view is
+owner-only, `anon` is denied for the wrong reason, and deleting the fix changes nothing. Before
+applying migrations you MUST simulate Supabase's stock grants:
+
+```sql
+alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+```
+
+**Four assertions**, so the proof is paired rather than absence-only:
+
+1. `anon` SELECT on the view → **denied**
+2. `authenticated` SELECT on the view → **still returns the active row**
+3. `anon` `delete from public.v_leaderboard_students` → **denied**, and `students` still has its rows
+4. `anon` SELECT on base `students` → **still 0 rows** (control)
+
+**Do not** add any of this to `tests/rls/run.sh` — that runner is broken on bare Postgres at three
+migrations and nothing in CI runs it. Filed separately as **T701**.
 
 ## Acceptance criteria — each names a mutation that turns it red
 
 | # | Criterion | Mutation that must turn it RED |
 |---|---|---|
-| 1 | `run_t205_anon_grant.sh` exits 0 with all three assertions PASS | Delete the `revoke` line from the new migration → assertion 1 must FAIL |
-| 2 | The fix is load-bearing, not incidental | Revert **only** the migration file; the suite must go red on assertion 1 specifically, not on a setup error |
-| 3 | `authenticated` is not collaterally damaged | Change the migration to `revoke select ... from anon, authenticated` → assertion 2 must FAIL |
-| 4 | The base-table control is genuinely asserting | Grant `anon` a `read_all` policy on `students` → assertion 3 must FAIL |
+| 1 | Suite exits 0 with all four assertions PASS | Blank the `revoke all` line, keep the file → assertion 1 must FAIL with `anon read 1 row(s)` |
+| 2 | The **write** path is genuinely closed, not just the read path | Replace `revoke all` with `revoke select` → **assertion 3 must FAIL**. This is the BLOCKER's own regression test; if this mutation leaves the suite green the suite is not testing the defect. |
+| 3 | `authenticated` SELECT is not collaterally damaged | Change line 1 to `revoke all ... from anon, authenticated` → assertion 2 must FAIL |
+| 4 | The base-table control is genuinely asserting | Add `create policy read_all on students for select to anon using (true)` → assertion 4 must FAIL |
+| 5 | The `authenticated` write revoke is load-bearing | Delete line 2 of the migration, and extend assertion 3 to run as `authenticated` → that must FAIL |
+
+**Criterion 1 says "blank the statement, keep the file", NOT "revert the file"** — the T195
+runner has a `found_*` guard, so removing the file yields `Missing required migration ... exit 1`,
+a setup error rather than a real red. The gate hit exactly this.
 
 **A criterion whose mutation leaves the suite green is not evidence — report that instead of
 shipping it** (`W5-KICKOFF.md:199-201`).
