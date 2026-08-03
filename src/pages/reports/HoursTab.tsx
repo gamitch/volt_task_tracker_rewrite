@@ -137,10 +137,33 @@
  *  - `events.adult_volunteers_count` (int, default 0) / `adult_volunteer_hours`
  *    (numeric, default 0) are PER-EVENT totals. `buildSeasonTotals` sums
  *    both across every event this task's `loadData` returned for the given
- *    season -- a plain arithmetic sum of already-real, already-non-null
- *    columns (no metric-view formula being re-derived here, since no view
- *    computes this sum at all; same class of "legitimately new, disclosed
- *    aggregate" reasoning T053's checker already accepted).
+ *    season THAT HAS AT LEAST ONE SESSION (T500 -- see below) -- a plain
+ *    arithmetic sum of already-real, already-non-null columns (no
+ *    metric-view formula being re-derived here, since no view computes this
+ *    sum at all; same class of "legitimately new, disclosed aggregate"
+ *    reasoning T053's checker already accepted).
+ *    T500 PREDICATE: event/session creation is not transactional (T330's
+ *    finding) -- a failed session insert can leave an event row behind, and
+ *    a coach's successful retry then produces a SECOND event row carrying
+ *    the same adult-volunteer figures, double-counting something that
+ *    happened once. An event with zero sessions did not happen, so
+ *    `buildSeasonTotals` now builds the set of event ids that have at least
+ *    one session (any status, including `canceled` -- this predicate is
+ *    "has >= 1 session", not "has a non-canceled session", so a
+ *    canceled-only event still counts; that is pre-existing/conservative
+ *    behaviour and intentionally out of scope here) and sums
+ *    `adultVolunteersCount`/`adultVolunteerHours` over ONLY those events.
+ *    `peopleReachedTotal`, `sessionsMissingHeadcountCount` and
+ *    `totalSessionCount` below are already session-derived and untouched by
+ *    this predicate. This is orthogonal to (and does not reverse) the
+ *    no-type-filter decision in the next paragraph -- narrowing which event
+ *    *kinds* count is a separate product question, filed as T702, not
+ *    decided by this file. One known, unverifiable-by-this-file gap:
+ *    imported data (`scripts/migrate/transform.ts`) maps events and
+ *    sessions independently, so an imported event that genuinely happened
+ *    could carry real adult-volunteer figures with zero session rows and
+ *    would now be silently excluded -- flagged for the data owner to check
+ *    at cutover, not something this file can detect.
  *  - `event_sessions.people_reached` (nullable int) is PER-SESSION.
  *    `buildSeasonTotals` sums every NON-NULL `peopleReached` value across
  *    every session this task's `loadData` returned for the season, and
@@ -590,9 +613,17 @@ export function buildSeasonTotals(
       peopleReachedTotal += session.peopleReached;
     }
   }
-  const adultVolunteersCount = events.reduce((sum, event) => sum + event.adultVolunteersCount, 0);
+  // T500: an event with zero sessions did not happen (event/session
+  // creation is not transactional -- T330). Exclude such an event's
+  // adult-volunteer figures from the season total; see module doc #6.
+  const eventIdsWithSessions = new Set(sessions.map((session) => session.eventId));
+  const eventsWithSessions = events.filter((event) => eventIdsWithSessions.has(event.id));
+  const adultVolunteersCount = eventsWithSessions.reduce(
+    (sum, event) => sum + event.adultVolunteersCount,
+    0,
+  );
   const adultVolunteerHours = round1(
-    events.reduce((sum, event) => sum + event.adultVolunteerHours, 0),
+    eventsWithSessions.reduce((sum, event) => sum + event.adultVolunteerHours, 0),
   );
   return {
     peopleReachedTotal,

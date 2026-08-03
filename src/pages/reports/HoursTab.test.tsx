@@ -339,6 +339,128 @@ describe('buildSeasonTotals -- module doc #6', () => {
 });
 
 // ---------------------------------------------------------------------------
+// T500: an event with zero sessions did not happen (event/session creation
+// is not transactional -- T330's finding), so its adult-volunteer figures
+// must not land in the season total. `FIXTURE_EVENTS` above cannot exercise
+// this: every one of its events has a session. A local fixture is built
+// per-test instead, per the packet's own instruction not to touch
+// `FIXTURE_EVENTS` (other tests depend on its exact shape).
+// ---------------------------------------------------------------------------
+describe('buildSeasonTotals -- T500: sessionless events excluded from season totals', () => {
+  const baseEvent: HoursEventRow = {
+    id: 'event-base',
+    seasonId: PLACEHOLDER_CURRENT_SEASON_ID,
+    type: 'outreach',
+    teamIds: null,
+    countsVolunteerHours: true,
+    adultVolunteersCount: 0,
+    adultVolunteerHours: 0,
+  };
+  const baseSession: HoursSessionRow = {
+    id: 'session-base',
+    eventId: 'event-base',
+    startsAt: '2026-01-01T00:00:00.000Z',
+    endsAt: '2026-01-01T01:00:00.000Z',
+    status: 'completed',
+    peopleReached: null,
+  };
+
+  // Criterion 1 (split into two `it`s -- a single `it` halts at its first
+  // failed `expect`, so it cannot show both fields going red on the same
+  // revert).
+  it('criterion 1a: excludes a sessionless event from adultVolunteersCount', () => {
+    const events: readonly HoursEventRow[] = [
+      { ...baseEvent, id: 'event-with-session', adultVolunteersCount: 5, adultVolunteerHours: 10 },
+      { ...baseEvent, id: 'event-sessionless', adultVolunteersCount: 3, adultVolunteerHours: 7 },
+    ];
+    const sessions: readonly HoursSessionRow[] = [
+      { ...baseSession, id: 'session-1', eventId: 'event-with-session' },
+    ];
+    const totals = buildSeasonTotals(events, sessions);
+    expect(totals.adultVolunteersCount).toBe(5); // NOT 8 (5 + 3)
+  });
+
+  it('criterion 1b: excludes a sessionless event from adultVolunteerHours', () => {
+    const events: readonly HoursEventRow[] = [
+      { ...baseEvent, id: 'event-with-session', adultVolunteersCount: 5, adultVolunteerHours: 10 },
+      { ...baseEvent, id: 'event-sessionless', adultVolunteersCount: 3, adultVolunteerHours: 7 },
+    ];
+    const sessions: readonly HoursSessionRow[] = [
+      { ...baseSession, id: 'session-1', eventId: 'event-with-session' },
+    ];
+    const totals = buildSeasonTotals(events, sessions);
+    expect(totals.adultVolunteerHours).toBe(10); // NOT 17 (10 + 7)
+  });
+
+  // Criterion 2: the T330 double-count scenario named in the defect -- a
+  // failed session insert leaves a sessionless orphan event behind, and a
+  // successful retry produces a second event (this time with a session)
+  // carrying the SAME adult-volunteer figures. The season total must count
+  // that figure once, not twice.
+  it('criterion 2: a sessioned event and its sessionless retry-orphan duplicate are counted once, not twice', () => {
+    const events: readonly HoursEventRow[] = [
+      { ...baseEvent, id: 'event-retry-succeeded', adultVolunteersCount: 4, adultVolunteerHours: 12 },
+      {
+        ...baseEvent,
+        id: 'event-orphan-from-failed-attempt',
+        adultVolunteersCount: 4,
+        adultVolunteerHours: 12,
+      },
+    ];
+    const sessions: readonly HoursSessionRow[] = [
+      { ...baseSession, id: 'session-1', eventId: 'event-retry-succeeded' },
+    ];
+    const totals = buildSeasonTotals(events, sessions);
+    expect(totals.adultVolunteersCount).toBe(4); // NOT 8
+    expect(totals.adultVolunteerHours).toBe(12); // NOT 24
+  });
+
+  // Criterion 3 -- the over-fixing guard. An event WITH a session must
+  // still be fully counted no matter its `type` or `countsVolunteerHours`
+  // (RPT-03 is unqualified; narrowing this is T702's question, not this
+  // task's). If the predicate were changed to also filter on
+  // `countsVolunteerHours` or `type === 'outreach'`, this must fail.
+  it('criterion 3: an event WITH a session is still fully counted regardless of type or countsVolunteerHours', () => {
+    const events: readonly HoursEventRow[] = [
+      {
+        ...baseEvent,
+        id: 'event-meeting-with-session',
+        type: 'meeting',
+        countsVolunteerHours: false,
+        adultVolunteersCount: 2,
+        adultVolunteerHours: 5,
+      },
+    ];
+    const sessions: readonly HoursSessionRow[] = [
+      { ...baseSession, id: 'session-1', eventId: 'event-meeting-with-session' },
+    ];
+    const totals = buildSeasonTotals(events, sessions);
+    expect(totals.adultVolunteersCount).toBe(2);
+    expect(totals.adultVolunteerHours).toBe(5);
+  });
+
+  // Criterion 4: the pre-existing contract is untouched by this predicate --
+  // session-derived totals do not depend on which events have sessions.
+  it('criterion 4: peopleReachedTotal, sessionsMissingHeadcountCount and totalSessionCount are unaffected by the event-level filter', () => {
+    const events: readonly HoursEventRow[] = [
+      { ...baseEvent, id: 'event-sessionless', adultVolunteersCount: 9, adultVolunteerHours: 20 },
+    ];
+    const sessions: readonly HoursSessionRow[] = [
+      { ...baseSession, id: 'session-1', eventId: 'event-elsewhere', peopleReached: 10 },
+      { ...baseSession, id: 'session-2', eventId: 'event-elsewhere', peopleReached: null },
+    ];
+    const totals = buildSeasonTotals(events, sessions);
+    expect(totals.peopleReachedTotal).toBe(10);
+    expect(totals.sessionsMissingHeadcountCount).toBe(1);
+    expect(totals.totalSessionCount).toBe(2);
+    // The sessionless event's own figures are still excluded, unrelated to
+    // the session-derived totals asserted above.
+    expect(totals.adultVolunteersCount).toBe(0);
+    expect(totals.adultVolunteerHours).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Render-level proof (DES-12 + real DOM number cross-checks).
 // ---------------------------------------------------------------------------
 
