@@ -16,11 +16,13 @@
  *      on the row's `SegmentedControl` -- proving the BLOCKER-class "without
  *      tabbing into the SegmentedControl" requirement, not just documenting
  *      it.
- *   2. A real test of MTG-11 coach-override precedence: a row is set to
- *      coach-Present via the real keyboard path, then a fabricated
- *      QR-sourced Realtime event for the SAME student is fed through the
- *      exact `subscribeToAttendanceChanges` callback contract the component
- *      itself consumes, asserting the row stays coach-Present, unchanged.
+ *   2. A real test of the attendance-precedence rule: a row is set via the
+ *      real keyboard path, then a fabricated QR-sourced Realtime event for
+ *      the SAME student is fed through the exact `subscribeToAttendanceChanges`
+ *      callback contract the component itself consumes. **The assertion was
+ *      INVERTED on 2026-08-02**: MTG-11's coach precedence is superseded by
+ *      the owner's LAST WRITE WINS ruling, so the incoming scan now wins
+ *      rather than being discarded.
  *   3. A real test of the Realtime-consumption logic in isolation (no
  *      pre-existing coach value to defend against), proving an incoming
  *      change updates the affected row.
@@ -47,16 +49,18 @@ import { AuthProvider, type AuthUser } from '../../app/guards';
 import { LoginAsDeferred as LoginAs } from '../../test-utils/authHarness';
 import {
   computeAttendanceTally,
-  defaultLoadLiveConsoleData,
+  defaultSetAttendanceStatus,
   filterRosterByQuery,
   formatSessionTimeRange,
   LiveConsoleBody,
   LiveConsolePage,
-  mergeAttendanceUpdate,
-  notWiredSetAttendanceStatus,
+  makeDefaultSetAttendanceStatus,
   notWiredSubscribeToAttendanceChanges,
   type AttendanceChangeListener,
+  type AttendanceMethod,
   type AttendanceRecordState,
+  type AttendanceStatus,
+  type LiveConsoleData,
   type LiveConsoleRosterEntry,
 } from './LiveConsole';
 
@@ -94,7 +98,168 @@ const TEST_PATH = `/meetings/live/${TEST_SESSION_ID}`;
 /** Renders the UNGATED `LiveConsoleBody` directly (bypasses `RequireRole`,
  * per that component's own module doc section 1/4) inside a real matched
  * route so `useParams()` resolves `sessionId`. */
-function renderBody(
+/**
+ * T403 step 1: `loadDisplayToken` now defaults to the REAL
+ * `loadKioskDisplayToken`, which calls the deployed `checkin-token` Edge
+ * Function. With no Supabase configured (the mandated gate state) that
+ * resolves nothing, and the panel honestly renders "QR not available yet"
+ * instead of a QR code.
+ *
+ * That is the correct production behaviour, so tests that want a QR on screen
+ * must now say so by injecting through the seam — the same "inject the fixture
+ * explicitly, never inherit one by default" discipline T151 established. These
+ * values are test-local and deliberately not exported from the component:
+ * before this change the component shipped its own fixture and every call site
+ * inherited it silently, which is how a fixture reaches a live route.
+ */
+const TEST_DISPLAY_TOKEN = {
+  qrUrl: `https://portal.voltfrc.org/checkin?s=${TEST_SESSION_ID}&t=abc123`,
+  shortCode: 'ABC234',
+};
+
+async function stubLoadDisplayToken(): Promise<typeof TEST_DISPLAY_TOKEN | null> {
+  return TEST_DISPLAY_TOKEN;
+}
+
+/**
+ * T403 step 2: the roster/attendance fixtures the COMPONENT used to ship
+ * (`FIXTURE_ROSTER`/`FIXTURE_ATTENDANCE`/`defaultLoadLiveConsoleData`) now live
+ * here, test-local and deliberately not exported from the component — the same
+ * move step 1 made for the display token, for the same reason: a default the
+ * component ships is inherited silently by every call site, which is how a
+ * fixture reaches a live route.
+ *
+ * Names are the PRD 4.2 wireframe's own already-fabricated placeholders
+ * ("Ada Q.", "Bea R.", "Cy T."), not new PII (constitution item 6).
+ */
+const TEST_ROSTER: LiveConsoleRosterEntry[] = [
+  { studentId: 'student-ada', name: 'Ada Q.' },
+  { studentId: 'student-bea', name: 'Bea R.' },
+  { studentId: 'student-cy', name: 'Cy T.' },
+  { studentId: 'student-dee', name: 'Dee W.' },
+  { studentId: 'student-eli', name: 'Eli M.' },
+  { studentId: 'student-fay', name: 'Fay N.' },
+  { studentId: 'student-gia', name: 'Gia P.' },
+];
+
+const TEST_ATTENDANCE: Record<string, AttendanceRecordState> = {
+  'student-ada': {
+    status: 'present',
+    method: 'qr',
+    recordedBy: null,
+    updatedAt: '2026-07-19T23:03:00.000Z',
+  },
+  'student-bea': {
+    status: 'present',
+    method: 'qr',
+    recordedBy: null,
+    updatedAt: '2026-07-19T23:04:00.000Z',
+  },
+  // student-cy: deliberately no entry -- "not yet checked in" (open circle
+  // in the PRD wireframe).
+  'student-dee': {
+    status: 'late',
+    method: 'coach',
+    recordedBy: 'fixture-coach',
+    updatedAt: '2026-07-19T23:20:00.000Z',
+  },
+  'student-eli': {
+    status: 'excused',
+    method: 'coach',
+    recordedBy: 'fixture-coach',
+    updatedAt: '2026-07-19T23:00:00.000Z',
+  },
+  'student-fay': {
+    status: 'absent',
+    method: 'import',
+    recordedBy: null,
+    updatedAt: '2026-07-19T22:00:00.000Z',
+  },
+};
+
+const TEST_SESSION_TITLE = 'Tuesday Build Meeting';
+
+async function stubLoadData(sessionId: string): Promise<LiveConsoleData> {
+  return {
+    session: {
+      id: sessionId,
+      title: TEST_SESSION_TITLE,
+      startsAt: '2026-07-21T23:00:00.000Z', // 6:00 PM America/Chicago
+      endsAt: '2026-07-22T01:00:00.000Z', // 8:00 PM America/Chicago
+    },
+    roster: [...TEST_ROSTER],
+    attendance: { ...TEST_ATTENDANCE },
+  };
+}
+
+/**
+ * T403 step 3, packet section 4b -- `onSetAttendanceStatus`'s shipped
+ * default (`defaultSetAttendanceStatus`) now makes a genuine write attempt.
+ * Every test below that drives a coach action (a `SegmentedControl` change
+ * or the DES-17 `1`-`4` keyboard path) injects one of these two seams
+ * EXPLICITLY rather than relying on that default -- with no Supabase
+ * configured (this suite's gate state), the real default's write would
+ * genuinely reject, and the packet's own disclosed hazard is that several of
+ * this file's pre-existing coach-action tests happened to pass anyway only
+ * because they never `await` between the action and their assertions, so
+ * the rejection microtask lands after the last assert.
+ */
+interface RecordedAttendanceWrite {
+  sessionId: string;
+  studentId: string;
+  status: AttendanceStatus;
+  method: AttendanceMethod;
+  recordedBy: string | null;
+}
+
+/** A resolving seam that records every call it is given, so a test can
+ * assert the exact arguments a coach action sent -- sessionId, studentId,
+ * status, method (the wire-resolved value, Trap 2), and recordedBy. */
+function spyResolvingSetAttendanceStatus(): {
+  onSetAttendanceStatus: (
+    sessionId: string,
+    studentId: string,
+    status: AttendanceStatus,
+    method: AttendanceMethod,
+    recordedBy: string | null,
+  ) => Promise<void>;
+  calls: RecordedAttendanceWrite[];
+} {
+  const calls: RecordedAttendanceWrite[] = [];
+  return {
+    calls,
+    onSetAttendanceStatus: async (sessionId, studentId, status, method, recordedBy) => {
+      calls.push({ sessionId, studentId, status, method, recordedBy });
+    },
+  };
+}
+
+/** A plain resolving seam for tests that only need the write to succeed
+ * without inspecting what was sent. */
+async function resolvingSetAttendanceStatus(): Promise<void> {
+  // Intentionally resolves -- an explicitly-injected happy-path seam per
+  // packet section 4b, not the component's own default.
+}
+
+/** An always-rejecting seam, for Trap 3's rollback + error-banner proof. */
+async function rejectingSetAttendanceStatus(): Promise<void> {
+  throw new Error('simulated persistence failure');
+}
+
+/**
+ * Renders `LiveConsoleBody` injecting NOTHING automatically, so every seam the
+ * caller does not name explicitly runs the component's own default.
+ * `renderBody` injects `loadDisplayToken` AND `loadData`; this path injects
+ * neither, and is the only way to assert on what the component actually ships.
+ *
+ * `props` exists so a test can hold ONE seam open while pinning another. T403
+ * step 2 made that necessary: with nothing injected the real `loadData` rejects
+ * (no Supabase in the gate state) and the page renders its DES-12 error state,
+ * so the QR panel never mounts — a test asserting on the component's own
+ * `loadDisplayToken` default has to get past the data load first, WITHOUT
+ * being handed a display token.
+ */
+function renderBodyNoInjection(
   user: AuthUser | null,
   props: Parameters<typeof LiveConsoleBody>[0] = {},
 ): void {
@@ -122,8 +287,20 @@ function renderBody(
   });
 }
 
-/** Renders the GATED default export, for the role-guard proof. */
-function renderPage(user: AuthUser | null): void {
+function renderBody(
+  user: AuthUser | null,
+  props: Parameters<typeof LiveConsoleBody>[0] = {},
+): void {
+  // Injected as DEFAULTS, not overrides — an individual test can still pass its
+  // own `loadDisplayToken` (including one that resolves null) or its own
+  // `loadData` (including one that rejects) to exercise the other paths.
+  //
+  // T403 step 2 added `loadData` here. Before it, these tests inherited the
+  // component's own fixture roster silently; now the component's default is the
+  // real Supabase-backed loader, so a test that wants Ada/Bea/Cy on screen has
+  // to say so. `renderBodyNoInjection` remains the only path that exercises
+  // what the component actually ships.
+  props = { loadDisplayToken: stubLoadDisplayToken, loadData: stubLoadData, ...props };
   act(() => {
     root.render(
       <MemoryRouter initialEntries={[TEST_PATH]}>
@@ -133,10 +310,41 @@ function renderPage(user: AuthUser | null): void {
               path="/meetings/live/:sessionId"
               element={
                 user === null ? (
-                  <LiveConsolePage />
+                  <LiveConsoleBody {...props} />
                 ) : (
                   <LoginAs user={user}>
-                    <LiveConsolePage />
+                    <LiveConsoleBody {...props} />
+                  </LoginAs>
+                )
+              }
+            />
+          </Routes>
+        </AuthProvider>
+      </MemoryRouter>,
+    );
+  });
+}
+
+/** Renders the GATED default export, for the role-guard proof. `props` are
+ * forwarded to the underlying body — the guard is what is under test here, so
+ * a test may inject data seams to get a populated console behind it. */
+function renderPage(
+  user: AuthUser | null,
+  props: Parameters<typeof LiveConsolePage>[0] = {},
+): void {
+  act(() => {
+    root.render(
+      <MemoryRouter initialEntries={[TEST_PATH]}>
+        <AuthProvider>
+          <Routes>
+            <Route
+              path="/meetings/live/:sessionId"
+              element={
+                user === null ? (
+                  <LiveConsolePage {...props} />
+                ) : (
+                  <LoginAs user={user}>
+                    <LiveConsolePage {...props} />
                   </LoginAs>
                 )
               }
@@ -203,53 +411,26 @@ function setNativeInputValue(input: HTMLInputElement, value: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// Pure functions -- mergeAttendanceUpdate (MTG-11), filterRosterByQuery,
+// Pure functions -- filterRosterByQuery,
 // computeAttendanceTally, formatSessionTimeRange.
 // ---------------------------------------------------------------------------
 
-describe('mergeAttendanceUpdate (MTG-11)', () => {
-  const coachRecord: AttendanceRecordState = {
-    status: 'present',
-    method: 'coach',
-    recordedBy: 'user-coach',
-    updatedAt: '2026-07-19T23:10:00.000Z',
-  };
-  const qrRecord: AttendanceRecordState = {
-    status: 'late',
-    method: 'qr',
-    recordedBy: null,
-    updatedAt: '2026-07-19T23:11:00.000Z',
-  };
-
-  it('applies the incoming value when there is no existing record', () => {
-    expect(mergeAttendanceUpdate(null, qrRecord)).toEqual(qrRecord);
-  });
-
-  it('a coach-recorded existing value always wins over a later non-coach update', () => {
-    expect(mergeAttendanceUpdate(coachRecord, qrRecord)).toEqual(coachRecord);
-  });
-
-  it('a coach-recorded existing value is replaced by a NEWER coach update', () => {
-    const newerCoachRecord: AttendanceRecordState = {
-      status: 'absent',
-      method: 'coach',
-      recordedBy: 'user-coach',
-      updatedAt: '2026-07-19T23:12:00.000Z',
-    };
-    expect(mergeAttendanceUpdate(coachRecord, newerCoachRecord)).toEqual(newerCoachRecord);
-  });
-
-  it('a non-coach existing value is replaced by any incoming update', () => {
-    expect(mergeAttendanceUpdate(qrRecord, coachRecord)).toEqual(coachRecord);
-    const importRecord: AttendanceRecordState = {
-      status: 'absent',
-      method: 'import',
-      recordedBy: null,
-      updatedAt: '2026-07-19T23:13:00.000Z',
-    };
-    expect(mergeAttendanceUpdate(qrRecord, importRecord)).toEqual(importRecord);
-  });
-});
+/**
+ * `mergeAttendanceUpdate` and its four tests are DELETED. MTG-11's
+ * coach-precedence rule is superseded — **last write wins** (owner ruling
+ * 2026-08-02, `auto-mode-decisions.md`, "George's ruling on MTG-11: LAST WRITE
+ * WINS"; the struck clause is annotated at `VOLT_Portal_PRD.md:307`).
+ *
+ * Constitution item 10 requires boss approval to change a passing test; that
+ * ruling is the approval, and it is cited rather than paraphrased.
+ *
+ * The behaviour those tests pinned is now asserted where it actually matters —
+ * through the component, in "last write wins (supersedes MTG-11)" below —
+ * rather than against a pure function that no longer exists. The old test
+ * *"a coach-recorded existing value always wins over a later non-coach update"*
+ * asserted precisely the behaviour the owner overturned: it would have kept a
+ * student marked `absent` after they turned up late and scanned in.
+ */
 
 describe('filterRosterByQuery', () => {
   const roster: LiveConsoleRosterEntry[] = [
@@ -348,7 +529,10 @@ describe('DES-17 keyboard path', () => {
   });
 
   it('digit keys 1/2/4 set Present/Late/Absent on the FOCUSED row while focus stays on the row itself (never the SegmentedControl)', async () => {
-    renderBody(COACH_USER);
+    // T403 step 3, packet section 4b: explicit resolving seam -- see the
+    // comment on `resolvingSetAttendanceStatus` above for why this is
+    // required on every coach-action test now that the default is real.
+    renderBody(COACH_USER, { onSetAttendanceStatus: resolvingSetAttendanceStatus });
     await flushMicrotasks();
 
     // student-cy starts with no attendance record at all (module doc: PRD
@@ -378,7 +562,7 @@ describe('DES-17 keyboard path', () => {
   });
 
   it('digit "3" sets Excused for a coach/admin role', async () => {
-    renderBody(COACH_USER);
+    renderBody(COACH_USER, { onSetAttendanceStatus: resolvingSetAttendanceStatus });
     await flushMicrotasks();
 
     const cy = row('student-cy');
@@ -409,11 +593,23 @@ describe('DES-17 keyboard path', () => {
 });
 
 // ---------------------------------------------------------------------------
-// MTG-11 coach-override precedence (packet Required Worker Output #2).
+// Last write wins -- supersedes MTG-11 coach precedence (owner ruling).
 // ---------------------------------------------------------------------------
 
-describe('MTG-11 coach-override precedence', () => {
-  it('a coach-set Present survives a subsequent simulated QR check-in for the same student', async () => {
+describe('last write wins (supersedes MTG-11 coach precedence)', () => {
+  /**
+   * INVERTED, not deleted. This test previously asserted that a coach value
+   * survived a later QR write — the rule the owner overturned on 2026-08-02
+   * (`auto-mode-decisions.md`, "George's ruling on MTG-11: LAST WRITE WINS").
+   * Constitution item 10 requires boss approval to change a passing test; that
+   * ruling is the approval.
+   *
+   * The scenario below is the owner's own, in his words: *"If a coach touches
+   * absent, but then the student comes late and scans the qr, the student entry
+   * should be saved."* Under the old rule the scan was discarded and the
+   * student stayed `absent` while standing in the room.
+   */
+  it("a late student's QR scan OVERWRITES a coach's earlier absent — the owner's case", async () => {
     let capturedOnChange: AttendanceChangeListener | null = null;
 
     renderBody(COACH_USER, {
@@ -423,6 +619,7 @@ describe('MTG-11 coach-override precedence', () => {
           capturedOnChange = null;
         };
       },
+      onSetAttendanceStatus: resolvingSetAttendanceStatus,
     });
     await flushMicrotasks();
 
@@ -430,22 +627,43 @@ describe('MTG-11 coach-override precedence', () => {
     act(() => {
       cy.focus();
     });
-    dispatchKeyOn(cy, '1'); // Coach sets Present via the real keyboard path.
-    expect(checkedStatusOf('student-cy')).toBe('present');
+    // Coach marks absent before the student arrives (`4` = Absent).
+    dispatchKeyOn(cy, '4');
+    expect(checkedStatusOf('student-cy')).toBe('absent');
 
     expect(capturedOnChange).not.toBeNull();
+    // The student turns up late and scans the kiosk.
     act(() => {
       capturedOnChange?.({
         studentId: 'student-cy',
-        status: 'absent',
+        status: 'present',
         method: 'qr',
         recordedBy: null,
         updatedAt: '2026-07-19T23:30:00.000Z',
       });
     });
 
-    // MTG-11: the coach's Present must survive, unchanged.
+    // The scan is the LAST write, so it wins. Under the superseded rule this
+    // asserted 'absent' and the student stayed marked absent while present.
     expect(checkedStatusOf('student-cy')).toBe('present');
+  });
+
+  it('a later coach edit overwrites an earlier QR value, in the other direction', async () => {
+    // The owner's second case: *"If a student said they were present (by
+    // mistake or falsely), but the coach then marked them absent the last
+    // record should win."* `student-ada` starts as a real `qr` `present` row.
+    renderBody(COACH_USER, { onSetAttendanceStatus: resolvingSetAttendanceStatus });
+    await flushMicrotasks();
+
+    expect(checkedStatusOf('student-ada')).toBe('present');
+    const ada = row('student-ada');
+    act(() => {
+      ada.focus();
+    });
+    dispatchKeyOn(ada, '4');
+    await flushMicrotasks();
+
+    expect(checkedStatusOf('student-ada')).toBe('absent');
   });
 });
 
@@ -511,8 +729,21 @@ describe('MTG-12 excused gating (defense in depth)', () => {
     expect(cy.querySelector('[role="radio"][data-value="excused"]')).toBeNull();
   });
 
+  /**
+   * STRENGTHENED after the T403 step 3 re-review (NIT-5). The original asserted
+   * only `checkedStatusOf(...) === null`, which **passed vacuously**: no
+   * `excused` radio is rendered for this role at all, so the assertion held
+   * whether or not the gate actually fired. Measured by the re-reviewer —
+   * disabling the MTG-12 gate left this test GREEN while other tests caught it.
+   *
+   * A test that cannot fail when the thing it names is broken is the recurring
+   * defect of this workflow (five exit-0 mutations before this one). It now
+   * asserts the two things that actually distinguish a working gate: the local
+   * row never becomes `excused`, and **no write is attempted at all**.
+   */
   it('digit "3" is a no-op for a non-coach/admin role (never sets excused via keyboard)', async () => {
-    renderBody(STUDENT_USER);
+    const spy = spyResolvingSetAttendanceStatus();
+    renderBody(STUDENT_USER, { onSetAttendanceStatus: spy.onSetAttendanceStatus });
     await flushMicrotasks();
 
     const cy = row('student-cy');
@@ -520,9 +751,19 @@ describe('MTG-12 excused gating (defense in depth)', () => {
       cy.focus();
     });
     dispatchKeyOn(cy, '3');
-    // No radio at all is data-value="excused" for this role, and the
-    // status must remain unset (no other digit was pressed).
+    await flushMicrotasks();
+
     expect(checkedStatusOf('student-cy')).toBeNull();
+    // The load-bearing assertion: the gate must stop the WRITE, not merely
+    // fail to render a radio. Without this the test cannot detect a leak.
+    expect(spy.calls).toEqual([]);
+
+    // And prove the harness itself is live — an allowed digit on the same row
+    // DOES reach the seam, so an empty `spy.calls` above means "blocked", not
+    // "this test never wires anything up".
+    dispatchKeyOn(cy, '1');
+    await flushMicrotasks();
+    expect(spy.calls.map((call) => call.status)).toEqual(['present']);
   });
 });
 
@@ -552,7 +793,10 @@ describe('LiveConsolePage role guard', () => {
   });
 
   it('renders the real console for a coach role', async () => {
-    renderPage(COACH_USER);
+    // T403 step 2: the roster is injected. Before it, this test inherited the
+    // component's fixture roster, so "the guard let a coach through to a
+    // working console" was proved by a student who does not exist.
+    renderPage(COACH_USER, { loadData: stubLoadData });
     await flushMicrotasks();
     expect(container.querySelector('[data-testid="redirected-home"]')).toBeNull();
     expect(row('student-ada')).toBeTruthy();
@@ -565,7 +809,8 @@ describe('LiveConsolePage role guard', () => {
 
 describe('aria-live tally', () => {
   it('renders an aria-live="polite" region and updates it when a row changes', async () => {
-    renderBody(COACH_USER);
+    // T403 step 3, packet section 4b: explicit resolving seam.
+    renderBody(COACH_USER, { onSetAttendanceStatus: resolvingSetAttendanceStatus });
     await flushMicrotasks();
 
     const liveRegion = container.querySelector('[data-testid="attendance-tally"]');
@@ -783,7 +1028,7 @@ describe('NFR-06 QR show/hide toggle (T072)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// DES-12 states + persistence seam default.
+// DES-12 states.
 // ---------------------------------------------------------------------------
 
 describe('DES-12 states', () => {
@@ -845,24 +1090,346 @@ describe('DES-12 states', () => {
   });
 
   it('T134 (UXC-12): renders exactly one <h1>, with the real session title, in the populated state', async () => {
-    renderBody(COACH_USER, { loadData: defaultLoadLiveConsoleData });
+    renderBody(COACH_USER);
     await flushMicrotasks();
     const headings = container.querySelectorAll('h1');
     expect(headings).toHaveLength(1);
-    expect(headings[0].textContent).toBe('Tuesday Build Meeting');
+    expect(headings[0].textContent).toBe(TEST_SESSION_TITLE);
   });
 });
 
-describe('persistence seam default', () => {
-  it('notWiredSetAttendanceStatus resolves without throwing (no real write exists yet)', async () => {
-    await expect(notWiredSetAttendanceStatus()).resolves.toBeUndefined();
+// ---------------------------------------------------------------------------
+// T403 step 2: the roster comes from the database, not from this file.
+// ---------------------------------------------------------------------------
+
+describe('T403 step 2 — real roster/attendance', () => {
+  it("renders NO fabricated students from the COMPONENT'S OWN default", async () => {
+    // Through `renderBodyNoInjection`, NOT `renderBody` — `renderBody` now
+    // supplies `loadData`, so a test using it can never detect a fixture being
+    // reintroduced as the component's default. This is the same trap T403
+    // step 1 measured on the display token: with the injecting helper,
+    // restoring a fixture default left the block green at exit 0.
+    //
+    // Here the component falls back to the real `loadLiveConsoleData`, which
+    // needs a configured Supabase and has none in the gate state, so it
+    // rejects and the honest answer is the DES-12 error state — never a
+    // roster of people who do not exist.
+    renderBodyNoInjection(COACH_USER);
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain("Couldn't load this session");
+    for (const entry of TEST_ROSTER) {
+      expect(container.textContent).not.toContain(entry.name);
+    }
+    expect(container.querySelector('[data-testid="roster-row-student-ada"]')).toBeNull();
+  });
+
+  it('no longer exports a fixture loader for any call site to inherit', async () => {
+    // The DOM assertion above proves the fixture is not reachable through the
+    // component's default TODAY. This proves the seam it came through is gone
+    // for good: nothing can import `defaultLoadLiveConsoleData` and pass it
+    // back in, and no future default can quietly point at it again.
+    //
+    // Asserted on the module's exports rather than by scanning the source
+    // text, because the source legitimately NAMES the deleted symbols in the
+    // comment recording why they were deleted.
+    const mod = await import('./LiveConsole');
+    expect(Object.keys(mod)).not.toContain('defaultLoadLiveConsoleData');
   });
 });
 
-describe('defaultLoadLiveConsoleData fixture', () => {
-  it('resolves a non-empty roster and session for any sessionId', async () => {
-    const data = await defaultLoadLiveConsoleData(TEST_SESSION_ID);
-    expect(data.session.id).toBe(TEST_SESSION_ID);
-    expect(data.roster.length).toBeGreaterThan(0);
+// ---------------------------------------------------------------------------
+// T403 step 1: the QR panel shows the REAL check-in credential.
+// ---------------------------------------------------------------------------
+
+describe('T403 step 1 — real display token', () => {
+  it("renders NO fabricated code from the COMPONENT'S OWN default (was 'FXTURE')", async () => {
+    // Renders through `renderBodyNoInjection`, NOT `renderBody`. That matters:
+    // `renderBody` supplies a token by default, so a test using it never
+    // exercises the component's own default and cannot detect a fixture being
+    // reintroduced there. Measured — with `renderBody` and an explicit
+    // `loadDisplayToken: async () => null`, restoring a fixture default left
+    // this whole block green at exit 0.
+    //
+    // Here the component falls back to its real default
+    // (`loadKioskDisplayToken`), which needs a configured Supabase and has
+    // none in the gate state, so the honest answer is that there is no code.
+    //
+    // T403 step 2: `loadData` is injected so the page gets PAST the data load
+    // and actually mounts the QR panel — the real `loadData` default would
+    // reject here and render the error state instead, and this test would then
+    // pass for the wrong reason (no QR panel at all, rather than a QR panel
+    // honestly reporting no code). `loadDisplayToken` is still NOT injected:
+    // that is the seam under test.
+    renderBodyNoInjection(COACH_USER, { loadData: stubLoadData });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('QR not available yet');
+    expect(container.textContent).not.toContain('FXTURE');
+    expect(container.textContent).not.toContain('FIXTURE');
+    // The placeholder dashes, never six plausible-looking characters.
+    expect(container.textContent).toContain('------');
+    expect(container.querySelector('svg[role="img"]')).toBeNull();
+  });
+
+  it('no longer claims the code "isn\'t live yet" — that Banner would now be false', async () => {
+    renderBody(COACH_USER);
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('Check-in');
+    expect(container.textContent).not.toContain("aren't live yet");
+    expect(container.textContent).not.toContain('A real, working code');
+  });
+
+  it('displays the token and short code it is given, verbatim', async () => {
+    renderBody(COACH_USER);
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain(TEST_DISPLAY_TOKEN.shortCode);
+    const qr = container.querySelector('svg[role="img"]');
+    expect(qr).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T403 step 3: a coach action is a real `attendance` write, not a no-op.
+// (Acceptance criteria 1/2/3/4/5 — see the worker packet.)
+// ---------------------------------------------------------------------------
+
+describe('defaultSetAttendanceStatus (T403 step 3, Trap 5)', () => {
+  it('rejects BEFORE any network call when no signed-in coach identity is available', async () => {
+    // If this reached the real `setAttendanceStatus` loader instead, the
+    // rejection would carry a DIFFERENT message (a `SupabaseLoaderError` from
+    // an unconfigured client, this suite's gate state) -- asserting THIS
+    // exact, hand-authored message is what proves the precondition check
+    // fired first, mirroring `makeOnEditAttendance`'s
+    // precondition-check-then-reject shape (`endMeeting.ts:447-473`,
+    // read-only reference).
+    await expect(
+      defaultSetAttendanceStatus('session-1', 'student-1', 'present', 'coach', null),
+    ).rejects.toThrow('No signed-in coach identity is available to record this attendance change.');
+  });
+
+  /**
+   * MAJOR-2. This adapter maps POSITIONAL seam arguments onto the loader's
+   * NAMED params, and until the rework it closed over the module-level
+   * `setAttendanceStatus` with no injection point — so the mapping was
+   * untestable, and a mutation that swapped `sessionId`/`studentId` and
+   * hardcoded `status`/`method` passed the FULL 1878-test suite at exit 0.
+   *
+   * Fifth exit-0 mutation in this project. The recurring shape: **a boundary
+   * that cannot be stubbed cannot be tested, and that is exactly where a false
+   * green lives.** Both halves either side of this one were individually
+   * proven — the loader's payload and the component's coach action — while the
+   * join between them was not.
+   *
+   * Positional order is deliberately all-distinct here so a transposition of
+   * ANY two arguments fails, not just the two the original mutation swapped.
+   */
+  it('maps positional seam arguments onto the loader’s named params, in the right order (MAJOR-2)', async () => {
+    const calls: unknown[] = [];
+    const write = makeDefaultSetAttendanceStatus(async (params) => {
+      calls.push(params);
+      return {} as never;
+    });
+
+    await write('SESSION-X', 'STUDENT-Y', 'excused', 'import', 'COACH-Z');
+
+    expect(calls).toEqual([
+      {
+        sessionId: 'SESSION-X',
+        studentId: 'STUDENT-Y',
+        status: 'excused',
+        method: 'import',
+        recordedBy: 'COACH-Z',
+      },
+    ]);
+  });
+
+  it('does not call the loader at all when identity is missing (MAJOR-2 + Trap 5)', async () => {
+    const calls: unknown[] = [];
+    const write = makeDefaultSetAttendanceStatus(async (params) => {
+      calls.push(params);
+      return {} as never;
+    });
+
+    await expect(write('session-1', 'student-1', 'present', 'coach', null)).rejects.toThrow();
+    // Not merely "it rejected" -- the loader was never reached.
+    expect(calls).toEqual([]);
+  });
+});
+
+describe('T403 step 3 — real attendance write', () => {
+  it('sends the exact payload for a brand-new record: status, method "coach" (Trap 2), and the acting coach id (Trap 5)', async () => {
+    const spy = spyResolvingSetAttendanceStatus();
+    renderBody(COACH_USER, { onSetAttendanceStatus: spy.onSetAttendanceStatus });
+    await flushMicrotasks();
+
+    // student-cy has no attendance entry at all (module doc TEST_ATTENDANCE).
+    const cy = row('student-cy');
+    act(() => {
+      cy.focus();
+    });
+    dispatchKeyOn(cy, '1'); // Present
+
+    expect(spy.calls).toEqual([
+      {
+        sessionId: TEST_SESSION_ID,
+        studentId: 'student-cy',
+        status: 'present',
+        method: 'coach',
+        recordedBy: COACH_USER.id,
+      },
+    ]);
+  });
+
+  /**
+   * REWRITTEN from *"preserves real 'qr' provenance on the WIRE"*. That test
+   * asserted the packet's acceptance criterion 3, which **contradicted the
+   * PRD**: `VOLT_Portal_PRD.md:307`'s first clause always said a coach tap
+   * upserts `method='coach'`. The criterion was taken from
+   * `resolveAttendanceWriteMethod`'s docstring and never checked against the
+   * requirement. The owner's 2026-08-02 ruling settles it — `method` records
+   * WHO SET THE VALUE THAT IS THERE NOW.
+   *
+   * **This is also the checker's MAJOR-1 test**, which is why it drives THREE
+   * sequential edits rather than one. The old single-shot test structurally
+   * could not see the defect: the first call was correct and every later call
+   * was wrong, so one action proved nothing about a roll-call console whose
+   * entire purpose is repeated tapping.
+   */
+  it('sends "coach" on EVERY write, across repeated edits of a real "qr" row (MAJOR-1)', async () => {
+    const spy = spyResolvingSetAttendanceStatus();
+    renderBody(COACH_USER, { onSetAttendanceStatus: spy.onSetAttendanceStatus });
+    await flushMicrotasks();
+
+    // student-ada: existing method 'qr', status 'present' (TEST_ATTENDANCE).
+    expect(checkedStatusOf('student-ada')).toBe('present');
+    const ada = row('student-ada');
+    act(() => {
+      ada.focus();
+    });
+
+    dispatchKeyOn(ada, '2'); // Late
+    await flushMicrotasks();
+    dispatchKeyOn(ada, '4'); // Absent
+    await flushMicrotasks();
+    dispatchKeyOn(ada, '1'); // Present
+    await flushMicrotasks();
+
+    expect(checkedStatusOf('student-ada')).toBe('present');
+    // Every call, not just the first. Before the rework this produced
+    // ['qr', 'coach', 'coach'] -- wrong on the first call under this ruling,
+    // and inconsistent with itself thereafter.
+    expect(spy.calls.map((call) => call.method)).toEqual(['coach', 'coach', 'coach']);
+    expect(spy.calls.map((call) => call.status)).toEqual(['late', 'absent', 'present']);
+    expect(spy.calls.every((call) => call.recordedBy === COACH_USER.id)).toBe(true);
+  });
+
+  it('sends "coach" for a real "import" row too — one meaning for the column', async () => {
+    const spy = spyResolvingSetAttendanceStatus();
+    renderBody(COACH_USER, { onSetAttendanceStatus: spy.onSetAttendanceStatus });
+    await flushMicrotasks();
+
+    // student-fay: existing method 'import' (TEST_ATTENDANCE).
+    const fay = row('student-fay');
+    act(() => {
+      fay.focus();
+    });
+    dispatchKeyOn(fay, '1'); // Present
+
+    // No row may claim `method: 'import'` while naming a coach in
+    // `recordedBy` -- the "mismatching on the record" the owner ruled out.
+    expect(spy.calls).toEqual([
+      {
+        sessionId: TEST_SESSION_ID,
+        studentId: 'student-fay',
+        status: 'present',
+        method: 'coach',
+        recordedBy: COACH_USER.id,
+      },
+    ]);
+  });
+
+  it('a REJECTED write rolls a row with an existing record back to its previous status, and shows a dismissable error Banner naming the student (Trap 3)', async () => {
+    renderBody(COACH_USER, { onSetAttendanceStatus: rejectingSetAttendanceStatus });
+    await flushMicrotasks();
+
+    // student-ada starts Present (module doc TEST_ATTENDANCE).
+    expect(checkedStatusOf('student-ada')).toBe('present');
+    const ada = row('student-ada');
+    act(() => {
+      ada.focus();
+    });
+    dispatchKeyOn(ada, '4'); // Absent -- the optimistic update applies immediately.
+    expect(checkedStatusOf('student-ada')).toBe('absent');
+
+    await flushMicrotasks(); // let the rejection + rollback settle.
+
+    // Rolled back to the real previous value -- never left showing a status
+    // that was never persisted (constitution item 26's HEAVY trigger).
+    expect(checkedStatusOf('student-ada')).toBe('present');
+
+    // Asserted by RENDERED TEXT, not `data-testid` (packet section 4b's
+    // precision instruction -- `Banner`'s `data-testid` pass-through is
+    // unverified), and names the affected student.
+    expect(container.textContent).toContain('Attendance not saved');
+    expect(container.textContent).toContain('Ada Q.');
+  });
+
+  it('a REJECTED write for a student with NO prior record removes the optimistic entry entirely, not a stale status', async () => {
+    renderBody(COACH_USER, { onSetAttendanceStatus: rejectingSetAttendanceStatus });
+    await flushMicrotasks();
+
+    // student-cy has no attendance entry at all (module doc TEST_ATTENDANCE).
+    expect(checkedStatusOf('student-cy')).toBeNull();
+    const cy = row('student-cy');
+    act(() => {
+      cy.focus();
+    });
+    dispatchKeyOn(cy, '1'); // Present -- optimistic update applies immediately.
+    expect(checkedStatusOf('student-cy')).toBe('present');
+
+    await flushMicrotasks();
+
+    expect(checkedStatusOf('student-cy')).toBeNull();
+    expect(container.textContent).toContain('Attendance not saved');
+    expect(container.textContent).toContain('Cy T.');
+  });
+
+  it('the error Banner is dismissable and clears on dismiss', async () => {
+    renderBody(COACH_USER, { onSetAttendanceStatus: rejectingSetAttendanceStatus });
+    await flushMicrotasks();
+
+    const cy = row('student-cy');
+    act(() => {
+      cy.focus();
+    });
+    dispatchKeyOn(cy, '1');
+    await flushMicrotasks();
+    expect(container.textContent).toContain('Attendance not saved');
+
+    const dismissButton = container.querySelector('button[aria-label="Dismiss"]');
+    expect(dismissButton).toBeTruthy();
+    act(() => {
+      dismissButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.textContent).not.toContain('Attendance not saved');
+  });
+
+  it('MTG-12 excused-gating still holds: a non-coach/admin role never even attempts a write for "excused"', async () => {
+    const spy = spyResolvingSetAttendanceStatus();
+    renderBody(STUDENT_USER, { onSetAttendanceStatus: spy.onSetAttendanceStatus });
+    await flushMicrotasks();
+
+    const cy = row('student-cy');
+    act(() => {
+      cy.focus();
+    });
+    dispatchKeyOn(cy, '3'); // Excused -- no-op for this role (module doc section 4).
+
+    expect(spy.calls).toEqual([]);
+    expect(checkedStatusOf('student-cy')).toBeNull();
   });
 });

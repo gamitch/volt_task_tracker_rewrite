@@ -51,6 +51,7 @@ import {
   makeLoadKioskDisplayToken,
   makeLoadKioskSessionTitle,
   makeLoadKioskTally,
+  makeLoadLiveConsoleData,
 } from '../../lib/supabase/loaders/kiosk';
 import { routePaths } from '../../app/router';
 
@@ -463,5 +464,170 @@ describe('loadKioskDisplayToken (T103 real load)', () => {
     const load = makeLoadKioskDisplayToken(() => client);
 
     await expect(load('session-99')).rejects.toMatchObject({ code: 'SESSION_NOT_FOUND' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3. `makeLoadLiveConsoleData` seam-level tests (T403 step 2).
+//
+// Lives here rather than in a new `loaders/kiosk.test.ts` for the reason this
+// file's own header already records: `loaders/kiosk.ts` is covered from this
+// file, not from a second one.
+// ---------------------------------------------------------------------------
+
+/** Builds a stub client for the four tables `makeLoadLiveConsoleData` reads.
+ * `attendance` goes through `makeLoadAttendanceForSessions`, so its chain is
+ * `.select().in().order().range()`, not the tally's `.select().eq()`. */
+function makeLiveConsoleClient(opts: {
+  session: unknown;
+  event: unknown;
+  students: unknown[];
+  attendance: unknown[];
+}): { client: SupabaseClient; studentsEqSpy: ReturnType<typeof vi.fn> } {
+  const studentsEqSpy = vi.fn().mockResolvedValue({ data: opts.students, error: null });
+  const rangeSpy = vi.fn().mockResolvedValue({ data: opts.attendance, error: null });
+
+  const fromSpy = vi.fn((table: string) => {
+    if (table === 'event_sessions') {
+      return {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            maybeSingle: vi.fn().mockResolvedValue({ data: opts.session, error: null }),
+          })),
+        })),
+      };
+    }
+    if (table === 'events') {
+      return {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            maybeSingle: vi.fn().mockResolvedValue({ data: opts.event, error: null }),
+          })),
+        })),
+      };
+    }
+    if (table === 'students') {
+      return { select: vi.fn(() => ({ eq: studentsEqSpy })) };
+    }
+    if (table === 'attendance') {
+      return {
+        select: vi.fn(() => ({
+          in: vi.fn(() => ({ order: vi.fn(() => ({ range: rangeSpy })) })),
+        })),
+      };
+    }
+    throw new Error(`unexpected table: ${table}`);
+  });
+
+  return { client: { from: fromSpy } as unknown as SupabaseClient, studentsEqSpy };
+}
+
+const LIVE_SESSION_ROW = {
+  id: 'session-1',
+  event_id: 'event-1',
+  starts_at: '2026-07-21T23:00:00.000Z',
+  ends_at: '2026-07-22T01:00:00.000Z',
+};
+
+describe('makeLoadLiveConsoleData (T403 step 2)', () => {
+  it('resolves the real session, team-scoped roster, and attendance', async () => {
+    const { client, studentsEqSpy } = makeLiveConsoleClient({
+      session: LIVE_SESSION_ROW,
+      event: { id: 'event-1', title: 'DB Meeting', team_ids: ['team-a'] },
+      students: [
+        { id: 'student-1', display_name: 'Real Student One', team_id: 'team-a' },
+        { id: 'student-2', display_name: 'Out Of Scope', team_id: 'team-b' },
+        { id: 'student-3', display_name: 'Real Student Three', team_id: 'team-a' },
+      ],
+      attendance: [
+        {
+          id: 'att-1',
+          session_id: 'session-1',
+          student_id: 'student-1',
+          status: 'present',
+          // Every timestamp on this row is DISTINCT, deliberately. Measured:
+          // with `check_in_at`/`updated_at`/`created_at` all equal, a loader
+          // reading the wrong column is indistinguishable from one reading the
+          // right column, and a mutation swapping them passed at exit 0.
+          check_in_at: '2026-07-21T23:05:00.000Z',
+          check_out_at: null,
+          hours_override: null,
+          method: 'qr',
+          recorded_by: null,
+          // Later than check-in: a row corrected part-way through the meeting.
+          updated_at: '2026-07-21T23:40:00.000Z',
+          created_at: '2026-07-21T23:01:00.000Z',
+        },
+      ],
+    });
+
+    const result = await makeLoadLiveConsoleData(() => client)('session-1');
+
+    expect(studentsEqSpy).toHaveBeenCalledWith('is_active', true);
+    // `startsAt` is the column T403 step 2 added to `querySessionEventId` --
+    // the end-meeting summary does not carry it, which is why it is read here.
+    expect(result.session).toEqual({
+      id: 'session-1',
+      title: 'DB Meeting',
+      startsAt: '2026-07-21T23:00:00.000Z',
+      endsAt: '2026-07-22T01:00:00.000Z',
+    });
+    // Team-scoped, and NAMED -- the tally only ever counted these rows.
+    expect(result.roster).toEqual([
+      { studentId: 'student-1', name: 'Real Student One' },
+      { studentId: 'student-3', name: 'Real Student Three' },
+    ]);
+    // `updatedAt` is the field `loadEndMeetingSummary` drops, and the reason
+    // this loader reads `attendance` directly instead of going through it.
+    expect(result.attendance['student-1']).toEqual({
+      status: 'present',
+      method: 'qr',
+      recordedBy: null,
+      updatedAt: '2026-07-21T23:40:00.000Z',
+    });
+    // A roster member with no `attendance` row has no entry at all.
+    expect(result.attendance['student-3']).toBeUndefined();
+  });
+
+  it('treats a null team_ids as open to every team', async () => {
+    const { client } = makeLiveConsoleClient({
+      session: LIVE_SESSION_ROW,
+      event: { id: 'event-1', title: 'Open Meeting', team_ids: null },
+      students: [
+        { id: 'student-1', display_name: 'One', team_id: 'team-a' },
+        { id: 'student-2', display_name: 'Two', team_id: 'team-b' },
+      ],
+      attendance: [],
+    });
+
+    const result = await makeLoadLiveConsoleData(() => client)('session-1');
+    expect(result.roster).toHaveLength(2);
+    expect(result.attendance).toEqual({});
+  });
+
+  it('rejects when the session cannot be found, rather than resolving a placeholder', async () => {
+    const { client } = makeLiveConsoleClient({
+      session: null,
+      event: null,
+      students: [],
+      attendance: [],
+    });
+
+    await expect(makeLoadLiveConsoleData(() => client)('session-99')).rejects.toThrow(
+      /session "session-99" was not found/,
+    );
+  });
+
+  it('rejects when the session resolves but its parent event does not', async () => {
+    const { client } = makeLiveConsoleClient({
+      session: LIVE_SESSION_ROW,
+      event: null,
+      students: [],
+      attendance: [],
+    });
+
+    await expect(makeLoadLiveConsoleData(() => client)('session-1')).rejects.toThrow(
+      /was not found/,
+    );
   });
 });

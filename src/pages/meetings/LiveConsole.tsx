@@ -109,15 +109,20 @@
  * token/code; there is still no endpoint anywhere in this repo that MINTS
  * one for a given `sessionId` -- the exact GAP #1 `Kiosk.tsx`/T034 already
  * identified and disclosed for its own QR panel. This file applies the
- * identical treatment `Kiosk.tsx` established (cited, not re-solved
- * differently, per the packet's explicit instruction): a real
- * `QRCodeSVG`-rendered QR + real short-code display, wired against an
- * injectable `loadDisplayToken` seam whose shipped default
- * (`fixtureLoadLiveConsoleDisplayToken`) resolves obviously-fake,
- * non-hex/non-alphabet-producible placeholder values
- * (`FIXTURE_QR_TOKEN`/`FIXTURE_SHORT_CODE` below), paired with a permanent,
- * non-dismissable `Banner` disclosing this is fixture data -- never made to
- * look production-real.
+ * identical treatment `Kiosk.tsx` established: a real `QRCodeSVG`-rendered QR
+ * + real short-code display, wired against an injectable `loadDisplayToken`
+ * seam.
+ *
+ * **T403 step 1 CLOSED THIS GAP.** The paragraph above describes the state
+ * when T033 shipped, and step 7's "there is still no endpoint anywhere in this
+ * repo that MINTS one" has been false since T103, which added the
+ * `checkin-token` Edge Function. `loadDisplayToken` now defaults to
+ * `loadKioskDisplayToken` (`../../lib/supabase/loaders/kiosk.ts`) -- the same
+ * real loader `Kiosk.tsx` uses -- so this panel shows the genuine token and
+ * short code that T032's `/checkin` verifies. The fixture constants, their
+ * loader, and the "aren't live yet" `Banner` are all deleted rather than kept
+ * as a fallback: a fallback is how a fixture reaches a live route, which is
+ * the defect family this console was itself an instance of.
  *
  * The same "missing wiring, not fabricated" treatment `Kiosk.tsx`'s GAP #2
  * established for ITS live tally applies here to BOTH this console's live
@@ -127,9 +132,25 @@
  * missing -- but nothing in this file calls it: no Realtime channel
  * subscription exists here yet, so roster/attendance changes made on this
  * screen do not sync live to other tabs or devices. Disclosed via a second
- * permanent Banner, with `defaultLoadLiveConsoleData` and
- * `notWiredSetAttendanceStatus` shipping honest fixture/no-op defaults
- * rather than fabricated network calls.
+ * permanent Banner.
+ *
+ * T403 step 2 narrows that gap: `loadData`'s default is now the REAL
+ * `loadLiveConsoleData` (`../../lib/supabase/loaders/kiosk.ts`) and the roster
+ * fixtures are deleted, so this console reads the actual roster and the actual
+ * `attendance` rows.
+ *
+ * T403 step 3 closes the write side: `onSetAttendanceStatus`'s default is now
+ * `defaultSetAttendanceStatus` (below), a real write through
+ * `../../lib/supabase/loaders/attendance.ts`'s `setAttendanceStatus`
+ * (`makeSetAttendanceStatus`) -- the parallel-upsert fix that file's own
+ * module doc #5 records, which deliberately never sends `hours_override` so a
+ * coach's roll-call click cannot null out a manual hours correction (Trap 1,
+ * this task's premise gate, confirmed on a real database). The old
+ * `notWiredSetAttendanceStatus` no-op is deleted, not kept as a fallback --
+ * with the roster/attendance now real (step 2), a no-op write silently
+ * discards every change a coach makes during an actual meeting, which is
+ * worse than the console not existing. What remains honestly unwired is only
+ * the Realtime subscription, whose Banner stays accurate.
  *
  * -----------------------------------------------------------------------
  * 3. DES-17 keyboard path -- BLOCKER-class per this task's own packet.
@@ -169,27 +190,56 @@
  * assertions.
  *
  * -----------------------------------------------------------------------
- * 4. MTG-11 coach-override precedence + MTG-12 excused gating.
+ * 4. LAST WRITE WINS (supersedes MTG-11 precedence) + MTG-12 excused gating.
  * -----------------------------------------------------------------------
  *
- * `mergeAttendanceUpdate(existing, incoming)` is the SINGLE pure function
- * both write paths go through: a coach's own `SegmentedControl`/keyboard
- * action (`handleCoachSetStatus`, always `method: 'coach'`) and an incoming
- * simulated Realtime change (`subscribeToAttendanceChanges`'s `onChange`
- * callback, section 5, which can carry any `AttendanceMethod`). Its rule:
- * if a row's EXISTING record is `method === 'coach'` and the INCOMING one
- * is not, the existing (coach) value wins unconditionally -- incoming is
- * discarded. Every other combination (no existing record, existing is
- * itself non-coach, or incoming IS also `method: 'coach'`) applies the
- * incoming value. Because a coach's own action always constructs
- * `incoming.method === 'coach'`, it always "wins" against whatever was
- * there before (including a prior QR check-in) -- both directions of MTG-11
- * ("coach always wins") fall out of this one rule. Proven directly (unit
- * test on the pure function) AND end-to-end (coach sets Present via the
- * real keyboard path, then a fabricated incoming QR event for the same
- * student is fed through the exact same `subscribeToAttendanceChanges`
- * callback contract the component itself uses, asserting the row stays
- * unchanged) in `LiveConsole.test.tsx`.
+ * **This section previously described MTG-11's coach-override precedence and
+ * a local-vs-wire `method` split. Both are GONE.** Owner ruling 2026-08-02,
+ * recorded verbatim in `docs/swarm/auto-mode-decisions.md` under *"George's
+ * ruling on MTG-11: LAST WRITE WINS, overturning coach precedence"*; the
+ * struck PRD clause is annotated at `VOLT_Portal_PRD.md:307`. Cite that
+ * ruling, never this paragraph.
+ *
+ * **The rule now:** whichever write happened last is what the row shows and
+ * what the database records. No precedence, no merge, no arbitration. A
+ * coach's tap overwrites an earlier QR value; an incoming QR scan overwrites
+ * an earlier coach value.
+ *
+ * **The case that broke the old rule** (the owner's own): a coach marks a
+ * student `absent` before they arrive; the student turns up late and scans
+ * the kiosk. Coach-precedence discarded that scan and left the student
+ * `absent` while standing in the room.
+ *
+ * **`method` means "who set the value that is there now"** -- NOT "how did
+ * this student physically check in". There is deliberately no second field, so
+ * a row can never claim `method: 'qr'` while naming a coach in `recorded_by`
+ * ("so we do not have a mixmatching on the record"). A coach tap therefore
+ * writes `'coach'` on the wire AND locally -- one value, no split.
+ *
+ * This also restores agreement with `VOLT_Portal_PRD.md:307`'s FIRST clause,
+ * which always said a coach tap upserts `method='coach'`. T403 step 3's
+ * packet asserted the opposite (acceptance criterion 3, "preserve qr/import
+ * provenance"); that criterion was taken from `resolveAttendanceWriteMethod`'s
+ * docstring and never checked against the requirement. **It was wrong**, and
+ * `resolveAttendanceWriteMethod` is consequently NOT called from this file.
+ * That function still implements the other meaning for W2's
+ * `AttendancePanel`/`MarkDayCompleteDialog` and is untouched here.
+ *
+ * **⚠️ THIS RULING IS SCOPED TO THIS FILE, DELIBERATELY. DO NOT UNIFY IT.**
+ * The owner ruled 2026-08-02 (`auto-mode-decisions.md`, *"LAST WRITE WINS
+ * applies to `LiveConsole` ONLY, not table-wide"*) that it does NOT extend to
+ * `resolveAttendanceWriteMethod` or to W2's screens. So `attendance.method`
+ * genuinely means two different things depending on which screen wrote the
+ * row: a coach edit to a student who scanned in records `'coach'` here and
+ * leaves `'qr'` there.
+ *
+ * **That divergence is intentional, not an inconsistency bug.** A future
+ * session will find it and be tempted to "fix" it; doing so requires a NEW
+ * owner decision, cited — this ruling is the opposite. The reasoning: "who set
+ * this value" is the useful fact during roll call, while outreach events carry
+ * volunteer hours where "how did this student originally arrive" may matter
+ * differently. W1 does not know W2's feature well enough to decide for it, and
+ * the owner declined to force the question.
  *
  * MTG-12 ("only coach/admin may set `excused`"): `canSetExcused` is
  * computed from `useAuth().user.role` independently of the
@@ -215,8 +265,9 @@
  * injectable default, `notWiredSubscribeToAttendanceChanges`, that is
  * honestly a no-op (never calls `onChange`, returns a no-op unsubscribe) --
  * disclosed via the same permanent Banner as section 2's second gap, not
- * silently pretending to be live. The component wires this seam's `onChange`
- * directly into `mergeAttendanceUpdate` (section 4) inside a `useEffect`
+ * silently pretending to be live. The component applies this seam's `onChange`
+ * event directly to local state (last write wins -- section 4; the old
+ * `mergeAttendanceUpdate` precedence rule is DELETED) inside a `useEffect`
  * cleanup-returning subscription, so the *consumption* logic (an incoming
  * change correctly and immediately updating the affected row's local state)
  * is fully real and independently provable by calling a test's own injected
@@ -412,6 +463,11 @@ import {
 } from '@astryxdesign/core';
 import { RequireRole, useAuth } from '../../app/guards';
 import { routePaths } from '../../app/router';
+import { loadKioskDisplayToken, loadLiveConsoleData } from '../../lib/supabase/loaders/kiosk';
+import {
+  setAttendanceStatus,
+  type SetAttendanceStatusFn as LoaderSetAttendanceStatusFn,
+} from '../../lib/supabase/loaders/attendance';
 
 // ---------------------------------------------------------------------------
 // Ground truth -- `attendance` real column shapes, camelCase renames cited
@@ -439,10 +495,13 @@ export interface AttendanceRecordState {
 // constants that do not require the server-only secret live here.
 // ---------------------------------------------------------------------------
 
-/** hmac.ts step 6 (module doc section 2): the QR payload's URL shape. */
-function buildCheckinUrl(sessionId: string, token: string): string {
-  return `https://portal.voltfrc.org/checkin?s=${encodeURIComponent(sessionId)}&t=${encodeURIComponent(token)}`;
-}
+/* T403 step 1: this file's own `buildCheckinUrl` is DELETED. It was a
+ * deliberate duplicate of `Kiosk.tsx`'s — the module doc above records that it
+ * was "re-implemented independently below rather than imported" only because
+ * `Kiosk.tsx` was a forbidden file for T033. Its sole caller was the fixture
+ * loader, and `loaders/kiosk.ts:134` already imports the real one from
+ * `Kiosk.tsx`, so the QR payload's URL shape now has exactly one definition
+ * again instead of two that could drift. */
 
 const QR_REFRESH_INTERVAL_MS = 45_000; // PRD MTG-06's ~45s client display refresh.
 
@@ -454,19 +513,25 @@ export type LoadLiveConsoleDisplayTokenFn = (
   sessionId: string,
 ) => Promise<LiveConsoleDisplayToken | null>;
 
-/** Obviously-fake: neither valid hex nor producible by the real `byte % 34`
- * alphabet mapping (module doc section 2 GAP #1). */
-const FIXTURE_QR_TOKEN = 'FIXTURE-LIVE-CONSOLE-NOT-A-REAL-TOKEN';
-const FIXTURE_SHORT_CODE = 'FXTURE';
-
-async function fixtureLoadLiveConsoleDisplayToken(
-  sessionId: string,
-): Promise<LiveConsoleDisplayToken | null> {
-  return {
-    qrUrl: buildCheckinUrl(sessionId, FIXTURE_QR_TOKEN),
-    shortCode: FIXTURE_SHORT_CODE,
-  };
-}
+/**
+ * T403 step 1: `FIXTURE_QR_TOKEN` / `FIXTURE_SHORT_CODE` and their loader are
+ * DELETED, not kept alongside the real one.
+ *
+ * `loadKioskDisplayToken` (`../../lib/supabase/loaders/kiosk.ts`) already
+ * calls the deployed `checkin-token` Edge Function and returns the same real
+ * HMAC token and 6-character short code `Kiosk.tsx` displays and T032's
+ * `/checkin` function verifies. It has been real since T103; this console
+ * simply never used it.
+ *
+ * `KioskDisplayToken` is a structural superset of `LiveConsoleDisplayToken`
+ * (it adds `refreshesInSeconds`), so it satisfies this seam directly — no
+ * adapter, no re-derivation of the token math, which lives in exactly one
+ * place (`supabase/functions/checkin/hmac.ts`) and must stay there.
+ *
+ * Deleting the fixtures rather than leaving them as a fallback is deliberate:
+ * a fallback is how a fixture reaches a live route, which is the family that
+ * produced T155/T176/T181/T324 and this console itself.
+ */
 
 // ---------------------------------------------------------------------------
 // Roster/session data seam -- module doc section 2's second gap (no shared
@@ -502,14 +567,53 @@ export type SetAttendanceStatusFn = (
   recordedBy: string | null,
 ) => Promise<void>;
 
-/** Shipped default -- module doc section 2/5. No real `attendance` write
- * exists yet (no shared Supabase client in `src/`); this local state update
- * IS the real, provable behavior -- this seam is only where a real
- * `supabase.from('attendance').upsert(...)` call would go once a shared
- * client exists. */
-export async function notWiredSetAttendanceStatus(): Promise<void> {
-  // Intentional no-op -- see module doc section 2/5.
+/**
+ * Shipped default -- T403 step 3 (module doc section 2). Rejects BEFORE any
+ * network call when no signed-in coach identity is available (Trap 5),
+ * mirroring `makeOnEditAttendance`'s precondition-check-then-reject shape
+ * (`../../lib/supabase/loaders/endMeeting.ts:447-473`, read-only reference --
+ * that file itself is Forbidden Files for this task). Otherwise delegates to
+ * the real `setAttendanceStatus` loader
+ * (`../../lib/supabase/loaders/attendance.ts`), whose payload deliberately
+ * omits `hours_override` (that file's module doc #5 -- Trap 1's fix) so a
+ * roll-call status change can never null out a coach's earlier manual hours
+ * correction.
+ *
+ * T403 step 3 REWORK (checker MAJOR-2). This adapter maps positional seam
+ * arguments onto the loader's named params, and it previously closed over the
+ * module-level `setAttendanceStatus` with **no injection point** — so nothing
+ * could stub the loader and the mapping itself was untested. A mutation that
+ * swapped `sessionId`/`studentId` and hardcoded `status`/`method` passed the
+ * FULL suite at exit 0: the fifth such mutation in this project's history, and
+ * the reason this factory exists.
+ *
+ * The lesson, stated once here because it keeps recurring: **a boundary that
+ * cannot be stubbed cannot be tested, and an untestable boundary is exactly
+ * where a false green lives.** Both proven halves either side of it —
+ * `makeSetAttendanceStatus`'s payload and `LiveConsoleBody`'s coach action —
+ * were individually verified while the join between them was not.
+ */
+export function makeDefaultSetAttendanceStatus(
+  write: LoaderSetAttendanceStatusFn = setAttendanceStatus,
+): SetAttendanceStatusFn {
+  return async (
+    sessionId: string,
+    studentId: string,
+    status: AttendanceStatus,
+    method: AttendanceMethod,
+    recordedBy: string | null,
+  ): Promise<void> => {
+    // Trap 5 -- reject BEFORE any client call when no acting-coach identity is
+    // resolved, the same precondition shape `makeOnEditAttendance` uses.
+    if (recordedBy === null) {
+      throw new Error('No signed-in coach identity is available to record this attendance change.');
+    }
+    await write({ sessionId, studentId, status, method, recordedBy });
+  };
 }
+
+/** `LiveConsoleBody`'s own default `onSetAttendanceStatus` -- real write. */
+export const defaultSetAttendanceStatus: SetAttendanceStatusFn = makeDefaultSetAttendanceStatus();
 
 export interface AttendanceChangeEvent {
   studentId: string;
@@ -532,91 +636,54 @@ export function notWiredSubscribeToAttendanceChanges(): () => void {
   return () => {};
 }
 
-// ---------------------------------------------------------------------------
-// Fixture data (constitution item 6: fabricated names only). Names below are
-// lifted directly from the PRD 4.2 wireframe itself ("Ada Q.", "Bea R.",
-// "Cy T.") -- already-fabricated placeholders in the ground truth, not new
-// PII, extended with a few more fabricated names for a workable roster.
-// ---------------------------------------------------------------------------
-
-const FIXTURE_SESSION_ID_FALLBACK = 'session-fixture-live-console';
-
-const FIXTURE_ROSTER: readonly LiveConsoleRosterEntry[] = [
-  { studentId: 'student-ada', name: 'Ada Q.' },
-  { studentId: 'student-bea', name: 'Bea R.' },
-  { studentId: 'student-cy', name: 'Cy T.' },
-  { studentId: 'student-dee', name: 'Dee W.' },
-  { studentId: 'student-eli', name: 'Eli M.' },
-  { studentId: 'student-fay', name: 'Fay N.' },
-  { studentId: 'student-gia', name: 'Gia P.' },
-];
-
-const FIXTURE_ATTENDANCE: Readonly<Record<string, AttendanceRecordState>> = {
-  'student-ada': {
-    status: 'present',
-    method: 'qr',
-    recordedBy: null,
-    updatedAt: '2026-07-19T23:03:00.000Z',
-  },
-  'student-bea': {
-    status: 'present',
-    method: 'qr',
-    recordedBy: null,
-    updatedAt: '2026-07-19T23:04:00.000Z',
-  },
-  // student-cy: deliberately no entry -- "not yet checked in" (open circle
-  // in the PRD wireframe).
-  'student-dee': {
-    status: 'late',
-    method: 'coach',
-    recordedBy: 'fixture-coach',
-    updatedAt: '2026-07-19T23:20:00.000Z',
-  },
-  'student-eli': {
-    status: 'excused',
-    method: 'coach',
-    recordedBy: 'fixture-coach',
-    updatedAt: '2026-07-19T23:00:00.000Z',
-  },
-  'student-fay': {
-    status: 'absent',
-    method: 'import',
-    recordedBy: null,
-    updatedAt: '2026-07-19T22:00:00.000Z',
-  },
-};
-
-/** Shipped default `LoadLiveConsoleDataFn` -- module doc section 2's second
- * gap. Real callers (once a shared Supabase client exists) or a
- * verification harness should pass their own. */
-export async function defaultLoadLiveConsoleData(sessionId: string): Promise<LiveConsoleData> {
-  return {
-    session: {
-      id: sessionId || FIXTURE_SESSION_ID_FALLBACK,
-      title: 'Tuesday Build Meeting',
-      startsAt: '2026-07-21T23:00:00.000Z', // 6:00 PM America/Chicago
-      endsAt: '2026-07-22T01:00:00.000Z', // 8:00 PM America/Chicago
-    },
-    roster: [...FIXTURE_ROSTER],
-    attendance: { ...FIXTURE_ATTENDANCE },
-  };
-}
+/**
+ * T403 step 2: `FIXTURE_ROSTER`, `FIXTURE_ATTENDANCE`,
+ * `FIXTURE_SESSION_ID_FALLBACK` and `defaultLoadLiveConsoleData` are DELETED,
+ * not kept as a fallback.
+ *
+ * They fabricated seven students ("Ada Q.", "Bea R.", …) and five attendance
+ * rows on a LIVE coach-facing route, so a real meeting showed a roster nobody
+ * on this team has ever been on. `loadLiveConsoleData`
+ * (`../../lib/supabase/loaders/kiosk.ts`) now resolves the real
+ * `event_sessions` → `events` → team-scoped active `students` roster and the
+ * real `attendance` rows for the session.
+ *
+ * Keeping them as a fallback is exactly how a fixture reaches a live route —
+ * the family that produced T155/T176/T181/T324 and this console. A test that
+ * wants a deterministic roster injects one through the `loadData` seam and
+ * says so (`LiveConsole.test.tsx`'s own `TEST_ROSTER`/`stubLoadData`), the
+ * discipline T151 established and T403 step 1 applied to the QR panel.
+ */
 
 // ---------------------------------------------------------------------------
 // Pure helpers -- exported for direct testing (module doc sections 3/4).
 // ---------------------------------------------------------------------------
 
-/** MTG-11: a coach-recorded value always wins over any later non-coach
- * (e.g. QR) update for the same student. See module doc section 4. */
-export function mergeAttendanceUpdate(
-  existing: AttendanceRecordState | null,
-  incoming: AttendanceRecordState,
-): AttendanceRecordState {
-  if (existing !== null && existing.method === 'coach' && incoming.method !== 'coach') {
-    return existing;
-  }
-  return incoming;
-}
+/**
+ * MTG-11's coach-precedence rule is SUPERSEDED — **last write wins.** Owner
+ * ruling 2026-08-02, recorded verbatim in `docs/swarm/auto-mode-decisions.md`
+ * under *"George's ruling on MTG-11: LAST WRITE WINS, overturning coach
+ * precedence"*; `VOLT_Portal_PRD.md:307` carries the struck clause and points
+ * at that ruling.
+ *
+ * `mergeAttendanceUpdate` is **DELETED**, not reduced to `return incoming`.
+ * Under this rule there is no merge to perform, and a function that ignores its
+ * `existing` argument would be a seam implying a decision that no longer
+ * exists — the same dishonesty as a fixture kept "just as a fallback". Both
+ * former call sites now apply the incoming record directly.
+ *
+ * The case that broke the old rule: a coach marks a student absent before they
+ * arrive; the student turns up late and scans the kiosk. Coach-precedence
+ * discarded that scan and left the student `absent` while standing in the room.
+ *
+ * **Known limit, disclosed rather than solved:** "last" means *last applied* —
+ * arrival order, not a timestamp comparison. `attendance.updated_at` is not
+ * trustworthy for ordering (T405: the database never bumps it on
+ * conflict-update), so there is nothing reliable to sort by. This is moot today
+ * because the Realtime seam is still an honest no-op
+ * (`notWiredSubscribeToAttendanceChanges`); it becomes real when Realtime does,
+ * and should be revisited then rather than pre-solved now.
+ */
 
 export function filterRosterByQuery(
   roster: readonly LiveConsoleRosterEntry[],
@@ -797,11 +864,13 @@ function QrPanel({
   return (
     <VStack gap={4} padding={4} hAlign="center" width={280}>
       <Heading level={2}>Check-in</Heading>
-      <Banner
-        status="warning"
-        title="This QR code and check-in code aren't live yet"
-        description="Scanning or entering them won't check anyone in. A real, working code isn't ready yet."
-      />
+      {/* T403 step 1: the "aren't live yet" Banner that used to sit here is
+          deleted, not reworded. `loadDisplayToken` now defaults to the real
+          `loadKioskDisplayToken`, so the code on screen is the same HMAC
+          token/short code the kiosk shows and `/checkin` accepts. Leaving the
+          warning would be the same defect in the opposite direction: honest
+          copy about dishonest data is the point, and dishonest copy about
+          honest data is just as wrong. */}
       {token === null ? (
         <Text type="supporting">QR not available yet.</Text>
       ) : (
@@ -895,9 +964,9 @@ export interface LiveConsoleBodyProps {
 }
 
 export function LiveConsoleBody({
-  loadData = defaultLoadLiveConsoleData,
-  loadDisplayToken = fixtureLoadLiveConsoleDisplayToken,
-  onSetAttendanceStatus = notWiredSetAttendanceStatus,
+  loadData = loadLiveConsoleData,
+  loadDisplayToken = loadKioskDisplayToken,
+  onSetAttendanceStatus = defaultSetAttendanceStatus,
   subscribeToAttendanceChanges = notWiredSubscribeToAttendanceChanges,
 }: LiveConsoleBodyProps): ReactNode {
   const { sessionId: rawSessionId } = useParams<{ sessionId: string }>();
@@ -918,6 +987,12 @@ export function LiveConsoleBody({
   const [query, setQuery] = useState('');
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [endMeetingStub, setEndMeetingStub] = useState<StubNotice | null>(null);
+  // T403 step 3, Trap 3 -- a rejected `onSetAttendanceStatus` write must be
+  // visible to the coach, not silently swallowed (see `handleSetStatus`
+  // below). Holds the display name of the student whose write just failed;
+  // `null` means no error banner is showing. Only the most recent failure is
+  // shown, same "one slot" convention `endMeetingStub` above already uses.
+  const [attendanceWriteError, setAttendanceWriteError] = useState<string | null>(null);
   // NFR-06 fix (T072): QR visible by default -- pure addition of a collapse
   // affordance so a coach on a phone can reclaim screen space for the
   // roster. `{showQr && <QrPanel .../>}` below genuinely un/mounts the
@@ -945,21 +1020,27 @@ export function LiveConsoleBody({
 
   const displayToken = useLiveConsoleDisplayToken(sessionId, loadDisplayToken);
 
-  // NFR-05 -- module doc section 5. Wires the injectable Realtime seam's
-  // `onChange` straight into the same `mergeAttendanceUpdate` precedence
-  // rule the coach's own writes use.
+  // NFR-05 -- module doc section 5. Applies the injectable Realtime seam's
+  // `onChange` event under the same rule the coach's own writes use: LAST
+  // WRITE WINS (owner ruling 2026-08-02). There is no precedence check here
+  // and there must not be one -- that is what lets a late scanner correct a
+  // coach's earlier `absent`.
   useEffect(() => {
     const unsubscribe = subscribeToAttendanceChanges(sessionId, (event) => {
-      setAttendanceByStudentId((prev) => {
-        const existing = prev[event.studentId] ?? null;
-        const merged = mergeAttendanceUpdate(existing, {
+      // Last write wins (owner ruling 2026-08-02 — see the note where
+      // `mergeAttendanceUpdate` was deleted). An incoming Realtime change is
+      // applied unconditionally, including over a value a coach just set:
+      // that is the whole point of the ruling, and it is what lets a student
+      // who scans in late correct a coach's earlier `absent`.
+      setAttendanceByStudentId((prev) => ({
+        ...prev,
+        [event.studentId]: {
           status: event.status,
           method: event.method,
           recordedBy: event.recordedBy,
           updatedAt: event.updatedAt,
-        });
-        return { ...prev, [event.studentId]: merged };
-      });
+        },
+      }));
     });
     return unsubscribe;
   }, [sessionId, subscribeToAttendanceChanges]);
@@ -981,19 +1062,63 @@ export function LiveConsoleBody({
       // the request was made (SegmentedControl click OR keyboard).
       return;
     }
+    const recordedBy = user?.id ?? null;
+    // T403 step 3 REWORK -- `resolveAttendanceWriteMethod` is deliberately NOT
+    // called here, and the wire/local method split the worker packet's section
+    // 4c prescribed is GONE. Both are consequences of the same owner ruling
+    // (2026-08-02, `auto-mode-decisions.md`, "George's ruling on MTG-11: LAST
+    // WRITE WINS"): `method` records WHO SET THE VALUE THAT IS THERE NOW, not
+    // how the student physically checked in. A coach tap is therefore always
+    // `'coach'` on the wire and in local state -- one value, no split, so a row
+    // can never claim `method: 'qr'` while naming a coach in `recorded_by`.
+    //
+    // This also matches `VOLT_Portal_PRD.md:307`'s FIRST clause, which always
+    // said a coach tap upserts `method='coach'`. The packet's acceptance
+    // criterion 3 ("preserve qr/import provenance") contradicted the PRD; it
+    // was taken from `resolveAttendanceWriteMethod`'s docstring and never
+    // checked against the requirement. `resolveAttendanceWriteMethod` still
+    // implements the other meaning for W2's screens and is untouched here.
     const incoming: AttendanceRecordState = {
       status,
       method: 'coach',
-      recordedBy: user?.id ?? null,
+      recordedBy,
       updatedAt: new Date().toISOString(),
     };
+    // T403 step 3 -- `previousRecord`/`hadPreviousRecord` are captured
+    // INSIDE this functional updater, not read from the `attendanceByStudentId`
+    // render-scope variable above, so a rollback (below, in `.catch()`) is
+    // correct even across rapid clicks on the same row: the updater always
+    // receives the true, currently-queued `prev`, not a value that may
+    // already be stale by the time a later click's rollback needs it.
+    let previousRecord: AttendanceRecordState | null = null;
+    let hadPreviousRecord = false;
     setAttendanceByStudentId((prev) => {
-      const existing = prev[studentId] ?? null;
-      return { ...prev, [studentId]: mergeAttendanceUpdate(existing, incoming) };
+      hadPreviousRecord = studentId in prev;
+      previousRecord = prev[studentId] ?? null;
+      // Last write wins -- this action IS the last write, so it is applied
+      // unconditionally (owner ruling; see the note where
+      // `mergeAttendanceUpdate` was deleted).
+      return { ...prev, [studentId]: incoming };
     });
-    onSetAttendanceStatus(sessionId, studentId, status, 'coach', user?.id ?? null).catch(() => {
-      // Persistence seam rejection -- see module doc section 2/5; the local
-      // state above is already the source of truth this UI shows.
+    onSetAttendanceStatus(sessionId, studentId, status, 'coach', recordedBy).catch(() => {
+      // T403 step 3, Trap 3 -- a rejected write must not leave the console
+      // silently asserting a status that was never persisted (constitution
+      // item 26's "lie to a user about their own data" HEAVY trigger). Roll
+      // back the optimistic update to whatever was on screen immediately
+      // before THIS action (deleting the key if there was no prior record at
+      // all), and surface a dismissable, student-named error.
+      setAttendanceByStudentId((prev) => {
+        if (!hadPreviousRecord) {
+          if (!(studentId in prev)) return prev;
+          const next = { ...prev };
+          delete next[studentId];
+          return next;
+        }
+        return { ...prev, [studentId]: previousRecord as AttendanceRecordState };
+      });
+      const studentName =
+        roster.find((entry) => entry.studentId === studentId)?.name ?? 'this student';
+      setAttendanceWriteError(studentName);
     });
   }
 
@@ -1058,6 +1183,20 @@ export function LiveConsoleBody({
 
       {endMeetingStub !== null && (
         <StubBanner notice={endMeetingStub} onDismiss={() => setEndMeetingStub(null)} />
+      )}
+
+      {/* T403 step 3, Trap 3 -- a rejected `onSetAttendanceStatus` write is
+          visible here, by rendered text, naming the affected student. See
+          `handleSetStatus`'s rollback + this Banner's DES-16-style "what
+          happened" copy. */}
+      {attendanceWriteError !== null && (
+        <Banner
+          status="error"
+          title="Attendance not saved"
+          description={`${attendanceWriteError}'s attendance change couldn't be saved. Check your connection and try again.`}
+          isDismissable
+          onDismiss={() => setAttendanceWriteError(null)}
+        />
       )}
 
       <Banner
