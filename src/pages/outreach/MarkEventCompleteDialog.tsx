@@ -159,11 +159,19 @@
  *    it -- reintroducing the exact bug this task exists to fix, on the one
  *    path where it is unrecoverable. So here: **a load that is in flight or
  *    has failed BLOCKS the write.** `handleConfirm` refuses to run
- *    (guarded twice -- once by the disabled confirm button, once
- *    defensively inside `handleConfirm` itself, since jsdom's `disabled`
- *    attribute alone already suppresses a dispatched click and this second
- *    guard is therefore untestable, defence-in-depth only) unless
- *    `attendanceState.status === 'success'`. A future reader must NOT
+ *    (guarded twice -- once by the disabled confirm button, once inside
+ *    `handleConfirm` itself) unless `attendanceState.status === 'success'`.
+ *    **Both layers are independently load-bearing, and neither is dead
+ *    code.** This sentence previously claimed the second guard was
+ *    "untestable" because "jsdom's `disabled` attribute alone already
+ *    suppresses a dispatched click" -- that is FALSE and was disproved by
+ *    T307's own checker (`verification-log.md:6458-6465`): Astryx's
+ *    `Button` guards on the `isDisabled` **prop**, not the DOM attribute,
+ *    so a DOM-level forced click is not what makes it hard to reach.
+ *    Removing only the button's clause still blocks the write; removing
+ *    only `handleConfirm`'s still blocks it; removing BOTH lets a write
+ *    through. See `:560-567` for the T401 re-proof rather than restating
+ *    the measurement here. A future reader must NOT
  *    "harmonise" these two dialogs' failure rules -- they differ because
  *    what the coach can see and correct before the write differs, not
  *    because of an oversight in either file.

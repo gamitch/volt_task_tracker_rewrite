@@ -953,6 +953,10 @@ function makePagingClient(pages: AttendanceDbRowFixture[][]): {
 describe('<MarkEventCompleteDialog /> C5 -- the real loader, paged past the old cap, still lets the write proceed with real provenance', () => {
   it('resolves 1500 rows across two real .range() pages and writes a preserved qr/hoursOverride/checkInAt row through unchanged', async () => {
     const QR_STUDENT_ID = 'student-qr-real';
+    // CHECKER FIX (NIT-1): a PAGE ONE student, on the roster below, so this
+    // test can prove page one's rows reach the write too -- not just page
+    // two's via the QR row.
+    const PAGE_1_STUDENT_ID = 'student-filler-0';
     const page1 = Array.from({ length: ATTENDANCE_PAGE_SIZE }, (_, i) =>
       makeAttendanceDbRowFixture(`filler-${i}`, { student_id: `student-filler-${i}` }),
     );
@@ -982,7 +986,10 @@ describe('<MarkEventCompleteDialog /> C5 -- the real loader, paged past the old 
           onOpenChange={() => {}}
           currentUserProfileId={COACH_PROFILE_ID}
           sessions={[SESSION_1]}
-          roster={[{ id: QR_STUDENT_ID, name: 'Rae Real', teamId: 'team-a' }]}
+          roster={[
+            { id: QR_STUDENT_ID, name: 'Rae Real', teamId: 'team-a' },
+            { id: PAGE_1_STUDENT_ID, name: 'Pia Page', teamId: 'team-a' },
+          ]}
           rsvps={[]}
           onMarkSessionComplete={onMarkSessionComplete}
           loadAttendance={loadAttendance}
@@ -1021,5 +1028,14 @@ describe('<MarkEventCompleteDialog /> C5 -- the real loader, paged past the old 
       hoursOverride: 6.5,
       checkInAt: '2026-08-02T14:05:00.000Z',
     });
+
+    // CHECKER FIX (NIT-1). The assertions above prove only that a PAGE TWO
+    // row reached the write, so a mutation dropping page ONE's rows would
+    // have left this green. `payload.attendance` cannot close that on its
+    // own -- it is filtered to the roster, and the roster below is one
+    // student who lives on page two -- so pin a PAGE ONE row instead, via
+    // the same roster it must pass through.
+    const page1Row = payload.attendance.find((row) => row.studentId === PAGE_1_STUDENT_ID);
+    expect(page1Row).toMatchObject({ status: 'present' });
   });
 });
