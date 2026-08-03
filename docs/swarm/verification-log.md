@@ -7750,3 +7750,98 @@ regions of the file. The two are independent but may conflict textually.
 **Disclosed:** the only new export is `OUTREACH_ATTENDANCE_PAGE_SIZE`, so the pagination boundary is
 assertable without a magic number that could drift — the same reason `attendance.ts` exports its own.
 `queryAttendanceForSessionsPage` and the loop stay file-local.
+
+---
+
+## T401 — the `ATTENDANCE_ROW_CAP` guard goes, now that T320 made it a false positive
+
+**HEAVY tier (item 26)** — it **deletes a fail-closed guard that gates a write**, so a mistake here
+permits writes currently refused. The diff is small; the tier is not about diff size. Packet →
+premise gate → worker → checker, with **every mutation replayed by the orchestrator**.
+
+Gates on the merged base, `.env.local` absent: `tsc` **0** · `vite build` ✓ · prettier clean ·
+eslint **0 errors / 362 warnings — no rise** · vitest **78 files / 1928 tests** · targeted file
+**26** exit 0.
+
+`MarkEventCompleteDialog.tsx:547` treated a ≥1000-row attendance load as **failed** and blocked the
+bulk write. That was right when T307 wrote it: PostgREST truncates at `[api] max_rows = 1000` with a
+**200 and a partial `Content-Range`**, so `createLoader` resolved a partial array every caller read
+as complete, and the write nulled real `check_in_at` / `hours_override` / `qr` provenance. T320's
+`.range()` pagination removed the thing the guard proxied for.
+
+### It was correctly BLOCKED until PR #28 actually merged
+
+W1's inbox note said the guard was already a false positive. **It was not, on `main`.** T320's
+pagination existed only on `claude/w1-checkin`; `origin/main`'s `attendance.ts` still issued the bare
+`.select().in()`, so the guard was still doing exactly its job and deleting it would have re-opened
+T307's destructive bug. The note was written from inside W1's branch, where the claim was true. This
+was raised on PR #28 and the row was held until #28 landed. **A premise can be true on the branch
+that states it and false on the branch that would act on it.**
+
+### The premise was proven by execution, not read
+
+The gate built a paging fake serving **1500 rows over two `.range()` pages** through the *real*
+`makeLoadAttendanceForSessions`, resolved **1500 distinct rows** (`rangeCalls [[0,999],[1000,1999]]`)
+with a `qr` / `hoursOverride: 6.5` / check-in row intact, and showed the current guard calling that
+complete load **failed**. It then hunted for a surviving path where the guard does real work and
+found none: the only production mount (`OutreachDetail.tsx:2147`) passes no `loadAttendance`; a
+transport ignoring `.range()` makes the loader **throw** after 100 pages into the surviving
+`.catch()`; and T402's un-paged query feeds the page, never this dialog.
+
+### The trap: a test that goes VACUOUS rather than red
+
+The orchestrator predicted **two** dependent tests would redden. Only `:774` does.
+**`:812` stays GREEN while testing nothing** — vite-node resolves the deleted named export as
+`undefined`, so `Array.from({ length: ATTENDANCE_ROW_CAP - 1 })` gets a `NaN` length and builds `[]`.
+**Only `tsc` catches the dangling import** (`TS2614`, exit 2). This repo has shipped 7+ assertions
+that passed for the wrong reason; this is the first recorded case of one going *vacuous* on deletion
+rather than red. `:812` was deleted (the gate's subset argument: any mutation reddening a 999-row
+test also reddens the 1000-row one, but not conversely).
+
+### The worker was stopped mid-task
+
+It committed the implementation (`3765f4f`) and left one uncommitted change, but **never wrote its
+packet-§7 output doc**. Per item 23's corollary the uncommitted change was assessed before being
+touched: a comment refinement, real work, committed rather than reverted. **The code is therefore
+unattested by its author** — every piece of evidence below is the orchestrator's own replay, and the
+checker was told to treat the diff as having had *less* scrutiny than usual, not more.
+
+### Verification — every mutation replayed by the orchestrator
+
+| Criterion | Mutation | Result |
+|---|---|---|
+| C1 + C5 | reinstate the `>= 1000` fail-closed guard | **2 red** — both the injected-array test **and** the real-loader test |
+| C2 | delete the `.catch()` error branch | **2 red** — F1 (load rejects blocks the write), F3 (retry re-runs the load) |
+| C4 | re-add the `ATTENDANCE_ROW_CAP` export | **1 red** |
+
+**C5 is the criterion the packet was missing until the gate found it.** C1 is satisfiable with an
+injected array, which pins the dialog but not the premise the whole task depends on. C5 drives the
+real loader through a paging fake.
+
+### The checker FAILed it — on the packet's error, not the worker's
+
+**MAJOR-1: the disproved F1b claim lived in TWO places and §3.5 named one.** The worker correctly
+fixed the inline copy; the survivor in module doc #6 (`:162-166`) is the *more authoritative* one —
+it is what the inline comment cites by name. So the file shipped saying the `handleConfirm` guard is
+"untestable" in one place and mutation-proven load-bearing in another, **about a guard on the
+data-destroying write path**. That is this project's recurring T301 defect, and it was the packet
+that under-specified the location. Fixed before merge with the measured truth: Astryx's `Button`
+guards on the `isDisabled` **prop**, both layers are independently load-bearing (checker re-proved:
+either alone still blocks; both removed lets a write through).
+
+**NIT-1, also closed before merge:** C5's name claimed 1500 rows resolve, but nothing counted them —
+the provenance assertion only proved a **page two** row arrived, so dropping **page one's** rows left
+it green. The orchestrator's first fix for this was itself wrong (asserting `payload.attendance` had
+1500 rows, when the payload is filtered to a roster of one student who lives on page two). Fixed
+properly by putting a page-one student on the roster; **verified by mutating the loader to drop page
+one, which now reddens exactly C5.**
+
+### Filed, not fixed (item 20)
+
+**T502** — `attendance.ts:363` treats a short page as end-of-data, but `createLoader` returns
+`data ?? null` **without throwing** when `data` and `error` are both null (`loader.ts:177`), which
+postgrest-js can produce. An empty-bodied page therefore resolves as "done" and the load comes back
+silently short. **T401 is what makes this reachable on the write path** — the `>= 1000` guard used to
+block precisely the page-boundary sub-case. Remote (needs >1000 rows across one event; the live DB
+holds 79), one line, and in **W1's** file, so W2 filed rather than reached across the boundary. It
+also narrows this log's own T307 entry at `:6454`.
