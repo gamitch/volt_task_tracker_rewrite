@@ -53,10 +53,14 @@ free number" from outside your block — that is exactly how the T196/T197 colli
 
 ## 3. State of play — what is already done
 
-`main` = **`7c7eb30`**, green: `tsc` 0 · `vite build` ✓ · prettier clean · eslint **0 errors / 361
-warnings** · vitest **76 files / 1842 tests**.
+`main` = **`76f8792`**, green: `tsc` 0 · `vite build` ✓ · prettier clean · eslint **0 errors / 362
+warnings** · vitest **78 files / 1928 tests**.
 
-Three W2 rows landed today. **Read their `verification-log.md` entries before touching the same
+**Measure the baseline yourself on your own branch point — do not quote this table.** It moved five
+times on 2026-08-03 alone (361→362 warnings, 1842→1928 tests) as W1, W4, W5 and W6 merged. Every
+stale figure in this project has cost someone a confused gate run.
+
+Six W2 rows have now landed. **Read their `verification-log.md` entries before touching the same
 code** — each records a trap that is still live.
 
 | Row | What shipped | The trap it left behind |
@@ -64,6 +68,9 @@ code** — each records a trap that is still live.
 | **T193** (PR #30) | A student's RSVP on `/outreach` now actually persists. It was writing nothing. | The optimistic row sets `respondedBy: studentId` — a `students.id` in a `profiles.id` field. **That is T174, still open.** |
 | **T309** (PR #33) | Unchecking a student in "Mark day complete" now writes `status: 'absent'` instead of doing nothing. | `buildAttendanceWriteRows` must stay **byte-identical** — bulk mode shares it and has no uncheck UI, so emitting absences there would fabricate them from no coach gesture. |
 | **T327** (PR #35) | Completion writes attendance **before** flipping the session to `completed`, so a failed write is retryable. | **Step (3), the adult-volunteer read-modify-write, must stay LAST.** It is additive and non-idempotent; moving it above the flip makes a retry double-count a grant-reporting figure. |
+| **T330** (PR #43) | A dateless (zero-session) event is now a visible, badged, em-dashed row pinned to the top of Upcoming, on **both** views — it used to be dropped from both buckets and unreachable. | **`buildEventGroups` routes zero-session events to `upcoming` and NOTHING may send them to `past`** — that comparator dereferences the last session and is safe only because of the routing. Its comment says so; do not "harden" it into a guard that does nothing (T301). |
+| **T402** (PR #44) | `loaders/outreach.ts`'s own `queryAttendanceForSessions` now pages, like T320 did for `attendance.ts`. | `.order('id')` is load-bearing. Paginating an unordered query duplicates and loses rows — measured at 1463 of 1500. |
+| **T401** (PR #47) | `ATTENDANCE_ROW_CAP` is gone; T320's pagination made it a false positive that blocked legitimate writes. | It was **blocked on PR #28** until T320 actually reached `main`. A premise can be true on the branch that states it and false on the branch that would act on it. |
 
 **Also live from earlier work (do not undo):** T305 and T307 fixed two destructive bugs in this exact
 write path — "Mark event complete" was overwriting real check-in times, hours overrides and QR
@@ -71,11 +78,11 @@ provenance with nulls. Their protections are load-bearing.
 
 ## 4. Your remaining rows, in order
 
-**Start with T330.** It is the only remaining row with a wrong number on a real screen.
+**Start with T306.** It is the last row where two records tell a user different stories about the
+same event.
 
 | Row | What | Tier |
 |---|---|---|
-| **T330** | Event/session creation is not transactional — **and the orphan event is invisible** | HEAVY |
 | **T306** | Signups on a past session still show RSVP intent over recorded attendance | STANDARD |
 | **T174** | `FIXTURE_RSVPS.respondedBy` holds `students.id`-shaped values in a `profiles.id` column | STANDARD |
 | **T300** | `OutreachEventDialog`'s own placeholder-coach copy | STANDARD |
@@ -85,7 +92,18 @@ provenance with nulls. Their protections are load-bearing.
 | **T152** | T147's parallel-load guard only discriminates in one direction | STANDARD |
 | **T301** | Three `OutreachDetail.tsx` comments call a `user !== null` check compiler-required — measured false | FAST |
 
-### T330 — read this before packeting it, the obvious framing is wrong
+### T306 — the display question is the OWNER's, and it is still open
+
+The owner's T305 ruling covers this surface but leaves one thing undecided: show attendance
+**in place of**, or **explicitly alongside**, the RSVP tallies. That is why this half was deferred
+rather than packeted with T305. **Ask before building.** And **do not sync the two records** —
+`OutreachList.tsx:1685-1687` records T121's finding that *"RSVP is intent, not a real attendance
+record"*; writing a `going` RSVP because a coach ticked an attendance box falsifies the intent record.
+
+### T330 — CLOSED (PR #43). Kept because its lesson generalises
+
+**The prescription below was WRONG and shipped in this file for a day.** It is left here as the
+worked example of failure mode #2, not as instruction.
 
 A previous packet proposed **closing T330 as no-change**, arguing an orphan event (an `events` row
 whose `event_sessions` insert failed) renders as `'No sessions scheduled yet.'` and the coach can

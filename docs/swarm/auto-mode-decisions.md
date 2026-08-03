@@ -2107,3 +2107,39 @@ measured green in this container (exit 0, ALL PASS). Fixing the older runner is 
   Constitution item 16 reserves migration cutover for him. **The exposure is not closed in
   production until he applies it** — that is the single most important thing for him to read here.
 - **Retyping any event**, explicitly not authorized by the T322 ruling.
+
+---
+
+## 2026-08-03 — third unsupervised window opens
+
+**Owner, verbatim:** *"I am going away for work, please go to audo decision mode"*, immediately after
+*"please update resume-here the merge has landded"*.
+
+**The standing rules at the top of this file (`:18-41`) apply unchanged.** Restating the one that
+governs most of what is left, because it is the one most easily eroded when nobody is watching:
+
+> **6. A task blocked on a genuine product judgement stops and waits** rather than guessing. Auto
+> mode covers engineering calls, not product ones.
+
+**What that means concretely for the remaining W2 queue.** T306's product question was answered
+before he left (and its follow-up constraint — *"i may be doing this on the same day of the event"* —
+which is what killed both obvious implementations of the trigger). The rows after it are debt,
+fixtures, tests and copy: **T174, T300, T190, T325, T165, T152, T301**. If any of them turns out to
+carry a real product choice — what a user sees, what a number means, which of two honest behaviours
+is wanted — it **parks with a written question**, it does not get an orchestrator's best guess.
+
+**Also unchanged and worth naming:** T406 stays **unfiled** because he said hold, not because it is
+unclear. It is confirmed real. Holding a known defect is his call to make and it is not auto mode's
+to reverse.
+
+**Three things this session established that the next unsupervised stretch should keep doing**, all
+of which cost nothing and each of which caught something:
+
+1. **Verify the premise on the branch you will act on**, not the branch that states it. T401's guard
+   was genuinely a false positive on W1's branch and genuinely load-bearing on `main`.
+2. **Replay your own mutations, including on your own fixes.** Two fixes shipped unpinned this
+   session — T330's expander guard and T401's C5 row count — and both were caught by the orchestrator
+   running its own named mutation and finding the suite still green.
+3. **Do not run `prettier --write` on `docs/`.** `format:check` covers `src/**` and root config only
+   (`package.json:13`); reformatting the ledger or verification log rewrites ~2000 lines that every
+   other workflow is concurrently appending to. Done once this session, reverted.
