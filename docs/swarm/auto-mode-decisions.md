@@ -1995,6 +1995,121 @@ chain fact-checks it against how the app is actually used.**
 
 ---
 
+## 2026-08-03 — W4+W5 auto-mode window opened (orchestrator's decisions, NOT the owner's)
+
+Owner left for work and asked this session to go to auto-decision mode and log important
+decisions here. **Same posture as the first two unsupervised windows: make decisions, log them
+for retrospective review, and do not attribute any of them to him.** Every ruling recorded above
+this entry is his; everything in this entry is mine, under delegated authority, and is
+**reversible by him**.
+
+**Standing discipline carried forward from the two false authorizations recorded on 2026-07-29
+(the "second false authorization today" REVIEW above):** when I authorize something I write the
+record first and hand the agent a *citation*, never a sentence to paraphrase; and when a subagent
+reports something is "authorized", I check *whose* authority it attributed before accepting it.
+
+### D1 — T205 ships `revoke all`, not the `revoke select` named in the ruling
+
+**The owner's 2026-07-31 ruling stands and is not reinterpreted.** He selected "Close it off"
+and the ruling's own text says *"`revoke select on public.v_leaderboard_students from anon;`
+**or equivalent**"*. This decision uses that latitude, and only that.
+
+**Measured, three ways, by the premise gate and then independently replayed by the orchestrator
+on Postgres 16.13 with Supabase's stock `alter default privileges ... grant all on tables to
+anon, authenticated, service_role` applied before the migrations:**
+
+| Revoke applied | `anon` runs `delete from public.v_leaderboard_students` | `students` rows |
+|---|---|---|
+| none | `DELETE 2` | 2 → **0** |
+| `revoke select ... from anon` *(the ruling's literal statement)* | `DELETE 2` | 2 → **0** |
+| `revoke all ... from anon` | `ERROR: permission denied for view` | 2 → 2 |
+
+`v_leaderboard_students` is a simple single-table view, so it is **auto-updatable**
+(`information_schema.views.is_updatable = YES`) and, having no `security_invoker`, it executes as
+its owner, which bypasses RLS. **Correction, T205 checker NIT-1:** the earlier wording here said
+"a `BYPASSRLS` role", which is harness-dependent and was asserted rather than measured. Measured
+both ways: in hosted Supabase the owner is `postgres`, which does carry `BYPASSRLS`; in a local
+scratch harness it is whichever superuser ran psql, which bypasses RLS by being a superuser and
+may report `rolbypassrls = false`. The observable behaviour is identical, but this project grades
+on measured-not-assumed and the original phrasing failed that bar. `revoke select` removes the
+read path and leaves an
+**unauthenticated roster-destruction path wide open**. An unqualified `DELETE` needs no `SELECT`
+privilege, so the read revoke does not even incidentally block it.
+
+**Had the ruling's literal one-liner shipped, the ledger would have recorded this exposure as
+"closed" while an anonymous internet request could still empty the students table.** That is the
+exact "lie to the owner about their own data" failure constitution item 26 exists to prevent, and
+it was caught only because the gate BUILT the prescription instead of reading it (item 26's
+"a gate that only reads is worth much less than one that runs").
+
+### D2 — T205's scope is extended to the `authenticated` half of the same defect
+
+The same view lets a plain **logged-in non-staff** session destroy the roster: base-table
+`delete from students` returns `DELETE 0` (RLS denies it correctly), but
+`delete from v_leaderboard_students` returns `DELETE 1`. Same view, same owner-bypass, same
+measured defect — only the caller differs.
+
+**This is a scope extension of an owner-ruled task, which this project's precedent normally
+forbids** (T158's checker filed T205 rather than extending T185, and item 25 warns against
+extending a rule by analogy). I am extending it anyway, and the reasoning should be argued with
+if it is wrong:
+
+1. The T185→T205 precedent was about a **read**, where there was a genuine product choice — a
+   leaderboard showing names to logged-in users is the feature. There is no equivalent choice
+   here: no one wants any signed-in student able to empty the roster.
+2. Constitution item 25's own text exempts this — *"Correctness, data integrity and honest
+   on-screen values are **unaffected** by this item."* This is data integrity, not a security
+   finding manufactured from an extension of a rule.
+3. It is the same one statement on the same one view in the same migration. Splitting it would
+   leave a measured destructive path open for as long as the second row waited for a ruling.
+4. Nothing legitimately writes through this view — the only production read is
+   `loaders/leaderboard.ts:147`, a `.select`.
+
+`authenticated` **keeps SELECT** (the leaderboard depends on it); only INSERT/UPDATE/DELETE go.
+
+**Reversible: if he disagrees, back the `authenticated` line out and refile it as its own row.**
+
+### D3 — scope bounded by measurement: this affects exactly one view, not a class
+
+Surveyed all 16 public views on the full migration set: **`v_leaderboard_students` is the only
+`is_updatable=YES` view in the schema.** The other 15 aggregate or join and are read-only by
+construction. So this is not a W10-style sweep and needs no schema-wide row. Filed **T700** to
+record the *class* — a future single-table view would silently reintroduce it — as a convention
+guard, not as a bug.
+
+### D4 — `tests/rls/run.sh` rot is real, out of scope, filed as T701
+
+That runner applies every migration unchanged and now fails on bare Postgres at three separate
+migrations (`cron.sql` needs `pg_cron` + `pg_net`; `avatar_storage.sql` needs `storage.buckets`).
+Nothing in CI runs it (`ci.yml` runs typecheck/lint/test/build only), so the rot went unnoticed.
+**T205 routes around it** by following the already-proven T195 precedent
+(`supabase/tests/run_calendar_feed_lifecycle.sh` + `calendar_feed_platform_stub.sql`), which was
+measured green in this container (exit 0, ALL PASS). Fixing the older runner is filed as T701.
+
+### Work order chosen for this window, so it can be argued with
+
+1. **T205** — in flight, gated, ruled, and now carrying a measured data-destruction path.
+2. **T500** — inherited from W2's T330 merge; a wrong number on a real screen **today**, in
+   W4-owned files, and explicitly "not downgradeable under item 25".
+3. **T322** — ruled twice (meetings 2026-08-02, competition 2026-08-03); latent today but the
+   headline correctness row.
+4. **T187** — the only row putting a wrong value in front of a real user today. Reaches into
+   W7's `students.ts`; W7 is unassigned, so I take it and say so in the PR.
+5. **T199**, then the shared set **T186 / T201 / T202** as one wave.
+6. FAST bundle: **T204**, **T200**. Then **T328**, **T331**, **T166**, **T182**.
+
+### What I will NOT decide in this window
+
+- **T198** — the per-coach team question. Product scope; needs him. Building nothing for it.
+  (D-2/D-3 at `state-summary.md:451-454` bears on it and should frame the question when asked.)
+- **T156** — the shared loader spine. Both kickoffs say raise with the owner; may belong in W10.
+- **Deploying any migration to hosted Supabase.** T205's migration lands in the repo only.
+  Constitution item 16 reserves migration cutover for him. **The exposure is not closed in
+  production until he applies it** — that is the single most important thing for him to read here.
+- **Retyping any event**, explicitly not authorized by the T322 ruling.
+
+---
+
 ## 2026-08-03 — third unsupervised window opens
 
 **Owner, verbatim:** *"I am going away for work, please go to audo decision mode"*, immediately after
