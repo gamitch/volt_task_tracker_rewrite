@@ -1845,6 +1845,30 @@ describe('<OutreachList /> student/parent view', () => {
     }
   });
 
+  // T190 (packet C3 -- "the criterion that captures the point of the task"):
+  // a NEW positive test that forgets an explicit `resolveStudentId`/
+  // `viewerStudentId` override must now fail loudly, not pass silently
+  // against real fixture data. Demonstrated directly, not just asserted:
+  // this test deliberately gives NO resolver override, so it falls through
+  // to the harness default (`PLACEHOLDER_CURRENT_STUDENT_ID`, `:192` above),
+  // which no fixture below is keyed to any more. Both outreach sessions
+  // (`session-food-bank-upcoming`, `session-park-cleanup-upcoming`) read as
+  // unanswered for this id (no RSVP row matches it), and neither
+  // `FIXTURE_RSVPS` nor `FIXTURE_GOAL_CONFIG` has a row for it, so hours and
+  // goal both read zero -- contrast with the "populated state" test above,
+  // which stubs the real viewer explicitly and sees 1 unanswered / 3 hrs
+  // confirmed / a real 12h goal from the exact same fixture data.
+  it('T190 regression guard: a render with NO explicit resolveStudentId/viewerStudentId override sees a viewer with no RSVPs and no goal, not the placeholder fixture', async () => {
+    window.localStorage.clear();
+    renderAsUser(STUDENT_OR_PARENT_USER, { loadData: defaultLoadOutreachData });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('2 awaiting your RSVP');
+    expect(container.textContent).toContain('0 hrs confirmed');
+    expect(container.textContent).toContain('0 hrs planned');
+    expect(container.textContent).not.toContain("You RSVP'd:");
+  });
+
   // T193: this test's own `onRsvpChange` used to be entirely absent, which
   // meant a click here fell through to `OutreachList`'s real default
   // (`submitRsvpChange`, an unmocked Supabase upsert that rejects in this
