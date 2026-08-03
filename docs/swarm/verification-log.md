@@ -7106,8 +7106,9 @@ process, not a one-off.
 The ruling is the boss approval item 10 requires. The MTG-11 precedence test **asserted the
 overturned behaviour** — it would have kept a student `absent` after they scanned in late — so it is
 **inverted, not deleted**, and now runs the owner's own scenario. A second test covers his other
-direction (a later coach edit overwriting a QR value). `mergeAttendanceUpdate`'s five unit tests are
-deleted with the function.
+direction (a later coach edit overwriting a QR value). `mergeAttendanceUpdate`'s four unit tests are
+deleted with the function (the re-review corrected this count from five; the arithmetic
+confirms it -- 1878 - 4 + 3 = 1877).
 
 The former criterion-3 test now drives **three sequential edits** rather than one. The single-shot
 version was structurally incapable of seeing MAJOR-1 — the first call was correct and every later
@@ -7143,3 +7144,67 @@ row filed (there is no pending work — a row would misrepresent a settled decis
 
 **Gates** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier **clean** · eslint
 **0 errors / 363 warnings** · vitest **77 files / 1877 tests, exit 0**.
+
+
+## T403 step 3 — re-review PASSED; step 3 and T403 are done
+
+**W1, `claude/w1-checkin`. HEAVY tier, full chain complete:** packet → `checker-premise` (Fable,
+building) → worker → `checker-reviewer` (FAIL) → owner ruling → rework → `checker-reviewer`
+(**PASS**, MINOR + NITs).
+
+### The re-review did not trust the shipped tests
+
+It drove its own probe — **6 sequential edits on the `'qr'` row, 6 on the `'import'` row, 3 on a
+brand-new row — and asserted `method`, `status`, `sessionId` and `studentId` on all 18 calls.** All
+sent `'coach'`. It byte-compared `makeUpsertAttendance` (746/746) and `resolveAttendanceWriteMethod`
+(204/204) as **IDENTICAL**, and ran seven mutations of its own, every one red at exit 1 — including
+**M7, which was green at exit 0 before the rework and was the reason for the FAIL.**
+
+It also answered a question nobody had asked: whether the option-A scoping could collide in
+practice. `attendance` rows key to `event_sessions` → `events.type`, so `LiveConsole` edits meeting
+sessions and W2's screens edit outreach sessions — **disjoint row sets.** The two meanings of
+`method` cannot meet on one row. That is a stronger result than the ruling needed.
+
+### MINOR-1 is the finding worth keeping
+
+The rework deleted `mergeAttendanceUpdate` but left two doc statements asserting the **overturned**
+coach-precedence rule as current — including a comment block sitting three lines above the code that
+implements the opposite, immediately followed by a comment saying so. A self-contradicting file.
+
+**This is precisely the hazard the ruling's own annotation warns about** — and it was introduced by
+the same change that wrote the warning. Deleting behaviour is not finished until every sentence that
+described it is corrected; prose asserting a superseded rule is indistinguishable, to a future
+reader, from a spec.
+
+### NIT-5 — the sixth vacuous test of this session
+
+The MTG-12 keyboard test asserted only that the row's status stayed `null`. No `excused` radio is
+rendered for that role at all, so **it passed whether or not the gate fired** — the re-reviewer
+measured it staying green under a gate-disabling mutation while other tests caught it. Optional to
+fix; fixed anyway, because this is the defect family that has cost this workflow six findings. It
+now asserts that no write is attempted, **and** exercises an allowed digit afterwards so an empty
+call list means "blocked" rather than "nothing was ever wired up".
+
+### A process failure of my own, recorded because item 23 exists for exactly this
+
+I mutated `LiveConsole.tsx` to verify the NIT-5 fix **without committing first**, then reverted with
+`git checkout --`, which silently discarded the MINOR-1 doc fixes I had just made in the same file.
+Caught by re-grepping rather than by assumption, and reapplied. **Item 23's "commit before mutating"
+is not bookkeeping** — the revert step cannot distinguish your mutation from your real work.
+
+### Not fixed, disclosed
+
+**NIT-3 (pre-existing, out of scope):** nothing structurally enforces the `LiveConsole`-only scope of
+the last-write-wins ruling. `/meetings/live/:sessionId` accepts any session id and
+`loadLiveConsoleData` does not filter `events.type = 'meeting'`. The disjointness above holds by
+convention and by how the app routes users, not by a guard. Not introduced by this work.
+
+**NIT-4 (process, judged defensible by the reviewer):** the PRD was edited in place rather than a
+`dispute-log` entry filed per the D002 precedent. The owner *changed* the requirement rather than
+deviating from it, the original wording is preserved under strikethrough, and the annotation cites
+the ruling — the reviewer judged this more honest than a silent deviation. Recorded so the departure
+from D002's pattern is visible.
+
+**Gates** (`.env.local` absent, all reproduced independently by the reviewer): `tsc` **0** ·
+`vite build` **✓** · prettier **clean** · eslint **0 errors / 363 warnings** · vitest
+**77 files / 1877 tests, exit 0**.

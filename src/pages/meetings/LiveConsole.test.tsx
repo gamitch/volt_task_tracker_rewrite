@@ -416,7 +416,7 @@ function setNativeInputValue(input: HTMLInputElement, value: string): void {
 // ---------------------------------------------------------------------------
 
 /**
- * `mergeAttendanceUpdate` and its five tests are DELETED. MTG-11's
+ * `mergeAttendanceUpdate` and its four tests are DELETED. MTG-11's
  * coach-precedence rule is superseded — **last write wins** (owner ruling
  * 2026-08-02, `auto-mode-decisions.md`, "George's ruling on MTG-11: LAST WRITE
  * WINS"; the struck clause is annotated at `VOLT_Portal_PRD.md:307`).
@@ -729,8 +729,21 @@ describe('MTG-12 excused gating (defense in depth)', () => {
     expect(cy.querySelector('[role="radio"][data-value="excused"]')).toBeNull();
   });
 
+  /**
+   * STRENGTHENED after the T403 step 3 re-review (NIT-5). The original asserted
+   * only `checkedStatusOf(...) === null`, which **passed vacuously**: no
+   * `excused` radio is rendered for this role at all, so the assertion held
+   * whether or not the gate actually fired. Measured by the re-reviewer —
+   * disabling the MTG-12 gate left this test GREEN while other tests caught it.
+   *
+   * A test that cannot fail when the thing it names is broken is the recurring
+   * defect of this workflow (five exit-0 mutations before this one). It now
+   * asserts the two things that actually distinguish a working gate: the local
+   * row never becomes `excused`, and **no write is attempted at all**.
+   */
   it('digit "3" is a no-op for a non-coach/admin role (never sets excused via keyboard)', async () => {
-    renderBody(STUDENT_USER);
+    const spy = spyResolvingSetAttendanceStatus();
+    renderBody(STUDENT_USER, { onSetAttendanceStatus: spy.onSetAttendanceStatus });
     await flushMicrotasks();
 
     const cy = row('student-cy');
@@ -738,9 +751,19 @@ describe('MTG-12 excused gating (defense in depth)', () => {
       cy.focus();
     });
     dispatchKeyOn(cy, '3');
-    // No radio at all is data-value="excused" for this role, and the
-    // status must remain unset (no other digit was pressed).
+    await flushMicrotasks();
+
     expect(checkedStatusOf('student-cy')).toBeNull();
+    // The load-bearing assertion: the gate must stop the WRITE, not merely
+    // fail to render a radio. Without this the test cannot detect a leak.
+    expect(spy.calls).toEqual([]);
+
+    // And prove the harness itself is live — an allowed digit on the same row
+    // DOES reach the seam, so an empty `spy.calls` above means "blocked", not
+    // "this test never wires anything up".
+    dispatchKeyOn(cy, '1');
+    await flushMicrotasks();
+    expect(spy.calls.map((call) => call.status)).toEqual(['present']);
   });
 });
 

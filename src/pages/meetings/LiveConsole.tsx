@@ -265,8 +265,9 @@
  * injectable default, `notWiredSubscribeToAttendanceChanges`, that is
  * honestly a no-op (never calls `onChange`, returns a no-op unsubscribe) --
  * disclosed via the same permanent Banner as section 2's second gap, not
- * silently pretending to be live. The component wires this seam's `onChange`
- * directly into `mergeAttendanceUpdate` (section 4) inside a `useEffect`
+ * silently pretending to be live. The component applies this seam's `onChange`
+ * event directly to local state (last write wins -- section 4; the old
+ * `mergeAttendanceUpdate` precedence rule is DELETED) inside a `useEffect`
  * cleanup-returning subscription, so the *consumption* logic (an incoming
  * change correctly and immediately updating the affected row's local state)
  * is fully real and independently provable by calling a test's own injected
@@ -577,8 +578,7 @@ export type SetAttendanceStatusFn = (
  * omits `hours_override` (that file's module doc #5 -- Trap 1's fix) so a
  * roll-call status change can never null out a coach's earlier manual hours
  * correction.
- */
-/**
+ *
  * T403 step 3 REWORK (checker MAJOR-2). This adapter maps positional seam
  * arguments onto the loader's named params, and it previously closed over the
  * module-level `setAttendanceStatus` with **no injection point** — so nothing
@@ -1020,9 +1020,11 @@ export function LiveConsoleBody({
 
   const displayToken = useLiveConsoleDisplayToken(sessionId, loadDisplayToken);
 
-  // NFR-05 -- module doc section 5. Wires the injectable Realtime seam's
-  // `onChange` straight into the same `mergeAttendanceUpdate` precedence
-  // rule the coach's own writes use.
+  // NFR-05 -- module doc section 5. Applies the injectable Realtime seam's
+  // `onChange` event under the same rule the coach's own writes use: LAST
+  // WRITE WINS (owner ruling 2026-08-02). There is no precedence check here
+  // and there must not be one -- that is what lets a late scanner correct a
+  // coach's earlier `absent`.
   useEffect(() => {
     const unsubscribe = subscribeToAttendanceChanges(sessionId, (event) => {
       // Last write wins (owner ruling 2026-08-02 — see the note where
