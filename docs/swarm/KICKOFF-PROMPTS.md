@@ -176,15 +176,30 @@ YOUR ROWS:
   T162 — loaders/meetings.ts has ZERO tests across 726 lines. STANDARD.
   T160 — MeetingsList's team type is still called FixtureTeam after T147 wired real data
          through it. FAST tier.
-  T196 (the mount) — BLOCKED on W1 making LiveConsole real. Do not start it. T178 already
-         built the whole endMeeting backend (473 lines + 14 tests); the mount was
-         deliberately parked because a real dialog on a fixture-backed console would write
-         real `absent` rows against fabricated students on first use.
+  T196 (the mount) — ✅ UNBLOCKED 2026-08-03. START HERE. W1's T403 made LiveConsole real
+         (real roster, real check-in credential, real attendance writes; all fixtures
+         deleted). T178 already built the whole endMeeting backend (473 lines + 14 tests);
+         the mount was parked only because a real dialog on a fixture-backed console would
+         have written real `absent` rows against fabricated students. That reason is gone.
+         READ FIRST: docs/swarm/inbox/w1-to-w3-T196-unblocked.md — it has an UPDATE banner
+         covering schema changes that landed after it was written.
 
-CONTEXT WORTH HAVING: in endMeeting.ts the WRITE ORDER IS LOAD-BEARING.
-trg_audit_attendance_post_completion is an `after update on attendance` trigger with a live
-session-status lookup, so checkout must precede the status flip. Because the flip is last,
-every reachable partial state fails safe — that, not a transaction, is why no RPC is needed.
+CONTEXT WORTH HAVING: in endMeeting.ts the WRITE ORDER IS LOAD-BEARING — but NOT for the
+reason the file's older comments gave. It was originally required because
+trg_audit_attendance_post_completion (`after update on attendance`, live session-status
+lookup) would have logged the coach's own meeting-close checkout as a post-completion
+correction. THAT TRIGGER NO LONGER EXISTS — it was removed 2026-08-03 by owner ruling
+(attendance corrections are a normal workflow here, not fraud). The ordering is RETAINED on
+an independent justification: because the flip is last, every reachable partial state fails
+safe — that, not a transaction, is why no RPC is needed. DO NOT reorder these writes on the
+grounds that the trigger is gone.
+
+ALSO CHANGED ON `attendance` (2026-08-03, main = c9b4698): `updated_at` is now maintained by
+`trg_attendance_touch_updated_at` (before insert or update) — it is trustworthy now, and
+anything you send in a payload is overwritten by the database. `audit_log.actor` is nullable
+so an audit write can never abort the write it audits. Post-completion attendance edits are
+audited NOWHERE, deliberately — see VOLT_Portal_PRD.md DATA-02's "do not re-add" note before
+you treat that as a bug.
 
 RULES: item 24 (ledger + verification-log in the merge commit), item 22 (named pathspecs
 only), item 23 (mutations in your own worktree; commit before mutating). State your tier in

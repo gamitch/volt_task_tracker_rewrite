@@ -76,9 +76,21 @@ your feature, not W1's.
 
 ## Related rows filed at the same time (FYI, not asks)
 
-- **T404** — `trg_audit_attendance_post_completion` is `after update` only, so a post-completion
-  attendance **INSERT** is never audited (observed: 0 rows vs 1 for UPDATE). Schema; owner call.
-- **T405** — no `moddatetime` on `attendance` and `loaders/attendance.ts` omits `updated_at`, so it
-  never moves on conflict-update — **while `outreach.ts:1136` sends it explicitly.** The two write
-  paths to one table already disagree about that column's meaning. Worth knowing if you change
-  either.
+- **T404 — ❌ CANCELLED 2026-08-03 by owner ruling.** ~~post-completion INSERTs are never audited~~
+  The trigger was **removed**, not widened: correcting attendance after a session completes is a
+  normal workflow for this team, not fraud. Post-completion attendance edits are audited **nowhere**,
+  by design. `VOLT_Portal_PRD.md` DATA-02 carries a *"do not re-add"* note.
+- **T405 — ✅ CLOSED 2026-08-03.** ~~no `moddatetime` on `attendance`~~
+  `trg_attendance_touch_updated_at` (`before insert or update`) now maintains `updated_at` on
+  **every** `attendance` write path — including yours. The two write paths no longer disagree about
+  the column's meaning; the database decides it.
+  **Precisely what this touches in your file — checked, not assumed.** `outreach.ts` sends an
+  explicit `updated_at: new Date().toISOString()` in **three** places, but only **one writes
+  `attendance`**:
+  - **`:1270`** (`upsertAttendance`, `client.from('attendance')`) — **now overwritten by the
+    trigger.** Harmless, since the database's `now()` beats a client clock, but the client-side
+    send is dead code you may want to drop.
+  - `:1200` (`upsertRsvps`) and `:1541` (`upsertExpectedAttendeeRsvps`) both write **`rsvps`**,
+    which has **no such trigger**. **Leave those alone — they are still load-bearing.** If `rsvps`
+    wants the same treatment that is a separate row and a separate owner call; it was not in scope
+    and was not changed.
