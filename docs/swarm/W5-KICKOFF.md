@@ -4,10 +4,20 @@
 `main` = `6b5663a`.** Everything you need is on disk; nothing important lives only in a
 conversation. Same shape as `W2-KICKOFF.md`, which is the sister document.
 
-**Why W5 was chosen for a fourth machine: it is the cleanest workflow in the repo.** Its owned
-files overlap with **nothing** that W1, W2, W4 or W7 own. Two of its rows do reach outside those
-files, and §5 tells you exactly which and what to do about it. Everything else you can run without
-talking to anyone.
+> ## ⚠️ CORRECTION — 2026-08-03, before any W5 work started
+>
+> **The original version of this file claimed W5 "overlaps with nothing that W1, W2, W4 or W7 own."
+> That is FALSE, and `WORKFLOWS.md:185-186` says so in plain text:**
+>
+> > *"W4 conflicts with W5 on `dashboard_views.sql` and `StudentHome.tsx` (T186, T187, T201, T202).
+> > Give both to one machine, or split strictly: W4 takes the SQL, W5 takes the `.tsx`."*
+>
+> The author read W4's row table and its `Owns:` line and stopped two lines short. **W5 is not the
+> clean workflow — there is no fully clean workflow left.** Do not rely on any "you can run without
+> talking to anyone" framing. §5 now lists **three** rows that reach outside W5, not two.
+
+**W5 — what a student, parent, or coach sees when they land.** Substantial, well-evidenced, and
+mostly independent — but **not conflict-free**, and the conflicts are named in §3 and §5.
 
 ---
 
@@ -61,8 +71,8 @@ collision happened, and it nearly happened a second time.
 |---|---|---|
 | `src/pages/outreach/**`, `loaders/outreach.ts`, `loaders/selfCheckoff.ts` | **W2** | Another machine, mid-flight on T330. |
 | `src/pages/checkin/**`, `pages/meetings/LiveConsole.tsx`, `Kiosk.tsx`, `loaders/checkin.ts`, `kiosk.ts`, `attendance.ts` | **W1** | Another machine, on T196 (making `LiveConsole` real — the launch blocker). |
-| `supabase/migrations/*metric_views.sql`, `*kpi_views.sql`, `*dashboard_views.sql`, `loaders/kpi.ts`, `loaders/reports.ts`, `pages/reports/**`, `pages/outreach/Leaderboard.tsx` | **W4** | May be assigned to a machine shortly. |
-| `loaders/students.ts`, `teams.ts`, `parents.ts`, `invites.ts`, `accept.ts`, `pages/roster/**` | **W7** | Unassigned, but **T200 reaches into it — see §5.** |
+| `supabase/migrations/*metric_views.sql`, `*kpi_views.sql`, `*dashboard_views.sql`, `loaders/kpi.ts`, `loaders/reports.ts`, `pages/reports/**`, `pages/outreach/Leaderboard.tsx` | **W4** | **⚠️ W4 CONFLICTS WITH YOU** on `dashboard_views.sql` and `StudentHome.tsx` — rows **T186, T187, T201, T202** (`WORKFLOWS.md:185-186`). Its instruction: give W4+W5 to one machine, **or split strictly — W4 takes the SQL, W5 takes the `.tsx`.** Confirm with the owner which applies before starting any of those four rows. |
+| `loaders/students.ts`, `teams.ts`, `parents.ts`, `invites.ts`, `accept.ts`, `pages/roster/**` | **W7** | Unassigned, but **BOTH T200 and T187 reach into it — see §5.** |
 | `pages/calendar/**`, `loaders/calendarFeed.ts` | W6 | Done — T194/T195 landed in PRs #37/#38. |
 
 **You may import freely from any of these. You may not modify them.**
@@ -102,7 +112,7 @@ trustworthy but **verify the line numbers** — several were written weeks ago.
 | **T156** | The loader discards the real Postgres error — **see the warning below** | STANDARD |
 | **T200** | `students.test.ts`'s row-not-found test asserts a bare `rejects.toThrow()` — **see below** | FAST |
 
-### ⚠️ T156 and T200 edit files W5 does not own. Do not start either without reading this.
+### ⚠️ THREE rows edit files W5 does not own: T156, T200 and T187. Do not start any without reading this.
 
 **T156 targets `src/lib/supabase/loaders/loader.ts`** — `toLoaderError` at `:116-121` replaces the
 real Postgres message with a generic string, keeps the original only in `cause`, and **nothing
@@ -117,6 +127,15 @@ own, and it can break W1, W2, W4 and W7 simultaneously. **Do not treat it as a W
 Raise it with the owner and coordinate before packeting; it may deserve to be re-filed as a W10
 cross-cutting row rather than run from here.
 
+**T187 targets `src/lib/supabase/loaders/students.ts`** — `makeResolveStudentScope` (`:422`) and
+`resolveStudentScope` (`:444`), which read the legacy `students.team_id`. **That file belongs to
+W7**, and `parentHome.ts` consumes the same factory, so widening its return type is *an export
+another session builds against* — an item 26 HEAVY trigger in its own right, which is consistent
+with T187 already being tiered HEAVY. **The original version of this file missed this entirely and
+described T187 as a `StudentHome.tsx`-only change.** Settle ownership with the owner before
+packeting: W7 is currently unassigned, but T187 is also one of the four rows `WORKFLOWS.md:185-186`
+names as a **W4/W5 conflict**, so it has two claimants, not one.
+
 **T200 targets `src/lib/supabase/loaders/students.test.ts`**, which belongs to **W7**. It is a
 one-assertion FAST fix (a bare `rejects.toThrow()` that passes for any error at all — the
 absence-only failure mode this project has shipped 7+ times). **If W7 is unassigned, take it and say
@@ -124,11 +143,20 @@ so in the PR. If W7 has a machine, hand it over.** Do not silently edit another 
 
 ### Where to start
 
-**Start with T199, then T187.** They are the same screen and the same student.
+**Ordering is now an open question — put it to the owner rather than assuming.** The original
+version of this file said "start with T199, then T187" on the strength of the fabricated-data claim
+corrected below. With that claim gone, **T187 is the only row here that puts a wrong value in front
+of a real user** (a two-team student sees one team), which argues for T187 first — but T187 is
+HEAVY, reaches into W7's file, and is one of the four rows in the W4/W5 conflict set. **T199 is
+cheap, self-contained and entirely inside your own files**, which argues for doing it first simply
+because it can start immediately. Both remain the right two rows; only their order is unsettled.
 
-- **T199** is the last of the fabricated-data family still on a live route: `StudentHome`'s events,
-  sessions, RSVPs and participation have **no real loader**. A student's own landing page is
-  showing invented content. Nothing else on your list is a wrong number in front of a user.
+- **T199 is NOT fabricated data, and the original version of this file was wrong to say so.**
+  `StudentHome.tsx`'s `loadData` defaults to the **real** `loadStudentHomeData`
+  (`loaders/students.ts:550`), whose `makeLoadStudentHomeData` returns `events: []`, `sessions: []`,
+  `rsvps: []`, `participation: null` — **verified at those lines**. The ledger's own wording is
+  *"honestly empty," not fabricated*. The fixture path is test-only. **T199 is a missing feature, not
+  a wrong number in front of a user**, and it should be prioritised as such.
 - **T187** is the correctness bug underneath it, and it is **HEAVY**: `resolveStudentScope` reads
   `students.team_id`, the legacy single-team column, so a student on two teams sees only one.
   **Every other reader has already migrated to the `student_teams` junction** —
@@ -195,7 +223,7 @@ npx vitest run <the targeted files>; echo $?     # assert the exit code, not jus
 it is more specific than most: it names **three** seams a zero-props `<StudentHome />` render
 reaches, and records that mocking `resolveCurrentStudentId` alone still leaves `resolveStudentScope`
 hitting the real `getSupabaseClient()` — measured by the T176 gate, round 1, MAJOR 6. T183 added a
-third seam (`StudentHome.tsx:1763`'s own `loadData` default). It is one of the two places in this
+third seam (`StudentHome.tsx:1768`'s own `loadData` default). It is one of the two places in this
 repo where this trap is written down, and orchestrators have *still* written criteria against an
 imagined harness four tasks running.
 
