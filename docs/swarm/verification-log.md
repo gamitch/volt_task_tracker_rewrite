@@ -7560,3 +7560,120 @@ expected idempotent `DROP TRIGGER IF EXISTS` notice reported that the old trigge
 no error occurred. `supabase migration list --linked` then showed `20260802000000` in both Local
 and Remote. Remaining W6 verification is the hosted application smoke test for one initial feed
 and one reset; no implementation row remains open.
+
+---
+
+## T330 — a dateless outreach event is now visible, honest and fixable
+
+**HEAVY tier (item 26) — packet → premise gate (2 rounds) → worker → checker, with every mutation
+replayed by the orchestrator.** One worker attempt; the packet needed two gate rounds. Gates on the
+merged base, `.env.local` absent: `tsc` 0 · `vite build` ✓ · prettier clean · eslint **0 errors /
+362 warnings — no rise** · vitest **78 files / 1921 tests** (+11) · targeted file **107** exit 0.
+
+An `events` row whose `event_sessions` insert failed was dropped from **both** buckets by
+`buildEventGroups` (`OutreachList.tsx:1730`). Since every in-app link to `/outreach/:eventId` is
+built from a rendered row — including `CalendarPage.tsx:514`, which is itself session-driven at
+`:349` — no row meant no link, and the coach could not see, reach or fix the event.
+
+### The prescription everyone had written down was wrong, and the gate proved it by running it
+
+Both the T330 ledger row and `W2-KICKOFF.md` §4 prescribed _"delete the `continue` at
+`OutreachList.tsx:1730`."_ **That alone ships a crash.** `hasScheduled` is `false` for a zero-session
+event, so the orphan routes into `past`, whose comparator dereferences
+`a.sessions[a.sessions.length - 1].startsAt` — `undefined` on an empty array. Measured:
+`TypeError: Cannot read properties of undefined (reading 'startsAt')`. It does **not** throw while
+the bucket holds one event, because a one-element array never invokes the comparator — so it would
+have surfaced only once a second event joined, taking out the entire list for every viewer.
+
+**This is the project's failure mode #2 living inside the prescription itself** — written from
+reading the `continue` line without executing what happens downstream of removing it.
+
+### The gate's second MAJOR is the one that actually saved the task
+
+**The fix did not fix its own headline scenario.** Both views gated the whole list on
+`hasAnyOutreach = sessions.length > 0` (`:3241`, `:3770`), so a season whose **first** create failed
+still rendered the EmptyState — and **all ten original criteria passed on that build**. The gate
+probed a green tree and measured `ROW RENDERED: false / EMPTYSTATE RENDERED: true`. Without it this
+task would have closed its own row having fixed only the case where a _second_ create fails.
+
+Round 1 also produced a **BLOCKER of the orchestrator's own making**: the packet authorized amending
+one test and forbade all others, but the routing change reddens **two** siblings sharing the `e3`
+fixture. Its own diff-grep rule was unsatisfiable by any correct implementation — a guaranteed
+mandatory dispute on the worker's first test run, the same shape that killed T305's v2 packet. Three
+citations were also wrong (`:566-573`, `:57-64`, `:46`), which is item 19c and the error this
+orchestrator keeps repeating.
+
+### The owner's rulings, and the question that was narrowed before it was asked
+
+`auto-mode-decisions.md`, "2026-08-03 — George's ruling on T330": **Upcoming, pinned to top**;
+**em dash**, not zeros; a **"Needs dates" badge**; **BOTH views**. A third bucket was **not** offered,
+because T304 (`:1320-1333`) already settled it — _"keep the current two buckets."_ The fourth ruling
+went **against** the orchestrator's coach-only recommendation and is recorded as such.
+
+**`Reached` is not dashed, deliberately.** It renders only in the `past` bucket (`:2836`, `:2729-2733`)
+and a dateless row is pinned to `upcoming`, so it renders _nothing_ — never a `0`. Building a dashed
+version would have been dead code. The ruling's principle is satisfied; the worker disclosed the
+reasoning rather than skipping it silently.
+
+### Verification — every mutation replayed by the orchestrator, not relayed
+
+| Criterion | Mutation                                                    | Result                                                                                  |
+| --------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| C1        | restore the `continue`                                      | **9 red**                                                                               |
+| C2        | route zero-session to `past`                                | **6 red** + `TypeError`; the single-orphan arm fails on `AssertionError`, not the crash |
+| C3        | dateless entries compare equal (`return 0`)                 | **2 red**, on an assertion, no throw                                                    |
+| C4        | remove the dateless guard                                   | **6 red**, real `TypeError`                                                             |
+| C5        | reverse `past`'s operands                                   | **1 red — exactly the past-sort test**                                                  |
+| C6/C7     | un-dash hours/count, **each branch separately**             | **1 red each, narrow and desktop independently**                                        |
+| C8        | drop the badge, each view                                   | **2 red** (coach), **1 red** (student)                                                  |
+| C9        | `formatEventDateRangeLabel` returns `''`                    | **4 red**                                                                               |
+| C10       | dateless formatting unconditionally                         | **4 red**, incl. pre-existing `populated state`                                         |
+| C11       | revert `hasAnyOutreach`                                     | **2 red — both views**                                                                  |
+| C12       | make `buildInitialOutreachEventFromRow` non-total over `[]` | **1 red**, `TypeError`                                                                  |
+
+**C3 is the one worth naming.** Its _original_ mutation was measured **green** by the gate — a `?? ''`
+sentinel sorts first in `localeCompare` by accident, so the pin survived unpinned. Reworded before
+dispatch. **C6/C7 reddening their branches independently** is the proof that the narrow-viewport
+render path is genuinely covered; dashing only the desktop pair left a coach on a phone seeing
+`0h / 0 students` with the suite green.
+
+### The checker found a hole in the packet that survived both gate rounds
+
+**MINOR-1:** the criteria table splits C6/C7/C8/C11 by branch or view but leaves **C10, the sole
+regression guard, as one bundle** — so the student view had no "a dated row must not be badged"
+assertion. The checker ran a mutation nobody had named (student badge unconditional) and the suite
+stayed **green at 105/105**. Shipped code was correct; the coverage was not. **Generalisable rule:
+criteria that split by view for presence must split by view for absence too.**
+
+**MINOR-2, and it is T330's own consequence:** before this task `buildEventGroups` dropped
+zero-session events, so `CoachExpanderButton` could never receive one. Now it could, and a dateless
+row rendered `aria-expanded="true"` alongside an **empty** `aria-controls` — not a valid IDREF list —
+announcing a disclosure containing nothing. Gated on `sessions.length > 0`. Item 15 makes
+accessibility a shipping requirement, so it closed here rather than becoming a row.
+
+**NIT-1:** the shipped `events.length > 0 || sessions.length > 0` had a **dead** second arm —
+`sessions` is `outreachSessions`, filtered to sessions whose `eventId` is in the set built from
+`outreachEvents`, so non-empty `sessions` entails non-empty `events`. Removed rather than kept: a
+condition whose comment claims work it does not do is **T301's recorded defect**, and this task's own
+packet warned about that exact shape for the neighbouring `past` comparator one section earlier.
+
+**The orchestrator then shipped MINOR-2's fix unpinned, and caught itself.** Replaying its own named
+mutation — delete the guard — left the suite **green at 106/106**. By this project's standard that is
+not evidence, so a test was added and the mutation now reddens exactly it. The same rule that caught
+C3 at the gate and MINOR-1 at the checker, applied to the orchestrator's own work rather than
+exempted from it.
+
+### Disclosed, and deliberately not fixed
+
+- **`past`'s comparator was left unchanged.** The ruling entry's own prose says _"both comparators
+  must tolerate an empty session list"_; the shipped answer makes `past` **unreachable** by empty
+  entries rather than **tolerant** of them, and its comment states outright that its safety is
+  entirely derivative and must never be called load-bearing in isolation. That is the better call —
+  an unreachable guard documented as real work is T301 — and the sentence in question was
+  orchestrator analysis, not one of the owner's four selections. Recorded so a future reader does not
+  conclude the task under-delivered.
+- **The adult-volunteer double-count is not fixed** — `pages/reports/**` is W4's. **Filed as T500.**
+  This task makes the orphan fixable; it does not correct that number.
+- **The bare `—` screen-reader question is repo-wide**, matching four other merged screens and
+  `KpiStrip.tsx:357-366`'s recorded convention. **Filed as T501** as one repo-wide task, not a T330
+  rework (item 25).
