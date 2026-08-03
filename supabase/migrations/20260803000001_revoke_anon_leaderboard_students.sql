@@ -22,7 +22,13 @@
 -- `v_leaderboard_students` is a simple single-table view, so Postgres makes
 -- it auto-updatable (`information_schema.views.is_updatable = 'YES'` -- the
 -- only such view in the whole schema, all 16 surveyed). It carries no
--- `security_invoker`, so it executes as its OWNER, a BYPASSRLS role. An
+-- `security_invoker`, so it executes as its OWNER, which bypasses RLS. (The
+-- MECHANISM of that bypass depends on who applied the migration, measured
+-- both ways: in hosted Supabase the owner is `postgres`, which carries the
+-- BYPASSRLS attribute; in a local scratch harness it is whichever superuser
+-- ran psql, which bypasses RLS by being a superuser and may have
+-- `rolbypassrls = false`. The observable behaviour is identical -- T205
+-- checker, NIT-1.) An
 -- unqualified `delete from public.v_leaderboard_students` needs no SELECT
 -- privilege at all, so `revoke select` alone leaves that DELETE path wide
 -- open to `anon` -- measured: `DELETE 2`, emptying `students`, even with

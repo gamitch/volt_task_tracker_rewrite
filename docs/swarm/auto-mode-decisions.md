@@ -2026,7 +2026,13 @@ anon, authenticated, service_role` applied before the migrations:**
 
 `v_leaderboard_students` is a simple single-table view, so it is **auto-updatable**
 (`information_schema.views.is_updatable = YES`) and, having no `security_invoker`, it executes as
-its owner — a `BYPASSRLS` role. `revoke select` removes the read path and leaves an
+its owner, which bypasses RLS. **Correction, T205 checker NIT-1:** the earlier wording here said
+"a `BYPASSRLS` role", which is harness-dependent and was asserted rather than measured. Measured
+both ways: in hosted Supabase the owner is `postgres`, which does carry `BYPASSRLS`; in a local
+scratch harness it is whichever superuser ran psql, which bypasses RLS by being a superuser and
+may report `rolbypassrls = false`. The observable behaviour is identical, but this project grades
+on measured-not-assumed and the original phrasing failed that bar. `revoke select` removes the
+read path and leaves an
 **unauthenticated roster-destruction path wide open**. An unqualified `DELETE` needs no `SELECT`
 privilege, so the read revoke does not even incidentally block it.
 

@@ -3,11 +3,22 @@
 -- explicitly SET ROLE anon/authenticated; setup and postcondition
 -- inspection run as the connecting superuser.
 --
--- Paired, not absence-only: every write-path assertion also proves the
--- underlying data was NOT touched, and the base-table read is a genuine
--- RLS-driven control, not a structural guarantee (see acceptance criterion
--- 4 in the T205 worker packet -- adding a permissive anon policy on
--- `students` must turn it red).
+-- Paired, not absence-only: the base-table read is a genuine RLS-driven
+-- control, not a structural guarantee (see acceptance criterion 4 in the
+-- T205 worker packet -- adding a permissive anon policy on `students` must
+-- turn it red).
+--
+-- HONEST LIMIT on the row-count guards that follow each write-path check
+-- (T205 checker, MINOR-1, proven not asserted): they do NOT prove this
+-- statement's own DELETE left the data alone. The DELETE and the follow-on
+-- count sit in the same `DO` block, so PL/pgSQL rolls the DELETE back before
+-- the count runs -- the count reads unchanged whatever the DELETE did. They
+-- remain useful as a guard against data loss committed by some OTHER source,
+-- and that is all they are claimed to be here. What actually proves the
+-- write path is shut is the mutation evidence: replacing `revoke all` with
+-- `revoke select` turns `anon-delete-denied` red, and deleting the migration's
+-- `authenticated` line turns `authenticated-delete-denied` red. Both were run
+-- by the worker, the orchestrator and the checker independently.
 
 -- ---------------------------------------------------------------------------
 -- Fixture: one team, one ACTIVE student (visible through the view), one
