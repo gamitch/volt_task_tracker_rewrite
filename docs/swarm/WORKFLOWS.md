@@ -127,7 +127,6 @@ destructive bugs; what remains is silent no-ops and non-atomic writes.
 | **T193** | A student changing their RSVP on `/outreach` **writes nothing to the database** | HEAVY |
 | **T309** | Unchecking a student in "Mark day complete" is a silent no-op | HEAVY |
 | **T327** | Outreach completion is non-atomic | HEAVY |
-| **T330** | Event and session creation is not transactional | HEAVY |
 | **T306** | Signups on a past session still show RSVP intent over recorded attendance | STANDARD |
 | **T174** | `FIXTURE_RSVPS.respondedBy` holds `students.id`-shaped values in a `profiles.id` column | STANDARD |
 | **T300** | `OutreachEventDialog`'s own placeholder-coach copy | STANDARD |
@@ -144,7 +143,9 @@ destructive bugs; what remains is silent no-ops and non-atomic writes.
 external audit never found it** — meaning nothing else is watching for it. Heavy tier: it is a write
 path.
 
-**Sequencing:** T193 → T309 → T327/T330. The last two are the same "non-atomic" family and should be
+**Sequencing:** T193 → T309 → T327 → T330 — **all four merged 2026-08-02/03**, as have T401 and T402
+(W1-block rows W2 executed). Remaining W2 rows start at **T306**. The historical note: T327/T330 were
+the same "non-atomic" family and were
 scoped together, carefully — T305/T307 added protections to this exact path that must not be undone.
 
 ---
