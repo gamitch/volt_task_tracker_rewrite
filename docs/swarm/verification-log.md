@@ -7208,3 +7208,355 @@ from D002's pattern is visible.
 **Gates** (`.env.local` absent, all reproduced independently by the reviewer): `tsc` **0** ·
 `vite build` **✓** · prettier **clean** · eslint **0 errors / 363 warnings** · vitest
 **77 files / 1877 tests, exit 0**.
+
+---
+
+## T193 — a student's RSVP on `/outreach` now actually persists
+
+**Merged `2c59874`. HEAVY tier (item 26) — a write path. One worker attempt; the packet needed two.**
+
+The control updated and wrote nothing. The comment said so, citing `RsvpControl`/`ParentRsvp` as
+"currently Blocked" — a premise that expired when T101 wired their real default. The fix reuses
+`submitRsvpChange`, the one real `rsvps` upsert, through a defaulted prop threaded to the
+student/parent view only.
+
+### The premise gate ran on fable, and BUILT the prescription
+
+Same result the opus gates produced on T305 and T189, for the same reason: **it executed rather than
+reviewed.** That remains the variable that predicts whether a gate finds anything — not the model.
+
+**MAJOR 1 — the packet's harness warning was false, and the falseness hid a worse hazard.** It
+predicted every existing test would reach the real writer and fail, reasoning by analogy from two
+**mount-time loader** traps. `submitRsvpChange` is a **click-time mutation**: measured **92 → 92,
+exit 0**, because exactly one of 92 tests clicks. And that one test then passed **only by racing the
+rejection** — one added `flushMicrotasks()` turned it red, since the rollback reverts the state it
+asserts. The packet's own procedure would have measured 92→92, concluded nothing needed doing, and
+shipped a green-by-race test.
+
+**The generalisable lesson: a count delta answers "did anything break", not "is anything now passing
+for the wrong reason".** This project has shipped seven-plus assertions that passed for the wrong
+reason; this is the first time the *detection procedure itself* was the thing passing for the wrong
+reason.
+
+**MAJOR 2 — "mirror `RsvpControl`'s rollback" was impossible here.** That component rolls back a
+scalar `displayedStatus` that may be `null`. This one's state is the shared `rsvps` array, and
+`withRsvpOverride` takes a **concrete** `RsvpStatus` and **appends** when no row exists — it cannot
+express "back to unanswered", and the captured previous status is `undefined` in exactly the
+dominant case, a student answering for the first time. Following the packet literally ships a
+**stuck phantom RSVP** on a failed write: the precise failure the packet itself called worse than
+the bug. The gate had already built and run the correct shape — an array snapshot.
+
+### Verification
+
+Two mutations replayed by the orchestrator rather than relayed:
+
+| Mutation | Result |
+|---|---|
+| delete the rollback | **C3 red** — the phantom RSVP survives a rejected write |
+| revert to local-only | **3 red**, including the pre-existing live-update test |
+
+Gates: `tsc` 0, build ✓, prettier clean, eslint **0 errors / 361 warnings (unchanged)**, vitest
+**75 files / 1821 tests** (+4), targeted file exit 0.
+
+**Worker disclosures kept rather than smoothed:** the error banner is page-level rather than
+per-row; C1/C2 share one test (both mutations independently red); no test for "second click while
+submitting is a no-op", which was not among the six named criteria.
+
+**Process note.** T323 merged without its ledger row or verification-log entry — item 26 removes
+coordination, **not bookkeeping**, and the other session had to backfill it. This entry was written
+before the PR, not after.
+
+---
+
+## T309 — unchecking a student in "Mark day complete" now records the absence
+
+**Merged `e40d2d5`. HEAVY tier (item 26) — it changes what reaches `attendance`. One worker attempt;
+the packet needed two.**
+
+`buildAttendanceWriteRows` mapped only `checkedStudentIds`, and `markDayComplete` upserts exactly
+the rows it is handed — so unchecking a student emitted **nothing** for them and their recorded row
+survived. T305 is what made it reachable: before it, a recorded student never *started* checked, so
+there was nothing to uncheck.
+
+The fix is one new exported pure function, `buildAttendanceAbsenceRows`, plus a concat at
+`handleSubmit`'s single call site.
+
+### The owner ruling, and the D-7 question that nearly went unasked
+
+George ruled `status: 'absent'` over DELETE. **The orchestrator recommended it without discovering
+that the question was already settled** — `loaders/attendance.ts:34-50` records D-7, his own
+2026-07-20 override (*"As coach I am ultimate authority and should be able to overwrite an RSVP or
+check-ins"*), under which T119 **deleted** an earlier `status: 'absent'` branch in favour of an
+unconditional DELETE. He was asked to choose between two options, one of which he had already ruled
+against, with no indication that he had.
+
+**The answer survived the correction** — D-7 governs *authority*, not mechanism, and authority is
+untouched: `v_student_hours` sums `where a.status in ('present','late')`, so an `absent` row yields
+zero hours exactly as a deleted row does. `absent` also avoids a second write step in a path already
+disclosed as non-atomic (T327). **The process failure was real regardless of the outcome:
+recommending on a settled question without checking whether it was settled.**
+
+### The premise gate ran on fable, and BUILT the prescription
+
+**MAJOR — the packet's harness section described the wrong file.** §6 v1 claimed
+`MarkDayCompleteDialog.test.tsx` has **no `vi.mock`** and that a green count there proves nothing
+about the attendance seam. It partial-mocks exactly that seam at `:49-55`, re-defaults it in
+`beforeEach` at `:102-103`, and **four existing tests already assert the call** (S1, S2, S6, W3b).
+The file with no mock is `MarkEventCompleteDialog.test.tsx`. The two files were inverted, and the
+packet then told a worker to invent a second injection mechanism alongside the asserted-on one.
+
+**This is the fourth consecutive task in which the orchestrator wrote criteria against an imagined
+harness rather than the real one** — despite the trap being documented verbatim in two test files.
+The gate slot keeps paying for itself on exactly this failure.
+
+Four more findings folded into v2: **C5's fixture constraint** (under the shared guard-deletion
+mutation a row-less roster student crash-reds *first* and masks C5's assertion entirely, making the
+packet's own "at least one arm fails on an assertion" requirement unmeetable over the shared
+4-student roster); **C10 deleted** as redundant with C9 (item 25) after the gate measured C9's
+full-label button lookup already catching it; a **stale test-range citation** (`:206-216`) that had
+been propagating since T307's packet; and **five module-doc claims** this diff falsifies.
+
+### Verification — every mutation replayed by the orchestrator, not relayed
+
+| Criterion | Mutation | Result |
+|---|---|---|
+| C1/C7 | `return []` from `buildAttendanceAbsenceRows` | **5 red** |
+| C2 | pre-T305 hardcode (null timestamps, `method: 'coach'`) | **2 red** |
+| C3 | `recordedBy: existing.recordedBy` (vitest-only — does not typecheck) | **2 red** |
+| C4/C5 | delete the `isAttendingStatus` guard | **13 red**; C5 fails on an **AssertionError**, not a crash |
+| C6 | iterate `Object.keys(recordedRowByStudentId)` instead of `roster` | **1 red — exactly C6** |
+| C9 | drop the absence spread from `handleSubmit` | **1 red — exactly C9** |
+
+C5's assertion-red is the one that confirms the packet's fixture constraint was honoured rather than
+nominally satisfied: `AssertionError: expected [ …(2) ] to have a length of +0 but got 2`.
+
+**The trap of the task held.** `buildAttendanceWriteRows` is **byte-identical** — verified by
+`sha256` of the extracted function at both revisions, not by reading the diff. It is shared with
+`MarkEventCompleteDialog`'s bulk mode, which has no check/uncheck UI at all, so teaching it to emit
+absences would fabricate them from **no coach gesture** — recreating T307's shape in a new form.
+Bulk mode and its test are untouched and green at 25.
+
+Gates: `tsc` 0, `vite build` ✓, prettier clean, eslint **0 errors / 362 warnings (+1**, attributed
+to `react-refresh/only-export-components` on the new export at `:815`; the unrelated `ParentHome.tsx`
+unused-disable warning is pre-existing**)**, vitest **75 files / 1829 tests** (+8), two-file gate
+exit 0. No assertion removed or weakened (`git diff | grep '^-' | grep -E 'expect|toBe|toEqual|toHave'`
+returns nothing).
+
+**Worker disclosure kept rather than smoothed:** it shipped **8** new tests where the gate's
+reference implementation had 9 (1829 vs 1830) for the same nine lettered criteria, and said so
+explicitly rather than padding to match a number. The mutations are the evidence, not the count.
+
+**Disclosed and deliberately not fixed:** the `AttendancePanel` directly below this dialog still
+DELETEs on uncheck, so the same gesture in two places leaves different rows behind. Invisible today
+because the outreach side never renders `absent`. Reconciling them means reopening D-7 and editing
+`loaders/attendance.ts`, which belongs to **W1** and is under concurrent edit.
+
+---
+
+## T327 — completing a day now writes in an order a failed write can recover from
+
+**Merged `2f6a26a`. HEAVY tier (item 26) — it changes the order of writes on a live path. One worker
+attempt; the packet needed two.**
+
+`makeMarkDayComplete` flipped `event_sessions.status` to `'completed'` **before** writing attendance.
+The fix swaps them. Two lines of control flow; the reasoning is the deliverable.
+
+### Both of the gate's MAJORs were the orchestrator's, and both were overstatements of severity
+
+**MAJOR 1 — packet v1 called this an unrecoverable trap door. It is not.** v1 claimed a failed
+attendance write permanently stranded the day, since `isSessionEligible` and `partitionEventSessions`
+both refuse a `'completed'` session. **The gate measured two recovery paths v1 missed**, and the
+orchestrator verified both directly rather than relaying:
+
+- **The dialog does not close on failure.** `onOpenChange(false)` sits inside the `try`, after the
+  `await` (`MarkDayCompleteDialog.tsx:1112-1122`); the catch sets `submitError` and the dialog stays
+  open. The flip carries no `.eq('status','scheduled')` guard, so **an immediate re-click converges
+  today.** v1's "no error visible after the dialog closes" was simply false.
+- **`AttendancePanel` edits completed sessions.** Its `eligibleSessions` excludes only `'canceled'`
+  (`AttendancePanel.tsx:648-649`), so the day's student hours are recoverable there.
+
+**What is genuinely stranded, and only after the coach abandons the retry, is narrower but real:**
+T309's absence rows (`AttendancePanel`'s uncheck DELETEs per D-7 and never writes `'absent'`) and
+the adult-volunteer deltas. Neither has another writer anywhere. **The reorder buys
+retry-that-works-later, not rescue from total loss** — and the packet was rewritten to say so.
+
+**MAJOR 2 — v1's proposal to close T330 collapsed.** See the T330 ledger row; the short version is
+that the closure rested on a code branch that is **dead on the surface that mattered**.
+
+**The generalisable lesson, and it is the sibling of T193's:** *reading that a branch exists is not
+evidence that it renders.* Both citations v1 leaned on (`OutreachList.tsx:1565`, and the implied
+"dialog closed" behaviour) were real lines of real code that do not execute on the path being
+described.
+
+### The asymmetry that is the actual substance of the task
+
+The adult-volunteer update is an **additive read-modify-write** (`currentCount + delta`,
+`outreach.ts:1191-1192`). It is **not idempotent**, so it must stay last: moved above the flip, a
+retry after a failed flip would **double-count** volunteer hours — a grant-reporting figure. The
+packet forbade moving it and **C4 is its guard**.
+
+**Verified byte-identical**: `sha256` of the extracted step-(3) block matches at `0016780` and
+`9fb2b07`. The arithmetic was not touched.
+
+### Verification — every mutation replayed by the orchestrator, not relayed
+
+| Mutation | Result |
+|---|---|
+| restore flip-before-attendance | **3 red — C1, C2 and C4 each independently** |
+| drop the attendance `length > 0` guard | **1 red — C3** |
+| move the flip after step (3) | **2 red — C4** |
+| remove the adult-volunteer delta guard | **1 red — C5** |
+
+C2 is the one worth naming: it pairs *"`event_sessions` was never flipped"* with *"the attendance
+write **was** attempted"*, so the absence half cannot pass because the fake threw early. This repo
+has shipped 7+ absence-only assertions that passed for the wrong reason.
+
+Gates: `tsc` 0, `vite build` ✓, prettier clean, eslint **0 errors / 361 warnings — unchanged**,
+vitest **76 files / 1842 tests** (+5), targeted three-file gate exit 0. Both dialog test files green
+at 54 and 25 with **zero edits**. No assertion removed or weakened.
+
+**C6 was deleted from the packet before dispatch** (item 25): the gate measured that it never
+reddened unless C1 or C4 already had, so its one unique assertion was folded into C4.
+
+**Deferred, filed rather than built:** an atomic SQL increment
+(`set adult_volunteers_count = adult_volunteers_count + $1`) exposed as an RPC, which is the only
+correct fix for step (3)'s non-idempotence. That is a migration and a different tier.
+
+---
+
+## T324 — calendar live route now loads active-season Supabase data
+
+**Merged `690e757` (PR #32, source commit `16e2f5d`). STANDARD tier.** Entry written as an
+item-24 backfill: the source merged before its ledger row and verification record were updated.
+The omission is recorded here rather than silently presented as an on-time closeout.
+
+**The defect.** `CalendarPage.tsx` defaulted its injectable loader to five hard-coded sessions and
+three hard-coded events under `season-placeholder-current`, so every real user saw fabricated data
+on `/calendar` regardless of database contents or active season.
+
+**The fix.** A calendar-specific `createLoader` implementation now queries `events` with the
+resolved active-season UUID, then queries `event_sessions` only for the visible event ids. The page
+uses the shared `SeasonProvider` states (`loading`, `none`, `error`, `ready`), invokes the loader only
+when ready, and leaves role visibility to the existing RLS policies. Production fixtures were
+removed; deterministic equivalents live only in tests.
+
+**Delegation evidence.** The first Terra dispatch stalled during analysis and produced no files;
+it was interrupted without changing the worktree. A replacement `gpt-5.6-terra` worker completed
+the bounded four-file implementation and committed it. The primary orchestrator independently
+reviewed the committed diff and replayed both named mutations.
+
+| Evidence | Result |
+|---|---|
+| Remove `.eq('season_id', seasonId)` | Loader scope test red, exit 1 |
+| Disconnect the real production default loader | Production-default UUID test red, exit 1 |
+| Targeted calendar suites after restoration | 39/39, exit 0 |
+| Full Vitest suite | 76 files / 1825 tests, exit 0 |
+| Typecheck / format / lint / build | all exit 0; lint 0 errors with existing warnings |
+
+**Scope:** five changed paths including the active worker packet; no subscription, calendar-feed,
+ICS, migration, router, provider, W1, or W2 source changed. T195/T194 remain the next W6 work and
+must be scoped together.
+
+---
+
+## T195 + T194 — provision calendar feeds and persist atomic reset
+
+**MERGED in PR #37; database migration deployed to hosted Supabase. HEAVY tier.** The
+branch was rebased onto `main = 0016780` after independent review. Rebased implementation commits:
+`02b2cc1` (lifecycle/RPC/UI/tests), `1fa1db3` (partial-mock compatibility), and `5ac900b`
+(checker-MAJOR schema-drift rework). Worker evidence tip: `2f266e3`.
+
+### The paired defect
+
+T177 made the subscription reader honest but exposed that no production path ever inserted a
+`calendar_feeds` row. Every real profile therefore reached the missing-row error. In the same
+widget, Reset still defaulted to `defaultOnResetFeedToken`, which logged a payload and returned
+browser-generated fake ids/tokens without revoking or inserting anything. T195 and T194 were
+implemented together because provisioning without Reset and Reset without an initial row are two
+halves of the same broken lifecycle.
+
+### What changed
+
+- One additive migration deterministically keeps the greatest `(created_at, id)` active row for
+  each profile and soft-revokes older duplicates without deleting history.
+- The migration installs a partial unique index on `profile_id WHERE revoked_at IS NULL`, a locked
+  trigger-only `SECURITY DEFINER` provisioner for every future profile insert, and a conflict-safe
+  backfill for existing profiles.
+- `reset_calendar_feed(p_revoke_feed_id uuid)` is `SECURITY INVOKER`, accepts no client profile id,
+  derives ownership from `auth.uid()`, soft-revokes exactly the caller's named active row, inserts
+  a database-generated replacement, and returns exactly that row in one PostgreSQL transaction.
+  `PUBLIC`/`anon` execution is revoked; `authenticated` is granted the exact signature.
+- `calendarFeed.ts` adds the real `.rpc(...).single()` writer with shared mutation error
+  normalization, explicit row mapping, null-result rejection, and a defensive returned-profile
+  check. `SubscribePopover` now defaults to that writer; the fake reset implementation is gone.
+- An HTTP rejection does not prove rollback. The component therefore reloads the authoritative
+  active feed after any reset rejection. If the server committed before losing the response, the
+  new row is installed. If reconciliation also fails, the possibly revoked URL and its copy/reset
+  actions are hidden behind an honest unknown-status state.
+- The existing ICS Edge Function required no change: it already resolves persisted tokens and
+  rejects missing or revoked rows uniformly.
+
+### HEAVY process and checker rework
+
+The initial premise gate returned REVISE because the packet incorrectly treated every rejected
+HTTP promise as proof of database rollback, proposed a non-discriminating RLS mutation, and relied
+on a superuser/null-identity SQL stub. Round two accepted those corrections but found the plain
+PostgreSQL gate could not install the unrelated Supabase-only cron migration and that the revised
+hostile mutation was still neutralized by the partial unique index. The owner explicitly authorized
+round three under constitution item 19a; it experimentally verified the exact cron-only skip and
+the corrected hostile mutation, then returned **DISPATCH**.
+
+The Sol worker produced a clean candidate and all eight named mutations went red. The independent
+Sol checker replayed the source, SQL, gates, and every mutation, then returned **FAIL — MAJOR** for
+one issue not covered by the packet's named mutations: `CREATE UNIQUE INDEX IF NOT EXISTS` could
+silently accept a wrong same-named full index. The checker reproduced a migration that appeared to
+succeed but whose first Reset failed SQLSTATE `23505`, because the wrong index also covered revoked
+history. Rework removed `IF NOT EXISTS`; the same counterexample now stops migration immediately
+with SQLSTATE `42P07`. The checker independently reran the counterexample, normal lifecycle,
+affected mutations, targeted suite, and gates, then returned **PASS — no findings**.
+
+### Mutation evidence
+
+| Mutation | Required red result |
+|---|---|
+| Remove existing-profile backfill | SQL lifecycle fails existing-profile assertion |
+| Remove provisioning trigger | Invite/future provisioning assertion fails |
+| Remove partial unique index | Migration/backfill or invariant assertion fails |
+| Defeat RLS + ownership and replace the target profile's row | Cross-owner assertion fails |
+| Send profile id instead of named active feed id | RPC argument test fails |
+| Replace the production reset default with a local fake | Real-writer default test fails |
+| Remove rejection reconciliation | lost-response and unknown-status UI tests fail |
+| Remove `PUBLIC` execute revoke | privilege/anonymous assertion fails |
+
+No mutation stayed green. The independent checker replayed all eight before rework and the five
+SQL-sensitive mutations after rework; TypeScript blobs were byte-identical for the remaining three.
+
+### Final post-rebase verification
+
+| Gate | Result |
+|---|---|
+| Calendar feed loader + popover suites | 2 files / 29 tests, exit 0 |
+| PostgreSQL 17 lifecycle/security runner | 10 named assertions, exit 0; skips exactly `20260719000000_cron.sql` |
+| Wrong same-named index drift probe | migration fails loudly, SQLSTATE `42P07` |
+| Typecheck | exit 0 |
+| Format check | exit 0 |
+| Lint | exit 0; 0 errors / 360 warnings |
+| Full Vitest suite, run alone | 76 files / 1850 tests, exit 0 |
+| Production build | exit 0; 2,397 modules transformed |
+
+One earlier parallel full-suite run had a single existing OutreachList test hit its 5-second
+timeout while duplicate suite/lint/build processes competed for resources; the isolated rerun above
+passed all tests. The branch was then rebased again for PR #35/T327 and the final isolated run
+passed all 1850 tests. No source outside W6, no existing migration, no RLS policy, and no ICS file
+changed.
+
+### Merge and hosted migration deployment
+
+PR #37 merged into `main` at `d0d1aa0` on 2026-08-02 after both CI runs passed. The owner linked a
+fresh `origin/main` deployment worktree to the hosted Supabase project, and
+`supabase db push --linked --dry-run` listed exactly one pending migration:
+`20260802000000_calendar_feed_lifecycle.sql`. The subsequent push completed successfully. The
+expected idempotent `DROP TRIGGER IF EXISTS` notice reported that the old trigger did not exist;
+no error occurred. `supabase migration list --linked` then showed `20260802000000` in both Local
+and Remote. Remaining W6 verification is the hosted application smoke test for one initial feed
+and one reset; no implementation row remains open.

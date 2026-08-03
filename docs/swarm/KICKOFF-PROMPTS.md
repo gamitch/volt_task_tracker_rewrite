@@ -9,6 +9,10 @@ collision table, and the coordination rules. These prompts are the operational s
 **Before dispatching two machines at once**, check `WORKFLOWS.md`'s *Assignment table* — the "safe to
 run beside" column is the only thing standing between you and a merge conflict in a 4164-line file.
 
+**Setting up a machine that has never run this repo:** `MACHINE-SETUP.md`, then
+`node scripts/doctor.mjs`. It is a short list — Node 22.22.2 and `npm ci` cover every workflow but
+W8 and W9, and no credentials are needed to run the gates.
+
 **Recommended pairings:** three machines → **W1 + W4 + W7** (zero shared files). Two → **W1 + W2**
 (every remaining data-loss row). One → **W1**, and stop reading here.
 
@@ -74,6 +78,10 @@ RULES THAT ARE NOT OPTIONAL:
 ---
 
 ## W2 — Run an outreach event
+
+> **SUPERSEDED 2026-08-02 — use `docs/swarm/W2-KICKOFF.md` instead.** T193, T309 and T327 have all
+> shipped since the prompt below was written, and T330's framing was refuted by a premise gate.
+> The block below is kept only as a record of the original cut; **do not paste it into a session.**
 
 > The most-worked path in the project and still the most defect-dense.
 
@@ -313,7 +321,7 @@ exit codes.
 
 ## W6 — Calendar & subscribe
 
-> The cleanest workflow to hand to a spare machine — it collides with nothing.
+> Implementation closed; hosted first-feed/reset smoke test pending.
 
 ```
 You are the orchestrator for the CALENDAR workflow on the VOLT team portal.
@@ -322,7 +330,8 @@ Read in this order: docs/swarm/RESUME-HERE.md (top-down, newest UPDATE first),
 docs/swarm/constitution.md (item 26), then docs/swarm/WORKFLOWS.md section W6.
 
 YOUR WORKFLOW: a student subscribes to the team calendar and it stays current on their
-phone. It is NON-FUNCTIONAL END TO END today, and worse than the external audit found.
+phone. Implementation is merged and the database migration is deployed. Do not dispatch
+new implementation work; only the hosted application smoke test remains.
 
 FILES YOU OWN:
   src/pages/calendar/CalendarPage.tsx      (902 lines)
@@ -335,21 +344,17 @@ Your workflow shares no files with any other. You are safe to run beside anythin
 YOUR ROW-NUMBER BLOCK: T900-T999.
 
 YOUR ROWS, in order:
-  T324 — the calendar renders HARD-CODED FIXTURE EVENTS ON A LIVE ROUTE. CalendarPage.tsx
-         still carries FIXTURE_EVENTS / FIXTURE_SESSIONS. STANDARD tier. START HERE, and
-         rank it above everything else you have: this is a surviving member of the
-         fabricated-data family that caused nearly every real bug in this project (T155
-         CoachHome, T176 StudentHome, T181 ParentHome) — on a live route, after that family
-         was declared closed.
-  T195 — NOTHING ANYWHERE IN THE CODEBASE EVER CREATES A calendar_feeds ROW. HEAVY. This is
-         the deeper cause the audit missed: the feature cannot work, it is not merely
-         lacking recovery.
-  T194 — SubscribePopover's onResetFeedToken fabricates a new feed token locally instead of
-         writing one to the database. HEAVY.
-  T177 — cross-surface; read the row carefully before scoping, it reaches outside your files.
+  T324 — MERGED in PR #32. CalendarPage now resolves the active season and loads real,
+         role-visible events/sessions through Supabase. Do not reopen it.
+  T195 — MERGED in PR #37; migration 20260802000000 DEPLOYED to hosted Supabase. The
+         migration backfills existing profiles, provisions future profiles, reconciles
+         duplicates, and enforces one active feed. HEAVY.
+  T194 — MERGED in PR #37. Reset is a persisted SECURITY INVOKER RPC, with the real writer
+         as production default and authoritative reconciliation after transport loss. HEAVY.
+  T177 — MERGED. Real subscription loader/link; do not reopen it.
 
-SCOPE T195 AND T194 TOGETHER. They are one broken mechanism described twice: nothing creates
-the row, and the reset button pretends to replace a token that never existed.
+DO NOT REDISPATCH T177/T324/T195/T194. W6 has no remaining implementation row. Confirm the
+hosted app includes PR #37, then smoke-test first provisioning and one reset.
 
 RULES: item 24 (ledger + verification-log in the merge commit), item 22 (named pathspecs),
 item 23 (mutations in your own worktree; commit before mutating). State your tier. Assert

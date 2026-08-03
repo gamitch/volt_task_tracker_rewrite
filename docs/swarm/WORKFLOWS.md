@@ -61,7 +61,7 @@ Tier is the **heaviest** item in the workflow, per constitution item 26.
 | **W3** | **Run a meeting** — schedule → attendance → participation % | 4 | HEAVY | Backend built, mount parked | W2, W4, W6, W7 |
 | **W4** | **Hours & goal accounting** — the numbers users are shown | 10 | HEAVY | **One confirmed bug** | W1, W3, W6, W7 |
 | **W5** | **Home dashboards** — student/parent/coach landing state | 10 | STANDARD | Mostly real | W6, W7, W8 |
-| **W6** | **Calendar & subscribe** | 4 | STANDARD | **Non-functional end to end** | everything |
+| **W6** | **Calendar & subscribe** | 0 | — | **Merged; database deployed; hosted smoke pending** | everything |
 | **W7** | **Roster & invites** | 5 | STANDARD | Working | everything |
 | **W8** | **Email & notifications** | 2 | — | **Blocked on owner** | everything |
 | **W9** | **Migration & go-live** | 4 | HEAVY | Migration has run | everything |
@@ -230,20 +230,22 @@ student) precisely to exercise this path, so it is testable in the real app.
 
 > A student subscribes to the team calendar and it stays current in their phone.
 
-**Non-functional end to end, and worse than the audit found.**
+**Implementation merged in PR #37 and migration `20260802000000` deployed to hosted Supabase;
+hosted application smoke test pending.**
 
 | Row | What | Tier |
 |---|---|---|
-| **T324** | The calendar renders **hard-coded fixture events on a live route** | STANDARD |
-| **T195** | **Nothing anywhere in the codebase ever creates a `calendar_feeds` row** | HEAVY |
-| **T194** | `SubscribePopover`'s reset fabricates a new feed token locally instead of writing one | HEAVY |
-| **T177** | *(cross-surface; check the row before scoping)* | STANDARD |
+| **T324** | **MERGED in PR #32** — calendar now loads active-season Supabase data | STANDARD |
+| **T195** | **MERGED in PR #37; DATABASE DEPLOYED** — migration provisions/backfills real feeds and enforces one active row | HEAVY |
+| **T194** | **MERGED in PR #37** — Reset is one authenticated atomic RPC with authoritative failure reconciliation | HEAVY |
+| **T177** | **MERGED** — real subscription loader/link; do not reopen | STANDARD |
 
 **Owns:** `pages/calendar/**`, `loaders/calendarFeed.ts`, the `ical-generator` edge function
 
-**Rank T324 above the rest of P1.** It is a surviving member of the fabricated-data family that
-caused nearly every real bug in this project, on a live route, after that family was declared closed.
-`CalendarPage.tsx` still carries `FIXTURE_EVENTS`/`FIXTURE_SESSIONS` at 902 lines.
+**Next: confirm the hosted application release includes PR #37, then smoke-test one initial feed
+and one reset against hosted Supabase.** No open W6 implementation row remains. The
+plain-PostgreSQL lifecycle/security suite, all eight named mutations, the full application suite,
+and an independent Frontier checker are green on the branch.
 
 **W6 collides with nothing.** It is the cleanest workflow to hand to a spare machine.
 
@@ -341,20 +343,39 @@ These are not suggestions. Each one is written against a failure this project ha
    **Row IDs go to four digits from W7 on.** That is fine — nothing parses these — but do not
    "helpfully" renumber T1000 back down into a gap. Gaps are the point.
 
-2. **One machine owns a file, not a workflow.** If two workflows need `OutreachList.tsx`, the second
+2. **Branch names are task-scoped, never session-scoped: `claude/t<row>-<short-slug>`.**
+   `claude/t193-persist-rsvp`, `claude/t321-manual-code`. **Never a session-plan name** like
+   `claude/swarm-plan-<id>`.
+
+   **This is the row-number failure wearing different clothes.** A generic branch name looks
+   reserved and is not. `claude/swarm-plan-zl575z` was used by one session for PR #27 and, the same
+   afternoon, by another session as the working branch for T193 — two machines pointed at one
+   mutable ref with nothing announcing the overlap. It was caught by the owner asking whether T193
+   would get its own branch, not by any check. T193 was moved to `claude/t193-persist-rsvp` before
+   its PR.
+
+   **Corollary, from the same incident:** when the PR for a branch has already merged, **do not
+   reuse the branch for follow-up work.** Restart it from `main` (`git checkout -B <name>
+   origin/main`) so no merged history is re-proposed, and open a **new** PR — a merged PR cannot
+   track new work. Better still, use a new task-scoped name and leave the old branch to be deleted.
+
+   **Delete merged branches.** Sixteen had accumulated by 2026-08-02. Turning on GitHub's
+   *Settings → General → Automatically delete head branches* removes the whole class.
+
+3. **One machine owns a file, not a workflow.** If two workflows need `OutreachList.tsx`, the second
    one waits. Check the collision table at the top before dispatching.
 
-3. **Never resolve a `task-ledger.md` conflict by taking one side wholesale.** Both sides are real
+4. **Never resolve a `task-ledger.md` conflict by taking one side wholesale.** Both sides are real
    rows. This is written in the ledger's own history and it has bitten once already.
 
-4. **Record and merge in the same commit** (item 24). Two of the three most recent merges drifted
+5. **Record and merge in the same commit** (item 24). Two of the three most recent merges drifted
    from their ledger rows — T303 recorded into the wrong column, T323 merged with no
    verification-log entry at all. With N machines running, that drift multiplies by N.
 
-5. **State the tier in the PR and defend it** (item 26). If two tiers are arguable, take the heavier
+6. **State the tier in the PR and defend it** (item 26). If two tiers are arguable, take the heavier
    one — but "it sounds important" is not a trigger and neither is file count.
 
-6. **Mutation experiments run in the agent's own worktree** (item 23), and **commit before mutating**
+7. **Mutation experiments run in the agent's own worktree** (item 23), and **commit before mutating**
    — T323's mutation revert also reverted the uncommitted fix, and only the full suite caught it.
 </content>
 </invoke>

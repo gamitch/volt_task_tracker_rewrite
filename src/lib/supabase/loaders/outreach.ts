@@ -114,13 +114,10 @@
  * 4. Mark Day Complete (`MarkDayCompleteDialog.tsx`, T042) -- THREE real
  *    writes, one of them a disclosed, non-atomic read-modify-write.
  *
- * `makeMarkDayComplete` below performs, in order:
- *   (a) `event_sessions` update: `status = 'completed'`, `people_reached =
- *       payload.peopleReached` -- the ONE place this module ever writes
- *       `event_sessions.status`, mirroring `loaders/meetings.ts`'s own
- *       `makeCancelMeetingSession` precedent for "the ONE place a given
- *       column is ever written" documentation discipline.
- *   (b) `attendance` upsert (keyed on the real `unique (session_id,
+ * `makeMarkDayComplete` below performs, in order (T327: reordered from the
+ * original (a)-then-(b) -- see the asymmetry note at the end of this
+ * section):
+ *   (a) `attendance` upsert (keyed on the real `unique (session_id,
  *       student_id)` constraint, migration line 94) for every row
  *       `buildAttendanceWriteRows` (`MarkDayCompleteDialog.tsx`'s own pure
  *       function, unchanged, still the ONLY place these rows are
@@ -130,7 +127,13 @@
  *       given (a real, honest `NULL` for a student the coach never
  *       overrode, per that dialog's own module doc #2's MET-03 tier-3
  *       fallback discipline -- this loader never back-fills it with a
- *       computed default).
+ *       computed default). Skipped entirely when `payload.attendance` is
+ *       empty (`length > 0` guard) so an empty day still completes.
+ *   (b) `event_sessions` update: `status = 'completed'`, `people_reached =
+ *       payload.peopleReached` -- the ONE place this module ever writes
+ *       `event_sessions.status`, mirroring `loaders/meetings.ts`'s own
+ *       `makeCancelMeetingSession` precedent for "the ONE place a given
+ *       column is ever written" documentation discipline.
  *   (c) An ADDITIVE update to `events.adult_volunteers_count`/
  *       `adult_volunteer_hours` (module doc #3 of `MarkDayCompleteDialog.tsx`
  *       -- these are per-session DELTAS to be ADDED to the event's running
@@ -156,6 +159,24 @@
  *       entirely (zero extra reads/writes) when both deltas are `0` -- the
  *       common case for a coach who didn't record any adult volunteers that
  *       day, per that dialog's own `0`-default `NumberInput`s.
+ *
+ * T327 asymmetry -- READ THIS before reordering anything else here: (a) and
+ * (b) above were swapped because the attendance upsert is IDEMPOTENT (same
+ * `onConflict` key every retry converges to the same row state), so writing
+ * it before the status flip means a failed flip leaves a `scheduled` session
+ * with its attendance already durably recorded -- an immediate re-click
+ * retries and converges, and `AttendancePanel` remains a working
+ * post-completion editor either way. Step (c) is NOT idempotent -- it is an
+ * ADDITIVE read-modify-write -- and moving IT earlier would let a failed
+ * later step's retry double-count adult-volunteer totals (a real number kept
+ * for grant reporting). So: idempotent writes may be reordered to protect a
+ * retry; non-idempotent ones may not, and (c) stays LAST. Do not "finish the
+ * job" by moving (c) too -- see the inline comment at its own call site
+ * below for the same warning at the point of edit. The correct fix for (c)'s
+ * own residual non-atomicity is an atomic SQL increment (`update ... set
+ * adult_volunteers_count = adult_volunteers_count + $1`) exposed as an RPC --
+ * out of this task's scope (a migration + a new deploy surface), tracked as
+ * a deferred ledger item, not fixed here.
  *
  * -----------------------------------------------------------------------
  * 5. Trap #5 -- `OutreachEventDialog.tsx` (T039) DOES genuinely support edit
@@ -1119,9 +1140,10 @@ export interface OutreachMarkDayCompletePayload {
 
 export type MarkDayCompleteFn = (payload: OutreachMarkDayCompletePayload) => Promise<void>;
 
-/** Module doc #4 -- three real writes: `event_sessions` status flip,
- * `attendance` upsert, and a disclosed non-atomic additive `events`
- * adult-volunteer update. */
+/** Module doc #4 -- three real writes, in order (T327): `attendance`
+ * upsert, `event_sessions` status flip, then a disclosed non-atomic additive
+ * `events` adult-volunteer update. See module doc #4's T327 asymmetry note
+ * above for why this order -- and why the third write must not move. */
 export function makeMarkDayComplete(
   getClient: () => SupabaseClient = getSupabaseClient,
 ): MarkDayCompleteFn {
@@ -1172,14 +1194,25 @@ export function makeMarkDayComplete(
   );
 
   return async (payload: OutreachMarkDayCompletePayload): Promise<void> => {
-    await updateSession({ sessionId: payload.sessionId, peopleReached: payload.peopleReached });
-
+    // T327: attendance is written BEFORE the status flip -- see module doc #4
+    // above for why. The attendance upsert is idempotent (`{ onConflict:
+    // 'session_id,student_id' }`, `:1150`), so if it succeeds and the flip
+    // below then fails, a retry re-issues the exact same upsert harmlessly
+    // and converges. Reversing this order is the one thing this task must
+    // NOT do to step (3) below -- see that comment for why.
     if (payload.attendance.length > 0) {
       await upsertAttendance(payload.attendance);
     }
 
+    await updateSession({ sessionId: payload.sessionId, peopleReached: payload.peopleReached });
+
     // Module doc #4(c) -- disclosed non-atomic read-modify-write, skipped
-    // entirely when there is nothing to add.
+    // entirely when there is nothing to add. T327: this step MUST stay LAST,
+    // after the flip above -- it is ADDITIVE (`currentCount + ...delta`,
+    // below) and therefore NOT idempotent. Unlike the attendance upsert
+    // above, moving this earlier would let a retry (after a later step
+    // fails) double-count adult-volunteer totals. Do not "finish the job" by
+    // reordering this too -- see the module doc's asymmetry note above.
     if (payload.adultVolunteersCountThisSession > 0 || payload.adultVolunteerHoursThisSession > 0) {
       const sessionEvent = await loadSessionEventId(payload.sessionId);
       if (sessionEvent !== null) {

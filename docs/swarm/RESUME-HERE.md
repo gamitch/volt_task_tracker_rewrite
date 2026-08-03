@@ -1,4 +1,4 @@
-# Resume here — state of play at `main` = `4b951c5` (read the UPDATE sections top-down; each supersedes the ones below it)
+# Resume here — state of play at `main` = `d0d1aa0` (read the UPDATE sections top-down; each supersedes the ones below it)
 
 Written 2026-07-30 so this session's context can be cleared without losing anything.
 Fresh orchestrator session: read this, then `constitution.md`, then the open rows in
@@ -8,11 +8,18 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
 
-## UPDATE — 2026-08-02 (latest): W1's T403 step 3 is REWORKED and awaiting re-review
+## UPDATE — 2026-08-03 (latest): W1's T403 is COMPLETE and passed re-review
 
-**Nothing is broken and nothing is half-landed.** Everything W1 has done is committed and pushed;
-the owner took the machine offline deliberately. **The single outstanding action is re-dispatching
-`checker-reviewer` against the branch head** — see the step-3 block below.
+**T403 is DONE — all three steps, HEAVY chain complete, re-review PASSED.** Nothing on T403 is
+outstanding. `LiveConsole` now shows the real roster, the real check-in credential, and records real
+`attendance` rows.
+
+**➡️ THIS UNBLOCKS T196, THE `EndMeetingDialog` MOUNT — W3's ROW, NOT W1's.** W3 is unstaffed. See
+`docs/swarm/inbox/w1-to-w3-T196-unblocked.md` for the handover. **W1 must not mount it** —
+`WORKFLOWS.md` W1 says so explicitly.
+
+**W1's own open rows: T404 and T405** (both schema-adjacent, both need an owner call) and **T400**
+(folded into T196's wave — do not start separately). **T406 is W2's.**
 
 **Everything W1 has done is pushed to `claude/w1-checkin` and coherent; work from the branch head.** Work in a worktree
 (`git worktree add /home/user/volt_w1_checkin claude/w1-checkin`, no `-b` — the branch exists on
@@ -38,44 +45,16 @@ worktree and the checkout will fail.
   re-verified by the orchestrator, not just claimed by the worker: `tsc` 0 · build ✓ · prettier
   clean · eslint 0 errors / 363 warnings · vitest 77 files / 1878 tests, exit 0.** All four
   mutations red at exit 1 — no exit-0 survivor, the first step this session where that held.
-- **`checker-reviewer`: RAN ONCE against `3a14453` and returned FAIL (MAJOR-1 + MAJOR-2). That
-  verdict is now HISTORICAL — the code it reviewed has been reworked.** Full verdict is on the T403
-  ledger row and in the verification-log entry *"T403 step 3 — attendance write: checker FAIL, and
-  the packet was the defect"*.
+- **✅ `checker-reviewer` RE-RAN and PASSED** (MINOR + NITs, none blocking) against `b3ba93b`;
+  findings fixed in `aa900f3`. It reproduced all six gates independently and did **not** trust the
+  shipped tests — it drove its own probe of 6 sequential edits on the `qr` row, 6 on the `import`
+  row and 3 on a new row, asserting `method`/`status`/both ids on all 18 calls. It byte-compared
+  `makeUpsertAttendance` (746/746) and `resolveAttendanceWriteMethod` (204/204) as **IDENTICAL**,
+  and ran seven of its own mutations, all red at exit 1 — including M7, which had been green at
+  exit 0 and caused the earlier FAIL.
 
-- **✅ REWORK DONE 2026-08-02, pushed. ❗ NOT YET RE-REVIEWED.**
-
-  **THE NEXT ACTION IS: re-dispatch `checker-reviewer` against the reworked code (branch head).**
-  Nothing else is outstanding on step 3. Step 3 is NOT done until that passes.
-
-  **What changed, and why it is not the fix the checker prescribed.** Offered two ways to preserve
-  `qr` provenance, the owner rejected both and ruled **LAST WRITE WINS** (`auto-mode-decisions.md`,
-  *"George's ruling on MTG-11"*). Checking that against the PRD exposed that **the packet's own
-  acceptance criterion 3 was wrong**: `VOLT_Portal_PRD.md:307`'s first clause always said a coach tap
-  upserts `method='coach'`, while criterion 3 demanded the opposite. It had been taken from
-  `resolveAttendanceWriteMethod`'s docstring and never checked against the requirement. So MAJOR-1
-  described code that was wrong on the FIRST call only, in the opposite direction from the finding.
-
-  - `mergeAttendanceUpdate` **deleted** (no merge exists under last-write-wins).
-  - `resolveAttendanceWriteMethod` **no longer called** from `LiveConsole`; a coach tap sends
-    `'coach'` on the wire and locally.
-  - `makeDefaultSetAttendanceStatus(write = setAttendanceStatus)` added — the injection point
-    MAJOR-2 required.
-  - MTG-11's precedence test **inverted, not deleted** (constitution item 10; the ruling is the
-    approval). The former criterion-3 test now drives **three sequential edits** — the single-shot
-    version structurally could not see MAJOR-1.
-  - Mutations: **M7 red at exit 1 on the full suite** (it was green at exit 0 before — that is what
-    caused the FAIL), M8 and M9 red at exit 1.
-  - Six gates green: `tsc` 0 · build ✓ · prettier clean · eslint 0 errors / 363 warnings · vitest
-    **77 files / 1877 tests, exit 0**.
-
-- **⚠️ A DELIBERATE DIVERGENCE YOU WILL MISTAKE FOR A BUG.** Owner ruled **option A**
-  (`auto-mode-decisions.md`, *"LAST WRITE WINS applies to `LiveConsole` ONLY, not table-wide"*):
-  `attendance.method` now means **`'coach'`** when the meeting console writes it and **`'qr'`
-  preserved** when W2's `AttendancePanel` / `MarkDayCompleteDialog` do. **This is intentional.
-  Unifying it requires a NEW owner decision, cited.** `resolveAttendanceWriteMethod` is unchanged
-  and keeps its contract; it is simply not called from `LiveConsole`. No W2 note and no ledger row
-  were filed for it, on purpose — there is no pending work.
+- **Do NOT re-dispatch a checker for T403.** The earlier FAIL verdict against `3a14453` is
+  **historical**; the code it reviewed was reworked and the rework passed.
 
 **Watch for this specifically (packet §4b).** With the seam made real, the 43 existing `LiveConsole`
 coach-action tests still pass at exit 0 **only by microtask timing** — no `await` sits between the
@@ -88,6 +67,83 @@ audited — schema, owner call), **T405** (`attendance.updated_at` never moves o
 `docs/swarm/inbox/w1-to-w2-T406-markdaycomplete-toctou.md`).
 
 **Next free row number in W1's block: T407.**
+
+## UPDATE — 2026-08-02 (newest): W6 merged; calendar lifecycle migration deployed; hosted smoke pending
+
+PR #37 merged `codex/t195-t194-calendar-feed-lifecycle` into `main` at `d0d1aa0`. Migration
+`20260802000000_calendar_feed_lifecycle.sql` was then successfully pushed to hosted Supabase;
+`supabase migration list --linked` showed version `20260802000000` in both Local and Remote.
+T195 and T194 were implemented together under the HEAVY process: existing profiles are
+backfilled, future profile inserts receive a feed, historical duplicate active feeds are
+deterministically reconciled, a partial unique index enforces one active feed per profile, and
+Reset now calls one authenticated security-invoker RPC that revokes the named row and inserts a
+database-generated replacement atomically.
+
+The transport-ambiguity case is handled explicitly: if the RPC response is lost, the component
+re-reads the authoritative active feed; if that read also fails, it hides the possibly revoked URL
+instead of presenting it as current. No ICS edit was needed because the Edge Function already
+rejects persisted revoked tokens.
+
+**Verification:** owner-authorized premise round 3 returned DISPATCH. The Sol worker's first
+candidate passed all named mutations and gates; the independent Sol checker then found one MAJOR:
+`CREATE UNIQUE INDEX IF NOT EXISTS` could silently accept a wrong same-named index and break Reset.
+The rework removed that drift-masking clause. The checker reproduced fail-loud SQLSTATE `42P07`,
+then returned PASS. After the final source rebase: targeted 29/29, PostgreSQL lifecycle/security
+10/10, full suite 1850/1850, typecheck/format/lint/build all exit 0 (lint 0 errors / 360 warnings).
+
+**W6 next:** confirm the hosted application release includes PR #37, then smoke-test initial
+provisioning plus one reset. Do not reopen T177, T324, T195, or T194 from older sections below.
+
+---
+
+## UPDATE — 2026-08-02 (latest): W2 is three rows further on, and W2 sessions start from `W2-KICKOFF.md`
+
+**`main` = `7c7eb30`**, green: `tsc` 0 · eslint **0 errors / 361 warnings** · vitest
+**76 files / 1842 tests**.
+
+**If you are picking up W2, read `docs/swarm/W2-KICKOFF.md` — it supersedes `KICKOFF-PROMPTS.md`'s
+W2 block**, which is now marked SUPERSEDED in place. Three W2 rows shipped after that block was
+written.
+
+| Row | Shipped | PR |
+|---|---|---|
+| **T193** | A student's RSVP on `/outreach` now actually persists — it was writing nothing | #30 |
+| **T309** | Unchecking a student in "Mark day complete" now records `status: 'absent'` | #33 |
+| **T327** | Completion writes attendance **before** the status flip, so a failed write is retryable | #35 |
+
+**T330's severity was RAISED, not closed.** A packet proposed closing it as no-change; the premise
+gate refuted the argument and the refutation was verified. `buildEventGroups` drops zero-session
+events from **both** buckets (`OutreachList.tsx:1730`), so an orphan event is **invisible on the
+coach list and unreachable without a remembered URL** — and a failed-create-then-retry
+**double-counts adult-volunteer totals** in `HoursTab`, which sums them across all season events
+with no session filter. **The corrected facts are in full on the T330 ledger row.** It is the next
+W2 row and needs an owner ruling on what a dateless event row should display.
+
+**Other machines, as of this writing:** W1 (another laptop) has completed T321, T161 and T320, open
+in **PR #28**. A third machine runs the Codex adapter and W6; its work merged as #29 and #32
+(T324 — calendar real data). **Do not touch `loaders/attendance.ts`** — it is W1's and live.
+
+**Three failure modes this project keeps repeating**, all caught by the premise gate today:
+writing criteria against an **imagined harness** instead of the real one (four consecutive tasks);
+**citing code that exists but never runs**; and **recommending on a question already settled** by an
+owner ruling. All three are written up in `W2-KICKOFF.md` §6.
+
+---
+
+## UPDATE — 2026-08-02 (latest): T193 and T324 merged; Codex adapter merged
+
+**`main` = `690e757`.** PR #29 added the Codex adapter (`AGENTS.md` and
+`docs/swarm/CODEX.md`). PR #30 merged T193's real student RSVP persistence. PR #32 merged T324:
+`/calendar` no longer renders production fixtures and now loads the resolved active season's
+role-visible events and sessions from Supabase.
+
+**W6 next:** scope **T195 + T194 together** under the HEAVY process. No code provisions an initial
+`calendar_feeds` row, and `SubscribePopover` still fabricates reset results locally. The combined
+fix is expected to include migration-backed first-use provisioning and an atomic persisted reset.
+
+**Process correction:** PR #32 merged without moving T324's ledger row or adding its verification
+entry. The next W6 branch backfills those records explicitly as item-24 drift; do not interpret the
+old row lower in history as an open task.
 
 ## UPDATE — 2026-08-02 (later): the backlog is now also cut by WORKFLOW, for parallel machines
 

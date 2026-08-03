@@ -161,16 +161,10 @@
  * correct timezone, without manual date-part reassembly.
  *
  * -----------------------------------------------------------------------
- * 6. No shared Supabase client wired in -- deliberate scope, not a gap for
- *    this task to solve (same posture as every other content page in this
- *    batch). `loadSessions` (an injectable `LoadCalendarSessionsFn` seam,
- *    per the packet's own "obviously-fake fixture defaults" instruction)
- *    defaults to `defaultLoadCalendarSessions`, whose fixture data spans all
- *    three event types (one `meeting`, one `outreach`, one `competition`
- *    event, five sessions total across July and August 2026 so month
- *    navigation is genuinely exercised -- see `FIXTURE_EVENTS`/
- *    `FIXTURE_SESSIONS` below) -- Known Context/Traps #6's literal
- *    requirement.
+ * 6. The live route resolves its season through `useActiveSeason()` and
+ *    defaults `loadSessions` to the real calendar-specific Supabase loader.
+ *    Tests inject deterministic fixture data through the same seam; production
+ *    code contains no event or session fixtures.
  *
  * -----------------------------------------------------------------------
  * 7. NAV-08 click-through routes (CAL-02) -- T137 (D009 remediation).
@@ -278,7 +272,7 @@
  *     when the current month/filter/day-selection combination has zero
  *     matching sessions even though sessions exist elsewhere).
  */
-import { useEffect, useId, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
 import {
   Badge,
   Banner,
@@ -299,8 +293,24 @@ import {
   type ISODateString,
 } from '@astryxdesign/core';
 import { Link as RouterLink } from 'react-router-dom';
+import { useActiveSeason } from '../../app/SeasonProvider';
 import { routePaths } from '../../app/router';
 import { EVENT_TYPE_BADGE, EVENT_TYPE_ORDER } from '../../lib/eventTypeBadge';
+import {
+  loadCalendarSessions,
+  type CalendarEventRow,
+  type CalendarSessionRow,
+  type LoadCalendarSessionsFn,
+} from '../../lib/supabase/loaders/calendar';
+
+export type {
+  CalendarEventRow,
+  CalendarEventType,
+  CalendarLoadResult,
+  CalendarSessionRow,
+  CalendarSessionStatus,
+  LoadCalendarSessionsFn,
+} from '../../lib/supabase/loaders/calendar';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of the real `events`/`event_sessions`
@@ -310,120 +320,10 @@ import { EVENT_TYPE_BADGE, EVENT_TYPE_ORDER } from '../../lib/eventTypeBadge';
 // established (module doc #1's citation, not redefined here).
 // ---------------------------------------------------------------------------
 
-export type CalendarEventType = 'meeting' | 'outreach' | 'competition';
-export type CalendarSessionStatus = 'scheduled' | 'completed' | 'canceled';
-
-export interface CalendarEventRow {
-  id: string;
-  seasonId: string;
-  type: CalendarEventType;
-  title: string;
-  locationName: string;
-}
-
-export interface CalendarSessionRow {
-  id: string;
-  eventId: string;
-  /** `event_sessions.session_date`, 'YYYY-MM-DD'. */
-  sessionDate: string;
-  startsAt: string;
-  endsAt: string;
-  status: CalendarSessionStatus;
-}
-
-export interface CalendarLoadResult {
-  events: readonly CalendarEventRow[];
-  sessions: readonly CalendarSessionRow[];
-}
-
-/** Injectable data-loading seam (Known Context/Traps #1/#6). Defaults to
- * `defaultLoadCalendarSessions`'s fixture data below. */
-export type LoadCalendarSessionsFn = () => Promise<CalendarLoadResult>;
-
 export interface EnrichedCalendarSession {
   session: CalendarSessionRow;
   event: CalendarEventRow;
 }
-
-// ---------------------------------------------------------------------------
-// Placeholder identifiers -- same class of gap `MeetingsList.tsx`/
-// `OutreachList.tsx` already disclosed (`PLACEHOLDER_CURRENT_SEASON_ID`).
-// ---------------------------------------------------------------------------
-
-const PLACEHOLDER_SEASON_ID = 'season-placeholder-current';
-
-// ---------------------------------------------------------------------------
-// Fixture data (constitution item 6: fabricated names only). Spans all three
-// event types, across two different months, so month navigation AND the
-// type filter are both genuinely exercised (Known Context/Traps #6).
-// ---------------------------------------------------------------------------
-
-const FIXTURE_EVENTS: readonly CalendarEventRow[] = [
-  {
-    id: 'event-weekly-build',
-    seasonId: PLACEHOLDER_SEASON_ID,
-    type: 'meeting',
-    title: 'Weekly Build Meeting',
-    locationName: 'Clubhouse',
-  },
-  {
-    id: 'event-food-bank-sort',
-    seasonId: PLACEHOLDER_SEASON_ID,
-    type: 'outreach',
-    title: 'Community Food Bank Sort',
-    locationName: 'Riverside Food Bank',
-  },
-  {
-    id: 'event-regional-qualifier',
-    seasonId: PLACEHOLDER_SEASON_ID,
-    type: 'competition',
-    title: 'Regional Qualifier',
-    locationName: 'Midtown Arena',
-  },
-];
-
-const FIXTURE_SESSIONS: readonly CalendarSessionRow[] = [
-  {
-    id: 'session-build-past',
-    eventId: 'event-weekly-build',
-    sessionDate: '2026-07-08',
-    startsAt: '2026-07-08T23:00:00.000Z', // 6:00 PM America/Chicago (CDT)
-    endsAt: '2026-07-09T01:00:00.000Z', // 8:00 PM America/Chicago
-    status: 'completed',
-  },
-  {
-    id: 'session-build-upcoming',
-    eventId: 'event-weekly-build',
-    sessionDate: '2026-07-22',
-    startsAt: '2026-07-22T23:00:00.000Z',
-    endsAt: '2026-07-23T01:00:00.000Z',
-    status: 'scheduled',
-  },
-  {
-    id: 'session-food-bank',
-    eventId: 'event-food-bank-sort',
-    sessionDate: '2026-07-26',
-    startsAt: '2026-07-26T15:00:00.000Z', // 10:00 AM America/Chicago
-    endsAt: '2026-07-26T18:00:00.000Z', // 1:00 PM America/Chicago
-    status: 'scheduled',
-  },
-  {
-    id: 'session-regional-july',
-    eventId: 'event-regional-qualifier',
-    sessionDate: '2026-07-30',
-    startsAt: '2026-07-30T13:00:00.000Z', // 8:00 AM America/Chicago
-    endsAt: '2026-07-30T21:00:00.000Z', // 4:00 PM America/Chicago
-    status: 'scheduled',
-  },
-  {
-    id: 'session-regional-august',
-    eventId: 'event-regional-qualifier',
-    sessionDate: '2026-08-08',
-    startsAt: '2026-08-08T13:00:00.000Z',
-    endsAt: '2026-08-08T21:00:00.000Z',
-    status: 'scheduled',
-  },
-];
 
 // ---------------------------------------------------------------------------
 // Pure functions -- exported for direct testing.
@@ -495,15 +395,6 @@ export function filterByType(
 ): EnrichedCalendarSession[] {
   if (filter === 'all') return [...enriched];
   return enriched.filter(({ event }) => event.type === filter);
-}
-
-// ---------------------------------------------------------------------------
-// Fixture loader -- obviously-fake default for the injectable `loadSessions`
-// seam (Known Context/Traps #1/#6).
-// ---------------------------------------------------------------------------
-
-export async function defaultLoadCalendarSessions(): Promise<CalendarLoadResult> {
-  return { events: FIXTURE_EVENTS, sessions: FIXTURE_SESSIONS };
 }
 
 // ---------------------------------------------------------------------------
@@ -676,13 +567,17 @@ type LoadState<T> =
   | { status: 'error'; error: unknown; retry: () => void }
   | { status: 'success'; data: T };
 
-function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): LoadState<T> {
+function useLoadState<T>(load: (() => Promise<T>) | null, deps: readonly unknown[]): LoadState<T> {
   const [state, setState] = useState<LoadState<T>>({ status: 'loading' });
   // Bumped by the error Banner's "Retry" action (DES-12) to force the effect
   // below to re-run without changing the caller-supplied `deps` semantics.
   const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
+    if (load === null) {
+      setState({ status: 'loading' });
+      return;
+    }
     let isMounted = true;
     setState({ status: 'loading' });
     load()
@@ -708,15 +603,23 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
 // ---------------------------------------------------------------------------
 
 export interface CalendarPageProps {
-  /** Injectable data-loading seam (Known Context/Traps #1/#6). Defaults to
-   * fixture data. */
+  /** Injectable data-loading seam. Defaults to the real Supabase loader. */
   loadSessions?: LoadCalendarSessionsFn;
 }
 
 export function CalendarPage({
-  loadSessions = defaultLoadCalendarSessions,
+  loadSessions = loadCalendarSessions,
 }: CalendarPageProps = {}): ReactNode {
-  const loadState = useLoadState(loadSessions, [loadSessions]);
+  const activeSeason = useActiveSeason();
+  const readySeasonId = activeSeason.status === 'ready' ? activeSeason.season.id : null;
+  const loadForActiveSeason = useCallback(
+    () => loadSessions(readySeasonId as string),
+    [loadSessions, readySeasonId],
+  );
+  const loadState = useLoadState(readySeasonId === null ? null : loadForActiveSeason, [
+    loadForActiveSeason,
+    readySeasonId,
+  ]);
   // UXC-01 (module doc #2's remedy (b), copying `OutreachList.tsx`'s shipped
   // `StudentOutreachSection`/`CoachOutreachSection` pattern): a stable id for
   // the "Sessions on <day>"/"Sessions in <month>" `Heading`, so the
@@ -749,6 +652,43 @@ export function CalendarPage({
   function handleShowWholeMonth(): void {
     setSelectedDayIso(null);
     setCalendarResetKey((key) => key + 1);
+  }
+
+  if (activeSeason.status === 'loading') {
+    return (
+      <VStack gap={3} padding={6} aria-busy="true">
+        <VisuallyHidden as="div" role="status">
+          Loading the active season…
+        </VisuallyHidden>
+        <Skeleton width={240} height={28} />
+        <Skeleton width={400} height={16} index={1} />
+      </VStack>
+    );
+  }
+
+  if (activeSeason.status === 'none') {
+    return (
+      <VStack padding={6}>
+        <EmptyState
+          headingLevel={1}
+          title="No active season yet"
+          description="An admin needs to create and activate a season in Season settings before the calendar can be scoped to it."
+        />
+      </VStack>
+    );
+  }
+
+  if (activeSeason.status === 'error') {
+    return (
+      <VStack gap={4} padding={6}>
+        <Banner
+          status="error"
+          title="Couldn't load the active season"
+          description={activeSeason.error.message}
+          endContent={<Button variant="ghost" label="Retry" onClick={activeSeason.refresh} />}
+        />
+      </VStack>
+    );
   }
 
   if (loadState.status === 'loading') {
