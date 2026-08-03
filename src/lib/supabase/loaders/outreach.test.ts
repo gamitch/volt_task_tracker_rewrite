@@ -738,7 +738,7 @@ describe('queryAttendanceForSessions pagination (T402, mirrors T320) -- exercise
     });
   });
 
-  it('C2 -- the REAL proof (not call-shape): dropping the stable order lets separate page requests observe DRIFTING physical row order, duplicating and dropping rows -- mutation: delete `.order(\'id\', ...)`', async () => {
+  it("C2 -- the REAL proof (not call-shape): dropping the stable order lets separate page requests observe DRIFTING physical row order, duplicating and dropping rows -- mutation: delete `.order('id', ...)`", async () => {
     // This is the exact "observable consequence" proof this task's own
     // packet §6 demands, not "was .order() called" (a call-shape assertion
     // that proves nothing about correctness -- see the OTHER test below,
@@ -807,7 +807,7 @@ describe('queryAttendanceForSessions pagination (T402, mirrors T320) -- exercise
     }
   });
 
-  it('C2 -- secondary/defense-in-depth ONLY (call-shape, deliberately not this criterion\'s sole proof): each page request orders by id ascending', async () => {
+  it("C2 -- secondary/defense-in-depth ONLY (call-shape, deliberately not this criterion's sole proof): each page request orders by id ascending", async () => {
     const attendanceTable = makeAttendancePagingTable([[attendanceFixtureRow('student-1')]]);
     const { client } = makeOutreachDataClient(attendanceTable);
 
@@ -846,9 +846,7 @@ describe('queryAttendanceForSessions pagination (T402, mirrors T320) -- exercise
 
   it('C5: an error from any page propagates -- never silently swallowed into [] -- mutation: swallow the error and return []', async () => {
     const orderSpy = vi.fn(() => ({
-      range: vi
-        .fn()
-        .mockResolvedValue({ data: null, error: { message: 'boom', code: 'ATT500' } }),
+      range: vi.fn().mockResolvedValue({ data: null, error: { message: 'boom', code: 'ATT500' } }),
     }));
     const attendanceTable = {
       select: vi.fn(() => ({ in: vi.fn(() => ({ order: orderSpy })) })),
