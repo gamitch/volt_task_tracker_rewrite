@@ -610,6 +610,96 @@
  * unedited here (filed for the ledger, not fixed in place, so this file does
  * not end this task with two contradicting explanations of the same
  * mechanism sitting a few hundred lines apart from each other).
+ *
+ * -----------------------------------------------------------------------
+ * 16. T306 (owner ruling, `docs/swarm/auto-mode-decisions.md`, "2026-08-03 --
+ *     George's ruling on T306"): once ANY `attendance` row is recorded for a
+ *     session, its Signups block shows what happened, not what was promised.
+ *
+ * Verbatim, the confusion this closes: *"i was on the UI and adding who
+ * attended an outreach event... What was not clear to me on the UI was what
+ * to do with the RSVP."* The RSVP buckets (module doc #2) looked actionable
+ * to a coach who had just recorded real attendance for the same roster.
+ *
+ * (a) THE TRIGGER, AND WHY IT TAKES NO `session` AT ALL. The owner's own
+ * follow-up ruled out the two obvious triggers himself (verbatim: *"pleae be
+ * cognizant of what a 'past' event is. i may be doing this on the same day
+ * of the event."*) -- NOT the date (he records attendance ON the event's own
+ * day; a date test would show RSVP buckets during the exact workflow that
+ * confused him, and would re-open T304, where these surfaces were settled to
+ * never consult the date) and NOT `session.status === 'completed'` (while
+ * recording attendance the session is normally still `scheduled` -- he has
+ * not run "Mark day complete" yet -- so a status test would leave the RSVP
+ * buckets up for the whole confusing moment). `hasRecordedAttendance
+ * (sessionId, attendanceRows)` below takes ONLY those two arguments --
+ * `session.status`/`session.sessionDate` are structurally unreachable inside
+ * it, so neither ruled-out trigger can be reintroduced by editing this
+ * function in isolation; both are only reachable by changing its ONE call
+ * site inside `SessionSignupList` below, which is exactly where this task's
+ * own mutations (C6/C7) are aimed and exactly why they need a real render,
+ * not a pure-function test, to catch (harness note, this task's packet §7).
+ *
+ * (b) THE LOAD SEAM SITS ON THE PAGE, NOT ON `SessionSignupList`. Same
+ * injectable, real-defaulted convention `AttendancePanel.tsx` (module doc
+ * #11, prop `loadAttendance`) and `MarkDayCompleteDialog.tsx` (module doc #9)
+ * already ship: `loadAttendance?: LoadAttendanceForSessionsFn`, defaulting to
+ * the real `loadAttendanceForSessions`. It is called ONCE, for every session
+ * on the page combined (mirrors `AttendancePanel`'s own `sessionIdsKey`
+ * shape, not `MarkDayCompleteDialog`'s single-session shape) -- a
+ * `SessionSignupList`-scoped seam would mean N independent fetches for an
+ * N-session event, one per row, which is the wrong shape for data that is
+ * naturally page-scoped (every session's attendance is already fetched in
+ * one page-level call for `AttendancePanel` too). The fetch is keyed off
+ * `data` -- this component's OWN top-level state (module doc #10), NOT
+ * `detailData`/`sessions`, which only exist after the early
+ * `loading`/`error`/`notFound` returns further down and so cannot back a
+ * hook call placed before them without breaking rules of hooks. `data` starts
+ * `null`, so the very first render's key is `''` (an empty `sessionIds`
+ * array, which the real loader/the test's own mock both resolve to `[]` for
+ * with no network/call-arg cost -- `loaders/attendance.ts`'s own module doc
+ * on `makeLoadAttendanceForSessions` documents the empty-array
+ * short-circuit); the effect re-fires once `data` populates with the page's
+ * real session ids, and again whenever that id SET changes (a session
+ * added/removed via edit), never on every unrelated re-render (the
+ * `attendanceSessionIdsKey` string-join is the same anti-thrash technique
+ * `AttendancePanel`'s own `sessionIdsKey` uses, not a coincidence).
+ *
+ * (c) THE FALLBACK IS `MarkDayCompleteDialog`'s SHAPE, NOT
+ * `MarkEventCompleteDialog`'s. That dialog's own module doc #9 states the
+ * distinction this task's packet requires verbatim: a display surface may
+ * degrade a failed/in-flight load silently; a surface that WRITES must
+ * abort. This section only ever displays -- `attendanceRows` state stays
+ * `null` on failure (same "plain `.then`/`.catch`, no retry, no three-state
+ * union" shape `MarkDayCompleteDialog`'s own attendance effect uses, module
+ * doc #9 there) and every session's trigger treats `null` identically to a
+ * genuinely-empty successful load (`attendanceRows ?? []` at the one call
+ * site below) -- no error `Banner`, no blocked signups render, no spinner
+ * over the RSVP fallback.
+ *
+ * (d) THE BUCKETING FUNCTION, `groupSessionAttendance`, MIRRORS
+ * `groupSessionSignups` (module doc #2) FIELD FOR FIELD: same per-`sessionId`
+ * filter, same roster-diff for the one derived bucket (`noRecord`, never a
+ * fabricated stored status -- the exact discipline module doc #2 already
+ * established for `noResponse`). `isAttendingStatus` is IMPORTED from
+ * `AttendancePanel.tsx` (that file's own module doc #4/export, line ~308),
+ * never re-derived here: it encodes `present`/`late`, the identical
+ * predicate `v_student_hours` (`20260717000003_metric_views.sql:18`) uses to
+ * decide which `attendance` rows count as attended, and duplicating a metric
+ * formula in a second TypeScript location is constitution item 3's own
+ * BLOCKER-class trap.
+ *
+ * (e) SWITCH PER SESSION, NEVER PER STUDENT (packet §4(c)). `SessionSignupList`
+ * computes `showAttendance` ONCE per session and renders EITHER the RSVP
+ * buckets OR the attendance buckets for that session's entire roster -- a
+ * per-student switch would put two vocabularies in one row and reintroduce
+ * the exact confusion this task exists to remove.
+ *
+ * (f) NO WRITE PATH (packet §5). `OutreachList.tsx:1685-1687`'s T121 finding
+ * still governs: "RSVP is intent, not a real attendance record." Nothing in
+ * this module doc's own load seam, `groupSessionAttendance`, or
+ * `hasRecordedAttendance` ever constructs an `rsvps`-shaped write -- this is
+ * a display change only, grep-provable: no `rsvps` insert/update/upsert call
+ * is introduced anywhere in this file by this task.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
@@ -664,7 +754,20 @@ import {
 } from './OutreachEventDialog';
 // T117 (PRD v2 UXP-01): the new coach-managed attendance panel -- module
 // doc #11.
-import { AttendancePanel } from './AttendancePanel';
+// T306 (module doc #16(d)) -- `isAttendingStatus` joins this same import:
+// the ONE semantic owner of "which recorded `attendance.status` values count
+// as attending", reused verbatim rather than re-derived (constitution item
+// 3). `AttendancePanel.tsx` is a Forbidden File for this task (read-only
+// reference/import only -- not modified).
+import { AttendancePanel, isAttendingStatus } from './AttendancePanel';
+// T306 (module doc #16(b)) -- the injectable load seam for this page's own
+// attendance-vs-RSVP trigger. `loaders/attendance.ts` is W1's Forbidden File
+// for this task (read-only reference/import only -- not modified).
+import {
+  loadAttendanceForSessions,
+  type AttendanceRow,
+  type LoadAttendanceForSessionsFn,
+} from '../../lib/supabase/loaders/attendance';
 // T127 (PRD v2 UXP-07): "Mark event complete" bulk action -- module doc #12.
 // Not given its own injectable override prop here, same posture
 // `AttendancePanel` above already established (module doc #11): the dialog's
@@ -809,6 +912,19 @@ export interface SessionSignupGroups {
   maybe: RosterStudent[];
   cantGo: RosterStudent[];
   noResponse: RosterStudent[];
+}
+
+/** T306 (module doc #16(d)) -- `groupSessionSignups`'s attendance-side
+ * counterpart. `attended` mirrors `isAttendingStatus` (`present`/`late`);
+ * `excused`/`absent` are the two remaining real `attendance.status` values
+ * (`loaders/attendance.ts :: AttendanceStatus`); `noRecord` is DERIVED by
+ * diffing the roster, exactly as `noResponse` is above -- never a fabricated
+ * stored status. */
+export interface SessionAttendanceGroups {
+  attended: RosterStudent[];
+  excused: RosterStudent[];
+  absent: RosterStudent[];
+  noRecord: RosterStudent[];
 }
 
 // ---------------------------------------------------------------------------
@@ -1057,6 +1173,61 @@ export function groupSessionSignups(
     else cantGo.push(student); // 'declined' -- OUT-04's "Can't go" bucket.
   }
   return { going, maybe, cantGo, noResponse };
+}
+
+/**
+ * T306 (module doc #16(a)) -- THE TRIGGER, expressed as narrowly as possible
+ * on purpose. Takes ONLY `sessionId` and `attendanceRows` -- no `session`
+ * object, so `session.status`/`session.sessionDate` are structurally
+ * unreachable here. The owner ruled out both of those himself
+ * (`auto-mode-decisions.md`, "2026-08-03 -- George's ruling on T306"): not
+ * the date (he records attendance the same day the event happens) and not
+ * `session.status === 'completed'` (the session is normally still
+ * `scheduled` while he is recording). Any rows recorded for this session ->
+ * real data exists -> show it. No rows -> RSVP intent is the only
+ * information that exists -> show that instead.
+ */
+export function hasRecordedAttendance(
+  sessionId: string,
+  attendanceRows: readonly AttendanceRow[],
+): boolean {
+  return attendanceRows.some((row) => row.sessionId === sessionId);
+}
+
+/**
+ * T306 (module doc #16(d)) -- `groupSessionSignups`'s attendance-side
+ * counterpart, same per-`sessionId` filter / roster-diff shape.
+ * `isAttendingStatus` (imported from `AttendancePanel.tsx`, never
+ * re-derived) decides `attended`; the two remaining real `attendance.status`
+ * values each get their own bucket; a roster student with no row at all for
+ * this session lands in `noRecord`, diffed from the roster exactly as
+ * `groupSessionSignups`'s own `noResponse` is, never a fabricated status.
+ */
+export function groupSessionAttendance(
+  sessionId: string,
+  roster: readonly RosterStudent[],
+  attendanceRows: readonly AttendanceRow[],
+): SessionAttendanceGroups {
+  const rowByStudentId = new Map(
+    attendanceRows
+      .filter((row) => row.sessionId === sessionId)
+      .map((row) => [row.studentId, row] as const),
+  );
+  const attended: RosterStudent[] = [];
+  const excused: RosterStudent[] = [];
+  const absent: RosterStudent[] = [];
+  const noRecord: RosterStudent[] = [];
+  for (const student of roster) {
+    const row = rowByStudentId.get(student.id);
+    if (row === undefined) {
+      noRecord.push(student); // Diffed, not a stored value (module doc #16(d)).
+      continue;
+    }
+    if (isAttendingStatus(row.status)) attended.push(student);
+    else if (row.status === 'excused') excused.push(student);
+    else if (row.status === 'absent') absent.push(student);
+  }
+  return { attended, excused, absent, noRecord };
 }
 
 /**
@@ -1452,14 +1623,32 @@ function SessionSignupList({
   session,
   roster,
   rsvps,
+  attendanceRows,
 }: {
   session: OutreachDetailSession;
   roster: readonly RosterStudent[];
   rsvps: readonly RsvpRow[];
+  /** T306 (module doc #16) -- already collapsed by the caller: the "no rows
+   * known yet" (in-flight/failed load) case and the "genuinely zero rows"
+   * case are indistinguishable here on purpose, both fall to the RSVP
+   * buckets (module doc #16(c)). */
+  attendanceRows: readonly AttendanceRow[];
 }): ReactNode {
-  const groups = useMemo(
+  // T306 (module doc #16(a)) -- THE TRIGGER's one call site. `session` is in
+  // scope here only for `.id` -- `hasRecordedAttendance` itself never sees
+  // `session.status`/`session.sessionDate` (module doc #16(a) explains why
+  // that narrow signature is deliberate).
+  const showAttendance = useMemo(
+    () => hasRecordedAttendance(session.id, attendanceRows),
+    [session.id, attendanceRows],
+  );
+  const signupGroups = useMemo(
     () => groupSessionSignups(session.id, roster, rsvps),
     [session.id, roster, rsvps],
+  );
+  const attendanceGroups = useMemo(
+    () => groupSessionAttendance(session.id, roster, attendanceRows),
+    [session.id, roster, attendanceRows],
   );
 
   return (
@@ -1468,12 +1657,30 @@ function SessionSignupList({
         {formatSessionDateTime(session)}
         {session.status !== 'scheduled' ? ` — ${session.status}` : ''}
       </Heading>
-      <HStack gap={5} wrap="wrap">
-        <SignupBucket label="Going" students={groups.going} />
-        <SignupBucket label="Maybe" students={groups.maybe} />
-        <SignupBucket label="Can't go" students={groups.cantGo} />
-        <SignupBucket label="No response" students={groups.noResponse} />
-      </HStack>
+      {showAttendance ? (
+        <VStack gap={2}>
+          {/* T306 (packet §4(d)) -- names which thing is on screen, so a
+              coach recording attendance never has to infer whether this
+              row is asking them to also go fix each RSVP (it isn't). */}
+          <Heading level={4}>Who actually came</Heading>
+          <HStack gap={5} wrap="wrap">
+            <SignupBucket label="Attended" students={attendanceGroups.attended} />
+            <SignupBucket label="Excused" students={attendanceGroups.excused} />
+            <SignupBucket label="Absent" students={attendanceGroups.absent} />
+            <SignupBucket label="No record" students={attendanceGroups.noRecord} />
+          </HStack>
+        </VStack>
+      ) : (
+        <VStack gap={2}>
+          <Heading level={4}>Who said they were coming</Heading>
+          <HStack gap={5} wrap="wrap">
+            <SignupBucket label="Going" students={signupGroups.going} />
+            <SignupBucket label="Maybe" students={signupGroups.maybe} />
+            <SignupBucket label="Can't go" students={signupGroups.cantGo} />
+            <SignupBucket label="No response" students={signupGroups.noResponse} />
+          </HStack>
+        </VStack>
+      )}
     </VStack>
   );
 }
@@ -1531,6 +1738,12 @@ export interface OutreachDetailProps {
    * established for this identical purpose; disclosed as a new pattern for
    * THIS file, which had no clock seam of its own before. */
   nowFn?: () => Date;
+  /** T306 (module doc #16(b)) -- injectable load seam for the Signups
+   * section's own attendance-vs-RSVP trigger. Same real-defaulted,
+   * injectable-prop convention `AttendancePanel.tsx`'s own `loadAttendance`
+   * and `MarkDayCompleteDialog.tsx`'s own `loadAttendance` already ship.
+   * Defaults to the real `loadAttendanceForSessions`. */
+  loadAttendance?: LoadAttendanceForSessionsFn;
 }
 
 export function OutreachDetail({
@@ -1540,6 +1753,7 @@ export function OutreachDetail({
   onCancelEvent = cancelOutreachEvent,
   loadRoster = loadOutreachEventRoster,
   loadGuardianLinksForParent = defaultLoadGuardianLinksForParent,
+  loadAttendance = loadAttendanceForSessions,
   nowFn = () => new Date(),
 }: OutreachDetailProps = {}): ReactNode {
   const { eventId: routeEventId } = useParams<{ eventId: string }>();
@@ -1556,6 +1770,13 @@ export function OutreachDetail({
   // can be reflected immediately without re-triggering the top-level
   // `loading` DES-12 state.
   const [data, setData] = useState<OutreachDetailData | null>(null);
+  // T306 (module doc #16(b)/(c)) -- `null` doubles as "not loaded yet" AND
+  // "load failed": both fall to the RSVP buckets at every session's trigger
+  // (the one call site collapses this via `attendanceRows ?? []`, further
+  // below), same "no error banner, no blocked render" degrade
+  // `MarkDayCompleteDialog.tsx`'s own attendance effect uses (that file's
+  // module doc #9).
+  const [attendanceRows, setAttendanceRows] = useState<readonly AttendanceRow[] | null>(null);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   // T101 (module doc #10) -- drives the one rendered
   // `<OutreachEventDialog>` instance, in EDIT mode (Trap #5: that dialog
@@ -1648,6 +1869,66 @@ export function OutreachDetail({
       setData(loadState.data);
     }
   }, [loadState]);
+
+  // T306 (module doc #16(b)) -- ONE combined attendance fetch for every
+  // session on this page (mirrors `AttendancePanel`'s own `sessionIdsKey`
+  // shape, not `MarkDayCompleteDialog`'s single-session shape). Keyed off
+  // `data` (this component's OWN top-level state, above) rather than
+  // `detailData`/`sessions` further below, which only exist after this
+  // component's own early `loading`/`error`/`notFound` returns and so cannot
+  // back a hook placed before them (rules of hooks). The string-join key,
+  // not `data` itself, is the effect's dependency so this only re-fires when
+  // the real session id SET changes, not on every unrelated `data` update
+  // (e.g. the optimistic cancel-event flip below only changes `status`
+  // fields, never the id set) -- same anti-thrash technique `AttendancePanel`
+  // already uses for its own identical `sessionIdsKey`.
+  // T117 (module doc #11) -- staff-only gate for the attendance panel below.
+  // T306 HOISTED it above the attendance load effect that follows: that load
+  // is staff-only too, and duplicating the role literals inline would
+  // re-derive a check this file already owns (module doc #11 warns about
+  // exactly that). Every other branch/section on this page is unchanged for a
+  // non-staff viewer.
+  const isStaffViewer = user !== null && (user.role === 'coach' || user.role === 'admin');
+  const attendanceSessionIdsKey = useMemo(
+    () => (data === null ? '' : data.sessions.map((session) => session.id).join('|')),
+    [data],
+  );
+  useEffect(() => {
+    // T306 -- STAFF ONLY, and this is a correctness gate, not a permission
+    // nicety. `attendance`'s RLS is `staff_all` plus `own_or_linked_read`
+    // (`20260717000002_rls.sql:226-232`), so a student or parent can read
+    // ONLY their own (or their linked child's) rows. Firing this for them
+    // would return a partial set, and `groupSessionAttendance` diffs the
+    // roster -- so every teammate would render under "No record" when the
+    // truth is the viewer cannot see their rows. That is a FALSE statement
+    // about a factual record, and worse than the RSVP intent it replaces.
+    //
+    // Leaving `attendanceRows` at `null` for non-staff means the trigger
+    // sees no rows and the RSVP buckets stand -- byte-identical to this
+    // page's pre-T306 behaviour for those viewers. It also honours T307's
+    // recorded concern (`verification-log.md`) that an ungated load fires an
+    // `attendance` SELECT for every signed-in viewer of this page.
+    if (!isStaffViewer) return undefined;
+    let isMounted = true;
+    const sessionIds = attendanceSessionIdsKey === '' ? [] : attendanceSessionIdsKey.split('|');
+    loadAttendance(sessionIds)
+      .then((rows) => {
+        if (isMounted) setAttendanceRows(rows);
+      })
+      .catch(() => {
+        // Graceful degrade (module doc #16(c), mirroring
+        // `MarkDayCompleteDialog.tsx`'s own module doc #9): `attendanceRows`
+        // stays whatever it already was (`null` on a first failure), so
+        // every session's trigger sees "no rows known" and the RSVP buckets
+        // stand -- no error `Banner`, no blocked signups render, no
+        // spinner. Deliberately different from `MarkEventCompleteDialog`
+        // (a WRITE path, which must abort on a failed load instead): this
+        // section only ever displays, so a degraded display is recoverable.
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [loadAttendance, attendanceSessionIdsKey, isStaffViewer]);
 
   // T157 (module doc #13(c)) -- fetched ONLY for a parent viewer. Every other
   // role (and a signed-out visitor) settles to `idle` without ever calling the
@@ -1859,10 +2140,6 @@ export function OutreachDetail({
   const { event, sessions, rsvps, students, teams, profiles } = detailData;
   const roster = resolveEventRoster(event, students);
   const orderedSessions = sortSessionsByStart(sessions);
-  // T117 (module doc #11) -- staff-only gate for the new attendance panel;
-  // every other branch/section on this page is unchanged for a non-staff
-  // viewer.
-  const isStaffViewer = user !== null && (user.role === 'coach' || user.role === 'admin');
   // T157 (module doc #13(e)) -- composed over the ALREADY team-scoped `roster`
   // (module doc #3), NOT the full unfiltered `students` list: a parent's linked
   // student outside this event's team scope gets no control for this event.
@@ -2016,7 +2293,12 @@ export function OutreachDetail({
         ) : (
           orderedSessions.map((session) => (
             <VStack key={session.id} gap={4}>
-              <SessionSignupList session={session} roster={roster} rsvps={rsvps} />
+              <SessionSignupList
+                session={session}
+                roster={roster}
+                rsvps={rsvps}
+                attendanceRows={attendanceRows ?? []}
+              />
               {/* T179 (module doc #15, Trap 9) -- staff-only, per-session
                   "Mark day complete" trigger, INSIDE this page's own
                   per-session loop (`MarkDayCompleteDialog` takes one
