@@ -650,3 +650,129 @@ describe('makeOnEditAttendance', () => {
     expect(fromSpy).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// T197 -- `editAttendance`'s chained `.eq('session_id', ...).eq('student_id',
+// ...)` row scoping, outcome-provable, NOT call-shape. A spy assertion like
+// `expect(eqArgs).toContainEqual(['session_id', ...])` (the shape criteria
+// 11/12 above already use for OTHER properties) proves the call was made; it
+// does NOT prove the scoping worked -- this repo has shipped 7+ assertions
+// that passed for the wrong reason. Copies T402's own C2 pattern
+// (`docs/swarm/verification-log.md`, T402 entry): a fake whose PHYSICAL row
+// behaviour makes the defect observable. `.update()`'s patch here is applied
+// to whichever accumulated `.eq()` filters actually select against a small
+// fake `attendance` table, so a dropped filter is provable by which row(s)
+// changed, not by which method was called. (An empty filter list matches
+// EVERY row -- `Array.prototype.every` on `[]` is vacuously `true` -- which
+// is exactly what a real, unfiltered Postgrest `.update()` does against a
+// real table: this is what makes the "delete both `.eq()`s" mutation
+// observable as a table-wide write, not merely a crash.)
+// ---------------------------------------------------------------------------
+
+interface FakeAttendanceRow {
+  session_id: string;
+  student_id: string;
+  status: AttendanceStatus;
+  recorded_by: string | null;
+}
+
+function freshFakeAttendanceRows(): FakeAttendanceRow[] {
+  // Two sessions x two students -- the packet's own bar (worker packet §4):
+  // "at least two sessions and at least two students". `session-A`/
+  // `student-1` is the row the test edits; the other three are same-student-
+  // different-session, same-session-different-student, and neither-matches
+  // controls -- each one is the specific row a dropped `.eq()` would also
+  // touch.
+  return [
+    { session_id: 'session-A', student_id: 'student-1', status: 'absent', recorded_by: null },
+    { session_id: 'session-A', student_id: 'student-2', status: 'absent', recorded_by: null },
+    { session_id: 'session-B', student_id: 'student-1', status: 'absent', recorded_by: null },
+    { session_id: 'session-B', student_id: 'student-2', status: 'absent', recorded_by: null },
+  ];
+}
+
+function makeAttendanceRowFakeClient(initialRows: FakeAttendanceRow[]): {
+  client: SupabaseClient;
+  rows: FakeAttendanceRow[];
+} {
+  const rows: FakeAttendanceRow[] = initialRows.map((row) => ({ ...row }));
+  const fromSpy = vi.fn((table: string) => {
+    if (table !== 'attendance') {
+      throw new Error(`unexpected table: ${table}`);
+    }
+    return {
+      update: (patch: { status: AttendanceStatus; recorded_by: string }) => {
+        // Filters accumulate as `.eq()` is chained -- by the time `.then()`
+        // is actually invoked (awaited), every `.eq()` in the real chain has
+        // already run synchronously, so this closure sees the complete set.
+        const filters: [string, unknown][] = [];
+        const chain: Record<string, unknown> = {};
+        chain.eq = (column: string, value: unknown) => {
+          filters.push([column, value]);
+          return chain;
+        };
+        chain.then = (
+          onFulfilled: (value: MutationResult) => unknown,
+          onRejected?: (reason: unknown) => unknown,
+        ) => {
+          for (const row of rows) {
+            const matches = filters.every(
+              ([column, value]) => (row as unknown as Record<string, unknown>)[column] === value,
+            );
+            if (matches) {
+              row.status = patch.status;
+              row.recorded_by = patch.recorded_by;
+            }
+          }
+          return Promise.resolve({ data: null, error: null } as MutationResult).then(
+            onFulfilled,
+            onRejected,
+          );
+        };
+        return chain;
+      },
+    };
+  });
+  return { client: { from: fromSpy } as unknown as SupabaseClient, rows };
+}
+
+describe('makeOnEditAttendance row scoping (T197) -- outcome-provable, not call-shape', () => {
+  it('C1 (session scoping) + C2 (student scoping) + C3 (both together): editing (session-A, student-1) changes ONLY that physical row -- the same-student/different-session row, the same-session/different-student row, and the row matching neither stay exactly as they were', async () => {
+    const { client, rows } = makeAttendanceRowFakeClient(freshFakeAttendanceRows());
+    const onEditAttendance = makeOnEditAttendance(
+      () => 'coach-197',
+      () => client,
+    );
+
+    await onEditAttendance('session-A', 'student-1', 'present');
+
+    // With BOTH `.eq()`s present (the real/unmutated code), exactly the
+    // target row changes; every other row is byte-identical to its initial
+    // state.
+    expect(rows).toEqual([
+      {
+        session_id: 'session-A',
+        student_id: 'student-1',
+        status: 'present',
+        recorded_by: 'coach-197',
+      },
+      // C2's own proof row: same session (session-A) as the target,
+      // DIFFERENT student. Deleting `.eq('student_id', ...)` leaves only the
+      // session_id filter, which matches this row too (both rows have
+      // session_id === 'session-A') -- so under that mutation this row
+      // wrongly flips to 'present'/'coach-197' and this assertion reddens.
+      { session_id: 'session-A', student_id: 'student-2', status: 'absent', recorded_by: null },
+      // C1's own proof row: same student (student-1) as the target,
+      // DIFFERENT session. Deleting `.eq('session_id', ...)` leaves only the
+      // student_id filter, which matches this row too (both rows have
+      // student_id === 'student-1') -- so under that mutation this row
+      // wrongly flips to 'present'/'coach-197' and this assertion reddens.
+      { session_id: 'session-B', student_id: 'student-1', status: 'absent', recorded_by: null },
+      // Matches neither the target session nor the target student -- stays
+      // untouched under either single-`.eq()`-deletion mutation, and only
+      // reddens under the "delete both `.eq()`s" (C3) mutation, where an
+      // empty filter list matches every row unconditionally.
+      { session_id: 'session-B', student_id: 'student-2', status: 'absent', recorded_by: null },
+    ]);
+  });
+});
