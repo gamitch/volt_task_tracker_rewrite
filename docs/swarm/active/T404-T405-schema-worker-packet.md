@@ -1,5 +1,37 @@
 # T404 + T405 — worker packet: two `attendance` triggers, one migration wave
 
+> ## ⛔ CANCELLED 2026-08-03 — DO NOT DISPATCH
+>
+> **This packet was never executed. It is retained as a reasoning trail only.** Superseded by
+> **PR #45**, which resolved both rows a different way after an owner ruling.
+>
+> **T404 (widen the audit trigger to INSERT) is cancelled outright, not deferred.** Its premise —
+> that an attendance row created after a session completes is suspicious — was overruled by the
+> owner: *"there is no need to have this strict policy for fraud prevention... there are times
+> where me or a student will see that they were not marked for attending but they were actually
+> there and i'll go in and put them in. no fraud."* Correcting attendance post-completion is a
+> **normal workflow** for this team. PR #45 therefore **removed**
+> `trg_audit_attendance_post_completion` rather than widening it, and made `audit_log.actor`
+> nullable so an audit write can never abort the write it is auditing. See PRD `DATA-02`.
+>
+> **T405 (stale `updated_at`) is closed by PR #45's** `trg_attendance_touch_updated_at`.
+>
+> **Two claims below were tested and are FALSE — do not carry them forward:**
+>
+> 1. **§4's headline trap is refuted.** Widening the trigger to `after insert or update` could
+>    *not* abort a student's QR check-in: `supabase/functions/checkin/`'s own
+>    `checkSessionLiveness` (`liveness.ts:30-32`, called at `index.ts:174`) rejects any
+>    non-`scheduled` session with a 409 **before any write happens**. The reachable hazard was
+>    narrower — a race where liveness passes while `scheduled` and the coach completes the session
+>    before the INSERT lands.
+> 2. **Trigger-name ordering is not load-bearing.** A `BEFORE` trigger always fires before an
+>    `AFTER` trigger regardless of name; this was proven by renaming the trigger to sort after the
+>    audit one and re-running the suite green.
+>
+> Also missed by this packet entirely: the **`self` check-off path**
+> (`20260724000000_self_checkoff.sql`) is retroactive **by design**, so widening the audit to
+> INSERT would have written an audit row for every routine self check-off.
+
 **Workflow W1, branch `claude/w1-checkin`. HEAVY tier — mandatory, not chosen.** Constitution item 26
 names *"a migration or metric-view SQL"* as an explicit HEAVY trigger. Chain: this packet →
 `checker-premise` (on Fable, **building against a real PostgreSQL**) → `worker-implementer` →
