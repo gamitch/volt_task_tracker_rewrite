@@ -428,7 +428,9 @@ current tiered priority list.
 - **T036 — End meeting flow.** PASS (1st attempt, NIT — closes E5). Checker independently confirmed
   `trg_audit_attendance_post_completion` fires as cited with zero client-side duplicate writes, and
   judged the pre-confirm-summary design (current-state tally + separate future-change disclosure)
-  the better of two options.
+  the better of two options. *(Historical. **That trigger was removed 2026-08-03** by owner ruling —
+  the "zero client-side duplicate writes" property still holds and is now trivially true, since
+  attendance is audited nowhere. See `auto-mode-decisions.md`.)*
 - **T040 — RSVP control.** PASS (attempt 2). Attempt 1 was a legitimate MAJOR FAIL — a real int32
   `setTimeout` overflow silently locked the control for sessions >~25 days out. Attempt 2's fix
   independently re-verified, including reproducing the worker's own revert-fix-restore regression
