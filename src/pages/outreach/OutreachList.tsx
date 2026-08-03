@@ -225,9 +225,21 @@
  *
  * T170 UPDATE: this gap is now closed for `OutreachList` itself -- see
  * module doc #15 below for the real resolution. `PLACEHOLDER_CURRENT_STUDENT_ID`
- * is KEPT (this file's own fixtures below still key to it, and
- * `OutreachList.test.tsx` still imports it), but is no longer this
- * component's own runtime default for an unresolved `viewerStudentId`.
+ * is KEPT (`OutreachList.test.tsx` still imports it, and its harness default
+ * still returns it -- see that file's own `renderAsUser`), but is no longer
+ * this component's own runtime default for an unresolved `viewerStudentId`.
+ *
+ * T190 UPDATE: after T170 the constant had NO runtime role left -- it only
+ * survived as fixture data, and the shipped fixtures below stayed keyed to
+ * it. That meant any NEW test that omitted an explicit `resolveStudentId`
+ * stub still got placeholder-in/placeholder-out by accident (the harness
+ * default resolves to the placeholder, and the fixtures matched it) -- a
+ * future-authoring hazard, since a positive test could pass while
+ * discriminating nothing. T190 rekeys every fixture below (`FIXTURE_STUDENTS`,
+ * `FIXTURE_GOAL_CONFIG`, `FIXTURE_RSVPS`) off the placeholder onto a real id
+ * (`'student-lena-osei'`), so the placeholder now keys NOTHING: a test with
+ * no explicit resolver stub gets a viewer with no fixture data at all and
+ * fails loudly, by construction, instead of silently passing.
  *
  * -----------------------------------------------------------------------
  * 8. Deliberate stubs (per Forbidden Files -- disclosed, not silently built
@@ -984,12 +996,19 @@ const PLACEHOLDER_SEASON_ID = 'season-placeholder-current';
 // Fixture data (constitution item 6: fabricated names only). Module doc #2.
 // ---------------------------------------------------------------------------
 
+// T190: the viewer fixture ('Lena Osei') has its own real id
+// ('student-lena-osei'), not `PLACEHOLDER_CURRENT_STUDENT_ID` -- see module
+// doc #7's T190 UPDATE above. `PLACEHOLDER_CURRENT_STUDENT_ID` keys nothing
+// in this file anymore; it survives only as the test harness's default
+// return value (`OutreachList.test.tsx`'s `renderAsUser`), deliberately, so
+// a test that forgets to stub a real viewer gets one that matches no
+// fixture data below.
 const FIXTURE_STUDENTS: readonly OutreachStudentFixture[] = [
   { id: 'student-amara-webb', name: 'Amara Webb' },
   { id: 'student-cole-jennings', name: 'Cole Jennings' },
   { id: 'student-priya-patel', name: 'Priya Patel' },
   { id: 'student-devon-marsh', name: 'Devon Marsh' },
-  { id: PLACEHOLDER_CURRENT_STUDENT_ID, name: 'Lena Osei' },
+  { id: 'student-lena-osei', name: 'Lena Osei' },
 ];
 
 /** T147 -- this file's own fixture default for the new `teams` field
@@ -1012,7 +1031,7 @@ const FIXTURE_GOAL_CONFIG: OutreachGoalConfig = {
     'student-cole-jennings': 8,
     'student-priya-patel': 12,
     'student-devon-marsh': 10,
-    [PLACEHOLDER_CURRENT_STUDENT_ID]: 12,
+    'student-lena-osei': 12, // T190: rekeyed off PLACEHOLDER_CURRENT_STUDENT_ID
   },
 };
 
@@ -1196,9 +1215,19 @@ const FIXTURE_RSVPS: readonly RsvpRow[] = [
   {
     id: 'rsvp-4',
     sessionId: 'session-food-bank-past',
-    studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
+    // T190: rekeyed off PLACEHOLDER_CURRENT_STUDENT_ID onto the viewer
+    // fixture's own real id (`FIXTURE_STUDENTS` above).
+    studentId: 'student-lena-osei',
     status: 'going',
-    respondedBy: PLACEHOLDER_CURRENT_STUDENT_ID,
+    // `respondedBy` is a `profiles.id` column, not `students.id` (T174's
+    // defect -- module doc #16 above). This file has no `profile-*`
+    // fixtures at all (`FIXTURE_STUDENTS` carries only `{id, name}`), so
+    // there is no real profile row to key to here; `'profile-lena-osei'`
+    // is a disclosed stand-in that is deliberately NOT `student-lena-osei`,
+    // so this field stays visibly in its own (profile) id-space rather than
+    // reintroducing T174's exact confusion in a new file. Not a fix for
+    // T174's open gap in this file -- see this task's worker output.
+    respondedBy: 'profile-lena-osei',
     updatedAt: '2026-06-10T12:15:00.000Z',
     createdAt: '2026-06-10T12:15:00.000Z',
   },
@@ -1252,9 +1281,11 @@ const FIXTURE_RSVPS: readonly RsvpRow[] = [
   {
     id: 'rsvp-10',
     sessionId: 'session-park-cleanup-upcoming',
-    studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
+    // T190: same rekey as rsvp-4 above.
+    studentId: 'student-lena-osei',
     status: 'maybe',
-    respondedBy: PLACEHOLDER_CURRENT_STUDENT_ID,
+    // T190: same deliberately-distinct profile-id stand-in as rsvp-4 above.
+    respondedBy: 'profile-lena-osei',
     updatedAt: '2026-07-10T09:10:00.000Z',
     createdAt: '2026-07-10T09:10:00.000Z',
   },

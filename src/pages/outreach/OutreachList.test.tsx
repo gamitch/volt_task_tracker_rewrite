@@ -165,14 +165,23 @@ const mockedLoadSelfCheckoffAttendance = vi.mocked(loadSelfCheckoffAttendance);
  * existing fixture-driven assertions. Unlike `StudentHome.test.tsx`'s own
  * T176 harness fix (which resolves to a DISTINCT, non-placeholder id,
  * because that page's `loadData` takes `studentId` as an argument), this
- * file's own `defaultLoadOutreachData` fixtures
- * (`FIXTURE_RSVPS`/`FIXTURE_GOAL_CONFIG`, component module doc #2) are
- * themselves keyed to `PLACEHOLDER_CURRENT_STUDENT_ID` -- so the harness
- * default here resolves to THAT same value, deliberately, to keep every
- * pre-existing fixture-driven assertion passing unchanged. This default is
- * spread BEFORE `props` (so an individual test's own
- * `viewerStudentId`/`resolveStudentId` override always wins, same
- * precedence `StudentHome.test.tsx`'s own harness fix established).
+ * file's own default resolves to `PLACEHOLDER_CURRENT_STUDENT_ID` itself.
+ *
+ * T190 UPDATE: this default is UNCHANGED (still `PLACEHOLDER_CURRENT_STUDENT_ID`,
+ * deliberately -- component module doc #7's T190 UPDATE), but
+ * `defaultLoadOutreachData`'s own fixtures (`FIXTURE_STUDENTS`/
+ * `FIXTURE_RSVPS`/`FIXTURE_GOAL_CONFIG`, component module doc #2) are NO
+ * LONGER keyed to it -- they are keyed to a real id (`'student-lena-osei'`)
+ * instead. That was the T190 hazard: this default used to accidentally
+ * match the fixtures, so a NEW test could omit an explicit
+ * `resolveStudentId`/`viewerStudentId` override and still pass against real
+ * fixture data, non-discriminating by construction. Now it matches nothing,
+ * so any test below that needs the fixture-driven student/parent view must
+ * stub explicitly (`resolveStudentId: async () => 'student-lena-osei'`) --
+ * see the tests below that do. This default is spread BEFORE `props` (so an
+ * individual test's own `viewerStudentId`/`resolveStudentId` override always
+ * wins, same precedence `StudentHome.test.tsx`'s own harness fix
+ * established).
  */
 function renderAsUser(
   user: AuthUser | null,
@@ -1070,6 +1079,19 @@ describe('getUnansweredRsvpCount (BEH-04 / Known Context/Traps #3)', () => {
     const outreachEventIds = new Set(outreachEvents.map((e) => e.id));
     const outreachSessions = data.sessions.filter((s) => outreachEventIds.has(s.eventId));
     const allStudentIds = data.students.map((s) => s.id);
+    // T190 FINDING (see this task's worker output §5/§6): unlike the other
+    // five tests T190 touched, this one has no `resolveStudentId` to stub --
+    // it calls `defaultLoadOutreachData` directly and never renders
+    // `OutreachList`. `PLACEHOLDER_CURRENT_STUDENT_ID` used to work here only
+    // because it accidentally WAS the fixture viewer's id; after T190 rekeyed
+    // `FIXTURE_STUDENTS`/`FIXTURE_RSVPS` onto a real id, the placeholder
+    // matches no fixture student at all, so it can no longer stand in for
+    // "the viewer" in this test. Fixed by referencing the fixture viewer's
+    // own real id instead of the placeholder -- the two asserted counts below
+    // (4 and 1) are UNCHANGED, because the underlying RSVP data they are
+    // computed from is unchanged; only which identifier means "the viewer"
+    // changed.
+    const viewerStudentId = 'student-lena-osei';
 
     // Coach (whole roster): 2 unanswered on session-food-bank-upcoming
     // (Priya, viewer) + 2 unanswered on session-park-cleanup-upcoming
@@ -1078,9 +1100,7 @@ describe('getUnansweredRsvpCount (BEH-04 / Known Context/Traps #3)', () => {
 
     // Viewer alone: unanswered only on session-food-bank-upcoming (they
     // already answered "maybe" on the park cleanup session) = 1.
-    expect(
-      getUnansweredRsvpCount(outreachSessions, data.rsvps, [PLACEHOLDER_CURRENT_STUDENT_ID]),
-    ).toBe(1);
+    expect(getUnansweredRsvpCount(outreachSessions, data.rsvps, [viewerStudentId])).toBe(1);
   });
 });
 
@@ -1783,7 +1803,12 @@ describe('<OutreachList /> student/parent view', () => {
 
   it('populated state: own goal bar (confirmed/planned never summed), unanswered badge, RSVP controls, NAV-07 exclusion', async () => {
     window.localStorage.clear();
-    renderAsUser(STUDENT_OR_PARENT_USER, { loadData: defaultLoadOutreachData });
+    // T190: explicit real-viewer stub -- the harness default
+    // (`PLACEHOLDER_CURRENT_STUDENT_ID`) no longer matches any fixture data.
+    renderAsUser(STUDENT_OR_PARENT_USER, {
+      loadData: defaultLoadOutreachData,
+      resolveStudentId: async () => 'student-lena-osei',
+    });
     await flushMicrotasks();
 
     expect(container.textContent).toContain('Your season goal');
@@ -1837,9 +1862,12 @@ describe('<OutreachList /> student/parent view', () => {
   it('selecting a real RSVP segment updates the goal bar and the unanswered-RSVP badge live (module doc #8b)', async () => {
     window.localStorage.clear();
     const fakeOnRsvpChange = vi.fn().mockResolvedValue(undefined);
+    // T190: explicit real-viewer stub -- see the harness default's own
+    // T190 UPDATE comment above `renderAsUser`.
     renderAsUser(STUDENT_OR_PARENT_USER, {
       loadData: defaultLoadOutreachData,
       onRsvpChange: fakeOnRsvpChange,
+      resolveStudentId: async () => 'student-lena-osei',
     });
     await flushMicrotasks();
 
@@ -1865,7 +1893,14 @@ describe('<OutreachList /> student/parent view', () => {
   it('BEH-01: milestone toast fires once per season+goal-bar, deduped via localStorage across remounts', async () => {
     window.localStorage.clear();
 
-    renderAsUser(STUDENT_OR_PARENT_USER, { loadData: defaultLoadOutreachData });
+    // T190: explicit real-viewer stub on BOTH renders below -- must be the
+    // SAME id both times so the dedupe key (goal-bar identity) matches
+    // across the remount, same as the harness default did before the
+    // fixtures were rekeyed off it.
+    renderAsUser(STUDENT_OR_PARENT_USER, {
+      loadData: defaultLoadOutreachData,
+      resolveStudentId: async () => 'student-lena-osei',
+    });
     await flushMicrotasks();
     // Viewer: 3 confirmed / 12 goal = exactly 25%.
     expect(container.textContent).toContain(
@@ -1874,7 +1909,10 @@ describe('<OutreachList /> student/parent view', () => {
 
     freshContainer();
 
-    renderAsUser(STUDENT_OR_PARENT_USER, { loadData: defaultLoadOutreachData });
+    renderAsUser(STUDENT_OR_PARENT_USER, {
+      loadData: defaultLoadOutreachData,
+      resolveStudentId: async () => 'student-lena-osei',
+    });
     await flushMicrotasks();
     // Same season, same goal bar (the viewer's own id) -- already fired, so
     // crossing the SAME milestone again must NOT re-fire the toast.
@@ -2017,7 +2055,15 @@ describe('<OutreachList /> T193: real RSVP writer wiring (packet §5)', () => {
   it('C3: a rejected write restores the previous (unanswered) status and surfaces a visible, honest error', async () => {
     window.localStorage.clear();
     const spy = vi.fn().mockRejectedValue(new Error('network down'));
-    renderAsUser(STUDENT_OR_PARENT_USER, { loadData: defaultLoadOutreachData, onRsvpChange: spy });
+    // T190: explicit real-viewer stub -- the harness default
+    // (`PLACEHOLDER_CURRENT_STUDENT_ID`) no longer matches any fixture data.
+    // Every `expect(...)` below this line is byte-identical to before T190
+    // (packet C4) -- only this render's viewer resolution changed.
+    renderAsUser(STUDENT_OR_PARENT_USER, {
+      loadData: defaultLoadOutreachData,
+      onRsvpChange: spy,
+      resolveStudentId: async () => 'student-lena-osei',
+    });
     await flushMicrotasks();
 
     expect(container.textContent).toContain('1 awaiting your RSVP');
@@ -2062,7 +2108,14 @@ describe('<OutreachList /> T193: real RSVP writer wiring (packet §5)', () => {
           resolveWrite = resolve;
         }),
     );
-    renderAsUser(STUDENT_OR_PARENT_USER, { loadData: defaultLoadOutreachData, onRsvpChange: spy });
+    // T190: explicit real-viewer stub -- see the C3 test above for why.
+    // Every `expect(...)` below this line is byte-identical to before T190
+    // (packet C4) -- only this render's viewer resolution changed.
+    renderAsUser(STUDENT_OR_PARENT_USER, {
+      loadData: defaultLoadOutreachData,
+      onRsvpChange: spy,
+      resolveStudentId: async () => 'student-lena-osei',
+    });
     await flushMicrotasks();
 
     clickFoodBankGoing();
