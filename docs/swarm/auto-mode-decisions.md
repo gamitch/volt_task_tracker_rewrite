@@ -1762,3 +1762,73 @@ D-7**, and the owner was asked to choose between options one of which he had alr
 opposite direction. The mistake was not the answer — it was recommending on a settled question
 without checking whether it was settled. **Search `auto-mode-decisions.md` and the target module's
 own doc header before framing any owner question.**
+
+---
+
+## 2026-08-03 — George's ruling on T330: a dateless event is an Upcoming row, pinned, with em-dash cells and a "Needs dates" badge (owner input, structured selection)
+
+**Context.** An `events` row whose `event_sessions` insert failed has zero sessions.
+`buildEventGroups` (`OutreachList.tsx:1730`) drops it from **both** buckets —
+`if (eventSessions.length === 0) continue;` — so it never renders on the coach list, and since
+**every** in-app link to `/outreach/:eventId` is built from a row (`OutreachList.tsx:2450`, `:3547`,
+and `CalendarPage.tsx:514`, which is itself session-driven at `:349`), there is no navigation
+affordance to it at all. The coach cannot see it, reach it, or fix it. This is T330.
+
+**The question was narrowed before it was asked.** A third "Needs dates" bucket was **not** offered,
+because the owner already ruled it out on T304 (2026-07-31, this file `:1320-1333`): *"having a 3rd
+bucket may make things more difficult. keep the current two buckets and i'll have to remember to
+close the days as they go by in order for them to move to 'past'."* Only the questions that ruling
+leaves open were put to him.
+
+**His selections, all three:**
+
+1. **Bucket — `Upcoming`, pinned to the top.** A dateless event is unfinished setup, not a finished
+   event. Pinning also removes the need to invent a sort key for a row that has no date.
+2. **Numeric cells — em dash (`—`) for hours, expected/attended count, and people reached.** Not
+   zeros. This follows the distinction the module already draws deliberately: `sumPeopleReached`
+   (`OutreachList.tsx:1795-1801`) returns `null` rather than `0` precisely so "not yet recorded" is
+   never displayed as a real logged `0`.
+3. **Marker — a "Needs dates" badge on the row.** The row already renders a type badge
+   (`Outreach`/`Competition`, `CoachEventDateCell`), so this reuses a shipped pattern rather than
+   inventing one. It is also the per-row-marker shape T304's entry recorded as the cheaper middle
+   ground (`:1349-1353`), which was *not* authorized then and **is** authorized now, for this
+   narrower case.
+
+**What this ruling does NOT authorize, and why it matters.** It does not authorize the naive fix
+that both the T330 ledger row and `W2-KICKOFF.md` §4 prescribe — *"delete the `continue` at
+`OutreachList.tsx:1730`"*. **Measured: that alone ships a crash.** `hasScheduled` is `false` for a
+zero-session event (`:1731`), so the row routes to `past`, whose comparator dereferences
+`a.sessions[a.sessions.length - 1].startsAt` (`:1739-1742`) — `undefined` on an empty array. The
+`upcoming` comparator has the same defect via `find(...) ?? a.sessions[0]` (`:1734-1737`). Neither
+throws while its bucket holds a single event, because a one-element array never invokes the
+comparator — so this surfaces only once a second event exists in the same bucket, taking out the
+entire coach list. **Both comparators must tolerate an empty session list as part of this task.**
+
+**Recorded as the project's failure mode #2 in the prescription itself:** the fix was written from
+reading the `continue` line, without executing what happens downstream of removing it.
+
+**Scope boundary, filed rather than built (item 20).** T330's other half — an orphan event's
+adult-volunteer figures double-counting in the season totals (`reports.ts:401-411` filters on
+`season_id` alone; `HoursTab.tsx:593-596` sums across all season events with no session filter) —
+lives in `pages/reports/**` and `loaders/reports.ts`, which **W4 owns** (`WORKFLOWS.md:177`). It is
+outside W2's file ownership and is filed as its own row rather than reached across the boundary.
+
+**Second question, asked after the first because scoping surfaced a consequence he had not been
+shown.** `buildEventGroups` has **two** consumers — the coach view (`OutreachList.tsx:3087`) and the
+student/parent view (`:3722`) — so making a dateless event visible inside that shared function
+surfaces the "Needs dates" row on **both**. Students and parents would see a row with no dates,
+nothing to RSVP to, and nothing they can act on, pinned to the top of their Upcoming list.
+
+**He ruled: show it in BOTH views.** *(Structured selection, 2026-08-03.)*
+
+**This is against the orchestrator's recommendation, which was coach-view-only**, on the reasoning
+that only a coach can add the missing dates. The owner's call stands and is not to be re-litigated.
+It is also the simpler implementation: one change inside the shared function, no per-view filter,
+and one less thing for the tests to pin. **Do not re-file this as a student-facing-noise bug** — a
+future session seeing an un-actionable "Needs dates" row on the student view is looking at intended
+behaviour and should read this entry.
+
+**Process note, the same shape as the T309 entry above:** the owner was asked the bucket/cells/badge
+question before the orchestrator had established how many surfaces `buildEventGroups` feeds. The
+first question was answerable without that fact; this one was not, and it should have been part of
+the same ask rather than a follow-up.
