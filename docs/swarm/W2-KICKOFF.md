@@ -112,7 +112,12 @@ the already-shipped `:1565` branch and restoring the edit path (`:1384-1386` alr
 sessions on save). **The real design work is deciding what that row shows for date/hours/count** —
 which is exactly what `buildEventGroups` currently dodges by skipping it.
 
-**Owner ruling needed** on what a dateless event row should display. Ask before building it.
+**Owner ruling needed** on what a dateless event row should display — but **T304 already narrows
+the question.** On 2026-07-31 the owner ruled against a third bucket, verbatim: *"having a 3rd
+bucket may make things more difficult. keep the current two buckets and i'll have to remember to
+close the days as they go by"* (`auto-mode-decisions.md:1320-1333`). So **do not ask whether to add
+a "needs dates" bucket** — that is settled. Ask instead: *inside the existing two buckets, which
+one holds a dateless event, and what do its date / hours / count cells show?*
 
 ## 5. Process — constitution item 26's three tiers
 
@@ -123,7 +128,7 @@ which is exactly what `buildEventGroups` currently dodges by skipping it.
 |---|---|---|
 | **FAST** | No write path, no schema/RLS/auth, no cross-module signature, ≤~20 lines, and you can name the mutation | You implement it directly. **Verification is NOT reduced.** |
 | **STANDARD** | Everything else that isn't HEAVY | Worker + you replay mutations. No separate checker. |
-| **HEAVY** | **Required** for write paths, RLS/auth, migrations, metric-view SQL, shared exports | Packet → premise gate → worker → you replay mutations |
+| **HEAVY** | **Required** for write paths, RLS/auth, migrations, metric-view SQL, shared exports | **Packet + premise gate + worker + checker** (constitution item 26's exact words), with **you replaying every mutation yourself**. The gate is capped at two rounds; a third escalates to the owner (item 19a). |
 
 **The premise gate is the highest-leverage slot in this process and must BUILD, not read.** Every
 save it has produced came from executing the prescription in its own worktree. On T305 it proved the
@@ -184,9 +189,13 @@ git checkout -b claude/t<row>-<slug> origin/main
 - **Work in your own git worktree** (item 23). Do not move the shared checkout's HEAD.
 - **Commit before running any mutation** — reverting a mutation with `git checkout --` also reverts
   uncommitted work. This has bitten this project.
-- **Stage named paths only. Never `git add -A` or `git add .`** (item 22). A `node_modules` symlink
-  was once committed to `main` this way; `.gitignore`'s `node_modules/` has a trailing slash and
-  matches directories, not symlinks.
+- **Stage named paths only. Never `git add -A` or `git add .`** (item 22). **The recorded rationale**
+  (`constitution.md:213-217`): a subagent modified `OutreachEventDialog.tsx` **without authorization**
+  during a documentation commit, and a habitual `git add -A` would have swept that source change into
+  a commit whose message described packet authoring — no packet defining it, no checker verifying it.
+  **The mechanism is indifferent to severity.** (Separately, a `node_modules` symlink once reached
+  `main` this way: `.gitignore`'s `node_modules/` has a trailing slash and matches directories, not
+  symlinks.)
 - **Never commit to `main` directly.** Open a PR. `main` is protected by CI (typecheck, lint, test,
   build, bundle size) — **wait for it to be green before merging.**
 - **Use a merge, not a squash**, if your verification log cites an implementation SHA — a squash
