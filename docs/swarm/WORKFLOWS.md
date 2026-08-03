@@ -58,7 +58,7 @@ Tier is the **heaviest** item in the workflow, per constitution item 26.
 |---|---|---:|---|---|---|
 | **W1** | **Check in** — student arrives and gets counted | 4 | HEAVY | **Broken end to end** | W4, W6, W7, W8 |
 | **W2** | **Run an outreach event** — create → RSVP → attend → complete | 13 | HEAVY | Partly working | W1, W3, W6, W7 |
-| **W3** | **Run a meeting** — schedule → attendance → participation % | 4 | HEAVY | Backend built, mount parked | W2, W4, W6, W7 |
+| **W3** | **Run a meeting** — schedule → attendance → participation % | 4 | HEAVY | **Backend built; mount UNBLOCKED 2026-08-03** | W2, W4, W6, W7 |
 | **W4** | **Hours & goal accounting** — the numbers users are shown | 10 | HEAVY | **One confirmed bug** | W1, W3, W6, W7 |
 | **W5** | **Home dashboards** — student/parent/coach landing state | 10 | STANDARD | Mostly real | W6, W7, W8 |
 | **W6** | **Calendar & subscribe** | 0 | — | **Merged; database deployed; hosted smoke pending** | everything |
@@ -89,7 +89,7 @@ recorded", they do not share files, and between them they contain every remainin
 | Row | What | Tier |
 |---|---|---|
 | **T321** | `/checkin` has no manual short-code entry; expiry offers only "Try again", replaying the same credential | STANDARD |
-| **T196** | `LiveConsole` roll call is a fixture shell — marking attendance is an intentional no-op, roster is fabricated | HEAVY |
+| ~~**T196**~~ | ~~`LiveConsole` roll call is a fixture shell~~ — **✅ DONE, and it was never T196.** This work shipped as **T403** (2026-08-03): real roster, real check-in credential, real `attendance` writes, all fixtures deleted. **The number `T196` belongs to W3's `EndMeetingDialog` mount**, not to W1 — see W3's table below. This line was an instance of the very T196 collision this file warns about at the top; it is struck rather than deleted so the collision stays visible. | — |
 | **T161** | `loaders/checkin.ts` has **0 tests** across 521 lines | STANDARD |
 | **T320** | `queryAttendanceForSessions` has no `.range()`/`.limit()` — a >1000-row response is silently truncated | STANDARD |
 
@@ -116,12 +116,15 @@ this grant obliges more process, not less.
 > migration, without either file being edited. That is the pattern for any future change here.
 
 **Start with T321.** It is UI-only on a backend T032 already shipped (short-code HMAC), which makes
-it the best effort-to-impact ratio in the entire backlog. **T196 is a project, not a ticket** — bring
-T161 under the same wave, since making `LiveConsole` real without tests on its loader repeats the
-mistake that produced the fixture shell.
+it the best effort-to-impact ratio in the entire backlog. **T161 is still open and still worth
+pairing with any further `LiveConsole` work** — making that console real without tests on its loader
+is what produced the fixture shell in the first place, and T403 shipped the real console without
+closing T161.
 
-**Overlap warning:** T196 also gates `EndMeetingDialog`'s mount, which is W3's blocked row. Whoever
-takes W1 should tell whoever has W3 when `LiveConsole` becomes real.
+**Overlap warning — DISCHARGED 2026-08-03.** This used to read *"whoever takes W1 should tell
+whoever has W3 when `LiveConsole` becomes real."* It is real (T403), W3 has been told
+(`inbox/w1-to-w3-T196-unblocked.md`), and **T196 is unblocked**. Nothing further is owed from W1
+to W3 on this.
 
 ---
 
@@ -137,7 +140,6 @@ destructive bugs; what remains is silent no-ops and non-atomic writes.
 | **T193** | A student changing their RSVP on `/outreach` **writes nothing to the database** | HEAVY |
 | **T309** | Unchecking a student in "Mark day complete" is a silent no-op | HEAVY |
 | **T327** | Outreach completion is non-atomic | HEAVY |
-| **T330** | Event and session creation is not transactional | HEAVY |
 | **T306** | Signups on a past session still show RSVP intent over recorded attendance | STANDARD |
 | **T174** | `FIXTURE_RSVPS.respondedBy` holds `students.id`-shaped values in a `profiles.id` column | STANDARD |
 | **T300** | `OutreachEventDialog`'s own placeholder-coach copy | STANDARD |
@@ -154,7 +156,9 @@ destructive bugs; what remains is silent no-ops and non-atomic writes.
 external audit never found it** — meaning nothing else is watching for it. Heavy tier: it is a write
 path.
 
-**Sequencing:** T193 → T309 → T327/T330. The last two are the same "non-atomic" family and should be
+**Sequencing:** T193 → T309 → T327 → T330 — **all four merged 2026-08-02/03**, as have T401 and T402
+(W1-block rows W2 executed). Remaining W2 rows start at **T306**. The historical note: T327/T330 were
+the same "non-atomic" family and were
 scoped together, carefully — T305/T307 added protections to this exact path that must not be undone.
 
 ---

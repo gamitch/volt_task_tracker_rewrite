@@ -7925,3 +7925,197 @@ every reference was a comment describing the trigger. Those comments were correc
 - **Not run against the live dataset.** The migration is idempotent and additive-or-dropping, but
   it has not been applied to production data.
 - **`20260719000000_cron.sql` was never applied** in verification (see above).
+
+---
+
+## T205 — `v_leaderboard_students` stops being readable *and writable* by the unauthenticated `anon` role
+
+**Tier: HEAVY, unconditional** — constitution item 18 trigger 1 (`constitution.md:75`, "creates or
+edits a file under `supabase/migrations/`") and item 26. FAST is barred by its own text
+(`constitution.md:311`). The owner's ruling says the same: *"no exception for a one-line revoke"*
+(`auto-mode-decisions.md:1313-1316`).
+
+**Authority.** Line 1 of the migration rests on the owner's ruling of 2026-07-31, structured
+selection, **"Close it off"** (`auto-mode-decisions.md:1297-1316`), using that ruling's own
+*"or equivalent"* latitude. **Line 2 is an orchestrator scope extension, NOT an owner ruling** —
+logged as decision **D2** under "W4+W5 auto-mode window" in `auto-mode-decisions.md`, taken while
+the owner was away, and explicitly reversible by him.
+
+### What the premise gate found — and why it mattered
+
+The gate BUILT the prescription in its own worktree instead of reading it, and returned **REVISE
+with a BLOCKER**. `v_leaderboard_students` is a simple single-table view, so Postgres makes it
+**auto-updatable**; it carries no `security_invoker`, so it executes as its RLS-bypassing owner.
+An unqualified `DELETE` requires no `SELECT` privilege, so revoking reads does not incidentally
+revoke writes.
+
+Measured on Postgres 16.13 with Supabase's stock
+`alter default privileges ... grant all on tables to anon, authenticated, service_role` applied
+before the migrations — by the gate, then **independently replayed by the orchestrator**:
+
+| Revoke applied | `anon` runs `delete from public.v_leaderboard_students` | `students` rows |
+|---|---|---|
+| none | `DELETE 2` | 2 → **0** |
+| `revoke select ... from anon` *(the ruling's literal text)* | `DELETE 2` | 2 → **0** |
+| `revoke all ... from anon` | `ERROR: permission denied for view` | 2 → 2 |
+
+**Had the literal one-liner shipped, this log would have recorded the exposure as closed while an
+anonymous internet request could still empty the students table.** That is exactly the
+"lie to the owner about their own data" failure item 26 exists to prevent, and only an executing
+gate could have caught it.
+
+Scope bounded by measurement: **all 16 public views surveyed; `v_leaderboard_students` is the only
+`is_updatable = YES` view in the schema.** The other 15 aggregate or join. Filed as **T700** (a
+convention guard, not an open bug) so a future single-table view cannot silently reintroduce it.
+
+### What shipped
+
+```sql
+revoke all on public.v_leaderboard_students from anon;
+revoke insert, update, delete on public.v_leaderboard_students from authenticated;
+```
+
+`authenticated` **keeps SELECT** — `loaders/leaderboard.ts:147` depends on every authenticated
+caller reading every active student's name; revoking it breaks the leaderboard. Verified by
+`has_table_privilege` matrix (SELECT `t`, INSERT/UPDATE/DELETE `f`) and by a live read as that role.
+
+Plus a permanent regression suite, `supabase/tests/run_t205_anon_grant.sh` +
+`t205_anon_grant_assertions.sql`, following the proven T195 precedent
+(`run_calendar_feed_lifecycle.sh` + `calendar_feed_platform_stub.sql`). It **must** simulate
+Supabase's stock default privileges before applying migrations — the gate proved that without that
+line the entire suite passes vacuously, because nothing was ever granted.
+
+### Mutation evidence — all five, run independently three times over
+
+| # | Mutation | Result |
+|---|---|---|
+| 1 | Blank the `revoke all` statement, keep the file | exit 3 — `FAIL anon-select-denied: anon read 1 row(s)` |
+| 2 | `revoke all` → `revoke select` | exit 3 — `FAIL anon-delete-denied: unauthenticated DELETE via view succeeded` |
+| 3 | `revoke all ... from anon, authenticated` | exit 3 — `permission denied for view` inside `authenticated-select-active` |
+| 4 | Add `create policy read_all on students for select to anon` | exit 3 — `FAIL anon-base-table-control: anon read 2 row(s)` |
+| 5 | Delete migration line 2 | exit 3 — `FAIL authenticated-delete-denied: logged-in non-staff DELETE via view succeeded` |
+
+Run by the worker, by the orchestrator (2 and 5), and by the checker (all five). **No mutation left
+the suite green.** Criterion 1 blanks the statement rather than removing the file, because the T195
+runner's `found_*` guard would otherwise turn it into a setup error rather than a real red — the
+gate hit exactly that trap on the first draft.
+
+### Checker findings, both fixed in-branch before the PR rather than deferred
+
+- **MINOR-1** — the assertions header claimed every write-path assertion "also proves the underlying
+  data was NOT touched". It cannot: the `DELETE` and the follow-on count sit in the same `DO` block,
+  so PL/pgSQL rolls the `DELETE` back before the count runs. The checker proved this rather than
+  asserting it. The header now states the honest limit and points at the mutation evidence, which is
+  what actually proves the write path is shut.
+- **NIT-1** — the orchestrator's own "a `BYPASSRLS` role" wording was harness-dependent and asserted
+  rather than measured. Measured both ways: hosted Supabase's owner is `postgres` (`BYPASSRLS` true);
+  a local scratch harness's owner is whichever superuser ran psql (`rolbypassrls` may be false, bypass
+  via superuser). Behaviour identical, wording corrected in the migration header and in D1.
+
+### Gates, `.env.local` absent
+
+`tsc --noEmit` 0 · `vite build` 0 · `format:check` 0 · `eslint .` 0 errors / **362 warnings**
+(unchanged from the `b1307c4` baseline) · `vitest run` 0 — **78 files / 1928 tests** (up from 1921;
+branch point `380266e` is later and carries other merges, not this change) ·
+`run_t205_anon_grant.sh` 0, ALL PASS · `run_calendar_feed_lifecycle.sh` 0, no cross-suite regression.
+
+`tests/rls/run.sh` and `supabase/tests/run.sh` fail **identically on this branch and on `main`** —
+pre-existing rot, not caused by T205, filed as **T701**.
+
+### ⚠️ Not closed in production
+
+The migration lands in the repo only. **Constitution item 16 reserves hosted-Supabase cutover for
+the human owner, so the unauthenticated roster-destruction path remains OPEN on the live project
+until he applies this migration.** No agent verified production grant state; none could.
+## T306 — a session with recorded attendance shows what happened, not what was promised
+
+**STANDARD tier (item 26)** — display-only, single module, **no write path**. Worker implemented; the
+orchestrator replayed every mutation; no separate checker round. One worker attempt, no dispute.
+
+Gates on the merged base, `.env.local` absent: `tsc` 0 · `vite build` ✓ · prettier clean · eslint
+**0 errors / 364 warnings** (+2, both `react-refresh/only-export-components` on the two new exported
+pure functions — the same pattern this file already carries 18 instances of) · vitest **78 files /
+1943 tests** · targeted file **112** exit 0.
+
+### The owner reframed his own defect, and that changed the task
+
+Filed as *"the tallies are wrong"* — students with recorded attendance sit under **No response**. His
+actual account: *"i was on the UI and adding who attended an outreach event... What was not clear to
+me on the UI was what to do with the RSVP. I belive i left it no response. it create a mental
+challenge from a user standpoint and was not clear."*
+
+**The defect is that the RSVP section looks actionable.** He was asking whether recording attendance
+also obliged him to go and fix each RSVP. It does not, and nothing on screen said so. He ruled: replace
+the buckets with what happened. *Alongside* and *keep-RSVP-with-a-note* were both offered and declined.
+
+### His follow-up constraint killed both obvious implementations
+
+> *"pleae be cognizant of what a 'past' event is. i may be doing this on the same day of the event."*
+
+- **Not the date** — he records on the day, so a date test still shows RSVP buckets during the exact
+  workflow that confused him, and it re-opens T304 where he settled that these surfaces ignore dates.
+- **Not `session.status === 'completed'`** — while recording attendance the session is normally still
+  `scheduled`. A status test leaves the RSVP buckets up for the whole confusing moment.
+
+**Trigger: does any attendance row exist for this session.** `hasRecordedAttendance` deliberately takes
+**no session object**, so `session.status` and `session.sessionDate` are structurally unreachable
+inside it. **C6 and C7 pin exactly the two wrong implementations** — and C7's mutation (add a date
+comparison) reddens **exactly one test**, the same-day scenario he described.
+
+### The packet was wrong, and the worker caught it by refusing to edit an assertion
+
+The packet **omitted a staff gate**. Implemented literally, the new load fired for every viewer, and a
+pre-existing assertion — *the attendance loader is not called for a non-staff viewer* — went red. The
+worker **reported it rather than fixing it by editing the assertion**, which is the rule, and it was
+right to: that assertion was protecting something real.
+
+`attendance` RLS is `staff_all` plus `own_or_linked_read` (`20260717000002_rls.sql:226-232`), so a
+student or parent reads **only their own** rows. `<SessionSignupList>` is **not** staff-gated — it
+renders for every viewer (`OutreachDetail.tsx:2019`). Ungated, `groupSessionAttendance` would diff the
+roster against that partial set and render **every teammate under "No record"** when the truth is the
+viewer cannot see their rows. **A false statement about a factual record, and worse than the RSVP
+intent it replaces.**
+
+Fixed by gating the **load effect** on `isStaffViewer`, so non-staff never fire the query at all —
+which also honours T307's recorded concern that an ungated load issues an `attendance` SELECT for every
+signed-in viewer of this page. `attendanceRows` stays `null` for them, the trigger sees no rows, and
+the RSVP buckets stand: byte-identical to pre-T306 behaviour. `isStaffViewer` was **hoisted** above the
+effect rather than duplicating the role literals inline (module doc #11 warns about that
+re-derivation), and added to the effect deps — without it, a coach whose role resolved after the first
+run would have got no attendance.
+
+### Verification — every mutation replayed by the orchestrator
+
+| Criterion | Mutation | Result |
+|---|---|---|
+| C1 | trigger always chooses attendance | **7 red** |
+| C2 | trigger always chooses RSVP | **6 red** |
+| C3 | replace imported `isAttendingStatus` with `status === 'present'` | **1 red — exactly C3** |
+| C4 | route `excused` into Attended | **1 red — exactly C4** |
+| C6 | add `&& session.status === 'completed'` to the switch | **4 red**, incl. C6 |
+| C7 | add a date comparison to the switch | **1 red — exactly C7** |
+| C10 | remove the staff gate | **2 red** — C10 **and** the pre-existing role-gating assertion |
+
+**C10 was added by the orchestrator** after the worker's report, with both arms: a student keeps the
+RSVP buckets and the loader is **never called**; a coach on the **same event** gets the attendance
+view — so the gate is provably the role, not the fixture. Its mutation reddening the pre-existing
+assertion too confirms both are pinning the same real behaviour.
+
+**One orchestrator error, caught and corrected:** the first attempt to render the T306 tests as a coach
+used an unbounded string replace and flipped 33 call sites, including T157's parent test and T169's,
+which are not T306's. Reverted and re-done bounded to the T306 describe blocks — 6 calls. **An
+unbounded replace across a 2000-line test file is not a safe edit**, and the only reason it surfaced
+was running the suite immediately after.
+
+`isAttendingStatus` is **imported** from `AttendancePanel.tsx:308`, never re-derived — it encodes
+`present`/`late`, the same predicate `v_student_hours` uses
+(`20260717000003_metric_views.sql:18`), and constitution item 3 forbids duplicating a metric formula
+in TypeScript.
+
+### Filed, not fixed (item 20)
+
+**T503** — the same RLS shape makes the **existing** RSVP buckets misleading for non-staff: a student
+sees every teammate under "No response" because `own_or_linked_read` hides their rows and
+`groupSessionSignups` diffs the roster. **Pre-existing; T306 did not cause it and deliberately did not
+extend it.** Whether a student should see teammates' RSVPs at all is a product question for the owner,
+not an engineering call. Recorded as **static analysis, not verified in-app.**
