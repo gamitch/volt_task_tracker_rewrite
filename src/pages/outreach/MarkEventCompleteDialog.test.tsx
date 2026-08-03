@@ -7,6 +7,7 @@
  * `MarkDayCompleteDialog.test.tsx` already established for this exact
  * `Dialog` component.
  */
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,13 +19,21 @@ import {
   MarkEventCompleteDialog,
   partitionEventSessions,
   type MarkEventCompleteDialogProps,
-  ATTENDANCE_ROW_CAP,
 } from './MarkEventCompleteDialog';
+// T401, C4 -- namespace import so the deleted `ATTENDANCE_ROW_CAP` export's
+// absence is assertable directly on the module object (§5's struck grep
+// form would zero-match on the packet's own required doc comment prose).
+import * as MarkEventCompleteDialogModule from './MarkEventCompleteDialog';
 // T307 -- the loaded-attendance fixture shape this dialog's new load seam
-// resolves to.
-import type {
-  AttendanceRow,
-  LoadAttendanceForSessionsFn,
+// resolves to. T401, C5 -- the REAL loader + its page-size constant, driven
+// through a paging fake below (never an injected array) so this suite pins
+// the actual premise this task depends on: the loader, not just the dialog,
+// returns complete data above 1000 rows.
+import {
+  makeLoadAttendanceForSessions,
+  ATTENDANCE_PAGE_SIZE,
+  type AttendanceRow,
+  type LoadAttendanceForSessionsFn,
 } from '../../lib/supabase/loaders/attendance';
 
 // T179 -- `currentUserProfileId` is now required (no fixture placeholder
@@ -761,20 +770,23 @@ describe('<MarkEventCompleteDialog /> attendance load -- L1 (called once, exactl
 });
 
 // ---------------------------------------------------------------------------
-// T307 checker follow-ups (MAJOR + MINOR), fixed in place rather than filed.
+// T401 -- the `ATTENDANCE_ROW_CAP` guard is gone (T320 made the loader page
+// internally, so a resolved array is complete regardless of length). This
+// replaces the old F4 describe block (T307 checker follow-up), which pinned
+// the guard this task deletes -- rewritten per packet §4/§5 (C1), not
+// dropped: a load this large used to be treated as failed/truncated and is
+// now a normal, complete, successful load.
 // ---------------------------------------------------------------------------
 
-describe('<MarkEventCompleteDialog /> F4 -- a silently TRUNCATED load must block the write, not look like success', () => {
-  it('routes a resolve at the PostgREST max_rows cap to the error state and writes nothing', async () => {
-    // A capped response is not an error: PostgREST returns 200 with a
-    // partial Content-Range, so `createLoader` resolves a truncated array
-    // and the block-on-failure rule would never engage. A student whose row
-    // was truncated away is indistinguishable from one who never had a row,
-    // so the write would null their real check-in/hours/method.
-    const cappedRows = Array.from({ length: ATTENDANCE_ROW_CAP }, (_, i) =>
+describe('<MarkEventCompleteDialog /> C1 -- a load at the former PostgREST max_rows cap now succeeds, and the write proceeds', () => {
+  it('reaches success (no error banner, confirm enabled) for an ATTENDANCE_PAGE_SIZE-row load, and onMarkSessionComplete is called', async () => {
+    // Fixture length is built from the imported `ATTENDANCE_PAGE_SIZE`
+    // (`attendance.ts:303`, already exported), the one remaining source of
+    // truth for this boundary, never a magic `1000` (packet §4).
+    const capSizedRows = Array.from({ length: ATTENDANCE_PAGE_SIZE }, (_, i) =>
       makeAttendanceRow({ studentId: `student-filler-${i}`, method: 'qr', hoursOverride: 3 }),
     );
-    const loadAttendance = vi.fn<LoadAttendanceForSessionsFn>(async () => cappedRows);
+    const loadAttendance = vi.fn<LoadAttendanceForSessionsFn>(async () => capSizedRows);
     const onMarkSessionComplete = vi.fn<(payload: MarkDayCompletePayload) => Promise<void>>(
       async () => {},
     );
@@ -794,44 +806,23 @@ describe('<MarkEventCompleteDialog /> F4 -- a silently TRUNCATED load must block
     });
     await flushMicrotasks();
 
+    // The load succeeded -- no error banner, confirm is enabled. Before this
+    // task, this exact resolve routed to the error state instead.
+    expect(container.textContent).not.toContain("Couldn't load recorded attendance");
     const confirmButton = findButtonByText('Mark 1 session complete');
     expect(confirmButton).toBeDefined();
-    expect(confirmButton?.disabled).toBe(true);
-    expect(container.textContent).toContain("Couldn't load recorded attendance");
+    expect(confirmButton?.disabled).toBe(false);
 
     clickElement(confirmButton as HTMLButtonElement);
     await flushMicrotasks();
 
     // Mock-hardening: prove the mock intercepted, so this is not passing
-    // because the real loader rejected for an unrelated reason.
+    // because the real loader resolved for an unrelated reason.
     expect(loadAttendance).toHaveBeenCalledTimes(1);
-    expect(onMarkSessionComplete).toHaveBeenCalledTimes(0);
-  });
-
-  it('still succeeds normally one row below the cap -- the guard is not a blanket block', async () => {
-    const belowCap = Array.from({ length: ATTENDANCE_ROW_CAP - 1 }, (_, i) =>
-      makeAttendanceRow({ studentId: `student-filler-${i}` }),
-    );
-    const loadAttendance = vi.fn<LoadAttendanceForSessionsFn>(async () => belowCap);
-    act(() => {
-      root.render(
-        <MarkEventCompleteDialog
-          isOpen
-          onOpenChange={() => {}}
-          currentUserProfileId={COACH_PROFILE_ID}
-          sessions={[SESSION_1]}
-          roster={ROSTER}
-          rsvps={RSVPS}
-          onMarkSessionComplete={async () => {}}
-          loadAttendance={loadAttendance}
-        />,
-      );
-    });
-    await flushMicrotasks();
-
-    expect(loadAttendance).toHaveBeenCalledTimes(1);
-    expect(container.textContent).not.toContain("Couldn't load recorded attendance");
-    expect(findButtonByText('Mark 1 session complete')?.disabled).toBe(false);
+    // The write proceeds -- the behaviour change this task exists to make,
+    // pinned by a test rather than merely un-asserted.
+    expect(onMarkSessionComplete).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain('Event marked complete');
   });
 });
 
@@ -860,5 +851,175 @@ describe('<MarkEventCompleteDialog /> the load effect is gated on isOpen', () =>
     await flushMicrotasks();
 
     expect(loadAttendance).toHaveBeenCalledTimes(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T401, C4 -- `ATTENDANCE_ROW_CAP` is no longer an export of this module.
+// ---------------------------------------------------------------------------
+
+describe('<MarkEventCompleteDialog /> C4 -- the deleted ATTENDANCE_ROW_CAP export stays deleted', () => {
+  it('does not export ATTENDANCE_ROW_CAP', () => {
+    // §5's grep form is struck as self-contradictory (§3.4 requires prose
+    // that names the constant, so a zero-occurrence grep would fail on the
+    // packet's own required doc comment). This asserts the module's actual
+    // export surface via the namespace import instead.
+    expect(MarkEventCompleteDialogModule).not.toHaveProperty('ATTENDANCE_ROW_CAP');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T401, C5 -- the criterion that pins the actual premise this task depends
+// on: the REAL `makeLoadAttendanceForSessions`, driven through a paging
+// fake (never an injected array), resolves complete data above 1000 rows
+// and the write proceeds with real provenance intact. C1 above is
+// satisfiable with an injected array, which pins the dialog but not the
+// loader; this is the only test in the suite that would catch a future
+// regression at the loader/dialog seam.
+//
+// Reuses the `makePagingClient` shape `attendance.test.ts:78-105` already
+// established for exactly this fake `.order().range()` transport -- that
+// file is not an Allowed File for this task, so this is a same-shape
+// re-derivation of that stub scoped to this file, not an import.
+// ---------------------------------------------------------------------------
+
+/** Raw `public.attendance` row exactly as Postgrest returns it, mirroring
+ * `attendance.test.ts`'s own fixture shape -- the paging fake below hands
+ * `makeLoadAttendanceForSessions` real snake_case rows, not the camelCase
+ * `AttendanceRow` this file's other fixtures (`makeAttendanceRow`) use. */
+interface AttendanceDbRowFixture {
+  id: string;
+  session_id: string;
+  student_id: string;
+  status: 'present' | 'late' | 'excused' | 'absent';
+  check_in_at: string | null;
+  check_out_at: string | null;
+  hours_override: number | null;
+  method: 'qr' | 'coach' | 'import';
+  recorded_by: string | null;
+  updated_at: string;
+  created_at: string;
+}
+
+function makeAttendanceDbRowFixture(
+  id: string,
+  overrides: Partial<AttendanceDbRowFixture> = {},
+): AttendanceDbRowFixture {
+  return {
+    id,
+    session_id: 'session-1',
+    student_id: `student-${id}`,
+    status: 'present',
+    check_in_at: null,
+    check_out_at: null,
+    hours_override: null,
+    method: 'coach',
+    recorded_by: null,
+    updated_at: '2026-08-02T00:00:00.000Z',
+    created_at: '2026-08-02T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+/** Serves `pages` in order, one per `.range()` call, and records every call
+ * so the request shape itself can be asserted -- same shape
+ * `attendance.test.ts:78-105`'s own `makePagingClient` already established
+ * for `makeLoadAttendanceForSessions`'s `.order().range()` transport. */
+function makePagingClient(pages: AttendanceDbRowFixture[][]): {
+  client: SupabaseClient;
+  rangeCalls: Array<[number, number]>;
+} {
+  const rangeCalls: Array<[number, number]> = [];
+  const orderSpy = vi.fn((column: string, opts: unknown) => {
+    void column;
+    void opts;
+    return {
+      range: vi.fn((from: number, to: number) => {
+        rangeCalls.push([from, to]);
+        const index = rangeCalls.length - 1;
+        return Promise.resolve({ data: pages[index] ?? [], error: null });
+      }),
+    };
+  });
+  const inSpy = vi.fn(() => ({ order: orderSpy }));
+  const selectSpy = vi.fn(() => ({ in: inSpy }));
+  const fromSpy = vi.fn((table: string) => {
+    if (table === 'attendance') return { select: selectSpy };
+    throw new Error(`unexpected table: ${table}`);
+  });
+  return { client: { from: fromSpy } as unknown as SupabaseClient, rangeCalls };
+}
+
+describe('<MarkEventCompleteDialog /> C5 -- the real loader, paged past the old cap, still lets the write proceed with real provenance', () => {
+  it('resolves 1500 rows across two real .range() pages and writes a preserved qr/hoursOverride/checkInAt row through unchanged', async () => {
+    const QR_STUDENT_ID = 'student-qr-real';
+    const page1 = Array.from({ length: ATTENDANCE_PAGE_SIZE }, (_, i) =>
+      makeAttendanceDbRowFixture(`filler-${i}`, { student_id: `student-filler-${i}` }),
+    );
+    const page2 = [
+      makeAttendanceDbRowFixture('qr-row', {
+        student_id: QR_STUDENT_ID,
+        status: 'present',
+        method: 'qr',
+        hours_override: 6.5,
+        check_in_at: '2026-08-02T14:05:00.000Z',
+      }),
+      ...Array.from({ length: 499 }, (_, i) =>
+        makeAttendanceDbRowFixture(`filler-tail-${i}`, { student_id: `student-filler-tail-${i}` }),
+      ),
+    ];
+    const stub = makePagingClient([page1, page2]);
+    // The REAL loader -- not an injected array -- driven by the fake
+    // transport above.
+    const loadAttendance = makeLoadAttendanceForSessions(() => stub.client);
+    const onMarkSessionComplete = vi.fn<(payload: MarkDayCompletePayload) => Promise<void>>(
+      async () => {},
+    );
+    act(() => {
+      root.render(
+        <MarkEventCompleteDialog
+          isOpen
+          onOpenChange={() => {}}
+          currentUserProfileId={COACH_PROFILE_ID}
+          sessions={[SESSION_1]}
+          roster={[{ id: QR_STUDENT_ID, name: 'Rae Real', teamId: 'team-a' }]}
+          rsvps={[]}
+          onMarkSessionComplete={onMarkSessionComplete}
+          loadAttendance={loadAttendance}
+        />,
+      );
+    });
+    await flushMicrotasks();
+
+    // Proof the real pagination ran, not a single-page stub: two full-window
+    // `.range()` calls, exactly `queryAttendanceForSessionsPage`'s own
+    // `.range(from, from + ATTENDANCE_PAGE_SIZE - 1)` formula.
+    expect(stub.rangeCalls).toEqual([
+      [0, ATTENDANCE_PAGE_SIZE - 1],
+      [ATTENDANCE_PAGE_SIZE, ATTENDANCE_PAGE_SIZE * 2 - 1],
+    ]);
+
+    // 1500 rows resolved -- the load succeeded rather than being treated as
+    // truncated (this is exactly the resolve size the deleted guard used to
+    // fail closed on).
+    expect(container.textContent).not.toContain("Couldn't load recorded attendance");
+    const confirmButton = findButtonByText('Mark 1 session complete');
+    expect(confirmButton?.disabled).toBe(false);
+
+    clickElement(confirmButton as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(onMarkSessionComplete).toHaveBeenCalledTimes(1);
+    const payload = onMarkSessionComplete.mock.calls[0][0];
+    const writtenRow = payload.attendance.find((row) => row.studentId === QR_STUDENT_ID);
+    // Real provenance carried through unchanged, from a row on the SECOND
+    // page -- proof the second `.range()` call's rows actually reached the
+    // write, not just the first page's.
+    expect(writtenRow).toMatchObject({
+      status: 'present',
+      method: 'qr',
+      hoursOverride: 6.5,
+      checkInAt: '2026-08-02T14:05:00.000Z',
+    });
   });
 });
