@@ -8,12 +8,13 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
 
-## UPDATE — 2026-08-02 (latest): W1 mid-flight on T403 step 3, may have stopped on budget
+## UPDATE — 2026-08-02 (latest): W1's T403 step 3 is REWORKED and awaiting re-review
 
-**If W1's session ended abruptly, it ran out of weekly usage credits, not into a problem.** The
-owner's allowance resets the same day; resume then. Nothing is broken and nothing is half-landed.
+**Nothing is broken and nothing is half-landed.** Everything W1 has done is committed and pushed;
+the owner took the machine offline deliberately. **The single outstanding action is re-dispatching
+`checker-reviewer` against the branch head** — see the step-3 block below.
 
-**Everything through `d67f77f` on `claude/w1-checkin` is pushed and coherent.** Work in a worktree
+**Everything W1 has done is pushed to `claude/w1-checkin` and coherent; work from the branch head.** Work in a worktree
 (`git worktree add /home/user/volt_w1_checkin claude/w1-checkin`, no `-b` — the branch exists on
 origin). Do NOT `git checkout claude/w1-checkin` in the primary checkout; it is already used by that
 worktree and the checkout will fail.
@@ -37,36 +38,44 @@ worktree and the checkout will fail.
   re-verified by the orchestrator, not just claimed by the worker: `tsc` 0 · build ✓ · prettier
   clean · eslint 0 errors / 363 warnings · vitest 77 files / 1878 tests, exit 0.** All four
   mutations red at exit 1 — no exit-0 survivor, the first step this session where that held.
-- **`checker-reviewer`: DONE — returned FAIL, MAJOR. DO NOT RE-DISPATCH IT.** Step 3 is **NOT
-  done**. Full verdict is on the T403 ledger row and in the verification-log entry
-  *"T403 step 3 — attendance write: checker FAIL, and the packet was the defect"*. **Read that
-  entry before doing anything.**
+- **`checker-reviewer`: RAN ONCE against `3a14453` and returned FAIL (MAJOR-1 + MAJOR-2). That
+  verdict is now HISTORICAL — the code it reviewed has been reworked.** Full verdict is on the T403
+  ledger row and in the verification-log entry *"T403 step 3 — attendance write: checker FAIL, and
+  the packet was the defect"*.
 
-  **THE NEXT ACTION IS A SPEC DECISION, NOT A CODE FIX.** MAJOR-1 originates in the packet's own
-  §4c Trap 2 prescription — the wire/local `method` split resolves wire provenance from the same
-  local record MTG-11 has already overwritten with `'coach'`, and the adapter discards the
-  `AttendanceRow` the loader returns, so local state never reconciles with the DB. Six sequential
-  edits on a real `qr` row send `["qr","coach","coach","coach","coach","coach"]` — re-inflicting
-  half the harm the gate proved on real PostgreSQL. **Fix §4c first, then re-run worker → checker.
-  Do not hand the current packet to a new worker unchanged.**
+- **✅ REWORK DONE 2026-08-02, pushed. ❗ NOT YET RE-REVIEWED.**
 
-  Two candidate directions (owner should pick): carry the true DB `method` as a separate field on
-  `AttendanceRecordState` and resolve the wire value from that; or stop discarding the returned
-  `AttendanceRow` and reconcile from the server's own `method`, as `AttendancePanel:720` does.
-  Also required: a test driving **≥2 sequential** edits on a `qr` row asserting BOTH wire calls send
-  `'qr'` (the current test is single-shot and structurally cannot see this), and making
-  `defaultSetAttendanceStatus` injectable so mutation M7 — currently green at exit 0 on the full
-  suite — goes red.
+  **THE NEXT ACTION IS: re-dispatch `checker-reviewer` against the reworked code (branch head).**
+  Nothing else is outstanding on step 3. Step 3 is NOT done until that passes.
 
-  **Note the packet's §2 Allowed Files list is itself defective** and should be amended before
-  reuse: literal compliance would have forbidden `attendance.test.ts`, the only place the packet's
-  own mandated `hours_override` mutation can be caught.
-- **One open question for the checker to rule on:** the worker added tests to
-  `src/lib/supabase/loaders/attendance.test.ts`, which is not in the packet's literal §2 Allowed
-  Files test list. It disclosed this loudly rather than hiding it, arguing `attendance.ts` is
-  explicitly W1's, that file is its pre-existing colocated test module, and it is the only place the
-  exact bytes sent to Supabase can be captured. Reasonable, but it is a real deviation and the
-  checker should rule.
+  **What changed, and why it is not the fix the checker prescribed.** Offered two ways to preserve
+  `qr` provenance, the owner rejected both and ruled **LAST WRITE WINS** (`auto-mode-decisions.md`,
+  *"George's ruling on MTG-11"*). Checking that against the PRD exposed that **the packet's own
+  acceptance criterion 3 was wrong**: `VOLT_Portal_PRD.md:307`'s first clause always said a coach tap
+  upserts `method='coach'`, while criterion 3 demanded the opposite. It had been taken from
+  `resolveAttendanceWriteMethod`'s docstring and never checked against the requirement. So MAJOR-1
+  described code that was wrong on the FIRST call only, in the opposite direction from the finding.
+
+  - `mergeAttendanceUpdate` **deleted** (no merge exists under last-write-wins).
+  - `resolveAttendanceWriteMethod` **no longer called** from `LiveConsole`; a coach tap sends
+    `'coach'` on the wire and locally.
+  - `makeDefaultSetAttendanceStatus(write = setAttendanceStatus)` added — the injection point
+    MAJOR-2 required.
+  - MTG-11's precedence test **inverted, not deleted** (constitution item 10; the ruling is the
+    approval). The former criterion-3 test now drives **three sequential edits** — the single-shot
+    version structurally could not see MAJOR-1.
+  - Mutations: **M7 red at exit 1 on the full suite** (it was green at exit 0 before — that is what
+    caused the FAIL), M8 and M9 red at exit 1.
+  - Six gates green: `tsc` 0 · build ✓ · prettier clean · eslint 0 errors / 363 warnings · vitest
+    **77 files / 1877 tests, exit 0**.
+
+- **⚠️ A DELIBERATE DIVERGENCE YOU WILL MISTAKE FOR A BUG.** Owner ruled **option A**
+  (`auto-mode-decisions.md`, *"LAST WRITE WINS applies to `LiveConsole` ONLY, not table-wide"*):
+  `attendance.method` now means **`'coach'`** when the meeting console writes it and **`'qr'`
+  preserved** when W2's `AttendancePanel` / `MarkDayCompleteDialog` do. **This is intentional.
+  Unifying it requires a NEW owner decision, cited.** `resolveAttendanceWriteMethod` is unchanged
+  and keeps its contract; it is simply not called from `LiveConsole`. No W2 note and no ledger row
+  were filed for it, on purpose — there is no pending work.
 
 **Watch for this specifically (packet §4b).** With the seam made real, the 43 existing `LiveConsole`
 coach-action tests still pass at exit 0 **only by microtask timing** — no `await` sits between the
