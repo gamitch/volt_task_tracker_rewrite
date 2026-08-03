@@ -509,8 +509,9 @@ export function MarkEventCompleteDialog({
     loadAttendance(remainingSessionIds)
       .then((rows) => {
         if (!isMounted) return;
-        // T401: this used to fail CLOSED here whenever `rows.length >= 1000`
-        // (`supabase/config.toml`'s `[api] max_rows`), because
+        // T401: this used to fail CLOSED here whenever `rows.length >=
+        // ATTENDANCE_ROW_CAP` (a now-deleted exported `const` of `1000`,
+        // `supabase/config.toml`'s `[api] max_rows`), because
         // `queryAttendanceForSessions` (`loaders/attendance.ts`) issued a
         // bare `.select('*').in(...)` with no `.range()`/`.limit()`, so a
         // capped PostgREST response (200 with a partial `Content-Range`, not
