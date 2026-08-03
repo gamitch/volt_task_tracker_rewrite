@@ -6563,6 +6563,652 @@ student test).
 **Gates:** `tsc` 0 · `vite build` ✓ · prettier clean · eslint **0 errors / 361 warnings**
 (unchanged) · vitest **73 files / 1786 tests**, exit 0.
 
+## T321 — manual short-code entry on `/checkin` (audit LIVE-002)
+
+**First task of the W1 (check in) workflow, on `claude/w1-checkin`. STANDARD tier.**
+
+**The defect.** An expired check-in credential was a dead end. The error state's only action was
+"Try again", which called `runCheckin()` — a function whose only credential source was
+`searchParamsKey`, the URL. So it re-sent the *same expired token* and could never succeed. Nothing
+anywhere let a student type the 6-character short code the kiosk displays, even though `callCheckin`
+has always known how to send one (`body.code`) and T032's backend has always accepted it.
+
+**Why it was untracked.** The file pointed twice at *"T054's future manual-entry sub-path"*
+(module doc and the query-param section). **T054 is Student Home / HOME-02** — unrelated. The
+pointer tracked nothing, so no row existed until the external audit re-found it as LIVE-002. Both
+references are corrected.
+
+**The scoping finding, which neither the audit nor the ledger row had.** Both describe this as a
+*"UI-only gap on a working backend"*. That is true for the expiry case and **false** for the case
+the audit actually named — *"a student who cannot scan has no fallback."* Verified rather than
+assumed, by reading T032's shipped code:
+
+- `validateCheckinRequest` (`validation.ts`) rejects any body without a **uuid `session_id`**
+  (`MISSING_SESSION_ID` / `INVALID_SESSION_ID`).
+- `verifyShortCode` (`hmac.ts:133-145`) HMACs the presented code over `` `${sessionId}:${bucket}` ``.
+
+**A short code is meaningful only relative to one specific session.** A student who scanned and then
+expired still has `?s=` in the URL, so the form reuses it and works. A student who never scanned has
+no session id, and `Kiosk.tsx` shows the QR and the code but never a readable session identifier.
+For that student, a form could only ever fail — so **the form is not rendered when `s` is absent**,
+and the gap is filed as **T400** with three candidate fixes, none of them UI-only. Shipping a form
+that silently could not work would have been the more impressive-looking outcome and the wrong one.
+
+**Client-side normalization.** Trim, upper-case, and map `0`→`O` / `1`→`I`. This is **lossless by
+construction**: the alphabet is `A-Z2-9` (34 chars) and contains neither digit, so the mapping can
+never rewrite one valid code into a different valid code. A test pins the alphabet and length
+against the backend constants, so a backend change fails a test here rather than silently rejecting
+codes students typed correctly.
+
+**Malformed codes never reach the network.** `rate_limit.ts` caps short-code attempts at 5/min/user
+(MTG-06). A typo must not burn one of five.
+
+**Keyboard path.** A real `<form onSubmit>` with `Button type="submit"`, so Enter submits via browser
+behaviour rather than a keydown handler. The test asserts that **mechanism** rather than simulating
+Enter, because jsdom does not implement implicit form submission — an honest structural assertion,
+not a simulated-browser claim.
+
+**Mutations — all four run in the worktree after committing (item 26's "commit before mutating"),
+each reverted and re-verified. Exit codes asserted, not just pass counts:**
+
+| Mutation | Result |
+|---|---|
+| manual submit calls `runCheckin()` (replays URL credential — the pre-T321 bug) | **2 red, exit 1** |
+| drop `isWellFormedShortCode` guard | **1 red, exit 1** |
+| render the form regardless of `manualSessionId` | **1 red, exit 1** |
+| drop the `0`→`O` / `1`→`I` mapping | **2 red, exit 1** |
+
+**Tier justification (item 26 requires this be stated and defended).** STANDARD, not FAST: the change
+exceeds ~20 lines of production code and adds five new exported symbols. Not HEAVY: it introduces no
+write path of its own — the attendance write is server-side in T032's already-shipped, HMAC-gated
+function, unchanged here — touches no schema, RLS, migration, metric SQL, or auth logic, and cannot
+corrupt data or misreport a user's own data. The one judgement worth flagging for correction: a
+reasonable reviewer could argue check-in *is* a write path and demand HEAVY. The counter is that the
+credential plumbing already existed and this change only supplies an alternative credential to an
+existing call; the server remains the sole authority on whether the write happens.
+
+**Disclosed residual:** eslint warnings in `src/pages/checkin/` go 2 → 5. All three additions are
+`react-refresh/only-export-components`, fired by exporting helpers from a file that also exports a
+component — the identical rule the file already carried 2 of, for `callCheckin` and
+`parseCheckinCredential`. Kept for consistency with the file's existing convention rather than split
+into a new module. Zero errors either way.
+
+**Gates** (measured with `.env.local` absent, the mandated gate state): `tsc` **0** · `vite build`
+**✓** · prettier **clean** · eslint **0 errors / 364 warnings** · vitest **75 files / 1831 tests
+(+14), exit 0**. Baseline at `origin/main` `e422123` measured independently first: 75 files / 1817
+tests, exit 0.
+
+## T161 — `loaders/checkin.ts` under test (521 lines, zero tests)
+
+**Second task of the W1 workflow, on `claude/w1-checkin`. STANDARD tier.**
+
+**Why now, before T196.** `LiveConsole`'s roster is a fixture and its attendance marking is an
+intentional no-op. Making it real on top of a loader with no tests repeats the exact mistake that
+produced the fixture shell. T161 was sequenced ahead of T320 for this reason, per
+`KICKOFF-PROMPTS.md`.
+
+**Coverage — 20 tests across four surfaces**, chosen by risk rather than line count:
+
+- **`aggregateParticipationForStudent`** — the only arithmetic in the file, and the only place it
+  can lie to a student about their own participation. Pins empty → `null`, single-row → returned
+  **by identity** (so the short-circuit cannot regress into a recompute that happens to agree),
+  dual-member summing, the never-across-seasons rule, and the `greatest(expected - excused, 1)`
+  divide-by-zero guard. The formula itself is pinned against the view it mirrors,
+  `20260722000000_membership_views.sql:75-77`, so editing one side without the other fails here
+  rather than silently disagreeing on screen.
+- **`makeGetAccessToken`** — all three documented degrade-to-null paths plus no-session and happy.
+  This seam feeds `/checkin`; a rejection here would hide the deployed function's real 401 behind a
+  generic client-side error.
+- **`makeLoadLinkedStudents`** — both early returns (asserting the *later* queries are never issued,
+  not just the return value), parent scoping from the real session, the client-side join, and the
+  `''` display-name fallback. Ordering is asserted with the students response deliberately
+  **reversed**, proving order comes from `guardian_links` rather than from response coincidence.
+- **`makeLoadConsistencyStripData`** — query shapes, including that `event_sessions` stays
+  unfiltered (the completed-only rule lives in exactly one place) and that `attendance` carries its
+  `student_id` filter.
+
+**The finding worth recording: a mutation ran clean and caught the orchestrator's own vacuous test.**
+
+| Mutation | Result |
+|---|---|
+| drop the `greatest(…, 1)` divide-by-zero guard | **2 red, exit 1** |
+| aggregate across seasons (drop the season filter) | **1 red, exit 1** |
+| `getAccessToken` rejects on session error instead of returning `null` | **passed, exit 0** ❌ |
+| drop the `attendance` `student_id` filter | **1 red, exit 1** |
+
+The third mutation was first written as "throw inside the `try`", which the enclosing `catch`
+swallows — a badly chosen mutation, not a finding. Rewritten to **delete the `if (error)` check
+outright**, it *still* passed. The cause was the test's own fixture: it returned
+`{ session: null, error: {...} }`, so the error branch and the no-session branch produce the
+identical value and no edit to the error branch can be detected. Fixed by giving the errored lookup
+a **usable token** alongside the error; the mutation then went red.
+
+**This is the vacuous-absence shape this project has now paid for eight times, and it appeared in a
+test written specifically to be thorough.** Declaring an assertion "covers the error path" does not
+make it discriminate — only running the mutation does. Recorded rather than quietly corrected.
+
+**Measured, not assumed:** `aggregateParticipationForStudent` reimplements a metric formula in
+TypeScript, a shape that normally invites float-vs-`numeric` rounding divergence. Checked
+exhaustively — for every `present`/`denominator` pair with denominator 1..4000, JS
+`Math.round(x * 10) / 10` and Postgres `round(numeric, 1)` agree on **every** input, so the
+divergence is unreachable at any scale this team will reach (the live database holds 117
+`event_sessions` in total). No follow-up filed.
+
+**Tier justification (item 26).** STANDARD: test-only, no production change, no write path, no
+schema/RLS/auth. Not FAST because it adds a new test module rather than a ≤20-line edit. Not HEAVY
+because nothing it touches can corrupt data — though note the *subject* under test includes metric
+arithmetic, which is why the SQL-pinning test exists.
+
+**Gates** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier **clean** · eslint
+**0 errors / 364 warnings (unchanged — no new warnings)** · vitest **76 files / 1851 tests (+20),
+exit 0**.
+
+## T320 — `.range()` pagination on the attendance read (silent truncation)
+
+**Third task of the W1 workflow, on `claude/w1-checkin`. STANDARD tier.**
+
+**The defect.** `supabase/config.toml:18` sets `[api] max_rows = 1000`. PostgREST truncates any
+response at that cap and returns **200 with a partial `Content-Range`** — not an error — so
+`createLoader` (`loader.ts:174-176`, which throws only on `result.error`) resolved a partial array
+that every caller read as complete. Requesting a larger page does not help: the server clamps it.
+Paginating is the only way to see past the cap.
+
+**Fix — pagination, the stronger of the two options the row offered** (the other was
+detect-and-error). `makeLoadAttendanceForSessions` pages until a **short** page returns. A full page
+means *"at least this many"*, never *"exactly this many"* — that ambiguity **is** the bug — so a
+result set that is an exact multiple of the page size costs one extra empty request rather than
+silently dropping whatever followed it. Disclosed, and asserted by its own test.
+
+**`.order('id')` is load-bearing, not cosmetic.** Page N+1 is defined as an offset into a result
+set, and Postgres guarantees no ordering without an explicit `order by`. Paginating an unordered
+query can return the same row on two pages and never return another — a subtler corruption than the
+bug being fixed. `id` is the table's uuid primary key (migration lines 82-95), so it is total,
+stable, and always present.
+
+**The page-count bound throws rather than returning what it gathered.** Returning a partial set at
+the bound would reintroduce exactly the silent truncation this row exists to remove. 100 pages is
+100,000 rows against a live database holding 79, so tripping it means the transport is broken, not
+the data.
+
+**Scope discovery, and the reason this needed an owner call.** `loaders/attendance.ts` turned out to
+be **shared across three workflows**: `endMeeting.ts:191` (W3) imports
+`makeLoadAttendanceForSessions` directly, and three W2 pages consume it. Changing the PostgREST
+chain broke **six tests in two files W1 does not own** — `endMeeting.test.ts` (5) and
+`AttendancePanel.test.tsx` (1) — all with the same
+`TypeError: client.from(...).select(...).in(...).order is not a function`. **Stub-shape breakage,
+not a behaviour regression**, diagnosed before any file was touched.
+
+Coordination rule 2 says the second workflow waits, and W2 is running right now, so the choice went
+to the owner rather than being made unilaterally. **He authorized crossing the boundary rather than
+weakening the fix.** Both edits are stub-only; neither page's production source is touched.
+
+**Mutations — all four run after committing (item 26), reverted and re-verified. Exit codes
+asserted:**
+
+| Mutation | Result |
+|---|---|
+| stop after page 0 (restore the original bug) | **4 red, exit 1** |
+| drop `.order('id')` — paginate without a stable sort | **8 red, exit 1** |
+| never advance the range offset (page 0 forever) | **1 red, exit 1** |
+| return a partial set at the page bound instead of throwing | **1 red, exit 1** |
+
+**Two follow-ups filed, both in W2's files and both W2's to execute:**
+
+- **T401** — T307's `ATTENDANCE_ROW_CAP` guard is now a **false positive**. `rows.length >= 1000`
+  was a correct proxy for "possibly truncated" while the loader stopped at one page; after
+  pagination it blocks a write whose data is complete. T320's own row anticipated deleting that
+  duplication but not that the deletion falls outside W1's files.
+- **T402** — **there are two functions named `queryAttendanceForSessions`.** T320 named only the one
+  in `attendance.ts`. `loaders/outreach.ts:745-754` carries the identical bare
+  `.select(...).in(...)` shape and has been invisible since it was written — neither T307's checker
+  nor the T320 row spotted it. The fix is a direct copy of this one.
+
+**Tier justification (item 26).** STANDARD: single loader module, no write path (this is a read),
+no schema/RLS/auth/migration. Not FAST — it exceeds ~20 lines and changes behaviour that four
+consumer modules depend on. A reviewer could argue HEAVY on the grounds that truncated attendance
+feeds a write path in `MarkEventCompleteDialog`; the counter is that T307's fail-closed guard
+already sits between this loader and that write, and this change only ever gives that guard *more*
+complete data. Flagging it rather than leaving the call silent.
+
+**Gates** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier **clean** · eslint
+**0 errors / 364 warnings (unchanged)** · vitest **77 files / 1860 tests (+9), exit 0**.
+
+## T403 step 1 — `LiveConsole` shows the real check-in credential
+
+**W1, on `claude/w1-checkin`. STANDARD tier.** Steps 2 and 3 are open; this entry covers step 1.
+
+**Scope correction, recorded because it was nearly got wrong.** The orchestrator initially framed
+"does the `EndMeetingDialog` mount land in this PR" as its own scoping decision. **It is not W1's
+call.** `EndMeetingDialog.tsx` is in W3's owned files; T196 sits on both workflow lists split in
+half, and W3's kickoff prompt says of the mount *"BLOCKED on W1 making LiveConsole real. Do not
+start it."* The owner caught it. T403 is W1's half; **T196 remains W3's row.**
+
+**The defect.** `loadDisplayToken` defaulted to a fixture resolving `FIXTURE_QR_TOKEN` and the short
+code `'FXTURE'`, under a `Banner` reading *"This QR code and check-in code aren't live yet."*
+`loadKioskDisplayToken` (`loaders/kiosk.ts`) has called the deployed `checkin-token` Edge Function
+since **T103** and returns the real HMAC token and short code that `Kiosk.tsx` displays and T032's
+`/checkin` verifies. This console simply never used it. The module doc still claimed *"there is
+still no endpoint anywhere in this repo that MINTS one"* — false since T103, now corrected.
+
+`KioskDisplayToken` is a structural superset of `LiveConsoleDisplayToken`, so the real loader
+satisfies the seam with no adapter and **no re-derivation of the token math**, which lives in one
+place (`supabase/functions/checkin/hmac.ts`) and must stay there.
+
+**Deleted, not kept as a fallback:** the fixture constants, their loader, and the Banner. A fallback
+is how a fixture reaches a live route — the family that produced T155/T176/T181/T324, and which this
+console was itself an instance of. The Banner was deleted rather than reworded: **dishonest copy
+about honest data is the same defect as honest copy about dishonest data.** Also deleted this file's
+own `buildCheckinUrl`, a deliberate duplicate whose only caller was the fixture; the QR URL shape now
+has one definition instead of two that could drift.
+
+**Three existing tests broke, correctly.** They had never passed a `loadDisplayToken` and so
+silently inherited the fixture; with the real default and no configured Supabase they got the honest
+"QR not available yet" render. That is T151's mechanism working — the call site must now declare its
+data. `renderBody` injects a token by default, overridable per test.
+
+### The finding: a mutation passed at exit 0, for the second time this session
+
+Restoring a fixture default left **all 42 tests green**. The cause was the fix for the breakage
+above: once `renderBody` injected a token by default, **no test exercised the component's own
+default**, and the test that claimed to prove there was no fabricated code was itself passing
+`loadDisplayToken: async () => null` — supplying the very thing it was meant to check.
+
+Fixed with `renderBodyNoInjection`, which renders `<LiveConsoleBody />` with no props at all. The
+mutation then went red.
+
+**This is the second instance in one session** (the first was T161's errored-session fixture, where
+the error branch and the no-session branch were indistinguishable). The shared shape is sharper than
+the vacuous-absence rule already recorded: **a test that supplies the thing it is checking cannot
+detect a change to it.** Both were written to be thorough, both looked right, and only running the
+mutation exposed either. Worth promoting into the constitution's process notes.
+
+**Mutation:** point `loadDisplayToken`'s default back at a fixture → **1 red, exit 1** (after the
+test fix; **0 red, exit 0** before it, which is why the test was rewritten).
+
+**Gates** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier **clean** · eslint
+**0 errors / 364 warnings (unchanged)** · vitest **77 files / 1863 tests (+3), exit 0**.
+
+## T403 step 2 — `LiveConsole` reads the real roster and attendance
+
+**W1, on `claude/w1-checkin`. STANDARD tier.** Step 3 remains open and is HEAVY. Tier defended
+below.
+
+### The settled design was wrong, and only building it exposed that
+
+The T403 row prescribed composing `makeLoadLiveConsoleData` from `loadEndMeetingSummary`
+(`loaders/endMeeting.ts`, W3's file, import-only), on the stated premise that *"`AttendanceRecordState`
+is already shared in the reverse direction, so the shapes line up."* **Both halves are false.**
+
+There is no sharing. `AttendanceRecordState` is declared **twice, independently** —
+`LiveConsole.tsx:436` and `EndMeetingDialog.tsx:313` — with no import between the files.
+`EndMeetingDialog.tsx`'s own module doc §6 says so outright: its ground truth is *"re-derived
+directly … NOT imported from `LiveConsole.tsx`."*
+
+And the shapes do not line up. `LiveConsole`'s requires **`updatedAt`**; `EndMeetingDialog`'s has no
+such field (`status`, `checkInAt`, `checkOutAt`, `method`, `recordedBy`). `endMeeting.ts:324-333`
+reads full `AttendanceRow`s — which **do** carry `updatedAt` — and drops it when narrowing. The
+prescribed composition therefore **cannot populate a required field**; it is a type error, not a
+style preference, and `endMeeting.ts` is W3's file, unfixable from W1.
+
+**The anti-duplication rationale was also inverted.** The row justified the import as avoiding
+re-derived roster logic. But `endMeeting.ts:127-130` describes its own roster resolution as *"the
+`loaders/kiosk.ts` pattern, **re-derived locally**"* — `kiosk.ts` is the **original**, `endMeeting.ts`
+the copy. `makeLoadKioskTally` already runs the identical active-student + team-scope filter; it only
+ever **counted** those rows instead of **naming** them. Importing the copy into the original to avoid
+duplication would have inverted the dependency direction.
+
+**Owner ruled** on the substitution (2026-08-02) after being shown the above, and separately ruled
+that the T403 row itself be rewritten rather than a new row filed. Replacement: kiosk.ts's own
+existing scope filter (extended with `display_name`) plus `makeLoadAttendanceForSessions`
+(`./attendance`, import-only) for the `updatedAt`-carrying rows. `starts_at, ends_at` on
+`querySessionEventId` survived unchanged from the original design — the end-meeting summary genuinely
+does not carry `startsAt`.
+
+**Independently reproduced, which is worth recording.** While this step was being built, another
+session pushed `309325d` to the same branch, correcting the same `updatedAt` premise on the T403 row
+from a read of the same two files. The two findings were reached separately and agree on premise (a);
+this session found premise (b), the inverted duplication direction, which `309325d` did not. Its
+corrected design named the redundant-read variant first but explicitly allowed *"or query the roster
+directly instead, but do NOT re-derive the event → team_ids → active-students filter"* — the branch
+taken here, and taken by **reusing** kiosk.ts's existing filter rather than re-deriving one, so that
+constraint holds. Rebased onto `309325d` rather than over it; both records are kept on the row.
+
+**Collision check ran first, per the `attendance.ts` lesson.** Importers of `loaders/kiosk.ts` are
+`Kiosk.tsx`, `LiveConsole.tsx`, `Kiosk.test.tsx` — all W1-owned. `./attendance` is imported, never
+edited. No file outside W1's list was touched.
+
+### The finding: a mutation passed at exit 0, for the THIRD time this session
+
+**Mutation 2** (`updatedAt: row.updatedAt` → `row.checkInAt ?? ''` — still a `string`, so `tsc`
+stays at 0) **passed all 18 tests at exit 0.** The cause was in the test fixture I had just written:
+`check_in_at`, `updated_at` and `created_at` all carried **the same timestamp**, so a loader reading
+the wrong column was indistinguishable from one reading the right column.
+
+This is the same shape recorded for T161 and T403 step 1, and it is worth stating in its sharper
+form: **it is not only that a test must not supply what it checks — distinct fields must hold
+distinct values, or the assertion cannot tell them apart.** The fixture looked realistic (a row
+created, checked in, and last touched at one moment is perfectly plausible) and that plausibility is
+exactly what hid the defect. Fixed by giving the row three different timestamps —
+`created_at` 23:01, `check_in_at` 23:05, `updated_at` 23:40, a row corrected mid-meeting. The
+mutation then went red.
+
+`updatedAt` is precisely the field the whole design decision turned on, so this mutation surviving
+would have meant the test suite could not detect the failure of the thing this task exists to fix.
+
+### Mutations (all run; committed at `ec4e340` before mutating, per item 23)
+
+| # | Mutation | Result |
+|---|---|---|
+| 1 | `loadData` default pointed back at a fixture roster | **1 red, exit 1** |
+| 2 | `updatedAt` sourced from `check_in_at` | **0 red, exit 0** → after fixture fix, **1 red, exit 1** |
+| 3 | team-scope filter dropped from the roster | **1 red, exit 1** |
+| 4 | `startsAt` sourced from `ends_at` | **1 red, exit 1** |
+
+Mutation 2 also confirms `tsc` alone cannot catch a same-typed wrong-column read: it exited **0**
+with the mutation in place.
+
+### Test-seam changes (T151's mechanism, working)
+
+`renderBody` now injects `loadData` as a default alongside `loadDisplayToken`, so the ~20 tests that
+silently inherited the component's fixture roster now declare their data. `renderBodyNoInjection`
+gained an optional `props` argument: with **nothing** injected the real loader rejects (no Supabase
+in the gate state) and the page renders its DES-12 error state, so the QR panel never mounts — step
+1's display-token test needed `loadData` held open while `loadDisplayToken` stayed at the
+component's own default. `renderPage` likewise forwards props; its role-guard test had been proving
+"a coach reaches a working console" via a student who does not exist.
+
+New coverage: `makeLoadLiveConsoleData` seam-level tests in `Kiosk.test.tsx` (session/roster/
+attendance mapping, `team_ids === null` open case, session-not-found and event-not-found rejections),
+and two `LiveConsole.test.tsx` tests — no fabricated students from the component's own default, and
+no fixture loader exported for any call site to inherit.
+
+### Tier
+
+**STANDARD, as the row prescribed, and it still fits after the design change.** Item 26's HEAVY
+trigger is a **write path or destructive operation**, RLS/auth/role logic, a migration, or an
+exported artifact another session builds against. This step is **read-only** — four `select`s and a
+client-side filter; it writes nothing. The design substitution changed *which* module is imported,
+not the risk class. **Step 3 is the write path and takes HEAVY**, undiluted, with the premise gate
+on Fable building its prescription in its own worktree.
+
+**Gates** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier **clean** · eslint
+**0 errors / 363 warnings** (was 364 — deleting the exported `defaultLoadLiveConsoleData` removed one
+`react-refresh/only-export-components` warning) · vitest **77 files / 1868 tests, exit 0**.
+
+## T403 step 3 — attendance write: checker FAIL, and the packet was the defect
+
+**W1, on `claude/w1-checkin`. HEAVY tier**, full chain run: packet → `checker-premise` (Fable,
+building) → `worker-implementer` → `checker-reviewer`. **Verdict: FAIL, MAJOR. Not merged as done.**
+Worker's diff is on the branch at `3a14453` with all six gates green; it is NOT complete.
+
+### The chain earned its cost, in the way that matters least comfortably
+
+**MAJOR-1 originates in this packet's own prescription**, was endorsed by the premise gate, was
+implemented faithfully by the worker, and was caught only by the checker — the fourth stage.
+
+§4c Trap 2 prescribed a wire/local split: local state keeps `method: 'coach'` so MTG-11's
+coach-precedence survives, while the wire sends
+`resolveAttendanceWriteMethod(existing?.method ?? null)`. But `existing` **is** that local record,
+and `defaultSetAttendanceStatus` returns `Promise<void>`, discarding the `AttendanceRow` the loader
+returns — so local state is never reconciled against the database. After the first click, the only
+source the provenance resolution reads has already been overwritten with `'coach'`.
+
+Captured by driving the real component: six sequential coach edits on a genuine `qr` row send
+`["qr","coach","coach","coach","coach","coach"]`.
+
+**This re-inflicts half the harm the premise gate had just proven on real PostgreSQL.** §0 recorded
+that the original defect nulls `hours_override` **and** downgrades `method` `qr`→`coach` in one
+statement. The prescription fixed the first half and reintroduced the second, from the second click
+onward, on a roll-call console whose entire purpose is repeated clicking.
+
+**Two compounding process facts, both worth keeping:**
+
+1. **The gate returned DISPATCH on a prescription it never exercised across repeated edits.** It
+   built the fix and proved it correct for one write. The defect only exists on the second.
+   *Building the prescription is necessary but not sufficient — it must be built against the usage
+   pattern, not a single call.*
+2. **The packet's own instruction would have made it worse.** "Capture `previousRecord` inside the
+   functional updater, not in render scope" — extended to `wireMethod`, as it implicitly steered —
+   is strictly worse, because `prev[studentId].method` is `'coach'` the instant the first updater
+   runs. The worker's render-scope choice beat the packet's instruction. It disclosed that choice as
+   a risk and argued equivalence with `AttendancePanel`; the checker showed the idioms are **not**
+   equivalent (`AttendancePanel` stores the server-returned row, so its `existing?.method` stays
+   real across unlimited edits) — so the worker was right to deviate and wrong about why.
+
+### MAJOR-2 — the fifth exit-0 mutation of this session
+
+`defaultSetAttendanceStatus` closes over a module-level const with no injection point, so the adapter
+joining the two proven halves — payload correctness and coach-action behaviour — is untested.
+Mutation M7 swapped `sessionId`/`studentId` and hardcoded status and method:
+
+```
+M7_TARGETED_EXIT=0
+M7_FULL_SUITE_EXIT=0     (77 files / 1878 tests, all passing)
+```
+
+Same family as T161, T403 step 1, T403 step 2's fixture, and the pre-existing microtask-timing
+tests. **Five instances in one session.** The recurring shape is now well enough evidenced to
+promote into the constitution: *a boundary that cannot be stubbed cannot be tested, and an untestable
+boundary is where the exit-0 mutation lives.*
+
+### What the checker confirmed was RIGHT
+
+- **§4b microtask hazard genuinely fixed, and proven load-bearing** — not asserted. Adding
+  `flushMicrotasks` to a converted test: still passes. Removing the injected seam and adding
+  `flushMicrotasks`: fails. Leaving the seam out without the flush: passes — reproducing the exact
+  "green suite proving nothing" the packet warned about.
+- **`makeUpsertAttendance` byte-identical**, verified independently by sha256 over the extracted
+  byte range (`bbd3c4f6…` both sides, 0 deleted lines in the whole file). W2's `AttendancePanel`
+  blast radius is genuinely zero.
+- Criteria 2, 4, 5, 6 PASS, each with a red-at-exit-1 mutation behind it. Six gates reproduced
+  independently: vitest **77 files / 1878 tests, exit 0**.
+
+### Ruling A — the deviation was not just acceptable, it was necessary
+
+The worker added tests to `attendance.test.ts`, outside the packet's literal §2 Allowed Files test
+list, and disclosed it in the file header rather than hiding it. **Mutation M2 — §5.7's own named
+"null the `hours_override`" mutation — fails ONLY in that file**; `LiveConsole.test.tsx` passed clean
+under it. Had the worker complied literally, the packet's own mandated mutation would have been
+**green at exit 0** and criterion 2 unverifiable.
+
+**The packet's file list would have forbidden the only evidence the packet demands.** Template to be
+amended: the colocated test module of any Allowed source file is allowed by default.
+
+### Ruling B — PostgREST residual honoured
+
+`attendance.ts` module doc #5 carries the disclosure verbatim, attributed, stating the payload-keys →
+`DO UPDATE SET` translation is inferred and "stated as a residual, not a proven fact." NIT: two
+sentences elsewhere state the inferred part without a local hedge.
+
+### Two checker findings I checked rather than accepted
+
+- **T405's headline was over-general — upheld, and narrowed.** The row's body already recorded that
+  `outreach.ts` sends `updated_at` explicitly, but the summary line claimed it of the whole table.
+  Headline now scoped to `attendance.ts`'s write paths.
+- **The proposed new row for the `outreach.ts` `hours_override` sibling — declined as a duplicate.**
+  T406 already enumerates that payload's full column list, `hours_override` included, by name.
+  Filing a second row would split one W2-owned finding across two. T406 stands.
+
+### Rework required before step 3 can be called done
+
+1. Resolve wire provenance from the row's **true DB** method — carry it as a separate field, or stop
+   discarding the returned `AttendanceRow` as `AttendancePanel:720` already does. **This is a spec
+   change and should go back through the packet, since the current design came from §4c.**
+2. Add a test driving **≥2 sequential** coach edits on a `qr` row, asserting **both** wire calls send
+   `'qr'`. The current criterion-3 test is single-shot and structurally cannot see this.
+3. Make `defaultSetAttendanceStatus` injectable; re-run M7 and report it **red at exit 1**.
+
+**Gates at this commit** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier
+**clean** · eslint **0 errors / 363 warnings** · vitest **77 files / 1878 tests, exit 0**. Green
+gates on a FAILED review — which is the point: the gates never had a chance of catching MAJOR-1.
+
+## T403 step 3 REWORK — the owner overturned the requirement, and the defect dissolved
+
+**W1, on `claude/w1-checkin`.** Follows the checker's FAIL. Not yet re-reviewed at time of writing.
+
+### The rework was not the one the checker prescribed
+
+The checker's MAJOR-1 said: a coach edit degrades a `qr` row's `method` to `coach` from the second
+click onward, violating acceptance criterion 3 (*"external `'qr'`/`'import'` provenance is
+preserved"*). Its prescribed fix was to carry the true DB provenance separately, or reconcile it
+from the returned row.
+
+Presented with both options in plain language, **the owner rejected the premise of both** and stated
+a different rule, unprompted and in his own words: *"in all cases, last record wins."* His case:
+*"If a coach touches absent, but then the student comes late and scans the qr, the student entry
+should be saved."* Asked whether it extends to the `method` label itself: *"it should follow last
+write wins so we do not have a mixmatching on the record."*
+
+Recorded verbatim in `auto-mode-decisions.md`.
+
+### Checking the ruling against the spec found that criterion 3 was wrong
+
+`VOLT_Portal_PRD.md:307` (MTG-11) contains two claims. The ruling **overturns the second** — *"always
+wins over QR values"* — which is exactly what discarded the late scanner's check-in and left them
+`absent` while standing in the room. Annotated as superseded, along with §12's acceptance item 4.
+
+**But the first clause reads:** *"A coach tap upserts with `method='coach'`, `recorded_by=coach`."*
+The PRD had always said a coach tap writes `'coach'`.
+
+**So acceptance criterion 3 contradicted the PRD.** It was taken from
+`resolveAttendanceWriteMethod`'s docstring and put in the packet by the orchestrator **without ever
+being checked against the requirement it claimed to implement.** The checker then measured the code
+against that criterion and found a MAJOR defect — correctly, given the criterion, which was itself
+wrong.
+
+Under the ruling the correct wire sequence is `["coach","coach","coach",…]`. The shipped code
+produced `["qr","coach","coach",…]` — **wrong on the FIRST call only, in the opposite direction from
+the finding.** The fix is to stop calling `resolveAttendanceWriteMethod` in this file at all:
+smaller than either option the checker offered, and smaller than the two the orchestrator offered
+the owner.
+
+**The lesson is not "the checker was wrong."** It was right about the code disagreeing with the
+criterion. The lesson is that **a wrong acceptance criterion is invisible to every downstream stage**
+— packet, premise gate, worker, and checker all reasoned faithfully from it, and only the owner
+reading the behaviour in plain language caught it. The premise gate fact-checks the packet against
+the *codebase*; nothing in the chain fact-checked it against the *PRD*. That is a real gap in this
+process, not a one-off.
+
+### What changed
+
+- **`mergeAttendanceUpdate` DELETED**, not reduced to `return incoming`. Under last-write-wins there
+  is no merge; a function ignoring its `existing` argument would imply a decision that no longer
+  exists — the same dishonesty as a fixture kept "as a fallback".
+- **`resolveAttendanceWriteMethod` no longer called here.** A coach tap sends `'coach'` on the wire
+  and locally. One value, no split, so no row can claim `method: 'qr'` while naming a coach in
+  `recorded_by`.
+- **`makeDefaultSetAttendanceStatus(write = setAttendanceStatus)`** — the injection point MAJOR-2
+  required.
+- Realtime handler applies incoming changes unconditionally.
+
+### Test changes, disclosed under constitution item 10
+
+The ruling is the boss approval item 10 requires. The MTG-11 precedence test **asserted the
+overturned behaviour** — it would have kept a student `absent` after they scanned in late — so it is
+**inverted, not deleted**, and now runs the owner's own scenario. A second test covers his other
+direction (a later coach edit overwriting a QR value). `mergeAttendanceUpdate`'s four unit tests are
+deleted with the function (the re-review corrected this count from five; the arithmetic
+confirms it -- 1878 - 4 + 3 = 1877).
+
+The former criterion-3 test now drives **three sequential edits** rather than one. The single-shot
+version was structurally incapable of seeing MAJOR-1 — the first call was correct and every later
+call was wrong.
+
+### Mutations (committed at `521d4c7` before mutating, per item 23)
+
+| # | Mutation | Result |
+|---|---|---|
+| M7 | corrupt the adapter's arg mapping (swap ids, hardcode status/method) | **RED, exit 1** targeted AND full suite — was **green at exit 0** before the rework |
+| M8 | restore the old provenance behaviour on the wire | **RED, exit 1**, 2 tests |
+| M9 | restore MTG-11 coach precedence in the Realtime path | **RED, exit 1** |
+
+M7 going red is the specific thing MAJOR-2 demanded.
+
+### Known limit, disclosed rather than solved
+
+"Last write wins" means *last applied* — arrival order, not a timestamp comparison.
+`attendance.updated_at` cannot order writes (T405: the database never bumps it on conflict-update),
+so there is nothing trustworthy to sort by. Moot today because the Realtime seam is still an honest
+no-op; it becomes real when Realtime does.
+
+### Scope held
+
+`resolveAttendanceWriteMethod` implements the *other* meaning of `method` and is used by W2's
+`AttendancePanel` and `MarkDayCompleteDialog`. **Owner ruled (option A): the ruling is scoped to
+`LiveConsole` only, NOT table-wide.** So `attendance.method` deliberately means two different things
+depending on which screen wrote the row — `'coach'` here, `'qr'` preserved there. **That divergence
+is intentional and must not be "fixed" without a new owner decision;** it is recorded in
+`auto-mode-decisions.md` and in the module doc at the point of use, because a future session will
+otherwise read it as an inconsistency bug. No W2 note sent (they have nothing to do) and no ledger
+row filed (there is no pending work — a row would misrepresent a settled decision as an open task).
+
+**Gates** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier **clean** · eslint
+**0 errors / 363 warnings** · vitest **77 files / 1877 tests, exit 0**.
+
+
+## T403 step 3 — re-review PASSED; step 3 and T403 are done
+
+**W1, `claude/w1-checkin`. HEAVY tier, full chain complete:** packet → `checker-premise` (Fable,
+building) → worker → `checker-reviewer` (FAIL) → owner ruling → rework → `checker-reviewer`
+(**PASS**, MINOR + NITs).
+
+### The re-review did not trust the shipped tests
+
+It drove its own probe — **6 sequential edits on the `'qr'` row, 6 on the `'import'` row, 3 on a
+brand-new row — and asserted `method`, `status`, `sessionId` and `studentId` on all 18 calls.** All
+sent `'coach'`. It byte-compared `makeUpsertAttendance` (746/746) and `resolveAttendanceWriteMethod`
+(204/204) as **IDENTICAL**, and ran seven mutations of its own, every one red at exit 1 — including
+**M7, which was green at exit 0 before the rework and was the reason for the FAIL.**
+
+It also answered a question nobody had asked: whether the option-A scoping could collide in
+practice. `attendance` rows key to `event_sessions` → `events.type`, so `LiveConsole` edits meeting
+sessions and W2's screens edit outreach sessions — **disjoint row sets.** The two meanings of
+`method` cannot meet on one row. That is a stronger result than the ruling needed.
+
+### MINOR-1 is the finding worth keeping
+
+The rework deleted `mergeAttendanceUpdate` but left two doc statements asserting the **overturned**
+coach-precedence rule as current — including a comment block sitting three lines above the code that
+implements the opposite, immediately followed by a comment saying so. A self-contradicting file.
+
+**This is precisely the hazard the ruling's own annotation warns about** — and it was introduced by
+the same change that wrote the warning. Deleting behaviour is not finished until every sentence that
+described it is corrected; prose asserting a superseded rule is indistinguishable, to a future
+reader, from a spec.
+
+### NIT-5 — the sixth vacuous test of this session
+
+The MTG-12 keyboard test asserted only that the row's status stayed `null`. No `excused` radio is
+rendered for that role at all, so **it passed whether or not the gate fired** — the re-reviewer
+measured it staying green under a gate-disabling mutation while other tests caught it. Optional to
+fix; fixed anyway, because this is the defect family that has cost this workflow six findings. It
+now asserts that no write is attempted, **and** exercises an allowed digit afterwards so an empty
+call list means "blocked" rather than "nothing was ever wired up".
+
+### A process failure of my own, recorded because item 23 exists for exactly this
+
+I mutated `LiveConsole.tsx` to verify the NIT-5 fix **without committing first**, then reverted with
+`git checkout --`, which silently discarded the MINOR-1 doc fixes I had just made in the same file.
+Caught by re-grepping rather than by assumption, and reapplied. **Item 23's "commit before mutating"
+is not bookkeeping** — the revert step cannot distinguish your mutation from your real work.
+
+### Not fixed, disclosed
+
+**NIT-3 (pre-existing, out of scope):** nothing structurally enforces the `LiveConsole`-only scope of
+the last-write-wins ruling. `/meetings/live/:sessionId` accepts any session id and
+`loadLiveConsoleData` does not filter `events.type = 'meeting'`. The disjointness above holds by
+convention and by how the app routes users, not by a guard. Not introduced by this work.
+
+**NIT-4 (process, judged defensible by the reviewer):** the PRD was edited in place rather than a
+`dispute-log` entry filed per the D002 precedent. The owner *changed* the requirement rather than
+deviating from it, the original wording is preserved under strikethrough, and the annotation cites
+the ruling — the reviewer judged this more honest than a silent deviation. Recorded so the departure
+from D002's pattern is visible.
+
+**Gates** (`.env.local` absent, all reproduced independently by the reviewer): `tsc` **0** ·
+`vite build` **✓** · prettier **clean** · eslint **0 errors / 363 warnings** · vitest
+**77 files / 1877 tests, exit 0**.
+
 ---
 
 ## T193 — a student's RSVP on `/outreach` now actually persists

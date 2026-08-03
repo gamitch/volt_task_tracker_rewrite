@@ -130,6 +130,17 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createLoader, type LoaderQueryResult } from '../loader';
 import { getSupabaseClient } from '../client';
 import { invokeEdgeFunction } from '../functions';
+// T403 step 2: import-only. `./attendance` is shared at runtime with W2's
+// panels and W3's `endMeeting.ts`; this file reads it and never edits it.
+import { makeLoadAttendanceForSessions } from './attendance';
+// Type-only, so no runtime module edge is added back toward the page (the
+// value-level `Kiosk.tsx` cycle below is the pre-existing, deliberate one).
+import type {
+  AttendanceRecordState as LiveConsoleAttendanceRecordState,
+  LiveConsoleData,
+  LiveConsoleRosterEntry,
+  LoadLiveConsoleDataFn,
+} from '../../../pages/meetings/LiveConsole';
 import {
   buildCheckinUrl,
   KIOSK_REFRESH_INTERVAL_SECONDS,
@@ -149,9 +160,17 @@ import {
 // the citation).
 // ---------------------------------------------------------------------------
 
+/** T403 step 2 adds `starts_at`/`ends_at`: `LiveConsoleSessionInfo` needs a
+ * real `startsAt`/`endsAt` for its DES-17 time range, and this is the only
+ * query in this file that reads `event_sessions`. Both columns are `not
+ * null` on the table (`supabase/migrations/20260717000000_scheduling_
+ * attendance.sql`), so neither is optional here. The tally/session-title
+ * loaders simply ignore the two extra fields. */
 interface EventSessionEventIdDbRow {
   id: string;
   event_id: string;
+  starts_at: string;
+  ends_at: string;
 }
 
 interface EventContextDbRow {
@@ -160,8 +179,12 @@ interface EventContextDbRow {
   team_ids: string[] | null;
 }
 
+/** T403 step 2 adds `display_name`: the tally only ever COUNTED these rows,
+ * but the live console has to NAME them. Same rows, same team-scope filter,
+ * one more column. */
 interface StudentTeamDbRow {
   id: string;
+  display_name: string;
   team_id: string;
 }
 
@@ -187,7 +210,7 @@ async function querySessionEventId(
 ): Promise<LoaderQueryResult<EventSessionEventIdDbRow>> {
   const result = await client
     .from('event_sessions')
-    .select('id, event_id')
+    .select('id, event_id, starts_at, ends_at')
     .eq('id', sessionId)
     .maybeSingle();
   return { data: (result.data as EventSessionEventIdDbRow | null) ?? null, error: result.error };
@@ -212,7 +235,10 @@ async function queryEventContext(
 async function queryActiveStudentTeams(
   client: SupabaseClient,
 ): Promise<LoaderQueryResult<StudentTeamDbRow[]>> {
-  const result = await client.from('students').select('id, team_id').eq('is_active', true);
+  const result = await client
+    .from('students')
+    .select('id, display_name, team_id')
+    .eq('is_active', true);
   return { data: (result.data as StudentTeamDbRow[] | null) ?? null, error: result.error };
 }
 
@@ -236,21 +262,38 @@ async function queryAttendanceStatuses(
  * queries, or `null` if either the session or its event cannot be found
  * (module doc above -- folded into the page's own DES-12 Empty state, not a
  * thrown error). */
-function makeLoadSessionEventContext(
+interface SessionWithEventContext {
+  session: EventSessionEventIdDbRow;
+  event: EventContextDbRow;
+}
+
+/** T403 step 2: the same two flat queries, but keeping the `event_sessions`
+ * row instead of discarding it — the live console needs its
+ * `starts_at`/`ends_at`, which live on the session, not the event. */
+function makeLoadSessionWithEventContext(
   getClient: () => SupabaseClient,
-): (sessionId: string) => Promise<EventContextDbRow | null> {
+): (sessionId: string) => Promise<SessionWithEventContext | null> {
   const loadSessionEventId = createLoader<string, EventSessionEventIdDbRow>(
     querySessionEventId,
     getClient,
   );
   const loadEventContext = createLoader<string, EventContextDbRow>(queryEventContext, getClient);
-  return async (sessionId: string): Promise<EventContextDbRow | null> => {
+  return async (sessionId: string): Promise<SessionWithEventContext | null> => {
     const session = await loadSessionEventId(sessionId);
     if (session === null) {
       return null;
     }
-    return loadEventContext(session.event_id);
+    const event = await loadEventContext(session.event_id);
+    return event === null ? null : { session, event };
   };
+}
+
+function makeLoadSessionEventContext(
+  getClient: () => SupabaseClient,
+): (sessionId: string) => Promise<EventContextDbRow | null> {
+  const loadSessionWithEvent = makeLoadSessionWithEventContext(getClient);
+  return async (sessionId: string): Promise<EventContextDbRow | null> =>
+    (await loadSessionWithEvent(sessionId))?.event ?? null;
 }
 
 /** `Kiosk.tsx`'s real `loadTally` (GAP #2). */
@@ -337,3 +380,107 @@ export function makeLoadKioskDisplayToken(
 
 /** `Kiosk.tsx`'s own default `loadDisplayToken` -- real Edge Function call. */
 export const loadKioskDisplayToken: KioskDisplayTokenLoader = makeLoadKioskDisplayToken();
+
+// ---------------------------------------------------------------------------
+// T403 step 2 -- `LiveConsole.tsx`'s real `loadData`.
+//
+// Why the roster is built HERE rather than by importing
+// `loadEndMeetingSummary` (`./endMeeting`, W3's file), which the T403 row
+// originally prescribed:
+//
+//  1. It cannot satisfy the type. `LiveConsole`'s own `AttendanceRecordState`
+//     requires `updatedAt`. `endMeeting.ts:324-333` reads full `AttendanceRow`s
+//     -- which DO carry `updatedAt` -- and drops it when narrowing to
+//     `EndMeetingDialog`'s own `AttendanceRecordState` (`status`, `checkInAt`,
+//     `checkOutAt`, `method`, `recordedBy`; no `updatedAt`). The field is gone
+//     by the time a caller sees it, and `endMeeting.ts` is W3's file.
+//
+//  2. The two `AttendanceRecordState`s are NOT a shared type. There are two
+//     independent declarations -- `LiveConsole.tsx:436` and
+//     `EndMeetingDialog.tsx:313` -- with different fields and no import
+//     between them; `EndMeetingDialog.tsx`'s own module doc §6 states its
+//     ground truth is "re-derived directly ... NOT imported from
+//     `LiveConsole.tsx`".
+//
+//  3. The duplication argument runs the other way. `endMeeting.ts:127-130`
+//     describes its roster resolution as "the `loaders/kiosk.ts` pattern,
+//     re-derived locally" -- THIS file is the original. `makeLoadKioskTally`
+//     already runs the identical active-student + team-scope filter; it just
+//     counts the rows instead of naming them. Nothing is re-derived below: the
+//     scope filter is the one this module already owned, reused, and the
+//     `attendance` read is imported from `./attendance` (import-only; that
+//     module is shared with W2/W3 and is NOT edited here).
+//
+// Owner ruled on this substitution 2026-08-02 after the original premise was
+// shown to be false; the T403 row carries the corrected design.
+// ---------------------------------------------------------------------------
+
+/**
+ * `LiveConsole.tsx`'s real `loadData`. `getClient` is injectable, this
+ * directory's own convention.
+ *
+ * Rejects (a plain `Error`) when the session or its parent event does not
+ * resolve: `LoadLiveConsoleDataFn`'s own signature is non-nullable, so there
+ * is no first-class "not found" value it can express -- the same constraint
+ * and the same honest resolution `endMeeting.ts`'s own
+ * `makeLoadEndMeetingSummary` already documents for `LoadEndMeetingSummaryFn`.
+ * `LiveConsoleBody`'s DES-12 error state renders that rejection as "Couldn't
+ * load this session".
+ */
+export function makeLoadLiveConsoleData(
+  getClient: () => SupabaseClient = getSupabaseClient,
+): LoadLiveConsoleDataFn {
+  const loadSessionWithEvent = makeLoadSessionWithEventContext(getClient);
+  const loadActiveStudentTeams = createLoader<void, StudentTeamDbRow[]>(
+    queryActiveStudentTeams,
+    getClient,
+  );
+  const loadAttendance = makeLoadAttendanceForSessions(getClient);
+
+  return async (sessionId: string): Promise<LiveConsoleData> => {
+    const context = await loadSessionWithEvent(sessionId);
+    if (context === null) {
+      throw new Error(`Live console: session "${sessionId}" was not found.`);
+    }
+    const { session, event } = context;
+    // Independent of the session/event lookup above -- run concurrently, the
+    // same shape `makeLoadKioskTally` already uses.
+    const [studentRows, attendanceRows] = await Promise.all([
+      loadActiveStudentTeams(),
+      loadAttendance([sessionId]),
+    ]);
+
+    // The SAME open-vs-scoped semantics `makeLoadKioskTally` applies for its
+    // `expected` count (module doc above): `team_ids === null` means open to
+    // every team, non-null means scoped to exactly those teams.
+    const teamIds = event.team_ids;
+    const roster: LiveConsoleRosterEntry[] = (studentRows ?? [])
+      .filter((student) => teamIds === null || teamIds.includes(student.team_id))
+      .map((student) => ({ studentId: student.id, name: student.display_name }));
+
+    const attendance: Record<string, LiveConsoleAttendanceRecordState> = {};
+    for (const row of attendanceRows) {
+      attendance[row.studentId] = {
+        status: row.status,
+        method: row.method,
+        recordedBy: row.recordedBy,
+        // The field `loadEndMeetingSummary` would have dropped -- see #1 above.
+        updatedAt: row.updatedAt,
+      };
+    }
+
+    return {
+      session: {
+        id: session.id,
+        title: event.title,
+        startsAt: session.starts_at,
+        endsAt: session.ends_at,
+      },
+      roster,
+      attendance,
+    };
+  };
+}
+
+/** `LiveConsole.tsx`'s own default `loadData` -- real queries. */
+export const loadLiveConsoleData: LoadLiveConsoleDataFn = makeLoadLiveConsoleData();

@@ -3,8 +3,14 @@
  *
  * Renders the three end states a student lands on after scanning the
  * check-in QR code (MTG-06's QR-encoded URL, `?s=<sessionId>&t=<token>`) or,
- * later, after T054's manual short-code entry calls the same
- * `callCheckin()` path (`?s=<sessionId>&code=<shortCode>`):
+ * since T321, after typing the kiosk's 6-character short code into this
+ * screen's own manual-entry form, which calls the same `callCheckin()` path
+ * with `{ session_id, code }`:
+ *
+ * (The two references here and below used to point at "T054's future
+ * manual-entry sub-path". T054 is Student Home / HOME-02 -- an unrelated
+ * task -- so that pointer tracked nothing and the work went unfiled until an
+ * external UX audit re-found it as LIVE-002. Corrected by T321.)
  *
  *   1. success       -- `already_checked_in: false` -- the DES-01
  *                        "Check-in Bolt": bolt draws in (~400ms), the
@@ -127,7 +133,14 @@
  * `Icon size="lg" color="accent"` without fighting a component whose
  * documented API has no animation hook.
  */
-import { useCallback, useEffect, useState, type ReactNode, type SVGProps } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type FormEvent,
+  type ReactNode,
+  type SVGProps,
+} from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Banner,
@@ -138,6 +151,7 @@ import {
   Icon,
   Spinner,
   Text,
+  TextInput,
   Timestamp,
   VStack,
 } from '@astryxdesign/core';
@@ -326,7 +340,7 @@ export async function callCheckin(
 
 // ---------------------------------------------------------------------------
 // URL query-param parsing -- MTG-06's QR-encoded URL shape (`?s=&t=`), plus
-// a `code` fallback for T054's future manual-entry sub-path.
+// the `code` form that T321's manual-entry sub-path builds.
 // ---------------------------------------------------------------------------
 
 const MISSING_CREDENTIAL_ERROR: CheckinErrorInfo = {
@@ -345,6 +359,69 @@ export function parseCheckinCredential(searchParams: URLSearchParams): CheckinCr
   }
   return { sessionId, token, code };
 }
+
+/**
+ * T321: the session id ALONE, independent of whether a usable credential is
+ * present. Manual short-code entry needs this separately from
+ * `parseCheckinCredential`, which returns `null` when `t`/`code` are absent
+ * even though `s` is perfectly readable.
+ *
+ * WHY THE SESSION ID IS NON-NEGOTIABLE (verified against T032's shipped
+ * backend, not assumed): `validateCheckinRequest`
+ * (`supabase/functions/checkin/validation.ts`) rejects any body without a
+ * uuid `session_id` (`MISSING_SESSION_ID`/`INVALID_SESSION_ID`), and
+ * `verifyShortCode` (`supabase/functions/checkin/hmac.ts:133-145`) HMACs the
+ * presented code over `` `${sessionId}:${bucket}` `` -- so a short code is
+ * only meaningful relative to one specific session. A typed code with no
+ * session id verifies against nothing and cannot be made to work from this
+ * file. See T400 for that separately-filed gap.
+ */
+export function parseCheckinSessionId(searchParams: URLSearchParams): string | null {
+  return searchParams.get('s') || null;
+}
+
+// ---------------------------------------------------------------------------
+// T321: manual short-code entry (MTG-06's "or types a short code" path).
+// ---------------------------------------------------------------------------
+
+/**
+ * Mirrors `supabase/functions/checkin/hmac.ts`'s `SHORT_CODE_LENGTH` (6) and
+ * `SHORT_CODE_ALPHABET` ('ABCDEFGHIJKLMNOPQRSTUVWXYZ23456789' -- 34 chars,
+ * A-Z plus 2-9). Deliberately duplicated rather than imported: that module is
+ * a Deno Edge Function outside `src/`, compiled by a different toolchain, and
+ * this file's tsconfig does not reach it. The values are pinned by
+ * `SHORT_CODE_CONTRACT` assertions in this file's test so a backend change
+ * that drifts from them fails a test here rather than silently rejecting
+ * valid codes in the browser.
+ */
+export const SHORT_CODE_LENGTH = 6;
+export const SHORT_CODE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ23456789';
+
+/**
+ * Trims, upper-cases, and resolves the two glyph confusions that the
+ * alphabet makes UNAMBIGUOUS: `0` and `1` are not in it, so a student
+ * reading a code off the kiosk TV who types `0` can only have meant `O`,
+ * and `1` can only have meant `I`. This mapping is lossless by
+ * construction -- it can never rewrite one valid code into a different
+ * valid code, because neither input character is ever part of one.
+ *
+ * The server applies its own `.trim().toUpperCase()` (`verifyShortCode`);
+ * normalizing here too means what the student sees echoed back is what is
+ * actually sent.
+ */
+export function normalizeShortCode(raw: string): string {
+  return raw.trim().toUpperCase().replaceAll('0', 'O').replaceAll('1', 'I');
+}
+
+/** True when `normalizeShortCode`'s output could possibly be a real code. */
+export function isWellFormedShortCode(normalized: string): boolean {
+  return (
+    normalized.length === SHORT_CODE_LENGTH &&
+    [...normalized].every((char) => SHORT_CODE_ALPHABET.includes(char))
+  );
+}
+
+const MALFORMED_SHORT_CODE_MESSAGE = `Enter the ${SHORT_CODE_LENGTH}-character code shown on the check-in screen. Letters and the digits 2-9 only.`;
 
 // ---------------------------------------------------------------------------
 // prefers-reduced-motion -- real `window.matchMedia` check (T035 worker
@@ -513,47 +590,87 @@ export function CheckinResult({
   const [state, setState] = useState<ResultState>({ status: 'loading' });
   const prefersReducedMotion = usePrefersReducedMotion();
 
-  const runCheckin = useCallback(() => {
-    const credential = parseCheckinCredential(new URLSearchParams(searchParamsKey));
-    if (!credential) {
-      setState({ status: 'error', error: MISSING_CREDENTIAL_ERROR });
-      return;
-    }
-    setState({ status: 'loading' });
-    // T100 (module doc gap #1): `getAccessToken` is now async -- `await`ed
-    // here, the one call site in this file. Any rejection (an
-    // `getAccessToken` override that itself throws, e.g. a test double)
-    // falls through to the same generic catch below as a `checkin()`
-    // rejection always has -- the real default (`loaders/checkin.ts`'s
-    // `getAccessToken`) never rejects (see that module's own doc).
-    void (async () => {
-      try {
-        const accessToken = await getAccessToken();
-        const result = await checkin(credential, accessToken, config);
-        if (!result.ok) {
-          setState({ status: 'error', error: result.error });
-          return;
-        }
-        setState(
-          result.data.already_checked_in
-            ? { status: 'already-in', attendance: result.data.attendance }
-            : { status: 'success', attendance: result.data.attendance },
-        );
-      } catch {
-        setState({
-          status: 'error',
-          error: {
-            code: 'CHECKIN_UNEXPECTED_ERROR',
-            message: 'Something went wrong checking you in. Try again.',
-          },
-        });
+  // T321: manual short-code entry. `manualSessionId` is read separately from
+  // `parseCheckinCredential` because that helper returns `null` when the URL
+  // carries no `t`/`code` -- which is precisely the state this form recovers
+  // from. `null` here means no session id is knowable, so the form is not
+  // offered at all rather than being offered and guaranteed to fail (T400).
+  const manualSessionId = parseCheckinSessionId(new URLSearchParams(searchParamsKey));
+  const [manualCode, setManualCode] = useState('');
+  const [manualCodeError, setManualCodeError] = useState<string | null>(null);
+
+  /**
+   * T321: `override` lets manual short-code entry run the SAME call path with
+   * a credential the URL does not contain. Without it, the only credential
+   * source is `searchParamsKey`, which is exactly why the pre-T321 "Try
+   * again" button replayed an expired token verbatim and could never succeed.
+   *
+   * Callers must invoke this as `runCheckin()`, never bare as
+   * `onClick={runCheckin}` -- React would pass the click event as `override`.
+   */
+  const runCheckin = useCallback(
+    (override?: CheckinCredential) => {
+      const credential = override ?? parseCheckinCredential(new URLSearchParams(searchParamsKey));
+      if (!credential) {
+        setState({ status: 'error', error: MISSING_CREDENTIAL_ERROR });
+        return;
       }
-    })();
-  }, [searchParamsKey, checkin, getAccessToken, config]);
+      setState({ status: 'loading' });
+      // T100 (module doc gap #1): `getAccessToken` is now async -- `await`ed
+      // here, the one call site in this file. Any rejection (an
+      // `getAccessToken` override that itself throws, e.g. a test double)
+      // falls through to the same generic catch below as a `checkin()`
+      // rejection always has -- the real default (`loaders/checkin.ts`'s
+      // `getAccessToken`) never rejects (see that module's own doc).
+      void (async () => {
+        try {
+          const accessToken = await getAccessToken();
+          const result = await checkin(credential, accessToken, config);
+          if (!result.ok) {
+            setState({ status: 'error', error: result.error });
+            return;
+          }
+          setState(
+            result.data.already_checked_in
+              ? { status: 'already-in', attendance: result.data.attendance }
+              : { status: 'success', attendance: result.data.attendance },
+          );
+        } catch {
+          setState({
+            status: 'error',
+            error: {
+              code: 'CHECKIN_UNEXPECTED_ERROR',
+              message: 'Something went wrong checking you in. Try again.',
+            },
+          });
+        }
+      })();
+    },
+    [searchParamsKey, checkin, getAccessToken, config],
+  );
 
   useEffect(() => {
+    // Bare `runCheckin()` -- the URL is the credential source on mount. Never
+    // pass this directly as an effect/handler reference (see `runCheckin`).
     runCheckin();
   }, [runCheckin]);
+
+  /**
+   * T321: manual short-code submission. Validates against the shipped backend
+   * contract BEFORE spending a network attempt, because
+   * `supabase/functions/checkin/rate_limit.ts` caps short-code attempts at
+   * 5/min/user (MTG-06) -- a typo must not burn one of five.
+   */
+  const handleManualSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const normalized = normalizeShortCode(manualCode);
+    if (!manualSessionId || !isWellFormedShortCode(normalized)) {
+      setManualCodeError(MALFORMED_SHORT_CODE_MESSAGE);
+      return;
+    }
+    setManualCodeError(null);
+    runCheckin({ sessionId: manualSessionId, code: normalized });
+  };
 
   const handleDone = () => navigate('/', { replace: true });
 
@@ -645,7 +762,39 @@ export function CheckinResult({
                   description={state.error.message}
                   container="card"
                 />
+                {/* "Try again" replays whatever credential the URL holds. That
+                    is right for a transient network failure and useless for an
+                    expired one, which is why T321 pairs it with the form below
+                    rather than replacing it. */}
                 <Button label="Try again" variant="primary" onClick={() => runCheckin()} />
+
+                {manualSessionId ? (
+                  <form onSubmit={handleManualSubmit} noValidate>
+                    <VStack gap={3} hAlign="center">
+                      <Text type="supporting" color="secondary">
+                        Code expired, or can&apos;t scan? Enter the code shown on the check-in
+                        screen.
+                      </Text>
+                      {/* astryx-api.md TextInput Props: label, value, onChange (value-first, not an event), placeholder, status, htmlName. Button Props: type='submit' -- gives the Enter key a real submit path (DES-17/NFR-07 keyboard requirement) without a keydown handler. */}
+                      <TextInput
+                        label="Check-in code"
+                        value={manualCode}
+                        onChange={(value) => {
+                          setManualCode(value);
+                          if (manualCodeError) {
+                            setManualCodeError(null);
+                          }
+                        }}
+                        placeholder="ABC234"
+                        htmlName="checkin-short-code"
+                        status={
+                          manualCodeError ? { type: 'error', message: manualCodeError } : undefined
+                        }
+                      />
+                      <Button label="Check in with code" variant="secondary" type="submit" />
+                    </VStack>
+                  </form>
+                ) : null}
               </VStack>
             ) : null}
           </Card>
