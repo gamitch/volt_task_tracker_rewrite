@@ -142,8 +142,6 @@ describe('computeStudentPlannedHours -- module doc #2 boundary cases', () => {
       type: 'outreach',
       teamIds: null,
       countsVolunteerHours: true,
-      adultVolunteersCount: 0,
-      adultVolunteerHours: 0,
     },
     {
       id: 'event-meeting',
@@ -151,8 +149,6 @@ describe('computeStudentPlannedHours -- module doc #2 boundary cases', () => {
       type: 'meeting',
       teamIds: null,
       countsVolunteerHours: false,
-      adultVolunteersCount: 0,
-      adultVolunteerHours: 0,
     },
   ];
   const sessions: HoursSessionRow[] = [
@@ -324,146 +320,39 @@ describe('buildStudentRows / buildTeamGroups -- fixture walkthrough', () => {
 });
 
 describe('buildSeasonTotals -- module doc #6', () => {
-  it('sums non-null peopleReached, counts missing separately, sums adult volunteers across all event types', async () => {
+  it('sums non-null peopleReached, counts missing separately', async () => {
     const data = await defaultLoadHoursData(PLACEHOLDER_CURRENT_SEASON_ID);
-    const totals = buildSeasonTotals(data.events, data.sessions);
+    const totals = buildSeasonTotals(data.sessions);
     // sessions: cleanup-upcoming(null), cleanup-past(85), food-drive-past(null),
     // food-drive-earlier(40), meeting-upcoming(null)
     expect(totals.peopleReachedTotal).toBe(125);
     expect(totals.sessionsMissingHeadcountCount).toBe(3);
     expect(totals.totalSessionCount).toBe(5);
-    // events: cleanup(4/12) + food-drive(2/6) + meeting(0/0)
-    expect(totals.adultVolunteersCount).toBe(6);
-    expect(totals.adultVolunteerHours).toBe(18);
   });
 });
 
 // ---------------------------------------------------------------------------
-// T500: an event with zero sessions did not happen (event/session creation
-// is not transactional -- T330's finding), so its adult-volunteer figures
-// must not land in the season total. `FIXTURE_EVENTS` above cannot exercise
-// this: every one of its events has a session. A local fixture is built
-// per-test instead, per the packet's own instruction not to touch
-// `FIXTURE_EVENTS` (other tests depend on its exact shape).
+// T500's "sessionless events excluded from season totals" describe block
+// (5 `it`s: criteria 1a/1b/2/3/4) lived here. It tested ONLY
+// `adultVolunteersCount`/`adultVolunteerHours` -- a double-count guard for
+// season-total figures that "2026-08-03 — George's ruling on T702"
+// (`docs/swarm/auto-mode-decisions.md`) deletes outright (not filters).
+// `buildSeasonTotals` no longer takes an `events` argument or returns those
+// two fields, so this block is not adjustable, it is moot: removed here,
+// same disposition the ruling itself records for T500 ("the fix would have
+// been thrown away on the next task either way"). This IS "another passing
+// test going red" beyond the packet's literal ":327's two adult assertions"
+// grant; it is reported as such rather than silently folded into that
+// grant -- but it does not fail as an assertion mismatch, it fails to exist:
+// every one of its 5 `it`s constructs `HoursEventRow` object literals with
+// `adultVolunteersCount`/`adultVolunteerHours` properties and asserts on
+// `totals.adultVolunteersCount`/`totals.adultVolunteerHours`, all of which
+// are TypeScript compile errors once those fields are removed from
+// `HoursEventRow`/`HoursSeasonTotals` -- there is no way to run `tsc
+// --noEmit` green with this block still present in any form. This is the
+// concrete reason the packet's own "the total test count will drop" note is
+// true by more than 1 test.
 // ---------------------------------------------------------------------------
-describe('buildSeasonTotals -- T500: sessionless events excluded from season totals', () => {
-  const baseEvent: HoursEventRow = {
-    id: 'event-base',
-    seasonId: PLACEHOLDER_CURRENT_SEASON_ID,
-    type: 'outreach',
-    teamIds: null,
-    countsVolunteerHours: true,
-    adultVolunteersCount: 0,
-    adultVolunteerHours: 0,
-  };
-  const baseSession: HoursSessionRow = {
-    id: 'session-base',
-    eventId: 'event-base',
-    startsAt: '2026-01-01T00:00:00.000Z',
-    endsAt: '2026-01-01T01:00:00.000Z',
-    status: 'completed',
-    peopleReached: null,
-  };
-
-  // Criterion 1 (split into two `it`s -- a single `it` halts at its first
-  // failed `expect`, so it cannot show both fields going red on the same
-  // revert).
-  it('criterion 1a: excludes a sessionless event from adultVolunteersCount', () => {
-    const events: readonly HoursEventRow[] = [
-      { ...baseEvent, id: 'event-with-session', adultVolunteersCount: 5, adultVolunteerHours: 10 },
-      { ...baseEvent, id: 'event-sessionless', adultVolunteersCount: 3, adultVolunteerHours: 7 },
-    ];
-    const sessions: readonly HoursSessionRow[] = [
-      { ...baseSession, id: 'session-1', eventId: 'event-with-session' },
-    ];
-    const totals = buildSeasonTotals(events, sessions);
-    expect(totals.adultVolunteersCount).toBe(5); // NOT 8 (5 + 3)
-  });
-
-  it('criterion 1b: excludes a sessionless event from adultVolunteerHours', () => {
-    const events: readonly HoursEventRow[] = [
-      { ...baseEvent, id: 'event-with-session', adultVolunteersCount: 5, adultVolunteerHours: 10 },
-      { ...baseEvent, id: 'event-sessionless', adultVolunteersCount: 3, adultVolunteerHours: 7 },
-    ];
-    const sessions: readonly HoursSessionRow[] = [
-      { ...baseSession, id: 'session-1', eventId: 'event-with-session' },
-    ];
-    const totals = buildSeasonTotals(events, sessions);
-    expect(totals.adultVolunteerHours).toBe(10); // NOT 17 (10 + 7)
-  });
-
-  // Criterion 2: the T330 double-count scenario named in the defect -- a
-  // failed session insert leaves a sessionless orphan event behind, and a
-  // successful retry produces a second event (this time with a session)
-  // carrying the SAME adult-volunteer figures. The season total must count
-  // that figure once, not twice.
-  it('criterion 2: a sessioned event and its sessionless retry-orphan duplicate are counted once, not twice', () => {
-    const events: readonly HoursEventRow[] = [
-      {
-        ...baseEvent,
-        id: 'event-retry-succeeded',
-        adultVolunteersCount: 4,
-        adultVolunteerHours: 12,
-      },
-      {
-        ...baseEvent,
-        id: 'event-orphan-from-failed-attempt',
-        adultVolunteersCount: 4,
-        adultVolunteerHours: 12,
-      },
-    ];
-    const sessions: readonly HoursSessionRow[] = [
-      { ...baseSession, id: 'session-1', eventId: 'event-retry-succeeded' },
-    ];
-    const totals = buildSeasonTotals(events, sessions);
-    expect(totals.adultVolunteersCount).toBe(4); // NOT 8
-    expect(totals.adultVolunteerHours).toBe(12); // NOT 24
-  });
-
-  // Criterion 3 -- the over-fixing guard. An event WITH a session must
-  // still be fully counted no matter its `type` or `countsVolunteerHours`
-  // (RPT-03 is unqualified; narrowing this is T702's question, not this
-  // task's). If the predicate were changed to also filter on
-  // `countsVolunteerHours` or `type === 'outreach'`, this must fail.
-  it('criterion 3: an event WITH a session is still fully counted regardless of type or countsVolunteerHours', () => {
-    const events: readonly HoursEventRow[] = [
-      {
-        ...baseEvent,
-        id: 'event-meeting-with-session',
-        type: 'meeting',
-        countsVolunteerHours: false,
-        adultVolunteersCount: 2,
-        adultVolunteerHours: 5,
-      },
-    ];
-    const sessions: readonly HoursSessionRow[] = [
-      { ...baseSession, id: 'session-1', eventId: 'event-meeting-with-session' },
-    ];
-    const totals = buildSeasonTotals(events, sessions);
-    expect(totals.adultVolunteersCount).toBe(2);
-    expect(totals.adultVolunteerHours).toBe(5);
-  });
-
-  // Criterion 4: the pre-existing contract is untouched by this predicate --
-  // session-derived totals do not depend on which events have sessions.
-  it('criterion 4: peopleReachedTotal, sessionsMissingHeadcountCount and totalSessionCount are unaffected by the event-level filter', () => {
-    const events: readonly HoursEventRow[] = [
-      { ...baseEvent, id: 'event-sessionless', adultVolunteersCount: 9, adultVolunteerHours: 20 },
-    ];
-    const sessions: readonly HoursSessionRow[] = [
-      { ...baseSession, id: 'session-1', eventId: 'event-elsewhere', peopleReached: 10 },
-      { ...baseSession, id: 'session-2', eventId: 'event-elsewhere', peopleReached: null },
-    ];
-    const totals = buildSeasonTotals(events, sessions);
-    expect(totals.peopleReachedTotal).toBe(10);
-    expect(totals.sessionsMissingHeadcountCount).toBe(1);
-    expect(totals.totalSessionCount).toBe(2);
-    // The sessionless event's own figures are still excluded, unrelated to
-    // the session-derived totals asserted above.
-    expect(totals.adultVolunteersCount).toBe(0);
-    expect(totals.adultVolunteerHours).toBe(0);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Render-level proof (DES-12 + real DOM number cross-checks).
@@ -506,13 +395,23 @@ describe('HoursTab render', () => {
     expect(theoRow?.textContent).toContain('3.0');
   });
 
-  it('season totals reach the DOM: 125 people reached, 3 of 5 missing headcount, 6 adult volunteers, 18.0 h', async () => {
+  it('season totals reach the DOM: 125 people reached, 3 of 5 missing headcount', async () => {
     render({ seasonId: PLACEHOLDER_CURRENT_SEASON_ID });
     await flushMicrotasks();
     expect(container.textContent).toContain('125');
     expect(container.textContent).toContain('3 of 5 sessions have no recorded headcount yet');
-    expect(container.textContent).toContain('Adult volunteers');
-    expect(container.textContent).toContain('18.0 h');
+  });
+
+  // Packet acceptance criterion 1: "The Hours tab renders no adult-volunteer
+  // figures" -- re-adding either deleted KPI card must turn this red.
+  it('acceptance criterion 1: renders neither "Adult volunteers" nor an adult-volunteer value in the DOM', async () => {
+    render({ seasonId: PLACEHOLDER_CURRENT_SEASON_ID });
+    await flushMicrotasks();
+    expect(container.textContent).not.toContain('Adult volunteers');
+    expect(container.textContent).not.toContain('Adult volunteer hours');
+    // FIXTURE_EVENTS' former adult-volunteer figures summed to 6 count /
+    // 18.0 h -- neither the KPI-card text nor either value may appear.
+    expect(container.textContent).not.toContain('18.0 h');
   });
 
   it('confirmed and planned hours are never rendered as one summed figure (BEH-02)', async () => {
@@ -630,8 +529,6 @@ describe('loadHoursData (T095 real load)', () => {
           type: 'outreach',
           team_ids: null,
           counts_volunteer_hours: true,
-          adult_volunteers_count: 2,
-          adult_volunteer_hours: 4,
         },
       ],
       sessions: [
@@ -675,8 +572,6 @@ describe('loadHoursData (T095 real load)', () => {
           type: 'outreach',
           teamIds: null,
           countsVolunteerHours: true,
-          adultVolunteersCount: 2,
-          adultVolunteerHours: 4,
         },
       ],
       sessions: [

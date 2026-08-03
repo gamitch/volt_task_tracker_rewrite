@@ -1,7 +1,9 @@
 /**
  * T057: `/reports` Hours tab (RPT-03), Epic E9. Per-student, per-team
  * confirmed/planned hours vs. goal (`ProgressBar`), team subtotal rows, and
- * season totals for people reached / adult volunteers.
+ * a season total for people reached. Season totals no longer include
+ * adult-volunteer count/hours -- "2026-08-03 — George's ruling on T702"
+ * (`docs/swarm/auto-mode-decisions.md`), students-only, module doc #6 below.
  *
  * -----------------------------------------------------------------------
  * 1. Confirmed hours ground truth -- `v_student_hours`, NEVER recomputed
@@ -131,39 +133,28 @@
  *    one team's own rows only -- never across teams.
  *
  * -----------------------------------------------------------------------
- * 6. Season totals -- people reached / adult volunteers (RPT-03's own
- *    literal text), ground truth per this task's own packet:
+ * 6. Season totals -- people reached ONLY (RPT-03, students-only per
+ *    "2026-08-03 — George's ruling on T702", `docs/swarm/auto-mode-
+ *    decisions.md`): *"we only nee to count student hours per rules we
+ *    already established"*. RPT-03 previously also named adult volunteers
+ *    (count and hours); that clause was removed from the PRD by the same
+ *    ruling and `buildSeasonTotals` no longer computes or returns those two
+ *    figures -- `HoursSeasonTotals` has no `adultVolunteersCount`/
+ *    `adultVolunteerHours` fields, `HoursEventRow` carries no adult-volunteer
+ *    columns, and the Season Totals cards render only "People reached".
+ *    This is a DELETION, not a filter -- an earlier plan (T500/T703) to
+ *    exclude sessionless events' adult-volunteer figures from the season sum
+ *    (a double-count guard, T330's non-transactional-create finding) is
+ *    superseded and removed along with the figures it guarded; there is
+ *    nothing left for that guard to protect once the sum itself is gone.
+ *    RPT-04 (Events tab) and RPT-05 (CSV export) show adult volunteers
+ *    PER EVENT and were not touched by this ruling -- see `EventsTab.tsx`/
+ *    `csvExport.ts`, forbidden/read-only files for this task. The
+ *    `events.adult_volunteers_count`/`adult_volunteer_hours` columns
+ *    themselves are untouched (no migration): coaches still enter these
+ *    numbers (`src/pages/outreach/**`, W2's files) and RPT-04/RPT-05 still
+ *    read them per-event; only this file's season-wide aggregation stops.
  *
- *  - `events.adult_volunteers_count` (int, default 0) / `adult_volunteer_hours`
- *    (numeric, default 0) are PER-EVENT totals. `buildSeasonTotals` sums
- *    both across every event this task's `loadData` returned for the given
- *    season THAT HAS AT LEAST ONE SESSION (T500 -- see below) -- a plain
- *    arithmetic sum of already-real, already-non-null columns (no
- *    metric-view formula being re-derived here, since no view computes this
- *    sum at all; same class of "legitimately new, disclosed aggregate"
- *    reasoning T053's checker already accepted).
- *    T500 PREDICATE: event/session creation is not transactional (T330's
- *    finding) -- a failed session insert can leave an event row behind, and
- *    a coach's successful retry then produces a SECOND event row carrying
- *    the same adult-volunteer figures, double-counting something that
- *    happened once. An event with zero sessions did not happen, so
- *    `buildSeasonTotals` now builds the set of event ids that have at least
- *    one session (any status, including `canceled` -- this predicate is
- *    "has >= 1 session", not "has a non-canceled session", so a
- *    canceled-only event still counts; that is pre-existing/conservative
- *    behaviour and intentionally out of scope here) and sums
- *    `adultVolunteersCount`/`adultVolunteerHours` over ONLY those events.
- *    `peopleReachedTotal`, `sessionsMissingHeadcountCount` and
- *    `totalSessionCount` below are already session-derived and untouched by
- *    this predicate. This is orthogonal to (and does not reverse) the
- *    no-type-filter decision in the next paragraph -- narrowing which event
- *    *kinds* count is a separate product question, filed as T702, not
- *    decided by this file. One known, unverifiable-by-this-file gap:
- *    imported data (`scripts/migrate/transform.ts`) maps events and
- *    sessions independently, so an imported event that genuinely happened
- *    could carry real adult-volunteer figures with zero session rows and
- *    would now be silently excluded -- flagged for the data owner to check
- *    at cutover, not something this file can detect.
  *  - `event_sessions.people_reached` (nullable int) is PER-SESSION.
  *    `buildSeasonTotals` sums every NON-NULL `peopleReached` value across
  *    every session this task's `loadData` returned for the season, and
@@ -176,12 +167,12 @@
  *    because a season total that quietly folds in "not recorded yet"
  *    sessions as literal zeroes would understate the real number without
  *    telling anyone, whereas the "N of M" framing is honest about
- *    incompleteness. No `event.type` filter is applied to either sum (the
+ *    incompleteness. No `event.type` filter is applied to this sum (the
  *    packet's own ground truth text says "summing these across all of a
  *    season's events/sessions", with no type restriction stated) --
- *    `FIXTURE_EVENTS` deliberately includes one `type: 'meeting'` event with
- *    its own (default-0/null) contribution specifically to prove this file
- *    does not silently drop non-outreach events from these two sums.
+ *    `FIXTURE_EVENTS` deliberately includes one `type: 'meeting'` event
+ *    specifically to prove this file does not silently drop non-outreach
+ *    events from this sum.
  *
  * -----------------------------------------------------------------------
  * 7. "Grouped Table" -- same resolution `ParticipationTab.tsx`'s (T056,
@@ -360,10 +351,6 @@ export interface HoursEventRow {
   teamIds: readonly string[] | null;
   /** Verbatim rename of `events.counts_volunteer_hours` -- module doc #2. */
   countsVolunteerHours: boolean;
-  /** Verbatim rename of `events.adult_volunteers_count` -- module doc #6. */
-  adultVolunteersCount: number;
-  /** Verbatim rename of `events.adult_volunteer_hours` -- module doc #6. */
-  adultVolunteerHours: number;
 }
 
 export interface HoursSessionRow {
@@ -593,17 +580,17 @@ export interface HoursSeasonTotals {
   peopleReachedTotal: number;
   sessionsMissingHeadcountCount: number;
   totalSessionCount: number;
-  adultVolunteersCount: number;
-  adultVolunteerHours: number;
 }
 
-/** Module doc #6 -- season totals for people reached / adult volunteers.
- * `peopleReached` nulls are EXCLUDED from the sum and counted separately
- * (disclosed judgment call), never silently treated as 0. */
-export function buildSeasonTotals(
-  events: readonly HoursEventRow[],
-  sessions: readonly HoursSessionRow[],
-): HoursSeasonTotals {
+/** Module doc #6 -- season total for people reached (students-only per
+ * "2026-08-03 — George's ruling on T702"; adult-volunteer figures were
+ * removed, not filtered -- see module doc #6 above). `peopleReached` nulls
+ * are EXCLUDED from the sum and counted separately (disclosed judgment
+ * call), never silently treated as 0. No longer takes an `events` argument:
+ * this function has nothing left to compute from `events` now that the
+ * adult-volunteer sums (and the T500 sessionless-event guard that protected
+ * them) are gone. */
+export function buildSeasonTotals(sessions: readonly HoursSessionRow[]): HoursSeasonTotals {
   let peopleReachedTotal = 0;
   let sessionsMissingHeadcountCount = 0;
   for (const session of sessions) {
@@ -613,24 +600,10 @@ export function buildSeasonTotals(
       peopleReachedTotal += session.peopleReached;
     }
   }
-  // T500: an event with zero sessions did not happen (event/session
-  // creation is not transactional -- T330). Exclude such an event's
-  // adult-volunteer figures from the season total; see module doc #6.
-  const eventIdsWithSessions = new Set(sessions.map((session) => session.eventId));
-  const eventsWithSessions = events.filter((event) => eventIdsWithSessions.has(event.id));
-  const adultVolunteersCount = eventsWithSessions.reduce(
-    (sum, event) => sum + event.adultVolunteersCount,
-    0,
-  );
-  const adultVolunteerHours = round1(
-    eventsWithSessions.reduce((sum, event) => sum + event.adultVolunteerHours, 0),
-  );
   return {
     peopleReachedTotal,
     sessionsMissingHeadcountCount,
     totalSessionCount: sessions.length,
-    adultVolunteersCount,
-    adultVolunteerHours,
   };
 }
 
@@ -780,8 +753,6 @@ const FIXTURE_EVENTS: readonly HoursEventRow[] = [
     type: 'outreach',
     teamIds: null,
     countsVolunteerHours: true,
-    adultVolunteersCount: 4,
-    adultVolunteerHours: 12,
   },
   {
     id: 'event-food-drive',
@@ -789,20 +760,15 @@ const FIXTURE_EVENTS: readonly HoursEventRow[] = [
     type: 'outreach',
     teamIds: null,
     countsVolunteerHours: true,
-    adultVolunteersCount: 2,
-    adultVolunteerHours: 6,
   },
-  // type: 'meeting', countsVolunteerHours: false -- proves (a) planned/
-  // confirmed hours correctly exclude it (module doc #2/#1) and (b) season
-  // totals do NOT silently drop non-outreach events (module doc #6).
+  // type: 'meeting', countsVolunteerHours: false -- proves planned/confirmed
+  // hours correctly exclude it (module doc #2/#1).
   {
     id: 'event-weekly-meeting',
     seasonId: PLACEHOLDER_CURRENT_SEASON_ID,
     type: 'meeting',
     teamIds: null,
     countsVolunteerHours: false,
-    adultVolunteersCount: 0,
-    adultVolunteerHours: 0,
   },
 ];
 
@@ -1088,18 +1054,6 @@ function SeasonTotalsCards({ totals }: { totals: HoursSeasonTotals }): ReactNode
             </Text>
           </VStack>
         </Card>
-        <Card>
-          <VStack gap={2}>
-            <Heading level={4}>Adult volunteers</Heading>
-            <Heading level={2}>{String(totals.adultVolunteersCount)}</Heading>
-          </VStack>
-        </Card>
-        <Card>
-          <VStack gap={2}>
-            <Heading level={4}>Adult volunteer hours</Heading>
-            <Heading level={2}>{`${totals.adultVolunteerHours.toFixed(1)} h`}</Heading>
-          </VStack>
-        </Card>
       </Grid>
     </VStack>
   );
@@ -1122,7 +1076,7 @@ export function HoursTab({ seasonId, loadData = loadHoursData }: HoursTabProps):
 
   const studentRows = useMemo(() => buildStudentRows(data), [data]);
   const teamGroups = useMemo(() => buildTeamGroups(studentRows), [studentRows]);
-  const seasonTotals = useMemo(() => buildSeasonTotals(data.events, data.sessions), [data]);
+  const seasonTotals = useMemo(() => buildSeasonTotals(data.sessions), [data]);
   const columns = useMemo(() => buildColumns(), []);
 
   if (loadState.status === 'loading') {
