@@ -2256,3 +2256,42 @@ before asking would have been the expensive path — T205's gate refuted the rul
 here a product ruling deleted the target of a fully-gated packet. Both were caught before a worker's
 output shipped. Recorded as evidence that the ask-first cost is being paid back, not as a complaint
 about the ruling arriving mid-flight.
+
+---
+
+## 2026-08-03 — George's ruling on T198: CoachHome's team-scoped widgets go SEASON-WIDE
+
+**Verbatim:** *"yes, season-wide is fine option b"* — answering a two-option question:
+(a) build a real per-coach team concept (new table linking staff to teams, new RLS), or
+(b) make the remaining team-scoped widgets season-wide, matching the five T124 widgets on the same
+page that already work that way.
+
+**He chose (b).** **T198 stops being an open architectural question and becomes ordinary work.**
+
+**Why this was put to him rather than inferred, and why it was framed as a confirmation.** The
+underlying facts were verified directly, not inherited from T173's ledger text (which speculated a
+schema change might be needed without checking): `AuthUser` (`guards.tsx:49-53`) carries no team
+field; **no table anywhere links a staff profile to a team**; and every `staff_all` RLS policy
+(`rls.sql:62-64, 96-98`) grants program-wide, not team-scoped, access. So the widgets were asking a
+question the data model cannot answer, and T173 correctly let them fall through to an honest zero
+rather than guessing.
+
+**D-2/D-3 already pointed here** (`state-summary.md:451-454`, George verbatim: *"SO P3+GG=VOLT… we
+are just a team, not a compliance driven business"*), and `CoachHome.tsx` module doc #13(a) had
+already reached the identical conclusion for T124's five widgets. Per §7's "recommending on a
+question already settled", the question was framed as **"confirm D-2 extends here"** rather than
+asked cold — but it was still asked, because option (a) implies a migration and RLS changes
+(constitution item 18 triggers), and D-2's own wording is about *seasons and hours*, not about coach
+dashboards. Stretching it that far was the owner's call to make, not an agent's.
+
+**What this authorizes, and the boundary.** The remaining team-scoped widgets on `CoachHome` render
+season-wide figures, consistent with the T124 five. **This is a widget-semantics change — explicitly
+NOT a schema or auth change**, so it carries none of item 18's triggers and does not need a
+migration. The T198 row's own deferred bundle now unblocks with it: real
+`events`/`sessions`/`rsvps`/`attendance`/`teamParticipation`/`studentHours` queries for
+`CoachHomeData`, which have been literal honest-empty since T173 and were deliberately parked
+pending exactly this answer — building them earlier risked building the wrong shape twice.
+
+**Not authorized:** inventing any per-coach team association, or reading `PLACEHOLDER_CURRENT_TEAM_ID`
+as if it were real. If a widget genuinely cannot be expressed season-wide, that is a new question,
+not a licence to improvise.
