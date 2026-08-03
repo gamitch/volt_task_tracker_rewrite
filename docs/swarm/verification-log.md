@@ -7041,3 +7041,101 @@ sentences elsewhere state the inferred part without a local hedge.
 **Gates at this commit** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier
 **clean** · eslint **0 errors / 363 warnings** · vitest **77 files / 1878 tests, exit 0**. Green
 gates on a FAILED review — which is the point: the gates never had a chance of catching MAJOR-1.
+
+## T403 step 3 REWORK — the owner overturned the requirement, and the defect dissolved
+
+**W1, on `claude/w1-checkin`.** Follows the checker's FAIL. Not yet re-reviewed at time of writing.
+
+### The rework was not the one the checker prescribed
+
+The checker's MAJOR-1 said: a coach edit degrades a `qr` row's `method` to `coach` from the second
+click onward, violating acceptance criterion 3 (*"external `'qr'`/`'import'` provenance is
+preserved"*). Its prescribed fix was to carry the true DB provenance separately, or reconcile it
+from the returned row.
+
+Presented with both options in plain language, **the owner rejected the premise of both** and stated
+a different rule, unprompted and in his own words: *"in all cases, last record wins."* His case:
+*"If a coach touches absent, but then the student comes late and scans the qr, the student entry
+should be saved."* Asked whether it extends to the `method` label itself: *"it should follow last
+write wins so we do not have a mixmatching on the record."*
+
+Recorded verbatim in `auto-mode-decisions.md`.
+
+### Checking the ruling against the spec found that criterion 3 was wrong
+
+`VOLT_Portal_PRD.md:307` (MTG-11) contains two claims. The ruling **overturns the second** — *"always
+wins over QR values"* — which is exactly what discarded the late scanner's check-in and left them
+`absent` while standing in the room. Annotated as superseded, along with §12's acceptance item 4.
+
+**But the first clause reads:** *"A coach tap upserts with `method='coach'`, `recorded_by=coach`."*
+The PRD had always said a coach tap writes `'coach'`.
+
+**So acceptance criterion 3 contradicted the PRD.** It was taken from
+`resolveAttendanceWriteMethod`'s docstring and put in the packet by the orchestrator **without ever
+being checked against the requirement it claimed to implement.** The checker then measured the code
+against that criterion and found a MAJOR defect — correctly, given the criterion, which was itself
+wrong.
+
+Under the ruling the correct wire sequence is `["coach","coach","coach",…]`. The shipped code
+produced `["qr","coach","coach",…]` — **wrong on the FIRST call only, in the opposite direction from
+the finding.** The fix is to stop calling `resolveAttendanceWriteMethod` in this file at all:
+smaller than either option the checker offered, and smaller than the two the orchestrator offered
+the owner.
+
+**The lesson is not "the checker was wrong."** It was right about the code disagreeing with the
+criterion. The lesson is that **a wrong acceptance criterion is invisible to every downstream stage**
+— packet, premise gate, worker, and checker all reasoned faithfully from it, and only the owner
+reading the behaviour in plain language caught it. The premise gate fact-checks the packet against
+the *codebase*; nothing in the chain fact-checked it against the *PRD*. That is a real gap in this
+process, not a one-off.
+
+### What changed
+
+- **`mergeAttendanceUpdate` DELETED**, not reduced to `return incoming`. Under last-write-wins there
+  is no merge; a function ignoring its `existing` argument would imply a decision that no longer
+  exists — the same dishonesty as a fixture kept "as a fallback".
+- **`resolveAttendanceWriteMethod` no longer called here.** A coach tap sends `'coach'` on the wire
+  and locally. One value, no split, so no row can claim `method: 'qr'` while naming a coach in
+  `recorded_by`.
+- **`makeDefaultSetAttendanceStatus(write = setAttendanceStatus)`** — the injection point MAJOR-2
+  required.
+- Realtime handler applies incoming changes unconditionally.
+
+### Test changes, disclosed under constitution item 10
+
+The ruling is the boss approval item 10 requires. The MTG-11 precedence test **asserted the
+overturned behaviour** — it would have kept a student `absent` after they scanned in late — so it is
+**inverted, not deleted**, and now runs the owner's own scenario. A second test covers his other
+direction (a later coach edit overwriting a QR value). `mergeAttendanceUpdate`'s five unit tests are
+deleted with the function.
+
+The former criterion-3 test now drives **three sequential edits** rather than one. The single-shot
+version was structurally incapable of seeing MAJOR-1 — the first call was correct and every later
+call was wrong.
+
+### Mutations (committed at `521d4c7` before mutating, per item 23)
+
+| # | Mutation | Result |
+|---|---|---|
+| M7 | corrupt the adapter's arg mapping (swap ids, hardcode status/method) | **RED, exit 1** targeted AND full suite — was **green at exit 0** before the rework |
+| M8 | restore the old provenance behaviour on the wire | **RED, exit 1**, 2 tests |
+| M9 | restore MTG-11 coach precedence in the Realtime path | **RED, exit 1** |
+
+M7 going red is the specific thing MAJOR-2 demanded.
+
+### Known limit, disclosed rather than solved
+
+"Last write wins" means *last applied* — arrival order, not a timestamp comparison.
+`attendance.updated_at` cannot order writes (T405: the database never bumps it on conflict-update),
+so there is nothing trustworthy to sort by. Moot today because the Realtime seam is still an honest
+no-op; it becomes real when Realtime does.
+
+### Scope held
+
+`resolveAttendanceWriteMethod` implements the *other* meaning of `method` and is used by W2's
+`AttendancePanel` and `MarkDayCompleteDialog`. **If this ruling extends to the whole table, that
+function is wrong everywhere** — W2's files, which W1 does not own and did not touch. Filed for W2
+and the owner rather than acted on.
+
+**Gates** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier **clean** · eslint
+**0 errors / 363 warnings** · vitest **77 files / 1877 tests, exit 0**.
