@@ -114,7 +114,7 @@ trustworthy but **verify the line numbers** — several were written weeks ago.
 
 ### ⚠️ THREE rows edit files W5 does not own: T156, T200 and T187. Do not start any without reading this.
 
-**T156 targets `src/lib/supabase/loaders/loader.ts`** — `toLoaderError` at `:116-121` replaces the
+**T156 targets `src/lib/supabase/loader.ts`** — `toLoaderError` at `:116-121` replaces the
 real Postgres message with a generic string, keeps the original only in `cause`, and **nothing
 anywhere logs it.** That is a genuine and well-evidenced defect: diagnosing T155 required the owner
 to open DevTools, filter the Network panel and click into a response body to recover
