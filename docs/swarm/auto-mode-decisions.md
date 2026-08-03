@@ -2225,3 +2225,65 @@ owner**; it is not covered by the ruling above, which answers *whether*, not *ho
 **Also unchanged: T306's attendance view stays staff-only.** This ruling is about **RSVP intent**, not
 attendance. `attendance` carries recorded hours and check-in provenance, and its RLS
 (`:226-232`) is a separate policy. Nothing here authorises widening that.
+
+---
+
+## 2026-08-03 — W3-A auto-mode window opened (orchestrator's decisions, NOT the owner's)
+
+Owner asked whether W3 could run while he was at work, then said **"launch w3-a"**. Everything in
+this entry is **mine, under delegated authority, and reversible by him.** Same posture as the three
+windows above: decide, log, never attribute to him.
+
+**The scope split was itself a decision put to him and approved, not assumed.** W3 was divided into
+W3-A (T197, T162, T160 — no open decisions, safe unattended) and T196 (a project carrying an open
+owner call, whose failure mode is real `absent` rows against real students). **T196 is excluded and
+must not be started in this window.** The wave stops when the three rows are done.
+
+**Measured base at window open, `main` = `33c9e24`:** `tsc` **0** · prettier **clean** ·
+vitest **78 files / 1944 tests, exit 0**.
+*Note: the W2 session recorded 78/1928 hours earlier the same day. `main` moved four more times
+between. This is why the W3-A prompt tells its agent to measure rather than inherit — and the
+orchestrator did so rather than quoting either figure.*
+
+### D1 — T197's premise gate is SKIPPED under item 19b, and the premise was re-measured instead
+
+**Item 19 normally requires `checker-premise` DISPATCH before any packet reaches a worker.**
+**19b scopes that by risk:** *"Light check or skip for packets that roll out an already-verified
+pattern to a new surface … The gate exists to catch unverified premises, not to re-audit settled
+ones."*
+
+T197 adds a test assertion to an existing test file against **already-correct shipped code**. It
+touches no migration, no RLS, no metric SQL, no auth. The pattern — assert a scoping filter — is
+settled in this repo.
+
+**Rather than skip the premise unverified, the orchestrator re-ran it directly** (item 19c: verify
+your own citations). At `33c9e24`, deleting both `.eq()` calls from `endMeeting.ts:450-456`:
+
+```
+Test Files  1 passed (1)
+     Tests  14 passed (14)
+vitest exit: 0
+```
+
+**Confirmed — the ledger's claim is true and current, not inherited.** File restored and
+`git diff --quiet` verified clean before packeting.
+
+**The residual risk in T197 is a vacuous test, which is a WORKER risk caught by the checker, not a
+premise risk.** Spending an opus gate round on a verified one-line premise is exactly the net-negative
+19a warns about. **Reversible:** if the checker finds the packet's premise wrong, this decision was
+wrong and a gate round should be added for T162.
+
+### D2 — T162 and T160 will be gated by the same test, not automatically skipped
+
+D1 is **not** a blanket exemption for the wave. T162 writes tests for **726 lines of previously
+untested loader** — a materially larger surface with real unknowns about what the participation math
+is supposed to do. That is closer to 19b's "novel" than its "settled". **T162 gets a premise gate
+unless its packet turns out to be narrower than it currently looks.** T160 is a rename in one file
+and will be skipped like D1.
+
+### Filed, not fixed — stale claims found while verifying
+
+- **`endMeeting.ts:12-19`** states T196 is *blocked*, `LiveConsole`'s attendance marking is an
+  *intentional no-op*, and its roster loader is a *fixture*. **All three are false since T403.**
+  Folded into T197's packet as an explicitly bounded comment-only fix (§5) rather than left, since
+  the worker is already in that file and the claim directly contradicts what the ledger now says.
