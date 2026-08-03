@@ -652,6 +652,22 @@ describe('buildEventGroups (UXD-02/03 per-event rows)', () => {
     expect(past.some((entry) => entry.event.id === 'e3')).toBe(false);
   });
 
+  // T330 (C2) -- NEW, a DELIBERATE single-orphan fixture (packet §8's own
+  // C2 warning): with NO other event in `past`, a mutation that routes a
+  // zero-session event to `past` instead of `upcoming` produces a
+  // ONE-element `past` array, which never invokes `past`'s own comparator
+  // (a one-element array never calls `.sort`'s comparator) -- so this
+  // mutation would NOT throw here. This test exists so THAT case reddens by
+  // its own `past.some`/`upcoming.some` assertions firing, not merely by
+  // riding along on the crash the multi-entry fixture above (the shared
+  // `e1`/`e2`/`e3` fixture) already produces.
+  it('a single dateless event, with no other past-bucket entry to crash the comparator, still resolves to upcoming and never past', () => {
+    const soloEvents: OutreachEventRow[] = [makeTestEvent({ id: 'solo', title: 'Solo dateless' })];
+    const { upcoming, past } = buildEventGroups(soloEvents, []);
+    expect(upcoming.some((entry) => entry.event.id === 'solo')).toBe(true);
+    expect(past.some((entry) => entry.event.id === 'solo')).toBe(false);
+  });
+
   // T330 (g)/(C4) -- NEW. Two dateless entries alongside a dated one must
   // sort without throwing: both pin ahead of the dated entry and tie with
   // each other (stable sort preserves their relative input order), then the
