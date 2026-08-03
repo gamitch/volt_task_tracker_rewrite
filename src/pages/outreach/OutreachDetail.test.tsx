@@ -66,7 +66,11 @@ import {
   markDayComplete,
   submitRsvpChange,
 } from '../../lib/supabase/loaders/outreach';
-import { loadAttendanceForSessions, upsertAttendance } from '../../lib/supabase/loaders/attendance';
+import {
+  loadAttendanceForSessions,
+  upsertAttendance,
+  type AttendanceRow,
+} from '../../lib/supabase/loaders/attendance';
 import {
   buildGoogleMapsUrl,
   buildInitialOutreachEvent,
@@ -77,7 +81,12 @@ import {
   formatChicagoWallTime,
   formatScopeLabel,
   formatSessionDateOnly,
+  // T306 -- the new attendance-vs-RSVP trigger/bucketing pure functions,
+  // same "exported, own describe block" convention `groupSessionSignups`
+  // itself already established.
+  groupSessionAttendance,
   groupSessionSignups,
+  hasRecordedAttendance,
   isSessionMarkDayCompleteEligible,
   OutreachDetail,
   resolveCreatorName,
@@ -377,6 +386,101 @@ describe('groupSessionSignups -- roster-diff derivation, not a stored status', (
   });
 });
 
+// ---------------------------------------------------------------------------
+// T306 -- attendance-side counterpart of groupSessionSignups, plus the
+// trigger. Pure-function level, mirroring the describe block immediately
+// above (this task's packet §7: "put the bucketing criteria [C3/C4/C5] at
+// pure-function level").
+// ---------------------------------------------------------------------------
+
+describe('groupSessionAttendance -- attendance-side counterpart of groupSessionSignups (T306)', () => {
+  const ROSTER: RosterStudent[] = [
+    { id: 's-1', name: 'Amara Chen', teamId: 'team-ravens', profileId: null },
+    { id: 's-2', name: 'Marcus Bello', teamId: 'team-ravens', profileId: null },
+    { id: 's-3', name: 'Nina Ortiz', teamId: 'team-ravens', profileId: null },
+    { id: 's-4', name: 'Ravi Kapoor', teamId: 'team-ravens', profileId: null },
+    { id: 's-5', name: 'Sofia Delgado', teamId: 'team-ravens', profileId: null },
+  ];
+
+  function buildRow(overrides: Pick<AttendanceRow, 'id' | 'studentId' | 'status'>): AttendanceRow {
+    return {
+      sessionId: 'session-1',
+      checkInAt: null,
+      checkOutAt: null,
+      hoursOverride: null,
+      method: 'coach',
+      recordedBy: 'profile-coach-1',
+      updatedAt: '2026-08-02T00:00:00.000Z',
+      createdAt: '2026-08-02T00:00:00.000Z',
+      ...overrides,
+    };
+  }
+
+  // s-5 deliberately has no row at all for session-1 -- the "No record" proof.
+  const ROWS: AttendanceRow[] = [
+    buildRow({ id: 'a-1', studentId: 's-1', status: 'present' }),
+    buildRow({ id: 'a-2', studentId: 's-2', status: 'late' }),
+    buildRow({ id: 'a-3', studentId: 's-3', status: 'excused' }),
+    buildRow({ id: 'a-4', studentId: 's-4', status: 'absent' }),
+  ];
+
+  it('C3: "present" and "late" both land in Attended', () => {
+    const groups = groupSessionAttendance('session-1', ROSTER, ROWS);
+    expect(groups.attended.map((s) => s.id).sort()).toEqual(['s-1', 's-2']);
+  });
+
+  it('C4: "excused" and "absent" land in their own buckets, never in Attended', () => {
+    const groups = groupSessionAttendance('session-1', ROSTER, ROWS);
+    expect(groups.excused.map((s) => s.id)).toEqual(['s-3']);
+    expect(groups.absent.map((s) => s.id)).toEqual(['s-4']);
+    expect(groups.attended.map((s) => s.id)).not.toContain('s-3');
+    expect(groups.attended.map((s) => s.id)).not.toContain('s-4');
+  });
+
+  it('C5: a roster student with no attendance row at all lands in "No record", diffed from the roster', () => {
+    const groups = groupSessionAttendance('session-1', ROSTER, ROWS);
+    expect(groups.noRecord.map((s) => s.id)).toEqual(['s-5']);
+  });
+
+  it('a session with zero attendance rows puts the entire roster in "No record"', () => {
+    const groups = groupSessionAttendance('session-with-no-attendance', ROSTER, ROWS);
+    expect(groups.attended).toEqual([]);
+    expect(groups.excused).toEqual([]);
+    expect(groups.absent).toEqual([]);
+    expect(groups.noRecord.map((s) => s.id)).toEqual(['s-1', 's-2', 's-3', 's-4', 's-5']);
+  });
+});
+
+describe('hasRecordedAttendance -- the T306 trigger, deliberately per-session not per-event', () => {
+  const ROWS: AttendanceRow[] = [
+    {
+      id: 'a-1',
+      sessionId: 'session-1',
+      studentId: 's-1',
+      status: 'present',
+      checkInAt: null,
+      checkOutAt: null,
+      hoursOverride: null,
+      method: 'coach',
+      recordedBy: 'profile-coach-1',
+      updatedAt: '2026-08-02T00:00:00.000Z',
+      createdAt: '2026-08-02T00:00:00.000Z',
+    },
+  ];
+
+  it('false for a session with zero recorded rows', () => {
+    expect(hasRecordedAttendance('session-with-no-rows', ROWS)).toBe(false);
+  });
+
+  it('true the instant at least one row exists for that session', () => {
+    expect(hasRecordedAttendance('session-1', ROWS)).toBe(true);
+  });
+
+  it("is scoped to the session id -- a row for a DIFFERENT session never flips this session's trigger", () => {
+    expect(hasRecordedAttendance('session-2', ROWS)).toBe(false);
+  });
+});
+
 describe('resolveEventRoster -- events.team_ids NULL/array semantics', () => {
   // T157: `profileId` required; immaterial to team-scope resolution (see the
   // note on the `groupSessionSignups` roster above).
@@ -477,6 +581,185 @@ describe('<OutreachDetail /> populated render -- team-scoped roster exclusion', 
     // as "No response" entries.
     expect(container.textContent).not.toContain('Sofia Delgado');
     expect(container.textContent).not.toContain('Ravi Kapoor');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T306 -- the attendance-vs-RSVP trigger, rendered end to end. Every test
+// below uses `event-park-cleanup` deliberately: its ONE session
+// (`session-park-cleanup`) is the ONLY session on the page, so a global
+// `container.textContent` assertion can never be contaminated by a SECOND,
+// unrelated session's own bucket labels the way `event-food-bank-sort`'s two
+// sessions could -- this is exactly the "paired absence proof" packet §6
+// requires for C2.
+//
+// Each test overrides the new `loadAttendance` prop directly (module doc
+// #16(b)'s own injectable-prop convention) rather than touching the shared
+// `mockedLoadAttendanceForSessions` module mock -- fully isolated per test,
+// same posture this file's own `loadRoster`/`loadGuardianLinksForParent`
+// prop overrides already use elsewhere.
+// ---------------------------------------------------------------------------
+
+function buildParkCleanupAttendanceRow(
+  overrides: Pick<AttendanceRow, 'id' | 'studentId' | 'status'>,
+): AttendanceRow {
+  return {
+    sessionId: 'session-park-cleanup',
+    checkInAt: null,
+    checkOutAt: null,
+    hoursOverride: null,
+    method: 'coach',
+    recordedBy: 'profile-coach-owens',
+    updatedAt: '2026-07-26T15:30:00.000Z',
+    createdAt: '2026-07-26T15:30:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('T306 C1: no recorded attendance renders the RSVP buckets, unchanged', () => {
+  it("shows Going/Can't go/No response, and no attendance-bucket labels at all", async () => {
+    renderDetail('event-park-cleanup', {
+      loadData: defaultLoadOutreachDetail,
+      loadAttendance: async () => [],
+    });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('Who said they were coming');
+    expect(container.textContent).toContain('Going (1)');
+    expect(container.textContent).toContain("Can't go (1)");
+    expect(container.textContent).toContain('No response (1)');
+
+    expect(container.textContent).not.toContain('Who actually came');
+    expect(container.textContent).not.toContain('Attended');
+    expect(container.textContent).not.toContain('Excused');
+    expect(container.textContent).not.toContain('No record');
+  });
+});
+
+describe('T306 C2: >=1 recorded attendance row switches to the attendance buckets, RSVP buckets gone', () => {
+  it("shows Attended (and the other attendance labels), never Going/Maybe/Can't go/No response", async () => {
+    renderDetail('event-park-cleanup', {
+      loadData: defaultLoadOutreachDetail,
+      loadAttendance: async () => [
+        buildParkCleanupAttendanceRow({
+          id: 'att-1',
+          studentId: 'student-amara-chen',
+          status: 'present',
+        }),
+      ],
+    });
+    await flushMicrotasks();
+
+    // Paired proof (packet §6): an attendance label is present AND every
+    // RSVP label is absent, in the SAME test -- an absence-only check would
+    // pass even if this section had rendered nothing at all.
+    expect(container.textContent).toContain('Who actually came');
+    expect(container.textContent).toContain('Attended (1)');
+    expect(container.textContent).toContain('No record (2)'); // Marcus, Nina -- no row.
+    expect(container.textContent).not.toContain('Who said they were coming');
+    expect(container.textContent).not.toContain('Going');
+    expect(container.textContent).not.toContain('Maybe');
+    expect(container.textContent).not.toContain("Can't go");
+    expect(container.textContent).not.toContain('No response');
+  });
+});
+
+describe('T306 C6: the trigger ignores session.status -- a SCHEDULED session with attendance rows still shows attendance', () => {
+  it('session-park-cleanup is genuinely still "scheduled" (not completed) and still shows Attended', async () => {
+    renderDetail('event-park-cleanup', {
+      loadData: defaultLoadOutreachDetail,
+      loadAttendance: async () => [
+        buildParkCleanupAttendanceRow({
+          id: 'att-1',
+          studentId: 'student-amara-chen',
+          status: 'present',
+        }),
+      ],
+    });
+    await flushMicrotasks();
+
+    // `session-park-cleanup`'s own fixture `status` is 'scheduled' (module
+    // doc #1's `FIXTURE_SESSIONS`) -- the coach has NOT run "Mark day
+    // complete" yet, matching the owner's own account of recording
+    // attendance mid-workflow, while the session is still 'scheduled'.
+    expect(container.textContent).toContain('Attended (1)');
+    expect(container.textContent).not.toContain('Who said they were coming');
+  });
+});
+
+describe('T306 C7: the trigger ignores the date -- a session dated TODAY with attendance rows still shows attendance', () => {
+  it("a session whose sessionDate is literally today still shows Attended, matching the owner's own same-day workflow", async () => {
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const loadTodaysSession: LoadOutreachDetailFn = async (eventId) => {
+      const result = await defaultLoadOutreachDetail(eventId);
+      if (result === null) return null;
+      return {
+        ...result,
+        sessions: result.sessions.map((session) =>
+          session.id === 'session-park-cleanup' ? { ...session, sessionDate: todayIso } : session,
+        ),
+      };
+    };
+
+    renderDetail('event-park-cleanup', {
+      loadData: loadTodaysSession,
+      loadAttendance: async () => [
+        buildParkCleanupAttendanceRow({
+          id: 'att-1',
+          studentId: 'student-amara-chen',
+          status: 'present',
+        }),
+      ],
+    });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('Attended (1)');
+    expect(container.textContent).not.toContain('Who said they were coming');
+  });
+});
+
+describe('T306 C8: a FAILED attendance load falls back to the RSVP buckets, no error banner, nothing blocked', () => {
+  it('a rejected loadAttendance still renders the page normally, RSVP buckets stand', async () => {
+    renderDetail('event-park-cleanup', {
+      loadData: defaultLoadOutreachDetail,
+      loadAttendance: async () => {
+        throw new Error('network down');
+      },
+    });
+    await flushMicrotasks();
+
+    // Fallback: exactly today's RSVP buckets, same as C1.
+    expect(container.textContent).toContain('Who said they were coming');
+    expect(container.textContent).toContain('Going (1)');
+    expect(container.textContent).toContain("Can't go (1)");
+    expect(container.textContent).toContain('No response (1)');
+    // Nothing blocked -- the rest of the page still renders normally.
+    expect(container.textContent).toContain('Riverside Park');
+    // No error surface for this failed load -- this is a DISPLAY surface
+    // (module doc #16(c)), degrading silently like
+    // `MarkDayCompleteDialog.tsx`, never like `MarkEventCompleteDialog.tsx`
+    // (a WRITE path, which must abort instead).
+    expect(container.textContent).not.toContain('Attended');
+    expect(container.textContent).not.toContain("Couldn't load attendance");
+  });
+});
+
+describe('T306 C9: no rsvps write occurs on any path this task touches', () => {
+  it('switching to the attendance buckets never calls the real rsvps write seam', async () => {
+    renderDetail('event-park-cleanup', {
+      loadData: defaultLoadOutreachDetail,
+      loadAttendance: async () => [
+        buildParkCleanupAttendanceRow({
+          id: 'att-1',
+          studentId: 'student-amara-chen',
+          status: 'present',
+        }),
+      ],
+    });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('Attended (1)'); // the switch genuinely happened.
+    expect(mockedSubmitRsvpChange).not.toHaveBeenCalled();
   });
 });
 
