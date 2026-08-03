@@ -1,4 +1,4 @@
-# Resume here — state of play at `main` = `d0d1aa0` (read the UPDATE sections top-down; each supersedes the ones below it)
+# Resume here — state of play at `main` = `c9b4698` (read the UPDATE sections top-down; each supersedes the ones below it)
 
 Written 2026-07-30 so this session's context can be cleared without losing anything.
 Fresh orchestrator session: read this, then `constitution.md`, then the open rows in
@@ -8,7 +8,100 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
 
-## UPDATE — 2026-08-03 (latest): W1's T403 is COMPLETE and passed re-review
+## UPDATE — 2026-08-03 (LATEST): attendance schema settled. T404 CANCELLED, T405 CLOSED. W1 is clear; **W3 is the next wave.**
+
+**`main` = `c9b4698`. PRs #42 and #45 are merged. W1's branch work is fully landed — nothing is
+outstanding on `claude/w1-checkin` or `claude/w1-checkin-bmqs1f`; work from `main`.**
+
+### The one thing to understand before touching `attendance`
+
+**An owner ruling reversed the direction of this work mid-flight.** T404 proposed widening
+`trg_audit_attendance_post_completion` to catch post-completion INSERTs. The owner overruled the
+premise:
+
+> there is no need to have this strict policy for fraud prevention... there are times where me or a
+> student will see that they were not marked for attending but they were actually there and i'll go
+> in and put them in. no fraud
+
+**So the trigger was REMOVED, not widened.** Post-completion attendance edits are audited nowhere,
+by design. Full reasoning in `auto-mode-decisions.md` (2026-08-03); evidence in
+`verification-log.md`; `VOLT_Portal_PRD.md` **DATA-02** updated with an explicit *"do not re-add an
+attendance audit trigger"* note.
+
+**⚠️ This is a re-add trap.** A future agent reading DATA-02, or seeing `create trigger
+trg_audit_attendance_post_completion` still present in `20260717000001_support_audit.sql` (it is —
+migrations are append-only; `20260803000000_simplify_attendance_audit.sql` drops it), will read the
+missing audit as a bug. **It is not.** Check the PRD note and the decisions log before "fixing" it.
+
+### What changed on the schema
+
+| Change | Migration |
+|---|---|
+| `trg_audit_attendance_post_completion` **dropped** | `20260803000000_simplify_attendance_audit.sql` |
+| `audit_log.actor` **now nullable** | same |
+| `trg_attendance_touch_updated_at` **added** (`before insert or update`) | same |
+
+The other four DATA-02 triggers (role changes, deactivations, session cancellations, invite
+revocations) are **kept**. This ruling is about attendance, not auditing in general.
+
+**`audit_log.actor` nullability is the safety fix worth remembering.** The actor expression
+`coalesce(auth.uid(), app.actor_id)` against a `NOT NULL` column meant an unresolvable actor
+**aborted the triggering write**. Measured: a post-completion correction was silently destroyed, and
+so was a **profile role change** — a live bug unrelated to attendance, found only because the first
+one was being proven properly. An audit trail must never be able to destroy the data it audits.
+
+### Row status
+
+- **T404 — ❌ CANCELLED.** Not deferred. Packet retained at
+  `active/T404-T405-schema-worker-packet.md` with a ⛔ **DO NOT DISPATCH** banner, because it
+  contains two claims that were tested and are **false** (the QR-check-in abort trap — blocked by
+  `checkSessionLiveness` 409 before any write; and trigger-name ordering). Read the banner, not the
+  body.
+- **T405 — ✅ CLOSED.** `attendance.updated_at` now advances on every write path. W1's client-side
+  half was written and **dropped before merge** — the trigger overwrites any client-supplied value.
+- **T400** — still folded into T196's wave. Do not start separately.
+- **T406** — still W2's, still deferred by owner decision.
+
+### ➡️ W3 is the next wave, and its handoff doc has been corrected
+
+`docs/swarm/inbox/w1-to-w3-T196-unblocked.md` — **read it, but note §5's T404/T405 entries were
+wrong until today and are now rewritten.** An UPDATE banner at the top of that file lists what moved.
+
+**W3's rows:** T196 (the mount, HEAVY, unblocked), T197, T162, T160. `WORKFLOWS.md` W3 says do not
+staff W3 alone — pair it with W2 or W4, or run T197/T162/T160 as a short standalone wave.
+
+**For T196 specifically:** `onEditAttendance` is now a plain `attendance` UPDATE with **no trigger
+side effects**. But **do not reorder** `endMeeting.ts`'s backfill → checkout → status-flip sequence
+on the grounds that the audit trigger is gone — the ordering is retained on an independent
+partial-failure-safety justification, documented in that file's module doc §1.
+
+### Process finding, second occurrence
+
+The premise gate returned **REVISE (MAJOR)** on this packet and its corrections held. But what
+actually killed the feature — that the model was wrong for this team — came from **the owner reading
+the behaviour in plain language**, not from the gate. **The gate fact-checks a packet against the
+codebase; nothing in the chain fact-checks it against how the app is actually used.** Same failure
+mode as T403's acceptance-criterion miss. Worth a constitution item if it happens a third time.
+
+### Known gaps, deliberately left open
+
+1. **Post-completion attendance DELETE is audited by nothing**, and always was — a coach un-marking
+   a student or a student self-deleting after a session closes leaves no trace. Surfaced during
+   this work, **not** filed as a row: given the ruling above it may well be acceptable. Raise it
+   with the owner rather than fixing it unilaterally.
+2. **`outreach.ts:1270` now sends a dead `updated_at`.** That upsert writes `attendance`, so the
+   new trigger overwrites its client-computed timestamp. Harmless, but it is dead code. **W2's
+   file, not W1's** — noted in `inbox/w1-to-w2-T406-markdaycomplete-toctou.md` rather than fixed.
+   **Checked and deliberately excluded:** `outreach.ts:1200` and `:1541` send `updated_at` to
+   **`rsvps`**, which has no such trigger — those are still load-bearing, do not "clean them up"
+   by symmetry.
+3. **`rsvps.updated_at` has the same latent staleness `attendance` had** — it is maintained only
+   because callers happen to send it. Not investigated, not filed; mentioned so it is a decision
+   rather than a surprise.
+
+---
+
+## UPDATE — 2026-08-03: W1's T403 is COMPLETE and passed re-review
 
 **T403 is DONE — all three steps, HEAVY chain complete, re-review PASSED.** Nothing on T403 is
 outstanding. `LiveConsole` now shows the real roster, the real check-in credential, and records real

@@ -7845,3 +7845,83 @@ silently short. **T401 is what makes this reachable on the write path** — the 
 block precisely the page-boundary sub-case. Remote (needs >1000 rows across one event; the live DB
 holds 79), one line, and in **W1's** file, so W2 filed rather than reached across the boundary. It
 also narrows this log's own T307 entry at `:6454`.
+
+---
+
+## T404 (CANCELLED) + T405 (CLOSED) — attendance audit removed, `updated_at` trigger added
+
+**PR #45 → `c9b4698`. PR #42 → `d864861` (the ownership ruling that made the migration legitimate).**
+Migration: `supabase/migrations/20260803000000_simplify_attendance_audit.sql`.
+
+**This did not run the standard HEAVY chain, and the reason matters.** The packet was written and
+premise-gated (verdict **REVISE (MAJOR)**), but before dispatch the owner overruled the feature's
+premise outright (`auto-mode-decisions.md`, 2026-08-03). There was no worker wave because there was
+no longer a feature to build. What follows is the orchestrator's own verification of the
+replacement change, run directly.
+
+### What the premise gate got right, and what it got wrong
+
+The gate was dispatched against the T404+T405 packet and returned **REVISE (MAJOR)**. Its corrections
+held up:
+
+| Packet claim | Gate verdict | Confirmed by re-test |
+|---|---|---|
+| Widening the trigger could abort a student's QR check-in | **REFUTED** — `checkSessionLiveness` (`liveness.ts:30-32`, called `index.ts:174`) returns 409 before any write | ✅ |
+| `old.status` on INSERT *raises* | **WRONG** — yields NULL in PG16; the abort was the `actor` NOT NULL constraint alone | ✅ |
+| Trigger name is load-bearing for ordering | **REFUTED** — BEFORE always precedes AFTER; proven by renaming to sort after and re-running green | ✅ |
+| A BEFORE trigger would overwrite client-supplied `updated_at` | **CONFIRMED** — this is what made `0703e6d` dead code | ✅ |
+| `moddatetime` can cover both legs | **WRONG** — errors `moddatetime: cannot process INSERT events` | ✅ |
+
+**What the gate missed, and the owner caught:** that the *whole model* was wrong for this team.
+The gate fact-checks a packet against the **codebase**; nothing in the chain fact-checks it against
+**how the app is actually used**. Second occurrence — see T403's entry for the first.
+
+### Verification — measured on a scratch PostgreSQL 16.13, not asserted
+
+Two databases built from the repo's real migration chain (`auth`/`storage` stubbed to the columns
+the migrations actually reference; `20260719000000_cron.sql` **skipped** — `pg_cron` is
+Supabase-hosted and unavailable locally, and is untouched by this change). Identical scenarios run
+against both.
+
+| # | Scenario | Before | After |
+|---|---|---|---|
+| A | Post-completion attendance UPDATE, **no resolvable actor** | **ABORTED** — `null value in column "actor" violates not-null constraint`; row stayed `absent`, **the correction was destroyed** | Saves; `status = present` |
+| B | Post-completion attendance UPDATE, actor present | 1 `audit_log` row | **0** rows — attendance is no longer audited |
+| C | **The owner's actual workflow** — INSERT a student who was there but never marked | Saves, 0 audit rows | Saves, 0 audit rows |
+| D | Does `updated_at` advance on UPDATE? | **NO** — stuck at the seeded `2020-01-01` | **YES** — advances to `now()` |
+| E | Profile role change, **no resolvable actor** | **ABORTED** — role stayed `coach`, **the change was destroyed** | Succeeds; audit row written with `actor = null` |
+
+**E is the finding nobody was looking for.** It has nothing to do with attendance — it is a live
+pre-existing bug in `fn_audit_profile_role_change`, reachable by any service-role or background-job
+role change, and it was fixed by the same `alter column actor drop not null`. It surfaced only
+because scenario A was being proven properly rather than reasoned about.
+
+### Structural checks
+
+- Full chain applies in order; **new migration re-applied twice more, clean** (idempotent — every
+  statement is `if exists` / `or replace`)
+- Triggers remaining on `attendance`: **`trg_attendance_touch_updated_at` only**
+- The four kept DATA-02 triggers confirmed present: `trg_audit_invite_revocation`,
+  `trg_audit_profile_role_change`, `trg_audit_session_cancellation`, `trg_audit_student_deactivation`
+- `audit_log.actor` → `is_nullable = YES`
+- **W4's views unaffected** — `v_student_hours` and `v_student_participation` return identical
+  results in both databases (W1 owns the table, W4 owns the views that read it; this is the
+  boundary the ownership ruling required W1 to verify without editing)
+
+### Gates
+
+`tsc` **0** · eslint **0 errors** (361 pre-existing warnings) · prettier **clean** ·
+vitest **75 files / 1821 tests, exit 0** · CI green on both PRs before merge.
+
+**No client code changed behaviourally.** Nothing in `src/` ever wrote `audit_log` for attendance —
+every reference was a comment describing the trigger. Those comments were corrected in
+`EndMeetingDialog.tsx` and `loaders/endMeeting.ts` rather than left to mislead.
+
+### Honest limits
+
+- **SQL is not covered by vitest.** The green suite proves the app still builds and its existing
+  behaviour is intact; it proves **nothing** about the trigger. The scratch-database run above is
+  the only evidence for the migration, and it used **stubbed** `auth`/`storage` schemas.
+- **Not run against the live dataset.** The migration is idempotent and additive-or-dropping, but
+  it has not been applied to production data.
+- **`20260719000000_cron.sql` was never applied** in verification (see above).

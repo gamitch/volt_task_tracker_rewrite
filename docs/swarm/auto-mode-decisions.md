@@ -1908,3 +1908,87 @@ authorized:** retyping any event, or touching the FLL events.
 
 **Cheap to implement once answered:** `kpi_views.sql:181-183` already computes all three as separate
 filtered sums, so this is column selection, not new arithmetic.
+
+---
+
+---
+
+## 2026-08-03 — George's ruling: attendance corrections are NOT fraud. T404 cancelled, the audit trigger removed (owner input, free-form)
+
+**This ruling reverses the direction of T404 and closes T405. It also overrules the premise of a
+packet that was already written and gated.** Landed as PR #45 (`c9b4698`).
+
+### Verbatim
+
+> please keep this app simple and remember we are a small volunteer team and not a corporation.
+> THere is no need to have this strict policy for fraud prevention. In acuality there are times
+> where me or a student will see that they were not marked for attending but they were actually
+> there and i'll go in and put them in the spreadsheet. no fraud
+
+### What was about to be built, and why it was wrong
+
+T404 said: `trg_audit_attendance_post_completion` is `after update` only, so a post-completion
+attendance **INSERT** is never audited — widen it to `after insert or update`. The packet
+(`active/T404-T405-schema-worker-packet.md`) was written and ready to dispatch.
+
+**Its premise was false for this team.** Widening the trigger assumes an attendance row created
+after a session completes is suspicious. The owner's own described workflow *is* that INSERT: a
+student was present, never got marked, and someone adds them afterward. The feature would have
+generated a fraud-log entry for the single most ordinary correction in the app.
+
+**Missed entirely by the packet:** the `self` check-off path
+(`20260724000000_self_checkoff.sql`) lets students and parents insert their own attendance and is
+**retroactive by design** — so widening the audit would have written a row for every routine self
+check-off, not just edge cases.
+
+### What was done instead
+
+1. **`trg_audit_attendance_post_completion` REMOVED** (not widened). Attendance record-keeping is
+   `attendance.recorded_by` + `attendance.updated_at` on the row itself — which the T124 activity
+   feed already reads for self-vs-staff attribution. That was always the simpler answer.
+2. **`audit_log.actor` made NULLABLE.** This is the part worth carrying forward even if the rest
+   is ever revisited. The trigger resolved its actor via
+   `coalesce(auth.uid(), current_setting('app.actor_id', true))` against a `NOT NULL` column, so an
+   unresolvable actor **aborted the triggering write**. Measured on scratch PG16: a post-completion
+   correction was silently lost (row stayed `absent`), and a **profile role change** hit the same
+   abort with the role left unchanged — a live bug with nothing to do with attendance. An audit
+   trail must never be able to destroy the data it audits.
+3. **`trg_attendance_touch_updated_at` added**, closing T405 completely (both W1's and W2's write
+   paths, not just W1's). Plain plpgsql, not `moddatetime` — that contrib function errors with
+   `cannot process INSERT events` and cannot cover the INSERT leg.
+
+### The four other DATA-02 triggers are KEPT
+
+Profile role changes, student deactivations, session cancellations, invite revocations. These are
+rare administrative actions that never fire during routine use, and "who did this" is worth
+recording. **This ruling is about attendance, not about auditing in general.**
+
+### PRD updated, deliberately
+
+`VOLT_Portal_PRD.md` **DATA-02** now excludes attendance and carries an explicit *"Do not re-add an
+attendance audit trigger"* note. Without that, the next agent reading DATA-02 would restore the
+trigger as a bug fix. **If this ruling is ever revisited, change the PRD in the same commit.**
+
+### Two claims from the packet that were TESTED AND ARE FALSE
+
+Recorded because they were stated with confidence and would otherwise be inherited:
+
+1. **"Widening the trigger could abort a student's QR check-in."** It could not.
+   `checkSessionLiveness` (`supabase/functions/checkin/liveness.ts:30-32`, called at
+   `index.ts:174`) rejects any non-`scheduled` session with a **409 before any write happens**. The
+   reachable hazard was narrower — a race where liveness passes while `scheduled` and the coach
+   completes the session before the INSERT lands.
+2. **"The trigger's name is load-bearing for firing order."** It is not. A `BEFORE` trigger always
+   fires before an `AFTER` trigger regardless of name — proven by renaming the trigger to sort
+   after the audit one and re-running the suite green.
+
+Also corrected: `old.status` on an INSERT yields **NULL** in PG16, it does not raise. The abort was
+always the `actor` NOT NULL constraint alone.
+
+### Process note worth keeping
+
+The premise gate returned **REVISE (MAJOR)** on this packet and was right to. But the finding that
+actually killed the feature — that the whole model was wrong for this team — came from the **owner
+reading the behaviour in plain language**, not from the gate. This is the second time that has
+happened (see T403's entry). **The gate fact-checks a packet against the codebase; nothing in the
+chain fact-checks it against how the app is actually used.**
