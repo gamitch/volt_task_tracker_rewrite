@@ -1,15 +1,22 @@
-# T330 — worker packet v1: a dateless outreach event becomes visible and fixable
+# T330 — worker packet v2: a dateless outreach event becomes visible and fixable
 
 **Tier: HEAVY** (constitution item 26 — `constitution.md:323`, "packet + premise gate + worker +
 checker"). Trigger: this changes what renders on the **only** surface from which an event is
-reachable, and the event carries figures that reach a grant-reporting total. Gate is capped at two
-rounds (item 19a); a third escalates to the owner.
+reachable, and the event carries figures that reach a grant-reporting total.
 
-**Branch point:** `b1d6f4a`. **Branch:** `claude/t330-orphan-events`.
+**Gate history: round 1 returned REVISE** — 1 BLOCKER, 3 MAJOR, 5 MINOR/NIT. The gate **built the
+entire prescription** in its own worktree and reached green (76 files / 1854 tests), which is why its
+findings are prescriptive rather than advisory. **Every round-1 finding was verified by the
+orchestrator directly against live code, not relayed.** Item 19a caps the gate at two rounds; a third
+escalates to the owner.
 
-**Measured baseline at `b1d6f4a`, `.env.local` absent** — measured by the orchestrator on this
-branch point, **not** copied from `W2-KICKOFF.md`, whose figures (361 warnings / 1842 tests) are
-stale by two W6 merges:
+**Branch point:** `b1d6f4a`. **Branch:** `claude/t330-orphan-events`. Branch from
+`claude/t330-orphan-events` (commit `9fd98a2`), **not** from `b1d6f4a` — the owner's rulings in §3
+exist only on that branch.
+
+**Measured baseline at `b1d6f4a`, `.env.local` absent** — measured by the orchestrator and
+independently re-measured by the gate. `W2-KICKOFF.md`'s figures (361 warnings / 1842 tests) are
+**stale by two W6 merges**; do not use them:
 
 ```
 tsc 0 · vite build ✓ · prettier clean · eslint 0 errors / 360 warnings · vitest 76 files / 1850 tests
@@ -17,15 +24,15 @@ tsc 0 · vite build ✓ · prettier clean · eslint 0 errors / 360 warnings · v
 
 ---
 
-## 1. The defect, in one paragraph
+## 1. The defect
 
 An `events` row whose `event_sessions` insert failed has zero sessions. `buildEventGroups` drops it
 from **both** buckets — `if (eventSessions.length === 0) continue;` (`OutreachList.tsx:1730`), stated
 in its own module doc at `:1711-1712`. Every in-app link to `/outreach/:eventId` is built from a
-rendered row (`OutreachList.tsx:2450`, `:3547`, and `CalendarPage.tsx:514`, which is itself
-session-driven at `:349`), so **no row means no link**: the coach cannot see the event, reach it, or
-fix it. It is not an RLS problem — `staff_all on events` (`rls.sql:149`) lets the coach read the row
-perfectly well.
+rendered row (`OutreachList.tsx:2450`, `:3547`, and `CalendarPage.tsx:514`, itself session-driven at
+`:349` — the gate grepped repo-wide and found no other non-test source), so **no row means no link**.
+The coach cannot see the event, reach it, or fix it. Not an RLS problem: `staff_all on events`
+(`rls.sql:149`) reads the row fine.
 
 ---
 
@@ -36,48 +43,47 @@ src/pages/outreach/OutreachList.tsx          (source)
 src/pages/outreach/OutreachList.test.tsx     (tests)
 ```
 
-**Forbidden, and these are owned by live sessions right now:**
-`src/lib/supabase/loaders/attendance.ts` (W1, PR #28 — import only, never modify),
-`src/pages/checkin/**`, `src/pages/meetings/LiveConsole.tsx`, `Kiosk.tsx`, `loaders/checkin.ts`,
+The gate's full build — including everything added in v2 — diffs **only** these two files.
+
+**Forbidden, owned by live sessions:** `src/lib/supabase/loaders/attendance.ts` (W1, PR #28 — import
+only), `src/pages/checkin/**`, `LiveConsole.tsx`, `Kiosk.tsx`, `loaders/checkin.ts`,
 `loaders/kiosk.ts` (W1), `src/pages/home/**` (W5), `src/pages/reports/**`, `loaders/reports.ts`
-(**W4** — `WORKFLOWS.md:177`), `supabase/migrations/*metric_views.sql`, `*kpi_views.sql` (W4).
+(**W4** — `WORKFLOWS.md:177`), `*metric_views.sql`, `*kpi_views.sql` (W4).
 
 ---
 
-## 3. The owner's rulings — build to these, do not re-derive them
+## 3. The owner's rulings — build to these
 
-Recorded verbatim in `auto-mode-decisions.md`, entry **"2026-08-03 — George's ruling on T330"**.
-**Cite that file, never this paraphrase.**
+Recorded in `auto-mode-decisions.md`, entry **"2026-08-03 — George's ruling on T330"** (on branch
+`claude/t330-orphan-events`, commit `9fd98a2`). **Cite that file, never this paraphrase.**
 
-1. **Bucket: `Upcoming`, pinned to the top.** A dateless event is unfinished setup, not a finished
-   event.
+1. **Bucket: `Upcoming`, pinned to the top.**
 2. **Numeric cells: em dash (`—`), not zeros.**
-3. **Marker: a "Needs dates" badge** on the row.
-4. **Audience: BOTH views** — coach *and* student/parent. This was asked as a follow-up and the
-   owner ruled against the orchestrator's coach-only recommendation. It is the simpler
-   implementation: one change inside the shared function, no per-view filter.
+3. **Marker: a "Needs dates" badge.**
+4. **Audience: BOTH views** — coach *and* student/parent. He ruled against the orchestrator's
+   coach-only recommendation.
 
-**Already settled, do NOT re-open:** a third "Needs dates" bucket. The owner ruled against it on
-T304 (`auto-mode-decisions.md:1320-1333`). Two buckets only.
+**Settled, do NOT reopen:** a third "Needs dates" bucket, ruled out on T304
+(`auto-mode-decisions.md:1320-1333`). Two buckets only.
 
 ---
 
-## 4. The prescription in the ledger row and in `W2-KICKOFF.md` is WRONG. Do not follow it literally.
+## 4. The prescription in the ledger row and `W2-KICKOFF.md` is WRONG — confirmed by execution
 
-Both say the fix is *"delete the `continue` at `OutreachList.tsx:1730`"*. **Measured: that alone
-ships a crash.**
+Both say the fix is *"delete the `continue` at `OutreachList.tsx:1730`"*. **The gate ran it:**
 
-`hasScheduled` is `false` for a zero-session event (`:1731`), so deleting the `continue` routes the
-orphan into **`past`** — and `past`'s comparator dereferences
-`a.sessions[a.sessions.length - 1].startsAt` (`:1739-1742`), which is `undefined` on an empty array.
-`upcoming`'s comparator has the identical defect via `find(...) ?? a.sessions[0]` (`:1734-1737`).
+```
+CAUGHT: TypeError: Cannot read properties of undefined (reading 'startsAt')
+```
 
-**Neither throws while its bucket holds one event**, because a single-element array never invokes
-the comparator. It surfaces only once a second event shares the bucket — taking out the entire
-outreach list for every viewer. A worse defect than the one being fixed.
+`hasScheduled` is `false` for a zero-session event (`:1731`), so deleting the `continue` alone routes
+the orphan into **`past`**, whose comparator dereferences `a.sessions[a.sessions.length - 1].startsAt`
+(`:1739-1742`) — `undefined` on an empty array. `upcoming` has the identical defect via
+`find(...) ?? a.sessions[0]` (`:1734-1737`).
 
-**This is the project's failure mode #2 inside the prescription itself:** written from reading the
-`continue` line, without executing what happens downstream of removing it.
+**Confirmed: a single orphan alone does NOT throw** — it lands in `past` silently. A one-element array
+never invokes the comparator. The crash needs a second entry in the same bucket, and then it takes out
+the entire list for every viewer.
 
 ---
 
@@ -85,140 +91,187 @@ outreach list for every viewer. A worse defect than the one being fixed.
 
 **(a) Route, don't just un-skip.** A zero-session event goes to **`upcoming`**, never `past`.
 
-**(b) Make `upcoming`'s comparator empty-safe and pin dateless entries first.** A dateless entry has
-no `startsAt` to compare; it sorts ahead of every dated entry, and two dateless entries tie.
-
-**(c) `past`'s comparator.** After (a), `past` can no longer receive a zero-session entry.
-**State explicitly in your output which you did and why:** left unchanged with a comment recording
-that (a) is what keeps it safe, or guarded defensively. Do **not** add an unreachable guard and then
-describe it as load-bearing — that is exactly T301's defect, which is an open row in this workflow.
-
-**(d) Cells.** For a dateless row, hours and count render **`—`**, not `0h` / `0 students`. Coach
-cells are `key: 'hours'` (`:2806-2818`, `StatCell label="Planned" value={...h}`) and `key: 'count'`
-(`:2820-2841`, `StatCell label="Expected" value={... students}`). Mirror it on the student/parent
-section.
-
-> **Note, and check it before building:** the `Reached` secondary renders **only** in the `past`
-> bucket (`:2836`, `bucket === 'past' && ...`). A dateless row is pinned to `upcoming`, so it has no
-> `Reached` cell to dash. **Do not build a dashed `Reached`** — it would be unreachable code. The
-> owner's "all three" ruling is satisfied by hours + count; report this rather than silently
-> building or silently skipping it.
-
-**(e) "Needs dates" badge** on the row. The row already renders a type badge
-(`Outreach`/`Competition`) in `CoachEventDateCell` — reuse that shipped pattern.
-
-**(f) The date cell needs no work.** `formatEventDateRangeLabel` already returns
-`'No sessions scheduled yet.'` for an empty array (`:1565`). That branch is dead **today** only
-because nothing reaches it; (a) is what makes it render. Do not duplicate the string.
-
-**Do not touch** `computeEventRowStats` (`:1830-1855`). Verified: it is already total over an empty
-session list — `dateRangeLabel` → the `:1565` branch, `weekdayChips` → `[]`, `expectedCount` /
-`attendedCount` → `0`, `reached` → `null` (`sumPeopleReached` returns `null`, never a fabricated
-`0`, `:1795-1801`), `hours` → `computeGroupHours` over no sessions. **Nothing there crashes and
-nothing there needs changing.**
-
----
-
-## 6. THE TRAP — an existing green test asserts the behaviour you are removing
-
-`OutreachList.test.tsx:566-573`:
+**(b) Empty-safe, pinned `upcoming` comparator.** Dateless entries sort ahead of every dated entry and
+tie with each other. The gate's working shape, two lines:
 
 ```js
-it('omits an event with zero real sessions from both buckets', () => {
-  const { upcoming, past } = buildEventGroups(events, sessions);
-  expect(upcoming.some((entry) => entry.event.id === 'e3')).toBe(false);
-  expect(past.some((entry) => entry.event.id === 'e3')).toBe(false);
-});
+if (aDateless || bDateless) return Number(bDateless) - Number(aDateless);
 ```
 
-**This test passes today and your change must make its first assertion false.**
+**(c) `past`'s comparator.** After (a), `past` can no longer receive a zero-session entry — the gate's
+probe confirms its safety depends **entirely** on (a). Leave it unchanged with a comment recording
+that. **Do not add an unreachable guard and describe it as load-bearing** — that is T301's defect,
+an open row in this workflow.
 
-**Amending it is explicitly authorized here** — Definition of Ready item 5 (`constitution.md:120`)
-requires any reversal of previously-passed work to be explicit and authorized, and this packet is
-that authorization. It is authorized **narrowly**:
+**(d) Em-dash cells — FOUR StatCells, not two.** *(round-1 MAJOR)*
 
-- **Rewrite it to assert the new contract** — `e3` is now in `upcoming`, pinned first, and still
-  **not** in `past`. **Keep the `past` half of the assertion.** It is the guard against the crash in
-  §4 and it must survive.
-- **Rename it** so its title states the new behaviour. A test whose name says "omits" while
-  asserting inclusion is worse than no test.
-- **Do not delete it**, do not `skip` it, and do not weaken any other assertion in the file.
+The coach table renders through **two** branches and the packet v1 cited only one:
 
-The fixture you need already exists: `e3` (`'No sessions yet'`) is declared at `:525` with no
-sessions in the array (`:559`).
+| Branch | Hours cell | Count cell |
+|---|---|---|
+| Desktop | `:2816` | `:2832` |
+| **Narrow** (`if (isNarrow)`, `:2674`) | **`:2696`** | **`:2700`** |
 
-**Nothing else in the suite may be amended.** If another test reddens, that is a finding — report it,
-do not fix it by editing the assertion. `git diff | grep '^-' | grep -E 'expect|toBe|toEqual|toHave'`
-must show **only** the lines from this one authorized test.
+Both render `` `${hoursValue}h` `` / `` `${countValue} students` ``. **Proven blind spot:** with only
+the desktop cells dashed, un-dashing the narrow cell leaves the suite green — a coach on a phone still
+sees `0h / 0 students`. Dash all four. The test file already has the `vi.stubGlobal('matchMedia', …)`
+idiom for narrow-mode DOM tests, and `test-setup.ts` ships a guarded polyfill.
+
+> **`Reached` is genuinely unreachable for a dateless row — do NOT build a dashed version.** The gate
+> confirmed it doubly: it is gated on `bucket === 'past'` at **both** `:2836` and `:2729-2733`, and
+> `reached` is `null` for empty `completedSessions` anyway (`:1800`). A dateless row is pinned to
+> `upcoming`. The owner's "all three" is satisfied by hours + count. **Report this reasoning in your
+> output** rather than silently skipping it.
+
+**(e) "Needs dates" badge, both views.** Coach: alongside the type badge in `CoachEventDateCell`.
+Student/parent: next to its own type badge at `:3445-3448`. `Badge variant="warning"` is verified
+present in the installed Astryx source (`@astryxdesign/core/src/Badge/Badge.tsx:71,135`) — constitution
+item 2 requires props come from `astryx-api.md`, so confirm there too before using it.
+
+**There is nothing to mirror on the student row's numeric cells — it has none.** It reads only
+`stats.dateRangeLabel` and `stats.weekdayChips`, stated in its own comment at `:3430-3436`. v1 told you
+to mirror cells that do not exist; that instruction is withdrawn.
+
+**(f) The date cell needs no work.** `formatEventDateRangeLabel` already returns
+`'No sessions scheduled yet.'` for an empty array (`:1565`). That branch is dead **on the list**
+specifically — it does render on `OutreachDetail` (`:1131`/`:2015`). (a) is what makes it render here.
+Do not duplicate the string.
+
+**(g) NEW, and without it this task does not fix its own primary scenario.** *(round-1 MAJOR)*
+
+Both views gate the **entire list** on sessions, not events:
+
+```js
+const hasAnyOutreach = sessions.length > 0;   // coach :3241 → :3282 ; student :3770 → :3793
+```
+
+The gate built the full §5(a)–(f) fix, got it green, then probed a season containing **only** an orphan:
+
+```
+ROW RENDERED: false / EMPTYSTATE RENDERED: true
+```
+
+**A failed *first* create of a season stays invisible and unfixable, and all ten v1 criteria pass
+anyway.** Change both gates to consider events as well as sessions (`events.length > 0 ||
+sessions.length > 0`, or equivalent). Both are inside the Allowed File.
+
+**Do not touch `computeEventRowStats` (`:1830-1855`).** The gate confirmed by execution that it is
+already total over an empty session list and the row renders without crashing.
 
 ---
 
-## 7. Harness facts — measured, not assumed
+## 6. AUTHORIZED TEST AMENDMENTS — **two** tests, not one *(round-1 BLOCKER)*
 
-**Read this before writing a criterion.** Four consecutive tasks in this project wrote criteria
-against an imagined harness.
+v1 authorized amending one test and forbade everything else. **That was unsatisfiable.** The routing
+change reddens **two** sibling tests that share the `e3` fixture, and the gate hit it on a correct
+implementation:
 
-- `OutreachList.test.tsx` (3300 lines) uses **raw `createRoot`/`act`**. There is **no
-  `@testing-library/react`** in this repo. Follow the file's existing pattern.
-- Its **only** `vi.mock` is a partial mock of `loaders/selfCheckoff` (`:57-64`), intercepting
-  `loadSelfCheckoffAttendance`. **`loaders/outreach` is NOT mocked** — `makeLoadOutreachData` and
-  `makeSaveOutreachEvent` are imported real (`:46`) and injected as props.
-- Every render must be wrapped in a real `<SeasonProvider>` (T106) plus `AuthProvider`/`LoginAs`
-  (`test-utils/authHarness`) and `MemoryRouter`.
-- `buildEventGroups`, `computeEventRowStats` and `formatEventDateRangeLabel` are **all exported and
-  directly unit-tested** (`:87`, `:91`, `:100`; existing blocks at `:521`, `:576`, `:630`). Put the
-  routing and sort criteria at pure-function level — cheapest and most precise. The badge and
-  em-dash criteria need DOM.
-- jsdom does not implement `HTMLDialogElement.prototype.showModal()`; the file already polyfills it
-  locally. Do not re-add.
+```
+2 failed | 94 passed
+groups by EVENT … → expected [ 'e3', 'e1' ] to deeply equal [ 'e1' ]
+```
+
+Both are authorized to change, and **only** these two. Definition of Ready item 5
+(`constitution.md:120`) requires reversals of passed work to be explicit and authorized; this is that
+authorization.
+
+**Test 1 — `groups by EVENT (one entry per event…)`, `:562-567`.** `upcoming.map(...)` becomes
+`['e3', 'e1']`; the `upcoming[0].sessions` assertion must move to `upcoming[1]`. Keep
+`past.map(...) === ['e2']` unchanged.
+
+**Test 2 — `omits an event with zero real sessions from both buckets`, `:569-573`.** Rewrite to assert
+`e3` is now in `upcoming`, pinned first, and **still not in `past`**. **Keep the `past` half** — it is
+the guard against §4's crash. **Rename it**; a test named "omits" that asserts inclusion is worse than
+no test. Do not delete or skip it.
+
+Fixture `e3` (`'No sessions yet'`) already exists at `:525`, with no sessions in the array (`:559`).
+
+**The rest of the suite is clean** — the gate ran it fully amended: **76 files / 1854 tests green**, no
+student/parent-view test breaks, no other file depends on the omission. If anything else reddens, that
+is a finding: **report it, do not fix it by editing an assertion.**
+
+`git diff | grep '^-' | grep -E 'expect|toBe|toEqual|toHave'` must show removed assertion lines from
+**these two tests only**.
+
+---
+
+## 7. Harness facts — verified by the gate, citations corrected
+
+- `OutreachList.test.tsx` (3300 lines) uses **raw `createRoot`/`act`** (`:38`, `:246`). **No
+  `@testing-library/react` is installed** — the gate confirmed the directory does not exist.
+- **Exactly one `vi.mock`**, at **`:56`** (v1 said `:57-64`): a partial mock of `loaders/selfCheckoff`
+  intercepting `loadSelfCheckoffAttendance`. **`loaders/outreach` is NOT mocked** — imported real at
+  **`:44`** (v1 said `:46`).
+- Renders need real `<SeasonProvider>` (T106) + `AuthProvider`/`LoginAs` + `MemoryRouter`.
+- `buildEventGroups`, `computeEventRowStats`, `formatEventDateRangeLabel` are all exported and
+  directly unit-tested (`:87`, `:91`, `:100`; blocks at `:521`, `:576`, `:630`). Put routing and sort
+  criteria at pure-function level; badge, em-dash, empty-state and Edit-path criteria need DOM.
+- jsdom lacks `HTMLDialogElement.prototype.showModal()`; the file already polyfills it locally.
 
 ---
 
 ## 8. Acceptance criteria — each names a mutation that MUST turn it red
 
-The orchestrator will replay **every** mutation personally. A criterion whose mutation leaves the
-suite green is not evidence and will be sent back.
+The orchestrator replays **every** mutation personally. Every mutation below except C3's was executed
+by the gate and reddened; C3's was reworded because the literal version stayed green.
 
 | # | Criterion | Mutation that must redden it |
 |---|---|---|
 | **C1** | A zero-session event appears in `upcoming` | restore `if (eventSessions.length === 0) continue;` |
-| **C2** | A zero-session event is **not** in `past` | route zero-session entries to `past` instead of `upcoming` |
-| **C3** | It sorts **first** in `upcoming`, ahead of every dated event | remove the pin, let it fall through to `localeCompare` |
-| **C4** | Two dateless events plus ≥1 dated event do not throw, and both dateless sort ahead | remove the empty-safe guard from `upcoming`'s comparator — **must throw `TypeError`, not merely misorder** |
-| **C5** | `past` with ≥2 entries still sorts correctly | reverse the `bLast`/`aLast` operand order |
-| **C6** | The row renders `—` for hours, not `0h` | return `` `${hoursValue}h` `` unconditionally |
-| **C7** | The row renders `—` for count, not `0 students` | return `` `${countValue} students` `` unconditionally |
-| **C8** | The row renders the **"Needs dates"** badge | drop the badge from the cell |
-| **C9** | The date cell renders `'No sessions scheduled yet.'` from the shipped `:1565` branch | make `formatEventDateRangeLabel` return `''` for an empty array |
-| **C10** | A **dated** event's row is unchanged — date, hours, count, no badge | apply the dateless formatting unconditionally |
+| **C2** | A zero-session event is **not** in `past` | route zero-session entries to `past` |
+| **C3** | It sorts **first** in `upcoming` | make dateless entries compare equal to everything (`return 0`) — **must fail the `upcoming[0].event.id` assertion, not throw** |
+| **C4** | Two dateless + ≥1 dated event do not throw | remove the dateless guard from `upcoming`'s comparator — **must throw a real `TypeError`** |
+| **C5** | `past` with ≥2 entries still sorts correctly | reverse the `bLast`/`aLast` operands |
+| **C6** | Hours renders `—`, **desktop and narrow** | return `` `${hoursValue}h` `` unconditionally — run it against **each** branch separately |
+| **C7** | Count renders `—`, **desktop and narrow** | return `` `${countValue} students` `` unconditionally — **each** branch separately |
+| **C8** | The **"Needs dates"** badge renders, both views | drop the badge from the cell |
+| **C9** | The date cell renders `'No sessions scheduled yet.'` | make `formatEventDateRangeLabel` return `''` for `[]` |
+| **C10** | A **dated** event's row is unchanged — date, hours, count, no badge | apply dateless formatting unconditionally |
+| **C11** | *(new)* An **orphan-only season** renders the row, not the EmptyState — **both views** | revert `hasAnyOutreach` to `sessions.length > 0` |
+| **C12** | *(new)* "Edit – {title}" renders on the dateless row and opens the dialog without crashing | — see note |
 
-**C4 is the crash criterion and the most important one here.** It must fail with a real `TypeError`
-under its mutation, not an ordering assertion — a one-element bucket never invokes the comparator, so
-**the fixture must put at least two entries in the same bucket**. State the fixture shape in your
-output.
+**C3's literal v1 mutation was measured GREEN** and is withdrawn: a `?? ''` sentinel sorts first in
+`localeCompare` by accident, so the pin survived unpinned. The reworded mutation reddens correctly
+(gate: `expected 'e1' to be 'e3'`).
 
-**C10 is the regression guard.** Without it every other criterion can be satisfied by formatting
-every row as dateless.
+**C4 needs ≥2 entries in one bucket** — a one-element bucket never invokes the comparator. State your
+fixture shape.
 
-**Paired assertions (this repo has shipped 7+ that passed for the wrong reason).** C1/C2 are a pair:
-assert presence in `upcoming` **and** absence from `past` in the same test, so neither passes because
-the event vanished entirely. C8's absence arm must be paired with proof the row itself rendered.
+**C2's fixture:** under its mutation with §5(c) left unguarded, the test reddens by §4's `TypeError`
+**before** its `past.some` assertion runs. Include a **single-orphan** fixture variant so the assertion
+arm itself fires, not just the crash.
+
+**C11 is the criterion that makes this task fix its own headline scenario.** Without it every other
+criterion passes on a build where a failed first create is still invisible.
+
+**C12:** the gate verified `buildInitialOutreachEventFromRow` is total over `[]` and the dialog opens
+(`DIALOG OPEN: true`), so no source change is expected — this is a regression guard. If no mutation
+reddens it, say so and keep it as a smoke test rather than inventing one.
+
+**C5, C9, C11, C12 need new tests** — no baseline test has ≥2 `past` entries, pins
+`formatEventDateRangeLabel([])`, builds an orphan-only season, or exercises the Edit path.
+
+**C10 is the regression guard.** Without it every other criterion is satisfiable by formatting every
+row as dateless.
+
+**Paired assertions** (this repo has shipped 7+ that passed for the wrong reason): C1/C2 assert
+presence in `upcoming` **and** absence from `past` in the same test. C8's absence arm must be paired
+with proof the row itself rendered. C11 must assert the row rendered **and** the EmptyState did not.
 
 ---
 
 ## 9. Out of scope — filed, not built (item 20)
 
-**T330's other half is not yours to fix.** An orphan event's adult-volunteer figures double-count in
-the season totals: the create dialog collects them (`OutreachEventDialog.tsx:1000-1001`),
-`queryHoursEvents` selects `from('events')` filtered on `season_id` **alone**, with no session join
-(`reports.ts:401-411`), and `buildSeasonTotals` sums across all season events with **no session
-filter** (`HoursTab.tsx:593-596`, called `:1094`). A failed create plus a successful retry leaves two
-events carrying the same figures, double-counted and — until this task — invisible.
+**T330's other half is not yours.** An orphan's adult-volunteer figures double-count in the season
+totals: the create dialog collects them (`OutreachEventDialog.tsx:1000-1001`), `queryHoursEvents`
+selects `from('events')` on `season_id` **alone** with no session join (`reports.ts:401-411`), and
+`buildSeasonTotals` sums across all season events with **no session filter** (`HoursTab.tsx:593-596`,
+called `:1094`). All four citations verified exact by the gate.
 
 `pages/reports/**` and `loaders/reports.ts` are **W4's** (`WORKFLOWS.md:177`). **Do not touch them.**
-The orchestrator files this as a new row in the **T500–T599** block. Making the orphan visible (this
-task) is what gives the coach the ability to delete or fix the duplicate; it does not make the totals
-correct on its own. **Say so in your output rather than implying this task closes the wrong number.**
+The orchestrator files this as a new row in the **T500–T599** block. Making the orphan visible gives
+the coach the ability to delete or fix the duplicate; it does not make the totals correct.
+**Say so in your output** rather than implying this task closes the wrong number.
 
 ---
 
@@ -226,18 +279,17 @@ correct on its own. **Say so in your output rather than implying this task close
 
 Write `docs/swarm/active/T330-worker-output.md`:
 
-1. **The commit SHA** your work landed in, and confirmation that `git diff` against the branch point
-   is non-empty in the **committed** blob (item 21 — T142 reported clean-and-complete work that was
-   never committed).
-2. **All six gates**, `.env.local` absent, with real numbers against the **measured** baseline
-   (0 errors / **360** warnings, **76 files / 1850** tests). Explain any warning rise. Assert the
-   **exit code** of the targeted run, not just the pass count.
-3. **Every mutation from §8, run, with its real red output pasted.** Not "confirmed red" — the
-   output.
-4. **§5(c)**: which you did about `past`'s comparator, and why.
-5. **§5(d)**: what you did about the `Reached` cell, and whether you agree it is unreachable.
-6. **The §6 amendment**: the test's before/after, and the output of
-   `git diff | grep '^-' | grep -E 'expect|toBe|toEqual|toHave'` — which must show only that test.
-7. **Anything in this packet you found to be wrong.** The last four packets in this project each
-   carried at least one false claim that a gate or worker caught. Finding one is a success, not an
-   objection — report it rather than working around it silently.
+1. **The commit SHA**, and confirmation the change is in the **committed blob** — `git diff` against
+   the branch point non-empty (item 21; T142 reported complete work that was never committed).
+2. **All six gates**, `.env.local` absent, against the measured baseline (**0 errors / 360 warnings**,
+   **76 files / 1850 tests**). Explain any warning rise. Assert the **exit code** of the targeted run.
+3. **Every mutation from §8, run, with real red output pasted.** Not "confirmed red" — the output.
+   C6/C7 must show the desktop and narrow branches reddening **separately**.
+4. **§5(c)**: what you did about `past`'s comparator and why.
+5. **§5(d)**: your reasoning on `Reached` being unreachable — agree or disagree.
+6. **§5(g)**: the orphan-only-season probe, before and after, both views.
+7. **§6**: both tests' before/after, plus `git diff | grep '^-' | grep -E 'expect|toBe|toEqual|toHave'`,
+   which must show only those two.
+8. **Anything in this packet that is wrong.** v1 carried a BLOCKER, three MAJORs and three bad
+   citations, all caught by a gate that executed rather than read. Finding another is a success, not
+   an objection.
