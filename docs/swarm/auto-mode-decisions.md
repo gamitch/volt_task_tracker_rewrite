@@ -1832,3 +1832,40 @@ behaviour and should read this entry.
 question before the orchestrator had established how many surfaces `buildEventGroups` feeds. The
 first question was answerable without that fact; this one was not, and it should have been part of
 the same ask rather than a follow-up.
+
+---
+
+## 2026-08-03 — George's ruling: W1 OWNS ATTENDANCE SCHEMA
+
+**Verbatim:** *"w1 owns attendance schema"* — in response to being told that neither T404 nor T405's
+remaining half had an owner, because `WORKFLOWS.md` gives W1 six source files and no migrations,
+while W4 owns only the view migrations (`*metric_views.sql`, `*kpi_views.sql`,
+`*dashboard_views.sql`).
+
+### What this grants
+
+W1 may now author migrations against the **`attendance` table and its triggers**. Concretely this
+unblocks:
+
+- **T404** — `trg_audit_attendance_post_completion` is `after update` only, so a post-completion
+  attendance INSERT is never audited.
+- **T405's remaining half** — no `moddatetime`/`set_updated_at` trigger on `attendance`, so
+  `updated_at` never moves on conflict-update. W1 has already fixed its own write path
+  client-side (`abda77c`); the trigger is the complete fix.
+
+### Scope boundaries this does NOT move
+
+- **`*metric_views.sql`, `*kpi_views.sql`, `*dashboard_views.sql` remain W4's.** Several of those
+  views READ `attendance` (`v_student_hours`, `v_student_participation`), so a change to the table
+  can affect them — W1 must verify against those views but must not edit them.
+- **`supabase/functions/**` remains outside W1** (the `checkin`/`checkin-token` Edge Functions).
+  `checkin/attendance_upsert.ts` writes `attendance`; W1 reads it as reference only.
+- **W2's and W3's frontend files are unchanged by this.** Owning the schema is not owning their
+  callers.
+
+### Tier consequence, stated up front
+
+**Constitution item 26 names "a migration or metric-view SQL" as an explicit HEAVY trigger.** So
+every migration W1 now writes takes the full chain — packet → `checker-premise` → worker →
+`checker-reviewer`. This ruling grants ownership, not a shortcut; if anything it obliges more
+process, because a bad trigger on `attendance` reaches every workflow that writes the table.
