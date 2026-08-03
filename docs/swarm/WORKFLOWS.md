@@ -105,6 +105,16 @@ several READ `attendance`, so W1 must verify against them without editing them),
 `supabase/functions/**`. **Every migration is HEAVY tier** (item 26 names migrations explicitly);
 this grant obliges more process, not less.
 
+> **Both rows this grant was issued for are now resolved (2026-08-03, `main` = `c9b4698`).**
+> **T404 CANCELLED** by a second owner ruling — `trg_audit_attendance_post_completion` was
+> **removed**, not widened, because correcting attendance post-completion is a normal workflow for
+> this team, not fraud. **T405 CLOSED** by `trg_attendance_touch_updated_at`. The grant itself
+> stands and still covers future `attendance` schema work.
+>
+> **The W4 boundary was exercised, not just asserted:** `v_student_hours` and
+> `v_student_participation` were verified to return identical results before and after the
+> migration, without either file being edited. That is the pattern for any future change here.
+
 **Start with T321.** It is UI-only on a backend T032 already shipped (short-code HMAC), which makes
 it the best effort-to-impact ratio in the entire backlog. **T196 is a project, not a ticket** — bring
 T161 under the same wave, since making `LiveConsole` real without tests on its loader repeats the
@@ -156,9 +166,14 @@ scoped together, carefully — T305/T307 added protections to this exact path th
 T178 built the whole `endMeeting` backend (473 lines + 14 tests). The mount was **deliberately
 parked** because putting a real dialog on a fixture-backed console would write real `absent` rows.
 
+> **✅ T196 IS UNBLOCKED as of 2026-08-03** — W1's T403 made `LiveConsole` real. Read
+> `docs/swarm/inbox/w1-to-w3-T196-unblocked.md` first; it carries an UPDATE banner covering the
+> `attendance` schema changes that landed after it was written (audit trigger removed,
+> `updated_at` now maintained, `audit_log.actor` nullable). **W3 is the next wave.**
+
 | Row | What | Tier |
 |---|---|---|
-| **T196** | *(the mount — blocked on W1 making `LiveConsole` real)* | HEAVY |
+| **T196** | *(the mount — **UNBLOCKED 2026-08-03**, `LiveConsole` is real)* | HEAVY |
 | **T197** | `onEditAttendance`'s row scoping is unasserted — deleting both `.eq()`s leaves the suite green | STANDARD |
 | **T162** | `loaders/meetings.ts` has **0 tests** across 726 lines | STANDARD |
 | **T160** | `MeetingsList`'s team type is still called `FixtureTeam` after T147 wired real data through it | FAST |
