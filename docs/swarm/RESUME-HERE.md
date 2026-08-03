@@ -8,7 +8,7 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
 
-## UPDATE — 2026-08-03 (LATEST): W2 shipped T330, T402 and T401. **T306 is the next W2 row.** Everything below about T330 is superseded.
+## UPDATE — 2026-08-03 (LATEST): W2 shipped T330, T402, T401 and T306. **T174 is the next W2 row.** Everything below about T330 is superseded.
 
 **`main` = `380266e`**, green and measured on it directly: `tsc` 0 · eslint **0 errors / 362
 warnings** · vitest **78 files / 1928 tests**. **Measure your own baseline anyway** — `main` moved
@@ -51,8 +51,10 @@ on PR #28, and it executed once #28 landed. **Check premises on the branch you w
 
 ### Open W2 rows, in order
 
-**T306 is next** and is in flight (packet written, worker dispatched). Then T174, T300, T190, T325,
-T165, T152, T301. See `W2-KICKOFF.md` §4.
+**T306 MERGED** (PR #51) — a session with recorded attendance now shows who actually came, triggered
+by whether attendance rows exist rather than by date or session status (the owner records attendance on
+the day, so both of those would have failed him). **T174 is next.** Then T300, T190, T325, T165, T152,
+T301. See `W2-KICKOFF.md` §4.
 
 **Filed by W2 this session, not yet packeted:** **T500** (an orphan event's adult-volunteer figures
 double-count in season totals — **W4's files**, `pages/reports/**`), **T501** (the bare `—`
