@@ -2192,3 +2192,67 @@ of which cost nothing and each of which caught something:
 3. **Do not run `prettier --write` on `docs/`.** `format:check` covers `src/**` and root config only
    (`package.json:13`); reformatting the ledger or verification log rewrites ~2000 lines that every
    other workflow is concurrently appending to. Done once this session, reverted.
+
+---
+
+## 2026-08-03 — George's ruling on T702: DROP the adult-volunteer totals from the Hours report
+
+**Structured selection.** He was given three options — (a) filter the adult figures to
+`type = 'outreach'` only, keeping them on screen, mirroring T322's "still tracked and still
+displayed" pattern; (b) remove them from the Hours report entirely, students only; (c) keep
+counting everything. **He selected (b), "Drop it — students only"**, and added in his own words:
+*"for T702 we only nee to count student hours per rules we already established"* and
+*"this should just be a change in the sql queries"*.
+
+**What this authorizes, and it is more than a code change:**
+
+1. **Amending RPT-03.** `VOLT_Portal_PRD.md:370` currently ends *"…team subtotal rows; season
+   totals for people reached and adult volunteers (count and hours)."* The adult-volunteer clause
+   comes out. **Constitution item 1 puts PRD requirement IDs above this constitution and above
+   agent judgment — only the owner can authorize this, and he has.** People-reached stays.
+2. **Changing a passing test.** `HoursTab.test.tsx:327` asserts `totals.adultVolunteersCount` and
+   `totals.adultVolunteerHours`. Removing the fields necessarily breaks it. The Non-Negotiables
+   require the owner's explicit approval to update an existing green test; **this ruling is that
+   approval**, recorded here so the worker has a citation rather than an inference.
+
+**Scope boundary — deliberately narrow, per his "just a change in the queries" steer.** The ruling
+is about **RPT-03's season totals** only:
+
+- **In scope:** drop the two columns from `queryHoursEvents`'s select (`reports.ts:408`), delete the
+  adult reduces and the two KPI cards in `HoursTab.tsx` (`:593-596`, `:1063`, `:1069`), update module
+  doc #6, amend RPT-03.
+- **NOT in scope, and not ruled on:** **RPT-04** (`PRD:371`, Events tab) and **RPT-05** (`PRD:372`,
+  CSV exports) both name adult volunteers independently and show them **per event**, not as a season
+  aggregate — `EventsTab.tsx:998-1004` and `csvExport.ts:388-389`. A per-event figure cannot
+  double-count, and he ruled on the Hours report. **Leave them.**
+- **NOT in scope:** the collection flow. `OutreachEventDialog.tsx:1454,1462` and
+  `MarkDayCompleteDialog.tsx:1176,1183` are where a coach *enters* these numbers, and
+  `loaders/outreach.ts:1316-1325` accumulates them. **Those are W2's files** and he did not ask for
+  data collection to stop. The columns keep being written; RPT-03 just stops aggregating them.
+- **NOT in scope:** dropping the `events.adult_volunteers_count`/`adult_volunteer_hours` columns.
+  Destructive, irreversible, and unnecessary — item 25 proportionality.
+
+**Correction to a premise in his own instruction, recorded because acting on it unexamined would
+have sent a worker to the wrong file:** there is **no SQL** to change. Module doc #6
+(`HoursTab.tsx:137-143`) states it directly — *"no metric-view formula being re-derived here, since
+no view computes this sum at all"*. These are raw `events` columns pulled by a PostgREST `.select()`
+and summed in TypeScript. The nearest thing to a "query change" is removing two column names from
+that select.
+
+### Consequence: T500 is superseded and closes without shipping
+
+**T500 was fixing the double-count in exactly the sum this ruling deletes.** Sessionless events
+inflating `buildSeasonTotals`'s adult figures cannot matter once those figures are gone. The work
+was packeted, premise-gated (DISPATCH after one REVISE) and part-implemented when the ruling landed;
+the worker was stopped mid-run rather than allowed to finish a fix to a deleted number.
+
+**Nothing is lost.** The gate's measurements stand on the record — the non-transactional create path
+(`outreach.ts:1478-1485`), the reproduction of the double-count, and the finding that the existing
+"across all event types" test cannot detect over-filtering (**T703**, still real and still worth
+doing). And the fix would have been thrown away on the next task either way.
+
+**Orchestrator's note on sequencing, not the owner's:** this is the second time today that building
+before asking would have been the expensive path — T205's gate refuted the ruled prescription, and
+here a product ruling deleted the target of a fully-gated packet. Both were caught before a worker's
+output shipped. Recorded as evidence that the ask-first cost is being paid back, not as a complaint
+about the ruling arriving mid-flight.
