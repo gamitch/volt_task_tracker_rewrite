@@ -190,41 +190,42 @@
  * assertions.
  *
  * -----------------------------------------------------------------------
- * 4. MTG-11 coach-override precedence + MTG-12 excused gating.
+ * 4. LAST WRITE WINS (supersedes MTG-11 precedence) + MTG-12 excused gating.
  * -----------------------------------------------------------------------
  *
- * `mergeAttendanceUpdate(existing, incoming)` is the SINGLE pure function
- * both write paths go through: a coach's own `SegmentedControl`/keyboard
- * action (`handleCoachSetStatus`, always `method: 'coach'`) and an incoming
- * simulated Realtime change (`subscribeToAttendanceChanges`'s `onChange`
- * callback, section 5, which can carry any `AttendanceMethod`). Its rule:
- * if a row's EXISTING record is `method === 'coach'` and the INCOMING one
- * is not, the existing (coach) value wins unconditionally -- incoming is
- * discarded. Every other combination (no existing record, existing is
- * itself non-coach, or incoming IS also `method: 'coach'`) applies the
- * incoming value. Because a coach's own action always constructs
- * `incoming.method === 'coach'`, it always "wins" against whatever was
- * there before (including a prior QR check-in) -- both directions of MTG-11
- * ("coach always wins") fall out of this one rule. Proven directly (unit
- * test on the pure function) AND end-to-end (coach sets Present via the
- * real keyboard path, then a fabricated incoming QR event for the same
- * student is fed through the exact same `subscribeToAttendanceChanges`
- * callback contract the component itself uses, asserting the row stays
- * unchanged) in `LiveConsole.test.tsx`.
+ * **This section previously described MTG-11's coach-override precedence and
+ * a local-vs-wire `method` split. Both are GONE.** Owner ruling 2026-08-02,
+ * recorded verbatim in `docs/swarm/auto-mode-decisions.md` under *"George's
+ * ruling on MTG-11: LAST WRITE WINS, overturning coach precedence"*; the
+ * struck PRD clause is annotated at `VOLT_Portal_PRD.md:307`. Cite that
+ * ruling, never this paragraph.
  *
- * T403 step 3 -- `handleSetStatus`'s LOCAL record vs. WIRE method are
- * deliberately different values, not an oversight (settled by this task's
- * worker packet section 4c, Trap 2): the LOCAL `incoming.method` fed into
- * `mergeAttendanceUpdate` above stays hardcoded `'coach'` -- that is what
- * makes this rule's "a coach-recorded value wins" precedence apply to a
- * coach's OWN action in the first place. The value actually sent to
- * `onSetAttendanceStatus` (the write) is instead
- * `resolveAttendanceWriteMethod(existing?.method ?? null)`
- * (`../../lib/supabase/loaders/attendance.ts`) -- the same idiom
- * `AttendancePanel.tsx`/`MarkDayCompleteDialog.tsx` already use -- so a
- * coach adjusting a student's hours/status does not silently erase that
- * student's real `'qr'`/`'import'` check-in provenance in the database, even
- * though the coach's own local view still displays/behaves as `'coach'`.
+ * **The rule now:** whichever write happened last is what the row shows and
+ * what the database records. No precedence, no merge, no arbitration. A
+ * coach's tap overwrites an earlier QR value; an incoming QR scan overwrites
+ * an earlier coach value.
+ *
+ * **The case that broke the old rule** (the owner's own): a coach marks a
+ * student `absent` before they arrive; the student turns up late and scans
+ * the kiosk. Coach-precedence discarded that scan and left the student
+ * `absent` while standing in the room.
+ *
+ * **`method` means "who set the value that is there now"** -- NOT "how did
+ * this student physically check in". There is deliberately no second field, so
+ * a row can never claim `method: 'qr'` while naming a coach in `recorded_by`
+ * ("so we do not have a mixmatching on the record"). A coach tap therefore
+ * writes `'coach'` on the wire AND locally -- one value, no split.
+ *
+ * This also restores agreement with `VOLT_Portal_PRD.md:307`'s FIRST clause,
+ * which always said a coach tap upserts `method='coach'`. T403 step 3's
+ * packet asserted the opposite (acceptance criterion 3, "preserve qr/import
+ * provenance"); that criterion was taken from `resolveAttendanceWriteMethod`'s
+ * docstring and never checked against the requirement. **It was wrong**, and
+ * `resolveAttendanceWriteMethod` is consequently NOT called from this file.
+ * That function still implements the other meaning for W2's
+ * `AttendancePanel`/`MarkDayCompleteDialog` and is untouched here; whether
+ * this ruling should extend to those screens is filed for W2 and the owner,
+ * not decided by W1.
  *
  * MTG-12 ("only coach/admin may set `excused`"): `canSetExcused` is
  * computed from `useAuth().user.role` independently of the
@@ -449,8 +450,8 @@ import { RequireRole, useAuth } from '../../app/guards';
 import { routePaths } from '../../app/router';
 import { loadKioskDisplayToken, loadLiveConsoleData } from '../../lib/supabase/loaders/kiosk';
 import {
-  resolveAttendanceWriteMethod,
   setAttendanceStatus,
+  type SetAttendanceStatusFn as LoaderSetAttendanceStatusFn,
 } from '../../lib/supabase/loaders/attendance';
 
 // ---------------------------------------------------------------------------
@@ -563,18 +564,42 @@ export type SetAttendanceStatusFn = (
  * roll-call status change can never null out a coach's earlier manual hours
  * correction.
  */
-export async function defaultSetAttendanceStatus(
-  sessionId: string,
-  studentId: string,
-  status: AttendanceStatus,
-  method: AttendanceMethod,
-  recordedBy: string | null,
-): Promise<void> {
-  if (recordedBy === null) {
-    throw new Error('No signed-in coach identity is available to record this attendance change.');
-  }
-  await setAttendanceStatus({ sessionId, studentId, status, method, recordedBy });
+/**
+ * T403 step 3 REWORK (checker MAJOR-2). This adapter maps positional seam
+ * arguments onto the loader's named params, and it previously closed over the
+ * module-level `setAttendanceStatus` with **no injection point** — so nothing
+ * could stub the loader and the mapping itself was untested. A mutation that
+ * swapped `sessionId`/`studentId` and hardcoded `status`/`method` passed the
+ * FULL suite at exit 0: the fifth such mutation in this project's history, and
+ * the reason this factory exists.
+ *
+ * The lesson, stated once here because it keeps recurring: **a boundary that
+ * cannot be stubbed cannot be tested, and an untestable boundary is exactly
+ * where a false green lives.** Both proven halves either side of it —
+ * `makeSetAttendanceStatus`'s payload and `LiveConsoleBody`'s coach action —
+ * were individually verified while the join between them was not.
+ */
+export function makeDefaultSetAttendanceStatus(
+  write: LoaderSetAttendanceStatusFn = setAttendanceStatus,
+): SetAttendanceStatusFn {
+  return async (
+    sessionId: string,
+    studentId: string,
+    status: AttendanceStatus,
+    method: AttendanceMethod,
+    recordedBy: string | null,
+  ): Promise<void> => {
+    // Trap 5 -- reject BEFORE any client call when no acting-coach identity is
+    // resolved, the same precondition shape `makeOnEditAttendance` uses.
+    if (recordedBy === null) {
+      throw new Error('No signed-in coach identity is available to record this attendance change.');
+    }
+    await write({ sessionId, studentId, status, method, recordedBy });
+  };
 }
+
+/** `LiveConsoleBody`'s own default `onSetAttendanceStatus` -- real write. */
+export const defaultSetAttendanceStatus: SetAttendanceStatusFn = makeDefaultSetAttendanceStatus();
 
 export interface AttendanceChangeEvent {
   studentId: string;
@@ -620,17 +645,31 @@ export function notWiredSubscribeToAttendanceChanges(): () => void {
 // Pure helpers -- exported for direct testing (module doc sections 3/4).
 // ---------------------------------------------------------------------------
 
-/** MTG-11: a coach-recorded value always wins over any later non-coach
- * (e.g. QR) update for the same student. See module doc section 4. */
-export function mergeAttendanceUpdate(
-  existing: AttendanceRecordState | null,
-  incoming: AttendanceRecordState,
-): AttendanceRecordState {
-  if (existing !== null && existing.method === 'coach' && incoming.method !== 'coach') {
-    return existing;
-  }
-  return incoming;
-}
+/**
+ * MTG-11's coach-precedence rule is SUPERSEDED — **last write wins.** Owner
+ * ruling 2026-08-02, recorded verbatim in `docs/swarm/auto-mode-decisions.md`
+ * under *"George's ruling on MTG-11: LAST WRITE WINS, overturning coach
+ * precedence"*; `VOLT_Portal_PRD.md:307` carries the struck clause and points
+ * at that ruling.
+ *
+ * `mergeAttendanceUpdate` is **DELETED**, not reduced to `return incoming`.
+ * Under this rule there is no merge to perform, and a function that ignores its
+ * `existing` argument would be a seam implying a decision that no longer
+ * exists — the same dishonesty as a fixture kept "just as a fallback". Both
+ * former call sites now apply the incoming record directly.
+ *
+ * The case that broke the old rule: a coach marks a student absent before they
+ * arrive; the student turns up late and scans the kiosk. Coach-precedence
+ * discarded that scan and left the student `absent` while standing in the room.
+ *
+ * **Known limit, disclosed rather than solved:** "last" means *last applied* —
+ * arrival order, not a timestamp comparison. `attendance.updated_at` is not
+ * trustworthy for ordering (T405: the database never bumps it on
+ * conflict-update), so there is nothing reliable to sort by. This is moot today
+ * because the Realtime seam is still an honest no-op
+ * (`notWiredSubscribeToAttendanceChanges`); it becomes real when Realtime does,
+ * and should be revisited then rather than pre-solved now.
+ */
 
 export function filterRosterByQuery(
   roster: readonly LiveConsoleRosterEntry[],
@@ -972,16 +1011,20 @@ export function LiveConsoleBody({
   // rule the coach's own writes use.
   useEffect(() => {
     const unsubscribe = subscribeToAttendanceChanges(sessionId, (event) => {
-      setAttendanceByStudentId((prev) => {
-        const existing = prev[event.studentId] ?? null;
-        const merged = mergeAttendanceUpdate(existing, {
+      // Last write wins (owner ruling 2026-08-02 — see the note where
+      // `mergeAttendanceUpdate` was deleted). An incoming Realtime change is
+      // applied unconditionally, including over a value a coach just set:
+      // that is the whole point of the ruling, and it is what lets a student
+      // who scans in late correct a coach's earlier `absent`.
+      setAttendanceByStudentId((prev) => ({
+        ...prev,
+        [event.studentId]: {
           status: event.status,
           method: event.method,
           recordedBy: event.recordedBy,
           updatedAt: event.updatedAt,
-        });
-        return { ...prev, [event.studentId]: merged };
-      });
+        },
+      }));
     });
     return unsubscribe;
   }, [sessionId, subscribeToAttendanceChanges]);
@@ -1004,14 +1047,21 @@ export function LiveConsoleBody({
       return;
     }
     const recordedBy = user?.id ?? null;
-    // T403 step 3, Trap 2 -- wire vs local method split (module doc section
-    // 4, settled by the worker packet, not re-derived here). Resolved from
-    // render-scope state, the SAME idiom `AttendancePanel.tsx`/
-    // `MarkDayCompleteDialog.tsx` already use for this exact call
-    // (`resolveAttendanceWriteMethod(existing?.method ?? null)`).
-    const wireMethod = resolveAttendanceWriteMethod(
-      attendanceByStudentId[studentId]?.method ?? null,
-    );
+    // T403 step 3 REWORK -- `resolveAttendanceWriteMethod` is deliberately NOT
+    // called here, and the wire/local method split the worker packet's section
+    // 4c prescribed is GONE. Both are consequences of the same owner ruling
+    // (2026-08-02, `auto-mode-decisions.md`, "George's ruling on MTG-11: LAST
+    // WRITE WINS"): `method` records WHO SET THE VALUE THAT IS THERE NOW, not
+    // how the student physically checked in. A coach tap is therefore always
+    // `'coach'` on the wire and in local state -- one value, no split, so a row
+    // can never claim `method: 'qr'` while naming a coach in `recorded_by`.
+    //
+    // This also matches `VOLT_Portal_PRD.md:307`'s FIRST clause, which always
+    // said a coach tap upserts `method='coach'`. The packet's acceptance
+    // criterion 3 ("preserve qr/import provenance") contradicted the PRD; it
+    // was taken from `resolveAttendanceWriteMethod`'s docstring and never
+    // checked against the requirement. `resolveAttendanceWriteMethod` still
+    // implements the other meaning for W2's screens and is untouched here.
     const incoming: AttendanceRecordState = {
       status,
       method: 'coach',
@@ -1029,9 +1079,12 @@ export function LiveConsoleBody({
     setAttendanceByStudentId((prev) => {
       hadPreviousRecord = studentId in prev;
       previousRecord = prev[studentId] ?? null;
-      return { ...prev, [studentId]: mergeAttendanceUpdate(previousRecord, incoming) };
+      // Last write wins -- this action IS the last write, so it is applied
+      // unconditionally (owner ruling; see the note where
+      // `mergeAttendanceUpdate` was deleted).
+      return { ...prev, [studentId]: incoming };
     });
-    onSetAttendanceStatus(sessionId, studentId, status, wireMethod, recordedBy).catch(() => {
+    onSetAttendanceStatus(sessionId, studentId, status, 'coach', recordedBy).catch(() => {
       // T403 step 3, Trap 3 -- a rejected write must not leave the console
       // silently asserting a status that was never persisted (constitution
       // item 26's "lie to a user about their own data" HEAVY trigger). Roll

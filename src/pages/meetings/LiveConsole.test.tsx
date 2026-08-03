@@ -16,11 +16,13 @@
  *      on the row's `SegmentedControl` -- proving the BLOCKER-class "without
  *      tabbing into the SegmentedControl" requirement, not just documenting
  *      it.
- *   2. A real test of MTG-11 coach-override precedence: a row is set to
- *      coach-Present via the real keyboard path, then a fabricated
- *      QR-sourced Realtime event for the SAME student is fed through the
- *      exact `subscribeToAttendanceChanges` callback contract the component
- *      itself consumes, asserting the row stays coach-Present, unchanged.
+ *   2. A real test of the attendance-precedence rule: a row is set via the
+ *      real keyboard path, then a fabricated QR-sourced Realtime event for
+ *      the SAME student is fed through the exact `subscribeToAttendanceChanges`
+ *      callback contract the component itself consumes. **The assertion was
+ *      INVERTED on 2026-08-02**: MTG-11's coach precedence is superseded by
+ *      the owner's LAST WRITE WINS ruling, so the incoming scan now wins
+ *      rather than being discarded.
  *   3. A real test of the Realtime-consumption logic in isolation (no
  *      pre-existing coach value to defend against), proving an incoming
  *      change updates the affected row.
@@ -52,7 +54,7 @@ import {
   formatSessionTimeRange,
   LiveConsoleBody,
   LiveConsolePage,
-  mergeAttendanceUpdate,
+  makeDefaultSetAttendanceStatus,
   notWiredSubscribeToAttendanceChanges,
   type AttendanceChangeListener,
   type AttendanceMethod,
@@ -409,53 +411,26 @@ function setNativeInputValue(input: HTMLInputElement, value: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// Pure functions -- mergeAttendanceUpdate (MTG-11), filterRosterByQuery,
+// Pure functions -- filterRosterByQuery,
 // computeAttendanceTally, formatSessionTimeRange.
 // ---------------------------------------------------------------------------
 
-describe('mergeAttendanceUpdate (MTG-11)', () => {
-  const coachRecord: AttendanceRecordState = {
-    status: 'present',
-    method: 'coach',
-    recordedBy: 'user-coach',
-    updatedAt: '2026-07-19T23:10:00.000Z',
-  };
-  const qrRecord: AttendanceRecordState = {
-    status: 'late',
-    method: 'qr',
-    recordedBy: null,
-    updatedAt: '2026-07-19T23:11:00.000Z',
-  };
-
-  it('applies the incoming value when there is no existing record', () => {
-    expect(mergeAttendanceUpdate(null, qrRecord)).toEqual(qrRecord);
-  });
-
-  it('a coach-recorded existing value always wins over a later non-coach update', () => {
-    expect(mergeAttendanceUpdate(coachRecord, qrRecord)).toEqual(coachRecord);
-  });
-
-  it('a coach-recorded existing value is replaced by a NEWER coach update', () => {
-    const newerCoachRecord: AttendanceRecordState = {
-      status: 'absent',
-      method: 'coach',
-      recordedBy: 'user-coach',
-      updatedAt: '2026-07-19T23:12:00.000Z',
-    };
-    expect(mergeAttendanceUpdate(coachRecord, newerCoachRecord)).toEqual(newerCoachRecord);
-  });
-
-  it('a non-coach existing value is replaced by any incoming update', () => {
-    expect(mergeAttendanceUpdate(qrRecord, coachRecord)).toEqual(coachRecord);
-    const importRecord: AttendanceRecordState = {
-      status: 'absent',
-      method: 'import',
-      recordedBy: null,
-      updatedAt: '2026-07-19T23:13:00.000Z',
-    };
-    expect(mergeAttendanceUpdate(qrRecord, importRecord)).toEqual(importRecord);
-  });
-});
+/**
+ * `mergeAttendanceUpdate` and its five tests are DELETED. MTG-11's
+ * coach-precedence rule is superseded — **last write wins** (owner ruling
+ * 2026-08-02, `auto-mode-decisions.md`, "George's ruling on MTG-11: LAST WRITE
+ * WINS"; the struck clause is annotated at `VOLT_Portal_PRD.md:307`).
+ *
+ * Constitution item 10 requires boss approval to change a passing test; that
+ * ruling is the approval, and it is cited rather than paraphrased.
+ *
+ * The behaviour those tests pinned is now asserted where it actually matters —
+ * through the component, in "last write wins (supersedes MTG-11)" below —
+ * rather than against a pure function that no longer exists. The old test
+ * *"a coach-recorded existing value always wins over a later non-coach update"*
+ * asserted precisely the behaviour the owner overturned: it would have kept a
+ * student marked `absent` after they turned up late and scanned in.
+ */
 
 describe('filterRosterByQuery', () => {
   const roster: LiveConsoleRosterEntry[] = [
@@ -618,11 +593,23 @@ describe('DES-17 keyboard path', () => {
 });
 
 // ---------------------------------------------------------------------------
-// MTG-11 coach-override precedence (packet Required Worker Output #2).
+// Last write wins -- supersedes MTG-11 coach precedence (owner ruling).
 // ---------------------------------------------------------------------------
 
-describe('MTG-11 coach-override precedence', () => {
-  it('a coach-set Present survives a subsequent simulated QR check-in for the same student', async () => {
+describe('last write wins (supersedes MTG-11 coach precedence)', () => {
+  /**
+   * INVERTED, not deleted. This test previously asserted that a coach value
+   * survived a later QR write — the rule the owner overturned on 2026-08-02
+   * (`auto-mode-decisions.md`, "George's ruling on MTG-11: LAST WRITE WINS").
+   * Constitution item 10 requires boss approval to change a passing test; that
+   * ruling is the approval.
+   *
+   * The scenario below is the owner's own, in his words: *"If a coach touches
+   * absent, but then the student comes late and scans the qr, the student entry
+   * should be saved."* Under the old rule the scan was discarded and the
+   * student stayed `absent` while standing in the room.
+   */
+  it("a late student's QR scan OVERWRITES a coach's earlier absent — the owner's case", async () => {
     let capturedOnChange: AttendanceChangeListener | null = null;
 
     renderBody(COACH_USER, {
@@ -632,7 +619,6 @@ describe('MTG-11 coach-override precedence', () => {
           capturedOnChange = null;
         };
       },
-      // T403 step 3, packet section 4b: explicit resolving seam.
       onSetAttendanceStatus: resolvingSetAttendanceStatus,
     });
     await flushMicrotasks();
@@ -641,22 +627,43 @@ describe('MTG-11 coach-override precedence', () => {
     act(() => {
       cy.focus();
     });
-    dispatchKeyOn(cy, '1'); // Coach sets Present via the real keyboard path.
-    expect(checkedStatusOf('student-cy')).toBe('present');
+    // Coach marks absent before the student arrives (`4` = Absent).
+    dispatchKeyOn(cy, '4');
+    expect(checkedStatusOf('student-cy')).toBe('absent');
 
     expect(capturedOnChange).not.toBeNull();
+    // The student turns up late and scans the kiosk.
     act(() => {
       capturedOnChange?.({
         studentId: 'student-cy',
-        status: 'absent',
+        status: 'present',
         method: 'qr',
         recordedBy: null,
         updatedAt: '2026-07-19T23:30:00.000Z',
       });
     });
 
-    // MTG-11: the coach's Present must survive, unchanged.
+    // The scan is the LAST write, so it wins. Under the superseded rule this
+    // asserted 'absent' and the student stayed marked absent while present.
     expect(checkedStatusOf('student-cy')).toBe('present');
+  });
+
+  it('a later coach edit overwrites an earlier QR value, in the other direction', async () => {
+    // The owner's second case: *"If a student said they were present (by
+    // mistake or falsely), but the coach then marked them absent the last
+    // record should win."* `student-ada` starts as a real `qr` `present` row.
+    renderBody(COACH_USER, { onSetAttendanceStatus: resolvingSetAttendanceStatus });
+    await flushMicrotasks();
+
+    expect(checkedStatusOf('student-ada')).toBe('present');
+    const ada = row('student-ada');
+    act(() => {
+      ada.focus();
+    });
+    dispatchKeyOn(ada, '4');
+    await flushMicrotasks();
+
+    expect(checkedStatusOf('student-ada')).toBe('absent');
   });
 });
 
@@ -1179,6 +1186,54 @@ describe('defaultSetAttendanceStatus (T403 step 3, Trap 5)', () => {
       defaultSetAttendanceStatus('session-1', 'student-1', 'present', 'coach', null),
     ).rejects.toThrow('No signed-in coach identity is available to record this attendance change.');
   });
+
+  /**
+   * MAJOR-2. This adapter maps POSITIONAL seam arguments onto the loader's
+   * NAMED params, and until the rework it closed over the module-level
+   * `setAttendanceStatus` with no injection point — so the mapping was
+   * untestable, and a mutation that swapped `sessionId`/`studentId` and
+   * hardcoded `status`/`method` passed the FULL 1878-test suite at exit 0.
+   *
+   * Fifth exit-0 mutation in this project. The recurring shape: **a boundary
+   * that cannot be stubbed cannot be tested, and that is exactly where a false
+   * green lives.** Both halves either side of this one were individually
+   * proven — the loader's payload and the component's coach action — while the
+   * join between them was not.
+   *
+   * Positional order is deliberately all-distinct here so a transposition of
+   * ANY two arguments fails, not just the two the original mutation swapped.
+   */
+  it('maps positional seam arguments onto the loader’s named params, in the right order (MAJOR-2)', async () => {
+    const calls: unknown[] = [];
+    const write = makeDefaultSetAttendanceStatus(async (params) => {
+      calls.push(params);
+      return {} as never;
+    });
+
+    await write('SESSION-X', 'STUDENT-Y', 'excused', 'import', 'COACH-Z');
+
+    expect(calls).toEqual([
+      {
+        sessionId: 'SESSION-X',
+        studentId: 'STUDENT-Y',
+        status: 'excused',
+        method: 'import',
+        recordedBy: 'COACH-Z',
+      },
+    ]);
+  });
+
+  it('does not call the loader at all when identity is missing (MAJOR-2 + Trap 5)', async () => {
+    const calls: unknown[] = [];
+    const write = makeDefaultSetAttendanceStatus(async (params) => {
+      calls.push(params);
+      return {} as never;
+    });
+
+    await expect(write('session-1', 'student-1', 'present', 'coach', null)).rejects.toThrow();
+    // Not merely "it rejected" -- the loader was never reached.
+    expect(calls).toEqual([]);
+  });
 });
 
 describe('T403 step 3 — real attendance write', () => {
@@ -1205,54 +1260,69 @@ describe('T403 step 3 — real attendance write', () => {
     ]);
   });
 
-  it('preserves real "qr" provenance on the WIRE (Trap 2) while the local row still flips to reflect the coach edit (MTG-11)', async () => {
+  /**
+   * REWRITTEN from *"preserves real 'qr' provenance on the WIRE"*. That test
+   * asserted the packet's acceptance criterion 3, which **contradicted the
+   * PRD**: `VOLT_Portal_PRD.md:307`'s first clause always said a coach tap
+   * upserts `method='coach'`. The criterion was taken from
+   * `resolveAttendanceWriteMethod`'s docstring and never checked against the
+   * requirement. The owner's 2026-08-02 ruling settles it — `method` records
+   * WHO SET THE VALUE THAT IS THERE NOW.
+   *
+   * **This is also the checker's MAJOR-1 test**, which is why it drives THREE
+   * sequential edits rather than one. The old single-shot test structurally
+   * could not see the defect: the first call was correct and every later call
+   * was wrong, so one action proved nothing about a roll-call console whose
+   * entire purpose is repeated tapping.
+   */
+  it('sends "coach" on EVERY write, across repeated edits of a real "qr" row (MAJOR-1)', async () => {
     const spy = spyResolvingSetAttendanceStatus();
     renderBody(COACH_USER, { onSetAttendanceStatus: spy.onSetAttendanceStatus });
     await flushMicrotasks();
 
-    // student-ada: existing method 'qr', status 'present' (module doc
-    // TEST_ATTENDANCE).
+    // student-ada: existing method 'qr', status 'present' (TEST_ATTENDANCE).
     expect(checkedStatusOf('student-ada')).toBe('present');
     const ada = row('student-ada');
     act(() => {
       ada.focus();
     });
-    dispatchKeyOn(ada, '2'); // Late
 
-    // Local display: the coach's own edit always wins (MTG-11) and shows the
-    // new status.
-    expect(checkedStatusOf('student-ada')).toBe('late');
-    // The WRITE, however, preserves the real external provenance instead of
-    // overwriting it to 'coach' -- this is the entire point of Trap 2.
-    expect(spy.calls).toEqual([
-      {
-        sessionId: TEST_SESSION_ID,
-        studentId: 'student-ada',
-        status: 'late',
-        method: 'qr',
-        recordedBy: COACH_USER.id,
-      },
-    ]);
+    dispatchKeyOn(ada, '2'); // Late
+    await flushMicrotasks();
+    dispatchKeyOn(ada, '4'); // Absent
+    await flushMicrotasks();
+    dispatchKeyOn(ada, '1'); // Present
+    await flushMicrotasks();
+
+    expect(checkedStatusOf('student-ada')).toBe('present');
+    // Every call, not just the first. Before the rework this produced
+    // ['qr', 'coach', 'coach'] -- wrong on the first call under this ruling,
+    // and inconsistent with itself thereafter.
+    expect(spy.calls.map((call) => call.method)).toEqual(['coach', 'coach', 'coach']);
+    expect(spy.calls.map((call) => call.status)).toEqual(['late', 'absent', 'present']);
+    expect(spy.calls.every((call) => call.recordedBy === COACH_USER.id)).toBe(true);
   });
 
-  it('preserves real "import" provenance on the wire the same way', async () => {
+  it('sends "coach" for a real "import" row too — one meaning for the column', async () => {
     const spy = spyResolvingSetAttendanceStatus();
     renderBody(COACH_USER, { onSetAttendanceStatus: spy.onSetAttendanceStatus });
     await flushMicrotasks();
 
-    // student-fay: existing method 'import' (module doc TEST_ATTENDANCE).
+    // student-fay: existing method 'import' (TEST_ATTENDANCE).
     const fay = row('student-fay');
     act(() => {
       fay.focus();
     });
     dispatchKeyOn(fay, '1'); // Present
 
+    // No row may claim `method: 'import'` while naming a coach in
+    // `recordedBy` -- the "mismatching on the record" the owner ruled out.
     expect(spy.calls).toEqual([
       {
         sessionId: TEST_SESSION_ID,
         studentId: 'student-fay',
         status: 'present',
-        method: 'import',
+        method: 'coach',
         recordedBy: COACH_USER.id,
       },
     ]);

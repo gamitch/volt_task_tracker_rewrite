@@ -1608,3 +1608,66 @@ code.
 **Sequencing consequence.** (a) needs a loader that lists currently-open sessions — which is work
 **T196 has to build anyway** to make `LiveConsole` real. T400 is therefore folded into T196's wave
 rather than run as a separate row, and must not be started before it. Recorded on the T400 row.
+
+## 2026-08-02 — George's ruling on MTG-11: LAST WRITE WINS, overturning coach precedence
+
+**Verbatim, unprompted — this is his own framing, not a menu he picked from.** Asked to choose
+between two ways of fixing a provenance defect, he rejected the premise of both and stated a rule:
+
+> *"why wouldn't we have the last record be what saves. If a coach touches absent, but then the
+> student comes late and scans the qr, the student entry should be saved. If a student said they
+> were present (by mistake or falsely), but the coach then marked them absent the last record should
+> win. if there is a ever a correction later the coach should be able to go in and update the
+> attendance, last record wins. in all cases, last record wins"*
+
+Asked to confirm whether the rule extends to the `attendance.method` label itself and not just the
+status, he answered:
+
+> *"it should follow last write wins so we do not have a mixmatching on the record."*
+
+### What this overturns
+
+**`VOLT_Portal_PRD.md:307`, MTG-11, second clause — now SUPERSEDED:**
+
+> *"A coach tap upserts with `method='coach'`, `recorded_by=coach`, and **always wins** over QR
+> values (QR writes never overwrite a `method='coach'` row)."*
+
+**Also supersedes `VOLT_Portal_PRD.md:794`'s acceptance item 4**, *"Coach override survives a
+subsequent QR write (MTG-11)."*
+
+**His late-scanner case is the one that breaks the written rule.** Coach marks a student absent
+before they arrive; the student turns up late and scans the kiosk. Under MTG-11 as written the scan
+is discarded and the student stays `absent` while standing in the room. Under last-write-wins the
+scan is recorded, which is the true state.
+
+### What this CONFIRMS — and why it shrinks T403 step 3's open defect
+
+**MTG-11's FIRST clause already said `method='coach'` on a coach tap.** The T403 step-3 packet's
+acceptance criterion 3 said the opposite — *"external `'qr'`/`'import'` provenance is preserved"* —
+which the orchestrator took from `resolveAttendanceWriteMethod`'s docstring and **never checked
+against the PRD.** That criterion was wrong.
+
+So the checker's MAJOR-1 (six sequential edits on a `qr` row send `["qr","coach","coach",…]`)
+describes code that is **wrong on the FIRST call only, in the opposite direction** from the finding.
+Correct under this ruling is `["coach","coach","coach",…]`. The fix is to stop calling
+`resolveAttendanceWriteMethod` in `LiveConsole` at all — smaller than either option offered.
+
+### Scope, stated honestly
+
+`method` now means **"who set the value that is there now"**, not "how did this student physically
+check in". One meaning, per his "no mismatching" instruction — no second field, and no row that
+claims `method='qr'` while naming a coach in `recorded_by`.
+
+**`resolveAttendanceWriteMethod` (`loaders/attendance.ts`) implements the OTHER meaning** — "a row
+that already carries real external provenance keeps that provenance" — and **two of W2's screens use
+it** (`AttendancePanel.tsx:717`, `MarkDayCompleteDialog.tsx:723`). If this ruling is meant to apply
+to the whole table rather than just `LiveConsole`, that function is wrong everywhere and W2's files
+must change. **W1 does not own those files and is not touching them.** Filed as a row for W2 rather
+than acted on; this ruling is applied to `LiveConsole` only until W2 and the owner decide.
+
+### Consequent test change, disclosed under constitution item 10
+
+`LiveConsole.test.tsx`'s MTG-11 precedence test asserts the now-superseded rule (a coach value
+surviving a later QR update). **It must be inverted, not deleted** — the new rule deserves a test
+that a later QR update DOES win. Item 10 requires boss approval to change an existing green test;
+this ruling is that approval, recorded here.
