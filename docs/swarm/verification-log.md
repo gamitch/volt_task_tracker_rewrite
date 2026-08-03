@@ -7677,3 +7677,76 @@ exempted from it.
 - **The bare `—` screen-reader question is repo-wide**, matching four other merged screens and
   `KpiStrip.tsx:357-366`'s recorded convention. **Filed as T501** as one repo-wide task, not a T330
   rework (item 25).
+
+---
+
+## T402 — `loaders/outreach.ts`'s own attendance read stops truncating silently
+
+**STANDARD tier (item 26)** — single module, no write path, rolling out T320's already-verified
+pattern to a second surface, which item 19b names as exactly when a full premise gate is not the
+right spend. Worker implemented; **the orchestrator replayed all five mutations**; no separate
+checker round. One worker attempt, no dispute.
+
+Gates, `.env.local` absent: `tsc` 0 · `vite build` ✓ · prettier clean · eslint **0 errors / 362
+warnings — no rise** · vitest **78 files / 1916 tests** exit 0 (+6) · targeted `outreach.test.ts`
+**16** exit 0.
+
+**There were two functions named `queryAttendanceForSessions`.** T320 fixed and named only the one in
+`loaders/attendance.ts`. This file-local duplicate carried the identical bare
+`.select(...).in(...)` — no `.range()`, no `.order()` — so PostgREST truncated it at
+`[api] max_rows = 1000` with a **200 and a partial `Content-Range`**, and `createLoader`, which throws
+only on `result.error`, resolved a partial array every caller read as complete. Neither T307's checker
+nor T320's own row spotted the duplicate.
+
+### The one question that could have made this quietly wrong, and it was verified rather than assumed
+
+The select list is `session_id, student_id, status` — **no `id`** — while the fix orders by `id`. A
+non-unique or absent ordering key does not fix pagination; it re-creates the bug. The packet made this
+an explicit stop-and-escalate condition. The worker settled it two independent ways: by reading
+**PostgREST v14.16's `QueryBuilder.hs`** (a plain table read emits one flat
+`SELECT <cols> FROM … ORDER BY <cols> LIMIT/OFFSET`, and standard SQL lets `ORDER BY` name any column
+of the underlying table for a non-`DISTINCT`, non-grouped query), and by finding **two already-shipped
+precedents in this very repo** — `queryAllTeams` orders by `sort_order`, absent from its own
+`.select('id, name, color')`, and `loaders/meetings.ts`'s `queryTeams` does the same. Both live in
+production today. **`id` was therefore not added to the select list, and `AttendanceDbRow` is
+byte-unchanged.**
+
+### Verification — every mutation replayed by the orchestrator, not relayed
+
+| Criterion | Mutation | Result |
+|---|---|---|
+| C1 | kill the loop, return the first page only | **3 red**, AssertionError |
+| C2 | delete `.order('id', …)` | **6 red** — `expected 1463 to be 1500` |
+| C3 | return the partial set instead of throwing at the page bound | **1 red**, AssertionError |
+| C4 | remove the short-page break | **4 red** |
+| C5 | swallow a page error and return `[]` | **1 red**, AssertionError |
+
+**C2 is the one worth naming.** The packet warned it was the criterion most likely to be written
+vacuously — asserting *"`.order` was called"* is a call-shape check and proves nothing about
+correctness, which is the "passes for the wrong reason" shape this repo has shipped 7+ times. The
+worker instead built a fake whose physical row order **drifts between page requests**, so dropping the
+ordering duplicates 37 ids and loses 37 others. The failure is `expected 1463 to be 1500` — an
+observable consequence, not a spy assertion. That is a new testing pattern in this codebase and worth
+copying.
+
+### Collateral the packet did not anticipate, and how it was handled
+
+Changing the PostgREST chain shape broke **two pre-existing tests in `OutreachList.test.tsx`** —
+outside T402's Allowed Files — which hand-roll a stub resolving straight off `.in()`:
+`TypeError: client.from(...).select(...).in(...).order is not a function`. **The worker reported
+rather than fixed, correctly**, since the packet granted no cross-boundary authorization.
+
+The orchestrator reproduced it, then authorized a **harness-shape-only** fix: `.in()` now returns a
+chainable `{ order → range }`. **No assertion changed** — verified by
+`git diff | grep '^-' | grep -E 'expect|toBe|toEqual|toHave'` returning nothing — and the
+`toHaveBeenCalledWith('session_id', […])` checks still hold because `.in()` is still the call that
+receives them. **Exact precedent:** W1 extended one stub chain in `AttendancePanel.test.tsx` the same
+way when T320 landed. Filing a follow-up row instead would have meant merging a **red** `main`, which
+is not a real option.
+
+**Note for whoever merges next:** T330's branch also edits `OutreachList.test.tsx`, in different
+regions of the file. The two are independent but may conflict textually.
+
+**Disclosed:** the only new export is `OUTREACH_ATTENDANCE_PAGE_SIZE`, so the pagination boundary is
+assertable without a magic number that could drift — the same reason `attendance.ts` exports its own.
+`queryAttendanceForSessionsPage` and the loop stay file-local.

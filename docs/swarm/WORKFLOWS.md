@@ -96,6 +96,15 @@ recorded", they do not share files, and between them they contain every remainin
 **Owns:** `pages/checkin/CheckinResult.tsx`, `pages/meetings/Kiosk.tsx`,
 `pages/meetings/LiveConsole.tsx`, `loaders/checkin.ts`, `loaders/kiosk.ts`, `loaders/attendance.ts`
 
+**Plus, added 2026-08-03 by owner ruling — the `attendance` TABLE AND ITS TRIGGERS in
+`supabase/migrations/**`.** Verbatim: *"w1 owns attendance schema"*
+(`auto-mode-decisions.md`, *"W1 OWNS ATTENDANCE SCHEMA"*). Granted because T404 and T405 had no
+owner: W1 held six source files and no migrations, and W4 owns only the view migrations.
+**Still NOT W1's:** `*metric_views.sql` / `*kpi_views.sql` / `*dashboard_views.sql` (W4's — and
+several READ `attendance`, so W1 must verify against them without editing them), and
+`supabase/functions/**`. **Every migration is HEAVY tier** (item 26 names migrations explicitly);
+this grant obliges more process, not less.
+
 **Start with T321.** It is UI-only on a backend T032 already shipped (short-code HMAC), which makes
 it the best effort-to-impact ratio in the entire backlog. **T196 is a project, not a ticket** — bring
 T161 under the same wave, since making `LiveConsole` real without tests on its loader repeats the
