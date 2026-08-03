@@ -1,4 +1,4 @@
-# Resume here — state of play at `main` = `c9b4698` (read the UPDATE sections top-down; each supersedes the ones below it)
+# Resume here — state of play at `main` = `380266e` at time of writing — run `git log -1` for the true tip; this pin rots on every merge` (read the UPDATE sections top-down; each supersedes the ones below it)
 
 Written 2026-07-30 so this session's context can be cleared without losing anything.
 Fresh orchestrator session: read this, then `constitution.md`, then the open rows in
