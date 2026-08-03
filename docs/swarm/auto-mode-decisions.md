@@ -1671,3 +1671,51 @@ than acted on; this ruling is applied to `LiveConsole` only until W2 and the own
 surviving a later QR update). **It must be inverted, not deleted** — the new rule deserves a test
 that a later QR update DOES win. Item 10 requires boss approval to change an existing green test;
 this ruling is that approval, recorded here.
+
+## 2026-08-02 — George's ruling: LAST WRITE WINS applies to `LiveConsole` ONLY, not table-wide
+
+**Structured selection.** Given three options in plain language — (A) leave the divergence, documented;
+(B) send W2 a note and let them decide; (C) rule it table-wide now — he answered **"A"**. The wording
+of the options is the orchestrator's; the choice is his. The orchestrator had leaned toward B or C;
+**he chose A and that is the decision.**
+
+### What this settles
+
+The LAST WRITE WINS ruling (see the MTG-11 entry above) is **scoped to
+`src/pages/meetings/LiveConsole.tsx`**. It does **not** extend to
+`loaders/attendance.ts`'s `resolveAttendanceWriteMethod`, and it does **not** extend to W2's
+`AttendancePanel.tsx` or `MarkDayCompleteDialog.tsx`.
+
+### ⚠️ THE RESULTING DIVERGENCE IS DELIBERATE. DO NOT "FIX" IT.
+
+`attendance.method` now means two different things depending on which screen wrote the row:
+
+| Screen | Coach edits a row that a student originally scanned | `method` becomes |
+|---|---|---|
+| `LiveConsole` (W1, meetings) | last writer wins | **`'coach'`** |
+| `AttendancePanel` (W2, outreach) | original provenance preserved | **`'qr'`** |
+| `MarkDayCompleteDialog` (W2, outreach) | original provenance preserved | **`'qr'`** |
+
+**A future session WILL find this and think it is an inconsistency bug.** It is not. It is an owner
+ruling. Anyone tempted to unify it must get a new owner decision first and cite it — this entry is
+not that decision, it is the opposite.
+
+### Why A is defensible, stated so the reasoning survives
+
+The ruling arose from the meeting console, where a coach taps a student's status during roll call and
+"who set this" is the useful fact. W2's screens are outreach events with volunteer hours attached,
+where "how did this student originally arrive" may carry weight the meeting console does not have.
+**W1 does not know W2's feature well enough to decide for it**, and the owner declined to force the
+question. Leaving each surface with the meaning its own feature needs is a legitimate outcome, not a
+deferral.
+
+### Consequences accepted with this choice
+
+- `resolveAttendanceWriteMethod` (`loaders/attendance.ts`) stays, unchanged, with its existing
+  "keeps that provenance" contract intact. It is simply **no longer called from `LiveConsole`**.
+- **No W2 inbox note is being sent for this.** W2 has nothing to do; sending them an ask would imply
+  otherwise. (T406, filed separately, still stands — that is a real defect in their file and is
+  unrelated to this.)
+- **No ledger row is filed**, because there is no pending work. A row would misrepresent a settled
+  decision as an open task.
+- Nothing in `src/pages/outreach/**` was read for behaviour or modified in reaching this decision.

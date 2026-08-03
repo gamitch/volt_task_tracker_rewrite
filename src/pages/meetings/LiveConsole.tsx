@@ -223,9 +223,23 @@
  * docstring and never checked against the requirement. **It was wrong**, and
  * `resolveAttendanceWriteMethod` is consequently NOT called from this file.
  * That function still implements the other meaning for W2's
- * `AttendancePanel`/`MarkDayCompleteDialog` and is untouched here; whether
- * this ruling should extend to those screens is filed for W2 and the owner,
- * not decided by W1.
+ * `AttendancePanel`/`MarkDayCompleteDialog` and is untouched here.
+ *
+ * **⚠️ THIS RULING IS SCOPED TO THIS FILE, DELIBERATELY. DO NOT UNIFY IT.**
+ * The owner ruled 2026-08-02 (`auto-mode-decisions.md`, *"LAST WRITE WINS
+ * applies to `LiveConsole` ONLY, not table-wide"*) that it does NOT extend to
+ * `resolveAttendanceWriteMethod` or to W2's screens. So `attendance.method`
+ * genuinely means two different things depending on which screen wrote the
+ * row: a coach edit to a student who scanned in records `'coach'` here and
+ * leaves `'qr'` there.
+ *
+ * **That divergence is intentional, not an inconsistency bug.** A future
+ * session will find it and be tempted to "fix" it; doing so requires a NEW
+ * owner decision, cited — this ruling is the opposite. The reasoning: "who set
+ * this value" is the useful fact during roll call, while outreach events carry
+ * volunteer hours where "how did this student originally arrive" may matter
+ * differently. W1 does not know W2's feature well enough to decide for it, and
+ * the owner declined to force the question.
  *
  * MTG-12 ("only coach/admin may set `excused`"): `canSetExcused` is
  * computed from `useAuth().user.role` independently of the

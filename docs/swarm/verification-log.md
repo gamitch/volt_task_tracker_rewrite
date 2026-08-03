@@ -7133,9 +7133,13 @@ no-op; it becomes real when Realtime does.
 ### Scope held
 
 `resolveAttendanceWriteMethod` implements the *other* meaning of `method` and is used by W2's
-`AttendancePanel` and `MarkDayCompleteDialog`. **If this ruling extends to the whole table, that
-function is wrong everywhere** — W2's files, which W1 does not own and did not touch. Filed for W2
-and the owner rather than acted on.
+`AttendancePanel` and `MarkDayCompleteDialog`. **Owner ruled (option A): the ruling is scoped to
+`LiveConsole` only, NOT table-wide.** So `attendance.method` deliberately means two different things
+depending on which screen wrote the row — `'coach'` here, `'qr'` preserved there. **That divergence
+is intentional and must not be "fixed" without a new owner decision;** it is recorded in
+`auto-mode-decisions.md` and in the module doc at the point of use, because a future session will
+otherwise read it as an inconsistency bug. No W2 note sent (they have nothing to do) and no ledger
+row filed (there is no pending work — a row would misrepresent a settled decision as an open task).
 
 **Gates** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier **clean** · eslint
 **0 errors / 363 warnings** · vitest **77 files / 1877 tests, exit 0**.
