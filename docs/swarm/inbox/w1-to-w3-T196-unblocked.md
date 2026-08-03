@@ -1,7 +1,32 @@
 # Inbox — for W3: T196 is UNBLOCKED. `LiveConsole` is real.
 
+> ## 🔄 UPDATED 2026-08-03 — read this before §5
+>
+> **The `attendance` schema changed under you since this file was written.** Both PRs are merged;
+> `main` is at **`c9b4698`**.
+>
+> 1. **`trg_audit_attendance_post_completion` NO LONGER EXISTS.** It was removed, not widened
+>    (PR #45). Post-completion attendance edits are **not audited at any layer** — that is now
+>    deliberate, per an owner ruling that correcting attendance after a meeting is a *normal
+>    workflow*, not fraud. **§5's T404 entry below is obsolete.**
+> 2. **`attendance.updated_at` now works.** `trg_attendance_touch_updated_at` (`before insert or
+>    update`) maintains it. **§5's T405 entry says "do not render it" — that advice is now
+>    reversed**, see the corrected entry.
+> 3. **`audit_log.actor` is now nullable**, so an audit write can never abort the write it audits.
+>
+> **What this means for T196 concretely:** `EndMeetingDialog`'s post-completion correction path
+> (`onEditAttendance`) is now a plain `attendance` UPDATE with **no trigger side effects at all**.
+> The comments in `EndMeetingDialog.tsx` and `loaders/endMeeting.ts` that described the audit
+> trigger have been corrected — if you read an older copy, distrust it.
+>
+> **One thing you inherit that is NOT obsolete:** `endMeeting.ts`'s write ordering (backfill →
+> checkout → status flip, flip always last). It was originally required to stop the trigger logging
+> the coach's own meeting-close checkout. That reason is gone, **but the ordering is retained** on
+> an independent justification — every partial-failure state fails safe. Do not reorder it on the
+> grounds that the trigger is gone; read that file's module doc §1 for the real reason.
+
 **From branch:** `claude/w1-checkin` (W1)
-**Base commit SHA:** `aa900f3`
+**Base commit SHA:** `aa900f3` *(stale — see the UPDATE above; current `main` is `c9b4698`)*
 **Author:** W1's orchestrator session. **Read-only with respect to every W3 file** —
 `EndMeetingDialog.tsx`, `loaders/endMeeting.ts`, `MeetingsList.tsx`, `ScheduleMeetingsDialog.tsx`,
 `StudentMeetingView.tsx` and `loaders/meetings.ts` were **not** modified. `loaders/endMeeting.ts` was
@@ -90,13 +115,19 @@ reverse.
 - **T400** — `/checkin` needs a picker of currently-open sessions. **Owner-ruled option (a)**
   (`auto-mode-decisions.md`, *"George's ruling on T400"*). **Folded into T196's wave**, because it
   needs the same open-sessions query you must build anyway. Do not start it separately.
-- **T404** — `trg_audit_attendance_post_completion` is `after update` only, so a post-completion
-  attendance **INSERT** is never audited (observed on a real PostgreSQL 16 scratch DB: 0 audit rows
-  for INSERT vs 1 for UPDATE). **Directly relevant to you** — ending a meeting and then correcting
-  attendance is exactly the post-completion path. Schema change, owner's call, not W1's and not
-  yours to land unilaterally.
-- **T405** — `attendance.updated_at` never moves on conflict-update via `attendance.ts`'s writers
-  (no `moddatetime` trigger). Relevant if your summary sorts or displays by it. **Do not render it.**
+- **T404** — ~~post-completion attendance INSERTs are never audited~~ **❌ CANCELLED 2026-08-03 by
+  owner ruling. Nothing for you to do, and nothing to work around.** The audit trigger was
+  **removed** rather than widened: correcting attendance after a meeting is the normal workflow for
+  this team, not a fraud signal. Post-completion attendance edits are audited **nowhere**, by
+  design. Attribution lives on the row — `attendance.recorded_by` + `attendance.updated_at`, which
+  T124's activity feed already reads. **If you find yourself about to "fix" the missing audit,
+  don't** — `VOLT_Portal_PRD.md` DATA-02 carries an explicit *"do not re-add"* note and the
+  reasoning is in `auto-mode-decisions.md`.
+- **T405** — ~~`attendance.updated_at` never moves~~ **✅ CLOSED 2026-08-03.**
+  `trg_attendance_touch_updated_at` (`before insert or update`) now maintains it on **every** write
+  path, W1's and W2's alike. **The old "do not render it" advice is reversed — the column is now
+  trustworthy** and is the honest answer to "when was this last touched." Note it is set by the
+  **database**, so do not send `updated_at` in a payload; anything you send is overwritten.
 
 ## 6. Where the detail lives
 

@@ -7845,3 +7845,178 @@ silently short. **T401 is what makes this reachable on the write path** — the 
 block precisely the page-boundary sub-case. Remote (needs >1000 rows across one event; the live DB
 holds 79), one line, and in **W1's** file, so W2 filed rather than reached across the boundary. It
 also narrows this log's own T307 entry at `:6454`.
+
+---
+
+## T404 (CANCELLED) + T405 (CLOSED) — attendance audit removed, `updated_at` trigger added
+
+**PR #45 → `c9b4698`. PR #42 → `d864861` (the ownership ruling that made the migration legitimate).**
+Migration: `supabase/migrations/20260803000000_simplify_attendance_audit.sql`.
+
+**This did not run the standard HEAVY chain, and the reason matters.** The packet was written and
+premise-gated (verdict **REVISE (MAJOR)**), but before dispatch the owner overruled the feature's
+premise outright (`auto-mode-decisions.md`, 2026-08-03). There was no worker wave because there was
+no longer a feature to build. What follows is the orchestrator's own verification of the
+replacement change, run directly.
+
+### What the premise gate got right, and what it got wrong
+
+The gate was dispatched against the T404+T405 packet and returned **REVISE (MAJOR)**. Its corrections
+held up:
+
+| Packet claim | Gate verdict | Confirmed by re-test |
+|---|---|---|
+| Widening the trigger could abort a student's QR check-in | **REFUTED** — `checkSessionLiveness` (`liveness.ts:30-32`, called `index.ts:174`) returns 409 before any write | ✅ |
+| `old.status` on INSERT *raises* | **WRONG** — yields NULL in PG16; the abort was the `actor` NOT NULL constraint alone | ✅ |
+| Trigger name is load-bearing for ordering | **REFUTED** — BEFORE always precedes AFTER; proven by renaming to sort after and re-running green | ✅ |
+| A BEFORE trigger would overwrite client-supplied `updated_at` | **CONFIRMED** — this is what made `0703e6d` dead code | ✅ |
+| `moddatetime` can cover both legs | **WRONG** — errors `moddatetime: cannot process INSERT events` | ✅ |
+
+**What the gate missed, and the owner caught:** that the *whole model* was wrong for this team.
+The gate fact-checks a packet against the **codebase**; nothing in the chain fact-checks it against
+**how the app is actually used**. Second occurrence — see T403's entry for the first.
+
+### Verification — measured on a scratch PostgreSQL 16.13, not asserted
+
+Two databases built from the repo's real migration chain (`auth`/`storage` stubbed to the columns
+the migrations actually reference; `20260719000000_cron.sql` **skipped** — `pg_cron` is
+Supabase-hosted and unavailable locally, and is untouched by this change). Identical scenarios run
+against both.
+
+| # | Scenario | Before | After |
+|---|---|---|---|
+| A | Post-completion attendance UPDATE, **no resolvable actor** | **ABORTED** — `null value in column "actor" violates not-null constraint`; row stayed `absent`, **the correction was destroyed** | Saves; `status = present` |
+| B | Post-completion attendance UPDATE, actor present | 1 `audit_log` row | **0** rows — attendance is no longer audited |
+| C | **The owner's actual workflow** — INSERT a student who was there but never marked | Saves, 0 audit rows | Saves, 0 audit rows |
+| D | Does `updated_at` advance on UPDATE? | **NO** — stuck at the seeded `2020-01-01` | **YES** — advances to `now()` |
+| E | Profile role change, **no resolvable actor** | **ABORTED** — role stayed `coach`, **the change was destroyed** | Succeeds; audit row written with `actor = null` |
+
+**E is the finding nobody was looking for.** It has nothing to do with attendance — it is a live
+pre-existing bug in `fn_audit_profile_role_change`, reachable by any service-role or background-job
+role change, and it was fixed by the same `alter column actor drop not null`. It surfaced only
+because scenario A was being proven properly rather than reasoned about.
+
+### Structural checks
+
+- Full chain applies in order; **new migration re-applied twice more, clean** (idempotent — every
+  statement is `if exists` / `or replace`)
+- Triggers remaining on `attendance`: **`trg_attendance_touch_updated_at` only**
+- The four kept DATA-02 triggers confirmed present: `trg_audit_invite_revocation`,
+  `trg_audit_profile_role_change`, `trg_audit_session_cancellation`, `trg_audit_student_deactivation`
+- `audit_log.actor` → `is_nullable = YES`
+- **W4's views unaffected** — `v_student_hours` and `v_student_participation` return identical
+  results in both databases (W1 owns the table, W4 owns the views that read it; this is the
+  boundary the ownership ruling required W1 to verify without editing)
+
+### Gates
+
+`tsc` **0** · eslint **0 errors** (361 pre-existing warnings) · prettier **clean** ·
+vitest **75 files / 1821 tests, exit 0** · CI green on both PRs before merge.
+
+**No client code changed behaviourally.** Nothing in `src/` ever wrote `audit_log` for attendance —
+every reference was a comment describing the trigger. Those comments were corrected in
+`EndMeetingDialog.tsx` and `loaders/endMeeting.ts` rather than left to mislead.
+
+### Honest limits
+
+- **SQL is not covered by vitest.** The green suite proves the app still builds and its existing
+  behaviour is intact; it proves **nothing** about the trigger. The scratch-database run above is
+  the only evidence for the migration, and it used **stubbed** `auth`/`storage` schemas.
+- **Not run against the live dataset.** The migration is idempotent and additive-or-dropping, but
+  it has not been applied to production data.
+- **`20260719000000_cron.sql` was never applied** in verification (see above).
+
+---
+
+## T306 — a session with recorded attendance shows what happened, not what was promised
+
+**STANDARD tier (item 26)** — display-only, single module, **no write path**. Worker implemented; the
+orchestrator replayed every mutation; no separate checker round. One worker attempt, no dispute.
+
+Gates on the merged base, `.env.local` absent: `tsc` 0 · `vite build` ✓ · prettier clean · eslint
+**0 errors / 364 warnings** (+2, both `react-refresh/only-export-components` on the two new exported
+pure functions — the same pattern this file already carries 18 instances of) · vitest **78 files /
+1943 tests** · targeted file **112** exit 0.
+
+### The owner reframed his own defect, and that changed the task
+
+Filed as *"the tallies are wrong"* — students with recorded attendance sit under **No response**. His
+actual account: *"i was on the UI and adding who attended an outreach event... What was not clear to
+me on the UI was what to do with the RSVP. I belive i left it no response. it create a mental
+challenge from a user standpoint and was not clear."*
+
+**The defect is that the RSVP section looks actionable.** He was asking whether recording attendance
+also obliged him to go and fix each RSVP. It does not, and nothing on screen said so. He ruled: replace
+the buckets with what happened. *Alongside* and *keep-RSVP-with-a-note* were both offered and declined.
+
+### His follow-up constraint killed both obvious implementations
+
+> *"pleae be cognizant of what a 'past' event is. i may be doing this on the same day of the event."*
+
+- **Not the date** — he records on the day, so a date test still shows RSVP buckets during the exact
+  workflow that confused him, and it re-opens T304 where he settled that these surfaces ignore dates.
+- **Not `session.status === 'completed'`** — while recording attendance the session is normally still
+  `scheduled`. A status test leaves the RSVP buckets up for the whole confusing moment.
+
+**Trigger: does any attendance row exist for this session.** `hasRecordedAttendance` deliberately takes
+**no session object**, so `session.status` and `session.sessionDate` are structurally unreachable
+inside it. **C6 and C7 pin exactly the two wrong implementations** — and C7's mutation (add a date
+comparison) reddens **exactly one test**, the same-day scenario he described.
+
+### The packet was wrong, and the worker caught it by refusing to edit an assertion
+
+The packet **omitted a staff gate**. Implemented literally, the new load fired for every viewer, and a
+pre-existing assertion — *the attendance loader is not called for a non-staff viewer* — went red. The
+worker **reported it rather than fixing it by editing the assertion**, which is the rule, and it was
+right to: that assertion was protecting something real.
+
+`attendance` RLS is `staff_all` plus `own_or_linked_read` (`20260717000002_rls.sql:226-232`), so a
+student or parent reads **only their own** rows. `<SessionSignupList>` is **not** staff-gated — it
+renders for every viewer (`OutreachDetail.tsx:2019`). Ungated, `groupSessionAttendance` would diff the
+roster against that partial set and render **every teammate under "No record"** when the truth is the
+viewer cannot see their rows. **A false statement about a factual record, and worse than the RSVP
+intent it replaces.**
+
+Fixed by gating the **load effect** on `isStaffViewer`, so non-staff never fire the query at all —
+which also honours T307's recorded concern that an ungated load issues an `attendance` SELECT for every
+signed-in viewer of this page. `attendanceRows` stays `null` for them, the trigger sees no rows, and
+the RSVP buckets stand: byte-identical to pre-T306 behaviour. `isStaffViewer` was **hoisted** above the
+effect rather than duplicating the role literals inline (module doc #11 warns about that
+re-derivation), and added to the effect deps — without it, a coach whose role resolved after the first
+run would have got no attendance.
+
+### Verification — every mutation replayed by the orchestrator
+
+| Criterion | Mutation | Result |
+|---|---|---|
+| C1 | trigger always chooses attendance | **7 red** |
+| C2 | trigger always chooses RSVP | **6 red** |
+| C3 | replace imported `isAttendingStatus` with `status === 'present'` | **1 red — exactly C3** |
+| C4 | route `excused` into Attended | **1 red — exactly C4** |
+| C6 | add `&& session.status === 'completed'` to the switch | **4 red**, incl. C6 |
+| C7 | add a date comparison to the switch | **1 red — exactly C7** |
+| C10 | remove the staff gate | **2 red** — C10 **and** the pre-existing role-gating assertion |
+
+**C10 was added by the orchestrator** after the worker's report, with both arms: a student keeps the
+RSVP buckets and the loader is **never called**; a coach on the **same event** gets the attendance
+view — so the gate is provably the role, not the fixture. Its mutation reddening the pre-existing
+assertion too confirms both are pinning the same real behaviour.
+
+**One orchestrator error, caught and corrected:** the first attempt to render the T306 tests as a coach
+used an unbounded string replace and flipped 33 call sites, including T157's parent test and T169's,
+which are not T306's. Reverted and re-done bounded to the T306 describe blocks — 6 calls. **An
+unbounded replace across a 2000-line test file is not a safe edit**, and the only reason it surfaced
+was running the suite immediately after.
+
+`isAttendingStatus` is **imported** from `AttendancePanel.tsx:308`, never re-derived — it encodes
+`present`/`late`, the same predicate `v_student_hours` uses
+(`20260717000003_metric_views.sql:18`), and constitution item 3 forbids duplicating a metric formula
+in TypeScript.
+
+### Filed, not fixed (item 20)
+
+**T503** — the same RLS shape makes the **existing** RSVP buckets misleading for non-staff: a student
+sees every teammate under "No response" because `own_or_linked_read` hides their rows and
+`groupSessionSignups` diffs the roster. **Pre-existing; T306 did not cause it and deliberately did not
+extend it.** Whether a student should see teammates' RSVPs at all is a product question for the owner,
+not an engineering call. Recorded as **static analysis, not verified in-app.**
