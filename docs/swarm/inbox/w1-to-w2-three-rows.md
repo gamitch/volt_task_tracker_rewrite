@@ -118,3 +118,42 @@ One edit, test-only, made under an explicit owner authorization because T320's f
 - `src/pages/outreach/AttendancePanel.test.tsx` — one stub chain extended with `.order()`/`.range()`
   to match the paginated loader. **No production file of yours was touched.** If it conflicts with
   your work, the stub is trivially re-derivable; take your version and re-apply the two spies.
+
+---
+
+## ⏸️ ADDENDUM 2026-08-03 — T406 IS DEFERRED. Start T401 and T402 only.
+
+**Owner decision:** *"i'll wait on 406."* T401 and T402 are cleared to start now; **do not start T406
+yet.**
+
+### Why — W1 is about to change the column T406's fix would touch
+
+W1 now owns the `attendance` table and its triggers (owner ruling 2026-08-03,
+`auto-mode-decisions.md`, *"W1 OWNS ATTENDANCE SCHEMA"*), and has a HEAVY chain scheduled that adds a
+**`moddatetime`-style trigger** so `attendance.updated_at` moves on conflict-update.
+
+`markDayComplete`'s upsert (`loaders/outreach.ts:1170`) currently sends
+`updated_at: new Date().toISOString()` explicitly. **A BEFORE trigger would overwrite that with the
+database's `now()`.** So if you fix T406 by narrowing that payload, you may narrow around a column
+whose behaviour is changing underneath you — and the client-supplied value may become redundant.
+
+That is a sequencing hazard, not a conflict: **no file is shared.** W1's work is a new migration plus
+`loaders/attendance.ts`; T406 lives in `loaders/outreach.ts`, which W1 has not touched and will not.
+
+### One thing W1 verified that is now load-bearing for you
+
+**`markDayComplete` writes attendance BEFORE the status flip** (`outreach.ts:1196`, the T327
+ordering, deliberate and documented). W1 checked this specifically.
+
+It means the other half of W1's scheduled work — **T404, widening the audit trigger to fire on
+INSERT** — will **not** make routine day-completion emit audit rows, because the session is still
+`'scheduled'` when those rows land. If that ordering ever changes, that stops being true and every
+backfilled student on an already-completed session would generate an `audit_log` row.
+
+### What to do
+
+- **T401** — clear. Its dependency T320 is merged to `main` (`bc53aab`, PR #28), so the
+  `ATTENDANCE_ROW_CAP` guard is genuinely a false positive now, not a hypothetical.
+- **T402** — clear. Independent of everything W1 holds.
+- **T406** — **hold.** W1 will follow up once the trigger wave lands and the `updated_at` question is
+  settled by building rather than by argument.

@@ -7560,3 +7560,288 @@ expected idempotent `DROP TRIGGER IF EXISTS` notice reported that the old trigge
 no error occurred. `supabase migration list --linked` then showed `20260802000000` in both Local
 and Remote. Remaining W6 verification is the hosted application smoke test for one initial feed
 and one reset; no implementation row remains open.
+
+---
+
+## T330 — a dateless outreach event is now visible, honest and fixable
+
+**HEAVY tier (item 26) — packet → premise gate (2 rounds) → worker → checker, with every mutation
+replayed by the orchestrator.** One worker attempt; the packet needed two gate rounds. Gates on the
+merged base, `.env.local` absent: `tsc` 0 · `vite build` ✓ · prettier clean · eslint **0 errors /
+362 warnings — no rise** · vitest **78 files / 1921 tests** (+11) · targeted file **107** exit 0.
+
+An `events` row whose `event_sessions` insert failed was dropped from **both** buckets by
+`buildEventGroups` (`OutreachList.tsx:1730`). Since every in-app link to `/outreach/:eventId` is
+built from a rendered row — including `CalendarPage.tsx:514`, which is itself session-driven at
+`:349` — no row meant no link, and the coach could not see, reach or fix the event.
+
+### The prescription everyone had written down was wrong, and the gate proved it by running it
+
+Both the T330 ledger row and `W2-KICKOFF.md` §4 prescribed _"delete the `continue` at
+`OutreachList.tsx:1730`."_ **That alone ships a crash.** `hasScheduled` is `false` for a zero-session
+event, so the orphan routes into `past`, whose comparator dereferences
+`a.sessions[a.sessions.length - 1].startsAt` — `undefined` on an empty array. Measured:
+`TypeError: Cannot read properties of undefined (reading 'startsAt')`. It does **not** throw while
+the bucket holds one event, because a one-element array never invokes the comparator — so it would
+have surfaced only once a second event joined, taking out the entire list for every viewer.
+
+**This is the project's failure mode #2 living inside the prescription itself** — written from
+reading the `continue` line without executing what happens downstream of removing it.
+
+### The gate's second MAJOR is the one that actually saved the task
+
+**The fix did not fix its own headline scenario.** Both views gated the whole list on
+`hasAnyOutreach = sessions.length > 0` (`:3241`, `:3770`), so a season whose **first** create failed
+still rendered the EmptyState — and **all ten original criteria passed on that build**. The gate
+probed a green tree and measured `ROW RENDERED: false / EMPTYSTATE RENDERED: true`. Without it this
+task would have closed its own row having fixed only the case where a _second_ create fails.
+
+Round 1 also produced a **BLOCKER of the orchestrator's own making**: the packet authorized amending
+one test and forbade all others, but the routing change reddens **two** siblings sharing the `e3`
+fixture. Its own diff-grep rule was unsatisfiable by any correct implementation — a guaranteed
+mandatory dispute on the worker's first test run, the same shape that killed T305's v2 packet. Three
+citations were also wrong (`:566-573`, `:57-64`, `:46`), which is item 19c and the error this
+orchestrator keeps repeating.
+
+### The owner's rulings, and the question that was narrowed before it was asked
+
+`auto-mode-decisions.md`, "2026-08-03 — George's ruling on T330": **Upcoming, pinned to top**;
+**em dash**, not zeros; a **"Needs dates" badge**; **BOTH views**. A third bucket was **not** offered,
+because T304 (`:1320-1333`) already settled it — _"keep the current two buckets."_ The fourth ruling
+went **against** the orchestrator's coach-only recommendation and is recorded as such.
+
+**`Reached` is not dashed, deliberately.** It renders only in the `past` bucket (`:2836`, `:2729-2733`)
+and a dateless row is pinned to `upcoming`, so it renders _nothing_ — never a `0`. Building a dashed
+version would have been dead code. The ruling's principle is satisfied; the worker disclosed the
+reasoning rather than skipping it silently.
+
+### Verification — every mutation replayed by the orchestrator, not relayed
+
+| Criterion | Mutation                                                    | Result                                                                                  |
+| --------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| C1        | restore the `continue`                                      | **9 red**                                                                               |
+| C2        | route zero-session to `past`                                | **6 red** + `TypeError`; the single-orphan arm fails on `AssertionError`, not the crash |
+| C3        | dateless entries compare equal (`return 0`)                 | **2 red**, on an assertion, no throw                                                    |
+| C4        | remove the dateless guard                                   | **6 red**, real `TypeError`                                                             |
+| C5        | reverse `past`'s operands                                   | **1 red — exactly the past-sort test**                                                  |
+| C6/C7     | un-dash hours/count, **each branch separately**             | **1 red each, narrow and desktop independently**                                        |
+| C8        | drop the badge, each view                                   | **2 red** (coach), **1 red** (student)                                                  |
+| C9        | `formatEventDateRangeLabel` returns `''`                    | **4 red**                                                                               |
+| C10       | dateless formatting unconditionally                         | **4 red**, incl. pre-existing `populated state`                                         |
+| C11       | revert `hasAnyOutreach`                                     | **2 red — both views**                                                                  |
+| C12       | make `buildInitialOutreachEventFromRow` non-total over `[]` | **1 red**, `TypeError`                                                                  |
+
+**C3 is the one worth naming.** Its _original_ mutation was measured **green** by the gate — a `?? ''`
+sentinel sorts first in `localeCompare` by accident, so the pin survived unpinned. Reworded before
+dispatch. **C6/C7 reddening their branches independently** is the proof that the narrow-viewport
+render path is genuinely covered; dashing only the desktop pair left a coach on a phone seeing
+`0h / 0 students` with the suite green.
+
+### The checker found a hole in the packet that survived both gate rounds
+
+**MINOR-1:** the criteria table splits C6/C7/C8/C11 by branch or view but leaves **C10, the sole
+regression guard, as one bundle** — so the student view had no "a dated row must not be badged"
+assertion. The checker ran a mutation nobody had named (student badge unconditional) and the suite
+stayed **green at 105/105**. Shipped code was correct; the coverage was not. **Generalisable rule:
+criteria that split by view for presence must split by view for absence too.**
+
+**MINOR-2, and it is T330's own consequence:** before this task `buildEventGroups` dropped
+zero-session events, so `CoachExpanderButton` could never receive one. Now it could, and a dateless
+row rendered `aria-expanded="true"` alongside an **empty** `aria-controls` — not a valid IDREF list —
+announcing a disclosure containing nothing. Gated on `sessions.length > 0`. Item 15 makes
+accessibility a shipping requirement, so it closed here rather than becoming a row.
+
+**NIT-1:** the shipped `events.length > 0 || sessions.length > 0` had a **dead** second arm —
+`sessions` is `outreachSessions`, filtered to sessions whose `eventId` is in the set built from
+`outreachEvents`, so non-empty `sessions` entails non-empty `events`. Removed rather than kept: a
+condition whose comment claims work it does not do is **T301's recorded defect**, and this task's own
+packet warned about that exact shape for the neighbouring `past` comparator one section earlier.
+
+**The orchestrator then shipped MINOR-2's fix unpinned, and caught itself.** Replaying its own named
+mutation — delete the guard — left the suite **green at 106/106**. By this project's standard that is
+not evidence, so a test was added and the mutation now reddens exactly it. The same rule that caught
+C3 at the gate and MINOR-1 at the checker, applied to the orchestrator's own work rather than
+exempted from it.
+
+### Disclosed, and deliberately not fixed
+
+- **`past`'s comparator was left unchanged.** The ruling entry's own prose says _"both comparators
+  must tolerate an empty session list"_; the shipped answer makes `past` **unreachable** by empty
+  entries rather than **tolerant** of them, and its comment states outright that its safety is
+  entirely derivative and must never be called load-bearing in isolation. That is the better call —
+  an unreachable guard documented as real work is T301 — and the sentence in question was
+  orchestrator analysis, not one of the owner's four selections. Recorded so a future reader does not
+  conclude the task under-delivered.
+- **The adult-volunteer double-count is not fixed** — `pages/reports/**` is W4's. **Filed as T500.**
+  This task makes the orphan fixable; it does not correct that number.
+- **The bare `—` screen-reader question is repo-wide**, matching four other merged screens and
+  `KpiStrip.tsx:357-366`'s recorded convention. **Filed as T501** as one repo-wide task, not a T330
+  rework (item 25).
+
+---
+
+## T402 — `loaders/outreach.ts`'s own attendance read stops truncating silently
+
+**STANDARD tier (item 26)** — single module, no write path, rolling out T320's already-verified
+pattern to a second surface, which item 19b names as exactly when a full premise gate is not the
+right spend. Worker implemented; **the orchestrator replayed all five mutations**; no separate
+checker round. One worker attempt, no dispute.
+
+Gates, `.env.local` absent: `tsc` 0 · `vite build` ✓ · prettier clean · eslint **0 errors / 362
+warnings — no rise** · vitest **78 files / 1916 tests** exit 0 (+6) · targeted `outreach.test.ts`
+**16** exit 0.
+
+**There were two functions named `queryAttendanceForSessions`.** T320 fixed and named only the one in
+`loaders/attendance.ts`. This file-local duplicate carried the identical bare
+`.select(...).in(...)` — no `.range()`, no `.order()` — so PostgREST truncated it at
+`[api] max_rows = 1000` with a **200 and a partial `Content-Range`**, and `createLoader`, which throws
+only on `result.error`, resolved a partial array every caller read as complete. Neither T307's checker
+nor T320's own row spotted the duplicate.
+
+### The one question that could have made this quietly wrong, and it was verified rather than assumed
+
+The select list is `session_id, student_id, status` — **no `id`** — while the fix orders by `id`. A
+non-unique or absent ordering key does not fix pagination; it re-creates the bug. The packet made this
+an explicit stop-and-escalate condition. The worker settled it two independent ways: by reading
+**PostgREST v14.16's `QueryBuilder.hs`** (a plain table read emits one flat
+`SELECT <cols> FROM … ORDER BY <cols> LIMIT/OFFSET`, and standard SQL lets `ORDER BY` name any column
+of the underlying table for a non-`DISTINCT`, non-grouped query), and by finding **two already-shipped
+precedents in this very repo** — `queryAllTeams` orders by `sort_order`, absent from its own
+`.select('id, name, color')`, and `loaders/meetings.ts`'s `queryTeams` does the same. Both live in
+production today. **`id` was therefore not added to the select list, and `AttendanceDbRow` is
+byte-unchanged.**
+
+### Verification — every mutation replayed by the orchestrator, not relayed
+
+| Criterion | Mutation | Result |
+|---|---|---|
+| C1 | kill the loop, return the first page only | **3 red**, AssertionError |
+| C2 | delete `.order('id', …)` | **6 red** — `expected 1463 to be 1500` |
+| C3 | return the partial set instead of throwing at the page bound | **1 red**, AssertionError |
+| C4 | remove the short-page break | **4 red** |
+| C5 | swallow a page error and return `[]` | **1 red**, AssertionError |
+
+**C2 is the one worth naming.** The packet warned it was the criterion most likely to be written
+vacuously — asserting *"`.order` was called"* is a call-shape check and proves nothing about
+correctness, which is the "passes for the wrong reason" shape this repo has shipped 7+ times. The
+worker instead built a fake whose physical row order **drifts between page requests**, so dropping the
+ordering duplicates 37 ids and loses 37 others. The failure is `expected 1463 to be 1500` — an
+observable consequence, not a spy assertion. That is a new testing pattern in this codebase and worth
+copying.
+
+### Collateral the packet did not anticipate, and how it was handled
+
+Changing the PostgREST chain shape broke **two pre-existing tests in `OutreachList.test.tsx`** —
+outside T402's Allowed Files — which hand-roll a stub resolving straight off `.in()`:
+`TypeError: client.from(...).select(...).in(...).order is not a function`. **The worker reported
+rather than fixed, correctly**, since the packet granted no cross-boundary authorization.
+
+The orchestrator reproduced it, then authorized a **harness-shape-only** fix: `.in()` now returns a
+chainable `{ order → range }`. **No assertion changed** — verified by
+`git diff | grep '^-' | grep -E 'expect|toBe|toEqual|toHave'` returning nothing — and the
+`toHaveBeenCalledWith('session_id', […])` checks still hold because `.in()` is still the call that
+receives them. **Exact precedent:** W1 extended one stub chain in `AttendancePanel.test.tsx` the same
+way when T320 landed. Filing a follow-up row instead would have meant merging a **red** `main`, which
+is not a real option.
+
+**Note for whoever merges next:** T330's branch also edits `OutreachList.test.tsx`, in different
+regions of the file. The two are independent but may conflict textually.
+
+**Disclosed:** the only new export is `OUTREACH_ATTENDANCE_PAGE_SIZE`, so the pagination boundary is
+assertable without a magic number that could drift — the same reason `attendance.ts` exports its own.
+`queryAttendanceForSessionsPage` and the loop stay file-local.
+
+---
+
+## T401 — the `ATTENDANCE_ROW_CAP` guard goes, now that T320 made it a false positive
+
+**HEAVY tier (item 26)** — it **deletes a fail-closed guard that gates a write**, so a mistake here
+permits writes currently refused. The diff is small; the tier is not about diff size. Packet →
+premise gate → worker → checker, with **every mutation replayed by the orchestrator**.
+
+Gates on the merged base, `.env.local` absent: `tsc` **0** · `vite build` ✓ · prettier clean ·
+eslint **0 errors / 362 warnings — no rise** · vitest **78 files / 1928 tests** · targeted file
+**26** exit 0.
+
+`MarkEventCompleteDialog.tsx:547` treated a ≥1000-row attendance load as **failed** and blocked the
+bulk write. That was right when T307 wrote it: PostgREST truncates at `[api] max_rows = 1000` with a
+**200 and a partial `Content-Range`**, so `createLoader` resolved a partial array every caller read
+as complete, and the write nulled real `check_in_at` / `hours_override` / `qr` provenance. T320's
+`.range()` pagination removed the thing the guard proxied for.
+
+### It was correctly BLOCKED until PR #28 actually merged
+
+W1's inbox note said the guard was already a false positive. **It was not, on `main`.** T320's
+pagination existed only on `claude/w1-checkin`; `origin/main`'s `attendance.ts` still issued the bare
+`.select().in()`, so the guard was still doing exactly its job and deleting it would have re-opened
+T307's destructive bug. The note was written from inside W1's branch, where the claim was true. This
+was raised on PR #28 and the row was held until #28 landed. **A premise can be true on the branch
+that states it and false on the branch that would act on it.**
+
+### The premise was proven by execution, not read
+
+The gate built a paging fake serving **1500 rows over two `.range()` pages** through the *real*
+`makeLoadAttendanceForSessions`, resolved **1500 distinct rows** (`rangeCalls [[0,999],[1000,1999]]`)
+with a `qr` / `hoursOverride: 6.5` / check-in row intact, and showed the current guard calling that
+complete load **failed**. It then hunted for a surviving path where the guard does real work and
+found none: the only production mount (`OutreachDetail.tsx:2147`) passes no `loadAttendance`; a
+transport ignoring `.range()` makes the loader **throw** after 100 pages into the surviving
+`.catch()`; and T402's un-paged query feeds the page, never this dialog.
+
+### The trap: a test that goes VACUOUS rather than red
+
+The orchestrator predicted **two** dependent tests would redden. Only `:774` does.
+**`:812` stays GREEN while testing nothing** — vite-node resolves the deleted named export as
+`undefined`, so `Array.from({ length: ATTENDANCE_ROW_CAP - 1 })` gets a `NaN` length and builds `[]`.
+**Only `tsc` catches the dangling import** (`TS2614`, exit 2). This repo has shipped 7+ assertions
+that passed for the wrong reason; this is the first recorded case of one going *vacuous* on deletion
+rather than red. `:812` was deleted (the gate's subset argument: any mutation reddening a 999-row
+test also reddens the 1000-row one, but not conversely).
+
+### The worker was stopped mid-task
+
+It committed the implementation (`3765f4f`) and left one uncommitted change, but **never wrote its
+packet-§7 output doc**. Per item 23's corollary the uncommitted change was assessed before being
+touched: a comment refinement, real work, committed rather than reverted. **The code is therefore
+unattested by its author** — every piece of evidence below is the orchestrator's own replay, and the
+checker was told to treat the diff as having had *less* scrutiny than usual, not more.
+
+### Verification — every mutation replayed by the orchestrator
+
+| Criterion | Mutation | Result |
+|---|---|---|
+| C1 + C5 | reinstate the `>= 1000` fail-closed guard | **2 red** — both the injected-array test **and** the real-loader test |
+| C2 | delete the `.catch()` error branch | **2 red** — F1 (load rejects blocks the write), F3 (retry re-runs the load) |
+| C4 | re-add the `ATTENDANCE_ROW_CAP` export | **1 red** |
+
+**C5 is the criterion the packet was missing until the gate found it.** C1 is satisfiable with an
+injected array, which pins the dialog but not the premise the whole task depends on. C5 drives the
+real loader through a paging fake.
+
+### The checker FAILed it — on the packet's error, not the worker's
+
+**MAJOR-1: the disproved F1b claim lived in TWO places and §3.5 named one.** The worker correctly
+fixed the inline copy; the survivor in module doc #6 (`:162-166`) is the *more authoritative* one —
+it is what the inline comment cites by name. So the file shipped saying the `handleConfirm` guard is
+"untestable" in one place and mutation-proven load-bearing in another, **about a guard on the
+data-destroying write path**. That is this project's recurring T301 defect, and it was the packet
+that under-specified the location. Fixed before merge with the measured truth: Astryx's `Button`
+guards on the `isDisabled` **prop**, both layers are independently load-bearing (checker re-proved:
+either alone still blocks; both removed lets a write through).
+
+**NIT-1, also closed before merge:** C5's name claimed 1500 rows resolve, but nothing counted them —
+the provenance assertion only proved a **page two** row arrived, so dropping **page one's** rows left
+it green. The orchestrator's first fix for this was itself wrong (asserting `payload.attendance` had
+1500 rows, when the payload is filtered to a roster of one student who lives on page two). Fixed
+properly by putting a page-one student on the roster; **verified by mutating the loader to drop page
+one, which now reddens exactly C5.**
+
+### Filed, not fixed (item 20)
+
+**T502** — `attendance.ts:363` treats a short page as end-of-data, but `createLoader` returns
+`data ?? null` **without throwing** when `data` and `error` are both null (`loader.ts:177`), which
+postgrest-js can produce. An empty-bodied page therefore resolves as "done" and the load comes back
+silently short. **T401 is what makes this reachable on the write path** — the `>= 1000` guard used to
+block precisely the page-boundary sub-case. Remote (needs >1000 rows across one event; the live DB
+holds 79), one line, and in **W1's** file, so W2 filed rather than reached across the boundary. It
+also narrows this log's own T307 entry at `:6454`.
