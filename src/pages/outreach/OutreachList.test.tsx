@@ -2528,10 +2528,24 @@ describe('loadOutreachData (T101 real load)', () => {
     const rsvpsInSpy = vi.fn().mockResolvedValue({ data: [], error: null });
     // CHECKER FIX (rework of T121, MAJOR) -- the new, real, batched
     // `attendance` query this loader now issues alongside `rsvps`.
-    const attendanceInSpy = vi.fn().mockResolvedValue({
-      data: [{ session_id: 'session-1', student_id: 'student-1', status: 'present' }],
-      error: null,
-    });
+    // T402 -- ORCHESTRATOR-AUTHORIZED stub-shape fix, outside T402's own
+    // Allowed Files. `loaders/outreach.ts`'s attendance read is now
+    // PAGINATED (`.in(...).order('id').range(...)`, mirroring T320), so a
+    // stub that resolved straight off `.in()` throws
+    // `client.from(...).select(...).in(...).order is not a function`.
+    // Test-harness shape only -- NO assertion is changed, and the
+    // `toHaveBeenCalledWith('session_id', [...])` checks below still hold
+    // because `.in()` is still the call that receives them. Exact precedent:
+    // W1 extended one stub chain in `AttendancePanel.test.tsx` the same way
+    // when T320 landed, under the same kind of authorization.
+    const attendanceInSpy = vi.fn(() => ({
+      order: vi.fn(() => ({
+        range: vi.fn().mockResolvedValue({
+          data: [{ session_id: 'session-1', student_id: 'student-1', status: 'present' }],
+          error: null,
+        }),
+      })),
+    }));
     const studentsOrderSpy = vi.fn().mockResolvedValue({
       data: [
         { id: 'student-1', display_name: 'Amara', team_id: 'team-ravens', goal_hours_override: 5 },
@@ -2644,7 +2658,9 @@ describe('loadOutreachData (T101 real load)', () => {
       error: null,
     });
     const rsvpsInSpy = vi.fn().mockResolvedValue({ data: [], error: null });
-    const attendanceInSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const attendanceInSpy = vi.fn(() => ({
+      order: vi.fn(() => ({ range: vi.fn().mockResolvedValue({ data: [], error: null }) })),
+    }));
     const studentsOrderSpy = vi.fn().mockResolvedValue({ data: [], error: null });
     const teamsOrderSpy = vi.fn().mockResolvedValue({ data: [], error: null });
     const seasonMaybeSingleSpy = vi
