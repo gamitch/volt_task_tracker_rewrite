@@ -1908,3 +1908,52 @@ authorized:** retyping any event, or touching the FLL events.
 
 **Cheap to implement once answered:** `kpi_views.sql:181-183` already computes all three as separate
 filtered sums, so this is column selection, not new arithmetic.
+
+---
+
+## 2026-08-03 — George's ruling on T306: a past session's Signups section shows what HAPPENED, not what was promised
+
+**His own account of the confusion, verbatim:** *"i was on the UI and adding who attended an outreach
+event. I could select a student and input hours as i should. What was not clear to me on the UI was
+what to do with the RSVP. I belive i left it no response. it create a mental challenge from a user
+standpoint and was not clear."*
+
+**That reframes the row.** The filed defect was "the tallies are wrong" — students with recorded
+attendance sit under *No response*. The real defect is that **the RSVP section looks actionable**: the
+coach reasonably wonders whether recording attendance also obliges him to go and fix each RSVP. It
+does not, and nothing on screen said so.
+
+**Ruling (structured selection): replace the buckets with what actually happened.** Not "alongside",
+not "keep RSVP with an explanatory line". Once real attendance exists, the RSVP question disappears
+from that surface entirely, so there is nothing left to wonder about. An upcoming session is
+unchanged — intent is the only thing that exists yet.
+
+### His follow-up constraint, and why it changes the trigger
+
+**Verbatim:** *"pleae be cognizant of what a 'past' event is. i may be doing this on the same day of
+the event."*
+
+This rules out both of the obvious triggers:
+
+- **Not the date.** He records attendance on the day of the event, so a date test would still show him
+  RSVP buckets during the exact workflow that confused him. It would also re-open T304, where he
+  settled that these surfaces do not consult the date.
+- **Not `session.status === 'completed'` either.** While he is recording attendance the session is
+  typically still `scheduled` — he has not marked the day complete yet. A status test would leave the
+  RSVP buckets on screen for the whole of the confusing moment and only fix it afterwards.
+
+**Trigger, therefore: whether any attendance row exists for that session.** No rows → RSVP intent is
+genuinely the only information that exists, so show it. Any rows → real data exists, so show it. It
+flips the instant he ticks the first student, same day or not.
+
+**This last part is the orchestrator's engineering call, not the owner's words** — it is recorded here
+because it is the mechanism that makes his stated constraint true, and because a future session
+reading only the "replace it" ruling could reasonably implement a date or status test and reintroduce
+exactly the confusion he reported.
+
+### What this does NOT authorize
+
+**Syncing the two records.** `OutreachList.tsx:1685-1687` carries T121's finding, still governing:
+*"RSVP is intent, not a real attendance record."* Writing a `going` RSVP because a coach ticked an
+attendance box would claim a student said yes in advance when they never responded. **This is a
+display change only — no writes.** Same boundary the T305 ruling drew for the dialog half.
