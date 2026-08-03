@@ -1,115 +1,207 @@
-# T162 — worker packet: first tests for `loaders/meetings.ts`
+# T162 — worker packet **v2**: first tests for `loaders/meetings.ts`
 
 **Workflow W3-A (unattended hygiene wave). Branch `claude/w3a-meetings-hygiene`. STANDARD tier.**
+Base: `d5d420a`.
 
-**Premise gate: REQUIRED for this packet** — orchestrator decision D2 in `auto-mode-decisions.md`.
-T197's gate was skipped as a settled pattern; **this one is not that.** 726 lines of previously
-untested loader, containing metric math a user sees, is 19b's "novel", not its "settled".
+**Gate round 1 returned REVISE (1 BLOCKER, 1 MAJOR, 3 MINOR, 3 NIT). This is the revision.** Item 19a
+caps the gate at two rounds. Every finding is addressed below; the two BLOCKERs were **the packet
+author's own false claims**, not worker-facing ambiguity, and are corrected in place rather than
+softened.
 
-## 1. Citations, verified by the orchestrator at `4b0866c` (item 19c)
+> ### What v1 got wrong, stated plainly so it is not re-derived
+>
+> 1. **v1 said `makeCreateMeetings` "rejects before any network call". IT DOES NOT.** It `await`s a
+>    `seasons` query **first** (`:712`), then guards (`:713-717`). The true statement is *rejects
+>    before either **write***.
+> 2. **v1 drew an analogy to `endMeeting.ts`'s `makeOnEditAttendance`. That analogy is wrong.** That
+>    guard calls a **closure** (`getRecordedBy()`) and genuinely precedes any network call. These are
+>    not the same shape. The analogy is deleted, not repaired.
+> 3. **v1's C4 was untestable by the assertion a worker would naturally write** — see §6.
+> 4. **v1 framed this row as "novel" work.** It is substantially **copy-and-adapt** — see §5.1.
 
-| Claim | Verified |
+## 1. Citations — re-verified at `d5d420a`
+
+| Claim | Status |
 |---|---|
-| `loaders/meetings.ts` is 726 lines | ✅ `wc -l` = 726 |
-| Zero tests | ✅ no `meetings.test.ts` exists |
-| `aggregateParticipationRows` | ✅ `:465` |
-| `makeLoadCoachMeetingsData` | ✅ `:536` |
-| `makeLoadStudentMeetingsData` | ✅ `:581` |
-| `makeCancelMeetingSession` | ✅ `:618` |
-| `makeResolveCurrentStudentId` | ✅ `:636` |
-| `makeCreateMeetings` | ✅ `:670` |
+| `meetings.ts` is 726 lines; zero tests (no `meetings.test.ts`) | ✅ |
+| `aggregateParticipationRows:465` · `makeLoadCoachMeetingsData:536` · `makeLoadStudentMeetingsData:581` · `makeCancelMeetingSession:618` · `makeResolveCurrentStudentId:636` · `makeCreateMeetings:670` | ✅ all six |
+| `queryFirstLinkedStudentId` "EARLIEST-linked child only" doc `:503`, decl `:504`, `.order` `:512`, `.limit` `:513` | ✅ |
+| The T147 real-teams comment block starts at **`:564`** | ✅ *(v1 said `:565` — corrected)* |
 
-**One ledger claim is imprecise and is corrected here:** the row says *"`meetings.ts:570` still
-carries the fixture-fallback comment from that incident."* `:565-570` is a comment about *threading
-real teams through so `ScheduleMeetingsDialog` gets real data instead of its own fixture
-`DEFAULT_TEAMS`* — it describes the **fix**, not surviving fixture fallback. **There is no fixture
-fallback left at that line.** Do not go hunting for one.
+**Ledger claim corrected:** the row calls `:570` a *"fixture-fallback comment from the T147
+incident."* That block documents **the fix** — threading real teams through so
+`ScheduleMeetingsDialog` stops using its own fixture `DEFAULT_TEAMS`. A grep for
+`fixture|fallback|DEFAULT_TEAMS|placeholder` across the file returns **only comments**. **No live
+fixture path survives anywhere in this file. Do not go hunting for one.**
 
-## 2. ⚠️ THE TRAP THAT DECIDES WHETHER THIS TASK HELPS OR HURTS
+## 2. ⚠️ THE METRIC TRAP — `present_ct` ALREADY INCLUDES LATE
 
-**`present_ct` ALREADY INCLUDES LATE. `late_ct` is a SUBSET of it, not a sibling.**
-
-From `v_student_participation` (`*metric_views.sql`, read directly — W4's file, **read-only for
-you**):
+**Operative definition — `supabase/migrations/20260722000000_membership_views.sql:72-76`.** This is
+the **live** view; `20260717000003_metric_views.sql:33-34` was superseded by a later
+`create or replace` and `meetings.ts:446` cites the membership one itself. **Both are W4's —
+read-only for you.**
 
 ```sql
 count(*) filter (where a.status in ('present','late')) as present_ct,
 count(*) filter (where a.status = 'late')              as late_ct,
 ```
 
-And `aggregateParticipationRows:478` computes:
+`aggregateParticipationRows:477-478`:
 
 ```js
 const denominator = Math.max(expectedCt - excusedCt, 1);
 const participationPct = Math.round(((100.0 * presentCt) / denominator) * 10) / 10;
 ```
 
-**PRD MET-01 says the numerator is "present+late marks". The code uses `presentCt` alone. THAT IS
-CORRECT** — because `present_ct` is already `present ∪ late`. The code and the PRD agree.
+**PRD MET-01 (`VOLT_Portal_PRD.md:563`) says the numerator is "present+late marks". The code uses
+`presentCt` alone. THAT IS CORRECT** — `present_ct` *is* `present ∪ late`. Confirmed independently
+by the gate three ways: the view's own `participation_pct`, `v_team_participation` summing
+`present_ct` alone, and `checkin.ts:340-373` doing the same.
 
-**Two ways to get this wrong, both of which ship a lie about a student's own participation:**
+**Two ways to ship a lie about a student's own participation:**
 
-1. **Writing a test that expects `(present_ct + late_ct) / denominator`.** That double-counts every
-   late mark. Your test would go green against a formula that is wrong, and cement it.
-2. **"Fixing" `aggregateParticipationRows` to add `lateCt`.** **Do not touch that function's
-   logic.** If you believe it is wrong, STOP and report it as a dispute — do not edit it.
+1. A test expecting `(present_ct + late_ct) / denominator` — **double-counts every late mark**, goes
+   green, cements the error.
+2. "Fixing" `aggregateParticipationRows` to add `lateCt`. **Do not touch that function's logic.** If
+   you believe it is wrong, **STOP and raise a dispute** — do not edit it.
 
-**Any fixture you build must satisfy `late_ct <= present_ct`.** A fixture with `present_ct: 3,
-late_ct: 5` is impossible in the real view and a test built on it proves nothing.
+### 2.1 Fixture rules — and their exact scope
+
+**These govern `ParticipationDbRow` fixtures ONLY** (the view-shaped rows this loader aggregates):
+
+- `late_ct <= present_ct` — late is a **subset**, not a sibling
+- `present_ct + excused_ct <= expected_ct`
+- **The only view-possible `expected_ct == excused_ct` fixture has `present_ct = 0`** (if every
+  expected session was excused, none can be present). So dropping the denominator floor yields
+  **`NaN`, not `Infinity`** — assert accordingly.
+
+**⚠️ These rules do NOT apply to the coach-view `PastAttendanceSummary` shape**
+(`MeetingsList.tsx:928-940`), whose `present`/`late` **are disjoint** and which `:1075` therefore
+**correctly adds together**. Two different `{presentCt, lateCt}` shapes exist in this feature. If
+you write fixtures for §4 item 5, do not import this rule into them.
 
 ## 3. Allowed files
 
 - **NEW** `src/lib/supabase/loaders/meetings.test.ts` — this is the task.
-- `src/lib/supabase/loaders/meetings.ts` — **only if a test reveals a genuine defect**, and then
-  only after reporting it. Default expectation: **this file is not modified at all.**
+- `src/lib/supabase/loaders/meetings.ts` — **only if a test reveals a genuine defect**, and only
+  after raising it. **Default expectation: unmodified.**
 
-**Not yours:** any `*metric_views.sql` (W4's — read as reference, never edit), `endMeeting.ts` /
-`endMeeting.test.ts` (T197 just landed there), `LiveConsole.tsx` / `Kiosk.tsx` (W1's), any migration.
+**Read-only reference (W3's own files, but out of scope for this task):**
+`endMeeting.ts`, `endMeeting.test.ts`, `checkin.ts`, `checkin.test.ts`.
+**Not W3's at all:** `*metric_views.sql` / `*membership_views.sql` (W4's), `LiveConsole.tsx` /
+`Kiosk.tsx` (W1's), any migration.
 
-## 4. What to cover
+## 4. What to cover — priority order
 
-**Priority order. If you run out of room, cover fewer things properly rather than all six thinly.**
+**§4 items 4 and 5 are deliberately criterion-free.** If you run out of room, cover fewer things
+properly rather than all six thinly. Items 1–3 carry the criteria and are the task's real content.
 
-1. **`aggregateParticipationRows`** — the highest-value target and the only pure function here.
-   Cover: empty → `null`; single row → returned **as-is** (identity, not recomputed); multi-row
-   summing; the **`Math.max(…, 1)` denominator floor** (a student with `expected == excused` must
-   not divide by zero); the rounding contract (`Math.round(x*10)/10`, one decimal); and that
-   `student_id`/`team_id`/`season_id` come from `rows[0]`.
-2. **`makeCreateMeetings`** — the mutation behind the owner's own reported failure (T147). Cover its
-   Supabase call shape and its **pre-condition rejection** (no active season → reject before any
-   network call, the same shape `endMeeting.ts`'s `makeOnEditAttendance` uses for a null identity).
-3. **`makeResolveCurrentStudentId`** — note `queryFirstLinkedStudentId` is documented
-   *"EARLIEST-linked child only"* (`:504`, Trap #4) and orders by `created_at` ascending with
-   `limit(1)`. **Assert that ordering** — a parent with two linked children must resolve to the
-   first-linked one, and deleting the `.order()` must redden your test.
-4. **`makeCancelMeetingSession`** — call shape and scoping.
-5. **`makeLoadCoachMeetingsData` / `makeLoadStudentMeetingsData`** — the two composed loaders. Their
-   value is in error propagation and in the row-shape mapping, not in re-testing the aggregation.
+1. **`aggregateParticipationRows`** — highest value, the only pure function here. Empty → `null`;
+   single row → returned **as-is**; multi-row summing; the `Math.max(…,1)` denominator floor;
+   rounding (`Math.round(x*10)/10`); and `student_id`/`team_id`/`season_id` sourced from `rows[0]`.
+2. **`makeCreateMeetings`** — the mutation behind the owner's own reported failure (T147). Its
+   **domain rejection** when no season is active. Read §6 C6 carefully before writing this one.
+3. **`makeResolveCurrentStudentId`** — `queryFirstLinkedStudentId` is *EARLIEST-linked child only*
+   (`:503-513`). A parent with two linked children must resolve to the first-linked. Read §6 C5
+   before writing this one.
+4. `makeCancelMeetingSession` — call shape and scoping. *(no criterion)*
+5. `makeLoadCoachMeetingsData` / `makeLoadStudentMeetingsData` — error propagation and row-shape
+   mapping, not re-testing the aggregation. *(no criterion)*
 
-## 5. How to test — the standard this repo actually holds
+## 5. How to test
 
 **Outcome-provable, not call-shape.** This project has shipped **7+ assertions that passed for the
-wrong reason**, and T401 produced one that went **vacuous rather than red**. Two patterns to copy,
-both in `verification-log.md`:
+wrong reason** (`verification-log.md:7726-7733`) and **one that went vacuous rather than red**
+(`:7791-7799`).
 
-- **T402's C2** — a fake whose physical behaviour makes the defect observable.
-- **T197 (landed on this branch at `4b0866c`, `endMeeting.test.ts`)** — the closest precedent, same
-  directory, same `runMutation` shape. **Read it before you start.** It asserts final row state, not
-  that `.eq()` was called.
+### 5.1 START HERE — this is largely copy-and-adapt, not novel work
 
-`getClient` is injectable on every factory here, so a stubbed transport needs zero network.
+**`src/lib/supabase/loaders/checkin.test.ts:45-123` already tests this exact formula.**
+`checkin.ts:330-373`'s `aggregateParticipationForStudent` is `aggregateParticipationRows` **plus a
+season filter** — same summing, same `Math.max(expectedCt - excusedCt, 1)`, same
+`Math.round(x*10)/10`. That green file already covers:
+
+| Case | Location |
+|---|---|
+| empty → `null` | `:50` |
+| single row returned verbatim | `:54-59` |
+| multi-row summing | `:63-71` |
+| **denominator floor, `expected_ct == excused_ct`** — asserts `.toBe(0)` **and** `Number.isFinite(...)` | `:86-93` |
+| rounding table | `:98-123` |
+
+**`Number.isFinite(...)` at `:93` is the ready-made C2 assertion.** Adapt these; the difference is
+that `aggregateParticipationRows` has **no season filter**. Do not reinvent them, and do not blindly
+copy the season-filter cases that do not apply.
+
+### 5.2 Other precedents
+
+- **T197** (`endMeeting.test.ts`, landed on this branch) — same directory, same `runMutation` shape.
+  Asserts final row state, not that `.eq()` was called.
+- **T402's C2** (`verification-log.md`) — a fake whose *physical* behaviour makes the defect
+  observable.
+
+`getClient` is injectable on every factory here (`:537, :582, :619, :637, :671`), so a stubbed
+transport needs zero network.
 
 ## 6. Acceptance criteria
 
-| # | Criterion | Mutation that must turn it RED at exit 1 |
+**C1–C3 require a fixture of ≥2 rows.** `meetings.ts:469` returns `rows[0]` untouched for a single
+row, so a one-row fixture cannot exercise the arithmetic at all.
+
+| # | Criterion | Mutation → must go RED at exit 1 |
 |---|---|---|
-| C1 | Participation summing is real | change `+ row.present_ct` to `+ 0` in the reduce |
-| C2 | The denominator floor is real | replace `Math.max(expectedCt - excusedCt, 1)` with `expectedCt - excusedCt` — a fixture with `expected == excused` must expose it (division by zero → `Infinity`/`NaN`) |
-| C3 | Rounding is real | drop the `Math.round(x*10)/10` wrapper |
-| C4 | Empty/single-row identity holds | make the `rows.length === 1` branch fall through to recomputation |
-| C5 | Earliest-linked-child ordering is real | delete `.order('created_at', { ascending: true })` |
-| C6 | `makeCreateMeetings`' pre-condition rejects before any network call | remove the no-active-season guard |
-| C7 | Whole suite still green | — (no existing test weakened; base is 78 files / 1945 tests, exit 0) |
+| C1 | Summing is real | `+ row.present_ct` → `+ 0` (`:471`) |
+| C2 | Denominator floor is real | drop `Math.max(…, 1)` (`:477`) |
+| C3 | Rounding is real | drop the `Math.round(x*10)/10` wrapper (`:478`) |
+| C4 | Single-row identity holds | make the `rows.length === 1` branch fall through (`:469`) |
+| C5 | Earliest-linked-child ordering is real | delete `.order('created_at', {ascending:true})` (`:512`) |
+| C6 | The no-active-season **domain** rejection is real | remove the guard (`:713-717`) |
+| C7 | Suite still green | — |
+
+### C2 — assert `Number.isFinite`, not a magic number
+The only view-possible `expected == excused` fixture has `present_ct = 0`, so the mutation yields
+**`NaN`**. Copy `checkin.test.ts:86-93`.
+
+### C4 — ⚠️ VALUE EQUALITY DOES NOT WORK HERE
+Measured by the gate: with the short-circuit removed, the recomputed object is **byte-identical** to
+`rows[0]` (`participation_pct: 66.7` both ways). `toEqual` stays **GREEN**.
+**Use reference identity: `expect(result).toBe(rows[0])`.** That is the one assertion that reddens
+(`Object.is equality`, exit 1). This is a deliberate exception to §5's outcome-provable framing — the
+*outcome* is genuinely indistinguishable, so identity is the only honest probe. Do not instead build
+a view-impossible fixture whose `participation_pct` contradicts its own counters; §2.1 forbids it.
+
+### C5 — ⚠️ THE OBVIOUS HARNESS MAKES THIS VACUOUS
+`endMeeting.test.ts:110`'s stub makes `.order()` a **no-op passthrough** (`chain.order = () => chain`).
+**Copy that and C5 can never redden** — deleting `.order()` from the source changes nothing the fake
+observes. **Build a fake that physically sorts its rows only when `.order()` is called**, then assert
+the parent resolves to the **earliest-linked** child. Seed the fake with the children in
+reverse-`created_at` order so an unsorted read returns the wrong one.
+
+### C6 — ⚠️ THE NATURAL ASSERTION STAYS GREEN. READ THIS TWICE.
+**`makeCreateMeetings` does NOT reject before any network call.** `:712` `await`s the `seasons`
+query; the guard at `:713-717` runs after it and rejects **before either write**.
+
+Removing the guard does **not** produce a write either — `activeSeason.id` at `:718` throws
+`TypeError: Cannot read properties of null (reading 'id')` first. **So "no `events` insert happened"
+is TRUE both with and without the guard, and a test asserting only that stays GREEN under the
+mutation.**
+
+**C6 must assert the rejection's identity:**
+
+```
+await expect(createMeetings(payload)).rejects.toThrow(/^No active season is set up yet\./)
+```
+
+Gate-verified red output for that form:
+`expected [Function] to throw error matching /^No active season is set up yet\./ but got 'Cannot
+read properties of null (reading 'id')'` — exit 1.
+
+You may **additionally** assert `from()` was called with `'seasons'` only, as a scope check. It must
+not be the only assertion.
+
+### C7 — expected counts
+Base at `d5d420a` is **78 files / 1946 tests, exit 0**. Adding `meetings.test.ts` makes it **79
+files**. State your delta so a replay does not misread it as drift.
 
 **Item 23: commit before mutating.** Record each mutation's exact failing assertion and exit code,
 then restore and verify `git diff --quiet`. **A green suite at exit 0 after a mutation means that
@@ -117,10 +209,10 @@ criterion is not covered — say so rather than adjusting the test to hide it.**
 
 ## 7. Required output
 
-- Each criterion with its mutation's **real** output (failing assertion text + exit code)
-- Final gates: `tsc`, `eslint`, `prettier`, `vitest`. **Base measured by the orchestrator at
-  `4b0866c`: `tsc` 0 · prettier clean · vitest 78 files / 1945 tests, exit 0.** If yours differ, say
-  so plainly rather than restating these.
-- Confirmation that `meetings.ts` is unmodified (or, if not, the defect that justified it and the
-  dispute you raised first)
-- Anything found and not fixed, **filed rather than dropped** — your row-number block is T600–T699
+- Each of C1–C7 with its mutation's **real** output (failing assertion text + exit code)
+- Final gates: `tsc`, `eslint`, `prettier`, `vitest`. **Base at `d5d420a`: `tsc` 0 · eslint 0 errors
+  / 364 warnings · prettier clean · vitest 78 files / 1946 tests, exit 0.** If yours differ, say so
+  plainly rather than restating these.
+- Confirmation that `meetings.ts` is unmodified — or the defect that justified touching it and the
+  dispute you raised **first**
+- Anything found and not fixed, **filed** rather than dropped. Your block is **T600–T699**.

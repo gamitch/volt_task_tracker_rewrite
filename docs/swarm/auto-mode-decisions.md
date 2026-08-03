@@ -2287,3 +2287,57 @@ and will be skipped like D1.
   *intentional no-op*, and its roster loader is a *fixture*. **All three are false since T403.**
   Folded into T197's packet as an explicitly bounded comment-only fix (§5) rather than left, since
   the worker is already in that file and the claim directly contradicts what the ledger now says.
+
+### D3 — T162's gate returned REVISE (1 BLOCKER); packet revised, re-gating. **Two BLOCKERs were the orchestrator's own false claims.**
+
+**Recorded because the failure is more useful than the fix.** D1 skipped T197's gate and D2 refused
+to extend that skip to T162. **That distinction was correct and this proves it** — the gate found a
+defect that would have reached a worker.
+
+**BLOCKER 1 — the packet asserted something false about the code it was specifying.** v1 said
+`makeCreateMeetings` *"rejects before any network call"*. It does not: `meetings.ts:712` `await`s a
+`seasons` query **first**, and the guard at `:713-717` rejects **before either write**. Verified by
+the orchestrator directly after the gate reported it — the `await loadActiveSeasonId()` is plainly
+the first statement in the returned function.
+
+**The consequence was worse than the wording.** The acceptance criterion built on that claim
+(*"rejects before any network call"*) steers a worker toward asserting *no write happened* — and
+that assertion **stays green under the mutation**, because removing the guard makes `activeSeason.id`
+(`:718`) throw a `TypeError` before `insertEvent` is ever invoked. **The packet would have shipped a
+criterion that passes for the wrong reason** — the exact shape this project has already paid for
+7+ times. v2 requires asserting the rejection's **identity**
+(`/^No active season is set up yet\./`), which the gate measured red at exit 1.
+
+**BLOCKER 2 — a false analogy taught the wrong mental model for that same criterion.** v1 said the
+guard was *"the same shape `endMeeting.ts`'s `makeOnEditAttendance` uses"*. It is not:
+`makeOnEditAttendance` (`endMeeting.ts:468-471`) guards on a **closure call** and therefore genuinely
+does precede any network call. Deleted in v2, not repaired.
+
+**MAJOR — C4 was untestable by the assertion a worker would naturally write.** Removing the
+single-row short-circuit leaves the returned value **byte-identical**; only
+`expect(result).toBe(rows[0])` reddens. The packet's own "outcome-provable, not call-shape" framing
+pointed **away** from the one assertion that works. v2 names reference identity as a deliberate,
+reasoned exception.
+
+**The framing in D2 was also partly wrong, and that is worth owning.** D2 called T162 *"novel, not
+settled"*. The gate found that **`checkin.test.ts:45-123` already tests this exact formula** —
+`aggregateParticipationForStudent` is `aggregateParticipationRows` plus a season filter, and that
+green file already covers empty→null, single-row-verbatim, multi-row summing, the rounding table, and
+**the denominator floor asserting `Number.isFinite(...)`, which is C2 outright**. T162's
+top-priority item is **copy-and-adapt**. **The gate was still worth running — but for the
+mutation-detectability defects, not for the metric premise, which held.**
+
+**What held:** every §2 claim about the metric. `present_ct` does include late, `late_ct` is a
+subset, and dividing `presentCt` alone matches MET-01 — confirmed three independent ways. That was
+the finding the gate was ostensibly for, and it needed no correction.
+
+**Round 1 of 2 (item 19a).** If round 2 returns REVISE again, the row is **parked for the owner**,
+not looped a third time and not overridden.
+
+**Filed from this gate (item 20): T600** — `meetings.ts:465-489` and `checkin.ts:340-373` are two
+TypeScript copies of one view expression, with no shared helper and no test asserting they agree.
+Not fixed here: it crosses into W1's `checkin.ts` and needs an ownership call.
+
+**Note on citation ambiguity:** `D1`/`D2`/`D3` are scoped **per window**. This file now contains
+more than one section numbered `D2` (the W4+W5 window has its own). **Always cite as
+"W3-A window, D<n>".**
