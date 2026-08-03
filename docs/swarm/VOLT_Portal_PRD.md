@@ -550,10 +550,12 @@ All tables: `id uuid pk default gen_random_uuid()`, `created_at timestamptz defa
 | `notification_prefs` | `profile_id fk unique`, one bool per EML-02 category, `digest_enabled bool default true` |
 | `calendar_feeds` | `profile_id fk`, `token uuid unique default gen_random_uuid()`, `revoked_at timestamptz null` |
 | `email_log` | `to_email`, `template text`, `session_id uuid null`, `profile_id uuid null`, `status text`, `sent_at` |
-| `audit_log` | `actor fk profiles`, `action text`, `entity text`, `entity_id uuid`, `meta jsonb` |
+| `audit_log` | `actor fk profiles null`, `action text`, `entity text`, `entity_id uuid`, `meta jsonb` |
 
 - **DATA-01** Derived metrics come from SQL views (`v_student_participation`, `v_student_hours`, `v_team_rollups`) implementing Section 9 exactly — the frontend never re-implements a formula.
-- **DATA-02** Audit-log writes (DB triggers) for: attendance edits after session completion, role changes, deactivations, event/session cancellations, invite revocations.
+- **DATA-02** Audit-log writes (DB triggers) for: role changes, deactivations, event/session cancellations, invite revocations. These are rare administrative actions where "who did this" is worth recording.
+  - **Attendance is deliberately NOT audit-logged** (owner decision, 2026-08-03). This is a small volunteer team, and adding or correcting attendance after a session has completed is a normal, legitimate workflow — someone was present but never got marked, so a coach or the student fixes it. It is not a fraud signal and must not be recorded as one. Attendance record-keeping is `attendance.recorded_by` + `attendance.updated_at` on the row itself, which the activity feed already surfaces. Do not re-add an attendance audit trigger.
+  - `audit_log.actor` is **nullable**. An audit write must never be able to abort the write it is auditing; an unresolvable actor records `null` rather than failing the transaction.
 
 ### 8.2 Metric formulas (normative — Section 9 shorthand `MET-*`)
 

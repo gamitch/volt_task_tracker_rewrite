@@ -40,23 +40,20 @@
  *   3. Status flip -- `.update({ status: 'completed' })` on
  *      `event_sessions`, scoped `.eq('id', sessionId)`. ALWAYS last.
  *
- * Ordering reason (cited directly, not re-derived --
- * `supabase/migrations/20260717000001_support_audit.sql:120-157`, read by
- * both the packet author and the premise gate independently):
- * `trg_audit_attendance_post_completion` is `after update on
- * public.attendance`, and it looks up `event_sessions.status` LIVE (a real
- * `select ... where id = new.session_id`, not a cached flag) at UPDATE
- * time. Checkout (step 2) is an `attendance` UPDATE -- if it ran after the
- * session already read `'completed'`, the trigger would fire and log the
- * coach's own routine meeting-close checkout as
- * `attendance_edited_post_completion`, a post-completion CORRECTION, which
- * is wrong: closing an open check-in as part of ending the meeting is the
- * intentional completion action itself. Backfill (step 1) is a plain
- * `INSERT ... ON CONFLICT DO NOTHING` -- it never fires an `after update`
- * trigger regardless of ordering, so it is order-independent relative to
- * the other two. `grep "create trigger"` against the migrations confirms
- * this is the ONLY trigger on `attendance`, and there is none on
- * `event_sessions` at all.
+ * Ordering history: this sequence was originally required by
+ * `trg_audit_attendance_post_completion`, an `after update on
+ * public.attendance` trigger that logged any attendance UPDATE against an
+ * already-`'completed'` session. Running checkout (step 2) after the flip
+ * would have logged the coach's own routine meeting-close checkout as a
+ * post-completion correction. That trigger was REMOVED in
+ * `supabase/migrations/20260803000000_simplify_attendance_audit.sql` --
+ * post-completion attendance corrections are a normal workflow for this
+ * team and are deliberately not audit-logged (PRD DATA-02).
+ *
+ * The ordering is RETAINED, but on the independent justification below
+ * (safe partial-failure states), not for audit reasons. The only trigger
+ * now on `attendance` is `trg_attendance_touch_updated_at` (a `before
+ * insert or update` timestamp touch), which is order-independent.
  *
  * **The actual, positive justification for three sequenced calls instead of
  * an RPC** (not "we can't prove otherwise"): because the flip is always
@@ -164,12 +161,12 @@
  * 4. `audit_log` -- never written here, anywhere.
  * -----------------------------------------------------------------------
  *
- * `trg_audit_attendance_post_completion` (section 1 above) is the SOLE
- * place a real `audit_log` row for a post-completion `attendance` edit is
- * ever written -- it fires automatically at the database layer once a real
- * `attendance` UPDATE (via `onEditAttendance`) runs against a session whose
- * `event_sessions.status` is already `'completed'`. This file never
- * inserts into `audit_log` anywhere -- grep-provable, zero occurrences.
+ * No `audit_log` row is written for a post-completion `attendance` edit at
+ * ANY layer -- not by this file, and not by the database (section 1 above:
+ * the trigger that used to do so was removed deliberately). Attendance
+ * attribution lives on the row: `recorded_by` + `updated_at`. This file
+ * never inserts into `audit_log` anywhere -- grep-provable, zero
+ * occurrences.
  *
  * -----------------------------------------------------------------------
  * 5. No migration, no new RLS.

@@ -54,98 +54,44 @@
  * uncoordinated calls of its own.
  *
  * -----------------------------------------------------------------------
- * 2. `trg_audit_attendance_post_completion` -- THE single most important
- *    ground-truth fact in this packet (Known Context/Traps #2). Cited in
- *    full, not paraphrased, and never duplicated.
+ * 2. Post-completion attendance edits are NOT audit-logged.
  * -----------------------------------------------------------------------
  *
- * `supabase/migrations/20260717000001_support_audit.sql` lines 120-156,
- * read directly for this task:
+ * HISTORY: this file was originally written against
+ * `trg_audit_attendance_post_completion`, an `after update on
+ * public.attendance` trigger that wrote an `audit_log` row for any
+ * attendance UPDATE whose session already read `'completed'`. That trigger
+ * was REMOVED in
+ * `supabase/migrations/20260803000000_simplify_attendance_audit.sql`.
  *
- *   create or replace function public.fn_audit_attendance_post_completion()
- *   returns trigger
- *   language plpgsql
- *   security definer
- *   set search_path = public, pg_temp
- *   as $$
- *   declare
- *     v_session_status text;
- *   begin
- *     select status into v_session_status
- *     from public.event_sessions
- *     where id = new.session_id;
+ * WHY (owner decision, PRD DATA-02): correcting attendance after a session
+ * has completed is a normal, legitimate workflow for this team -- a student
+ * was present but never got marked, so a coach or the student fixes it. It
+ * is not a fraud signal and is not recorded as one. Attendance
+ * record-keeping is `attendance.recorded_by` + `attendance.updated_at` on
+ * the row itself (`updated_at` is now maintained by
+ * `trg_attendance_touch_updated_at`), which the activity feed already reads
+ * to show self-vs-staff attribution.
  *
- *     if v_session_status = 'completed' then
- *       insert into public.audit_log (actor, action, entity, entity_id, meta)
- *       values (
- *         coalesce(auth.uid(), nullif(current_setting('app.actor_id', true), '')::uuid),
- *         'attendance_edited_post_completion',
- *         'attendance',
- *         new.id,
- *         jsonb_build_object(
- *           'session_id', new.session_id,
- *           'student_id', new.student_id,
- *           'old_status', old.status,
- *           'new_status', new.status
- *         )
- *       );
- *     end if;
+ * Consequences for this file:
  *
- *     return new;
- *   end;
- *   $$;
- *
- *   create trigger trg_audit_attendance_post_completion
- *     after update on public.attendance
- *     for each row
- *     execute function public.fn_audit_attendance_post_completion();
- *
- * This is `after update ... for each row`, and it looks up
- * `event_sessions.status` LIVE via `NEW.session_id` (a real `select ...
- * where id = new.session_id`, not a cached/stored flag) -- it fires (writes
- * a real `audit_log` row) for ANY `attendance` UPDATE whose session is
- * ALREADY `'completed'` at that moment, regardless of who or what performed
- * the UPDATE.
- *
- * Two direct consequences for this file:
- *
- *   (a) ORDERING within `handleConfirmEndMeeting` (Known Context/Traps
- *       #1c/#2a): the backfill/checkout mutations described in section 1
- *       above must happen BEFORE `event_sessions.status` flips to
- *       `'completed'`. Backfill is an INSERT (never fires an `after update`
- *       trigger regardless of ordering), but checkout IS an `attendance`
- *       UPDATE (`check_out_at = ends_at` on an existing row) -- if that
- *       UPDATE ran AFTER the session row already read `'completed'`, the
- *       trigger would fire and log it as `attendance_edited_post_completion`,
- *       which is WRONG: closing out an open check-in as part of ending the
- *       meeting is the intentional, expected completion action itself, not a
- *       later correction a coach makes to an already-closed meeting.
- *       CORRECTED (T178): a real implementation of `onEndMeeting` (section 1)
- *       is three sequenced writes, not one transaction -- it naturally
- *       satisfies this by awaiting the checkout UPDATE before issuing the
- *       `event_sessions` UPDATE (checkout second, status flip always last)
- *       -- disclosed here as the specific reason that ordering matters, not
- *       just asserted.
- *   (b) FUTURE coach edits (Known Context/Traps #2b): any attendance
- *       correction made AFTER this dialog's confirm (e.g. a coach later
- *       fixing a student's status from `present` to `late`) is a plain
- *       `attendance` UPDATE through `onEditAttendance` below --
- *       `handleEditAttendance` calls it and nothing else. The trigger fires
- *       automatically at the database layer once that real UPDATE runs
- *       against a session whose `event_sessions.status` is already
- *       `'completed'` (true after section 1's mutation completes). This
- *       file NEVER inserts into `audit_log` anywhere -- `defaultOnEndMeeting`
- *       and `defaultOnEditAttendance` (this file's only two mutation stubs)
- *       both only `console.warn` the payload they would have sent, and no
- *       other write path exists in this file. CONFIRMED: grep for
- *       `audit_log` across this file returns ONLY this comment block (see
- *       Required Worker Output's grep proof) -- zero real writes, zero
- *       duplicate inserts, the same non-duplication property
- *       `InvitesTab.tsx`/T027 already established for
- *       `trg_audit_invite_revocation` (a different trigger, same class of
- *       trap: an already-applied DB trigger owns the audit write, a
- *       client-side duplicate would be redundant and could race/conflict
- *       with it).
+ *   (a) ORDERING within `handleConfirmEndMeeting`: the backfill/checkout
+ *       mutations in section 1 run before `event_sessions.status` flips to
+ *       `'completed'`. That ordering originally existed to stop the trigger
+ *       from logging the coach's own routine meeting-close checkout as a
+ *       post-completion correction. With the trigger gone, the ordering is
+ *       no longer load-bearing for audit reasons -- it is retained because
+ *       checkout-then-flip is the natural sequence anyway (see
+ *       `../../lib/supabase/loaders/endMeeting.ts`), not because anything
+ *       now depends on it.
+ *   (b) FUTURE coach edits: any attendance correction made after this
+ *       dialog's confirm (e.g. fixing a status from `present` to `late`) is
+ *       a plain `attendance` UPDATE through `onEditAttendance` below --
+ *       `handleEditAttendance` calls it and nothing else. This file NEVER
+ *       inserts into `audit_log` anywhere, and neither does the database
+ *       for attendance. `defaultOnEndMeeting` and `defaultOnEditAttendance`
+ *       (this file's only two mutation stubs) both only `console.warn` the
+ *       payload they would have sent.
  *
  * -----------------------------------------------------------------------
  * 3. Pre-confirm summary design choice (Known Context/Traps #3) -- decided
@@ -360,9 +306,9 @@ export type OnEndMeetingFn = (payload: EndMeetingPayload) => Promise<void>;
 
 /**
  * Module doc section 2b -- a plain `attendance` UPDATE. Never inserts into
- * `audit_log`; `trg_audit_attendance_post_completion` (already-applied DB
- * trigger, cited in full in module doc section 2) does that automatically
- * once the real UPDATE this represents runs against a completed session.
+ * `audit_log`, and neither does the database: post-completion attendance
+ * corrections are deliberately not audit-logged (module doc section 2).
+ * `recorded_by`/`updated_at` on the row carry the attribution.
  */
 export type OnEditAttendanceFn = (
   sessionId: string,
@@ -602,18 +548,16 @@ export const defaultOnEndMeeting: OnEndMeetingFn = async (payload) => {
 /**
  * Module doc sections 2b/5. Represents "a plain `attendance` UPDATE
  * happened" -- nothing else. No `audit_log` write, no `audit_log`
- * reference, anywhere in this function;
- * `trg_audit_attendance_post_completion` (already-applied DB trigger, cited
- * in full in module doc section 2) writes the real `audit_log` row
- * automatically once this real UPDATE runs against a completed session.
+ * reference, anywhere in this function; post-completion attendance
+ * corrections are deliberately not audit-logged at any layer (module doc
+ * section 2).
  */
 export const defaultOnEditAttendance: OnEditAttendanceFn = async (sessionId, studentId, status) => {
   console.warn(
     '[EndMeetingDialog] No Supabase client wired in yet (module doc section 5) -- this ' +
       'stub only logs the attendance UPDATE payload that would have been sent. ' +
-      'trg_audit_attendance_post_completion (module doc section 2) writes the audit_log ' +
-      'row automatically once this real UPDATE runs against a completed session -- no ' +
-      'client-side audit_log write belongs here or anywhere in this file.',
+      'Post-completion attendance corrections are deliberately not audit-logged (module ' +
+      'doc section 2) -- no client-side audit_log write belongs here or anywhere in this file.',
     { sessionId, studentId, status },
   );
 };
@@ -708,8 +652,8 @@ export interface EndMeetingDialogProps {
   /**
    * Injectable post-completion attendance-correction seam (module doc
    * section 2b). Defaults to a `console.warn` stub. A plain `attendance`
-   * UPDATE -- `trg_audit_attendance_post_completion` handles the audit
-   * logging automatically; this file never duplicates it.
+   * UPDATE -- these corrections are a normal workflow and are not
+   * audit-logged (module doc section 2).
    */
   onEditAttendance?: OnEditAttendanceFn;
 }
@@ -780,9 +724,8 @@ export function EndMeetingDialog({
     );
     setEditError(null);
     try {
-      // Section 2b: a plain UPDATE. trg_audit_attendance_post_completion
-      // (module doc section 2) writes the audit_log row automatically --
-      // nothing else happens here.
+      // Section 2b: a plain UPDATE. Not audit-logged at any layer (module
+      // doc section 2) -- nothing else happens here.
       await onEditAttendance(data.session.id, studentId, status);
     } catch (error) {
       setData((prev) =>
