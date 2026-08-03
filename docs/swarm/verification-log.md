@@ -8119,3 +8119,53 @@ sees every teammate under "No response" because `own_or_linked_read` hides their
 `groupSessionSignups` diffs the roster. **Pre-existing; T306 did not cause it and deliberately did not
 extend it.** Whether a student should see teammates' RSVPs at all is a product question for the owner,
 not an engineering call. Recorded as **static analysis, not verified in-app.**
+
+---
+
+## T174 — the shipped RSVP fixture now teaches the right id-space
+
+**FAST tier (item 26).** The orchestrator implemented directly: no packet, no worker, no checker.
+**Stated and defended, because `W2-KICKOFF.md` tiered this STANDARD and this went lower.** The
+deciding fact was verified rather than assumed: `FIXTURE_RSVPS` is reached **only** through
+`defaultLoadOutreachDetail` (`OutreachDetail.tsx:1377`), never the real `loadData`, so there is **no
+production consumer**. No write path, no schema/RLS/auth, no signature another module imports, seven
+value changes. **Verification was not reduced** — all six gates, a named mutation with real red
+output, and a PR.
+
+All seven `respondedBy` values were `student-*`-shaped in a column that is
+`uuid references public.profiles (id)` (`20260717000000_scheduling_attendance.sql:72`). Rewritten to
+the `profile-*` ids the students fixture already declares — a clean 1:1 rename, since all five
+students already carry matching `profileId`s.
+
+Gates, `.env.local` absent: `tsc` 0 · `vite build` ✓ · prettier clean · eslint **0 errors / 364
+warnings — no rise** · vitest **78 files / 1944 tests** (+1) · targeted file **113** exit 0.
+
+### The honest finding: this fix reddened nothing, and that is the point
+
+**No existing test asserted anything about these values.** Checked before implementing: T157's parent
+tests inject their own correctly-id-spaced `loadData` (`makeParentLoadData`) precisely *because* the
+fixture was broken, and the one test that renders the default fixture as a parent
+(`OutreachDetail.test.tsx:1009`) asserts only menu items. So the defect was **invisible to the entire
+suite** — there was no mutation to run, because there was nothing to redden.
+
+**A defect invisible to the whole suite needs a new test to carry any evidence at all.** That is why
+this task added one rather than mutating an existing assertion, and it is the generalisable point:
+"no test broke" is not evidence a fixture is correct when no test ever looked.
+
+The new test runs the **real** `resolveRsvpResponderAttribution` over every fixture row rather than
+checking a string prefix. A prefix assertion would pass on any `profile-`-shaped typo; this one fails
+unless the value genuinely matches that student's own profile id. Mutation (revert one value to the
+`student-*` shape):
+
+```
+× T174 … every fixture RSVP attributes to its OWN student, never to "unrecognized"
+  → rsvp rsvp-1 misattributed: expected 'unrecognized' to be 'self'
+```
+
+That is the defect's own failure mode, reproduced: T157's criterion-5 mutation showed the same shape —
+a wrong profile id makes attribution fall through to `'unrecognized'` and tell a parent that a
+stranger answered for their child.
+
+**Why a zero-production-impact fixture still mattered:** the fixture is what a future task reads to
+learn the shape of a real `RsvpRow`, so the confusion propagates by imitation. That was T157's own
+stated reason for deferring rather than dismissing it (item 20).
