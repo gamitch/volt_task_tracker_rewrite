@@ -15,8 +15,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
 import {
   makeLoadGuardianLinksForParent,
+  makeLoadOutreachData,
   makeLoadOutreachDetail,
   makeMarkDayComplete,
+  OUTREACH_ATTENDANCE_PAGE_SIZE,
   type OutreachAttendanceWriteRow,
   type OutreachMarkDayCompletePayload,
 } from './outreach';
@@ -536,5 +538,325 @@ describe('makeMarkDayComplete (T327) -- completion write ordering', () => {
 
     expect(setup.order.some((call) => call.table === 'events')).toBe(false);
     expect(setup.eventsUpdateArgs).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T402: `queryAttendanceForSessions`'s own `.range()` pagination -- this
+// file's OWN, file-local, unrelated duplicate of the defect T320 fixed in
+// `loaders/attendance.ts`'s `makeLoadAttendanceForSessions`
+// (`supabase/config.toml`'s `[api] max_rows = 1000`; PostgREST truncates
+// silently at that cap with a 200 and a partial `Content-Range`, not an
+// error).
+//
+// §5 test-seam decision, recorded per this task's own worker packet item 20:
+// `queryAttendanceForSessions`/`queryAttendanceForSessionsPage` is file-local
+// and has exactly ONE caller (`makeLoadOutreachData`'s own `loadAttendance`
+// closure) -- unlike `attendance.ts`'s `makeLoadAttendanceForSessions`,
+// nothing else in this codebase reaches it directly, so there is no
+// standalone factory to export without inventing NEW public API surface
+// purely to shortcut this test file. DECISION: test through the existing
+// public caller, `makeLoadOutreachData`, exactly as `OutreachList.test.tsx`'s
+// own pre-existing `loadOutreachData (T101 real load)` describe block already
+// does for this same loader's OTHER tables -- `makeOutreachDataClient` below
+// mirrors that file's own `fromSpy` shape, narrowed to let each test swap in
+// its own `attendance` table stub. The ONE new export this task adds,
+// `OUTREACH_ATTENDANCE_PAGE_SIZE`, is a plain constant (not the query
+// function itself), exported for the same "assertable boundary, no
+// magic-number duplicate" reason `attendance.ts`'s own `ATTENDANCE_PAGE_SIZE`
+// already is -- see that constant's own doc comment in `outreach.ts`.
+//
+// KNOWN COLLATERAL (disclosed, not fixed here -- outside this task's Allowed
+// Files): changing this query's PostgREST chain from `.select().in()` to
+// `.select().in().order().range()` breaks TWO pre-existing tests in
+// `src/pages/outreach/OutreachList.test.tsx` ("loadOutreachData (T101 real
+// load) > filters events by season_id..." and "...issues the teams query in
+// the SAME batch..."), both of which stub the `attendance` table with a bare
+// `{ select: () => ({ in: ... }) }` chain that has no `.order()` method.
+// Same "stub-shape breakage, not a behaviour regression" class T320's own
+// verification-log entry names for the identical situation in
+// `endMeeting.test.ts`/`AttendancePanel.test.tsx` -- there, T320 was
+// authorized to cross the file boundary and fix the stub shape; here, this
+// task's Allowed Files are only `outreach.ts` and this file, so the fix is
+// reported rather than applied. See this task's own worker-output doc.
+// ---------------------------------------------------------------------------
+
+interface OutreachAttendanceFixtureRow {
+  session_id: string;
+  student_id: string;
+  status: 'present' | 'late' | 'excused' | 'absent';
+}
+
+function attendanceFixtureRow(studentId: string): OutreachAttendanceFixtureRow {
+  return { session_id: 'session-1', student_id: studentId, status: 'present' };
+}
+
+/** A full page of distinct rows, offset so page contents never collide --
+ * same shape `attendance.test.ts`'s own `fullPage` helper uses. */
+function fullAttendancePage(pageIndex: number): OutreachAttendanceFixtureRow[] {
+  return Array.from({ length: OUTREACH_ATTENDANCE_PAGE_SIZE }, (_, i) =>
+    attendanceFixtureRow(`student-${pageIndex * OUTREACH_ATTENDANCE_PAGE_SIZE + i}`),
+  );
+}
+
+/**
+ * Records every `.range()` call for the `attendance` table specifically
+ * (mirrors `attendance.test.ts`'s own `makePagingClient`, narrowed to just
+ * the ONE table entry `makeOutreachDataClient` below slots in, since this
+ * loader's other four tables are fixed/uninteresting for these tests).
+ */
+function makeAttendancePagingTable(pages: OutreachAttendanceFixtureRow[][]) {
+  const rangeCalls: Array<[number, number]> = [];
+  const orderSpy = vi.fn((column: string, opts: unknown) => {
+    void column;
+    void opts;
+    return {
+      range: vi.fn((from: number, to: number) => {
+        rangeCalls.push([from, to]);
+        const index = rangeCalls.length - 1;
+        return Promise.resolve({ data: pages[index] ?? [], error: null });
+      }),
+    };
+  });
+  const inSpy = vi.fn(() => ({ order: orderSpy }));
+  const selectSpy = vi.fn(() => ({ in: inSpy }));
+  return { select: selectSpy, selectSpy, inSpy, orderSpy, rangeCalls };
+}
+
+/**
+ * A full `makeLoadOutreachData` fixture -- ONE event with ONE session, so
+ * `sessionIds` is non-empty and the `attendance` query (this task's own
+ * target) actually fires. Every table OTHER than `attendance` resolves the
+ * cheapest real shape that lets the loader run to completion; each test
+ * below supplies its own `attendanceTable` stub (the §5 test-seam decision
+ * above).
+ */
+function makeOutreachDataClient(attendanceTable: { select: () => unknown }): {
+  client: SupabaseClient;
+  fromSpy: ReturnType<typeof vi.fn>;
+} {
+  const fromSpy = vi.fn((table: string) => {
+    if (table === 'events') {
+      return {
+        select: vi.fn(() => ({
+          eq: vi.fn().mockResolvedValue({
+            data: [
+              {
+                id: 'event-1',
+                season_id: 'season-1',
+                type: 'outreach',
+                title: 'Food Bank',
+                description: '',
+                location_name: '',
+                address: '',
+                team_ids: null,
+                counts_participation: false,
+                counts_volunteer_hours: true,
+                adult_volunteers_count: 0,
+                adult_volunteer_hours: 0,
+                created_by: null,
+              },
+            ],
+            error: null,
+          }),
+        })),
+      };
+    }
+    if (table === 'event_sessions') {
+      return {
+        select: vi.fn(() => ({
+          in: vi.fn().mockResolvedValue({
+            data: [
+              {
+                id: 'session-1',
+                event_id: 'event-1',
+                session_date: '2026-08-01',
+                starts_at: '2026-08-01T14:00:00.000Z',
+                ends_at: '2026-08-01T16:00:00.000Z',
+                status: 'scheduled',
+                people_reached: null,
+                notes: '',
+              },
+            ],
+            error: null,
+          }),
+        })),
+      };
+    }
+    if (table === 'rsvps') {
+      return {
+        select: vi.fn(() => ({ in: vi.fn().mockResolvedValue({ data: [], error: null }) })),
+      };
+    }
+    if (table === 'attendance') return attendanceTable;
+    if (table === 'students') {
+      return {
+        select: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: [], error: null }) })),
+      };
+    }
+    if (table === 'teams') {
+      return {
+        select: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: [], error: null }) })),
+      };
+    }
+    if (table === 'seasons') {
+      return {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            maybeSingle: vi
+              .fn()
+              .mockResolvedValue({ data: { id: 'season-1', default_goal_hours: 0 }, error: null }),
+          })),
+        })),
+      };
+    }
+    throw new Error(`unexpected table: ${table}`);
+  });
+  return { client: { from: fromSpy } as unknown as SupabaseClient, fromSpy };
+}
+
+describe('queryAttendanceForSessions pagination (T402, mirrors T320) -- exercised via makeLoadOutreachData, its only caller', () => {
+  it('C1: a result set larger than one page returns ALL rows, not just the first page -- mutation: remove the pagination loop, return the first page only', async () => {
+    const attendanceTable = makeAttendancePagingTable([
+      fullAttendancePage(0),
+      [attendanceFixtureRow('student-tail')],
+    ]);
+    const { client } = makeOutreachDataClient(attendanceTable);
+
+    const result = await makeLoadOutreachData(() => client)('season-1');
+
+    expect(result.attendance).toHaveLength(OUTREACH_ATTENDANCE_PAGE_SIZE + 1);
+    expect(attendanceTable.rangeCalls).toEqual([
+      [0, OUTREACH_ATTENDANCE_PAGE_SIZE - 1],
+      [OUTREACH_ATTENDANCE_PAGE_SIZE, OUTREACH_ATTENDANCE_PAGE_SIZE * 2 - 1],
+    ]);
+    // The row that used to be silently dropped before this fix.
+    expect(result.attendance[result.attendance.length - 1]).toEqual({
+      sessionId: 'session-1',
+      studentId: 'student-tail',
+      status: 'present',
+    });
+  });
+
+  it('C2 -- the REAL proof (not call-shape): dropping the stable order lets separate page requests observe DRIFTING physical row order, duplicating and dropping rows -- mutation: delete `.order(\'id\', ...)`', async () => {
+    // This is the exact "observable consequence" proof this task's own
+    // packet §6 demands, not "was .order() called" (a call-shape assertion
+    // that proves nothing about correctness -- see the OTHER test below,
+    // deliberately kept secondary).
+    //
+    // Models the real risk (packet §3, T320's own verification-log entry):
+    // Postgres gives NO ordering guarantee absent an explicit `order by`,
+    // and each page here is a SEPARATE round trip -- so an "unordered"
+    // query's physical row order can legitimately drift between two page
+    // requests (e.g. straddling a concurrent write, a different scan plan,
+    // etc). This fake models that drift directly: with NO stable `.order(
+    // 'id', ...)` recorded before a given `.range()` call, it serves a
+    // ROTATED view of the same underlying rows instead of a stable one; with
+    // the stable order recorded, it always sorts before slicing. `student_id`
+    // stands in for the real `id` ordering column here since this loader's
+    // own `.select()` never returns `id` at all (see `AttendanceDbRow`'s own
+    // doc comment in `outreach.ts`).
+    const TOTAL = OUTREACH_ATTENDANCE_PAGE_SIZE + 500; // forces exactly two pages: one full (1000), one short (500)
+    const ROTATE_STEP = 37; // arbitrary, non-trivial shift relative to TOTAL
+    const base: OutreachAttendanceFixtureRow[] = Array.from({ length: TOTAL }, (_, i) =>
+      attendanceFixtureRow(`student-${String(i).padStart(4, '0')}`),
+    );
+    function rotate<T>(arr: readonly T[], shift: number): T[] {
+      if (arr.length === 0) return [];
+      const s = shift % arr.length;
+      return [...arr.slice(s), ...arr.slice(0, s)];
+    }
+    let queryCount = 0;
+    const attendanceTable = {
+      select: vi.fn(() => ({
+        in: vi.fn(() => {
+          let orderedById = false;
+          const chain = {
+            order: vi.fn((column: string) => {
+              if (column === 'id') orderedById = true;
+              return chain;
+            }),
+            range: vi.fn((from: number, to: number) => {
+              const physical = orderedById
+                ? [...base].sort((a, b) => (a.student_id < b.student_id ? -1 : 1))
+                : rotate(base, queryCount * ROTATE_STEP);
+              queryCount += 1;
+              return Promise.resolve({ data: physical.slice(from, to + 1), error: null });
+            }),
+          };
+          return chain;
+        }),
+      })),
+    };
+    const { client } = makeOutreachDataClient(attendanceTable);
+
+    const result = await makeLoadOutreachData(() => client)('season-1');
+
+    // With `.order('id', ...)` genuinely applied (the real, unmutated code),
+    // every page is sliced from the SAME stable sort, so the union across
+    // pages is exactly the input set: right length AND no duplicate ids.
+    // (A length-only assertion would NOT catch the mutation here -- see this
+    // test's own doc comment above and the worker-output doc's §4/§6 record:
+    // under the mutation, `1000 + 500 === 1500` STILL holds even though 37
+    // ids are duplicated and 37 different ids are dropped entirely.)
+    expect(result.attendance).toHaveLength(TOTAL);
+    const uniqueStudentIds = new Set(result.attendance.map((row) => row.studentId));
+    expect(uniqueStudentIds.size).toBe(TOTAL);
+    for (let i = 0; i < TOTAL; i += 1) {
+      expect(uniqueStudentIds.has(`student-${String(i).padStart(4, '0')}`)).toBe(true);
+    }
+  });
+
+  it('C2 -- secondary/defense-in-depth ONLY (call-shape, deliberately not this criterion\'s sole proof): each page request orders by id ascending', async () => {
+    const attendanceTable = makeAttendancePagingTable([[attendanceFixtureRow('student-1')]]);
+    const { client } = makeOutreachDataClient(attendanceTable);
+
+    await makeLoadOutreachData(() => client)('season-1');
+
+    expect(attendanceTable.orderSpy).toHaveBeenCalledWith('id', { ascending: true });
+  });
+
+  it('C3: exhausting the page bound THROWS rather than returning a partial set -- mutation: replace the throw with `return rows`', async () => {
+    // 100 full pages -- OUTREACH_ATTENDANCE_MAX_PAGES's own bound (asserted
+    // via the thrown message below) -- so every one of the 100 allowed
+    // attempts comes back full and the loop never sees a short page.
+    const pages = Array.from({ length: 100 }, (_, i) => fullAttendancePage(i));
+    const attendanceTable = makeAttendancePagingTable(pages);
+    const { client } = makeOutreachDataClient(attendanceTable);
+
+    await expect(makeLoadOutreachData(() => client)('season-1')).rejects.toThrow(
+      /exceeded 100 pages/,
+    );
+  });
+
+  it('C4: a short page terminates the loop -- exactly ONE request is issued, not more -- mutation: remove the `< PAGE_SIZE` break', async () => {
+    const attendanceTable = makeAttendancePagingTable([
+      [attendanceFixtureRow('student-1'), attendanceFixtureRow('student-2')],
+    ]);
+    const { client } = makeOutreachDataClient(attendanceTable);
+
+    const result = await makeLoadOutreachData(() => client)('season-1');
+
+    expect(result.attendance).toHaveLength(2);
+    // The request-COUNT assertion this criterion specifically demands (not
+    // just the row count, which a looser mutation could coincidentally
+    // still get right).
+    expect(attendanceTable.rangeCalls).toHaveLength(1);
+  });
+
+  it('C5: an error from any page propagates -- never silently swallowed into [] -- mutation: swallow the error and return []', async () => {
+    const orderSpy = vi.fn(() => ({
+      range: vi
+        .fn()
+        .mockResolvedValue({ data: null, error: { message: 'boom', code: 'ATT500' } }),
+    }));
+    const attendanceTable = {
+      select: vi.fn(() => ({ in: vi.fn(() => ({ order: orderSpy })) })),
+    };
+    const { client } = makeOutreachDataClient(attendanceTable);
+
+    await expect(makeLoadOutreachData(() => client)('season-1')).rejects.toMatchObject({
+      code: 'ATT500',
+    });
   });
 });

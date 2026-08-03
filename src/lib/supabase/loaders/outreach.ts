@@ -448,6 +448,12 @@ interface RsvpDbRow {
  * `AttendanceDbRow`, a forbidden/read-only file for this task, which needs
  * the full row shape for its own edit/write surfaces -- this is a narrower,
  * independent read-only mapper for a different consumer).
+ *
+ * T402: this row shape is DELIBERATELY left unchanged by the pagination fix
+ * below. `id` (the table's uuid primary key, needed only for a stable
+ * `.order()`) is never added here -- see `queryAttendanceForSessionsPage`'s
+ * own doc comment for the verified-not-assumed reason a plain `ORDER BY`
+ * column does not need to appear in a table's `SELECT`/select-list.
  */
 interface AttendanceDbRow {
   session_id: string;
@@ -762,15 +768,76 @@ async function queryRsvpsForSessions(
  * hand -- the SAME shape `queryRsvpsForSessions` immediately above already
  * established for this exact "join every child row for a set of session
  * ids in one round trip" pattern. No N-per-event fan-out.
+ *
+ * T402: this file's OWN, file-local `queryAttendanceForSessions` carried the
+ * identical silent-truncation defect T320 fixed in `loaders/attendance.ts`
+ * (`supabase/config.toml`'s `[api] max_rows = 1000` -- PostgREST truncates
+ * at that cap with a 200 and a partial `Content-Range`, not an error, so
+ * `createLoader`, which throws only on `result.error`, resolved a partial
+ * array every caller read as complete). T320 named only the `attendance.ts`
+ * one; this duplicate is that row's own flagged follow-up (T402). Fix is a
+ * direct, deliberate copy of `attendance.ts:303-372`'s shape
+ * (`queryAttendanceForSessionsPage`/the pagination loop inside
+ * `makeLoadOutreachData` below):
+ *   - `.order('id', { ascending: true })` is load-bearing, not cosmetic --
+ *     `id` is the table's uuid primary key (migration lines 82-95, module
+ *     doc #1 above), so it is total, stable, and always present. Page N+1 is
+ *     an offset into a result set, and Postgres gives no ordering guarantee
+ *     without an explicit `order by` -- an unordered `.range()` can return a
+ *     row twice and never return another.
+ *   - Pages until a SHORT page returns (a full page means "at least this
+ *     many", never "exactly this many").
+ *   - Throws (see the loop in `makeLoadOutreachData` below) at
+ *     `OUTREACH_ATTENDANCE_MAX_PAGES` rather than returning a partial set --
+ *     returning what was gathered so far would reintroduce exactly the
+ *     silent truncation this fix removes.
+ *
+ * `id` is NOT added to this function's own `.select()` list (still
+ * `session_id, student_id, status` -- `AttendanceDbRow` above, this file's
+ * own narrower row shape, is left byte-identical). This task's own worker
+ * packet §4 requires this to be VERIFIED, not assumed: PostgREST's
+ * query-plan-to-SQL translation (`PostgREST/Query/QueryBuilder.hs`,
+ * `readPlanToQuery`, checked directly against the v14.16 source) emits a
+ * single flat `SELECT <select-cols> FROM <table> WHERE ... ORDER BY
+ * <order-cols> LIMIT/OFFSET` statement for a plain table read -- standard
+ * SQL allows `ORDER BY` to reference any column of the underlying table
+ * regardless of what is projected in `SELECT`, for any non-`DISTINCT`,
+ * non-grouped query, which this is (no aggregate `select` field here, so
+ * PostgREST's own `groupF` never applies a `GROUP BY`). Independently
+ * confirmed by existing, already-shipped precedent in this exact codebase:
+ * `queryAllTeams` below already orders by `sort_order`, a column absent from
+ * its own `.select('id, name, color')` list, and `loaders/meetings.ts`'s
+ * `queryTeams` does the identical thing (`.select('id, name').order(
+ * 'sort_order', ...)`). Both are live, in production, today.
+ *
+ * T402 §5 (test seam): exported ONLY so the pagination boundary is
+ * assertable from `outreach.test.ts` without a magic-number duplicate that
+ * could silently drift from this value -- the same reason `attendance.ts`'s
+ * own `ATTENDANCE_PAGE_SIZE` is exported. No production consumer outside
+ * this file reads it; `queryAttendanceForSessionsPage` and the pagination
+ * loop in `makeLoadOutreachData` below remain file-local/unexported.
  */
-async function queryAttendanceForSessions(
+export const OUTREACH_ATTENDANCE_PAGE_SIZE = 1000;
+
+/**
+ * Upper bound on pages, so a server that ignores `.range()` produces a
+ * diagnosable error instead of an unbounded loop -- same reasoning
+ * `attendance.ts`'s own `ATTENDANCE_MAX_PAGES` states: 100 pages is 100,000
+ * attendance rows, orders of magnitude beyond anything this deployment can
+ * reach.
+ */
+const OUTREACH_ATTENDANCE_MAX_PAGES = 100;
+
+async function queryAttendanceForSessionsPage(
   client: SupabaseClient,
-  sessionIds: readonly string[],
+  args: { sessionIds: readonly string[]; from: number },
 ): Promise<LoaderQueryResult<AttendanceDbRow[]>> {
   const result = await client
     .from('attendance')
     .select('session_id, student_id, status')
-    .in('session_id', [...sessionIds]);
+    .in('session_id', [...args.sessionIds])
+    .order('id', { ascending: true })
+    .range(args.from, args.from + OUTREACH_ATTENDANCE_PAGE_SIZE - 1);
   return { data: (result.data as AttendanceDbRow[] | null) ?? null, error: result.error };
 }
 
@@ -940,10 +1007,43 @@ export function makeLoadOutreachData(
   // uses; fetched in parallel with it below (both depend only on
   // `sessionIds`, already resolved by that point) -- no new round trip
   // beyond this single additional query.
-  const loadAttendance = createLoader<readonly string[], AttendanceDbRow[]>(
-    queryAttendanceForSessions,
-    getClient,
-  );
+  //
+  // T402: `loadAttendance` is now a hand-rolled paginating wrapper around a
+  // single-PAGE `createLoader` (`loadAttendancePage` below), rather than a
+  // direct `createLoader` over the whole query -- the same shape
+  // `attendance.ts:345-375`'s own `makeLoadAttendanceForSessions` already
+  // established for T320. `loadAttendance`'s own external shape
+  // (`(sessionIds) => Promise<AttendanceDbRow[]>`) is UNCHANGED, so the
+  // `Promise.all([loadRsvps(sessionIds), loadAttendance(sessionIds)])` call
+  // site below needed no edit at all -- only called when `sessionIds.length
+  // > 0` (guarded by that same call site), so no redundant empty-array
+  // short-circuit is duplicated here.
+  const loadAttendancePage = createLoader<
+    { sessionIds: readonly string[]; from: number },
+    AttendanceDbRow[]
+  >(queryAttendanceForSessionsPage, getClient);
+  const loadAttendance = async (sessionIds: readonly string[]): Promise<AttendanceDbRow[]> => {
+    const rows: AttendanceDbRow[] = [];
+    for (let page = 0; page < OUTREACH_ATTENDANCE_MAX_PAGES; page += 1) {
+      const pageRows =
+        (await loadAttendancePage({
+          sessionIds,
+          from: page * OUTREACH_ATTENDANCE_PAGE_SIZE,
+        })) ?? [];
+      rows.push(...pageRows);
+      if (pageRows.length < OUTREACH_ATTENDANCE_PAGE_SIZE) {
+        return rows;
+      }
+    }
+    // Only reachable if every one of OUTREACH_ATTENDANCE_MAX_PAGES pages came
+    // back full -- see `queryAttendanceForSessionsPage`'s own doc comment:
+    // throwing here (rather than returning `rows` as gathered so far) keeps
+    // this loader's contract honest, matching `attendance.ts`'s own T320 fix.
+    throw new Error(
+      `queryAttendanceForSessions: exceeded ${OUTREACH_ATTENDANCE_MAX_PAGES} pages of ` +
+        `${OUTREACH_ATTENDANCE_PAGE_SIZE} rows without reaching the end of the result set`,
+    );
+  };
   const loadStudents = createLoader<void, StudentDbRow[]>(queryAllStudents, getClient);
   const loadSeasonGoal = createLoader<string, SeasonGoalDbRow>(querySeasonGoal, getClient);
   // T147 -- real teams, so `OutreachList.tsx` can pass them to
