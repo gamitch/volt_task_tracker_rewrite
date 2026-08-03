@@ -4,11 +4,16 @@
 checker"). Trigger: this changes what renders on the **only** surface from which an event is
 reachable, and the event carries figures that reach a grant-reporting total.
 
-**Gate history: round 1 returned REVISE** — 1 BLOCKER, 3 MAJOR, 5 MINOR/NIT. The gate **built the
-entire prescription** in its own worktree and reached green (76 files / 1854 tests), which is why its
-findings are prescriptive rather than advisory. **Every round-1 finding was verified by the
-orchestrator directly against live code, not relayed.** Item 19a caps the gate at two rounds; a third
-escalates to the owner.
+**Gate history: round 1 REVISE (1 BLOCKER, 3 MAJOR, 5 MINOR/NIT) → round 2 DISPATCH** (4 MINOR/NIT,
+folded in below). The gate **built the entire prescription** in its own worktree both rounds, which is
+why its findings are prescriptive rather than advisory. **Every round-1 finding was verified by the
+orchestrator directly against live code, not relayed.** Item 19a's two-round cap is now spent — a
+further revision escalates to the owner rather than looping.
+
+**Test-count figures in this packet are historical, not targets.** The round-1 build measured 76 files
+/ 1854 tests and the round-2 build 76 / 1858; **your final count will exceed both**, because §8
+requires new tests those builds did not all carry. Report your real number against the **baseline** of
+76 / 1850 — never against 1854 or 1858.
 
 **Branch point:** `b1d6f4a`. **Branch:** `claude/t330-orphan-events`. Branch from
 `claude/t330-orphan-events` (commit `9fd98a2`), **not** from `b1d6f4a` — the owner's rulings in §3
@@ -124,9 +129,11 @@ idiom for narrow-mode DOM tests, and `test-setup.ts` ships a guarded polyfill.
 > output** rather than silently skipping it.
 
 **(e) "Needs dates" badge, both views.** Coach: alongside the type badge in `CoachEventDateCell`.
-Student/parent: next to its own type badge at `:3445-3448`. `Badge variant="warning"` is verified
-present in the installed Astryx source (`@astryxdesign/core/src/Badge/Badge.tsx:71,135`) — constitution
-item 2 requires props come from `astryx-api.md`, so confirm there too before using it.
+Student/parent: next to its own type badge at `:3445-3448`. **`Badge variant="warning"` is confirmed in
+`astryx-api.md:530`** — the Badge props table lists `'warning'` in the `variant` union, and `label`
+usage matches the doc's own examples at `:500-503`. Constitution item 2 is satisfied from the source of
+truth, not from the installed package (item 2 calls the CLI/installed source a cross-check, never a
+source). **Do not use any other Badge prop without checking it there first.**
 
 **There is nothing to mirror on the student row's numeric cells — it has none.** It reads only
 `stats.dateRangeLabel` and `stats.weekdayChips`, stated in its own comment at `:3430-3436`. v1 told you
@@ -186,9 +193,12 @@ no test. Do not delete or skip it.
 
 Fixture `e3` (`'No sessions yet'`) already exists at `:525`, with no sessions in the array (`:559`).
 
-**The rest of the suite is clean** — the gate ran it fully amended: **76 files / 1854 tests green**, no
-student/parent-view test breaks, no other file depends on the omission. If anything else reddens, that
-is a finding: **report it, do not fix it by editing an assertion.**
+**The rest of the suite is clean, verified with §5(g) in the build** — the gate ran it fully amended at
+**76 files / 1858 tests green**. No student/parent-view test breaks, and **no existing DES-12
+empty-state test reddens**: both (coach `:1073`, student `:1733`) fixture `events: [], sessions: []`
+and stayed green, which simultaneously proves a genuinely-empty season still shows the EmptyState. The
+diff-grep showed exactly **3** removed assertion lines, all from these two tests. If anything else
+reddens, that is a finding: **report it, do not fix it by editing an assertion.**
 
 `git diff | grep '^-' | grep -E 'expect|toBe|toEqual|toHave'` must show removed assertion lines from
 **these two tests only**.
@@ -244,12 +254,24 @@ arm itself fires, not just the crash.
 **C11 is the criterion that makes this task fix its own headline scenario.** Without it every other
 criterion passes on a build where a failed first create is still invisible.
 
-**C12:** the gate verified `buildInitialOutreachEventFromRow` is total over `[]` and the dialog opens
-(`DIALOG OPEN: true`), so no source change is expected — this is a regression guard. If no mutation
-reddens it, say so and keep it as a smoke test rather than inventing one.
+**C12 is a real criterion, not just a smoke test.** No source change is expected — the gate confirmed
+`buildInitialOutreachEventFromRow` is already total over `[]` and the dialog opens
+(`DIALOG OPEN: true`) — but a named mutation exists and must redden it: **make
+`buildInitialOutreachEventFromRow` (`:1655`) non-total over `[]` by dereferencing `sessions[0]`**.
+Measured: `1 failed | 103 passed`, exactly C12. Reuse the shipped T121 Edit-button idiom
+(`aria-label === 'Edit – …'`, test `:1487`).
 
-**C5, C9, C11, C12 need new tests** — no baseline test has ≥2 `past` entries, pins
-`formatEventDateRangeLabel([])`, builds an orphan-only season, or exercises the Edit path.
+**C5, C9, C11, C12 and C6/C7's narrow arm all need new tests** — no baseline test has ≥2 `past`
+entries, pins `formatEventDateRangeLabel([])`, builds an orphan-only season, exercises the Edit path,
+**or asserts narrow-mode em-dash** (the T130 narrow block predates T330). Without a narrow test,
+C6/C7's narrow mutation has nothing to redden and the coach-on-a-phone regression stays invisible.
+Reuse the shipped `stubMatchMedia` idiom from the T130 responsive block.
+
+**Narrow-test fixture warning — this cost the gate a cycle, take it for free.** With no RSVPs, the
+*dated* comparator row legitimately renders `Planned0h` too, so a broad
+`not.toContain('Planned0h')` arm is **unsatisfiable**. Give the fixture a `going` RSVP and a roster
+student so the dated row shows real numbers (`Planned2h`) and the dateless row's `—` is
+distinguishable — the same shape as the round-1 desktop test.
 
 **C10 is the regression guard.** Without it every other criterion is satisfiable by formatting every
 row as dateless.
