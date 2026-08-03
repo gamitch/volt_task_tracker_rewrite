@@ -8169,3 +8169,106 @@ stranger answered for their child.
 **Why a zero-production-impact fixture still mattered:** the fixture is what a future task reads to
 learn the shape of a real `RsvpRow`, so the confusion propagates by imitation. That was T157's own
 stated reason for deferring rather than dismissing it (item 20).
+
+---
+
+## T197 — `onEditAttendance`'s row scoping, asserted (W3-A auto-mode wave)
+
+**PASS, attempt 1. `4b0866c` on `claude/w3a-meetings-hygiene`. Checker verdict PASS, 2 NIT, both
+closed in-branch.** Worker `worker-implementer` (sonnet — item 18's opus triggers do not apply: no
+migration, no RLS, no metric SQL, no auth).
+
+### The premise, re-measured rather than inherited
+
+The ledger row claimed deleting both `.eq()`s left the suite green. **The orchestrator re-ran it at
+base `33c9e24` before writing the packet** (item 19c) rather than quoting the row:
+
+```
+Test Files  1 passed (1)
+     Tests  14 passed (14)
+vitest exit: 0
+```
+
+Confirmed and current. That mutation converts a coach's single-student status edit into a
+**table-wide `attendance` UPDATE**. File restored, `git diff --quiet` verified clean before packeting.
+
+### Gate skipped, deliberately and on the record
+
+**Premise gate SKIPPED under item 19b** — orchestrator decision D1, W3-A window. Settled pattern
+(assert a scoping filter), no item-18 risk class, premise verified directly. The residual risk was a
+**vacuous test**, which is a worker risk the checker catches, not a premise risk. D2 in the same
+entry explicitly refused to extend that skip to T162 — and that gate then returned REVISE with a
+BLOCKER, so the distinction held up.
+
+### What shipped
+
+The assertion only. `editAttendance`'s executable code is **byte-identical to base** — checker
+confirmed by comment-stripped blob comparison (6652 chars each, exact string equality). The test file
+change is a **pure append**; `head -652` of the new file diffs empty against base.
+
+**Outcome-provable, not call-shape.** A fake `attendance` table of 4 rows across 2 sessions × 2
+students; the test asserts full physical row state. **Zero `toHaveBeenCalledWith` assertions were
+added.** The fake's `filters.every(...)` is vacuously true on an empty array, so a zero-filter
+`.update()` matches every row — mirroring a real unfiltered PostgREST UPDATE. The checker verified
+that semantic specifically, since a fake that instead matched *nothing* would redden for the wrong
+reason and prove nothing about scoping.
+
+### Mutations — replayed independently by orchestrator AND checker, not relayed
+
+| Mutation | Result | Why the shape matters |
+|---|---|---|
+| C1 — drop `.eq('session_id', …)` | **red, exit 1** | fails on the same-student/other-session row |
+| C2 — drop `.eq('student_id', …)` | **red, exit 1** | fails on the same-session/other-student row |
+| C3 — drop both | **red, exit 1** (full suite `1 failed \| 1944 passed`) | all three non-target rows flip — the table-wide write, observed as an outcome |
+
+Each single deletion reddens **on its own**, on the specific row it exposes. A test that only caught
+both-deleted would be half a test.
+
+### The checker's own four mutations, hunting a wrong-reason pass
+
+This is the part worth copying. The packet named three mutations; the checker invented four more.
+
+- **Arg swap** — `.eq('student_id', args.sessionId)`, the copy-paste defect that makes a coach's edit
+  silently match zero rows and do nothing: **RED**. It fails on the *target* row still reading
+  `absent`. This is the failure a "no other rows changed" test would have missed entirely — the test
+  proves the intended write **happened**, not merely that collateral writes did not.
+- **T401 vacuity probe** — replace the whole mutation body with a resolved `{data:null,error:null}`
+  that never touches the client: **RED, not vacuous.**
+- **`.eq()` reordering** (semantically identical): **GREEN.** No chain-order brittleness, no false
+  positive.
+- **Hardcode both filter values to the fixture's own literals**: **GREEN** → became NIT-1.
+
+### Both NITs closed in-branch, not deferred
+
+**NIT-1** was real: with one fixture scenario, a filter pinned to that scenario's literals is
+indistinguishable from an args-derived one. The plausible *production* form of that defect is caught
+(the arg swap above), which is why the checker rated it NIT — but the gap was cheap to close. Fixed
+by a second scenario targeting a different `(session, student)` pair with a distinct `late` status.
+**The orchestrator re-ran the checker's own hardcode mutation against the fix: now `1 failed |
+15 passed`, exit 1.** Proven, not asserted.
+
+**⚠️ That NIT-1 test addition is orchestrator-authored and was NOT re-reviewed by the checker** —
+disclosed per the W3-A auto-mode posture, which permits the orchestrator to close mechanical NIT
+findings provided it says they are unreviewed.
+
+**NIT-2:** a dangling `:510-511` cite in the module doc, pointing at what is now an unrelated
+`LiveConsoleDisplayToken` interface. Removed.
+
+Also folded in (packet §5, comment-only): `endMeeting.ts:12-19` still claimed T196 was *blocked*,
+`LiveConsole`'s attendance marking an *intentional no-op*, and its roster a *fixture*. All three
+false since T403. The checker verified every claim in the replacement text against the repo rather
+than against the comment.
+
+### Gates
+
+`tsc` **0** · eslint **0 errors** / 364 warnings · prettier **clean** · vitest **78 files /
+1946 tests, exit 0** (base 1944; +2 = the worker's test and the NIT-1 scenario).
+
+### Honest limits
+
+- The fake implements only `.eq()`. A future refactor of `editAttendance` to `.match({…})` or
+  `.in()` would crash the fake rather than fail informatively. Acceptable for a scoping guard, worth
+  knowing before that refactor.
+- `onEditAttendance` is still **not reachable in production** — nothing mounts it. That is T196. This
+  row lands the guard **before** the path goes live, which is why it was done first rather than
+  folded into T196.

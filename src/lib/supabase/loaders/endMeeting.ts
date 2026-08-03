@@ -13,7 +13,7 @@
  * task -- that mount is still filed as its own row, T196, and T196 is not
  * this task. T196 is now UNBLOCKED (as of T403, 2026-08-03): it was
  * originally blocked because `LiveConsole.tsx`'s own attendance marking was
- * an intentional no-op (`:510-511`) and its roster loader was a fixture, so
+ * an intentional no-op and its roster loader was a fixture, so
  * a real End Meeting dialog mounted on top of that fixture-backed console
  * would, on first real use, have marked every actually-checked-in student a
  * real `absent` row (the owner-ruled reason for the original split -- see

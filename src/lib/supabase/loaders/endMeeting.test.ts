@@ -775,4 +775,40 @@ describe('makeOnEditAttendance row scoping (T197) -- outcome-provable, not call-
       { session_id: 'session-B', student_id: 'student-2', status: 'absent', recorded_by: null },
     ]);
   });
+
+  // T197 checker NIT-1, closed in-branch. The single-scenario test above is
+  // green under a mutation that HARDCODES both filter values to this fixture's
+  // own literals (`.eq('session_id', 'session-A').eq('student_id', 'student-1')`,
+  // ignoring `args`) -- so on its own it does not prove the filters are
+  // args-DERIVED, only that two filters of the right shape are applied. The
+  // plausible production form of that defect (a wrong arg threaded through, e.g.
+  // `.eq('student_id', args.sessionId)`) IS caught by the test above. This
+  // second scenario closes the remaining shape: it targets a DIFFERENT
+  // (session, student) pair, so any filter pinned to `session-A`/`student-1`
+  // now matches the wrong rows -- or none -- and reddens.
+  it('the filter VALUES are derived from arguments, not pinned to one fixture: editing (session-B, student-2) moves that row and only that row', async () => {
+    const { client, rows } = makeAttendanceRowFakeClient(freshFakeAttendanceRows());
+    const onEditAttendance = makeOnEditAttendance(
+      () => 'coach-197',
+      () => client,
+    );
+
+    await onEditAttendance('session-B', 'student-2', 'late');
+
+    expect(rows).toEqual([
+      // Untouched: this is the row the FIRST scenario targets. If either filter
+      // were hardcoded to `session-A`/`student-1`, this row would wrongly move.
+      { session_id: 'session-A', student_id: 'student-1', status: 'absent', recorded_by: null },
+      { session_id: 'session-A', student_id: 'student-2', status: 'absent', recorded_by: null },
+      { session_id: 'session-B', student_id: 'student-1', status: 'absent', recorded_by: null },
+      // The only row that may change, and it carries the distinct 'late'
+      // status so a cross-test copy/paste cannot accidentally satisfy this.
+      {
+        session_id: 'session-B',
+        student_id: 'student-2',
+        status: 'late',
+        recorded_by: 'coach-197',
+      },
+    ]);
+  });
 });
