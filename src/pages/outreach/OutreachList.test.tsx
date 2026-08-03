@@ -3509,6 +3509,31 @@ describe('<OutreachList /> T330: dateless (zero-session) events are visible and 
     expect(needsDatesMatches.length).toBe(1);
   });
 
+  // CHECKER FIX (MINOR-2). A dateless row must not render the session
+  // expander at all. Before this guard it rendered `Sessions (0)` with
+  // `aria-expanded=true` and an EMPTY `aria-controls` -- an invalid IDREF
+  // list announcing a disclosure that contains nothing, reachable only
+  // because T330 is what first lets a zero-session event render.
+  //
+  // This test exists because the fix was initially shipped UNPINNED: the
+  // orchestrator replayed "delete the guard" and the suite stayed green at
+  // 106/106, which by this project's own standard is not evidence. Same
+  // rule that caught C3 at the gate and MINOR-1 at the checker.
+  it('MINOR-2 (coach view): a dateless row renders NO session expander; a dated row still does', async () => {
+    renderAsUser(COACH_USER, { loadData: orphanPlusDatedLoadData });
+    await flushMicrotasks();
+
+    // Paired: both rows must actually be present, or the absence arm below
+    // could pass simply because nothing rendered.
+    expect(container.textContent).toContain('Orphaned Coat Drive');
+    expect(container.textContent).toContain('Scheduled Food Drive');
+
+    // The dated row keeps its real disclosure...
+    expect(container.textContent).toContain('Sessions (1)');
+    // ...and the dateless row has none to keep.
+    expect(container.textContent).not.toContain('Sessions (0)');
+  });
+
   // CHECKER FIX (MINOR-1). C8 pinned the badge's PRESENCE per view, but
   // C10 -- the only absence guard -- was never split by view, so the
   // student/parent side had no "a DATED row must not be badged" assertion
