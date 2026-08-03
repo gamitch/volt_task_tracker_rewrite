@@ -2610,6 +2610,29 @@ function CoachExpanderButton({
   );
 }
 
+/** CHECKER FIX (MINOR-2), and it is T330's own consequence rather than a
+ * pre-existing bug: before this task `buildEventGroups` dropped zero-session
+ * events, so `CoachExpanderButton` could never receive one. Now it can, and
+ * a dateless row rendered a DEAD disclosure -- measured in the real DOM:
+ * `aria-expanded=true` alongside `aria-controls=""` (an empty IDREF list,
+ * which is not valid) while the table body gained no rows, because
+ * `controlsIds` is `[].join(' ')`. A control that announces a disclosure
+ * containing nothing is exactly what the comment above already argues
+ * against for the collapsed state; that comment simply predated any row
+ * that could have zero sessions. Rendering nothing is the honest answer --
+ * the row's session count is already carried by `formatEventDateRangeLabel`'s
+ * "No sessions scheduled yet." in the date cell, so no information is lost.
+ * Constitution item 15 makes accessibility a shipping requirement, so this
+ * closes here rather than becoming a follow-up row. */
+function CoachExpanderButtonOrNull(props: {
+  row: CoachEventTableRow;
+  isExpanded: boolean;
+  onToggleExpand: (eventId: string) => void;
+}): ReactNode {
+  if (props.row.sessions.length === 0) return null;
+  return <CoachExpanderButton {...props} />;
+}
+
 /** T131 (reverses part of T112, supersedes the UXC-04 "View details" text
  * exemption -- George authorized 2026-07-28, `VOLT_UX_Craft_PRD_v3.md`
  * UXC-04 row / commit `b959b90`, T131 packet "Authorization for the
@@ -2758,7 +2781,7 @@ function buildCoachOutreachColumns({
                 />
               </HStack>
               <HStack gap={2} wrap="wrap" vAlign="center">
-                <CoachExpanderButton
+                <CoachExpanderButtonOrNull
                   row={row}
                   isExpanded={isExpanded}
                   onToggleExpand={onToggleExpand}
@@ -2790,7 +2813,11 @@ function buildCoachOutreachColumns({
         if (row.kind !== 'event') return null;
         const isExpanded = expandedEventIds.has(row.event.id);
         return (
-          <CoachExpanderButton row={row} isExpanded={isExpanded} onToggleExpand={onToggleExpand} />
+          <CoachExpanderButtonOrNull
+            row={row}
+            isExpanded={isExpanded}
+            onToggleExpand={onToggleExpand}
+          />
         );
       },
     },
@@ -3302,14 +3329,25 @@ function CoachOutreachView({
     }
   }
 
-  // T330 (g) -- gated on events AS WELL AS sessions, not sessions alone. A
-  // season whose only event's `event_sessions` insert failed has real
-  // `events` but zero `sessions`; gating on `sessions.length` alone would
-  // render the EmptyState over that event forever (a failed FIRST create
-  // stays invisible and unfixable), even though (a)-(f) above make a
-  // dateless event a real, rendered `upcoming` row once the list itself
-  // renders.
-  const hasAnyOutreach = events.length > 0 || sessions.length > 0;
+  // T330 (g) -- gated on EVENTS, not sessions. A season whose only event's
+  // `event_sessions` insert failed has real `events` but zero `sessions`;
+  // gating on `sessions.length` would render the EmptyState over that event
+  // forever (a failed FIRST create stays invisible and unfixable), even
+  // though (a)-(f) above make a dateless event a real, rendered `upcoming`
+  // row once the list itself renders.
+  //
+  // CHECKER FIX (NIT-1): this shipped as `events.length > 0 ||
+  // sessions.length > 0`, and the `||` arm is DEAD -- `sessions` here is
+  // `outreachSessions`, filtered to sessions whose `eventId` is in the set
+  // built from `outreachEvents` (module doc #2's filter site below), so a
+  // non-empty `sessions` ENTAILS a non-empty `events` and the disjunct can
+  // never change the result. Measured: dropping it left the suite green.
+  // Kept as `events.length > 0` alone rather than carrying a second
+  // condition whose comment claims work it does not do -- that is T301's
+  // recorded defect (an inert guard documented as load-bearing), and this
+  // task's own packet warned about that exact shape for the neighbouring
+  // `past` comparator.
+  const hasAnyOutreach = events.length > 0;
   // T121 item (b) -- edit-mode prefill, including `expectedStudentIds`
   // derived from the event's own existing `going` RSVPs.
   const initialEvent =
@@ -3848,9 +3886,11 @@ function StudentParentOutreachView({
 
   // T330 (g) -- same fix as the coach view's own `hasAnyOutreach` above,
   // and for the same reason: the owner ruled a dateless event visible on
-  // BOTH views (ruling #4), so both gates must consider `events` as well as
-  // `sessions`, or a failed first create stays invisible here too.
-  const hasAnyOutreach = events.length > 0 || sessions.length > 0;
+  // BOTH views (ruling #4), so both gates must key off `events`, or a
+  // failed first create stays invisible here too. See that comment for why
+  // the `|| sessions.length > 0` arm this shipped with was dead and was
+  // removed rather than kept as an inert guard (checker NIT-1).
+  const hasAnyOutreach = events.length > 0;
 
   return (
     <>

@@ -3509,6 +3509,32 @@ describe('<OutreachList /> T330: dateless (zero-session) events are visible and 
     expect(needsDatesMatches.length).toBe(1);
   });
 
+  // CHECKER FIX (MINOR-1). C8 pinned the badge's PRESENCE per view, but
+  // C10 -- the only absence guard -- was never split by view, so the
+  // student/parent side had no "a DATED row must not be badged" assertion
+  // at all. The checker measured the hole: making `OutreachList.tsx`'s
+  // student badge unconditional left the whole suite green at 105/105.
+  // Root cause was the packet's own criteria table, which splits C6/C7/C8
+  // by branch/view and leaves the regression guard as a single bundle --
+  // the generalisable rule being that criteria which split by view for
+  // presence must split by view for absence too.
+  it('C10 (student/parent view): a DATED row is never badged -- "Needs dates" appears exactly once', async () => {
+    renderAsUser(STUDENT_OR_PARENT_USER, {
+      loadData: orphanPlusDatedLoadData,
+      viewerStudentId: 'student-1',
+    });
+    await flushMicrotasks();
+
+    // Paired, per packet §8: prove BOTH rows actually rendered before
+    // asserting anything about how many badges exist, so this cannot pass
+    // because the dated row simply never appeared.
+    expect(container.textContent).toContain('Orphaned Coat Drive');
+    expect(container.textContent).toContain('Scheduled Food Drive');
+
+    const needsDatesMatches = container.textContent?.match(/Needs dates/g) ?? [];
+    expect(needsDatesMatches.length).toBe(1);
+  });
+
   // C12 -- a real criterion, not a smoke test (packet §8): the inline
   // "Edit" action must open the dialog on a dateless row without crashing,
   // reusing the shipped T121 Edit-button idiom.
