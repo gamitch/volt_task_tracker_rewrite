@@ -1,4 +1,9 @@
-# Resume here — state of play at `main` = `380266e` (read the UPDATE sections top-down; each supersedes the ones below it)
+# Resume here (read the UPDATE sections top-down; each supersedes the ones below it)
+
+**Written at `main` = `2a8f237`. This pin rots on every merge — `main` moved seven times on
+2026-08-03 alone. Run `git log -1` for the true tip, and do not treat a mismatch as evidence this
+file is stale.** The dated UPDATE sections below are the real ordering. **Measure your own gate
+baseline rather than trusting any figure quoted here.**
 
 Written 2026-07-30 so this session's context can be cleared without losing anything.
 Fresh orchestrator session: read this, then `constitution.md`, then the open rows in
