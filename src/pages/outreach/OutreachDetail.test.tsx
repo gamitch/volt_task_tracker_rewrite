@@ -618,10 +618,14 @@ function buildParkCleanupAttendanceRow(
 
 describe('T306 C1: no recorded attendance renders the RSVP buckets, unchanged', () => {
   it("shows Going/Can't go/No response, and no attendance-bucket labels at all", async () => {
-    renderDetail('event-park-cleanup', {
-      loadData: defaultLoadOutreachDetail,
-      loadAttendance: async () => [],
-    });
+    renderDetail(
+      'event-park-cleanup',
+      {
+        loadData: defaultLoadOutreachDetail,
+        loadAttendance: async () => [],
+      },
+      COACH_USER,
+    );
     await flushMicrotasks();
 
     expect(container.textContent).toContain('Who said they were coming');
@@ -638,16 +642,20 @@ describe('T306 C1: no recorded attendance renders the RSVP buckets, unchanged', 
 
 describe('T306 C2: >=1 recorded attendance row switches to the attendance buckets, RSVP buckets gone', () => {
   it("shows Attended (and the other attendance labels), never Going/Maybe/Can't go/No response", async () => {
-    renderDetail('event-park-cleanup', {
-      loadData: defaultLoadOutreachDetail,
-      loadAttendance: async () => [
-        buildParkCleanupAttendanceRow({
-          id: 'att-1',
-          studentId: 'student-amara-chen',
-          status: 'present',
-        }),
-      ],
-    });
+    renderDetail(
+      'event-park-cleanup',
+      {
+        loadData: defaultLoadOutreachDetail,
+        loadAttendance: async () => [
+          buildParkCleanupAttendanceRow({
+            id: 'att-1',
+            studentId: 'student-amara-chen',
+            status: 'present',
+          }),
+        ],
+      },
+      COACH_USER,
+    );
     await flushMicrotasks();
 
     // Paired proof (packet §6): an attendance label is present AND every
@@ -666,16 +674,20 @@ describe('T306 C2: >=1 recorded attendance row switches to the attendance bucket
 
 describe('T306 C6: the trigger ignores session.status -- a SCHEDULED session with attendance rows still shows attendance', () => {
   it('session-park-cleanup is genuinely still "scheduled" (not completed) and still shows Attended', async () => {
-    renderDetail('event-park-cleanup', {
-      loadData: defaultLoadOutreachDetail,
-      loadAttendance: async () => [
-        buildParkCleanupAttendanceRow({
-          id: 'att-1',
-          studentId: 'student-amara-chen',
-          status: 'present',
-        }),
-      ],
-    });
+    renderDetail(
+      'event-park-cleanup',
+      {
+        loadData: defaultLoadOutreachDetail,
+        loadAttendance: async () => [
+          buildParkCleanupAttendanceRow({
+            id: 'att-1',
+            studentId: 'student-amara-chen',
+            status: 'present',
+          }),
+        ],
+      },
+      COACH_USER,
+    );
     await flushMicrotasks();
 
     // `session-park-cleanup`'s own fixture `status` is 'scheduled' (module
@@ -701,16 +713,20 @@ describe('T306 C7: the trigger ignores the date -- a session dated TODAY with at
       };
     };
 
-    renderDetail('event-park-cleanup', {
-      loadData: loadTodaysSession,
-      loadAttendance: async () => [
-        buildParkCleanupAttendanceRow({
-          id: 'att-1',
-          studentId: 'student-amara-chen',
-          status: 'present',
-        }),
-      ],
-    });
+    renderDetail(
+      'event-park-cleanup',
+      {
+        loadData: loadTodaysSession,
+        loadAttendance: async () => [
+          buildParkCleanupAttendanceRow({
+            id: 'att-1',
+            studentId: 'student-amara-chen',
+            status: 'present',
+          }),
+        ],
+      },
+      COACH_USER,
+    );
     await flushMicrotasks();
 
     expect(container.textContent).toContain('Attended (1)');
@@ -720,12 +736,16 @@ describe('T306 C7: the trigger ignores the date -- a session dated TODAY with at
 
 describe('T306 C8: a FAILED attendance load falls back to the RSVP buckets, no error banner, nothing blocked', () => {
   it('a rejected loadAttendance still renders the page normally, RSVP buckets stand', async () => {
-    renderDetail('event-park-cleanup', {
-      loadData: defaultLoadOutreachDetail,
-      loadAttendance: async () => {
-        throw new Error('network down');
+    renderDetail(
+      'event-park-cleanup',
+      {
+        loadData: defaultLoadOutreachDetail,
+        loadAttendance: async () => {
+          throw new Error('network down');
+        },
       },
-    });
+      COACH_USER,
+    );
     await flushMicrotasks();
 
     // Fallback: exactly today's RSVP buckets, same as C1.
@@ -746,20 +766,87 @@ describe('T306 C8: a FAILED attendance load falls back to the RSVP buckets, no e
 
 describe('T306 C9: no rsvps write occurs on any path this task touches', () => {
   it('switching to the attendance buckets never calls the real rsvps write seam', async () => {
-    renderDetail('event-park-cleanup', {
-      loadData: defaultLoadOutreachDetail,
-      loadAttendance: async () => [
-        buildParkCleanupAttendanceRow({
-          id: 'att-1',
-          studentId: 'student-amara-chen',
-          status: 'present',
-        }),
-      ],
-    });
+    renderDetail(
+      'event-park-cleanup',
+      {
+        loadData: defaultLoadOutreachDetail,
+        loadAttendance: async () => [
+          buildParkCleanupAttendanceRow({
+            id: 'att-1',
+            studentId: 'student-amara-chen',
+            status: 'present',
+          }),
+        ],
+      },
+      COACH_USER,
+    );
     await flushMicrotasks();
 
     expect(container.textContent).toContain('Attended (1)'); // the switch genuinely happened.
     expect(mockedSubmitRsvpChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('T306 C10: the attendance view is STAFF-ONLY, and non-staff never fires the load', () => {
+  // ORCHESTRATOR-ADDED after the worker reported a pre-existing assertion
+  // failing. That assertion was RIGHT and the packet was wrong: it never
+  // specified a staff gate.
+  //
+  // `attendance`'s RLS is `staff_all` plus `own_or_linked_read`
+  // (`20260717000002_rls.sql:226-232`), so a student or parent can read only
+  // their OWN rows. Ungated, `groupSessionAttendance` would diff the roster
+  // against that partial set and render every teammate under "No record" --
+  // a FALSE statement about a factual record, and worse than the RSVP intent
+  // it replaces. `<SessionSignupList>` is NOT staff-gated (it renders for
+  // every viewer at its call site), so the gate has to live on the load.
+  it('a STUDENT viewer keeps the RSVP buckets and the attendance loader is never called', async () => {
+    const loadAttendance = vi.fn(async () => [
+      buildParkCleanupAttendanceRow({
+        id: 'att-1',
+        studentId: 'student-amara-chen',
+        status: 'present',
+      }),
+    ]);
+
+    renderDetail(
+      'event-park-cleanup',
+      { loadData: defaultLoadOutreachDetail, loadAttendance },
+      STUDENT_USER,
+    );
+    await flushMicrotasks();
+
+    // Paired, per packet §6: prove the section actually rendered before
+    // asserting anything is absent from it.
+    expect(container.textContent).toContain('Who said they were coming');
+    expect(container.textContent).toContain('No response');
+    expect(container.textContent).not.toContain('Who actually came');
+    expect(container.textContent).not.toContain('Attended (');
+
+    // The load must not fire at all -- not merely be ignored. T307's own
+    // verification-log entry records the concern that an ungated load fires
+    // an `attendance` SELECT for every signed-in viewer of this page.
+    expect(loadAttendance).not.toHaveBeenCalled();
+  });
+
+  it('a COACH viewer on the same event DOES get the attendance view -- proof the gate is the role, not the fixture', async () => {
+    const loadAttendance = vi.fn(async () => [
+      buildParkCleanupAttendanceRow({
+        id: 'att-1',
+        studentId: 'student-amara-chen',
+        status: 'present',
+      }),
+    ]);
+
+    renderDetail(
+      'event-park-cleanup',
+      { loadData: defaultLoadOutreachDetail, loadAttendance },
+      COACH_USER,
+    );
+    await flushMicrotasks();
+
+    expect(loadAttendance).toHaveBeenCalled();
+    expect(container.textContent).toContain('Who actually came');
+    expect(container.textContent).toContain('Attended (1)');
   });
 });
 

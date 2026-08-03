@@ -1882,11 +1882,33 @@ export function OutreachDetail({
   // (e.g. the optimistic cancel-event flip below only changes `status`
   // fields, never the id set) -- same anti-thrash technique `AttendancePanel`
   // already uses for its own identical `sessionIdsKey`.
+  // T117 (module doc #11) -- staff-only gate for the attendance panel below.
+  // T306 HOISTED it above the attendance load effect that follows: that load
+  // is staff-only too, and duplicating the role literals inline would
+  // re-derive a check this file already owns (module doc #11 warns about
+  // exactly that). Every other branch/section on this page is unchanged for a
+  // non-staff viewer.
+  const isStaffViewer = user !== null && (user.role === 'coach' || user.role === 'admin');
   const attendanceSessionIdsKey = useMemo(
     () => (data === null ? '' : data.sessions.map((session) => session.id).join('|')),
     [data],
   );
   useEffect(() => {
+    // T306 -- STAFF ONLY, and this is a correctness gate, not a permission
+    // nicety. `attendance`'s RLS is `staff_all` plus `own_or_linked_read`
+    // (`20260717000002_rls.sql:226-232`), so a student or parent can read
+    // ONLY their own (or their linked child's) rows. Firing this for them
+    // would return a partial set, and `groupSessionAttendance` diffs the
+    // roster -- so every teammate would render under "No record" when the
+    // truth is the viewer cannot see their rows. That is a FALSE statement
+    // about a factual record, and worse than the RSVP intent it replaces.
+    //
+    // Leaving `attendanceRows` at `null` for non-staff means the trigger
+    // sees no rows and the RSVP buckets stand -- byte-identical to this
+    // page's pre-T306 behaviour for those viewers. It also honours T307's
+    // recorded concern (`verification-log.md`) that an ungated load fires an
+    // `attendance` SELECT for every signed-in viewer of this page.
+    if (!isStaffViewer) return undefined;
     let isMounted = true;
     const sessionIds = attendanceSessionIdsKey === '' ? [] : attendanceSessionIdsKey.split('|');
     loadAttendance(sessionIds)
@@ -1906,7 +1928,7 @@ export function OutreachDetail({
     return () => {
       isMounted = false;
     };
-  }, [loadAttendance, attendanceSessionIdsKey]);
+  }, [loadAttendance, attendanceSessionIdsKey, isStaffViewer]);
 
   // T157 (module doc #13(c)) -- fetched ONLY for a parent viewer. Every other
   // role (and a signed-out visitor) settles to `idle` without ever calling the
@@ -2118,10 +2140,6 @@ export function OutreachDetail({
   const { event, sessions, rsvps, students, teams, profiles } = detailData;
   const roster = resolveEventRoster(event, students);
   const orderedSessions = sortSessionsByStart(sessions);
-  // T117 (module doc #11) -- staff-only gate for the new attendance panel;
-  // every other branch/section on this page is unchanged for a non-staff
-  // viewer.
-  const isStaffViewer = user !== null && (user.role === 'coach' || user.role === 'admin');
   // T157 (module doc #13(e)) -- composed over the ALREADY team-scoped `roster`
   // (module doc #3), NOT the full unfiltered `students` list: a parent's linked
   // student outside this event's team scope gets no control for this event.
