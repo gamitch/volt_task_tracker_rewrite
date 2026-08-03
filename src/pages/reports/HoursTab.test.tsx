@@ -399,7 +399,12 @@ describe('buildSeasonTotals -- T500: sessionless events excluded from season tot
   // that figure once, not twice.
   it('criterion 2: a sessioned event and its sessionless retry-orphan duplicate are counted once, not twice', () => {
     const events: readonly HoursEventRow[] = [
-      { ...baseEvent, id: 'event-retry-succeeded', adultVolunteersCount: 4, adultVolunteerHours: 12 },
+      {
+        ...baseEvent,
+        id: 'event-retry-succeeded',
+        adultVolunteersCount: 4,
+        adultVolunteerHours: 12,
+      },
       {
         ...baseEvent,
         id: 'event-orphan-from-failed-attempt',
