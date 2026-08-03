@@ -1,0 +1,60 @@
+-- T205: revoke privileges on public.v_leaderboard_students that Supabase's
+-- stock `alter default privileges ... grant all on tables to anon,
+-- authenticated, service_role` hands out on every new relation, including
+-- this one (`20260731000000_leaderboard_students_view.sql:54`).
+--
+-- Additive only (constitution item 10): a `revoke` against an existing view
+-- in a NEW migration file. No existing migration is edited.
+--
+-- -----------------------------------------------------------------------
+-- LINE 1 -- authority: the owner's ruling, `auto-mode-decisions.md:1297-1316`
+-- (2026-07-31, structured selection). Presented with "leave as-is (T185
+-- precedent) vs. close it off", George selected **"Close it off."** The
+-- ruling's own text authorises "`revoke select on
+-- public.v_leaderboard_students from anon;` **or equivalent**" -- this line
+-- uses that "or equivalent" latitude, and ONLY that latitude, to ship
+-- `revoke all` instead of the literal `revoke select`.
+--
+-- Why `revoke select` (the ruling's literal text) is not what got shipped --
+-- MEASURED, not assumed, by the premise gate and independently replayed by
+-- the orchestrator on Postgres 16.13 (recorded as decision D1 under
+-- "W4+W5 auto-mode window" in `auto-mode-decisions.md`):
+-- `v_leaderboard_students` is a simple single-table view, so Postgres makes
+-- it auto-updatable (`information_schema.views.is_updatable = 'YES'` -- the
+-- only such view in the whole schema, all 16 surveyed). It carries no
+-- `security_invoker`, so it executes as its OWNER, which bypasses RLS. (The
+-- MECHANISM of that bypass depends on who applied the migration, measured
+-- both ways: in hosted Supabase the owner is `postgres`, which carries the
+-- BYPASSRLS attribute; in a local scratch harness it is whichever superuser
+-- ran psql, which bypasses RLS by being a superuser and may have
+-- `rolbypassrls = false`. The observable behaviour is identical -- T205
+-- checker, NIT-1.) An
+-- unqualified `delete from public.v_leaderboard_students` needs no SELECT
+-- privilege at all, so `revoke select` alone leaves that DELETE path wide
+-- open to `anon` -- measured: `DELETE 2`, emptying `students`, even with
+-- `revoke select ... from anon` applied. Only `revoke all` actually closes
+-- read AND write. Shipping the literal one-liner would have let the ledger
+-- record this exposure "closed" while an anonymous internet request could
+-- still empty the student roster.
+--
+-- LINE 2 -- authority: an ORCHESTRATOR scope extension, NOT an owner
+-- ruling. Logged as decision D2 under "W4+W5 auto-mode window" in
+-- `auto-mode-decisions.md`. The identical owner-bypass mechanism that makes
+-- line 1 necessary also lets any plain LOGGED-IN, non-staff `authenticated`
+-- session destroy the roster through this view: measured, base-table
+-- `delete from students` returns `DELETE 0` (RLS's `own_or_linked_read`/
+-- `staff_all` policies correctly deny a non-staff caller), but
+-- `delete from public.v_leaderboard_students` returns `DELETE 1` for the
+-- same caller, because the view bypasses RLS entirely. This line closes
+-- that second path by revoking only the write verbs from `authenticated`.
+-- `authenticated` deliberately KEEPS SELECT -- `Leaderboard.tsx` /
+-- `loaders/leaderboard.ts:147` depends on every authenticated caller being
+-- able to read every active student's name; revoking it would break the
+-- feature.
+--
+-- Do NOT read line 2 as owner-authorized -- it is not. It is explicitly
+-- reversible by the owner (see D2's own text): if he disagrees, the
+-- `authenticated` revoke can be backed out and refiled as its own row
+-- without touching line 1's owner-ruled fix.
+revoke all on public.v_leaderboard_students from anon;
+revoke insert, update, delete on public.v_leaderboard_students from authenticated;
