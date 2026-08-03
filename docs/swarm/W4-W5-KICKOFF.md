@@ -35,7 +35,8 @@ supabase/migrations/*metric_views.sql, *kpi_views.sql, *dashboard_views.sql
 src/lib/supabase/loaders/kpi.ts          (255 lines, ZERO tests — that is T164)
 src/lib/supabase/loaders/reports.ts      (729 lines, ZERO tests — that is T163)
 src/pages/reports/**                     (EventsTab, HoursTab, ParticipationTab, ReportsShell, csvExport — all with tests)
-src/pages/outreach/Leaderboard.tsx       (541 lines)
+src/pages/outreach/Leaderboard.tsx       (541 lines) AND its Leaderboard.test.tsx beside it
+src/components/kpi/**                    (KpiStrip.tsx — assigned to you, see below)
 ```
 
 **W5 — home dashboards** (*"what a student, parent, or coach sees when they land"*):
@@ -48,8 +49,17 @@ src/lib/supabase/loaders/coachHome.ts    (219 lines, has tests)
 ```
 
 **⚠️ `src/pages/outreach/Leaderboard.tsx` is W4's, but it sits inside `src/pages/outreach/`, which
-W2 owns wholesale and is actively working in.** It is one of exactly 10 files in that directory.
-**Tell W2 you have it, and touch nothing else in that folder.**
+W2 owns wholesale and is actively working in.** That directory holds **20 files — 10 components plus
+10 tests**. **`Leaderboard.test.tsx` comes with the component and is yours too** (you cannot change
+one without the other). **Tell W2 you have both, and touch nothing else in that folder.**
+
+**⚠️ `src/components/kpi/KpiStrip.tsx` is assigned to you, and neither workflow originally owned it.**
+T322's ruling authorises relabelling the card, and that card lives here — `label="Season hours"`
+(`:286`), `label="% toward season goal"` (`:301`), `formatHoursBreakdown` (`:371-377`) — mounted
+globally from `AppShell`. Nobody owned `src/components/**`, so **T322 would have split the way T308
+does.** Your **T331** (staff KPI strip on small viewports) almost certainly lands on the same
+component, which is the second reason to hold it rather than hand it off. **Say in the PR that you
+have taken it.**
 
 **Row-number blocks: W4 → T700–T799, W5 → T800–T899** (`WORKFLOWS.md:322`). You hold two blocks.
 **File each new row in the block of the workflow it belongs to** — do not merge them, and never take
@@ -63,7 +73,7 @@ W2 owns wholesale and is actively working in.** It is one of exactly 10 files in
 | `src/pages/checkin/**`, `pages/meetings/LiveConsole.tsx`, `Kiosk.tsx`, `loaders/checkin.ts`, `kiosk.ts`, `attendance.ts` | **W1**, on T196 (the launch blocker) |
 | `loaders/students.ts`, `teams.ts`, `parents.ts`, `invites.ts`, `accept.ts`, `pages/roster/**` | **W7** — see §5, three of your rows reach in |
 | `pages/calendar/**`, `loaders/calendarFeed.ts` | W6 — done |
-| `src/lib/supabase/loaders/loader.ts` | **nobody** — shared spine, see §5 |
+| `src/lib/supabase/loader.ts` | **nobody** — shared spine, see §5 |
 
 **You may import freely from any of these. You may not modify them.**
 
@@ -106,9 +116,25 @@ diff talk you out of the tier."** Item 18 trigger 1 also fires unconditionally o
   teams in the community. Those two events are **72 of 117 sessions (62%) of the migrated data**.
   **Not authorized:** retyping any event, or touching the FLL events.
 
+  **⚠️ THERE ARE THREE EVENT TYPES, NOT TWO — and the second ruling exists because of it.**
+  `scheduling_attendance.sql:36` constrains `type in ('meeting', 'outreach', 'competition')`, and
+  `competition_hours` is its own filtered sum (`kpi_views.sql:183`, surfaced again at `:226`) that
+  the card renders. The 2026-08-02 ruling covered only `meeting` and `outreach`. **The owner ruled on
+  the third on 2026-08-03: `competition` does NOT count either.**
+
+  | `events.type` | Counts toward the volunteer-hours goal? |
+  |---|---|
+  | `outreach` | **Yes** — service the students perform for others |
+  | `meeting` | **No** — internal team meetings; produces a participation percentage instead |
+  | `competition` | **No** — the team competing for itself is not community service |
+
+  **Volunteer hours = `outreach` only.** Competition hours stay tracked and displayed as their own
+  figure; they leave the volunteer total and its goal percentage. `kpi_views.sql:181-183` already
+  computes all three as separate filtered sums, so this is **column selection, not new arithmetic**.
+
   **It is latent today**, not visible — the team records no `meeting`-type events, so the figure
   reads `0.0h`. It becomes a live wrong number the moment the first internal team meeting is
-  recorded. Read the full ruling in `auto-mode-decisions.md` before packeting; **cite that file,
+  recorded. Read **both** rulings in `auto-mode-decisions.md` before packeting; **cite that file,
   never a paraphrase of it.**
 
 ## 5. Rows that reach outside both workflows — read before starting any of them
@@ -126,7 +152,7 @@ say so in the PR, or hand it over if W7 gets a machine.
 of the four W4/W5 shared rows, so with the pairing it now has one owner — you — except for the W7
 file question.**
 
-**T156 targets `loaders/loader.ts`, the shared spine.** Measured: **23 loader modules and 33 source
+**T156 targets `src/lib/supabase/loader.ts`, the shared spine.** Measured: **23 loader modules and 33 source
 files** use `createLoader`/`runMutation`. Changing its error shape can break W1, W2 and W7 at once.
 **Do not treat it as local.** Raise it with the owner; it may belong in W10.
 
@@ -151,9 +177,16 @@ re-derived:
 1. **T205** — ruled, Ready, one line, real exposure.
 2. **T322** — ruled, the headline correctness row.
 3. **T187** — the only row that puts a wrong value in front of a real user today (a two-team student
-   sees one team). Now unambiguously yours. **Every other reader has already migrated** to the
-   `student_teams` junction (`membership_views.sql:63`/`:92`, `dashboard_views.sql:205-206`,
-   `kpi_views.sql:256`), so it is a finishing move — but it edits W7's file, so settle that first.
+   sees one team). Now unambiguously yours. **Every other reader has migrated** to the
+   `student_teams` junction — but **they do NOT agree on what membership means, and that is a design
+   input for both T187 and T201.** Verified: `membership_views.sql:63` uses
+   `join student_teams st on st.student_id = s.id and st.left_on is null` and
+   `dashboard_views.sql:205-206` uses the same `left_on is null` predicate, but **`kpi_views.sql:256`
+   is a bare `left join student_teams st on st.team_id = t.id` with no ACTIVE predicate at all.** So
+   "everyone migrated" is true; "everyone agrees" is false, and a student who *left* a team is
+   counted differently depending on which view you read. **Decide which semantic T187 adopts and say
+   so explicitly** — do not assume the majority spelling is intentional. It edits W7's file, so
+   settle ownership first.
 4. **T199** — cheap, self-contained, entirely inside your own files.
 5. Then the rest of the shared set (**T186, T201, T202**) as one wave, since they straddle the same
    view/screen boundary the pairing exists to resolve.
