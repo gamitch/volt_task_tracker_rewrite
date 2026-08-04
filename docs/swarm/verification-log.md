@@ -8022,11 +8022,20 @@ branch point `380266e` is later and carries other merges, not this change) ·
 `tests/rls/run.sh` and `supabase/tests/run.sh` fail **identically on this branch and on `main`** —
 pre-existing rot, not caused by T205, filed as **T701**.
 
-### ⚠️ Not closed in production
+### Not closed in production — and a correction to how that was first framed
 
 The migration lands in the repo only. **Constitution item 16 reserves hosted-Supabase cutover for
-the human owner, so the unauthenticated roster-destruction path remains OPEN on the live project
-until he applies this migration.** No agent verified production grant state; none could.
+the human owner, so the grant remains open on the hosted project until he applies this migration.**
+No agent verified production grant state; none could.
+
+**CORRECTION, same day, owner input:** the orchestrator originally wrote this up as an urgent live
+exposure — "an anonymous internet request can wipe the roster today". **That overstated it.** The
+owner confirmed there is **no deployed application** at present, so the Supabase `anon` key is not
+published in any public frontend bundle; reaching the view at all requires that key to leak first.
+The grant is genuinely open and worth closing, and the mechanism (measured: `anon` `DELETE 2`,
+`students` emptied) is exactly as described above — but the reachability premise the urgency rested
+on was assumed, not verified. Recorded rather than quietly edited, because "measured, not assumed"
+has to apply to the orchestrator's own risk framing too, not just to the code.
 ## T306 — a session with recorded attendance shows what happened, not what was promised
 
 **STANDARD tier (item 26)** — display-only, single module, **no write path**. Worker implemented; the
@@ -8169,3 +8178,94 @@ stranger answered for their child.
 **Why a zero-production-impact fixture still mattered:** the fixture is what a future task reads to
 learn the shape of a real `RsvpRow`, so the confusion propagates by imitation. That was T157's own
 stated reason for deferring rather than dismissing it (item 20).
+## T702 — RPT-03's adult-volunteer season totals are removed; students only
+
+**Tier: STANDARD**, stated and defended. None of constitution item 26's required HEAVY triggers
+fire: no write path, no RLS/auth, no migration, no metric-view SQL, and `buildSeasonTotals` has
+exactly two consumers, both inside W4's own files. Not FAST either — it removes fields from an
+exported type across four files including the PRD.
+
+**Authority.** Owner ruling, 2026-08-03, structured selection: **"Drop it — students only"**
+(`auto-mode-decisions.md`, "George's ruling on T702"). Verbatim: *"we only nee to count student
+hours per rules we already established"* and *"this should just be a change in the sql queries"*,
+clarified to one screen.
+
+That ruling authorized **two things no agent may do alone**, both recorded as citations rather than
+left to inference:
+
+1. **Amending RPT-03** (`VOLT_Portal_PRD.md:370`) — constitution item 1 puts PRD requirement IDs
+   above the constitution and above agent judgment. The line now reads *"…team subtotal rows; season
+   totals for people reached."* People-reached retained; the adult-volunteer clause removed.
+2. **Changing a passing test** — `HoursTab.test.tsx:327` asserted the deleted fields. The
+   Non-Negotiables require explicit owner approval; this ruling is it.
+
+### A premise correction the owner's own instruction contained
+
+He asked for *"just a change in the sql queries"*. **There is no SQL here.** Module doc #6 states it
+directly — *"no metric-view formula being re-derived here, since no view computes this sum at all"*.
+These are raw `events` columns fetched by a PostgREST `.select()` and summed in TypeScript. Acting on
+the instruction unexamined would have sent a worker hunting a view that does not exist. The nearest
+equivalent — dropping two column names from `queryHoursEvents`'s select — is what shipped.
+
+Also verified before scoping: adult-volunteer figures appear **nowhere** in `pages/home/**`,
+`components/kpi/` or the dashboard loaders, so "just for the dashboard" could only mean this one
+reporting screen.
+
+### What shipped
+
+- `reports.ts` — two columns off `queryHoursEvents`'s select, off `HoursEventDbRow`, off its mapping.
+  **`queryEventsEvents` untouched** (RPT-04).
+- `HoursTab.tsx` — two fields off `HoursEventRow`/`HoursSeasonTotals`, both reduces deleted, both KPI
+  cards removed, module doc #6 and the file summary rewritten so they do not become false claims.
+- `HoursTab.test.tsx` — the `:327` adult assertions removed; people-reached assertions retained.
+- `VOLT_Portal_PRD.md:370` — RPT-03 amended.
+
+**Deliberately NOT touched:** RPT-04 (`EventsTab.tsx`) and RPT-05 (`csvExport.ts`), which show adult
+volunteers **per event** and were not ruled on; the W2-owned collection flow, so coaches keep
+entering the figures; and the database columns, which stay.
+
+### Worker's three disclosed judgment calls — all ratified, none hidden
+
+The worker flagged each rather than absorbing it into the narrower permission it was given:
+
+1. **Removed a 5-`it` describe block beyond the literal "two adult assertions" grant.** Ratified:
+   those tests referenced fields that no longer exist on the type, so `tsc --noEmit` cannot go green
+   with them present in any form. Not adjustable — moot.
+2. **Dropped `buildSeasonTotals`'s now-unused `events` parameter.** Ratified: `noUnusedParameters`
+   and `noUnusedLocals` are both `true` in this repo's tsconfig, so the dead code could not be left
+   inert. Both call sites updated.
+3. **Left the loading skeleton previewing 3 KPI cards when 1 renders.** Correctly declined as out of
+   packet scope — **and taken by the orchestrator instead**, because T702 itself created that
+   mismatch and shipping it would be shipping a self-inflicted defect. Skeleton now previews one card.
+
+### The T500 history on this branch, so a reviewer is not confused
+
+The branch carries `671e0b4`/`de02ea0` — T500's sessionless-event filter and its five tests — landed
+before the owner's ruling arrived, then removed by `e1c0119` as dead code. **The T500 worker had
+already committed when it was stopped mid-run.** That is also the honest explanation of the
+`1950 → 1948` baseline discrepancy the T702 worker reported and could not resolve: the packet's 1950
+came from the T500 *premise gate's own worktree*, which carried the gate's added tests, and was
+quoted as a baseline for a different commit. **The orchestrator's error, not the worker's** — and the
+worker was right to report it unexplained rather than reconcile it silently.
+
+### Mutation evidence — orchestrator replayed 1 and 3 personally
+
+| # | Mutation | Result |
+|---|---|---|
+| 1 | Re-add an "Adult volunteers" KPI card | exit 1 — `expected 'Season totalsPeople reached125…' not to contain 'Adult volunteers'`, 1 failed / 30 passed |
+| 2 | Break `peopleReachedTotal`'s reduce | 2 failed / 29 passed — the surviving `:327` assertion `expected 127 to be 125` |
+| 3 | Strip adult columns from `queryEventsEvents` (RPT-04) | 1 failed / 26 passed — `loadEventSessionsData` real-load test, `adultVolunteer* : undefined` vs `4`/`2` |
+
+**Mutation 3 is the over-deletion guard and it needed two attempts to replay.** The orchestrator's
+first attempt changed only the select string and the suite stayed **green** — because the test's mock
+returns fixed rows regardless of the select argument. The worker had already documented exactly this
+and done the fuller removal. **A select-string-only mutation on this file is not evidence**; the
+mapping must go too. Recorded because the next person will otherwise repeat it.
+
+### Gates, `.env.local` absent, measured on the final tree
+
+`tsc --noEmit` 0 · `vite build` 0 · `format:check` 0 · `eslint .` **0 errors / 364 warnings**
+(unchanged) · `vitest run` 0 — **78 files / 1944 tests**.
+
+**The count dropped from 1948 and that is correct, not damage:** −5 for T500's now-untestable describe
+block, +1 for the new criterion-1 test asserting the DOM contains no adult-volunteer figures.

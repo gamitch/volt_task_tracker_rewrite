@@ -333,15 +333,18 @@ interface VStudentHoursDbRow {
   confirmed_hours: number;
 }
 
-/** Raw `public.events` row, minimal columns for the Hours tab. */
+/** Raw `public.events` row, minimal columns for the Hours tab.
+ * `adult_volunteers_count`/`adult_volunteer_hours` were dropped by
+ * "2026-08-03 — George's ruling on T702" (auto-mode-decisions.md) -- RPT-03's
+ * season totals are students-only now. The columns themselves still exist on
+ * `events` and are still queried by `queryEventsEvents` below for RPT-04
+ * (per-event figures, not ruled on); this row shape is just narrower. */
 interface HoursEventDbRow {
   id: string;
   season_id: string;
   type: SharedEventType;
   team_ids: string[] | null;
   counts_volunteer_hours: boolean;
-  adult_volunteers_count: number;
-  adult_volunteer_hours: number;
 }
 
 /** Raw `public.event_sessions` row, minimal columns for the Hours tab. */
@@ -404,9 +407,7 @@ async function queryHoursEvents(
 ): Promise<LoaderQueryResult<HoursEventDbRow[]>> {
   const result = await client
     .from('events')
-    .select(
-      'id, season_id, type, team_ids, counts_volunteer_hours, adult_volunteers_count, adult_volunteer_hours',
-    )
+    .select('id, season_id, type, team_ids, counts_volunteer_hours')
     .eq('season_id', seasonId);
   return { data: (result.data as HoursEventDbRow[] | null) ?? null, error: result.error };
 }
@@ -465,8 +466,6 @@ function mapHoursEventDbRowToEventRow(row: HoursEventDbRow): HoursEventRow {
     type: row.type,
     teamIds: row.team_ids,
     countsVolunteerHours: row.counts_volunteer_hours,
-    adultVolunteersCount: row.adult_volunteers_count,
-    adultVolunteerHours: row.adult_volunteer_hours,
   };
 }
 
