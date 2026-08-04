@@ -9170,6 +9170,82 @@ tests**, targeted `outreach.test.ts` **39 passed, exit 0** (from a 19-test basel
 
 ---
 
+## T187 + T800 — student scoping moves onto ACTIVE `student_teams` memberships, on both surfaces
+
+**Tier: HEAVY.** It changes what a student sees about her own data and it edits `loaders/students.ts`
+(**W7's file — W7 unassigned, taken here and declared**). Full chain ran: packet → premise gate
+(REVISE, 1 BLOCKER) → revised packet → worker → orchestrator verification.
+
+**Owner rulings, both in `auto-mode-decisions.md`:** *"T187 + T800 as one wave"*, and on the test
+edits — *"i dont like the idea of making the code have a workaround to avoid writing tests… I would
+prefer we write the code correctly and test should validate that."*
+
+### The row was wrong about its own mechanism — the fifth such row this session
+
+T187's row says `resolveStudentScope` reads `students.team_id`. **It reads
+`v_student_goal_projection.team_id`** (`students.ts:407-408`), whose column is `s.team_id`
+(`dashboard_views.sql:326`) — documented as *"used here ONLY for the row's display badge … never for
+any rollup math."* A live route was scoping off a column the schema calls display-only. **That is
+also T186; they are one mechanism seen from two sides.**
+
+### What shipped
+
+A new ACTIVE-membership read on `student_teams` using `.is('left_on', null)` — the predicate every
+already-migrated reader uses. `ResolveStudentScopeFn` gains `teamIds: readonly string[]`;
+`isEventInTeamScope` becomes an intersection test; `ParentHome`'s own predicate and its fixture
+caller are threaded the same way. **No migration** — `student_teams` already exists with
+`read_all for select to authenticated`.
+
+**The owner rejected a `string | readonly string[]` union** that the gate offered to spare test
+churn, on the grounds that it distorts production code to avoid writing tests. **Verified in the
+shipped code: zero union signatures across all four production files.**
+
+### The test-edit approval, and proof its boundary held
+
+The approval was bounded to **shape-only, behaviour-preserving** edits. The worker was killed by a
+session limit before it could deliver the required enumeration, **so the orchestrator produced and
+verified it instead** rather than accepting the change unenumerated.
+
+Every removed line in an existing test is a call site whose **argument shape** changed —
+`isEventInTeamScope({teamIds:['team-b']}, 'team-a')` → `(…, ['team-a'])` — with the expectation
+**byte-identical** (`toBe(true)`, `toBe(false)`, `toEqual([])` all unchanged). Harness plumbing
+gained a `student_teams` table and an `.is()` method. **No assertion was weakened, deleted or
+loosened.** New two-team cases were added alongside, not substituted for old ones.
+
+### Mutation evidence — orchestrator replayed personally
+
+| # | Mutation | Result |
+|---|---|---|
+| 1 | Revert the predicate to a single-id test | **5 failed / 210 passed** — the two-team tests |
+| 3 | Drop `.is('left_on', null)` from the new read | **RED on the query-shape spy** — `expect(isSpy).toHaveBeenCalledWith('left_on', null)` |
+| — | Restore | 361 passed, tree clean |
+
+**Criterion 3 only works because the gate caught it.** As first written it was a fixture-visibility
+test, and the gate proved every fake client in this repo returns configured rows regardless of
+chained filters — dropping the ACTIVE predicate would have left the suite **green**. It was reworded
+to a query-shape spy before dispatch.
+
+### Gates, `.env.local` absent, after merging current `main`
+
+`tsc --noEmit` 0 · `vite build` 0 · `format:check` 0 (prettier run on four files) ·
+`eslint .` **0 errors / 364 warnings** (unchanged) · `vitest run` 0 — **78 files / 1973 tests**.
+
+### Process note — two session-limit deaths, no work lost
+
+The worker was terminated by usage limits **twice**. The first time it had **uncommitted** changes
+and no commits of its own; the orchestrator committed a labelled safety snapshot and pushed. The
+second time it had committed four times and left a clean tree. **The safety snapshot was explicitly
+recorded as unverified scratch, not a deliverable** — and the resume instructions written at the
+pause said to discard it, which by then was stale advice. Corrected on resume rather than followed.
+
+### What this leaves for T186
+
+The live scoping mechanism now moves to `student_teams`, **but `resolveStudentScope` still reads and
+returns the display-only `v_student_goal_projection.team_id` as `teamId`**, and neither the view
+comment nor the loader records that dependency. **T186's documentation fix remains fully open.**
+
+---
+
 ## T506 — `MarkEventCompleteDialog.tsx`'s module doc described an `updated_at` the write no longer sends
 
 **Tier: FAST** (constitution item 26), defended: **comment-only**, proven by hash — both revisions

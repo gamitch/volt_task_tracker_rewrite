@@ -1,10 +1,10 @@
-import {defineTheme} from '@astryxdesign/core/theme';
-import {neutralTheme} from '@astryxdesign/theme-neutral';
+import { defineTheme } from '@astryxdesign/core/theme';
+import { neutralTheme } from '@astryxdesign/theme-neutral';
 
 export const voltTheme = defineTheme({
   name: 'volt',
   extends: neutralTheme,
-  color: {accent: '#5B2EE5', neutralStyle: 'cool'},
+  color: { accent: '#5B2EE5', neutralStyle: 'cool' },
   typography: {
     heading: {
       family: 'Space Grotesk',
@@ -17,7 +17,7 @@ export const voltTheme = defineTheme({
       fallbacks: '-apple-system, sans-serif',
     },
   },
-  radius: {base: 6, multiplier: 1},
+  radius: { base: 6, multiplier: 1 },
   tokens: {
     // [light, dark]
     '--color-accent': ['#5B2EE5', '#9B7BFF'],
