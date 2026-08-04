@@ -188,11 +188,21 @@
  *    overrule if he disagrees, since it is one seeding call, not scattered
  *    logic. **One real, disclosed cost:** once a session's rows are
  *    loaded, a student with an existing recorded row is written back
- *    exactly as they already are, EXCEPT `attendance.recorded_by` (and
- *    `updated_at`), which `makeMarkDayComplete`'s upsert also names
- *    (`loaders/outreach.ts:1139-1149`) -- so this write re-attributes that
- *    row to whoever clicked "Mark event complete" today, on a row this path
- *    never displayed and the coach never actively edited. This is
+ *    exactly as they already are, EXCEPT `attendance.recorded_by`, which
+ *    `makeMarkDayComplete`'s upsert still names (`loaders/outreach.ts`,
+ *    `upsertAttendance` -- grep the symbol; this citation has already gone
+ *    stale once) -- so this write re-attributes that row to whoever clicked
+ *    "Mark event complete" today, on a row this path never displayed and the
+ *    coach never actively edited.
+ *
+ *    T406 UPDATE (T506): this used to read "`recorded_by` (and
+ *    `updated_at`)". The upsert no longer names `updated_at` at all -- T406
+ *    narrowed the payload so a concurrent QR scan's `check_in_at` survives,
+ *    and dropped `updated_at` with it. The row's timestamp still moves, but
+ *    because W1's `trg_attendance_touch_updated_at`
+ *    (`20260803000000_simplify_attendance_audit.sql:78-83`, `before insert or
+ *    update`) sets it on BOTH legs -- not because this write sends it. The
+ *    disclosed cost above is therefore about `recorded_by` alone. This is
  *    consistent with `UpsertAttendanceParams.recordedBy`'s own documented
  *    convention ("always re-attributed to whoever is editing right now")
  *    and with T305's own W5, but every prior instance of that convention

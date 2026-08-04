@@ -2788,6 +2788,179 @@ for that; **this ruling is it**, and it covers those two and nothing else. Note 
 `meetingHours: 2.0` — a value the production view **cannot generate**. It is kept on the fixture (to
 prove the field is still carried) and deliberately not rendered.
 
+---
+
+## 2026-08-03 — George lifts the T406 hold and picks the approach: NARROW THE WRITE
+
+**Two decisions, both his.** First he lifted the hold he set earlier that day (*"i'll wait on 406"*).
+Then, asked which of the two shapes to build, he chose: *"what's the simplest approach, narrow the
+write so it only touches the columns the dialog actually means to set?"* — and on confirmation,
+*"yes go ahead with T406"*.
+
+**He is right that it is the simpler one, and the reasoning is worth keeping** because it is not
+merely "smaller diff":
+
+- **Re-reading at submit ADDS things** — another round trip, a new failure mode (a re-read that fails
+  exactly when the coach hits Confirm), more state. And it only *shrinks* the race window; something
+  can still land between the re-read and the write.
+- **Narrowing REMOVES things.** You cannot overwrite a column you never send. Preservation stops being
+  something the code must remember to do and becomes something it cannot fail to do.
+- **It also retires work T305 had to add.** T305 made the dialog carry `hoursOverride`, `checkInAt`,
+  `checkOutAt` and `method` through the write *specifically to stop it nulling them*. Narrowing makes
+  the carrying unnecessary for the timestamp columns.
+
+### The sequencing hazard this row carried is RESOLVED — verified, not assumed
+
+The T406 ledger row warned that narrowing before W1's T405 trigger landed *"risks narrowing around a
+column whose behaviour is changing."* **The trigger has landed**:
+`trg_attendance_touch_updated_at`, `before insert or update`, setting `new.updated_at := now()`
+(`20260803000000_simplify_attendance_audit.sql:78-83`, on `main`). So `updated_at` is now DB-managed
+and the dialog's explicit `updated_at: new Date().toISOString()` is already dead weight the trigger
+overwrites. **Checked on `main`, the branch this will act on** — the T401 lesson.
+
+### What the schema permits, which decides the whole design
+
+| Column | Constraint | Droppable |
+|---|---|---|
+| `check_in_at`, `check_out_at` | nullable, no default | **YES** — INSERT → `NULL` (correct for a coach-marked student who never scanned); UPDATE → preserved |
+| `updated_at` | `not null default now()` | **YES** — the T405 trigger now sets it on both legs |
+| `method` | **`not null`, NO default** | **NO** — dropping it makes every INSERT violate the constraint |
+| `status`, `recorded_by`, `hours_override` | — | **NO** — these are the coach's actual gesture |
+
+### The residual this leaves, stated now so it is not discovered later
+
+Because `method` cannot be dropped, **a concurrent QR scan's `method: 'qr'` can still be clobbered**
+by the dialog's stale snapshot, even after this fix. The student's real `check_in_at` survives — which
+is the harm the owner described — but the *provenance* that they scanned rather than being marked by a
+coach does not.
+
+**This is a genuine partial fix and the packet must say so rather than imply the TOCTOU is closed.**
+Closing the `method` half needs either a schema default (a migration on a table W1 owns) or an
+insert/update split (which re-introduces the multi-step shape T327 exists to avoid). Neither is
+proportionate to a ~20-student team for a provenance flag; **file it, do not build it.**
+## 2026-08-04 — George's ruling: T187 and T800 run as ONE wave
+
+**Verbatim:** *"T187 + T800 as one wave"* — answering whether to fix `StudentHome`'s single-team
+narrowing alone (T187 as filed) or together with the identical defect on `ParentHome`'s child cards
+(T800, filed minutes earlier while scoping T187).
+
+**Why this was asked rather than assumed.** T187's ledger scope is explicitly *"move **this page's**
+scoping onto `student_teams` ACTIVE memberships"* — page-scoped to `StudentHome`. Widening it
+unilaterally is the scope creep this project has recorded and punished. But the two surfaces are
+**not** fixed by the same edit: T187's narrowing comes from `resolveStudentScope` returning a single
+`teamId`, while `ParentHome`'s comes from `makeLoadStudentHomeCardData(studentId, teamId)`
+(`parentHome.ts:463`) taking a single id **as a parameter from its caller**. Different paths, same
+defect. He chose to do them together, as he did for T322's second surface.
+
+**Also settled by the same ruling:** they share one new read — a student's ACTIVE `student_teams`
+memberships — so doing them apart would mean building that read, proving it, and then immediately
+re-opening the same files.
+
+### Two premise corrections recorded with this ruling
+
+**1. T187's own row mis-states its mechanism.** It says `resolveStudentScope` reads
+`students.team_id`. It does not: it reads **`v_student_goal_projection.team_id`**
+(`loaders/students.ts:407-408`), and that view's column is `s.team_id`
+(`dashboard_views.sql:326`) — documented at `:311-320` as *"used here ONLY for the row's display
+badge … never for any rollup math."* **T186 and T187 are therefore one mechanism seen from two
+sides**, not two independent rows: T186 is "a live route scopes off a display-only column", T187 is
+"that scoping is single-team". Whoever closes this wave should say what it leaves for T186.
+
+**2. The blast radius the kickoffs feared is much smaller than stated.** Both kickoffs flag T187 as
+HEAVY partly because widening `resolveStudentScope`'s return is *"an export another session builds
+against"* — `parentHome.ts` consumes the same factory. **Measured: `parentHome` reads nothing off
+the scope but `goalHours` and `confirmedHours` (`:482-483`). It never touches `teamId`.** So an
+**additive** field disturbs no consumer. T187 stays HEAVY — it changes what a student sees about
+their own data, and it edits W7's file — but not for that reason.
+
+**W7 remains unassigned**, so `loaders/students.ts` is taken here rather than handed over. **Say so
+in the PR**, per the same disposition the kickoffs give T200 and T204.
+
+---
+
+## 2026-08-04 — George's ruling on T187's test edits: write the code correctly, make the tests follow
+
+**Verbatim:** *"personally, i dont like the idea of making the code have a workaround to avoid writing
+tests, that seems backwards in terms of code quality. I would prefer we write the code correctly and
+test should validate that but i don't understand the level of complexity to rewrite the tests."*
+
+**He chose option 2 and rejected option 1, and the reasoning is better than the orchestrator's.**
+The premise gate offered a `string | readonly string[]` union on the predicate and four helpers,
+which would have spared 17 direct-call assertion edits. The orchestrator recommended it on
+"fewer passing assertions touched" grounds. **That was the wrong weighting:** the union makes the
+production signature ambiguous *in order to* avoid test churn. The Non-Negotiable exists to stop a
+real bug being papered over by editing the test that caught it — **not to freeze test shape
+forever**. If the correct domain shape is "a set of ACTIVE team memberships", the tests should
+assert that.
+
+**Signature stays `teamIds: readonly string[]`.** No union. No compatibility shim.
+
+### Approval granted, and its exact boundary
+
+The owner approves updating the existing tests this necessarily breaks, in these four files:
+`students.test.ts`, `parentHome.test.ts`, `StudentHome.test.tsx`, `ParentHome.test.tsx`.
+
+**The boundary — and it is the whole point of the approval:** every edit must be **shape-only and
+behaviour-preserving**. Changing `isEventInTeamScope(event, 'team-a')` to
+`isEventInTeamScope(event, ['team-a'])` is shape. Adding `teamIds` to a fixture object is shape.
+Teaching a fake client the `student_teams` table and an `.is()` method is plumbing. **Weakening,
+deleting or loosening what a test asserts about behaviour is NOT covered by this approval** — if any
+existing test cannot be made green by a shape-only edit, that is a signal the implementation is
+wrong, and the worker must stop and report rather than adjust the assertion.
+
+**Enforcement, so this is checkable rather than trusted:** the worker enumerates every edited line
+and classifies it (call-site shape / fixture shape / expectation shape / harness plumbing), and the
+checker verifies no behavioural assertion changed. Several of these tests are proof artifacts from
+T176, T181, T183 and T184 — silently reversing one is the failure class item 19's rationale records.
+
+### Also settled by this ruling
+
+**His stated uncertainty was about cost, not principle** — *"i don't understand the level of
+complexity"*. Measured, so it is on the record: 17 call-site argument changes, ~16 fixture objects
+and 3 expectation objects gaining a field, one fake client learning a table, and three fake query
+chains gaining an `.is()` method. **No test's subject or expected behaviour changes.** The scary
+"~48 lines including assertion lines" figure is almost entirely mechanical.
+
+---
+
+## 2026-08-04 — George closes D010: correct the false RLS comment in a NEW migration's header, never in place
+
+**Verbatim:** *"let's go with B"* — chosen after the orchestrator put two ways of closing D010 to him
+in plain language.
+
+**Context, and a correction the orchestrator owed him.** D010 had been described to him earlier that
+day as *"still open, awaiting your decision"*. **That was wrong and was retracted.** He decided the
+substance on **2026-07-29**: do **not** change the schema — the KPI views expose season aggregates
+with no PII, and a `security_invoker` change risks breaking auth that works today for something not
+worth it. That ruling stands and is not reopened.
+
+**The only thing still pending was narrow:** D010's own resolution noted that fixing the false comment
+required editing an **already-applied** migration file, which **constitution item 10 forbids outright**
+(*"editing an applied migration file → BLOCKER"*), and so *"stays proposed until he says go"*.
+
+**Two ways were offered:**
+
+- **A** — authorise editing the comments in place: an explicit item 10 exception, and it makes the
+  files disagree with what the database actually ran.
+- **B** ← **chosen** — leave every applied file untouched; put the correction in the **header of the
+  next new migration**, citing D010.
+
+**B costs nothing, breaks no rule, and needs no exception.** D010 therefore closes with **no schema
+change and no item 10 exception.**
+
+**Where the correction lands:** T503 is writing a new migration anyway, and its packet v2 §3 already
+requires exactly this. No separate task is needed.
+
+**The claim being corrected, and why it kept mattering:** *"plain views run under the querying
+session's own RLS against their base tables."* False — a view without `security_invoker` executes as
+its **owner**. It appears in `20260723000000_kpi_views.sql:136-152` (D010 found it), was copied into
+`20260723001_dashboard_views.sql:50-56`, and **nearly derailed T503**, whose premise gate had to stand
+up a real PostgreSQL 16.13 to determine which of two contradictory comments in this repo was true.
+**Three occasions.** D010's own words: *"a wrong security claim left in the tree is how a future
+decision gets made on a bad premise."*
+
+---
+
 ### D4 — T164's premise gate SKIPPED under item 19b; worker + checker dispatched
 
 **Not a blanket policy — the opposite call to D2**, which insisted T162 be gated. The difference is

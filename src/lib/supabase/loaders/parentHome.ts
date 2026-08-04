@@ -471,7 +471,28 @@ export function makeLoadStudentHomeCardDataForParentHome(
 
     const events = (eventRows ?? []).map(mapEventDbRow);
     const sessions = (sessionRows ?? []).map(mapFullEventSessionDbRow);
-    const nextEvents = buildNextEventsForStudent(sessions, events, teamId, nowFn().getTime());
+    // T187 -- scope by the student's real ACTIVE team ids
+    // (`resolveStudentScope`'s new `teamIds`, `students.ts`'s own module
+    // doc), not the single threaded `teamId` -- same defect, second surface
+    // (`StudentHome.tsx`'s own module doc #8 T187 record). Two edge cases,
+    // both disclosed:
+    //   - `scope === null` (e.g. a deactivated linked student, module doc
+    //     above's own honest zero/absent fallback) -- no active-membership
+    //     read to fall back on, so this uses the threaded single `teamId`,
+    //     same single-team behavior this function already had.
+    //   - `scope` present but a genuinely EMPTY `teamIds` (zero active
+    //     memberships) -- scoped to nothing (an honest `[]`), NOT a fallback
+    //     to `teamId`; a real student with zero active team rows genuinely
+    //     has no team-scoped events to show. This is why every per-card test
+    //     fixture that exercises `nextEvents` seeds an ACTIVE `student_teams`
+    //     row mirroring the real backfill, not a code-level fallback here.
+    const activeTeamIds = scope === null ? [teamId] : scope.teamIds;
+    const nextEvents = buildNextEventsForStudent(
+      sessions,
+      events,
+      activeTeamIds,
+      nowFn().getTime(),
+    );
     const nextEventSessionIds = new Set(nextEvents.map((event) => event.sessionId));
 
     return {

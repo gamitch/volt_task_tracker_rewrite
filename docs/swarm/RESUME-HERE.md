@@ -13,6 +13,55 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
 
+## UPDATE — 2026-08-04 (LATEST, supersedes the W4+W5 section below): **W2 outreach wave — nine tasks merged, T406 in flight, T165 is the last one**
+
+**W2's queue is nearly done.** Merged this session, each with a ledger row and a verification-log
+entry (item 24): **T330, T401, T402, T174, T190, T306, T325, T152, T300** — plus **T301** (PR open at
+time of writing).
+
+**T406 is merged too** (PR #65) — eleven tasks in total. Its premise gate proved the load-bearing
+claim **by execution** against a scratch PostgreSQL 16.13 loaded with this repo's real migrations,
+rather than by citing documentation, and all seven of its acceptance criteria were replayed
+independently by the orchestrator. **It is a deliberate PARTIAL fix:** `attendance.method` is
+`not null` with no default and provably cannot be dropped from the payload on either leg, so a
+concurrent QR scan's `method: 'qr'` can still be clobbered. The student's real `check_in_at` now
+survives — the harm the owner described — but the provenance does not. **Residual filed as T505 for
+an owner ruling** (closing it needs a migration on a table W1 owns); **T506** files a stale module
+doc in a file T406 was forbidden to edit.
+
+**Still open:**
+
+- **T165** (STANDARD) — **the last W2 task.** Packet committed on
+  `claude/t165-outreach-loader-coverage`, worker dispatched. **The ledger row's numbers are wrong and
+  the packet corrects them by measurement:** the file has **18** value exports, not 23 (the count
+  included 9 `type` exports); **7 are already exercised**, not 2; and `makeMarkDayComplete` is named
+  as a target while being one of the best-covered symbols in the file after T327 and T406. The real
+  remaining surface is **five** symbols. Note also that `loadOutreachData` is *referenced* in the
+  test file but has **zero call sites** — being mentioned is not coverage.
+
+**Filed, explicitly NOT W2's to build:** T501 (bare em-dash a11y, repo-wide), T502 (residual silent
+truncation in W1's `attendance.ts`), T503 (owner ruled *widen* RLS so students see teammates' RSVPs —
+PRD 8.3 + item 3 make it non-improvisable and the scope is still his call), T504 (T174's defect in
+`OutreachList.tsx`, unverifiable there today since nothing reads `respondedBy`). **T500 is CLOSED as
+SUPERSEDED** by W4's T702.
+
+### Four things this wave learned that cost real time
+
+1. **A merge reported as done is not done.** PR #59 was reported merged in-session while still open,
+   caught only by checking whether its code was actually in `main`. **Verify every merge three ways:
+   the code is in `main`, the ledger row says MERGED, and the branch is an ancestor of `main`.**
+2. **A criterion whose mutation does not remove the guard is worthless, and three shipped this
+   wave** — T401's row count, T190's C3, T300's C2 (restoring a default while every call site still
+   passes the prop produces no `tsc` error at all). **Run every named mutation before dispatching.**
+3. **A ledger row's cost estimate and citations are usually stale.** T190's said 3 assertions,
+   measured 6. T301's said 3 comments, history showed 2. T152's named the wrong mutation as its
+   evidence. **Measure; do not quote.**
+4. **Bound every string replacement to the target block.** Two separate over-replacements this wave
+   (T306's 33 call sites, T152's wrong test) — identical mock blocks recur across a 3000-line test
+   file.
+
+---
+
 ## UPDATE — 2026-08-04 (LATEST): W4+W5 wave — **T205, T702, T322 merged. TWO MIGRATIONS AWAIT THE OWNER'S CUTOVER.**
 
 **Three tasks shipped, one closed unshipped, five owner rulings taken.** Gates at the last merge:
@@ -20,14 +69,29 @@ without checking whether that UPDATE moved it.**
 vitest **78 files / 1951 tests, exit 0**. Rulings are in `auto-mode-decisions.md` under the
 **"W4+W5 auto-mode window"** and the four dated entries after it.
 
-### ⚠️ TWO MIGRATIONS ARE IN THE REPO AND NOT IN PRODUCTION
+### ✅ MIGRATIONS APPLIED TO PRODUCTION — 2026-08-04, by George
 
-Constitution item 16 reserves hosted-Supabase cutover for the owner. **Neither of these is live:**
+**No migration is pending.** He ran `supabase db push` and confirmed with
+`supabase migration list` that Local and Remote match on every row. **THREE went in, not the two this
+section used to name:**
 
+- `20260803000000_simplify_attendance_audit.sql` — **was not listed here at all.** It creates
+  `trg_attendance_touch_updated_at`. See the warning below.
 - `20260803000001_revoke_anon_leaderboard_students.sql` (**T205**)
-- `20260804000000_volunteer_hours_outreach_only.sql` (**T322**)
+- `20260804000000_volunteer_hours_outreach_only.sql` (**T322**) — hours totals drop visibly; meeting
+  and competition hours leave the volunteer-hours figure per his ruling. Intended.
 
-Until they are applied, the hosted project keeps the old grants and the old view definitions.
+**⚠️ The ordering hazard that nearly bit, recorded so the next one is caught deliberately.**
+`push` printed `NOTICE: trigger "trg_attendance_touch_updated_at" ... does not exist, skipping`,
+which proves the trigger was **not** in production until that moment. **T406 (merged earlier the same
+day) removed `updated_at` from the attendance write entirely**, relying on that trigger to maintain
+it. Had the app shipped with T406 before this migration, every attendance write would have left
+`updated_at` silently frozen. The order came out right by luck, not design.
+
+**Lesson for any future migration+code pair:** a code change whose correctness depends on a migration
+is only correct once that migration is APPLIED — not once it is merged. Nothing in the agents'
+container can see the remote (`UNATTENDED-SESSION-LOG.md:267`), so **the ledger row must name the
+migration the code depends on**, and the owner must be told the two ship together.
 
 ### The pattern worth carrying forward: three for three, the stated defect was wrong
 
