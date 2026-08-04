@@ -120,6 +120,10 @@ function makeChain(result: FakeQueryResult): Record<string, unknown> {
   chain.eq = () => chain;
   chain.in = () => chain;
   chain.order = () => chain;
+  // T187 -- `.is('left_on', null)`, the new `student_teams` ACTIVE filter
+  // (`loaders/students.ts`'s own `queryActiveTeamIdsByStudentId`, reused via
+  // `makeResolveStudentScope`/`loaders/parentHome.ts`'s own per-card seam).
+  chain.is = () => chain;
   chain.maybeSingle = () => Promise.resolve(result);
   chain.then = (
     onFulfilled: (value: FakeQueryResult) => unknown,
@@ -183,11 +187,17 @@ const EMPTY_CARD_DATA: StudentHomeCardData = {
 
 describe('isEventInTeamScope', () => {
   it('null team_ids means all teams', () => {
-    expect(isEventInTeamScope({ teamIds: null }, 'team-a')).toBe(true);
+    expect(isEventInTeamScope({ teamIds: null }, ['team-a'])).toBe(true);
   });
   it('matches only listed team ids', () => {
-    expect(isEventInTeamScope({ teamIds: ['team-a'] }, 'team-a')).toBe(true);
-    expect(isEventInTeamScope({ teamIds: ['team-b'] }, 'team-a')).toBe(false);
+    expect(isEventInTeamScope({ teamIds: ['team-a'] }, ['team-a'])).toBe(true);
+    expect(isEventInTeamScope({ teamIds: ['team-b'] }, ['team-a'])).toBe(false);
+  });
+  // T187 -- a parent's linked student may be on more than one team; the
+  // scope this predicate takes is now that active set, not a single id.
+  it('matches when the event shares AT LEAST ONE id with a dual-team student\'s active set', () => {
+    expect(isEventInTeamScope({ teamIds: ['team-b'] }, ['team-a', 'team-b'])).toBe(true);
+    expect(isEventInTeamScope({ teamIds: ['team-c'] }, ['team-a', 'team-b'])).toBe(false);
   });
 });
 
@@ -265,7 +275,7 @@ describe('buildNextEventsForStudent (Next 3 events boundary proof)', () => {
       scheduledSession('s4', 'e-outreach', 13),
       scheduledSession('s5', 'e-meeting', 16),
     ];
-    const rows = buildNextEventsForStudent(sessions, events, 'team-a', REF_NOW_MS);
+    const rows = buildNextEventsForStudent(sessions, events, ['team-a'], REF_NOW_MS);
     expect(NEXT_EVENTS_LIMIT).toBe(3);
     expect(rows).toHaveLength(3);
     expect(rows.map((r) => r.sessionId)).toEqual(['s1', 's2', 's3']);
@@ -273,13 +283,13 @@ describe('buildNextEventsForStudent (Next 3 events boundary proof)', () => {
 
   it('shows exactly 1 event for a student with only 1 upcoming -- never padded to 3', () => {
     const sessions: HomeSessionRow[] = [scheduledSession('only', 'e-outreach', 4)];
-    const rows = buildNextEventsForStudent(sessions, events, 'team-a', REF_NOW_MS);
+    const rows = buildNextEventsForStudent(sessions, events, ['team-a'], REF_NOW_MS);
     expect(rows).toHaveLength(1);
     expect(rows[0].sessionId).toBe('only');
   });
 
   it('shows zero events (not padded, not a crash) for a student with none', () => {
-    expect(buildNextEventsForStudent([], events, 'team-a', REF_NOW_MS)).toEqual([]);
+    expect(buildNextEventsForStudent([], events, ['team-a'], REF_NOW_MS)).toEqual([]);
   });
 
   it('excludes competition-type sessions even when they sort earliest', () => {
@@ -287,13 +297,26 @@ describe('buildNextEventsForStudent (Next 3 events boundary proof)', () => {
       scheduledSession('comp', 'e-competition', 1), // earliest, but wrong type
       scheduledSession('meet', 'e-meeting', 5),
     ];
-    const rows = buildNextEventsForStudent(sessions, events, 'team-a', REF_NOW_MS);
+    const rows = buildNextEventsForStudent(sessions, events, ['team-a'], REF_NOW_MS);
     expect(rows.map((r) => r.sessionId)).toEqual(['meet']);
   });
 
   it('excludes out-of-team-scope sessions', () => {
     const sessions: HomeSessionRow[] = [scheduledSession('other-team', 'e-wrong-team', 3)];
-    expect(buildNextEventsForStudent(sessions, events, 'team-a', REF_NOW_MS)).toEqual([]);
+    expect(buildNextEventsForStudent(sessions, events, ['team-a'], REF_NOW_MS)).toEqual([]);
+  });
+
+  // T187 -- a dual-team linked student's card includes events from BOTH
+  // active teams, not just the first (`e-wrong-team`, scoped to `team-b`
+  // only, is excluded from every single-team case above -- here it is
+  // INCLUDED once `team-b` is also in the active set).
+  it('includes events from BOTH of a dual-team student\'s active teams', () => {
+    const sessions: HomeSessionRow[] = [
+      scheduledSession('s-team-a', 'e-meeting', 2),
+      scheduledSession('s-team-b', 'e-wrong-team', 4),
+    ];
+    const rows = buildNextEventsForStudent(sessions, events, ['team-a', 'team-b'], REF_NOW_MS);
+    expect(rows.map((r) => r.sessionId)).toEqual(['s-team-a', 's-team-b']);
   });
 
   it('excludes already-ended and non-scheduled sessions', () => {
@@ -313,7 +336,7 @@ describe('buildNextEventsForStudent (Next 3 events boundary proof)', () => {
       endsAt: new Date(REF_NOW_MS + 90_000_000).toISOString(),
       status: 'completed',
     };
-    expect(buildNextEventsForStudent([past, completed], events, 'team-a', REF_NOW_MS)).toEqual([]);
+    expect(buildNextEventsForStudent([past, completed], events, ['team-a'], REF_NOW_MS)).toEqual([]);
   });
 });
 
@@ -649,6 +672,12 @@ describe('<ParentHome /> C3: goalHours is a verbatim passthrough, never TS-recom
         data: { team_id: teamId, goal_hours: 63, confirmed_hours: 10, planned_hours: 0 },
         error: null,
       },
+      // T187 -- `makeResolveStudentScope` now ALSO reads `student_teams`
+      // (sequential, after the non-null v_student_goal_projection row above)
+      // for the ACTIVE membership set; a single row mirroring the legacy
+      // `teamId` preserves this test's own single-team scope unaffected --
+      // this test is about goalHours passthrough, not team scoping.
+      student_teams: { data: [{ team_id: teamId }], error: null },
       events: { data: [], error: null },
       rsvps: { data: [], error: null },
       // A co-present raw override this file's real query never selects and
@@ -872,6 +901,89 @@ describe('<ParentHome /> C5: next-3-events sourced from real data (row-mapper mu
     expect(miloSection).toContain('Team B Canned Food Drive');
     expect(miloSection).not.toContain('Team A Build Night');
     expect(miloSection).not.toContain('Regional Qualifier');
+  });
+});
+
+describe('<ParentHome /> T187 -- a parent of a TWO-team child sees BOTH teams\' events on that child\'s card (criterion 2)', () => {
+  it("the child's card shows events from BOTH of her real ACTIVE student_teams memberships, not just the legacy primary team", async () => {
+    const studentId = 'student-c-dual-real';
+    const primaryTeamId = 'team-c-dual-primary';
+    const secondTeamId = 'team-c-dual-second';
+
+    const eventRows = [
+      {
+        id: 'event-dual-primary',
+        season_id: 'season-dual',
+        type: 'meeting',
+        title: 'Primary Team Build Night',
+        team_ids: [primaryTeamId],
+      },
+      {
+        id: 'event-dual-second',
+        season_id: 'season-dual',
+        type: 'outreach',
+        title: 'Second Team Canned Food Drive',
+        team_ids: [secondTeamId],
+      },
+      {
+        id: 'event-dual-neither',
+        season_id: 'season-dual',
+        type: 'meeting',
+        title: 'Unrelated Team Meeting (must never appear)',
+        team_ids: ['team-c-dual-unrelated'],
+      },
+    ];
+    function dualSessionRow(id: string, eventId: string, offsetDays: number) {
+      const startsAt = new Date(REF_NOW_MS + offsetDays * 86_400_000).toISOString();
+      const endsAt = new Date(REF_NOW_MS + offsetDays * 86_400_000 + 3_600_000).toISOString();
+      return {
+        id,
+        event_id: eventId,
+        session_date: startsAt.slice(0, 10),
+        starts_at: startsAt,
+        ends_at: endsAt,
+        status: 'scheduled',
+      };
+    }
+    const sessionRows = [
+      dualSessionRow('session-dual-primary', 'event-dual-primary', 1),
+      dualSessionRow('session-dual-second', 'event-dual-second', 2),
+      dualSessionRow('session-dual-neither', 'event-dual-neither', 3),
+    ];
+
+    const fakeClient = makeFakeClient({
+      event_sessions: { data: sessionRows, error: null },
+      attendance: { data: [], error: null },
+      v_student_participation: { data: [], error: null },
+      v_student_goal_projection: {
+        data: { team_id: primaryTeamId, goal_hours: 100, confirmed_hours: 0, planned_hours: 0 },
+        error: null,
+      },
+      // T187's own new read -- TWO active memberships for this one student.
+      student_teams: {
+        data: [{ team_id: primaryTeamId }, { team_id: secondTeamId }],
+        error: null,
+      },
+      events: { data: eventRows, error: null },
+      rsvps: { data: [], error: null },
+    });
+    const loadStudentData = makeLoadStudentHomeCardDataForParentHome(
+      () => fakeClient,
+      () => new Date(REF_NOW_MS),
+    );
+    const injected: LinkedStudentsResult = {
+      students: [
+        { studentId, displayName: 'Dual Team Student', teamId: primaryTeamId, isActive: true },
+      ],
+      teams: [{ id: primaryTeamId, name: 'Primary Team' }],
+    };
+
+    renderAsUser(PARENT_USER, { loadLinkedStudents: async () => injected, loadStudentData });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('Primary Team Build Night');
+    expect(container.textContent).toContain('Second Team Canned Food Drive');
+    expect(container.textContent).not.toContain('Unrelated Team Meeting');
   });
 });
 
