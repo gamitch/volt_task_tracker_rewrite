@@ -9246,6 +9246,95 @@ comment nor the loader records that dependency. **T186's documentation fix remai
 
 ---
 
+## T506 — `MarkEventCompleteDialog.tsx`'s module doc described an `updated_at` the write no longer sends
+
+**Tier: FAST** (constitution item 26), defended: **comment-only**, proven by hash — both revisions
+transpiled with `removeComments` emit byte-identical output (`sha256 1036f71ba86a09ed…`, 10095 bytes
+each). Orchestrator-implemented.
+
+**The stale claim** (`:190-192`) said a re-written row differs *"EXCEPT `attendance.recorded_by` (and
+`updated_at`), which `makeMarkDayComplete`'s upsert also names (`loaders/outreach.ts:1139-1149`)"*.
+
+**Both halves were wrong after T406.** Measured: the upsert names `updated_at` **zero** times, and the
+`:1139-1149` citation points at unrelated loader code — `upsertAttendance` is at `:1304`.
+
+**The corrected text keeps the real cost and fixes only the mechanism.** `recorded_by` *is* still named
+and still re-attributes the row, so that disclosure stands. `updated_at` still moves too — but because
+W1's `trg_attendance_touch_updated_at` (`20260803000000_simplify_attendance_audit.sql:78-83`, `before
+insert or update`) sets it on both legs, **not** because this write sends it. The new text says so and
+tells the reader to grep the symbol rather than trust a line number, since this citation has now gone
+stale once.
+
+**Filed by T406's worker, which could not fix it** — that file was Forbidden to T406 (an item 22
+boundary, not an oversight). Exactly what item 20 is for.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise** · targeted
+`MarkEventCompleteDialog.test.tsx` **26 passed, exit 0**. `.env.local` absent.
+
+---
+
+## T504 — `OutreachList.tsx`'s `respondedBy` values were `students.id`-shaped in a `profiles.id` field, in fixtures **and** in a runtime path
+
+**Tier: FAST** (constitution item 26), defended: no write path reaches a database here, no
+schema/RLS/auth, no signature change (see below — the one signature involved is deliberately left
+alone), and **no observable behaviour change**. Orchestrator-implemented.
+
+### The row understated it: there was a runtime instance, not just fixtures
+
+The row describes fixture data. Measured, there were **two** things:
+
+1. **Nine `FIXTURE_RSVPS.respondedBy` values** keyed `student-*`, in a field mirroring
+   `rsvps.responded_by` — a `profiles.id` column. Rekeyed to `profile-*`.
+2. **`withRsvpOverride`'s locally-appended row** set `respondedBy: studentId` — **runtime code**, not
+   fixture data. `OutreachList.tsx`'s own module doc already disclosed this as *"T174's exact open
+   defect… out of scope here"*.
+
+### Why the runtime fix is `null` rather than a profile id
+
+`withRsvpOverride`'s **signature is frozen by T193's packet §4** — the freeze is recorded in the
+function's own doc comment, and the reason is that `getUnansweredRsvpCount`, `computeStudentHours` and
+the goal bar all read the `rsvps` state it returns. So the caller's `viewerProfileId` (which *is* in
+scope at `:3929`, and is used correctly for the real write) **cannot be threaded in without breaking
+that freeze**.
+
+`rsvps.responded_by` is **nullable**. `null` states "this local row does not know who responded",
+which is true. `studentId` stated something false. **Choosing `null` respects a merged task's
+constraint instead of quietly overriding it.**
+
+### NO TEST SHIPPED, and the reason is measured rather than asserted
+
+**Nothing reads `respondedBy` in this file.** Verified two ways:
+
+- every occurrence is a write or a type declaration — there is no read site;
+- `getUnansweredRsvpCount` and `computeStudentHours`, the two consumers named by T193's freeze, contain
+  **zero** references to it.
+
+So the honesty check was run directly: **every `respondedBy` in the file was set to a garbage
+string**, and the suite stayed green:
+
+```
+Tests  108 passed (108)   exit=0
+```
+
+**No mutation of this field can redden anything**, so any test written for it would be a test that
+looks like a guard and is not — the T325 and T301 lesson, applied a third time. **The evidence for
+this task is the type-shape argument and that measurement**, stated as such.
+
+### What was deliberately NOT done
+
+`OutreachList.test.tsx` has its own `respondedBy: 'stu-1'` fixtures. They are the **test's** data, not
+the shipped fixtures this row is about, and touching them would widen scope silently. Left alone and
+recorded here.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise** · vitest **78 files / 1976
+tests**, exit 0 · build ✓. `.env.local` absent.
+
+---
+
 ## T196 — `EndMeetingDialog` mounted on `LiveConsole` (closes W3)
 
 **PASS. `6271ac6` + wiring-test follow-up. checker-reviewer PASS, 2 MINOR (one fixed in-branch, one
