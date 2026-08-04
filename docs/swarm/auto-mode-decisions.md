@@ -2706,3 +2706,43 @@ it.
   2026-08-03 ruling says so explicitly. They come out of the volunteer-hours **total** and its goal
   percentage — not out of the app. So the per-type breakdown columns in `v_season_kpis` must survive.
 - **Meeting participation %** is a separate figure and is untouched.
+
+---
+
+## 2026-08-04 — George's ruling: T187 and T800 run as ONE wave
+
+**Verbatim:** *"T187 + T800 as one wave"* — answering whether to fix `StudentHome`'s single-team
+narrowing alone (T187 as filed) or together with the identical defect on `ParentHome`'s child cards
+(T800, filed minutes earlier while scoping T187).
+
+**Why this was asked rather than assumed.** T187's ledger scope is explicitly *"move **this page's**
+scoping onto `student_teams` ACTIVE memberships"* — page-scoped to `StudentHome`. Widening it
+unilaterally is the scope creep this project has recorded and punished. But the two surfaces are
+**not** fixed by the same edit: T187's narrowing comes from `resolveStudentScope` returning a single
+`teamId`, while `ParentHome`'s comes from `makeLoadStudentHomeCardData(studentId, teamId)`
+(`parentHome.ts:463`) taking a single id **as a parameter from its caller**. Different paths, same
+defect. He chose to do them together, as he did for T322's second surface.
+
+**Also settled by the same ruling:** they share one new read — a student's ACTIVE `student_teams`
+memberships — so doing them apart would mean building that read, proving it, and then immediately
+re-opening the same files.
+
+### Two premise corrections recorded with this ruling
+
+**1. T187's own row mis-states its mechanism.** It says `resolveStudentScope` reads
+`students.team_id`. It does not: it reads **`v_student_goal_projection.team_id`**
+(`loaders/students.ts:409`), and that view's column is `s.team_id`
+(`dashboard_views.sql:322`) — documented at `:311-320` as *"used here ONLY for the row's display
+badge … never for any rollup math."* **T186 and T187 are therefore one mechanism seen from two
+sides**, not two independent rows: T186 is "a live route scopes off a display-only column", T187 is
+"that scoping is single-team". Whoever closes this wave should say what it leaves for T186.
+
+**2. The blast radius the kickoffs feared is much smaller than stated.** Both kickoffs flag T187 as
+HEAVY partly because widening `resolveStudentScope`'s return is *"an export another session builds
+against"* — `parentHome.ts` consumes the same factory. **Measured: `parentHome` reads nothing off
+the scope but `goalHours` and `confirmedHours` (`:482-483`). It never touches `teamId`.** So an
+**additive** field disturbs no consumer. T187 stays HEAVY — it changes what a student sees about
+their own data, and it edits W7's file — but not for that reason.
+
+**W7 remains unassigned**, so `loaders/students.ts` is taken here rather than handed over. **Say so
+in the PR**, per the same disposition the kickoffs give T200 and T204.
