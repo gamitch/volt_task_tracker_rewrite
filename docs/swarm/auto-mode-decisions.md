@@ -2746,3 +2746,48 @@ their own data, and it edits W7's file — but not for that reason.
 
 **W7 remains unassigned**, so `loaders/students.ts` is taken here rather than handed over. **Say so
 in the PR**, per the same disposition the kickoffs give T200 and T204.
+
+---
+
+## 2026-08-04 — George's ruling on T187's test edits: write the code correctly, make the tests follow
+
+**Verbatim:** *"personally, i dont like the idea of making the code have a workaround to avoid writing
+tests, that seems backwards in terms of code quality. I would prefer we write the code correctly and
+test should validate that but i don't understand the level of complexity to rewrite the tests."*
+
+**He chose option 2 and rejected option 1, and the reasoning is better than the orchestrator's.**
+The premise gate offered a `string | readonly string[]` union on the predicate and four helpers,
+which would have spared 17 direct-call assertion edits. The orchestrator recommended it on
+"fewer passing assertions touched" grounds. **That was the wrong weighting:** the union makes the
+production signature ambiguous *in order to* avoid test churn. The Non-Negotiable exists to stop a
+real bug being papered over by editing the test that caught it — **not to freeze test shape
+forever**. If the correct domain shape is "a set of ACTIVE team memberships", the tests should
+assert that.
+
+**Signature stays `teamIds: readonly string[]`.** No union. No compatibility shim.
+
+### Approval granted, and its exact boundary
+
+The owner approves updating the existing tests this necessarily breaks, in these four files:
+`students.test.ts`, `parentHome.test.ts`, `StudentHome.test.tsx`, `ParentHome.test.tsx`.
+
+**The boundary — and it is the whole point of the approval:** every edit must be **shape-only and
+behaviour-preserving**. Changing `isEventInTeamScope(event, 'team-a')` to
+`isEventInTeamScope(event, ['team-a'])` is shape. Adding `teamIds` to a fixture object is shape.
+Teaching a fake client the `student_teams` table and an `.is()` method is plumbing. **Weakening,
+deleting or loosening what a test asserts about behaviour is NOT covered by this approval** — if any
+existing test cannot be made green by a shape-only edit, that is a signal the implementation is
+wrong, and the worker must stop and report rather than adjust the assertion.
+
+**Enforcement, so this is checkable rather than trusted:** the worker enumerates every edited line
+and classifies it (call-site shape / fixture shape / expectation shape / harness plumbing), and the
+checker verifies no behavioural assertion changed. Several of these tests are proof artifacts from
+T176, T181, T183 and T184 — silently reversing one is the failure class item 19's rationale records.
+
+### Also settled by this ruling
+
+**His stated uncertainty was about cost, not principle** — *"i don't understand the level of
+complexity"*. Measured, so it is on the record: 17 call-site argument changes, ~16 fixture objects
+and 3 expectation objects gaining a field, one fake client learning a table, and three fake query
+chains gaining an `.is()` method. **No test's subject or expected behaviour changes.** The scary
+"~48 lines including assertion lines" figure is almost entirely mechanical.
