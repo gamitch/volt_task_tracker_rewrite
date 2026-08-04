@@ -2709,6 +2709,135 @@ it.
 
 ---
 
+## 2026-08-04 — George's ruling on T325: move the actions out of the slot (option A)
+
+**The question was put in plain English, with three options and a recommendation.** Verbatim answer:
+*"let's go with A option"* — move the two row actions out of Astryx's `endContent` slot into the row
+body, rather than overriding the slot's styling or writing custom CSS against the design system's
+internals.
+
+**Why the other two were declined, recorded so this is not re-argued:** (b) a targeted style override
+reaches around the design system for one spot, and is the kind of thing that breaks silently later;
+(c) custom CSS against Astryx's internals is the most fragile and hardest to understand. **(a) is the
+only option that stays within ordinary component composition** — constitution item 11's escalation
+order exists precisely to prefer it.
+
+### Verified BEFORE packeting, not after
+
+Option A was prototyped in a throwaway Playwright rig at 390×844 and measured:
+
+| | overflow | action buttons |
+|---|---|---|
+| baseline | **213px** | 5 present |
+| option A | **0px** | **5 present, labels unchanged** |
+
+**The accessible names survive intact** — *"Hide session details – Riverside Park Cleanup"* and the
+rest — which was the whole reason shortening the labels was rejected. T131/T132's
+distinguishable-accessible-name work is untouched.
+
+**Two implementation facts the prototype surfaced, both non-obvious:**
+
+1. **`rowActions` must be declared ABOVE `description`.** The first attempt hit
+   `Cannot access 'rowActions' before initialization` at runtime — `description` is built earlier in
+   the component, so the actions block has to be hoisted above it.
+2. **The whole jsdom suite stays green (108/108).** No existing test reddens. That is convenient and
+   also a warning: **jsdom cannot see this fix, because it does no layout.** The evidence is the
+   browser measurement, not the suite, and any regression here will be invisible to CI.
+
+### One process note worth keeping
+
+The first prototype reported **overflow 0 with the buttons GONE** — it "fixed" the overflow by
+deleting the thing that overflowed. It was caught only because the measurement also asserted the
+buttons were still present. **A layout measurement that checks only the number is not evidence**; it
+must also assert that what should be on screen still is.
+## 2026-08-04 — George's ruling on T704: DROP the Meetings term from the KPI breakdown
+
+**Verbatim:** *"for T704, drop the meetings term from the breakdown"* — choosing option (a) of the
+three the row offered: (a) drop the term, (b) compute `meeting_hours` honestly via a CTE without the
+flag join, (c) confirm a permanently-zero figure is acceptable.
+
+**Why the row existed.** `v_season_kpis.meeting_hours` is the filtered sum of a CTE that joins
+`and e.counts_volunteer_hours`, and meetings are created with that flag hardcoded `false`
+(`loaders/meetings.ts:690`) with **no app path anywhere that edits it** — the T322 premise gate
+checked. So the figure is **structurally frozen at `0.0`**, and `KpiStrip`'s breakdown rendered it
+beside two live numbers, presenting a dead figure as a live one. Found by that gate as MINOR-2 and
+filed rather than folded into T322.
+
+**This resolves a real tension in the owner's own earlier ruling.** The 2026-08-03 T322 ruling said
+meeting and competition hours are *"still tracked and still displayed as their own figure."*
+Competition genuinely is. **Meeting could not be** — the SQL cannot produce a non-zero value. Rather
+than quietly leaving the contradiction, it was put to him; he resolved it by dropping the display.
+
+**Consistent with the same ruling's other half:** *"Meeting participation stays its own separate
+figure."* Meeting attendance is measured as a **participation percentage**, not as volunteer hours.
+Removing an hours term that was always zero does not remove any meeting measurement — it removes a
+misleading one.
+
+**Scope — deliberately minimal.** Only `formatHoursBreakdown`'s output changes.
+**`meetingHours` stays** on `KpiStripData`, in `loaders/kpi.ts`, and in `v_season_kpis`: still
+tracked, just not displayed here. **No migration**, no view change, no loader change.
+
+**Tier: FAST** (item 26) — no write path, no schema/RLS/auth, no cross-module signature change,
+well under ~20 lines, and a named mutation exists. **Verification was NOT reduced:** the mutation
+(putting the term back) was run and reported red on both intended assertions, and all gates ran.
+Implemented directly by the orchestrator, per FAST's own definition.
+
+**Test authorization:** two passing assertions (`KpiStrip.test.tsx:306`, `:362`) asserted the
+`Meetings X.Xh` string and had to change. The Non-Negotiables require the owner's explicit approval
+for that; **this ruling is it**, and it covers those two and nothing else. Note `:362`'s fixture sets
+`meetingHours: 2.0` — a value the production view **cannot generate**. It is kept on the fixture (to
+prove the field is still carried) and deliberately not rendered.
+
+---
+
+## 2026-08-03 — George lifts the T406 hold and picks the approach: NARROW THE WRITE
+
+**Two decisions, both his.** First he lifted the hold he set earlier that day (*"i'll wait on 406"*).
+Then, asked which of the two shapes to build, he chose: *"what's the simplest approach, narrow the
+write so it only touches the columns the dialog actually means to set?"* — and on confirmation,
+*"yes go ahead with T406"*.
+
+**He is right that it is the simpler one, and the reasoning is worth keeping** because it is not
+merely "smaller diff":
+
+- **Re-reading at submit ADDS things** — another round trip, a new failure mode (a re-read that fails
+  exactly when the coach hits Confirm), more state. And it only *shrinks* the race window; something
+  can still land between the re-read and the write.
+- **Narrowing REMOVES things.** You cannot overwrite a column you never send. Preservation stops being
+  something the code must remember to do and becomes something it cannot fail to do.
+- **It also retires work T305 had to add.** T305 made the dialog carry `hoursOverride`, `checkInAt`,
+  `checkOutAt` and `method` through the write *specifically to stop it nulling them*. Narrowing makes
+  the carrying unnecessary for the timestamp columns.
+
+### The sequencing hazard this row carried is RESOLVED — verified, not assumed
+
+The T406 ledger row warned that narrowing before W1's T405 trigger landed *"risks narrowing around a
+column whose behaviour is changing."* **The trigger has landed**:
+`trg_attendance_touch_updated_at`, `before insert or update`, setting `new.updated_at := now()`
+(`20260803000000_simplify_attendance_audit.sql:78-83`, on `main`). So `updated_at` is now DB-managed
+and the dialog's explicit `updated_at: new Date().toISOString()` is already dead weight the trigger
+overwrites. **Checked on `main`, the branch this will act on** — the T401 lesson.
+
+### What the schema permits, which decides the whole design
+
+| Column | Constraint | Droppable |
+|---|---|---|
+| `check_in_at`, `check_out_at` | nullable, no default | **YES** — INSERT → `NULL` (correct for a coach-marked student who never scanned); UPDATE → preserved |
+| `updated_at` | `not null default now()` | **YES** — the T405 trigger now sets it on both legs |
+| `method` | **`not null`, NO default** | **NO** — dropping it makes every INSERT violate the constraint |
+| `status`, `recorded_by`, `hours_override` | — | **NO** — these are the coach's actual gesture |
+
+### The residual this leaves, stated now so it is not discovered later
+
+Because `method` cannot be dropped, **a concurrent QR scan's `method: 'qr'` can still be clobbered**
+by the dialog's stale snapshot, even after this fix. The student's real `check_in_at` survives — which
+is the harm the owner described — but the *provenance* that they scanned rather than being marked by a
+coach does not.
+
+**This is a genuine partial fix and the packet must say so rather than imply the TOCTOU is closed.**
+Closing the `method` half needs either a schema default (a migration on a table W1 owns) or an
+insert/update split (which re-introduces the multi-step shape T327 exists to avoid). Neither is
+proportionate to a ~20-student team for a provenance flag; **file it, do not build it.**
 ## 2026-08-04 — George's ruling: T187 and T800 run as ONE wave
 
 **Verbatim:** *"T187 + T800 as one wave"* — answering whether to fix `StudentHome`'s single-team

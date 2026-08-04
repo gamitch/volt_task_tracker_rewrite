@@ -13,6 +13,65 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
 
+## UPDATE — 2026-08-04 (LATEST): W4+W5 wave — **T205, T702, T322 merged. TWO MIGRATIONS AWAIT THE OWNER'S CUTOVER.**
+
+**Three tasks shipped, one closed unshipped, five owner rulings taken.** Gates at the last merge:
+`tsc` **0** · `vite build` **0** · prettier clean · eslint **0 errors / 364 warnings** ·
+vitest **78 files / 1951 tests, exit 0**. Rulings are in `auto-mode-decisions.md` under the
+**"W4+W5 auto-mode window"** and the four dated entries after it.
+
+### ⚠️ TWO MIGRATIONS ARE IN THE REPO AND NOT IN PRODUCTION
+
+Constitution item 16 reserves hosted-Supabase cutover for the owner. **Neither of these is live:**
+
+- `20260803000001_revoke_anon_leaderboard_students.sql` (**T205**)
+- `20260804000000_volunteer_hours_outreach_only.sql` (**T322**)
+
+Until they are applied, the hosted project keeps the old grants and the old view definitions.
+
+### The pattern worth carrying forward: three for three, the stated defect was wrong
+
+**Every one of these rows described its own bug incorrectly, and each was caught before code
+shipped** — by a premise gate that BUILT the prescription, or by a worker that refused to reconcile
+a number silently.
+
+- **T205** — the owner's own ruled one-liner did not work. `revoke select … from anon` closes the
+  read and leaves an unauthenticated `DELETE` open, because `v_leaderboard_students` is the schema's
+  only auto-updatable view and runs as its RLS-bypassing owner. Measured: `anon` emptied `students`
+  with the ruled fix applied. Shipped `revoke all` plus a write revoke for `authenticated`.
+- **T500** — the double-count was real, but the broader framing was **spec-compliant deliberate
+  behaviour** (RPT-03 is unqualified; three independent records of the decision). Then the T702
+  ruling deleted the target outright. Closed unshipped; the worker was stopped mid-run.
+- **T322** — the ledger claimed `v_season_kpis` sums meeting hours into the total. **It never did**
+  — the CTE already filtered `counts_volunteer_hours`, and meetings are created with that flag
+  hardcoded false. The live exposure was **competition**, whose flag is admin-editable and sat one
+  toggle from counting.
+
+**If you are packeting a W4 or W5 row, verify its stated mechanism before believing it.**
+
+### Owner rulings taken 2026-08-03/04 — all in `auto-mode-decisions.md`, cite the file
+
+- **T322 part 2** — competition hours do NOT count. Volunteer hours = `type = 'outreach'` ONLY.
+- **T702** — drop the adult-volunteer season totals from the Hours report; **RPT-03 amended in the
+  PRD** (the owner is the only authority who can do that, item 1).
+- **T198** — CoachHome goes **season-wide**; no per-coach team concept. This also released the
+  CoachHome data bundle parked since T173.
+- **T156** — **parked**, on concurrency risk not merit. Unpark conditions are on the row.
+- **T187 scope** — the volunteer-hours fix extends to `v_student_hours`, not just the staff card.
+
+### New rows filed this wave
+
+**T700** (auto-updatable-view guard — measured, only `v_leaderboard_students` qualifies) ·
+**T701** (`tests/rls/run.sh` no longer runs on bare Postgres and **no CI job invokes it**) ·
+**T703** (a fixture that advertises a proof it cannot deliver) · **T704** (`meeting_hours` is
+structurally frozen at `0.0` yet the KPI card renders it — **needs an owner ruling**).
+
+### Still open for the owner
+
+**T704** (above) and the two cutovers. **T198 and T156 are resolved and need nothing further.**
+
+---
+
 ## UPDATE — 2026-08-04 (LATEST): W3-A wave COMPLETE (T197, T160, T162). **Four "0 tests" ledger rows were measured wrong.**
 
 **All three W3-A rows shipped.** Gates: `tsc` **0** · eslint **0 errors** · prettier clean ·

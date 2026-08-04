@@ -1266,7 +1266,7 @@ describe('<MarkDayCompleteDialog /> C9 -- end-to-end uncheck through the dialog 
 // ---------------------------------------------------------------------------
 
 describe('markDayComplete (T101 real onMarkComplete default)', () => {
-  it('updates event_sessions (status=completed, people_reached) and upserts the attendance rows', async () => {
+  it('T406 C1/C4: updates event_sessions (status=completed, people_reached) and upserts the attendance rows with the NARROWED DB payload -- exact shape, not objectContaining, so re-adding check_in_at/check_out_at/updated_at (C1) or dropping status/hours_override/method/recorded_by (C4) both fail this assertion', async () => {
     const sessionUpdateEqSpy = vi.fn().mockResolvedValue({ data: null, error: null });
     const sessionUpdateSpy = vi.fn(() => ({ eq: sessionUpdateEqSpy }));
     const attendanceUpsertSpy = vi.fn().mockResolvedValue({ data: null, error: null });
@@ -1301,24 +1301,93 @@ describe('markDayComplete (T101 real onMarkComplete default)', () => {
 
     expect(sessionUpdateSpy).toHaveBeenCalledWith({ status: 'completed', people_reached: 42 });
     expect(sessionUpdateEqSpy).toHaveBeenCalledWith('id', 'session-1');
+    // EXACT match (not `objectContaining`): C1 requires `check_in_at`/
+    // `check_out_at`/`updated_at` to be genuinely ABSENT from the sent
+    // object, not merely present-and-ignored -- an `objectContaining`
+    // assertion cannot see an extra key the fake spy still received, so it
+    // would pass even if this task's narrowing were reverted for one column
+    // but not read here. `toEqual` also gives C4 for free: dropping
+    // `status`/`hours_override`/`method`/`recorded_by` leaves the sent
+    // object missing a key this exact shape requires.
     expect(attendanceUpsertSpy).toHaveBeenCalledWith(
       [
-        expect.objectContaining({
+        {
           session_id: 'session-1',
           student_id: 'student-1',
           status: 'present',
-          check_in_at: null,
-          check_out_at: null,
           hours_override: null,
           method: 'coach',
           recorded_by: 'profile-coach-1',
-        }),
+        },
       ],
       { onConflict: 'session_id,student_id' },
     );
     // No adult-volunteer delta -- the additive events read-modify-write is
     // skipped entirely (module doc #4(c)).
     expect(fromSpy).not.toHaveBeenCalledWith('events');
+  });
+
+  it("T406 C5: an absence row (T309's buildAttendanceAbsenceRows, module doc #10 -- status 'absent' with a preserved checkInAt/checkOutAt/hoursOverride/method) still reaches the narrowed upsert with status 'absent' and the same narrowed column set -- reverting buildAttendanceAbsenceRows' own contribution (e.g. back to producing no rows, or a non-'absent' status) turns this red", async () => {
+    const sessionUpdateEqSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+    const sessionUpdateSpy = vi.fn(() => ({ eq: sessionUpdateEqSpy }));
+    const attendanceUpsertSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+
+    const fromSpy = vi.fn((table: string) => {
+      if (table === 'event_sessions') return { update: sessionUpdateSpy };
+      if (table === 'attendance') return { upsert: attendanceUpsertSpy };
+      throw new Error(`unexpected table: ${table}`);
+    });
+    const client = { from: fromSpy } as unknown as SupabaseClient;
+
+    // Real production output, not a hand-rolled fixture -- exercises T309's
+    // actual absence-row builder so a regression IN that builder (the named
+    // mutation) is what turns this test red, not a copy of its shape.
+    const absenceRows = buildAttendanceAbsenceRows(
+      'session-1',
+      [{ id: 'student-absent', name: 'A. Bsent', teamId: 'team-1' }],
+      [],
+      'profile-coach-1',
+      {
+        'student-absent': {
+          id: 'attendance-row-1',
+          sessionId: 'session-1',
+          studentId: 'student-absent',
+          status: 'present',
+          checkInAt: '2026-08-04T14:00:00.000Z',
+          checkOutAt: '2026-08-04T15:00:00.000Z',
+          hoursOverride: 2.5,
+          method: 'qr',
+          recordedBy: 'coach-someone-else',
+          updatedAt: '2026-08-04T14:00:00.000Z',
+          createdAt: '2026-08-04T14:00:00.000Z',
+        },
+      },
+    );
+    expect(absenceRows).toHaveLength(1);
+
+    const markComplete = makeMarkDayComplete(() => client);
+    await markComplete({
+      sessionId: 'session-1',
+      peopleReached: 0,
+      attendance: absenceRows,
+      adultVolunteersCountThisSession: 0,
+      adultVolunteerHoursThisSession: 0,
+      recordedBy: 'profile-coach-1',
+    });
+
+    expect(attendanceUpsertSpy).toHaveBeenCalledWith(
+      [
+        {
+          session_id: 'session-1',
+          student_id: 'student-absent',
+          status: 'absent',
+          hours_override: 2.5,
+          method: 'qr',
+          recorded_by: 'profile-coach-1',
+        },
+      ],
+      { onConflict: 'session_id,student_id' },
+    );
   });
 
   it('performs the disclosed non-atomic additive events adult-volunteer update only when a delta is nonzero', async () => {

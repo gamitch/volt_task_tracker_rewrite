@@ -2865,59 +2865,85 @@ describe('loadOutreachData (T101 real load)', () => {
   // can.
   it('issues the teams query in the SAME batch as students/seasons (zero-dependency), never serialized after the session-dependent batch', async () => {
     const callOrder: string[] = [];
+    // T152 -- the concurrency barrier. `callOrder` records only POSITION, and
+    // every position assertion below is set-equal under arrangements that are
+    // genuinely serial (measured -- see the T152 verification-log entry:
+    // hoisting `loadTeams()` to a serial `await` ahead of the batch, and
+    // serializing it BETWEEN the two batches, both left this test green before
+    // this barrier existed). What distinguishes parallel from serial is whether
+    // anything RESOLVED in between: `Promise.all([a, b, c, d])` evaluates its
+    // array synchronously, so no microtask can run between the first and last
+    // call. Every mocked resolution therefore bumps `resolutionCount` when it
+    // DELIVERS, and each `from()` records the count it saw. Four
+    // zero-dependency queries in one batch must all record the SAME count; any
+    // `await` between them drains microtasks and moves it.
+    let resolutionCount = 0;
+    const issuedAt = new Map<string, number>();
+    /** Resolves to `value`, counting the delivery. A fresh promise per call. */
+    const settle = <T,>(value: T): Promise<T> =>
+      Promise.resolve(value).then((resolved) => {
+        resolutionCount += 1;
+        return resolved;
+      });
     // One real event + one real session -- needed so `eventIds`/`sessionIds`
     // are both non-empty, which is what makes `event_sessions` (batch 1) and
     // `rsvps`/`attendance` (batch 2, session-dependent) actually get issued
     // at all; an empty result short-circuits those calls via `Promise.resolve([])`
     // instead (module doc on `makeLoadOutreachData`), which would make this
     // test's own ordering proof vacuous.
-    const eventsEqSpy = vi.fn().mockResolvedValue({
-      data: [
-        {
-          id: 'event-1',
-          season_id: 'season-1',
-          type: 'outreach',
-          title: 'T',
-          description: '',
-          location_name: '',
-          address: '',
-          team_ids: null,
-          counts_participation: false,
-          counts_volunteer_hours: true,
-          adult_volunteers_count: 0,
-          adult_volunteer_hours: 0,
-          created_by: null,
-        },
-      ],
-      error: null,
-    });
-    const sessionsInSpy = vi.fn().mockResolvedValue({
-      data: [
-        {
-          id: 'session-1',
-          event_id: 'event-1',
-          session_date: '2026-08-01',
-          starts_at: '2026-08-01T14:00:00.000Z',
-          ends_at: '2026-08-01T16:00:00.000Z',
-          status: 'scheduled',
-          people_reached: null,
-          notes: '',
-        },
-      ],
-      error: null,
-    });
-    const rsvpsInSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const eventsEqSpy = vi.fn(() =>
+      settle({
+        data: [
+          {
+            id: 'event-1',
+            season_id: 'season-1',
+            type: 'outreach',
+            title: 'T',
+            description: '',
+            location_name: '',
+            address: '',
+            team_ids: null,
+            counts_participation: false,
+            counts_volunteer_hours: true,
+            adult_volunteers_count: 0,
+            adult_volunteer_hours: 0,
+            created_by: null,
+          },
+        ],
+        error: null,
+      }),
+    );
+    const sessionsInSpy = vi.fn(() =>
+      settle({
+        data: [
+          {
+            id: 'session-1',
+            event_id: 'event-1',
+            session_date: '2026-08-01',
+            starts_at: '2026-08-01T14:00:00.000Z',
+            ends_at: '2026-08-01T16:00:00.000Z',
+            status: 'scheduled',
+            people_reached: null,
+            notes: '',
+          },
+        ],
+        error: null,
+      }),
+    );
+    const rsvpsInSpy = vi.fn(() => settle({ data: [], error: null }));
     const attendanceInSpy = vi.fn(() => ({
-      order: vi.fn(() => ({ range: vi.fn().mockResolvedValue({ data: [], error: null }) })),
+      order: vi.fn(() => ({ range: vi.fn(() => settle({ data: [], error: null })) })),
     }));
-    const studentsOrderSpy = vi.fn().mockResolvedValue({ data: [], error: null });
-    const teamsOrderSpy = vi.fn().mockResolvedValue({ data: [], error: null });
-    const seasonMaybeSingleSpy = vi
-      .fn()
-      .mockResolvedValue({ data: { id: 'season-1', default_goal_hours: 0 }, error: null });
+    const studentsOrderSpy = vi.fn(() => settle({ data: [], error: null }));
+    const teamsOrderSpy = vi.fn(() => settle({ data: [], error: null }));
+    const seasonMaybeSingleSpy = vi.fn(() =>
+      settle({ data: { id: 'season-1', default_goal_hours: 0 }, error: null }),
+    );
 
     const fromSpy = vi.fn((table: string) => {
       callOrder.push(table);
+      // T152 -- deliveries completed when this query was issued.
+      if (!issuedAt.has(table)) issuedAt.set(table, resolutionCount);
       if (table === 'events') return { select: vi.fn(() => ({ eq: eventsEqSpy })) };
       if (table === 'event_sessions') return { select: vi.fn(() => ({ in: sessionsInSpy })) };
       if (table === 'rsvps') return { select: vi.fn(() => ({ in: rsvpsInSpy })) };
@@ -2957,6 +2983,28 @@ describe('loadOutreachData (T101 real load)', () => {
     expect(callOrder.slice(1, 5).sort()).toEqual(
       ['event_sessions', 'seasons', 'students', 'teams'].sort(),
     );
+
+    // T152 -- the assertion the position checks above cannot make. All four
+    // zero-dependency queries must have been issued with the SAME number of
+    // deliveries behind them, i.e. nothing resolved in between. Serializing any
+    // one of them -- ahead of the batch, or between the two batches --
+    // introduces an `await`, which drains microtasks and moves the count.
+    // Asserted as one object so a failure names the offender and its count.
+    const batchIssueCount = issuedAt.get('event_sessions');
+    expect({
+      event_sessions: issuedAt.get('event_sessions'),
+      students: issuedAt.get('students'),
+      seasons: issuedAt.get('seasons'),
+      teams: issuedAt.get('teams'),
+    }).toEqual({
+      event_sessions: batchIssueCount,
+      students: batchIssueCount,
+      seasons: batchIssueCount,
+      teams: batchIssueCount,
+    });
+    // Not the trivial all-zero case: `events` is awaited on its own first, so
+    // the batch is genuinely downstream of at least one completed delivery.
+    expect(batchIssueCount).toBeGreaterThan(0);
   });
 
   it('falls back to the season default_goal_hours when a student has no goal_hours_override', async () => {

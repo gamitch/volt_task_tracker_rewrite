@@ -348,20 +348,26 @@
  *     team) -- a student hidden by a team-scope change is dropped from the
  *     submitted set rather than silently carried through unioned with
  *     whatever is on screen.
- *   - `respondedBy`: `currentUserProfileId` (new injectable prop, same
+ *   - `respondedBy`: `currentUserProfileId` (injectable prop, same
  *     auth-seam pattern `RsvpControl.tsx`'s `currentUserProfileId`/
  *     `MarkDayCompleteDialog.tsx`'s `currentUserProfileId` already
- *     established), defaulting to `PLACEHOLDER_CURRENT_COACH_PROFILE_ID`
- *     below -- deliberately the SAME literal value
- *     `MarkDayCompleteDialog.tsx`'s own `PLACEHOLDER_CURRENT_COACH_PROFILE_ID`
- *     uses (`'profile-placeholder-current-coach'`), since both dialogs are
- *     coach-only surfaces attributing a write to the identical real-world
- *     actor (unlike `RsvpControl.tsx`'s own placeholder, which is a
- *     student/parent viewer and deliberately uses a DIFFERENT literal per
- *     that file's own module doc #7). Declared locally in this file (not
- *     imported from `MarkDayCompleteDialog.tsx`) -- same "no cross-dialog
- *     import" convention every sibling dialog in this directory already
- *     follows.
+ *     established). T300 UPDATE: `currentUserProfileId` is now a REQUIRED
+ *     prop, not optional-with-a-fixture-default. Before this task it
+ *     defaulted to this file's own locally-declared
+ *     `PLACEHOLDER_CURRENT_COACH_PROFILE_ID` (`'profile-placeholder-current-
+ *     coach'`, deliberately the same literal `MarkDayCompleteDialog.tsx`'s
+ *     own now-deleted (T179) placeholder of the same name used, since both
+ *     dialogs are coach-only surfaces attributing a write to the identical
+ *     real-world actor). A call site that omitted `currentUserProfileId`
+ *     compiled cleanly and silently attributed `respondedBy` to that
+ *     non-uuid placeholder rather than the real signed-in coach's
+ *     `profiles.id` -- latent, not live-firing (this dialog's only triggers
+ *     require a signed-in staff user today), but a bare Postgres `22P02
+ *     invalid input syntax for type uuid` if it ever had reached the
+ *     database (see T156). Deleting the default and the
+ *     `PLACEHOLDER_CURRENT_COACH_PROFILE_ID` export turns that omission into
+ *     a `tsc` error instead, mirroring T179's identical fix on
+ *     `MarkDayCompleteDialog.tsx`'s own placeholder of the same name.
  *   Both fields are OPTIONAL on `SaveOutreachEventPayload` (never
  *   `undefined` when the payload actually comes from THIS component's own
  *   `handleSubmit`, which always populates them) specifically so pre-
@@ -611,12 +617,13 @@ const DEFAULT_STUDENTS: readonly OutreachRosterStudent[] = [
   { id: 'student-titans-2', name: 'Casey Nguyen', teamId: 'team-titans', isActive: true },
 ];
 
-/** T118 (UXP-02) module doc 11d -- same literal value
- * `MarkDayCompleteDialog.tsx`'s own `PLACEHOLDER_CURRENT_COACH_PROFILE_ID`
- * uses, deliberately (both are coach-only surfaces attributing a write to
- * the same real-world actor); declared locally, not imported (module doc
- * 11d). */
-export const PLACEHOLDER_CURRENT_COACH_PROFILE_ID = 'profile-placeholder-current-coach';
+// T300 UPDATE (module doc 11d has the full writeup): this file's own
+// `PLACEHOLDER_CURRENT_COACH_PROFILE_ID` export -- the same literal
+// `MarkDayCompleteDialog.tsx`'s own now-deleted (T179) placeholder of the
+// same name used -- is deleted, along with `currentUserProfileId`'s default
+// to it (below). A call site omitting `currentUserProfileId` now fails
+// `tsc` instead of silently substituting this non-uuid placeholder into a
+// real `profiles.id` position.
 
 // Module doc #6 -- BEH-07 smart default, daytime (distinct from
 // ScheduleMeetingsDialog's evening default), stand-in for "creator's
@@ -953,9 +960,11 @@ export interface OutreachEventDialogProps {
   /** T118 (UXP-02) module doc 11e -- defaults to `DEFAULT_STUDENTS`
    * (fixture, module-level doc). */
   students?: readonly OutreachRosterStudent[];
-  /** T118 (UXP-02) module doc 11d -- defaults to
-   * `PLACEHOLDER_CURRENT_COACH_PROFILE_ID`. */
-  currentUserProfileId?: string;
+  /** T300 UPDATE (module doc 11d has the full writeup) -- REQUIRED, no
+   * longer defaults to this file's own now-deleted
+   * `PLACEHOLDER_CURRENT_COACH_PROFILE_ID` fixture. The acting coach's real
+   * `profiles.id`; attributed to `respondedBy` on save. */
+  currentUserProfileId: string;
   /** Defaults to `defaultOnSaveEvent` (module doc #9). */
   onSaveEvent?: OnSaveOutreachEventFn;
   /** Present => "edit" mode, pre-filled from this existing event + its
@@ -968,7 +977,7 @@ export function OutreachEventDialog({
   onOpenChange,
   teams,
   students = DEFAULT_STUDENTS,
-  currentUserProfileId = PLACEHOLDER_CURRENT_COACH_PROFILE_ID,
+  currentUserProfileId,
   onSaveEvent = defaultOnSaveEvent,
   initialEvent,
 }: OutreachEventDialogProps): ReactNode {
