@@ -8721,3 +8721,61 @@ installed **globally** (`NODE_PATH=/opt/node22/lib/node_modules`), Chromium is a
 `NODE_PATH`), and the rig must inject `defaultLoadOutreachData` **and** stub
 `resolveStudentId: 'student-lena-osei'` — after T190 the old placeholder resolves to a viewer with no
 fixture data, so a rig using it measures an empty page.
+
+---
+
+## T152 — T147's parallel-load guard now discriminates in both directions, and the blind spot was wider than filed
+
+**Tier: FAST** (constitution item 26), defended: **test-only**. No write path, no schema/RLS/auth, no
+signature change, one file. The orchestrator implemented it directly; no worker, no gate. Named
+mutations exist and all of them were run.
+
+### What was wrong
+
+T147's guard proves batching by **position**: `expect(callOrder.slice(1, 5).sort()).toEqual([...])`.
+Sorting throws away exactly the information the claim needs — the slice is set-equal under
+arrangements that are genuinely serial.
+
+### The blind spot is wider than the ledger row said — measured, not argued
+
+The row claimed one missed direction (teams hoisted ahead of the batch) and that serializing teams
+*after* the batch is correctly caught. Running all three:
+
+| Mutation | Before T152 | After T152 |
+|---|---|---|
+| **A** — `loadTeams()` hoisted to a serial `await` **before** the batch | **PASSED** (filed) | **RED** |
+| **B** — `loadTeams()` serialized **between** the two batches | **PASSED** — *not filed; a second, unknown blind spot* | **RED** |
+| **C** — `loadTeams()` serialized after `rsvps`/`attendance` | RED (`expected 4 to be greater than 6`) | RED |
+| **D** — `loadStudents()` serialized ahead | **never guarded at all** — the test only ever watched `teams` | **RED** |
+
+**B is a genuine extra serial round trip** and slipped through because moving `teams` to just after
+the first batch keeps it inside slice positions 1-4. **D** was never in scope of the original
+assertions, which name only `teams`/`rsvps`/`attendance`.
+
+### The fix
+
+Position cannot express the claim, so the guard now asserts **what resolved in between**.
+`Promise.all([a, b, c, d])` evaluates its array **synchronously**, so no microtask can run between the
+first and last call. Every mocked resolution bumps a `resolutionCount` when it **delivers**, each
+`from()` records the count it saw, and the four zero-dependency queries must record the **same** count.
+Any `await` between them drains microtasks and moves it.
+
+The original position assertions are **kept unchanged** — they are not wrong, only weak, and they are
+T147's shipped evidence. The new assertion is additive. A final
+`expect(batchIssueCount).toBeGreaterThan(0)` rules out the trivial all-zero case, so the equality
+cannot pass by nothing having resolved at all.
+
+No timers and no barrier-with-deadlock: a serialized implementation fails on a value comparison that
+names the offending query, not by timing out.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise** · vitest **78 files / 1951
+tests**, targeted `OutreachList.test.tsx` **108 passed, exit 0** · build ✓. `.env.local` absent.
+
+### One process note
+
+The first attempt at this edit used unbounded string replacement and matched a **different** test's
+identical mock block, producing a syntax error. Redone bounded to the target `it()` block's line
+range. Same failure mode as T306's 33-call-site over-replacement; the lesson did not stick the first
+time.
