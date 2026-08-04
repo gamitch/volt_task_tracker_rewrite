@@ -2731,8 +2731,8 @@ re-opening the same files.
 
 **1. T187's own row mis-states its mechanism.** It says `resolveStudentScope` reads
 `students.team_id`. It does not: it reads **`v_student_goal_projection.team_id`**
-(`loaders/students.ts:409`), and that view's column is `s.team_id`
-(`dashboard_views.sql:322`) — documented at `:311-320` as *"used here ONLY for the row's display
+(`loaders/students.ts:407-408`), and that view's column is `s.team_id`
+(`dashboard_views.sql:326`) — documented at `:311-320` as *"used here ONLY for the row's display
 badge … never for any rollup math."* **T186 and T187 are therefore one mechanism seen from two
 sides**, not two independent rows: T186 is "a live route scopes off a display-only column", T187 is
 "that scoping is single-team". Whoever closes this wave should say what it leaves for T186.
