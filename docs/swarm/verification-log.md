@@ -8325,3 +8325,69 @@ the same defect, no row filed. Recorded so nobody "fixes" it later by symmetry.
 
 **Orchestrator-authored and not independently reviewed.** A rename verified by a type-checker and an
 unchanged suite is about as low-risk as a change gets, but no second pair of eyes saw it.
+
+---
+
+## T162 — re-scoped to the measured gap, closed test-only (W3-A auto-mode wave)
+
+**PASS. `meetings.ts` unmodified. No new test file. Orchestrator-authored, not independently
+reviewed — the three mutation proofs below are the evidence.**
+
+### The row was mostly phantom work, and that is the headline
+
+T162 said *"`loaders/meetings.ts` has 0 tests across 726 lines."* **False.**
+`MeetingsList.test.tsx:1803-2272` already unit-tests the module in six describes / 17 tests. The
+claim came from an external audit that counted **files named `meetings.test.ts`** rather than tests
+*of* the module — the same error on T161 and T163 (D5).
+
+**The premise gate caught it at round 2.** Item 19a capped the loop and the row was **parked for the
+owner** rather than gated a third time or overridden.
+
+**Owner ruling, verbatim: _"we should not be duplicating existing test"_.** So no
+`meetings.test.ts` was created, the 17 existing tests were neither duplicated nor moved, and all
+work went into the file that already had them — which also avoided creating a **third** maintenance
+site for the MET-01 arithmetic (**T600**).
+
+### What was actually missing — three gaps, ~35 lines
+
+Each was measured before being fixed, and each is proven by its own mutation replayed against the
+final tree.
+
+| # | Gap | Mutation | Result |
+|---|---|---|---|
+| a | `Math.max(expectedCt - excusedCt, 1)` floor (`meetings.ts:477`) had **no test** — deleting it left all 1946 tests green | drop the floor | `expected NaN to be +0` — **exit 1** |
+| b | `MeetingsList.test.tsx:2017` used `toEqual(row)`, which **survives** deleting the single-row short-circuit | drop the `rows.length === 1` branch (`:469`) | `expected {…} to be {…} // Object.is equality` — **exit 1** |
+| c | `:2166` asserted `orderSpy` was **called**, not that sorting **worked** | drop `.order('created_at', {ascending:true})` (`:512`) | `expected 'student-later' to be 'student-earliest'` — **exit 1** |
+
+**(a)** Without the floor, a student whose every expected session was excused is shown `NaN` instead
+of a participation figure. The fixture is **view-possible by construction** — if every expected
+session was excused then none can have been attended, so `present_ct` must be 0, which is why the
+mutation yields `NaN` and not `Infinity`. Mirrors the same guard's coverage on the twin function at
+`checkin.test.ts:86-93`.
+
+**(b)** The failure output prints the two objects as **identical** — which is precisely why the old
+`toEqual` proved nothing. Reference identity is the only assertion that can distinguish "returned
+the same object" from "recomputed something that looks the same".
+
+**(c)** The old spy **ignored its own arguments**, so the fixture resolved the same row with or
+without the ordering. The replacement fake **sorts physically** and only when `.order()` is called,
+with rows seeded in reverse `created_at` order — so an unsorted read returns the later-linked child
+and the assertion fails **on a real value, not a spy call**. This guards Trap #4's
+earliest-linked-child rule, where a parent with two children silently resolves to the wrong one.
+**The old call-shape test was kept, not replaced** — it is insufficient, not wrong.
+
+### Gates
+
+`tsc` **0** · eslint **0 errors** / 364 warnings · prettier **clean** · vitest **78 files /
+1948 tests, exit 0** (+2 net: two new tests; the third change was an assertion swap).
+
+### Honest limits
+
+- **Not independently reviewed.** Same disclosure as T160 (D6). The mutation evidence is the
+  substitute, and it is weaker than a second reader.
+- **Coverage beyond these three gaps was measured structurally, not by line coverage** (D5) — no
+  coverage tool is installed and a new dependency is an escalation class. A referenced export may
+  still be thinly tested, so "11/11 exports referenced" is a lower bound on coverage, not a claim of
+  completeness.
+- **Packet v2 was never dispatched.** It is retained at `active/T162-worker-packet.md` as the record
+  of what this row was believed to require, and of the two BLOCKERs the gate found in it.
