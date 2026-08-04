@@ -542,6 +542,239 @@ describe('makeMarkDayComplete (T327) -- completion write ordering', () => {
 });
 
 // ---------------------------------------------------------------------------
+// T406: `upsertAttendance`'s NARROWED `attendance` DB mapping (`outreach.ts`,
+// grep `upsertAttendance` -- do not trust a line number) -- closes a real
+// TOCTOU: `MarkDayCompleteDialog.tsx` loads attendance ONCE on open and
+// `handleSubmit` writes that same snapshot later, so a row written in
+// between (a student scanning the QR kiosk while the dialog is still open)
+// was silently overwritten by the stale snapshot. `docs/swarm/active/
+// T406-gate-report.md` proved by EXECUTION, against a real PostgreSQL 16.13
+// loaded with this repo's actual migrations, that PostgREST leaves an unsent
+// column untouched on the conflict path (E1/E7) and reproduced the defect
+// itself (E4: `14:07:33+00` -> `NULL`) and the batch-uniformity trap (E5).
+//
+// C2 (`docs/swarm/active/T406-worker-packet.md` §8) is the criterion this
+// task exists for, and it is explicitly NOT a shape/call-args assertion:
+// "re-add check_in_at to the payload" also turns a plain payload-keys check
+// red, so a shape assertion cannot discriminate the outcome this fix
+// actually has to guarantee from a fix that merely changed which keys get
+// sent (the gate's MAJOR-2, `T406-gate-report.md`). The suite below drives
+// the REAL `makeMarkDayComplete` against a STATEFUL fake `attendance` table
+// that models the union-of-keys/null-fill semantics that report's E1/E5
+// proved (`@supabase/postgrest-js` v2.110.7,
+// `PostgrestQueryBuilder.ts:1403-1409`: a batch upsert's `columns=` is the
+// UNION of `Object.keys` across every row in the array; a row missing a key
+// IN that union is written NULL for it -- `defaultToNull` is the client's
+// default, no `Prefer: missing=default` is ever sent by this codebase). A
+// column never present in the union for ANY row in the batch is left
+// UNTOUCHED on the conflict path (E1). Every assertion below reads the
+// fake's in-memory STORE after the write -- never `mock.calls` -- per that
+// same finding.
+// ---------------------------------------------------------------------------
+
+type FakeAttendanceRow = Record<string, unknown> & {
+  session_id: string;
+  student_id: string;
+};
+
+function fakeAttendanceRowKey(row: { session_id: string; student_id: string }): string {
+  return `${row.session_id}:${row.student_id}`;
+}
+
+/**
+ * A stateful fake for the `attendance` table's real `.upsert(rows,
+ * {onConflict})` call. Models the union-of-keys semantics
+ * `T406-gate-report.md` E1/E5 proved by execution against a real PostgreSQL
+ * 16.13 loaded with this repo's real migrations, cross-checked against the
+ * installed `@supabase/postgrest-js` v2.110.7 client source AND PostgREST's
+ * own server-side `mutatePlanToQuery`: the columns actually written for one
+ * upsert call are the UNION of `Object.keys` across every row the client
+ * sends in that single array (`PostgrestQueryBuilder.ts:1403-1409`); a row
+ * omitting a key that IS in that union is written NULL for it
+ * (`json_to_recordset`, no `missing=default`); a column that is in NO row's
+ * keys for that call is left completely untouched on the conflict path
+ * (`DO UPDATE SET c = EXCLUDED.c` only for the payload-derived column list --
+ * an unsent column never appears in `SET`). `event_sessions`/`events` are
+ * stubbed inert (no-op success) -- C2/C3 only need `attendance` STATE, and a
+ * zero-delta payload (this suite's convention) never reaches the `events`
+ * read-modify-write, so `fromSpy` never even needs an `events` branch.
+ */
+function makeStatefulMarkDayCompleteClient(seed: readonly FakeAttendanceRow[] = []): {
+  client: SupabaseClient;
+  store: Map<string, FakeAttendanceRow>;
+} {
+  const store = new Map<string, FakeAttendanceRow>();
+  for (const row of seed) store.set(fakeAttendanceRowKey(row), { ...row });
+
+  const fromSpy = vi.fn((table: string) => {
+    if (table === 'attendance') {
+      return {
+        upsert: (rows: FakeAttendanceRow[]) => {
+          const unionKeys = new Set<string>();
+          for (const row of rows) {
+            for (const key of Object.keys(row)) unionKeys.add(key);
+          }
+          for (const row of rows) {
+            const key = fakeAttendanceRowKey(row);
+            const existing = store.get(key);
+            const merged: FakeAttendanceRow = existing
+              ? { ...existing }
+              : { session_id: row.session_id, student_id: row.student_id };
+            for (const column of unionKeys) {
+              merged[column] = column in row ? row[column] : null;
+            }
+            store.set(key, merged);
+          }
+          return Promise.resolve({ data: null, error: null });
+        },
+      };
+    }
+    if (table === 'event_sessions') {
+      return {
+        update: () => ({ eq: () => Promise.resolve({ data: null, error: null }) }),
+      };
+    }
+    throw new Error(`unexpected table in T406 stateful fake: ${table}`);
+  });
+
+  return { client: { from: fromSpy } as unknown as SupabaseClient, store };
+}
+
+describe('makeMarkDayComplete (T406) -- narrowed write survives a concurrent scan', () => {
+  it("C2: a row written BETWEEN the dialog's load and its submit (a concurrent QR scan) keeps its real check_in_at after the narrowed write -- asserted on POST-WRITE ROW STATE, never on the call args", async () => {
+    const MID_RACE_SCAN_TIME = '2026-08-04T14:07:33.000Z';
+    const setup = makeStatefulMarkDayCompleteClient([
+      {
+        session_id: 'session-day-1',
+        student_id: 'student-1',
+        status: 'present',
+        check_in_at: MID_RACE_SCAN_TIME,
+        check_out_at: null,
+        hours_override: null,
+        method: 'qr',
+        recorded_by: 'coach-1',
+      },
+    ]);
+    const markDayComplete = makeMarkDayComplete(() => setup.client);
+
+    // The dialog loaded ONCE on open, before the scan above happened, and
+    // now submits that stale pre-scan snapshot (checkInAt: null).
+    await markDayComplete(
+      makeMarkDayCompletePayload({
+        attendance: [
+          {
+            sessionId: 'session-day-1',
+            studentId: 'student-1',
+            status: 'present',
+            checkInAt: null,
+            checkOutAt: null,
+            hoursOverride: null,
+            method: 'coach',
+            recordedBy: 'coach-1',
+          },
+        ],
+        adultVolunteersCountThisSession: 0,
+        adultVolunteerHoursThisSession: 0,
+      }),
+    );
+
+    const row = setup.store.get('session-day-1:student-1');
+    expect(row?.check_in_at).toBe(MID_RACE_SCAN_TIME);
+    // The coach's stale `status`/`method` DO still land -- narrowing only
+    // protects the columns this task's packet §4 says are droppable. This
+    // is the residual §5/the packet's own worker-output requirement
+    // documents: `method` cannot be dropped (E3), so a concurrent scan's
+    // `method: 'qr'` provenance IS still clobbered even though its
+    // timestamp survives.
+    expect(row?.status).toBe('present');
+    expect(row?.method).toBe('coach');
+  });
+
+  it("C2 (subset-uniformity guard): a heterogeneous batch -- one scanned row plus one OTHER row -- still leaves the scanned row's check_in_at untouched, proving the narrowing is uniform across the whole batch, not just that one row (T406-gate-report.md E5's union-columns null-fill: a key present on ANY row in the batch null-fills every OTHER row that omits it)", async () => {
+    const MID_RACE_SCAN_TIME = '2026-08-04T15:00:00.000Z';
+    const setup = makeStatefulMarkDayCompleteClient([
+      {
+        session_id: 'session-day-1',
+        student_id: 'student-1',
+        status: 'present',
+        check_in_at: MID_RACE_SCAN_TIME,
+        check_out_at: null,
+        hours_override: null,
+        method: 'qr',
+        recorded_by: 'coach-1',
+      },
+    ]);
+    const markDayComplete = makeMarkDayComplete(() => setup.client);
+
+    await markDayComplete(
+      makeMarkDayCompletePayload({
+        attendance: [
+          {
+            sessionId: 'session-day-1',
+            studentId: 'student-1',
+            status: 'present',
+            checkInAt: null,
+            checkOutAt: null,
+            hoursOverride: null,
+            method: 'coach',
+            recordedBy: 'coach-1',
+          },
+          {
+            sessionId: 'session-day-1',
+            studentId: 'student-2',
+            status: 'absent',
+            checkInAt: null,
+            checkOutAt: null,
+            hoursOverride: null,
+            method: 'coach',
+            recordedBy: 'coach-1',
+          },
+        ],
+        adultVolunteersCountThisSession: 0,
+        adultVolunteerHoursThisSession: 0,
+      }),
+    );
+
+    const scannedRow = setup.store.get('session-day-1:student-1');
+    expect(scannedRow?.check_in_at).toBe(MID_RACE_SCAN_TIME);
+  });
+
+  it("C3: a student with NO prior row (the INSERT leg) still gets a correct row written, carrying method -- the DB's real `not null` constraint is T406-gate-report.md's E3 (quoted below), not reproducible in vitest (no Postgres present here to raise 23502)", async () => {
+    // T406-gate-report.md E3, quoted verbatim for the DB-level half of this
+    // criterion: "ERROR:  null value in column \"method\" of relation
+    // \"attendance\" violates not-null constraint" -- and on BOTH the
+    // INSERT leg and the pure conflict leg, per that report (PostgreSQL
+    // checks NOT NULL on the candidate tuple before conflict arbitration).
+    const setup = makeStatefulMarkDayCompleteClient([]); // no prior row for this student
+    const markDayComplete = makeMarkDayComplete(() => setup.client);
+
+    await markDayComplete(
+      makeMarkDayCompletePayload({
+        attendance: [
+          {
+            sessionId: 'session-day-1',
+            studentId: 'student-new',
+            status: 'present',
+            checkInAt: null,
+            checkOutAt: null,
+            hoursOverride: null,
+            method: 'coach',
+            recordedBy: 'coach-1',
+          },
+        ],
+        adultVolunteersCountThisSession: 0,
+        adultVolunteerHoursThisSession: 0,
+      }),
+    );
+
+    const row = setup.store.get('session-day-1:student-new');
+    expect(row?.method).toBe('coach');
+    expect(row?.status).toBe('present');
+    expect(row?.recorded_by).toBe('coach-1');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // T402: `queryAttendanceForSessions`'s own `.range()` pagination -- this
 // file's OWN, file-local, unrelated duplicate of the defect T320 fixed in
 // `loaders/attendance.ts`'s `makeLoadAttendanceForSessions`

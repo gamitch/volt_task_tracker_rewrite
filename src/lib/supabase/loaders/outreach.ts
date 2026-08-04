@@ -121,14 +121,44 @@
  *       student_id)` constraint, migration line 94) for every row
  *       `buildAttendanceWriteRows` (`MarkDayCompleteDialog.tsx`'s own pure
  *       function, unchanged, still the ONLY place these rows are
- *       constructed) already produced -- `checkInAt`/`checkOutAt` pass
- *       through as `null` verbatim (that dialog's own module doc #2(c),
- *       never invented here), `hoursOverride` passes through exactly as
- *       given (a real, honest `NULL` for a student the coach never
- *       overrode, per that dialog's own module doc #2's MET-03 tier-3
+ *       constructed) already produced. `hoursOverride` passes through
+ *       exactly as given (a real, honest `NULL` for a student the coach
+ *       never overrode, per that dialog's own module doc #2's MET-03 tier-3
  *       fallback discipline -- this loader never back-fills it with a
  *       computed default). Skipped entirely when `payload.attendance` is
  *       empty (`length > 0` guard) so an empty day still completes.
+ *
+ *       T406 UPDATE -- this upsert's snake_case DB mapping is now NARROWED:
+ *       `check_in_at`/`check_out_at`/`updated_at` are no longer sent at all
+ *       (uniformly, across every row in the batch -- see the inline comment
+ *       at the mapping itself, `:1258` at authoring time, `grep
+ *       upsertAttendance`, do not trust the line number). This closes a real
+ *       TOCTOU: `MarkDayCompleteDialog.tsx` loads attendance ONCE on open and
+ *       submits that snapshot; a concurrent QR scan's `check_in_at`,
+ *       previously overwritten by that stale snapshot (including the `null`
+ *       this bullet used to describe `checkInAt`/`checkOutAt` as carrying
+ *       "verbatim"), now survives instead -- PostgREST leaves an unsent
+ *       column untouched on the conflict path (`docs/swarm/active/
+ *       T406-gate-report.md` E1/E7, proved by execution against a real
+ *       PostgreSQL 16.13). `updated_at` is dropped too: W1's
+ *       `trg_attendance_touch_updated_at` (`20260803000000_simplify_
+ *       attendance_audit.sql:78-83`) now sets it on both legs, so this
+ *       loader's own explicit value was already dead weight the trigger
+ *       overwrote (same report, E2). `method` CANNOT be dropped -- it is
+ *       `not null` with no default, and the gate proved that INSERT-leg
+ *       constraint fires on BOTH legs (E3) -- so a concurrent scan's
+ *       `method: 'qr'` provenance is still clobbered by the dialog's stale
+ *       snapshot even after this fix; only the timestamp is preserved. This
+ *       is a genuine PARTIAL fix, recorded as such in `auto-mode-
+ *       decisions.md`'s "2026-08-03 -- George lifts the T406 hold" entry --
+ *       closing the `method` half needs a schema default or an insert/update
+ *       split, neither proportionate here (item 25), filed rather than built.
+ *       The camelCase `OutreachAttendanceWriteRow`/`AttendanceWriteRow`
+ *       types and both of `MarkDayCompleteDialog.tsx`'s row builders are
+ *       UNCHANGED by this update -- they still carry `checkInAt`/
+ *       `checkOutAt` through (T305's carrying becomes redundant for the
+ *       timestamp columns, not wrong); only this loader's snake_case DB
+ *       mapping stops sending them.
  *   (b) `event_sessions` update: `status = 'completed'`, `people_reached =
  *       payload.peopleReached` -- the ONE place this module ever writes
  *       `event_sessions.status`, mirroring `loaders/meetings.ts`'s own
@@ -1255,6 +1285,22 @@ export function makeMarkDayComplete(
         .eq('id', args.sessionId),
     getClient,
   );
+  // T406: NARROWED DB mapping -- deliberately does NOT send `check_in_at`,
+  // `check_out_at` or `updated_at`. `@supabase/postgrest-js` v2.110.7 sets
+  // this batch upsert's `columns=` to the UNION of `Object.keys` across every
+  // row (`PostgrestQueryBuilder.ts:1403-1409`), so every row's mapped object
+  // below MUST omit the same keys uniformly -- a row that re-adds one while
+  // its batch-mates don't still null-fills every OTHER row for that column
+  // (`docs/swarm/active/T406-gate-report.md` E5). On the conflict path an
+  // unsent column is left untouched (same report, E1/E7): this is what lets
+  // a concurrent QR scan's `check_in_at` survive a stale dialog snapshot
+  // instead of being overwritten -- the TOCTOU module doc #4's T406 UPDATE
+  // above describes. `updated_at` is dropped because W1's
+  // `trg_attendance_touch_updated_at` now sets it on both legs (same
+  // report, E2) -- this loader's own explicit value was dead weight. Do NOT
+  // drop `method`: it is `not null` with no default and fails on BOTH the
+  // INSERT and conflict leg when omitted (same report, E3) -- see module doc
+  // #4's T406 UPDATE for the resulting (disclosed, partial) residual.
   const upsertAttendance = runMutation<readonly OutreachAttendanceWriteRow[], void>(
     (client, rows) =>
       client.from('attendance').upsert(
@@ -1262,12 +1308,9 @@ export function makeMarkDayComplete(
           session_id: row.sessionId,
           student_id: row.studentId,
           status: row.status,
-          check_in_at: row.checkInAt,
-          check_out_at: row.checkOutAt,
           hours_override: row.hoursOverride,
           method: row.method,
           recorded_by: row.recordedBy,
-          updated_at: new Date().toISOString(),
         })),
         { onConflict: 'session_id,student_id' },
       ),
