@@ -2787,3 +2787,101 @@ Implemented directly by the orchestrator, per FAST's own definition.
 for that; **this ruling is it**, and it covers those two and nothing else. Note `:362`'s fixture sets
 `meetingHours: 2.0` — a value the production view **cannot generate**. It is kept on the fixture (to
 prove the field is still carried) and deliberately not rendered.
+
+---
+
+## 2026-08-04 — W4+W5 session paused at the usage limit. RESUME STATE, and two open owner questions.
+
+**The owner flagged an approaching session usage limit (resets ~4 hours from this entry) and asked
+that in-flight work be secured and unfinished work resumed unmonitored.** This entry is the resume
+point. Everything below is on `origin` — nothing lives only in the ephemeral container.
+
+### In flight — T187 + T800, worker was mid-implementation
+
+| Branch | Tip | What it is |
+|---|---|---|
+| `claude/t187-student-teams-scoping` | `9e8c6c7` | The packet (revision 1, gate-corrected) |
+| `claude/t187-t800-worker-impl` | `680299f` | **WIP snapshot — NOT verified** |
+| `gate/t187-premise-check` | `5280e1f` | The gate's own build, kept for reference |
+
+**`680299f` was committed by the ORCHESTRATOR, not the worker**, purely to prevent loss — the worker
+had uncommitted changes to `StudentHome.tsx` and no commits of its own. **It is a snapshot, not a
+deliverable: no mutation was run, no gate passed, no criterion verified.** On resume, treat it as
+unverified scratch — re-dispatch the worker against the packet at `9e8c6c7` rather than assuming
+`680299f` is a starting point worth keeping.
+
+**The packet is gate-approved and carries the owner's bounded test-edit approval.** Expect the
+literal build to produce ~30 tsc errors and ~18 failing tests before any test edit — that is the
+gate's measured baseline, not a mistake.
+
+### ⚠️ OPEN OWNER QUESTION 1 — T201, ruled on a premise that turned out to be false
+
+**He ruled**, verbatim: *"the hours should report as any other student. Reason being if studentA did
+outreach but then left the team and was deactivated, those studentA hours still count toward the
+overall team outreach goals."*
+
+**The stated reason is already satisfied, and was before the ruling.** Measured: deactivating a
+student runs `update students set is_active = :isActive` and **nothing else** (`students.ts:254`) —
+it does **not** set `student_teams.left_on`. So:
+
+| View | `is_active` filter | Deactivated student's hours |
+|---|---|---|
+| `v_student_hours` | none (no `students` join) | **counted** |
+| `v_team_hours` | joins `student_teams on left_on is null` — still null | **counted in team totals** |
+| `v_season_kpis` | computes straight from `attendance` | **counted in season totals** |
+
+**Nothing is lost from team or season outreach goals today.** The only thing `is_active` hides is
+the **per-student** surface — `v_student_goal_projection`'s `where s.is_active`.
+
+**So implementing the ruling literally would change only her individual surfaces, and would reverse
+two of his own rulings:** T184 (StudentHome's `{kind:'inactive'}` branch — the T201 gate measured
+that relaxing the filter makes it unreachable and reds three green test blocks) and **T191**,
+2026-07-31, *"No bar at all"* on a deactivated child's parent card.
+
+**NOT IMPLEMENTED, deliberately.** The orchestrator put the correction back to him and the session
+paused before he answered. **Do not implement this ruling on resume without a fresh answer.** The
+orchestrator's recommendation on record: close T201 as working-as-ruled, and if he wants visibility
+anyway, do the **staff-report** variant (a departed student listed with an inactive marker) — it adds
+information without contradicting T184 or T191, needs no migration, and collides with no wave.
+
+### ⚠️ OPEN OWNER QUESTION 2 — T198's `teamParticipation` card
+
+The T198 scoping investigation returned. Five of the six honest-empty `CoachHomeData` fields have
+clean season-wide fills. **`teamParticipation` does not:** its metric (PRD HOME-01 / MET-02) exists
+only per-team (`metric_views.sql:44-49`), and per-coach teams are gone by his own T198 ruling.
+Three options, all needing him: build a season-grain view (**a migration — item 18 and item 26 both
+fire, opus worker**), repoint the card at the existing `v_season_attendance_rate` (changes what the
+card means and duplicates a tile already on the page), or drop it (**PRD HOME-01 names it**).
+
+### Decisions the orchestrator made alone this session, logged for review
+
+1. **`studentHours` will NOT be filled as the T198 row describes.** Its sums are *exactly*
+   `v_season_kpis.goal_target_hours` and `total_hours`. Re-summing them per-student in TypeScript
+   would duplicate a metric formula that now exists as a view column — **constitution item 3
+   BLOCKER territory** — and would let the card disagree with the always-mounted KPI strip on the
+   same screen over rounding. Consume `loadKpiStripData` and retire the field. **The ledger row's
+   wording is premise, not spec.**
+2. **T198's row claims "no migration is needed". That is false** for the `teamParticipation` half.
+   Corrected in the row.
+3. **T166's "Blocked on T155" marker is stale** — T155 merged 2026-07-30 (`97398ff`). `dashboard.ts`
+   genuinely has no test file. The row is unblocked.
+4. **T163/T164's "0 tests" claims are unsafe to packet as written.** No dedicated test files exist,
+   but `reports.ts` is exercised directly by three suites (`makeLoadHoursData`,
+   `makeLoadParticipationData`, `makeLoadEventSessionsData`) and `kpi.ts` by two. Same trap the W3-A
+   wave found in T162, whose "0 tests" claim was outright **false**. Re-characterise before packeting.
+5. **A file collision exists between the two next waves:** `DashboardPage.test.tsx` mocks the loaders
+   of *both* T187+T800 and the T198 bundle. **Sequence them; do not run both against that file.**
+
+### Standing state
+
+**TWO MIGRATIONS ARE IN THE REPO AND NOT IN PRODUCTION** — `20260803000001_revoke_anon_leaderboard_students.sql`
+(T205) and `20260804000000_volunteer_hours_outreach_only.sql` (T322). Item 16 reserves hosted cutover
+for the owner. This has been true all session and remains the only thing no agent can do.
+
+**Merged this session:** T205, T702, T322, T704, and a status-doc refresh. **Closed unshipped:** T500.
+**Filed:** T700, T701, T703, T704, T800.
+
+**The pattern to carry forward: FIVE rows this session described their own defect incorrectly** —
+T205's owner-ruled fix did not work; T500's "bug" was spec-compliant deliberate behaviour; T322's
+row claimed a leak that never existed; T187's row names the wrong column; T201's ruling rested on a
+premise already satisfied. **Verify a W4/W5 row's stated mechanism before believing it.**
