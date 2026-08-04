@@ -471,7 +471,12 @@ export function makeLoadStudentHomeCardDataForParentHome(
 
     const events = (eventRows ?? []).map(mapEventDbRow);
     const sessions = (sessionRows ?? []).map(mapFullEventSessionDbRow);
-    const nextEvents = buildNextEventsForStudent(sessions, events, teamId, nowFn().getTime());
+    const nextEvents = buildNextEventsForStudent(
+      sessions,
+      events,
+      scope?.teamIds ?? [teamId],
+      nowFn().getTime(),
+    );
     const nextEventSessionIds = new Set(nextEvents.map((event) => event.sessionId));
 
     return {

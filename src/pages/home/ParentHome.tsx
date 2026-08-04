@@ -839,9 +839,9 @@ function round1(value: number): number {
  * `isEventInTeamScope` (Forbidden Files/read-only reference only here). */
 export function isEventInTeamScope(
   event: { teamIds: readonly string[] | null },
-  teamId: string,
+  teamIds: readonly string[],
 ): boolean {
-  return event.teamIds === null || event.teamIds.includes(teamId);
+  return event.teamIds === null || event.teamIds.some((id) => teamIds.includes(id));
 }
 
 /** UI-side percent math, no metric-view equivalent to duplicate (module doc
@@ -887,7 +887,7 @@ export const NEXT_EVENTS_LIMIT = 3;
 export function buildNextEventsForStudent(
   sessions: readonly HomeSessionRow[],
   events: readonly HomeEventRow[],
-  teamId: string,
+  teamIds: readonly string[],
   nowMs: number,
   limit: number = NEXT_EVENTS_LIMIT,
 ): NextEventRow[] {
@@ -896,7 +896,7 @@ export function buildNextEventsForStudent(
       .filter(
         (event) =>
           (event.type === 'meeting' || event.type === 'outreach') &&
-          isEventInTeamScope(event, teamId),
+          isEventInTeamScope(event, teamIds),
       )
       .map((event) => [event.id, event] as const),
   );
@@ -978,7 +978,7 @@ export async function defaultLoadStudentHomeCardData(
   const nextEvents = buildNextEventsForStudent(
     FIXTURE_SESSIONS,
     FIXTURE_EVENTS,
-    teamId,
+    [teamId],
     FIXTURE_REFERENCE_NOW.getTime(),
   );
   const nextEventSessionIds = new Set(nextEvents.map((event) => event.sessionId));

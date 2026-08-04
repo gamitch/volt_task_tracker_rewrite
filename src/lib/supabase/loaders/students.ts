@@ -411,6 +411,40 @@ async function queryStudentGoalProjectionById(
   return { data: (result.data as StudentGoalProjectionDbRow | null) ?? null, error: result.error };
 }
 
+/** T187: a student's ACTIVE `student_teams` membership team ids -- the
+ * ACTIVE predicate is `left_on is null`, matching the already-migrated
+ * readers (`membership_views.sql:63`/`:92`, `dashboard_views.sql:205-206`). */
+interface StudentTeamMembershipDbRow {
+  team_id: string;
+}
+
+async function queryActiveStudentTeamIds(
+  client: SupabaseClient,
+  studentId: string,
+): Promise<LoaderQueryResult<StudentTeamMembershipDbRow[]>> {
+  const result = await client
+    .from('student_teams')
+    .select('team_id')
+    .eq('student_id', studentId)
+    .is('left_on', null);
+  return {
+    data: (result.data as StudentTeamMembershipDbRow[] | null) ?? null,
+    error: result.error,
+  };
+}
+
+/** T187: the shared ACTIVE-membership read (same injectable-`getClient` +
+ * `createLoader` convention every export in this file already uses). */
+export function makeResolveActiveStudentTeamIds(
+  getClient: () => SupabaseClient = getSupabaseClient,
+): (studentId: string) => Promise<readonly string[]> {
+  const load = createLoader<string, StudentTeamMembershipDbRow[]>(
+    queryActiveStudentTeamIds,
+    getClient,
+  );
+  return async (studentId: string) => ((await load(studentId)) ?? []).map((row) => row.team_id);
+}
+
 /**
  * `getClient` is injectable (defaults to the shared singleton), same
  * convention every export above already established, so tests can supply a
@@ -426,13 +460,15 @@ export function makeResolveStudentScope(
     queryStudentGoalProjectionById,
     getClient,
   );
+  const loadTeamIds = makeResolveActiveStudentTeamIds(getClient);
   return async (studentId: string) => {
-    const row = await loadScope(studentId);
+    const [row, teamIds] = await Promise.all([loadScope(studentId), loadTeamIds(studentId)]);
     if (row === null) return null;
     // Verbatim passthrough (constitution item 3) -- `goal_hours` is already
     // the coalesced value; no coalesce/override arithmetic happens here.
     return {
       teamId: row.team_id,
+      teamIds,
       goalHours: row.goal_hours,
       confirmedHours: row.confirmed_hours,
       plannedHours: row.planned_hours,

@@ -493,6 +493,7 @@ export type LoadStudentHomeDataFn = (
  */
 export interface StudentScope {
   teamId: string;
+  teamIds: readonly string[];
   goalHours: number;
   confirmedHours: number;
   plannedHours: number;
@@ -648,9 +649,9 @@ function round1(value: number): number {
  * as "all teams" per the real `events` schema. */
 export function isEventInTeamScope(
   event: { teamIds: readonly string[] | null },
-  teamId: string,
+  teamIds: readonly string[],
 ): boolean {
-  return event.teamIds === null || event.teamIds.includes(teamId);
+  return event.teamIds === null || event.teamIds.some((id) => teamIds.includes(id));
 }
 
 /** MTG-10's own literal wireframe annotation: "only while a session is
@@ -672,12 +673,12 @@ export function isSessionLive(
 export function selectLiveMeetingSession(
   sessions: readonly HomeSessionRow[],
   events: readonly HomeEventRow[],
-  teamId: string,
+  teamIds: readonly string[],
   nowMs: number,
 ): HomeSessionRow | null {
   const meetingEventIds = new Set(
     events
-      .filter((event) => event.type === 'meeting' && isEventInTeamScope(event, teamId))
+      .filter((event) => event.type === 'meeting' && isEventInTeamScope(event, teamIds))
       .map((e) => e.id),
   );
   const live = sessions
@@ -705,7 +706,7 @@ export function buildNextUp(
   events: readonly HomeEventRow[],
   rsvps: readonly HomeRsvpRow[],
   studentId: string,
-  teamId: string,
+  teamIds: readonly string[],
   nowMs: number,
   limit = 5,
 ): NextUpRow[] {
@@ -714,7 +715,7 @@ export function buildNextUp(
       .filter(
         (event) =>
           (event.type === 'meeting' || event.type === 'outreach') &&
-          isEventInTeamScope(event, teamId),
+          isEventInTeamScope(event, teamIds),
       )
       .map((event) => [event.id, event] as const),
   );
@@ -760,12 +761,12 @@ export function getUnansweredOutreachOpportunities(
   events: readonly HomeEventRow[],
   rsvps: readonly HomeRsvpRow[],
   studentId: string,
-  teamId: string,
+  teamIds: readonly string[],
   nowMs: number,
 ): SignupOpportunityRow[] {
   const eventById = new Map(
     events
-      .filter((event) => event.type === 'outreach' && isEventInTeamScope(event, teamId))
+      .filter((event) => event.type === 'outreach' && isEventInTeamScope(event, teamIds))
       .map((event) => [event.id, event] as const),
   );
   return sessions
@@ -1285,7 +1286,7 @@ function StudentHomeLoadingSkeleton(): ReactNode {
 
 interface StudentHomeContentProps {
   studentId: string;
-  teamId: string;
+  teamIds: readonly string[];
   seasonId: string;
   /** Verbatim passthrough of `v_student_goal_projection.goal_hours`
    * (`resolveStudentScope`) -- already the coalesced
@@ -1307,7 +1308,7 @@ interface StudentHomeContentProps {
 
 function StudentHomeContent({
   studentId,
-  teamId,
+  teamIds,
   seasonId,
   goalHours,
   confirmedHours,
@@ -1360,14 +1361,14 @@ function StudentHomeContent({
   const data = loadState.data;
   const nowMs = nowFn().getTime();
 
-  const liveSession = selectLiveMeetingSession(data.sessions, data.events, teamId, nowMs);
-  const nextUp = buildNextUp(data.sessions, data.events, rsvps, studentId, teamId, nowMs);
+  const liveSession = selectLiveMeetingSession(data.sessions, data.events, teamIds, nowMs);
+  const nextUp = buildNextUp(data.sessions, data.events, rsvps, studentId, teamIds, nowMs);
   const opportunities = getUnansweredOutreachOpportunities(
     data.sessions,
     data.events,
     rsvps,
     studentId,
-    teamId,
+    teamIds,
     nowMs,
   );
   const heroState = selectHeroState(liveSession !== null, opportunities.length);
@@ -1538,6 +1539,7 @@ function StudentHomeContent({
 export interface ResolvedStudentIdentity {
   studentId: string;
   teamId: string;
+  teamIds: readonly string[];
   goalHours: number;
   confirmedHours: number;
   plannedHours: number;
@@ -1575,6 +1577,7 @@ export async function resolveStudentIdentity(
       kind: 'linked',
       studentId,
       teamId: explicitTeamId,
+      teamIds: [explicitTeamId],
       goalHours: seasonDefaultGoalHours,
       confirmedHours: 0,
       plannedHours: 0,
@@ -1586,6 +1589,7 @@ export async function resolveStudentIdentity(
     kind: 'linked',
     studentId,
     teamId: scope.teamId,
+    teamIds: scope.teamIds,
     goalHours: scope.goalHours,
     confirmedHours: scope.confirmedHours,
     plannedHours: scope.plannedHours,
@@ -1696,11 +1700,11 @@ function ResolvedStudentHomeView({
     );
   }
 
-  const { studentId, teamId, goalHours, confirmedHours, plannedHours } = loadState.data;
+  const { studentId, teamIds, goalHours, confirmedHours, plannedHours } = loadState.data;
   return (
     <StudentHomeContent
       studentId={studentId}
-      teamId={teamId}
+      teamIds={teamIds}
       seasonId={seasonId}
       goalHours={goalHours}
       confirmedHours={confirmedHours}
