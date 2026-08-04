@@ -13,6 +13,44 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
 
+## UPDATE — 2026-08-04 (LATEST, supersedes the W4+W5 section below): **W2 outreach wave — nine tasks merged, T406 in flight, T165 is the last one**
+
+**W2's queue is nearly done.** Merged this session, each with a ledger row and a verification-log
+entry (item 24): **T330, T401, T402, T174, T190, T306, T325, T152, T300** — plus **T301** (PR open at
+time of writing).
+
+**Still open:**
+
+- **T406** (HEAVY, `markDayComplete`'s attendance write) — **worker committed and PUSHED** to
+  `claude/t406-work`; its premise gate already **proved the load-bearing claim by execution** on a
+  real PostgreSQL 16.13 and its report is committed at `docs/swarm/active/T406-gate-report.md`.
+  Verify the mutations, then ledger row + log entry + PR.
+- **T165** (STANDARD, `loaders/outreach.ts`: 21 of 23 exports untested) — **the last W2 task.**
+  Blocked only by T406 (same file). Needs a packet, a worker, and a mutation replay.
+
+**Filed, explicitly NOT W2's to build:** T501 (bare em-dash a11y, repo-wide), T502 (residual silent
+truncation in W1's `attendance.ts`), T503 (owner ruled *widen* RLS so students see teammates' RSVPs —
+PRD 8.3 + item 3 make it non-improvisable and the scope is still his call), T504 (T174's defect in
+`OutreachList.tsx`, unverifiable there today since nothing reads `respondedBy`). **T500 is CLOSED as
+SUPERSEDED** by W4's T702.
+
+### Four things this wave learned that cost real time
+
+1. **A merge reported as done is not done.** PR #59 was reported merged in-session while still open,
+   caught only by checking whether its code was actually in `main`. **Verify every merge three ways:
+   the code is in `main`, the ledger row says MERGED, and the branch is an ancestor of `main`.**
+2. **A criterion whose mutation does not remove the guard is worthless, and three shipped this
+   wave** — T401's row count, T190's C3, T300's C2 (restoring a default while every call site still
+   passes the prop produces no `tsc` error at all). **Run every named mutation before dispatching.**
+3. **A ledger row's cost estimate and citations are usually stale.** T190's said 3 assertions,
+   measured 6. T301's said 3 comments, history showed 2. T152's named the wrong mutation as its
+   evidence. **Measure; do not quote.**
+4. **Bound every string replacement to the target block.** Two separate over-replacements this wave
+   (T306's 33 call sites, T152's wrong test) — identical mock blocks recur across a 3000-line test
+   file.
+
+---
+
 ## UPDATE — 2026-08-04 (LATEST): W4+W5 wave — **T205, T702, T322 merged. TWO MIGRATIONS AWAIT THE OWNER'S CUTOVER.**
 
 **Three tasks shipped, one closed unshipped, five owner rulings taken.** Gates at the last merge:
