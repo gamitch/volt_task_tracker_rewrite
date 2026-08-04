@@ -747,10 +747,12 @@ function pickerButtons(): HTMLButtonElement[] {
 
 describe('T400 live-session picker', () => {
   it('offers the open meetings by name when the URL carries no session id at all', async () => {
-    const loadOpenSessions = vi.fn().mockResolvedValue([
-      openSession(),
-      openSession({ sessionId: 'session-outreach', title: 'Library STEM Night' }),
-    ]);
+    const loadOpenSessions = vi
+      .fn()
+      .mockResolvedValue([
+        openSession(),
+        openSession({ sessionId: 'session-outreach', title: 'Library STEM Night' }),
+      ]);
     renderAt('/checkin', { checkin: failingCheckin(), loadOpenSessions });
     await flushMicrotasks();
 
@@ -779,10 +781,12 @@ describe('T400 live-session picker', () => {
 
   it('checks in against the PICKED session id, not a placeholder', async () => {
     const checkin = failingCheckin();
-    const loadOpenSessions = vi.fn().mockResolvedValue([
-      openSession({ sessionId: 'session-not-this-one', title: 'Monday Practice' }),
-      openSession({ sessionId: 'session-the-right-one', title: 'Tuesday Build Night' }),
-    ]);
+    const loadOpenSessions = vi
+      .fn()
+      .mockResolvedValue([
+        openSession({ sessionId: 'session-not-this-one', title: 'Monday Practice' }),
+        openSession({ sessionId: 'session-the-right-one', title: 'Tuesday Build Night' }),
+      ]);
     renderAt('/checkin', { checkin, loadOpenSessions });
     await flushMicrotasks();
 
@@ -806,9 +810,9 @@ describe('T400 live-session picker', () => {
       await Promise.resolve();
     });
     await act(async () => {
-      container.querySelector('form')?.dispatchEvent(
-        new Event('submit', { bubbles: true, cancelable: true }),
-      );
+      container
+        .querySelector('form')
+        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       await Promise.resolve();
     });
 

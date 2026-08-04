@@ -853,13 +853,15 @@ export function CheckinResult({
                      supplies the session id the short code is meaningless
                      without -- and the form then renders on the next pass. */
                   <VStack gap={3} hAlign="center">
-                    {openSessions.status === 'loading' ? <Spinner label="Loading meetings" /> : null}
+                    {openSessions.status === 'loading' ? (
+                      <Spinner label="Loading meetings" />
+                    ) : null}
 
                     {openSessions.status === 'success' && openSessions.sessions.length > 0 ? (
                       <>
                         <Text type="supporting" color="secondary">
-                          Can&apos;t scan? Pick the meeting you&apos;re at, then enter the code shown
-                          on the check-in screen.
+                          Can&apos;t scan? Pick the meeting you&apos;re at, then enter the code
+                          shown on the check-in screen.
                         </Text>
                         {openSessions.sessions.map((session) => (
                           <VStack gap={1} hAlign="center" key={session.sessionId}>

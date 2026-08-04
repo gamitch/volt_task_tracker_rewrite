@@ -341,7 +341,10 @@ interface OpenSessionStubOptions {
 function makeOpenSessionsClient(options: OpenSessionStubOptions = {}) {
   const orderSpy = vi
     .fn()
-    .mockResolvedValue({ data: options.sessions === undefined ? [] : options.sessions, error: null });
+    .mockResolvedValue({
+      data: options.sessions === undefined ? [] : options.sessions,
+      error: null,
+    });
   const lteSpy = vi.fn(() => ({ order: orderSpy }));
   const gteSpy = vi.fn(() => ({ lte: lteSpy }));
   const sessionsEqSpy = vi.fn(() => ({ gte: gteSpy }));
@@ -374,20 +377,29 @@ const PINNED_NOW = Date.parse('2026-08-04T18:00:00.000Z');
 describe('makeLoadOpenCheckinSessions (T400)', () => {
   it('asks only for scheduled sessions — a completed or canceled one must never be offered', async () => {
     const stub = makeOpenSessionsClient();
-    await makeLoadOpenCheckinSessions(() => stub.client, () => PINNED_NOW)();
+    await makeLoadOpenCheckinSessions(
+      () => stub.client,
+      () => PINNED_NOW,
+    )();
     expect(stub.sessionsEqSpy).toHaveBeenCalledWith('status', 'scheduled');
   });
 
   it('opens the window two hours BEFORE the session ends, so a student leaving late can still check in', async () => {
     const stub = makeOpenSessionsClient();
-    await makeLoadOpenCheckinSessions(() => stub.client, () => PINNED_NOW)();
+    await makeLoadOpenCheckinSessions(
+      () => stub.client,
+      () => PINNED_NOW,
+    )();
     // ends_at >= now - 2h. A session that ended 90 minutes ago is still listed.
     expect(stub.gteSpy).toHaveBeenCalledWith('ends_at', '2026-08-04T16:00:00.000Z');
   });
 
   it('opens the window two hours before the session starts, so an early arrival sees it', async () => {
     const stub = makeOpenSessionsClient();
-    await makeLoadOpenCheckinSessions(() => stub.client, () => PINNED_NOW)();
+    await makeLoadOpenCheckinSessions(
+      () => stub.client,
+      () => PINNED_NOW,
+    )();
     // starts_at <= now + 2h.
     expect(stub.lteSpy).toHaveBeenCalledWith('starts_at', '2026-08-04T20:00:00.000Z');
   });
@@ -416,7 +428,10 @@ describe('makeLoadOpenCheckinSessions (T400)', () => {
       ],
     });
     await expect(
-      makeLoadOpenCheckinSessions(() => stub.client, () => PINNED_NOW)(),
+      makeLoadOpenCheckinSessions(
+        () => stub.client,
+        () => PINNED_NOW,
+      )(),
     ).resolves.toEqual([
       {
         sessionId: 'session-build-night',
@@ -443,7 +458,10 @@ describe('makeLoadOpenCheckinSessions (T400)', () => {
       ],
       events: [],
     });
-    const result = await makeLoadOpenCheckinSessions(() => stub.client, () => PINNED_NOW)();
+    const result = await makeLoadOpenCheckinSessions(
+      () => stub.client,
+      () => PINNED_NOW,
+    )();
     expect(result).toHaveLength(1);
     expect(result[0].sessionId).toBe('session-orphan');
     expect(result[0].title).toBe('Meeting');
@@ -452,7 +470,10 @@ describe('makeLoadOpenCheckinSessions (T400)', () => {
   it('never queries events when no session is open', async () => {
     const stub = makeOpenSessionsClient({ sessions: [] });
     await expect(
-      makeLoadOpenCheckinSessions(() => stub.client, () => PINNED_NOW)(),
+      makeLoadOpenCheckinSessions(
+        () => stub.client,
+        () => PINNED_NOW,
+      )(),
     ).resolves.toEqual([]);
     expect(stub.fromSpy).toHaveBeenCalledWith('event_sessions');
     expect(stub.fromSpy).not.toHaveBeenCalledWith('events');
@@ -461,7 +482,10 @@ describe('makeLoadOpenCheckinSessions (T400)', () => {
   it('treats a null session response as "none open" rather than crashing', async () => {
     const stub = makeOpenSessionsClient({ sessions: null });
     await expect(
-      makeLoadOpenCheckinSessions(() => stub.client, () => PINNED_NOW)(),
+      makeLoadOpenCheckinSessions(
+        () => stub.client,
+        () => PINNED_NOW,
+      )(),
     ).resolves.toEqual([]);
   });
 
@@ -483,7 +507,10 @@ describe('makeLoadOpenCheckinSessions (T400)', () => {
       ],
       events: [{ id: 'event-build', title: 'Tuesday Build Night' }],
     });
-    await makeLoadOpenCheckinSessions(() => stub.client, () => PINNED_NOW)();
+    await makeLoadOpenCheckinSessions(
+      () => stub.client,
+      () => PINNED_NOW,
+    )();
     expect(stub.eventsInSpy).toHaveBeenCalledWith('id', ['event-build']);
   });
 });

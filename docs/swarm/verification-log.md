@@ -9808,3 +9808,60 @@ deletes code · `vitest` **78 files / 1996 tests** · `vite build` 0.
 Separately and still true: `20260804000000_volunteer_hours_outreach_only.sql` is direct in-repo
 precedent for **T801** — it `create or replace`s two already-applied views from a new migration,
 citing constitution item 10 by name.
+
+---
+
+## T400 — live-session picker on `/checkin` (2026-08-04, orchestrator, STANDARD tier)
+
+**Premise measured before any code was written, and one claim in the row was false.**
+
+The row said *"(a) needs a currently-open-sessions loader, which T196 must build anyway."* T196 had
+already shipped. It built **no such loader**. Every loader it produced takes a `sessionId` and
+returns one session — `makeLoadEndMeetingSummary` (`endMeeting.ts:288`), `makeOnEndMeeting` (`:373`),
+`makeOnEditAttendance` (`:448`), `makeLoadLiveConsoleData` (`kiosk.ts:430`). Searching `loaders/` for
+`openSessions`/`liveSessions`/`'live'` returned **zero** hits, and there is no `'live'` session status
+at all: the vocabulary is `'scheduled' | 'completed' | 'canceled'`
+(`20260717000000_scheduling_attendance.sql:59`). T400 had to build the loader, not consume one.
+
+**What the row got right, verified independently:** `validateCheckinRequest` rejects a non-uuid
+`session_id` (`supabase/functions/checkin/validation.ts:69`); `Kiosk.tsx` renders the QR, the 6-char
+code, a tally and a title, and never a readable session id; `/checkin` sits behind `RequireAuth`
+(`router.tsx:233-239`), so the picker's query runs as a real authenticated user and
+`event_sessions`'s `own_or_linked_read` policy (`20260717000002_rls.sql:180-189`) scopes it to the
+student's own team without a client-side filter.
+
+### Mutation evidence — 12 mutants, every one red at exit 1
+
+| # | Mutation | Result |
+|---|---|---|
+| M1 | `.eq('status','scheduled')` → `'completed'` | 1 failed, exit 1 |
+| M2 | `OPEN_SESSION_GRACE_MS` 2h → `0` | 2 failed, exit 1 |
+| M3 | join by array position instead of `event_id` | 1 failed, exit 1 |
+| M4 | drop sessions whose event title is missing | 1 failed, exit 1 |
+| M5 | remove the empty-session early return | 1 failed, exit 1 |
+| M6 | `(await loadSessions()) ?? []` → `!` | 1 failed, exit 1 |
+| M7 | remove the `event_id` de-duplication | 1 failed, exit 1 |
+| M8 | `urlSessionId ?? pickedSessionId` → `urlSessionId` | 2 failed, exit 1 |
+| M9 | picker always sends `sessions[0].sessionId` | 1 failed, exit 1 |
+| M10 | load the list even when the URL has `?s=` | 1 failed, exit 1 |
+| M11 | drop the "no meetings are open" message | 1 failed, exit 1 |
+| M12 | drop the "couldn't load the list" message | 1 failed, exit 1 |
+
+**Two mutants were the point of the exercise.** M3 is this row's version of the field-swap class: a
+positional join returns the right *number* of meetings with the *wrong names* on them, and nothing
+crashes — a student taps "Tuesday Build Night" and checks into the outreach event. It is caught only
+because the fixture returns the two events in **reversed** order; with them in matching order the
+test would have stayed green under the mutation. M9 is the same shape one level up: the test picks
+the **second** listed session precisely so "always send the first" cannot pass.
+
+A 13th attempt (force the picker to render alongside the form) broke the JSX rather than producing a
+valid mutant, so it is **not counted** — M8 already covers that behaviour.
+
+**Gates:** tsc exit 0 · eslint 0 errors (5 pre-existing `react-refresh` warnings) · prettier written ·
+vitest **80 files / 2024 tests, exit 0** (base 2010, +14 = 8 loader + 6 component). Mutations ran in a
+throwaway worktree (item 23); the shared tree was verified clean with `git diff --quiet` after each.
+
+**Filed, not fixed:** nothing new. **T502 remains open and untouched** — `attendance.ts:361` still
+does `(await loadPage({…})) ?? []` and `loader.ts:177` still returns `result.data ?? null` without
+throwing, so a `{data: null, error: null}` page still resolves as end-of-data. It is a W1 file and a
+one-line fix, but it is a distinct row and was not in this one's scope.
