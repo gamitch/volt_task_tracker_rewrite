@@ -69,14 +69,29 @@ SUPERSEDED** by W4's T702.
 vitest **78 files / 1951 tests, exit 0**. Rulings are in `auto-mode-decisions.md` under the
 **"W4+W5 auto-mode window"** and the four dated entries after it.
 
-### ⚠️ TWO MIGRATIONS ARE IN THE REPO AND NOT IN PRODUCTION
+### ✅ MIGRATIONS APPLIED TO PRODUCTION — 2026-08-04, by George
 
-Constitution item 16 reserves hosted-Supabase cutover for the owner. **Neither of these is live:**
+**No migration is pending.** He ran `supabase db push` and confirmed with
+`supabase migration list` that Local and Remote match on every row. **THREE went in, not the two this
+section used to name:**
 
+- `20260803000000_simplify_attendance_audit.sql` — **was not listed here at all.** It creates
+  `trg_attendance_touch_updated_at`. See the warning below.
 - `20260803000001_revoke_anon_leaderboard_students.sql` (**T205**)
-- `20260804000000_volunteer_hours_outreach_only.sql` (**T322**)
+- `20260804000000_volunteer_hours_outreach_only.sql` (**T322**) — hours totals drop visibly; meeting
+  and competition hours leave the volunteer-hours figure per his ruling. Intended.
 
-Until they are applied, the hosted project keeps the old grants and the old view definitions.
+**⚠️ The ordering hazard that nearly bit, recorded so the next one is caught deliberately.**
+`push` printed `NOTICE: trigger "trg_attendance_touch_updated_at" ... does not exist, skipping`,
+which proves the trigger was **not** in production until that moment. **T406 (merged earlier the same
+day) removed `updated_at` from the attendance write entirely**, relying on that trigger to maintain
+it. Had the app shipped with T406 before this migration, every attendance write would have left
+`updated_at` silently frozen. The order came out right by luck, not design.
+
+**Lesson for any future migration+code pair:** a code change whose correctness depends on a migration
+is only correct once that migration is APPLIED — not once it is merged. Nothing in the agents'
+container can see the remote (`UNATTENDED-SESSION-LOG.md:267`), so **the ledger row must name the
+migration the code depends on**, and the owner must be told the two ship together.
 
 ### The pattern worth carrying forward: three for three, the stated defect was wrong
 
