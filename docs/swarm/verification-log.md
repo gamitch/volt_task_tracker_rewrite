@@ -9167,3 +9167,63 @@ outcome-based.
 `tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise** · vitest **78 files / 1976
 tests**, targeted `outreach.test.ts` **39 passed, exit 0** (from a 19-test baseline) · build ✓.
 `.env.local` absent.
+
+---
+
+## T504 — `OutreachList.tsx`'s `respondedBy` values were `students.id`-shaped in a `profiles.id` field, in fixtures **and** in a runtime path
+
+**Tier: FAST** (constitution item 26), defended: no write path reaches a database here, no
+schema/RLS/auth, no signature change (see below — the one signature involved is deliberately left
+alone), and **no observable behaviour change**. Orchestrator-implemented.
+
+### The row understated it: there was a runtime instance, not just fixtures
+
+The row describes fixture data. Measured, there were **two** things:
+
+1. **Nine `FIXTURE_RSVPS.respondedBy` values** keyed `student-*`, in a field mirroring
+   `rsvps.responded_by` — a `profiles.id` column. Rekeyed to `profile-*`.
+2. **`withRsvpOverride`'s locally-appended row** set `respondedBy: studentId` — **runtime code**, not
+   fixture data. `OutreachList.tsx`'s own module doc already disclosed this as *"T174's exact open
+   defect… out of scope here"*.
+
+### Why the runtime fix is `null` rather than a profile id
+
+`withRsvpOverride`'s **signature is frozen by T193's packet §4** — the freeze is recorded in the
+function's own doc comment, and the reason is that `getUnansweredRsvpCount`, `computeStudentHours` and
+the goal bar all read the `rsvps` state it returns. So the caller's `viewerProfileId` (which *is* in
+scope at `:3929`, and is used correctly for the real write) **cannot be threaded in without breaking
+that freeze**.
+
+`rsvps.responded_by` is **nullable**. `null` states "this local row does not know who responded",
+which is true. `studentId` stated something false. **Choosing `null` respects a merged task's
+constraint instead of quietly overriding it.**
+
+### NO TEST SHIPPED, and the reason is measured rather than asserted
+
+**Nothing reads `respondedBy` in this file.** Verified two ways:
+
+- every occurrence is a write or a type declaration — there is no read site;
+- `getUnansweredRsvpCount` and `computeStudentHours`, the two consumers named by T193's freeze, contain
+  **zero** references to it.
+
+So the honesty check was run directly: **every `respondedBy` in the file was set to a garbage
+string**, and the suite stayed green:
+
+```
+Tests  108 passed (108)   exit=0
+```
+
+**No mutation of this field can redden anything**, so any test written for it would be a test that
+looks like a guard and is not — the T325 and T301 lesson, applied a third time. **The evidence for
+this task is the type-shape argument and that measurement**, stated as such.
+
+### What was deliberately NOT done
+
+`OutreachList.test.tsx` has its own `respondedBy: 'stu-1'` fixtures. They are the **test's** data, not
+the shipped fixtures this row is about, and touching them would widen scope silently. Left alone and
+recorded here.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise** · vitest **78 files / 1976
+tests**, exit 0 · build ✓. `.env.local` absent.
