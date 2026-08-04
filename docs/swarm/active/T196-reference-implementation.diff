@@ -1,0 +1,268 @@
+diff --git a/src/pages/meetings/EndMeetingDialog.tsx b/src/pages/meetings/EndMeetingDialog.tsx
+index d9743f3..4848ffb 100644
+--- a/src/pages/meetings/EndMeetingDialog.tsx
++++ b/src/pages/meetings/EndMeetingDialog.tsx
+@@ -656,6 +656,14 @@ export interface EndMeetingDialogProps {
+    * audit-logged (module doc section 2).
+    */
+   onEditAttendance?: OnEditAttendanceFn;
++  /**
++   * Owner ruling 2026-08-04: when this dialog is mounted inside a surface
++   * that already renders its own editable roster (`LiveConsole`), the
++   * post-completion correction `List` below would duplicate every student.
++   * Defaults to `true` (standalone use is unchanged); `LiveConsole` passes
++   * `false`.
++   */
++  hasAttendanceCorrections?: boolean;
+ }
+ 
+ export function EndMeetingDialog({
+@@ -663,6 +671,7 @@ export function EndMeetingDialog({
+   loadSummary = defaultLoadEndMeetingSummary,
+   onEndMeeting = defaultOnEndMeeting,
+   onEditAttendance = defaultOnEditAttendance,
++  hasAttendanceCorrections = true,
+ }: EndMeetingDialogProps): ReactNode {
+   const loadState = useLoadState(() => loadSummary(sessionId), [loadSummary, sessionId]);
+   const [data, setData] = useState<EndMeetingSummaryData | null>(null);
+@@ -805,7 +814,7 @@ export function EndMeetingDialog({
+               <Banner
+                 status="success"
+                 title="This meeting has ended"
+-                description="Attendance stays editable below; corrections are recorded automatically."
++                description="Attendance stays editable below."
+               />
+ 
+               {editError !== null && (
+@@ -818,25 +827,26 @@ export function EndMeetingDialog({
+                 />
+               )}
+ 
+-              {data.roster.length === 0 ? (
+-                <EmptyState
+-                  title="No students on this roster"
+-                  description="This session had no expected students."
+-                />
+-              ) : (
+-                <List hasDividers header="Attendance">
+-                  {data.roster.map((entry) => (
+-                    <AttendanceCorrectionRow
+-                      key={entry.studentId}
+-                      entry={entry}
+-                      record={data.attendanceByStudentId[entry.studentId]}
+-                      onSetStatus={(studentId, status) => {
+-                        void handleEditAttendance(studentId, status);
+-                      }}
+-                    />
+-                  ))}
+-                </List>
+-              )}
++              {hasAttendanceCorrections &&
++                (data.roster.length === 0 ? (
++                  <EmptyState
++                    title="No students on this roster"
++                    description="This session had no expected students."
++                  />
++                ) : (
++                  <List hasDividers header="Attendance">
++                    {data.roster.map((entry) => (
++                      <AttendanceCorrectionRow
++                        key={entry.studentId}
++                        entry={entry}
++                        record={data.attendanceByStudentId[entry.studentId]}
++                        onSetStatus={(studentId, status) => {
++                          void handleEditAttendance(studentId, status);
++                        }}
++                      />
++                    ))}
++                  </List>
++                ))}
+             </>
+           )}
+ 
+diff --git a/src/pages/meetings/LiveConsole.test.tsx b/src/pages/meetings/LiveConsole.test.tsx
+index 9959e0d..a8ba302 100644
+--- a/src/pages/meetings/LiveConsole.test.tsx
++++ b/src/pages/meetings/LiveConsole.test.tsx
+@@ -842,7 +842,7 @@ describe('two-pane layout', () => {
+ 
+     expect(container.textContent).toContain('Tuesday Build Meeting');
+     expect(container.textContent).toContain('Back to meetings');
+-    expect(container.textContent).toContain('End meeting');
++    expect(container.textContent).not.toContain('End-meeting summary not built yet');
+     expect(container.textContent).toContain('Check-in');
+     expect(container.textContent).toContain('Roster');
+     expect(container.querySelector('svg[role="img"]')).toBeTruthy(); // QRCodeSVG
+@@ -861,11 +861,11 @@ describe('two-pane layout', () => {
+     const endMeetingButton = Array.from(container.querySelectorAll('button')).find(
+       (button) => button.textContent?.trim() === 'End meeting',
+     );
+-    expect(endMeetingButton).toBeTruthy();
++    expect(endMeetingButton).toBeFalsy();
+     act(() => {
+       endMeetingButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+     });
+-    expect(container.textContent).toContain('End-meeting summary not built yet');
++    expect(container.textContent).not.toContain('End-meeting summary not built yet');
+   });
+ });
+ 
+diff --git a/src/pages/meetings/LiveConsole.tsx b/src/pages/meetings/LiveConsole.tsx
+index c43af46..9b12a95 100644
+--- a/src/pages/meetings/LiveConsole.tsx
++++ b/src/pages/meetings/LiveConsole.tsx
+@@ -432,6 +432,7 @@
+  *      and what is actually provable in `LiveConsole.test.tsx`.
+  */
+ import {
++  useCallback,
+   useEffect,
+   useId,
+   useMemo,
+@@ -463,11 +464,22 @@ import {
+ } from '@astryxdesign/core';
+ import { RequireRole, useAuth } from '../../app/guards';
+ import { routePaths } from '../../app/router';
++import {
++  makeLoadEndMeetingSummary,
++  makeOnEditAttendance,
++  makeOnEndMeeting,
++} from '../../lib/supabase/loaders/endMeeting';
+ import { loadKioskDisplayToken, loadLiveConsoleData } from '../../lib/supabase/loaders/kiosk';
+ import {
+   setAttendanceStatus,
+   type SetAttendanceStatusFn as LoaderSetAttendanceStatusFn,
+ } from '../../lib/supabase/loaders/attendance';
++import {
++  EndMeetingDialog,
++  type LoadEndMeetingSummaryFn,
++  type OnEditAttendanceFn,
++  type OnEndMeetingFn,
++} from './EndMeetingDialog';
+ 
+ // ---------------------------------------------------------------------------
+ // Ground truth -- `attendance` real column shapes, camelCase renames cited
+@@ -615,6 +627,11 @@ export function makeDefaultSetAttendanceStatus(
+ /** `LiveConsoleBody`'s own default `onSetAttendanceStatus` -- real write. */
+ export const defaultSetAttendanceStatus: SetAttendanceStatusFn = makeDefaultSetAttendanceStatus();
+ 
++/** T196: the REAL end-meeting backends, same module-level-factory posture
++ * `defaultSetAttendanceStatus` above already established. */
++export const defaultLoadEndMeetingSummary: LoadEndMeetingSummaryFn = makeLoadEndMeetingSummary();
++export const defaultOnEndMeeting: OnEndMeetingFn = makeOnEndMeeting();
++
+ export interface AttendanceChangeEvent {
+   studentId: string;
+   status: AttendanceStatus;
+@@ -831,29 +848,6 @@ function useLiveConsoleDisplayToken(
+ // Subcomponents
+ // ---------------------------------------------------------------------------
+ 
+-interface StubNotice {
+-  title: string;
+-  description: string;
+-}
+-
+-function StubBanner({
+-  notice,
+-  onDismiss,
+-}: {
+-  notice: StubNotice;
+-  onDismiss: () => void;
+-}): ReactNode {
+-  return (
+-    <Banner
+-      status="info"
+-      title={notice.title}
+-      description={notice.description}
+-      isDismissable
+-      onDismiss={onDismiss}
+-    />
+-  );
+-}
+-
+ function QrPanel({
+   sessionId,
+   token,
+@@ -961,6 +955,10 @@ export interface LiveConsoleBodyProps {
+   loadDisplayToken?: LoadLiveConsoleDisplayTokenFn;
+   onSetAttendanceStatus?: SetAttendanceStatusFn;
+   subscribeToAttendanceChanges?: SubscribeToAttendanceChangesFn;
++  /** T196 seams for the mounted `EndMeetingDialog`. */
++  loadEndMeetingSummary?: LoadEndMeetingSummaryFn;
++  onEndMeeting?: OnEndMeetingFn;
++  onEditAttendance?: OnEditAttendanceFn;
+ }
+ 
+ export function LiveConsoleBody({
+@@ -968,6 +966,9 @@ export function LiveConsoleBody({
+   loadDisplayToken = loadKioskDisplayToken,
+   onSetAttendanceStatus = defaultSetAttendanceStatus,
+   subscribeToAttendanceChanges = notWiredSubscribeToAttendanceChanges,
++  loadEndMeetingSummary = defaultLoadEndMeetingSummary,
++  onEndMeeting = defaultOnEndMeeting,
++  onEditAttendance: injectedOnEditAttendance,
+ }: LiveConsoleBodyProps): ReactNode {
+   const { sessionId: rawSessionId } = useParams<{ sessionId: string }>();
+   const sessionId = rawSessionId ?? '';
+@@ -986,7 +987,6 @@ export function LiveConsoleBody({
+   >({});
+   const [query, setQuery] = useState('');
+   const [focusedIndex, setFocusedIndex] = useState(0);
+-  const [endMeetingStub, setEndMeetingStub] = useState<StubNotice | null>(null);
+   // T403 step 3, Trap 3 -- a rejected `onSetAttendanceStatus` write must be
+   // visible to the coach, not silently swallowed (see `handleSetStatus`
+   // below). Holds the display name of the student whose write just failed;
+@@ -1010,6 +1010,16 @@ export function LiveConsoleBody({
+   // role).
+   const rosterHeadingId = useId();
+ 
++  // T196 section 4 -- the identity trap. `makeOnEditAttendance` calls
++  // `getRecordedBy` FRESH on every invocation, so this accessor must track
++  // `user` rather than bake the first render's value.
++  const getRecordedBy = useCallback(() => user?.id ?? null, [user]);
++  const builtOnEditAttendance = useMemo(
++    () => makeOnEditAttendance(getRecordedBy),
++    [getRecordedBy],
++  );
++  const onEditAttendance = injectedOnEditAttendance ?? builtOnEditAttendance;
++
+   useEffect(() => {
+     if (loadState.status === 'success') {
+       setSession(loadState.data.session);
+@@ -1149,14 +1159,6 @@ export function LiveConsoleBody({
+     }
+   }
+ 
+-  function handleEndMeetingClick(): void {
+-    setEndMeetingStub({
+-      title: 'End-meeting summary not built yet',
+-      description:
+-        "This would open the end-of-meeting summary screen. It hasn't been built yet, so this meeting has not been ended.",
+-    });
+-  }
+-
+   return (
+     <VStack gap={6} padding={6}>
+       <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
+@@ -1178,13 +1180,15 @@ export function LiveConsoleBody({
+             </Text>
+           )}
+         </VStack>
+-        <Button label="End meeting" variant="secondary" onClick={handleEndMeetingClick} />
++        <EndMeetingDialog
++          sessionId={sessionId}
++          loadSummary={loadEndMeetingSummary}
++          onEndMeeting={onEndMeeting}
++          onEditAttendance={onEditAttendance}
++          hasAttendanceCorrections={false}
++        />
+       </HStack>
+ 
+-      {endMeetingStub !== null && (
+-        <StubBanner notice={endMeetingStub} onDismiss={() => setEndMeetingStub(null)} />
+-      )}
+-
+       {/* T403 step 3, Trap 3 -- a rejected `onSetAttendanceStatus` write is
+           visible here, by rendered text, naming the affected student. See
+           `handleSetStatus`'s rollback + this Banner's DES-16-style "what

@@ -842,7 +842,7 @@ describe('two-pane layout', () => {
 
     expect(container.textContent).toContain('Tuesday Build Meeting');
     expect(container.textContent).toContain('Back to meetings');
-    expect(container.textContent).toContain('End meeting');
+    expect(container.textContent).not.toContain('End-meeting summary not built yet');
     expect(container.textContent).toContain('Check-in');
     expect(container.textContent).toContain('Roster');
     expect(container.querySelector('svg[role="img"]')).toBeTruthy(); // QRCodeSVG
@@ -854,19 +854,18 @@ describe('two-pane layout', () => {
     expect(kioskLink?.getAttribute('href')).toBe(`/kiosk/${TEST_SESSION_ID}`);
   });
 
-  it('shows an "End-meeting summary not built yet" disclosure Banner when "End meeting" is clicked', async () => {
-    renderBody(COACH_USER);
-    await flushMicrotasks();
-
-    const endMeetingButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent?.trim() === 'End meeting',
-    );
-    expect(endMeetingButton).toBeTruthy();
-    act(() => {
-      endMeetingButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    expect(container.textContent).toContain('End-meeting summary not built yet');
-  });
+  // T196: the "End-meeting summary not built yet" stub test was DELETED here, not
+  // rewritten. Its subject -- the stub Banner -- no longer exists, so there was
+  // nothing left for it to test. The version that survived the mount asserted the
+  // End-meeting button was ABSENT, dispatched a click on an undefined element, and
+  // checked that just-deleted stub copy was missing (trivially true), all under a
+  // name describing the opposite of what it asserted.
+  //
+  // The behaviour it was reaching for -- the dialog's own trigger renders, and the
+  // stub copy never returns -- is covered properly in
+  // `LiveConsole.endMeeting.test.tsx`, which injects the `loadEndMeetingSummary`
+  // seam so the button's PRESENCE is the signal rather than its absence. The
+  // surviving test above still asserts the stub copy is gone.
 });
 
 // ---------------------------------------------------------------------------

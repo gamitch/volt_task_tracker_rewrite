@@ -252,12 +252,20 @@
  * `ResolvedStudentIdentity.teamIds`/`StudentHomeContentProps.teamIds`
  * thread it from the identity-resolution tier down to the content tier. A
  * dual-team student's second team's meetings/check-in/sign-ups are no
- * longer silently invisible. **T186 remains open, separately:** the raw
- * `students.team_id` column itself (still read here for the KEPT `teamId`
- * display value, and still what `v_student_goal_projection`'s own
- * `team_id` column reflects) is still schema-documented as
- * display-only -- this task does not touch that column or its own
- * migration-level status, only widens THIS file's own scoping read.
+ * longer silently invisible.
+ *
+ * **T186 UPDATE (was "remains open" here):** the documentation half is now
+ * recorded, in `loaders/students.ts`'s own `StudentGoalProjectionDbRow`
+ * -- that the raw `students.team_id` column (still read for the KEPT
+ * `teamId` value, and what `v_student_goal_projection.team_id` reflects) is
+ * schema-documented display-only, that this file was the reader which
+ * briefly made that documentation false, and that T187 walked it back. The
+ * KEPT `teamId` is written into `ResolvedStudentIdentity` and never read
+ * anywhere in this file; reading it again for scoping would reintroduce the
+ * T187 defect. The matching fix to the migration's own comment could NOT be
+ * made: constitution item 10 makes editing an applied migration file a
+ * BLOCKER, so the view's own text still says "display badge only" with no
+ * pointer to its second reader.
  *
  * This file still does not branch on `user.role` at all (unlike
  * `OutreachList.tsx`/`MeetingsList.tsx`, which are role-VARIANT pages):
