@@ -9335,6 +9335,200 @@ tests**, exit 0 · build ✓. `.env.local` absent.
 
 ---
 
+## T503 — a student now sees what their teammates actually answered
+
+**Tier: HEAVY** (constitution item 26): RLS change plus a migration. Full chain — packet → premise gate
+→ **REVISE** → packet v2 → worker → orchestrator replay.
+
+### The defect
+
+A non-staff viewer's Signups buckets showed **every teammate under "No response"**, whatever they had
+answered. `groupSessionSignups` diffs the roster against the rsvps RLS lets it read, so the page was
+treating *"I am not allowed to read this row"* as *"this student did not answer"* — a false statement
+on screen, not a privacy protection. **Pre-existing; T306 deliberately did not extend it.**
+
+### The owner's two rulings
+
+Product (2026-08-03): *"it is ok if students see other teammates rsvp's… we quite frankly do that
+currently through thumbs up in chat."* Scope (2026-08-04): *"let's go with the first option, anyone on
+the team"* — the widest of three offered.
+
+### The MAJOR: this is a PRD deviation, and v1 of the packet missed it entirely
+
+**Constitution item 3:** *"RLS policies and metric SQL come **only** from PRD Section 8.4, copied
+verbatim. Re-deriving either → **BLOCKER**."* PRD §8.3's `rsvps` row says `read/write own`.
+
+**The gate caught that the packet had no deviation record, which would have made this
+BLOCKER-able.** The orchestrator had misremembered item 3 as covering only metric formulas in
+TypeScript. Fixed by filing **D013** before any code was written, following the **D002** pattern
+constitution item 8 already uses for React 19: the PRD text stays **unedited**, and the dispute-log
+entry plus the two decision entries are the authority. The migration header cites all of them.
+
+### The premise, proven by execution
+
+Two migrations in this repo made **contradictory** claims about whether a view respects the querying
+user's RLS. That decided the blast radius: nothing, or every student's planned-hours figure.
+
+The gate settled it on a scratch **PostgreSQL 16.13** with this repo's real migrations. A view without
+`security_invoker` **executes as its owner** and never applied the querying user's RLS:
+
+| | Result |
+|---|---|
+| direct `rsvps` read, non-staff session | **1 row** |
+| `v_planned_rsvp_hours`, same session, same instant | **3 rows — teammates' included** |
+| `set (security_invoker = on)` / `reset` | **1 row** / **3 rows** |
+| after the new policy | direct read **3 rows**; all three planned-hours views **byte-identical** |
+
+It re-ran with a **NOSUPERUSER, NOBYPASSRLS** owner — strictly weaker than hosted Supabase's
+`postgres` — so the result holds there *a fortiori*.
+
+### What shipped
+
+**One additive statement.** `create policy read_all_authenticated on rsvps for select to authenticated
+using (true);` — no `drop`, no `alter`, `own_or_linked_read` left in place. Postgres ORs permissive
+policies, so this suffices, and 8.4's verbatim policy survives.
+
+### Orchestrator's independent replay — on its own PostgreSQL 16.13
+
+The worker's suite passed end-to-end (**exit 0**), including `PASS c2-update-denied (UPDATE 0, no
+exception)`. Then each mutation, re-run:
+
+| # | Mutation | Real failure |
+|---|---|---|
+| **C1** | drop the new policy | `FAIL c1-select-all: expected 4 rows visible to Student One, got 1` |
+| **C2** | **also** widen the write policy | `FAIL c2-update-denied: cross-student UPDATE matched a row (should be UPDATE 0)` |
+| **C3** | grant to `anon` as well | `FAIL c3-anon-denied: anon read 4 row(s) from rsvps` |
+| **C5** | write policies untouched | the RLS migration is **not in the diff at all** — only the new file is |
+| **C6** | no app code | `git diff -- src/` against the **merge-base** is **empty** |
+
+**C2 is the criterion that keeps the ruling honest.** The owner authorised *seeing*, not *answering for
+other people*; a migration widening both would have satisfied C1 and silently exceeded him.
+
+**A diff-direction trap worth recording:** `git diff origin/main HEAD -- src/` showed 42 changed lines
+and looked like a C6 violation. It was an artifact — the branch predates T504, so the diff rendered
+T504's merged changes as reversions. **Against the merge-base it is empty.** Diffing a branch against a
+moved `main` measures the wrong thing.
+
+### Two corrections that would have produced broken evidence
+
+- **Cross-student UPDATE denial manifests as `UPDATE 0`, NOT an exception.** The row is *visible* but
+  not *updatable*, so RLS filters it out of the UPDATE's scope rather than raising. **T205's
+  exception-catch shape would have mis-asserted this and passed anyway.**
+- The before/after view comparison needed the **migration loop split** — apply all-but-the-new →
+  snapshot → apply → re-snapshot.
+
+### D010 closed here, per the owner's "option B"
+
+The false claim *"plain views run under the querying session's own RLS"* appears in
+`kpi_views.sql:136-152` (D010, 2026-07-29) and was copied into `dashboard_views.sql:50-56`. **Item 10
+forbids editing an applied migration**, so the correction rides in **this migration's header**,
+covering both occurrences. **Neither file was edited.** Third in-repo occurrence of the same false
+premise.
+
+### FOR THE OWNER — what changes when he applies it
+
+- Students see teammates' real RSVP answers instead of a wall of "No response". **That is the point.**
+- **`responded_by` becomes visible**, so a parent answering on their child's behalf is now visible to
+  teammates. Not part of what he was shown when he chose the scope; disclosed in D013 and here.
+- **`makeLoadOutreachData` now returns every rsvp row to non-staff sessions in its payload.** Display
+  is unchanged — the student view filters by own id — but the data is in the response. All other
+  direct readers were verified unaffected (coach-only, or `.eq('student_id')`-filtered).
+- **Not applied.** Item 16 reserves cutover for the owner.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise** · vitest **78 files / 1993
+tests**, exit 0 · build ✓ · **SQL suite exit 0** on a real PostgreSQL 16.13. `.env.local` absent.
+
+---
+
+## T164 — first runtime tests for `loaders/kpi.ts` (W4's file, owner-authorized)
+
+**PASS, attempt 1. `86e8648`. Checker verdict PASS, 1 MINOR (a mutation survivor with no user
+surface), filed rather than fixed.** Worker `worker-implementer` (sonnet — no item-18 trigger: the
+loader contains **no arithmetic at all**; the metric math lives in W4's `*kpi_views.sql`, which it
+only reads).
+
+### The one true row of four
+
+T161, T162 and T163's *"0 tests"* claims were all retracted this week — an audit had counted **files
+named `<module>.test.ts`** rather than tests *of* the module (D5, D7). **T164 survived every check.**
+Verified three times before packeting and a fourth time by the checker at base: **0 runtime imports,
+0 invocations of either export.** The two apparent references are `import type` (erased at runtime),
+and every use of `loadKpiStripData` in `KpiStrip.test.tsx` is the component's **injected prop being
+stubbed** — which tests `KpiStrip`, not this loader.
+
+### Gate skipped, on the record
+
+**Item 19b, decision D4.** Premise measured by direct observation rather than inherited; settled
+pattern with three in-repo precedents; no item-18 risk class. **The checker re-verified the premise
+independently and it held** — so the skip was sound. Same reasoning as D1/T197.
+
+### The defect class this row exists for
+
+`mapKpisDbRowToKpiStripData` is a **verbatim 11-field column rename with no logic**. Swap any two
+and **nothing crashes** — a coach is simply shown meeting hours labelled as outreach hours. Item
+26's *"lie to a user about their own data"*, exactly.
+
+**A lazy fixture makes that undetectable.** If two fields share a value, a swap between them is
+invisible and the suite stays green. **The fixture carries 11 distinct values across 11 fields** —
+the checker verified this **programmatically rather than by eye**, including the string/date pair.
+
+### Mutations — replayed by orchestrator AND checker, not relayed
+
+All seven packet criteria red at exit 1. The orchestrator independently replayed C1 and saw
+`meetingHours: 22 → 33`, `outreachHours: 33 → 22` in the failure diff.
+
+**The checker then ran eight mutations of its own — 7 caught, 1 survivor:**
+
+| Its own mutation | Result |
+|---|---|
+| `total_hours`↔`competition_hours` | red |
+| `most_recent_event_title`↔`most_recent_event_date` (the string/date pair) | red |
+| single field nulled | red |
+| `mapTeamCountDbRowToBreakdownRow`: `team_id`↔`team_name` | red |
+| `activeStudentsCount` ← `team_sort_order` | red |
+| map path passed `[]` instead of `teamBreakdown` | red |
+| `activeStudentsCount: 0` hardcoded | red |
+| **`seasonId: row.season_id` → hardcoded constant** | **SURVIVED, exit 0** |
+
+**The survivor, honestly scoped:** every mapping test passes the loader the same id the fixture row
+carries, so the `season_id` **passthrough** is coincidentally satisfied rather than discriminated.
+**Narrow:** all *swaps* involving `season_id` are still caught (values distinct), the zero path does
+discriminate it (`'season-missing'`), and `KpiStrip.tsx` **never renders** `KpiStripData.seasonId`.
+**No user-visible lie today. Filed, not fixed** — one-line fixture change, W4's T700 block.
+
+### The worker disclosed a weakness on itself, and the checker tested it
+
+The worker flagged that its "both views queried" assertion for C6 was **call-shape**
+(`fromSpy.toHaveBeenCalledWith`). The checker **deleted those lines and re-ran C6** — still **red at
+exit 1**, on two outcome-based assertions. C6 never depended on the call-shape check. That is the
+right way to handle a self-disclosed weakness: test it, don't take it on trust.
+
+### Not a re-implementation
+
+Value import of `makeLoadKpiStripData`, invoked in all 8 tests. **No `vi.mock` anywhere.** The stub
+implements transport only and returns raw snake_case rows — it contains no camelCase mapping, so it
+cannot stand in for the logic under test. The real `createLoader` runs. Expected objects are
+hand-written literals, not derived from the fixture — the shape that would have made this vacuous is
+absent.
+
+### Gates
+
+`tsc` **0** · eslint **0 errors** / 364 pre-existing warnings · prettier **clean** · vitest
+**79 files / 1960 tests, exit 0**. Base `08a1092` re-measured in the checker's own worktree: 78 /
+1952. **Delta exactly +1 file / +8 tests.**
+
+### Environment note, chased and cleared
+
+The checker observed 12 failures on the shared tree mid-review and correctly flagged it as *"captured
+on a tree in flux"*. **Chased: not real.** `origin/main` measured green in an isolated worktree
+(78 files / 1993 tests, exit 0), and the T196 branch at `02af8d7` also exits 0. The shared tree had
+simply been switched branches by the orchestrator mid-merge. **Worth copying: the checker reported
+an anomaly it could not attribute rather than ignoring it or blaming the task.**
+
+---
+
 ## T196 — `EndMeetingDialog` mounted on `LiveConsole` (closes W3)
 
 **PASS. `6271ac6` + wiring-test follow-up. checker-reviewer PASS, 2 MINOR (one fixed in-branch, one

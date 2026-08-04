@@ -2961,6 +2961,111 @@ decision gets made on a bad premise."*
 
 ---
 
+
+---
+
+## 2026-08-04 — George picks the SCOPE for T503: any student on the team, always
+
+**Verbatim:** *"let's go with the first option, anyone on the team"* — chosen from three scopes put to
+him in plain language after he asked for a reminder of the T503 ruling.
+
+**This closes the last open question on T503.** The product half was settled 2026-08-03 (*"it is ok if
+students see other teammates rsvp's…"*); what remained was **how wide "teammate" means**, since an RLS
+policy has to be written as a specific rule. The three offered were:
+
+1. **Anyone on the team, always** ← **chosen**
+2. only for events the viewer is also on the roster for
+3. only students sharing a team with the viewer
+
+**The orchestrator recommended (1) and gave its reasoning**, which he accepted: it is one small rule,
+easy to reason about later, and on a ~20-student team the other two draw boundaries that do not
+correspond to anything real. The leaderboard already shows everyone's hours to everyone.
+
+**What this authorises, and what it does NOT:**
+
+- **Authorised:** widening **SELECT** on `rsvps` so any authenticated user may read any row.
+- **NOT authorised:** any change to the **write** policies. `own_or_linked_write` /
+  `own_or_linked_update` (`20260717000002_rls.sql:205-215`) stay exactly as they are — a student still
+  may only answer for themselves, and a parent only for their linked child. **Widening read is not
+  widening write**, and a task that touches the write side has exceeded this ruling.
+- **NOT authorised:** applying the migration to hosted Supabase. **Constitution item 16 reserves
+  cutover for the owner**, and three migrations now await him (T205's, T322's, and this one).
+
+**One consequence to put in front of him rather than discover later:** `rsvps.responded_by` is a
+`profiles.id`, so widening read also reveals **who answered**, not just what the answer was — e.g.
+that a parent answered on their child's behalf rather than the student answering themselves. That is
+a small thing on this team and consistent with the reasoning he gave, but it was not part of what he
+was shown, so it is recorded here and called out in the PR rather than slipped in.
+
+---
+
+### D4 — T164's premise gate SKIPPED under item 19b; worker + checker dispatched
+
+**Not a blanket policy — the opposite call to D2**, which insisted T162 be gated. The difference is
+the premise, and D2's own reasoning was later shown partly wrong by the gate it commissioned.
+
+**Skipped because:**
+- The premise is **measured three times by direct observation**, most recently at HEAD `bab3371`:
+  **0 runtime imports, 0 invocations of either export, 255 lines.** Not inherited from a ledger row —
+  and it is the **one row of four** whose "0 tests" claim survived scrutiny (D5/D7 retracted the
+  other three).
+- The pattern is settled with **three in-repo precedents** (`checkin.test.ts`, `endMeeting.test.ts`,
+  `attendance.test.ts`), all stubbing through the same injectable `getClient`.
+- **No item-18 trigger:** no migration, no RLS, no `security definer`, no auth. The loader contains
+  **no arithmetic at all** — the metric math lives in W4's `*kpi_views.sql`, which it only reads.
+
+**The residual risk is a vacuous test, which is a worker risk the checker catches — not a premise
+risk.** Same reasoning as D1 for T197, which held up: that gate-skip was followed by a checker
+that found two real NITs.
+
+**Reversible:** if the checker finds the packet's premise wrong, this decision was wrong.
+
+### D5 — T164 is W4's file; the owner authorized it directly
+
+`loaders/kpi.ts` is W4's (`WORKFLOWS.md:226`), and this session is the W3/T196 orchestrator. **The
+owner said *"go ahead with T164"*, which is the authorization.** Scoped to this row's tests only —
+W4's view migrations, `loaders/reports.ts` and `pages/reports/**` are untouched. Recorded so the
+cross-workflow reach is visible rather than assumed.
+
+### The defect class this row exists for
+
+`mapKpisDbRowToKpiStripData` (`kpi.ts:202-222`) is a verbatim 11-field column rename with no logic.
+**Swap any two fields and nothing crashes — a coach is shown meeting hours labelled as outreach
+hours.** Item 26's "lie to a user about their own data", exactly. The packet's C1/C2 are that
+mutation, and it requires every fixture field to carry a **distinct** value or the swap is
+invisible.
+
+### D6 — process correction: D5's cross-workflow reach should have been ASKED, not logged after the fact
+
+**The owner stopped the T164 worker mid-flight:** *"oh wait let me see if w4 is working T164. you
+should have informed me this was W4's first."* **He is right, and the distinction is worth keeping.**
+
+D5 treated his earlier *"go ahead with T164"* as authorization for reaching into W4's files. **But
+that go-ahead was given before either of us knew T164 was W4's row** — the ownership check happened
+after. **He could not have authorized a cross-workflow reach he did not know existed.** Recording it
+in this file made it *visible*; visible-after-the-fact is not the same as asked. **D5's
+authorization claim is withdrawn; this restart rests on his explicit "restart it" instead.**
+
+**What the stop actually checked, measured:**
+
+| Check | Result |
+|---|---|
+| W4 active at all? | **YES** — PR #67 (T187+T800) updated 20 minutes prior |
+| Does #67 touch `kpi.ts` or `*kpi_views.sql`? | **NO** — its 13 files are `parentHome`, `students`, `StudentHome`, `ParentHome`, `volt.ts`, swarm docs |
+| Any commit touching `kpi.ts` in 2 days? | **NONE** — recent W4 commits (T702, T500) are `pages/reports/**` and outreach totals |
+| Worker damage | **NONE** — killed at its first step, tree clean, no `kpi.test.ts` created |
+
+**So there was no real collision — but the process was still wrong, and only luck made the outcome
+harmless.** `WORKFLOWS.md`'s own top warning is that two workflows sharing a file cannot run in
+parallel, and this project has already paid for that lesson twice. **The rule for the rest of this
+window: a cross-workflow file reach is an ASK, not a log entry — even when the owner has said "go
+ahead" to the row, if ownership was established after he said it.**
+
+**Restarted on his explicit instruction (*"restart it"*), with the collision check now on the
+record rather than assumed.**
+
+---
+
 ---
 
 ## 2026-08-04 — George's ruling: W3 gets `LiveConsole.tsx` FOR T196's MOUNT ONLY; T400 is un-sequenced from T196's wave
