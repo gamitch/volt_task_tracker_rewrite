@@ -367,7 +367,7 @@ export const voltTheme = defineTheme({
 
 - **RPT-01** `/reports` (coach/admin), season-scoped, `TabList`: **Participation | Hours | Events**.
 - **RPT-02 Participation tab:** `Grouped Table`-style table grouped by team: student, meetings expected / present / late / excused, participation % (MET-01) with `ProgressBar`, sortable; `PowerSearch` filter (team, below-% threshold, name). A "below 70%" quick filter chip answers P-COACH2.
-- **RPT-03 Hours tab:** student, team, confirmed hours, planned hours (going RSVPs on future sessions × duration), goal, % to goal, `ProgressBar`; team subtotal rows; season totals for people reached and adult volunteers (count and hours).
+- **RPT-03 Hours tab:** student, team, confirmed hours, planned hours (going RSVPs on future sessions × duration), goal, % to goal, `ProgressBar`; team subtotal rows; season totals for people reached.
 - **RPT-04 Events tab:** all sessions with type, date, attendance/signup counts, hours awarded, people reached, adult volunteers, status.
 - **RPT-05 CSV exports** (`Button variant="secondary"` per tab + a combined menu): `roster.csv`, `events.csv`, `attendance.csv`, `hours_by_student.csv`. Client-generated from the same queries, UTF-8, header row, ISO dates. Parity requirement: old app's "Download events CSV / roster CSV" consumers keep working (columns superset of old ones — verified during migration).
 - **RPT-06** Students/parents do not access `/reports`; their equivalents live on Home and `/meetings`.

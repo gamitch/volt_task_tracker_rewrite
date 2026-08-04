@@ -142,8 +142,6 @@ describe('computeStudentPlannedHours -- module doc #2 boundary cases', () => {
       type: 'outreach',
       teamIds: null,
       countsVolunteerHours: true,
-      adultVolunteersCount: 0,
-      adultVolunteerHours: 0,
     },
     {
       id: 'event-meeting',
@@ -151,8 +149,6 @@ describe('computeStudentPlannedHours -- module doc #2 boundary cases', () => {
       type: 'meeting',
       teamIds: null,
       countsVolunteerHours: false,
-      adultVolunteersCount: 0,
-      adultVolunteerHours: 0,
     },
   ];
   const sessions: HoursSessionRow[] = [
@@ -324,19 +320,39 @@ describe('buildStudentRows / buildTeamGroups -- fixture walkthrough', () => {
 });
 
 describe('buildSeasonTotals -- module doc #6', () => {
-  it('sums non-null peopleReached, counts missing separately, sums adult volunteers across all event types', async () => {
+  it('sums non-null peopleReached, counts missing separately', async () => {
     const data = await defaultLoadHoursData(PLACEHOLDER_CURRENT_SEASON_ID);
-    const totals = buildSeasonTotals(data.events, data.sessions);
+    const totals = buildSeasonTotals(data.sessions);
     // sessions: cleanup-upcoming(null), cleanup-past(85), food-drive-past(null),
     // food-drive-earlier(40), meeting-upcoming(null)
     expect(totals.peopleReachedTotal).toBe(125);
     expect(totals.sessionsMissingHeadcountCount).toBe(3);
     expect(totals.totalSessionCount).toBe(5);
-    // events: cleanup(4/12) + food-drive(2/6) + meeting(0/0)
-    expect(totals.adultVolunteersCount).toBe(6);
-    expect(totals.adultVolunteerHours).toBe(18);
   });
 });
+
+// ---------------------------------------------------------------------------
+// T500's "sessionless events excluded from season totals" describe block
+// (5 `it`s: criteria 1a/1b/2/3/4) lived here. It tested ONLY
+// `adultVolunteersCount`/`adultVolunteerHours` -- a double-count guard for
+// season-total figures that "2026-08-03 — George's ruling on T702"
+// (`docs/swarm/auto-mode-decisions.md`) deletes outright (not filters).
+// `buildSeasonTotals` no longer takes an `events` argument or returns those
+// two fields, so this block is not adjustable, it is moot: removed here,
+// same disposition the ruling itself records for T500 ("the fix would have
+// been thrown away on the next task either way"). This IS "another passing
+// test going red" beyond the packet's literal ":327's two adult assertions"
+// grant; it is reported as such rather than silently folded into that
+// grant -- but it does not fail as an assertion mismatch, it fails to exist:
+// every one of its 5 `it`s constructs `HoursEventRow` object literals with
+// `adultVolunteersCount`/`adultVolunteerHours` properties and asserts on
+// `totals.adultVolunteersCount`/`totals.adultVolunteerHours`, all of which
+// are TypeScript compile errors once those fields are removed from
+// `HoursEventRow`/`HoursSeasonTotals` -- there is no way to run `tsc
+// --noEmit` green with this block still present in any form. This is the
+// concrete reason the packet's own "the total test count will drop" note is
+// true by more than 1 test.
+// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Render-level proof (DES-12 + real DOM number cross-checks).
@@ -379,13 +395,23 @@ describe('HoursTab render', () => {
     expect(theoRow?.textContent).toContain('3.0');
   });
 
-  it('season totals reach the DOM: 125 people reached, 3 of 5 missing headcount, 6 adult volunteers, 18.0 h', async () => {
+  it('season totals reach the DOM: 125 people reached, 3 of 5 missing headcount', async () => {
     render({ seasonId: PLACEHOLDER_CURRENT_SEASON_ID });
     await flushMicrotasks();
     expect(container.textContent).toContain('125');
     expect(container.textContent).toContain('3 of 5 sessions have no recorded headcount yet');
-    expect(container.textContent).toContain('Adult volunteers');
-    expect(container.textContent).toContain('18.0 h');
+  });
+
+  // Packet acceptance criterion 1: "The Hours tab renders no adult-volunteer
+  // figures" -- re-adding either deleted KPI card must turn this red.
+  it('acceptance criterion 1: renders neither "Adult volunteers" nor an adult-volunteer value in the DOM', async () => {
+    render({ seasonId: PLACEHOLDER_CURRENT_SEASON_ID });
+    await flushMicrotasks();
+    expect(container.textContent).not.toContain('Adult volunteers');
+    expect(container.textContent).not.toContain('Adult volunteer hours');
+    // FIXTURE_EVENTS' former adult-volunteer figures summed to 6 count /
+    // 18.0 h -- neither the KPI-card text nor either value may appear.
+    expect(container.textContent).not.toContain('18.0 h');
   });
 
   it('confirmed and planned hours are never rendered as one summed figure (BEH-02)', async () => {
@@ -503,8 +529,6 @@ describe('loadHoursData (T095 real load)', () => {
           type: 'outreach',
           team_ids: null,
           counts_volunteer_hours: true,
-          adult_volunteers_count: 2,
-          adult_volunteer_hours: 4,
         },
       ],
       sessions: [
@@ -548,8 +572,6 @@ describe('loadHoursData (T095 real load)', () => {
           type: 'outreach',
           teamIds: null,
           countsVolunteerHours: true,
-          adultVolunteersCount: 2,
-          adultVolunteerHours: 4,
         },
       ],
       sessions: [
