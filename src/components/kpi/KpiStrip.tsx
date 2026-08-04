@@ -283,7 +283,7 @@ function KpiStripContent({
     <Section padding={3} dividers={['bottom']}>
       <Grid columns={{ minWidth: 200, repeat: 'fit', max: 4 }} gap={3}>
         <KpiTile
-          label="Season hours"
+          label="Volunteer hours"
           value={data.totalHours.toFixed(1)}
           secondary={formatHoursBreakdown(data)}
         />
