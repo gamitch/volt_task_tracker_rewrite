@@ -8556,3 +8556,101 @@ earliest-linked-child rule, where a parent with two children silently resolves t
   completeness.
 - **Packet v2 was never dispatched.** It is retained at `active/T162-worker-packet.md` as the record
   of what this row was believed to require, and of the two BLOCKERs the gate found in it.
+## T322 — volunteer hours become `type = 'outreach'` ONLY, in both the season KPI and every student's own total
+
+**Tier: HEAVY, unconditional.** Constitution item 18 trigger 1 (`constitution.md:75`, "creates or
+edits a file under `supabase/migrations/`") **and** trigger 3 (a SQL view containing metric math).
+Full chain ran: packet → premise gate (**DISPATCH**, 4 MINOR / 4 NIT) → worker → orchestrator replay.
+
+**Three rulings, all in `auto-mode-decisions.md`:** 2026-08-02 (meetings excluded), 2026-08-03
+(competitions excluded — *"Volunteer hours = `type = 'outreach'` ONLY"*), 2026-08-04 (*"fix both"* —
+extend beyond the staff card to `v_student_hours`).
+
+### The ledger row's account of this bug was wrong, and the correction is the task
+
+T322's row states `v_season_kpis` sums *"across all types including `meeting`"*. **Incomplete and
+misleading.** The `hours_by_type` CTE already joins `and e.counts_volunteer_hours`, and meetings are
+created with that flag hardcoded `false` (`loaders/meetings.ts:690`) with no app path that edits it.
+**Meeting hours never reached the total.** The gate confirmed this by measurement: a seeded meeting
+with production flags contributed nothing pre-fix.
+
+**The real defect: the volunteer-hours total was governed by an editable per-event boolean rather
+than by event `type`** — which is the entire substance of both rulings. `competition`'s flag is
+admin-editable and defaults `false`, so it sat **one toggle away** from counting. Measured pre-fix
+with the toggle on: 3.0h leaked into `total_hours` (7.5 vs 4.5), into `v_student_hours.confirmed_hours`
+(5.0 vs 2.0), and into `goal_pct` (4 vs 2).
+
+### What shipped
+
+One new additive migration, `20260804000000_volunteer_hours_outreach_only.sql` — item 10 forbids
+editing an applied migration, so both views are `create or replace`d:
+
+- **`v_student_hours`** — join gains `and e.type = 'outreach'`, keeping the pre-existing flag
+  condition rather than replacing it.
+- **`v_season_kpis`** — **the `hours_by_type` CTE is deliberately NOT filtered**; only
+  `total_hours` becomes `sum(type_hours) filter (where type = 'outreach')`. Filtering the CTE would
+  have zeroed the `meeting_hours`/`competition_hours` breakdown, which the 2026-08-03 ruling requires
+  to survive.
+- **`KpiStrip.tsx:286`** — label now reads **"Volunteer hours"**, per the 2026-08-02 ruling's
+  *"label the card so it reads as volunteer hours rather than all hours."*
+
+**`goal_pct` needed no separate change** — the gate resolved the packet's admitted open question by
+measurement: it derives from `total_hours` (`kpi_views.sql:237`) and inherits the fix. **NULL path
+measured safe:** the outer `coalesce` catches `sum(...) filter`'s NULL, so a season with no outreach
+hours reads `0`, never blank.
+
+### The FLL protection, which is the whole reason this filters by type
+
+`GG FLL Team Meetings` and `P3 FLL Team Meetings` are `type = 'outreach'` and **count in full** —
+**72 of 117 sessions, 62% of the migrated data**. Acceptance criterion 4 exists solely to prove the
+filter is by `type` and not by title; a title-based fix would have stripped the majority of the
+team's real volunteer hours out of every student's goal. **Three separate people have now reached for
+that mistake.** Not authorized, and not done: retyping any event.
+
+### Mutation evidence — the two halves fail in mirror image
+
+| # | Mutation | Result |
+|---|---|---|
+| 1 | Revert `total_hours` to the all-type sum | exit 3 — `total_hours 7.0` (expected `4.0`); `confirmed_hours` stayed correct at 4.0 |
+| 2 | Drop `and e.type = 'outreach'` from `v_student_hours` | exit 3 — `confirmed_hours 7.0` (expected `4.0`); `total_hours` stayed correct at 4.0 |
+| 4 | Filter by event title instead of type | exit 3 — fails **only** `fll-titled-outreach-counts-in-full`, assertions 1-4 unaffected |
+| 5 | Revert the card label | exit 1 — 6 failed / 9 passed |
+
+**M1 and M2 failing in opposite directions is the proof that "fix both" was two independent fixes,
+not one change with a side effect** — each half breaks exactly one figure and leaves the other
+correct.
+
+### Who verified what — stated plainly
+
+**The worker hit a session API limit and terminated mid-run**, after confirming mutation 4 and before
+running mutation 5 or any gate. **It had already committed** (`c9fa12e`, `d487704`) — verified per
+item 21 against the committed blob, not the working tree. The orchestrator personally ran the SQL
+suite baseline, **mutations 1, 2 and 5**, and every gate. Mutation 3 was run by the premise gate and
+not re-run by the orchestrator; that is disclosed rather than implied.
+
+### Gates, `.env.local` absent
+
+`tsc --noEmit` 0 · `vite build` 0 · `format:check` 0 · `eslint .` **0 errors / 364 warnings**
+(unchanged) · `vitest run` 0 — **78 files / 1946 tests** · `run_volunteer_hours_outreach_only.sh` 0,
+ALL 5 PASS · `run_calendar_feed_lifecycle.sh` 0 · `run_t205_anon_grant.sh` 0 — no cross-suite
+regression.
+
+### Blast radius — inherited deliberately, not a side effect
+
+`v_team_hours`, `v_season_roster_stats`, `v_student_goal_projection`, `loaders/leaderboard.ts:138`,
+`loaders/reports.ts:398`, `send-reminders/index.ts:512`, and all three home dashboards now carry
+outreach-only semantics. **That is the ruling's intent.** Dependents `coalesce` absent rows to honest
+zeros (gate-measured). One disclosed nuance: a student whose *only* hours came from a flag-on
+competition drops off the leaderboard rather than showing 0 — no live data is in that state.
+
+### Filed, not fixed here
+
+**T704** — `v_season_kpis.meeting_hours` is structurally frozen at `0.0` (the CTE's flag join plus
+meetings' hardcoded `false`), yet `KpiStrip` renders `Meetings 0.0h` beside real figures. That
+contradicts the 2026-08-03 ruling's expectation that meeting hours stay *"displayed as their own
+figure"*. Needs an owner ruling; out of this task's scope.
+
+### Not deployed
+
+The migration lands in the repo only. **Constitution item 16 reserves hosted-Supabase cutover for the
+owner**, so the live project keeps the old view definitions until he applies it.
