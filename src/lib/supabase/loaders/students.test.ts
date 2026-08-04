@@ -29,7 +29,10 @@ import {
 
 /**
  * Records `.select()`/`.eq()`/`.maybeSingle()` for the
- * `v_student_goal_projection` view.
+ * `v_student_goal_projection` view, AND (T187) `.select()`/`.eq()`/`.is()`
+ * for the new `student_teams` ACTIVE-membership read `makeResolveStudentScope`
+ * now also issues (`students.ts`'s own module doc: sequential, only after a
+ * non-null `v_student_goal_projection` row).
  *
  * Criterion 8's own MINOR fix (T176-gate-round1-findings.md): `maybeSingle`
  * is exposed at BOTH the filtered chain position (after `.eq(...)`) AND
@@ -40,6 +43,13 @@ import {
  * failure genuinely comes from the intended `eqSpy` assertion going red,
  * not from an unrelated crash -- verified directly below (`it('the eq-drop
  * mutation fails on the intended assertion, not a TypeError' ...`).
+ *
+ * `activeTeamIds` (T187, new second parameter) defaults to `row ? [row.team_id]
+ * : []` -- when a caller supplies only `row`, the fake `student_teams` table
+ * mirrors the single legacy `team_id` as that student's one ACTIVE
+ * membership, preserving every pre-existing single-team test's own behavior
+ * unchanged (real production backfill precedent: one membership row per
+ * legacy `team_id`).
  */
 function makeRecordingClient(
   row: {
@@ -48,12 +58,43 @@ function makeRecordingClient(
     confirmed_hours: number;
     planned_hours: number;
   } | null,
+  activeTeamIds: string[] = row ? [row.team_id] : [],
 ) {
   const maybeSingleSpy = vi.fn().mockResolvedValue({ data: row, error: null });
   const eqSpy = vi.fn(() => ({ maybeSingle: maybeSingleSpy }));
   const selectSpy = vi.fn(() => ({ eq: eqSpy, maybeSingle: maybeSingleSpy }));
+
+  // T187 -- `student_teams` fake chain: `.select('team_id')
+  // .eq('student_id', id).is('left_on', null)`. `resolveActiveRows` is the
+  // ONE underlying resolver both the real `.is(...)` terminal call AND the
+  // `.eq(...)` stage's own `.then` (below) share -- mirrors real
+  // `supabase-js` PostgrestFilterBuilder, where EVERY chain stage is itself
+  // directly awaitable, not just the one this loader happens to call last.
+  // That `.then` is what lets the criterion-3 "is-drop" mutation proof below
+  // resolve without a `TypeError` when `.is(...)` is genuinely never called,
+  // the same "mutation fails on the intended spy, not a crash" shape
+  // `eqSpy`'s own eq-drop proof above already established -- calling it does
+  // NOT itself count as calling `isSpy` (the tracked mock), so that proof's
+  // own `expect(isSpy).not.toHaveBeenCalled()` stays meaningful.
+  function resolveActiveRows(): Promise<{ data: { team_id: string }[]; error: null }> {
+    return Promise.resolve({
+      data: activeTeamIds.map((teamId) => ({ team_id: teamId })),
+      error: null,
+    });
+  }
+  const isSpy = vi.fn(() => resolveActiveRows());
+  const teamsEqSpy = vi.fn(() => ({
+    is: isSpy,
+    then: (
+      onFulfilled: (value: { data: { team_id: string }[]; error: null }) => unknown,
+      onRejected?: (reason: unknown) => unknown,
+    ) => resolveActiveRows().then(onFulfilled, onRejected),
+  }));
+  const teamsSelectSpy = vi.fn(() => ({ eq: teamsEqSpy }));
+
   const fromSpy = vi.fn((table: string) => {
     if (table === 'v_student_goal_projection') return { select: selectSpy };
+    if (table === 'student_teams') return { select: teamsSelectSpy };
     throw new Error(`unexpected table: ${table}`);
   });
   return {
@@ -62,6 +103,9 @@ function makeRecordingClient(
     selectSpy,
     eqSpy,
     maybeSingleSpy,
+    teamsSelectSpy,
+    teamsEqSpy,
+    isSpy,
   };
 }
 
@@ -94,6 +138,7 @@ describe('makeResolveStudentScope (T176 criterion 8, round 2: v_student_goal_pro
 
     await expect(resolveStudentScope('student-real-2')).resolves.toEqual({
       teamId: 'team-real-2',
+      teamIds: ['team-real-2'],
       goalHours: 42,
       confirmedHours: 10,
       plannedHours: 3,
@@ -111,6 +156,7 @@ describe('makeResolveStudentScope (T176 criterion 8, round 2: v_student_goal_pro
 
     await expect(resolveStudentScope('student-real-3')).resolves.toEqual({
       teamId: 'team-real-3',
+      teamIds: ['team-real-3'],
       goalHours: 7,
       confirmedHours: 0,
       plannedHours: 0,
@@ -170,6 +216,111 @@ describe('makeResolveStudentScope (T176 criterion 8, round 2: v_student_goal_pro
     expect(maybeSingleSpy).toHaveBeenCalledTimes(1);
     // The intended guard: eqSpy was never called under the mutated path.
     expect(eqSpy).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * T187 (acceptance criterion 3) -- the read is scoped to ACTIVE
+ * `student_teams` memberships. Query-shape spy form (not a fixture-visibility
+ * test): every fake client in this repo returns configured rows regardless
+ * of chained filters, so a left-team fixture would still "appear" and a
+ * dropped `.is('left_on', null)` filter would leave a fixture-only test
+ * green -- the spy on the ARGUMENTS a mutated call site would still make (or
+ * fail to make) is what actually turns red. Precedent for this exact form:
+ * `makeResolveStudentScope`'s own `eqSpy` assertions above
+ * (`students.test.ts:104-107`/`:151-159`).
+ */
+describe('makeResolveStudentScope (T187: ACTIVE student_teams memberships)', () => {
+  it("reads student_teams scoped by exactly .eq('student_id', studentId).is('left_on', null)", async () => {
+    const { client, teamsSelectSpy, teamsEqSpy, isSpy } = makeRecordingClient(
+      { team_id: 'team-real-5', goal_hours: 10, confirmed_hours: 1, planned_hours: 0 },
+      ['team-real-5', 'team-second-5'],
+    );
+    const resolveStudentScope = makeResolveStudentScope(() => client);
+
+    await resolveStudentScope('student-real-5');
+
+    expect(teamsSelectSpy).toHaveBeenCalledWith('team_id');
+    expect(teamsEqSpy).toHaveBeenCalledTimes(1);
+    expect(teamsEqSpy).toHaveBeenCalledWith('student_id', 'student-real-5');
+    expect(isSpy).toHaveBeenCalledTimes(1);
+    expect(isSpy).toHaveBeenCalledWith('left_on', null);
+  });
+
+  it('maps every active team_id row to StudentScope.teamIds, a real dual-team student resolves BOTH ids -- never collapsed to one', async () => {
+    const { client } = makeRecordingClient(
+      { team_id: 'team-primary-6', goal_hours: 10, confirmed_hours: 1, planned_hours: 0 },
+      ['team-primary-6', 'team-second-6'],
+    );
+    const resolveStudentScope = makeResolveStudentScope(() => client);
+
+    await expect(resolveStudentScope('student-dual-6')).resolves.toEqual({
+      teamId: 'team-primary-6',
+      teamIds: ['team-primary-6', 'team-second-6'],
+      goalHours: 10,
+      confirmedHours: 1,
+      plannedHours: 0,
+    });
+  });
+
+  it('resolves an empty teamIds (never a crash) for a student with genuinely zero active memberships', async () => {
+    const { client } = makeRecordingClient(
+      { team_id: 'team-real-7', goal_hours: 10, confirmed_hours: 1, planned_hours: 0 },
+      [],
+    );
+    const resolveStudentScope = makeResolveStudentScope(() => client);
+
+    await expect(resolveStudentScope('student-real-7')).resolves.toEqual({
+      teamId: 'team-real-7',
+      teamIds: [],
+      goalHours: 10,
+      confirmedHours: 1,
+      plannedHours: 0,
+    });
+  });
+
+  it('never queries student_teams at all when v_student_goal_projection resolves no row (sequential fetch, module doc\'s own disclosed efficiency decision)', async () => {
+    const { client, fromSpy } = makeRecordingClient(null);
+    const resolveStudentScope = makeResolveStudentScope(() => client);
+
+    await expect(resolveStudentScope('student-inactive-8')).resolves.toBeNull();
+
+    expect(fromSpy).not.toHaveBeenCalledWith('student_teams');
+  });
+
+  /**
+   * Criterion 3's own mutation: drop the `.is('left_on', null)` filter
+   * (simulated here directly, not by editing the loader) to confirm the
+   * intended guard assertion is genuinely what goes red -- same
+   * filter-guard technique as `makeResolveStudentScope`'s own `eqSpy`
+   * eq-drop proof above (`students.test.ts:175-199`). This exact mutation
+   * (deleting `.is('left_on', null)` from `queryActiveTeamIdsByStudentId` in
+   * `students.ts`) was ALSO applied directly to the real loader and run, per
+   * item 23/this task's own worker output mutation-evidence record.
+   */
+  it('the is-drop mutation fails on the intended isSpy assertion, not a TypeError', async () => {
+    const { client, teamsEqSpy, isSpy } = makeRecordingClient(
+      { team_id: 'team-real-9', goal_hours: 10, confirmed_hours: 1, planned_hours: 0 },
+      ['team-real-9'],
+    );
+    // Simulates the mutated query:
+    // `.from('student_teams').select('team_id').eq('student_id', id)` --
+    // `.is(...)` genuinely never called, and the raw (still-unfiltered by
+    // left_on) row list is returned as-is.
+    const mutatedResult = await (
+      client.from('student_teams') as unknown as { select: (columns: string) => unknown }
+    ).select('team_id');
+    const mutatedFiltered = await (
+      mutatedResult as { eq: (column: string, value: string) => Promise<unknown> }
+    ).eq('student_id', 'student-real-9');
+
+    expect(mutatedFiltered).toEqual({
+      data: [{ team_id: 'team-real-9' }],
+      error: null,
+    });
+    expect(teamsEqSpy).toHaveBeenCalledTimes(1);
+    // The intended guard: isSpy was never called under the mutated path.
+    expect(isSpy).not.toHaveBeenCalled();
   });
 });
 
