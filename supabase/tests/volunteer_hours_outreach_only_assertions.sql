@@ -27,6 +27,25 @@
 -- `hours_override` NULL, so each view's own formula falls through to its
 -- third branch (full session duration) -- session lengths were chosen so
 -- every resulting figure is a clean, unambiguous number.
+--
+-- Result collection: each of the 5 assertions below records a PASS/FAIL
+-- row into a session-local temp table instead of raising an exception
+-- immediately. This is deliberate -- assertions 1/2/3 share the same
+-- underlying `confirmed_hours`/`total_hours` figures (they narrate three
+-- different claims about the SAME computation), so a mutation that breaks
+-- one typically breaks all three. With `ON_ERROR_STOP=1` and an immediate
+-- `raise exception`, the FIRST failing block would abort the script and
+-- hide whether the others also failed (or, worse, silently hide a
+-- different one). Collecting all 5 first and raising ONE final summary at
+-- the end gives the complete, honest picture of which assertions a given
+-- mutation actually turns red -- required to tell "red on the intended
+-- assertion" apart from "red on the wrong one" per the worker packet.
+
+create temporary table t322_results (
+  name text primary key,
+  passed boolean not null,
+  detail text not null
+);
 
 insert into public.seasons (id, name, starts_on, ends_on, default_goal_hours, is_active)
 values
@@ -109,12 +128,12 @@ begin
     where season_id = '90000000-0000-4000-8000-000000000001'
   ), 0) into v_total_hours;
 
-  if v_confirmed_hours is distinct from 4.0 or v_total_hours is distinct from 4.0 then
-    raise exception
-      'FAIL outreach-hours-count: student confirmed_hours %, season total_hours % (expected 4.0 / 4.0)',
-      v_confirmed_hours, v_total_hours;
-  end if;
-  raise notice 'PASS outreach-hours-count (confirmed_hours %, total_hours %)', v_confirmed_hours, v_total_hours;
+  insert into t322_results (name, passed, detail)
+  values (
+    'outreach-hours-count',
+    v_confirmed_hours is not distinct from 4.0 and v_total_hours is not distinct from 4.0,
+    format('confirmed_hours %s, total_hours %s (expected 4.0 / 4.0)', v_confirmed_hours, v_total_hours)
+  );
 end;
 $$;
 
@@ -141,12 +160,15 @@ begin
     where season_id = '90000000-0000-4000-8000-000000000001'
   ), 0) into v_total_hours;
 
-  if v_confirmed_hours is distinct from 4.0 or v_total_hours is distinct from 4.0 then
-    raise exception
-      'FAIL competition-hours-excluded-live-gap: student confirmed_hours %, season total_hours % (expected 4.0 / 4.0, NOT 7.0 -- the 3.0h flag-on competition session must not leak in)',
-      v_confirmed_hours, v_total_hours;
-  end if;
-  raise notice 'PASS competition-hours-excluded-live-gap (confirmed_hours %, total_hours %)', v_confirmed_hours, v_total_hours;
+  insert into t322_results (name, passed, detail)
+  values (
+    'competition-hours-excluded-live-gap',
+    v_confirmed_hours is not distinct from 4.0 and v_total_hours is not distinct from 4.0,
+    format(
+      'confirmed_hours %s, total_hours %s (expected 4.0 / 4.0, NOT 7.0 -- the 3.0h flag-on competition session must not leak in)',
+      v_confirmed_hours, v_total_hours
+    )
+  );
 end;
 $$;
 
@@ -172,12 +194,12 @@ begin
     where season_id = '90000000-0000-4000-8000-000000000001'
   ), 0) into v_total_hours;
 
-  if v_confirmed_hours is distinct from 4.0 or v_total_hours is distinct from 4.0 then
-    raise exception
-      'FAIL meeting-hours-excluded: student confirmed_hours %, season total_hours % (expected 4.0 / 4.0, NOT 6.0)',
-      v_confirmed_hours, v_total_hours;
-  end if;
-  raise notice 'PASS meeting-hours-excluded (confirmed_hours %, total_hours %)', v_confirmed_hours, v_total_hours;
+  insert into t322_results (name, passed, detail)
+  values (
+    'meeting-hours-excluded',
+    v_confirmed_hours is not distinct from 4.0 and v_total_hours is not distinct from 4.0,
+    format('confirmed_hours %s, total_hours %s (expected 4.0 / 4.0, NOT 6.0)', v_confirmed_hours, v_total_hours)
+  );
 end;
 $$;
 
@@ -200,13 +222,15 @@ begin
   from v_season_kpis
   where season_id = '90000000-0000-4000-8000-000000000001';
 
-  if v_competition_hours is distinct from 3.0 then
-    raise exception
-      'FAIL breakdown-survives: competition_hours % (expected 3.0 -- the breakdown column must not be zeroed by the total_hours fix)',
-      v_competition_hours;
-  end if;
-  raise notice 'PASS breakdown-survives (competition_hours %); measured (not asserted) meeting_hours = % (structurally frozen at 0, T704)',
-    v_competition_hours, v_meeting_hours;
+  insert into t322_results (name, passed, detail)
+  values (
+    'breakdown-survives',
+    v_competition_hours is not distinct from 3.0,
+    format(
+      'competition_hours %s (expected 3.0, asserted); meeting_hours %s (measured only, not asserted -- structurally frozen at 0, T704)',
+      v_competition_hours, v_meeting_hours
+    )
+  );
 end;
 $$;
 
@@ -233,11 +257,43 @@ begin
     where season_id = '90000000-0000-4000-8000-000000000002'
   ), 0) into v_total_hours;
 
-  if v_confirmed_hours is distinct from 5.0 or v_total_hours is distinct from 5.0 then
-    raise exception
-      'FAIL fll-titled-outreach-counts-in-full: student confirmed_hours %, season total_hours % (expected 5.0 / 5.0 -- a "Meetings" title must not exclude a type=outreach event)',
-      v_confirmed_hours, v_total_hours;
+  insert into t322_results (name, passed, detail)
+  values (
+    'fll-titled-outreach-counts-in-full',
+    v_confirmed_hours is not distinct from 5.0 and v_total_hours is not distinct from 5.0,
+    format(
+      'confirmed_hours %s, total_hours %s (expected 5.0 / 5.0 -- a "Meetings" title must not exclude a type=outreach event)',
+      v_confirmed_hours, v_total_hours
+    )
+  );
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Summary: print every assertion's PASS/FAIL individually (so a mutation's
+-- full blast radius across all 5 is visible in the log), then fail the
+-- script as a whole if any did not pass.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  r record;
+  v_failed_count integer := 0;
+  v_total_count integer := 0;
+begin
+  for r in select name, passed, detail from t322_results order by name loop
+    v_total_count := v_total_count + 1;
+    if r.passed then
+      raise notice 'PASS %: %', r.name, r.detail;
+    else
+      v_failed_count := v_failed_count + 1;
+      raise notice 'FAIL %: %', r.name, r.detail;
+    end if;
+  end loop;
+
+  if v_failed_count > 0 then
+    raise exception 'FAIL: % of % T322 volunteer-hours-outreach-only assertions failed -- see NOTICE lines above', v_failed_count, v_total_count;
   end if;
-  raise notice 'PASS fll-titled-outreach-counts-in-full (confirmed_hours %, total_hours %)', v_confirmed_hours, v_total_hours;
+
+  raise notice 'PASS: all % T322 volunteer-hours-outreach-only assertions passed', v_total_count;
 end;
 $$;
