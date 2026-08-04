@@ -56,7 +56,7 @@ Tier is the **heaviest** item in the workflow, per constitution item 26.
 
 | # | Workflow | Open rows | Tier | State | Safe to run beside |
 |---|---|---:|---|---|---|
-| **W1** | **Check in** — student arrives and gets counted | 4 | HEAVY | **Broken end to end** | W4, W6, W7, W8 |
+| **W1** | **Check in** — student arrives and gets counted | **1** | HEAVY | **NOT broken — T321/T161/T320/T403 all merged (PR #28 +). Only T400 remains.** *(This cell read "Broken end to end / 4 rows" until 2026-08-04; three rows had shipped and their statuses were never updated.)* | W4, W6, W7, W8 |
 | **W2** | **Run an outreach event** — create → RSVP → attend → complete | 13 | HEAVY | Partly working | W1, W3, W6, W7 |
 | **W3** | **Run a meeting** — schedule → attendance → participation % | **1** | HEAVY | **T197/T160/T162 shipped 2026-08-04; only T196 (the mount) remains** | W2, W4, W6, W7 |
 | **W4** | **Hours & goal accounting** — the numbers users are shown | 12 | HEAVY | **T205 + T322 merged 2026-08-04; both await owner cutover.** T500 closed unshipped (superseded by T702) | W1, W3, W6, W7 |
@@ -88,10 +88,10 @@ recorded", they do not share files, and between them they contain every remainin
 
 | Row | What | Tier |
 |---|---|---|
-| **T321** | `/checkin` has no manual short-code entry; expiry offers only "Try again", replaying the same credential | STANDARD |
+| ~~**T321**~~ | ~~no manual short-code entry~~ — **✅ MERGED in PR #28** (`bc53aab`). The form is live in `CheckinResult.tsx`. This row read *"awaiting merge"* until 2026-08-04. | — |
 | ~~**T196**~~ | ~~`LiveConsole` roll call is a fixture shell~~ — **✅ DONE, and it was never T196.** This work shipped as **T403** (2026-08-03): real roster, real check-in credential, real `attendance` writes, all fixtures deleted. **The number `T196` belongs to W3's `EndMeetingDialog` mount**, not to W1 — see W3's table below. This line was an instance of the very T196 collision this file warns about at the top; it is struck rather than deleted so the collision stays visible. | — |
-| **T161** | `loaders/checkin.ts` has **0 tests** across 521 lines | STANDARD |
-| **T320** | `queryAttendanceForSessions` has no `.range()`/`.limit()` — a >1000-row response is silently truncated | STANDARD |
+| ~~**T161**~~ | ~~0 tests across 521 lines~~ — **✅ MERGED in PR #28.** `checkin.test.ts` has 20 tests on `main`. | — |
+| ~~**T320**~~ | ~~no `.range()`/`.limit()`~~ — **✅ MERGED in PR #28.** Pagination is present in `loaders/attendance.ts`. | — |
 
 **Owns:** `pages/checkin/CheckinResult.tsx`, `pages/meetings/Kiosk.tsx`,
 `pages/meetings/LiveConsole.tsx`, `loaders/checkin.ts`, `loaders/kiosk.ts`, `loaders/attendance.ts`
@@ -115,8 +115,9 @@ this grant obliges more process, not less.
 > `v_student_participation` were verified to return identical results before and after the
 > migration, without either file being edited. That is the pattern for any future change here.
 
-**Start with T321.** It is UI-only on a backend T032 already shipped (short-code HMAC), which makes
-it the best effort-to-impact ratio in the entire backlog. **T161 is still open and still worth
+**~~Start with T321.~~ T321 shipped in PR #28** — the manual short-code form is live. **W1's only
+genuinely open row is T400** (a student who cannot scan has no session id, so the short code alone
+cannot check them in; owner-ruled option (a), un-sequenced from T196's wave on 2026-08-04). **T161 is still open and still worth
 pairing with any further `LiveConsole` work** — making that console real without tests on its loader
 is what produced the fixture shell in the first place, and T403 shipped the real console without
 closing T161.
