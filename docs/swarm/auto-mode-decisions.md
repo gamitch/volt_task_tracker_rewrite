@@ -2823,3 +2823,32 @@ cross-workflow reach is visible rather than assumed.
 hours.** Item 26's "lie to a user about their own data", exactly. The packet's C1/C2 are that
 mutation, and it requires every fixture field to carry a **distinct** value or the swap is
 invisible.
+
+### D6 — process correction: D5's cross-workflow reach should have been ASKED, not logged after the fact
+
+**The owner stopped the T164 worker mid-flight:** *"oh wait let me see if w4 is working T164. you
+should have informed me this was W4's first."* **He is right, and the distinction is worth keeping.**
+
+D5 treated his earlier *"go ahead with T164"* as authorization for reaching into W4's files. **But
+that go-ahead was given before either of us knew T164 was W4's row** — the ownership check happened
+after. **He could not have authorized a cross-workflow reach he did not know existed.** Recording it
+in this file made it *visible*; visible-after-the-fact is not the same as asked. **D5's
+authorization claim is withdrawn; this restart rests on his explicit "restart it" instead.**
+
+**What the stop actually checked, measured:**
+
+| Check | Result |
+|---|---|
+| W4 active at all? | **YES** — PR #67 (T187+T800) updated 20 minutes prior |
+| Does #67 touch `kpi.ts` or `*kpi_views.sql`? | **NO** — its 13 files are `parentHome`, `students`, `StudentHome`, `ParentHome`, `volt.ts`, swarm docs |
+| Any commit touching `kpi.ts` in 2 days? | **NONE** — recent W4 commits (T702, T500) are `pages/reports/**` and outreach totals |
+| Worker damage | **NONE** — killed at its first step, tree clean, no `kpi.test.ts` created |
+
+**So there was no real collision — but the process was still wrong, and only luck made the outcome
+harmless.** `WORKFLOWS.md`'s own top warning is that two workflows sharing a file cannot run in
+parallel, and this project has already paid for that lesson twice. **The rule for the rest of this
+window: a cross-workflow file reach is an ASK, not a log entry — even when the owner has said "go
+ahead" to the row, if ownership was established after he said it.**
+
+**Restarted on his explicit instruction (*"restart it"*), with the collision check now on the
+record rather than assumed.**
