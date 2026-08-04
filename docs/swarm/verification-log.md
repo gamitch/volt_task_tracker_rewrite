@@ -9619,3 +9619,69 @@ files a live worker was writing**, having twice concluded from weak evidence tha
 **All three round-1 BLOCKERs and both round-2 MAJORs originated in the orchestrator's packet, not in
 the worker's code.** The gates that caught them **built the prescription rather than reading it** —
 which is the argument for item 26's own wording, now evidenced four times this week.
+
+## T186 — the display-only `team_id` dependency, recorded in TypeScript because item 10 blocks the SQL
+
+**Tier: FAST/STANDARD** — documentation accuracy only. **The diff is provably comment-only:** filtering
+the whole `src` diff for changed lines that are not comment lines returns **nothing**. That is the
+strongest evidence this class of task can produce, and it was run rather than asserted.
+
+### The row's premise had already moved before the task was worked
+
+T186 was filed saying *"a live route **now** scopes off it"*. True when filed. **False by the time it
+was worked** — T187 (PR #67, merged earlier the same day) moved every scope predicate onto ACTIVE
+`student_teams` memberships. So `dashboard_views.sql:311-320`'s claim that the column is used *"ONLY
+for the row's display badge"* is **true again today**.
+
+**That is not a reason to close the row unfixed.** The claim was silently false in between, and the
+dependency edge survives: `team_id` still reaches `StudentScope.teamId` → `ResolvedStudentIdentity.teamId`.
+Grep across the repo shows that field is **written and never read** — dead since T187. The new comment
+records the history and warns that reading it again for scoping reintroduces the T187 defect. Filed
+separately as **T802**.
+
+**This is the sixth row this session that was wrong about its own mechanism.**
+
+### The prescribed fix was half-impossible, and that was checked rather than assumed
+
+The row says *"record it in both the migration comment and the loader."* `20260723000001_dashboard_views.sql`
+is applied, and **constitution item 10: "editing an applied migration file → BLOCKER."** The row was
+written without checking item 10. Rather than pick unilaterally, three options went to the owner —
+TS-only, a new additive `comment on view` migration, or an item-10 amendment. **Ruled: TS-only**, residual
+filed as **T801** (`auto-mode-decisions.md`, 2026-08-04). The consequence is stated, not softened: a SQL
+reader still sees both wrong comments.
+
+### A second wrong comment, found by following the first
+
+`students.ts:365-370` did not merely fail to document the dependency — it **repeated the migration's own
+false RLS sentence**, asserting `v_student_goal_projection` "runs under the CALLING session's own RLS".
+It does not. `security_definer` is a *function* attribute; the view-level knob is `security_invoker`
+(PG15+), which defaults **OFF** and appears zero times in `supabase/`, so these views execute as their
+OWNER and bypass base-table RLS.
+
+**Measured, not reasoned** — unusually for this repo. `20260731000000_leaderboard_students_view.sql:32-46`
+records a live PGlite/PostgreSQL run with a non-superuser view owner: a student-role session reading the
+view got every active student's row, the same session reading the base table got exactly its own one row,
+and a `security_invoker=on` counterfactual collapsed both back to one. The mechanism is proven.
+
+**No behaviour changes and no security work is implied.** T185 established the finding and closed
+no-change on the owner's 2026-07-30 proportionality ruling; only the comment residue was ever in scope.
+The per-base-table RLS composition in that comment was **kept, not deleted** — it is what would make the
+read safe under `security_invoker=on`, so it is belt-and-braces rather than wrong.
+
+### A stale caveat retired
+
+The same paragraph closed by saying the composition *"has no DIRECT precedent elsewhere in this codebase
+to point to as a live-tested example"* and asked a checker to confirm it. Stale in the half that matters:
+the bypass **mechanism** is live-tested at the leaderboard migration. Corrected rather than left to send a
+future reader looking for evidence that already exists.
+
+### Gates, `.env.local` absent
+
+`tsc --noEmit` 0 · `format:check` 0 · `eslint .` **0 errors / 364 warnings** (unchanged) ·
+`vitest run` **78 files / 1993 tests** · `vite build` 0.
+
+### What remains open
+
+**T801** (both `dashboard_views.sql` comments, blocked by item 10) and **T802** (the dead
+`ResolvedStudentIdentity.teamId` field). Neither is closed by this task and both are filed with the
+reason, not left implicit.
