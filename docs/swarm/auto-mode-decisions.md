@@ -2449,3 +2449,19 @@ own. Only invocation counts.
 - Two narrower gaps worth carrying: `checkin.ts`'s `getAccessToken` singleton (the
   `makeGetAccessToken` factory **is** tested; only the trivial singleton wrapper is not — likely not
   worth a row), and T162's measured C2/C4 gaps already recorded in its parked row.
+
+### D6 — T160 done by the orchestrator without a worker round
+
+**FAST tier, a 6-reference file-local type rename, fully verified by `tsc` plus an unchanged test
+suite.** A worker+checker cycle costs roughly 175K tokens; this change is smaller than its own packet
+would have been. Dispatching one would have been process theatre at the owner's expense — and the
+owner had raised cost explicitly earlier in this session.
+
+**Disclosed both ways:** the ledger row and the verification-log entry each state that this is
+orchestrator-authored and **not independently reviewed**. **Reversible:** the diff is a pure
+identifier swap, proven by blanking the identifier from both sides and observing every changed line
+collapse to identical text.
+
+**This is not a precedent for STANDARD or HEAVY rows.** T197 (STANDARD) got a worker and a checker,
+and that checker found two real NITs the orchestrator had not — including one that survived the
+orchestrator's own mutation replay.
