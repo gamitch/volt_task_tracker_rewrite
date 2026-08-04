@@ -2295,3 +2295,44 @@ pending exactly this answer — building them earlier risked building the wrong 
 **Not authorized:** inventing any per-coach team association, or reading `PLACEHOLDER_CURRENT_TEAM_ID`
 as if it were real. If a widget genuinely cannot be expressed season-wide, that is a new question,
 not a licence to improvise.
+
+---
+
+## 2026-08-03 — George's ruling on T156: PARK it until the repo is quiet
+
+**Verbatim:** *"yes, park T156 for later"* — answering a two-part question: (1) do you want the
+loader's real Postgres error surfaced at all, and (2) if so, now or in a quiet window?
+
+**His answer is "yes, but not now."** T156 is **not** rejected and **not** closed — it is
+deliberately deferred on **concurrency risk**, not on merit.
+
+**The defect is real and already cost him personally.** `toLoaderError`
+(`src/lib/supabase/loader.ts:116-121`) replaces the underlying Postgres message with a generic
+`DEFAULT_LOADER_ERROR_MESSAGE`, keeps the original only in `cause`, and **nothing anywhere reads or
+logs `cause`** — no `console.*` in `loader.ts`. Diagnosing T155 required the owner to open DevTools,
+filter the Network panel and click into a response body to recover
+`22P02 invalid input syntax for type uuid`; the investigating agent could not determine the cause
+from the repository at all and had to rank hypotheses instead.
+
+**Why parking is the right call rather than a dodge.** `loader.ts` is the shared spine: measured,
+**23 loader modules and 33 source files** use `createLoader`/`runMutation`. Changing its error shape
+is *an export another session builds against* — a constitution item 26 HEAVY trigger in its own
+right — and W1, W2 and W7 are all live in this repo building on it right now. The failure mode is
+not "this task goes wrong"; it is **three other machines breaking simultaneously, each discovering it
+separately, mid-task**. Both `W4-W5-KICKOFF.md` (§5) and `W5-KICKOFF.md` (§5) independently reached
+the same conclusion and say to raise it with the owner rather than run it from W4/W5.
+
+**Conditions for unparking, recorded so this does not silently rot** (constitution item 20's whole
+point is that untriaged deferrals become permanent):
+
+1. **No other workflow mid-task in this repo** — check before starting, not after.
+2. Run it **standalone**, nothing else of mine in flight.
+3. Consider re-filing it as a **W10 cross-cutting row** rather than a W4/W5 one; it belongs to
+   whoever owns repo-wide sweeps, since it is one file that everything imports.
+
+**Orchestrator's note, not the owner's:** the cheap half of this may be separable. Adding a
+`console.error` of `cause` inside `toLoaderError` changes **no** export's shape and therefore breaks
+nobody — it is the *error-shape* change that is dangerous, not the *logging*. If the owner wants
+diagnosability sooner, that split is worth putting to him as its own narrow question. **Not
+proposing it now** — he has just said "later", and re-litigating a fresh ruling is exactly the
+behaviour §7 warns against.

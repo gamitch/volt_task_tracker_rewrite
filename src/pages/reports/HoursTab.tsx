@@ -1088,7 +1088,13 @@ export function HoursTab({ seasonId, loadData = loadHoursData }: HoursTabProps):
         <VStack gap={3}>
           <Skeleton width={160} height={22} index={0} />
           <Grid columns={{ minWidth: 220, repeat: 'fit' }} gap={3}>
-            {[0, 1, 2].map((card) => (
+            {/* T702 -- ONE card, matching the one real season-total Card that
+                now renders. Was [0, 1, 2] when this tab showed people-reached
+                plus adult-volunteer count and hours; the owner's T702 ruling
+                removed the two adult cards, and a 3-card skeleton previewing a
+                1-card layout is a load-time layout shift (module doc #10: the
+                skeleton previews the KNOWN shape). */}
+            {[0].map((card) => (
               <VStack key={card} gap={2} padding={4}>
                 <Skeleton width={140} height={14} index={card * 2 + 1} />
                 <Skeleton width={80} height={24} index={card * 2 + 2} />
