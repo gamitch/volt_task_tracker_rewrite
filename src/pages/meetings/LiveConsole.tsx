@@ -303,17 +303,24 @@
  * deliberate choice, not an oversight.
  *
  * -----------------------------------------------------------------------
- * 8. "End meeting" stub (packet Forbidden Files -- `EndMeetingDialog.tsx`
- *    is T036's out-of-scope deliverable).
+ * 8. "End meeting" (T196: the real `EndMeetingDialog.tsx`, T036, mounted).
  * -----------------------------------------------------------------------
  *
- * The header's real, clickable "End meeting" `Button` shows a dismissable
- * `Banner` disclosing that the real end-of-meeting summary dialog (T036)
- * has not shipped yet, rather than opening a fake dialog or silently doing
- * nothing -- the same `StubBanner`-shaped pattern `MeetingsList.tsx`/T030
- * already established for its own out-of-scope "Schedule meetings"/"Edit"
- * actions (re-implemented locally here since `MeetingsList.tsx` is a
- * forbidden, not "import-only", file).
+ * The header's "End meeting" `Button` used to disclose a dismissable stub
+ * `Banner` ("End-meeting summary not built yet"); that stub, its
+ * `StubNotice`/`StubBanner` local types, and the `endMeetingStub` state slot
+ * are all deleted now that T196 mounts the real `EndMeetingDialog` (T036) in
+ * their place, wired to the real `loadEndMeetingSummary`/`onEndMeeting`
+ * backends (`../../lib/supabase/loaders/endMeeting`, T178) via the
+ * `loadEndMeetingSummary`/`onEndMeeting`/`onEditAttendance` seams on
+ * `LiveConsoleBodyProps` below. Owner ruling 2026-08-04 (T196 packet section
+ * 3): post-completion, ONLY this console's own roster/check-in panel render
+ * -- the dialog's own post-completion attendance-correction list is
+ * suppressed via `hasAttendanceCorrections={false}` (an `EndMeetingDialog`
+ * prop, default `true`, so the dialog's standalone/T036 behavior is
+ * unchanged), because two unsynchronised write paths editing the same
+ * student produced a duplicate, contradictory-status row when both rendered
+ * at once. The dialog's own "This meeting has ended" banner still renders.
  *
  * -----------------------------------------------------------------------
  * 9. Astryx prop sourcing (constitution item 2) -- every prop below,
@@ -432,6 +439,7 @@
  *      and what is actually provable in `LiveConsole.test.tsx`.
  */
 import {
+  useCallback,
   useEffect,
   useId,
   useMemo,
@@ -463,11 +471,22 @@ import {
 } from '@astryxdesign/core';
 import { RequireRole, useAuth } from '../../app/guards';
 import { routePaths } from '../../app/router';
+import {
+  makeLoadEndMeetingSummary,
+  makeOnEditAttendance,
+  makeOnEndMeeting,
+} from '../../lib/supabase/loaders/endMeeting';
 import { loadKioskDisplayToken, loadLiveConsoleData } from '../../lib/supabase/loaders/kiosk';
 import {
   setAttendanceStatus,
   type SetAttendanceStatusFn as LoaderSetAttendanceStatusFn,
 } from '../../lib/supabase/loaders/attendance';
+import {
+  EndMeetingDialog,
+  type LoadEndMeetingSummaryFn,
+  type OnEditAttendanceFn,
+  type OnEndMeetingFn,
+} from './EndMeetingDialog';
 
 // ---------------------------------------------------------------------------
 // Ground truth -- `attendance` real column shapes, camelCase renames cited
@@ -614,6 +633,11 @@ export function makeDefaultSetAttendanceStatus(
 
 /** `LiveConsoleBody`'s own default `onSetAttendanceStatus` -- real write. */
 export const defaultSetAttendanceStatus: SetAttendanceStatusFn = makeDefaultSetAttendanceStatus();
+
+/** T196: the REAL end-meeting backends, same module-level-factory posture
+ * `defaultSetAttendanceStatus` above already established. */
+export const defaultLoadEndMeetingSummary: LoadEndMeetingSummaryFn = makeLoadEndMeetingSummary();
+export const defaultOnEndMeeting: OnEndMeetingFn = makeOnEndMeeting();
 
 export interface AttendanceChangeEvent {
   studentId: string;
@@ -831,29 +855,6 @@ function useLiveConsoleDisplayToken(
 // Subcomponents
 // ---------------------------------------------------------------------------
 
-interface StubNotice {
-  title: string;
-  description: string;
-}
-
-function StubBanner({
-  notice,
-  onDismiss,
-}: {
-  notice: StubNotice;
-  onDismiss: () => void;
-}): ReactNode {
-  return (
-    <Banner
-      status="info"
-      title={notice.title}
-      description={notice.description}
-      isDismissable
-      onDismiss={onDismiss}
-    />
-  );
-}
-
 function QrPanel({
   sessionId,
   token,
@@ -961,6 +962,10 @@ export interface LiveConsoleBodyProps {
   loadDisplayToken?: LoadLiveConsoleDisplayTokenFn;
   onSetAttendanceStatus?: SetAttendanceStatusFn;
   subscribeToAttendanceChanges?: SubscribeToAttendanceChangesFn;
+  /** T196 seams for the mounted `EndMeetingDialog`. */
+  loadEndMeetingSummary?: LoadEndMeetingSummaryFn;
+  onEndMeeting?: OnEndMeetingFn;
+  onEditAttendance?: OnEditAttendanceFn;
 }
 
 export function LiveConsoleBody({
@@ -968,6 +973,9 @@ export function LiveConsoleBody({
   loadDisplayToken = loadKioskDisplayToken,
   onSetAttendanceStatus = defaultSetAttendanceStatus,
   subscribeToAttendanceChanges = notWiredSubscribeToAttendanceChanges,
+  loadEndMeetingSummary = defaultLoadEndMeetingSummary,
+  onEndMeeting = defaultOnEndMeeting,
+  onEditAttendance: injectedOnEditAttendance,
 }: LiveConsoleBodyProps): ReactNode {
   const { sessionId: rawSessionId } = useParams<{ sessionId: string }>();
   const sessionId = rawSessionId ?? '';
@@ -986,7 +994,6 @@ export function LiveConsoleBody({
   >({});
   const [query, setQuery] = useState('');
   const [focusedIndex, setFocusedIndex] = useState(0);
-  const [endMeetingStub, setEndMeetingStub] = useState<StubNotice | null>(null);
   // T403 step 3, Trap 3 -- a rejected `onSetAttendanceStatus` write must be
   // visible to the coach, not silently swallowed (see `handleSetStatus`
   // below). Holds the display name of the student whose write just failed;
@@ -1009,6 +1016,13 @@ export function LiveConsoleBody({
   // `<div role="group">`, not `Section` (full-bleed margin + no nameable
   // role).
   const rosterHeadingId = useId();
+
+  // T196 section 4 -- the identity trap. `makeOnEditAttendance` calls
+  // `getRecordedBy` FRESH on every invocation, so this accessor must track
+  // `user` rather than bake the first render's value.
+  const getRecordedBy = useCallback(() => user?.id ?? null, [user]);
+  const builtOnEditAttendance = useMemo(() => makeOnEditAttendance(getRecordedBy), [getRecordedBy]);
+  const onEditAttendance = injectedOnEditAttendance ?? builtOnEditAttendance;
 
   useEffect(() => {
     if (loadState.status === 'success') {
@@ -1149,14 +1163,6 @@ export function LiveConsoleBody({
     }
   }
 
-  function handleEndMeetingClick(): void {
-    setEndMeetingStub({
-      title: 'End-meeting summary not built yet',
-      description:
-        "This would open the end-of-meeting summary screen. It hasn't been built yet, so this meeting has not been ended.",
-    });
-  }
-
   return (
     <VStack gap={6} padding={6}>
       <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
@@ -1178,12 +1184,14 @@ export function LiveConsoleBody({
             </Text>
           )}
         </VStack>
-        <Button label="End meeting" variant="secondary" onClick={handleEndMeetingClick} />
+        <EndMeetingDialog
+          sessionId={sessionId}
+          loadSummary={loadEndMeetingSummary}
+          onEndMeeting={onEndMeeting}
+          onEditAttendance={onEditAttendance}
+          hasAttendanceCorrections={false}
+        />
       </HStack>
-
-      {endMeetingStub !== null && (
-        <StubBanner notice={endMeetingStub} onDismiss={() => setEndMeetingStub(null)} />
-      )}
 
       {/* T403 step 3, Trap 3 -- a rejected `onSetAttendanceStatus` write is
           visible here, by rendered text, naming the affected student. See
