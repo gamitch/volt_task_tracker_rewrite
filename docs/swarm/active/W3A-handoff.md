@@ -4,17 +4,20 @@
 All decisions the orchestrator made alone are logged in `auto-mode-decisions.md` under
 **"W3-A auto-mode window"** (D1–D6), marked as the orchestrator's and reversible.
 
-## Result: 2 of 3 shipped, 1 parked for the owner
+## Result: 3 of 3 shipped — wave complete
 
 | Row | Tier | Outcome |
 |---|---|---|
 | **T197** | STANDARD | ✅ **PASSED** — worker + checker, both NITs closed in-branch |
 | **T160** | FAST | ✅ **PASSED** — orchestrator-authored, no worker (D6), not independently reviewed |
-| **T162** | STANDARD | ⛔ **PARKED** — gate round 2 REVISE, item 19a escalation (D4) |
+| **T162** | STANDARD | ✅ **PASSED** — parked at gate round 2 (D4), then **re-scoped by owner ruling** and closed test-only |
 
-**Gates at `d574503`:** `tsc` **0** · eslint **0 errors** / 364 warnings · prettier **clean** ·
-vitest **78 files / 1946 tests, exit 0**. Base was 1944; +2 are T197's assertion and its NIT-1
-scenario. T160 changed no count, as a pure rename must not.
+**Gates after merging `main` (`f5c730a`):** `tsc` **0** · eslint **0 errors** / 364 warnings ·
+prettier **clean** · vitest **78 files / 1949 tests, exit 0**.
+
+T197 added 2 (its assertion + the NIT-1 scenario), T162 added 2 (the denominator-floor test and the
+physically-sorting ordering test; the third fix was an assertion swap). T160 added none, as a pure
+rename must not.
 
 ## ⚠️ The thing to read first: four ledger rows were measured wrong
 
@@ -39,19 +42,30 @@ factory nor the singleton is ever invoked.
 **D5 retracts part of D4.** D4 swept T164 in with the others on the proxy *"two test files import
 it"* — the same class of shortcut as the audit's, wrong the same way. Only invocation counts.
 
-## T162 — two decisions needed before it moves
+## T162 — resolved. Both decisions ruled, row closed.
 
-Packet v2 is otherwise dispatch-clean; **all eleven round-1 findings were verified fixed** by the
-round-2 gate, each by running it. It is parked on a *premise*, not a packet defect.
+**The row as written was mostly phantom work** — its "0 tests across 726 lines" premise was false
+(see above). Parked at gate round 2 under item 19a rather than looped a third time, then resolved by
+two owner rulings.
 
-1. **Re-scope or close.** Measured: **C1, C3, C5, C6 already go RED against the shipped suite with
-   zero new tests written** — a worker following the packet's own evidence protocol would record
-   four passes having written nothing. Only **C2** (denominator floor) and **C4** (single-row
-   reference identity; the shipped assertion at `MeetingsList.test.tsx:2017` is the weak `toEqual`)
-   are genuine gaps, plus an outcome-provable replacement for the call-shape ordering spy at `:2166`.
-2. **Rule on duplication.** Should a new `meetings.test.ts` duplicate, supersede, or leave the 17
-   existing tests at `MeetingsList.test.tsx:1803-2272`? Moving them would create a **third**
-   maintenance site for the MET-01 arithmetic — see **T600**.
+**Ruling 1 — duplication.** Verbatim: *"we should not be duplicating existing test"*. So **no
+`meetings.test.ts` was created**, the 17 existing tests at `MeetingsList.test.tsx:1803-2272` were
+**neither duplicated nor moved**, and all work went into the file that already had them. That also
+avoided creating a **third** maintenance site for the MET-01 arithmetic (**T600**).
+
+**Ruling 2 — do the remaining gap.** Re-scoped to the three measured gaps, ~35 lines, **`meetings.ts`
+itself unmodified**. Each proven by its own mutation:
+
+| Gap | Mutation | Result |
+|---|---|---|
+| The `Math.max(expectedCt - excusedCt, 1)` floor had **no test** — deleting it left all 1946 green | drop the floor | `expected NaN to be +0`, **exit 1** |
+| `:2017`'s `toEqual(row)` **survives** deleting the single-row short-circuit | drop `rows.length === 1` | `expected {…} to be {…} // Object.is`, **exit 1** |
+| `:2166` asserted the sort was *called*, not that it *worked* | drop `.order('created_at', …)` | `expected 'student-later' to be 'student-earliest'`, **exit 1** |
+
+Without the floor, a student whose every expected session was excused is shown **`NaN`**. The
+ordering gap guarded Trap #4's earliest-linked-child rule, where a parent with two children silently
+resolves to the wrong one. The old call-shape ordering test was **kept, not replaced** — insufficient,
+not wrong.
 
 ## Filed this wave
 
@@ -71,6 +85,17 @@ round-2 gate, each by running it. It is parked on a *premise*, not a packet defe
 **T196 was not started and must not be** — it is excluded from this wave by the owner-approved split.
 It is a project, not a ticket; it carries an open owner call; and its failure mode is real `absent`
 rows against real students.
+
+## ⚠️ Two of these three rows were never independently reviewed
+
+**T197 got the full chain** — worker, then checker. That checker found **two real NITs the
+orchestrator had missed**, including one that survived the orchestrator's own mutation replay.
+
+**T160 and T162 were orchestrator-authored with no second reader** (D6 for T160; T162 by the same
+reasoning after its worker packet was abandoned). Both are disclosed as unreviewed in their ledger
+rows and verification-log entries, and both carry mutation proofs as the substitute. **On the
+evidence of T197, that substitute is weaker than a second reader.** If anything in this wave gets a
+retrospective review, make it those two.
 
 ## Process finding — third occurrence of one shape
 
