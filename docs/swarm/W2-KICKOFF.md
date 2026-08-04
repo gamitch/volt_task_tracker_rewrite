@@ -71,6 +71,9 @@ code** — each records a trap that is still live.
 | **T330** (PR #43) | A dateless (zero-session) event is now a visible, badged, em-dashed row pinned to the top of Upcoming, on **both** views — it used to be dropped from both buckets and unreachable. | **`buildEventGroups` routes zero-session events to `upcoming` and NOTHING may send them to `past`** — that comparator dereferences the last session and is safe only because of the routing. Its comment says so; do not "harden" it into a guard that does nothing (T301). |
 | **T402** (PR #44) | `loaders/outreach.ts`'s own `queryAttendanceForSessions` now pages, like T320 did for `attendance.ts`. | `.order('id')` is load-bearing. Paginating an unordered query duplicates and loses rows — measured at 1463 of 1500. |
 | **T401** (PR #47) | `ATTENDANCE_ROW_CAP` is gone; T320's pagination made it a false positive that blocked legitimate writes. | It was **blocked on PR #28** until T320 actually reached `main`. A premise can be true on the branch that states it and false on the branch that would act on it. |
+| **T306** (PR #51) | A session with recorded attendance shows who actually came, not who said they would. | The trigger is **whether attendance rows exist** — NOT the date, NOT `session.status`. The owner records attendance on the day, so both of those fail him. C6/C7 pin exactly those two wrong implementations. The attendance view is **staff-only**: RLS is `own_or_linked_read`, so ungated a student would be told every teammate has no record. |
+| **T174** (PR #52) | `OutreachDetail`'s `FIXTURE_RSVPS.respondedBy` now holds `profiles.id` values. | It reddened **nothing** — no test had ever looked at those values. "No test broke" is not evidence when nothing was watching. |
+| **T190** (PR #54) | `OutreachList`'s fixtures no longer key to `PLACEHOLDER_CURRENT_STUDENT_ID`, so a no-stub render sees an empty viewer. | Fixing the affected tests by **stubbing the viewer they need** — never by editing expected figures, which would have silently weakened T193's C3/C6. |
 
 **Also live from earlier work (do not undo):** T305 and T307 fixed two destructive bugs in this exact
 write path — "Mark event complete" was overwriting real check-in times, hours overrides and QR
@@ -78,21 +81,41 @@ provenance with nulls. Their protections are load-bearing.
 
 ## 4. Your remaining rows, in order
 
-**Start with T306.** It is the last row where two records tell a user different stories about the
-same event.
+**T300 is in flight; T325 is the best-scoped row left** — its defect is now measured rather than
+alleged, so it can be packeted against a known mechanism instead of a guess. See §4a.
 
 | Row | What | Tier |
 |---|---|---|
-| **T306** | Signups on a past session still show RSVP intent over recorded attendance | STANDARD |
-| **T174** | `FIXTURE_RSVPS.respondedBy` holds `students.id`-shaped values in a `profiles.id` column | STANDARD |
 | **T300** | `OutreachEventDialog`'s own placeholder-coach copy | STANDARD |
-| **T190** | Shipped fixtures key to a placeholder with no runtime role | STANDARD |
-| **T325** | Mobile student RSVP row collapses at 390×844 | STANDARD |
+| **T325** | **VERIFIED by measurement** — 213px horizontal overflow at 390×844, and the mechanism is NOT what the audit says | STANDARD |
 | **T165** | `loaders/outreach.ts`: 21 of 23 exports untested | STANDARD |
 | **T152** | T147's parallel-load guard only discriminates in one direction | STANDARD |
 | **T301** | Three `OutreachDetail.tsx` comments call a `user !== null` check compiler-required — measured false | FAST |
 
-### T306 — the display question is the OWNER's, and it is still open
+### T325 — MEASURED, and the audit's description is misleading (§4a)
+
+Verified in **real Chromium at 390×844** via a throwaway Playwright rig (the T131/T142 convention —
+real dev server, real provider stack, rig deleted afterwards). **213px of horizontal overflow**:
+`document.scrollWidth` **603** vs `clientWidth` **390**.
+
+- **Nothing "collapses" — the row OVERFLOWS.** The audit's wording sends you looking for the wrong thing.
+- **It is NOT the RSVP `SegmentedControl`**, which is the obvious suspect from reading the source. The
+  orchestrator guessed that and was wrong.
+- **It IS the `endContent` action span:** `display: flex` with **`flex-shrink: 0`**, measured **563px
+  wide inside a 342px `ListItem`** whose own `flex-shrink` is 1. It refuses to compress or wrap.
+- It is wide because the labels embed the full event title — *"Hide session details – Canned Food
+  Drive"* — which is the accessible-name pattern **T131/T132 deliberately established**. **The labels
+  are correct. Do not truncate them.** The shrink/wrap behaviour is the bug.
+- **Structural root cause:** the coach table got a full `isNarrow` branch under T130/T132. The
+  **student view has none** — `isNarrow` appears nowhere in it.
+
+**Rig recipe, so nobody rebuilds it from scratch:** playwright is installed globally
+(`NODE_PATH=/opt/node22/lib/node_modules`), Chromium is at
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, the harness must be **CJS** (ESM ignores
+`NODE_PATH`), and the rig **must inject `defaultLoadOutreachData`** or it renders the error state
+against a missing Supabase config and you measure nothing.
+
+### T306 — CLOSED (PR #51). The display question was the owner's and he answered it
 
 The owner's T305 ruling covers this surface but leaves one thing undecided: show attendance
 **in place of**, or **explicitly alongside**, the RSVP tallies. That is why this half was deferred
