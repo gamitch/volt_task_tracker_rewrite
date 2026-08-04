@@ -122,10 +122,12 @@ const TEST_CURRENT_USER_PROFILE_ID = 'profile-coach-real-injected';
 // ---------------------------------------------------------------------------
 describe('OutreachEventDialog module exports (T300)', () => {
   it('no longer exports PLACEHOLDER_CURRENT_COACH_PROFILE_ID', () => {
-    expect(Object.prototype.hasOwnProperty.call(
-      OutreachEventDialogModule,
-      'PLACEHOLDER_CURRENT_COACH_PROFILE_ID',
-    )).toBe(false);
+    expect(
+      Object.prototype.hasOwnProperty.call(
+        OutreachEventDialogModule,
+        'PLACEHOLDER_CURRENT_COACH_PROFILE_ID',
+      ),
+    ).toBe(false);
     expect(
       (OutreachEventDialogModule as Record<string, unknown>).PLACEHOLDER_CURRENT_COACH_PROFILE_ID,
     ).toBeUndefined();
