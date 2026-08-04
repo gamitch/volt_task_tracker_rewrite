@@ -19,14 +19,25 @@ without checking whether that UPDATE moved it.**
 entry (item 24): **T330, T401, T402, T174, T190, T306, T325, T152, T300** — plus **T301** (PR open at
 time of writing).
 
+**T406 is merged too** (PR #65) — eleven tasks in total. Its premise gate proved the load-bearing
+claim **by execution** against a scratch PostgreSQL 16.13 loaded with this repo's real migrations,
+rather than by citing documentation, and all seven of its acceptance criteria were replayed
+independently by the orchestrator. **It is a deliberate PARTIAL fix:** `attendance.method` is
+`not null` with no default and provably cannot be dropped from the payload on either leg, so a
+concurrent QR scan's `method: 'qr'` can still be clobbered. The student's real `check_in_at` now
+survives — the harm the owner described — but the provenance does not. **Residual filed as T505 for
+an owner ruling** (closing it needs a migration on a table W1 owns); **T506** files a stale module
+doc in a file T406 was forbidden to edit.
+
 **Still open:**
 
-- **T406** (HEAVY, `markDayComplete`'s attendance write) — **worker committed and PUSHED** to
-  `claude/t406-work`; its premise gate already **proved the load-bearing claim by execution** on a
-  real PostgreSQL 16.13 and its report is committed at `docs/swarm/active/T406-gate-report.md`.
-  Verify the mutations, then ledger row + log entry + PR.
-- **T165** (STANDARD, `loaders/outreach.ts`: 21 of 23 exports untested) — **the last W2 task.**
-  Blocked only by T406 (same file). Needs a packet, a worker, and a mutation replay.
+- **T165** (STANDARD) — **the last W2 task.** Packet committed on
+  `claude/t165-outreach-loader-coverage`, worker dispatched. **The ledger row's numbers are wrong and
+  the packet corrects them by measurement:** the file has **18** value exports, not 23 (the count
+  included 9 `type` exports); **7 are already exercised**, not 2; and `makeMarkDayComplete` is named
+  as a target while being one of the best-covered symbols in the file after T327 and T406. The real
+  remaining surface is **five** symbols. Note also that `loadOutreachData` is *referenced* in the
+  test file but has **zero call sites** — being mentioned is not coverage.
 
 **Filed, explicitly NOT W2's to build:** T501 (bare em-dash a11y, repo-wide), T502 (residual silent
 truncation in W1's `attendance.ts`), T503 (owner ruled *widen* RLS so students see teammates' RSVPs —
