@@ -2920,3 +2920,41 @@ complexity"*. Measured, so it is on the record: 17 call-site argument changes, ~
 and 3 expectation objects gaining a field, one fake client learning a table, and three fake query
 chains gaining an `.is()` method. **No test's subject or expected behaviour changes.** The scary
 "~48 lines including assertion lines" figure is almost entirely mechanical.
+
+---
+
+## 2026-08-04 — George closes D010: correct the false RLS comment in a NEW migration's header, never in place
+
+**Verbatim:** *"let's go with B"* — chosen after the orchestrator put two ways of closing D010 to him
+in plain language.
+
+**Context, and a correction the orchestrator owed him.** D010 had been described to him earlier that
+day as *"still open, awaiting your decision"*. **That was wrong and was retracted.** He decided the
+substance on **2026-07-29**: do **not** change the schema — the KPI views expose season aggregates
+with no PII, and a `security_invoker` change risks breaking auth that works today for something not
+worth it. That ruling stands and is not reopened.
+
+**The only thing still pending was narrow:** D010's own resolution noted that fixing the false comment
+required editing an **already-applied** migration file, which **constitution item 10 forbids outright**
+(*"editing an applied migration file → BLOCKER"*), and so *"stays proposed until he says go"*.
+
+**Two ways were offered:**
+
+- **A** — authorise editing the comments in place: an explicit item 10 exception, and it makes the
+  files disagree with what the database actually ran.
+- **B** ← **chosen** — leave every applied file untouched; put the correction in the **header of the
+  next new migration**, citing D010.
+
+**B costs nothing, breaks no rule, and needs no exception.** D010 therefore closes with **no schema
+change and no item 10 exception.**
+
+**Where the correction lands:** T503 is writing a new migration anyway, and its packet v2 §3 already
+requires exactly this. No separate task is needed.
+
+**The claim being corrected, and why it kept mattering:** *"plain views run under the querying
+session's own RLS against their base tables."* False — a view without `security_invoker` executes as
+its **owner**. It appears in `20260723000000_kpi_views.sql:136-152` (D010 found it), was copied into
+`20260723001_dashboard_views.sql:50-56`, and **nearly derailed T503**, whose premise gate had to stand
+up a real PostgreSQL 16.13 to determine which of two contradictory comments in this repo was true.
+**Three occasions.** D010's own words: *"a wrong security claim left in the tree is how a future
+decision gets made on a bad premise."*
