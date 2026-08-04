@@ -2366,3 +2366,55 @@ nobody — it is the *error-shape* change that is dangerous, not the *logging*. 
 diagnosability sooner, that split is worth putting to him as its own narrow question. **Not
 proposing it now** — he has just said "later", and re-litigating a fresh ruling is exactly the
 behaviour §7 warns against.
+
+---
+
+## 2026-08-04 — George's ruling: T322 extends to `v_student_hours`, not just the staff KPI card
+
+**Verbatim:** *"fix both."*
+
+**The question he was answering, and the premise correction behind it.** The T322 ledger row states
+*"`v_season_kpis` computes `total_hours = sum(type_hours)` across **all** types including `meeting`
+(`kpi_views.sql:180`)"*. That is **incomplete, and misleading to anyone acting on it**. The CTE
+feeding that sum already filters:
+
+```sql
+join events e on e.id = es.event_id and e.counts_volunteer_hours
+```
+
+so an event flagged as not counting never reaches the sum at all. Meetings are created with
+`counts_volunteer_hours: false`, fixed and non-editable (`loaders/meetings.ts:690`). **Meeting hours
+are therefore already excluded today** — not, as the row implies, leaking into the total and merely
+reading `0.0h` because no meetings exist. A worker following that row would hunt a leak that is not
+there.
+
+**The real defect is that the volunteer-hours total is governed by an editable per-event boolean
+rather than by event `type`** — and "by type, never by name" is the entire substance of the
+2026-08-02 and 2026-08-03 rulings.
+
+| `events.type` | `counts_volunteer_hours` | Counts today |
+|---|---|---|
+| `outreach` | `true`, fixed (`OutreachEventDialog.tsx`'s `OUTREACH_FIXED_FLAGS`) | correct |
+| `meeting` | `false`, fixed (`meetings.ts:690`) | already excluded |
+| `competition` | **admin-editable, defaults `false`** | excluded by default — **one toggle from counting** |
+
+So the live gap is **competition**, not meeting: an admin flipping that toggle puts competition
+hours into the volunteer-hours total and the goal percentage, contradicting the 2026-08-03 ruling.
+
+**What "fix both" decides.** `v_student_hours` (`metric_views.sql:15`) carries the **identical**
+join, so the same exposure exists on **every student's own confirmed hours and goal progress**. The
+2026-08-02 ruling's operative text was card-scoped (*"remove meeting hours from the volunteer-hours
+total and its goal percentage, and label the card…"*), so extending it to the student-facing view
+was **put to him rather than inferred** — it changes a number every student sees. He chose to extend
+it.
+
+**Unchanged and NOT re-opened by this ruling:**
+
+- **The FLL events still count.** `GG FLL Team Meetings` and `P3 FLL Team Meetings` are
+  `type = 'outreach'` and are **72 of 117 sessions, 62% of the migrated data**. Any fix filtering on
+  `type = 'outreach'` keeps them, which is the point of filtering by type rather than by title.
+  **Not authorized:** retyping any event.
+- **Competition and meeting hours stay tracked and stay displayed as their own figures.** The
+  2026-08-03 ruling says so explicitly. They come out of the volunteer-hours **total** and its goal
+  percentage — not out of the app. So the per-type breakdown columns in `v_season_kpis` must survive.
+- **Meeting participation %** is a separate figure and is untouched.
