@@ -9439,3 +9439,183 @@ premise.
 
 `tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise** · vitest **78 files / 1993
 tests**, exit 0 · build ✓ · **SQL suite exit 0** on a real PostgreSQL 16.13. `.env.local` absent.
+
+---
+
+## T164 — first runtime tests for `loaders/kpi.ts` (W4's file, owner-authorized)
+
+**PASS, attempt 1. `86e8648`. Checker verdict PASS, 1 MINOR (a mutation survivor with no user
+surface), filed rather than fixed.** Worker `worker-implementer` (sonnet — no item-18 trigger: the
+loader contains **no arithmetic at all**; the metric math lives in W4's `*kpi_views.sql`, which it
+only reads).
+
+### The one true row of four
+
+T161, T162 and T163's *"0 tests"* claims were all retracted this week — an audit had counted **files
+named `<module>.test.ts`** rather than tests *of* the module (D5, D7). **T164 survived every check.**
+Verified three times before packeting and a fourth time by the checker at base: **0 runtime imports,
+0 invocations of either export.** The two apparent references are `import type` (erased at runtime),
+and every use of `loadKpiStripData` in `KpiStrip.test.tsx` is the component's **injected prop being
+stubbed** — which tests `KpiStrip`, not this loader.
+
+### Gate skipped, on the record
+
+**Item 19b, decision D4.** Premise measured by direct observation rather than inherited; settled
+pattern with three in-repo precedents; no item-18 risk class. **The checker re-verified the premise
+independently and it held** — so the skip was sound. Same reasoning as D1/T197.
+
+### The defect class this row exists for
+
+`mapKpisDbRowToKpiStripData` is a **verbatim 11-field column rename with no logic**. Swap any two
+and **nothing crashes** — a coach is simply shown meeting hours labelled as outreach hours. Item
+26's *"lie to a user about their own data"*, exactly.
+
+**A lazy fixture makes that undetectable.** If two fields share a value, a swap between them is
+invisible and the suite stays green. **The fixture carries 11 distinct values across 11 fields** —
+the checker verified this **programmatically rather than by eye**, including the string/date pair.
+
+### Mutations — replayed by orchestrator AND checker, not relayed
+
+All seven packet criteria red at exit 1. The orchestrator independently replayed C1 and saw
+`meetingHours: 22 → 33`, `outreachHours: 33 → 22` in the failure diff.
+
+**The checker then ran eight mutations of its own — 7 caught, 1 survivor:**
+
+| Its own mutation | Result |
+|---|---|
+| `total_hours`↔`competition_hours` | red |
+| `most_recent_event_title`↔`most_recent_event_date` (the string/date pair) | red |
+| single field nulled | red |
+| `mapTeamCountDbRowToBreakdownRow`: `team_id`↔`team_name` | red |
+| `activeStudentsCount` ← `team_sort_order` | red |
+| map path passed `[]` instead of `teamBreakdown` | red |
+| `activeStudentsCount: 0` hardcoded | red |
+| **`seasonId: row.season_id` → hardcoded constant** | **SURVIVED, exit 0** |
+
+**The survivor, honestly scoped:** every mapping test passes the loader the same id the fixture row
+carries, so the `season_id` **passthrough** is coincidentally satisfied rather than discriminated.
+**Narrow:** all *swaps* involving `season_id` are still caught (values distinct), the zero path does
+discriminate it (`'season-missing'`), and `KpiStrip.tsx` **never renders** `KpiStripData.seasonId`.
+**No user-visible lie today. Filed, not fixed** — one-line fixture change, W4's T700 block.
+
+### The worker disclosed a weakness on itself, and the checker tested it
+
+The worker flagged that its "both views queried" assertion for C6 was **call-shape**
+(`fromSpy.toHaveBeenCalledWith`). The checker **deleted those lines and re-ran C6** — still **red at
+exit 1**, on two outcome-based assertions. C6 never depended on the call-shape check. That is the
+right way to handle a self-disclosed weakness: test it, don't take it on trust.
+
+### Not a re-implementation
+
+Value import of `makeLoadKpiStripData`, invoked in all 8 tests. **No `vi.mock` anywhere.** The stub
+implements transport only and returns raw snake_case rows — it contains no camelCase mapping, so it
+cannot stand in for the logic under test. The real `createLoader` runs. Expected objects are
+hand-written literals, not derived from the fixture — the shape that would have made this vacuous is
+absent.
+
+### Gates
+
+`tsc` **0** · eslint **0 errors** / 364 pre-existing warnings · prettier **clean** · vitest
+**79 files / 1960 tests, exit 0**. Base `08a1092` re-measured in the checker's own worktree: 78 /
+1952. **Delta exactly +1 file / +8 tests.**
+
+### Environment note, chased and cleared
+
+The checker observed 12 failures on the shared tree mid-review and correctly flagged it as *"captured
+on a tree in flux"*. **Chased: not real.** `origin/main` measured green in an isolated worktree
+(78 files / 1993 tests, exit 0), and the T196 branch at `02af8d7` also exits 0. The shared tree had
+simply been switched branches by the orchestrator mid-merge. **Worth copying: the checker reported
+an anomaly it could not attribute rather than ignoring it or blaming the task.**
+
+---
+
+## T196 — `EndMeetingDialog` mounted on `LiveConsole` (closes W3)
+
+**PASS. `6271ac6` + wiring-test follow-up. checker-reviewer PASS, 2 MINOR (one fixed in-branch, one
+filed).** Two premise-gate rounds preceded it; round 2 found **no BLOCKER**.
+
+### What shipped
+
+The dialog is wired to its three real backends. Stub handler, Button, Banner and the
+`StubBanner`/`StubNotice` declarations removed. Three seams added to `LiveConsoleBodyProps`.
+`hasAttendanceCorrections` added to `EndMeetingDialog`, defaulting **true** — verified load-bearing
+by mutation: flipping the default breaks three pre-existing dialog tests.
+
+### The owner's ruling is guarded by a test that reproduces the defect
+
+He ruled — **after seeing it screenshotted** — that post-completion only the console's roster and
+check-in panel render. Under the C5 mutation the checker dumped the DOM:
+
+```
+[{"label":"Attendance for Nia F.","checked":["Absent"]}, … ,{"label":"Attendance for Nia F.","checked":["Present"]}]
+```
+
+**Two rows for one student with contradictory statuses** — the exact defect. The test discriminates
+on the real thing, not a control count.
+
+**His rationale was also verified rather than assumed:** the round-2 gate rendered a completed
+session and drove it — the console's roster stays editable, a click produced a real write with the
+call-time identity, and the QR panel still renders. That was the one finding that could have
+collapsed the ruling.
+
+### The false banner copy is gone
+
+It read *"Attendance stays editable below; **corrections are recorded automatically**."* The second
+clause described `trg_audit_attendance_post_completion`, **removed 2026-08-03 by this same owner**.
+False on every screen that rendered it. Verified true in both contexts now.
+
+### The performance trap — avoided and measured both ways
+
+`loadEndMeetingSummary`/`onEndMeeting` are default-parameter **references to module-level consts**.
+Measured with a call-counter over five keystrokes:
+
+| | mount | after 5 keystrokes |
+|---|---|---|
+| **as shipped** | **1** | **1** |
+| rewritten as an inline factory call | **4** | **9** |
+
+Exactly reproducing the packet's own numbers. `onEditAttendance` uses
+`useCallback(() => user?.id ?? null, [user])` — no empty-dep closure over `user`.
+
+### A vacuous test was deleted, not inverted a third time
+
+The stub test asserted the End-meeting button was **absent**, dispatched a click on `undefined`, and
+checked that just-deleted stub copy was missing — trivially true — under a name describing the
+opposite. **The T401 shape.** Deleted; the checker proved both halves of its intent live elsewhere
+by mutation (`LiveConsole.test.tsx:845` and `endMeeting.test.tsx:241`, each red under its own probe).
+
+### Checker MINOR-1 — a real hole, fixed in-branch
+
+C2/C3 inject the seams, so they prove the console **forwards its props** — not that its own defaults
+are the real backends. The checker corrupted only the module consts, leaving the JSX intact:
+
+- `defaultLoadEndMeetingSummary` → inline fixture: **whole suite green**
+- `defaultOnEndMeeting` → `async () => undefined`: **whole suite green**
+
+In production the first shows a coach **fabricated attendance tallies** before ending a real meeting;
+the second makes **"End meeting" silently do nothing.** Both invisible.
+
+Two wiring tests added, modelled on this file's own `defaultSetAttendanceStatus` precedent: they
+assert the consts reach the real Supabase-backed factories, which reject with the client's
+configuration error in this gate state, where a fixture or no-op **resolves**. **Both of the
+checker's own Y1/Y2 mutations now go red at exit 1** — replayed by the orchestrator, not relayed.
+
+### Filed, not fixed — T601, T602
+
+`makeOnEditAttendance` now has **no reachable caller in the product** (a direct consequence of the
+ruling, needing an owner call), and `endMeeting.ts`'s module doc still claims T196 is unwired and
+`EndMeetingDialog.tsx` frozen — both false, and that file was outside T196's grant.
+
+### Gates
+
+`tsc` **0** · eslint **0 errors** / 366 pre-existing warnings · prettier **clean** · vitest
+**79 files / 1999 tests, exit 0**. Merge base measured 78 / 1993.
+
+### Cost, recorded honestly
+
+3 packet versions · 2 gate rounds · 1 worker restart · **2 collisions where the orchestrator edited
+files a live worker was writing**, having twice concluded from weak evidence that it had died.
+
+**All three round-1 BLOCKERs and both round-2 MAJORs originated in the orchestrator's packet, not in
+the worker's code.** The gates that caught them **built the prescription rather than reading it** —
+which is the argument for item 26's own wording, now evidenced four times this week.
