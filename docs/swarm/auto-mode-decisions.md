@@ -2403,3 +2403,49 @@ chain verified the *packet* diligently and nobody re-measured the *ledger row it
 three-for-three and is worth a constitution item.
 
 **The wave continues with T160**, which is independent of all of this.
+
+### D5 — the measuring pass. **D4 over-corrected: T164's "0 tests" claim is TRUE, and that annotation is retracted.**
+
+Owner asked for a measuring pass across the four "0 tests" rows before any of them are dispatched.
+**No dependency installed** — `@vitest/coverage-v8` is absent and a new dependency is an escalation
+class, so this is a **structural** measurement: which exported symbols are referenced by any test
+file, with comments stripped so a name in prose does not count as coverage.
+
+**Stated limit, so nobody over-reads it: this is function-level, not line-level.** A referenced
+export may still be thinly tested. It is a **lower bound on coverage and an upper bound on the gap**.
+
+| Row | Module | Lines | Test files exercising it | Exports referenced | Verdict |
+|---|---|---:|---|---|---|
+| **T161** | `checkin.ts` | 521 | **3** (incl. a dedicated `checkin.test.ts`), 144 it-blocks | **6/7** | claim **FALSE** — substantially covered |
+| **T162** | `meetings.ts` | 726 | 2, 87 it-blocks | **11/11** | claim **FALSE** — every export exercised |
+| **T163** | `reports.ts` | 729 | 4, 83 it-blocks | **6/6** | claim **FALSE** — every export exercised |
+| **T164** | `kpi.ts` | 255 | **0 at runtime** | **0/2 invoked** | claim **TRUE** — see below |
+
+#### The retraction
+
+**D4 swept T164 in with the other three and called its premise "suspect". That was wrong.**
+
+D4 reasoned from *"two test files import the module"*. Measured properly, both imports are
+**`import type` only** (`KpiStrip.test.tsx:24`, `AppShell.test.tsx:48`) — they take `KpiStripData` /
+`LoadKpiStripDataFn` and never the runtime. Every apparent hit on `loadKpiStripData` in
+`KpiStrip.test.tsx` is the component's **injected prop being stubbed**
+(`loadKpiStripData: async () => FIXTURE_KPI_DATA`), which exercises `KpiStrip`, not the loader.
+**Neither `makeLoadKpiStripData` nor `loadKpiStripData` is ever invoked by a test.**
+
+**So T164's 255 lines of runtime genuinely are untested, the original row stands, and its ledger
+annotation is corrected from "premise suspect" to "premise confirmed".**
+
+**The lesson is the same one D4 raised, applied to D4 itself:** "a test file imports this module" is
+the *same class of proxy* as "a file named `<module>.test.ts` exists" — cheaper to check than the
+real thing, and wrong in the same direction. D4 caught the audit's proxy and then reached for its
+own. Only invocation counts.
+
+#### Net position for the owner
+
+- **T161, T162, T163 are substantially covered.** Their line counts (521 / 726 / 729 = ~1,976 lines
+  advertised as untested) do **not** represent real gaps. Re-scope or close.
+- **T164 is the real one.** 255 lines, no runtime test at all. **If only one of these four gets
+  done, it is this one** — and its premise needs no further verification.
+- Two narrower gaps worth carrying: `checkin.ts`'s `getAccessToken` singleton (the
+  `makeGetAccessToken` factory **is** tested; only the trivial singleton wrapper is not — likely not
+  worth a row), and T162's measured C2/C4 gaps already recorded in its parked row.
