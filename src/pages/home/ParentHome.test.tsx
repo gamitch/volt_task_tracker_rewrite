@@ -120,6 +120,7 @@ function makeChain(result: FakeQueryResult): Record<string, unknown> {
   chain.eq = () => chain;
   chain.in = () => chain;
   chain.order = () => chain;
+  chain.is = () => chain;
   chain.maybeSingle = () => Promise.resolve(result);
   chain.then = (
     onFulfilled: (value: FakeQueryResult) => unknown,
@@ -183,11 +184,11 @@ const EMPTY_CARD_DATA: StudentHomeCardData = {
 
 describe('isEventInTeamScope', () => {
   it('null team_ids means all teams', () => {
-    expect(isEventInTeamScope({ teamIds: null }, 'team-a')).toBe(true);
+    expect(isEventInTeamScope({ teamIds: null }, ['team-a'])).toBe(true);
   });
   it('matches only listed team ids', () => {
-    expect(isEventInTeamScope({ teamIds: ['team-a'] }, 'team-a')).toBe(true);
-    expect(isEventInTeamScope({ teamIds: ['team-b'] }, 'team-a')).toBe(false);
+    expect(isEventInTeamScope({ teamIds: ['team-a'] }, ['team-a'])).toBe(true);
+    expect(isEventInTeamScope({ teamIds: ['team-b'] }, ['team-a'])).toBe(false);
   });
 });
 
@@ -265,7 +266,7 @@ describe('buildNextEventsForStudent (Next 3 events boundary proof)', () => {
       scheduledSession('s4', 'e-outreach', 13),
       scheduledSession('s5', 'e-meeting', 16),
     ];
-    const rows = buildNextEventsForStudent(sessions, events, 'team-a', REF_NOW_MS);
+    const rows = buildNextEventsForStudent(sessions, events, ['team-a'], REF_NOW_MS);
     expect(NEXT_EVENTS_LIMIT).toBe(3);
     expect(rows).toHaveLength(3);
     expect(rows.map((r) => r.sessionId)).toEqual(['s1', 's2', 's3']);
@@ -273,13 +274,13 @@ describe('buildNextEventsForStudent (Next 3 events boundary proof)', () => {
 
   it('shows exactly 1 event for a student with only 1 upcoming -- never padded to 3', () => {
     const sessions: HomeSessionRow[] = [scheduledSession('only', 'e-outreach', 4)];
-    const rows = buildNextEventsForStudent(sessions, events, 'team-a', REF_NOW_MS);
+    const rows = buildNextEventsForStudent(sessions, events, ['team-a'], REF_NOW_MS);
     expect(rows).toHaveLength(1);
     expect(rows[0].sessionId).toBe('only');
   });
 
   it('shows zero events (not padded, not a crash) for a student with none', () => {
-    expect(buildNextEventsForStudent([], events, 'team-a', REF_NOW_MS)).toEqual([]);
+    expect(buildNextEventsForStudent([], events, ['team-a'], REF_NOW_MS)).toEqual([]);
   });
 
   it('excludes competition-type sessions even when they sort earliest', () => {
@@ -287,13 +288,13 @@ describe('buildNextEventsForStudent (Next 3 events boundary proof)', () => {
       scheduledSession('comp', 'e-competition', 1), // earliest, but wrong type
       scheduledSession('meet', 'e-meeting', 5),
     ];
-    const rows = buildNextEventsForStudent(sessions, events, 'team-a', REF_NOW_MS);
+    const rows = buildNextEventsForStudent(sessions, events, ['team-a'], REF_NOW_MS);
     expect(rows.map((r) => r.sessionId)).toEqual(['meet']);
   });
 
   it('excludes out-of-team-scope sessions', () => {
     const sessions: HomeSessionRow[] = [scheduledSession('other-team', 'e-wrong-team', 3)];
-    expect(buildNextEventsForStudent(sessions, events, 'team-a', REF_NOW_MS)).toEqual([]);
+    expect(buildNextEventsForStudent(sessions, events, ['team-a'], REF_NOW_MS)).toEqual([]);
   });
 
   it('excludes already-ended and non-scheduled sessions', () => {
@@ -313,7 +314,7 @@ describe('buildNextEventsForStudent (Next 3 events boundary proof)', () => {
       endsAt: new Date(REF_NOW_MS + 90_000_000).toISOString(),
       status: 'completed',
     };
-    expect(buildNextEventsForStudent([past, completed], events, 'team-a', REF_NOW_MS)).toEqual([]);
+    expect(buildNextEventsForStudent([past, completed], events, ['team-a'], REF_NOW_MS)).toEqual([]);
   });
 });
 
@@ -655,6 +656,7 @@ describe('<ParentHome /> C3: goalHours is a verbatim passthrough, never TS-recom
       // never reads -- present here only to prove a reintroduced TS-side
       // coalesce (this criterion's own mutation) WOULD pick it up.
       students: { data: [{ id: studentId, goal_hours_override: 999 }], error: null },
+      student_teams: { data: [], error: null },
     });
     const loadStudentData = makeLoadStudentHomeCardDataForParentHome(() => fakeClient);
     const injected: LinkedStudentsResult = {
@@ -831,6 +833,7 @@ describe('<ParentHome /> C5: next-3-events sourced from real data (row-mapper mu
       v_student_goal_projection: { data: null, error: null },
       events: { data: EVENT_ROWS, error: null },
       rsvps: { data: [], error: null },
+      student_teams: { data: [], error: null },
     });
     const loadStudentData = makeLoadStudentHomeCardDataForParentHome(
       () => fakeClient,

@@ -121,6 +121,7 @@ function renderAsUser(
     resolveStudentId: async () => HARNESS_DEFAULT_RESOLVED_STUDENT_ID,
     resolveStudentScope: async () => ({
       teamId: HARNESS_DEFAULT_RESOLVED_TEAM_ID,
+      teamIds: [HARNESS_DEFAULT_RESOLVED_TEAM_ID],
       goalHours: 100,
       confirmedHours: 0,
       plannedHours: 0,
@@ -215,13 +216,13 @@ function fixtureLoadData(studentId: string): Promise<StudentHomeData> {
 
 describe('isEventInTeamScope', () => {
   it('treats teamIds === null as "all teams"', () => {
-    expect(isEventInTeamScope({ teamIds: null }, 'team-a')).toBe(true);
+    expect(isEventInTeamScope({ teamIds: null }, ['team-a'])).toBe(true);
   });
   it('excludes a team not present in teamIds', () => {
-    expect(isEventInTeamScope({ teamIds: ['team-b'] }, 'team-a')).toBe(false);
+    expect(isEventInTeamScope({ teamIds: ['team-b'] }, ['team-a'])).toBe(false);
   });
   it('includes a team present in teamIds', () => {
-    expect(isEventInTeamScope({ teamIds: ['team-a', 'team-b'] }, 'team-a')).toBe(true);
+    expect(isEventInTeamScope({ teamIds: ['team-a', 'team-b'] }, ['team-a'])).toBe(true);
   });
 });
 
@@ -307,7 +308,7 @@ describe('selectLiveMeetingSession', () => {
   ];
 
   it('returns the live meeting-type session in team scope, ignoring outreach and other teams', () => {
-    const result = selectLiveMeetingSession(sessions, events, 'team-a', REF_NOW_MS);
+    const result = selectLiveMeetingSession(sessions, events, ['team-a'], REF_NOW_MS);
     expect(result?.id).toBe('session-meeting-live');
   });
 
@@ -315,7 +316,7 @@ describe('selectLiveMeetingSession', () => {
     const result = selectLiveMeetingSession(
       sessions,
       events,
-      'team-a',
+      ['team-a'],
       new Date('2026-07-19T20:00:00.000Z').getTime(),
     );
     expect(result).toBeNull();
@@ -414,7 +415,7 @@ describe('buildNextUp', () => {
       // No RSVP on s-outreach-unanswered -- must not appear in Next up.
     ];
 
-    const result = buildNextUp(sessions, events, rsvps, 'student-1', 'team-a', REF_NOW_MS);
+    const result = buildNextUp(sessions, events, rsvps, 'student-1', ['team-a'], REF_NOW_MS);
     const ids = result.map((row) => row.sessionId);
     expect(ids).toEqual(['s-meeting', 's-outreach-going']);
     expect(result.find((r) => r.sessionId === 's-outreach-going')?.isOutreachGoing).toBe(true);
@@ -441,7 +442,7 @@ describe('buildNextUp', () => {
         status: 'scheduled',
       },
     ];
-    const result = buildNextUp(sessions, events, [], 'student-1', 'team-a', REF_NOW_MS);
+    const result = buildNextUp(sessions, events, [], 'student-1', ['team-a'], REF_NOW_MS);
     expect(result).toHaveLength(0);
   });
 });
@@ -542,7 +543,7 @@ describe('getUnansweredOutreachOpportunities', () => {
       events,
       rsvps,
       'student-1',
-      'team-a',
+      ['team-a'],
       REF_NOW_MS,
     );
     expect(result.map((r) => r.sessionId)).toEqual(['s-b', 's-a']);
@@ -808,6 +809,7 @@ describe('StudentHome render -- BEH-02 confirmed/planned hours never summed', ()
       studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
       resolveStudentScope: async () => ({
         teamId: 'team-fixture-beh02',
+        teamIds: ['team-fixture-beh02'],
         goalHours: 100,
         confirmedHours: 62,
         plannedHours: 3,
@@ -874,6 +876,7 @@ describe('StudentHome DES-12 states', () => {
       studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
       resolveStudentScope: async () => ({
         teamId: PLACEHOLDER_CURRENT_TEAM_ID,
+        teamIds: [PLACEHOLDER_CURRENT_TEAM_ID],
         goalHours: 100,
         confirmedHours: 62,
         plannedHours: 3,
@@ -1095,6 +1098,7 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
     const resolveStudentId = vi.fn(async () => 'should-never-be-called');
     const resolveStudentScope = vi.fn(async () => ({
       teamId: 'team-x',
+      teamIds: ['team-x'],
       goalHours: 5,
       confirmedHours: 2,
       plannedHours: 1,
@@ -1113,6 +1117,7 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
       kind: 'linked',
       studentId: 'student-explicit',
       teamId: 'team-x',
+      teamIds: ['team-x'],
       goalHours: 5,
       confirmedHours: 2,
       plannedHours: 1,
@@ -1123,6 +1128,7 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
     const resolveStudentId = vi.fn(async () => 'student-resolved');
     const resolveStudentScope = vi.fn(async () => ({
       teamId: 'should-never-be-used',
+      teamIds: ['should-never-be-used'],
       goalHours: 99,
       confirmedHours: 99,
       plannedHours: 99,
@@ -1141,6 +1147,7 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
       kind: 'linked',
       studentId: 'student-resolved',
       teamId: 'team-explicit',
+      teamIds: ['team-explicit'],
       goalHours: 42,
       confirmedHours: 0,
       plannedHours: 0,
@@ -1151,6 +1158,7 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
     const resolveStudentId = vi.fn(async () => 'student-resolved');
     const resolveStudentScope = vi.fn(async () => ({
       teamId: 'team-resolved',
+      teamIds: ['team-resolved'],
       goalHours: 3,
       confirmedHours: 1.5,
       plannedHours: 0.5,
@@ -1169,6 +1177,7 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
       kind: 'linked',
       studentId: 'student-resolved',
       teamId: 'team-resolved',
+      teamIds: ['team-resolved'],
       goalHours: 3,
       confirmedHours: 1.5,
       plannedHours: 0.5,
@@ -1179,6 +1188,7 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
     const resolveStudentId = vi.fn(async () => null);
     const resolveStudentScope = vi.fn(async () => ({
       teamId: 'team-x',
+      teamIds: ['team-x'],
       goalHours: 100,
       confirmedHours: 0,
       plannedHours: 0,
@@ -1313,6 +1323,7 @@ describe('<StudentHome /> T176 -- real, resolved teamId reaches team-scoped widg
       loadData,
       resolveStudentScope: async () => ({
         teamId: 'team-fixture-alpha',
+        teamIds: ['team-fixture-alpha'],
         goalHours: 100,
         confirmedHours: 0,
         plannedHours: 0,
@@ -1330,6 +1341,7 @@ describe('<StudentHome /> T176 -- explicit teamId bypasses resolveStudentScope e
   it('(a) resolveStudentScope is never called AND (b) the rendered team-scope outcome reflects the explicit value', async () => {
     const resolveStudentScopeSpy = vi.fn(async () => ({
       teamId: 'team-should-never-be-used',
+      teamIds: ['team-should-never-be-used'],
       goalHours: 999,
       confirmedHours: 999,
       plannedHours: 999,
@@ -1562,6 +1574,7 @@ describe('<StudentHome /> T176 round 2 -- goal-hours denominator + confirmed/pla
           }),
         resolveStudentScope: async () => ({
           teamId: 'team-fixture-c10',
+          teamIds: ['team-fixture-c10'],
           goalHours: 8,
           confirmedHours: 2,
           plannedHours: 1,
@@ -1601,6 +1614,7 @@ describe('<StudentHome /> T176 round 2 -- goal-hours denominator + confirmed/pla
         loadData: async () => buildDataFixture({ studentHours: null }),
         resolveStudentScope: async () => ({
           teamId: 'team-fixture-c10',
+          teamIds: ['team-fixture-c10'],
           goalHours: 40,
           confirmedHours: 10,
           plannedHours: 5,
@@ -1668,6 +1682,7 @@ describe('<StudentHome /> T176/T183 -- render-and-enumerate live over container.
         resolveStudentId: async () => 'student-real-c11',
         resolveStudentScope: async () => ({
           teamId: 'team-real-c11',
+          teamIds: ['team-real-c11'],
           goalHours: 50,
           confirmedHours: 5,
           plannedHours: 2,
@@ -1760,6 +1775,7 @@ describe('<StudentHome /> T184 -- "sees nothing" is proven with a positive contr
       resolveStudentId: async () => 'student-real-linked-c5',
       resolveStudentScope: async () => ({
         teamId: 'team-real-c5',
+        teamIds: ['team-real-c5'],
         goalHours: 20,
         confirmedHours: 4,
         plannedHours: 2,
@@ -1783,5 +1799,121 @@ describe('<StudentHome /> T184 -- "sees nothing" is proven with a positive contr
     expect(container.textContent).not.toContain('Hi Ada Reyes');
     expect(container.querySelector('[role="progressbar"]')).toBeNull();
     expect(container.textContent).toContain('Your student account is inactive');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T187 (gate build): two-team scope intersection -- criteria 1 & 4.
+// ---------------------------------------------------------------------------
+describe('T187: two-team scope intersection', () => {
+  const REF = new Date('2026-07-19T12:00:00.000Z').getTime();
+  const twoTeamEvents: HomeEventRow[] = [
+    {
+      id: 'e-team-a-meeting',
+      seasonId: 's1',
+      type: 'meeting',
+      title: 'Alpha Build',
+      teamIds: ['team-a'],
+      countsVolunteerHours: false,
+    },
+    {
+      id: 'e-team-b-meeting',
+      seasonId: 's1',
+      type: 'meeting',
+      title: 'Beta Build',
+      teamIds: ['team-b'],
+      countsVolunteerHours: false,
+    },
+    {
+      id: 'e-team-c-outreach',
+      seasonId: 's1',
+      type: 'outreach',
+      title: 'Gamma Fair (out of scope)',
+      teamIds: ['team-c'],
+      countsVolunteerHours: true,
+    },
+    {
+      id: 'e-team-b-outreach',
+      seasonId: 's1',
+      type: 'outreach',
+      title: 'Beta Fair',
+      teamIds: ['team-b'],
+      countsVolunteerHours: true,
+    },
+  ];
+  const twoTeamSessions: HomeSessionRow[] = [
+    {
+      id: 's-a-meeting',
+      eventId: 'e-team-a-meeting',
+      startsAt: '2026-07-20T10:00:00.000Z',
+      endsAt: '2026-07-20T12:00:00.000Z',
+      status: 'scheduled',
+    },
+    {
+      id: 's-b-meeting-live',
+      eventId: 'e-team-b-meeting',
+      startsAt: '2026-07-19T11:30:00.000Z',
+      endsAt: '2026-07-19T13:30:00.000Z',
+      status: 'scheduled',
+    },
+    {
+      id: 's-c-outreach',
+      eventId: 'e-team-c-outreach',
+      startsAt: '2026-07-21T10:00:00.000Z',
+      endsAt: '2026-07-21T12:00:00.000Z',
+      status: 'scheduled',
+    },
+    {
+      id: 's-b-outreach',
+      eventId: 'e-team-b-outreach',
+      startsAt: '2026-07-22T10:00:00.000Z',
+      endsAt: '2026-07-22T12:00:00.000Z',
+      status: 'scheduled',
+    },
+  ];
+
+  it('an event on EITHER of a two-team student\'s teams is in scope; neither-team is not (criterion 1)', () => {
+    expect(isEventInTeamScope({ teamIds: ['team-a'] }, ['team-a', 'team-b'])).toBe(true);
+    expect(isEventInTeamScope({ teamIds: ['team-b'] }, ['team-a', 'team-b'])).toBe(true);
+    expect(isEventInTeamScope({ teamIds: ['team-c'] }, ['team-a', 'team-b'])).toBe(false);
+  });
+
+  it('an all-teams event (teamIds === null) reaches every student (criterion 4)', () => {
+    expect(isEventInTeamScope({ teamIds: null }, ['team-a', 'team-b'])).toBe(true);
+    expect(isEventInTeamScope({ teamIds: null }, [])).toBe(true);
+  });
+
+  it('buildNextUp surfaces BOTH teams\' meetings for a two-team student (criterion 1)', () => {
+    const result = buildNextUp(
+      twoTeamSessions,
+      twoTeamEvents,
+      [],
+      'student-two-team',
+      ['team-a', 'team-b'],
+      REF,
+    );
+    const ids = result.map((row) => row.sessionId);
+    expect(ids).toContain('s-a-meeting');
+    expect(ids).toContain('s-b-meeting-live');
+    expect(ids).not.toContain('s-c-outreach');
+  });
+
+  it('selectLiveMeetingSession finds a live meeting on the SECOND team (criterion 1, check-in gate)', () => {
+    const result = selectLiveMeetingSession(twoTeamSessions, twoTeamEvents, ['team-a', 'team-b'], REF);
+    expect(result?.id).toBe('s-b-meeting-live');
+  });
+
+  it('getUnansweredOutreachOpportunities surfaces the second team\'s outreach (criterion 1, sign-ups)', () => {
+    const result = getUnansweredOutreachOpportunities(
+      twoTeamSessions,
+      twoTeamEvents,
+      [],
+      'student-two-team',
+      ['team-a', 'team-b'],
+      REF,
+    );
+    const ids = result.map((row) => row.sessionId);
+    expect(ids).toContain('s-b-outreach');
+    expect(ids).not.toContain('s-c-outreach');
   });
 });

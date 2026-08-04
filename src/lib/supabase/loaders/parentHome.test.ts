@@ -58,6 +58,7 @@ function makeRecordingChain(
     recorded.orderArgs.push([column, opts]);
     return chain;
   };
+  chain.is = () => chain;
   chain.maybeSingle = () => Promise.resolve(result);
   chain.then = (
     onFulfilled: (value: typeof result) => unknown,
@@ -270,6 +271,7 @@ describe('makeLoadStudentHomeCardDataForParentHome', () => {
       },
       events: { data: [], error: null },
       rsvps: { data: [], error: null },
+      student_teams: { data: [{ team_id: TEAM_ID }], error: null },
       ...overrides,
     };
   }
@@ -458,5 +460,74 @@ describe('makeLoadStudentHomeCardDataForParentHome', () => {
       { sessionId: 'session-strip-1', sessionDate: '2026-05-01', status: 'present' },
     ]);
     expect(data.participation).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T800 (gate build): a two-team child's card scopes by ACTIVE memberships,
+// not the single threaded team id -- criterion 2.
+// ---------------------------------------------------------------------------
+describe("T800: two-team child's card (criterion 2)", () => {
+  it("shows BOTH teams' events when student_teams carries two ACTIVE memberships", async () => {
+    const TEAM_SECOND = 'team-real-second';
+    const eventRows = [
+      {
+        id: 'event-primary-1',
+        season_id: 'season-x',
+        type: 'meeting',
+        title: 'Primary Team Meeting',
+        team_ids: ['team-real-1'],
+      },
+      {
+        id: 'event-second-1',
+        season_id: 'season-x',
+        type: 'outreach',
+        title: 'Second Team Fair',
+        team_ids: [TEAM_SECOND],
+      },
+    ];
+    const sessionRows = [
+      {
+        id: 'session-primary-1',
+        event_id: 'event-primary-1',
+        session_date: '2026-08-10',
+        starts_at: '2026-08-10T10:00:00.000Z',
+        ends_at: '2026-08-10T12:00:00.000Z',
+        status: 'scheduled',
+      },
+      {
+        id: 'session-second-1',
+        event_id: 'event-second-1',
+        session_date: '2026-08-11',
+        starts_at: '2026-08-11T10:00:00.000Z',
+        ends_at: '2026-08-11T12:00:00.000Z',
+        status: 'scheduled',
+      },
+    ];
+    const { client } = makeRecordingClient({
+      event_sessions: { data: sessionRows, error: null },
+      attendance: { data: [], error: null },
+      v_student_participation: { data: [], error: null },
+      v_student_goal_projection: {
+        data: { team_id: 'team-real-1', goal_hours: 80, confirmed_hours: 12, planned_hours: 3 },
+        error: null,
+      },
+      events: { data: eventRows, error: null },
+      rsvps: { data: [], error: null },
+      student_teams: {
+        data: [{ team_id: 'team-real-1' }, { team_id: TEAM_SECOND }],
+        error: null,
+      },
+    });
+    const loadStudentData = makeLoadStudentHomeCardDataForParentHome(
+      () => client,
+      () => new Date('2026-08-01T00:00:00.000Z'),
+    );
+
+    const data = await loadStudentData('student-real-1', 'team-real-1');
+
+    const titles = data.nextEvents.map((event) => event.title);
+    expect(titles).toContain('Primary Team Meeting');
+    expect(titles).toContain('Second Team Fair');
   });
 });

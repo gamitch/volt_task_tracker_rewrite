@@ -48,12 +48,17 @@ function makeRecordingClient(
     confirmed_hours: number;
     planned_hours: number;
   } | null,
+  teamRows: { team_id: string }[] = [],
 ) {
   const maybeSingleSpy = vi.fn().mockResolvedValue({ data: row, error: null });
   const eqSpy = vi.fn(() => ({ maybeSingle: maybeSingleSpy }));
   const selectSpy = vi.fn(() => ({ eq: eqSpy, maybeSingle: maybeSingleSpy }));
+  const teamIsSpy = vi.fn().mockResolvedValue({ data: teamRows, error: null });
+  const teamEqSpy = vi.fn(() => ({ is: teamIsSpy }));
+  const teamSelectSpy = vi.fn(() => ({ eq: teamEqSpy }));
   const fromSpy = vi.fn((table: string) => {
     if (table === 'v_student_goal_projection') return { select: selectSpy };
+    if (table === 'student_teams') return { select: teamSelectSpy };
     throw new Error(`unexpected table: ${table}`);
   });
   return {
@@ -62,6 +67,9 @@ function makeRecordingClient(
     selectSpy,
     eqSpy,
     maybeSingleSpy,
+    teamSelectSpy,
+    teamEqSpy,
+    teamIsSpy,
   };
 }
 
@@ -94,6 +102,7 @@ describe('makeResolveStudentScope (T176 criterion 8, round 2: v_student_goal_pro
 
     await expect(resolveStudentScope('student-real-2')).resolves.toEqual({
       teamId: 'team-real-2',
+      teamIds: [],
       goalHours: 42,
       confirmedHours: 10,
       plannedHours: 3,
@@ -111,6 +120,7 @@ describe('makeResolveStudentScope (T176 criterion 8, round 2: v_student_goal_pro
 
     await expect(resolveStudentScope('student-real-3')).resolves.toEqual({
       teamId: 'team-real-3',
+      teamIds: [],
       goalHours: 7,
       confirmedHours: 0,
       plannedHours: 0,
@@ -381,5 +391,37 @@ describe('makeResolveStudentIsActive (T189)', () => {
     expect(mutatedRow).toEqual({ data: { is_active: false }, error: null });
     expect(maybeSingleSpy).toHaveBeenCalledTimes(1);
     expect(eqSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T187 (gate build): the ACTIVE student_teams membership read -- criteria 1
+// (scope carries both ids) and 3 (ACTIVE predicate is applied server-side).
+// ---------------------------------------------------------------------------
+describe('T187: ACTIVE student_teams membership read', () => {
+  it('resolves BOTH active team ids onto the scope for a two-team student', async () => {
+    const { client } = makeRecordingClient(
+      { team_id: 'team-real-a', goal_hours: 10, confirmed_hours: 0, planned_hours: 0 },
+      [{ team_id: 'team-real-a' }, { team_id: 'team-real-b' }],
+    );
+    const resolveStudentScope = makeResolveStudentScope(() => client);
+
+    await expect(resolveStudentScope('student-two-team')).resolves.toEqual({
+      teamId: 'team-real-a',
+      teamIds: ['team-real-a', 'team-real-b'],
+      goalHours: 10,
+      confirmedHours: 0,
+      plannedHours: 0,
+    });
+  });
+
+  it("applies the ACTIVE predicate server-side: .is('left_on', null), scoped by .eq('student_id', ...) (criterion 3)", async () => {
+    const { client, teamEqSpy, teamIsSpy } = makeRecordingClient(null, []);
+    const resolveStudentScope = makeResolveStudentScope(() => client);
+
+    await resolveStudentScope('student-left-team');
+
+    expect(teamEqSpy).toHaveBeenCalledWith('student_id', 'student-left-team');
+    expect(teamIsSpy).toHaveBeenCalledWith('left_on', null);
   });
 });
