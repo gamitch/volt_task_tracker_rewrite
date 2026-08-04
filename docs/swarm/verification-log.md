@@ -8993,3 +8993,90 @@ and T300's C1 was written to avoid.
 `tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise from `main`** · vitest
 **78 files / 1951 tests**, targeted `OutreachDetail.test.tsx` **113 passed, exit 0** · build ✓.
 `.env.local` absent.
+
+---
+
+## T406 — `markDayComplete`'s attendance write is narrowed so a concurrent QR scan survives (PARTIAL fix, stated as such)
+
+**Tier: HEAVY** (constitution item 26), stated and defended: this changes **what columns reach a write
+on the `attendance` table** — the surface T305 and T307 exist to protect. Item 26's trigger question,
+*can a mistake here corrupt data?*, is **yes**, and in the worst direction: narrow the wrong column and
+the fix nulls `check_in_at` for every student on every day-completion, strictly worse than the bug.
+Full chain run: packet → premise gate → **REVISE** → packet v2 → worker → orchestrator replay.
+
+### The defect
+
+The dialog loads attendance **once on open** and `handleSubmit` writes that snapshot back. A student
+who scans the QR kiosk in between has their real `check_in_at` overwritten by the pre-scan snapshot.
+The check-in disappears silently.
+
+### The premise gate proved the load-bearing claim by EXECUTION, not documentation
+
+Everything rested on one claim: *a PostgREST upsert with a narrowed column list leaves the unsent
+columns untouched on the conflict path.* The gate stood up a scratch **PostgreSQL 16.13** with this
+repo's real migrations, and cross-checked the installed `@supabase/postgrest-js` v2.110.7 source and
+PostgREST's own `mutatePlanToQuery`:
+
+| | Result |
+|---|---|
+| **E1** | narrowed upsert over a seeded `check_in_at = 14:07:33+00`, `method='qr'` → **`check_in_at` survived** |
+| **E2** | `updated_at` trigger fires on the **UPDATE** leg; an explicitly-sent stale value was **overwritten by the trigger** |
+| **E3** | `method` cannot be dropped: `ERROR: null value in column "method" … violates not-null constraint` — **on BOTH legs**, since PostgreSQL checks NOT NULL on the candidate tuple before conflict arbitration. Stronger than the packet claimed |
+| **E4** | the bug reproduced: full-column payload + stale snapshot → `14:07:33+00` → **NULL** |
+| **E5** | batch-uniformity trap reproduced — the client sets `columns=` to the **union of `Object.keys` across all rows**, so a key missing from *some* rows null-fills them |
+
+The gate returned **REVISE** with two MAJORs, **both independently re-verified by the orchestrator**:
+
+1. The packet said `markDayComplete` had **one** caller. It has **three** — and one
+   (`MarkEventCompleteDialog.tsx:460`) is a **Forbidden** file whose bulk path flows through the very
+   write being narrowed.
+2. **C2's named mutation did not discriminate.** "Re-add `check_in_at`" also reddens a plain
+   payload-keys assertion, so C1+C2 were satisfiable by one shape assertion — the exact
+   "passes for the wrong reason" trap the packet itself named.
+
+### Orchestrator's independent mutation replay
+
+Re-run by the orchestrator, not taken from the worker's report:
+
+| # | Mutation | Result |
+|---|---|---|
+| **C1** | re-add `updated_at` to the payload | **2 failed** / 74, exit 1 |
+| **C2** | re-add `check_in_at` to **every** row | **red** — `expected null to be '2026-08-04T14:07:33.000Z'` |
+| **C2 (discriminating)** | re-add `check_in_at` to only a **SUBSET** of rows | **red** — `expected null to be '…15:00:00.000Z'`, the union-columns null-fill, which **no shape assertion can catch** |
+| **C4** | drop `recorded_by` | **3 failed** / 74, exit 1 |
+| **C6** | `buildAttendanceWriteRows` byte-identical | sha256 `0385ea2bc77a10ba…`, **22 lines, identical at both revisions**; `MarkDayCompleteDialog.tsx` has **zero** diff |
+| **C7** | move the adult-volunteer RMW above the session flip | **2 failed** / 19, exit 1 — T327's ordering genuinely pinned |
+
+**C2 asserts `setup.store.get(…)` — real post-write row state from a stateful fake modelling the
+proven union-of-keys semantics — never `mock.calls`.** That was the whole point of packet v2.
+
+**C3 and C5 were run by the worker with transcripts in `T406-worker-output.md` but were not
+independently replayed by the orchestrator.** C3's database half is the gate's E3 above, which *was*
+proven by execution. Recorded here rather than implied.
+
+### One vacuous-verification catch worth recording
+
+The orchestrator's first attempt at C6 extracted the function with an `awk` range that matched
+**nothing**, and both revisions therefore hashed to `e3b0c442…` — **the sha256 of the empty string.**
+It looked like a clean match. `buildAttendanceWriteRows` lives in `MarkDayCompleteDialog.tsx`, not
+`loaders/outreach.ts`. **A hash comparison that succeeds on two empty inputs is not evidence**; the
+line count is what exposed it.
+
+### THIS IS A PARTIAL FIX — say so, do not imply otherwise
+
+**`method` cannot be dropped** (NOT NULL, no default, and E3 shows it fails on *both* legs). So a
+concurrent scan's `method: 'qr'` **can still be clobbered** by the dialog's stale snapshot — the gate
+observed exactly that in E1, `qr` → `coach`, in the same run that preserved `check_in_at`.
+
+The student's real **`check_in_at` survives — the harm the owner described** — but the *provenance*
+that they scanned rather than being coach-marked does not. Closing that half needs either a schema
+default (a migration on a table W1 owns) or an insert/update split (re-introducing the multi-step
+shape T327 exists to avoid). Neither is proportionate for a provenance flag on a ~20-student team
+(item 25). **Filed, not built. No migration added.**
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise** · vitest **78 files /
+1955 tests** · build ✓. `.env.local` absent. `MarkDayCompleteDialog.tsx` needed **zero** edits, and
+`MarkEventCompleteDialog.test.tsx` (Forbidden) stayed green with **zero** edits — confirming the
+narrowing landed on the snake_case DB mapping only, leaving the camelCase builders untouched.
