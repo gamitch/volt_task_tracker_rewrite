@@ -589,12 +589,14 @@
  * existing test rejected its reload.
  *
  * (g) EVERY `user !== null` GATE IN THIS FILE IS DEFENSIVE, NOT
- * COMPILER-REQUIRED. This file's four role-scoped render sites
- * (`<ParentRsvp>`, `<RsvpControl>`, `<AttendancePanel>` and this dialog) each
- * write an explicit `user !== null` beside their `isParentViewer` /
- * `isStudentViewer` / `isStaffViewer` check. That is a deliberate,
- * conventional belt-and-braces choice -- it is NOT what makes `user.id`
- * compile.
+ * COMPILER-REQUIRED. This file's role-scoped render sites -- `<ParentRsvp>`,
+ * `<RsvpControl>`, `<AttendancePanel>`, this dialog, and the
+ * `<OutreachEventDialog>` mount T300 later gated the same way -- each write an
+ * explicit `user !== null` beside their `isParentViewer` / `isStudentViewer` /
+ * `isStaffViewer` check. That is a deliberate, conventional belt-and-braces
+ * choice -- it is NOT what makes `user.id` compile. (Deliberately not stated as
+ * a count: this paragraph's earlier revision hard-coded one, and it went stale
+ * the moment a gate was added. That is the same failure this section documents.)
  *
  * TypeScript 4.4+ narrows through ALIASED conditions. `user` is a `const`
  * destructured binding (`const { user } = useAuth()`, module doc #11) and

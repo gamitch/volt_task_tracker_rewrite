@@ -8957,6 +8957,18 @@ corrective module doc ("Three pre-existing gates … carry comments stating …"
 **The miscount had propagated into the correction itself**, which is the same
 propagation-by-imitation shape this row was filed to stop. Both were fixed.
 
+### The count was NOT restated as a number, deliberately
+
+T300 merged before this branch did and added a **fifth** `user !== null` gate (the
+`<OutreachEventDialog>` mount). The corrected paragraph had said "this file's **four** role-scoped
+render sites" — which went stale the moment that gate landed, mid-review of this very task. It now
+names the sites without hard-coding a count, and says why. **A task about a false count in a comment
+must not ship a fresh one.**
+
+Also checked, because it was the live risk: T300's new gate comment does **not** repeat the
+"LOAD-BEARING" claim. It reasons about reachability instead and never invokes type narrowing, so the
+propagation-by-imitation this row was filed to stop did not recur.
+
 ### Zero behaviour change, proven by hash
 
 A comment-only claim deserves better than "I read the diff". Both revisions were run through
