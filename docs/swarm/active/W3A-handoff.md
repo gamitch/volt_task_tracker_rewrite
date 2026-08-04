@@ -21,19 +21,19 @@ rename must not.
 
 ## ⚠️ The thing to read first: four ledger rows were measured wrong
 
-**T161, T162, T163's "0 tests" claims are FALSE.** They came from an external audit that counted
+**T162's "0 tests" claim was FALSE; T163's is UNVERIFIED; T161's was TRUE and its row was simply completed — see D7's retraction.** Originally stated as all four: They came from an external audit that counted
 **files named `<module>.test.ts`** rather than tests *of* the module. Measured (D5, structural —
 which exports any test file actually invokes; no dependency installed):
 
 | Row | Module | Lines | Reality |
 |---|---|---:|---|
-| T161 | `checkin.ts` | 521 | **3 test files incl. a dedicated one, 144 it-blocks, 6/7 exports** |
+| ~~T161~~ | `checkin.ts` | 521 | ❌ **RETRACTED (D7) — claim was TRUE; row was COMPLETED** (`2d58675`) |
 | T162 | `meetings.ts` | 726 | 2 files, 87 it-blocks, **11/11 exports** |
 | T163 | `reports.ts` | 729 | 4 files, 83 it-blocks, **6/6 exports** |
 | **T164** | `kpi.ts` | 255 | **claim is TRUE — 0 runtime tests** |
 
-**~1,976 lines are advertised as untested and are substantially covered.** All four rows are
-annotated in the ledger.
+**Corrected figure: ~729 lines unverified (T163), not the ~1,976 first claimed.** All four rows are
+annotated in the ledger; T161's annotation is a retraction.
 
 **T164 is the real one and the only one worth doing.** Both its test files `import type` only; every
 apparent hit on `loadKpiStripData` is the component's **injected prop being stubbed**. Neither the

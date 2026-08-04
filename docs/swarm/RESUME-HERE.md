@@ -21,18 +21,22 @@ orchestrator made alone are in `auto-mode-decisions.md` under **"W3-A auto-mode 
 
 ### ⚠️ Read this before packeting any "0 tests" row
 
-**T161, T162 and T163's "0 tests" claims are FALSE.** They came from an external audit that counted
-**files named `<module>.test.ts`** rather than tests *of* the module. Measured (D5):
+**T162's "0 tests" claim was FALSE. T163's is UNVERIFIED. T161's was TRUE — that row was simply
+done.** An earlier version of this section claimed all four were mis-measured by an audit that
+counted **files named `<module>.test.ts`**; **that is retracted for T161 (see D7)** and the finding
+is narrowed. Measured (D5, corrected by D7):
 
 | Row | Module | Lines | Reality |
 |---|---|---:|---|
-| T161 | `checkin.ts` | 521 | 3 test files incl. a dedicated one, 144 it-blocks, **6/7 exports** |
+| ~~T161~~ | `checkin.ts` | 521 | ❌ **RETRACTED — claim was TRUE; the row was COMPLETED** (`2d58675`). Needs nothing. |
 | T162 | `meetings.ts` | 726 | 2 files, 87 it-blocks, **11/11 exports** — now CLOSED |
 | T163 | `reports.ts` | 729 | 4 files, 83 it-blocks, **6/6 exports** |
 | **T164** | `kpi.ts` | 255 | **claim is TRUE — 0 runtime tests** |
 
-**~1,976 lines are advertised as untested and are substantially covered. Re-scope or close T161 and
-T163 the way T162 was.** **T164 is the only genuine gap and the one worth doing** — both its test
+**T161 needs nothing — it is done and awaiting merge on the W1 branch. T163 is genuinely unknown and
+should be MEASURED, not assumed in either direction.** The "~1,976 lines falsely advertised" figure
+in the first version of this section was wrong; read it as **~729 unverified** (T163) plus T162's
+726, now closed. **T164 is the only confirmed gap and the one worth doing** — both its test
 files `import type` only, and every apparent use of `loadKpiStripData` is the component's injected
 prop being stubbed.
 
