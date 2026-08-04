@@ -1,116 +1,162 @@
-# T196 — worker packet: mount `EndMeetingDialog` on `LiveConsole`
+# T196 — worker packet **v2**: mount `EndMeetingDialog` on `LiveConsole`
 
-**Branch `claude/t196-endmeeting-mount`. Base `aabc7f1`. HEAVY tier.**
-Baseline measured by the orchestrator at base: `tsc` **0** · vitest **78 files / 1950 tests, exit 0**.
+**Branch `claude/t196-endmeeting-mount`. HEAVY tier.** Base measured: `tsc` **0** · vitest
+**78 files / 1950 tests, exit 0**.
 
-**Scope note that changes what this row is.** The ledger calls T196 *"a project, not a ticket."* That
-was written when the mount required building a real console first. **T403 did that.** Measured today:
-`EndMeetingDialog` is built and tested, all three backends in `endMeeting.ts` are built and tested,
-and the three props line up **one-to-one** with the three factories. **This is wiring.** If you find
-yourself designing something, stop and raise it — you have left the row.
+**Gate round 1 returned REVISE — 3 BLOCKER, 3 MAJOR, 3 MINOR, 2 NIT. This is the revision.** Round 2
+is the last (item 19a). The gate **built v1's prescription and ran it**; every finding below is
+measured, not argued.
 
-## 1. Ownership — read before touching anything
+> ### What v1 got wrong. Stated so it is not re-derived.
+>
+> 1. **v1 said this row's "a project, not a ticket" framing was stale and "this is wiring."**
+>    **Wrong.** The mount breaks two green tests, needs an interface change, and produced a
+>    data-integrity defect. **The row was right.**
+> 2. **C4's mutation was vacuous.** "Freeze `getRecordedBy` at construction" is a **no-op** for a
+>    factory called inline in JSX — construction time *is* every render. The gate applied it
+>    verbatim and C4 stayed **green**.
+> 3. **§3's "omit the memo" advice was a performance defect.** Measured: `loadCalls after mount: 4 |
+>    after 5 keystrokes: 9` — one **4-query** reload per parent re-render, and the panel drops to a
+>    spinner on every keystroke.
+> 4. **v1 claimed the dialog's button renders unconditionally.** It renders **only** for
+>    `loadState === 'success' && session.status === 'scheduled'`.
 
-`LiveConsole.tsx` is **W1's file**. **Owner ruling 2026-08-04 grants W3 this file FOR THIS MOUNT
-ONLY** (`auto-mode-decisions.md`). You may:
+## 1. Ownership — grant, now extended
 
-- replace `handleEndMeetingClick` (`:1152-1158`) and its `StubBanner` render (`:1184-1186`)
-- render `EndMeetingDialog` wired to the three real backends
+`LiveConsole.tsx` is W1's; **owner ruling 2026-08-04 grants it to W3 for this mount only.**
+**Extended by ruling 3 (same date) to:**
 
-**You may NOT touch**, and changing any of them means you have left the grant — **stop and report**:
+- **`LiveConsole.test.tsx`** — **`:845` and `:864` ONLY.** Both assert the stub this row deletes.
+  **This is the explicit test-update approval** non-negotiable #2 and DoR #5 require. **No other test
+  in that file may be touched.**
+- **`LiveConsoleBodyProps`** — to add the injectable seams §5 needs. It is an exported interface;
+  the grant names it deliberately.
+- **`EndMeetingDialog.tsx`** — W3's own file, always in scope.
+
+**Still NOT yours** — touching any of these means you have left the grant, so **stop and report**:
 the roster query, the QR/short-code panel, `makeDefaultSetAttendanceStatus` or any attendance-write
-internal, `AttendanceRecordState`, or `Kiosk.tsx`.
+internal, `AttendanceRecordState`, `Kiosk.tsx`, or any other test in `LiveConsole.test.tsx`.
 
-**T400 is NOT in this wave** (same ruling, un-sequenced). Do not build a session picker.
+**T400 is not in this wave.** Do not build a session picker.
 
-## 2. Ground truth — every line verified at base, not inherited
+## 2. Ground truth — re-verified, with v1's errors corrected
 
-| Fact | Verified |
+| Fact | Status |
 |---|---|
-| `EndMeetingDialogProps` = `{ sessionId, loadSummary?, onEndMeeting?, onEditAttendance? }` | ✅ `EndMeetingDialog.tsx:642-660` |
-| Three factories exist | ✅ `endMeeting.ts:288` `makeLoadEndMeetingSummary`, `:373` `makeOnEndMeeting`, `:448` `makeOnEditAttendance` |
-| `makeOnEditAttendance(getRecordedBy: () => string \| null, getClient?)` | ✅ `endMeeting.ts:448-451` |
-| The dialog renders its **own** "End meeting" button | ✅ `EndMeetingDialog.tsx:779` |
-| `LiveConsole` has `useAuth()` | ✅ `:464` import, `:974` `const { user } = useAuth()` |
-| `LiveConsole` already derives the same identity | ✅ `:1065` `const recordedBy = user?.id ?? null;` |
-| `profiles.id` **references** `auth.users(id)` — so `user.id` IS a valid `recorded_by` | ✅ `20260716000000_identity_roster.sql:17` |
-| The stub to replace | ✅ `:1152-1158` `handleEndMeetingClick`, `:1181` the Button, `:1184-1186` the banner |
+| `EndMeetingDialogProps` = `{ sessionId, loadSummary?, onEndMeeting?, onEditAttendance? }` | ✅ `EndMeetingDialog.tsx:642-659` *(v1 said `:642-660`)* |
+| `makeLoadEndMeetingSummary:288` · `makeOnEndMeeting:373` · `makeOnEditAttendance:448` | ✅ |
+| `makeOnEditAttendance(getRecordedBy: () => string \| null, getClient?)` | ✅ `:448-451` |
+| **The dialog's "End meeting" `<Button>` is `:778` (label `:779`) and renders ONLY inside `loadState.status === 'success' && data.session.status === 'scheduled'`** (`:753`, `:776`) | ⚠️ **v1 read this as unconditional. It is not.** |
+| `LiveConsole` has `useAuth()` | ✅ `:464`, `:974` |
+| `LiveConsole:1065` `const recordedBy = user?.id ?? null;` — inside `handleSetStatus`, a genuine call-time precedent | ✅ |
+| `attendance.recorded_by` → **`public.profiles(id)`** (`20260717000000_scheduling_attendance.sql:91`), and `profiles.id` → `auth.users(id)` (`20260716000000_identity_roster.sql:17`). **Both links matter**; v1 omitted the first | ✅ corrected |
+| Stub: `:1152-1158` handler, `:1181` Button, `:1184-1186` banner, `:989` state | ✅ |
+| `getRecordedBy` is read inside the returned function (`endMeeting.ts:472-476`), quoted at `:112-116` *(v1 said `:106-114`)* | ✅ |
+| `EndMeetingDialog` mounted nowhere today | ✅ |
 
-**`EndMeetingDialog` is currently mounted nowhere** — grep-verified, only `endMeeting.ts:202` and its
-test import from it.
+## 3. ⚠️ THE DESIGN — owner-ruled after seeing it rendered. Read before writing code.
 
-## 3. ⚠️ THE TRAP — a stale identity closure
+**The mount was built and screenshotted. In the completed state, `Ada Q.` appeared TWICE with
+contradictory statuses** — `Absent` in the dialog's correction list, `Present` in the console's
+roster, from two unsynchronised write paths.
 
-`makeOnEditAttendance` takes `getRecordedBy` and **calls it fresh on every invocation**.
-`endMeeting.ts:106-114` says so explicitly and names this task:
+**Owner ruling 1: post-completion, ONLY the console's own roster and check-in panel render.** The QR
+panel stays useful after the meeting ends — a student leaving who forgot to scan can still check in.
 
-> `getRecordedBy` is called FRESH on every invocation of the returned function, never read once at
-> factory-construction time, so it stays correct behind a `useRef`-backed accessor that changes
-> across renders **once T196 wires this factory to a real `useAuth()` ref**.
+**Owner ruling 2: keep the "This meeting has ended" banner, with corrected copy.**
 
-**The defect this invites:** memoising the factory —
+### What to build
+
+**In `EndMeetingDialog.tsx` (W3's own file):** add an optional prop, default **`true`** so every
+existing dialog test passes unchanged, that suppresses **only the attendance-correction `List`**
+(`:822-840`) in the `status === 'completed'` branch. **The banner at `:805-809` still renders.**
+
+**Fix that banner's copy — it is FALSE.** It currently reads *"Attendance stays editable below;
+corrections are recorded automatically."* **The second clause describes
+`trg_audit_attendance_post_completion`, removed 2026-08-03 by owner ruling.** Corrections are
+recorded nowhere, deliberately. Keep *"Attendance stays editable below"* — true both when the
+dialog renders its own list and when the console's roster is what sits below. **Drop the false
+clause.** This is a real correctness fix, not copy polish, and it applies to the dialog's standalone
+use too.
+
+**In `LiveConsole.tsx`:** pass the prop so the correction list never renders there.
+
+**Do NOT** gate the mount on session status from the console side. `LiveConsoleSessionInfo`
+(`:553-558`) has **no `status` field**; adding one means changing W1's loader, outside your grant.
+
+## 4. ⚠️ THE IDENTITY TRAP — and the memo rule, which v1 got backwards
+
+`makeOnEditAttendance` calls `getRecordedBy` **fresh on every invocation** (`endMeeting.ts:472-476`).
+
+**The defect:** `useMemo(() => makeOnEditAttendance(() => user?.id ?? null), [])` bakes the first
+render's `user`. Measured by the gate: **`recordedBy: null` on both edits.** Dominant case is a
+rejected write (auth resolves async, so first render's `user` is `null`); the rarer stale-but-non-null
+re-auth case writes a **wrong** `recorded_by`.
+
+**The memo rule, corrected — v1's blanket "omit the memo" was wrong:**
+
+| Prop | Rule | Why |
+|---|---|---|
+| `loadSummary` | **`useMemo(..., [])`** | `useLoadState` re-runs on `[loadSummary, sessionId, retryToken]` (`EndMeetingDialog.tsx:576-599`). A new instance per render = **one 4-query reload per parent re-render**, and the panel drops to a spinner mid-render. Measured: 4 calls on mount, 9 after five keystrokes. |
+| `onEndMeeting` | **`useMemo(..., [])`** | closes over nothing |
+| `onEditAttendance` | **must stay fresh** | see below |
+
+**Recommended for the identity — mirrors this file's own shipped precedent at `:1065`:**
 
 ```tsx
-const onEditAttendance = useMemo(() => makeOnEditAttendance(() => user?.id ?? null), []); // ❌ WRONG
+const getRecordedBy = useCallback(() => user?.id ?? null, [user]);
 ```
 
-— bakes the `user` from first render. After a re-auth or a slow profile resolve, every subsequent
-edit is attributed to a **stale or null** identity. `recorded_by` is who the app says changed a
-student's attendance, so this writes a **wrong name onto a real record**.
+No ref, no escalation. A ref-backed `useMemo(..., [])` is also acceptable. **What is NOT acceptable
+is a `useMemo` closing over `user` with an empty dep array.**
 
-**Either** omit the memo so a fresh closure is built each render, **or** memoise with a ref whose
-`.current` is updated on every render. **Do not memoise a closure over `user` with an empty dep
-array.** Whichever you choose, **C4 must prove it.**
+## 5. Seams, and why they are in the grant
 
-## 4. The wiring
+`LiveConsoleBodyProps` (`:959-964`) has no `loadSummary` seam. Without one, the real loader always
+rejects in test, the dialog renders *"Couldn't load this meeting"*, and **its button never exists —
+so C1, C3, C4 and C5 cannot be measured at all.** Add the three seams; default them to the real
+factories so production behaviour is unchanged.
 
-Replace the stub. The dialog brings its own button, so the existing `<Button label="End meeting" …>`
-at `:1181` **goes away** — do not wrap the dialog in it or you will get two buttons.
+## 6. Cleanup that `tsc` will force
 
-```tsx
-<EndMeetingDialog
-  sessionId={/* the session this console is showing */}
-  loadSummary={makeLoadEndMeetingSummary()}
-  onEndMeeting={makeOnEndMeeting()}
-  onEditAttendance={makeOnEditAttendance(getRecordedBy)}
-/>
-```
+Deleting `:1181`/`:1184-1186`/`:989` leaves `StubBanner` (`:834`) and `StubNotice` (`:839`)
+**unused** — `tsc` fails `TS6133: 'StubBanner' is declared but its value is never read`. **Delete the
+declarations, not just the usages.** `:313`'s module doc references `StubBanner` and goes stale too.
 
-`getRecordedBy` must resolve `user?.id ?? null` **at call time** — mirroring `:1065`, which is the
-shipped precedent in this same file.
+**Nothing shares `endMeetingStub`.** `:994`'s "one slot" comment describes `attendanceWriteError`
+(`:995`), a *separate* `useState`. v1 told you to grep before deleting; the grep is done — **delete
+it.**
 
-**Null identity is already handled downstream** — `makeOnEditAttendance` rejects before any network
-call, with the same message `makeDefaultSetAttendanceStatus` uses (`:608-610`). **Do not add a second
-guard in the console**; let the existing one fire.
+## 7. Acceptance criteria
 
-**Delete `endMeetingStub` state and `StubBanner` usage only if nothing else uses them.** `:994` says
-the "one slot" convention is shared — **grep before deleting**, and if another stub uses it, leave
-the state and remove only the end-meeting path.
-
-## 5. Acceptance criteria
+**Already covered — do NOT re-test, cite instead:** `endMeeting.test.ts:626` (*"reads getRecordedBy
+FRESH on every call… not baked at construction"*) and `:640` (*"null identity rejects before any
+network call"*). **v1's C4 and C5 duplicated these.** Yours are **console-level** criteria.
 
 | # | Criterion | Mutation → must go RED at exit 1 |
 |---|---|---|
-| C1 | The dialog is really mounted and the stub is gone | render the console; assert the stub's copy (*"End-meeting summary not built yet"*) is **absent** and the dialog's own affordance present |
-| C2 | `loadSummary` is wired to the real factory, not the fixture default | pass no `loadSummary` (fall back to `defaultLoadEndMeetingSummary`) |
-| C3 | `onEndMeeting` is wired to the real factory | pass no `onEndMeeting` |
-| C4 | **`getRecordedBy` resolves at CALL time, not construction time** | freeze it at construction (`const id = user?.id; () => id ?? null`), then change the auth identity between renders and invoke an edit |
-| C5 | A null identity still rejects before any network call | make `getRecordedBy` return a non-null constant |
-| C6 | Suite green | — |
+| C1 | The dialog is mounted; the stub is gone | assert the stub copy absent **and** the dialog's button present (needs the `loadSummary` seam) |
+| C2 | The console passes the **real** `loadSummary`, not the fixture default | omit the prop → falls back to `defaultLoadEndMeetingSummary` |
+| C3 | The console passes the real `onEndMeeting` | omit the prop |
+| C4 | **The identity is resolved at CALL time** | `useMemo(() => makeOnEditAttendance(() => user?.id ?? null), [])` — **this is the mutation that bites; "freeze at construction" is a no-op and must not be used** |
+| C5 | **Post-completion, the console renders NO attendance-correction list** — owner ruling 1 | pass the suppression prop as `true`/omit it → the list returns and a student appears twice |
+| C6 | The "meeting has ended" banner **still renders**, and its copy no longer claims corrections are recorded | delete the banner; separately, restore the old copy |
+| C7 | Suite green, **including the two updated tests** | — |
 
-**C4 is the criterion that matters.** A test that only checks "some id was passed" cannot catch a
-stale closure. It must **change the identity between renders** and assert the *second* edit carries
-the *second* identity. If your C4 passes with the frozen-at-construction mutation applied, it is not
-testing what it claims — say so rather than adjusting it.
+**C4 and C5 are the two that matter.** C4 must **change identity between renders** and assert the
+*second* edit carries the *second* identity — the gate confirmed `LoginAs`
+(`test-utils/authHarness.tsx:131`) supports this with **no new infrastructure**. C5 is the
+owner-ruled defect; a test that only counts controls is not enough — assert a **student name appears
+once**.
 
 **Item 23: mutate in your own worktree, never the shared tree. Commit before mutating.** Record each
-mutation's exact failing assertion and exit code, then restore and verify `git diff --quiet`.
+mutation's exact failing assertion and exit code, restore, verify `git diff --quiet`. **A green suite
+at exit 0 after a mutation means that criterion is not covered — say so.**
 
-## 6. Required output
+## 8. Required output
 
-- C1–C6, each with its mutation's **real** output (failing assertion + exit code)
-- Final gates: `tsc`, `eslint`, `prettier`, `vitest`. **Base: `tsc` 0 · vitest 78 files / 1950
-  tests, exit 0.** If yours differ, say so plainly rather than restating these.
-- Confirmation that nothing outside the grant in §1 was modified — a `git diff` of `LiveConsole.tsx`
-  showing only the stub replacement and the mount
-- Anything found and not fixed, **filed** rather than dropped. Block: **T600–T699**.
+- C1–C7 with **real** mutation output (failing assertion + exit code)
+- Gates: `tsc`, `eslint`, `prettier`, `vitest`. **Base: `tsc` 0 · 78 files / 1950 tests, exit 0.**
+- A `git diff` of `LiveConsole.tsx` showing only the stub removal, the mount, and the seams
+- Confirmation that **only** `:845` and `:864` changed in `LiveConsole.test.tsx`
+- Anything found and not fixed, **filed**. Block: **T600–T699**.

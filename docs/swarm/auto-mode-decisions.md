@@ -2695,3 +2695,54 @@ the risk of one HEAVY wave carrying both.
 
 **T400 remains owner-ruled option (a) and remains W1's file (`pages/checkin/**`).** Un-sequencing it
 from T196 does **not** grant it to W3.
+
+## 2026-08-04 — George's rulings on T196's mount shape, after seeing it rendered
+
+**He asked for a screenshot before ruling, and the screenshot changed the answer.** The mount was
+built in a throwaway worktree and captured in headless Chromium — real render, not a mockup.
+Scheduled state: no duplication, the dialog contributes only its "End meeting" button. **Completed
+state: `Ada Q.` appears twice with contradictory statuses — `Absent` in the dialog's correction
+list, `Present` in the console's roster.**
+
+### Ruling 1 — post-completion, ONLY the console's own roster and check-in panel render
+
+Verbatim: *"i would prefer if only this option showed... this way, i can edit as a coach and if a
+student is leaving the meeting and forgot to check in they could do so."* He circled the console's
+Check-in (QR + short code) panel and its Roster.
+
+**The reasoning is a product one worth preserving:** the QR panel stays useful *after* the meeting
+ends, for the student walking out who forgot to scan. Suppressing the console's half and keeping the
+dialog's — which is what "gate the mount on completed" would have done — throws that away.
+
+**This invalidated an option the orchestrator had offered.** "Show it only for completed sessions"
+was presented as a way to avoid the duplication; the screenshot proved completed is *exactly* when
+the duplication occurs. **It would have guaranteed the bug it was meant to prevent.** Offered
+without rendering it first.
+
+**It is also the cheapest option, which was not obvious before rendering.** Gating from the console
+would need `status` added to `LiveConsoleSessionInfo` and its loader — W1 files, outside the grant.
+Suppressing from the dialog needs one optional prop in `EndMeetingDialog.tsx`, **W3's own file**.
+
+### Ruling 2 — keep the "This meeting has ended" banner, with corrected copy
+
+Verbatim: *"keep the banner with fixed copy"*. Without it a coach opening a finished meeting sees a
+normal-looking live console with a live QR code and no indication the meeting is over.
+
+**The copy fix is not cosmetic — the existing text is FALSE as of 2026-08-03.** It reads
+*"Attendance stays editable below; **corrections are recorded automatically**."* That second clause
+describes `trg_audit_attendance_post_completion`, which **this owner had removed the same week**.
+Corrections are recorded nowhere, deliberately. The clause is wrong on every screen that renders it,
+independent of T196. Drop it; keep *"Attendance stays editable below"*, which is true in both
+contexts.
+
+### Ruling 3 — test updates authorized, scoped
+
+Verbatim: *"yes update the tests"*. **Constitution non-negotiable #2 and DoR #5 require this to be
+explicit; it now is.** Scoped to `LiveConsole.test.tsx:845` and `:864` — both assert the stub T196
+deletes, so they test behaviour being deliberately replaced. **This extends the T196 grant to
+`LiveConsole.test.tsx` for those two tests only.**
+
+**Also carried in that approval, and flagged here so it is visible rather than buried:** the grant
+extends to **`LiveConsoleBodyProps`** for the injectable seams the acceptance criteria need. The
+premise gate measured that without them, four of six criteria are unmeasurable. It edits an exported
+interface. **If that was not intended, say so and the criteria get re-scoped instead.**
