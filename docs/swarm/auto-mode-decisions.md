@@ -2706,3 +2706,47 @@ it.
   2026-08-03 ruling says so explicitly. They come out of the volunteer-hours **total** and its goal
   percentage — not out of the app. So the per-type breakdown columns in `v_season_kpis` must survive.
 - **Meeting participation %** is a separate figure and is untouched.
+
+---
+
+## 2026-08-04 — George's ruling on T325: move the actions out of the slot (option A)
+
+**The question was put in plain English, with three options and a recommendation.** Verbatim answer:
+*"let's go with A option"* — move the two row actions out of Astryx's `endContent` slot into the row
+body, rather than overriding the slot's styling or writing custom CSS against the design system's
+internals.
+
+**Why the other two were declined, recorded so this is not re-argued:** (b) a targeted style override
+reaches around the design system for one spot, and is the kind of thing that breaks silently later;
+(c) custom CSS against Astryx's internals is the most fragile and hardest to understand. **(a) is the
+only option that stays within ordinary component composition** — constitution item 11's escalation
+order exists precisely to prefer it.
+
+### Verified BEFORE packeting, not after
+
+Option A was prototyped in a throwaway Playwright rig at 390×844 and measured:
+
+| | overflow | action buttons |
+|---|---|---|
+| baseline | **213px** | 5 present |
+| option A | **0px** | **5 present, labels unchanged** |
+
+**The accessible names survive intact** — *"Hide session details – Riverside Park Cleanup"* and the
+rest — which was the whole reason shortening the labels was rejected. T131/T132's
+distinguishable-accessible-name work is untouched.
+
+**Two implementation facts the prototype surfaced, both non-obvious:**
+
+1. **`rowActions` must be declared ABOVE `description`.** The first attempt hit
+   `Cannot access 'rowActions' before initialization` at runtime — `description` is built earlier in
+   the component, so the actions block has to be hoisted above it.
+2. **The whole jsdom suite stays green (108/108).** No existing test reddens. That is convenient and
+   also a warning: **jsdom cannot see this fix, because it does no layout.** The evidence is the
+   browser measurement, not the suite, and any regression here will be invisible to CI.
+
+### One process note worth keeping
+
+The first prototype reported **overflow 0 with the buttons GONE** — it "fixed" the overflow by
+deleting the thing that overflowed. It was caught only because the measurement also asserted the
+buttons were still present. **A layout measurement that checks only the number is not evidence**; it
+must also assert that what should be on screen still is.
