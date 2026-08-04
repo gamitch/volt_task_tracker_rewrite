@@ -2787,3 +2787,39 @@ Implemented directly by the orchestrator, per FAST's own definition.
 for that; **this ruling is it**, and it covers those two and nothing else. Note `:362`'s fixture sets
 `meetingHours: 2.0` — a value the production view **cannot generate**. It is kept on the fixture (to
 prove the field is still carried) and deliberately not rendered.
+
+### D4 — T164's premise gate SKIPPED under item 19b; worker + checker dispatched
+
+**Not a blanket policy — the opposite call to D2**, which insisted T162 be gated. The difference is
+the premise, and D2's own reasoning was later shown partly wrong by the gate it commissioned.
+
+**Skipped because:**
+- The premise is **measured three times by direct observation**, most recently at HEAD `bab3371`:
+  **0 runtime imports, 0 invocations of either export, 255 lines.** Not inherited from a ledger row —
+  and it is the **one row of four** whose "0 tests" claim survived scrutiny (D5/D7 retracted the
+  other three).
+- The pattern is settled with **three in-repo precedents** (`checkin.test.ts`, `endMeeting.test.ts`,
+  `attendance.test.ts`), all stubbing through the same injectable `getClient`.
+- **No item-18 trigger:** no migration, no RLS, no `security definer`, no auth. The loader contains
+  **no arithmetic at all** — the metric math lives in W4's `*kpi_views.sql`, which it only reads.
+
+**The residual risk is a vacuous test, which is a worker risk the checker catches — not a premise
+risk.** Same reasoning as D1 for T197, which held up: that gate-skip was followed by a checker
+that found two real NITs.
+
+**Reversible:** if the checker finds the packet's premise wrong, this decision was wrong.
+
+### D5 — T164 is W4's file; the owner authorized it directly
+
+`loaders/kpi.ts` is W4's (`WORKFLOWS.md:226`), and this session is the W3/T196 orchestrator. **The
+owner said *"go ahead with T164"*, which is the authorization.** Scoped to this row's tests only —
+W4's view migrations, `loaders/reports.ts` and `pages/reports/**` are untouched. Recorded so the
+cross-workflow reach is visible rather than assumed.
+
+### The defect class this row exists for
+
+`mapKpisDbRowToKpiStripData` (`kpi.ts:202-222`) is a verbatim 11-field column rename with no logic.
+**Swap any two fields and nothing crashes — a coach is shown meeting hours labelled as outreach
+hours.** Item 26's "lie to a user about their own data", exactly. The packet's C1/C2 are that
+mutation, and it requires every fixture field to carry a **distinct** value or the swap is
+invisible.
