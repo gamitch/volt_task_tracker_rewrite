@@ -9526,3 +9526,96 @@ on a tree in flux"*. **Chased: not real.** `origin/main` measured green in an is
 (78 files / 1993 tests, exit 0), and the T196 branch at `02af8d7` also exits 0. The shared tree had
 simply been switched branches by the orchestrator mid-merge. **Worth copying: the checker reported
 an anomaly it could not attribute rather than ignoring it or blaming the task.**
+
+---
+
+## T196 — `EndMeetingDialog` mounted on `LiveConsole` (closes W3)
+
+**PASS. `6271ac6` + wiring-test follow-up. checker-reviewer PASS, 2 MINOR (one fixed in-branch, one
+filed).** Two premise-gate rounds preceded it; round 2 found **no BLOCKER**.
+
+### What shipped
+
+The dialog is wired to its three real backends. Stub handler, Button, Banner and the
+`StubBanner`/`StubNotice` declarations removed. Three seams added to `LiveConsoleBodyProps`.
+`hasAttendanceCorrections` added to `EndMeetingDialog`, defaulting **true** — verified load-bearing
+by mutation: flipping the default breaks three pre-existing dialog tests.
+
+### The owner's ruling is guarded by a test that reproduces the defect
+
+He ruled — **after seeing it screenshotted** — that post-completion only the console's roster and
+check-in panel render. Under the C5 mutation the checker dumped the DOM:
+
+```
+[{"label":"Attendance for Nia F.","checked":["Absent"]}, … ,{"label":"Attendance for Nia F.","checked":["Present"]}]
+```
+
+**Two rows for one student with contradictory statuses** — the exact defect. The test discriminates
+on the real thing, not a control count.
+
+**His rationale was also verified rather than assumed:** the round-2 gate rendered a completed
+session and drove it — the console's roster stays editable, a click produced a real write with the
+call-time identity, and the QR panel still renders. That was the one finding that could have
+collapsed the ruling.
+
+### The false banner copy is gone
+
+It read *"Attendance stays editable below; **corrections are recorded automatically**."* The second
+clause described `trg_audit_attendance_post_completion`, **removed 2026-08-03 by this same owner**.
+False on every screen that rendered it. Verified true in both contexts now.
+
+### The performance trap — avoided and measured both ways
+
+`loadEndMeetingSummary`/`onEndMeeting` are default-parameter **references to module-level consts**.
+Measured with a call-counter over five keystrokes:
+
+| | mount | after 5 keystrokes |
+|---|---|---|
+| **as shipped** | **1** | **1** |
+| rewritten as an inline factory call | **4** | **9** |
+
+Exactly reproducing the packet's own numbers. `onEditAttendance` uses
+`useCallback(() => user?.id ?? null, [user])` — no empty-dep closure over `user`.
+
+### A vacuous test was deleted, not inverted a third time
+
+The stub test asserted the End-meeting button was **absent**, dispatched a click on `undefined`, and
+checked that just-deleted stub copy was missing — trivially true — under a name describing the
+opposite. **The T401 shape.** Deleted; the checker proved both halves of its intent live elsewhere
+by mutation (`LiveConsole.test.tsx:845` and `endMeeting.test.tsx:241`, each red under its own probe).
+
+### Checker MINOR-1 — a real hole, fixed in-branch
+
+C2/C3 inject the seams, so they prove the console **forwards its props** — not that its own defaults
+are the real backends. The checker corrupted only the module consts, leaving the JSX intact:
+
+- `defaultLoadEndMeetingSummary` → inline fixture: **whole suite green**
+- `defaultOnEndMeeting` → `async () => undefined`: **whole suite green**
+
+In production the first shows a coach **fabricated attendance tallies** before ending a real meeting;
+the second makes **"End meeting" silently do nothing.** Both invisible.
+
+Two wiring tests added, modelled on this file's own `defaultSetAttendanceStatus` precedent: they
+assert the consts reach the real Supabase-backed factories, which reject with the client's
+configuration error in this gate state, where a fixture or no-op **resolves**. **Both of the
+checker's own Y1/Y2 mutations now go red at exit 1** — replayed by the orchestrator, not relayed.
+
+### Filed, not fixed — T601, T602
+
+`makeOnEditAttendance` now has **no reachable caller in the product** (a direct consequence of the
+ruling, needing an owner call), and `endMeeting.ts`'s module doc still claims T196 is unwired and
+`EndMeetingDialog.tsx` frozen — both false, and that file was outside T196's grant.
+
+### Gates
+
+`tsc` **0** · eslint **0 errors** / 366 pre-existing warnings · prettier **clean** · vitest
+**79 files / 1999 tests, exit 0**. Merge base measured 78 / 1993.
+
+### Cost, recorded honestly
+
+3 packet versions · 2 gate rounds · 1 worker restart · **2 collisions where the orchestrator edited
+files a live worker was writing**, having twice concluded from weak evidence that it had died.
+
+**All three round-1 BLOCKERs and both round-2 MAJORs originated in the orchestrator's packet, not in
+the worker's code.** The gates that caught them **built the prescription rather than reading it** —
+which is the argument for item 26's own wording, now evidenced four times this week.

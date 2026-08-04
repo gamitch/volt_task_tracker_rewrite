@@ -188,8 +188,16 @@ parked** because putting a real dialog on a fixture-backed console would write r
 **W3 is the thinnest workflow and mostly waits on W1.** Do not assign a machine to W3 alone — give it
 to whoever has W2 or W4, or run T197/T162/T160 as a short standalone wave.
 
-**Do not put `LiveConsole.tsx` in W3's allowed files.** It belongs to W1. That file is the entire
-reason T196 is blocked and two machines editing it will collide.
+**`LiveConsole.tsx` belongs to W1** — with ONE scoped exception, granted by owner ruling
+2026-08-04: **W3 may edit it for T196's mount specifically** (replace the `handleEndMeetingClick`
+stub and render `EndMeetingDialog` wired to its three real backends). **Everything else in that
+file stays W1's** — the roster query, the QR/short-code panel, `makeDefaultSetAttendanceStatus`
+and every attendance-write internal. If T196 finds itself changing how the console loads or writes
+attendance, it has left its grant and must stop. Two machines editing this file will still collide,
+so W1 and W3 must not run it concurrently.
+
+**T400 is no longer sequenced into T196's wave** (same ruling) — the mount lands first, T400 is
+packeted afterwards, and it remains W1's file.
 
 ---
 
