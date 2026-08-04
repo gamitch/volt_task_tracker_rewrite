@@ -2657,6 +2657,138 @@ genuinely worth doing.** **T163 is genuinely unknown** and should be measured, n
 direction. The claim that ~2,200 lines are falsely advertised as untested **should be read as ~1,455
 at most** (T162's 726, now closed, plus T163's 729, unverified) — **not** the four-row, 2,231-line
 figure stated in PR #56.
+## 2026-08-04 — George's ruling: T322 extends to `v_student_hours`, not just the staff KPI card
+
+**Verbatim:** *"fix both."*
+
+**The question he was answering, and the premise correction behind it.** The T322 ledger row states
+*"`v_season_kpis` computes `total_hours = sum(type_hours)` across **all** types including `meeting`
+(`kpi_views.sql:180`)"*. That is **incomplete, and misleading to anyone acting on it**. The CTE
+feeding that sum already filters:
+
+```sql
+join events e on e.id = es.event_id and e.counts_volunteer_hours
+```
+
+so an event flagged as not counting never reaches the sum at all. Meetings are created with
+`counts_volunteer_hours: false`, fixed and non-editable (`loaders/meetings.ts:690`). **Meeting hours
+are therefore already excluded today** — not, as the row implies, leaking into the total and merely
+reading `0.0h` because no meetings exist. A worker following that row would hunt a leak that is not
+there.
+
+**The real defect is that the volunteer-hours total is governed by an editable per-event boolean
+rather than by event `type`** — and "by type, never by name" is the entire substance of the
+2026-08-02 and 2026-08-03 rulings.
+
+| `events.type` | `counts_volunteer_hours` | Counts today |
+|---|---|---|
+| `outreach` | `true`, fixed (`OutreachEventDialog.tsx`'s `OUTREACH_FIXED_FLAGS`) | correct |
+| `meeting` | `false`, fixed (`meetings.ts:690`) | already excluded |
+| `competition` | **admin-editable, defaults `false`** | excluded by default — **one toggle from counting** |
+
+So the live gap is **competition**, not meeting: an admin flipping that toggle puts competition
+hours into the volunteer-hours total and the goal percentage, contradicting the 2026-08-03 ruling.
+
+**What "fix both" decides.** `v_student_hours` (`metric_views.sql:17`; the view spans `:3-19`) carries the **identical**
+join, so the same exposure exists on **every student's own confirmed hours and goal progress**. The
+2026-08-02 ruling's operative text was card-scoped (*"remove meeting hours from the volunteer-hours
+total and its goal percentage, and label the card…"*), so extending it to the student-facing view
+was **put to him rather than inferred** — it changes a number every student sees. He chose to extend
+it.
+
+**Unchanged and NOT re-opened by this ruling:**
+
+- **The FLL events still count.** `GG FLL Team Meetings` and `P3 FLL Team Meetings` are
+  `type = 'outreach'` and are **72 of 117 sessions, 62% of the migrated data**. Any fix filtering on
+  `type = 'outreach'` keeps them, which is the point of filtering by type rather than by title.
+  **Not authorized:** retyping any event.
+- **Competition and meeting hours stay tracked and stay displayed as their own figures.** The
+  2026-08-03 ruling says so explicitly. They come out of the volunteer-hours **total** and its goal
+  percentage — not out of the app. So the per-type breakdown columns in `v_season_kpis` must survive.
+- **Meeting participation %** is a separate figure and is untouched.
+
+---
+
+## 2026-08-04 — George's ruling on T325: move the actions out of the slot (option A)
+
+**The question was put in plain English, with three options and a recommendation.** Verbatim answer:
+*"let's go with A option"* — move the two row actions out of Astryx's `endContent` slot into the row
+body, rather than overriding the slot's styling or writing custom CSS against the design system's
+internals.
+
+**Why the other two were declined, recorded so this is not re-argued:** (b) a targeted style override
+reaches around the design system for one spot, and is the kind of thing that breaks silently later;
+(c) custom CSS against Astryx's internals is the most fragile and hardest to understand. **(a) is the
+only option that stays within ordinary component composition** — constitution item 11's escalation
+order exists precisely to prefer it.
+
+### Verified BEFORE packeting, not after
+
+Option A was prototyped in a throwaway Playwright rig at 390×844 and measured:
+
+| | overflow | action buttons |
+|---|---|---|
+| baseline | **213px** | 5 present |
+| option A | **0px** | **5 present, labels unchanged** |
+
+**The accessible names survive intact** — *"Hide session details – Riverside Park Cleanup"* and the
+rest — which was the whole reason shortening the labels was rejected. T131/T132's
+distinguishable-accessible-name work is untouched.
+
+**Two implementation facts the prototype surfaced, both non-obvious:**
+
+1. **`rowActions` must be declared ABOVE `description`.** The first attempt hit
+   `Cannot access 'rowActions' before initialization` at runtime — `description` is built earlier in
+   the component, so the actions block has to be hoisted above it.
+2. **The whole jsdom suite stays green (108/108).** No existing test reddens. That is convenient and
+   also a warning: **jsdom cannot see this fix, because it does no layout.** The evidence is the
+   browser measurement, not the suite, and any regression here will be invisible to CI.
+
+### One process note worth keeping
+
+The first prototype reported **overflow 0 with the buttons GONE** — it "fixed" the overflow by
+deleting the thing that overflowed. It was caught only because the measurement also asserted the
+buttons were still present. **A layout measurement that checks only the number is not evidence**; it
+must also assert that what should be on screen still is.
+## 2026-08-04 — George's ruling on T704: DROP the Meetings term from the KPI breakdown
+
+**Verbatim:** *"for T704, drop the meetings term from the breakdown"* — choosing option (a) of the
+three the row offered: (a) drop the term, (b) compute `meeting_hours` honestly via a CTE without the
+flag join, (c) confirm a permanently-zero figure is acceptable.
+
+**Why the row existed.** `v_season_kpis.meeting_hours` is the filtered sum of a CTE that joins
+`and e.counts_volunteer_hours`, and meetings are created with that flag hardcoded `false`
+(`loaders/meetings.ts:690`) with **no app path anywhere that edits it** — the T322 premise gate
+checked. So the figure is **structurally frozen at `0.0`**, and `KpiStrip`'s breakdown rendered it
+beside two live numbers, presenting a dead figure as a live one. Found by that gate as MINOR-2 and
+filed rather than folded into T322.
+
+**This resolves a real tension in the owner's own earlier ruling.** The 2026-08-03 T322 ruling said
+meeting and competition hours are *"still tracked and still displayed as their own figure."*
+Competition genuinely is. **Meeting could not be** — the SQL cannot produce a non-zero value. Rather
+than quietly leaving the contradiction, it was put to him; he resolved it by dropping the display.
+
+**Consistent with the same ruling's other half:** *"Meeting participation stays its own separate
+figure."* Meeting attendance is measured as a **participation percentage**, not as volunteer hours.
+Removing an hours term that was always zero does not remove any meeting measurement — it removes a
+misleading one.
+
+**Scope — deliberately minimal.** Only `formatHoursBreakdown`'s output changes.
+**`meetingHours` stays** on `KpiStripData`, in `loaders/kpi.ts`, and in `v_season_kpis`: still
+tracked, just not displayed here. **No migration**, no view change, no loader change.
+
+**Tier: FAST** (item 26) — no write path, no schema/RLS/auth, no cross-module signature change,
+well under ~20 lines, and a named mutation exists. **Verification was NOT reduced:** the mutation
+(putting the term back) was run and reported red on both intended assertions, and all gates ran.
+Implemented directly by the orchestrator, per FAST's own definition.
+
+**Test authorization:** two passing assertions (`KpiStrip.test.tsx:306`, `:362`) asserted the
+`Meetings X.Xh` string and had to change. The Non-Negotiables require the owner's explicit approval
+for that; **this ruling is it**, and it covers those two and nothing else. Note `:362`'s fixture sets
+`meetingHours: 2.0` — a value the production view **cannot generate**. It is kept on the fixture (to
+prove the field is still carried) and deliberately not rendered.
+
+---
 
 ---
 

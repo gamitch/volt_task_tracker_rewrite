@@ -283,7 +283,7 @@ function KpiStripContent({
     <Section padding={3} dividers={['bottom']}>
       <Grid columns={{ minWidth: 200, repeat: 'fit', max: 4 }} gap={3}>
         <KpiTile
-          label="Season hours"
+          label="Volunteer hours"
           value={data.totalHours.toFixed(1)}
           secondary={formatHoursBreakdown(data)}
         />
@@ -368,9 +368,25 @@ function KpiStripSkeleton(): ReactNode {
 /** e.g. "Meetings 0h · Outreach 10.5h · Competitions 10h" -- mirrors the
  * reference figure's own "Meetings 0h · Competitions 0h" separator/unit
  * style exactly (capability map "Coach dashboard" KPI card). */
+/**
+ * T704 -- the `Meetings` term is deliberately ABSENT, by owner ruling
+ * 2026-08-04 (`auto-mode-decisions.md`): "drop the meetings term from the
+ * breakdown".
+ *
+ * Why it went, rather than being fixed to show a real number: it could never
+ * show one. `v_season_kpis.meeting_hours` is the filtered sum of a CTE that
+ * joins `and e.counts_volunteer_hours`, and meetings are created with that
+ * flag hardcoded `false` (`loaders/meetings.ts:690`) with no app path that
+ * edits it -- so the figure is structurally frozen at `0.0`. Rendering it
+ * beside two live figures presented a dead number as a live one.
+ *
+ * `meetingHours` stays on `KpiStripData` and in the view: it is still
+ * tracked, just not displayed here. Meeting attendance is measured as a
+ * participation percentage, not as volunteer hours -- the 2026-08-02 T322
+ * ruling's own "meeting participation stays its own separate figure".
+ */
 function formatHoursBreakdown(data: KpiStripData): string {
   return [
-    `Meetings ${data.meetingHours.toFixed(1)}h`,
     `Outreach ${data.outreachHours.toFixed(1)}h`,
     `Competitions ${data.competitionHours.toFixed(1)}h`,
   ].join(' · ');
