@@ -8993,3 +8993,253 @@ and T300's C1 was written to avoid.
 `tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise from `main`** · vitest
 **78 files / 1951 tests**, targeted `OutreachDetail.test.tsx` **113 passed, exit 0** · build ✓.
 `.env.local` absent.
+
+---
+
+## T406 — `markDayComplete`'s attendance write is narrowed so a concurrent QR scan survives (PARTIAL fix, stated as such)
+
+**Tier: HEAVY** (constitution item 26), stated and defended: this changes **what columns reach a write
+on the `attendance` table** — the surface T305 and T307 exist to protect. Item 26's trigger question,
+*can a mistake here corrupt data?*, is **yes**, and in the worst direction: narrow the wrong column and
+the fix nulls `check_in_at` for every student on every day-completion, strictly worse than the bug.
+Full chain run: packet → premise gate → **REVISE** → packet v2 → worker → orchestrator replay.
+
+### The defect
+
+The dialog loads attendance **once on open** and `handleSubmit` writes that snapshot back. A student
+who scans the QR kiosk in between has their real `check_in_at` overwritten by the pre-scan snapshot.
+The check-in disappears silently.
+
+### The premise gate proved the load-bearing claim by EXECUTION, not documentation
+
+Everything rested on one claim: *a PostgREST upsert with a narrowed column list leaves the unsent
+columns untouched on the conflict path.* The gate stood up a scratch **PostgreSQL 16.13** with this
+repo's real migrations, and cross-checked the installed `@supabase/postgrest-js` v2.110.7 source and
+PostgREST's own `mutatePlanToQuery`:
+
+| | Result |
+|---|---|
+| **E1** | narrowed upsert over a seeded `check_in_at = 14:07:33+00`, `method='qr'` → **`check_in_at` survived** |
+| **E2** | `updated_at` trigger fires on the **UPDATE** leg; an explicitly-sent stale value was **overwritten by the trigger** |
+| **E3** | `method` cannot be dropped: `ERROR: null value in column "method" … violates not-null constraint` — **on BOTH legs**, since PostgreSQL checks NOT NULL on the candidate tuple before conflict arbitration. Stronger than the packet claimed |
+| **E4** | the bug reproduced: full-column payload + stale snapshot → `14:07:33+00` → **NULL** |
+| **E5** | batch-uniformity trap reproduced — the client sets `columns=` to the **union of `Object.keys` across all rows**, so a key missing from *some* rows null-fills them |
+
+The gate returned **REVISE** with two MAJORs, **both independently re-verified by the orchestrator**:
+
+1. The packet said `markDayComplete` had **one** caller. It has **three** — and one
+   (`MarkEventCompleteDialog.tsx:460`) is a **Forbidden** file whose bulk path flows through the very
+   write being narrowed.
+2. **C2's named mutation did not discriminate.** "Re-add `check_in_at`" also reddens a plain
+   payload-keys assertion, so C1+C2 were satisfiable by one shape assertion — the exact
+   "passes for the wrong reason" trap the packet itself named.
+
+### Orchestrator's independent mutation replay
+
+Re-run by the orchestrator, not taken from the worker's report:
+
+| # | Mutation | Result |
+|---|---|---|
+| **C1** | re-add `updated_at` to the payload | **2 failed** / 74, exit 1 |
+| **C2** | re-add `check_in_at` to **every** row | **red** — `expected null to be '2026-08-04T14:07:33.000Z'` |
+| **C2 (discriminating)** | re-add `check_in_at` to only a **SUBSET** of rows | **red** — `expected null to be '…15:00:00.000Z'`, the union-columns null-fill, which **no shape assertion can catch** |
+| **C4** | drop `recorded_by` | **3 failed** / 74, exit 1 |
+| **C6** | `buildAttendanceWriteRows` byte-identical | sha256 `0385ea2bc77a10ba…`, **22 lines, identical at both revisions**; `MarkDayCompleteDialog.tsx` has **zero** diff |
+| **C7** | move the adult-volunteer RMW above the session flip | **2 failed** / 19, exit 1 — T327's ordering genuinely pinned |
+
+**C2 asserts `setup.store.get(…)` — real post-write row state from a stateful fake modelling the
+proven union-of-keys semantics — never `mock.calls`.** That was the whole point of packet v2.
+
+**C3 and C5 were run by the worker with transcripts in `T406-worker-output.md` but were not
+independently replayed by the orchestrator.** C3's database half is the gate's E3 above, which *was*
+proven by execution. Recorded here rather than implied.
+
+### One vacuous-verification catch worth recording
+
+The orchestrator's first attempt at C6 extracted the function with an `awk` range that matched
+**nothing**, and both revisions therefore hashed to `e3b0c442…` — **the sha256 of the empty string.**
+It looked like a clean match. `buildAttendanceWriteRows` lives in `MarkDayCompleteDialog.tsx`, not
+`loaders/outreach.ts`. **A hash comparison that succeeds on two empty inputs is not evidence**; the
+line count is what exposed it.
+
+### THIS IS A PARTIAL FIX — say so, do not imply otherwise
+
+**`method` cannot be dropped** (NOT NULL, no default, and E3 shows it fails on *both* legs). So a
+concurrent scan's `method: 'qr'` **can still be clobbered** by the dialog's stale snapshot — the gate
+observed exactly that in E1, `qr` → `coach`, in the same run that preserved `check_in_at`.
+
+The student's real **`check_in_at` survives — the harm the owner described** — but the *provenance*
+that they scanned rather than being coach-marked does not. Closing that half needs either a schema
+default (a migration on a table W1 owns) or an insert/update split (re-introducing the multi-step
+shape T327 exists to avoid). Neither is proportionate for a provenance flag on a ~20-student team
+(item 25). **Filed, not built. No migration added.**
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise** · vitest **78 files /
+1955 tests** · build ✓. `.env.local` absent. `MarkDayCompleteDialog.tsx` needed **zero** edits, and
+`MarkEventCompleteDialog.test.tsx` (Forbidden) stayed green with **zero** edits — confirming the
+narrowing landed on the snake_case DB mapping only, leaving the camelCase builders untouched.
+
+---
+
+## T165 — cover the untested exports of `loaders/outreach.ts`, and correct the row (and the packet) that described them
+
+**Tier: STANDARD** (constitution item 26), stated and defended: **test-only, single file**. No
+production code changed at all — that is criterion C1, and it holds: `git diff` against the branch
+point for `src/lib/supabase/loaders/outreach.ts` is **empty**. Worker implemented; orchestrator
+replayed mutations and added one test the replay proved missing.
+
+### The ledger row's numbers were wrong, and so was the packet's correction of them
+
+The row says *"21 of 23 exports untested"*. Measured at `b9742b8`: the file has **27 `export`
+statements, 9 of them `type`/`interface`** → **18 value exports**, not 23. And the row names
+`makeMarkDayComplete` as a target while it is one of the **best-covered symbols in the file** after
+T327 and T406.
+
+**Then the packet made its own error, and the worker caught it.** Packet §1 measured coverage
+**only inside `outreach.test.ts`** and concluded five symbols were untested. A repo-wide search shows
+all five are already referenced by sibling page test files:
+
+| Symbol | Already referenced in |
+|---|---|
+| `computeExpectedAttendeeRsvpPlan` | `OutreachEventDialog.test.tsx` |
+| `makeSubmitRsvpChange` | `RsvpControl.test.tsx` |
+| `makeSaveOutreachEvent` | `OutreachEventDialog.test.tsx`, `OutreachList.test.tsx` |
+| `makeCancelOutreachEvent` | `OutreachDetail.test.tsx` |
+| `makeLoadOutreachEventRoster` | `OutreachEventDialog.test.tsx` |
+
+**Verified independently by the orchestrator.** The work still earns its place — several of the new
+tests are **outcome**-based where the pre-existing sibling coverage was **shape**-only
+(`toHaveBeenCalledWith`), and several branches were genuinely unguarded — but the packet overstated
+the gap, and this entry records that rather than quietly keeping the flattering framing.
+
+**The lesson, and it is the same one three times this session:** *scope your measurement to the claim
+you are making.* "Untested" is a repo-wide claim; measuring one file cannot establish it.
+
+### 19 tests, 19 named mutations — plus one the replay proved missing
+
+The worker added **19 tests with a 1:1 mutation ratio**, each mutation applied, run and reverted with
+red output recorded. The orchestrator replayed a sample. Two reddened hard. **One did not:**
+
+```
+M1  drop `!checkedSet.has(row.student_id)` from the delete filter
+    -> Tests 38 passed (38)   ***SUITE STAYED GREEN***
+```
+
+That mutation makes every save **delete the RSVP rows of students who are still checked**. It is not
+an equivalent mutation — the returned plan differs observably (`['r2']` vs `['r1','r2']`) — and on the
+real write path the row is deleted and re-upserted, replacing a student's own self-authored `'going'`
+with a coach-authored one. **That is precisely the intent-vs-record distinction T121 established.**
+
+The existing test that looked like it covered this passes an **empty** checked-set, so it pins the
+`status === 'going'` condition and never exercises the `checkedSet` guard. The delete filter has two
+conditions; only one was pinned.
+
+**The orchestrator added the missing test.** The packet's own C4 required this
+(*"`computeExpectedAttendeeRsvpPlan`'s branches are covered, not just one path"*), so it is a
+criterion miss, not scope creep. It now reddens:
+
+```
+AssertionError: expected [ 'rsvp-keep', 'rsvp-drop' ] to deeply equal [ 'rsvp-drop' ]
+      Tests  1 failed | 38 passed (39)
+```
+
+**This is the fourth mutation this session that was named in good faith and did not actually redden
+anything** (T401's row count, T190's C3, T300's C2, now this). Every one was found by *running* it.
+
+### C1 and C3, verified by the orchestrator
+
+- **C1** — `git diff --stat b9742b8 HEAD -- src/lib/supabase/loaders/outreach.ts` is **empty**.
+- **C3** — the test file diff has **zero** deleted lines (pure `+764`), and all five protected blocks
+  (T146's select-string guard, T157's two, T327's ordering, T406's stateful fake, T402's paging) are
+  present and unmodified.
+
+### Known residual, stated not hidden
+
+There is now modest redundancy between `outreach.test.ts` and four sibling page test files. Removing
+it is a **cross-file** consolidation, outside this task's single-file scope. Not filed as a defect —
+duplicate coverage is a cost, not a bug, and the sibling tests are shape-only where these are
+outcome-based.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise** · vitest **78 files / 1976
+tests**, targeted `outreach.test.ts` **39 passed, exit 0** (from a 19-test baseline) · build ✓.
+`.env.local` absent.
+
+---
+
+## T187 + T800 — student scoping moves onto ACTIVE `student_teams` memberships, on both surfaces
+
+**Tier: HEAVY.** It changes what a student sees about her own data and it edits `loaders/students.ts`
+(**W7's file — W7 unassigned, taken here and declared**). Full chain ran: packet → premise gate
+(REVISE, 1 BLOCKER) → revised packet → worker → orchestrator verification.
+
+**Owner rulings, both in `auto-mode-decisions.md`:** *"T187 + T800 as one wave"*, and on the test
+edits — *"i dont like the idea of making the code have a workaround to avoid writing tests… I would
+prefer we write the code correctly and test should validate that."*
+
+### The row was wrong about its own mechanism — the fifth such row this session
+
+T187's row says `resolveStudentScope` reads `students.team_id`. **It reads
+`v_student_goal_projection.team_id`** (`students.ts:407-408`), whose column is `s.team_id`
+(`dashboard_views.sql:326`) — documented as *"used here ONLY for the row's display badge … never for
+any rollup math."* A live route was scoping off a column the schema calls display-only. **That is
+also T186; they are one mechanism seen from two sides.**
+
+### What shipped
+
+A new ACTIVE-membership read on `student_teams` using `.is('left_on', null)` — the predicate every
+already-migrated reader uses. `ResolveStudentScopeFn` gains `teamIds: readonly string[]`;
+`isEventInTeamScope` becomes an intersection test; `ParentHome`'s own predicate and its fixture
+caller are threaded the same way. **No migration** — `student_teams` already exists with
+`read_all for select to authenticated`.
+
+**The owner rejected a `string | readonly string[]` union** that the gate offered to spare test
+churn, on the grounds that it distorts production code to avoid writing tests. **Verified in the
+shipped code: zero union signatures across all four production files.**
+
+### The test-edit approval, and proof its boundary held
+
+The approval was bounded to **shape-only, behaviour-preserving** edits. The worker was killed by a
+session limit before it could deliver the required enumeration, **so the orchestrator produced and
+verified it instead** rather than accepting the change unenumerated.
+
+Every removed line in an existing test is a call site whose **argument shape** changed —
+`isEventInTeamScope({teamIds:['team-b']}, 'team-a')` → `(…, ['team-a'])` — with the expectation
+**byte-identical** (`toBe(true)`, `toBe(false)`, `toEqual([])` all unchanged). Harness plumbing
+gained a `student_teams` table and an `.is()` method. **No assertion was weakened, deleted or
+loosened.** New two-team cases were added alongside, not substituted for old ones.
+
+### Mutation evidence — orchestrator replayed personally
+
+| # | Mutation | Result |
+|---|---|---|
+| 1 | Revert the predicate to a single-id test | **5 failed / 210 passed** — the two-team tests |
+| 3 | Drop `.is('left_on', null)` from the new read | **RED on the query-shape spy** — `expect(isSpy).toHaveBeenCalledWith('left_on', null)` |
+| — | Restore | 361 passed, tree clean |
+
+**Criterion 3 only works because the gate caught it.** As first written it was a fixture-visibility
+test, and the gate proved every fake client in this repo returns configured rows regardless of
+chained filters — dropping the ACTIVE predicate would have left the suite **green**. It was reworded
+to a query-shape spy before dispatch.
+
+### Gates, `.env.local` absent, after merging current `main`
+
+`tsc --noEmit` 0 · `vite build` 0 · `format:check` 0 (prettier run on four files) ·
+`eslint .` **0 errors / 364 warnings** (unchanged) · `vitest run` 0 — **78 files / 1973 tests**.
+
+### Process note — two session-limit deaths, no work lost
+
+The worker was terminated by usage limits **twice**. The first time it had **uncommitted** changes
+and no commits of its own; the orchestrator committed a labelled safety snapshot and pushed. The
+second time it had committed four times and left a clean tree. **The safety snapshot was explicitly
+recorded as unverified scratch, not a deliverable** — and the resume instructions written at the
+pause said to discard it, which by then was stale advice. Corrected on resume rather than followed.
+
+### What this leaves for T186
+
+The live scoping mechanism now moves to `student_teams`, **but `resolveStudentScope` still reads and
+returns the display-only `v_student_goal_projection.team_id` as `teamId`**, and neither the view
+comment nor the loader records that dependency. **T186's documentation fix remains fully open.**

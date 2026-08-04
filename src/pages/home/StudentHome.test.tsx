@@ -121,6 +121,10 @@ function renderAsUser(
     resolveStudentId: async () => HARNESS_DEFAULT_RESOLVED_STUDENT_ID,
     resolveStudentScope: async () => ({
       teamId: HARNESS_DEFAULT_RESOLVED_TEAM_ID,
+      // T187: single-element array mirroring the single legacy teamId above
+      // -- every pre-existing `it(` in this file keeps its exact original
+      // (single-team) behavior unchanged.
+      teamIds: [HARNESS_DEFAULT_RESOLVED_TEAM_ID],
       goalHours: 100,
       confirmedHours: 0,
       plannedHours: 0,
@@ -215,13 +219,22 @@ function fixtureLoadData(studentId: string): Promise<StudentHomeData> {
 
 describe('isEventInTeamScope', () => {
   it('treats teamIds === null as "all teams"', () => {
-    expect(isEventInTeamScope({ teamIds: null }, 'team-a')).toBe(true);
+    expect(isEventInTeamScope({ teamIds: null }, ['team-a'])).toBe(true);
   });
   it('excludes a team not present in teamIds', () => {
-    expect(isEventInTeamScope({ teamIds: ['team-b'] }, 'team-a')).toBe(false);
+    expect(isEventInTeamScope({ teamIds: ['team-b'] }, ['team-a'])).toBe(false);
   });
   it('includes a team present in teamIds', () => {
-    expect(isEventInTeamScope({ teamIds: ['team-a', 'team-b'] }, 'team-a')).toBe(true);
+    expect(isEventInTeamScope({ teamIds: ['team-a', 'team-b'] }, ['team-a'])).toBe(true);
+  });
+  // T187 -- the student's own active-team set is now plural (a dual-team
+  // student), not a single id. New coverage, not a shape edit of the three
+  // single-id cases above.
+  it("includes an event that shares AT LEAST ONE id with a dual-team student's active set", () => {
+    expect(isEventInTeamScope({ teamIds: ['team-b'] }, ['team-a', 'team-b'])).toBe(true);
+  });
+  it("excludes an event whose team is in neither of the student's two active teams", () => {
+    expect(isEventInTeamScope({ teamIds: ['team-c'] }, ['team-a', 'team-b'])).toBe(false);
   });
 });
 
@@ -307,7 +320,7 @@ describe('selectLiveMeetingSession', () => {
   ];
 
   it('returns the live meeting-type session in team scope, ignoring outreach and other teams', () => {
-    const result = selectLiveMeetingSession(sessions, events, 'team-a', REF_NOW_MS);
+    const result = selectLiveMeetingSession(sessions, events, ['team-a'], REF_NOW_MS);
     expect(result?.id).toBe('session-meeting-live');
   });
 
@@ -315,7 +328,7 @@ describe('selectLiveMeetingSession', () => {
     const result = selectLiveMeetingSession(
       sessions,
       events,
-      'team-a',
+      ['team-a'],
       new Date('2026-07-19T20:00:00.000Z').getTime(),
     );
     expect(result).toBeNull();
@@ -414,7 +427,7 @@ describe('buildNextUp', () => {
       // No RSVP on s-outreach-unanswered -- must not appear in Next up.
     ];
 
-    const result = buildNextUp(sessions, events, rsvps, 'student-1', 'team-a', REF_NOW_MS);
+    const result = buildNextUp(sessions, events, rsvps, 'student-1', ['team-a'], REF_NOW_MS);
     const ids = result.map((row) => row.sessionId);
     expect(ids).toEqual(['s-meeting', 's-outreach-going']);
     expect(result.find((r) => r.sessionId === 's-outreach-going')?.isOutreachGoing).toBe(true);
@@ -441,8 +454,71 @@ describe('buildNextUp', () => {
         status: 'scheduled',
       },
     ];
-    const result = buildNextUp(sessions, events, [], 'student-1', 'team-a', REF_NOW_MS);
+    const result = buildNextUp(sessions, events, [], 'student-1', ['team-a'], REF_NOW_MS);
     expect(result).toHaveLength(0);
+  });
+
+  // T187 -- a dual-team student's Next up includes BOTH teams' meetings, not
+  // just the first.
+  it("includes meetings from BOTH of a dual-team student's active teams, excludes a third team", () => {
+    const events: HomeEventRow[] = [
+      {
+        id: 'event-team-a',
+        seasonId: 's1',
+        type: 'meeting',
+        title: 'Team A Meeting',
+        teamIds: ['team-dual-a'],
+        countsVolunteerHours: false,
+      },
+      {
+        id: 'event-team-b',
+        seasonId: 's1',
+        type: 'meeting',
+        title: 'Team B Meeting',
+        teamIds: ['team-dual-b'],
+        countsVolunteerHours: false,
+      },
+      {
+        id: 'event-team-c',
+        seasonId: 's1',
+        type: 'meeting',
+        title: 'Team C Meeting (neither active team)',
+        teamIds: ['team-dual-c'],
+        countsVolunteerHours: false,
+      },
+    ];
+    const sessions: HomeSessionRow[] = [
+      {
+        id: 's-team-a',
+        eventId: 'event-team-a',
+        startsAt: '2026-07-21T23:00:00.000Z',
+        endsAt: '2026-07-22T01:00:00.000Z',
+        status: 'scheduled',
+      },
+      {
+        id: 's-team-b',
+        eventId: 'event-team-b',
+        startsAt: '2026-07-22T23:00:00.000Z',
+        endsAt: '2026-07-23T01:00:00.000Z',
+        status: 'scheduled',
+      },
+      {
+        id: 's-team-c',
+        eventId: 'event-team-c',
+        startsAt: '2026-07-23T23:00:00.000Z',
+        endsAt: '2026-07-24T01:00:00.000Z',
+        status: 'scheduled',
+      },
+    ];
+    const result = buildNextUp(
+      sessions,
+      events,
+      [],
+      'student-1',
+      ['team-dual-a', 'team-dual-b'],
+      REF_NOW_MS,
+    );
+    expect(result.map((row) => row.sessionId)).toEqual(['s-team-a', 's-team-b']);
   });
 });
 
@@ -542,10 +618,73 @@ describe('getUnansweredOutreachOpportunities', () => {
       events,
       rsvps,
       'student-1',
-      'team-a',
+      ['team-a'],
       REF_NOW_MS,
     );
     expect(result.map((r) => r.sessionId)).toEqual(['s-b', 's-a']);
+  });
+
+  // T187 -- a dual-team student's Sign-up opportunities include BOTH teams'
+  // unanswered outreach, excludes a third team.
+  it("includes unanswered outreach from BOTH of a dual-team student's active teams, excludes a third team", () => {
+    const events: HomeEventRow[] = [
+      {
+        id: 'event-team-a',
+        seasonId: 's1',
+        type: 'outreach',
+        title: 'Team A Outreach',
+        teamIds: ['team-dual-a'],
+        countsVolunteerHours: true,
+      },
+      {
+        id: 'event-team-b',
+        seasonId: 's1',
+        type: 'outreach',
+        title: 'Team B Outreach',
+        teamIds: ['team-dual-b'],
+        countsVolunteerHours: true,
+      },
+      {
+        id: 'event-team-c',
+        seasonId: 's1',
+        type: 'outreach',
+        title: 'Team C Outreach (neither active team)',
+        teamIds: ['team-dual-c'],
+        countsVolunteerHours: true,
+      },
+    ];
+    const sessions: HomeSessionRow[] = [
+      {
+        id: 's-team-a',
+        eventId: 'event-team-a',
+        startsAt: '2026-07-21T23:00:00.000Z',
+        endsAt: '2026-07-22T01:00:00.000Z',
+        status: 'scheduled',
+      },
+      {
+        id: 's-team-b',
+        eventId: 'event-team-b',
+        startsAt: '2026-07-22T23:00:00.000Z',
+        endsAt: '2026-07-23T01:00:00.000Z',
+        status: 'scheduled',
+      },
+      {
+        id: 's-team-c',
+        eventId: 'event-team-c',
+        startsAt: '2026-07-23T23:00:00.000Z',
+        endsAt: '2026-07-24T01:00:00.000Z',
+        status: 'scheduled',
+      },
+    ];
+    const result = getUnansweredOutreachOpportunities(
+      sessions,
+      events,
+      [],
+      'student-1',
+      ['team-dual-a', 'team-dual-b'],
+      REF_NOW_MS,
+    );
+    expect(result.map((r) => r.sessionId)).toEqual(['s-team-a', 's-team-b']);
   });
 });
 
@@ -808,6 +947,7 @@ describe('StudentHome render -- BEH-02 confirmed/planned hours never summed', ()
       studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
       resolveStudentScope: async () => ({
         teamId: 'team-fixture-beh02',
+        teamIds: ['team-fixture-beh02'],
         goalHours: 100,
         confirmedHours: 62,
         plannedHours: 3,
@@ -874,6 +1014,7 @@ describe('StudentHome DES-12 states', () => {
       studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
       resolveStudentScope: async () => ({
         teamId: PLACEHOLDER_CURRENT_TEAM_ID,
+        teamIds: [PLACEHOLDER_CURRENT_TEAM_ID],
         goalHours: 100,
         confirmedHours: 62,
         plannedHours: 3,
@@ -1095,6 +1236,7 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
     const resolveStudentId = vi.fn(async () => 'should-never-be-called');
     const resolveStudentScope = vi.fn(async () => ({
       teamId: 'team-x',
+      teamIds: ['team-x'],
       goalHours: 5,
       confirmedHours: 2,
       plannedHours: 1,
@@ -1113,6 +1255,7 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
       kind: 'linked',
       studentId: 'student-explicit',
       teamId: 'team-x',
+      teamIds: ['team-x'],
       goalHours: 5,
       confirmedHours: 2,
       plannedHours: 1,
@@ -1123,6 +1266,7 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
     const resolveStudentId = vi.fn(async () => 'student-resolved');
     const resolveStudentScope = vi.fn(async () => ({
       teamId: 'should-never-be-used',
+      teamIds: ['should-never-be-used'],
       goalHours: 99,
       confirmedHours: 99,
       plannedHours: 99,
@@ -1141,6 +1285,11 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
       kind: 'linked',
       studentId: 'student-resolved',
       teamId: 'team-explicit',
+      // T187: the explicit-teamId bypass has no scope read to draw an
+      // active set from -- `[explicitTeamId]` is the production code's own
+      // honest single-team equivalent (StudentHome.tsx's own
+      // resolveStudentIdentity, explicitTeamId branch).
+      teamIds: ['team-explicit'],
       goalHours: 42,
       confirmedHours: 0,
       plannedHours: 0,
@@ -1151,6 +1300,7 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
     const resolveStudentId = vi.fn(async () => 'student-resolved');
     const resolveStudentScope = vi.fn(async () => ({
       teamId: 'team-resolved',
+      teamIds: ['team-resolved', 'team-resolved-second'],
       goalHours: 3,
       confirmedHours: 1.5,
       plannedHours: 0.5,
@@ -1169,6 +1319,7 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
       kind: 'linked',
       studentId: 'student-resolved',
       teamId: 'team-resolved',
+      teamIds: ['team-resolved', 'team-resolved-second'],
       goalHours: 3,
       confirmedHours: 1.5,
       plannedHours: 0.5,
@@ -1179,6 +1330,7 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
     const resolveStudentId = vi.fn(async () => null);
     const resolveStudentScope = vi.fn(async () => ({
       teamId: 'team-x',
+      teamIds: ['team-x'],
       goalHours: 100,
       confirmedHours: 0,
       plannedHours: 0,
@@ -1313,6 +1465,7 @@ describe('<StudentHome /> T176 -- real, resolved teamId reaches team-scoped widg
       loadData,
       resolveStudentScope: async () => ({
         teamId: 'team-fixture-alpha',
+        teamIds: ['team-fixture-alpha'],
         goalHours: 100,
         confirmedHours: 0,
         plannedHours: 0,
@@ -1326,10 +1479,185 @@ describe('<StudentHome /> T176 -- real, resolved teamId reaches team-scoped widg
   });
 });
 
+describe("<StudentHome /> T187 -- a two-team student sees BOTH teams' meetings, live check-in, and sign-up opportunities (criterion 1)", () => {
+  it('Next up and Sign-up opportunities both include events from EITHER active team, and exclude a third team', async () => {
+    const teamAMeeting: HomeEventRow = {
+      id: 'event-dual-a-meeting',
+      seasonId: 'season-1',
+      type: 'meeting',
+      title: 'Team A Weekly Build',
+      teamIds: ['team-dual-a'],
+      countsVolunteerHours: false,
+    };
+    const teamBMeeting: HomeEventRow = {
+      id: 'event-dual-b-meeting',
+      seasonId: 'season-1',
+      type: 'meeting',
+      title: 'Team B Weekly Build',
+      teamIds: ['team-dual-b'],
+      countsVolunteerHours: false,
+    };
+    const teamAOutreach: HomeEventRow = {
+      id: 'event-dual-a-outreach',
+      seasonId: 'season-1',
+      type: 'outreach',
+      title: 'Team A Canned Food Drive',
+      teamIds: ['team-dual-a'],
+      countsVolunteerHours: true,
+    };
+    const teamBOutreach: HomeEventRow = {
+      id: 'event-dual-b-outreach',
+      seasonId: 'season-1',
+      type: 'outreach',
+      title: 'Team B STEM Night',
+      teamIds: ['team-dual-b'],
+      countsVolunteerHours: true,
+    };
+    const thirdTeamMeeting: HomeEventRow = {
+      id: 'event-dual-c-meeting',
+      seasonId: 'season-1',
+      type: 'meeting',
+      title: 'Team C Meeting (neither active team, must never appear)',
+      teamIds: ['team-dual-c'],
+      countsVolunteerHours: false,
+    };
+    const teamAMeetingSession: HomeSessionRow = {
+      id: 'session-dual-a-meeting',
+      eventId: 'event-dual-a-meeting',
+      startsAt: '2026-07-21T23:00:00.000Z',
+      endsAt: '2026-07-22T01:00:00.000Z',
+      status: 'scheduled',
+    };
+    const teamBMeetingSession: HomeSessionRow = {
+      id: 'session-dual-b-meeting',
+      eventId: 'event-dual-b-meeting',
+      startsAt: '2026-07-22T23:00:00.000Z',
+      endsAt: '2026-07-23T01:00:00.000Z',
+      status: 'scheduled',
+    };
+    const teamAOutreachSession: HomeSessionRow = {
+      id: 'session-dual-a-outreach',
+      eventId: 'event-dual-a-outreach',
+      startsAt: '2026-07-25T15:00:00.000Z',
+      endsAt: '2026-07-25T18:00:00.000Z',
+      status: 'scheduled',
+    };
+    const teamBOutreachSession: HomeSessionRow = {
+      id: 'session-dual-b-outreach',
+      eventId: 'event-dual-b-outreach',
+      startsAt: '2026-07-26T15:00:00.000Z',
+      endsAt: '2026-07-26T18:00:00.000Z',
+      status: 'scheduled',
+    };
+    const thirdTeamSession: HomeSessionRow = {
+      id: 'session-dual-c-meeting',
+      eventId: 'event-dual-c-meeting',
+      startsAt: '2026-07-20T23:00:00.000Z',
+      endsAt: '2026-07-21T01:00:00.000Z',
+      status: 'scheduled',
+    };
+
+    const loadData = async (): Promise<StudentHomeData> =>
+      buildDataFixture({
+        events: [teamAMeeting, teamBMeeting, teamAOutreach, teamBOutreach, thirdTeamMeeting],
+        sessions: [
+          teamAMeetingSession,
+          teamBMeetingSession,
+          teamAOutreachSession,
+          teamBOutreachSession,
+          thirdTeamSession,
+        ],
+        rsvps: [],
+      });
+
+    renderAsUser(STUDENT_USER, {
+      loadData,
+      resolveStudentScope: async () => ({
+        teamId: 'team-dual-a',
+        // The defect this task fixes: a student on TWO teams must see BOTH,
+        // not just the first (primary) one.
+        teamIds: ['team-dual-a', 'team-dual-b'],
+        goalHours: 100,
+        confirmedHours: 0,
+        plannedHours: 0,
+      }),
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+
+    // Next up: BOTH teams' meetings.
+    expect(container.textContent).toContain('Team A Weekly Build');
+    expect(container.textContent).toContain('Team B Weekly Build');
+    // Sign-up opportunities: BOTH teams' unanswered outreach.
+    expect(container.textContent).toContain('Team A Canned Food Drive');
+    expect(container.textContent).toContain('Team B STEM Night');
+    // Never a third team the student does not belong to.
+    expect(container.textContent).not.toContain('Team C Meeting');
+  });
+
+  it('live check-in reaches a currently-live meeting on the SECOND active team, not only the primary one', async () => {
+    const primaryTeamMeeting: HomeEventRow = {
+      id: 'event-dual-primary-meeting',
+      seasonId: 'season-1',
+      type: 'meeting',
+      title: 'Primary Team Meeting (not live)',
+      teamIds: ['team-dual-primary'],
+      countsVolunteerHours: false,
+    };
+    const secondTeamLiveMeeting: HomeEventRow = {
+      id: 'event-dual-second-meeting',
+      seasonId: 'season-1',
+      type: 'meeting',
+      title: 'Second Team Meeting (live now)',
+      teamIds: ['team-dual-second'],
+      countsVolunteerHours: false,
+    };
+    const primaryTeamSession: HomeSessionRow = {
+      id: 'session-dual-primary',
+      eventId: 'event-dual-primary-meeting',
+      startsAt: '2026-07-25T11:30:00.000Z',
+      endsAt: '2026-07-25T13:30:00.000Z',
+      status: 'scheduled',
+    };
+    const secondTeamLiveSession: HomeSessionRow = {
+      id: 'session-dual-second-live',
+      eventId: 'event-dual-second-meeting',
+      startsAt: '2026-07-19T11:30:00.000Z',
+      endsAt: '2026-07-19T13:30:00.000Z',
+      status: 'scheduled',
+    };
+
+    const loadData = async (): Promise<StudentHomeData> =>
+      buildDataFixture({
+        events: [primaryTeamMeeting, secondTeamLiveMeeting],
+        sessions: [primaryTeamSession, secondTeamLiveSession],
+        rsvps: [],
+      });
+
+    renderAsUser(STUDENT_USER, {
+      loadData,
+      resolveStudentScope: async () => ({
+        teamId: 'team-dual-primary',
+        teamIds: ['team-dual-primary', 'team-dual-second'],
+        goalHours: 100,
+        confirmedHours: 0,
+        plannedHours: 0,
+      }),
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('Meeting live now');
+    expect(primaryButtons()).toHaveLength(1);
+    expect(primaryButtons()[0]?.textContent).toContain('Check in');
+  });
+});
+
 describe('<StudentHome /> T176 -- explicit teamId bypasses resolveStudentScope entirely, paired (criterion 4, BLOCKER 2 fix extended)', () => {
   it('(a) resolveStudentScope is never called AND (b) the rendered team-scope outcome reflects the explicit value', async () => {
     const resolveStudentScopeSpy = vi.fn(async () => ({
       teamId: 'team-should-never-be-used',
+      teamIds: ['team-should-never-be-used'],
       goalHours: 999,
       confirmedHours: 999,
       plannedHours: 999,
@@ -1562,6 +1890,7 @@ describe('<StudentHome /> T176 round 2 -- goal-hours denominator + confirmed/pla
           }),
         resolveStudentScope: async () => ({
           teamId: 'team-fixture-c10',
+          teamIds: ['team-fixture-c10'],
           goalHours: 8,
           confirmedHours: 2,
           plannedHours: 1,
@@ -1601,6 +1930,7 @@ describe('<StudentHome /> T176 round 2 -- goal-hours denominator + confirmed/pla
         loadData: async () => buildDataFixture({ studentHours: null }),
         resolveStudentScope: async () => ({
           teamId: 'team-fixture-c10',
+          teamIds: ['team-fixture-c10'],
           goalHours: 40,
           confirmedHours: 10,
           plannedHours: 5,
@@ -1668,6 +1998,7 @@ describe('<StudentHome /> T176/T183 -- render-and-enumerate live over container.
         resolveStudentId: async () => 'student-real-c11',
         resolveStudentScope: async () => ({
           teamId: 'team-real-c11',
+          teamIds: ['team-real-c11'],
           goalHours: 50,
           confirmedHours: 5,
           plannedHours: 2,
@@ -1760,6 +2091,7 @@ describe('<StudentHome /> T184 -- "sees nothing" is proven with a positive contr
       resolveStudentId: async () => 'student-real-linked-c5',
       resolveStudentScope: async () => ({
         teamId: 'team-real-c5',
+        teamIds: ['team-real-c5'],
         goalHours: 20,
         confirmedHours: 4,
         plannedHours: 2,

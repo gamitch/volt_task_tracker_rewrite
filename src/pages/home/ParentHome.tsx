@@ -836,12 +836,16 @@ function round1(value: number): number {
 /** The ONLY team-scope predicate in this file -- honors `team_ids === null`
  * as "all teams" per the real `events` schema (module doc #1/#5).
  * Independently reimplemented, same idiom as `CoachHome.tsx`'s own
- * `isEventInTeamScope` (Forbidden Files/read-only reference only here). */
+ * `isEventInTeamScope` (Forbidden Files/read-only reference only here).
+ * T187: the second parameter is the student's own ACTIVE team ids (plural),
+ * not a single primary team -- an event is in scope when it shares AT LEAST
+ * ONE id with that set (same widening `StudentHome.tsx`'s own copy of this
+ * predicate makes, module doc #8 there). */
 export function isEventInTeamScope(
   event: { teamIds: readonly string[] | null },
-  teamId: string,
+  teamIds: readonly string[],
 ): boolean {
-  return event.teamIds === null || event.teamIds.includes(teamId);
+  return event.teamIds === null || event.teamIds.some((id) => teamIds.includes(id));
 }
 
 /** UI-side percent math, no metric-view equivalent to duplicate (module doc
@@ -887,7 +891,7 @@ export const NEXT_EVENTS_LIMIT = 3;
 export function buildNextEventsForStudent(
   sessions: readonly HomeSessionRow[],
   events: readonly HomeEventRow[],
-  teamId: string,
+  teamIds: readonly string[],
   nowMs: number,
   limit: number = NEXT_EVENTS_LIMIT,
 ): NextEventRow[] {
@@ -896,7 +900,7 @@ export function buildNextEventsForStudent(
       .filter(
         (event) =>
           (event.type === 'meeting' || event.type === 'outreach') &&
-          isEventInTeamScope(event, teamId),
+          isEventInTeamScope(event, teamIds),
       )
       .map((event) => [event.id, event] as const),
   );
@@ -975,10 +979,16 @@ export async function defaultLoadStudentHomeCardData(
   studentId: string,
   teamId: string,
 ): Promise<StudentHomeCardData> {
+  // T187: this fixture generator has no real `student_teams` source to draw
+  // an active set from -- `[teamId]` is the honest single-team equivalent,
+  // preserving this fixture's own pre-T187 single-team behavior exactly (the
+  // real per-card seam, `loaders/parentHome.ts`'s
+  // `makeLoadStudentHomeCardDataForParentHome`, is the one that reads the
+  // real ACTIVE membership set).
   const nextEvents = buildNextEventsForStudent(
     FIXTURE_SESSIONS,
     FIXTURE_EVENTS,
-    teamId,
+    [teamId],
     FIXTURE_REFERENCE_NOW.getTime(),
   );
   const nextEventSessionIds = new Set(nextEvents.map((event) => event.sessionId));
