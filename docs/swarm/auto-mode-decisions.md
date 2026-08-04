@@ -2878,3 +2878,68 @@ deletes, so they test behaviour being deliberately replaced. **This extends the 
 extends to **`LiveConsoleBodyProps`** for the injectable seams the acceptance criteria need. The
 premise gate measured that without them, four of six criteria are unmeasurable. It edits an exported
 interface. **If that was not intended, say so and the criteria get re-scoped instead.**
+
+---
+
+## 2026-08-04 — T196 unmonitored window (orchestrator's decisions, NOT the owner's)
+
+Owner set a timer to resume after a usage-window pause and asked for autonomous work. Everything
+here is **mine, reversible by him, and never attributed to him.**
+
+### D1 — T196 PARKED after gate round 2. Item 19a honoured; no third round, no override.
+
+**Round 2 returned REVISE with 2 MAJOR and NO BLOCKER.** All three round-1 BLOCKERs were verified
+fixed by building and running them. Item 19a caps the gate at two rounds, so this escalates.
+
+**Parking is also substantively correct, not just procedural: MAJOR-A cannot be fixed by a packet
+edit.** Non-negotiable #2 makes test-update scope an owner ruling. Editing the packet to cover
+`:868` myself would be manufacturing an authorization the owner did not give — the exact "false
+authorization" failure this file records from 2026-07-29.
+
+**The work itself is done and verified.** The gate built the full prescription in a worktree:
+`tsc` 0 · eslint 0 · prettier clean · **78 files / 1952 tests, exit 0**. **Its reference
+implementation is preserved at `active/T196-reference-implementation.diff`** so the eventual worker
+starts from a measured-green artifact rather than re-deriving it. **T196 is parked on
+authorization, not on difficulty.**
+
+**The owner's design ruling was vindicated by measurement.** The gate rendered a completed session
+and drove it: the console's roster stays editable, clicking `Late` produced a real write with the
+identity resolved at call time, and the QR panel still renders. I had flagged this as the one thing
+that could collapse the ruling. It held.
+
+### D2 — three of my own packet errors, recorded because the pattern is the point
+
+Round 2 was clean of BLOCKERs but not of my mistakes:
+
+1. **§5, read literally, re-creates the exact defect §4 warns about.** `loadSummary =
+   makeLoadEndMeetingSummary()` as a **default parameter** re-evaluates every render — measured
+   `mount=4, after5keys=9`, identical to the storm round 1 caught. A module-level `const`
+   (precedent: `LiveConsole.tsx:616`) measures `1` and `1`. **I wrote a warning and then wrote the
+   defect two sections later.**
+2. **C4 was unmeasurable as a consequence of the owner's own ruling** — suppressing the correction
+   list removes the only caller of `onEditAttendance`, so no console affordance can invoke it. I
+   did not trace that consequence when I wrote the criterion.
+3. **Six citation errors** (`:753`→`:764`, `LiveConsoleSessionInfo` `:553-558`→`:541-546`,
+   `StubNotice`/`StubBanner` swapped, `endMeeting.ts:472-476`→`:468`, correction block
+   `:822-840`→`:821-839`, base 1950→**1952** tests). Item 19c exists for exactly this and I still
+   shipped six.
+
+**Across two rounds this packet carried 3 BLOCKERs, 2 MAJORs and 8 citation errors, all mine.**
+Every one was caught by a gate that **built the prescription instead of reading it**. That is the
+argument for item 26's "a gate that only reads is worth much less than one that runs", and it is now
+evidenced three times this week.
+
+### D3 — moving to T164 rather than idling
+
+T196 cannot advance without the owner. **T164 is the next row and needs nothing from him**: its
+premise is verified a third time at HEAD `bab3371` — **0 runtime imports, 0 invocations of either
+export, 255 lines**. The factory is client-injectable, and the loader does **no arithmetic** (the
+math lives in W4's `*kpi_views.sql`, which it only reads), so it carries no metric-math risk and no
+item-18 opus trigger.
+
+### Filed for the owner, not fixed (item 20)
+
+- **`makeOnEditAttendance` will have NO reachable caller in the product** once ruling 1 lands.
+  Worth a ledger row so it is a decision rather than drift.
+- **`endMeeting.ts:8`, `:12-19`, `:114-118`, `:443-446`** still say T196 is unwired and
+  `EndMeetingDialog.tsx` is frozen. Stale once the mount lands; that file is outside T196's grant.
