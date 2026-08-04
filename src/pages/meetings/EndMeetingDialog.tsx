@@ -656,6 +656,14 @@ export interface EndMeetingDialogProps {
    * audit-logged (module doc section 2).
    */
   onEditAttendance?: OnEditAttendanceFn;
+  /**
+   * Owner ruling 2026-08-04: when this dialog is mounted inside a surface
+   * that already renders its own editable roster (`LiveConsole`), the
+   * post-completion correction `List` below would duplicate every student.
+   * Defaults to `true` (standalone use is unchanged); `LiveConsole` passes
+   * `false`.
+   */
+  hasAttendanceCorrections?: boolean;
 }
 
 export function EndMeetingDialog({
@@ -663,6 +671,7 @@ export function EndMeetingDialog({
   loadSummary = defaultLoadEndMeetingSummary,
   onEndMeeting = defaultOnEndMeeting,
   onEditAttendance = defaultOnEditAttendance,
+  hasAttendanceCorrections = true,
 }: EndMeetingDialogProps): ReactNode {
   const loadState = useLoadState(() => loadSummary(sessionId), [loadSummary, sessionId]);
   const [data, setData] = useState<EndMeetingSummaryData | null>(null);
@@ -805,7 +814,7 @@ export function EndMeetingDialog({
               <Banner
                 status="success"
                 title="This meeting has ended"
-                description="Attendance stays editable below; corrections are recorded automatically."
+                description="Attendance stays editable below."
               />
 
               {editError !== null && (
@@ -818,25 +827,26 @@ export function EndMeetingDialog({
                 />
               )}
 
-              {data.roster.length === 0 ? (
-                <EmptyState
-                  title="No students on this roster"
-                  description="This session had no expected students."
-                />
-              ) : (
-                <List hasDividers header="Attendance">
-                  {data.roster.map((entry) => (
-                    <AttendanceCorrectionRow
-                      key={entry.studentId}
-                      entry={entry}
-                      record={data.attendanceByStudentId[entry.studentId]}
-                      onSetStatus={(studentId, status) => {
-                        void handleEditAttendance(studentId, status);
-                      }}
-                    />
-                  ))}
-                </List>
-              )}
+              {hasAttendanceCorrections &&
+                (data.roster.length === 0 ? (
+                  <EmptyState
+                    title="No students on this roster"
+                    description="This session had no expected students."
+                  />
+                ) : (
+                  <List hasDividers header="Attendance">
+                    {data.roster.map((entry) => (
+                      <AttendanceCorrectionRow
+                        key={entry.studentId}
+                        entry={entry}
+                        record={data.attendanceByStudentId[entry.studentId]}
+                        onSetStatus={(studentId, status) => {
+                          void handleEditAttendance(studentId, status);
+                        }}
+                      />
+                    ))}
+                  </List>
+                ))}
             </>
           )}
 
