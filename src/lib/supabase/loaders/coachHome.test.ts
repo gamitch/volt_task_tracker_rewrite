@@ -28,12 +28,68 @@ interface StudentRowFixture {
   goal_hours_override: number | null;
 }
 
-function makeRecordingClient(teams: TeamRowFixture[] | null, students: StudentRowFixture[] | null) {
+/**
+ * T198 -- the dispatcher gains the six tables/views the loader now reads, plus
+ * the `.eq(...)`/`.in(...)`/`.maybeSingle()` chain methods those queries use.
+ * The original two-argument signature is preserved so every T173 test above
+ * keeps working unchanged; extra rows are supplied via the optional third
+ * argument, defaulting to empty.
+ *
+ * The chain is deliberately a PASSTHROUGH: `.eq`/`.in` record their arguments
+ * and return the same chain rather than filtering. That is why the query-shape
+ * assertions below spy on the arguments directly -- a fixture-visibility test
+ * would pass here even if the loader dropped a filter entirely (the same trap
+ * T187's premise gate caught in this repo's other fake clients).
+ */
+type ExtraRows = Partial<Record<string, unknown[] | null>>;
+
+function makeChain(rows: unknown[] | null) {
+  const eqSpy = vi.fn(() => chain);
+  const inSpy = vi.fn(() => chain);
+  const maybeSingleSpy = vi.fn(async () => ({ data: rows?.[0] ?? null, error: null }));
+  const chain = {
+    eq: eqSpy,
+    in: inSpy,
+    maybeSingle: maybeSingleSpy,
+    then: (resolve: (v: { data: unknown[] | null; error: null }) => unknown) =>
+      Promise.resolve({ data: rows, error: null }).then(resolve),
+  };
+  return { chain, eqSpy, inSpy, maybeSingleSpy };
+}
+
+function makeRecordingClient(
+  teams: TeamRowFixture[] | null,
+  students: StudentRowFixture[] | null,
+  extra: ExtraRows = {},
+) {
   const teamsSelectSpy = vi.fn().mockResolvedValue({ data: teams, error: null });
   const studentsSelectSpy = vi.fn().mockResolvedValue({ data: students, error: null });
+  const selectSpies: Record<string, ReturnType<typeof vi.fn>> = {};
+  const chains: Record<string, ReturnType<typeof makeChain>> = {};
+
+  const chainedTable = (table: string) => {
+    const built = makeChain(extra[table] ?? []);
+    chains[table] = built;
+    const selectSpy = vi.fn(() => built.chain);
+    selectSpies[table] = selectSpy;
+    return { select: selectSpy };
+  };
+
+  const CHAINED = [
+    'events',
+    'event_sessions',
+    'rsvps',
+    'attendance',
+    'v_student_hours',
+    'v_season_attendance_rate',
+  ];
+  const tableStubs: Record<string, { select: ReturnType<typeof vi.fn> }> = {};
+  for (const table of CHAINED) tableStubs[table] = chainedTable(table);
+
   const fromSpy = vi.fn((table: string) => {
     if (table === 'teams') return { select: teamsSelectSpy };
     if (table === 'students') return { select: studentsSelectSpy };
+    if (tableStubs[table]) return tableStubs[table];
     throw new Error(`unexpected table: ${table}`);
   });
   return {
@@ -41,6 +97,8 @@ function makeRecordingClient(teams: TeamRowFixture[] | null, students: StudentRo
     fromSpy,
     teamsSelectSpy,
     studentsSelectSpy,
+    selectSpies,
+    chains,
   };
 }
 
@@ -139,18 +197,136 @@ describe('makeLoadCoachHomeData (T173 criterion 7)', () => {
     expect(data.seasonSetupStatus).toEqual({ hasGoalsConfigured: true });
   });
 
-  it('returns honest-empty literals for events/sessions/rsvps/attendance/teamParticipation/studentHours -- no real query for any of these six fields (filed as T198)', async () => {
+  // -------------------------------------------------------------------------
+  // T198 -- the six fields that were honest-empty literals are real queries.
+  //
+  // The test this replaces asserted the OPPOSITE ("no real query for any of
+  // these six fields"). It is not preserved, because it pinned the deferral
+  // itself; keeping it would mean asserting the bug. Its replacements below
+  // are strictly stronger -- they pin the query SHAPE, not just the output.
+  // -------------------------------------------------------------------------
+
+  it('still resolves all six to empty/null when every table is empty -- an honest empty, now measured rather than hardcoded', async () => {
     const { client } = makeRecordingClient([], []);
     const data = await makeLoadCoachHomeData(() => client)('season-1');
     expect(data.events).toEqual([]);
     expect(data.sessions).toEqual([]);
     expect(data.rsvps).toEqual([]);
     expect(data.attendance).toEqual([]);
-    expect(data.teamParticipation).toBeNull();
+    expect(data.seasonParticipation).toBeNull();
     expect(data.studentHours).toEqual([]);
   });
 
-  it('composes the full CoachHomeData shape end-to-end against a stub client -- real teams/students, everything else honest-empty', async () => {
+  it('scopes events by season, selecting exactly the HomeEventRow columns', async () => {
+    const { client, selectSpies, chains } = makeRecordingClient([], []);
+    await makeLoadCoachHomeData(() => client)('season-42');
+    expect(selectSpies.events).toHaveBeenCalledWith('id, season_id, type, title, team_ids');
+    expect(chains.events.eqSpy).toHaveBeenCalledWith('season_id', 'season-42');
+  });
+
+  it('scopes v_student_hours and v_season_attendance_rate by the SAME season id', async () => {
+    const { client, selectSpies, chains } = makeRecordingClient([], []);
+    await makeLoadCoachHomeData(() => client)('season-42');
+    expect(selectSpies.v_student_hours).toHaveBeenCalledWith(
+      'student_id, season_id, confirmed_hours',
+    );
+    expect(chains.v_student_hours.eqSpy).toHaveBeenCalledWith('season_id', 'season-42');
+    expect(selectSpies.v_season_attendance_rate).toHaveBeenCalledWith(
+      'season_id, attendance_rate_pct',
+    );
+    expect(chains.v_season_attendance_rate.eqSpy).toHaveBeenCalledWith('season_id', 'season-42');
+  });
+
+  it('never issues an empty .in(...) -- no events means no session query, and no sessions means no rsvp/attendance query', async () => {
+    const { client, fromSpy } = makeRecordingClient([], []);
+    await makeLoadCoachHomeData(() => client)('season-1');
+    expect(fromSpy).toHaveBeenCalledWith('events');
+    expect(fromSpy).not.toHaveBeenCalledWith('event_sessions');
+    expect(fromSpy).not.toHaveBeenCalledWith('rsvps');
+    expect(fromSpy).not.toHaveBeenCalledWith('attendance');
+  });
+
+  it('chains events -> sessions -> (rsvps, attendance) on the ids each stage returns', async () => {
+    const { client, chains } = makeRecordingClient([], [], {
+      events: [
+        { id: 'event-1', season_id: 'season-1', type: 'meeting', title: 'X', team_ids: null },
+      ],
+      event_sessions: [
+        {
+          id: 'session-1',
+          event_id: 'event-1',
+          starts_at: '2026-08-01T00:00:00.000Z',
+          ends_at: '2026-08-01T01:00:00.000Z',
+          status: 'scheduled',
+        },
+      ],
+    });
+    await makeLoadCoachHomeData(() => client)('season-1');
+    expect(chains.event_sessions.inSpy).toHaveBeenCalledWith('event_id', ['event-1']);
+    expect(chains.rsvps.inSpy).toHaveBeenCalledWith('session_id', ['session-1']);
+    expect(chains.attendance.inSpy).toHaveBeenCalledWith('session_id', ['session-1']);
+  });
+
+  it('maps snake_case to camelCase for all six, preserving events.team_ids null as the "all teams" sentinel', async () => {
+    const { client } = makeRecordingClient([], [], {
+      events: [
+        { id: 'e1', season_id: 'season-1', type: 'meeting', title: 'Build', team_ids: null },
+        { id: 'e2', season_id: 'season-1', type: 'outreach', title: 'Drive', team_ids: ['team-a'] },
+      ],
+      event_sessions: [
+        {
+          id: 's1',
+          event_id: 'e1',
+          starts_at: '2026-08-01T00:00:00.000Z',
+          ends_at: '2026-08-01T01:00:00.000Z',
+          status: 'completed',
+        },
+      ],
+      rsvps: [
+        {
+          id: 'r1',
+          session_id: 's1',
+          student_id: 'stu-1',
+          status: 'going',
+          updated_at: '2026-08-01T00:30:00.000Z',
+        },
+      ],
+      attendance: [{ session_id: 's1', student_id: 'stu-1', status: 'present' }],
+      v_student_hours: [{ student_id: 'stu-1', season_id: 'season-1', confirmed_hours: 12.5 }],
+      v_season_attendance_rate: [{ season_id: 'season-1', attendance_rate_pct: 87.5 }],
+    });
+    const data = await makeLoadCoachHomeData(() => client)('season-1');
+    expect(data.events).toEqual([
+      { id: 'e1', seasonId: 'season-1', type: 'meeting', title: 'Build', teamIds: null },
+      { id: 'e2', seasonId: 'season-1', type: 'outreach', title: 'Drive', teamIds: ['team-a'] },
+    ]);
+    expect(data.sessions).toEqual([
+      {
+        id: 's1',
+        eventId: 'e1',
+        startsAt: '2026-08-01T00:00:00.000Z',
+        endsAt: '2026-08-01T01:00:00.000Z',
+        status: 'completed',
+      },
+    ]);
+    expect(data.rsvps).toEqual([
+      {
+        id: 'r1',
+        sessionId: 's1',
+        studentId: 'stu-1',
+        status: 'going',
+        updatedAt: '2026-08-01T00:30:00.000Z',
+      },
+    ]);
+    expect(data.attendance).toEqual([{ sessionId: 's1', studentId: 'stu-1', status: 'present' }]);
+    expect(data.studentHours).toEqual([
+      { studentId: 'stu-1', seasonId: 'season-1', confirmedHours: 12.5 },
+    ]);
+    // `attendance_rate_pct` -> `participationPct`, verbatim, no arithmetic.
+    expect(data.seasonParticipation).toEqual({ seasonId: 'season-1', participationPct: 87.5 });
+  });
+
+  it('composes the full CoachHomeData shape end-to-end against a stub client -- real teams/students, empty tables for the rest', async () => {
     const { client } = makeRecordingClient(
       [
         { id: 'team-falcons', name: 'Falcons' },
@@ -201,7 +377,7 @@ describe('makeLoadCoachHomeData (T173 criterion 7)', () => {
       sessions: [],
       rsvps: [],
       attendance: [],
-      teamParticipation: null,
+      seasonParticipation: null,
       studentHours: [],
       seasonSetupStatus: { hasGoalsConfigured: true },
     });
@@ -219,7 +395,17 @@ describe('makeLoadCoachHomeData (T173 criterion 7)', () => {
       if (table === 'students') {
         return { select: vi.fn().mockResolvedValue({ data: [], error: null }) };
       }
-      throw new Error(`unexpected table: ${table}`);
+      // T198 -- the loader now reads six more tables in the same Promise.all.
+      // Without these, the dispatcher's own `unexpected table` throw would
+      // surface as UNKNOWN and MASK the 500 this test exists to assert.
+      const emptyChain = {
+        eq: () => emptyChain,
+        in: () => emptyChain,
+        maybeSingle: async () => ({ data: null, error: null }),
+        then: (resolve: (v: { data: never[]; error: null }) => unknown) =>
+          Promise.resolve({ data: [], error: null }).then(resolve),
+      };
+      return { select: () => emptyChain };
     });
     const client = { from: fromSpy } as unknown as SupabaseClient;
     await expect(makeLoadCoachHomeData(() => client)('season-1')).rejects.toMatchObject({

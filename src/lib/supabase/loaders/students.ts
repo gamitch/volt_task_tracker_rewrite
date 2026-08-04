@@ -362,12 +362,34 @@ export const updateStudent: UpdateStudentFn = makeUpdateStudent();
  * signature to take a `seasonId` argument for no additional real scoping
  * benefit, a disclosed, deliberate simplicity choice.
  *
- * RLS -- **reasoned, not measured (no live Supabase in this environment,
- * same disclosed gap every task in this codebase carries).** The
- * migration's own header (`dashboard_views.sql:49-52`) states none of its
- * views are `security_definer`/`security_barrier`, so
- * `v_student_goal_projection` runs under the CALLING session's own RLS
- * against its base tables. For a `student`-role caller reading their own
+ * RLS -- **T186 CORRECTION. The premise this paragraph was originally
+ * written on is wrong, and the correction makes the conclusion stronger,
+ * not weaker.** The migration's own header (`dashboard_views.sql:49-52`)
+ * states none of its views are `security_definer`/`security_barrier`, "so
+ * each runs under the querying session's own RLS against its base tables".
+ * That sentence is wrong as written, and this comment repeated it.
+ * `security_definer` is a **function** attribute; the view-level knob is
+ * `security_invoker` (PG15+), which defaults **OFF** and appears zero times
+ * in `supabase/`. So `v_student_goal_projection` executes as its OWNER and
+ * does NOT apply the calling session's RLS to its base tables at all.
+ *
+ * This is **measured, not reasoned** -- unusually for this codebase, the
+ * mechanism has a live experiment behind it:
+ * `20260731000000_leaderboard_students_view.sql:32-46` records a scratch
+ * PGlite/PostgreSQL run with a non-superuser view owner shaped like
+ * Supabase's migration-applying role, in which a student-role session
+ * reading a view got every active student's row while the same session
+ * reading the base table directly got exactly its own one row, and a
+ * `security_invoker=on` counterfactual collapsed both back to one row.
+ *
+ * **Nothing here changes behaviour, and the exposure is owner-ruled
+ * intended** (T185, closed no-change on the owner's 2026-07-30
+ * proportionality ruling; constitution item 4 is about TABLES, and every
+ * table has policies). The per-base-table composition below is KEPT
+ * because it is what makes the read safe under `security_invoker=on` too,
+ * i.e. it is the argument that survives if this schema ever adopts the
+ * invoker semantics -- but note it is currently belt-and-braces, not the
+ * operative mechanism. For a `student`-role caller reading their own
  * `student_id`: `students` carries `own_or_linked_read`
  * (`rls.sql:100-102`, `id in (select my_student_ids())`); `seasons`
  * carries `read_all` (`rls.sql:78-79`, any authenticated caller); the
@@ -379,12 +401,16 @@ export const updateStudent: UpdateStudentFn = makeUpdateStudent();
  * `rls.sql:201`) via the same `event_sessions`/`events`. Every base table
  * this view touches already grants a student read access to exactly their
  * own row(s) -- composed together, a real signed-in student's own query
- * genuinely resolves, not an RLS-caused false-empty. This exact
- * composition (a multi-table view whose every base table is
- * `own_or_linked_read`-covered, read by a student for their own id) has no
- * DIRECT precedent elsewhere in this codebase to point to as a live-tested
- * example -- flagged for the checker to independently confirm rather than
- * accepted on my own reasoning alone.
+ * genuinely resolves, not an RLS-caused false-empty -- and under the
+ * owner-execution semantics actually in force, it resolves regardless.
+ *
+ * (T186 also retires this paragraph's original closing caveat, which said
+ * the composition "has no DIRECT precedent elsewhere in this codebase to
+ * point to as a live-tested example" and asked a checker to confirm it.
+ * That is now stale in the half that matters: the view-owner RLS-bypass
+ * MECHANISM is live-tested, at the leaderboard migration cited above. What
+ * remains untested is only the `security_invoker=on` counterfactual
+ * composition, which no code path currently depends on.)
  *
  * A brand-new interface (`StudentGoalProjectionDbRow`), not a reuse of the
  * existing module-private `StudentDbRow` above -- this task's own packet
@@ -393,6 +419,37 @@ export const updateStudent: UpdateStudentFn = makeUpdateStudent();
  * column set.
  */
 interface StudentGoalProjectionDbRow {
+  /**
+   * **T186 -- this column is schema-documented as DISPLAY-ONLY, and this is
+   * the second consumer of it.** `dashboard_views.sql:311-320` says
+   * `v_student_goal_projection.team_id` (which is `students.team_id`, the
+   * legacy/primary-team column SCH-01 leaves in place "as legacy/primary-team
+   * until every reader migrates") is "used here ONLY for the row's display
+   * badge ... never for any rollup math" -- written when the view's only
+   * reader was `loaders/dashboard.ts`'s `queryGoalProjection`, feeding
+   * `CoachHome.tsx`'s projection rows. That comment cannot see THIS reader,
+   * and an editor of the view who trusts it would not know this one exists.
+   *
+   * History, because the near-miss is the point: T176 wired this value
+   * through to `StudentScope.teamId`, and `StudentHome.tsx` then used it for
+   * FUNCTIONAL team scoping -- gating meetings, live check-in and sign-up
+   * opportunities off a column the schema calls display-only. That was a real
+   * defect for dual-team students (T187), and T187 fixed it by moving every
+   * scope predicate onto `teamIds` from ACTIVE `student_teams` memberships.
+   *
+   * So the view's "display badge only" claim is TRUE again today -- but only
+   * because T187 walked it back, and it was silently false in between. The
+   * dependency edge itself still exists: this column still reaches
+   * `StudentScope.teamId` -> `ResolvedStudentIdentity.teamId`, where (verified
+   * by grep across this repo) it is currently WRITTEN AND NEVER READ, kept for
+   * shape stability under T187's owner ruling rather than for any live use.
+   * Anything that starts reading it again is reintroducing the T187 defect.
+   *
+   * The matching correction could NOT be made in the migration itself:
+   * constitution item 10 makes editing an applied migration file a BLOCKER,
+   * and `20260723000001_dashboard_views.sql` is applied. Recorded here
+   * instead. See this task's verification-log entry.
+   */
   team_id: string;
   goal_hours: number;
   confirmed_hours: number;
