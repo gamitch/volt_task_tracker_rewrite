@@ -9246,6 +9246,35 @@ comment nor the loader records that dependency. **T186's documentation fix remai
 
 ---
 
+## T506 — `MarkEventCompleteDialog.tsx`'s module doc described an `updated_at` the write no longer sends
+
+**Tier: FAST** (constitution item 26), defended: **comment-only**, proven by hash — both revisions
+transpiled with `removeComments` emit byte-identical output (`sha256 1036f71ba86a09ed…`, 10095 bytes
+each). Orchestrator-implemented.
+
+**The stale claim** (`:190-192`) said a re-written row differs *"EXCEPT `attendance.recorded_by` (and
+`updated_at`), which `makeMarkDayComplete`'s upsert also names (`loaders/outreach.ts:1139-1149`)"*.
+
+**Both halves were wrong after T406.** Measured: the upsert names `updated_at` **zero** times, and the
+`:1139-1149` citation points at unrelated loader code — `upsertAttendance` is at `:1304`.
+
+**The corrected text keeps the real cost and fixes only the mechanism.** `recorded_by` *is* still named
+and still re-attributes the row, so that disclosure stands. `updated_at` still moves too — but because
+W1's `trg_attendance_touch_updated_at` (`20260803000000_simplify_attendance_audit.sql:78-83`, `before
+insert or update`) sets it on both legs, **not** because this write sends it. The new text says so and
+tells the reader to grep the symbol rather than trust a line number, since this citation has now gone
+stale once.
+
+**Filed by T406's worker, which could not fix it** — that file was Forbidden to T406 (an item 22
+boundary, not an oversight). Exactly what item 20 is for.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise** · targeted
+`MarkEventCompleteDialog.test.tsx` **26 passed, exit 0**. `.env.local` absent.
+
+---
+
 ## T504 — `OutreachList.tsx`'s `respondedBy` values were `students.id`-shaped in a `profiles.id` field, in fixtures **and** in a runtime path
 
 **Tier: FAST** (constitution item 26), defended: no write path reaches a database here, no
