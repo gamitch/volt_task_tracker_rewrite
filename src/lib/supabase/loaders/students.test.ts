@@ -279,7 +279,7 @@ describe('makeResolveStudentScope (T187: ACTIVE student_teams memberships)', () 
     });
   });
 
-  it('never queries student_teams at all when v_student_goal_projection resolves no row (sequential fetch, module doc\'s own disclosed efficiency decision)', async () => {
+  it("never queries student_teams at all when v_student_goal_projection resolves no row (sequential fetch, module doc's own disclosed efficiency decision)", async () => {
     const { client, fromSpy } = makeRecordingClient(null);
     const resolveStudentScope = makeResolveStudentScope(() => client);
 

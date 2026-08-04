@@ -195,7 +195,7 @@ describe('isEventInTeamScope', () => {
   });
   // T187 -- a parent's linked student may be on more than one team; the
   // scope this predicate takes is now that active set, not a single id.
-  it('matches when the event shares AT LEAST ONE id with a dual-team student\'s active set', () => {
+  it("matches when the event shares AT LEAST ONE id with a dual-team student's active set", () => {
     expect(isEventInTeamScope({ teamIds: ['team-b'] }, ['team-a', 'team-b'])).toBe(true);
     expect(isEventInTeamScope({ teamIds: ['team-c'] }, ['team-a', 'team-b'])).toBe(false);
   });
@@ -310,7 +310,7 @@ describe('buildNextEventsForStudent (Next 3 events boundary proof)', () => {
   // active teams, not just the first (`e-wrong-team`, scoped to `team-b`
   // only, is excluded from every single-team case above -- here it is
   // INCLUDED once `team-b` is also in the active set).
-  it('includes events from BOTH of a dual-team student\'s active teams', () => {
+  it("includes events from BOTH of a dual-team student's active teams", () => {
     const sessions: HomeSessionRow[] = [
       scheduledSession('s-team-a', 'e-meeting', 2),
       scheduledSession('s-team-b', 'e-wrong-team', 4),
@@ -336,7 +336,9 @@ describe('buildNextEventsForStudent (Next 3 events boundary proof)', () => {
       endsAt: new Date(REF_NOW_MS + 90_000_000).toISOString(),
       status: 'completed',
     };
-    expect(buildNextEventsForStudent([past, completed], events, ['team-a'], REF_NOW_MS)).toEqual([]);
+    expect(buildNextEventsForStudent([past, completed], events, ['team-a'], REF_NOW_MS)).toEqual(
+      [],
+    );
   });
 });
 
@@ -904,7 +906,7 @@ describe('<ParentHome /> C5: next-3-events sourced from real data (row-mapper mu
   });
 });
 
-describe('<ParentHome /> T187 -- a parent of a TWO-team child sees BOTH teams\' events on that child\'s card (criterion 2)', () => {
+describe("<ParentHome /> T187 -- a parent of a TWO-team child sees BOTH teams' events on that child's card (criterion 2)", () => {
   it("the child's card shows events from BOTH of her real ACTIVE student_teams memberships, not just the legacy primary team", async () => {
     const studentId = 'student-c-dual-real';
     const primaryTeamId = 'team-c-dual-primary';

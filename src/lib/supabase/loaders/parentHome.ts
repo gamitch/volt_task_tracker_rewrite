@@ -487,7 +487,12 @@ export function makeLoadStudentHomeCardDataForParentHome(
     //     fixture that exercises `nextEvents` seeds an ACTIVE `student_teams`
     //     row mirroring the real backfill, not a code-level fallback here.
     const activeTeamIds = scope === null ? [teamId] : scope.teamIds;
-    const nextEvents = buildNextEventsForStudent(sessions, events, activeTeamIds, nowFn().getTime());
+    const nextEvents = buildNextEventsForStudent(
+      sessions,
+      events,
+      activeTeamIds,
+      nowFn().getTime(),
+    );
     const nextEventSessionIds = new Set(nextEvents.map((event) => event.sessionId));
 
     return {

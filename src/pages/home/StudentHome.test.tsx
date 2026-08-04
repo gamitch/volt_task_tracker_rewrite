@@ -230,10 +230,10 @@ describe('isEventInTeamScope', () => {
   // T187 -- the student's own active-team set is now plural (a dual-team
   // student), not a single id. New coverage, not a shape edit of the three
   // single-id cases above.
-  it('includes an event that shares AT LEAST ONE id with a dual-team student\'s active set', () => {
+  it("includes an event that shares AT LEAST ONE id with a dual-team student's active set", () => {
     expect(isEventInTeamScope({ teamIds: ['team-b'] }, ['team-a', 'team-b'])).toBe(true);
   });
-  it('excludes an event whose team is in neither of the student\'s two active teams', () => {
+  it("excludes an event whose team is in neither of the student's two active teams", () => {
     expect(isEventInTeamScope({ teamIds: ['team-c'] }, ['team-a', 'team-b'])).toBe(false);
   });
 });
@@ -460,7 +460,7 @@ describe('buildNextUp', () => {
 
   // T187 -- a dual-team student's Next up includes BOTH teams' meetings, not
   // just the first.
-  it('includes meetings from BOTH of a dual-team student\'s active teams, excludes a third team', () => {
+  it("includes meetings from BOTH of a dual-team student's active teams, excludes a third team", () => {
     const events: HomeEventRow[] = [
       {
         id: 'event-team-a',
@@ -626,7 +626,7 @@ describe('getUnansweredOutreachOpportunities', () => {
 
   // T187 -- a dual-team student's Sign-up opportunities include BOTH teams'
   // unanswered outreach, excludes a third team.
-  it('includes unanswered outreach from BOTH of a dual-team student\'s active teams, excludes a third team', () => {
+  it("includes unanswered outreach from BOTH of a dual-team student's active teams, excludes a third team", () => {
     const events: HomeEventRow[] = [
       {
         id: 'event-team-a',
@@ -1479,7 +1479,7 @@ describe('<StudentHome /> T176 -- real, resolved teamId reaches team-scoped widg
   });
 });
 
-describe('<StudentHome /> T187 -- a two-team student sees BOTH teams\' meetings, live check-in, and sign-up opportunities (criterion 1)', () => {
+describe("<StudentHome /> T187 -- a two-team student sees BOTH teams' meetings, live check-in, and sign-up opportunities (criterion 1)", () => {
   it('Next up and Sign-up opportunities both include events from EITHER active team, and exclude a third team', async () => {
     const teamAMeeting: HomeEventRow = {
       id: 'event-dual-a-meeting',
