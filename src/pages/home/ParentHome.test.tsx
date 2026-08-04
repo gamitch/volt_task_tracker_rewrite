@@ -314,7 +314,9 @@ describe('buildNextEventsForStudent (Next 3 events boundary proof)', () => {
       endsAt: new Date(REF_NOW_MS + 90_000_000).toISOString(),
       status: 'completed',
     };
-    expect(buildNextEventsForStudent([past, completed], events, ['team-a'], REF_NOW_MS)).toEqual([]);
+    expect(buildNextEventsForStudent([past, completed], events, ['team-a'], REF_NOW_MS)).toEqual(
+      [],
+    );
   });
 });
 

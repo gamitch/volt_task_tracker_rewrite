@@ -1872,7 +1872,7 @@ describe('T187: two-team scope intersection', () => {
     },
   ];
 
-  it('an event on EITHER of a two-team student\'s teams is in scope; neither-team is not (criterion 1)', () => {
+  it("an event on EITHER of a two-team student's teams is in scope; neither-team is not (criterion 1)", () => {
     expect(isEventInTeamScope({ teamIds: ['team-a'] }, ['team-a', 'team-b'])).toBe(true);
     expect(isEventInTeamScope({ teamIds: ['team-b'] }, ['team-a', 'team-b'])).toBe(true);
     expect(isEventInTeamScope({ teamIds: ['team-c'] }, ['team-a', 'team-b'])).toBe(false);
@@ -1883,7 +1883,7 @@ describe('T187: two-team scope intersection', () => {
     expect(isEventInTeamScope({ teamIds: null }, [])).toBe(true);
   });
 
-  it('buildNextUp surfaces BOTH teams\' meetings for a two-team student (criterion 1)', () => {
+  it("buildNextUp surfaces BOTH teams' meetings for a two-team student (criterion 1)", () => {
     const result = buildNextUp(
       twoTeamSessions,
       twoTeamEvents,
@@ -1899,11 +1899,16 @@ describe('T187: two-team scope intersection', () => {
   });
 
   it('selectLiveMeetingSession finds a live meeting on the SECOND team (criterion 1, check-in gate)', () => {
-    const result = selectLiveMeetingSession(twoTeamSessions, twoTeamEvents, ['team-a', 'team-b'], REF);
+    const result = selectLiveMeetingSession(
+      twoTeamSessions,
+      twoTeamEvents,
+      ['team-a', 'team-b'],
+      REF,
+    );
     expect(result?.id).toBe('s-b-meeting-live');
   });
 
-  it('getUnansweredOutreachOpportunities surfaces the second team\'s outreach (criterion 1, sign-ups)', () => {
+  it("getUnansweredOutreachOpportunities surfaces the second team's outreach (criterion 1, sign-ups)", () => {
     const result = getUnansweredOutreachOpportunities(
       twoTeamSessions,
       twoTeamEvents,
