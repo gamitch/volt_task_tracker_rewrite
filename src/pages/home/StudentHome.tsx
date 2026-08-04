@@ -490,9 +490,23 @@ export type LoadStudentHomeDataFn = (
  * `ResolveCurrentStudentIdFn` cross-file shape, module doc #8) and
  * imported as a type by `loaders/students.ts`, which supplies the real
  * implementation (`resolveStudentScope`, additive-only export).
+ *
+ * T187 -- `teamIds` widens this scope from the single legacy
+ * `students.team_id` primary-team column (module doc #8's own disclosed
+ * narrowing) to the student's real ACTIVE `student_teams` memberships
+ * (`loaders/students.ts`'s own new read, `left_on is null`). `teamId` is
+ * KEPT unchanged (owner-ruled: the primary-team value may still serve
+ * display, and keeping it means no other production consumer's own shape
+ * changes) -- `teamIds` is the new field every team-scope predicate in this
+ * file now reads from instead.
  */
 export interface StudentScope {
   teamId: string;
+  /** The student's ACTIVE `student_teams` memberships (module doc #8) --
+   * may contain more than one id for a dual-team student. Never includes a
+   * team the student has LEFT (`left_on is null` is the loader's own
+   * filter). */
+  teamIds: readonly string[];
   goalHours: number;
   confirmedHours: number;
   plannedHours: number;
@@ -645,12 +659,15 @@ function round1(value: number): number {
 }
 
 /** The ONLY team-scope predicate in this file -- honors `team_ids === null`
- * as "all teams" per the real `events` schema. */
+ * as "all teams" per the real `events` schema. T187: the second parameter is
+ * the student's own ACTIVE team ids (plural -- a dual-team student), not a
+ * single primary team; an event is in scope when it shares AT LEAST ONE id
+ * with that set. */
 export function isEventInTeamScope(
   event: { teamIds: readonly string[] | null },
-  teamId: string,
+  teamIds: readonly string[],
 ): boolean {
-  return event.teamIds === null || event.teamIds.includes(teamId);
+  return event.teamIds === null || event.teamIds.some((id) => teamIds.includes(id));
 }
 
 /** MTG-10's own literal wireframe annotation: "only while a session is
@@ -672,12 +689,12 @@ export function isSessionLive(
 export function selectLiveMeetingSession(
   sessions: readonly HomeSessionRow[],
   events: readonly HomeEventRow[],
-  teamId: string,
+  teamIds: readonly string[],
   nowMs: number,
 ): HomeSessionRow | null {
   const meetingEventIds = new Set(
     events
-      .filter((event) => event.type === 'meeting' && isEventInTeamScope(event, teamId))
+      .filter((event) => event.type === 'meeting' && isEventInTeamScope(event, teamIds))
       .map((e) => e.id),
   );
   const live = sessions
@@ -705,7 +722,7 @@ export function buildNextUp(
   events: readonly HomeEventRow[],
   rsvps: readonly HomeRsvpRow[],
   studentId: string,
-  teamId: string,
+  teamIds: readonly string[],
   nowMs: number,
   limit = 5,
 ): NextUpRow[] {
@@ -714,7 +731,7 @@ export function buildNextUp(
       .filter(
         (event) =>
           (event.type === 'meeting' || event.type === 'outreach') &&
-          isEventInTeamScope(event, teamId),
+          isEventInTeamScope(event, teamIds),
       )
       .map((event) => [event.id, event] as const),
   );
@@ -760,12 +777,12 @@ export function getUnansweredOutreachOpportunities(
   events: readonly HomeEventRow[],
   rsvps: readonly HomeRsvpRow[],
   studentId: string,
-  teamId: string,
+  teamIds: readonly string[],
   nowMs: number,
 ): SignupOpportunityRow[] {
   const eventById = new Map(
     events
-      .filter((event) => event.type === 'outreach' && isEventInTeamScope(event, teamId))
+      .filter((event) => event.type === 'outreach' && isEventInTeamScope(event, teamIds))
       .map((event) => [event.id, event] as const),
   );
   return sessions
@@ -1285,7 +1302,10 @@ function StudentHomeLoadingSkeleton(): ReactNode {
 
 interface StudentHomeContentProps {
   studentId: string;
-  teamId: string;
+  /** T187: the student's ACTIVE `student_teams` memberships (module doc #8),
+   * not the single legacy `teamId` -- this is what every team-scope
+   * predicate below now reads. */
+  teamIds: readonly string[];
   seasonId: string;
   /** Verbatim passthrough of `v_student_goal_projection.goal_hours`
    * (`resolveStudentScope`) -- already the coalesced
@@ -1307,7 +1327,7 @@ interface StudentHomeContentProps {
 
 function StudentHomeContent({
   studentId,
-  teamId,
+  teamIds,
   seasonId,
   goalHours,
   confirmedHours,
