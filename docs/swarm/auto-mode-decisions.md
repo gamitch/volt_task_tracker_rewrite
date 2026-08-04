@@ -3235,3 +3235,101 @@ rather than line, so a worker is not blocked again by a fourth assertion inside 
 
 **T196 remains parked on MAJOR-B only** (C4's measurability). The recommendation put to him is to
 drop C4 and cite `endMeeting.test.ts:626`; that decision is still open.
+
+## 2026-08-04 — George's ruling on T186's SQL half: file it, don't force it
+
+**Question put to him.** T186's ledger row prescribes recording the `v_student_goal_projection.team_id`
+dependency *"in both the migration comment and the loader"*. The loader half is ordinary work. The
+migration half is not: `20260723000001_dashboard_views.sql` is **applied**, and **constitution item 10
+makes editing an applied migration file a BLOCKER**. The row was written without checking item 10, so
+as filed it prescribes a blocked action. Three ways out were offered — ship the TS half only, add a
+new additive `comment on view …` migration, or amend item 10 to exempt comment-only edits.
+
+**Ruling: ship the TS half only.** Neither a migration nor a constitution amendment is bought for a
+comment fix. The residual is filed as **T801** rather than quietly dropped, and the consequence is
+stated plainly in that row: a reader who opens `dashboard_views.sql` still sees both wrong comments —
+the `:311-320` "display badge only" claim that names just one of two readers, and the `:49-52`
+`security_definer`/RLS sentence that is wrong as written. **The corrections exist only in TypeScript.**
+
+**This is consistent with the 2026-07-30 ruling that closed T185**, and for the same reason: the
+underlying fact is worth knowing, the exposure is owner-sanctioned, and the cost of a
+schema-level fix exceeds what a comment-accuracy defect is worth to a volunteer team.
+
+**Also filed off this closure: T802** — `ResolvedStudentIdentity.teamId` is now written and never read
+(measured by grep), dead since T187 moved scoping onto `teamIds`. Kept deliberately by T187's own
+ruling so no consumer's shape changed; recorded because an unread field still carrying a
+display-only value is the exact shape someone re-reads for scoping later.
+
+**Two corrections the orchestrator made to its own earlier statements this session**, recorded so the
+log is not flattering: T198 was reported to George as *"still waiting on your answer"* when his ruling
+already existed (**2026-08-03, season-wide, option (b)**) — it was unblocked ordinary work the whole
+time. And a stale one-shot Routine that had already fired was updated rather than deleted, re-arming
+it for the next day carrying instructions that asserted T187 was still open; deleted once noticed.
+
+---
+
+---
+
+## 2026-08-04 — George closes T501 (won't-fix) and T505 (won't-fix), both on proportionality
+
+Two follow-up rows closed in one sitting, each after the orchestrator measured the premise and put a
+recommendation to him in plain language. **Neither was closed to save effort — both were closed
+because the measurement changed what the row was worth.**
+
+### T501 — bare `—` empty-stat glyph, a11y. WON'T-FIX.
+
+**Verbatim:** *"no one uses a screen reader, let's skip it"*.
+
+The concern was that a lone `—` may be announced as nothing, leaving a label followed by silence. It
+was never verified against a real screen reader — it was a code-reading finding, and it depends on a
+punctuation-verbosity setting that is off by default.
+
+**The decisive fact is the owner's, not a technical one: nobody on this team uses a screen reader.**
+The mitigation would have been one repo-wide change (a shared `—` + `VisuallyHidden` pairing across
+~18 sites in four files). Real, contained, and worth nothing to this team's actual users.
+
+**Also recorded so a future task does not trip on it:** the row claims *"`VisuallyHidden` is already
+imported in `OutreachList.tsx`"*. **That is false** — measured, the only file importing it is
+`KpiStrip.tsx`. The component does exist in Astryx (`astryx-api.md:6594`), so the mechanism is
+available; the citation was simply wrong.
+
+**Revisit if:** the team ever gains a screen-reader user. Nothing else changes this answer.
+
+### T505 — `markDayComplete` can clobber a concurrent scan's `method`. WON'T-FIX.
+
+**Verbatim:** *"agreed, close it as won't-fix"*, after the orchestrator recommended against building
+it and offered to build it anyway if he disagreed.
+
+**Three measurements changed the picture, and the row understated the first:**
+
+1. **`MarkDayCompleteDialog` already preserves provenance in the normal case.** It calls
+   `resolveAttendanceWriteMethod(existing?.method ?? null)` (`:795`), so a student who scanned
+   *before* the dialog opened keeps their `'qr'` today. **The residual is only the narrow TOCTOU
+   race** — a scan landing between the dialog's load and its submit.
+2. **`method` is never shown to anyone and feeds no number.** No SQL view, no metric, zero UI render
+   sites. It is write-only provenance.
+3. **The owner had already ruled on this exact trade-off** on **2026-08-02**: *"LAST WRITE WINS
+   applies to `LiveConsole` ONLY, not table-wide."* `LiveConsole.tsx:226-236` records the consequence
+   plainly — a coach editing a student who scanned in writes `'coach'` there and leaves `'qr'` on the
+   W2 screens — and calls that divergence **"intentional, not an inconsistency bug."** So a coach
+   overwriting a scan's provenance is already accepted behaviour on another screen.
+
+**What building it would have cost.** The only race-free fix is a schema default
+(`alter column method set default 'coach'`) plus dropping `method` from the write so the conflict path
+cannot touch it. That is a **migration on a table W1 owns**, and it permanently trades a loud
+`NOT NULL` failure for a silent `'coach'` in any future writer that forgets the column. Re-reading at
+submit was already rejected for T406 (adds a round trip, only shrinks the window); an insert/update
+split re-introduces the multi-step shape T327 exists to avoid.
+
+**Item 25, squarely:** a permanently weaker constraint on a shared table, to protect a flag nobody
+sees, nothing computes with, and which is already accepted as overwritable elsewhere.
+
+**Revisit if:** `attendance.method` ever becomes user-visible or enters a metric view. **That change
+should trip over this entry.**
+
+### The pattern in both
+
+Neither row was wrong to file. Both were filed honestly by a checker or a worker that could not fix
+them in place. **What changed was measuring them before building** — T505's row asserted the fix
+needed a migration or an insert/update split, and did not know the dialog already handled the
+non-race case or that the owner had ruled on the trade-off two days earlier.

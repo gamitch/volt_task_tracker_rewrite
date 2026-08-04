@@ -705,16 +705,26 @@ export interface HomeRsvpRow {
   updatedAt: string;
 }
 
-interface HomeAttendanceRow {
+export interface HomeAttendanceRow {
   sessionId: string;
   studentId: string;
   status: AttendanceStatus;
 }
 
-/** Verbatim camelCase rename of `v_team_participation`'s three real columns
- * (module doc #4, MET-02). Never recomputed in this file. */
-export interface TeamParticipationMetric {
-  teamId: string;
+/**
+ * T198 -- was `TeamParticipationMetric`, a verbatim rename of
+ * `v_team_participation`'s three columns. The owner's season-wide ruling
+ * removes the per-team grain this page had no way to scope (no coach->team
+ * link exists), so this is now a verbatim rename of
+ * `v_season_attendance_rate`'s season-grain columns and carries NO `teamId`.
+ *
+ * `participationPct` maps `attendance_rate_pct`. The two views compute
+ * slightly different things -- `v_team_participation` excludes excused
+ * absences from its denominator and this one does not -- which is disclosed
+ * rather than smoothed over; see `loaders/coachHome.ts`'s own row doc.
+ * Never recomputed in this file.
+ */
+export interface SeasonParticipationMetric {
   seasonId: string;
   participationPct: number;
 }
@@ -757,7 +767,7 @@ export interface CoachHomeData {
   sessions: readonly HomeSessionRow[];
   rsvps: readonly HomeRsvpRow[];
   attendance: readonly HomeAttendanceRow[];
-  teamParticipation: TeamParticipationMetric | null;
+  seasonParticipation: SeasonParticipationMetric | null;
   studentHours: readonly StudentHoursMetric[];
   seasonSetupStatus: SeasonSetupStatus;
 }
@@ -1002,8 +1012,8 @@ const FIXTURE_ATTENDANCE: readonly HomeAttendanceRow[] = [
 
 /** Pre-computed `v_team_participation` row (module doc #4) -- never
  * recomputed by this file. */
-const FIXTURE_TEAM_PARTICIPATION: readonly TeamParticipationMetric[] = [
-  { teamId: PLACEHOLDER_CURRENT_TEAM_ID, seasonId: PLACEHOLDER_SEASON_ID, participationPct: 82.4 },
+const FIXTURE_SEASON_PARTICIPATION: readonly SeasonParticipationMetric[] = [
+  { seasonId: PLACEHOLDER_SEASON_ID, participationPct: 82.4 },
 ];
 
 /** Pre-computed `v_student_hours` rows (module doc #4) -- never recomputed
@@ -1028,25 +1038,22 @@ function round1(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
-/** The ONLY team-scope predicate in this file -- honors `team_ids === null`
- * as "all teams" per the real `events` schema (module doc #3/#8). */
-export function isEventInTeamScope(
-  event: { teamIds: readonly string[] | null },
-  teamId: string,
-): boolean {
-  return event.teamIds === null || event.teamIds.includes(teamId);
-}
+/* T198 -- `isEventInTeamScope` (once "the ONLY team-scope predicate in this
+ * file") is DELETED, not left unused. The owner's season-wide ruling means
+ * nothing on this page filters by team, and `PLACEHOLDER_CURRENT_TEAM_ID`
+ * filters nothing. Keeping a dead predicate around is how a placeholder
+ * scope creeps back in. `StudentHome.tsx`/`ParentHome.tsx` keep their OWN
+ * same-named predicates -- those are real, student-scoped, and unrelated. */
 
 /** MET-04's denominator (module doc #4): active roster only,
  * `goal_hours_override ?? default_goal_hours`, summed. */
 export function sumGoalHours(
   students: readonly HomeStudentRow[],
-  teamId: string,
   defaultGoalHours: number,
 ): number {
   return round1(
     students
-      .filter((student) => student.teamId === teamId && student.isActive)
+      .filter((student) => student.isActive)
       .reduce((sum, student) => sum + (student.goalHoursOverride ?? defaultGoalHours), 0),
   );
 }
@@ -1056,12 +1063,9 @@ export function sumGoalHours(
  * hours. */
 export function sumConfirmedHours(
   students: readonly HomeStudentRow[],
-  teamId: string,
   hoursRows: readonly StudentHoursMetric[],
 ): number {
-  const activeIds = new Set(
-    students.filter((student) => student.teamId === teamId && student.isActive).map((s) => s.id),
-  );
+  const activeIds = new Set(students.filter((student) => student.isActive).map((s) => s.id));
   return round1(
     hoursRows
       .filter((row) => activeIds.has(row.studentId))
@@ -1091,12 +1095,9 @@ export function buildLastCompletedMeetingSummary(
   events: readonly HomeEventRow[],
   attendance: readonly HomeAttendanceRow[],
   students: readonly HomeStudentRow[],
-  teamId: string,
 ): LastCompletedMeetingSummary | null {
   const meetingEventIds = new Set(
-    events
-      .filter((event) => event.type === 'meeting' && isEventInTeamScope(event, teamId))
-      .map((e) => e.id),
+    events.filter((event) => event.type === 'meeting').map((e) => e.id),
   );
   const eventById = new Map(events.map((event) => [event.id, event] as const));
 
@@ -1108,9 +1109,7 @@ export function buildLastCompletedMeetingSummary(
   if (!latest) return null;
 
   const records = attendance.filter((record) => record.sessionId === latest.id);
-  const rosterSize = students.filter(
-    (student) => student.teamId === teamId && student.isActive,
-  ).length;
+  const rosterSize = students.filter((student) => student.isActive).length;
 
   return {
     sessionId: latest.id,
@@ -1135,13 +1134,10 @@ export function attendanceRatePercent(summary: LastCompletedMeetingSummary): num
 export function countUpcomingSessionsInNextDays(
   sessions: readonly HomeSessionRow[],
   events: readonly HomeEventRow[],
-  teamId: string,
   nowMs: number,
   days = 7,
 ): number {
-  const inScopeEventIds = new Set(
-    events.filter((event) => isEventInTeamScope(event, teamId)).map((event) => event.id),
-  );
+  const inScopeEventIds = new Set(events.map((event) => event.id));
   const windowEndMs = nowMs + days * 24 * 60 * 60 * 1000;
   return sessions.filter((session) => {
     if (session.status !== 'scheduled' || !inScopeEventIds.has(session.eventId)) return false;
@@ -1165,15 +1161,10 @@ export function buildNextUp(
   sessions: readonly HomeSessionRow[],
   events: readonly HomeEventRow[],
   rsvps: readonly HomeRsvpRow[],
-  teamId: string,
   nowMs: number,
   limit = 5,
 ): NextUpRow[] {
-  const eventById = new Map(
-    events
-      .filter((event) => isEventInTeamScope(event, teamId))
-      .map((event) => [event.id, event] as const),
-  );
+  const eventById = new Map(events.map((event) => [event.id, event] as const));
   return sessions
     .filter((session) => {
       if (session.status !== 'scheduled' || !eventById.has(session.eventId)) return false;
@@ -1219,13 +1210,10 @@ export function isSessionCheckInEligible(
 export function selectCheckInSession(
   sessions: readonly HomeSessionRow[],
   events: readonly HomeEventRow[],
-  teamId: string,
   nowMs: number,
 ): HomeSessionRow | null {
   const meetingEventIds = new Set(
-    events
-      .filter((event) => event.type === 'meeting' && isEventInTeamScope(event, teamId))
-      .map((e) => e.id),
+    events.filter((event) => event.type === 'meeting').map((e) => e.id),
   );
   const eligible = sessions
     .filter(
@@ -1535,7 +1523,8 @@ export async function defaultLoadCoachHomeData(seasonId: string): Promise<CoachH
     sessions: FIXTURE_SESSIONS,
     rsvps: FIXTURE_RSVPS,
     attendance: FIXTURE_ATTENDANCE,
-    teamParticipation: FIXTURE_TEAM_PARTICIPATION.find((row) => row.seasonId === seasonId) ?? null,
+    seasonParticipation:
+      FIXTURE_SEASON_PARTICIPATION.find((row) => row.seasonId === seasonId) ?? null,
     studentHours: FIXTURE_STUDENT_HOURS.filter((row) => row.seasonId === seasonId),
     seasonSetupStatus: FIXTURE_SEASON_SETUP_STATUS,
   };
@@ -2124,11 +2113,12 @@ export interface CoachHomeProps {
    * built by T104) -- same "prop defaults to the real loader" convention as
    * `loadLeaderboardData` immediately above. */
   loadLeaderboardPrivacySetting?: LoadPrivacySettingFn;
-  /** Which team this Coach/Admin Home is scoped to (module doc #8) --
-   * scopes ONLY the pre-existing primary KPI grid / Next up / Recent-feed
-   * team filter / check-in / season-setup card. T124's new season-wide
-   * widgets (module doc #13(a)) deliberately ignore this prop. */
-  teamId?: string;
+  /* T198 -- the `teamId` prop is REMOVED. It scoped the primary KPI grid /
+   * Next up / check-in / season-setup card to `PLACEHOLDER_CURRENT_TEAM_ID`,
+   * a literal that matches no real team id, so every widget it touched
+   * floored to an honest zero. The owner's season-wide ruling makes those
+   * widgets match T124's, which never read it. Nothing replaces it: there is
+   * no per-coach team concept, by ruling. */
   /** Injectable clock for the 60-minute check-in boundary / 7-day window /
    * relative-time formatting (module doc #5). Defaults to the real clock. */
   nowFn?: () => Date;
@@ -2195,7 +2185,6 @@ export function CoachHome({
   loadDashboardData: loadDashboardDataProp = loadDashboardData,
   loadLeaderboardData: loadLeaderboardDataProp = loadLeaderboardData,
   loadLeaderboardPrivacySetting: loadLeaderboardPrivacySettingProp = loadPrivacySetting,
-  teamId = PLACEHOLDER_CURRENT_TEAM_ID,
   nowFn = () => new Date(),
 }: CoachHomeProps = {}): ReactNode {
   const { user } = useAuth();
@@ -2242,7 +2231,6 @@ export function CoachHome({
         <CoachHomeContent
           user={user}
           seasonId={activeSeason.season.id}
-          teamId={teamId}
           loadData={loadData}
           loadDashboardData={loadDashboardDataProp}
           loadLeaderboardData={loadLeaderboardDataProp}
@@ -2266,7 +2254,6 @@ export function CoachHome({
 interface CoachHomeContentProps {
   user: AuthUser;
   seasonId: string;
-  teamId: string;
   loadData: LoadCoachHomeDataFn;
   loadDashboardData: LoadDashboardDataFn;
   loadLeaderboardData: LoadLeaderboardDataFn;
@@ -2278,7 +2265,6 @@ interface CoachHomeContentProps {
 function CoachHomeContent({
   user,
   seasonId,
-  teamId,
   loadData,
   loadDashboardData: loadDashboardDataProp,
   loadLeaderboardData: loadLeaderboardDataProp,
@@ -2322,11 +2308,9 @@ function CoachHomeContent({
   // using 0/0 fallbacks until real data has loaded (0/0 crosses no
   // milestone, so this is inert until `loadState.status === 'success'`).
   const successData = loadState.status === 'success' ? loadState.data : null;
-  const preGoalHours = successData
-    ? sumGoalHours(successData.students, teamId, defaultGoalHours)
-    : 0;
+  const preGoalHours = successData ? sumGoalHours(successData.students, defaultGoalHours) : 0;
   const preConfirmedHours = successData
-    ? sumConfirmedHours(successData.students, teamId, successData.studentHours)
+    ? sumConfirmedHours(successData.students, successData.studentHours)
     : 0;
   const { toasts, dismissToast } = useMilestoneToasts(seasonId, preConfirmedHours, preGoalHours);
 
@@ -2353,7 +2337,7 @@ function CoachHomeContent({
 
   const data = loadState.data;
 
-  const teamParticipation = data.teamParticipation;
+  const seasonParticipation = data.seasonParticipation;
   const goalHours = preGoalHours;
   const confirmedHours = preConfirmedHours;
   const lastMeetingSummary = buildLastCompletedMeetingSummary(
@@ -2361,17 +2345,11 @@ function CoachHomeContent({
     data.events,
     data.attendance,
     data.students,
-    teamId,
   );
   const attendanceRate = lastMeetingSummary ? attendanceRatePercent(lastMeetingSummary) : null;
-  const upcomingIn7Days = countUpcomingSessionsInNextDays(
-    data.sessions,
-    data.events,
-    teamId,
-    nowMs,
-  );
-  const nextUp = buildNextUp(data.sessions, data.events, data.rsvps, teamId, nowMs);
-  const checkInSession = selectCheckInSession(data.sessions, data.events, teamId, nowMs);
+  const upcomingIn7Days = countUpcomingSessionsInNextDays(data.sessions, data.events, nowMs);
+  const nextUp = buildNextUp(data.sessions, data.events, data.rsvps, nowMs);
+  const checkInSession = selectCheckInSession(data.sessions, data.events, nowMs);
   const showSeasonSetupCard =
     user.role === 'admin' && isSeasonMissingSetup(data.teams, data.seasonSetupStatus);
 
@@ -2464,10 +2442,14 @@ function CoachHomeContent({
               )}
 
               <Grid columns={{ minWidth: 240, repeat: 'fit' }} gap={4}>
+                {/* T198 -- relabelled from "Team participation". The figure
+                    is season-wide (owner ruling), so the old label named a
+                    scope the number never had once the placeholder team
+                    stopped matching anything. */}
                 <KpiCard
-                  label="Team participation"
+                  label="Participation"
                   value={
-                    teamParticipation !== null ? `${teamParticipation.participationPct}%` : '—'
+                    seasonParticipation !== null ? `${seasonParticipation.participationPct}%` : '—'
                   }
                   secondary={
                     <Text type="supporting" color="secondary">

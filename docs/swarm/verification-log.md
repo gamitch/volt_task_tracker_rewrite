@@ -9619,3 +9619,178 @@ files a live worker was writing**, having twice concluded from weak evidence tha
 **All three round-1 BLOCKERs and both round-2 MAJORs originated in the orchestrator's packet, not in
 the worker's code.** The gates that caught them **built the prescription rather than reading it** —
 which is the argument for item 26's own wording, now evidenced four times this week.
+
+## T186 — the display-only `team_id` dependency, recorded in TypeScript because item 10 blocks the SQL
+
+**Tier: FAST/STANDARD** — documentation accuracy only. **The diff is provably comment-only:** filtering
+the whole `src` diff for changed lines that are not comment lines returns **nothing**. That is the
+strongest evidence this class of task can produce, and it was run rather than asserted.
+
+### The row's premise had already moved before the task was worked
+
+T186 was filed saying *"a live route **now** scopes off it"*. True when filed. **False by the time it
+was worked** — T187 (PR #67, merged earlier the same day) moved every scope predicate onto ACTIVE
+`student_teams` memberships. So `dashboard_views.sql:311-320`'s claim that the column is used *"ONLY
+for the row's display badge"* is **true again today**.
+
+**That is not a reason to close the row unfixed.** The claim was silently false in between, and the
+dependency edge survives: `team_id` still reaches `StudentScope.teamId` → `ResolvedStudentIdentity.teamId`.
+Grep across the repo shows that field is **written and never read** — dead since T187. The new comment
+records the history and warns that reading it again for scoping reintroduces the T187 defect. Filed
+separately as **T802**.
+
+**This is the sixth row this session that was wrong about its own mechanism.**
+
+### The prescribed fix was half-impossible, and that was checked rather than assumed
+
+The row says *"record it in both the migration comment and the loader."* `20260723000001_dashboard_views.sql`
+is applied, and **constitution item 10: "editing an applied migration file → BLOCKER."** The row was
+written without checking item 10. Rather than pick unilaterally, three options went to the owner —
+TS-only, a new additive `comment on view` migration, or an item-10 amendment. **Ruled: TS-only**, residual
+filed as **T801** (`auto-mode-decisions.md`, 2026-08-04). The consequence is stated, not softened: a SQL
+reader still sees both wrong comments.
+
+### A second wrong comment, found by following the first
+
+`students.ts:365-370` did not merely fail to document the dependency — it **repeated the migration's own
+false RLS sentence**, asserting `v_student_goal_projection` "runs under the CALLING session's own RLS".
+It does not. `security_definer` is a *function* attribute; the view-level knob is `security_invoker`
+(PG15+), which defaults **OFF** and appears zero times in `supabase/`, so these views execute as their
+OWNER and bypass base-table RLS.
+
+**Measured, not reasoned** — unusually for this repo. `20260731000000_leaderboard_students_view.sql:32-46`
+records a live PGlite/PostgreSQL run with a non-superuser view owner: a student-role session reading the
+view got every active student's row, the same session reading the base table got exactly its own one row,
+and a `security_invoker=on` counterfactual collapsed both back to one. The mechanism is proven.
+
+**No behaviour changes and no security work is implied.** T185 established the finding and closed
+no-change on the owner's 2026-07-30 proportionality ruling; only the comment residue was ever in scope.
+The per-base-table RLS composition in that comment was **kept, not deleted** — it is what would make the
+read safe under `security_invoker=on`, so it is belt-and-braces rather than wrong.
+
+### A stale caveat retired
+
+The same paragraph closed by saying the composition *"has no DIRECT precedent elsewhere in this codebase
+to point to as a live-tested example"* and asked a checker to confirm it. Stale in the half that matters:
+the bypass **mechanism** is live-tested at the leaderboard migration. Corrected rather than left to send a
+future reader looking for evidence that already exists.
+
+### Gates, `.env.local` absent
+
+`tsc --noEmit` 0 · `format:check` 0 · `eslint .` **0 errors / 364 warnings** (unchanged) ·
+`vitest run` **78 files / 1993 tests** · `vite build` 0.
+
+### What remains open
+
+**T801** (both `dashboard_views.sql` comments, blocked by item 10) and **T802** (the dead
+`ResolvedStudentIdentity.teamId` field). Neither is closed by this task and both are filed with the
+reason, not left implicit.
+
+## T198 — CoachHome goes season-wide: six real queries, and the page stops pretending it has a team
+
+**Tier: HEAVY.** It changes what a coach sees, edits two production files and two test files, and
+retires a public prop. Owner ruled the product question **2026-08-03** (*"yes, season-wide is fine
+option b"*) and approved the test approach **2026-08-04**.
+
+### Both halves had to ship together, and that is why the task was bigger than the row
+
+The row describes a data-wiring bundle: real `events`/`sessions`/`rsvps`/`attendance`/
+`teamParticipation`/`studentHours`. But wiring those queries **alone** would have added six real
+network round trips for **zero visible change** — every widget consuming them filtered on
+`PLACEHOLDER_CURRENT_TEAM_ID`, which matches no real id, so all of them floored to zero regardless of
+what the queries returned. The de-scoping is not scope creep; it is what makes the queries observable.
+
+**The row also undercounted the work: six helpers took a `teamId`, not four.** `sumGoalHours` and
+`sumConfirmedHours` were missed by the row's framing.
+
+`isEventInTeamScope` — which this file's own comment called *"the ONLY team-scope predicate in this
+file"* — is **deleted**, not left unused. A dead scope predicate is how a placeholder scope creeps
+back in. `StudentHome.tsx`/`ParentHome.tsx` keep their own same-named predicates; those are real,
+student-scoped, and untouched.
+
+### `teamParticipation` could not simply become season-wide, and the honest answer cost something
+
+`v_team_participation` is per-team and **has no season-grain rollup**. The season figure therefore
+comes from `v_season_attendance_rate` instead — with two consequences that are disclosed in-code and
+filed as **T803** rather than smoothed over:
+
+1. **The denominator differs.** `v_team_participation` excludes excused absences; the season view does
+   not. The tile generally reads **lower** than before. It is the honest season-wide metric that
+   already existed, not a new one invented to fill the hole.
+2. **The page already renders this exact view**, via `dashboard.ts`'s `queryAttendanceRate` in the
+   T124 analytics section. One metric now appears in **two tiles under two independent load states**,
+   which means they can legitimately disagree on screen.
+
+The tile is relabelled "Team participation" → "Participation". **"Hours vs. team goal" is deliberately
+NOT relabelled** — D-2's *"we are just a team"* framing keeps that one honest.
+
+### The test edits were NOT shape-only, and were approved on that basis
+
+T187's approval covered shape-only, behaviour-preserving edits with byte-identical expectations. **This
+task's do not qualify and were not claimed to.** Owner approved them explicitly on 2026-08-04
+(*"yes recompute the expectations and delete that test block"*). Every recomputation, with its cause:
+
+| Assertion | Was | Now | Why |
+|---|---|---|---|
+| `sumGoalHours` (unit) | 18 | **23** | s4 (`team-b`, active, override 5) now counts |
+| `sumConfirmedHours` (unit) | 7 | **107** | same student's 100h now counts |
+| fixture goal hours | 38 | **48** | the Titans student's 10h default now counts |
+| last-meeting rate | 75% | **60%** | rosterSize 4 → 5; present+late unchanged at 3 |
+| upcoming in 7 days | 2 | **4** | Titans sessions now count |
+| T173 stub hours | `0 / 1 hrs` | **`0 / 18 hrs`** | that student's own `goal_hours_override` |
+
+That last one is worth naming: the fixture's `goal_hours_override: 18` carried the comment *"not
+asserted directly"*. It is now load-bearing — the change turned an inert fixture field into a
+measured one.
+
+**`describe('isEventInTeamScope')` is deleted outright.** Tests for a deleted export cannot be
+preserved; keeping them disabled would be pretending.
+
+**Two exclusion assertions were INVERTED, not deleted** — *"excludes an otherwise-eligible meeting
+outside the team scope"* → *"INCLUDES it"*, and `not.toContain('Titans Strategy Session')` →
+`toContain(...)`. Same fixtures, opposite expectations. These are the sharpest available proof the
+scoping actually changed, and M2 below confirms they earn their place.
+
+### A masked-error trap, found by running it
+
+Two fake-client dispatchers (`coachHome.test.ts`'s and `CoachHome.test.tsx`'s T173 stub) threw
+`unexpected table` for anything but `teams`/`students`. Once the loader read six more tables, one
+test asserting a **500** started failing with **UNKNOWN** — the dispatcher's own throw was **masking
+the error the test existed to assert**. Both dispatchers now know the new tables. Their `.eq`/`.in`
+are deliberate PASSTHROUGHS, which is exactly why the new coverage spies on the arguments rather than
+on filtered output — a fixture-visibility test would pass here even if a filter were dropped entirely
+(the trap T187's premise gate caught elsewhere in this repo).
+
+### A real bug this introduced, caught by the suite
+
+`DashboardPage.test.tsx` stubs the loader through `vi.mock`, which returns an **untyped** literal —
+so `tsc` never checked it, the renamed field stayed `teamParticipation`, and `seasonParticipation`
+arrived `undefined`. `undefined !== null` passes the null guard and then dereferences: the whole page
+crashed. Fixed at the stub, **not** by loosening the guard to `?.` — a missing required field should
+fail loudly, and here it did.
+
+A second over-correction, also caught: blanket-replacing `'Team participation'` with `'Participation'`
+hit two NEGATIVE assertions that used the old label as a *CoachHome-unique marker*. "Participation"
+is not unique — Student/Parent pages use the word. Retargeted to "Events in next 7 days".
+
+### Mutations, replayed personally
+
+| # | Mutation | Result |
+|---|---|---|
+| 1 | Drop `.eq('season_id', seasonId)` from the events query | **RED** on the query-shape spy |
+| 2 | Re-introduce a team filter in `selectCheckInSession` | **RED, 2 tests** — including the inverted one |
+| — | Restore both | 1996 passed, tree clean |
+
+### Gates, `.env.local` absent, after merging current `main`
+
+`tsc` 0 · `format:check` 0 · `eslint` **0 errors / 363 warnings — DOWN from 364**, because this task
+deletes code · `vitest` **78 files / 1996 tests** · `vite build` 0.
+
+### Filed, not fixed
+
+**T803** (the duplicated participation metric) and **T804** — the latter found while reading these
+views and materially more important than the tile: `v_student_participation` scopes membership off the
+legacy `students.team_id` rather than ACTIVE `student_teams`, which is **the T187 defect still live in
+SQL**, feeding `checkin.ts`, `reports.ts` and `meetings.ts`. The newly-pushed
+`20260804000000_volunteer_hours_outreach_only.sql` is direct precedent for fixing it without editing an
+applied file — and, separately, is precedent for **T801** too.
