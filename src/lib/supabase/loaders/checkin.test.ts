@@ -19,6 +19,7 @@ import {
   makeGetAccessToken,
   makeLoadConsistencyStripData,
   makeLoadLinkedStudents,
+  makeLoadOpenCheckinSessions,
 } from './checkin';
 
 // ---------------------------------------------------------------------------
@@ -319,5 +320,170 @@ describe('makeLoadConsistencyStripData (T161)', () => {
     const stub = makeStripClient();
     await makeLoadConsistencyStripData(() => stub.client)('student-remy-okafor');
     expect(stub.participationEqSpy).toHaveBeenCalledWith('student_id', 'student-remy-okafor');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// makeLoadOpenCheckinSessions (T400) — the session picker's data source.
+//
+// The defect class that matters here is a WRONG WINDOW: too narrow and the
+// student standing in the room sees an empty list (the exact failure T400
+// exists to remove); too wide and they are offered a meeting from last week
+// and check into the wrong one. So the bounds are asserted as real values
+// against a pinned clock, not as "some ISO string was passed".
+// ---------------------------------------------------------------------------
+
+interface OpenSessionStubOptions {
+  sessions?: Array<{ id: string; event_id: string; starts_at: string; ends_at: string }> | null;
+  events?: Array<{ id: string; title: string }> | null;
+}
+
+function makeOpenSessionsClient(options: OpenSessionStubOptions = {}) {
+  const orderSpy = vi
+    .fn()
+    .mockResolvedValue({ data: options.sessions === undefined ? [] : options.sessions, error: null });
+  const lteSpy = vi.fn(() => ({ order: orderSpy }));
+  const gteSpy = vi.fn(() => ({ lte: lteSpy }));
+  const sessionsEqSpy = vi.fn(() => ({ gte: gteSpy }));
+  const sessionsSelectSpy = vi.fn(() => ({ eq: sessionsEqSpy }));
+  const eventsInSpy = vi
+    .fn()
+    .mockResolvedValue({ data: options.events === undefined ? [] : options.events, error: null });
+  const eventsSelectSpy = vi.fn(() => ({ in: eventsInSpy }));
+  const fromSpy = vi.fn((table: string) => {
+    if (table === 'event_sessions') return { select: sessionsSelectSpy };
+    if (table === 'events') return { select: eventsSelectSpy };
+    throw new Error(`unexpected table: ${table}`);
+  });
+  const client = { from: fromSpy } as unknown as SupabaseClient;
+  return {
+    client,
+    fromSpy,
+    sessionsSelectSpy,
+    sessionsEqSpy,
+    gteSpy,
+    lteSpy,
+    orderSpy,
+    eventsInSpy,
+  };
+}
+
+/** 2026-08-04T18:00:00Z, pinned so the window bounds are exact values. */
+const PINNED_NOW = Date.parse('2026-08-04T18:00:00.000Z');
+
+describe('makeLoadOpenCheckinSessions (T400)', () => {
+  it('asks only for scheduled sessions — a completed or canceled one must never be offered', async () => {
+    const stub = makeOpenSessionsClient();
+    await makeLoadOpenCheckinSessions(() => stub.client, () => PINNED_NOW)();
+    expect(stub.sessionsEqSpy).toHaveBeenCalledWith('status', 'scheduled');
+  });
+
+  it('opens the window two hours BEFORE the session ends, so a student leaving late can still check in', async () => {
+    const stub = makeOpenSessionsClient();
+    await makeLoadOpenCheckinSessions(() => stub.client, () => PINNED_NOW)();
+    // ends_at >= now - 2h. A session that ended 90 minutes ago is still listed.
+    expect(stub.gteSpy).toHaveBeenCalledWith('ends_at', '2026-08-04T16:00:00.000Z');
+  });
+
+  it('opens the window two hours before the session starts, so an early arrival sees it', async () => {
+    const stub = makeOpenSessionsClient();
+    await makeLoadOpenCheckinSessions(() => stub.client, () => PINNED_NOW)();
+    // starts_at <= now + 2h.
+    expect(stub.lteSpy).toHaveBeenCalledWith('starts_at', '2026-08-04T20:00:00.000Z');
+  });
+
+  it('joins each session to its event title — a swap here labels the wrong meeting', async () => {
+    // Distinct titles AND a deliberately reversed events response: if the join
+    // ignored event_id and paired by position, this returns the wrong titles.
+    const stub = makeOpenSessionsClient({
+      sessions: [
+        {
+          id: 'session-build-night',
+          event_id: 'event-build',
+          starts_at: '2026-08-04T18:00:00.000Z',
+          ends_at: '2026-08-04T21:00:00.000Z',
+        },
+        {
+          id: 'session-outreach',
+          event_id: 'event-outreach',
+          starts_at: '2026-08-04T19:00:00.000Z',
+          ends_at: '2026-08-04T20:00:00.000Z',
+        },
+      ],
+      events: [
+        { id: 'event-outreach', title: 'Library STEM Night' },
+        { id: 'event-build', title: 'Tuesday Build Night' },
+      ],
+    });
+    await expect(
+      makeLoadOpenCheckinSessions(() => stub.client, () => PINNED_NOW)(),
+    ).resolves.toEqual([
+      {
+        sessionId: 'session-build-night',
+        title: 'Tuesday Build Night',
+        startsAt: '2026-08-04T18:00:00.000Z',
+      },
+      {
+        sessionId: 'session-outreach',
+        title: 'Library STEM Night',
+        startsAt: '2026-08-04T19:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('still lists a session whose event title did not come back, rather than hiding it', async () => {
+    const stub = makeOpenSessionsClient({
+      sessions: [
+        {
+          id: 'session-orphan',
+          event_id: 'event-missing',
+          starts_at: '2026-08-04T18:00:00.000Z',
+          ends_at: '2026-08-04T21:00:00.000Z',
+        },
+      ],
+      events: [],
+    });
+    const result = await makeLoadOpenCheckinSessions(() => stub.client, () => PINNED_NOW)();
+    expect(result).toHaveLength(1);
+    expect(result[0].sessionId).toBe('session-orphan');
+    expect(result[0].title).toBe('Meeting');
+  });
+
+  it('never queries events when no session is open', async () => {
+    const stub = makeOpenSessionsClient({ sessions: [] });
+    await expect(
+      makeLoadOpenCheckinSessions(() => stub.client, () => PINNED_NOW)(),
+    ).resolves.toEqual([]);
+    expect(stub.fromSpy).toHaveBeenCalledWith('event_sessions');
+    expect(stub.fromSpy).not.toHaveBeenCalledWith('events');
+  });
+
+  it('treats a null session response as "none open" rather than crashing', async () => {
+    const stub = makeOpenSessionsClient({ sessions: null });
+    await expect(
+      makeLoadOpenCheckinSessions(() => stub.client, () => PINNED_NOW)(),
+    ).resolves.toEqual([]);
+  });
+
+  it('de-duplicates event ids so two sessions of one event cost one events query', async () => {
+    const stub = makeOpenSessionsClient({
+      sessions: [
+        {
+          id: 'session-am',
+          event_id: 'event-build',
+          starts_at: '2026-08-04T17:00:00.000Z',
+          ends_at: '2026-08-04T18:30:00.000Z',
+        },
+        {
+          id: 'session-pm',
+          event_id: 'event-build',
+          starts_at: '2026-08-04T19:00:00.000Z',
+          ends_at: '2026-08-04T21:00:00.000Z',
+        },
+      ],
+      events: [{ id: 'event-build', title: 'Tuesday Build Night' }],
+    });
+    await makeLoadOpenCheckinSessions(() => stub.client, () => PINNED_NOW)();
+    expect(stub.eventsInSpy).toHaveBeenCalledWith('id', ['event-build']);
   });
 });
