@@ -1016,6 +1016,26 @@ that actually works today.
 
 The diagnostic query above is kept for the record, but nobody needs to run it.
 
+### CLOSED 2026-08-04 — option B: the correction rides in a NEW migration's header
+
+**George's ruling:** *"let's go with B"*. The comment fix does **not** edit any applied migration.
+Instead the next new migration's header carries the correction, citing this entry — so **constitution
+item 10 is respected with no exception**, and the applied files continue to match exactly what the
+database ran.
+
+**No schema change.** The 2026-07-29 decision above is unchanged and was not reopened.
+
+**Where it lands:** T503's migration (packet v2 §3 already requires it). The same header also corrects
+the copy of the claim in `20260723000001_dashboard_views.sql:50-56`, which D010 did not know about.
+
+**Third occurrence, and the reason this was worth closing rather than leaving proposed:** T503's
+premise gate had to stand up a real PostgreSQL 16.13 to determine which of two contradictory comments
+in this repo was true — `dashboard_views.sql` (false) against the leaderboard migrations (correct).
+It also supplied by execution the evidence D010's diagnostic query was written to obtain: a view with
+no `security_invoker` returned **3 rows** to a session whose direct table read returned **1**, and
+`set (security_invoker = on)` collapsed it to 1. Evidence in `docs/swarm/active/T503-gate-report.md`.
+**Nobody needs to run the diagnostic query now.**
+
 **Standing calibration, applies beyond this entry:** proportion findings to this
 project's actual stakes. Real risks here are losing student data, leaking PII or
 credentials, and breaking auth. Aggregate hour counts visible to the team they

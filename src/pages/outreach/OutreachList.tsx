@@ -734,11 +734,15 @@
  * concurrency-safe. A rejected write surfaces via a dismissable error
  * `Banner` (same copy/shape as `RsvpControl.tsx`'s own), never silently.
  *
- * Not fixed here, disclosed (packet §3): `withRsvpOverride`'s own
- * locally-appended row sets `respondedBy: studentId` (a `students.id` in a
- * field that mirrors a `profiles.id` column) -- T174's exact open defect,
- * so the optimistic row and the persisted row disagree on that one field
- * until reload. Local-only display state, out of scope here;
+ * FIXED by T504 (was disclosed-not-fixed here, packet §3):
+ * `withRsvpOverride`'s locally-appended row used to set
+ * `respondedBy: studentId` -- a `students.id` in a field mirroring a
+ * `profiles.id` column, T174's exact defect. It now sets `null`, which is
+ * what the nullable column means and what this function actually knows: its
+ * signature is frozen by T193's packet §4, so the caller's `viewerProfileId`
+ * cannot be threaded in. The optimistic row and the persisted row therefore
+ * no longer disagree on a WRONG-SHAPED value; they differ only in that the
+ * local one does not yet know the responder. Local-only display state;
  * `withRsvpOverride`'s signature is unchanged (frozen by this same packet
  * §4 -- `getUnansweredRsvpCount`/`computeStudentHours`/the goal bar all read
  * the same `rsvps` state).
@@ -1190,7 +1194,7 @@ const FIXTURE_RSVPS: readonly RsvpRow[] = [
     sessionId: 'session-food-bank-past',
     studentId: 'student-amara-webb',
     status: 'going',
-    respondedBy: 'student-amara-webb',
+    respondedBy: 'profile-amara-webb',
     updatedAt: '2026-06-10T12:00:00.000Z',
     createdAt: '2026-06-10T12:00:00.000Z',
   },
@@ -1199,7 +1203,7 @@ const FIXTURE_RSVPS: readonly RsvpRow[] = [
     sessionId: 'session-food-bank-past',
     studentId: 'student-cole-jennings',
     status: 'going',
-    respondedBy: 'student-cole-jennings',
+    respondedBy: 'profile-cole-jennings',
     updatedAt: '2026-06-10T12:05:00.000Z',
     createdAt: '2026-06-10T12:05:00.000Z',
   },
@@ -1208,7 +1212,7 @@ const FIXTURE_RSVPS: readonly RsvpRow[] = [
     sessionId: 'session-food-bank-past',
     studentId: 'student-priya-patel',
     status: 'declined',
-    respondedBy: 'student-priya-patel',
+    respondedBy: 'profile-priya-patel',
     updatedAt: '2026-06-10T12:10:00.000Z',
     createdAt: '2026-06-10T12:10:00.000Z',
   },
@@ -1236,7 +1240,7 @@ const FIXTURE_RSVPS: readonly RsvpRow[] = [
     sessionId: 'session-food-bank-upcoming',
     studentId: 'student-amara-webb',
     status: 'going',
-    respondedBy: 'student-amara-webb',
+    respondedBy: 'profile-amara-webb',
     updatedAt: '2026-07-15T09:00:00.000Z',
     createdAt: '2026-07-15T09:00:00.000Z',
   },
@@ -1245,7 +1249,7 @@ const FIXTURE_RSVPS: readonly RsvpRow[] = [
     sessionId: 'session-food-bank-upcoming',
     studentId: 'student-cole-jennings',
     status: 'maybe',
-    respondedBy: 'student-cole-jennings',
+    respondedBy: 'profile-cole-jennings',
     updatedAt: '2026-07-15T09:05:00.000Z',
     createdAt: '2026-07-15T09:05:00.000Z',
   },
@@ -1254,7 +1258,7 @@ const FIXTURE_RSVPS: readonly RsvpRow[] = [
     sessionId: 'session-food-bank-upcoming',
     studentId: 'student-devon-marsh',
     status: 'declined',
-    respondedBy: 'student-devon-marsh',
+    respondedBy: 'profile-devon-marsh',
     updatedAt: '2026-07-15T09:10:00.000Z',
     createdAt: '2026-07-15T09:10:00.000Z',
   },
@@ -1265,7 +1269,7 @@ const FIXTURE_RSVPS: readonly RsvpRow[] = [
     sessionId: 'session-park-cleanup-upcoming',
     studentId: 'student-priya-patel',
     status: 'going',
-    respondedBy: 'student-priya-patel',
+    respondedBy: 'profile-priya-patel',
     updatedAt: '2026-07-10T09:00:00.000Z',
     createdAt: '2026-07-10T09:00:00.000Z',
   },
@@ -1274,7 +1278,7 @@ const FIXTURE_RSVPS: readonly RsvpRow[] = [
     sessionId: 'session-park-cleanup-upcoming',
     studentId: 'student-devon-marsh',
     status: 'going',
-    respondedBy: 'student-devon-marsh',
+    respondedBy: 'profile-devon-marsh',
     updatedAt: '2026-07-10T09:05:00.000Z',
     createdAt: '2026-07-10T09:05:00.000Z',
   },
@@ -1296,7 +1300,7 @@ const FIXTURE_RSVPS: readonly RsvpRow[] = [
     sessionId: 'session-tutoring-canceled',
     studentId: 'student-cole-jennings',
     status: 'going',
-    respondedBy: 'student-cole-jennings',
+    respondedBy: 'profile-cole-jennings',
     updatedAt: '2026-05-20T09:00:00.000Z',
     createdAt: '2026-05-20T09:00:00.000Z',
   },
@@ -1498,7 +1502,15 @@ export function withRsvpOverride(
       sessionId,
       studentId,
       status,
-      respondedBy: studentId,
+      // T504: `null`, not `studentId`. This mirrors `rsvps.responded_by`, a
+      // NULLABLE `profiles.id` column -- and a `students.id` here is T174's
+      // exact defect. No `profiles.id` is reachable: this function's signature
+      // is FROZEN by T193's packet §4, so the caller's `viewerProfileId`
+      // cannot be threaded in without breaking that freeze. `null` states
+      // "not known on this local row", which is true; `studentId` stated
+      // something false. Nothing reads this field (see the module doc), so
+      // this is representation correctness, not a behaviour change.
+      respondedBy: null,
       updatedAt: now,
       createdAt: now,
     };
