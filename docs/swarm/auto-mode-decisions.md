@@ -2401,7 +2401,7 @@ rather than by event `type`** — and "by type, never by name" is the entire sub
 So the live gap is **competition**, not meeting: an admin flipping that toggle puts competition
 hours into the volunteer-hours total and the goal percentage, contradicting the 2026-08-03 ruling.
 
-**What "fix both" decides.** `v_student_hours` (`metric_views.sql:15`) carries the **identical**
+**What "fix both" decides.** `v_student_hours` (`metric_views.sql:17`; the view spans `:3-19`) carries the **identical**
 join, so the same exposure exists on **every student's own confirmed hours and goal progress**. The
 2026-08-02 ruling's operative text was card-scoped (*"remove meeting hours from the volunteer-hours
 total and its goal percentage, and label the card…"*), so extending it to the student-facing view

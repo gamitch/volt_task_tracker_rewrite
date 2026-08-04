@@ -71,9 +71,20 @@ sum(type_hours) filter (where type = 'outreach') as total_hours
 
 The three breakdown columns at `:181-183` stay exactly as they are.
 
-**Check `goal_pct` yourself.** It is computed inside the same view and consumed at
-`KpiStrip.tsx:302`. If it derives from `total_hours` it inherits the fix automatically; if it
-recomputes independently, **it needs the same change and the packet author missed it — say so.**
+**`goal_pct` — resolved by the premise gate, do not re-derive.** It **derives**:
+`kpi_views.sql:237` divides `coalesce(sh.total_hours, 0)`, the same CTE column this fix changes.
+Measured 4 → 2 under the gate's fixture with the fix applied, and mutation 1 flips it back. **No
+second change is needed.**
+
+**NULL path — also measured safe.** `sum(...) filter (...)` returns NULL when nothing matches, but
+the outer `coalesce` at `kpi_views.sql:223`/`:237` catches it: a season with only flag-on competition
+hours yields `total_hours = 0` and `goal_pct = 0`, never NULL. Nothing null reaches `loaders/kpi.ts`.
+
+**Five existing green assertions will break on the label change** — `KpiStrip.test.tsx:156, 166,
+226, 268, 297`, each `toContain('Season hours')`. The Non-Negotiables require the owner's explicit
+approval to update a passing test; **the 2026-08-02 ruling is that approval** (*"label the card so it
+reads as volunteer hours rather than all hours"*). Cite it in your commit, the way T702's row cited
+its ruling for `HoursTab.test.tsx:327`. **That authorization covers these five and nothing else.**
 
 **3. `src/components/kpi/KpiStrip.tsx`** — the 2026-08-02 ruling also authorizes *"label the card so
 it reads as volunteer hours rather than all hours."* `label="Season hours"` is at `:286`. Make it say
@@ -85,7 +96,7 @@ volunteer hours. Follow PRD DES-14…16 for copy (sentence case). **Do not restr
 ```
 supabase/migrations/<new timestamp>_volunteer_hours_outreach_only.sql   (NEW)
 src/components/kpi/KpiStrip.tsx                                        (label only)
-src/components/kpi/KpiStrip.test.tsx                                   (coverage)
+src/components/kpi/KpiStrip.test.tsx        (new coverage AND five existing assertion updates)
 supabase/tests/<new>                                                   (SQL proof, see below)
 ```
 
@@ -108,9 +119,28 @@ Seed fixtures for **all three types**, with attendance on completed sessions, an
 2. A `competition` event **with `counts_volunteer_hours = true`** contributes **zero** to both.
    *(This is the live gap — seed the flag ON deliberately.)*
 3. A `meeting` event contributes zero to both.
-4. `v_season_kpis.competition_hours` and `meeting_hours` are **still populated** — the breakdown
-   survives.
+4. `v_season_kpis.competition_hours` is **still populated** (`3.0` in the gate's fixture) — the
+   breakdown survives. **Assert on `competition_hours` only.** *Measure* `meeting_hours` and report
+   it, but do NOT assert it non-zero: the gate proved it is **structurally frozen at 0** — the
+   `hours_by_type` CTE joins `and e.counts_volunteer_hours` and no app path ever sets that flag true
+   on a meeting, so making it non-zero needs a hand-run `UPDATE` no UI can issue. Filed as **T704**;
+   out of scope here.
 5. An event titled like `GG FLL Team Meetings` but typed `outreach` **counts in full**.
+
+## Blast radius of "fix both" — enumerated by the gate, expect these to change
+
+`v_student_hours` feeds more than the Hours report. **All of these inherit outreach-only semantics,
+which is the ruling's intent, not a regression** — and the gate measured that dependents `coalesce`
+absent rows to honest zeros:
+
+`v_team_hours` (`membership_views.sql:86-91`) · `v_season_roster_stats` (`dashboard_views.sql:132`) ·
+`v_student_goal_projection` (`dashboard_views.sql:322`) · `loaders/leaderboard.ts:138` ·
+`loaders/reports.ts:398` · `send-reminders/index.ts:512` and the weekly digest ·
+CoachHome / StudentHome / ParentHome via the dashboard views.
+
+**One disclosed nuance:** a student whose *only* hours came from a flag-on competition **drops off
+the leaderboard** rather than showing 0. No live data is in that state today. Report it if your
+fixtures reach it; do not "fix" it here.
 
 ## Acceptance criteria — each names a mutation that turns it red
 
@@ -123,10 +153,17 @@ Seed fixtures for **all three types**, with attendance on completed sessions, an
 | 5 | The card says volunteer hours | Revert the label → a `KpiStrip.test.tsx` assertion must FAIL |
 
 Criterion 4 is the guard against the exact mistake that has now confused three people.
+
+**Two design notes from the gate, both measured:** keep assertion 1's thresholds independent of the
+FLL event's hours, or mutation 4 lands on assertion 1 instead of assertion 5 — still red, but on the
+wrong assertion. And **use a fabricated title variant** (`Fixture GG FLL Team Meetings`), never the
+real event title verbatim — constitution item 6, fixtures use fabricated names.
 **A criterion whose mutation leaves the suite green is not evidence — report that instead of
 shipping it.**
 
-## Six gates, `.env.local` ABSENT — assert exit codes, not just counts
+## Gates, `.env.local` ABSENT — assert exit codes, not just counts
+
+(Seven commands: the six standard gates plus a cross-suite regression check.)
 
 ```
 npx tsc --noEmit ; echo $?
