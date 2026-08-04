@@ -55,7 +55,6 @@ import {
   goalProjectionShortHours,
   hasMilestoneToastFired,
   hoursVsGoalPercent,
-  isEventInTeamScope,
   isSeasonMissingSetup,
   isSelfOriginated,
   isSessionCheckInEligible,
@@ -193,39 +192,42 @@ afterEach(() => {
 const REF_NOW_MS = FIXTURE_REFERENCE_NOW.getTime();
 
 // ---------------------------------------------------------------------------
-// Pure functions -- isEventInTeamScope / sums
+// Pure functions -- sums
+//
+// T198 -- `describe('isEventInTeamScope')` is DELETED here, not disabled: the
+// function it covered no longer exists (owner-ruled season-wide, so this page
+// has no team-scope predicate at all). Tests for a deleted export cannot be
+// preserved. `StudentHome.tsx`/`ParentHome.tsx` keep their own same-named
+// predicates and their own tests -- untouched by this task.
 // ---------------------------------------------------------------------------
-
-describe('isEventInTeamScope', () => {
-  it('null team_ids means all teams', () => {
-    expect(isEventInTeamScope({ teamIds: null }, 'team-a')).toBe(true);
-  });
-  it('matches only listed team ids', () => {
-    expect(isEventInTeamScope({ teamIds: ['team-a'] }, 'team-a')).toBe(true);
-    expect(isEventInTeamScope({ teamIds: ['team-b'] }, 'team-a')).toBe(false);
-  });
-});
 
 describe('sumGoalHours / sumConfirmedHours', () => {
   const students: HomeStudentRow[] = [
     { id: 's1', displayName: 'A', teamId: 'team-a', isActive: true, goalHoursOverride: null },
     { id: 's2', displayName: 'B', teamId: 'team-a', isActive: true, goalHoursOverride: 8 },
     { id: 's3', displayName: 'C', teamId: 'team-a', isActive: false, goalHoursOverride: 20 }, // inactive
-    { id: 's4', displayName: 'D', teamId: 'team-b', isActive: true, goalHoursOverride: 5 }, // wrong team
+    // T198 -- was "// wrong team", excluded. Season-wide, a different team
+    // is INCLUDED; only `isActive` still filters.
+    { id: 's4', displayName: 'D', teamId: 'team-b', isActive: true, goalHoursOverride: 5 },
   ];
 
-  it('sums goal hours for active, team-scoped students only, falling back to the default', () => {
-    expect(sumGoalHours(students, 'team-a', 10)).toBe(18); // 10 (default) + 8 (override)
+  it('sums goal hours for ACTIVE students season-wide, falling back to the default', () => {
+    // T198 recomputed: was 18 when scoped to team-a (10 default + 8 override).
+    // Season-wide adds s4 (team-b, active, override 5); s3 still excluded as
+    // inactive. 10 + 8 + 5 = 23.
+    expect(sumGoalHours(students, 10)).toBe(23);
   });
 
-  it('sums confirmed hours from pre-computed rows, active+team-scoped only', () => {
+  it('sums confirmed hours from pre-computed rows, ACTIVE students season-wide', () => {
     const hoursRows = [
       { studentId: 's1', seasonId: 'season-1', confirmedHours: 3 },
       { studentId: 's2', seasonId: 'season-1', confirmedHours: 4 },
       { studentId: 's3', seasonId: 'season-1', confirmedHours: 100 }, // inactive, excluded
-      { studentId: 's4', seasonId: 'season-1', confirmedHours: 100 }, // wrong team, excluded
+      { studentId: 's4', seasonId: 'season-1', confirmedHours: 100 }, // T198: now INCLUDED
     ];
-    expect(sumConfirmedHours(students, 'team-a', hoursRows)).toBe(7);
+    // T198 recomputed: was 7 (3 + 4) when scoped to team-a. Season-wide adds
+    // s4's 100; s3 still excluded as inactive. 3 + 4 + 100 = 107.
+    expect(sumConfirmedHours(students, hoursRows)).toBe(107);
   });
 });
 
@@ -293,7 +295,7 @@ describe('buildLastCompletedMeetingSummary / attendanceRatePercent', () => {
   ];
 
   it('picks the most recent COMPLETED MEETING session, ignoring later outreach/future sessions', () => {
-    const summary = buildLastCompletedMeetingSummary(sessions, events, [], students, 'team-a');
+    const summary = buildLastCompletedMeetingSummary(sessions, events, [], students);
     expect(summary?.sessionId).toBe('latest');
     expect(summary?.title).toBe('Weekly Build');
   });
@@ -304,13 +306,7 @@ describe('buildLastCompletedMeetingSummary / attendanceRatePercent', () => {
       { sessionId: 'latest', studentId: 's2', status: 'absent' as const },
       { sessionId: 'old', studentId: 's1', status: 'present' as const }, // wrong session, ignored
     ];
-    const summary = buildLastCompletedMeetingSummary(
-      sessions,
-      events,
-      attendance,
-      students,
-      'team-a',
-    );
+    const summary = buildLastCompletedMeetingSummary(sessions, events, attendance, students);
     expect(summary).toEqual({
       sessionId: 'latest',
       title: 'Weekly Build',
@@ -323,8 +319,8 @@ describe('buildLastCompletedMeetingSummary / attendanceRatePercent', () => {
     expect(attendanceRatePercent(summary!)).toBe(50); // 1 of 2, not excused-adjusted
   });
 
-  it('returns null when no completed meeting exists yet for the team', () => {
-    expect(buildLastCompletedMeetingSummary([], events, [], students, 'team-a')).toBeNull();
+  it('returns null when no completed meeting exists yet this season', () => {
+    expect(buildLastCompletedMeetingSummary([], events, [], students)).toBeNull();
   });
 });
 
@@ -375,7 +371,7 @@ describe('isSessionCheckInEligible (60-minute boundary)', () => {
   });
 });
 
-describe('selectCheckInSession (meeting-type + team-scope + eligibility, all combined)', () => {
+describe('selectCheckInSession (meeting-type + eligibility, season-wide)', () => {
   const events: HomeEventRow[] = [
     { id: 'e-meeting', seasonId: 's1', type: 'meeting', title: 'Build', teamIds: ['team-a'] },
     {
@@ -411,11 +407,16 @@ describe('selectCheckInSession (meeting-type + team-scope + eligibility, all com
         status: 'scheduled',
       },
     ];
-    const result = selectCheckInSession(sessions, events, 'team-a', REF_NOW_MS);
+    const result = selectCheckInSession(sessions, events, REF_NOW_MS);
     expect(result?.id).toBe('meeting-eligible');
   });
 
-  it('excludes an otherwise-eligible meeting session outside the requested team scope', () => {
+  // T198 -- this test's premise is INVERTED, not dropped. It previously
+  // asserted that an eligible meeting on another team was EXCLUDED; under the
+  // owner's season-wide ruling it must now be RETURNED. Kept (rather than
+  // deleted) because it is the sharpest single proof the scoping actually
+  // changed: same fixture, opposite expectation.
+  it('INCLUDES an eligible meeting session belonging to another team (season-wide)', () => {
     const sessions: HomeSessionRow[] = [
       {
         id: 'other-team-eligible',
@@ -425,7 +426,7 @@ describe('selectCheckInSession (meeting-type + team-scope + eligibility, all com
         status: 'scheduled',
       },
     ];
-    expect(selectCheckInSession(sessions, events, 'team-a', REF_NOW_MS)).toBeNull();
+    expect(selectCheckInSession(sessions, events, REF_NOW_MS)?.id).toBe('other-team-eligible');
   });
 
   it('returns null when nothing is eligible', () => {
@@ -438,7 +439,7 @@ describe('selectCheckInSession (meeting-type + team-scope + eligibility, all com
         status: 'scheduled',
       },
     ];
-    expect(selectCheckInSession(sessions, events, 'team-a', REF_NOW_MS)).toBeNull();
+    expect(selectCheckInSession(sessions, events, REF_NOW_MS)).toBeNull();
   });
 });
 
@@ -458,7 +459,7 @@ describe('countUpcomingSessionsInNextDays', () => {
     { id: 'e-other-team', seasonId: 's1', type: 'meeting', title: 'Y', teamIds: ['team-titans'] },
   ];
 
-  it('counts scheduled sessions starting within the window, excludes already-started, far-future, non-scheduled, and out-of-team-scope ones', () => {
+  it('counts scheduled sessions starting within the window season-wide, excluding already-started, far-future and non-scheduled ones', () => {
     const sessions: HomeSessionRow[] = [
       {
         id: 'in-window',
@@ -503,9 +504,9 @@ describe('countUpcomingSessionsInNextDays', () => {
         status: 'scheduled',
       },
     ];
-    expect(
-      countUpcomingSessionsInNextDays(sessions, events, PLACEHOLDER_CURRENT_TEAM_ID, REF_NOW_MS),
-    ).toBe(2);
+    // T198 recomputed: was 2 (in-window + exactly-7-days on e1). Season-wide
+    // also counts `other-team-in-window` (e-other-team, scheduled, +60s), so 3.
+    expect(countUpcomingSessionsInNextDays(sessions, events, REF_NOW_MS)).toBe(3);
   });
 });
 
@@ -542,7 +543,7 @@ describe('buildNextUp', () => {
         status: 'scheduled',
       },
     ];
-    const rows = buildNextUp(sessions, events, [], 'any-team', REF_NOW_MS);
+    const rows = buildNextUp(sessions, events, [], REF_NOW_MS);
     expect(rows.map((r) => r.sessionId)).toEqual(['live', 'later']);
     expect(rows[0].type).toBe('meeting');
     expect(rows[1].type).toBe('outreach');
@@ -566,7 +567,7 @@ describe('buildNextUp', () => {
       { id: 'r2', sessionId: 's1', studentId: 'b', status: 'going', updatedAt: '' },
       { id: 'r3', sessionId: 's1', studentId: 'c', status: 'declined', updatedAt: '' },
     ];
-    const rows = buildNextUp(sessions, events, rsvps, 'any-team', REF_NOW_MS);
+    const rows = buildNextUp(sessions, events, rsvps, REF_NOW_MS);
     expect(rows[0].goingCount).toBe(2);
   });
 });
@@ -1019,58 +1020,48 @@ describe('defaultLoadCoachHomeData (shipped fixture composition, against FIXTURE
     data = await defaultLoadCoachHomeData('season-placeholder-current');
   });
 
-  it('team participation is read verbatim from the fixture (no arithmetic)', () => {
-    expect(data.teamParticipation?.participationPct).toBe(82.4);
+  it('season participation is read verbatim from the fixture (no arithmetic)', () => {
+    expect(data.seasonParticipation?.participationPct).toBe(82.4);
   });
 
-  it('hours vs goal: 12 confirmed / 38 goal = 31.6%, crossing only the 25% milestone', () => {
-    const goalHours = sumGoalHours(
-      data.students,
-      PLACEHOLDER_CURRENT_TEAM_ID,
-      data.defaultGoalHours,
-    );
-    const confirmedHours = sumConfirmedHours(
-      data.students,
-      PLACEHOLDER_CURRENT_TEAM_ID,
-      data.studentHours,
-    );
-    expect(goalHours).toBe(38);
+  it('hours vs goal season-wide: 12 confirmed / 48 goal = 25%, crossing only the 25% milestone', () => {
+    const goalHours = sumGoalHours(data.students, data.defaultGoalHours);
+    const confirmedHours = sumConfirmedHours(data.students, data.studentHours);
+    // T198 recomputed: goal was 38 when scoped to the placeholder team; the
+    // Titans student's 10h default now counts too, so 48. Confirmed hours are
+    // unchanged at 12 (that student has no confirmed hours in the fixture),
+    // which is itself the proof the two sums moved independently.
+    expect(goalHours).toBe(48);
     expect(confirmedHours).toBe(12);
     const percent = hoursVsGoalPercent(confirmedHours, goalHours);
-    expect(percent).toBe(31.6);
+    expect(percent).toBe(25);
     expect(crossedMilestones(percent)).toEqual([25]);
   });
 
-  it('last completed meeting attendance rate: 3 of 4 active roster = 75%', () => {
+  it('last completed meeting attendance rate season-wide: 3 of 5 active roster = 60%', () => {
     const summary = buildLastCompletedMeetingSummary(
       data.sessions,
       data.events,
       data.attendance,
       data.students,
-      PLACEHOLDER_CURRENT_TEAM_ID,
     );
     expect(summary?.title).toBe('Weekly Build Meeting');
-    expect(attendanceRatePercent(summary!)).toBe(75);
+    // T198 recomputed: rosterSize was 4 (active students on the placeholder
+    // team); season-wide it is 5. Present+late is unchanged at 3, so 3/5 = 60.
+    expect(summary?.rosterSize).toBe(5);
+    expect(attendanceRatePercent(summary!)).toBe(60);
   });
 
-  it('events in next 7 days = 2 (food bank +2h, regionals +5d), excludes far-future/live/wrong-team', () => {
+  it('events in next 7 days season-wide = 4, still excluding far-future/live/non-scheduled ones', () => {
     expect(
-      countUpcomingSessionsInNextDays(
-        data.sessions,
-        data.events,
-        PLACEHOLDER_CURRENT_TEAM_ID,
-        REF_NOW_MS,
-      ),
-    ).toBe(2);
+      countUpcomingSessionsInNextDays(data.sessions, data.events, REF_NOW_MS),
+      // T198 recomputed: was 2 (food bank +2h, regionals +5d) under the
+      // placeholder team scope; the Titans sessions now count too.
+    ).toBe(4);
   });
 
   it('check-in eligible session is the live meeting, never the Titans-scoped near-term one', () => {
-    const session = selectCheckInSession(
-      data.sessions,
-      data.events,
-      PLACEHOLDER_CURRENT_TEAM_ID,
-      REF_NOW_MS,
-    );
+    const session = selectCheckInSession(data.sessions, data.events, REF_NOW_MS);
     expect(session?.id).toBe('session-build-live-now');
   });
 
@@ -1118,7 +1109,7 @@ describe('<CoachHome /> DES-12 states', () => {
     renderAsUser(COACH_USER, { loadData: fixtureLoadData, nowFn: () => FIXTURE_REFERENCE_NOW });
     await flushMicrotasks();
 
-    expect(container.textContent).toContain('Team participation');
+    expect(container.textContent).toContain('Participation');
     expect(container.textContent).toContain('Hours vs. team goal');
     expect(container.textContent).toContain('Last meeting attendance');
     expect(container.textContent).toContain('Events in next 7 days');
@@ -1129,8 +1120,11 @@ describe('<CoachHome /> DES-12 states', () => {
     expect(container.textContent).toContain('Next up');
     expect(container.textContent).toContain('Community Food Bank Sort');
     expect(container.textContent).toContain('Regionals Qualifier');
-    // Titans-scoped session must never appear (team-scope exclusion).
-    expect(container.textContent).not.toContain('Titans Strategy Session');
+    // T198 -- INVERTED, not deleted. This asserted a Titans-scoped session
+    // could never appear; season-wide it must. Same fixture, opposite
+    // expectation -- the sharpest proof in this suite that the page stopped
+    // filtering by team.
+    expect(container.textContent).toContain('Titans Strategy Session');
 
     // T203 (criterion 3): `renderAsUser`'s harness merge (§7a) supplies the
     // fixture `loadLeaderboardData`/`loadLeaderboardPrivacySetting` defaults
@@ -1274,7 +1268,7 @@ describe('<CoachHome /> T155 -- season-status literals (criterion 3)', () => {
     // Retry re-ran loadActiveSeason, which now resolves -- 'ready' delegates
     // to CoachHomeContent, proving Retry is genuinely wired to
     // activeSeason.refresh(), not a dead click handler.
-    expect(container.textContent).toContain('Team participation');
+    expect(container.textContent).toContain('Participation');
     expect(container.textContent).not.toContain("Couldn't load the active season");
   });
 
@@ -1356,7 +1350,7 @@ describe('<CoachHome /> T155 -- fail-loud without a <SeasonProvider> ancestor (c
     // CoachHome itself rendered real content -- proof the probe (CoachHome
     // calling useActiveSeason() at its own top level) genuinely did not
     // throw here, not merely that nothing crashed before it ran.
-    expect(container.textContent).toContain('Team participation');
+    expect(container.textContent).toContain('Participation');
   });
 });
 
@@ -1417,13 +1411,25 @@ function makeCoachHomeStubClient(
     if (table === 'students') {
       return { select: vi.fn().mockResolvedValue({ data: students, error: null }) };
     }
-    throw new Error(`unexpected table: ${table}`);
+    // T198 -- the loader now reads six more tables/views. They resolve EMPTY
+    // here on purpose: this suite's point is that a real, non-fixture season
+    // produces honest empties, and empty tables are exactly that. Without
+    // these the dispatcher's throw would surface as "Couldn't load Home" and
+    // the assertions below would never run.
+    const emptyChain = {
+      eq: () => emptyChain,
+      in: () => emptyChain,
+      maybeSingle: async () => ({ data: null, error: null }),
+      then: (resolve: (v: { data: never[]; error: null }) => unknown) =>
+        Promise.resolve({ data: [], error: null }).then(resolve),
+    };
+    return { select: () => emptyChain };
   });
   return { from: fromSpy } as unknown as SupabaseClient;
 }
 
 describe('<CoachHome /> T173 -- measured-reality proof for a REAL, non-placeholder season with a REAL loaders/coachHome loader (criterion 5)', () => {
-  it('Test A (non-empty teams): genuinely empties four widgets, floors "Hours vs. team goal" to an honest 0 / 1 hrs (no real student matches the still-placeholder teamId), shows the real "Default goal 45h" from the active season, and clears the admin Season-setup card', async () => {
+  it('Test A (non-empty teams): genuinely empties four widgets, now counts the real student\'s own 18h override season-wide (0 / 18 hrs), shows the real "Default goal 45h" from the active season, and clears the admin Season-setup card', async () => {
     window.localStorage.clear();
     const stubClient = makeCoachHomeStubClient(
       [{ id: 'team-real-falcons', name: 'Falcons' }],
@@ -1433,7 +1439,7 @@ describe('<CoachHome /> T173 -- measured-reality proof for a REAL, non-placehold
           display_name: 'Jamie Osei',
           team_id: 'team-real-falcons', // NOT PLACEHOLDER_CURRENT_TEAM_ID.
           is_active: true,
-          goal_hours_override: 18, // Distinctive; not asserted directly, exercises the field.
+          goal_hours_override: 18, // T198: now genuinely asserted below (0 / 18 hrs).
         },
       ],
     );
@@ -1457,11 +1463,14 @@ describe('<CoachHome /> T173 -- measured-reality proof for a REAL, non-placehold
     );
     await flushMicrotasks();
 
-    // Honest empties -- all four reach empty via the `events`/`sessions`/
-    // `attendance` literal-empty fields this loader returns (unaffected by
-    // this change, still exercised the same way: six `expect` calls
-    // covering four widgets total).
-    expect(kpiCardValue('Team participation')).toBe('—');
+    // Honest empties. T198 CHANGED WHY THIS PASSES, and the distinction is
+    // the whole point of the suite: these widgets used to empty because no
+    // real student matched `PLACEHOLDER_CURRENT_TEAM_ID`. That placeholder is
+    // gone. They now empty because the stub's `events`/`event_sessions`/
+    // `attendance`/`v_season_attendance_rate` genuinely return no rows --
+    // a real empty result, not a scope mismatch. Same assertions, honest
+    // mechanism.
+    expect(kpiCardValue('Participation')).toBe('—');
     expect(container.textContent).not.toContain('82.4%'); // the fixture-only participation value must be genuinely gone
     expect(container.textContent).toContain('No completed meetings yet this season'); // last-meeting attendance secondary
     expect(kpiCardValue('Last meeting attendance')).toBe('—');
@@ -1478,7 +1487,12 @@ describe('<CoachHome /> T173 -- measured-reality proof for a REAL, non-placehold
     // ruling #1's "floors to honest zero" consequence, measured here, not
     // just claimed). This assertion is driven entirely by `teams`/`students`
     // (the stub client), not by `defaultGoalHours`'s source.
-    expect(container.textContent).toContain('0 / 1 hrs');
+    // T198 recomputed: was `0 / 1 hrs`, the floored value produced when no
+    // real student matched `PLACEHOLDER_CURRENT_TEAM_ID`. Season-wide, this
+    // student's own `goal_hours_override: 18` is the denominator -- which
+    // also means the fixture field that was previously "not asserted
+    // directly" is now load-bearing.
+    expect(container.textContent).toContain('0 / 18 hrs');
     expect(container.textContent).not.toContain('0 / 38 hrs');
 
     // Proves `hasGoalsConfigured: true` + non-empty teams correctly clears
