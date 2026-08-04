@@ -79,6 +79,10 @@ section used to name:**
   `trg_attendance_touch_updated_at`. See the warning below.
 - `20260803000001_revoke_anon_leaderboard_students.sql` (**T205**)
 - `20260804000000_volunteer_hours_outreach_only.sql` (**T322**) — hours totals drop visibly; meeting
+- `20260804000001_widen_rsvp_read_all_authenticated.sql` (**T503**) — **applied later the same day.**
+  Widens `rsvps` SELECT to any authenticated user, a deliberate PRD 8.3 deviation recorded as **D013** on
+  the D002 pattern (PRD text intentionally unedited). Its header also carries **D010**'s comment
+  correction, per the owner's option-B ruling — no applied migration was edited.
   and competition hours leave the volunteer-hours figure per his ruling. Intended.
 
 **⚠️ The ordering hazard that nearly bit, recorded so the next one is caught deliberately.**
