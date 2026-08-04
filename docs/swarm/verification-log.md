@@ -8724,6 +8724,190 @@ fixture data, so a rig using it measures an empty page.
 
 ---
 
+## T704 — the `Meetings` term leaves the KPI breakdown
+
+**Tier: FAST** (constitution item 26), stated and defended: no write path, no schema/RLS/auth, no
+cross-module signature change, well under ~20 lines of production change, and a named mutation
+exists. **Verification was not reduced** — FAST removes coordination, not evidence. Implemented
+directly by the orchestrator, which is what FAST prescribes.
+
+**Authority.** Owner ruling 2026-08-04, verbatim *"for T704, drop the meetings term from the
+breakdown"* — option (a) of three the row offered. It also authorized updating the two passing
+assertions that asserted the removed string (`KpiStrip.test.tsx:306`, `:362`); the Non-Negotiables
+require explicit owner approval for that, and it covers those two only.
+
+### Why the figure had to go rather than be fixed
+
+`v_season_kpis.meeting_hours` is a filtered sum over a CTE that joins `and e.counts_volunteer_hours`,
+and meetings are created with that flag hardcoded `false` (`loaders/meetings.ts:690`) with **no app
+path that edits it** — verified by the T322 premise gate, which found this as MINOR-2 and filed it
+rather than folding it into that task. The figure is **structurally frozen at `0.0`**. `KpiStrip`
+rendered it beside two live numbers, presenting a dead figure as a live one.
+
+**This resolved a genuine tension in the owner's own earlier ruling.** The 2026-08-03 T322 ruling
+said meeting and competition hours are *"still tracked and still displayed as their own figure."*
+Competition is. **Meeting could not be.** Rather than leave the contradiction unremarked, it was put
+to him.
+
+Consistent with the same ruling's other half — *"meeting participation stays its own separate
+figure"* — meeting attendance is measured as a **participation percentage**, not as hours. Removing
+an always-zero hours term removes no meeting measurement, only a misleading one.
+
+### What changed, and what deliberately did not
+
+`formatHoursBreakdown` now renders `Outreach … · Competitions …`. **`meetingHours` stays** on
+`KpiStripData`, in `loaders/kpi.ts`, and in `v_season_kpis` — still tracked, just not displayed here.
+**No migration, no view change, no loader change.**
+
+`KpiStrip.test.tsx:362`'s fixture keeps `meetingHours: 2.0` — **a value the production view cannot
+generate** — to prove the field is still carried, with an explicit comment saying so and an assertion
+that it is not rendered.
+
+### Mutation evidence
+
+| Mutation | Result |
+|---|---|
+| Restore the `Meetings` term to `formatHoursBreakdown` | **RED on both intended assertions** — `expected 'Volunteer hours20.5Meetings 0.0h · Ou…' not to contain 'Meetings'` and `expected 'Volunteer hours10.5Meetings 2.0h · Ou…' not to contain 'Meetings'` |
+| Revert | 15 passed |
+
+Committed before mutating (item 26's own rule, learned from T323 and re-learned by this orchestrator
+earlier today).
+
+### Gates, `.env.local` absent
+
+`tsc --noEmit` 0 · `vite build` 0 · `format:check` 0 · `eslint .` **0 errors / 364 warnings**
+(unchanged) · `vitest run` 0 — **78 files / 1951 tests**.
+
+**Incidental confirmation:** the mutation output shows the card label reading **"Volunteer hours"**,
+independently confirming T322 landed on `main`.
+
+---
+
+## T152 — T147's parallel-load guard now discriminates in both directions, and the blind spot was wider than filed
+
+**Tier: FAST** (constitution item 26), defended: **test-only**. No write path, no schema/RLS/auth, no
+signature change, one file. The orchestrator implemented it directly; no worker, no gate. Named
+mutations exist and all of them were run.
+
+### What was wrong
+
+T147's guard proves batching by **position**: `expect(callOrder.slice(1, 5).sort()).toEqual([...])`.
+Sorting throws away exactly the information the claim needs — the slice is set-equal under
+arrangements that are genuinely serial.
+
+### The blind spot is wider than the ledger row said — measured, not argued
+
+The row claimed one missed direction (teams hoisted ahead of the batch) and that serializing teams
+*after* the batch is correctly caught. Running all three:
+
+| Mutation | Before T152 | After T152 |
+|---|---|---|
+| **A** — `loadTeams()` hoisted to a serial `await` **before** the batch | **PASSED** (filed) | **RED** |
+| **B** — `loadTeams()` serialized **between** the two batches | **PASSED** — *not filed; a second, unknown blind spot* | **RED** |
+| **C** — `loadTeams()` serialized after `rsvps`/`attendance` | RED (`expected 4 to be greater than 6`) | RED |
+| **D** — `loadStudents()` serialized ahead | **never guarded at all** — the test only ever watched `teams` | **RED** |
+
+**B is a genuine extra serial round trip** and slipped through because moving `teams` to just after
+the first batch keeps it inside slice positions 1-4. **D** was never in scope of the original
+assertions, which name only `teams`/`rsvps`/`attendance`.
+
+### The fix
+
+Position cannot express the claim, so the guard now asserts **what resolved in between**.
+`Promise.all([a, b, c, d])` evaluates its array **synchronously**, so no microtask can run between the
+first and last call. Every mocked resolution bumps a `resolutionCount` when it **delivers**, each
+`from()` records the count it saw, and the four zero-dependency queries must record the **same** count.
+Any `await` between them drains microtasks and moves it.
+
+The original position assertions are **kept unchanged** — they are not wrong, only weak, and they are
+T147's shipped evidence. The new assertion is additive. A final
+`expect(batchIssueCount).toBeGreaterThan(0)` rules out the trivial all-zero case, so the equality
+cannot pass by nothing having resolved at all.
+
+No timers and no barrier-with-deadlock: a serialized implementation fails on a value comparison that
+names the offending query, not by timing out.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise** · vitest **78 files / 1951
+tests**, targeted `OutreachList.test.tsx` **108 passed, exit 0** · build ✓. `.env.local` absent.
+
+### One process note
+
+The first attempt at this edit used unbounded string replacement and matched a **different** test's
+identical mock block, producing a syntax error. Redone bounded to the target `it()` block's line
+range. Same failure mode as T306's 33-call-site over-replacement; the lesson did not stick the first
+time.
+
+---
+
+## T300 — `OutreachEventDialog`'s placeholder coach id becomes impossible, not merely unreachable
+
+**Tier: STANDARD** (constitution item 26), stated and defended: no write-path *logic* change, no
+schema/RLS/auth, and it rolls out a pattern already built, reviewed and merged as **T179** for the two
+sibling dialogs on this same page — item 19b's *"applying a proven pattern to a second surface"*. It is
+**not FAST**, because making `currentUserProfileId` required **changes a signature another module
+imports**, which item 26's FAST tier explicitly excludes. Worker implemented; **orchestrator replayed
+every mutation independently**; no separate checker round.
+
+### The defect
+
+`OutreachEventDialog.tsx` declared its **own independent**
+`PLACEHOLDER_CURRENT_COACH_PROFILE_ID = 'profile-placeholder-current-coach'` — the same literal
+`MarkDayCompleteDialog.tsx`'s was, but a separate declaration, so T179 deleting that one never touched
+this. `currentUserProfileId` defaulted to it, and the live call site passed `user?.id`
+(`string | undefined`), so a null `user` would silently substitute a **non-uuid string into a real
+`profiles.id` position** (`respondedBy`).
+
+**Latent, not live-firing** — the dialog's triggers are the staff-only `MoreMenu` "Edit" item and the
+create flow, both requiring a signed-in user. **Worth closing anyway, and that is the point:** the
+required-prop change makes the defect **impossible** rather than **currently unreachable**, the
+distinction the whole T179 family exists to draw.
+
+### Orchestrator's independent mutation replay
+
+Every criterion re-run by the orchestrator on its own worktree, not taken from the worker's report:
+
+| # | Mutation | Result |
+|---|---|---|
+| **C1** | re-add the export | vitest **exit 1** — `expected true to be false`, asserted against the real **module namespace object**, not a grep |
+| **C2** | prop required, call site omits it | `tsc` **exit 2** — `TS2741: Property 'currentUserProfileId' is missing … but required in type 'OutreachEventDialogProps'` |
+| **C2 (control)** | *same* omission, optional+default restored | `tsc` **exit 0** — proving the default is exactly what removes the guard |
+| **C3** | hardcode a different id into `respondedBy` | vitest **exit 1**, 2 real assertions |
+| **C4** | restore `user?.id` at the call site | `tsc` **exit 2** — `TS18047: 'user' is possibly 'null'` |
+
+**C2 and C4 are typecheck criteria and that is the whole point of this task** — the fix converts a
+runtime substitution into a compile-time impossibility, and a green vitest run demonstrates neither.
+
+### Two packet errors the worker found, both confirmed by the orchestrator
+
+1. **§3.2's "mirror T179's module doc, which names the deleted constant" is false.**
+   `MarkDayCompleteDialog.tsx` contains **zero** occurrences of `PLACEHOLDER` anywhere — by that
+   task's own design. T300's C1 requires the opposite (name it in prose so the reader knows what went
+   and why). The worker followed C1 and was right to.
+2. **C2's named mutation ("restore the default") is vacuous as literally written.** Adding a runtime
+   default back to a still-required prop produces **zero** `tsc` errors, because no call site omits it.
+   The worker substituted a paired experiment; the orchestrator re-ran that pair, above. **This is the
+   third vacuous-rather-than-red criterion caught in this workflow** (T401's row count, T190's C3,
+   now this) — the failure mode is a criterion whose mutation does not actually remove the guard.
+
+### §3.3 — which gate shape, and why
+
+`{user !== null && ( … )}`, **not** `isStaffViewer && user !== null`. This call site is edit-mode only
+and its sole trigger (`openEditDialog`) is reachable only through the staff-only "Edit" `MoreMenu`
+item, so `isStaffViewer` would be redundant *and* would narrow who can open the dialog. The file's
+closer precedent for staff-only-*triggered* dialogs (`MarkEventCompleteDialog` /
+`MarkDayCompleteDialog`) already uses plain `user !== null`. **This task removes a placeholder; it does
+not change who can open the dialog.**
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise** · vitest **78 files / 1952
+tests** (1951 + the new C1 test), targeted `OutreachEventDialog.test.tsx` + `OutreachDetail.test.tsx`
+**186 passed, exit 0** · build ✓. `.env.local` absent. `OutreachDetail.test.tsx` needed zero changes.
+
+---
+
 ## T301 — the "LOAD-BEARING" comments in `OutreachDetail.tsx` were false, and there were two of them, not three
 
 **Tier: FAST** (constitution item 26), and defended: comment-only. No write path, no schema/RLS/auth,
