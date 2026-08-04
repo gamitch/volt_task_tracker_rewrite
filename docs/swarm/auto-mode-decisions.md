@@ -2657,3 +2657,41 @@ genuinely worth doing.** **T163 is genuinely unknown** and should be measured, n
 direction. The claim that ~2,200 lines are falsely advertised as untested **should be read as ~1,455
 at most** (T162's 726, now closed, plus T163's 729, unverified) — **not** the four-row, 2,231-line
 figure stated in PR #56.
+
+---
+
+## 2026-08-04 — George's ruling: W3 gets `LiveConsole.tsx` FOR T196's MOUNT ONLY; T400 is un-sequenced from T196's wave
+
+**Two decisions, both put to him with the evidence, both taken as recommended.**
+
+### Ruling 1 — scoped grant, not wholesale ownership
+
+**T196 is a W3 row whose mount target is a W1 file.** `WORKFLOWS.md:97` lists
+`pages/meetings/LiveConsole.tsx` under W1's *Owns*, and W3's own section says outright: *"Do not put
+`LiveConsole.tsx` in W3's allowed files. It belongs to W1."* T196 cannot be done without editing it.
+
+**Granted: W3 may edit `LiveConsole.tsx` FOR T196's MOUNT SPECIFICALLY** — replacing the
+`handleEndMeetingClick` stub (`:1152-1158`) and its `StubBanner`, and rendering `EndMeetingDialog`
+wired to its three real backends. **Same shape as the 2026-08-03 attendance-schema grant: scoped to
+the work, not wholesale.**
+
+**Still W1's, untouched by this grant:** the console's roster query, QR/short-code panel,
+`makeDefaultSetAttendanceStatus` and every other attendance-write internal, and `Kiosk.tsx`. **If
+T196 finds itself changing how the console loads or writes attendance, it has left its grant** and
+must stop and raise it.
+
+### Ruling 2 — T400 is un-sequenced from this wave
+
+T400 (a live-session picker on `/checkin` for students who cannot scan; owner-ruled option (a) on
+2026-08-02) had been *"sequenced into T196's wave"*. **It is now separated: the mount lands first,
+T400 is packeted afterwards.**
+
+**Reason, and it is a scope-honesty one:** the mount is **wiring** — `EndMeetingDialog` is built and
+tested, all three backends in `endMeeting.ts` are built and tested, and the three props line up
+one-to-one with the three factories. T400 is an **unbuilt feature** on a different page. Bundling
+them roughly doubles the wave and hides a real feature inside a task described as a mount. The
+shared open-sessions query was the original argument for combining them; that saving is smaller than
+the risk of one HEAVY wave carrying both.
+
+**T400 remains owner-ruled option (a) and remains W1's file (`pages/checkin/**`).** Un-sequencing it
+from T196 does **not** grant it to W3.
