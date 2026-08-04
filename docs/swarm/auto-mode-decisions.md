@@ -2195,6 +2195,36 @@ of which cost nothing and each of which caught something:
 
 ---
 
+## 2026-08-03 — George's ruling on T503: students SHOULD see teammates' RSVPs. The fix is to widen access, not to hide the buckets.
+
+**Verbatim:** *"for T503, it is ok if students see other teammates rsvp's they often want to know which
+freinds are coming to an event and we quite frankly do that currently through thumbs up in chat."*
+
+**This settles the product half and reverses the direction of the fix.** T503 was filed with two
+possible shapes: widen RLS so students can read teammates' `rsvps`, or stop showing other students'
+buckets to non-staff. **He chose visibility** — and gave the reason, which is worth keeping: the team
+already does this informally in chat, so the app showing it is matching existing behaviour rather than
+introducing exposure. **Do not re-file this as a privacy concern.** Item 25's threat model applies: one
+small volunteer team, no PII stored, and the leaderboard already shows everyone's hours.
+
+**What is NOT settled, and must not be improvised.** The current policy is
+`own_or_linked_read on rsvps` — `student_id in (select my_student_ids())`
+(`20260717000002_rls.sql:201-203`). Widening it is a **schema change**, and two constitution items bite:
+
+- **Item 3:** *"RLS policies and metric SQL come **only** from PRD Section 8.4, copied verbatim.
+  Re-deriving either → BLOCKER."* PRD 8.3 currently specifies `read own` for `rsvps`. So this needs
+  either a PRD amendment or an explicitly recorded, owner-authorised deviation — **not** an
+  orchestrator writing a new policy from first principles.
+- **Item 10:** additive migration via the Supabase CLI; editing an applied migration file is a BLOCKER.
+
+**Scope question still open:** "teammates" needs a definition in policy terms — every student in the
+season, or only students on a team sharing the event (`events.team_ids`)? The narrower one matches how
+this app already scopes rosters. **That is a real product/security question and it stays with the
+owner**; it is not covered by the ruling above, which answers *whether*, not *how far*.
+
+**Also unchanged: T306's attendance view stays staff-only.** This ruling is about **RSVP intent**, not
+attendance. `attendance` carries recorded hours and check-in provenance, and its RLS
+(`:226-232`) is a separate policy. Nothing here authorises widening that.
 ## 2026-08-03 — George's ruling on T702: DROP the adult-volunteer totals from the Hours report
 
 **Structured selection.** He was given three options — (a) filter the adult figures to

@@ -145,7 +145,14 @@ RULES THAT ARE NOT OPTIONAL:
 
 ## W3 — Run a meeting
 
-> Thin, and mostly waiting on W1. Do not give this a machine of its own.
+> **No longer waiting on W1** (T403 landed 2026-08-03). Still thin — four rows.
+>
+> **Two ways to dispatch this, and they are not interchangeable:**
+> - **§W3-A below — the three-row hygiene wave (T197 → T162 → T160).** No open decisions in any
+>   of them. **This is the one that is safe to run unattended.**
+> - **§W3 (full) — this block, including T196.** T196 is a project, not a ticket, carries an open
+>   owner call, and its failure mode is real `absent` rows written against real students.
+>   **Do not run it unsupervised.**
 
 ```
 You are the orchestrator for the MEETINGS workflow on the VOLT team portal.
@@ -165,8 +172,9 @@ FILES YOU OWN:
   src/lib/supabase/loaders/endMeeting.ts
 
 DO NOT TOUCH src/pages/meetings/LiveConsole.tsx OR Kiosk.tsx. They are in your directory but
-they belong to W1, and LiveConsole is the entire reason your T196 mount is blocked. Two
-machines editing that file will collide.
+they belong to W1. (This used to add "and LiveConsole is the entire reason your T196 mount is
+blocked" — that reason is gone as of T403, but the ownership boundary is unchanged and two
+machines editing that file will still collide.)
 
 YOUR ROW-NUMBER BLOCK: T600-T699.
 
@@ -204,6 +212,115 @@ you treat that as a bug.
 RULES: item 24 (ledger + verification-log in the merge commit), item 22 (named pathspecs
 only), item 23 (mutations in your own worktree; commit before mutating). State your tier in
 the PR. Assert exit codes, not just pass counts.
+```
+
+---
+
+## W3-A — Run a meeting: the three-row hygiene wave (T197 → T162 → T160)
+
+> **Written 2026-08-03 for unattended operation.** This is W3 **minus T196**. Every row here is
+> self-contained, in W3's own files, with **no open owner decision**. Safe to launch and leave.
+>
+> **T196 is deliberately excluded.** It is a project, not a ticket; it carries an open owner call
+> (whether to import `loadEndMeetingSummary` from `endMeeting.ts`); and the defect it exists to
+> prevent is a coach marking 14 students present and getting 14 real `absent` rows. Packet it with
+> the owner present. If this wave finishes early, **stop** — do not roll into T196.
+
+```
+You are the orchestrator for a scoped MEETINGS hygiene wave on the VOLT team portal.
+The owner is away. You are running unattended.
+
+Read in this order: docs/swarm/RESUME-HERE.md (top-down, newest UPDATE first),
+docs/swarm/constitution.md (items 23, 24, 25, 26), then docs/swarm/WORKFLOWS.md section W3.
+
+MEASURE YOUR OWN BASELINE FIRST. main moves several times a day; every gate figure quoted in
+any doc is stale by the time you read it. Run tsc / eslint / prettier / vitest on your base
+commit and record the numbers before you change anything. "The suite was green" is not a
+baseline you may inherit.
+
+YOUR SCOPE IS EXACTLY THREE ROWS. Do not add a fourth.
+
+  T197 — STANDARD. DO THIS FIRST, and do not let its ledger row talk you out of the ordering.
+         endMeeting.ts:456-457's onEditAttendance is scoped .eq('session_id',…).eq('student_id',…).
+         Delete both and the suite still reports 14 passed (14) — while that mutation turns a
+         coach's single-student status edit into a TABLE-WIDE attendance UPDATE.
+         The shipped code is CORRECT. Nothing is broken. You are adding the missing assertion.
+         WHY FIRST: the row says it was filed separately "because T196 is blocked indefinitely."
+         T196 is no longer blocked, so that reasoning is void — but the conclusion flips the
+         other way, not toward folding it in. T196 is what MOUNTS this path in production.
+         Landing the guard BEFORE the path goes live is strictly better than bundling them.
+
+  T162 — STANDARD. loaders/meetings.ts has ZERO tests across 726 lines. Cover:
+         aggregateParticipationRows, makeLoadCoachMeetingsData, makeLoadStudentMeetingsData,
+         makeCancelMeetingSession, makeResolveCurrentStudentId, makeCreateMeetings —
+         the participation math and each mutation's Supabase call shape.
+         This is the loader behind the owner's OWN meeting-creation failure (T147), and
+         meetings.ts:570 still carries the fixture-fallback comment from that incident.
+         Highest regression value of the three.
+         THERE IS NO DRAFT PACKET. The ledger used to claim one was "in inbox"; it does not
+         exist and that cell is corrected. Write the packet yourself.
+
+  T160 — FAST. MeetingsList.tsx:548 declares `interface FixtureTeam`, used by the real prop at
+         :648 and by teamScopeLabel at :888 — while a genuine FIXTURE_TEAMS sits at :722.
+         T147 wired real Supabase data through that type (:2224 passes teams={teams} from
+         loadCoachMeetingsData), so the name now actively misleads. Rename only. No behaviour
+         change. Do it LAST — it touches a file T162 may also touch.
+
+FILES YOU OWN:
+  src/pages/meetings/MeetingsList.tsx
+  src/pages/meetings/ScheduleMeetingsDialog.tsx
+  src/pages/meetings/EndMeetingDialog.tsx
+  src/pages/meetings/StudentMeetingView.tsx
+  src/lib/supabase/loaders/meetings.ts
+  src/lib/supabase/loaders/endMeeting.ts
+
+DO NOT TOUCH LiveConsole.tsx or Kiosk.tsx — W1's, despite sitting in your directory.
+DO NOT TOUCH supabase/migrations/** — attendance schema is W1's, and every migration is HEAVY.
+DO NOT START T196.
+
+YOUR ROW-NUMBER BLOCK: T600-T699. File anything you find; do not fix out of scope.
+
+UNATTENDED POSTURE — the part that matters most:
+
+  YOU DECIDE ALONE: revising your own packets after gate findings; dispatching workers and
+  checkers; resuming a failed worker; fixing MINOR/NIT findings that are comment-only or
+  mechanical (disclose in the commit that they are unreviewed); committing and pushing to
+  your branch.
+
+  YOU DEFER TO THE OWNER — park the row, log it, move on, do NOT work around it:
+    - anything touching supabase/migrations/, RLS, security definer, metric-math SQL, or
+      auth/session/permission logic
+    - any THIRD gate REVISE on one packet (item 19a escalates to the human; with no human,
+      park it rather than loop or override)
+    - any product decision where two readings produce materially different UI
+    - opening or merging any PR
+  Log every decision you make alone in docs/swarm/auto-mode-decisions.md under a new
+  "W3-A auto-mode window" heading, marked as YOURS and reversible — never attributed to him.
+  Precedent to copy: the "W4+W5 auto-mode window" entry in that same file.
+
+TWO FAILURE MODES THIS PROJECT HAS PAID FOR, BOTH LIVE IN YOUR SCOPE:
+
+  1. A test can pass for the wrong reason (7+ recorded instances), and it can go VACUOUS
+     rather than red — T401 deleted an exported constant and a dependent test kept passing
+     while testing nothing (Array.from({length: undefined - 1}) → []). Only tsc caught it.
+     For T197 specifically: asserting ".eq was called" is a call-shape check and proves
+     nothing. Build a fake whose stored rows let a missing .eq produce an OBSERVABLE wrong
+     outcome — the wrong row count changing — the way T402's C2 did.
+
+  2. A premise can be true on the branch that states it and false on the branch you act on.
+     Check every premise against YOUR base commit, not against the doc that asserts it.
+
+MUTATIONS ARE THE ACCEPTANCE BAR, NOT THE TEST COUNT. Commit before mutating (item 23). For
+every criterion, break the code deliberately and show the suite goes RED AT EXIT 1. A green
+suite at exit 0 after a mutation means the criterion is not covered, regardless of pass count.
+
+RULES: item 24 (ledger + verification-log entry in the merge commit), item 22 (named pathspecs
+only), item 23 (mutations in your own worktree). State your tier per row in the PR.
+Assert exit codes, not just pass counts.
+
+WHEN THE THREE ROWS ARE DONE: stop. Write a short handoff at
+docs/swarm/active/W3A-handoff.md — what shipped, what you decided alone, what you parked, and
+your measured gate numbers. Do not roll into T196.
 ```
 
 ---

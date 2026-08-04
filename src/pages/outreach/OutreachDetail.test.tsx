@@ -103,7 +103,7 @@ import {
 // T157: `GuardianLinkRow` is reused from `ParentRsvp.tsx`'s own export, the
 // same type `OutreachDetail.tsx` and `loaders/outreach.ts` now both use --
 // this test constructs the exact rows the real loader would resolve.
-import type { GuardianLinkRow } from './ParentRsvp';
+import { resolveRsvpResponderAttribution, type GuardianLinkRow } from './ParentRsvp';
 
 // T117 (module doc above) -- partial mock so the new `<AttendancePanel>`
 // (rendered with no override props from `OutreachDetail.tsx` -- it has none
@@ -3551,5 +3551,49 @@ describe('"Mark day complete" dialog Cancel really closes/unmounts it (module do
     await flushMicrotasks();
 
     expect(findMarkDayCompleteDialogElement()).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T174 -- the shipped fixture must teach the RIGHT id-space.
+// ---------------------------------------------------------------------------
+
+describe('T174: FIXTURE_RSVPS.respondedBy holds profiles.id values, not students.id values', () => {
+  // `rsvps.responded_by` is `uuid references public.profiles (id)`
+  // (`20260717000000_scheduling_attendance.sql:72`). Every one of the seven
+  // fixture rows previously carried a `student-*` value there.
+  //
+  // There was NO production impact -- `FIXTURE_RSVPS` is reached only through
+  // `defaultLoadOutreachDetail`, never the real `loadData` -- and, verified
+  // before this fix, NO existing test asserted anything about those values.
+  // So the defect was invisible to the whole suite: the honest consequence is
+  // that this fix needed a NEW test to have any evidence at all, which is why
+  // this block exists rather than a mutation of an existing one.
+  //
+  // Why it mattered anyway: the fixture is what a future task reads to learn
+  // the shape of a real `RsvpRow`, so the confusion propagates by imitation.
+  // T157's own criterion-5 mutation showed the failure mode -- a wrong
+  // profile id makes `resolveRsvpResponderAttribution` fall through to
+  // `'unrecognized'` and tell a parent a stranger answered for their child.
+  it('every fixture RSVP attributes to its OWN student, never to "unrecognized"', async () => {
+    const data = await defaultLoadOutreachDetail('event-food-bank-sort');
+    expect(data).not.toBeNull();
+    const { rsvps, students } = data!;
+    expect(rsvps.length).toBeGreaterThan(0); // paired: prove there is something to check.
+
+    for (const rsvp of rsvps) {
+      const student = students.find((candidate) => candidate.id === rsvp.studentId);
+      expect(student, `no fixture student for rsvp ${rsvp.id}`).toBeTruthy();
+      // Run the REAL attribution resolver, not a string-prefix check: a
+      // prefix assertion would pass on any `profile-`-shaped typo, whereas
+      // this fails unless the value genuinely matches that student's profile.
+      const attribution = resolveRsvpResponderAttribution(
+        rsvp.respondedBy,
+        student!.id,
+        student!.profileId,
+        [],
+      );
+      expect(attribution.kind, `rsvp ${rsvp.id} misattributed`).toBe('self');
+    }
   });
 });
