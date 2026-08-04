@@ -1183,6 +1183,38 @@ describe('computeExpectedAttendeeRsvpPlan (T165) -- T119 D-7 reconciliation bran
     expect(plan.idsToDelete).toEqual(['rsvp-self']);
   });
 
+  // T165 (orchestrator addition after mutation replay): the delete filter has TWO
+  // conditions and, before this test, only `row.status === 'going'` was pinned.
+  // Dropping `!checkedSet.has(row.student_id)` left the whole suite green at 38/38,
+  // even though it makes every save delete the rows of students who are STILL
+  // checked. That is not a no-op dressed up as one: the plan is observably
+  // different (`['r2']` vs `['r1','r2']`), and on the real write path the row is
+  // deleted and re-upserted, which replaces a student's own self-authored 'going'
+  // with a coach-authored one -- exactly the intent-vs-record distinction T121
+  // established and `OutreachList.tsx` still carries.
+  it('a student who is STILL CHECKED keeps their existing going row -- it is not deleted and re-created -- mutation: drop `!checkedSet.has(row.student_id)` from the delete filter', () => {
+    const stillChecked = rsvpFixtureRow({
+      id: 'rsvp-keep',
+      student_id: 'student-keep',
+      status: 'going',
+      responded_by: 'student-keep',
+    });
+    const nowUnchecked = rsvpFixtureRow({
+      id: 'rsvp-drop',
+      student_id: 'student-drop',
+      status: 'going',
+    });
+
+    const plan = computeExpectedAttendeeRsvpPlan(
+      [stillChecked, nowUnchecked],
+      ['session-1'],
+      ['student-keep'],
+    );
+
+    // Only the unchecked student's row is deleted. `rsvp-keep` must NOT appear.
+    expect(plan.idsToDelete).toEqual(['rsvp-drop']);
+  });
+
   it("a 'maybe'/'declined' row for an unchecked student is left COMPLETELY UNTOUCHED -- an uncheck only ever clears a PLANNED ('going') entry, never a student's actual declined/maybe answer -- mutation: drop the `row.status === 'going'` condition from the delete filter", () => {
     const maybeRow = rsvpFixtureRow({ id: 'rsvp-maybe', student_id: 'student-x', status: 'maybe' });
     const declinedRow = rsvpFixtureRow({

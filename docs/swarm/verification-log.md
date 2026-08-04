@@ -9080,3 +9080,90 @@ shape T327 exists to avoid). Neither is proportionate for a provenance flag on a
 1955 tests** · build ✓. `.env.local` absent. `MarkDayCompleteDialog.tsx` needed **zero** edits, and
 `MarkEventCompleteDialog.test.tsx` (Forbidden) stayed green with **zero** edits — confirming the
 narrowing landed on the snake_case DB mapping only, leaving the camelCase builders untouched.
+
+---
+
+## T165 — cover the untested exports of `loaders/outreach.ts`, and correct the row (and the packet) that described them
+
+**Tier: STANDARD** (constitution item 26), stated and defended: **test-only, single file**. No
+production code changed at all — that is criterion C1, and it holds: `git diff` against the branch
+point for `src/lib/supabase/loaders/outreach.ts` is **empty**. Worker implemented; orchestrator
+replayed mutations and added one test the replay proved missing.
+
+### The ledger row's numbers were wrong, and so was the packet's correction of them
+
+The row says *"21 of 23 exports untested"*. Measured at `b9742b8`: the file has **27 `export`
+statements, 9 of them `type`/`interface`** → **18 value exports**, not 23. And the row names
+`makeMarkDayComplete` as a target while it is one of the **best-covered symbols in the file** after
+T327 and T406.
+
+**Then the packet made its own error, and the worker caught it.** Packet §1 measured coverage
+**only inside `outreach.test.ts`** and concluded five symbols were untested. A repo-wide search shows
+all five are already referenced by sibling page test files:
+
+| Symbol | Already referenced in |
+|---|---|
+| `computeExpectedAttendeeRsvpPlan` | `OutreachEventDialog.test.tsx` |
+| `makeSubmitRsvpChange` | `RsvpControl.test.tsx` |
+| `makeSaveOutreachEvent` | `OutreachEventDialog.test.tsx`, `OutreachList.test.tsx` |
+| `makeCancelOutreachEvent` | `OutreachDetail.test.tsx` |
+| `makeLoadOutreachEventRoster` | `OutreachEventDialog.test.tsx` |
+
+**Verified independently by the orchestrator.** The work still earns its place — several of the new
+tests are **outcome**-based where the pre-existing sibling coverage was **shape**-only
+(`toHaveBeenCalledWith`), and several branches were genuinely unguarded — but the packet overstated
+the gap, and this entry records that rather than quietly keeping the flattering framing.
+
+**The lesson, and it is the same one three times this session:** *scope your measurement to the claim
+you are making.* "Untested" is a repo-wide claim; measuring one file cannot establish it.
+
+### 19 tests, 19 named mutations — plus one the replay proved missing
+
+The worker added **19 tests with a 1:1 mutation ratio**, each mutation applied, run and reverted with
+red output recorded. The orchestrator replayed a sample. Two reddened hard. **One did not:**
+
+```
+M1  drop `!checkedSet.has(row.student_id)` from the delete filter
+    -> Tests 38 passed (38)   ***SUITE STAYED GREEN***
+```
+
+That mutation makes every save **delete the RSVP rows of students who are still checked**. It is not
+an equivalent mutation — the returned plan differs observably (`['r2']` vs `['r1','r2']`) — and on the
+real write path the row is deleted and re-upserted, replacing a student's own self-authored `'going'`
+with a coach-authored one. **That is precisely the intent-vs-record distinction T121 established.**
+
+The existing test that looked like it covered this passes an **empty** checked-set, so it pins the
+`status === 'going'` condition and never exercises the `checkedSet` guard. The delete filter has two
+conditions; only one was pinned.
+
+**The orchestrator added the missing test.** The packet's own C4 required this
+(*"`computeExpectedAttendeeRsvpPlan`'s branches are covered, not just one path"*), so it is a
+criterion miss, not scope creep. It now reddens:
+
+```
+AssertionError: expected [ 'rsvp-keep', 'rsvp-drop' ] to deeply equal [ 'rsvp-drop' ]
+      Tests  1 failed | 38 passed (39)
+```
+
+**This is the fourth mutation this session that was named in good faith and did not actually redden
+anything** (T401's row count, T190's C3, T300's C2, now this). Every one was found by *running* it.
+
+### C1 and C3, verified by the orchestrator
+
+- **C1** — `git diff --stat b9742b8 HEAD -- src/lib/supabase/loaders/outreach.ts` is **empty**.
+- **C3** — the test file diff has **zero** deleted lines (pure `+764`), and all five protected blocks
+  (T146's select-string guard, T157's two, T327's ordering, T406's stateful fake, T402's paging) are
+  present and unmodified.
+
+### Known residual, stated not hidden
+
+There is now modest redundancy between `outreach.test.ts` and four sibling page test files. Removing
+it is a **cross-file** consolidation, outside this task's single-file scope. Not filed as a defect —
+duplicate coverage is a cost, not a bug, and the sibling tests are shape-only where these are
+outcome-based.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise** · vitest **78 files / 1976
+tests**, targeted `outreach.test.ts` **39 passed, exit 0** (from a 19-test baseline) · build ✓.
+`.env.local` absent.
