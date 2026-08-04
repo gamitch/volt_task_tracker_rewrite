@@ -8724,6 +8724,65 @@ fixture data, so a rig using it measures an empty page.
 
 ---
 
+## T704 — the `Meetings` term leaves the KPI breakdown
+
+**Tier: FAST** (constitution item 26), stated and defended: no write path, no schema/RLS/auth, no
+cross-module signature change, well under ~20 lines of production change, and a named mutation
+exists. **Verification was not reduced** — FAST removes coordination, not evidence. Implemented
+directly by the orchestrator, which is what FAST prescribes.
+
+**Authority.** Owner ruling 2026-08-04, verbatim *"for T704, drop the meetings term from the
+breakdown"* — option (a) of three the row offered. It also authorized updating the two passing
+assertions that asserted the removed string (`KpiStrip.test.tsx:306`, `:362`); the Non-Negotiables
+require explicit owner approval for that, and it covers those two only.
+
+### Why the figure had to go rather than be fixed
+
+`v_season_kpis.meeting_hours` is a filtered sum over a CTE that joins `and e.counts_volunteer_hours`,
+and meetings are created with that flag hardcoded `false` (`loaders/meetings.ts:690`) with **no app
+path that edits it** — verified by the T322 premise gate, which found this as MINOR-2 and filed it
+rather than folding it into that task. The figure is **structurally frozen at `0.0`**. `KpiStrip`
+rendered it beside two live numbers, presenting a dead figure as a live one.
+
+**This resolved a genuine tension in the owner's own earlier ruling.** The 2026-08-03 T322 ruling
+said meeting and competition hours are *"still tracked and still displayed as their own figure."*
+Competition is. **Meeting could not be.** Rather than leave the contradiction unremarked, it was put
+to him.
+
+Consistent with the same ruling's other half — *"meeting participation stays its own separate
+figure"* — meeting attendance is measured as a **participation percentage**, not as hours. Removing
+an always-zero hours term removes no meeting measurement, only a misleading one.
+
+### What changed, and what deliberately did not
+
+`formatHoursBreakdown` now renders `Outreach … · Competitions …`. **`meetingHours` stays** on
+`KpiStripData`, in `loaders/kpi.ts`, and in `v_season_kpis` — still tracked, just not displayed here.
+**No migration, no view change, no loader change.**
+
+`KpiStrip.test.tsx:362`'s fixture keeps `meetingHours: 2.0` — **a value the production view cannot
+generate** — to prove the field is still carried, with an explicit comment saying so and an assertion
+that it is not rendered.
+
+### Mutation evidence
+
+| Mutation | Result |
+|---|---|
+| Restore the `Meetings` term to `formatHoursBreakdown` | **RED on both intended assertions** — `expected 'Volunteer hours20.5Meetings 0.0h · Ou…' not to contain 'Meetings'` and `expected 'Volunteer hours10.5Meetings 2.0h · Ou…' not to contain 'Meetings'` |
+| Revert | 15 passed |
+
+Committed before mutating (item 26's own rule, learned from T323 and re-learned by this orchestrator
+earlier today).
+
+### Gates, `.env.local` absent
+
+`tsc --noEmit` 0 · `vite build` 0 · `format:check` 0 · `eslint .` **0 errors / 364 warnings**
+(unchanged) · `vitest run` 0 — **78 files / 1951 tests**.
+
+**Incidental confirmation:** the mutation output shows the card label reading **"Volunteer hours"**,
+independently confirming T322 landed on `main`.
+
+---
+
 ## T152 — T147's parallel-load guard now discriminates in both directions, and the blind spot was wider than filed
 
 **Tier: FAST** (constitution item 26), defended: **test-only**. No write path, no schema/RLS/auth, no
