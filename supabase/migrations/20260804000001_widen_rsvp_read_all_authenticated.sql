@@ -1,0 +1,109 @@
+-- T503: widen `rsvps` SELECT so any authenticated user may read any row --
+-- students should see what their teammates actually answered, not a
+-- diffed-away "No response" caused by RLS trimming a row they cannot read
+-- (`OutreachDetail.tsx`'s `groupSessionSignups`/`SessionSignupList`
+-- currently treat "not permitted to read" as "did not answer").
+--
+-- Additive migration only (constitution item 10): this is a SECOND,
+-- permissive SELECT policy alongside the existing `own_or_linked_read`
+-- (`20260717000002_rls.sql:201-203`), which is left completely unmodified.
+-- Postgres ORs permissive policies together, so a second `using (true)`
+-- policy is sufficient; nothing is dropped or rewritten. PRD 8.4's
+-- verbatim `own_or_linked_read` shape survives byte-for-byte, and so do
+-- `own_or_linked_write` / `own_or_linked_update` (same file, :205-212) --
+-- this migration touches READ only.
+--
+-- -----------------------------------------------------------------------
+-- AUTHORITY -- this is a deliberate, owner-authorised deviation from PRD
+-- 8.3's `rsvps` matrix row ("read/write own" / "read linked"). Constitution
+-- item 3 makes an RLS policy that is not PRD 8.4 verbatim a BLOCKER unless
+-- the deviation is on the record. It is: `docs/swarm/dispute-log.md` ->
+-- **D013**, filed before this migration was written, following the D002
+-- pattern already established for React 19 (constitution item 8) -- the PRD
+-- text itself stays intentionally unedited; D013 is the record of the
+-- deviation. D013 cites two verbatim owner rulings in
+-- `docs/swarm/auto-mode-decisions.md`:
+--   * 2026-08-03 -- "for T503, it is ok if students see other teammates
+--     rsvp's they often want to know which freinds are coming to an event
+--     and we quite frankly do that currently through thumbs up in chat."
+--     (settles WHETHER to widen read -- yes)
+--   * 2026-08-04 -- "let's go with the first option, anyone on the team"
+--     (settles the SCOPE -- unrestricted to every authenticated caller, not
+--     team- or event-scoped; chosen from three options put to him in plain
+--     language, the widest of the three offered)
+-- The exemption covers ONLY this one SELECT policy on `rsvps` and nothing
+-- else -- not the write policies below it in `20260717000002_rls.sql`, and
+-- not `attendance`, which T306 deliberately staff-gated because a factual
+-- attendance/check-in record is not the same thing as RSVP intent (PRD
+-- v2's own T193/T119/T121 distinction).
+--
+-- DISCLOSED CONSEQUENCE (the 2026-08-04 decision entry's own closing note,
+-- carried forward here rather than left to be discovered later):
+-- `rsvps.responded_by` is a `profiles.id`, so widening read also reveals
+-- WHO answered, not just what the answer was -- e.g. that a parent
+-- answered on a child's behalf rather than the student answering
+-- themselves. Small on a roughly 20-student team and consistent with the
+-- reasoning the owner gave (the team already does this informally via
+-- thumbs-up reactions in chat), but flagged rather than shipped silently.
+--
+-- -----------------------------------------------------------------------
+-- CORRECTION, D010 -- two already-applied migrations claim a plain view
+-- "runs under the querying session's own RLS against its base tables".
+-- That is FALSE, measured by execution on real PostgreSQL 16.13 (this
+-- task's premise gate; full evidence in
+-- `docs/swarm/active/T503-gate-report.md`): a view carrying no
+-- `security_invoker` executes as its OWNER and never applies the querying
+-- session's RLS to its base tables at all. Absent `FORCE ROW LEVEL
+-- SECURITY` (set nowhere anywhere in this schema, grepped), the owner
+-- bypasses RLS entirely -- proved two ways: a `security_invoker = on`
+-- counterfactual on `v_planned_rsvp_hours` collapsed a non-staff session's
+-- 3 visible rows to 1 (and `reset` restored 3), and reassigning ownership
+-- of `rsvps`/`events`/`event_sessions`/`v_planned_rsvp_hours` to a
+-- NOSUPERUSER, NOBYPASSRLS role -- strictly WEAKER than hosted Supabase's
+-- table-owning `postgres` role, which DOES carry BYPASSRLS -- still showed
+-- the bypass, so it holds on hosted Supabase a fortiori.
+--
+-- Both occurrences of the false claim, corrected here because constitution
+-- item 10 forbids editing either applied file in place:
+--   * `20260723000000_kpi_views.sql:137-152` -- "so a non-staff session
+--     querying `v_season_kpis` gets RLS-filtered to zero rows" -- this is
+--     the occurrence **D010** named when it was filed 2026-07-29.
+--   * `20260723000001_dashboard_views.sql:49-60` -- "each runs under the
+--     querying session's own RLS against its base tables" -- the same
+--     claim, copied into a second migration; D010 did not know about this
+--     copy when it was filed. `20260731000000_leaderboard_students_view
+--     .sql:49-52` already flagged this exact sentence as false without
+--     restating it; this is the third in-repo occurrence.
+-- This correction is exactly the shape `20260731000000`'s own header
+-- already modelled for the same false claim found a second time -- fix the
+-- comment in a NEW file, never the applied one. **George closed D010 on
+-- 2026-08-04, choosing "option B"**: leave every applied migration file
+-- untouched and land the correction in the header of the next new
+-- migration -- this one. No schema change follows from the correction;
+-- D010's substantive 2026-07-29 ruling (the KPI views expose only season
+-- aggregates, no PII, not worth a `security_invoker` change) stands and is
+-- not reopened by this migration.
+--
+-- -----------------------------------------------------------------------
+-- BLAST RADIUS ON EXISTING METRIC VIEWS -- measured, not assumed, by the
+-- premise gate, and re-verified by this task's own scratch-database test
+-- (`supabase/tests/run_t503_widen_rsvp_read.sh`, splitting migration
+-- application before/after this file so the comparison is a real
+-- before/after, not a read of the SQL text): `v_planned_rsvp_hours` /
+-- `v_student_planned_hours` / `v_season_upcoming_committed_hours` (all
+-- `20260723000001_dashboard_views.sql`) already read past `rsvps`' RLS via
+-- the owner-bypass mechanism explained above, so widening `rsvps` SELECT
+-- changes NO view output at all -- byte-identical rows before and after,
+-- confirmed for the same non-staff session at the same instant.
+--
+-- NOT authorised by this migration or the rulings it cites: any change to
+-- the write policies (`own_or_linked_write` / `own_or_linked_update`,
+-- unmodified below in the schema, byte-identical -- verified by sha256 in
+-- the test script above); any change to `attendance` RLS; any `anon`
+-- grant (this policy is `to authenticated` only -- T205 exists because an
+-- `anon` grant leaked a different view, and this migration does not
+-- recreate that shape); applying this migration to hosted Supabase
+-- (constitution item 16 reserves cutover for the human owner).
+
+create policy read_all_authenticated on rsvps
+  for select to authenticated using (true);

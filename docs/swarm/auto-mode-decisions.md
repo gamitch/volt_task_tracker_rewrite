@@ -2961,6 +2961,44 @@ decision gets made on a bad premise."*
 
 ---
 
+
+---
+
+## 2026-08-04 — George picks the SCOPE for T503: any student on the team, always
+
+**Verbatim:** *"let's go with the first option, anyone on the team"* — chosen from three scopes put to
+him in plain language after he asked for a reminder of the T503 ruling.
+
+**This closes the last open question on T503.** The product half was settled 2026-08-03 (*"it is ok if
+students see other teammates rsvp's…"*); what remained was **how wide "teammate" means**, since an RLS
+policy has to be written as a specific rule. The three offered were:
+
+1. **Anyone on the team, always** ← **chosen**
+2. only for events the viewer is also on the roster for
+3. only students sharing a team with the viewer
+
+**The orchestrator recommended (1) and gave its reasoning**, which he accepted: it is one small rule,
+easy to reason about later, and on a ~20-student team the other two draw boundaries that do not
+correspond to anything real. The leaderboard already shows everyone's hours to everyone.
+
+**What this authorises, and what it does NOT:**
+
+- **Authorised:** widening **SELECT** on `rsvps` so any authenticated user may read any row.
+- **NOT authorised:** any change to the **write** policies. `own_or_linked_write` /
+  `own_or_linked_update` (`20260717000002_rls.sql:205-215`) stay exactly as they are — a student still
+  may only answer for themselves, and a parent only for their linked child. **Widening read is not
+  widening write**, and a task that touches the write side has exceeded this ruling.
+- **NOT authorised:** applying the migration to hosted Supabase. **Constitution item 16 reserves
+  cutover for the owner**, and three migrations now await him (T205's, T322's, and this one).
+
+**One consequence to put in front of him rather than discover later:** `rsvps.responded_by` is a
+`profiles.id`, so widening read also reveals **who answered**, not just what the answer was — e.g.
+that a parent answered on their child's behalf rather than the student answering themselves. That is
+a small thing on this team and consistent with the reasoning he gave, but it was not part of what he
+was shown, so it is recorded here and called out in the PR rather than slipped in.
+
+---
+
 ### D4 — T164's premise gate SKIPPED under item 19b; worker + checker dispatched
 
 **Not a blanket policy — the opposite call to D2**, which insisted T162 be gated. The difference is
