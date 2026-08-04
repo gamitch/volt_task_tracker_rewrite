@@ -2943,3 +2943,19 @@ item-18 opus trigger.
   Worth a ledger row so it is a decision rather than drift.
 - **`endMeeting.ts:8`, `:12-19`, `:114-118`, `:443-446`** still say T196 is unwired and
   `EndMeetingDialog.tsx` is frozen. Stale once the mount lands; that file is outside T196's grant.
+
+### 2026-08-04 — George extends the T196 test approval to `:868` (owner input)
+
+Verbatim: *"i approve to extned the test approval to :868"*.
+
+**This closes MAJOR-A, the reason T196 parked.** The 2026-08-04 ruling 3 authorized
+`LiveConsole.test.tsx:845` and `:864`; the gate measured that `:868` asserts the **same stub**
+(`expect(container.textContent).toContain('End-meeting summary not built yet')`), so with only the
+two authorized lines changed the suite stayed red and a compliant worker had to stop.
+
+**Authorization now covers the two `it` blocks at `:839-855` and `:857-869`** — scoped by block
+rather than line, so a worker is not blocked again by a fourth assertion inside the same tests.
+**No other test in `LiveConsole.test.tsx` is authorized.**
+
+**T196 remains parked on MAJOR-B only** (C4's measurability). The recommendation put to him is to
+drop C4 and cite `endMeeting.test.ts:626`; that decision is still open.
