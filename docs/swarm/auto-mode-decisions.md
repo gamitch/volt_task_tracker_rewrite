@@ -2225,6 +2225,149 @@ owner**; it is not covered by the ruling above, which answers *whether*, not *ho
 **Also unchanged: T306's attendance view stays staff-only.** This ruling is about **RSVP intent**, not
 attendance. `attendance` carries recorded hours and check-in provenance, and its RLS
 (`:226-232`) is a separate policy. Nothing here authorises widening that.
+## 2026-08-03 — George's ruling on T702: DROP the adult-volunteer totals from the Hours report
+
+**Structured selection.** He was given three options — (a) filter the adult figures to
+`type = 'outreach'` only, keeping them on screen, mirroring T322's "still tracked and still
+displayed" pattern; (b) remove them from the Hours report entirely, students only; (c) keep
+counting everything. **He selected (b), "Drop it — students only"**, and added in his own words:
+*"for T702 we only nee to count student hours per rules we already established"* and
+*"this should just be a change in the sql queries"*.
+
+**What this authorizes, and it is more than a code change:**
+
+1. **Amending RPT-03.** `VOLT_Portal_PRD.md:370` currently ends *"…team subtotal rows; season
+   totals for people reached and adult volunteers (count and hours)."* The adult-volunteer clause
+   comes out. **Constitution item 1 puts PRD requirement IDs above this constitution and above
+   agent judgment — only the owner can authorize this, and he has.** People-reached stays.
+2. **Changing a passing test.** `HoursTab.test.tsx:327` asserts `totals.adultVolunteersCount` and
+   `totals.adultVolunteerHours`. Removing the fields necessarily breaks it. The Non-Negotiables
+   require the owner's explicit approval to update an existing green test; **this ruling is that
+   approval**, recorded here so the worker has a citation rather than an inference.
+
+**Scope boundary — deliberately narrow, per his "just a change in the queries" steer.** The ruling
+is about **RPT-03's season totals** only:
+
+- **In scope:** drop the two columns from `queryHoursEvents`'s select (`reports.ts:408`), delete the
+  adult reduces and the two KPI cards in `HoursTab.tsx` (`:593-596`, `:1063`, `:1069`), update module
+  doc #6, amend RPT-03.
+- **NOT in scope, and not ruled on:** **RPT-04** (`PRD:371`, Events tab) and **RPT-05** (`PRD:372`,
+  CSV exports) both name adult volunteers independently and show them **per event**, not as a season
+  aggregate — `EventsTab.tsx:998-1004` and `csvExport.ts:388-389`. A per-event figure cannot
+  double-count, and he ruled on the Hours report. **Leave them.**
+- **NOT in scope:** the collection flow. `OutreachEventDialog.tsx:1454,1462` and
+  `MarkDayCompleteDialog.tsx:1176,1183` are where a coach *enters* these numbers, and
+  `loaders/outreach.ts:1316-1325` accumulates them. **Those are W2's files** and he did not ask for
+  data collection to stop. The columns keep being written; RPT-03 just stops aggregating them.
+- **NOT in scope:** dropping the `events.adult_volunteers_count`/`adult_volunteer_hours` columns.
+  Destructive, irreversible, and unnecessary — item 25 proportionality.
+
+**Correction to a premise in his own instruction, recorded because acting on it unexamined would
+have sent a worker to the wrong file:** there is **no SQL** to change. Module doc #6
+(`HoursTab.tsx:137-143`) states it directly — *"no metric-view formula being re-derived here, since
+no view computes this sum at all"*. These are raw `events` columns pulled by a PostgREST `.select()`
+and summed in TypeScript. The nearest thing to a "query change" is removing two column names from
+that select.
+
+### Consequence: T500 is superseded and closes without shipping
+
+**T500 was fixing the double-count in exactly the sum this ruling deletes.** Sessionless events
+inflating `buildSeasonTotals`'s adult figures cannot matter once those figures are gone. The work
+was packeted, premise-gated (DISPATCH after one REVISE) and part-implemented when the ruling landed;
+the worker was stopped mid-run rather than allowed to finish a fix to a deleted number.
+
+**Nothing is lost.** The gate's measurements stand on the record — the non-transactional create path
+(`outreach.ts:1478-1485`), the reproduction of the double-count, and the finding that the existing
+"across all event types" test cannot detect over-filtering (**T703**, still real and still worth
+doing). And the fix would have been thrown away on the next task either way.
+
+**Orchestrator's note on sequencing, not the owner's:** this is the second time today that building
+before asking would have been the expensive path — T205's gate refuted the ruled prescription, and
+here a product ruling deleted the target of a fully-gated packet. Both were caught before a worker's
+output shipped. Recorded as evidence that the ask-first cost is being paid back, not as a complaint
+about the ruling arriving mid-flight.
+
+---
+
+## 2026-08-03 — George's ruling on T198: CoachHome's team-scoped widgets go SEASON-WIDE
+
+**Verbatim:** *"yes, season-wide is fine option b"* — answering a two-option question:
+(a) build a real per-coach team concept (new table linking staff to teams, new RLS), or
+(b) make the remaining team-scoped widgets season-wide, matching the five T124 widgets on the same
+page that already work that way.
+
+**He chose (b).** **T198 stops being an open architectural question and becomes ordinary work.**
+
+**Why this was put to him rather than inferred, and why it was framed as a confirmation.** The
+underlying facts were verified directly, not inherited from T173's ledger text (which speculated a
+schema change might be needed without checking): `AuthUser` (`guards.tsx:49-53`) carries no team
+field; **no table anywhere links a staff profile to a team**; and every `staff_all` RLS policy
+(`rls.sql:62-64, 96-98`) grants program-wide, not team-scoped, access. So the widgets were asking a
+question the data model cannot answer, and T173 correctly let them fall through to an honest zero
+rather than guessing.
+
+**D-2/D-3 already pointed here** (`state-summary.md:451-454`, George verbatim: *"SO P3+GG=VOLT… we
+are just a team, not a compliance driven business"*), and `CoachHome.tsx` module doc #13(a) had
+already reached the identical conclusion for T124's five widgets. Per §7's "recommending on a
+question already settled", the question was framed as **"confirm D-2 extends here"** rather than
+asked cold — but it was still asked, because option (a) implies a migration and RLS changes
+(constitution item 18 triggers), and D-2's own wording is about *seasons and hours*, not about coach
+dashboards. Stretching it that far was the owner's call to make, not an agent's.
+
+**What this authorizes, and the boundary.** The remaining team-scoped widgets on `CoachHome` render
+season-wide figures, consistent with the T124 five. **This is a widget-semantics change — explicitly
+NOT a schema or auth change**, so it carries none of item 18's triggers and does not need a
+migration. The T198 row's own deferred bundle now unblocks with it: real
+`events`/`sessions`/`rsvps`/`attendance`/`teamParticipation`/`studentHours` queries for
+`CoachHomeData`, which have been literal honest-empty since T173 and were deliberately parked
+pending exactly this answer — building them earlier risked building the wrong shape twice.
+
+**Not authorized:** inventing any per-coach team association, or reading `PLACEHOLDER_CURRENT_TEAM_ID`
+as if it were real. If a widget genuinely cannot be expressed season-wide, that is a new question,
+not a licence to improvise.
+
+---
+
+## 2026-08-03 — George's ruling on T156: PARK it until the repo is quiet
+
+**Verbatim:** *"yes, park T156 for later"* — answering a two-part question: (1) do you want the
+loader's real Postgres error surfaced at all, and (2) if so, now or in a quiet window?
+
+**His answer is "yes, but not now."** T156 is **not** rejected and **not** closed — it is
+deliberately deferred on **concurrency risk**, not on merit.
+
+**The defect is real and already cost him personally.** `toLoaderError`
+(`src/lib/supabase/loader.ts:116-121`) replaces the underlying Postgres message with a generic
+`DEFAULT_LOADER_ERROR_MESSAGE`, keeps the original only in `cause`, and **nothing anywhere reads or
+logs `cause`** — no `console.*` in `loader.ts`. Diagnosing T155 required the owner to open DevTools,
+filter the Network panel and click into a response body to recover
+`22P02 invalid input syntax for type uuid`; the investigating agent could not determine the cause
+from the repository at all and had to rank hypotheses instead.
+
+**Why parking is the right call rather than a dodge.** `loader.ts` is the shared spine: measured,
+**23 loader modules and 33 source files** use `createLoader`/`runMutation`. Changing its error shape
+is *an export another session builds against* — a constitution item 26 HEAVY trigger in its own
+right — and W1, W2 and W7 are all live in this repo building on it right now. The failure mode is
+not "this task goes wrong"; it is **three other machines breaking simultaneously, each discovering it
+separately, mid-task**. Both `W4-W5-KICKOFF.md` (§5) and `W5-KICKOFF.md` (§5) independently reached
+the same conclusion and say to raise it with the owner rather than run it from W4/W5.
+
+**Conditions for unparking, recorded so this does not silently rot** (constitution item 20's whole
+point is that untriaged deferrals become permanent):
+
+1. **No other workflow mid-task in this repo** — check before starting, not after.
+2. Run it **standalone**, nothing else of mine in flight.
+3. Consider re-filing it as a **W10 cross-cutting row** rather than a W4/W5 one; it belongs to
+   whoever owns repo-wide sweeps, since it is one file that everything imports.
+
+**Orchestrator's note, not the owner's:** the cheap half of this may be separable. Adding a
+`console.error` of `cause` inside `toLoaderError` changes **no** export's shape and therefore breaks
+nobody — it is the *error-shape* change that is dangerous, not the *logging*. If the owner wants
+diagnosability sooner, that split is worth putting to him as its own narrow question. **Not
+proposing it now** — he has just said "later", and re-litigating a fresh ruling is exactly the
+behaviour §7 warns against.
+
+---
 
 ---
 
