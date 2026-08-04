@@ -228,8 +228,8 @@
  * for an unresolved `studentId`/`teamId`; see the new "Identity resolution"
  * doc directly above `resolveStudentIdentity` below for the resolved shape.
  *
- * **Known, disclosed narrowing (not a bug, filed as a follow-up, T176
- * worker output criterion 12b):** `resolveStudentScope` reads the LEGACY
+ * **T187 FIX (was: known, disclosed narrowing, T176 worker output criterion
+ * 12b):** `resolveStudentScope` used to read ONLY the LEGACY
  * `students.team_id` primary-team column, per
  * `supabase/migrations/20260721000000_student_teams.sql`'s own header --
  * TWO separate, non-contiguous verbatim fragments from that header, quoted
@@ -238,13 +238,26 @@
  * remains the legacy/primary-team read path until a later SCH-03+ packet
  * migrates readers over to this junction." Every other current reader
  * (`v_student_participation`/`v_team_hours`, `dashboard_views.sql`,
- * `kpi_views.sql`) has already migrated to the `student_teams` junction;
- * this file has not. A dual-team-member student's second team's meetings,
- * live check-in, and sign-up opportunities are silently invisible on this
- * page -- the same defect class T120 already fixed once on
- * `ParticipationTab.tsx`. Deliberate, disclosed, out of T176's bounded
- * scope (its own packet's explicit instruction), not silently assumed
- * single-valued.
+ * `kpi_views.sql`) had already migrated to the `student_teams` junction;
+ * this file had not, so a dual-team-member student's second team's
+ * meetings, live check-in, and sign-up opportunities were silently
+ * invisible on this page -- the same defect class T120 already fixed once
+ * on `ParticipationTab.tsx`.
+ *
+ * T187 closes this gap: `resolveStudentScope` now ALSO reads the student's
+ * ACTIVE `student_teams` memberships (`left_on is null`), returned as
+ * `StudentScope.teamIds` alongside the kept legacy `teamId`. Every
+ * team-scope predicate in this file (`isEventInTeamScope` and its three
+ * callers) now takes that plural set, not the single primary team --
+ * `ResolvedStudentIdentity.teamIds`/`StudentHomeContentProps.teamIds`
+ * thread it from the identity-resolution tier down to the content tier. A
+ * dual-team student's second team's meetings/check-in/sign-ups are no
+ * longer silently invisible. **T186 remains open, separately:** the raw
+ * `students.team_id` column itself (still read here for the KEPT `teamId`
+ * display value, and still what `v_student_goal_projection`'s own
+ * `team_id` column reflects) is still schema-documented as
+ * display-only -- this task does not touch that column or its own
+ * migration-level status, only widens THIS file's own scoping read.
  *
  * This file still does not branch on `user.role` at all (unlike
  * `OutreachList.tsx`/`MeetingsList.tsx`, which are role-VARIANT pages):
@@ -490,9 +503,23 @@ export type LoadStudentHomeDataFn = (
  * `ResolveCurrentStudentIdFn` cross-file shape, module doc #8) and
  * imported as a type by `loaders/students.ts`, which supplies the real
  * implementation (`resolveStudentScope`, additive-only export).
+ *
+ * T187 -- `teamIds` widens this scope from the single legacy
+ * `students.team_id` primary-team column (module doc #8's own disclosed
+ * narrowing) to the student's real ACTIVE `student_teams` memberships
+ * (`loaders/students.ts`'s own new read, `left_on is null`). `teamId` is
+ * KEPT unchanged (owner-ruled: the primary-team value may still serve
+ * display, and keeping it means no other production consumer's own shape
+ * changes) -- `teamIds` is the new field every team-scope predicate in this
+ * file now reads from instead.
  */
 export interface StudentScope {
   teamId: string;
+  /** The student's ACTIVE `student_teams` memberships (module doc #8) --
+   * may contain more than one id for a dual-team student. Never includes a
+   * team the student has LEFT (`left_on is null` is the loader's own
+   * filter). */
+  teamIds: readonly string[];
   goalHours: number;
   confirmedHours: number;
   plannedHours: number;
@@ -645,12 +672,15 @@ function round1(value: number): number {
 }
 
 /** The ONLY team-scope predicate in this file -- honors `team_ids === null`
- * as "all teams" per the real `events` schema. */
+ * as "all teams" per the real `events` schema. T187: the second parameter is
+ * the student's own ACTIVE team ids (plural -- a dual-team student), not a
+ * single primary team; an event is in scope when it shares AT LEAST ONE id
+ * with that set. */
 export function isEventInTeamScope(
   event: { teamIds: readonly string[] | null },
-  teamId: string,
+  teamIds: readonly string[],
 ): boolean {
-  return event.teamIds === null || event.teamIds.includes(teamId);
+  return event.teamIds === null || event.teamIds.some((id) => teamIds.includes(id));
 }
 
 /** MTG-10's own literal wireframe annotation: "only while a session is
@@ -672,12 +702,12 @@ export function isSessionLive(
 export function selectLiveMeetingSession(
   sessions: readonly HomeSessionRow[],
   events: readonly HomeEventRow[],
-  teamId: string,
+  teamIds: readonly string[],
   nowMs: number,
 ): HomeSessionRow | null {
   const meetingEventIds = new Set(
     events
-      .filter((event) => event.type === 'meeting' && isEventInTeamScope(event, teamId))
+      .filter((event) => event.type === 'meeting' && isEventInTeamScope(event, teamIds))
       .map((e) => e.id),
   );
   const live = sessions
@@ -705,7 +735,7 @@ export function buildNextUp(
   events: readonly HomeEventRow[],
   rsvps: readonly HomeRsvpRow[],
   studentId: string,
-  teamId: string,
+  teamIds: readonly string[],
   nowMs: number,
   limit = 5,
 ): NextUpRow[] {
@@ -714,7 +744,7 @@ export function buildNextUp(
       .filter(
         (event) =>
           (event.type === 'meeting' || event.type === 'outreach') &&
-          isEventInTeamScope(event, teamId),
+          isEventInTeamScope(event, teamIds),
       )
       .map((event) => [event.id, event] as const),
   );
@@ -760,12 +790,12 @@ export function getUnansweredOutreachOpportunities(
   events: readonly HomeEventRow[],
   rsvps: readonly HomeRsvpRow[],
   studentId: string,
-  teamId: string,
+  teamIds: readonly string[],
   nowMs: number,
 ): SignupOpportunityRow[] {
   const eventById = new Map(
     events
-      .filter((event) => event.type === 'outreach' && isEventInTeamScope(event, teamId))
+      .filter((event) => event.type === 'outreach' && isEventInTeamScope(event, teamIds))
       .map((event) => [event.id, event] as const),
   );
   return sessions
@@ -1285,7 +1315,10 @@ function StudentHomeLoadingSkeleton(): ReactNode {
 
 interface StudentHomeContentProps {
   studentId: string;
-  teamId: string;
+  /** T187: the student's ACTIVE `student_teams` memberships (module doc #8),
+   * not the single legacy `teamId` -- this is what every team-scope
+   * predicate below now reads. */
+  teamIds: readonly string[];
   seasonId: string;
   /** Verbatim passthrough of `v_student_goal_projection.goal_hours`
    * (`resolveStudentScope`) -- already the coalesced
@@ -1307,7 +1340,7 @@ interface StudentHomeContentProps {
 
 function StudentHomeContent({
   studentId,
-  teamId,
+  teamIds,
   seasonId,
   goalHours,
   confirmedHours,
@@ -1360,14 +1393,14 @@ function StudentHomeContent({
   const data = loadState.data;
   const nowMs = nowFn().getTime();
 
-  const liveSession = selectLiveMeetingSession(data.sessions, data.events, teamId, nowMs);
-  const nextUp = buildNextUp(data.sessions, data.events, rsvps, studentId, teamId, nowMs);
+  const liveSession = selectLiveMeetingSession(data.sessions, data.events, teamIds, nowMs);
+  const nextUp = buildNextUp(data.sessions, data.events, rsvps, studentId, teamIds, nowMs);
   const opportunities = getUnansweredOutreachOpportunities(
     data.sessions,
     data.events,
     rsvps,
     studentId,
-    teamId,
+    teamIds,
     nowMs,
   );
   const heroState = selectHeroState(liveSession !== null, opportunities.length);
@@ -1538,6 +1571,10 @@ function StudentHomeContent({
 export interface ResolvedStudentIdentity {
   studentId: string;
   teamId: string;
+  /** T187: the student's ACTIVE `student_teams` memberships -- what the
+   * content tier's team-scope predicates actually use now. `teamId` above is
+   * KEPT unchanged (owner-ruled -- may still serve display). */
+  teamIds: readonly string[];
   goalHours: number;
   confirmedHours: number;
   plannedHours: number;
@@ -1571,10 +1608,15 @@ export async function resolveStudentIdentity(
   const studentId = explicitStudentId ?? (await resolveStudentId(viewer));
   if (studentId === null) return { kind: 'not-linked' };
   if (explicitTeamId !== undefined) {
+    // T187: the explicit bypass has no scope read to draw a real active-set
+    // from -- `[explicitTeamId]` is the honest single-team equivalent (same
+    // "explicit bypass never consults resolveStudentScope" posture this
+    // branch already established for goalHours/confirmedHours/plannedHours).
     return {
       kind: 'linked',
       studentId,
       teamId: explicitTeamId,
+      teamIds: [explicitTeamId],
       goalHours: seasonDefaultGoalHours,
       confirmedHours: 0,
       plannedHours: 0,
@@ -1586,6 +1628,7 @@ export async function resolveStudentIdentity(
     kind: 'linked',
     studentId,
     teamId: scope.teamId,
+    teamIds: scope.teamIds,
     goalHours: scope.goalHours,
     confirmedHours: scope.confirmedHours,
     plannedHours: scope.plannedHours,
@@ -1696,11 +1739,15 @@ function ResolvedStudentHomeView({
     );
   }
 
-  const { studentId, teamId, goalHours, confirmedHours, plannedHours } = loadState.data;
+  // T187: `teamIds` (the ACTIVE-membership set) is what the content tier
+  // actually scopes against now -- `teamId` (the kept legacy single value,
+  // still on `ResolvedStudentIdentity` for other consumers/tests) is not
+  // threaded further, since this component renders no per-team display.
+  const { studentId, teamIds, goalHours, confirmedHours, plannedHours } = loadState.data;
   return (
     <StudentHomeContent
       studentId={studentId}
-      teamId={teamId}
+      teamIds={teamIds}
       seasonId={seasonId}
       goalHours={goalHours}
       confirmedHours={confirmedHours}

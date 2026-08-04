@@ -412,12 +412,50 @@ async function queryStudentGoalProjectionById(
 }
 
 /**
+ * T187 -- the student's ACTIVE `student_teams` memberships (`StudentScope`'s
+ * new `teamIds` field, `StudentHome.tsx`'s own module doc for the full
+ * record). `left_on is null` is the ACTIVE predicate every already-migrated
+ * reader uses (`membership_views.sql:63`/`:92`, `dashboard_views.sql:205-206`);
+ * `.is('left_on', null)` has in-repo precedent (`calendarFeed.ts:103`,
+ * `endMeeting.ts:398`). RLS -- `student_teams` carries `read_all for select
+ * to authenticated using (true)` (`20260721000000_student_teams.sql:86`), so
+ * a signed-in student's own query for their own `studentId` resolves
+ * unconditionally; the explicit `.eq('student_id', studentId)` filter below
+ * is still supplied (defense in depth, same convention every other query in
+ * this file already follows), not relied on RLS alone.
+ */
+interface StudentActiveTeamIdDbRow {
+  team_id: string;
+}
+
+async function queryActiveTeamIdsByStudentId(
+  client: SupabaseClient,
+  studentId: string,
+): Promise<LoaderQueryResult<StudentActiveTeamIdDbRow[]>> {
+  const result = await client
+    .from('student_teams')
+    .select('team_id')
+    .eq('student_id', studentId)
+    .is('left_on', null);
+  return { data: (result.data as StudentActiveTeamIdDbRow[] | null) ?? null, error: result.error };
+}
+
+/**
  * `getClient` is injectable (defaults to the shared singleton), same
  * convention every export above already established, so tests can supply a
  * stubbed transport with zero real network calls -- see this task's own new
  * `students.test.ts` (scoped to this one function only -- NOT a full
  * coverage sweep of this file, which no ledger row currently claims, per
  * this task's own packet disclosure).
+ *
+ * T187 -- the `student_teams` read (`loadActiveTeamIds`) is deliberately
+ * SEQUENTIAL, after `loadScope`, not parallel via `Promise.all`: when
+ * `loadScope` resolves `null` (no `v_student_goal_projection` row -- an
+ * inactive student or no active season), this function already returns
+ * `null` overall and the active-team-ids read would be discarded unused --
+ * skipping it here is a genuine, disclosed efficiency win (one fewer real
+ * network round trip for that case), not a workaround shaped around any
+ * test.
  */
 export function makeResolveStudentScope(
   getClient: () => SupabaseClient = getSupabaseClient,
@@ -426,13 +464,19 @@ export function makeResolveStudentScope(
     queryStudentGoalProjectionById,
     getClient,
   );
+  const loadActiveTeamIds = createLoader<string, StudentActiveTeamIdDbRow[]>(
+    queryActiveTeamIdsByStudentId,
+    getClient,
+  );
   return async (studentId: string) => {
     const row = await loadScope(studentId);
     if (row === null) return null;
+    const activeTeamRows = await loadActiveTeamIds(studentId);
     // Verbatim passthrough (constitution item 3) -- `goal_hours` is already
     // the coalesced value; no coalesce/override arithmetic happens here.
     return {
       teamId: row.team_id,
+      teamIds: (activeTeamRows ?? []).map((teamRow) => teamRow.team_id),
       goalHours: row.goal_hours,
       confirmedHours: row.confirmed_hours,
       plannedHours: row.planned_hours,
