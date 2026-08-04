@@ -8332,3 +8332,73 @@ only the one row it touched, onto a disclosed `profile-lena-osei` stand-in.
 `resolveRsvpResponderAttribution` reads the field, **nothing in `OutreachList.tsx` reads `respondedBy`
 at all**, so no mutation can redden a fix. Filing it beats shipping a change this repo's own standard
 could not verify.
+
+---
+
+## T325 — the mobile student row stops overflowing, and the fix is proven by measurement rather than by tests
+
+**Owner-chosen shape (option A).** Put in plain English with three options and a recommendation; his
+answer: *"let's go with A option"* — move the two row actions out of Astryx's `endContent` slot into
+the row body, rather than overriding the slot's styling or writing custom CSS against the design
+system's internals. Constitution item 11's escalation order exists to prefer exactly that.
+
+Gates, `.env.local` absent: `tsc` 0 · `vite build` ✓ · prettier clean · eslint **0 errors / 364
+warnings — no rise** · vitest **78 files / 1946 tests**.
+
+### Measured, at every step, in real Chromium at 390×844
+
+| | overflow | action buttons |
+|---|---|---|
+| baseline | **213px** (`scrollWidth` 603 vs `clientWidth` 390) | 5 present |
+| `maxWidth="100%"` on our `HStack` | **213px — no change** | 5 present |
+| **option A (shipped)** | **0px** | **5 present, labels unchanged** |
+
+**The audit's description was misleading and the obvious suspect was wrong.** Nothing "collapses" —
+the row *overflows*. And it is not the RSVP `SegmentedControl`, which is what reading the source
+suggests; the orchestrator guessed that and was wrong. The offender is Astryx's own `endContent` slot
+wrapper: `flex-shrink: 0`, `max-width: none`, sizing to its 563px content inside a 342px row.
+
+**Our `HStack` already had `wrap="wrap"`.** It never fired, because nothing constrained the box it
+lived in — and `maxWidth="100%"` resolved against that same unconstrained 563px parent, which is why
+the first candidate fix measured as a no-op. Each button (285px, 265px) fits inside 342px once
+wrapping can engage.
+
+**The labels stay long on purpose.** `Button.label` is both the visible text and the accessible name
+(`astryx-api.md:1811`), so shortening them would undo T131/T132's distinguishable-accessible-name
+work. That is why the fix is structural rather than textual.
+
+### Shipped with NO new test, and that is the honest call
+
+**jsdom performs no layout.** It cannot see a 213px overflow and cannot see a regression. Three tests
+were attempted and none survived scrutiny:
+
+1. An ancestor walk asserting the button shares a body ancestor — **measured vacuous.** Reverting the
+   fix left it green: the `<li>` contains the `endContent` slot and the row body alike.
+2. A sharpened nearest-shared-ancestor check — **also measured vacuous**, for the same reason, and
+   because the string it keyed on is the event *title* (the `label` slot), not body text.
+3. A presence-and-labels guard — **redundant.** Mutating either the presence or the labels reddens
+   existing **T170** (criterion 10) and **T126** tests, which already locate these buttons by exact
+   label text.
+
+**Shipping any of them would have been a test that looks like a guard and is not** — the same family
+this project keeps catching (T330's `?? ''` sentinel, T401's vacuous test, T190's wrong C3 mutation).
+The evidence for this task is the measurement, stated as such.
+
+### Two traps the prototype surfaced, both worth keeping
+
+- **`rowActions` must be declared above `description`.** It is referenced there; a later declaration
+  throws `Cannot access 'rowActions' before initialization` at runtime, not at compile time.
+- **The first prototype reported "overflow 0" while having silently DELETED the buttons.** It "fixed"
+  the overflow by removing the thing that overflowed, and was caught only because the measurement also
+  asserted the buttons were still present. **A layout measurement that checks only the number is not
+  evidence.**
+
+### Rig
+
+Throwaway Playwright harness following the T131/T142 convention — real dev server, real provider
+stack, deleted afterwards, nothing from it committed. Recipe, so it is not rediscovered: playwright is
+installed **globally** (`NODE_PATH=/opt/node22/lib/node_modules`), Chromium is at
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, the harness must be **CJS** (ESM ignores
+`NODE_PATH`), and the rig must inject `defaultLoadOutreachData` **and** stub
+`resolveStudentId: 'student-lena-osei'` — after T190 the old placeholder resolves to a viewer with no
+fixture data, so a rig using it measures an empty page.
