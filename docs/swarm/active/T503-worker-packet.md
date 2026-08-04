@@ -92,10 +92,16 @@ INSERT → `42501`.** **Cross-student UPDATE → `UPDATE 0`** (see §4.2 — thi
 is referenced by 10 policies** — load-bearing, not dead; do not touch it.
 
 **`20260723000001_dashboard_views.sql:50-56` is the false comment.** So is
-`20260723000000_kpi_views.sql:136-152` — **D010 filed that on 2026-07-29 and it is still open,
-awaiting the owner.** Yours is the **third** in-repo confirmation. **Item 10 forbids editing an applied
-migration**, so correct it **in your new migration's header**, citing D010 and D013 — never in place.
-Full evidence: `docs/swarm/active/T503-gate-report.md`.
+`20260723000000_kpi_views.sql:136-152`, which **D010** filed on 2026-07-29.
+
+**The owner CLOSED D010 on 2026-08-04 and your migration is where the fix lands.** He chose *"option
+B"* (`auto-mode-decisions.md`, that date): **no applied migration is edited** — item 10 stands with no
+exception — and the correction goes in the **header of the next new migration**, which is yours.
+
+**So your migration header must carry all three:** the D013 deviation record (§2.1), and a short
+correction of the false RLS claim citing **D010**, covering **both** occurrences —
+`kpi_views.sql:136-152` (which D010 named) and `dashboard_views.sql:50-56` (which it did not know
+about). **Do not edit either file.** Full evidence: `docs/swarm/active/T503-gate-report.md`.
 
 ---
 
