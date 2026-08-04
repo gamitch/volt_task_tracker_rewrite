@@ -588,28 +588,40 @@
  * (module doc #12), which had the same defect, latent only because no
  * existing test rejected its reload.
  *
- * (g) THE `user !== null` GATE AT THIS DIALOG (AND AT THE
- * `MarkEventCompleteDialog` MOUNT ABOVE, Part C) IS DEFENSIVE, NOT
- * COMPILER-REQUIRED -- CORRECTING A CLAIM THIS FILE'S OWN PRE-EXISTING
- * COMMENTS MAKE. Three pre-existing gates at this file's other role-scoped
- * render sites (the `<ParentRsvp>`/`<RsvpControl>`/`<AttendancePanel>` call
- * sites above) carry comments stating their own `user !== null` checks are
- * "LOAD-BEARING" because `isParentViewer`/`isStudentViewer`/`isStaffViewer`
- * are "plain booleans, not type predicates," and therefore "do not narrow
- * `user`." That claim does not hold: TypeScript 4.4+ narrows through ALIASED
- * conditions, and `user` is a `const` destructured binding (`const { user } =
- * useAuth()`, module doc #11) -- `isStaffViewer` itself narrows `user` at
- * every one of its own uses, including inside this dialog's gate, with no
- * separate check. This task's own premise gate measured `tsc exit=0` after
- * deleting all three of those pre-existing null checks at once. The explicit
- * `user !== null` checks at THIS task's two new/touched gates are still
- * written -- they are DEFENSIVE and match this file's own established
- * convention, not because the compiler demands them. The three pre-existing
- * comments making the stronger, false claim are a separate, pre-existing
- * defect, out of this task's Allowed Files, and are deliberately left
- * unedited here (filed for the ledger, not fixed in place, so this file does
- * not end this task with two contradicting explanations of the same
- * mechanism sitting a few hundred lines apart from each other).
+ * (g) EVERY `user !== null` GATE IN THIS FILE IS DEFENSIVE, NOT
+ * COMPILER-REQUIRED. This file's four role-scoped render sites
+ * (`<ParentRsvp>`, `<RsvpControl>`, `<AttendancePanel>` and this dialog) each
+ * write an explicit `user !== null` beside their `isParentViewer` /
+ * `isStudentViewer` / `isStaffViewer` check. That is a deliberate,
+ * conventional belt-and-braces choice -- it is NOT what makes `user.id`
+ * compile.
+ *
+ * TypeScript 4.4+ narrows through ALIASED conditions. `user` is a `const`
+ * destructured binding (`const { user } = useAuth()`, module doc #11) and
+ * each viewer flag is itself a `const` initialised from a condition that
+ * begins `user !== null && ...`, so the flag narrows `user` at every one of
+ * its own uses, with no separate check.
+ *
+ * MEASURED TWICE, and the second measurement is the discriminating one.
+ * T179's premise gate deleted all three pre-existing null checks at once and
+ * got `tsc exit=0`. T301 reproduced that and added the control the first
+ * measurement lacked: deleting the checks AND weakening the three flags from
+ * `const` to `let` -- which is precisely what defeats aliased-condition
+ * narrowing -- fails with `tsc exit=2` and three `TS18047: 'user' is possibly
+ * 'null'` errors, one at each `currentUserProfileId={user.id}`. Exit 0 alone
+ * would have been consistent with the narrowing coming from somewhere else
+ * entirely; the paired run shows it comes from the `const` flags.
+ *
+ * T301 corrected the two pre-existing comments (at the `<ParentRsvp>` and
+ * `<RsvpControl>` gates) that had claimed the opposite -- that the flags are
+ * "plain booleans, not type predicates" and so "do not narrow `user`", making
+ * the null checks "LOAD-BEARING". They are not load-bearing, and the reason
+ * this was worth correcting rather than leaving alone is that the false claim
+ * had already begun to propagate by imitation: T179's own packet copied it
+ * verbatim and would have written a fourth copy into this very module doc had
+ * its gate not caught it. NOTE that the `<AttendancePanel>` gate's own comment
+ * never made the claim -- an earlier revision of this paragraph said three
+ * comments carried it when only two ever did.
  *
  * -----------------------------------------------------------------------
  * 16. T306 (owner ruling, `docs/swarm/auto-mode-decisions.md`, "2026-08-03 --
@@ -2324,12 +2336,16 @@ export function OutreachDetail({
               {/* T157 (module doc #13(d)/(f)) -- one `<ParentRsvp>` per
                   (session x qualifying linked student), inside this page's own
                   per-session loop (OUT-04 is per-session, module doc #4). The
-                  `user !== null` in this gate is LOAD-BEARING, not redundant
-                  with `isParentViewer`: that const is a plain boolean, not a
-                  type predicate, so TypeScript does not narrow `user` through
-                  it and `currentUserProfileId={user.id}` would not compile.
-                  Same shape module doc #11's `<AttendancePanel>` gate already
-                  uses for the identical reason. */}
+                  `user !== null` in this gate is DEFENSIVE and conventional,
+                  NOT compiler-required -- `isParentViewer` is a `const`
+                  initialised from `user !== null && ...`, and TypeScript 4.4+
+                  narrows through aliased conditions, so it already narrows
+                  `user` on its own and `currentUserProfileId={user.id}`
+                  compiles without the extra check. Same shape module doc
+                  #11's `<AttendancePanel>` gate uses, for the same defensive
+                  reason. Module doc #15(g) has the measurement, including the
+                  `const`->`let` control that proves where the narrowing comes
+                  from. */}
               {isParentViewer &&
                 user !== null &&
                 guardianLinksState.status === 'ready' &&
@@ -2362,13 +2378,15 @@ export function OutreachDetail({
                 ))}
               {/* T169 (module doc #14) -- the STUDENT's own self-service
                   control, one per session, for their own roster row only.
-                  `user !== null` is LOAD-BEARING here for the identical
-                  reason already documented at this file's other two role
-                  gates (`isParentViewer`/`isStaffViewer` above):
-                  `isStudentViewer` is a plain `boolean`, not a type
-                  predicate, so it does not narrow `user: AuthUser | null`
-                  and `currentUserProfileId={user.id}` would not compile
-                  without the separate null check. No page-owned `Heading`
+                  `user !== null` is DEFENSIVE here, not compiler-required,
+                  for the identical reason documented at this file's other
+                  role gates (`isParentViewer`/`isStaffViewer` above):
+                  `isStudentViewer` is a `const` initialised from
+                  `user !== null && ...`, and TypeScript 4.4+ narrows through
+                  aliased conditions, so `user: AuthUser | null` is already
+                  narrowed and `currentUserProfileId={user.id}` compiles
+                  without the separate null check. Module doc #15(g) has the
+                  measurement. No page-owned `Heading`
                   here, unlike `<ParentRsvp>` above -- module doc #14(c): a
                   student only ever sees their own single control, so there
                   is no cross-student `aria-label` collision to disambiguate;

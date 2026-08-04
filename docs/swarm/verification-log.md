@@ -8721,3 +8721,79 @@ installed **globally** (`NODE_PATH=/opt/node22/lib/node_modules`), Chromium is a
 `NODE_PATH`), and the rig must inject `defaultLoadOutreachData` **and** stub
 `resolveStudentId: 'student-lena-osei'` — after T190 the old placeholder resolves to a viewer with no
 fixture data, so a rig using it measures an empty page.
+
+---
+
+## T301 — the "LOAD-BEARING" comments in `OutreachDetail.tsx` were false, and there were two of them, not three
+
+**Tier: FAST** (constitution item 26), and defended: comment-only. No write path, no schema/RLS/auth,
+no signature change, no behaviour change of any kind — **proven, not asserted** (see below). The
+orchestrator implemented it directly; no worker, no gate.
+
+### The claim, and it is false
+
+Two gate comments stated that the `user !== null` beside `isParentViewer` / `isStudentViewer` was
+**"LOAD-BEARING, not redundant"**, because those flags are *"a plain boolean, not a type predicate,
+so TypeScript does not narrow `user` through it and `currentUserProfileId={user.id}` would not
+compile."*
+
+TypeScript 4.4+ narrows through **aliased conditions**. `user` is a `const` destructured binding
+(`const { user } = useAuth()`) and each viewer flag is itself a `const` initialised from a condition
+beginning `user !== null && …`, so each flag narrows `user` at every one of its own uses.
+
+### Measured, with the control the first measurement lacked
+
+T179's premise gate had already measured `tsc exit=0` after deleting all three null checks. That is
+necessary but **not sufficient** — exit 0 is equally consistent with the narrowing arriving from
+somewhere else entirely. So this task ran the discriminating pair:
+
+| Mutation | Result |
+|---|---|
+| delete the three `user !== null` conjuncts, keep the flags `const` | **`tsc` exit 0** — the checks are not load-bearing |
+| delete them **and** weaken the three flags `const` → `let` (which is exactly what defeats aliased-condition narrowing) | **`tsc` exit 2**, three errors: `TS18047: 'user' is possibly 'null'` at `:2357`, `:2387`, `:2405` — one per `currentUserProfileId={user.id}` |
+
+The second run is the evidence: it localises the narrowing to the `const` flags rather than merely
+showing the checks are removable.
+
+### The ledger row's count was wrong — two comments, not three
+
+The row says three pre-existing comments carry the claim, at `:1812-1818`, `:1850` and `:1858-1861`.
+All three citations are stale (T306 grew this file by ~300 lines), and **the count is wrong**. Traced
+through history by counting the string at every revision that touched the file:
+
+```
+1  a76781d  T170 packet          -> T157's <ParentRsvp> gate only
+2  7647820  T169 (OutreachDetail) -> T169's <RsvpControl> gate added
+3  c017256  T179                  -> the third occurrence is T179's own CORRECTION, not a claim
+```
+
+The `<AttendancePanel>` gate's comment **never made the claim** — yet both T157's comment ("Same shape
+module doc #11's `<AttendancePanel>` gate already uses for the identical reason") and T179's
+corrective module doc ("Three pre-existing gates … carry comments stating …") assert that it did.
+**The miscount had propagated into the correction itself**, which is the same
+propagation-by-imitation shape this row was filed to stop. Both were fixed.
+
+### Zero behaviour change, proven by hash
+
+A comment-only claim deserves better than "I read the diff". Both revisions were run through
+`ts.transpileModule` with `removeComments: true` and the emitted output hashed:
+
+```
+before: 31808 bytes  sha256 10c29a36…7e223a
+after:  31808 bytes  sha256 10c29a36…7e223a   IDENTICAL
+```
+
+### No mutation criterion, and that is stated rather than papered over
+
+A comment carries no behaviour, so no mutation of it can turn a test red. Inventing an assertion that
+greps for comment text would be a test that looks like a guard and is not — the T325 lesson, one task
+earlier. **The evidence for this task is the measurement table above and the hash equality**, not a
+test. Note also that a naive "the phrase no longer appears" grep would **fail** here on purpose: the
+corrected module doc quotes the false claim in order to refute it, exactly the contradiction T401 hit
+and T300's C1 was written to avoid.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise from `main`** · vitest
+**78 files / 1951 tests**, targeted `OutreachDetail.test.tsx` **113 passed, exit 0** · build ✓.
+`.env.local` absent.
