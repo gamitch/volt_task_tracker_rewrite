@@ -13,7 +13,71 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
 
-## UPDATE — 2026-08-04 (LATEST): W2 shipped T330, T402, T401, T306, T174 and T190. **T406 and T300 are in flight; T325 is the best-scoped row left.** Everything below about T330 is superseded.
+## UPDATE — 2026-08-04 (LATEST): W3-A wave COMPLETE (T197, T160, T162). **Four "0 tests" ledger rows were measured wrong.**
+
+**All three W3-A rows shipped.** Gates: `tsc` **0** · eslint **0 errors** · prettier clean ·
+vitest **78 files / 1949 tests, exit 0**. Full detail in `active/W3A-handoff.md`; decisions the
+orchestrator made alone are in `auto-mode-decisions.md` under **"W3-A auto-mode window"** (D1–D6).
+
+### ⚠️ Read this before packeting any "0 tests" row
+
+**T161, T162 and T163's "0 tests" claims are FALSE.** They came from an external audit that counted
+**files named `<module>.test.ts`** rather than tests *of* the module. Measured (D5):
+
+| Row | Module | Lines | Reality |
+|---|---|---:|---|
+| T161 | `checkin.ts` | 521 | 3 test files incl. a dedicated one, 144 it-blocks, **6/7 exports** |
+| T162 | `meetings.ts` | 726 | 2 files, 87 it-blocks, **11/11 exports** — now CLOSED |
+| T163 | `reports.ts` | 729 | 4 files, 83 it-blocks, **6/6 exports** |
+| **T164** | `kpi.ts` | 255 | **claim is TRUE — 0 runtime tests** |
+
+**~1,976 lines are advertised as untested and are substantially covered. Re-scope or close T161 and
+T163 the way T162 was.** **T164 is the only genuine gap and the one worth doing** — both its test
+files `import type` only, and every apparent use of `loadKpiStripData` is the component's injected
+prop being stubbed.
+
+**D5 retracts part of D4**, which had swept T164 in with the others on the proxy *"two test files
+import it"* — the same class of shortcut as the audit's, wrong the same way. **Only invocation
+counts.**
+
+### What shipped
+
+- **T197** — `onEditAttendance`'s row scoping is now asserted outcome-provably. Deleting either
+  `.eq()` used to leave the suite green; a single-student edit became a table-wide `attendance`
+  UPDATE. Worker + checker; the checker's own arg-swap mutation caught a shape the packet had not.
+- **T160** — `FixtureTeam` → `Team` in `MeetingsList.tsx`. Real data flows through that type, so the
+  name misled. `FIXTURE_TEAMS` deliberately keeps its name.
+- **T162** — re-scoped by owner ruling to three measured gaps, **test-only**, `meetings.ts`
+  unmodified, **no new test file** (*"we should not be duplicating existing test"*). Closed a live
+  divide-by-zero: without the denominator floor, a student whose every session was excused is shown
+  `NaN`.
+
+### ⚠️ T160 and T162 were never independently reviewed
+
+Orchestrator-authored, disclosed as unreviewed in their ledger rows and verification-log entries,
+with mutation proofs as the substitute. **T197 — the one that did get a checker — had two real NITs
+found that the orchestrator missed, one surviving its own mutation replay.** If anything here gets a
+retrospective review, make it those two.
+
+### Filed
+
+**T600** — `meetings.ts:465-489` and `checkin.ts:340-373` are two TypeScript copies of one view
+expression, no shared helper, no test asserting they agree. Crosses into W1's `checkin.ts`.
+
+### Still open for W3
+
+**T196 (the mount) was deliberately not started** and remains the wave's excluded row — a project,
+not a ticket, with an open owner call and a failure mode of real `absent` rows against real students.
+
+---
+
+## UPDATE — 2026-08-03 (earlier): W2 shipped T330, T402, T401 and T306. **T174 is the next W2 row.** Everything below about T330 is superseded.
+
+> **The W2 section immediately below is CONCURRENT with this one, not superseded.** It covers W2's rows; this one covers W3-A. Same day, different workflows — read both.
+
+---
+
+## UPDATE — 2026-08-04 (2026-08-04, W2 — concurrent with the W3-A section above): W2 shipped T330, T402, T401, T306, T174 and T190. **T406 and T300 are in flight; T325 is the best-scoped row left.** Everything below about T330 is superseded.
 
 **`main` = `380266e`**, green and measured on it directly: `tsc` 0 · eslint **0 errors / 362
 warnings** · vitest **78 files / 1928 tests**. **Measure your own baseline anyway** — `main` moved

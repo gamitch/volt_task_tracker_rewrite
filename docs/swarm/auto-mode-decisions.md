@@ -2366,3 +2366,245 @@ nobody — it is the *error-shape* change that is dangerous, not the *logging*. 
 diagnosability sooner, that split is worth putting to him as its own narrow question. **Not
 proposing it now** — he has just said "later", and re-litigating a fresh ruling is exactly the
 behaviour §7 warns against.
+
+---
+
+---
+
+## 2026-08-03 — W3-A auto-mode window opened (orchestrator's decisions, NOT the owner's)
+
+Owner asked whether W3 could run while he was at work, then said **"launch w3-a"**. Everything in
+this entry is **mine, under delegated authority, and reversible by him.** Same posture as the three
+windows above: decide, log, never attribute to him.
+
+**The scope split was itself a decision put to him and approved, not assumed.** W3 was divided into
+W3-A (T197, T162, T160 — no open decisions, safe unattended) and T196 (a project carrying an open
+owner call, whose failure mode is real `absent` rows against real students). **T196 is excluded and
+must not be started in this window.** The wave stops when the three rows are done.
+
+**Measured base at window open, `main` = `33c9e24`:** `tsc` **0** · prettier **clean** ·
+vitest **78 files / 1944 tests, exit 0**.
+*Note: the W2 session recorded 78/1928 hours earlier the same day. `main` moved four more times
+between. This is why the W3-A prompt tells its agent to measure rather than inherit — and the
+orchestrator did so rather than quoting either figure.*
+
+### D1 — T197's premise gate is SKIPPED under item 19b, and the premise was re-measured instead
+
+**Item 19 normally requires `checker-premise` DISPATCH before any packet reaches a worker.**
+**19b scopes that by risk:** *"Light check or skip for packets that roll out an already-verified
+pattern to a new surface … The gate exists to catch unverified premises, not to re-audit settled
+ones."*
+
+T197 adds a test assertion to an existing test file against **already-correct shipped code**. It
+touches no migration, no RLS, no metric SQL, no auth. The pattern — assert a scoping filter — is
+settled in this repo.
+
+**Rather than skip the premise unverified, the orchestrator re-ran it directly** (item 19c: verify
+your own citations). At `33c9e24`, deleting both `.eq()` calls from `endMeeting.ts:450-456`:
+
+```
+Test Files  1 passed (1)
+     Tests  14 passed (14)
+vitest exit: 0
+```
+
+**Confirmed — the ledger's claim is true and current, not inherited.** File restored and
+`git diff --quiet` verified clean before packeting.
+
+**The residual risk in T197 is a vacuous test, which is a WORKER risk caught by the checker, not a
+premise risk.** Spending an opus gate round on a verified one-line premise is exactly the net-negative
+19a warns about. **Reversible:** if the checker finds the packet's premise wrong, this decision was
+wrong and a gate round should be added for T162.
+
+### D2 — T162 and T160 will be gated by the same test, not automatically skipped
+
+D1 is **not** a blanket exemption for the wave. T162 writes tests for **726 lines of previously
+untested loader** — a materially larger surface with real unknowns about what the participation math
+is supposed to do. That is closer to 19b's "novel" than its "settled". **T162 gets a premise gate
+unless its packet turns out to be narrower than it currently looks.** T160 is a rename in one file
+and will be skipped like D1.
+
+### Filed, not fixed — stale claims found while verifying
+
+- **`endMeeting.ts:12-19`** states T196 is *blocked*, `LiveConsole`'s attendance marking is an
+  *intentional no-op*, and its roster loader is a *fixture*. **All three are false since T403.**
+  Folded into T197's packet as an explicitly bounded comment-only fix (§5) rather than left, since
+  the worker is already in that file and the claim directly contradicts what the ledger now says.
+
+### D3 — T162's gate returned REVISE (1 BLOCKER); packet revised, re-gating. **Two BLOCKERs were the orchestrator's own false claims.**
+
+**Recorded because the failure is more useful than the fix.** D1 skipped T197's gate and D2 refused
+to extend that skip to T162. **That distinction was correct and this proves it** — the gate found a
+defect that would have reached a worker.
+
+**BLOCKER 1 — the packet asserted something false about the code it was specifying.** v1 said
+`makeCreateMeetings` *"rejects before any network call"*. It does not: `meetings.ts:712` `await`s a
+`seasons` query **first**, and the guard at `:713-717` rejects **before either write**. Verified by
+the orchestrator directly after the gate reported it — the `await loadActiveSeasonId()` is plainly
+the first statement in the returned function.
+
+**The consequence was worse than the wording.** The acceptance criterion built on that claim
+(*"rejects before any network call"*) steers a worker toward asserting *no write happened* — and
+that assertion **stays green under the mutation**, because removing the guard makes `activeSeason.id`
+(`:718`) throw a `TypeError` before `insertEvent` is ever invoked. **The packet would have shipped a
+criterion that passes for the wrong reason** — the exact shape this project has already paid for
+7+ times. v2 requires asserting the rejection's **identity**
+(`/^No active season is set up yet\./`), which the gate measured red at exit 1.
+
+**BLOCKER 2 — a false analogy taught the wrong mental model for that same criterion.** v1 said the
+guard was *"the same shape `endMeeting.ts`'s `makeOnEditAttendance` uses"*. It is not:
+`makeOnEditAttendance` (`endMeeting.ts:468-471`) guards on a **closure call** and therefore genuinely
+does precede any network call. Deleted in v2, not repaired.
+
+**MAJOR — C4 was untestable by the assertion a worker would naturally write.** Removing the
+single-row short-circuit leaves the returned value **byte-identical**; only
+`expect(result).toBe(rows[0])` reddens. The packet's own "outcome-provable, not call-shape" framing
+pointed **away** from the one assertion that works. v2 names reference identity as a deliberate,
+reasoned exception.
+
+**The framing in D2 was also partly wrong, and that is worth owning.** D2 called T162 *"novel, not
+settled"*. The gate found that **`checkin.test.ts:45-123` already tests this exact formula** —
+`aggregateParticipationForStudent` is `aggregateParticipationRows` plus a season filter, and that
+green file already covers empty→null, single-row-verbatim, multi-row summing, the rounding table, and
+**the denominator floor asserting `Number.isFinite(...)`, which is C2 outright**. T162's
+top-priority item is **copy-and-adapt**. **The gate was still worth running — but for the
+mutation-detectability defects, not for the metric premise, which held.**
+
+**What held:** every §2 claim about the metric. `present_ct` does include late, `late_ct` is a
+subset, and dividing `presentCt` alone matches MET-01 — confirmed three independent ways. That was
+the finding the gate was ostensibly for, and it needed no correction.
+
+**Round 1 of 2 (item 19a).** If round 2 returns REVISE again, the row is **parked for the owner**,
+not looped a third time and not overridden.
+
+**Filed from this gate (item 20): T600** — `meetings.ts:465-489` and `checkin.ts:340-373` are two
+TypeScript copies of one view expression, with no shared helper and no test asserting they agree.
+Not fixed here: it crosses into W1's `checkin.ts` and needs an ownership call.
+
+**Note on citation ambiguity:** `D1`/`D2`/`D3` are scoped **per window**. This file now contains
+more than one section numbered `D2` (the W4+W5 window has its own). **Always cite as
+"W3-A window, D<n>".**
+
+### D4 — T162 PARKED for the owner (item 19a). The row's own premise is false, and the error is systemic across four rows.
+
+**Gate round 2 returned REVISE. Item 19a caps the gate at two rounds, so this escalates rather than
+looping. No third round was run and none should be.** T162 is **not dispatched**.
+
+**All eleven round-1 findings were verified fixed** by round 2, each by running it — including the
+C6 control-flow BLOCKER, whose corrected assertion reproduced the exact quoted failure at exit 1.
+Packet v2 is otherwise dispatch-clean. **The new BLOCKER is a different, older premise that round 1
+missed and v2 re-affirmed with a ✅ without running it.**
+
+#### The finding
+
+**T162's headline — "`loaders/meetings.ts` has 0 tests across 726 lines" — is false.**
+`MeetingsList.test.tsx:1803-2272` imports `../../lib/supabase/loaders/meetings` directly and
+unit-tests it in **six dedicated describes, 17 tests**, covering **all five** of the packet's
+coverage items.
+
+**The consequence is the failure mode this project keeps paying for.** Measured: C1, C3, C5 and C6
+already go **RED at exit 1** against the shipped suite with **zero new tests written**. A worker
+following §7 — "record each mutation's real output" — would observe RED four times and honestly
+record four passes, having written nothing of value. **The packet's own anti-vacuity protocol would
+have certified a vacuous test file.** Only **C2** (denominator floor) and **C4** (single-row
+reference identity; the shipped assertion at `:2017` is the weak `toEqual`) are genuine gaps — the
+only two mutations that leave all 1946 tests green.
+
+#### It is systemic, and the other three rows are corrected too
+
+The claim traces to `task-ledger.md`'s external audit, which counted **files named
+`<module>.test.ts`** rather than tests *of* the module. **Every "0 tests" row it produced is
+overstated.** Measured 2026-08-04:
+
+| Row | Claim | Reality |
+|---|---|---|
+| **T161** `loaders/checkin.ts` | "0 tests / 521 lines" | **A dedicated `checkin.test.ts` EXISTS with 20 `it` blocks**, plus 2 importing files. T162's own gate named it the *template* for this arithmetic. |
+| **T162** `loaders/meetings.ts` | "0 tests / 726 lines" | 17 direct unit tests in `MeetingsList.test.tsx` |
+| **T163** `loaders/reports.ts` | "0 tests / 729 lines" | no dedicated file, but **4** test files import it |
+| **T164** `loaders/kpi.ts` | "0 tests / 255 lines" | no dedicated file, but **2** test files import it |
+
+**T161 is the worst of these** — it claims zero tests for a module that has a dedicated, thorough
+test file. All four rows are annotated in the ledger. **T161 is W1's and T163/T164 are W4's; this is
+a factual correction to a false claim, not W3-A doing their work.** Left un-annotated, each would
+have sent a worker to rebuild coverage that exists.
+
+#### Owner decisions needed on T162
+
+1. **Re-scope to the measured gap** — C2, C4, and an outcome-provable replacement for the call-shape
+   ordering spy at `MeetingsList.test.tsx:2166` (which the packet's own §5 forbids) — **or close the
+   row as substantially already-done.**
+2. **Rule on duplication:** should a new `meetings.test.ts` duplicate, supersede, or leave the 17
+   existing tests? Moving them touches `MeetingsList.test.tsx` and would create a **third**
+   maintenance site for the MET-01 arithmetic (see **T600**).
+
+#### Process lesson, third occurrence
+
+T403's acceptance criterion contradicted the PRD. T404's whole premise was wrong for this team.
+**Now T162's premise was inherited from an audit that measured the wrong thing.** In all three the
+chain verified the *packet* diligently and nobody re-measured the *ledger row it came from*.
+**19c says "verify your own citations"; it does not say "verify the row's."** That gap is now
+three-for-three and is worth a constitution item.
+
+**The wave continues with T160**, which is independent of all of this.
+
+### D5 — the measuring pass. **D4 over-corrected: T164's "0 tests" claim is TRUE, and that annotation is retracted.**
+
+Owner asked for a measuring pass across the four "0 tests" rows before any of them are dispatched.
+**No dependency installed** — `@vitest/coverage-v8` is absent and a new dependency is an escalation
+class, so this is a **structural** measurement: which exported symbols are referenced by any test
+file, with comments stripped so a name in prose does not count as coverage.
+
+**Stated limit, so nobody over-reads it: this is function-level, not line-level.** A referenced
+export may still be thinly tested. It is a **lower bound on coverage and an upper bound on the gap**.
+
+| Row | Module | Lines | Test files exercising it | Exports referenced | Verdict |
+|---|---|---:|---|---|---|
+| **T161** | `checkin.ts` | 521 | **3** (incl. a dedicated `checkin.test.ts`), 144 it-blocks | **6/7** | claim **FALSE** — substantially covered |
+| **T162** | `meetings.ts` | 726 | 2, 87 it-blocks | **11/11** | claim **FALSE** — every export exercised |
+| **T163** | `reports.ts` | 729 | 4, 83 it-blocks | **6/6** | claim **FALSE** — every export exercised |
+| **T164** | `kpi.ts` | 255 | **0 at runtime** | **0/2 invoked** | claim **TRUE** — see below |
+
+#### The retraction
+
+**D4 swept T164 in with the other three and called its premise "suspect". That was wrong.**
+
+D4 reasoned from *"two test files import the module"*. Measured properly, both imports are
+**`import type` only** (`KpiStrip.test.tsx:24`, `AppShell.test.tsx:48`) — they take `KpiStripData` /
+`LoadKpiStripDataFn` and never the runtime. Every apparent hit on `loadKpiStripData` in
+`KpiStrip.test.tsx` is the component's **injected prop being stubbed**
+(`loadKpiStripData: async () => FIXTURE_KPI_DATA`), which exercises `KpiStrip`, not the loader.
+**Neither `makeLoadKpiStripData` nor `loadKpiStripData` is ever invoked by a test.**
+
+**So T164's 255 lines of runtime genuinely are untested, the original row stands, and its ledger
+annotation is corrected from "premise suspect" to "premise confirmed".**
+
+**The lesson is the same one D4 raised, applied to D4 itself:** "a test file imports this module" is
+the *same class of proxy* as "a file named `<module>.test.ts` exists" — cheaper to check than the
+real thing, and wrong in the same direction. D4 caught the audit's proxy and then reached for its
+own. Only invocation counts.
+
+#### Net position for the owner
+
+- **T161, T162, T163 are substantially covered.** Their line counts (521 / 726 / 729 = ~1,976 lines
+  advertised as untested) do **not** represent real gaps. Re-scope or close.
+- **T164 is the real one.** 255 lines, no runtime test at all. **If only one of these four gets
+  done, it is this one** — and its premise needs no further verification.
+- Two narrower gaps worth carrying: `checkin.ts`'s `getAccessToken` singleton (the
+  `makeGetAccessToken` factory **is** tested; only the trivial singleton wrapper is not — likely not
+  worth a row), and T162's measured C2/C4 gaps already recorded in its parked row.
+
+### D6 — T160 done by the orchestrator without a worker round
+
+**FAST tier, a 6-reference file-local type rename, fully verified by `tsc` plus an unchanged test
+suite.** A worker+checker cycle costs roughly 175K tokens; this change is smaller than its own packet
+would have been. Dispatching one would have been process theatre at the owner's expense — and the
+owner had raised cost explicitly earlier in this session.
+
+**Disclosed both ways:** the ledger row and the verification-log entry each state that this is
+orchestrator-authored and **not independently reviewed**. **Reversible:** the diff is a pure
+identifier swap, proven by blanking the identifier from both sides and observing every changed line
+collapse to identical text.
+
+**This is not a precedent for STANDARD or HEAVY rows.** T197 (STANDARD) got a worker and a checker,
+and that checker found two real NITs the orchestrator had not — including one that survived the
+orchestrator's own mutation replay.

@@ -2014,7 +2014,51 @@ describe('aggregateParticipationRows (T122 .limit(1) fix decision)', () => {
       excused_ct: 0,
       participation_pct: 57.1,
     };
-    expect(aggregateParticipationRows([row])).toEqual(row);
+    // T162: `toBe`, NOT `toEqual`. The function short-circuits on
+    // `rows.length === 1` and returns the SAME OBJECT. Deleting that
+    // short-circuit makes it recompute -- and the recomputed object is
+    // byte-identical here (round(100*4/(7-0),1) === 57.1), so `toEqual`
+    // stays GREEN under that mutation and proves nothing. Reference
+    // identity is the only assertion that reddens. Measured, not assumed.
+    expect(aggregateParticipationRows([row])).toBe(row);
+  });
+
+  // T162: the `Math.max(expectedCt - excusedCt, 1)` denominator floor
+  // (`loaders/meetings.ts:477`) had NO test -- deleting it left all 1946
+  // tests green. Without it, a student whose every expected session was
+  // excused divides by zero. Mirrors the same guard's coverage on the twin
+  // function at `loaders/checkin.test.ts:86-93`.
+  //
+  // Fixture is view-possible, deliberately: if every expected session was
+  // excused then none can have been attended, so `present_ct` MUST be 0.
+  // That is why the mutation yields NaN rather than Infinity.
+  it('guards the denominator at 1 when every expected session was excused (no divide-by-zero)', () => {
+    const result = aggregateParticipationRows([
+      {
+        student_id: 's1',
+        team_id: 'team-a',
+        season_id: 'season-1',
+        expected_ct: 3,
+        present_ct: 0,
+        late_ct: 0,
+        excused_ct: 3,
+        participation_pct: 0,
+      },
+      {
+        student_id: 's1',
+        team_id: 'team-b',
+        season_id: 'season-1',
+        expected_ct: 2,
+        present_ct: 0,
+        late_ct: 0,
+        excused_ct: 2,
+        participation_pct: 0,
+      },
+    ]);
+    // Summed: expected 5, excused 5 -> 5 - 5 = 0 -> greatest(0, 1) = 1.
+    // 100 * 0 / 1 = 0. Without the floor: 0 / 0 -> NaN.
+    expect(result?.participation_pct).toBe(0);
+    expect(Number.isFinite(result?.participation_pct)).toBe(true);
   });
 
   it("sums counters across every row and recomputes participation_pct using the view's own expression", () => {
@@ -2165,6 +2209,51 @@ describe('resolveCurrentStudentId (T096, Trap #4 real resolution)', () => {
     expect(eqSpy).toHaveBeenCalledWith('parent_profile_id', 'profile-parent-1');
     expect(orderSpy).toHaveBeenCalledWith('created_at', { ascending: true });
     expect(limitSpy).toHaveBeenCalledWith(1);
+    expect(result).toBe('student-earliest');
+  });
+
+  // T162: the test above asserts the sort was REQUESTED, not that it WORKED --
+  // its `orderSpy` ignores its arguments and the fixture resolves the same row
+  // either way, so deleting `.order('created_at', {ascending:true})` from
+  // `loaders/meetings.ts:512` leaves it GREEN. That matters here specifically:
+  // Trap #4's rule is EARLIEST-linked child, so a parent with two children
+  // silently resolves to the wrong one if the ordering is lost.
+  //
+  // This fake instead SORTS PHYSICALLY, and only when `.order()` is called.
+  // The rows are seeded in reverse `created_at` order, so an unsorted read
+  // returns the LATER-linked child and the assertion reddens.
+  it('a parent with TWO linked students resolves the earliest-linked one -- outcome-provable, not call-shape', async () => {
+    const linkRows = [
+      { student_id: 'student-later', created_at: '2026-03-01T00:00:00Z' },
+      { student_id: 'student-earliest', created_at: '2026-01-01T00:00:00Z' },
+    ];
+
+    const makeChain = (rows: readonly { student_id: string; created_at: string }[]) => ({
+      order: (column: string, opts?: { ascending?: boolean }) =>
+        makeChain(
+          [...rows].sort((a, b) => {
+            const dir = opts?.ascending === false ? -1 : 1;
+            const av = String(a[column as 'created_at']);
+            const bv = String(b[column as 'created_at']);
+            return av < bv ? -dir : av > bv ? dir : 0;
+          }),
+        ),
+      limit: (n: number) =>
+        Promise.resolve({
+          data: rows.slice(0, n).map(({ student_id }) => ({ student_id })),
+          error: null,
+        }),
+    });
+
+    const client = {
+      from: () => ({ select: () => ({ eq: () => makeChain(linkRows) }) }),
+    } as unknown as SupabaseClient;
+
+    const resolve = makeResolveCurrentStudentId(() => client);
+    const result = await resolve({ id: 'profile-parent-1', role: 'parent' });
+
+    // Seeded later-first. With `.order(...)` the earliest wins; without it,
+    // `.limit(1)` takes `student-later` and this fails on a real value.
     expect(result).toBe('student-earliest');
   });
 

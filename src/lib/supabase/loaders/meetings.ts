@@ -15,7 +15,7 @@
  * `queryEvents`/`querySessions`/`queryTeams`/`queryAttendance*` below fetch
  * real rows and map them (snake_case -> camelCase) into plain objects
  * structurally identical to `MeetingsList.tsx`'s own (unexported)
- * `FixtureEvent`/`FixtureEventSession`/`FixtureTeam`/`FixtureAttendanceRecord`
+ * `FixtureEvent`/`FixtureEventSession`/`Team`/`FixtureAttendanceRecord`
  * shapes -- then `makeLoadCoachMeetingsData`/`makeLoadStudentMeetingsData`
  * below call that file's own EXPORTED `buildCoachMeetingRows`/
  * `buildStudentMeetingsData` directly. NAV-07's "meeting-type sessions only"

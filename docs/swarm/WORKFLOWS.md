@@ -58,7 +58,7 @@ Tier is the **heaviest** item in the workflow, per constitution item 26.
 |---|---|---:|---|---|---|
 | **W1** | **Check in** — student arrives and gets counted | 4 | HEAVY | **Broken end to end** | W4, W6, W7, W8 |
 | **W2** | **Run an outreach event** — create → RSVP → attend → complete | 13 | HEAVY | Partly working | W1, W3, W6, W7 |
-| **W3** | **Run a meeting** — schedule → attendance → participation % | 4 | HEAVY | **Backend built; mount UNBLOCKED 2026-08-03** | W2, W4, W6, W7 |
+| **W3** | **Run a meeting** — schedule → attendance → participation % | **1** | HEAVY | **T197/T160/T162 shipped 2026-08-04; only T196 (the mount) remains** | W2, W4, W6, W7 |
 | **W4** | **Hours & goal accounting** — the numbers users are shown | 10 | HEAVY | **One confirmed bug** | W1, W3, W6, W7 |
 | **W5** | **Home dashboards** — student/parent/coach landing state | 10 | STANDARD | Mostly real | W6, W7, W8 |
 | **W6** | **Calendar & subscribe** | 0 | — | **Merged; database deployed; hosted smoke pending** | everything |
@@ -178,9 +178,9 @@ parked** because putting a real dialog on a fixture-backed console would write r
 | Row | What | Tier |
 |---|---|---|
 | **T196** | *(the mount — **UNBLOCKED 2026-08-03**, `LiveConsole` is real)* | HEAVY |
-| **T197** | `onEditAttendance`'s row scoping is unasserted — deleting both `.eq()`s leaves the suite green | STANDARD |
-| **T162** | `loaders/meetings.ts` has **0 tests** across 726 lines | STANDARD |
-| **T160** | `MeetingsList`'s team type is still called `FixtureTeam` after T147 wired real data through it | FAST |
+| ~~**T197**~~ | ~~row scoping unasserted~~ — ✅ **DONE 2026-08-04** (worker + checker) | — |
+| ~~**T162**~~ | ~~`loaders/meetings.ts` has 0 tests~~ — ✅ **DONE 2026-08-04.** The "0 tests" premise was **false**; re-scoped to the 3 measured gaps | — |
+| ~~**T160**~~ | ~~team type still called `FixtureTeam`~~ — ✅ **DONE 2026-08-04** | — |
 
 **Owns:** `pages/meetings/MeetingsList.tsx`, `ScheduleMeetingsDialog.tsx`, `EndMeetingDialog.tsx`,
 `StudentMeetingView.tsx`, `loaders/meetings.ts`, `loaders/endMeeting.ts`
