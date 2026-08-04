@@ -8993,3 +8993,90 @@ and T300's C1 was written to avoid.
 `tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise from `main`** · vitest
 **78 files / 1951 tests**, targeted `OutreachDetail.test.tsx` **113 passed, exit 0** · build ✓.
 `.env.local` absent.
+
+---
+
+## T164 — first runtime tests for `loaders/kpi.ts` (W4's file, owner-authorized)
+
+**PASS, attempt 1. `86e8648`. Checker verdict PASS, 1 MINOR (a mutation survivor with no user
+surface), filed rather than fixed.** Worker `worker-implementer` (sonnet — no item-18 trigger: the
+loader contains **no arithmetic at all**; the metric math lives in W4's `*kpi_views.sql`, which it
+only reads).
+
+### The one true row of four
+
+T161, T162 and T163's *"0 tests"* claims were all retracted this week — an audit had counted **files
+named `<module>.test.ts`** rather than tests *of* the module (D5, D7). **T164 survived every check.**
+Verified three times before packeting and a fourth time by the checker at base: **0 runtime imports,
+0 invocations of either export.** The two apparent references are `import type` (erased at runtime),
+and every use of `loadKpiStripData` in `KpiStrip.test.tsx` is the component's **injected prop being
+stubbed** — which tests `KpiStrip`, not this loader.
+
+### Gate skipped, on the record
+
+**Item 19b, decision D4.** Premise measured by direct observation rather than inherited; settled
+pattern with three in-repo precedents; no item-18 risk class. **The checker re-verified the premise
+independently and it held** — so the skip was sound. Same reasoning as D1/T197.
+
+### The defect class this row exists for
+
+`mapKpisDbRowToKpiStripData` is a **verbatim 11-field column rename with no logic**. Swap any two
+and **nothing crashes** — a coach is simply shown meeting hours labelled as outreach hours. Item
+26's *"lie to a user about their own data"*, exactly.
+
+**A lazy fixture makes that undetectable.** If two fields share a value, a swap between them is
+invisible and the suite stays green. **The fixture carries 11 distinct values across 11 fields** —
+the checker verified this **programmatically rather than by eye**, including the string/date pair.
+
+### Mutations — replayed by orchestrator AND checker, not relayed
+
+All seven packet criteria red at exit 1. The orchestrator independently replayed C1 and saw
+`meetingHours: 22 → 33`, `outreachHours: 33 → 22` in the failure diff.
+
+**The checker then ran eight mutations of its own — 7 caught, 1 survivor:**
+
+| Its own mutation | Result |
+|---|---|
+| `total_hours`↔`competition_hours` | red |
+| `most_recent_event_title`↔`most_recent_event_date` (the string/date pair) | red |
+| single field nulled | red |
+| `mapTeamCountDbRowToBreakdownRow`: `team_id`↔`team_name` | red |
+| `activeStudentsCount` ← `team_sort_order` | red |
+| map path passed `[]` instead of `teamBreakdown` | red |
+| `activeStudentsCount: 0` hardcoded | red |
+| **`seasonId: row.season_id` → hardcoded constant** | **SURVIVED, exit 0** |
+
+**The survivor, honestly scoped:** every mapping test passes the loader the same id the fixture row
+carries, so the `season_id` **passthrough** is coincidentally satisfied rather than discriminated.
+**Narrow:** all *swaps* involving `season_id` are still caught (values distinct), the zero path does
+discriminate it (`'season-missing'`), and `KpiStrip.tsx` **never renders** `KpiStripData.seasonId`.
+**No user-visible lie today. Filed, not fixed** — one-line fixture change, W4's T700 block.
+
+### The worker disclosed a weakness on itself, and the checker tested it
+
+The worker flagged that its "both views queried" assertion for C6 was **call-shape**
+(`fromSpy.toHaveBeenCalledWith`). The checker **deleted those lines and re-ran C6** — still **red at
+exit 1**, on two outcome-based assertions. C6 never depended on the call-shape check. That is the
+right way to handle a self-disclosed weakness: test it, don't take it on trust.
+
+### Not a re-implementation
+
+Value import of `makeLoadKpiStripData`, invoked in all 8 tests. **No `vi.mock` anywhere.** The stub
+implements transport only and returns raw snake_case rows — it contains no camelCase mapping, so it
+cannot stand in for the logic under test. The real `createLoader` runs. Expected objects are
+hand-written literals, not derived from the fixture — the shape that would have made this vacuous is
+absent.
+
+### Gates
+
+`tsc` **0** · eslint **0 errors** / 364 pre-existing warnings · prettier **clean** · vitest
+**79 files / 1960 tests, exit 0**. Base `08a1092` re-measured in the checker's own worktree: 78 /
+1952. **Delta exactly +1 file / +8 tests.**
+
+### Environment note, chased and cleared
+
+The checker observed 12 failures on the shared tree mid-review and correctly flagged it as *"captured
+on a tree in flux"*. **Chased: not real.** `origin/main` measured green in an isolated worktree
+(78 files / 1993 tests, exit 0), and the T196 branch at `02af8d7` also exits 0. The shared tree had
+simply been switched branches by the orchestrator mid-merge. **Worth copying: the checker reported
+an anomaly it could not attribute rather than ignoring it or blaming the task.**
