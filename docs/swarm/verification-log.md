@@ -9808,3 +9808,102 @@ deletes code · `vitest` **78 files / 1996 tests** · `vite build` 0.
 Separately and still true: `20260804000000_volunteer_hours_outreach_only.sql` is direct in-repo
 precedent for **T801** — it `create or replace`s two already-applied views from a new migration,
 citing constitution item 10 by name.
+
+---
+
+## T801 — two wrong comments corrected without touching the file that carries them
+
+**Tier: STANDARD.** No behaviour change, no data change, no application code — but it introduces a
+mechanism this repo had never used, so the reasoning is recorded in full.
+
+### The choice between T801's two options was mine to make only in one direction
+
+The row named two closures: **(a)** a new additive migration writing corrections into the catalog, or
+**(b)** amending constitution item 10 to exempt comment-only edits, then fixing in place. Owner said
+work it, without picking.
+
+**(a) is the one an implementation task is allowed to choose.** (b) changes a BLOCKER-class rule; that
+is an owner decision, and quietly taking it while "just fixing comments" would be smuggling a
+constitutional amendment into a documentation task. (a) needs no rule change and has adjacent
+precedent — `20260804000000_volunteer_hours_outreach_only.sql` corrects already-applied views from a
+new file, citing item 10 by name.
+
+### Both claims were re-verified before writing, and one was slightly off
+
+Filed rows are not evidence. Re-checking found:
+
+- **The RLS claim (correction 2) holds.** `security_invoker` appears **6 times** in `supabase/` — but
+  every one is comment prose. As a real `with (security_invoker = …)` clause it appears **zero
+  times**, so every view executes as its owner and does not apply the caller's RLS. The T801 row said
+  "appears zero times in `supabase/`", which is imprecise as written; the substance is right and the
+  distinction is now recorded rather than inherited.
+- **The second reader is real.** `students.ts:464` (`queryStudentGoalProjectionById`) selects
+  `team_id` into `StudentScope.teamId`, and `students.ts:434-443` records that this reader once used
+  it for functional scoping — the T187 defect. The original comment's "used here ONLY for the display
+  badge" is wrong **by omission**, which is why the correction pins the omitted reader rather than
+  contradicting a falsehood.
+
+**The half that was true stays true.** The original also said the column is never used for rollup math
+in that view. It isn't — the view has no `student_teams` join. A "correction" that discarded a
+correct statement would be its own inaccuracy, so assertion A3 exists specifically to pin its
+survival.
+
+### What is honestly weak about option (a)
+
+**A reader who opens `20260723000001_dashboard_views.sql` still sees both wrong `--` comments.** Item
+10 is exactly the rule that forbids rewriting them. Catalog comments (`\d+`, `obj_description`) and a
+new file in timestamp order are *additional* reach, not a replacement — so both wrong comments are
+quoted **verbatim** in the new migration's header, and a reader who finds only that file still learns
+what was wrong and where.
+
+**`comment on` had zero prior use in this repo.** That is a new convention. It is named in the
+migration header rather than introduced silently.
+
+### Measured on a real PostgreSQL 16.13, not reasoned
+
+No PGlite in this environment, so a scratch PG16 cluster was initialised (as an unprivileged user —
+`initdb` refuses to run as root) with a minimal Supabase-shaped bootstrap: `auth` schema,
+`auth.users` widened to the columns the invite trigger touches, `auth.uid()` reading a GUC, and the
+`anon`/`authenticated`/`service_role` roles.
+
+Every migration then applied to a fresh database. **Two were skipped and the skip is reported, not
+swallowed:** `20260719000000_cron.sql` (needs `pg_cron`) and `20260720000001_avatar_storage.sql`
+(needs `storage.buckets`) — both Supabase-managed, and neither defines or reads a dashboard view.
+
+| # | Mutation | Result |
+|---|---|---|
+| 1 | Drop one view's comment | **RED** — A1 names `v_season_attendance_rate` |
+| 2 | **Reintroduce the ORIGINAL wrong text** on a view | **RED** — A1 names `v_event_student_hours` |
+| 3 | Strip the second reader from the column comment | **RED** on A2, **green on A3** — they are independent |
+| 4 | `alter view … set (security_invoker = on)` | **RED** — A4 names the view |
+| — | Re-apply the migration verbatim | All 4 green again — **proves idempotency** |
+
+Mutation 2 is the one that matters: it is the actual regression this task guards against, and a
+presence-only check would have passed it. A1 pins the *direction* of the claim, not just that a
+comment exists.
+
+**The "no view definition changes" claim is measured.** An `md5` over
+`pg_get_viewdef` for every public view is byte-identical before and after applying the migration.
+
+### The assertions file departs from its own precedent, deliberately
+
+`supabase/tests/t801_dashboard_views_comment_assertions.sql` follows T322/T205 for structure —
+PASS/FAIL collected into a temp table, one `raise` at the end, so a run reports every result rather
+than aborting on the first. But it has **no fixture INSERTs**, because a comment-only correction has
+no row-level behaviour to construct. It also states its own narrowness: it proves the text is in the
+catalog, **not** that the RLS mechanism behaves as described — that was measured separately and lives
+at `20260731000000_leaderboard_students_view.sql:32-46`.
+
+A4 is the assertion with a future: if anyone ever turns `security_invoker` on, these comments become
+wrong, and A4 is what says so — rather than letting them rot the way the ones being corrected did.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `vitest` **80 files / 2010 tests** (unchanged — this task ships no
+application code).
+
+### Not implied by this task
+
+**No security work.** T185 examined the exposure itself and closed no-change on the owner's
+proportionality ruling. This corrects a *description*. Anyone reading the new migration as a
+newly-discovered vulnerability is reading it wrong, which is why the header says so explicitly.
