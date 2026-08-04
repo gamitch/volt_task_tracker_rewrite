@@ -9788,9 +9788,23 @@ deletes code · `vitest` **78 files / 1996 tests** · `vite build` 0.
 
 ### Filed, not fixed
 
-**T803** (the duplicated participation metric) and **T804** — the latter found while reading these
-views and materially more important than the tile: `v_student_participation` scopes membership off the
-legacy `students.team_id` rather than ACTIVE `student_teams`, which is **the T187 defect still live in
-SQL**, feeding `checkin.ts`, `reports.ts` and `meetings.ts`. The newly-pushed
-`20260804000000_volunteer_hours_outreach_only.sql` is direct precedent for fixing it without editing an
-applied file — and, separately, is precedent for **T801** too.
+**T803** (the duplicated participation metric) and **T804**.
+
+> **CORRECTION, 2026-08-04 — T804 was wrong and is withdrawn.** This entry originally claimed
+> `v_student_participation` still scopes membership off the legacy `students.team_id`, calling it "the
+> T187 defect still live in SQL" across three loaders. **It is not.** That text lives in
+> `20260717000003_metric_views.sql`, but `20260722000000_membership_views.sql:59` already
+> `create or replace`s the view onto ACTIVE memberships
+> (`join student_teams st on st.student_id = s.id and st.left_on is null`). The last definition wins,
+> and the fix predates this task by two weeks. `v_team_participation` inherits the correct semantics;
+> `checkin.ts`/`reports.ts`/`meetings.ts` read a correct view; no student is mis-counted.
+>
+> **The mistake:** I searched for the view name, read the first match, and reported it as live without
+> checking for a later redefinition — in a `create or replace` codebase, finding *a* definition is not
+> finding *the* definition. Nothing in T198's shipped code depended on the claim, so the code is
+> unaffected; only this narrative was wrong. PR #76's body carries the same error and cannot be edited
+> after merge, which is disclosed rather than quietly dropped.
+
+Separately and still true: `20260804000000_volunteer_hours_outreach_only.sql` is direct in-repo
+precedent for **T801** — it `create or replace`s two already-applied views from a new migration,
+citing constitution item 10 by name.
