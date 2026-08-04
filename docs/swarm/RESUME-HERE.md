@@ -73,6 +73,12 @@ not a ticket, with an open owner call and a failure mode of real `absent` rows a
 
 ## UPDATE — 2026-08-03 (earlier): W2 shipped T330, T402, T401 and T306. **T174 is the next W2 row.** Everything below about T330 is superseded.
 
+> **The W2 section immediately below is CONCURRENT with this one, not superseded.** It covers W2's rows; this one covers W3-A. Same day, different workflows — read both.
+
+---
+
+## UPDATE — 2026-08-04 (2026-08-04, W2 — concurrent with the W3-A section above): W2 shipped T330, T402, T401, T306, T174 and T190. **T406 and T300 are in flight; T325 is the best-scoped row left.** Everything below about T330 is superseded.
+
 **`main` = `380266e`**, green and measured on it directly: `tsc` 0 · eslint **0 errors / 362
 warnings** · vitest **78 files / 1928 tests**. **Measure your own baseline anyway** — `main` moved
 five times on 2026-08-03 and every figure quoted in older sections of this file is stale.
@@ -114,10 +120,20 @@ on PR #28, and it executed once #28 landed. **Check premises on the branch you w
 
 ### Open W2 rows, in order
 
-**T306 MERGED** (PR #51) — a session with recorded attendance now shows who actually came, triggered
-by whether attendance rows exist rather than by date or session status (the owner records attendance on
-the day, so both of those would have failed him). **T174 is next.** Then T300, T190, T325, T165, T152,
-T301. See `W2-KICKOFF.md` §4.
+**Six W2 rows merged**: T330 (#43), T402 (#44), T401 (#47), T306 (#51), T174 (#52), T190 (#54).
+
+**In flight:** **T406** (HEAVY — narrow `markDayComplete`'s write so a concurrent QR scan survives;
+premise gate proving the narrowed-upsert claim) and **T300** (placeholder coach id).
+
+**T325 is the best-scoped row left, and it is now MEASURED rather than alleged** — 213px of horizontal
+overflow at 390×844 in real Chromium, with the mechanism identified and the audit's own description
+shown to be misleading. `W2-KICKOFF.md` §4a has the finding and the rig recipe. Then T165, T152, T301.
+
+**Filed by W2, not yet packeted:** T500 (adult-volunteer double-count — **W4's files**), T501 (bare
+em-dash a11y — repo-wide), T502 (residual silent truncation — **W1's file**), T503 (students seeing
+teammates' RSVPs — **owner ruled: widen RLS, but PRD 8.3 + item 3 mean it is not improvisable, and the
+scope is still his call**), T504 (T174's defect in a file T174 never touched — honestly unverifiable
+today, since nothing reads the field).
 
 **Filed by W2 this session, not yet packeted:** **T500** (an orphan event's adult-volunteer figures
 double-count in season totals — **W4's files**, `pages/reports/**`), **T501** (the bare `—`

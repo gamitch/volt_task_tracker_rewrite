@@ -8272,6 +8272,69 @@ block, +1 for the new criterion-1 test asserting the DOM contains no adult-volun
 
 ---
 
+## T190 — the shipped fixtures no longer key to the placeholder, so new tests discriminate by construction
+
+**STANDARD tier (item 26)** — no write path, one file pair. Worker implemented; the orchestrator
+replayed every mutation; no separate checker round.
+
+Gates on the merged base, `.env.local` absent: `tsc` 0 · `vite build` ✓ · prettier clean · eslint
+**0 errors / 364 warnings — no rise** · vitest **78 files / 1945 tests** (+1) · targeted **108** exit 0.
+
+After T170, `PLACEHOLDER_CURRENT_STUDENT_ID` had no runtime role, but the harness default still
+returned it **and the fixtures were still keyed to it** — so any test omitting `resolveStudentId` got
+placeholder-in / placeholder-out. Not a coverage hole; a **future-authoring hazard**, and precisely how
+T170's own MAJOR happened. Fixtures now key to `student-lena-osei`, the default matches nothing, and a
+no-stub render sees an empty viewer.
+
+### The ledger row's own cost estimate was wrong, and measuring is what caught it
+
+The row claimed *"Measured cost: exactly 3 test assertions need their expected figures updated."*
+Applying the rekey before packeting produced **`6 failed | 101 passed`**. The three it named, plus
+`getUnansweredRsvpCount`'s fixture-count test and — the ones that mattered — **T193's C3 and C6**,
+acceptance criteria of a HEAVY task merged the previous day. **All six of the row's source citations
+were also stale**; T330 had grown the file ~150 lines.
+
+**The prescription was changed as a result.** The row said update the expected figures. That would have
+silently weakened T193's evidence, whose subject is *what a rejected write restores*. Instead the
+affected tests **stub the viewer they need**, which leaves every `expect(...)` byte-identical **and**
+serves the task's own goal: a test that needs a real viewer now has to say so. Verified — T193's C3
+gained only a `renderAsUser` stub, its assertions untouched, and C6 changed not at all.
+
+**One disclosed exception, and it is the right one.** `getUnansweredRsvpCount`'s test is a pure-function
+test with no render, so there is no `resolveStudentId` to stub — structurally impossible. Fixed by a
+**value-preserving identifier swap** (`PLACEHOLDER_CURRENT_STUDENT_ID` → `viewerStudentId`) with
+`.toBe(1)` unchanged. The worker reported this as contradicting the packet's blanket "byte-identical"
+framing rather than quietly doing it, which is the behaviour the rule exists to produce.
+
+### The worker refuted one of the packet's own criteria, and the orchestrator confirmed it
+
+**C3's named mutation was wrong.** The packet said *"re-key `FIXTURE_STUDENTS` back to the
+placeholder"* would redden C3's property (a no-stub render sees an empty viewer). Replayed both ways:
+
+| Mutation | Result |
+|---|---|
+| rekey `FIXTURE_STUDENTS` (as the packet named it) | **4 red — but none of them C3's own guard**; the failures are coach-view and pure-function tests, where the students fixture drives counts |
+| rekey `FIXTURE_RSVPS` (the worker's correction) | **10 red** — this is what actually drives the viewer's emptiness |
+
+The packet's mutation reddened *something*, which is exactly how a wrong criterion survives review: a
+count delta looks like evidence. It is not evidence unless it reddens **the property the criterion
+claims**. The worker also added a direct C3 guard, because no existing test literally exercised the
+no-stub case.
+
+### Filed, not fixed (item 20)
+
+**T504** — the other nine `FIXTURE_RSVPS.respondedBy` values in this file are still `students.id`-shaped
+in a `profiles.id` column: **T174's defect in a file T174 never touched**. T174 could do a clean rename
+because `OutreachDetail.tsx`'s student fixtures carry `profileId`; **this file's do not**. T190 rekeyed
+only the one row it touched, onto a disclosed `profile-lena-osei` stand-in.
+
+**And it is honestly unfixable-with-evidence here today:** unlike T174, where
+`resolveRsvpResponderAttribution` reads the field, **nothing in `OutreachList.tsx` reads `respondedBy`
+at all**, so no mutation can redden a fix. Filing it beats shipping a change this repo's own standard
+could not verify.
+
+---
+
 ---
 
 ## T197 — `onEditAttendance`'s row scoping, asserted (W3-A auto-mode wave)
