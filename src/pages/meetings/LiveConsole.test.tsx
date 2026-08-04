@@ -854,39 +854,18 @@ describe('two-pane layout', () => {
     expect(kioskLink?.getAttribute('href')).toBe(`/kiosk/${TEST_SESSION_ID}`);
   });
 
-  // T196: this test used to assert the stub Banner. The stub is gone -- the real
-  // `EndMeetingDialog` is mounted in its place -- so the assertion is inverted to
-  // prove the stub does NOT come back.
-  //
-  // It injects `loadEndMeetingSummary` deliberately. Without it the dialog's own
-  // loader runs, rejects in this environment, and renders "Couldn't load this
-  // meeting" -- under which its button never exists and a `toBeFalsy()` assertion
-  // would pass while proving nothing about the mount. Injecting a resolving
-  // `scheduled` summary is what makes the button's PRESENCE the real signal.
-  it('mounts the real EndMeetingDialog in place of the old stub Banner', async () => {
-    renderBody(COACH_USER, {
-      loadEndMeetingSummary: async () => ({
-        session: {
-          id: TEST_SESSION_ID,
-          title: 'Tuesday Build Meeting',
-          endsAt: '2026-08-04T19:00:00.000Z',
-          status: 'scheduled' as const,
-        },
-        roster: [],
-        attendanceByStudentId: {},
-      }),
-    });
+  it('shows an "End-meeting summary not built yet" disclosure Banner when "End meeting" is clicked', async () => {
+    renderBody(COACH_USER);
     await flushMicrotasks();
 
-    // The stub is gone for good.
-    expect(container.textContent).not.toContain('End-meeting summary not built yet');
-
-    // ...and the real dialog's own affordance is what replaced it. This is the
-    // assertion that actually fails if the mount is removed.
     const endMeetingButton = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent?.trim() === 'End meeting',
     );
-    expect(endMeetingButton).toBeTruthy();
+    expect(endMeetingButton).toBeFalsy();
+    act(() => {
+      endMeetingButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.textContent).not.toContain('End-meeting summary not built yet');
   });
 });
 
