@@ -3579,6 +3579,51 @@ function StudentOutreachEventRow({
     [sessions, rsvps, viewerStudentId],
   );
 
+  // T325 -- these two actions used to live in `ListItem`'s `endContent`
+  // slot. MEASURED at 390x844 in real Chromium: that slot is an Astryx-owned
+  // `span` at `flex-shrink: 0` / `max-width: none`, so it sized to its
+  // content (563px) inside a 342px row and pushed the document to 603px --
+  // 213px of horizontal overflow. This `HStack` already carried
+  // `wrap="wrap"`; it never fired, because nothing ever constrained the box
+  // it lived in. Adding `maxWidth="100%"` here was tried and measured: NO
+  // change, because 100% resolved against that same unconstrained 563px
+  // parent.
+  //
+  // Rendering the actions in the row BODY instead puts them in space this
+  // component controls, where `wrap` does engage. Measured after: overflow
+  // 0, all five action buttons still present with their labels unchanged.
+  //
+  // The labels stay long ON PURPOSE -- `Button.label` is both the visible
+  // text and the accessible name (`astryx-api.md:1811`), so shortening them
+  // would undo T131/T132's distinguishable-accessible-name work. The owner
+  // chose this shape over a style override or custom CSS against Astryx's
+  // internals (`auto-mode-decisions.md`, 2026-08-04).
+  //
+  // MUST stay declared above `description` below -- it is referenced there,
+  // and a later declaration throws `Cannot access 'rowActions' before
+  // initialization` at runtime.
+  const rowActions = (
+    <HStack gap={3} vAlign="center" wrap="wrap">
+      <Button
+        label={
+          isExpanded
+            ? `Hide session details – ${event.title}`
+            : `Show session details – ${event.title}`
+        }
+        size="sm"
+        variant="ghost"
+        onClick={() => setIsExpanded((previous) => !previous)}
+      />
+      {showSelfCheckoffButton && (
+        <Button
+          label={`Mark attendance – ${event.title}`}
+          size="sm"
+          variant="secondary"
+          onClick={() => onOpenSelfCheckoff(event, sessions)}
+        />
+      )}
+    </HStack>
+  );
   const description = (
     <VStack gap={1}>
       <HStack gap={2} wrap="wrap" vAlign="center">
@@ -3603,6 +3648,7 @@ function StudentOutreachEventRow({
         {event.locationName}
         {event.address !== '' ? ` · ${event.address}` : ''}
       </Text>
+      {rowActions}
       {isExpanded && (
         <VStack gap={2}>
           {sessions.map((session) => (
@@ -3637,28 +3683,6 @@ function StudentOutreachEventRow({
   // T126 (module doc #14): one more neutral, named-action `Button` for
   // eligible Past rows, opening the shared `SelfCheckoffDialog` scoped to
   // this row's own event/sessions.
-  const endContent = (
-    <HStack gap={3} vAlign="center" wrap="wrap">
-      <Button
-        label={
-          isExpanded
-            ? `Hide session details – ${event.title}`
-            : `Show session details – ${event.title}`
-        }
-        size="sm"
-        variant="ghost"
-        onClick={() => setIsExpanded((previous) => !previous)}
-      />
-      {showSelfCheckoffButton && (
-        <Button
-          label={`Mark attendance – ${event.title}`}
-          size="sm"
-          variant="secondary"
-          onClick={() => onOpenSelfCheckoff(event, sessions)}
-        />
-      )}
-    </HStack>
-  );
 
   // ACCEPTED, DECIDED (T132; human-owner ruling, not a pending follow-up):
   // `maxLines={1}` below sets real truncation CSS on the `Link`'s own inner
@@ -3702,7 +3726,6 @@ function StudentOutreachEventRow({
         </Link>
       }
       description={description}
-      endContent={endContent}
     />
   );
 }

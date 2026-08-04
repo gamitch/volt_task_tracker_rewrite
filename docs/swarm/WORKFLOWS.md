@@ -59,8 +59,8 @@ Tier is the **heaviest** item in the workflow, per constitution item 26.
 | **W1** | **Check in** — student arrives and gets counted | 4 | HEAVY | **Broken end to end** | W4, W6, W7, W8 |
 | **W2** | **Run an outreach event** — create → RSVP → attend → complete | 13 | HEAVY | Partly working | W1, W3, W6, W7 |
 | **W3** | **Run a meeting** — schedule → attendance → participation % | **1** | HEAVY | **T197/T160/T162 shipped 2026-08-04; only T196 (the mount) remains** | W2, W4, W6, W7 |
-| **W4** | **Hours & goal accounting** — the numbers users are shown | 10 | HEAVY | **One confirmed bug** | W1, W3, W6, W7 |
-| **W5** | **Home dashboards** — student/parent/coach landing state | 10 | STANDARD | Mostly real | W6, W7, W8 |
+| **W4** | **Hours & goal accounting** — the numbers users are shown | 12 | HEAVY | **T205 + T322 merged 2026-08-04; both await owner cutover.** T500 closed unshipped (superseded by T702) | W1, W3, W6, W7 |
+| **W5** | **Home dashboards** — student/parent/coach landing state | 9 | STANDARD | T702 merged; **T198 ruled season-wide** (releases the CoachHome bundle); **T156 parked** | W6, W7, W8 |
 | **W6** | **Calendar & subscribe** | 0 | — | **Merged; database deployed; hosted smoke pending** | everything |
 | **W7** | **Roster & invites** | 5 | STANDARD | Working | everything |
 | **W8** | **Email & notifications** | 2 | — | **Blocked on owner** | everything |
@@ -195,6 +195,15 @@ reason T196 is blocked and two machines editing it will collide.
 
 ## W4 — Hours & goal accounting
 
+> **STATUS 2026-08-04 — this table is stale in three places.** **T205** and **T322** are MERGED
+> (both await the owner's hosted-Supabase cutover; item 16). **T500**, filed here by W2 from T330,
+> closed **unshipped** — superseded by the T702 ruling that deleted the figure it was fixing.
+> **T322's row text was wrong about its own bug**: meeting hours never reached the total (the CTE
+> already filtered `counts_volunteer_hours`); the live exposure was competition's admin-editable
+> toggle. New rows filed this wave: **T700, T701, T703, T704** — T704 needs an owner ruling.
+> Authority for all of it is `auto-mode-decisions.md`, not this file.
+
+
 > Every number the app shows a user about their own contribution.
 
 **Constitution item 26 puts this whole workflow at HEAVY** — it is metric-view SQL, where a mistake
@@ -228,6 +237,15 @@ Give both to one machine, or split strictly: W4 takes the SQL, W5 takes the `.ts
 ---
 
 ## W5 — Home dashboards
+
+> **STATUS 2026-08-04.** **T702** merged (adult-volunteer season totals dropped from RPT-03, PRD
+> amended by owner ruling). **T198 is RULED** — season-wide, no per-coach team concept — which also
+> releases the `CoachHomeData` bundle parked since T173. **T156 is PARKED** by owner ruling on
+> concurrency risk, with unpark conditions on its row. **T187 remains the highest-value open row
+> here** — the only one putting a wrong value in front of a real user today — and note its ledger
+> text mis-states the mechanism: `resolveStudentScope` reads `v_student_goal_projection.team_id`,
+> not `students.team_id` directly, which makes T186 and T187 one mechanism seen from two sides.
+
 
 > What a student, parent, or coach sees when they land.
 

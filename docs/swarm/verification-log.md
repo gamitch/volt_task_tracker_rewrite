@@ -8654,3 +8654,187 @@ figure"*. Needs an owner ruling; out of this task's scope.
 
 The migration lands in the repo only. **Constitution item 16 reserves hosted-Supabase cutover for the
 owner**, so the live project keeps the old view definitions until he applies it.
+## T325 — the mobile student row stops overflowing, and the fix is proven by measurement rather than by tests
+
+**Owner-chosen shape (option A).** Put in plain English with three options and a recommendation; his
+answer: *"let's go with A option"* — move the two row actions out of Astryx's `endContent` slot into
+the row body, rather than overriding the slot's styling or writing custom CSS against the design
+system's internals. Constitution item 11's escalation order exists to prefer exactly that.
+
+Gates, `.env.local` absent: `tsc` 0 · `vite build` ✓ · prettier clean · eslint **0 errors / 364
+warnings — no rise** · vitest **78 files / 1946 tests**.
+
+### Measured, at every step, in real Chromium at 390×844
+
+| | overflow | action buttons |
+|---|---|---|
+| baseline | **213px** (`scrollWidth` 603 vs `clientWidth` 390) | 5 present |
+| `maxWidth="100%"` on our `HStack` | **213px — no change** | 5 present |
+| **option A (shipped)** | **0px** | **5 present, labels unchanged** |
+
+**The audit's description was misleading and the obvious suspect was wrong.** Nothing "collapses" —
+the row *overflows*. And it is not the RSVP `SegmentedControl`, which is what reading the source
+suggests; the orchestrator guessed that and was wrong. The offender is Astryx's own `endContent` slot
+wrapper: `flex-shrink: 0`, `max-width: none`, sizing to its 563px content inside a 342px row.
+
+**Our `HStack` already had `wrap="wrap"`.** It never fired, because nothing constrained the box it
+lived in — and `maxWidth="100%"` resolved against that same unconstrained 563px parent, which is why
+the first candidate fix measured as a no-op. Each button (285px, 265px) fits inside 342px once
+wrapping can engage.
+
+**The labels stay long on purpose.** `Button.label` is both the visible text and the accessible name
+(`astryx-api.md:1811`), so shortening them would undo T131/T132's distinguishable-accessible-name
+work. That is why the fix is structural rather than textual.
+
+### Shipped with NO new test, and that is the honest call
+
+**jsdom performs no layout.** It cannot see a 213px overflow and cannot see a regression. Three tests
+were attempted and none survived scrutiny:
+
+1. An ancestor walk asserting the button shares a body ancestor — **measured vacuous.** Reverting the
+   fix left it green: the `<li>` contains the `endContent` slot and the row body alike.
+2. A sharpened nearest-shared-ancestor check — **also measured vacuous**, for the same reason, and
+   because the string it keyed on is the event *title* (the `label` slot), not body text.
+3. A presence-and-labels guard — **redundant.** Mutating either the presence or the labels reddens
+   existing **T170** (criterion 10) and **T126** tests, which already locate these buttons by exact
+   label text.
+
+**Shipping any of them would have been a test that looks like a guard and is not** — the same family
+this project keeps catching (T330's `?? ''` sentinel, T401's vacuous test, T190's wrong C3 mutation).
+The evidence for this task is the measurement, stated as such.
+
+### Two traps the prototype surfaced, both worth keeping
+
+- **`rowActions` must be declared above `description`.** It is referenced there; a later declaration
+  throws `Cannot access 'rowActions' before initialization` at runtime, not at compile time.
+- **The first prototype reported "overflow 0" while having silently DELETED the buttons.** It "fixed"
+  the overflow by removing the thing that overflowed, and was caught only because the measurement also
+  asserted the buttons were still present. **A layout measurement that checks only the number is not
+  evidence.**
+
+### Rig
+
+Throwaway Playwright harness following the T131/T142 convention — real dev server, real provider
+stack, deleted afterwards, nothing from it committed. Recipe, so it is not rediscovered: playwright is
+installed **globally** (`NODE_PATH=/opt/node22/lib/node_modules`), Chromium is at
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, the harness must be **CJS** (ESM ignores
+`NODE_PATH`), and the rig must inject `defaultLoadOutreachData` **and** stub
+`resolveStudentId: 'student-lena-osei'` — after T190 the old placeholder resolves to a viewer with no
+fixture data, so a rig using it measures an empty page.
+
+---
+
+## T704 — the `Meetings` term leaves the KPI breakdown
+
+**Tier: FAST** (constitution item 26), stated and defended: no write path, no schema/RLS/auth, no
+cross-module signature change, well under ~20 lines of production change, and a named mutation
+exists. **Verification was not reduced** — FAST removes coordination, not evidence. Implemented
+directly by the orchestrator, which is what FAST prescribes.
+
+**Authority.** Owner ruling 2026-08-04, verbatim *"for T704, drop the meetings term from the
+breakdown"* — option (a) of three the row offered. It also authorized updating the two passing
+assertions that asserted the removed string (`KpiStrip.test.tsx:306`, `:362`); the Non-Negotiables
+require explicit owner approval for that, and it covers those two only.
+
+### Why the figure had to go rather than be fixed
+
+`v_season_kpis.meeting_hours` is a filtered sum over a CTE that joins `and e.counts_volunteer_hours`,
+and meetings are created with that flag hardcoded `false` (`loaders/meetings.ts:690`) with **no app
+path that edits it** — verified by the T322 premise gate, which found this as MINOR-2 and filed it
+rather than folding it into that task. The figure is **structurally frozen at `0.0`**. `KpiStrip`
+rendered it beside two live numbers, presenting a dead figure as a live one.
+
+**This resolved a genuine tension in the owner's own earlier ruling.** The 2026-08-03 T322 ruling
+said meeting and competition hours are *"still tracked and still displayed as their own figure."*
+Competition is. **Meeting could not be.** Rather than leave the contradiction unremarked, it was put
+to him.
+
+Consistent with the same ruling's other half — *"meeting participation stays its own separate
+figure"* — meeting attendance is measured as a **participation percentage**, not as hours. Removing
+an always-zero hours term removes no meeting measurement, only a misleading one.
+
+### What changed, and what deliberately did not
+
+`formatHoursBreakdown` now renders `Outreach … · Competitions …`. **`meetingHours` stays** on
+`KpiStripData`, in `loaders/kpi.ts`, and in `v_season_kpis` — still tracked, just not displayed here.
+**No migration, no view change, no loader change.**
+
+`KpiStrip.test.tsx:362`'s fixture keeps `meetingHours: 2.0` — **a value the production view cannot
+generate** — to prove the field is still carried, with an explicit comment saying so and an assertion
+that it is not rendered.
+
+### Mutation evidence
+
+| Mutation | Result |
+|---|---|
+| Restore the `Meetings` term to `formatHoursBreakdown` | **RED on both intended assertions** — `expected 'Volunteer hours20.5Meetings 0.0h · Ou…' not to contain 'Meetings'` and `expected 'Volunteer hours10.5Meetings 2.0h · Ou…' not to contain 'Meetings'` |
+| Revert | 15 passed |
+
+Committed before mutating (item 26's own rule, learned from T323 and re-learned by this orchestrator
+earlier today).
+
+### Gates, `.env.local` absent
+
+`tsc --noEmit` 0 · `vite build` 0 · `format:check` 0 · `eslint .` **0 errors / 364 warnings**
+(unchanged) · `vitest run` 0 — **78 files / 1951 tests**.
+
+**Incidental confirmation:** the mutation output shows the card label reading **"Volunteer hours"**,
+independently confirming T322 landed on `main`.
+
+---
+
+## T152 — T147's parallel-load guard now discriminates in both directions, and the blind spot was wider than filed
+
+**Tier: FAST** (constitution item 26), defended: **test-only**. No write path, no schema/RLS/auth, no
+signature change, one file. The orchestrator implemented it directly; no worker, no gate. Named
+mutations exist and all of them were run.
+
+### What was wrong
+
+T147's guard proves batching by **position**: `expect(callOrder.slice(1, 5).sort()).toEqual([...])`.
+Sorting throws away exactly the information the claim needs — the slice is set-equal under
+arrangements that are genuinely serial.
+
+### The blind spot is wider than the ledger row said — measured, not argued
+
+The row claimed one missed direction (teams hoisted ahead of the batch) and that serializing teams
+*after* the batch is correctly caught. Running all three:
+
+| Mutation | Before T152 | After T152 |
+|---|---|---|
+| **A** — `loadTeams()` hoisted to a serial `await` **before** the batch | **PASSED** (filed) | **RED** |
+| **B** — `loadTeams()` serialized **between** the two batches | **PASSED** — *not filed; a second, unknown blind spot* | **RED** |
+| **C** — `loadTeams()` serialized after `rsvps`/`attendance` | RED (`expected 4 to be greater than 6`) | RED |
+| **D** — `loadStudents()` serialized ahead | **never guarded at all** — the test only ever watched `teams` | **RED** |
+
+**B is a genuine extra serial round trip** and slipped through because moving `teams` to just after
+the first batch keeps it inside slice positions 1-4. **D** was never in scope of the original
+assertions, which name only `teams`/`rsvps`/`attendance`.
+
+### The fix
+
+Position cannot express the claim, so the guard now asserts **what resolved in between**.
+`Promise.all([a, b, c, d])` evaluates its array **synchronously**, so no microtask can run between the
+first and last call. Every mocked resolution bumps a `resolutionCount` when it **delivers**, each
+`from()` records the count it saw, and the four zero-dependency queries must record the **same** count.
+Any `await` between them drains microtasks and moves it.
+
+The original position assertions are **kept unchanged** — they are not wrong, only weak, and they are
+T147's shipped evidence. The new assertion is additive. A final
+`expect(batchIssueCount).toBeGreaterThan(0)` rules out the trivial all-zero case, so the equality
+cannot pass by nothing having resolved at all.
+
+No timers and no barrier-with-deadlock: a serialized implementation fails on a value comparison that
+names the offending query, not by timing out.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise** · vitest **78 files / 1951
+tests**, targeted `OutreachList.test.tsx` **108 passed, exit 0** · build ✓. `.env.local` absent.
+
+### One process note
+
+The first attempt at this edit used unbounded string replacement and matched a **different** test's
+identical mock block, producing a syntax error. Redone bounded to the target `it()` block's line
+range. Same failure mode as T306's 33-call-site over-replacement; the lesson did not stick the first
+time.
