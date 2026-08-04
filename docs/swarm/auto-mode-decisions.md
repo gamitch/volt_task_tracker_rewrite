@@ -2814,7 +2814,7 @@ unverified scratch — re-dispatch the worker against the packet at `9e8c6c7` ra
 literal build to produce ~30 tsc errors and ~18 failing tests before any test edit — that is the
 gate's measured baseline, not a mistake.
 
-### ⚠️ OPEN OWNER QUESTION 1 — T201, ruled on a premise that turned out to be false
+### ✅ RESOLVED — T201 CLOSES as working-as-ruled (owner, same session, after the correction)
 
 **He ruled**, verbatim: *"the hours should report as any other student. Reason being if studentA did
 outreach but then left the team and was deactivated, those studentA hours still count toward the
@@ -2838,11 +2838,19 @@ two of his own rulings:** T184 (StudentHome's `{kind:'inactive'}` branch — the
 that relaxing the filter makes it unreachable and reds three green test blocks) and **T191**,
 2026-07-31, *"No bar at all"* on a deactivated child's parent card.
 
-**NOT IMPLEMENTED, deliberately.** The orchestrator put the correction back to him and the session
-paused before he answered. **Do not implement this ruling on resume without a fresh answer.** The
-orchestrator's recommendation on record: close T201 as working-as-ruled, and if he wants visibility
-anyway, do the **staff-report** variant (a departed student listed with an inactive marker) — it adds
-information without contradicting T184 or T191, needs no migration, and collides with no wave.
+**The correction went back to him and he re-decided.** Verbatim: *"and yes, T201 closes as
+working-as-ruled"*. **T201 is CLOSED. No code. Nothing to implement on resume.**
+
+**Why this is the right outcome, recorded so it is not re-opened by someone reading the row cold:**
+his goal — departed students' hours still counting toward team outreach goals — **is already met** by
+the views as they stand. The current behaviour is also the more honest one: she contributed, the team
+keeps the credit, and her personal progress bar does not imply she is still working toward a goal she
+has left. T184, T189, T191 and T158 between them already cover every surface honestly.
+
+**If visibility is ever wanted later**, the variant that does not contradict anything is the
+**staff-only hours report** — a departed student listed with an inactive marker, answering "how many
+hours did she contribute before she left". No migration, no collision, and it supersedes no ruling.
+Not authorized now; recorded as the cheap path if the question returns.
 
 ### ⚠️ OPEN OWNER QUESTION 2 — T198's `teamParticipation` card
 
