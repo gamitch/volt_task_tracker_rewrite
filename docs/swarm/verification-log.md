@@ -8272,3 +8272,56 @@ than against the comment.
 - `onEditAttendance` is still **not reachable in production** — nothing mounts it. That is T196. This
   row lands the guard **before** the path goes live, which is why it was done first rather than
   folded into T196.
+
+---
+
+## T160 — `FixtureTeam` → `Team` in `MeetingsList.tsx` (W3-A auto-mode wave)
+
+**PASS. FAST tier. Orchestrator-authored, no worker dispatched — see D6.**
+
+### Every line number in the row was stale; the substance was not
+
+The file had shifted ~32 lines since the row was written. `FixtureTeam` is at `:580` (row said
+`:548`), used at `:680`/`:920` (row said `:648`/`:888`), `FIXTURE_TEAMS` at `:754` (row said `:722`),
+and the cited `:2224` `teams={teams}` line does not exist at that number. **Re-derived rather than
+trusted** — the third row in this wave whose citations had drifted.
+
+**The premise was then verified, not assumed:** real Supabase data reaches the `FixtureTeam`-typed
+state through `setTeams(loadState.data.teams)` (`:2018`) and `setTeams(fresh.teams)` (`:2108`), both
+fed by the real `loadCoachMeetingsData`. The name genuinely misled a reader into thinking the
+production path was fixture-backed.
+
+### What changed, and what deliberately did not
+
+`FixtureTeam` → `Team`, 6 references, file-local. No collision: `Team` was unused in the file, and
+there is no canonical `Team` type in `src/lib/supabase/` to align with (sibling loaders declare their
+own `TeamOption` / `TeamRow`).
+
+**`FIXTURE_TEAMS` keeps its name.** It is a real fixture constant feeding
+`defaultLoadCoachMeetingsData` — the obviously-fake default for the injectable `loadData` seam. Its
+name is accurate and renaming it would have been the actual error. The row's own framing ("alongside
+a genuine `FIXTURE_TEAMS`") anticipated this.
+
+One comment-only follow-through in `loaders/meetings.ts:18`, which named the type in prose.
+
+### Proved a pure rename rather than asserted
+
+Blanking the identifier from both sides of the diff collapses **every** changed line to identical
+text. Combined with `tsc` 0 (no dangling reference survives a partial rename) and an **unchanged**
+test count, that is the whole verification a rename admits.
+
+### Checked and deliberately NOT filed
+
+`pages/reports/ParticipationTab.tsx:382` declares its own identically-named `FixtureTeam`. It is fed
+only by `FIXTURE_TEAMS` (`:639`) — **genuinely fixture-backed, so the name is correct there.** Not
+the same defect, no row filed. Recorded so nobody "fixes" it later by symmetry.
+
+### Gates
+
+`tsc` **0** · eslint **0 errors** / 364 warnings · prettier **clean** · vitest **78 files /
+1946 tests, exit 0** — byte-identical to base, as a pure rename must be.
+
+### Honest limit
+
+**Orchestrator-authored and not independently reviewed.** A rename verified by a type-checker and an
+unchanged suite is about as low-risk as a change gets, but no second pair of eyes saw it.

@@ -577,7 +577,7 @@ type BadgeVariant =
   | 'teal'
   | 'yellow';
 
-interface FixtureTeam {
+interface Team {
   id: string;
   name: string;
 }
@@ -677,7 +677,7 @@ export interface CoachMeetingsData {
    * team-scope label) -- threaded through here too so it can reach
    * `<ScheduleMeetingsDialog>`'s own `teams` prop, replacing that dialog's
    * fixture `DEFAULT_TEAMS`. */
-  teams: readonly FixtureTeam[];
+  teams: readonly Team[];
 }
 
 export type LoadCoachMeetingsDataFn = () => Promise<CoachMeetingsData>;
@@ -751,7 +751,7 @@ const PLACEHOLDER_SEASON_ID = 'season-placeholder-current';
 // Fixture data (constitution item 6: fabricated names only). Module doc #1/#2.
 // ---------------------------------------------------------------------------
 
-const FIXTURE_TEAMS: readonly FixtureTeam[] = [
+const FIXTURE_TEAMS: readonly Team[] = [
   { id: 'team-ravens', name: 'Ravens' },
   { id: 'team-titans', name: 'Titans' },
 ];
@@ -917,7 +917,7 @@ const FIXTURE_PARTICIPATION_METRICS: readonly StudentParticipationMetric[] = [
 // Pure builder functions -- exported for direct testing.
 // ---------------------------------------------------------------------------
 
-function teamScopeLabel(teamIds: readonly string[] | null, teams: readonly FixtureTeam[]): string {
+function teamScopeLabel(teamIds: readonly string[] | null, teams: readonly Team[]): string {
   if (teamIds === null) {
     return 'All teams';
   }
@@ -952,7 +952,7 @@ function meetingEventIdsOf(events: readonly FixtureEvent[]): Set<string> {
 export function buildCoachMeetingRows(
   events: readonly FixtureEvent[],
   sessions: readonly FixtureEventSession[],
-  teams: readonly FixtureTeam[],
+  teams: readonly Team[],
   attendance: readonly FixtureAttendanceRecord[],
   rsvps: readonly FixtureRsvpRecord[] = [],
   students: readonly FixtureStudent[] = [],
@@ -1984,7 +1984,7 @@ function CoachMeetingsView({
   // initial-load effect below and the post-create reload,
   // `handleCreateMeetingsSubmit`), threaded to `<ScheduleMeetingsDialog>`'s
   // own `teams` prop.
-  const [teams, setTeams] = useState<readonly FixtureTeam[]>([]);
+  const [teams, setTeams] = useState<readonly Team[]>([]);
   const [stubNotice, setStubNotice] = useState<StubNotice | null>(null);
   const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
   // T096 (module doc #7a) -- drives the one rendered `<ScheduleMeetingsDialog>`
