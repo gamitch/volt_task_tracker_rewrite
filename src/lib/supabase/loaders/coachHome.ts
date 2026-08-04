@@ -380,7 +380,10 @@ async function queryCoachHomeStudentHours(
     .from('v_student_hours')
     .select('student_id, season_id, confirmed_hours')
     .eq('season_id', seasonId);
-  return { data: (result.data as CoachHomeStudentHoursDbRow[] | null) ?? null, error: result.error };
+  return {
+    data: (result.data as CoachHomeStudentHoursDbRow[] | null) ?? null,
+    error: result.error,
+  };
 }
 
 async function queryCoachHomeSeasonParticipation(

@@ -2308,9 +2308,7 @@ function CoachHomeContent({
   // using 0/0 fallbacks until real data has loaded (0/0 crosses no
   // milestone, so this is inert until `loadState.status === 'success'`).
   const successData = loadState.status === 'success' ? loadState.data : null;
-  const preGoalHours = successData
-    ? sumGoalHours(successData.students, defaultGoalHours)
-    : 0;
+  const preGoalHours = successData ? sumGoalHours(successData.students, defaultGoalHours) : 0;
   const preConfirmedHours = successData
     ? sumConfirmedHours(successData.students, successData.studentHours)
     : 0;
@@ -2451,9 +2449,7 @@ function CoachHomeContent({
                 <KpiCard
                   label="Participation"
                   value={
-                    seasonParticipation !== null
-                      ? `${seasonParticipation.participationPct}%`
-                      : '—'
+                    seasonParticipation !== null ? `${seasonParticipation.participationPct}%` : '—'
                   }
                   secondary={
                     <Text type="supporting" color="secondary">
