@@ -218,6 +218,23 @@ the PR. Assert exit codes, not just pass counts.
 
 ## W3-A — Run a meeting: the three-row hygiene wave (T197 → T162 → T160)
 
+> ## ✅ EXECUTED AND COMPLETE 2026-08-04 — DO NOT RE-DISPATCH
+>
+> All three rows shipped. See `active/W3A-handoff.md` and `auto-mode-decisions.md` ("W3-A auto-mode
+> window", D1–D6). **Retained as a worked example of an unattended-wave prompt, not as live work.**
+>
+> **What the wave learned, for whoever writes the next one:**
+> - **T162's premise was false.** "0 tests across 726 lines" came from an audit that counted *files
+>   named `meetings.test.ts`*, not tests *of* the module — 17 already existed. **T161 and T163 carry
+>   the same error and are still open.** Measure before packeting.
+> - **Four of six acceptance criteria were pre-satisfied by the shipped suite**, so a worker could
+>   have recorded four mutation passes having written nothing. **Measure mutations against the new
+>   file alone**, not the whole suite.
+> - The premise gate earned its keep: it returned REVISE twice, and **two of the BLOCKERs were the
+>   orchestrator's own false claims about code it had not run.**
+>
+> **T196 is still excluded and still must not be run unsupervised.**
+
 > **Written 2026-08-03 for unattended operation.** This is W3 **minus T196**. Every row here is
 > self-contained, in W3's own files, with **no open owner decision**. Safe to launch and leave.
 >

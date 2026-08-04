@@ -8335,6 +8335,325 @@ could not verify.
 
 ---
 
+---
+
+## T197 — `onEditAttendance`'s row scoping, asserted (W3-A auto-mode wave)
+
+**PASS, attempt 1. `4b0866c` on `claude/w3a-meetings-hygiene`. Checker verdict PASS, 2 NIT, both
+closed in-branch.** Worker `worker-implementer` (sonnet — item 18's opus triggers do not apply: no
+migration, no RLS, no metric SQL, no auth).
+
+### The premise, re-measured rather than inherited
+
+The ledger row claimed deleting both `.eq()`s left the suite green. **The orchestrator re-ran it at
+base `33c9e24` before writing the packet** (item 19c) rather than quoting the row:
+
+```
+Test Files  1 passed (1)
+     Tests  14 passed (14)
+vitest exit: 0
+```
+
+Confirmed and current. That mutation converts a coach's single-student status edit into a
+**table-wide `attendance` UPDATE**. File restored, `git diff --quiet` verified clean before packeting.
+
+### Gate skipped, deliberately and on the record
+
+**Premise gate SKIPPED under item 19b** — orchestrator decision D1, W3-A window. Settled pattern
+(assert a scoping filter), no item-18 risk class, premise verified directly. The residual risk was a
+**vacuous test**, which is a worker risk the checker catches, not a premise risk. D2 in the same
+entry explicitly refused to extend that skip to T162 — and that gate then returned REVISE with a
+BLOCKER, so the distinction held up.
+
+### What shipped
+
+The assertion only. `editAttendance`'s executable code is **byte-identical to base** — checker
+confirmed by comment-stripped blob comparison (6652 chars each, exact string equality). The test file
+change is a **pure append**; `head -652` of the new file diffs empty against base.
+
+**Outcome-provable, not call-shape.** A fake `attendance` table of 4 rows across 2 sessions × 2
+students; the test asserts full physical row state. **Zero `toHaveBeenCalledWith` assertions were
+added.** The fake's `filters.every(...)` is vacuously true on an empty array, so a zero-filter
+`.update()` matches every row — mirroring a real unfiltered PostgREST UPDATE. The checker verified
+that semantic specifically, since a fake that instead matched *nothing* would redden for the wrong
+reason and prove nothing about scoping.
+
+### Mutations — replayed independently by orchestrator AND checker, not relayed
+
+| Mutation | Result | Why the shape matters |
+|---|---|---|
+| C1 — drop `.eq('session_id', …)` | **red, exit 1** | fails on the same-student/other-session row |
+| C2 — drop `.eq('student_id', …)` | **red, exit 1** | fails on the same-session/other-student row |
+| C3 — drop both | **red, exit 1** (full suite `1 failed \| 1944 passed`) | all three non-target rows flip — the table-wide write, observed as an outcome |
+
+Each single deletion reddens **on its own**, on the specific row it exposes. A test that only caught
+both-deleted would be half a test.
+
+### The checker's own four mutations, hunting a wrong-reason pass
+
+This is the part worth copying. The packet named three mutations; the checker invented four more.
+
+- **Arg swap** — `.eq('student_id', args.sessionId)`, the copy-paste defect that makes a coach's edit
+  silently match zero rows and do nothing: **RED**. It fails on the *target* row still reading
+  `absent`. This is the failure a "no other rows changed" test would have missed entirely — the test
+  proves the intended write **happened**, not merely that collateral writes did not.
+- **T401 vacuity probe** — replace the whole mutation body with a resolved `{data:null,error:null}`
+  that never touches the client: **RED, not vacuous.**
+- **`.eq()` reordering** (semantically identical): **GREEN.** No chain-order brittleness, no false
+  positive.
+- **Hardcode both filter values to the fixture's own literals**: **GREEN** → became NIT-1.
+
+### Both NITs closed in-branch, not deferred
+
+**NIT-1** was real: with one fixture scenario, a filter pinned to that scenario's literals is
+indistinguishable from an args-derived one. The plausible *production* form of that defect is caught
+(the arg swap above), which is why the checker rated it NIT — but the gap was cheap to close. Fixed
+by a second scenario targeting a different `(session, student)` pair with a distinct `late` status.
+**The orchestrator re-ran the checker's own hardcode mutation against the fix: now `1 failed |
+15 passed`, exit 1.** Proven, not asserted.
+
+**⚠️ That NIT-1 test addition is orchestrator-authored and was NOT re-reviewed by the checker** —
+disclosed per the W3-A auto-mode posture, which permits the orchestrator to close mechanical NIT
+findings provided it says they are unreviewed.
+
+**NIT-2:** a dangling `:510-511` cite in the module doc, pointing at what is now an unrelated
+`LiveConsoleDisplayToken` interface. Removed.
+
+Also folded in (packet §5, comment-only): `endMeeting.ts:12-19` still claimed T196 was *blocked*,
+`LiveConsole`'s attendance marking an *intentional no-op*, and its roster a *fixture*. All three
+false since T403. The checker verified every claim in the replacement text against the repo rather
+than against the comment.
+
+### Gates
+
+`tsc` **0** · eslint **0 errors** / 364 warnings · prettier **clean** · vitest **78 files /
+1946 tests, exit 0** (base 1944; +2 = the worker's test and the NIT-1 scenario).
+
+### Honest limits
+
+- The fake implements only `.eq()`. A future refactor of `editAttendance` to `.match({…})` or
+  `.in()` would crash the fake rather than fail informatively. Acceptable for a scoping guard, worth
+  knowing before that refactor.
+- `onEditAttendance` is still **not reachable in production** — nothing mounts it. That is T196. This
+  row lands the guard **before** the path goes live, which is why it was done first rather than
+  folded into T196.
+
+---
+
+## T160 — `FixtureTeam` → `Team` in `MeetingsList.tsx` (W3-A auto-mode wave)
+
+**PASS. FAST tier. Orchestrator-authored, no worker dispatched — see D6.**
+
+### Every line number in the row was stale; the substance was not
+
+The file had shifted ~32 lines since the row was written. `FixtureTeam` is at `:580` (row said
+`:548`), used at `:680`/`:920` (row said `:648`/`:888`), `FIXTURE_TEAMS` at `:754` (row said `:722`),
+and the cited `:2224` `teams={teams}` line does not exist at that number. **Re-derived rather than
+trusted** — the third row in this wave whose citations had drifted.
+
+**The premise was then verified, not assumed:** real Supabase data reaches the `FixtureTeam`-typed
+state through `setTeams(loadState.data.teams)` (`:2018`) and `setTeams(fresh.teams)` (`:2108`), both
+fed by the real `loadCoachMeetingsData`. The name genuinely misled a reader into thinking the
+production path was fixture-backed.
+
+### What changed, and what deliberately did not
+
+`FixtureTeam` → `Team`, 6 references, file-local. No collision: `Team` was unused in the file, and
+there is no canonical `Team` type in `src/lib/supabase/` to align with (sibling loaders declare their
+own `TeamOption` / `TeamRow`).
+
+**`FIXTURE_TEAMS` keeps its name.** It is a real fixture constant feeding
+`defaultLoadCoachMeetingsData` — the obviously-fake default for the injectable `loadData` seam. Its
+name is accurate and renaming it would have been the actual error. The row's own framing ("alongside
+a genuine `FIXTURE_TEAMS`") anticipated this.
+
+One comment-only follow-through in `loaders/meetings.ts:18`, which named the type in prose.
+
+### Proved a pure rename rather than asserted
+
+Blanking the identifier from both sides of the diff collapses **every** changed line to identical
+text. Combined with `tsc` 0 (no dangling reference survives a partial rename) and an **unchanged**
+test count, that is the whole verification a rename admits.
+
+### Checked and deliberately NOT filed
+
+`pages/reports/ParticipationTab.tsx:382` declares its own identically-named `FixtureTeam`. It is fed
+only by `FIXTURE_TEAMS` (`:639`) — **genuinely fixture-backed, so the name is correct there.** Not
+the same defect, no row filed. Recorded so nobody "fixes" it later by symmetry.
+
+### Gates
+
+`tsc` **0** · eslint **0 errors** / 364 warnings · prettier **clean** · vitest **78 files /
+1946 tests, exit 0** — byte-identical to base, as a pure rename must be.
+
+### Honest limit
+
+**Orchestrator-authored and not independently reviewed.** A rename verified by a type-checker and an
+unchanged suite is about as low-risk as a change gets, but no second pair of eyes saw it.
+
+---
+
+## T162 — re-scoped to the measured gap, closed test-only (W3-A auto-mode wave)
+
+**PASS. `meetings.ts` unmodified. No new test file. Orchestrator-authored, not independently
+reviewed — the three mutation proofs below are the evidence.**
+
+### The row was mostly phantom work, and that is the headline
+
+T162 said *"`loaders/meetings.ts` has 0 tests across 726 lines."* **False.**
+`MeetingsList.test.tsx:1803-2272` already unit-tests the module in six describes / 17 tests. The
+claim came from an external audit that counted **files named `meetings.test.ts`** rather than tests
+*of* the module — the same error on T161 and T163 (D5).
+
+**The premise gate caught it at round 2.** Item 19a capped the loop and the row was **parked for the
+owner** rather than gated a third time or overridden.
+
+**Owner ruling, verbatim: _"we should not be duplicating existing test"_.** So no
+`meetings.test.ts` was created, the 17 existing tests were neither duplicated nor moved, and all
+work went into the file that already had them — which also avoided creating a **third** maintenance
+site for the MET-01 arithmetic (**T600**).
+
+### What was actually missing — three gaps, ~35 lines
+
+Each was measured before being fixed, and each is proven by its own mutation replayed against the
+final tree.
+
+| # | Gap | Mutation | Result |
+|---|---|---|---|
+| a | `Math.max(expectedCt - excusedCt, 1)` floor (`meetings.ts:477`) had **no test** — deleting it left all 1946 tests green | drop the floor | `expected NaN to be +0` — **exit 1** |
+| b | `MeetingsList.test.tsx:2017` used `toEqual(row)`, which **survives** deleting the single-row short-circuit | drop the `rows.length === 1` branch (`:469`) | `expected {…} to be {…} // Object.is equality` — **exit 1** |
+| c | `:2166` asserted `orderSpy` was **called**, not that sorting **worked** | drop `.order('created_at', {ascending:true})` (`:512`) | `expected 'student-later' to be 'student-earliest'` — **exit 1** |
+
+**(a)** Without the floor, a student whose every expected session was excused is shown `NaN` instead
+of a participation figure. The fixture is **view-possible by construction** — if every expected
+session was excused then none can have been attended, so `present_ct` must be 0, which is why the
+mutation yields `NaN` and not `Infinity`. Mirrors the same guard's coverage on the twin function at
+`checkin.test.ts:86-93`.
+
+**(b)** The failure output prints the two objects as **identical** — which is precisely why the old
+`toEqual` proved nothing. Reference identity is the only assertion that can distinguish "returned
+the same object" from "recomputed something that looks the same".
+
+**(c)** The old spy **ignored its own arguments**, so the fixture resolved the same row with or
+without the ordering. The replacement fake **sorts physically** and only when `.order()` is called,
+with rows seeded in reverse `created_at` order — so an unsorted read returns the later-linked child
+and the assertion fails **on a real value, not a spy call**. This guards Trap #4's
+earliest-linked-child rule, where a parent with two children silently resolves to the wrong one.
+**The old call-shape test was kept, not replaced** — it is insufficient, not wrong.
+
+### Gates
+
+`tsc` **0** · eslint **0 errors** / 364 warnings · prettier **clean** · vitest **78 files /
+1948 tests, exit 0** (+2 net: two new tests; the third change was an assertion swap).
+
+### Honest limits
+
+- **Not independently reviewed.** Same disclosure as T160 (D6). The mutation evidence is the
+  substitute, and it is weaker than a second reader.
+- **Coverage beyond these three gaps was measured structurally, not by line coverage** (D5) — no
+  coverage tool is installed and a new dependency is an escalation class. A referenced export may
+  still be thinly tested, so "11/11 exports referenced" is a lower bound on coverage, not a claim of
+  completeness.
+- **Packet v2 was never dispatched.** It is retained at `active/T162-worker-packet.md` as the record
+  of what this row was believed to require, and of the two BLOCKERs the gate found in it.
+## T322 — volunteer hours become `type = 'outreach'` ONLY, in both the season KPI and every student's own total
+
+**Tier: HEAVY, unconditional.** Constitution item 18 trigger 1 (`constitution.md:75`, "creates or
+edits a file under `supabase/migrations/`") **and** trigger 3 (a SQL view containing metric math).
+Full chain ran: packet → premise gate (**DISPATCH**, 4 MINOR / 4 NIT) → worker → orchestrator replay.
+
+**Three rulings, all in `auto-mode-decisions.md`:** 2026-08-02 (meetings excluded), 2026-08-03
+(competitions excluded — *"Volunteer hours = `type = 'outreach'` ONLY"*), 2026-08-04 (*"fix both"* —
+extend beyond the staff card to `v_student_hours`).
+
+### The ledger row's account of this bug was wrong, and the correction is the task
+
+T322's row states `v_season_kpis` sums *"across all types including `meeting`"*. **Incomplete and
+misleading.** The `hours_by_type` CTE already joins `and e.counts_volunteer_hours`, and meetings are
+created with that flag hardcoded `false` (`loaders/meetings.ts:690`) with no app path that edits it.
+**Meeting hours never reached the total.** The gate confirmed this by measurement: a seeded meeting
+with production flags contributed nothing pre-fix.
+
+**The real defect: the volunteer-hours total was governed by an editable per-event boolean rather
+than by event `type`** — which is the entire substance of both rulings. `competition`'s flag is
+admin-editable and defaults `false`, so it sat **one toggle away** from counting. Measured pre-fix
+with the toggle on: 3.0h leaked into `total_hours` (7.5 vs 4.5), into `v_student_hours.confirmed_hours`
+(5.0 vs 2.0), and into `goal_pct` (4 vs 2).
+
+### What shipped
+
+One new additive migration, `20260804000000_volunteer_hours_outreach_only.sql` — item 10 forbids
+editing an applied migration, so both views are `create or replace`d:
+
+- **`v_student_hours`** — join gains `and e.type = 'outreach'`, keeping the pre-existing flag
+  condition rather than replacing it.
+- **`v_season_kpis`** — **the `hours_by_type` CTE is deliberately NOT filtered**; only
+  `total_hours` becomes `sum(type_hours) filter (where type = 'outreach')`. Filtering the CTE would
+  have zeroed the `meeting_hours`/`competition_hours` breakdown, which the 2026-08-03 ruling requires
+  to survive.
+- **`KpiStrip.tsx:286`** — label now reads **"Volunteer hours"**, per the 2026-08-02 ruling's
+  *"label the card so it reads as volunteer hours rather than all hours."*
+
+**`goal_pct` needed no separate change** — the gate resolved the packet's admitted open question by
+measurement: it derives from `total_hours` (`kpi_views.sql:237`) and inherits the fix. **NULL path
+measured safe:** the outer `coalesce` catches `sum(...) filter`'s NULL, so a season with no outreach
+hours reads `0`, never blank.
+
+### The FLL protection, which is the whole reason this filters by type
+
+`GG FLL Team Meetings` and `P3 FLL Team Meetings` are `type = 'outreach'` and **count in full** —
+**72 of 117 sessions, 62% of the migrated data**. Acceptance criterion 4 exists solely to prove the
+filter is by `type` and not by title; a title-based fix would have stripped the majority of the
+team's real volunteer hours out of every student's goal. **Three separate people have now reached for
+that mistake.** Not authorized, and not done: retyping any event.
+
+### Mutation evidence — the two halves fail in mirror image
+
+| # | Mutation | Result |
+|---|---|---|
+| 1 | Revert `total_hours` to the all-type sum | exit 3 — `total_hours 7.0` (expected `4.0`); `confirmed_hours` stayed correct at 4.0 |
+| 2 | Drop `and e.type = 'outreach'` from `v_student_hours` | exit 3 — `confirmed_hours 7.0` (expected `4.0`); `total_hours` stayed correct at 4.0 |
+| 4 | Filter by event title instead of type | exit 3 — fails **only** `fll-titled-outreach-counts-in-full`, assertions 1-4 unaffected |
+| 5 | Revert the card label | exit 1 — 6 failed / 9 passed |
+
+**M1 and M2 failing in opposite directions is the proof that "fix both" was two independent fixes,
+not one change with a side effect** — each half breaks exactly one figure and leaves the other
+correct.
+
+### Who verified what — stated plainly
+
+**The worker hit a session API limit and terminated mid-run**, after confirming mutation 4 and before
+running mutation 5 or any gate. **It had already committed** (`c9fa12e`, `d487704`) — verified per
+item 21 against the committed blob, not the working tree. The orchestrator personally ran the SQL
+suite baseline, **mutations 1, 2 and 5**, and every gate. Mutation 3 was run by the premise gate and
+not re-run by the orchestrator; that is disclosed rather than implied.
+
+### Gates, `.env.local` absent
+
+`tsc --noEmit` 0 · `vite build` 0 · `format:check` 0 · `eslint .` **0 errors / 364 warnings**
+(unchanged) · `vitest run` 0 — **78 files / 1946 tests** · `run_volunteer_hours_outreach_only.sh` 0,
+ALL 5 PASS · `run_calendar_feed_lifecycle.sh` 0 · `run_t205_anon_grant.sh` 0 — no cross-suite
+regression.
+
+### Blast radius — inherited deliberately, not a side effect
+
+`v_team_hours`, `v_season_roster_stats`, `v_student_goal_projection`, `loaders/leaderboard.ts:138`,
+`loaders/reports.ts:398`, `send-reminders/index.ts:512`, and all three home dashboards now carry
+outreach-only semantics. **That is the ruling's intent.** Dependents `coalesce` absent rows to honest
+zeros (gate-measured). One disclosed nuance: a student whose *only* hours came from a flag-on
+competition drops off the leaderboard rather than showing 0 — no live data is in that state.
+
+### Filed, not fixed here
+
+**T704** — `v_season_kpis.meeting_hours` is structurally frozen at `0.0` (the CTE's flag join plus
+meetings' hardcoded `false`), yet `KpiStrip` renders `Meetings 0.0h` beside real figures. That
+contradicts the 2026-08-03 ruling's expectation that meeting hours stay *"displayed as their own
+figure"*. Needs an owner ruling; out of this task's scope.
+
+### Not deployed
+
+The migration lands in the repo only. **Constitution item 16 reserves hosted-Supabase cutover for the
+owner**, so the live project keeps the old view definitions until he applies it.
 ## T325 — the mobile student row stops overflowing, and the fix is proven by measurement rather than by tests
 
 **Owner-chosen shape (option A).** Put in plain English with three options and a recommendation; his

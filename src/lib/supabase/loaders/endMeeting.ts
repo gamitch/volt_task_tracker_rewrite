@@ -10,13 +10,17 @@
  * it, never redefined.
  *
  * NOT wired into `EndMeetingDialog.tsx`/`LiveConsole.tsx`/any route by this
- * task. The mount is filed as its own row, T196, blocked -- because
- * `LiveConsole.tsx`'s own attendance marking is an intentional no-op
- * (`:510-511`) and its roster loader is a fixture, so a real End Meeting
- * dialog mounted on top of that fixture-backed console would, on first real
- * use, mark every actually-checked-in student a real `absent` row (the
- * owner-ruled reason for the split -- see `docs/swarm/active/
- * T178-gate-round1-findings.md`, BLOCKER 3).
+ * task -- that mount is still filed as its own row, T196, and T196 is not
+ * this task. T196 is now UNBLOCKED (as of T403, 2026-08-03): it was
+ * originally blocked because `LiveConsole.tsx`'s own attendance marking was
+ * an intentional no-op and its roster loader was a fixture, so
+ * a real End Meeting dialog mounted on top of that fixture-backed console
+ * would, on first real use, have marked every actually-checked-in student a
+ * real `absent` row (the owner-ruled reason for the original split -- see
+ * `docs/swarm/active/T178-gate-round1-findings.md`, BLOCKER 3). T403 made
+ * `LiveConsole.tsx`'s roster and attendance writes real and deleted the
+ * fixtures, so that blocking reason no longer holds -- T196 is unblocked,
+ * just not yet done.
  *
  * -----------------------------------------------------------------------
  * 1. Three sequenced `runMutation` calls, not a transaction/RPC -- and the

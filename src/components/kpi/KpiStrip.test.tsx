@@ -13,6 +13,13 @@
  * state (loading/error+retry/success), the "no arithmetic, only
  * presentation formatting" display functions, and the "one fetch per
  * seasonId, not per render" contract (module doc #4).
+ *
+ * T322: the "Season hours" -> "Volunteer hours" label change below (five
+ * assertions at what were originally lines 156/166/226/268/297) is an
+ * owner-approved update to a passing test, per the 2026-08-02 ruling on
+ * T322 (`docs/swarm/auto-mode-decisions.md`): "label the card so it reads
+ * as volunteer hours rather than all hours." That authorization covers
+ * exactly these five assertions and nothing else in this file.
  */
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -153,7 +160,7 @@ describe('<KpiStrip /> (T123 UXD-01/UXP-05)', () => {
       loadKpiStripData: async () => FIXTURE_KPI_DATA,
     });
     await flushMicrotasks();
-    expect(textContent()).toContain('Season hours');
+    expect(textContent()).toContain('Volunteer hours');
   });
 
   it('renders for an admin session', async () => {
@@ -163,7 +170,7 @@ describe('<KpiStrip /> (T123 UXD-01/UXP-05)', () => {
       loadKpiStripData: async () => FIXTURE_KPI_DATA,
     });
     await flushMicrotasks();
-    expect(textContent()).toContain('Season hours');
+    expect(textContent()).toContain('Volunteer hours');
   });
 
   // -------------------------------------------------------------------
@@ -223,7 +230,7 @@ describe('<KpiStrip /> (T123 UXD-01/UXP-05)', () => {
     });
     await flushMicrotasks();
     expect(callCount).toBe(2);
-    expect(textContent()).toContain('Season hours');
+    expect(textContent()).toContain('Volunteer hours');
   });
 
   // -------------------------------------------------------------------
@@ -265,7 +272,7 @@ describe('<KpiStrip /> (T123 UXD-01/UXP-05)', () => {
     });
     await flushMicrotasks();
     expect(callCount).toBe(2);
-    expect(textContent()).toContain('Season hours');
+    expect(textContent()).toContain('Volunteer hours');
   });
 
   it('normalizes a non-SupabaseLoaderError KPI-fetch rejection into a displayable error state', async () => {
@@ -293,8 +300,8 @@ describe('<KpiStrip /> (T123 UXD-01/UXP-05)', () => {
     await flushMicrotasks();
     const text = textContent();
 
-    // Card 1: season hours + category breakdown.
-    expect(text).toContain('Season hours');
+    // Card 1: volunteer hours + category breakdown.
+    expect(text).toContain('Volunteer hours');
     expect(text).toContain('20.5');
     expect(text).toContain('Meetings 0.0h · Outreach 10.5h · Competitions 10.0h');
 
@@ -313,6 +320,47 @@ describe('<KpiStrip /> (T123 UXD-01/UXP-05)', () => {
     expect(text).toContain('% toward season goal');
     expect(text).toContain('6%');
     expect(text).toContain('20.5 / 350h target');
+  });
+
+  // T322 (2026-08-02/08-03 rulings): volunteer hours = `type = 'outreach'`
+  // ONLY. This component performs zero arithmetic on the numbers it
+  // receives (constitution item 3) -- the SQL-level proof that
+  // `v_season_kpis.total_hours` excludes meeting/competition hours lives in
+  // `supabase/tests/volunteer_hours_outreach_only_assertions.sql`. This is
+  // the display-layer contract: the headline figure need not equal the sum
+  // of the three breakdown figures, meeting/competition hours still render
+  // as their own tracked figures, and the label reads "Volunteer hours",
+  // never "Season hours".
+  it("T322: the headline figure is the outreach-only total, not meeting+outreach+competition, and the card is labeled 'Volunteer hours'", async () => {
+    const outreachOnlyTotal: KpiStripData = {
+      ...FIXTURE_KPI_DATA,
+      // Deliberately NOT meetingHours + outreachHours + competitionHours
+      // (2.0 + 10.5 + 10.0 = 22.5) -- 10.5 is the outreach-only figure the
+      // 2026-08-03 ruling requires, matching v_season_kpis.total_hours'
+      // `sum(type_hours) filter (where type = 'outreach')`.
+      totalHours: 10.5,
+      meetingHours: 2.0,
+      outreachHours: 10.5,
+      competitionHours: 10.0,
+      goalPct: 3, // round(100 * 10.5 / 350, 0)
+    };
+    renderStrip({
+      user: COACH_USER,
+      loadActiveSeason: async () => FIXTURE_SEASON,
+      loadKpiStripData: async () => outreachOnlyTotal,
+    });
+    await flushMicrotasks();
+    const text = textContent();
+
+    expect(text).toContain('Volunteer hours');
+    expect(text).not.toContain('Season hours');
+    expect(text).toContain('10.5');
+    expect(text).not.toContain('22.5');
+    // Meeting and competition hours still render as their own breakdown
+    // figures even though excluded from the headline total (2026-08-03
+    // ruling: "still tracked and still displayed as their own figure").
+    expect(text).toContain('Meetings 2.0h · Outreach 10.5h · Competitions 10.0h');
+    expect(text).toContain('10.5 / 350h target');
   });
 
   it('renders the honest empty sub-lines when zero events/teams exist yet, never a fabricated placeholder', async () => {
