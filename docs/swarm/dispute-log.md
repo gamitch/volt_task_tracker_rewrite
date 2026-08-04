@@ -1195,3 +1195,84 @@ never a way to conclude absence.
 T145 FAIL stands; rework issued for the false clause and for a second, unrelated
 MAJOR (the legend proof does not exercise the legend — it passes with zero legend
 badges rendered). T145's other criteria passed and are unaffected.
+
+---
+
+## D013 - T503 widens `rsvps` SELECT beyond PRD 8.3, on the owner's explicit ruling (the D002 pattern)
+
+**Filed by the orchestrator 2026-08-04**, before any code was written, because
+**constitution item 3 makes this a BLOCKER unless it is recorded**: *"RLS
+policies and metric SQL come **only** from PRD Section 8.4, copied verbatim.
+Re-deriving either … → BLOCKER."* T503's premise gate caught that the T503
+packet had omitted this entirely. **This entry is the record that makes the
+deviation authorised rather than a violation.**
+
+### What the PRD says, and what is being built instead
+
+`VOLT_Portal_PRD.md` §8.3's `rsvps` row reads:
+
+| rsvps | full | **read/write own** | read linked; write linked (responded_by=self) |
+
+T503 widens the **read** half to *any authenticated user may read any row*. The
+write half is **unchanged** and stays exactly as 8.3 specifies.
+
+### The authority
+
+Two owner rulings, both verbatim in `auto-mode-decisions.md`:
+
+1. **2026-08-03** — *"for T503, it is ok if students see other teammates rsvp's
+   they often want to know which freinds are coming to an event and we quite
+   frankly do that currently through thumbs up in chat."* — settles that
+   students **should** see teammates' RSVPs.
+2. **2026-08-04** — *"let's go with the first option, anyone on the team"* —
+   settles the **scope**, chosen from three put to him in plain language.
+
+### Why this is the D002 pattern and not a PRD edit
+
+Constitution item 8 records React 19 as *"an approved, human-authorized deviation
+from PRD D2's 'React 18' … The PRD text itself is intentionally unedited; D002 is
+the record of the deviation."*
+
+**Same shape here. The PRD text is NOT to be amended** — no owner entry
+authorises editing it, and editing it would destroy the record of what was
+originally specified. This entry plus the two decision entries are the authority;
+the migration header cites them.
+
+**For checkers:** a `rsvps` SELECT policy that does not match 8.3 verbatim is
+**expected** on and after T503, and this entry is why. It is not an item 3
+violation. **Every other policy on every other table still comes from 8.4
+verbatim, and this exemption extends to nothing else** — in particular not to
+`rsvps`' write policies and not to `attendance`, which T306 deliberately
+staff-gated.
+
+### The defect it fixes, for the record
+
+Under 8.3's read rule, `OutreachDetail`'s Signups section shows **every teammate
+under "No response"** to a student viewer, because it diffs the roster against
+the rsvps RLS lets it see and treats "not permitted to read" as "did not answer".
+That is a false statement on screen, not a privacy protection.
+
+### Blast radius, proven rather than argued
+
+T503's premise gate stood up a real PostgreSQL 16.13 with this repo's migrations
+and measured it: the planned-hours views (`v_planned_rsvp_hours`,
+`v_student_planned_hours`, `v_season_upcoming_committed_hours`) return
+**byte-identical rows before and after** the widening, because a view without
+`security_invoker` executes as its owner and never applied the querying user's
+RLS to begin with. It re-ran the check with a **NOSUPERUSER, NOBYPASSRLS** owner
+to confirm the result holds on hosted Supabase a fortiori.
+
+### This is the THIRD time that same false claim has been found in this repo
+
+`20260723000001_dashboard_views.sql:50-56` asserts its views *"run under the
+querying session's own RLS against its base tables"*. That is false, and it is
+the same claim **D010** filed on 2026-07-29 about
+`20260723000000_kpi_views.sql:136-152` — **a dispute still open and awaiting
+George's decision.** The leaderboard migrations
+(`20260731000000:33`, `20260803000001:25`) state the correct owner-semantics
+reading, so the repo has contradicted itself in writing for over a week.
+
+**T503's gate has now supplied by execution the evidence D010 was missing.**
+Recommend closing D010 on that evidence rather than re-deriving it. **Item 10
+forbids editing an applied migration**, so neither comment may be corrected in
+place; the correction belongs in a new migration's header.

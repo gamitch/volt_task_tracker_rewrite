@@ -31,10 +31,12 @@ interface RecordedCalls {
   eqArgs: [string, unknown][];
   inArgs: [string, unknown][];
   orderArgs: [string, unknown][];
+  // T187 -- `.is('left_on', null)`, the new `student_teams` ACTIVE filter.
+  isArgs: [string, unknown][];
 }
 
 function freshRecordedCalls(): RecordedCalls {
-  return { selectArgs: [], eqArgs: [], inArgs: [], orderArgs: [] };
+  return { selectArgs: [], eqArgs: [], inArgs: [], orderArgs: [], isArgs: [] };
 }
 
 function makeRecordingChain(
@@ -56,6 +58,10 @@ function makeRecordingChain(
   };
   chain.order = (column: string, opts: unknown) => {
     recorded.orderArgs.push([column, opts]);
+    return chain;
+  };
+  chain.is = (column: string, value: unknown) => {
+    recorded.isArgs.push([column, value]);
     return chain;
   };
   chain.maybeSingle = () => Promise.resolve(result);
@@ -268,6 +274,14 @@ describe('makeLoadStudentHomeCardDataForParentHome', () => {
         data: { team_id: TEAM_ID, goal_hours: 80, confirmed_hours: 12, planned_hours: 3 },
         error: null,
       },
+      // T187 -- `makeResolveStudentScope` (`students.ts`) now ALSO reads
+      // `student_teams` for the ACTIVE membership set, sequentially after
+      // the non-null `v_student_goal_projection` row above. A single row
+      // mirroring the legacy `TEAM_ID` (real production backfill precedent:
+      // one membership row per legacy `students.team_id`) preserves every
+      // test below that doesn't override this key its own pre-T187
+      // single-team scope, unchanged.
+      student_teams: { data: [{ team_id: TEAM_ID }], error: null },
       events: { data: [], error: null },
       rsvps: { data: [], error: null },
       ...overrides,
@@ -294,6 +308,92 @@ describe('makeLoadStudentHomeCardDataForParentHome', () => {
       goalHours: 0,
       confirmedHours: 0,
     });
+  });
+
+  /**
+   * T187 -- the FIRST of the two disclosed edge cases (`loaders/parentHome.ts`'s
+   * own module doc): `scope === null` falls back to the threaded single
+   * `teamId`, not to an empty/nothing scope. Extends the test immediately
+   * above (which only checked goalHours/confirmedHours) to also prove
+   * next-events scoping specifically -- `student_teams` is never even
+   * queried here (module doc's own sequential-fetch decision, same as
+   * `students.ts`), so this genuinely exercises the fallback branch, not a
+   * seeded active row.
+   */
+  it('falls back to the threaded single teamId for next-events scoping when resolveStudentScope returns null', async () => {
+    const eventRow = {
+      id: 'event-scope-null-fallback',
+      season_id: 'season-scope-null',
+      type: 'meeting',
+      title: 'Fallback Scope Meeting',
+      team_ids: [TEAM_ID],
+    };
+    const sessionRow = {
+      id: 'session-scope-null-fallback',
+      event_id: 'event-scope-null-fallback',
+      session_date: '2026-06-05',
+      starts_at: '2026-06-05T10:00:00.000Z',
+      ends_at: '2026-06-05T11:00:00.000Z',
+      status: 'scheduled',
+    };
+    const { client, recordedByTable } = makeRecordingClient(
+      baseTables({
+        v_student_goal_projection: { data: null, error: null },
+        events: { data: [eventRow], error: null },
+        event_sessions: { data: [sessionRow], error: null },
+      }),
+    );
+    const loadStudentData = makeLoadStudentHomeCardDataForParentHome(
+      () => client,
+      () => new Date('2026-06-01T00:00:00.000Z'),
+    );
+
+    const data = await loadStudentData(STUDENT_ID, TEAM_ID);
+
+    expect(data.nextEvents).toHaveLength(1);
+    expect(data.nextEvents[0]?.title).toBe('Fallback Scope Meeting');
+    // The sequential-fetch decision (students.ts's own module doc): no row
+    // -> student_teams is never queried at all.
+    expect(recordedByTable.student_teams).toBeUndefined();
+  });
+
+  /**
+   * T187 -- the SECOND disclosed edge case: `scope` present but a genuinely
+   * EMPTY active `teamIds` scopes to NOTHING (an honest `[]`), it does NOT
+   * fall back to the threaded `teamId`. A real student with zero active
+   * `student_teams` rows genuinely has no team-scoped events to show.
+   */
+  it('scopes to NOTHING (never falls back to teamId) when resolveStudentScope resolves a present scope with zero active memberships', async () => {
+    const eventRow = {
+      id: 'event-zero-active',
+      season_id: 'season-zero-active',
+      type: 'meeting',
+      title: 'Would Only Show On A Fallback',
+      team_ids: [TEAM_ID],
+    };
+    const sessionRow = {
+      id: 'session-zero-active',
+      event_id: 'event-zero-active',
+      session_date: '2026-06-05',
+      starts_at: '2026-06-05T10:00:00.000Z',
+      ends_at: '2026-06-05T11:00:00.000Z',
+      status: 'scheduled',
+    };
+    const { client } = makeRecordingClient(
+      baseTables({
+        student_teams: { data: [], error: null },
+        events: { data: [eventRow], error: null },
+        event_sessions: { data: [sessionRow], error: null },
+      }),
+    );
+    const loadStudentData = makeLoadStudentHomeCardDataForParentHome(
+      () => client,
+      () => new Date('2026-06-01T00:00:00.000Z'),
+    );
+
+    const data = await loadStudentData(STUDENT_ID, TEAM_ID);
+
+    expect(data.nextEvents).toEqual([]);
   });
 
   it('reads events with id/season_id/type/title/team_ids, unfiltered (full table, RLS-scoped)', async () => {
@@ -458,5 +558,66 @@ describe('makeLoadStudentHomeCardDataForParentHome', () => {
       { sessionId: 'session-strip-1', sessionDate: '2026-05-01', status: 'present' },
     ]);
     expect(data.participation).toBeNull();
+  });
+
+  /**
+   * T187 (acceptance criterion 2) -- a parent's TWO-team child sees events
+   * from BOTH real ACTIVE `student_teams` memberships, not just the legacy
+   * primary `teamId` threaded in.
+   */
+  it("includes next-events from BOTH of a student's real ACTIVE student_teams memberships, never just the threaded primary teamId", async () => {
+    const SECOND_TEAM_ID = 'team-card-real-second';
+    const primaryEvent = {
+      id: 'event-real-primary',
+      season_id: 'season-real',
+      type: 'meeting',
+      title: 'Primary Team Real Meeting',
+      team_ids: [TEAM_ID],
+    };
+    const secondEvent = {
+      id: 'event-real-second',
+      season_id: 'season-real',
+      type: 'outreach',
+      title: 'Second Team Real Outreach',
+      team_ids: [SECOND_TEAM_ID],
+    };
+    const primarySession = {
+      id: 'session-real-primary',
+      event_id: 'event-real-primary',
+      session_date: '2026-06-05',
+      starts_at: '2026-06-05T10:00:00.000Z',
+      ends_at: '2026-06-05T11:00:00.000Z',
+      status: 'scheduled',
+    };
+    const secondSession = {
+      id: 'session-real-second',
+      event_id: 'event-real-second',
+      session_date: '2026-06-06',
+      starts_at: '2026-06-06T10:00:00.000Z',
+      ends_at: '2026-06-06T11:00:00.000Z',
+      status: 'scheduled',
+    };
+    const { client } = makeRecordingClient(
+      baseTables({
+        // TWO active memberships for this one student.
+        student_teams: {
+          data: [{ team_id: TEAM_ID }, { team_id: SECOND_TEAM_ID }],
+          error: null,
+        },
+        events: { data: [primaryEvent, secondEvent], error: null },
+        event_sessions: { data: [primarySession, secondSession], error: null },
+      }),
+    );
+    const loadStudentData = makeLoadStudentHomeCardDataForParentHome(
+      () => client,
+      () => new Date('2026-06-01T00:00:00.000Z'),
+    );
+
+    const data = await loadStudentData(STUDENT_ID, TEAM_ID);
+
+    expect(data.nextEvents.map((event) => event.title)).toEqual([
+      'Primary Team Real Meeting',
+      'Second Team Real Outreach',
+    ]);
   });
 });
