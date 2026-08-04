@@ -23,7 +23,12 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthUser } from '../../app/guards';
 import { LoginAsDeferred as LoginAs } from '../../test-utils/authHarness';
-import { LiveConsoleBody, type LiveConsoleData } from './LiveConsole';
+import {
+  defaultLoadEndMeetingSummary,
+  defaultOnEndMeeting,
+  LiveConsoleBody,
+  type LiveConsoleData,
+} from './LiveConsole';
 import {
   buildEndMeetingConfirmDescription,
   type AttendanceRecordState as EndMeetingAttendanceRecordState,
@@ -350,5 +355,47 @@ describe('T196 C6 -- the "meeting has ended" banner copy no longer claims automa
 
     expect(container.textContent).toContain('Attendance stays editable below.');
     expect(container.textContent).not.toContain('corrections are recorded automatically');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T196 follow-up (checker MINOR-1): the console's PRODUCTION defaults.
+//
+// C2 and C3 inject the seams, so they prove the console FORWARDS its props --
+// not that its own defaults are the real backends. The checker demonstrated the
+// hole with two mutations that leave the JSX wiring untouched and corrupt only
+// the module consts: swapping `defaultLoadEndMeetingSummary` for an inline
+// fixture, or `defaultOnEndMeeting` for `async () => undefined`, left the ENTIRE
+// suite green.
+//
+// In production the first would show a coach fabricated attendance tallies in
+// the confirm dialog before ending a real meeting; the second would make "End
+// meeting" silently do nothing. Both invisible.
+//
+// These assert the consts reach the REAL Supabase-backed factories. With no
+// Supabase configured -- this suite's gate state -- the genuine loaders reject
+// with the client's own configuration error. A fixture or a no-op RESOLVES, so
+// either substitution turns these red.
+//
+// Same shape as `LiveConsole.test.tsx`'s own
+// `describe('defaultSetAttendanceStatus …')`, which established this pattern.
+// ---------------------------------------------------------------------------
+
+describe("T196 -- the console's production defaults are the real backends", () => {
+  it('defaultLoadEndMeetingSummary reaches the real loader, not a fixture', async () => {
+    await expect(defaultLoadEndMeetingSummary('session-1')).rejects.toThrow(
+      /Supabase isn't configured yet/,
+    );
+  });
+
+  it('defaultOnEndMeeting reaches the real mutation, not a no-op', async () => {
+    await expect(
+      defaultOnEndMeeting({
+        sessionId: 'session-1',
+        endsAt: '2026-08-04T19:00:00.000Z',
+        backfillAbsentStudentIds: [],
+        checkoutStudentIds: [],
+      }),
+    ).rejects.toThrow(/Supabase isn't configured yet/);
   });
 });
