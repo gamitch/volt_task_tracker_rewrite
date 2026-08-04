@@ -2608,3 +2608,52 @@ collapse to identical text.
 **This is not a precedent for STANDARD or HEAVY rows.** T197 (STANDARD) got a worker and a checker,
 and that checker found two real NITs the orchestrator had not — including one that survived the
 orchestrator's own mutation replay.
+
+### D7 — RETRACTION: T161 was never mis-measured. It was completed. D4/D5's "four rows" finding is narrowed to two.
+
+**This corrects a claim that reached a merged PR body (#56), a merge commit on `main`, four status
+docs and this file. It is the second retraction in this window, and it is the same error both times.**
+
+**What was claimed** (D4, repeated in D5, PR #56, `RESUME-HERE`, `WORKFLOWS`, the W3-A handoff):
+that **four** ledger rows — T161, T162, T163, T164 — carried a false *"0 tests"* premise produced by
+an audit that counted **files named `<module>.test.ts`** rather than tests *of* the module.
+
+**What is true:**
+
+| Row | Verdict | Evidence |
+|---|---|---|
+| **T161** | ❌ **CLAIM WAS RIGHT. Row was COMPLETED.** | `checkin.test.ts` exists because commit **`2d58675`** *"T161 — bring loaders/checkin.ts under test"* created it with 20 tests; `verification-log.md:6641` carries the entry. **The "0 tests" premise was TRUE when filed.** |
+| **T162** | ✅ finding holds | Never done before this wave. Its coverage sits in `MeetingsList.test.tsx` as a **side effect of T147**, a different row — so the premise really was false at filing and nobody had noticed. |
+| **T163** | ⚠️ **downgraded to UNVERIFIED** | Never completed (no entry, no commit), but the only measurement taken is symbol reference, not coverage. Not established either way. |
+| **T164** | ✅ finding holds | Genuinely untested; both test files `import type` only. |
+
+**So the systemic finding is real but narrower: it is confirmed on ONE row (T162), plausible on one
+(T163), and FALSE on the row that was cited as the worst example.**
+
+#### The error, and why it is the same one twice
+
+D4 reasoned from *"a dedicated test file exists, so the row's premise is false."* It never asked
+**why** the file exists. The answer was one `git log` away: **the row had been done.**
+
+**D5 already caught this exact shape once** — it retracted D4's treatment of T164, which had reasoned
+from *"two test files import the module"* without checking whether they invoke it. D5 wrote: *"only
+invocation counts."* **The same lesson applied to T161 and was not drawn: only provenance explains a
+test file's existence.**
+
+Both times the shortcut was cheaper than the real check and wrong in the same direction — and both
+times it was the *same* mistake being made about the audit that the audit made about the code.
+
+#### Where the false claim persists and cannot be edited
+
+- **The merge commit for PR #56 on `main`** — immutable. This entry is the correction of record.
+- **PR #56's body** — editable, and updated with a correction banner.
+
+Corrected here, in both ledger rows, `RESUME-HERE`, `WORKFLOWS` and the W3-A handoff.
+
+#### What the owner should take from this
+
+**T161 needs nothing** — it is done and awaiting merge on the W1 branch. **T164 remains the one
+genuinely worth doing.** **T163 is genuinely unknown** and should be measured, not assumed in either
+direction. The claim that ~2,200 lines are falsely advertised as untested **should be read as ~1,455
+at most** (T162's 726, now closed, plus T163's 729, unverified) — **not** the four-row, 2,231-line
+figure stated in PR #56.
