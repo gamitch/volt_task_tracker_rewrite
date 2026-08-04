@@ -2920,3 +2920,35 @@ complexity"*. Measured, so it is on the record: 17 call-site argument changes, ~
 and 3 expectation objects gaining a field, one fake client learning a table, and three fake query
 chains gaining an `.is()` method. **No test's subject or expected behaviour changes.** The scary
 "~48 lines including assertion lines" figure is almost entirely mechanical.
+
+---
+
+## 2026-08-04 — George's ruling on T186's SQL half: file it, don't force it
+
+**Question put to him.** T186's ledger row prescribes recording the `v_student_goal_projection.team_id`
+dependency *"in both the migration comment and the loader"*. The loader half is ordinary work. The
+migration half is not: `20260723000001_dashboard_views.sql` is **applied**, and **constitution item 10
+makes editing an applied migration file a BLOCKER**. The row was written without checking item 10, so
+as filed it prescribes a blocked action. Three ways out were offered — ship the TS half only, add a
+new additive `comment on view …` migration, or amend item 10 to exempt comment-only edits.
+
+**Ruling: ship the TS half only.** Neither a migration nor a constitution amendment is bought for a
+comment fix. The residual is filed as **T801** rather than quietly dropped, and the consequence is
+stated plainly in that row: a reader who opens `dashboard_views.sql` still sees both wrong comments —
+the `:311-320` "display badge only" claim that names just one of two readers, and the `:49-52`
+`security_definer`/RLS sentence that is wrong as written. **The corrections exist only in TypeScript.**
+
+**This is consistent with the 2026-07-30 ruling that closed T185**, and for the same reason: the
+underlying fact is worth knowing, the exposure is owner-sanctioned, and the cost of a
+schema-level fix exceeds what a comment-accuracy defect is worth to a volunteer team.
+
+**Also filed off this closure: T802** — `ResolvedStudentIdentity.teamId` is now written and never read
+(measured by grep), dead since T187 moved scoping onto `teamIds`. Kept deliberately by T187's own
+ruling so no consumer's shape changed; recorded because an unread field still carrying a
+display-only value is the exact shape someone re-reads for scoping later.
+
+**Two corrections the orchestrator made to its own earlier statements this session**, recorded so the
+log is not flattering: T198 was reported to George as *"still waiting on your answer"* when his ruling
+already existed (**2026-08-03, season-wide, option (b)**) — it was unblocked ordinary work the whole
+time. And a stale one-shot Routine that had already fired was updated rather than deleted, re-arming
+it for the next day carrying instructions that asserted T187 was still open; deleted once noticed.
