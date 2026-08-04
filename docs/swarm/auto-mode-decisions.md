@@ -2341,3 +2341,65 @@ Not fixed here: it crosses into W1's `checkin.ts` and needs an ownership call.
 **Note on citation ambiguity:** `D1`/`D2`/`D3` are scoped **per window**. This file now contains
 more than one section numbered `D2` (the W4+W5 window has its own). **Always cite as
 "W3-A window, D<n>".**
+
+### D4 — T162 PARKED for the owner (item 19a). The row's own premise is false, and the error is systemic across four rows.
+
+**Gate round 2 returned REVISE. Item 19a caps the gate at two rounds, so this escalates rather than
+looping. No third round was run and none should be.** T162 is **not dispatched**.
+
+**All eleven round-1 findings were verified fixed** by round 2, each by running it — including the
+C6 control-flow BLOCKER, whose corrected assertion reproduced the exact quoted failure at exit 1.
+Packet v2 is otherwise dispatch-clean. **The new BLOCKER is a different, older premise that round 1
+missed and v2 re-affirmed with a ✅ without running it.**
+
+#### The finding
+
+**T162's headline — "`loaders/meetings.ts` has 0 tests across 726 lines" — is false.**
+`MeetingsList.test.tsx:1803-2272` imports `../../lib/supabase/loaders/meetings` directly and
+unit-tests it in **six dedicated describes, 17 tests**, covering **all five** of the packet's
+coverage items.
+
+**The consequence is the failure mode this project keeps paying for.** Measured: C1, C3, C5 and C6
+already go **RED at exit 1** against the shipped suite with **zero new tests written**. A worker
+following §7 — "record each mutation's real output" — would observe RED four times and honestly
+record four passes, having written nothing of value. **The packet's own anti-vacuity protocol would
+have certified a vacuous test file.** Only **C2** (denominator floor) and **C4** (single-row
+reference identity; the shipped assertion at `:2017` is the weak `toEqual`) are genuine gaps — the
+only two mutations that leave all 1946 tests green.
+
+#### It is systemic, and the other three rows are corrected too
+
+The claim traces to `task-ledger.md`'s external audit, which counted **files named
+`<module>.test.ts`** rather than tests *of* the module. **Every "0 tests" row it produced is
+overstated.** Measured 2026-08-04:
+
+| Row | Claim | Reality |
+|---|---|---|
+| **T161** `loaders/checkin.ts` | "0 tests / 521 lines" | **A dedicated `checkin.test.ts` EXISTS with 20 `it` blocks**, plus 2 importing files. T162's own gate named it the *template* for this arithmetic. |
+| **T162** `loaders/meetings.ts` | "0 tests / 726 lines" | 17 direct unit tests in `MeetingsList.test.tsx` |
+| **T163** `loaders/reports.ts` | "0 tests / 729 lines" | no dedicated file, but **4** test files import it |
+| **T164** `loaders/kpi.ts` | "0 tests / 255 lines" | no dedicated file, but **2** test files import it |
+
+**T161 is the worst of these** — it claims zero tests for a module that has a dedicated, thorough
+test file. All four rows are annotated in the ledger. **T161 is W1's and T163/T164 are W4's; this is
+a factual correction to a false claim, not W3-A doing their work.** Left un-annotated, each would
+have sent a worker to rebuild coverage that exists.
+
+#### Owner decisions needed on T162
+
+1. **Re-scope to the measured gap** — C2, C4, and an outcome-provable replacement for the call-shape
+   ordering spy at `MeetingsList.test.tsx:2166` (which the packet's own §5 forbids) — **or close the
+   row as substantially already-done.**
+2. **Rule on duplication:** should a new `meetings.test.ts` duplicate, supersede, or leave the 17
+   existing tests? Moving them touches `MeetingsList.test.tsx` and would create a **third**
+   maintenance site for the MET-01 arithmetic (see **T600**).
+
+#### Process lesson, third occurrence
+
+T403's acceptance criterion contradicted the PRD. T404's whole premise was wrong for this team.
+**Now T162's premise was inherited from an audit that measured the wrong thing.** In all three the
+chain verified the *packet* diligently and nobody re-measured the *ledger row it came from*.
+**19c says "verify your own citations"; it does not say "verify the row's."** That gap is now
+three-for-three and is worth a constitution item.
+
+**The wave continues with T160**, which is independent of all of this.
