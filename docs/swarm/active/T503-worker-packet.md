@@ -1,127 +1,137 @@
-# T503 — worker packet v1: widen `rsvps` SELECT so a student sees what their teammates actually answered
+# T503 — worker packet **v2**: widen `rsvps` SELECT so a student sees what their teammates actually answered
 
-**Tier: HEAVY** (constitution item 26), and it is not close. This changes **RLS on a table**, which
-item 26 names explicitly, and it ships a **migration**. Item 26's trigger question — *can a mistake
-here corrupt data?* — is the wrong question here; the right one is *can a mistake here expose data
-that should not be exposed, or silently change a number on a screen?*, and both are **yes** if the
-policy is written wrong. Packet → premise gate → worker → checker, with the orchestrator replaying
-every mutation.
+**Tier: HEAVY** (constitution item 26), and not close: this changes **RLS on a table** and ships a
+**migration**. The right trigger question here is not *can a mistake corrupt data?* but *can a mistake
+expose data that should not be exposed, or silently change a number on a screen?* — and both are
+**yes** if the policy is written wrong. Packet → premise gate → worker → checker, orchestrator
+replaying every mutation.
 
-**Branch:** `claude/t503-widen-rsvp-read`, from current `main` **`7fe4e56`**.
+**v2 supersedes v1 after the premise gate returned REVISE** (round 1 of item 19a's two) with one
+MAJOR, three MINORs and two NITs. **The §3 premise is now PROVEN by execution — do not re-derive it.**
+The MAJOR was a real omission in v1 and is fixed in §2.1.
 
-**Measure your own baseline.** `main` moves hourly. At `7fe4e56` it stands at `tsc` 0 · eslint
-**0 errors / 364 warnings** · vitest **78 files / 1976 tests**.
+**Branch:** `claude/t503-widen-rsvp-read`, from current `main`. **Measure your own baseline.**
 
 ---
 
-## 1. The defect, and it is a display lie rather than a security hole
+## 1. The defect — a display lie, not a security hole
 
 A non-staff viewer's Signups buckets show **every teammate under "No response"**, whatever they
 actually answered.
 
 `rsvps` RLS is `staff_all` plus `own_or_linked_read` (`20260717000002_rls.sql:197-203`), so a student
-reads only their own row and a parent only their linked child's. `groupSessionSignups`
-(`OutreachDetail.tsx`) builds its buckets by **diffing the roster** against the rsvps it can see, and
-`<SessionSignupList>` renders for **every** viewer with no staff gate. So the page treats *"I am not
-allowed to see this row"* as *"this student did not answer"*. Those are different facts and it
-displays the wrong one.
+reads only their own row. `groupSessionSignups` builds its buckets by **diffing the roster** against
+the rsvps it can see, and `<SessionSignupList>` renders for **every** viewer (`OutreachDetail.tsx:2310`;
+the staff gate at `:2329` covers the *attendance* view, not this one). So the page treats *"I am not
+allowed to read this row"* as *"this student did not answer"* — a false statement on screen.
 
-**Pre-existing.** T306 did not cause it and deliberately did not extend it — T306's attendance view is
-staff-gated precisely so it would not create a second, worse instance (attendance is a factual record;
-RSVP is intent).
+**Pre-existing.** T306 did not cause it and deliberately did not extend it (`:1925` staff-gates its
+attendance view precisely so it would not create a second, worse instance).
 
 ---
 
-## 2. The owner's decision — build to exactly this
+## 2. The owner's decision, and the authority to deviate from the PRD
 
-`auto-mode-decisions.md`, **"2026-08-03 — George's ruling on T503"** (the product half) and
-**"2026-08-04 — George picks the SCOPE for T503"** (the scope). **Cite those entries, never this
-paraphrase.**
+`auto-mode-decisions.md`: **"2026-08-03 — George's ruling on T503"** (product) and **"2026-08-04 —
+George picks the SCOPE for T503"** (scope). **Cite those entries, never this paraphrase.**
 
-**Widen SELECT on `rsvps` so any authenticated user may read any row.** He chose the widest of three
-offered scopes, and gave his reasoning for visibility generally: the team already shares this
-informally in chat, so the app showing it matches existing behaviour rather than introducing exposure.
+**Widen SELECT on `rsvps` so any authenticated user may read any row.**
+
+### 2.1 THIS IS A DELIBERATE PRD DEVIATION AND IT IS ALREADY RECORDED — read `D013` first
+
+**The gate's MAJOR, and v1 missed it entirely.** Constitution **item 3**:
+
+> *"RLS policies and metric SQL come **only** from PRD Section 8.4, copied verbatim. Re-deriving
+> either … → **BLOCKER**."*
+
+PRD §8.3's `rsvps` row says **`read/write own`**. A policy that widens read is therefore *not* 8.4
+verbatim, and **a checker would be correct to BLOCKER it** unless the deviation is on the record.
+
+**It is on the record: `dispute-log.md` → `D013`**, filed before any code was written, following the
+**D002** pattern that constitution item 8 already uses for React 19.
+
+- **Cite `D013` and both decision entries in the migration's header comment.** That is what makes this
+  authorised rather than a violation.
+- **Do NOT amend the PRD.** No owner entry authorises editing it, and D002's precedent is explicit
+  that the PRD text stays unedited so the original specification survives.
+- The exemption covers **this one SELECT policy and nothing else.**
 
 ### What is NOT authorised — exceeding any of these means stop and report
 
-- **No change to the write policies.** `own_or_linked_write` and `own_or_linked_update`
-  (`20260717000002_rls.sql:205-215`) stay **byte-identical**. A student still answers only for
-  themselves; a parent only for their linked child. **Widening read is not widening write.**
+- **No change to the write policies.** `own_or_linked_write` / `own_or_linked_update`
+  (`20260717000002_rls.sql:205-215`) stay **byte-identical**. **Widening read is not widening write.**
 - **No change to `attendance` RLS.** Attendance is a factual record and is deliberately staff-gated.
-  This ruling is about RSVPs — intent — only.
-- **No `anon` access.** The widened policy is for **`authenticated`** only. T205 exists because an
-  `anon` grant leaked a view; do not re-create that shape.
+- **No `anon` access.** The policy is for **`authenticated`** only. T205 exists because an `anon`
+  grant leaked a view; do not recreate that shape.
 - **Do not apply the migration to hosted Supabase.** **Item 16 reserves cutover for the owner.**
-  Three migrations now await him. Your job ends at a committed migration plus a passing test.
 
 ---
 
-## 3. THE QUESTION THE GATE MUST SETTLE — two migrations in this repo contradict each other
+## 3. The load-bearing premise — ALREADY PROVEN. Quote it; do not re-derive it.
 
-This decides whether the task's blast radius is "nothing outside the app's direct table reads" or
-"every student's planned-hours figure changes".
+v1 asked the gate to settle a contradiction between two migrations. **It did, on a real
+PostgreSQL 16.13 loaded with this repo's migrations.**
 
-**Claim A** — `20260723000001_dashboard_views.sql:52-56`:
+**Claim B is TRUE, Claim A is FALSE.** A view carrying no `security_invoker` **executes as its owner
+and never applied the querying user's RLS to begin with**, so widening `rsvps` **changes no view
+output at all**. Measured, as a non-staff student session:
 
-> *"none of the views below are `security_definer`/`security_barrier`, so each runs under the
-> querying session's own RLS against its base tables (… `rsvps` …)"*
+| | Result |
+|---|---|
+| direct `rsvps` read, before | **1 row** (correctly trimmed) |
+| `v_planned_rsvp_hours`, same session, same instant | **3 rows — teammates' included** |
+| counterfactual `set (security_invoker = on)` | **1 row**; `reset` → **3 rows** |
+| after adding the new policy | direct read → **3 rows** (the fix); all three planned-hours views **byte-identical to before** |
 
-**Claim B** — `20260803000001_revoke_anon_leaderboard_students.sql:25` and
-`20260731000000_leaderboard_students_view.sql:33`:
+**It generalises to hosted Supabase.** The gate re-ran it with the objects owned by a
+**NOSUPERUSER, NOBYPASSRLS** role — strictly weaker than hosted's `postgres` (table owner **with**
+BYPASSRLS) — and the bypass still held, so it holds there *a fortiori*.
 
-> *"It carries no `security_invoker`, so it executes as its OWNER, which bypasses RLS."*
+Also settled: **`anon` read 0 rows before and after** (no `rsvps` policy names it). **Cross-student
+INSERT → `42501`.** **Cross-student UPDATE → `UPDATE 0`** (see §4.2 — this matters). **`my_student_ids()`
+is referenced by 10 policies** — load-bearing, not dead; do not touch it.
 
-**These cannot both be true, and `v_planned_rsvp_hours` reads `rsvps` directly**
-(`20260723000001:71-77`, redefined `20260724000001:64-70`), feeding `v_student_planned_hours` and
-`v_season_upcoming_committed_hours`.
-
-- If **B** is right, widening `rsvps` RLS changes **no view output at all** — the views never applied
-  the querying user's RLS in the first place. The change is contained to the app's direct table reads.
-- If **A** is right, widening `rsvps` **changes what every student's planned-hours views return**,
-  which is a metric change on **W4's** surface and a far bigger task than this packet describes.
-
-**PROVE IT BY EXECUTION.** Do not settle it by reading Postgres documentation and do not settle it by
-reasoning from the comments — one of those comments is already wrong. Stand up a real PostgreSQL 16
-(`/usr/lib/postgresql/16/bin/{initdb,pg_ctl}`; `psql` is on PATH), load this repo's migrations, create
-a non-staff role, and **query `v_planned_rsvp_hours` as that role before and after widening the
-policy.** If the returned rows differ, A is right and **this packet is wrong — return BLOCKER.**
-
-**There is a shipped harness for exactly this**: `supabase/tests/run.sh`, `auth_stub.sql`, `seed.sql`,
-and the per-task precedents `run_t205_anon_grant.sh` (an RLS/grant task, the closest analogue) and
-`run_volunteer_hours_outreach_only.sh`. **Use that harness rather than inventing one.**
-
-Also settle, because it changes the wording of the policy:
-- **Does `authenticated` include the `anon` role in this schema?** It must not. Prove the widened
-  policy grants nothing to `anon`.
-- **Is `my_student_ids()` (`:20-26`) used anywhere that would now be dead** for the read path? Report
-  it; do not delete it — it is load-bearing for the write policies.
+**`20260723000001_dashboard_views.sql:50-56` is the false comment.** So is
+`20260723000000_kpi_views.sql:136-152` — **D010 filed that on 2026-07-29 and it is still open,
+awaiting the owner.** Yours is the **third** in-repo confirmation. **Item 10 forbids editing an applied
+migration**, so correct it **in your new migration's header**, citing D010 and D013 — never in place.
+Full evidence: `docs/swarm/active/T503-gate-report.md`.
 
 ---
 
 ## 4. What to build
 
-**4.1 A new migration**, additive, following the naming and header conventions of
-`20260803000001_revoke_anon_leaderboard_students.sql`. It replaces `own_or_linked_read` on `rsvps`
-with a policy granting SELECT to `authenticated` unconditionally — or adds a second permissive SELECT
-policy alongside it, **whichever the gate proves is the cleaner shape** (Postgres ORs permissive
-policies, so a second policy is sufficient and less destructive; state which you chose and why).
+### 4.1 The migration — **additive second policy** (the gate settled v1's open choice)
 
-**Write the migration's own header comment to say what it does and does not do**, in this repo's
-style: that this is read-only widening, that the write policies are untouched and why, and that
-`responded_by` becomes visible.
+Add a **second permissive SELECT policy** for `authenticated` alongside the existing
+`own_or_linked_read`; do **not** drop or rewrite the existing one. Postgres ORs permissive policies, so
+this is sufficient, it is less destructive, it leaves 8.4's verbatim `own_or_linked_read` intact
+(which softens §2.1's deviation to an addition rather than a replacement), and **C5 then holds
+trivially**.
 
-**4.2 A test script** under `supabase/tests/`, mirroring `run_t205_anon_grant.sh`'s shape, asserting:
-- a non-staff authenticated user **can** read another student's `rsvps` row;
-- that same user **still cannot INSERT or UPDATE** another student's row;
+Follow the header conventions of `20260803000001_revoke_anon_leaderboard_students.sql`. The header must
+record: that this is **read-only** widening; that the write policies are untouched **and why**; that
+**`responded_by` becomes visible**; and the **D013 / D010** citations from §2.1 and §3.
+
+### 4.2 The test script — three corrections the gate measured
+
+Mirror `run_t205_anon_grant.sh`. Assert:
+
+- a non-staff authenticated user **can** read another student's row;
+- that user **still cannot INSERT** another student's row (**`42501`**);
+- that user **still cannot UPDATE** another student's row — **and this manifests as `UPDATE 0`, NOT an
+  exception.** The row is *visible* but not *updatable*, so RLS filters it out of the UPDATE's scope
+  rather than raising. **T205's exception-catch shape will mis-assert this** — do not copy it blindly;
 - **`anon` gets nothing**;
-- the planned-hours views return **the same rows before and after** (the §3 finding, pinned as a test
-  so a future migration cannot silently change it).
+- the planned-hours views return **identical rows before and after**. This requires **splitting the
+  migration loop**: apply all-but-the-new migration → snapshot → apply the new one → re-snapshot.
 
-**4.3 Application code: expect to change NOTHING.** `queryRsvpsForSessions`
-(`loaders/outreach.ts:789-791`) already selects **all** rsvps for the session ids with no student
-filter — RLS is the only thing trimming the result. **Verify that and say so.** If you find yourself
-editing `OutreachDetail.tsx` to make the buckets correct, **stop and report** — that means the premise
-is wrong.
+### 4.3 Application code: expect to change NOTHING
+
+`queryRsvpsForSessions` (`loaders/outreach.ts:784-792`) already selects **all** rsvps for the session
+ids with no student filter — RLS is the only thing trimming it. **Confirmed by the gate.** If you find
+yourself editing `OutreachDetail.tsx` to make the buckets correct, **stop and report**: the premise is
+wrong.
 
 ---
 
@@ -129,28 +139,25 @@ is wrong.
 
 | # | Criterion | Mutation |
 |---|---|---|
-| **C1** | A non-staff authenticated user can SELECT another student's `rsvps` row | drop the new policy — must fail on a real database, not a mock |
-| **C2** | That same user **cannot** INSERT or UPDATE another student's row | widen the write policy too — C2 must go red, proving read and write are genuinely separate |
-| **C3** | `anon` can read **nothing** from `rsvps` | grant the new policy to `public`/`anon` instead of `authenticated` |
-| **C4** | The planned-hours views return identical rows before and after the widening | — this is §3's finding pinned; if it cannot be made to fail, say so plainly rather than inventing a mutation |
-| **C5** | `own_or_linked_write` / `own_or_linked_update` are **byte-identical** to `main` | verify by **sha256** of the extracted policy text, not by reading the diff |
+| **C1** | A non-staff authenticated user can SELECT another student's row | drop the new policy — must fail on a real database |
+| **C2** | That user **cannot** INSERT or UPDATE another student's row | widen the write policy too — C2 goes red, proving read and write stayed separate |
+| **C3** | `anon` reads **nothing** | grant the new policy to `public`/`anon` instead of `authenticated` |
+| **C4** | The planned-hours views return identical rows before and after | **`alter view v_planned_rsvp_hours set (security_invoker = on)`** — the gate proved this makes C4's comparison go red (1 → 3), so C4 **is** mutation-testable |
+| **C5** | `own_or_linked_write` / `own_or_linked_update` **byte-identical** to `main` | verify by **sha256** of the extracted policy text, not by reading the diff |
 | **C6** | No application code changed | `git diff --stat -- src/` is **empty** |
 
-**C2 is the criterion that keeps the owner's ruling honest.** He authorised *seeing*, not *answering
-for other people*. A migration that widens both would satisfy C1 and silently exceed the ruling.
-
-**C5 by hash.** T309 and T406 both established this as the way a "must not change" claim is verified
-in this repo; reading a diff is a weaker claim.
+**C2 is what keeps the owner's ruling honest.** He authorised *seeing*, not *answering for other
+people*. A migration widening both would satisfy C1 and silently exceed the ruling.
 
 ---
 
 ## 6. What must survive — verify, do not assume
 
-- **T205** — the `anon` revoke. Confirm this migration does not re-open what T205 closed.
-- **T193 / T119 / T121** — RSVP is **intent**, not an attendance record, and self-authored rows are
-  meaningful. Nothing here may blur that; this task changes **who can read**, never what a row means.
-- **T306** — its attendance view is staff-gated on purpose. **Do not widen `attendance`** on the
-  theory that this ruling generalises. It does not.
+- **T205** — the `anon` revoke. Confirm this does not re-open what it closed.
+- **T193 / T119 / T121** — RSVP is **intent**, not an attendance record. This changes **who can read**,
+  never what a row means.
+- **T306** — its attendance view is staff-gated on purpose. **Do not widen `attendance`** on the theory
+  that this ruling generalises. It does not.
 
 ---
 
@@ -159,15 +166,16 @@ in this repo; reading a diff is a weaker claim.
 `docs/swarm/active/T503-worker-output.md`:
 
 1. **Commit SHA**, plus proof the work is in the **committed blob** (item 21).
-2. **All six gates** against your own measured baseline, `.env.local` absent, **plus** the SQL test
-   script's own exit code.
-3. **Every mutation in §5, run, with real output pasted** — C1/C2/C3 against a real PostgreSQL, and
-   C5's sha256 pair.
-4. **§3's answer**, with the before/after view rows pasted, and **which of the two contradictory
-   migration comments is wrong.** File that as a finding — a false claim in a migration header is
-   exactly the propagation-by-imitation shape T301 was filed for.
-5. **A plain-English note for the owner** on what he will see change after he applies it, including
-   that `responded_by` becomes visible.
-6. **Anything in this packet that is wrong.** Every packet this session carried at least one false
-   claim caught downstream — two MAJORs on T406, a bad scoping assumption on T165, a vacuous criterion
-   on T300. Finding another is a success, not an objection.
+2. **All six gates** against your measured baseline, `.env.local` absent, **plus the SQL test script's
+   own exit code.**
+3. **Every mutation in §5, run, with real output pasted** — C1–C4 against a real PostgreSQL, C5's
+   sha256 pair.
+4. **The false-comment finding filed as a third confirmation**, citing D010, and where you corrected it
+   (a new migration header — *never* in place, item 10).
+5. **A plain-English note for the owner**, covering: that `responded_by` becomes visible (so a parent
+   answering for their child is now visible to teammates), **and that `makeLoadOutreachData`
+   (`outreach.ts:1034`) now returns every rsvp row to non-staff sessions in its payload** — display is
+   unchanged, since the student view filters by their own id, but the data is in the response. All
+   other direct readers were verified unaffected (coach-only or `.eq('student_id')`-filtered).
+6. **Anything in this packet that is wrong.** v1 carried a MAJOR, three MINORs and two NITs — all
+   caught by the gate, and the MAJOR was a BLOCKER-class miss. Assume v2 has its own.
