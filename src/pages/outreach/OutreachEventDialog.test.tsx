@@ -52,7 +52,6 @@ import {
   generateSingleSessionDates,
   groupActiveRosterByTeam,
   OutreachEventDialog,
-  PLACEHOLDER_CURRENT_COACH_PROFILE_ID,
   resolveEventTypeFlags,
   resolveExpectedAttendeeIds,
   resolveTeamScope,
@@ -62,6 +61,11 @@ import {
   type OutreachTeamOption,
   type SaveOutreachEventPayload,
 } from './OutreachEventDialog';
+// T300 C1 -- the whole module namespace object, so the assertion below
+// checks the REAL absence of the export (not a grep, which would also match
+// this file's own required doc-comment prose naming the deleted constant --
+// see module doc 11d/OutreachEventDialog.tsx's own updated doc comments).
+import * as OutreachEventDialogModule from './OutreachEventDialog';
 import {
   computeExpectedAttendeeRsvpPlan,
   makeLoadOutreachEventRoster,
@@ -96,6 +100,37 @@ const TEST_TEAMS: readonly OutreachTeamOption[] = [
   { id: 'team-ravens', name: 'Ravens' },
   { id: 'team-titans', name: 'Titans' },
 ];
+
+// ---------------------------------------------------------------------------
+// T300: `currentUserProfileId` is now a required prop (the deleted
+// `PLACEHOLDER_CURRENT_COACH_PROFILE_ID` module fixture no longer exists) --
+// one shared local fixture for this file, referenced at every render site
+// that doesn't already supply its own `currentUserProfileId` override. Same
+// "named local constant, not the deleted export" precedent
+// `MarkDayCompleteDialog.test.tsx`'s own `COACH_PROFILE_ID` already
+// established after T179 made that dialog's `currentUserProfileId` required.
+// ---------------------------------------------------------------------------
+const TEST_CURRENT_USER_PROFILE_ID = 'profile-coach-real-injected';
+
+// ---------------------------------------------------------------------------
+// T300 C1 -- `PLACEHOLDER_CURRENT_COACH_PROFILE_ID` is no longer an export
+// of this module. Asserted against the real module namespace object, NOT a
+// text grep -- a zero-occurrence grep for the identifier would itself fail,
+// since this file's own updated module doc comments (11d) and
+// `OutreachEventDialog.tsx`'s own updated doc comments name the deleted
+// constant in prose explaining why the default went.
+// ---------------------------------------------------------------------------
+describe('OutreachEventDialog module exports (T300)', () => {
+  it('no longer exports PLACEHOLDER_CURRENT_COACH_PROFILE_ID', () => {
+    expect(Object.prototype.hasOwnProperty.call(
+      OutreachEventDialogModule,
+      'PLACEHOLDER_CURRENT_COACH_PROFILE_ID',
+    )).toBe(false);
+    expect(
+      (OutreachEventDialogModule as Record<string, unknown>).PLACEHOLDER_CURRENT_COACH_PROFILE_ID,
+    ).toBeUndefined();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // jsdom gap: `Dialog` renders a native `<dialog>` and calls
@@ -553,7 +588,14 @@ describe('computeConfirmLabel (BEH-07 / Known Context/Traps #4)', () => {
 describe('<OutreachEventDialog /> field order (OUT-02 / constitution item 13)', () => {
   it('renders top-level fields in the exact OUT-02 order for the default (single-mode, no date picked) state', () => {
     act(() => {
-      root.render(<OutreachEventDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
     });
     const labelTexts = Array.from(document.querySelectorAll('label'))
       .map((el) => el.textContent?.trim() ?? '')
@@ -591,7 +633,14 @@ describe('<OutreachEventDialog /> field order (OUT-02 / constitution item 13)', 
 
   it('inserts per-session Start/End/Expected-people-reached rows between schedule mode and adult volunteers once a date is picked', () => {
     act(() => {
-      root.render(<OutreachEventDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
     });
     const dateInput = getFieldControl('Date') as HTMLInputElement;
     act(() => {
@@ -622,7 +671,14 @@ describe('<OutreachEventDialog /> field order (OUT-02 / constitution item 13)', 
 describe('<OutreachEventDialog /> type Selector + CMP-02 flag gating (Known Context/Traps #1/#2)', () => {
   it('defaults to "outreach" and never shows the counts_participation/counts_volunteer_hours toggles for it', () => {
     act(() => {
-      root.render(<OutreachEventDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
     });
     expect(document.body.textContent).not.toContain('Counts toward participation %');
     expect(document.body.textContent).not.toContain('Counts toward volunteer hours');
@@ -630,7 +686,14 @@ describe('<OutreachEventDialog /> type Selector + CMP-02 flag gating (Known Cont
 
   it('the type Selector offers "Outreach" and "Competition" but never a "Meeting" option (module doc #1 resolution, grep-provable)', () => {
     act(() => {
-      root.render(<OutreachEventDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
     });
     const trigger = getFieldControl('Event type');
     clickButton(trigger);
@@ -646,7 +709,14 @@ describe('<OutreachEventDialog /> type Selector + CMP-02 flag gating (Known Cont
 
   it('switching to "Competition" reveals both flag toggles, defaulting OFF (CMP-02)', () => {
     act(() => {
-      root.render(<OutreachEventDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
     });
     const trigger = getFieldControl('Event type');
     clickButton(trigger);
@@ -690,6 +760,7 @@ describe('<OutreachEventDialog /> disabled/enabled confirm button (Known Context
           onOpenChange={() => {}}
           onSaveEvent={onSaveEvent}
           teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
         />,
       );
     });
@@ -726,7 +797,14 @@ describe('<OutreachEventDialog /> disabled/enabled confirm button (Known Context
 
   it('a picked date with no title stays disabled (title is independently required)', () => {
     act(() => {
-      root.render(<OutreachEventDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
     });
     const dateInput = getFieldControl('Date') as HTMLInputElement;
     act(() => {
@@ -737,7 +815,14 @@ describe('<OutreachEventDialog /> disabled/enabled confirm button (Known Context
 
   it('Custom dates mode: disabled with zero picked dates, enables after adding one, count grows/shrinks as dates are added/removed', () => {
     act(() => {
-      root.render(<OutreachEventDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
     });
     const titleInput = getFieldControl('Title') as HTMLInputElement;
     act(() => {
@@ -778,7 +863,14 @@ describe('<OutreachEventDialog /> disabled/enabled confirm button (Known Context
 
   it('Multi-day mode: three consecutive days via the real DateRangeInput popover produce 3 sessions', () => {
     act(() => {
-      root.render(<OutreachEventDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
     });
     const titleInput = getFieldControl('Title') as HTMLInputElement;
     act(() => {
@@ -814,6 +906,7 @@ describe('<OutreachEventDialog /> submit + cancel behavior', () => {
           onOpenChange={onOpenChange}
           onSaveEvent={onSaveEvent}
           teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
         />,
       );
     });
@@ -860,6 +953,7 @@ describe('<OutreachEventDialog /> submit + cancel behavior', () => {
           onOpenChange={onOpenChange}
           onSaveEvent={onSaveEvent}
           teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
         />,
       );
     });
@@ -880,7 +974,14 @@ describe('<OutreachEventDialog /> submit + cancel behavior', () => {
 
   it('resets to pristine defaults every time the dialog re-opens (nothing persists across opens)', () => {
     act(() => {
-      root.render(<OutreachEventDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
     });
     const dateInput = getFieldControl('Date') as HTMLInputElement;
     act(() => {
@@ -890,11 +991,23 @@ describe('<OutreachEventDialog /> submit + cancel behavior', () => {
 
     act(() => {
       root.render(
-        <OutreachEventDialog isOpen={false} onOpenChange={() => {}} teams={TEST_TEAMS} />,
+        <OutreachEventDialog
+          isOpen={false}
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
       );
     });
     act(() => {
-      root.render(<OutreachEventDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
     });
 
     expect(findButtonByText('Create event — 0 sessions')).toBeDefined();
@@ -934,6 +1047,7 @@ describe('<OutreachEventDialog /> edit mode (module doc #8)', () => {
           onOpenChange={() => {}}
           initialEvent={EXISTING_EVENT}
           teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
         />,
       );
     });
@@ -957,6 +1071,7 @@ describe('<OutreachEventDialog /> edit mode (module doc #8)', () => {
           initialEvent={EXISTING_EVENT}
           onSaveEvent={onSaveEvent}
           teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
         />,
       );
     });
@@ -981,6 +1096,7 @@ describe('<OutreachEventDialog /> edit mode (module doc #8)', () => {
           onOpenChange={() => {}}
           initialEvent={{ ...EXISTING_EVENT, expectedStudentIds: ['student-ravens-1'] }}
           teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
         />,
       );
     });
@@ -998,6 +1114,7 @@ describe('<OutreachEventDialog /> edit mode (module doc #8)', () => {
           onOpenChange={() => {}}
           initialEvent={EXISTING_EVENT}
           teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
         />,
       );
     });
@@ -1013,7 +1130,14 @@ describe('<OutreachEventDialog /> edit mode (module doc #8)', () => {
 describe('<OutreachEventDialog /> "Expected attendees" checklist (UXP-02)', () => {
   it('renders the default fixture roster grouped by team, scoped to the currently-selected teams', () => {
     act(() => {
-      root.render(<OutreachEventDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
     });
     expect(document.body.textContent).toContain('Riley Chen');
     expect(document.body.textContent).toContain('Jordan Blake');
@@ -1024,7 +1148,14 @@ describe('<OutreachEventDialog /> "Expected attendees" checklist (UXP-02)', () =
 
   it('checking a roster item updates the visible count', () => {
     act(() => {
-      root.render(<OutreachEventDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
     });
     clickButton(getFieldControl('Riley Chen'));
     expect(document.body.textContent).toContain('Expected attendees (1 of 4)');
@@ -1032,7 +1163,14 @@ describe('<OutreachEventDialog /> "Expected attendees" checklist (UXP-02)', () =
 
   it('"All" checks every currently-visible roster student; "Clear" unchecks all of them', () => {
     act(() => {
-      root.render(<OutreachEventDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
     });
     clickButton(findButtonByText('All') as HTMLButtonElement);
     expect(document.body.textContent).toContain('Expected attendees (4 of 4)');
@@ -1053,6 +1191,7 @@ describe('<OutreachEventDialog /> "Expected attendees" checklist (UXP-02)', () =
           onOpenChange={() => {}}
           onSaveEvent={onSaveEvent}
           teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
         />,
       );
     });
@@ -1072,7 +1211,11 @@ describe('<OutreachEventDialog /> "Expected attendees" checklist (UXP-02)', () =
 
     const payload = onSaveEvent.mock.calls[0][0] as SaveOutreachEventPayload;
     expect(payload.expectedStudentIds).toEqual(['student-ravens-1', 'student-titans-1']);
-    expect(payload.respondedBy).toBe(PLACEHOLDER_CURRENT_COACH_PROFILE_ID);
+    // T300: `PLACEHOLDER_CURRENT_COACH_PROFILE_ID` is deleted (no more
+    // runtime default) -- this now pins that the acting coach's REAL
+    // injected `currentUserProfileId` reaches `respondedBy`, the same
+    // property this assertion has always existed to prove.
+    expect(payload.respondedBy).toBe(TEST_CURRENT_USER_PROFILE_ID);
   });
 
   it('submits an empty expectedStudentIds array (not undefined) when nothing is checked', async () => {
@@ -1084,6 +1227,7 @@ describe('<OutreachEventDialog /> "Expected attendees" checklist (UXP-02)', () =
           onOpenChange={() => {}}
           onSaveEvent={onSaveEvent}
           teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
         />,
       );
     });
@@ -1140,7 +1284,13 @@ describe('<OutreachEventDialog /> "Expected attendees" checklist (UXP-02)', () =
     ];
     act(() => {
       root.render(
-        <OutreachEventDialog isOpen onOpenChange={() => {}} teams={teams} students={students} />,
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={teams}
+          students={students}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
       );
     });
     // Default team scope = every team selected -- both visible.

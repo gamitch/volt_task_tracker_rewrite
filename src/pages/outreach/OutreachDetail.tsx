@@ -2526,16 +2526,46 @@ export function OutreachDetail({
           for `formatScopeLabel`/`AttendancePanel`), replacing the dialog's
           own `DEFAULT_TEAMS` fixture fallback (`'team-ravens'`/
           `'team-titans'`, non-uuid strings that failed the real
-          `events.team_ids uuid[]` insert). */}
-      <OutreachEventDialog
-        isOpen={isEventDialogOpen}
-        onOpenChange={setIsEventDialogOpen}
-        teams={teams}
-        onSaveEvent={handleSaveEventSubmit}
-        initialEvent={buildInitialOutreachEvent(event, sessions, rsvps)}
-        students={eventDialogRoster}
-        currentUserProfileId={user?.id}
-      />
+          `events.team_ids uuid[]` insert).
+
+          T300 UPDATE: `currentUserProfileId` is now a required prop on
+          `OutreachEventDialog` (that file's own module doc 11d has the full
+          writeup) -- this call site previously passed `user?.id`
+          (`string | undefined`), so a null `user` would have silently
+          compiled a `respondedBy` write attributed to that file's own
+          now-deleted `PLACEHOLDER_CURRENT_COACH_PROFILE_ID` fixture default
+          instead. Gated here by an explicit `user !== null` check, NOT also
+          `isStaffViewer` -- unlike the `isStaffViewer && user !== null`
+          shape this file's three role-VISIBILITY gates use (`isParentViewer`/
+          `isStudentViewer`/`isStaffViewer` above, `AttendancePanel`), this
+          element is not a page section whose visibility should track a role;
+          it is a `Dialog` whose own `isOpen` already controls whether
+          anything is shown, same as the `MarkEventCompleteDialog`/
+          `MarkDayCompleteDialog` mounts below, both of which use this exact
+          `user !== null`-only shape for the identical reason (see those
+          mounts' own module docs). Reachability is honest: this element's
+          only trigger, `openEditDialog`, is wired to the "Edit" `MoreMenu`
+          item, which is itself only pushed onto `menuItems` `if
+          (isStaffViewer)` above -- so this branch is latent (unreachable by
+          a non-staff or signed-out viewer today, since they cannot flip
+          `isEventDialogOpen` true), not live-firing; it becomes impossible,
+          not merely unreachable, once the prop is required. Adding
+          `isStaffViewer` here in addition would not change what any viewer
+          can actually reach -- it would only additionally unmount this
+          closed dialog for parents/students, which is not this task's
+          purpose (removing a placeholder default, not changing who can open
+          the dialog). */}
+      {user !== null && (
+        <OutreachEventDialog
+          isOpen={isEventDialogOpen}
+          onOpenChange={setIsEventDialogOpen}
+          teams={teams}
+          onSaveEvent={handleSaveEventSubmit}
+          initialEvent={buildInitialOutreachEvent(event, sessions, rsvps)}
+          students={eventDialogRoster}
+          currentUserProfileId={user.id}
+        />
+      )}
     </VStack>
   );
 }
