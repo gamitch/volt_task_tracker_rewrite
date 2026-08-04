@@ -8654,3 +8654,342 @@ figure"*. Needs an owner ruling; out of this task's scope.
 
 The migration lands in the repo only. **Constitution item 16 reserves hosted-Supabase cutover for the
 owner**, so the live project keeps the old view definitions until he applies it.
+## T325 — the mobile student row stops overflowing, and the fix is proven by measurement rather than by tests
+
+**Owner-chosen shape (option A).** Put in plain English with three options and a recommendation; his
+answer: *"let's go with A option"* — move the two row actions out of Astryx's `endContent` slot into
+the row body, rather than overriding the slot's styling or writing custom CSS against the design
+system's internals. Constitution item 11's escalation order exists to prefer exactly that.
+
+Gates, `.env.local` absent: `tsc` 0 · `vite build` ✓ · prettier clean · eslint **0 errors / 364
+warnings — no rise** · vitest **78 files / 1946 tests**.
+
+### Measured, at every step, in real Chromium at 390×844
+
+| | overflow | action buttons |
+|---|---|---|
+| baseline | **213px** (`scrollWidth` 603 vs `clientWidth` 390) | 5 present |
+| `maxWidth="100%"` on our `HStack` | **213px — no change** | 5 present |
+| **option A (shipped)** | **0px** | **5 present, labels unchanged** |
+
+**The audit's description was misleading and the obvious suspect was wrong.** Nothing "collapses" —
+the row *overflows*. And it is not the RSVP `SegmentedControl`, which is what reading the source
+suggests; the orchestrator guessed that and was wrong. The offender is Astryx's own `endContent` slot
+wrapper: `flex-shrink: 0`, `max-width: none`, sizing to its 563px content inside a 342px row.
+
+**Our `HStack` already had `wrap="wrap"`.** It never fired, because nothing constrained the box it
+lived in — and `maxWidth="100%"` resolved against that same unconstrained 563px parent, which is why
+the first candidate fix measured as a no-op. Each button (285px, 265px) fits inside 342px once
+wrapping can engage.
+
+**The labels stay long on purpose.** `Button.label` is both the visible text and the accessible name
+(`astryx-api.md:1811`), so shortening them would undo T131/T132's distinguishable-accessible-name
+work. That is why the fix is structural rather than textual.
+
+### Shipped with NO new test, and that is the honest call
+
+**jsdom performs no layout.** It cannot see a 213px overflow and cannot see a regression. Three tests
+were attempted and none survived scrutiny:
+
+1. An ancestor walk asserting the button shares a body ancestor — **measured vacuous.** Reverting the
+   fix left it green: the `<li>` contains the `endContent` slot and the row body alike.
+2. A sharpened nearest-shared-ancestor check — **also measured vacuous**, for the same reason, and
+   because the string it keyed on is the event *title* (the `label` slot), not body text.
+3. A presence-and-labels guard — **redundant.** Mutating either the presence or the labels reddens
+   existing **T170** (criterion 10) and **T126** tests, which already locate these buttons by exact
+   label text.
+
+**Shipping any of them would have been a test that looks like a guard and is not** — the same family
+this project keeps catching (T330's `?? ''` sentinel, T401's vacuous test, T190's wrong C3 mutation).
+The evidence for this task is the measurement, stated as such.
+
+### Two traps the prototype surfaced, both worth keeping
+
+- **`rowActions` must be declared above `description`.** It is referenced there; a later declaration
+  throws `Cannot access 'rowActions' before initialization` at runtime, not at compile time.
+- **The first prototype reported "overflow 0" while having silently DELETED the buttons.** It "fixed"
+  the overflow by removing the thing that overflowed, and was caught only because the measurement also
+  asserted the buttons were still present. **A layout measurement that checks only the number is not
+  evidence.**
+
+### Rig
+
+Throwaway Playwright harness following the T131/T142 convention — real dev server, real provider
+stack, deleted afterwards, nothing from it committed. Recipe, so it is not rediscovered: playwright is
+installed **globally** (`NODE_PATH=/opt/node22/lib/node_modules`), Chromium is at
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, the harness must be **CJS** (ESM ignores
+`NODE_PATH`), and the rig must inject `defaultLoadOutreachData` **and** stub
+`resolveStudentId: 'student-lena-osei'` — after T190 the old placeholder resolves to a viewer with no
+fixture data, so a rig using it measures an empty page.
+
+---
+
+## T704 — the `Meetings` term leaves the KPI breakdown
+
+**Tier: FAST** (constitution item 26), stated and defended: no write path, no schema/RLS/auth, no
+cross-module signature change, well under ~20 lines of production change, and a named mutation
+exists. **Verification was not reduced** — FAST removes coordination, not evidence. Implemented
+directly by the orchestrator, which is what FAST prescribes.
+
+**Authority.** Owner ruling 2026-08-04, verbatim *"for T704, drop the meetings term from the
+breakdown"* — option (a) of three the row offered. It also authorized updating the two passing
+assertions that asserted the removed string (`KpiStrip.test.tsx:306`, `:362`); the Non-Negotiables
+require explicit owner approval for that, and it covers those two only.
+
+### Why the figure had to go rather than be fixed
+
+`v_season_kpis.meeting_hours` is a filtered sum over a CTE that joins `and e.counts_volunteer_hours`,
+and meetings are created with that flag hardcoded `false` (`loaders/meetings.ts:690`) with **no app
+path that edits it** — verified by the T322 premise gate, which found this as MINOR-2 and filed it
+rather than folding it into that task. The figure is **structurally frozen at `0.0`**. `KpiStrip`
+rendered it beside two live numbers, presenting a dead figure as a live one.
+
+**This resolved a genuine tension in the owner's own earlier ruling.** The 2026-08-03 T322 ruling
+said meeting and competition hours are *"still tracked and still displayed as their own figure."*
+Competition is. **Meeting could not be.** Rather than leave the contradiction unremarked, it was put
+to him.
+
+Consistent with the same ruling's other half — *"meeting participation stays its own separate
+figure"* — meeting attendance is measured as a **participation percentage**, not as hours. Removing
+an always-zero hours term removes no meeting measurement, only a misleading one.
+
+### What changed, and what deliberately did not
+
+`formatHoursBreakdown` now renders `Outreach … · Competitions …`. **`meetingHours` stays** on
+`KpiStripData`, in `loaders/kpi.ts`, and in `v_season_kpis` — still tracked, just not displayed here.
+**No migration, no view change, no loader change.**
+
+`KpiStrip.test.tsx:362`'s fixture keeps `meetingHours: 2.0` — **a value the production view cannot
+generate** — to prove the field is still carried, with an explicit comment saying so and an assertion
+that it is not rendered.
+
+### Mutation evidence
+
+| Mutation | Result |
+|---|---|
+| Restore the `Meetings` term to `formatHoursBreakdown` | **RED on both intended assertions** — `expected 'Volunteer hours20.5Meetings 0.0h · Ou…' not to contain 'Meetings'` and `expected 'Volunteer hours10.5Meetings 2.0h · Ou…' not to contain 'Meetings'` |
+| Revert | 15 passed |
+
+Committed before mutating (item 26's own rule, learned from T323 and re-learned by this orchestrator
+earlier today).
+
+### Gates, `.env.local` absent
+
+`tsc --noEmit` 0 · `vite build` 0 · `format:check` 0 · `eslint .` **0 errors / 364 warnings**
+(unchanged) · `vitest run` 0 — **78 files / 1951 tests**.
+
+**Incidental confirmation:** the mutation output shows the card label reading **"Volunteer hours"**,
+independently confirming T322 landed on `main`.
+
+---
+
+## T152 — T147's parallel-load guard now discriminates in both directions, and the blind spot was wider than filed
+
+**Tier: FAST** (constitution item 26), defended: **test-only**. No write path, no schema/RLS/auth, no
+signature change, one file. The orchestrator implemented it directly; no worker, no gate. Named
+mutations exist and all of them were run.
+
+### What was wrong
+
+T147's guard proves batching by **position**: `expect(callOrder.slice(1, 5).sort()).toEqual([...])`.
+Sorting throws away exactly the information the claim needs — the slice is set-equal under
+arrangements that are genuinely serial.
+
+### The blind spot is wider than the ledger row said — measured, not argued
+
+The row claimed one missed direction (teams hoisted ahead of the batch) and that serializing teams
+*after* the batch is correctly caught. Running all three:
+
+| Mutation | Before T152 | After T152 |
+|---|---|---|
+| **A** — `loadTeams()` hoisted to a serial `await` **before** the batch | **PASSED** (filed) | **RED** |
+| **B** — `loadTeams()` serialized **between** the two batches | **PASSED** — *not filed; a second, unknown blind spot* | **RED** |
+| **C** — `loadTeams()` serialized after `rsvps`/`attendance` | RED (`expected 4 to be greater than 6`) | RED |
+| **D** — `loadStudents()` serialized ahead | **never guarded at all** — the test only ever watched `teams` | **RED** |
+
+**B is a genuine extra serial round trip** and slipped through because moving `teams` to just after
+the first batch keeps it inside slice positions 1-4. **D** was never in scope of the original
+assertions, which name only `teams`/`rsvps`/`attendance`.
+
+### The fix
+
+Position cannot express the claim, so the guard now asserts **what resolved in between**.
+`Promise.all([a, b, c, d])` evaluates its array **synchronously**, so no microtask can run between the
+first and last call. Every mocked resolution bumps a `resolutionCount` when it **delivers**, each
+`from()` records the count it saw, and the four zero-dependency queries must record the **same** count.
+Any `await` between them drains microtasks and moves it.
+
+The original position assertions are **kept unchanged** — they are not wrong, only weak, and they are
+T147's shipped evidence. The new assertion is additive. A final
+`expect(batchIssueCount).toBeGreaterThan(0)` rules out the trivial all-zero case, so the equality
+cannot pass by nothing having resolved at all.
+
+No timers and no barrier-with-deadlock: a serialized implementation fails on a value comparison that
+names the offending query, not by timing out.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise** · vitest **78 files / 1951
+tests**, targeted `OutreachList.test.tsx` **108 passed, exit 0** · build ✓. `.env.local` absent.
+
+### One process note
+
+The first attempt at this edit used unbounded string replacement and matched a **different** test's
+identical mock block, producing a syntax error. Redone bounded to the target `it()` block's line
+range. Same failure mode as T306's 33-call-site over-replacement; the lesson did not stick the first
+time.
+
+---
+
+## T300 — `OutreachEventDialog`'s placeholder coach id becomes impossible, not merely unreachable
+
+**Tier: STANDARD** (constitution item 26), stated and defended: no write-path *logic* change, no
+schema/RLS/auth, and it rolls out a pattern already built, reviewed and merged as **T179** for the two
+sibling dialogs on this same page — item 19b's *"applying a proven pattern to a second surface"*. It is
+**not FAST**, because making `currentUserProfileId` required **changes a signature another module
+imports**, which item 26's FAST tier explicitly excludes. Worker implemented; **orchestrator replayed
+every mutation independently**; no separate checker round.
+
+### The defect
+
+`OutreachEventDialog.tsx` declared its **own independent**
+`PLACEHOLDER_CURRENT_COACH_PROFILE_ID = 'profile-placeholder-current-coach'` — the same literal
+`MarkDayCompleteDialog.tsx`'s was, but a separate declaration, so T179 deleting that one never touched
+this. `currentUserProfileId` defaulted to it, and the live call site passed `user?.id`
+(`string | undefined`), so a null `user` would silently substitute a **non-uuid string into a real
+`profiles.id` position** (`respondedBy`).
+
+**Latent, not live-firing** — the dialog's triggers are the staff-only `MoreMenu` "Edit" item and the
+create flow, both requiring a signed-in user. **Worth closing anyway, and that is the point:** the
+required-prop change makes the defect **impossible** rather than **currently unreachable**, the
+distinction the whole T179 family exists to draw.
+
+### Orchestrator's independent mutation replay
+
+Every criterion re-run by the orchestrator on its own worktree, not taken from the worker's report:
+
+| # | Mutation | Result |
+|---|---|---|
+| **C1** | re-add the export | vitest **exit 1** — `expected true to be false`, asserted against the real **module namespace object**, not a grep |
+| **C2** | prop required, call site omits it | `tsc` **exit 2** — `TS2741: Property 'currentUserProfileId' is missing … but required in type 'OutreachEventDialogProps'` |
+| **C2 (control)** | *same* omission, optional+default restored | `tsc` **exit 0** — proving the default is exactly what removes the guard |
+| **C3** | hardcode a different id into `respondedBy` | vitest **exit 1**, 2 real assertions |
+| **C4** | restore `user?.id` at the call site | `tsc` **exit 2** — `TS18047: 'user' is possibly 'null'` |
+
+**C2 and C4 are typecheck criteria and that is the whole point of this task** — the fix converts a
+runtime substitution into a compile-time impossibility, and a green vitest run demonstrates neither.
+
+### Two packet errors the worker found, both confirmed by the orchestrator
+
+1. **§3.2's "mirror T179's module doc, which names the deleted constant" is false.**
+   `MarkDayCompleteDialog.tsx` contains **zero** occurrences of `PLACEHOLDER` anywhere — by that
+   task's own design. T300's C1 requires the opposite (name it in prose so the reader knows what went
+   and why). The worker followed C1 and was right to.
+2. **C2's named mutation ("restore the default") is vacuous as literally written.** Adding a runtime
+   default back to a still-required prop produces **zero** `tsc` errors, because no call site omits it.
+   The worker substituted a paired experiment; the orchestrator re-ran that pair, above. **This is the
+   third vacuous-rather-than-red criterion caught in this workflow** (T401's row count, T190's C3,
+   now this) — the failure mode is a criterion whose mutation does not actually remove the guard.
+
+### §3.3 — which gate shape, and why
+
+`{user !== null && ( … )}`, **not** `isStaffViewer && user !== null`. This call site is edit-mode only
+and its sole trigger (`openEditDialog`) is reachable only through the staff-only "Edit" `MoreMenu`
+item, so `isStaffViewer` would be redundant *and* would narrow who can open the dialog. The file's
+closer precedent for staff-only-*triggered* dialogs (`MarkEventCompleteDialog` /
+`MarkDayCompleteDialog`) already uses plain `user !== null`. **This task removes a placeholder; it does
+not change who can open the dialog.**
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise** · vitest **78 files / 1952
+tests** (1951 + the new C1 test), targeted `OutreachEventDialog.test.tsx` + `OutreachDetail.test.tsx`
+**186 passed, exit 0** · build ✓. `.env.local` absent. `OutreachDetail.test.tsx` needed zero changes.
+
+---
+
+## T301 — the "LOAD-BEARING" comments in `OutreachDetail.tsx` were false, and there were two of them, not three
+
+**Tier: FAST** (constitution item 26), and defended: comment-only. No write path, no schema/RLS/auth,
+no signature change, no behaviour change of any kind — **proven, not asserted** (see below). The
+orchestrator implemented it directly; no worker, no gate.
+
+### The claim, and it is false
+
+Two gate comments stated that the `user !== null` beside `isParentViewer` / `isStudentViewer` was
+**"LOAD-BEARING, not redundant"**, because those flags are *"a plain boolean, not a type predicate,
+so TypeScript does not narrow `user` through it and `currentUserProfileId={user.id}` would not
+compile."*
+
+TypeScript 4.4+ narrows through **aliased conditions**. `user` is a `const` destructured binding
+(`const { user } = useAuth()`) and each viewer flag is itself a `const` initialised from a condition
+beginning `user !== null && …`, so each flag narrows `user` at every one of its own uses.
+
+### Measured, with the control the first measurement lacked
+
+T179's premise gate had already measured `tsc exit=0` after deleting all three null checks. That is
+necessary but **not sufficient** — exit 0 is equally consistent with the narrowing arriving from
+somewhere else entirely. So this task ran the discriminating pair:
+
+| Mutation | Result |
+|---|---|
+| delete the three `user !== null` conjuncts, keep the flags `const` | **`tsc` exit 0** — the checks are not load-bearing |
+| delete them **and** weaken the three flags `const` → `let` (which is exactly what defeats aliased-condition narrowing) | **`tsc` exit 2**, three errors: `TS18047: 'user' is possibly 'null'` at `:2357`, `:2387`, `:2405` — one per `currentUserProfileId={user.id}` |
+
+The second run is the evidence: it localises the narrowing to the `const` flags rather than merely
+showing the checks are removable.
+
+### The ledger row's count was wrong — two comments, not three
+
+The row says three pre-existing comments carry the claim, at `:1812-1818`, `:1850` and `:1858-1861`.
+All three citations are stale (T306 grew this file by ~300 lines), and **the count is wrong**. Traced
+through history by counting the string at every revision that touched the file:
+
+```
+1  a76781d  T170 packet          -> T157's <ParentRsvp> gate only
+2  7647820  T169 (OutreachDetail) -> T169's <RsvpControl> gate added
+3  c017256  T179                  -> the third occurrence is T179's own CORRECTION, not a claim
+```
+
+The `<AttendancePanel>` gate's comment **never made the claim** — yet both T157's comment ("Same shape
+module doc #11's `<AttendancePanel>` gate already uses for the identical reason") and T179's
+corrective module doc ("Three pre-existing gates … carry comments stating …") assert that it did.
+**The miscount had propagated into the correction itself**, which is the same
+propagation-by-imitation shape this row was filed to stop. Both were fixed.
+
+### The count was NOT restated as a number, deliberately
+
+T300 merged before this branch did and added a **fifth** `user !== null` gate (the
+`<OutreachEventDialog>` mount). The corrected paragraph had said "this file's **four** role-scoped
+render sites" — which went stale the moment that gate landed, mid-review of this very task. It now
+names the sites without hard-coding a count, and says why. **A task about a false count in a comment
+must not ship a fresh one.**
+
+Also checked, because it was the live risk: T300's new gate comment does **not** repeat the
+"LOAD-BEARING" claim. It reasons about reachability instead and never invokes type narrowing, so the
+propagation-by-imitation this row was filed to stop did not recur.
+
+### Zero behaviour change, proven by hash
+
+A comment-only claim deserves better than "I read the diff". Both revisions were run through
+`ts.transpileModule` with `removeComments: true` and the emitted output hashed:
+
+```
+before: 31808 bytes  sha256 10c29a36…7e223a
+after:  31808 bytes  sha256 10c29a36…7e223a   IDENTICAL
+```
+
+### No mutation criterion, and that is stated rather than papered over
+
+A comment carries no behaviour, so no mutation of it can turn a test red. Inventing an assertion that
+greps for comment text would be a test that looks like a guard and is not — the T325 lesson, one task
+earlier. **The evidence for this task is the measurement table above and the hash equality**, not a
+test. Note also that a naive "the phrase no longer appears" grep would **fail** here on purpose: the
+corrected module doc quotes the false claim in order to refute it, exactly the contradiction T401 hit
+and T300's C1 was written to avoid.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · eslint **0 errors / 364 warnings — no rise from `main`** · vitest
+**78 files / 1951 tests**, targeted `OutreachDetail.test.tsx` **113 passed, exit 0** · build ✓.
+`.env.local` absent.

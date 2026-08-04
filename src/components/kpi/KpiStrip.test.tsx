@@ -303,7 +303,10 @@ describe('<KpiStrip /> (T123 UXD-01/UXP-05)', () => {
     // Card 1: volunteer hours + category breakdown.
     expect(text).toContain('Volunteer hours');
     expect(text).toContain('20.5');
-    expect(text).toContain('Meetings 0.0h · Outreach 10.5h · Competitions 10.0h');
+    expect(text).toContain('Outreach 10.5h · Competitions 10.0h');
+    // T704 (owner ruling 2026-08-04): the Meetings term is gone -- it was
+    // structurally frozen at 0.0 and could never show a real number.
+    expect(text).not.toContain('Meetings');
 
     // Card 2: active students + per-team split (D-3 double-count values
     // passed straight through, never re-summed here).
@@ -359,7 +362,12 @@ describe('<KpiStrip /> (T123 UXD-01/UXP-05)', () => {
     // Meeting and competition hours still render as their own breakdown
     // figures even though excluded from the headline total (2026-08-03
     // ruling: "still tracked and still displayed as their own figure").
-    expect(text).toContain('Meetings 2.0h · Outreach 10.5h · Competitions 10.0h');
+    // T704 -- `meetingHours: 2.0` above is a hand-built fixture value the
+    // production view cannot generate (see `formatHoursBreakdown`'s doc). It
+    // stays on the fixture to prove the field is still carried, and is
+    // deliberately NOT rendered.
+    expect(text).toContain('Outreach 10.5h · Competitions 10.0h');
+    expect(text).not.toContain('Meetings');
     expect(text).toContain('10.5 / 350h target');
   });
 
