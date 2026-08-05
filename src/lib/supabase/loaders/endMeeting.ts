@@ -101,7 +101,7 @@
  * object (`{code, message, cause}`), never an `Error` instance.
  * `EndMeetingDialog.tsx`'s own `handleConfirmEndMeeting` catch block
  * does `error instanceof Error ? error.message : 'Something went wrong
- * ending this meeting.'` (`:827-829`) -- since this file's rejections are
+ * ending this meeting.'` (`:827-830`) -- since this file's rejections are
  * never `Error` instances, that check always falls through to the generic
  * fallback. A coach who hits a partial failure sees only "Couldn't end
  * this meeting... Something went wrong ending this meeting," concatenated

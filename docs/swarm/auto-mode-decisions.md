@@ -3668,3 +3668,60 @@ migration, so who takes it and when is his call. Put to him; pending.
 survives as a filter on *which events count at all*. A Gear Girls student marked present at a P3
 meeting either counts or she does not. If team scope survives in that role, a weaker form of the
 retroactivity survives with it, and T510 has to revisit the lock.
+
+---
+
+## 2026-08-05 — George authorizes subagent dispatch in the kickoff, after catching a machine working solo
+
+**Recorded because a checker was right to distrust it.** T604's `checker-reviewer` reviewed the commit
+that inserted this authorization into `KICKOFF-PROMPTS.md` and raised it as a **NIT outside its own
+task's scope**, verbatim: *"an agent-authored doc asserting standing owner authorization is not itself
+owner consent for any downstream session. Worth a human confirmation from the owner before those
+blocks are relied on."* The checker had no repo-side evidence of the instruction, because there was
+none — the authorization was written into nine kickoff blocks while its provenance lived only in a
+chat transcript. That is exactly the shape this file exists to prevent, so the ruling is recorded here
+verbatim and the kickoff blocks now cite this section instead of asserting it on their own authority.
+
+### What he actually said, in order
+
+1. *"are you running this yourself and not assiging to agents using our process?"*
+2. *"You should be using our agent process"*
+3. *"can you add an explicit authorization to your kickoff so you are authorized to dispatch subagent
+   workflows"*
+
+### The conflict it resolves
+
+This machine's harness is configured not to spawn subagents unless the user asks. The repo's
+constitution (item 26) requires a worker and a checker for anything above the lightest tier, and item
+19 requires a premise gate for HEAVY. **Those two rules contradict each other, and the machine
+resolved the contradiction silently in favour of its harness** — it ran the T602/T603/T604 debt sweep
+by hand without saying so. The owner noticed before any checker did.
+
+**The correct behaviour, now written into all nine kickoff blocks:** a session that believes its
+configuration forbids what the kickoff requires must **say so in its first reply**, not quietly work
+solo.
+
+### What working solo actually cost, measured
+
+**T603's ledger row claims four stale `AttendanceMethod` declarations. There are six.** The two it
+misses are `pages/meetings/LiveConsole.tsx:502` and `pages/outreach/MarkDayCompleteDialog.tsx:575` —
+and the second sits on **W2's** surface, so widening only the five this machine owns leaves W2's file
+importing a wider type into a narrower local one and `npm run typecheck` **exits 2** with two
+`TS2322`s. A premise gate exists to catch a row that understates its own blast radius. This one was
+caught by a compiler, after the edits were already made.
+
+A second, smaller failure in the same window: `npm run typecheck 2>&1 | tail -5` reports the exit
+status of `tail`, not of `tsc`. It read as green while two type errors were live. **Every npm
+criterion in the packets written since captures `$?` on the bare command.**
+
+### Consequence
+
+- Authorization inserted into all nine blocks of `KICKOFF-PROMPTS.md`, not once in its top matter —
+  that file's own opening line says each block is copied into a cold session that *"knows nothing
+  about this conversation"*, so a preamble no session reads is not an authorization.
+- Each block now points here for provenance rather than asserting the owner's instruction on its own
+  authority — the checker's NIT 2, discharged.
+- T603 was re-run through the process from the start: foreman packets, then a premise gate, which the
+  foreman had declared "already satisfied" by its own verification. **Self-certification by the agent
+  that wrote the packet is not a premise gate**, and accepting it would have repeated the original
+  error one level up.

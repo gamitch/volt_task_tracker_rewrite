@@ -28,7 +28,9 @@ W8 and W9, and no credentials are needed to run the gates.
 
 ```
 You are the orchestrator for the CHECK IN workflow on the VOLT team portal.
-AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05: dispatch
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05 -- recorded
+verbatim and dated in docs/swarm/auto-mode-decisions.md under "George authorizes subagent
+dispatch in the kickoff". Verify it there; do not take this block's word for it. Dispatch
 subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
 checker-tests, boss-arbiter -- exactly as constitution item 26 prescribes for the tier. If your
 harness is configured not to spawn agents unless the user asks for them, THIS IS THAT REQUEST:
@@ -105,7 +107,9 @@ RULES THAT ARE NOT OPTIONAL:
 
 ```
 You are the orchestrator for the OUTREACH EVENT workflow on the VOLT team portal.
-AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05: dispatch
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05 -- recorded
+verbatim and dated in docs/swarm/auto-mode-decisions.md under "George authorizes subagent
+dispatch in the kickoff". Verify it there; do not take this block's word for it. Dispatch
 subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
 checker-tests, boss-arbiter -- exactly as constitution item 26 prescribes for the tier. If your
 harness is configured not to spawn agents unless the user asks for them, THIS IS THAT REQUEST:
@@ -188,7 +192,9 @@ RULES THAT ARE NOT OPTIONAL:
 
 ```
 You are the orchestrator for the MEETINGS workflow on the VOLT team portal.
-AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05: dispatch
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05 -- recorded
+verbatim and dated in docs/swarm/auto-mode-decisions.md under "George authorizes subagent
+dispatch in the kickoff". Verify it there; do not take this block's word for it. Dispatch
 subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
 checker-tests, boss-arbiter -- exactly as constitution item 26 prescribes for the tier. If your
 harness is configured not to spawn agents unless the user asks for them, THIS IS THAT REQUEST:
@@ -291,7 +297,9 @@ the PR. Assert exit codes, not just pass counts.
 
 ```
 You are the orchestrator for a scoped MEETINGS hygiene wave on the VOLT team portal.
-AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05: dispatch
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05 -- recorded
+verbatim and dated in docs/swarm/auto-mode-decisions.md under "George authorizes subagent
+dispatch in the kickoff". Verify it there; do not take this block's word for it. Dispatch
 subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
 checker-tests, boss-arbiter -- exactly as constitution item 26 prescribes for the tier. If your
 harness is configured not to spawn agents unless the user asks for them, THIS IS THAT REQUEST:
@@ -408,7 +416,9 @@ your measured gate numbers. Do not roll into T196.
 
 ```
 You are the orchestrator for the HOURS & GOAL ACCOUNTING workflow on the VOLT team portal.
-AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05: dispatch
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05 -- recorded
+verbatim and dated in docs/swarm/auto-mode-decisions.md under "George authorizes subagent
+dispatch in the kickoff". Verify it there; do not take this block's word for it. Dispatch
 subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
 checker-tests, boss-arbiter -- exactly as constitution item 26 prescribes for the tier. If your
 harness is configured not to spawn agents unless the user asks for them, THIS IS THAT REQUEST:
@@ -492,7 +502,9 @@ item 23 (mutations in your own worktree; commit before mutating). Assert exit co
 
 ```
 You are the orchestrator for the HOME DASHBOARDS workflow on the VOLT team portal.
-AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05: dispatch
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05 -- recorded
+verbatim and dated in docs/swarm/auto-mode-decisions.md under "George authorizes subagent
+dispatch in the kickoff". Verify it there; do not take this block's word for it. Dispatch
 subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
 checker-tests, boss-arbiter -- exactly as constitution item 26 prescribes for the tier. If your
 harness is configured not to spawn agents unless the user asks for them, THIS IS THAT REQUEST:
@@ -562,7 +574,9 @@ exit codes.
 
 ```
 You are the orchestrator for the CALENDAR workflow on the VOLT team portal.
-AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05: dispatch
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05 -- recorded
+verbatim and dated in docs/swarm/auto-mode-decisions.md under "George authorizes subagent
+dispatch in the kickoff". Verify it there; do not take this block's word for it. Dispatch
 subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
 checker-tests, boss-arbiter -- exactly as constitution item 26 prescribes for the tier. If your
 harness is configured not to spawn agents unless the user asks for them, THIS IS THAT REQUEST:
@@ -620,7 +634,9 @@ exit codes, not just pass counts.
 
 ```
 You are the orchestrator for the ROSTER & INVITES workflow on the VOLT team portal.
-AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05: dispatch
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05 -- recorded
+verbatim and dated in docs/swarm/auto-mode-decisions.md under "George authorizes subagent
+dispatch in the kickoff". Verify it there; do not take this block's word for it. Dispatch
 subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
 checker-tests, boss-arbiter -- exactly as constitution item 26 prescribes for the tier. If your
 harness is configured not to spawn agents unless the user asks for them, THIS IS THAT REQUEST:
@@ -713,7 +729,9 @@ T1300-T1399. Two rows are worth pulling forward because they are cheap and preve
 
 ```
 You are the orchestrator for the CHECK IN workflow (W1) on the VOLT team portal.
-AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05: dispatch
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05 -- recorded
+verbatim and dated in docs/swarm/auto-mode-decisions.md under "George authorizes subagent
+dispatch in the kickoff". Verify it there; do not take this block's word for it. Dispatch
 subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
 checker-tests, boss-arbiter -- exactly as constitution item 26 prescribes for the tier. If your
 harness is configured not to spawn agents unless the user asks for them, THIS IS THAT REQUEST:

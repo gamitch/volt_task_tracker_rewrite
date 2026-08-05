@@ -10684,3 +10684,36 @@ route T801 took.
 
 `tsc` 0 · `format:check` 0 · `vitest` **81 files / 2051 tests** · **9 SQL suites** green on live
 PG 16.13 · 1 withhold mutation replayed.
+
+---
+
+## T604 — stale "frozen" residue in `loaders/endMeeting.ts` — **PASS** (2026-08-05, `3b2ffd5`)
+
+Checker `checker-reviewer` (sonnet), against `docs/swarm/active/T604-checker-packet.md`. NIT only.
+
+Four comments called `EndMeetingDialog.tsx` frozen or forbidden — false since T196 mounted it, doubly
+so since T508 edited it directly. **The substance of those comments was NOT stale and was kept:**
+`EndMeetingDialog.tsx:827-830` still does `error instanceof Error ? error.message : 'Something went
+wrong ending this meeting.'`, and `loader.ts:78-82`/`:116-121` confirm `SupabaseLoaderError` is a
+plain interface, never an `Error` — so the `instanceof` check really does always fall through and a
+coach really does learn nothing about which partial state was reached. The checker re-verified that at
+both ends; a "fix" that deleted the warning with the stale word would have failed C5. Filed as **T607**.
+
+**Comment-only proven, not asserted** — T506 precedent, `ts.transpileModule({removeComments:true})` +
+sha256 across `3b2ffd5~1` vs `3b2ffd5`: `IDENTICAL`, length 12189 both sides. Lines 1-98 byte-identical,
+so T508's correct historical "frozen" note at `:10` was provably untouched.
+
+Sites were relocated **by content**, not by the ledger's line numbers, which had drifted — `:297` is
+now `:299`. Gates run standalone with `$?` captured directly, never through a pipe: typecheck 0,
+format:check 0, lint 0 errors, vitest 2051/2051 across 81 files.
+
+**T602 discharged in the same pass, on evidence.** T508 had already folded it; grepping
+`NOT wired|not yet wired|unwired|forbidden file` over `endMeeting.ts` returns zero matches. No code
+written for T602.
+
+**Two NITs.** (1) The new catch-block citation stopped one line short — `:827-829` → `:827-830`, fixed
+same day. (2) Outside this row's diff, the checker flagged that the subagent-dispatch authorization
+added to `KICKOFF-PROMPTS.md` asserted an owner instruction with no repo-side evidence, and that an
+agent-authored doc claiming standing owner authorization is not owner consent. **Correct, and
+discharged**: the ruling is now recorded verbatim in `auto-mode-decisions.md` and all nine blocks cite
+it instead of asserting it.
