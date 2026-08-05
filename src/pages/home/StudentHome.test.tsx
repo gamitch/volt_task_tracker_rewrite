@@ -946,7 +946,6 @@ describe('StudentHome render -- BEH-02 confirmed/planned hours never summed', ()
       loadData,
       studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
       resolveStudentScope: async () => ({
-        teamId: 'team-fixture-beh02',
         teamIds: ['team-fixture-beh02'],
         goalHours: 100,
         confirmedHours: 62,
@@ -1013,7 +1012,6 @@ describe('StudentHome DES-12 states', () => {
       loadData: fixtureLoadData,
       studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
       resolveStudentScope: async () => ({
-        teamId: PLACEHOLDER_CURRENT_TEAM_ID,
         teamIds: [PLACEHOLDER_CURRENT_TEAM_ID],
         goalHours: 100,
         confirmedHours: 62,
@@ -1235,7 +1233,6 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
   it('skips resolveStudentId entirely when explicitStudentId is given, and resolves scope for it', async () => {
     const resolveStudentId = vi.fn(async () => 'should-never-be-called');
     const resolveStudentScope = vi.fn(async () => ({
-      teamId: 'team-x',
       teamIds: ['team-x'],
       goalHours: 5,
       confirmedHours: 2,
@@ -1254,7 +1251,6 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
     expect(result).toEqual({
       kind: 'linked',
       studentId: 'student-explicit',
-      teamId: 'team-x',
       teamIds: ['team-x'],
       goalHours: 5,
       confirmedHours: 2,
@@ -1265,7 +1261,6 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
   it('skips resolveStudentScope entirely when explicitTeamId is given -- goalHours falls back to seasonDefaultGoalHours, confirmed/planned default to 0', async () => {
     const resolveStudentId = vi.fn(async () => 'student-resolved');
     const resolveStudentScope = vi.fn(async () => ({
-      teamId: 'should-never-be-used',
       teamIds: ['should-never-be-used'],
       goalHours: 99,
       confirmedHours: 99,
@@ -1284,7 +1279,6 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
     expect(result).toEqual({
       kind: 'linked',
       studentId: 'student-resolved',
-      teamId: 'team-explicit',
       // T187: the explicit-teamId bypass has no scope read to draw an
       // active set from -- `[explicitTeamId]` is the production code's own
       // honest single-team equivalent (StudentHome.tsx's own
@@ -1299,7 +1293,6 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
   it('resolves nothing explicit -- calls both real seams, verbatim passthrough (no coalesce/arithmetic applied here)', async () => {
     const resolveStudentId = vi.fn(async () => 'student-resolved');
     const resolveStudentScope = vi.fn(async () => ({
-      teamId: 'team-resolved',
       teamIds: ['team-resolved', 'team-resolved-second'],
       goalHours: 3,
       confirmedHours: 1.5,
@@ -1318,7 +1311,6 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
     expect(result).toEqual({
       kind: 'linked',
       studentId: 'student-resolved',
-      teamId: 'team-resolved',
       teamIds: ['team-resolved', 'team-resolved-second'],
       goalHours: 3,
       confirmedHours: 1.5,
@@ -1329,7 +1321,6 @@ describe('resolveStudentIdentity (pure-ish, directly testable, same posture buil
   it('returns {kind: "not-linked"} when resolveStudentId resolves null, without calling resolveStudentScope', async () => {
     const resolveStudentId = vi.fn(async () => null);
     const resolveStudentScope = vi.fn(async () => ({
-      teamId: 'team-x',
       teamIds: ['team-x'],
       goalHours: 100,
       confirmedHours: 0,
@@ -1464,7 +1455,6 @@ describe('<StudentHome /> T176 -- real, resolved teamId reaches team-scoped widg
     renderAsUser(STUDENT_USER, {
       loadData,
       resolveStudentScope: async () => ({
-        teamId: 'team-fixture-alpha',
         teamIds: ['team-fixture-alpha'],
         goalHours: 100,
         confirmedHours: 0,
@@ -1637,7 +1627,6 @@ describe("<StudentHome /> T187 -- a two-team student sees BOTH teams' meetings, 
     renderAsUser(STUDENT_USER, {
       loadData,
       resolveStudentScope: async () => ({
-        teamId: 'team-dual-primary',
         teamIds: ['team-dual-primary', 'team-dual-second'],
         goalHours: 100,
         confirmedHours: 0,
@@ -1656,7 +1645,6 @@ describe("<StudentHome /> T187 -- a two-team student sees BOTH teams' meetings, 
 describe('<StudentHome /> T176 -- explicit teamId bypasses resolveStudentScope entirely, paired (criterion 4, BLOCKER 2 fix extended)', () => {
   it('(a) resolveStudentScope is never called AND (b) the rendered team-scope outcome reflects the explicit value', async () => {
     const resolveStudentScopeSpy = vi.fn(async () => ({
-      teamId: 'team-should-never-be-used',
       teamIds: ['team-should-never-be-used'],
       goalHours: 999,
       confirmedHours: 999,
@@ -1889,7 +1877,6 @@ describe('<StudentHome /> T176 round 2 -- goal-hours denominator + confirmed/pla
             studentHours: { studentId: 'student-1', seasonId: 'season-1', confirmedHours: 999 },
           }),
         resolveStudentScope: async () => ({
-          teamId: 'team-fixture-c10',
           teamIds: ['team-fixture-c10'],
           goalHours: 8,
           confirmedHours: 2,
@@ -1929,7 +1916,6 @@ describe('<StudentHome /> T176 round 2 -- goal-hours denominator + confirmed/pla
       {
         loadData: async () => buildDataFixture({ studentHours: null }),
         resolveStudentScope: async () => ({
-          teamId: 'team-fixture-c10',
           teamIds: ['team-fixture-c10'],
           goalHours: 40,
           confirmedHours: 10,
@@ -1997,7 +1983,6 @@ describe('<StudentHome /> T176/T183 -- render-and-enumerate live over container.
         loadData: realLoadData,
         resolveStudentId: async () => 'student-real-c11',
         resolveStudentScope: async () => ({
-          teamId: 'team-real-c11',
           teamIds: ['team-real-c11'],
           goalHours: 50,
           confirmedHours: 5,
@@ -2090,7 +2075,6 @@ describe('<StudentHome /> T184 -- "sees nothing" is proven with a positive contr
     renderAsUser(STUDENT_USER, {
       resolveStudentId: async () => 'student-real-linked-c5',
       resolveStudentScope: async () => ({
-        teamId: 'team-real-c5',
         teamIds: ['team-real-c5'],
         goalHours: 20,
         confirmedHours: 4,

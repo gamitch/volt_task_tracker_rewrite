@@ -522,7 +522,6 @@ export type LoadStudentHomeDataFn = (
  * file now reads from instead.
  */
 export interface StudentScope {
-  teamId: string;
   /** The student's ACTIVE `student_teams` memberships (module doc #8) --
    * may contain more than one id for a dual-team student. Never includes a
    * team the student has LEFT (`left_on is null` is the loader's own
@@ -1578,10 +1577,11 @@ function StudentHomeContent({
 
 export interface ResolvedStudentIdentity {
   studentId: string;
-  teamId: string;
   /** T187: the student's ACTIVE `student_teams` memberships -- what the
-   * content tier's team-scope predicates actually use now. `teamId` above is
-   * KEPT unchanged (owner-ruled -- may still serve display). */
+   * content tier's team-scope predicates actually use. T802 removed the
+   * legacy single `teamId` that sat beside this; it was written and never
+   * read, and a plainly-named populated value is exactly what a future
+   * reader mistakes for the right answer. */
   teamIds: readonly string[];
   goalHours: number;
   confirmedHours: number;
@@ -1623,7 +1623,6 @@ export async function resolveStudentIdentity(
     return {
       kind: 'linked',
       studentId,
-      teamId: explicitTeamId,
       teamIds: [explicitTeamId],
       goalHours: seasonDefaultGoalHours,
       confirmedHours: 0,
@@ -1635,7 +1634,6 @@ export async function resolveStudentIdentity(
   return {
     kind: 'linked',
     studentId,
-    teamId: scope.teamId,
     teamIds: scope.teamIds,
     goalHours: scope.goalHours,
     confirmedHours: scope.confirmedHours,
