@@ -60,7 +60,7 @@ Tier is the **heaviest** item in the workflow, per constitution item 26.
 | **W2** | **Run an outreach event** — create → RSVP → attend → complete | **0** | HEAVY | **CLOSED 2026-08-04** — 12 rows merged (T330, T401, T402, T174, T190, T306, T325, T152, T300, T301, T406, T165); T501/T505 closed won't-fix. | W1, W3, W6, W7 |
 | **W3** | **Run a meeting** — schedule → attendance → participation % | **5** | HEAVY | **RE-OPENED 2026-08-05 by live testing.** T196 shipped 2026-08-04; the owner then ran a real meeting and found four defects. **T508 is writing false data now.** | W2, W4, W6, W7 |
 | **W4** | **Hours & goal accounting** — the numbers users are shown | **9** | HEAVY | T205 + T322 applied to production 2026-08-04. **T509 added 2026-08-05 (MET-01 marks-only, D014) — BLOCKED on W3's T508.** | W1, W3, W6, W7 |
-| **W5** | **Home dashboards** — student/parent/coach landing state | **10** | STANDARD | T702/T187/T198 merged; T801-T803 filed from their closures; T156 parked | W6, W7, W8 |
+| **W5** | **Home dashboards** — student/parent/coach landing state | **8** | STANDARD | T186/T187/T198 merged; **T801 closed**; **T803 in flight (PR #93)**; T802 open; T156 parked | W6, W7, W8 |
 | **W6** | **Calendar & subscribe** | **0** | — | **CLOSED** — merged, database deployed | everything |
 | **W7** | **Roster & invites** | 5 | STANDARD | Working. T064 is a human gate; **T167's premise is UNVERIFIED — measure before packeting** | everything |
 | **W8** | **Email & notifications** | 2 | — | **Blocked on owner** | everything |
@@ -88,7 +88,7 @@ ships.** While `backfillAbsences` writes a row for every eligible student, "expl
 Sequence T508 first, across machines.
 
 **Rows filed after this document was written** are not yet in the sections below. By surface:
-**W3** — T508, T510, T511, T601, T602 · **W4** — T509 · **W5** — T801, T802, T803 · **unowned** — T507.
+**W3** — T508, T510, T511, T601, T602 · **W4** — T509 · **W5** — T802 *(T801 closed; T803 in flight, PR #93)* · **unowned** — T507.
 
 **Block-vs-surface mismatch, deliberate:** T507-T511 carry **W2's** number block (T500-599) because W2's
 orchestrator filed them, but T508/T510/T511 sit on **W3's** surface and T509 on **W4's**. The block is a
@@ -246,7 +246,6 @@ lies to a user about their own data. Do not let a small-looking diff talk you ou
 | **T188** | Two different "confirmed hours" numbers exist and can legitimately disagree | HEAVY |
 | **T308** | *(metric views + `MarkDayCompleteDialog`)* | HEAVY |
 | **T201** | A deactivated student's historical hours sit in `v_student_hours` with no `is_active` filter | HEAVY |
-| **T186** | `v_student_goal_projection.team_id` is documented display-only, but a live route scopes off it | HEAVY |
 | **T204** | `loaders/students.ts`'s RLS-reasoning comment cites a claim about view mechanics that is false | FAST |
 | **T205** | `v_leaderboard_students` is readable by the unauthenticated `anon` key *(owner ruled — check the row)* | HEAVY |
 | **T202** | Zero-goal `ProgressBar`s announce a fabricated `aria-valuemax` to assistive tech | STANDARD |
@@ -272,10 +271,14 @@ Give both to one machine, or split strictly: W4 takes the SQL, W5 takes the `.ts
 > **STATUS 2026-08-04.** **T702** merged (adult-volunteer season totals dropped from RPT-03, PRD
 > amended by owner ruling). **T198 is RULED** — season-wide, no per-coach team concept — which also
 > releases the `CoachHomeData` bundle parked since T173. **T156 is PARKED** by owner ruling on
-> concurrency risk, with unpark conditions on its row. **T187 remains the highest-value open row
-> here** — the only one putting a wrong value in front of a real user today — and note its ledger
-> text mis-states the mechanism: `resolveStudentScope` reads `v_student_goal_projection.team_id`,
-> not `students.team_id` directly, which makes T186 and T187 one mechanism seen from two sides.
+> concurrency risk, with unpark conditions on its row. **T186, T187 and T198 are all MERGED**
+> (2026-08-04), so none of them is an open row here any more. T187 moved `StudentHome`'s scoping onto
+> ACTIVE `student_teams` memberships; T186 recorded the one display-only `team_id` read that
+> survives. They were one mechanism seen from two sides — `resolveStudentScope` reads
+> `v_student_goal_projection.team_id`, not `students.team_id` directly. T198 shipped `CoachHome`
+> season-wide: six real queries, no per-coach team concept. Residuals from those closures: **T801
+> closed**, **T803 in flight (PR #93)**, **T802 open**, and **T804 WITHDRAWN as an incorrect filing**
+> — the view it named had already been migrated onto ACTIVE memberships; see its ledger row.
 
 
 > What a student, parent, or coach sees when they land.
@@ -286,9 +289,7 @@ declared closed. Most of what remains is residue plus real loader gaps.
 | Row | What | Tier |
 |---|---|---|
 | **T199** | `StudentHome`'s `events`/`sessions`/`rsvps`/`participation` still have **no real loader** | STANDARD |
-| **T187** | `StudentHome`'s team scoping reads the legacy single-team column — a dual-member student sees one team | HEAVY |
 | **T192** | `ParentHome` issues unfiltered full-table reads once per child card | STANDARD |
-| **T198** | Does `CoachHome` need a real per-coach team concept? *(open question)* | STANDARD |
 | **T200** | `students.test.ts`'s row-not-found test asserts a bare `rejects.toThrow()` | FAST |
 | **T182** | `StudentHomeSlot.tsx` is unreachable, untested, consciously superseded | FAST |
 | **T166** | `loaders/dashboard.ts` has 0 tests — deliberately deferred | STANDARD |
