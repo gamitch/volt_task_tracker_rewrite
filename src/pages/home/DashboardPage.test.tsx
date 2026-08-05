@@ -146,7 +146,6 @@ vi.mock('../../lib/supabase/loaders/coachHome', async (importOriginal) => {
       sessions: [],
       rsvps: [],
       attendance: [],
-      seasonParticipation: null, // T198 -- renamed from `teamParticipation` (season-wide ruling).
       studentHours: [],
     }),
   };
@@ -312,7 +311,7 @@ describe('DashboardPage role dispatch', () => {
     renderAsUser(COACH_USER);
     await flushMicrotasks();
     // CoachHome-only KPI label (CoachHome.tsx's own "Team participation" KPI card).
-    expect(container.textContent).toContain('Participation');
+    expect(container.textContent).toContain('Events in next 7 days');
     // CoachHome's HOME-04 admin-only "Season setup" card must NOT show for a
     // plain coach (CoachHome.tsx's own internal role gate), proving this
     // really is CoachHome branching internally, not a coincidence.
@@ -354,7 +353,7 @@ describe('DashboardPage role dispatch', () => {
   it('renders CoachHome for role "admin" (HOME-04 handled internally by CoachHome, not duplicated here)', async () => {
     renderAsUser(ADMIN_USER);
     await flushMicrotasks();
-    expect(container.textContent).toContain('Participation');
+    expect(container.textContent).toContain('Events in next 7 days');
     // T173: the mocked `loaders/coachHome` always reports
     // `hasGoalsConfigured: true` -- this card now shows because the mock's
     // `teams: []` makes `isSeasonMissingSetup` true via the teams branch,
@@ -394,9 +393,10 @@ describe('DashboardPage role dispatch', () => {
     // dispatcher, so it is the only test that closes the vacuity gap on
     // `StudentHome.tsx:1763` actually having been swapped.
     expect(container.textContent).toContain('Hi Jordan Blake');
-    // T198 -- the CoachHome-unique marker was 'Team participation'; that tile
-    // is now labelled just 'Participation', which Student/Parent pages also use.
-    // Switched to a label that is still unique to CoachHome.
+    // T198/T803 -- the CoachHome-unique marker was 'Team participation', then
+    // 'Participation'; that tile is now removed entirely (it duplicated the
+    // analytics section's 'Attendance rate'). This label is still unique to
+    // CoachHome and still present.
     expect(container.textContent).not.toContain('Events in next 7 days');
     expect(container.textContent).not.toContain('Dashboard Fixture Linked Student');
   });
@@ -415,9 +415,10 @@ describe('DashboardPage role dispatch', () => {
     expect(container.textContent).not.toContain('Ada R.');
     expect(container.textContent).not.toContain('Bea R.');
     expect(container.textContent).not.toContain('Cleo R.');
-    // T198 -- the CoachHome-unique marker was 'Team participation'; that tile
-    // is now labelled just 'Participation', which Student/Parent pages also use.
-    // Switched to a label that is still unique to CoachHome.
+    // T198/T803 -- the CoachHome-unique marker was 'Team participation', then
+    // 'Participation'; that tile is now removed entirely (it duplicated the
+    // analytics section's 'Attendance rate'). This label is still unique to
+    // CoachHome and still present.
     expect(container.textContent).not.toContain('Events in next 7 days');
     // T183 (criterion 7c) -- same vacuity guard as the "coach"/"admin" cases
     // above.

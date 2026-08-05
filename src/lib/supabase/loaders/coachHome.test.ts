@@ -213,7 +213,6 @@ describe('makeLoadCoachHomeData (T173 criterion 7)', () => {
     expect(data.sessions).toEqual([]);
     expect(data.rsvps).toEqual([]);
     expect(data.attendance).toEqual([]);
-    expect(data.seasonParticipation).toBeNull();
     expect(data.studentHours).toEqual([]);
   });
 
@@ -224,17 +223,26 @@ describe('makeLoadCoachHomeData (T173 criterion 7)', () => {
     expect(chains.events.eqSpy).toHaveBeenCalledWith('season_id', 'season-42');
   });
 
-  it('scopes v_student_hours and v_season_attendance_rate by the SAME season id', async () => {
+  it('scopes v_student_hours by season id', async () => {
     const { client, selectSpies, chains } = makeRecordingClient([], []);
     await makeLoadCoachHomeData(() => client)('season-42');
     expect(selectSpies.v_student_hours).toHaveBeenCalledWith(
       'student_id, season_id, confirmed_hours',
     );
     expect(chains.v_student_hours.eqSpy).toHaveBeenCalledWith('season_id', 'season-42');
-    expect(selectSpies.v_season_attendance_rate).toHaveBeenCalledWith(
-      'season_id, attendance_rate_pct',
-    );
-    expect(chains.v_season_attendance_rate.eqSpy).toHaveBeenCalledWith('season_id', 'season-42');
+  });
+
+  // T803 -- this loader must NOT read `v_season_attendance_rate` any more.
+  // The assertion is the point of the task, not a leftover: T198 fetched that
+  // view here purely to feed a tile the T124 analytics section already
+  // rendered from its own `loaders/dashboard.ts` read. A regression that
+  // re-adds the query would be invisible on screen (the surviving tile looks
+  // identical) and would only show up as a silent extra round trip -- so it
+  // is pinned here, where it IS visible.
+  it('never queries v_season_attendance_rate -- that read belongs to loaders/dashboard.ts alone', async () => {
+    const { client, fromSpy } = makeRecordingClient([], []);
+    await makeLoadCoachHomeData(() => client)('season-1');
+    expect(fromSpy).not.toHaveBeenCalledWith('v_season_attendance_rate');
   });
 
   it('never issues an empty .in(...) -- no events means no session query, and no sessions means no rsvp/attendance query', async () => {
@@ -293,7 +301,6 @@ describe('makeLoadCoachHomeData (T173 criterion 7)', () => {
       ],
       attendance: [{ session_id: 's1', student_id: 'stu-1', status: 'present' }],
       v_student_hours: [{ student_id: 'stu-1', season_id: 'season-1', confirmed_hours: 12.5 }],
-      v_season_attendance_rate: [{ season_id: 'season-1', attendance_rate_pct: 87.5 }],
     });
     const data = await makeLoadCoachHomeData(() => client)('season-1');
     expect(data.events).toEqual([
@@ -322,8 +329,6 @@ describe('makeLoadCoachHomeData (T173 criterion 7)', () => {
     expect(data.studentHours).toEqual([
       { studentId: 'stu-1', seasonId: 'season-1', confirmedHours: 12.5 },
     ]);
-    // `attendance_rate_pct` -> `participationPct`, verbatim, no arithmetic.
-    expect(data.seasonParticipation).toEqual({ seasonId: 'season-1', participationPct: 87.5 });
   });
 
   it('composes the full CoachHomeData shape end-to-end against a stub client -- real teams/students, empty tables for the rest', async () => {
@@ -377,7 +382,6 @@ describe('makeLoadCoachHomeData (T173 criterion 7)', () => {
       sessions: [],
       rsvps: [],
       attendance: [],
-      seasonParticipation: null,
       studentHours: [],
       seasonSetupStatus: { hasGoalsConfigured: true },
     });

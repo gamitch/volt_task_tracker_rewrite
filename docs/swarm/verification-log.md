@@ -9907,3 +9907,71 @@ application code).
 **No security work.** T185 examined the exposure itself and closed no-change on the owner's
 proportionality ruling. This corrects a *description*. Anyone reading the new migration as a
 newly-discovered vulnerability is reading it wrong, which is why the header says so explicitly.
+
+---
+
+## T803 — the duplicate participation tile, dropped along with the query behind it
+
+**Tier: STANDARD.** Owner ruled *"drop the duplicate tile"*. The question the ruling left open was
+**which** of the two.
+
+### Which tile survived, and why that way round
+
+Both read `v_season_attendance_rate` for the same season. The `Participation` tile in the primary KPI
+grid is the one T198 introduced; the `Attendance rate` tile in the T124 analytics section predates it
+and reaches the page through a different loader (`loaders/dashboard.ts`'s `queryAttendanceRate`).
+
+The newer one goes. Two reasons beyond seniority: its secondary read **"Season to date"**, while the
+survivor's reads **"Of active roster per session"** — which is what that view's denominator actually
+is. Keeping the tile with the more accurate label was the better of the two outcomes, not just the
+older one.
+
+**No figure is lost.** The same number still renders, from the same view, in the same page.
+
+### The dead query went with it
+
+`seasonParticipation`, `SeasonParticipationMetric`, its fixture, mapper, DB-row type and the
+`v_season_attendance_rate` read are all deleted from `loaders/coachHome.ts`. Removing the tile alone
+would have left a real network round trip feeding nothing — **the exact waste T198's own closure
+warned about** when it argued the queries and the de-scoping had to ship together. The KPI grid is
+`repeat: 'fit'`, so it reflows from four tiles to three; nothing fills the slot.
+
+### Guarded by a negative test, because this regression is invisible
+
+Re-adding the query would look **identical on screen** — the surviving tile renders the same number —
+and would surface only as a silent extra request. So the guard is an absence assertion:
+
+> `it('never queries v_season_attendance_rate -- that read belongs to loaders/dashboard.ts alone')`
+
+**Mutation replayed:** adding the read back into the loader's `Promise.all` reddens exactly that test
+and nothing else.
+
+### Two assertions that were passing for the wrong reason
+
+Found while updating the tile's neighbours, unrelated to the ruling, fixed because leaving them would
+be leaving known-bad coverage:
+
+- `expect(container.textContent).toContain('75%')`, commented *"last-meeting attendance rate KPI
+  value"*, was matching the **ProgressBar's own milestone labels** (`25%50%75%100%`). The real value
+  has been **60%** since T198 widened the roster season-wide — so this assertion would have passed
+  with the KPI card entirely absent.
+- `expect(container.textContent).toContain('2')` matched any digit `2` anywhere on the page.
+
+Both now use the file's existing `kpiCardValue()` helper against the specific card, so they assert
+`'60%'` and `'4'` rather than "these characters appear somewhere".
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `vitest` **80 files / 2010 tests** · `vite build` 0.
+
+### Noted while verifying, not fixed here
+
+**CI does not run `supabase/tests/*.sql`.** `.github/workflows/ci.yml` runs typecheck, lint, vitest,
+build and a bundle-size gate only. T801's assertions, and the pre-existing t205/t322/t503 ones, have
+never executed in CI — the only thing that has run them is a human on a scratch cluster. A green
+check does not cover the SQL layer today.
+
+**`docs/swarm/WORKFLOWS.md` has drifted from the ledger it summarizes.** It still lists T186, T187,
+T198 as open rows and T801 as merely "filed", all of which are merged/closed in the ledger on `main`.
+Its refresh (PR #89) landed *after* those merges, so the information was available. Reported to the
+owner rather than fixed inside this task.
