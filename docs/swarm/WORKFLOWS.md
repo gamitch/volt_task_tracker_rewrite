@@ -50,6 +50,28 @@ per-directory. Before editing anything under `src/lib/supabase/loaders/`, grep f
 
 ---
 
+## Machine assignments — who has actually touched what
+
+**Recorded 2026-08-05 by the owner.** This is a record of history, not a reservation of future work:
+it answers *"which machine has been in these files"*, which is the question that matters when
+deciding what can run in parallel and who to ask about a surprising change.
+
+| Machine | Workflows worked |
+|---|---|
+| **1** | W2 |
+| **2** | **W1 + W3**, plus **one W4 row (T164)** |
+| **3** | W6, W4, W5 |
+
+**W4 has been touched by two machines.** Machine 3 owns it; machine 2 landed exactly one row there —
+**T164** (first runtime tests for `loaders/kpi.ts`, PR #73) — under a direct owner authorization for
+that row alone. It is called out because a "single owner per workflow" assumption is what makes
+parallel dispatch safe, and W4 is the one workflow where that assumption is false. **The rule it
+cost us to learn:** a cross-workflow file reach is an **ASK to the owner**, never a log entry the
+reaching session writes for itself.
+
+**Machine 2's W1 and W3 work spans more than one session.** Do not assume one session per workflow
+when reading branch names or asking a machine what it did.
+
 ## Assignment table
 
 Tier is the **heaviest** item in the workflow, per constitution item 26.
