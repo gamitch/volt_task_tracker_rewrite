@@ -10370,3 +10370,56 @@ right to leave them and file instead of widening a deliberate list by judgement.
 A primitive exists (`attendance.ts:495-515` already carries it) but the seam is in another
 workflow's file. The value is unchanged from the backfill it replaces — a pre-existing gap made
 visible, not a regression.
+
+---
+
+## T703 — closed superseded, and a mutation that lied
+
+### The row was right to sequence itself after T702, and T702 dissolved it
+
+T703's premise: the `buildSeasonTotals` fixture's meeting event carries `adultVolunteersCount: 0,
+adultVolunteerHours: 0`, so including or excluding it yields the identical total — a fixture
+advertising a proof it cannot deliver.
+
+**Those fields no longer exist.** T702 deleted the adult-volunteer season figures outright rather than
+filtering them. And `buildSeasonTotals(sessions)` no longer receives an `events` argument, so it
+cannot see event `type` at all — the regression T703 guards against is not merely unguarded, it is
+**structurally inexpressible**.
+
+`HoursTab.tsx` module doc #6 already recorded this, naming the row: *"an earlier plan (T500/T703) …
+is superseded and removed along with the figures it guarded; there is nothing left for that guard to
+protect once the sum itself is gone."* The row outlived its own resolution — the same shape as T204,
+which was also already fixed when its row was picked up.
+
+### The concern, re-checked against today's code
+
+A superseded premise does not mean today's tests are sound, so both surviving claims were mutation-tested:
+
+| Mutation | Result |
+|---|---|
+| Truncate `buildSeasonTotals`'s loop (`sessions.slice(0, -1)`) | **RED** — 2 tests |
+| Count nulls into the total instead of bucketing them separately | **RED** — same 2 |
+| Remove the `countsVolunteerHours` guard (the fixture's *new* advertised proof) | **RED** — 2 tests, one named for exactly that behaviour |
+
+Nothing here advertises a proof it cannot deliver.
+
+### The mutation that lied, and why it is worth writing down
+
+The first attempt at mutation 1 replaced `for (const session of sessions) {` with a single
+`replace(…, 1)`. That string appears **twice**. It hit line 443 — a different function — and left
+`buildSeasonTotals` at line 596 untouched.
+
+The test passed. And a passing test under a "mutation" looks exactly like T703's defect **confirmed**:
+a test that cannot detect the regression it names. I was one step from filing that as the finding.
+
+What caught it was checking that the mutation landed where intended — printing the changed line
+number rather than trusting `replace` to have hit the right occurrence.
+
+**A mutation that did not apply is indistinguishable from a test that does not guard.** Mutation
+testing only proves something if you verify the mutation itself took effect. That belongs alongside
+this session's other two: a filed row is not evidence, and a comment cannot verify itself.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `vitest` **80 files / 2027 tests** · 4 mutations replayed. No production
+code changed — this task closes a row and records why.
