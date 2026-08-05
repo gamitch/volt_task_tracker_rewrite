@@ -22,10 +22,20 @@ this file and in `WORKFLOWS.md` is historical reasoning; the table is the only c
 (**T508, T510, T511**) and one on W4 (**T509**), re-opening W3 from 0 rows to 5.
 
 **T508 is the urgent one — it is writing false records into production now.** Ending a meeting
-backfills an `absent` row for every unmarked student, and the roster it uses selects *every active
-student with no team filter*, so a P3-only meeting wrote 17 absence rows for students who were
-never expected. Owner's ruling: *"only count 'absent' if i click the pill."* **W4's T509 is inert
-until T508 lands — sequence T508 first, across machines.**
+backfills an `absent` row for every unmarked student on the roster. Owner's ruling: *"only count
+'absent' if i click the pill."* **W4's T509 is inert until T508 lands — sequence T508 first, across
+machines.**
+
+⚠️ **Correction, 2026-08-05, by W3 — this paragraph and T508's own ledger row both said the roster
+query "selects every active student with no team filter". That is FALSE and it propagated.**
+`endMeeting.ts:319-322` **does** filter the roster on `events.team_ids`
+(`teamIds === null || teamIds.includes(student.team_id)`), and `kiosk.ts:456-459` runs the identical
+filter. Only the *query* is unfiltered; the scoping happens client-side right after it. **Do not
+"fix" the roster query — the filter is already there.** How the 17 rows actually arose is **not
+established**: `team_ids = null` (which `ScheduleMeetingsDialog` sends whenever the coach leaves the
+team picker at its all-selected default) would produce them, but the ledger and the owner both
+describe the meeting as P3-*scoped*, which is incompatible with that path. Treat the cause as open.
+**The fix is unaffected either way** — the backfill goes regardless of who the roster contains.
 
 **W1 is CLOSED at 0 rows.** T321/T161/T320/T403 merged in PR #28; **T400 and T502 shipped in PR
 #85** (the live-session picker for a student who cannot scan, and the attendance paging fix so a

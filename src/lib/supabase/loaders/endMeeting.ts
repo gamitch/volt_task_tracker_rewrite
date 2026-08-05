@@ -2,25 +2,29 @@
  * T178 (revision 2 -- BUILD HALF ONLY, mount split to T196): the real
  * backend behind `src/pages/meetings/EndMeetingDialog.tsx`'s three
  * injectable seams (`loadSummary`/`onEndMeeting`/`onEditAttendance`), all of
- * which are `console.warn`/fixture stubs today. Built on T086's
- * `createLoader`/`runMutation` (`../loader.ts`, read-only import here), same
- * DI (`getClient`) convention every prior loader module in this directory
- * already established. `EndMeetingDialog.tsx` is a frozen, forbidden file
- * here (module doc only) -- every page-facing type below is imported from
- * it, never redefined.
+ * which were `console.warn`/fixture stubs when this file was first written.
+ * Built on T086's `createLoader`/`runMutation` (`../loader.ts`, read-only
+ * import here), same DI (`getClient`) convention every prior loader module
+ * in this directory already established. Every page-facing type below is
+ * imported from `EndMeetingDialog.tsx`, never redefined -- CORRECTED (T602):
+ * that file is no longer frozen/forbidden project-wide (T196 mounted it,
+ * T508 now edits it directly for the owner's opt-in ruling, that file's own
+ * module doc section 1a); this file continues to import its types rather
+ * than redefine them regardless.
  *
- * NOT wired into `EndMeetingDialog.tsx`/`LiveConsole.tsx`/any route by this
- * task -- that mount is still filed as its own row, T196, and T196 is not
- * this task. T196 is now UNBLOCKED (as of T403, 2026-08-03): it was
- * originally blocked because `LiveConsole.tsx`'s own attendance marking was
- * an intentional no-op and its roster loader was a fixture, so
- * a real End Meeting dialog mounted on top of that fixture-backed console
- * would, on first real use, have marked every actually-checked-in student a
- * real `absent` row (the owner-ruled reason for the original split -- see
- * `docs/swarm/active/T178-gate-round1-findings.md`, BLOCKER 3). T403 made
- * `LiveConsole.tsx`'s roster and attendance writes real and deleted the
- * fixtures, so that blocking reason no longer holds -- T196 is unblocked,
- * just not yet done.
+ * CORRECTED (T602): the mount SHIPPED. `LiveConsole.tsx:1187` mounts the
+ * real `EndMeetingDialog`, wiring `loadEndMeetingSummary`/`onEndMeeting`
+ * (this file's own exports) and `makeOnEditAttendance` (`:1024`, with real
+ * coach identity) -- T196 closed 2026-08-04 at `6271ac6`. Historical note,
+ * no longer live: T196 was originally blocked because `LiveConsole.tsx`'s
+ * own attendance marking was an intentional no-op and its roster loader was
+ * a fixture, so a real End Meeting dialog mounted on top of that
+ * fixture-backed console would, on first real use, have marked every
+ * actually-checked-in student a real `absent` row (the owner-ruled reason
+ * for the original split -- see `docs/swarm/active/T178-gate-round1-findings.md`,
+ * BLOCKER 3). T403 made `LiveConsole.tsx`'s roster and attendance writes
+ * real and deleted the fixtures, removing that blocker; T196 then shipped
+ * the mount.
  *
  * -----------------------------------------------------------------------
  * 1. Three sequenced `runMutation` calls, not a transaction/RPC -- and the
@@ -29,20 +33,30 @@
  *
  * `makeOnEndMeeting` below issues, always in this order, always awaited
  * sequentially (never `Promise.all`'d, never reordered):
- *   1. Backfill absences -- `.upsert(rows, { onConflict:
- *      'session_id,student_id', ignoreDuplicates: true })` on `attendance`
- *      for `payload.backfillAbsentStudentIds`, one `status: 'absent',
- *      method: 'coach', recorded_by: null` row per student (backfilled rows
- *      are `recorded_by: null` by `EndMeetingDialog.tsx`'s own
- *      `applyEndMeetingResult` design -- this file mirrors that, not
- *      reinvents it).
+ *   1. Mark absences (T508, renamed from "Backfill absences"; the
+ *      `BackfillAbsencesArgs`/`backfillAbsences` names below are now
+ *      `MarkAbsencesArgs`/`markAbsences`) -- GUARDED: only issued when
+ *      `payload.markAbsentStudentIds.length > 0`. Owner ruling
+ *      (`EndMeetingDialog.tsx` module doc section 1a): the coach must
+ *      explicitly opt in via a checkbox before any absence is recorded, so
+ *      the ordinary (opted-out) case must not send an `upsert` request
+ *      against `attendance` at all -- not even one with an empty row array,
+ *      which is still a real write request. When it does run:
+ *      `.upsert(rows, { onConflict: 'session_id,student_id',
+ *      ignoreDuplicates: true })` on `attendance` for
+ *      `payload.markAbsentStudentIds`, one `status: 'absent', method:
+ *      'coach', recorded_by: null` row per student (`recorded_by: null` by
+ *      `EndMeetingDialog.tsx`'s own `applyEndMeetingResult` design -- this
+ *      file mirrors that, not reinvents it).
  *   2. Checkout -- `.update({ check_out_at: payload.endsAt })` on
  *      `attendance` for `payload.checkoutStudentIds`, scoped by
  *      `session_id` + `.in('student_id', ...)`, guarded
  *      `.is('check_out_at', null)` so it never clobbers a real checkout
- *      stamp set some other way.
+ *      stamp set some other way. UNCONDITIONAL -- still runs even when step
+ *      1 is skipped.
  *   3. Status flip -- `.update({ status: 'completed' })` on
- *      `event_sessions`, scoped `.eq('id', sessionId)`. ALWAYS last.
+ *      `event_sessions`, scoped `.eq('id', sessionId)`. ALWAYS last, and
+ *      UNCONDITIONAL -- still runs even when step 1 is skipped.
  *
  * Ordering history: this sequence was originally required by
  * `trg_audit_attendance_post_completion`, an `after update on
@@ -62,16 +76,17 @@
  * **The actual, positive justification for three sequenced calls instead of
  * an RPC** (not "we can't prove otherwise"): because the flip is always
  * last, EVERY reachable partial-failure state fails in the safe direction.
- * If step 2 (checkout) rejects, step 1 (backfill) has already landed but
- * the session is still `'scheduled'` -- no audit pollution, and a retry is
- * a clean no-op (idempotent: `ignoreDuplicates` for the backfill,
- * `.is('check_out_at', null)` for the checkout, both re-setting the same
- * terminal value for the flip). If step 3 (flip) rejects, steps 1+2 have
- * landed but the session is still `'scheduled'` -- same safe outcome, same
- * clean retry. There is NO ordering under this design in which the flip
- * lands and the checkout doesn't. This design property, not an inability to
- * prove transactional atomicity, is why three sequenced `runMutation` calls
- * are sufficient here.
+ * If step 2 (checkout) rejects, step 1 (mark) has already either landed or
+ * been deliberately skipped (T508's guard, not a failure) -- either way the
+ * session is still `'scheduled'` -- no audit pollution, and a retry is a
+ * clean no-op (idempotent: `ignoreDuplicates` for the mark, `.is('check_out_at',
+ * null)` for the checkout, both re-setting the same terminal value for the
+ * flip). If step 3 (flip) rejects, steps 1+2 have landed/been-skipped but
+ * the session is still `'scheduled'` -- same safe outcome, same clean
+ * retry. There is NO ordering under this design in which the flip lands and
+ * the checkout doesn't. This design property, not an inability to prove
+ * transactional atomicity, is why three sequenced `runMutation` calls are
+ * sufficient here.
  *
  * **Disclosed risk, honestly, not softened:** if step 2 or step 3 rejects
  * after an earlier step already succeeded, the database IS left in that
@@ -102,20 +117,22 @@
  * -----------------------------------------------------------------------
  *
  * `onEndMeeting`/`EndMeetingPayload` needs no acting-coach identity
- * (backfilled rows are `recorded_by: null`, section 1 above). A real
+ * (mark-absent rows are `recorded_by: null`, section 1 above). A real
  * `attendance` UPDATE through `onEditAttendance`, per `loaders/
  * attendance.ts`'s own established convention for this table (module doc
  * #2 there), DOES need the real acting coach's id in `recorded_by`. Since
- * `OnEditAttendanceFn`'s own signature (`EndMeetingDialog.tsx`, frozen)
- * carries no identity parameter, identity is captured by
+ * `OnEditAttendanceFn`'s own signature (`EndMeetingDialog.tsx`) carries no
+ * identity parameter, identity is captured by
  * `makeOnEditAttendance(getRecordedBy, getClient?)`'s own closure --
  * `getRecordedBy: () => string | null` is called FRESH on every invocation
  * of the returned function, never read once at factory-construction time,
  * so it stays correct behind a `useRef`-backed accessor that changes across
- * renders once T196 wires this factory to a real `useAuth()` ref. This file
- * has no mount in scope, so nothing here calls this factory against a real
- * ref -- that wiring is T196's job; this file's job is to make the factory
- * itself correct and tested so it is ready when T196 unblocks.
+ * renders. CORRECTED (T602): this is no longer a "once T196 wires it"
+ * forward reference -- T196 shipped it. `LiveConsole.tsx:1023-1024` supplies
+ * `getRecordedBy = useCallback(() => user?.id ?? null, [user])` and builds
+ * `makeOnEditAttendance(getRecordedBy)` via `useMemo`, so this factory's
+ * fresh-read contract is genuinely exercised in production, not only in
+ * this file's own tests.
  *
  * If `getRecordedBy()` resolves `null` at call time (no signed-in coach
  * identity available), the returned function rejects BEFORE any network
@@ -182,9 +199,9 @@
  * against an already-permitted write surface, same posture `loaders/
  * attendance.ts` already established for this table. `attendance.recorded_by`
  * is nullable and `unique (session_id, student_id)` exists (`supabase/
- * migrations/20260717000000_scheduling_attendance.sql`), so the backfill
- * shape and its `onConflict` target are both legal without any schema
- * change.
+ * migrations/20260717000000_scheduling_attendance.sql`), so the mark-absent
+ * upsert shape and its `onConflict` target are both legal without any
+ * schema change.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createLoader, runMutation, type LoaderQueryResult } from '../loader';
@@ -353,7 +370,7 @@ export const loadEndMeetingSummary: LoadEndMeetingSummaryFn = makeLoadEndMeeting
 // onEndMeeting -- module doc #1's three sequenced mutations.
 // ---------------------------------------------------------------------------
 
-interface BackfillAbsencesArgs {
+interface MarkAbsencesArgs {
   sessionId: string;
   studentIds: readonly string[];
 }
@@ -373,7 +390,7 @@ interface CheckoutStudentsArgs {
 export function makeOnEndMeeting(
   getClient: () => SupabaseClient = getSupabaseClient,
 ): OnEndMeetingFn {
-  const backfillAbsences = runMutation<BackfillAbsencesArgs, void>(
+  const markAbsences = runMutation<MarkAbsencesArgs, void>(
     (client, args) =>
       client.from('attendance').upsert(
         args.studentIds.map((studentId) => ({
@@ -406,19 +423,27 @@ export function makeOnEndMeeting(
   );
 
   return async (payload: EndMeetingPayload): Promise<void> => {
-    // Step 1 -- INSERT ... ON CONFLICT DO NOTHING, order-independent, but
-    // run first anyway (module doc #1).
-    await backfillAbsences({
-      sessionId: payload.sessionId,
-      studentIds: payload.backfillAbsentStudentIds,
-    });
+    // Step 1 -- T508, GUARDED: this is an acceptance criterion, not an
+    // optimization. `payload.markAbsentStudentIds` is empty unless the
+    // coach explicitly opted in (`EndMeetingDialog.tsx` module doc section
+    // 1a); without this guard the ordinary case would still issue a real
+    // `upsert` request against `attendance` with an empty row array, which
+    // is still a write request the owner's ruling says must not happen.
+    if (payload.markAbsentStudentIds.length > 0) {
+      await markAbsences({
+        sessionId: payload.sessionId,
+        studentIds: payload.markAbsentStudentIds,
+      });
+    }
     // Step 2 -- MUST precede step 3 (module doc #1's ordering rationale).
+    // UNCONDITIONAL -- still runs even when step 1 is skipped.
     await checkoutStudents({
       sessionId: payload.sessionId,
       studentIds: payload.checkoutStudentIds,
       endsAt: payload.endsAt,
     });
-    // Step 3 -- ALWAYS last (module doc #1).
+    // Step 3 -- ALWAYS last (module doc #1). UNCONDITIONAL -- still runs
+    // even when step 1 is skipped.
     await flipSessionStatus(payload.sessionId);
   };
 }
@@ -441,9 +466,23 @@ interface EditAttendanceArgs {
  * `EndMeetingDialog.tsx`'s real `onEditAttendance`. `getRecordedBy` is
  * called FRESH on every invocation of the returned function (module doc #2)
  * -- never read once at construction time, so this stays correct behind a
- * `useRef`-backed accessor across renders once T196 wires this factory to a
- * real `useAuth()` ref (not done by this task). `getClient` is injectable,
- * this directory's own convention.
+ * `useRef`-backed accessor across renders. CORRECTED (T602): T196 already
+ * wires this factory to a real `useAuth()`-derived ref --
+ * `LiveConsole.tsx:1023-1024`. `getClient` is injectable, this directory's
+ * own convention.
+ *
+ * T601 (owner ruling, 2026-08-05, CLOSED, re-confirmed): kept as-is,
+ * deliberately unreachable from any product surface today rather than
+ * drifted-into-dead. `EndMeetingDialog`'s only mount (`LiveConsole.tsx:1187`)
+ * passes `hasAttendanceCorrections={false}`, so `AttendanceCorrectionRow` --
+ * the only caller of `onEditAttendance` -- never renders there, and nothing
+ * in the shipped console can currently invoke the function this factory
+ * returns. Options put to the owner were keep-as-is / delete / wire to a
+ * real surface; he ruled keep, documented. Its tests
+ * (`endMeeting.test.ts:626`, `:640`) cover real behaviour and stay
+ * authoritative -- deleting them or the factory would lose that coverage,
+ * and re-exposing post-completion correction later would mean rewriting it
+ * from scratch.
  */
 export function makeOnEditAttendance(
   getRecordedBy: () => string | null,

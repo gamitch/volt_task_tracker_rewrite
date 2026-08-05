@@ -10270,3 +10270,103 @@ Nothing here can rot silently again, which was the actual complaint behind T701.
 
 `tsc` 0 · `format:check` 0 · `eslint` 0 errors · `vitest` **80 files / 2027 tests** (unchanged — the
 TypeScript edits are comment-only) · **8/8 SQL suites** on live PG16.13 · 3 mutations replayed.
+
+---
+
+## T508 — the automatic absence backfill is gone; absences are now an explicit coach opt-in
+
+**Commit `0cd559e`** on `claude/w3-meeting-workflow-0bl669`. Tier HEAVY (write path, item 26):
+packet → `checker-premise` → `worker-implementer` (sonnet, per item 18 — none of the four opus
+triggers apply) → orchestrator replay.
+
+**What shipped.** `backfillAbsences` no longer runs unconditionally. `makeOnEndMeeting` now guards
+the mark-absences upsert on `payload.markAbsentStudentIds.length > 0`, so the ordinary case issues
+**no `attendance` write request at all** — not even an empty-array upsert, which is still a real
+write. The dialog's "will be marked absent" callout is replaced by an honest pair of sentences, and
+a `CheckboxInput` beside the End meeting trigger is the owner's required one-click bulk control:
+ticking it marks **every** unmarked roster member absent in one action, labelled with the live count
+("Mark 17 students with no attendance record absent"). It defaults unticked. Checkout and the status
+flip remain unconditional and unreordered.
+
+### The premise gate paid for itself twice
+
+**Round 1 returned REVISE (BLOCKER).** It built the full prescription in its own worktrees and ran
+every named mutation rather than reading, and it caught two criteria that would have shipped
+believing they were covered:
+
+- **§4a.3 was vacuous** — the packet declared "no default is an acceptance criterion", cited T300's
+  C2 as the cautionary precedent, and then reproduced T300's exact error. Restoring the default left
+  the suite green at exit 0 with `tsc` clean. Replaced with T300's paired `tsc` replay (C10).
+- **C8 could not bite** — it asserted an off-roster mark through `computeEndMeetingSummaryCounts`,
+  which after the prescription never receives a roster at all, so its "assert the student is absent
+  from the roster array" fixture checked an array that was never passed in. Re-sited at
+  `buildEndMeetingConfirmDescription`, which still takes both.
+
+It also caught a **BLOCKER that no amount of reading would have found**: the owner's grant on
+`LiveConsole.endMeeting.test.tsx` was recorded as "exactly two lines" and **three are forced**
+(`:195`, `:276`, `:396`). Two fails `tsc` at exit 2. The grant was re-confirmed at three by the owner
+before dispatch rather than widened by worker judgement — see `auto-mode-decisions.md`.
+
+### Orchestrator replay — four criteria re-run independently, in a throwaway worktree
+
+Not trusted from the worker's report. Applied, measured, reverted; `git diff --quiet` clean after.
+
+| # | What was mutated | Result |
+|---|---|---|
+| **C1** | deleted the `length > 0` write guard | **vitest exit 1**, 1 failed — the empty-array upsert was issued and caught at the transport |
+| **C6** | `useState(false)` → `useState(true)` | **vitest exit 1**, 3 failed |
+| **C8** | re-scoped the tally to roster members *inside* `buildEndMeetingConfirmDescription`, leaving `computeEndMeetingSummaryCounts` untouched | **`tsc` exit 0** (genuinely signature-preserving) and **vitest exit 1**, exactly 1 failed |
+| **C10** | paired replay — (a) omit the 4th arg, no default; (b) same omission, default restored | (a) **`tsc` exit 2**, `EndMeetingDialog.tsx(805,21): error TS2554: Expected 4 arguments, but got 3`; (b) **`tsc` exit 0 clean** — confirming the default would have made it vacuous |
+
+The worker independently reported all 11 red, including confirming that the "decorative" unit-test
+shape for C8 **stays green** under the same mutation — it verified that from its own output rather
+than repeating the packet's claim.
+
+### Gates, measured by the orchestrator on `0cd559e`, not quoted from the worker
+
+`tsc` **0** · eslint **0 errors / 366 warnings** · `format:check` **clean** · vitest
+**80 files / 2038 tests, exit 0**.
+
+Baseline was 365 warnings / 2027 tests. **The +1 warning is the declared, pre-announced delta** —
+`react-refresh/only-export-components` on the newly exported `buildMarkRemainingAbsentLabel`
+(`EndMeetingDialog.tsx` 11→12). Declaring it in the packet before the work started is what stopped
+it being litigated at review. **+11 tests**: `endMeeting.test.ts` 16→18, `EndMeetingDialog.test.tsx`
+21→30.
+
+### The worker's report contained one false claim about its own work
+
+Its "Known risks" section states that *"T508 alone does not add a bulk control … a whole-team opt-in
+still costs one tap per student today."* **That is wrong, and the code contradicts it.** Ticking the
+one checkbox sets `markAbsentStudentIds = computeUnmarkedStudentIds(...)` — the entire unmarked set,
+in one action (`EndMeetingDialog.tsx:437-451`, `:918-923`). The bulk control the owner's MET-01
+ruling is conditional on **is present and working**; the worker built it correctly and then
+mis-described it.
+
+Recorded because taking that sentence at face value would have led to declaring T508 incomplete and
+leaving **W4's T509 blocked for no reason**. A worker's summary is not evidence about its own diff —
+this is the second recorded instance in this project of a report contradicting the artifact it
+describes (T142 was the first, in the opposite direction).
+
+### Scope discipline held
+
+Exactly the five Allowed Files changed; `LiveConsole.tsx` source was never opened; the grant was used
+for exactly its three authorised lines. §3g's three tests were each re-derived deliberately, and the
+second one is worth noting — its old assertion, that an unmarked student *is* auto-marked absent,
+literally encoded the live data corruption as correct behaviour.
+
+### Filed, not fixed (item 20)
+
+**T603** — `AttendanceMethod` omits `'self'` in **four** declarations while the database has allowed
+it since 2026-07-24. The worker reported one; the other three came from grepping the symbol. Already
+worked around once rather than fixed (`selfCheckoff.ts:93` forked a correct parallel type and its
+module doc says why). No live crash — there is no `Record<AttendanceMethod, …>` anywhere — but
+`resolveAttendanceWriteMethod` is on a write path.
+
+**T604** — four more "frozen"/"forbidden" claims about `EndMeetingDialog.tsx` survive in
+`endMeeting.ts` at `:102`, `:105`, `:110`, `:297`, outside T602's four named ranges. The worker was
+right to leave them and file instead of widening a deliberate list by judgement.
+
+**Unchanged residual (§6, disclosed not fixed):** `recorded_by` on bulk-marked rows stays `null`.
+A primitive exists (`attendance.ts:495-515` already carries it) but the seam is in another
+workflow's file. The value is unchanged from the backfill it replaces — a pre-existing gap made
+visible, not a regression.
