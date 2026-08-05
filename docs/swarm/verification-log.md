@@ -9910,6 +9910,112 @@ newly-discovered vulnerability is reading it wrong, which is why the header says
 
 ---
 
+## T400 — live-session picker on `/checkin` (2026-08-04, orchestrator, STANDARD tier)
+
+**Premise measured before any code was written, and one claim in the row was false.**
+
+The row said *"(a) needs a currently-open-sessions loader, which T196 must build anyway."* T196 had
+already shipped. It built **no such loader**. Every loader it produced takes a `sessionId` and
+returns one session — `makeLoadEndMeetingSummary` (`endMeeting.ts:288`), `makeOnEndMeeting` (`:373`),
+`makeOnEditAttendance` (`:448`), `makeLoadLiveConsoleData` (`kiosk.ts:430`). Searching `loaders/` for
+`openSessions`/`liveSessions`/`'live'` returned **zero** hits, and there is no `'live'` session status
+at all: the vocabulary is `'scheduled' | 'completed' | 'canceled'`
+(`20260717000000_scheduling_attendance.sql:59`). T400 had to build the loader, not consume one.
+
+**What the row got right, verified independently:** `validateCheckinRequest` rejects a non-uuid
+`session_id` (`supabase/functions/checkin/validation.ts:69`); `Kiosk.tsx` renders the QR, the 6-char
+code, a tally and a title, and never a readable session id; `/checkin` sits behind `RequireAuth`
+(`router.tsx:233-239`), so the picker's query runs as a real authenticated user and
+`event_sessions`'s `own_or_linked_read` policy (`20260717000002_rls.sql:180-189`) scopes it to the
+student's own team without a client-side filter.
+
+### Mutation evidence — 12 mutants, every one red at exit 1
+
+| # | Mutation | Result |
+|---|---|---|
+| M1 | `.eq('status','scheduled')` → `'completed'` | 1 failed, exit 1 |
+| M2 | `OPEN_SESSION_GRACE_MS` 2h → `0` | 2 failed, exit 1 |
+| M3 | join by array position instead of `event_id` | 1 failed, exit 1 |
+| M4 | drop sessions whose event title is missing | 1 failed, exit 1 |
+| M5 | remove the empty-session early return | 1 failed, exit 1 |
+| M6 | `(await loadSessions()) ?? []` → `!` | 1 failed, exit 1 |
+| M7 | remove the `event_id` de-duplication | 1 failed, exit 1 |
+| M8 | `urlSessionId ?? pickedSessionId` → `urlSessionId` | 2 failed, exit 1 |
+| M9 | picker always sends `sessions[0].sessionId` | 1 failed, exit 1 |
+| M10 | load the list even when the URL has `?s=` | 1 failed, exit 1 |
+| M11 | drop the "no meetings are open" message | 1 failed, exit 1 |
+| M12 | drop the "couldn't load the list" message | 1 failed, exit 1 |
+
+**Two mutants were the point of the exercise.** M3 is this row's version of the field-swap class: a
+positional join returns the right *number* of meetings with the *wrong names* on them, and nothing
+crashes — a student taps "Tuesday Build Night" and checks into the outreach event. It is caught only
+because the fixture returns the two events in **reversed** order; with them in matching order the
+test would have stayed green under the mutation. M9 is the same shape one level up: the test picks
+the **second** listed session precisely so "always send the first" cannot pass.
+
+A 13th attempt (force the picker to render alongside the form) broke the JSX rather than producing a
+valid mutant, so it is **not counted** — M8 already covers that behaviour.
+
+**Gates:** tsc exit 0 · eslint 0 errors (5 pre-existing `react-refresh` warnings) · prettier written ·
+vitest **80 files / 2024 tests, exit 0** (base 2010, +14 = 8 loader + 6 component). Mutations ran in a
+throwaway worktree (item 23); the shared tree was verified clean with `git diff --quiet` after each.
+
+**Filed, not fixed:** nothing new. **T502 remains open and untouched** — `attendance.ts:361` still
+does `(await loadPage({…})) ?? []` and `loader.ts:177` still returns `result.data ?? null` without
+throwing, so a `{data: null, error: null}` page still resolves as end-of-data. It is a W1 file and a
+one-line fix, but it is a distinct row and was not in this one's scope.
+
+---
+
+## T502 — a no-answer attendance page is not an empty page (2026-08-04, orchestrator, FAST tier)
+
+**Premise re-verified against the code before touching it**, because this row had been sitting since
+2026-08-03 and this session has already found five rows describing a repo state that no longer
+existed. Both halves were still exactly as filed: `attendance.ts:360` still did
+`(await loadPage({…})) ?? []`, and `loader.ts:177` still returned `result.data ?? null` with no throw
+when `data` and `error` are both null (`:174-177`).
+
+**The fix is in `attendance.ts`, deliberately NOT in `createLoader`.** Making `createLoader` throw on
+`{data: null, error: null}` would fix this caller and break others: `querySessionUserId`
+(`loaders/checkin.ts:382-390`) returns exactly that pair to mean *"nobody is signed in"*, and
+`makeGetAccessToken` is documented to never reject. A shared helper is the wrong place to encode one
+caller's interpretation of an ambiguous response.
+
+The paging loop now throws on a `null` page, matching the page-cap branch three lines below it —
+same principle, same reason: a caller who cannot get a trustworthy answer must be told, never handed
+a short list that looks complete.
+
+### Mutation evidence — 3 mutants, all red at exit 1
+
+| # | Mutation | Result |
+|---|---|---|
+| N1 | revert to `rows.push(...(pageRows ?? []))` | 2 failed, exit 1 |
+| N2 | guard only page 0 (`pageRows === null && page === 0`) | 1 failed, exit 1 |
+| N3 | throw on an empty page too (`|| pageRows.length === 0`) | 2 failed, exit 1 |
+
+**N2 is the one that matters.** It leaves the fix visibly present — the guard is still there, still
+throws, and a reviewer skimming the diff would call it correct — while restoring the exact
+real-world failure: a full page 0 of genuine attendance followed by an empty-bodied page 1, resolving
+as a complete-looking list short by however many rows followed. It is caught only because the test
+asserts on the **mid-stream** case rather than a first-page-null case, which would have passed under
+N2 and let a half-fix ship.
+
+**N3 guards the opposite error.** Throwing on `null` is only correct if `[]` still means "no rows";
+if the guard widened to cover empty pages, every brand-new session with no check-ins would start
+erroring. That test is what keeps the fix from over-reaching.
+
+**Corrects an earlier over-broad claim in this log.** Line 6454 states that `createLoader` *"throws
+on `result.error` so a failed query cannot resolve `[]` and masquerade as 'nobody attended'."* That is
+true for `result.error` and false for the `{data: null, error: null}` pair — which is precisely the
+gap T502 filed and this entry closes. The original claim was not wrong about what it examined; it was
+narrower than it sounded.
+
+**Gates:** tsc exit 0 · eslint 0 errors (5 pre-existing `react-refresh` warnings) · prettier clean ·
+vitest **80 files / 2027 tests, exit 0** (2024 → 2027, +3). Mutations ran in a throwaway worktree
+(item 23); shared tree verified clean with `git diff --quiet` after each.
+
+---
+
 ## T803 — the duplicate participation tile, dropped along with the query behind it
 
 **Tier: STANDARD.** Owner ruled *"drop the duplicate tile"*. The question the ruling left open was

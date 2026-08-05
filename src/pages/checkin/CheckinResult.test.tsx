@@ -39,6 +39,7 @@ import {
   type CheckinCallResult,
   type CheckinResponsePayload,
 } from './CheckinResult';
+import type { OpenCheckinSession } from '../../lib/supabase/loaders/checkin';
 
 // ---------------------------------------------------------------------------
 // Render harness
@@ -708,5 +709,141 @@ describe('prefers-reduced-motion (real window.matchMedia check)', () => {
     expect(container.textContent).toContain("You're in");
     expect(container.querySelector('.checkin-bolt-glyph--animate')).toBeNull();
     expect(container.querySelector('.checkin-bolt-surface--animate')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T400 — the live-session picker.
+//
+// This closes the half of the check-in gap T321 could not: a student who
+// cannot scan at all has NO session id, and a short code is meaningless
+// without one (`supabase/functions/checkin/hmac.ts:133-145` HMACs the code
+// over `${sessionId}:${bucket}`; `validation.ts:69` rejects a non-uuid
+// `session_id`). T321 deliberately withholds its form in that state because
+// the form could only ever fail. The picker supplies the missing half.
+// ---------------------------------------------------------------------------
+
+function openSession(overrides: Partial<OpenCheckinSession> = {}): OpenCheckinSession {
+  return {
+    sessionId: 'session-build-night',
+    title: 'Tuesday Build Night',
+    startsAt: '2026-08-04T18:00:00.000Z',
+    ...overrides,
+  };
+}
+
+/** A `checkin` that always fails, so the render lands in the error branch the
+ * picker lives in. A URL with no `s`/`t` never reaches the network at all. */
+function failingCheckin() {
+  return vi.fn<typeof callCheckin>().mockResolvedValue({
+    ok: false,
+    error: { code: 'CHECKIN_EXPIRED', message: 'That code has expired.' },
+  });
+}
+
+function pickerButtons(): HTMLButtonElement[] {
+  return Array.from(container.querySelectorAll('button'));
+}
+
+describe('T400 live-session picker', () => {
+  it('offers the open meetings by name when the URL carries no session id at all', async () => {
+    const loadOpenSessions = vi
+      .fn()
+      .mockResolvedValue([
+        openSession(),
+        openSession({ sessionId: 'session-outreach', title: 'Library STEM Night' }),
+      ]);
+    renderAt('/checkin', { checkin: failingCheckin(), loadOpenSessions });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('Tuesday Build Night');
+    expect(container.textContent).toContain('Library STEM Night');
+  });
+
+  it('withholds the short-code form until a meeting is picked, then shows it', async () => {
+    const loadOpenSessions = vi.fn().mockResolvedValue([openSession()]);
+    renderAt('/checkin', { checkin: failingCheckin(), loadOpenSessions });
+    await flushMicrotasks();
+
+    // Pre-pick: no session id is knowable, so T321's form must NOT be offered.
+    expect(container.querySelector('form')).toBeNull();
+
+    const pick = pickerButtons().find((btn) => btn.textContent?.includes('Tuesday Build Night'));
+    expect(pick).toBeTruthy();
+    await act(async () => {
+      pick?.click();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('form')).toBeTruthy();
+    expect(container.textContent).toContain('Check-in code');
+  });
+
+  it('checks in against the PICKED session id, not a placeholder', async () => {
+    const checkin = failingCheckin();
+    const loadOpenSessions = vi
+      .fn()
+      .mockResolvedValue([
+        openSession({ sessionId: 'session-not-this-one', title: 'Monday Practice' }),
+        openSession({ sessionId: 'session-the-right-one', title: 'Tuesday Build Night' }),
+      ]);
+    renderAt('/checkin', { checkin, loadOpenSessions });
+    await flushMicrotasks();
+
+    // Deliberately the SECOND entry: picking by position would pass with the
+    // first, so this asserts the tapped session's own id is what is sent.
+    const pick = pickerButtons().find((btn) => btn.textContent?.includes('Tuesday Build Night'));
+    await act(async () => {
+      pick?.click();
+      await Promise.resolve();
+    });
+
+    const input = container.querySelector<HTMLInputElement>('input[name="checkin-short-code"]');
+    expect(input).toBeTruthy();
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value',
+      )?.set;
+      setter?.call(input, 'ABC234');
+      input?.dispatchEvent(new Event('input', { bubbles: true }));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      container
+        .querySelector('form')
+        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+
+    expect(checkin).toHaveBeenCalledTimes(1);
+    expect(checkin.mock.calls[0][0]).toEqual({
+      sessionId: 'session-the-right-one',
+      code: 'ABC234',
+    });
+  });
+
+  it('spends no query on the scanned path — a URL with a session id never loads the list', async () => {
+    const loadOpenSessions = vi.fn().mockResolvedValue([openSession()]);
+    renderAt('/checkin?s=session-1&t=abc123', { checkin: failingCheckin(), loadOpenSessions });
+    await flushMicrotasks();
+
+    expect(loadOpenSessions).not.toHaveBeenCalled();
+  });
+
+  it('says so plainly when nothing is open, rather than rendering an empty card', async () => {
+    const loadOpenSessions = vi.fn().mockResolvedValue([]);
+    renderAt('/checkin', { checkin: failingCheckin(), loadOpenSessions });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('No meetings are open right now');
+  });
+
+  it('degrades to a readable message when the list itself fails to load', async () => {
+    const loadOpenSessions = vi.fn().mockRejectedValue(new Error('network down'));
+    renderAt('/checkin', { checkin: failingCheckin(), loadOpenSessions });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain("Couldn't load the list of meetings");
   });
 });

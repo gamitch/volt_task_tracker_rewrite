@@ -1296,3 +1296,59 @@ reading, so the repo has contradicted itself in writing for over a week.
 Recommend closing D010 on that evidence rather than re-deriving it. **Item 10
 forbids editing an applied migration**, so neither comment may be corrected in
 place; the correction belongs in a new migration's header.
+
+---
+
+## D014 - MET-01's denominator changes from eligibility to explicit marks, on the owner's ruling (the D002/D013 pattern)
+
+**Filed by the orchestrator 2026-08-05**, before any code, because **constitution item 3 makes this a
+BLOCKER unless recorded**: *"RLS policies and metric SQL come **only** from PRD Section 8.4, copied
+verbatim. Re-deriving either … → BLOCKER."* This entry is what makes the change authorised rather than
+a violation.
+
+### What the PRD says, and what replaces it
+
+`VOLT_Portal_PRD.md:563`, **MET-01**, normative:
+
+> Student participation % (season) = `present+late marks` ÷ (`completed meeting sessions in season, in
+> the student's team scope, while student active` − `excused marks`) × 100.
+
+The denominator is **eligibility** — every completed, `counts_participation` session the student was in
+team scope for while active. `20260717000003_metric_views.sql:22-41` implements exactly that, via a
+cross product of eligible students × completed sessions with `attendance` LEFT JOINed.
+
+**It becomes:** `present + late` ÷ (`present + late + absent` − `excused`) × 100, over the sessions
+where that student **has an attendance row**. Sessions with no row for that student do not count.
+Denominator floor 1 and the `—` display rule survive; `—` now also covers a student with no marks at
+all. **`counts_participation=true` still gates which sessions qualify.**
+
+### The authority
+
+`auto-mode-decisions.md`, **"2026-08-05 — George rules on absence marking and MET-01"**, three verbatim
+rulings plus his *"leave as is"* on legacy rows.
+
+### Why this is not a preference
+
+The orchestrator proposed keeping eligibility and scoping meetings by `events.team_ids`, which the view
+already honours. **The owner corrected it:** the sub-teams that determine who is expected — business,
+build, software — sit *below* `teams` (P3, Gear Girls) and are **deliberately unmodelled**, to keep the
+app simple.
+
+**Expected-attendance is therefore not derivable from any data this app holds**, and an eligibility
+denominator asserts knowledge the schema does not have. Marks become the only honest source.
+
+### The known cost, recorded so it is not rediscovered as a bug
+
+This **inverts the failure direction**. Today, forgetting to mark makes participation look *worse* than
+reality; under marks-only it looks *better*, because unmarked students drop out of their own
+denominator. RPT-02 mitigates it by displaying `expected / present / late / excused` beside the % — a
+`100%` backed by `2 expected` is visibly thin. **If RPT-02 ever stops showing those counts, this
+trade-off breaks and D014 must be revisited.**
+
+### Same shape as D002 and D013
+
+The PRD text is **deliberately not amended**. This entry plus the decision record are the authority, and
+the migration header cites both. For checkers: a `v_student_participation` that does not match 8.4
+verbatim is **expected** from this task onward, and the exemption covers **that view and MET-01 only** —
+not `v_student_hours`, not MET-02's aggregation shape beyond the denominator it inherits, and nothing on
+the volunteer-hours side.

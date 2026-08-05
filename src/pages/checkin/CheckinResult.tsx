@@ -155,7 +155,12 @@ import {
   Timestamp,
   VStack,
 } from '@astryxdesign/core';
-import { getAccessToken as loadAccessTokenFromSupabase } from '../../lib/supabase/loaders/checkin';
+import {
+  getAccessToken as loadAccessTokenFromSupabase,
+  loadOpenCheckinSessions,
+  type LoadOpenCheckinSessionsFn,
+  type OpenCheckinSession,
+} from '../../lib/supabase/loaders/checkin';
 
 // ---------------------------------------------------------------------------
 // Contract types -- mirror `supabase/functions/checkin/attendance_upsert.ts`
@@ -577,12 +582,27 @@ export interface CheckinResultProps {
    * (`../../lib/supabase/loaders/checkin.ts`'s `getAccessToken`). */
   getAccessToken?: GetAccessTokenFn;
   config?: CallCheckinConfig;
+  /** T400 seam. Defaults to the real query. This is a module-level `const`,
+   * not an inline factory call, deliberately: a `= makeLoad...()` default
+   * would build a new function on EVERY render, and any `useEffect` keyed on
+   * it would re-run forever (the exact defect T196 measured and fixed). */
+  loadOpenSessions?: LoadOpenCheckinSessionsFn;
 }
+
+/** T400: the picker's own load state -- separate from `ResultState`, which
+ * tracks the check-in call itself. Collapsing the two would make a failed
+ * session list look like a failed check-in. */
+type OpenSessionsState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success'; sessions: OpenCheckinSession[] }
+  | { status: 'error' };
 
 export function CheckinResult({
   checkin = callCheckin,
   getAccessToken = loadAccessTokenFromSupabase,
   config,
+  loadOpenSessions = loadOpenCheckinSessions,
 }: CheckinResultProps = {}): ReactNode {
   const [searchParams] = useSearchParams();
   const searchParamsKey = searchParams.toString();
@@ -595,9 +615,42 @@ export function CheckinResult({
   // carries no `t`/`code` -- which is precisely the state this form recovers
   // from. `null` here means no session id is knowable, so the form is not
   // offered at all rather than being offered and guaranteed to fail (T400).
-  const manualSessionId = parseCheckinSessionId(new URLSearchParams(searchParamsKey));
+  const urlSessionId = parseCheckinSessionId(new URLSearchParams(searchParamsKey));
   const [manualCode, setManualCode] = useState('');
   const [manualCodeError, setManualCodeError] = useState<string | null>(null);
+
+  // T400: a student who could not scan has NO session id at all, so T321's
+  // form cannot render (it would be guaranteed to fail -- see the comment
+  // above). Picking a live session supplies the missing half, after which
+  // every downstream use below is identical to the `?s=`-carrying case.
+  const [pickedSessionId, setPickedSessionId] = useState<string | null>(null);
+  const [openSessions, setOpenSessions] = useState<OpenSessionsState>({ status: 'idle' });
+  const manualSessionId = urlSessionId ?? pickedSessionId;
+
+  useEffect(() => {
+    // Only fetched when the URL genuinely lacks a session id. A scanned QR
+    // always carries one, so the common path spends no query at all.
+    if (urlSessionId !== null) {
+      return;
+    }
+    let cancelled = false;
+    setOpenSessions({ status: 'loading' });
+    void (async () => {
+      try {
+        const sessions = await loadOpenSessions();
+        if (!cancelled) {
+          setOpenSessions({ status: 'success', sessions });
+        }
+      } catch {
+        if (!cancelled) {
+          setOpenSessions({ status: 'error' });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [urlSessionId, loadOpenSessions]);
 
   /**
    * T321: `override` lets manual short-code entry run the SAME call path with
@@ -794,7 +847,50 @@ export function CheckinResult({
                       <Button label="Check in with code" variant="secondary" type="submit" />
                     </VStack>
                   </form>
-                ) : null}
+                ) : (
+                  /* T400: no session id is knowable from the URL, so the form
+                     above cannot be offered. Pick the meeting first -- that
+                     supplies the session id the short code is meaningless
+                     without -- and the form then renders on the next pass. */
+                  <VStack gap={3} hAlign="center">
+                    {openSessions.status === 'loading' ? (
+                      <Spinner label="Loading meetings" />
+                    ) : null}
+
+                    {openSessions.status === 'success' && openSessions.sessions.length > 0 ? (
+                      <>
+                        <Text type="supporting" color="secondary">
+                          Can&apos;t scan? Pick the meeting you&apos;re at, then enter the code
+                          shown on the check-in screen.
+                        </Text>
+                        {openSessions.sessions.map((session) => (
+                          <VStack gap={1} hAlign="center" key={session.sessionId}>
+                            <Button
+                              label={session.title}
+                              variant="secondary"
+                              onClick={() => setPickedSessionId(session.sessionId)}
+                            />
+                            <Text type="supporting" color="secondary">
+                              Starts at <Timestamp value={session.startsAt} format="time" />
+                            </Text>
+                          </VStack>
+                        ))}
+                      </>
+                    ) : null}
+
+                    {openSessions.status === 'success' && openSessions.sessions.length === 0 ? (
+                      <Text type="supporting" color="secondary">
+                        No meetings are open right now. Ask a coach to check you in.
+                      </Text>
+                    ) : null}
+
+                    {openSessions.status === 'error' ? (
+                      <Text type="supporting" color="secondary">
+                        Couldn&apos;t load the list of meetings. Ask a coach to check you in.
+                      </Text>
+                    ) : null}
+                  </VStack>
+                )}
               </VStack>
             ) : null}
           </Card>
