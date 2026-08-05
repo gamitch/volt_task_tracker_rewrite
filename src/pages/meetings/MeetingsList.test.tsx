@@ -14,6 +14,7 @@
  * pattern `CheckinResult.test.tsx` and `theme.smoke.test.tsx` already
  * established.
  */
+import { MemoryRouter } from 'react-router-dom';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -175,14 +176,22 @@ const STUDENT_OR_PARENT_USER: AuthUser = {
   role: 'student',
 };
 
+/** T511 -- `MemoryRouter` is required, not decorative: the coach session row now
+ * renders a real `Link as={RouterLink}` to the live console, and `RouterLink`
+ * throws `Cannot destructure property 'basename'` outside a router context.
+ * Same wrapper `LiveConsole.test.tsx` and `CheckinResult.test.tsx` already use
+ * for the same reason. It is additive -- every pre-existing assertion in this
+ * file is unaffected by having a router in the tree. */
 function renderAsUser(user: AuthUser, props: Parameters<typeof MeetingsList>[0] = {}): void {
   act(() => {
     root.render(
-      <AuthProvider>
-        <LoginAs user={user}>
-          <MeetingsList {...props} />
-        </LoginAs>
-      </AuthProvider>,
+      <MemoryRouter>
+        <AuthProvider>
+          <LoginAs user={user}>
+            <MeetingsList {...props} />
+          </LoginAs>
+        </AuthProvider>
+      </MemoryRouter>,
     );
   });
 }
@@ -2358,5 +2367,169 @@ describe('createMeetings (T096, Trap #3 real onCreateMeetings default)', () => {
 
     const create = makeCreateMeetings(() => client);
     await expect(create(SAMPLE_PAYLOAD)).rejects.toThrow(/No active season/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T511 -- the live console's entry point.
+//
+// `/meetings/live/:sessionId` shipped wired and working, and
+// `routePaths.meetingLiveSession` had ZERO call sites: the only way in was
+// typing the URL. These four criteria pin the entry point that closes that,
+// and each one has a named mutation recorded in
+// `docs/swarm/active/T511-scope.md` §6.
+//
+// Every assertion below targets `sess-live-2`, the SECOND scheduled session,
+// never the first. A link built from the wrong session's id, or rendered only
+// on the first iteration, passes a first-item assertion and fails these.
+// ---------------------------------------------------------------------------
+
+const T511_ROW: CoachMeetingsData = {
+  rows: [
+    {
+      eventId: 'event-t511',
+      title: 'Build Night',
+      locationName: 'Robotics Lab',
+      teamScopeLabel: 'All teams',
+      sessions: [
+        {
+          sessionId: 'sess-live-1',
+          sessionDate: '2026-09-02',
+          startsAt: '2026-09-02T18:00:00.000Z',
+          endsAt: '2026-09-02T20:00:00.000Z',
+          status: 'scheduled',
+          durationHours: 2,
+          expectedCt: 3,
+          attendanceSummary: null,
+          attendeeNames: [],
+        },
+        // The one every T511 assertion targets. Distinct id AND distinct date:
+        // the id makes "points at THIS session" falsifiable, the date makes the
+        // two links' accessible names differ (C4).
+        {
+          sessionId: 'sess-live-2',
+          sessionDate: '2026-09-09',
+          startsAt: '2026-09-09T18:00:00.000Z',
+          endsAt: '2026-09-09T20:00:00.000Z',
+          status: 'scheduled',
+          durationHours: 2,
+          expectedCt: 4,
+          attendanceSummary: null,
+          attendeeNames: [],
+        },
+        {
+          sessionId: 'sess-done',
+          sessionDate: '2026-08-26',
+          startsAt: '2026-08-26T18:00:00.000Z',
+          endsAt: '2026-08-26T20:00:00.000Z',
+          status: 'completed',
+          durationHours: 2,
+          expectedCt: 5,
+          attendanceSummary: { presentCt: 5, lateCt: 0, excusedCt: 0, absentCt: 0 },
+          attendeeNames: ['Ada L.'],
+        },
+        {
+          sessionId: 'sess-scrapped',
+          sessionDate: '2026-08-19',
+          startsAt: '2026-08-19T18:00:00.000Z',
+          endsAt: '2026-08-19T20:00:00.000Z',
+          status: 'canceled',
+          durationHours: 2,
+          expectedCt: 6,
+          attendanceSummary: null,
+          attendeeNames: [],
+        },
+      ],
+    },
+  ],
+  teams: [],
+};
+
+/** Every "Go live" anchor currently in the DOM, as {href, accessibleName}. */
+function goLiveLinks(): { href: string; name: string }[] {
+  return Array.from(document.querySelectorAll('a'))
+    .filter((a) => (a.textContent ?? '').includes('Go live'))
+    .map((a) => ({ href: a.getAttribute('href') ?? '', name: a.textContent ?? '' }));
+}
+
+describe('T511 -- live console entry point (coach session row)', () => {
+  it('C1: a scheduled session links to /meetings/live/<that session’s own id>', async () => {
+    renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(T511_ROW) });
+    await flushMicrotasks();
+    expandRow('Build Night');
+
+    const links = goLiveLinks();
+    expect(links).toHaveLength(2);
+
+    // The SECOND scheduled session, asserted against its own id -- not the
+    // first, and not merely "some /meetings/live/ href exists".
+    const second = links[1];
+    expect(second.href).toBe('/meetings/live/sess-live-2');
+    // And the first is genuinely a different target, so a single shared or
+    // hardcoded href cannot satisfy both.
+    expect(links[0].href).toBe('/meetings/live/sess-live-1');
+  });
+
+  it('C2: completed and canceled sessions get no Go live link', async () => {
+    renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(T511_ROW) });
+    await flushMicrotasks();
+    expandRow('Build Night');
+
+    const hrefs = goLiveLinks().map((l) => l.href);
+    // Both non-scheduled sessions are present in this render (proving the
+    // absence is a status decision, not an absent fixture) ...
+    expect(container.textContent).toContain('Attended: Ada L.');
+    expect(container.textContent).toContain('Canceled');
+    // ... and neither contributes a live-console link.
+    expect(hrefs).not.toContain('/meetings/live/sess-done');
+    expect(hrefs).not.toContain('/meetings/live/sess-scrapped');
+  });
+
+  it('C3: the student/parent view renders no Go live link at all', async () => {
+    // BOTH loaders are supplied, and that is the whole point. An earlier
+    // version of this test passed `loadStudentData` only, and was VACUOUS:
+    // widening the role gate handed the student the coach view, but with no
+    // coach fixture and no expansion no session rows rendered, so "no Go live
+    // links" was trivially true and the mutation left this test green while
+    // turning 23 others red. Supplying the coach fixture too means that if the
+    // gate ever widens, this student really would be handed a rendered coach
+    // row -- which is the thing being guarded against.
+    renderAsUser(STUDENT_OR_PARENT_USER, {
+      resolveStudentId: fakeResolveStudentId('student-fixture'),
+      resolveStudentIsActive: fakeResolveStudentIsActive(true),
+      loadStudentData: () => Promise.resolve({ history: [], participation: null }),
+      loadCoachData: () => Promise.resolve(T511_ROW),
+    });
+    await flushMicrotasks();
+    await flushMicrotasks();
+
+    // Expanding is what makes session rows exist at all. A student has no such
+    // expander, so its absence is the expected path here -- but if the gate
+    // widens, this call succeeds and the links appear.
+    try {
+      expandRow('Build Night');
+    } catch {
+      // No coach expander rendered -- the correct outcome for a student.
+    }
+
+    // The gate is structural: `CoachMeetingSessionRow` only renders under
+    // `CoachMeetingsView`. This asserts that existing gate rather than adding
+    // a second one beside the link that could drift out of step with it.
+    expect(goLiveLinks()).toHaveLength(0);
+    expect(container.textContent).not.toContain('Go live');
+  });
+
+  it('C4: each link’s accessible name is unique within one event', async () => {
+    renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(T511_ROW) });
+    await flushMicrotasks();
+    expandRow('Build Night');
+
+    const names = goLiveLinks().map((l) => l.name);
+    expect(names).toHaveLength(2);
+    // Astryx forbids `label` on a text link, so the visible text IS the
+    // accessible name. Two links both reading "Go live" would be two
+    // indistinguishable targets to a screen reader.
+    expect(new Set(names).size).toBe(2);
+    expect(names[1]).toContain('Sep 9');
   });
 });

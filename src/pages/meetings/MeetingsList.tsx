@@ -493,6 +493,7 @@ import {
   EmptyState,
   Heading,
   HStack,
+  Link,
   List,
   ListItem,
   Skeleton,
@@ -504,7 +505,13 @@ import {
   proportional,
   type TableColumn,
 } from '@astryxdesign/core';
+import { Link as RouterLink } from 'react-router-dom';
 import { useAuth, type Role } from '../../app/guards';
+// T511 -- `routePaths` is IMPORT-ONLY here (the route already exists and needs
+// no change). `router.tsx` loads every page via `lazy(() => import(...))`, so a
+// page importing this back from it is not a cycle -- the same idiom
+// `LiveConsole.tsx` and `Kiosk.tsx` already use.
+import { routePaths } from '../../app/router';
 import { isSupabaseLoaderError } from '../../lib/supabase';
 // T135 (UXC-02/03/07, T130's proven pattern) -- the shared three-tier stat
 // cell (micro-label / value w/ hasTabularNumbers / secondary) extracted by
@@ -1616,16 +1623,52 @@ function CoachMeetingSessionRow({
       <HStack gap={2} vAlign="center">
         <Badge variant={statusBadge.variant} label={statusBadge.label} />
         {session.status === 'scheduled' && (
-          <Button
-            variant="ghost"
-            size="sm"
-            style={MIN_TOUCH_TARGET_STYLE}
-            // Includes the session's own date so a multi-session row's
-            // several Cancel buttons are each unambiguous (both visually
-            // and to assistive tech), unlike a bare "Cancel session".
-            label={`Cancel ${formatWeekdayDate(session.sessionDate)} session`}
-            onClick={() => onCancelRequest(eventId, eventTitle, session)}
-          />
+          <>
+            {/* T511 -- the live console's ONLY entry point in the app.
+                `routePaths.meetingLiveSession` had zero call sites, so
+                `/meetings/live/:sessionId` was reachable only by typing the
+                URL. A `Link`, not a `Button`: this navigates, and
+                `astryx-api.md`'s Link Best Practices reserve Button for
+                actions that do NOT navigate -- so a real anchor is what gives
+                middle-click, ctrl-click and the correct screen-reader
+                announcement. Same shape as `LiveConsole.tsx`'s own outbound
+                "Open kiosk view" link. It sits beside a `Button` and will not
+                look identical to it; that is the disclosed cost of being a
+                real link.
+
+                No time window, deliberately: gating this to "starting soon"
+                would make the console unreachable again outside that window --
+                including the case that matters most, a meeting that started an
+                hour ago and is still running. See `docs/swarm/active/
+                T511-scope.md` §3.
+
+                No role check here either. `CoachMeetingSessionRow` renders only
+                under `CoachMeetingsView`, which is already gated on
+                `isCoachOrAdminView`; adding a second gate gives two that can
+                drift apart. Asserted rather than duplicated (§4). */}
+            <Link
+              as={RouterLink}
+              href={routePaths.meetingLiveSession(session.sessionId)}
+              isStandalone
+            >
+              {/* The date is REQUIRED, not decorative: `astryx-api.md` forbids
+                  `label` on a text link, so this visible text IS the accessible
+                  name -- and a multi-session row would otherwise render several
+                  links all named "Go live". The Cancel button beside it solves
+                  the identical problem the same way. */}
+              {`Go live — ${formatWeekdayDate(session.sessionDate)}`}
+            </Link>
+            <Button
+              variant="ghost"
+              size="sm"
+              style={MIN_TOUCH_TARGET_STYLE}
+              // Includes the session's own date so a multi-session row's
+              // several Cancel buttons are each unambiguous (both visually
+              // and to assistive tech), unlike a bare "Cancel session".
+              label={`Cancel ${formatWeekdayDate(session.sessionDate)} session`}
+              onClick={() => onCancelRequest(eventId, eventTitle, session)}
+            />
+          </>
         )}
       </HStack>
     </HStack>
