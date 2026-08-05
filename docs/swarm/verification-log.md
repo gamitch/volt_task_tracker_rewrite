@@ -10684,3 +10684,68 @@ route T801 took.
 
 `tsc` 0 · `format:check` 0 · `vitest` **81 files / 2051 tests** · **9 SQL suites** green on live
 PG 16.13 · 1 withhold mutation replayed.
+
+---
+
+## T202 — a one-site a11y NIT that was six sites, and two carve-outs that weren't real
+
+### The audit the row asked for contradicted the row
+
+T202 named one site (`HoursTab.tsx`) and deferred everything else. Both deferrals were wrong.
+
+**T191 did not remove the clamp from `ParentHome.tsx`.** Its owner ruling was *"no bar at all"* for a
+**deactivated** child — it swaps the bar for a marker on `!isActive`. The clamp survived at
+`ParentHome.tsx:1281` and still fired for an **active** child with a genuine zero goal. That is the
+page T181 existed to stop fabricating on, so the fabrication outlived two tasks aimed near it.
+
+**The CoachHome carve-out pointed at nothing.** The row deferred four clamps to *"T173/T198's
+territory"* — but `T173`'s row does not contain the words ProgressBar, aria, valuemax or clamp, and
+T198 closed the day before without touching them. Orphaned.
+
+`StudentHome.tsx:1465`'s carve-out **is** real — T184's row does name progressbar — so it is
+deliberately untouched.
+
+### Mechanism read from the component, then confirmed by rendering
+
+```js
+const safeMax = Number.isFinite(max) ? max : 0;                    // :160  passes 0 THROUGH
+const percentage = safeMax > 0 ? clampedValue / safeMax * 100 : 0; // :162  already guards
+"aria-valuemax": isIndeterminate ? undefined : safeMax,            // :212  unconditional
+```
+
+The component never floors `max` at 1 and already handles 0 safely. **The app-level `: 1` was the only
+thing inventing the number**, so passing the real 0 is both correct and safe.
+
+That was a claim worth testing rather than reasoning about, so a throwaway probe rendered the real
+component: `max={1}` announces `aria-valuemax="1"`; `max={0}` announces `"0"` and does not crash.
+Probe deleted after.
+
+### Six clamps, two kinds
+
+| Kind | Sites | Why it fabricated |
+|---|---|---|
+| A real **goal** | `HoursTab:939`, `ParentHome:1281`, `CoachHome:2040`, `CoachHome:2441` | announced a goal of 1 h existing in no data source |
+| A chart **scale** | `CoachHome:1982`, `CoachHome:2012` | with every team at 0 h, announced a scale topping out at 1 h |
+
+The distinction is recorded in-code because they are different questions — one is a data value, the
+other a display device — even though both invent the same number.
+
+### The test asserts the right attribute, and that is the whole point
+
+The new `ParentHome.test.tsx` case pins `aria-valuemax="0"` for a zero-goal **active** child, reusing
+T191's own scoped `hoursVsGoalProgressBars` helper (which exists because a page-wide progressbar count
+would catch `ConsistencyStrip`'s bar too — T191's checker found that vacuity).
+
+It asserts on `aria-valuemax`, **not** the visible text, deliberately: `formatValueLabel` only shapes
+the visible label, so a text-only assertion would pass while assistive tech still heard the invented
+number. **That is precisely how this survived T191** — the visible copy was already honest, and only
+the a11y tree lied.
+
+Mutation: reinstating the clamp turns it RED (`expected '1' to be '0'`). The mutation's landing line
+was printed before running, after this session's earlier lesson that a mutation which silently fails
+to apply is indistinguishable from a test that does not guard.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `eslint` 0 errors · `vitest` **81 files / 2052 tests** (was 2051) · 1
+mutation replayed.
