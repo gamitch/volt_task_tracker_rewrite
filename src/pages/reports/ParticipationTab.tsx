@@ -796,7 +796,15 @@ function buildColumns(): TableColumn<ParticipationDisplayRow>[] {
     { key: 'studentName', header: 'Student', width: proportional(2) },
     {
       key: 'expectedCt',
-      header: 'Expected',
+      // T509/D014 -- was 'Expected'. This column now counts EXPLICIT MARKS,
+      // not eligibility, so the old header named something the number stopped
+      // meaning. The SQL column keeps `expected_ct` (three loaders select it
+      // by name; renaming breaks them at runtime -- see
+      // `20260806000000_met01_explicit_marks.sql`), so this label is where the
+      // correction is visible. D014's mitigation for the inverted failure
+      // direction is that RPT-02 SHOWS these counts -- which only works if the
+      // label is true.
+      header: 'Marked',
       width: proportional(1),
       align: 'end',
       renderCell: (row) => renderCountCell(row.expectedCt),

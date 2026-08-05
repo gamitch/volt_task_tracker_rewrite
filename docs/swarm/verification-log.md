@@ -10505,3 +10505,165 @@ asserts the existing one instead.
 `MemoryRouter` was added to this file's shared `renderAsUser` helper — `RouterLink` throws outside a
 router context. Same wrapper `LiveConsole.test.tsx` and `CheckinResult.test.tsx` already use, and
 additive: all 84 pre-existing tests pass unchanged.
+
+---
+
+## T163 — the row said "0 tests"; it was wrong, and checking found the real gap
+
+### Checked first, because the owner said prior reviews had got this wrong
+
+They were right to say so. T163 read *"`loaders/reports.ts` has 0 tests (729 lines)"*. **All six
+exports were already imported as VALUES and exercised against stubbed clients** by
+`pages/reports/{Participation,Hours,Events}Tab.test.tsx`. The file had no *colocated* test file, which
+is a different claim. (It is also 744 lines now, not 729.)
+
+Had I taken the row at face value, I would have written a from-scratch suite duplicating coverage that
+already existed — and, worse, most likely reproduced the same blind spot, because the obvious thing to
+copy is the existing fake client.
+
+### Measuring found a real gap, narrower and sharper than the row
+
+Five mutations against the live loaders, run through the existing `pages/reports` suite:
+
+| Mutation | Tab suite |
+|---|---|
+| participation: return `[]` instead of built rows | **RED** — caught |
+| events: skip the sessions chain entirely | **RED** — caught |
+| participation: wrong `seasonId` to the metrics query | **GREEN** — missed |
+| hours: wrong `seasonId` to the season-goal query | **GREEN** — missed |
+| events: wrong `seasonId` to the events query | **GREEN** — missed |
+
+**Season scoping was unguarded in all three loaders.** Structural breakage is caught; sending a query
+to the wrong season is not — and that is the failure that would silently show a coach another season's
+numbers.
+
+### Why the existing tests cannot catch it — mechanism, not speculation
+
+Their fake clients build the filter spy inline and throw the handle away:
+
+```ts
+select: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ data, error }) }))
+```
+
+That `.eq` returns identical rows for every argument and is unreachable from the test body, so no
+assertion about what was passed is even expressible. This is the same passthrough-fake trap
+`loaders/coachHome.test.ts` documents (T198) and `t700_updatable_view_guard_assertions.sql` guards
+against in SQL: **a fixture-visibility test passes identically whether or not the filter is applied.**
+
+### What shipped
+
+`src/lib/supabase/loaders/reports.test.ts` — 9 tests that deliberately do **not** re-test mapping or
+row building, since the tab tests already cover those well (proven above). It retains the spy handles
+and pins every query's *filter argument*: season scoping across all three loaders, the shared
+`is_active` students filter, the `events → sessions → (attendance, rsvps)` id chain, and the
+empty-`.in(...)` guards.
+
+### Proof the gap closed, in both directions
+
+| Mutation | Tab suite | New file |
+|---|---|---|
+| participation: wrong `seasonId` | GREEN | **RED** |
+| hours: wrong `seasonId` | GREEN | **RED** |
+| events: wrong `seasonId` | GREEN | **RED** |
+| hours: drop the `is_active` filter | RED | **RED** |
+
+The last row matters: it shows the new file is **additive**, not a replacement — where the tab tests
+already guard something, both catch it.
+
+### The pattern this closes on
+
+Three rows today whose premise did not survive contact: T204 (already fixed), T703 (superseded), and
+now T163 (wrong about coverage entirely). In every case the row pointed somewhere useful — but the
+useful thing was never quite what the row said. **Check the premise, then keep looking; a wrong
+premise often sits next to a real defect.**
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `eslint` 0 errors · `vitest` **81 files / 2047 tests** (was 80 / 2038) ·
+9 mutations replayed.
+
+---
+
+## T509 — MET-01 counts explicit marks, and the premise gate found a live lie
+
+### The gate found the defect is worse than the row says
+
+The row frames T509 as a PRD deviation (D014). Run against live PostgreSQL 16.13 with a two-student
+fixture, the shipped view says something worse:
+
+```
+BEFORE   Fixture Marked     expected_ct=2  present_ct=1  ->  50.0%
+         Fixture Unmarked   expected_ct=2  present_ct=0  ->   0.0%   <-- ZERO attendance rows
+```
+
+That student has **no attendance rows at all**. Nobody marked them, and the app reports they attended
+0% of sessions. **T508 made this the default case**, not an edge case — absences are now written only
+when a coach explicitly opts in, so "no row" is the ordinary state of a student nobody got to.
+
+This is a live user-facing lie about a student's own contribution, which is exactly the class
+constitution item 26 puts at HEAVY.
+
+### Two of the row's instructions were wrong
+
+**The denominator would double-subtract.** The row says *"present+late ÷ (present+late+absent −
+excused)"*. But `attendance.status` is `check (status in ('present','late','excused','absent'))` —
+four **mutually exclusive** values, so `present+late+absent` already excludes excused. Implemented as
+`count(*) − count(*) filter (where status='excused')`, which reads as the rule rather than an
+enumeration that would drift if a fifth status were added.
+
+**"Re-derive T014's MET-01 fixture tests, they encode the old denominator" — measured, and they
+don't.** `supabase/tests/run.sh` passes **identically** with T509 applied and withheld. Its fixture
+marks every student for every session, so eligibility and explicit marks select the same set there.
+The assertions are still correct; they are simply blind to this change. Re-deriving them would have
+produced identical numbers and proved nothing — the same fixture-cannot-tell-the-difference shape
+T703 was filed for. A **diverging** fixture was written instead.
+
+### A decision made, then reversed on measurement
+
+`expected_ct` now counts marks, so the name is wrong. A rename to `marked_ct` was drafted and proven
+to work: `create or replace view` refuses it (Postgres hints at `ALTER VIEW … RENAME COLUMN`), and the
+dependent `v_team_participation` auto-follows by attribute number.
+
+**It was reverted.** `expected_ct` is selected **by name** from this view in three loaders —
+`reports.ts:253`, `checkin.ts:336`, `meetings.ts:425`. Renaming would break all three **at runtime**,
+not merely churn types. I had recommended the rename on an estimate of "migration + one loader + one
+page + tests"; measuring showed that estimate was wrong, and the recommendation with it.
+
+Two near-misses recorded so nobody "finishes the rename": `v_season_attendance_rate` has its **own**
+`expected_ct` (different view), and `MeetingsList.tsx`'s `expectedCt` is an RSVP going-count
+(unrelated).
+
+So the column keeps its name with a catalog comment, and the correction lands where a user sees it:
+**RPT-02's header "Expected" → "Marked"** — which is precisely what D014's mitigation depends on,
+since that mitigation is *"RPT-02 shows the counts"*.
+
+### NULL, not a floor
+
+Both views divided by `greatest(…, 1)`, which fabricated 0% when there was no denominator. Both now
+return NULL, which the UI already renders as an em dash. This also fixes the all-excused student, who
+previously scored a fabricated 0%.
+
+### Proof
+
+`t509_explicit_marks_assertions.sql` + runner, wired into CI's `sql` job (now 12 steps).
+
+| Assertion | With T509 | Migration withheld |
+|---|---|---|
+| A1 unmarked student has no row | PASS | **FAIL** — *"expected 0 rows, got 1 (the pre-T509 0% lie is back)"* |
+| A2 marked student scores 50.0 | PASS | PASS — correctly unchanged |
+| A3 all-excused yields NULL | PASS | **FAIL** — `pct=0.0` |
+| A4 team rollup matches | PASS | **FAIL** — `25.0` |
+| A5 fixture is non-vacuous | PASS | **FAIL** |
+
+A2 staying green is the point: a fully-marked student scores the same either way, so the change is
+surgical rather than "drop rows until the numbers look nice". All 8 pre-existing SQL suites still pass.
+
+### Not done — and it is the owner's step
+
+**The migration is not applied.** Per constitution item 16 the owner applies migrations. Until then
+this is built and proven, not live.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `vitest` **81 files / 2051 tests** · **9 SQL suites** green on live
+PG 16.13 · 1 withhold mutation replayed.

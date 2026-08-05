@@ -246,3 +246,6 @@ jobs:
 
       - name: 'T195 calendar-feed lifecycle assertions'
         run: bash supabase/tests/run_calendar_feed_lifecycle.sh
+
+      - name: 'T509 explicit-marks denominator (MET-01/D014)'
+        run: bash supabase/tests/run_t509_explicit_marks.sh
