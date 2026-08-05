@@ -13,7 +13,39 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
 
-## UPDATE — 2026-08-04 (LATEST, supersedes the W4+W5 section below): **W2 outreach wave — nine tasks merged, T406 in flight, T165 is the last one**
+## UPDATE — 2026-08-05 (LATEST): **W3 re-opened by live testing. `WORKFLOWS.md`'s summary table is the authority for what is open.**
+
+**Read `WORKFLOWS.md`'s summary table before anything below this line.** Every prose section in
+this file and in `WORKFLOWS.md` is historical reasoning; the table is the only current status.
+
+**The owner ran a real meeting on 2026-08-05 and found four defects.** Three landed on W3
+(**T508, T510, T511**) and one on W4 (**T509**), re-opening W3 from 0 rows to 5.
+
+**T508 is the urgent one — it is writing false records into production now.** Ending a meeting
+backfills an `absent` row for every unmarked student, and the roster it uses selects *every active
+student with no team filter*, so a P3-only meeting wrote 17 absence rows for students who were
+never expected. Owner's ruling: *"only count 'absent' if i click the pill."* **W4's T509 is inert
+until T508 lands — sequence T508 first, across machines.**
+
+**W1 is CLOSED at 0 rows.** T321/T161/T320/T403 merged in PR #28; **T400 and T502 shipped in PR
+#85** (the live-session picker for a student who cannot scan, and the attendance paging fix so a
+`{data: null, error: null}` page can no longer read as end-of-data). **W2 and W6 are also closed.**
+
+**Two rows below this line are known stale and are NOT mine to edit** — flagged for whoever owns
+them: **T175** still reads *"not yet packeted"* though it merged as PR #91 (`format:check` is in CI
+now, scoped to `src/**` — the `docs/swarm/*.md` files still fail prettier and that remains
+pre-existing and out of scope), and **W10's summary cell** still advertises T175 as its cheapest
+open row.
+
+**The habit that keeps paying here:** verify a row's premise against the code before packeting it.
+One recent session found five ledger rows describing a repo state that no longer existed, and two
+whose stated scope was simply wrong. Read files with `git show origin/main:<path>` — the working
+tree goes stale within the hour, and a session that read a tree 13 commits behind reported a
+workflow's status backwards.
+
+---
+
+## UPDATE — 2026-08-04 (supersedes the W4+W5 section below): **W2 outreach wave — nine tasks merged, T406 in flight, T165 is the last one**
 
 **W2's queue is nearly done.** Merged this session, each with a ledger row and a verification-log
 entry (item 24): **T330, T401, T402, T174, T190, T306, T325, T152, T300** — plus **T301** (PR open at
@@ -62,7 +94,7 @@ SUPERSEDED** by W4's T702.
 
 ---
 
-## UPDATE — 2026-08-04 (LATEST): W4+W5 wave — **T205, T702, T322 merged. TWO MIGRATIONS AWAIT THE OWNER'S CUTOVER.**
+## UPDATE — 2026-08-04: W4+W5 wave — **T205, T702, T322 merged. TWO MIGRATIONS AWAIT THE OWNER'S CUTOVER.**
 
 **Three tasks shipped, one closed unshipped, five owner rulings taken.** Gates at the last merge:
 `tsc` **0** · `vite build` **0** · prettier clean · eslint **0 errors / 364 warnings** ·
@@ -140,7 +172,7 @@ structurally frozen at `0.0` yet the KPI card renders it — **needs an owner ru
 
 ---
 
-## UPDATE — 2026-08-04 (LATEST): W3-A wave COMPLETE (T197, T160, T162). **Four "0 tests" ledger rows were measured wrong.**
+## UPDATE — 2026-08-04: W3-A wave COMPLETE (T197, T160, T162). **Four "0 tests" ledger rows were measured wrong.**
 
 **All three W3-A rows shipped.** Gates: `tsc` **0** · eslint **0 errors** · prettier clean ·
 vitest **78 files / 1949 tests, exit 0**. Full detail in `active/W3A-handoff.md`; decisions the
@@ -1233,7 +1265,7 @@ the backlog grows. These five are the only path to "finished".
 | Row | Why |
 |---|---|
 | T156 | the loader throws away the real Postgres error. This is why diagnosing the dashboard bug needed DevTools and a screenshot. Makes every future bug cheaper. |
-| T175 | add `format:check` to CI — minutes of work, closes a silent-drift class |
+| ~~T175~~ | **Done — shipped as PR #91**, `format:check` is a CI step now. |
 
 ## CLOSE — process artifacts, no user impact (13)
 
@@ -1243,10 +1275,10 @@ the backlog grows. These five are the only path to "finished".
 | T171 | a true property that no test pins. The code is correct. |
 | T190 | fixture id-space rekeying so *future* tests are discriminating by construction |
 | T174 | `FIXTURE_RSVPS` id-space confusion — fixture-only |
-| T186 | a view column's comment says display-only. A comment. |
+| ~~T186~~ | **Superseded — MERGED 2026-08-04, not closed.** The comment was corrected and the surviving display-only read recorded. |
 | T160 | a type is still called `FixtureTeam`. Cosmetic. |
 | T182 | delete `StudentHomeSlot.tsx` — dead code hurting nobody |
-| T187 | dual-team narrowing, deliberate and disclosed. **Re-open when a student actually joins two teams.** |
+| ~~T187~~ | **Superseded — MERGED 2026-08-04, not closed.** Scoping now reads ACTIVE `student_teams` memberships, so it no longer waits on a student joining two teams. |
 | T192 | per-card full-table reads — fine at one team, one season (item 25) |
 | T168 | the placeholder sweep. **The audits are done**; both families were found and closed. |
 | T172 | the mechanism fix. T151 already made the dialogs compiler-enforced and every known instance is fixed; this now only prevents hypothetical future ones. |

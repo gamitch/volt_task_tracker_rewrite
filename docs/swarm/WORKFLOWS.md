@@ -56,11 +56,11 @@ Tier is the **heaviest** item in the workflow, per constitution item 26.
 
 | # | Workflow | Open rows | Tier | State | Safe to run beside |
 |---|---|---:|---|---|---|
-| **W1** | **Check in** — student arrives and gets counted | **0** | HEAVY | **CLOSED 2026-08-04** — T321/T161/T320/T403 merged, T400 shipped. | W4, W6, W7, W8 |
+| **W1** | **Check in** — student arrives and gets counted | **0** | HEAVY | **CLOSED 2026-08-04** — T321/T161/T320/T403 merged, **T400 + T502 shipped (PR #85)**. | W4, W6, W7, W8 |
 | **W2** | **Run an outreach event** — create → RSVP → attend → complete | **0** | HEAVY | **CLOSED 2026-08-04** — 12 rows merged (T330, T401, T402, T174, T190, T306, T325, T152, T300, T301, T406, T165); T501/T505 closed won't-fix. | W1, W3, W6, W7 |
 | **W3** | **Run a meeting** — schedule → attendance → participation % | **5** | HEAVY | **RE-OPENED 2026-08-05 by live testing.** T196 shipped 2026-08-04; the owner then ran a real meeting and found four defects. **T508 is writing false data now.** | W2, W4, W6, W7 |
 | **W4** | **Hours & goal accounting** — the numbers users are shown | **9** | HEAVY | T205 + T322 applied to production 2026-08-04. **T509 added 2026-08-05 (MET-01 marks-only, D014) — BLOCKED on W3's T508.** | W1, W3, W6, W7 |
-| **W5** | **Home dashboards** — student/parent/coach landing state | **10** | STANDARD | T702/T187/T198 merged; T801-T803 filed from their closures; T156 parked | W6, W7, W8 |
+| **W5** | **Home dashboards** — student/parent/coach landing state | **8** | STANDARD | T186/T187/T198 merged; **T801 closed**; **T803 in flight (PR #93)**; T802 open; T156 parked | W6, W7, W8 |
 | **W6** | **Calendar & subscribe** | **0** | — | **CLOSED** — merged, database deployed | everything |
 | **W7** | **Roster & invites** | 5 | STANDARD | Working. T064 is a human gate; **T167's premise is UNVERIFIED — measure before packeting** | everything |
 | **W8** | **Email & notifications** | 2 | — | **Blocked on owner** | everything |
@@ -88,7 +88,7 @@ ships.** While `backfillAbsences` writes a row for every eligible student, "expl
 Sequence T508 first, across machines.
 
 **Rows filed after this document was written** are not yet in the sections below. By surface:
-**W3** — T508, T510, T511, T601, T602 · **W4** — T509 · **W5** — T801, T802, T803 · **unowned** — T507.
+**W3** — T508, T510, T511, T601, T602 · **W4** — T509 · **W5** — T802 *(T801 closed; T803 in flight, PR #93)* · **unowned** — T507.
 
 **Block-vs-surface mismatch, deliberate:** T507-T511 carry **W2's** number block (T500-599) because W2's
 orchestrator filed them, but T508/T510/T511 sit on **W3's** surface and T509 on **W4's**. The block is a
@@ -104,7 +104,7 @@ T500s.
 
 > A student walks in, scans a QR code (or types a short code), and their attendance is recorded.
 
-**This is the workflow that decides whether the app is launchable.** It does not work today.
+~~**This is the workflow that decides whether the app is launchable.** It does not work today.~~ **It works.** That sentence was true when this section was written and false from 2026-08-04; it is struck rather than deleted because it is the reason W1 was sequenced first.
 
 | Row | What | Tier |
 |---|---|---|
@@ -135,12 +135,7 @@ this grant obliges more process, not less.
 > `v_student_participation` were verified to return identical results before and after the
 > migration, without either file being edited. That is the pattern for any future change here.
 
-**~~Start with T321.~~ T321 shipped in PR #28** — the manual short-code form is live. **W1's only
-genuinely open row is T400** (a student who cannot scan has no session id, so the short code alone
-cannot check them in; owner-ruled option (a), un-sequenced from T196's wave on 2026-08-04). **T161 is still open and still worth
-pairing with any further `LiveConsole` work** — making that console real without tests on its loader
-is what produced the fixture shell in the first place, and T403 shipped the real console without
-closing T161.
+**~~Start with T321.~~ T321 shipped in PR #28** — the manual short-code form is live. ~~**W1's only genuinely open row is T400**~~ — **T400 shipped 2026-08-04 (PR #85)**: `/checkin` now lists the currently-open sessions so a student who cannot scan taps the meeting they are at, which supplies the session id the short code is meaningless without. **T502 shipped in the same PR** — the attendance paging loop no longer reads a `{data: null, error: null}` page as end-of-data, so a paged read cannot come back silently short. ~~**T161 is still open**~~ — **T161 merged in PR #28**; `checkin.test.ts` runs 20 tests on `main`. The pairing advice it carried still holds in principle: making a console real without tests on its loader is what produced the fixture shell in the first place.
 
 **Overlap warning — DISCHARGED 2026-08-03.** This used to read *"whoever takes W1 should tell
 whoever has W3 when `LiveConsole` becomes real."* It is real (T403), W3 has been told
@@ -251,7 +246,6 @@ lies to a user about their own data. Do not let a small-looking diff talk you ou
 | **T188** | Two different "confirmed hours" numbers exist and can legitimately disagree | HEAVY |
 | **T308** | *(metric views + `MarkDayCompleteDialog`)* | HEAVY |
 | **T201** | A deactivated student's historical hours sit in `v_student_hours` with no `is_active` filter | HEAVY |
-| **T186** | `v_student_goal_projection.team_id` is documented display-only, but a live route scopes off it | HEAVY |
 | **T204** | `loaders/students.ts`'s RLS-reasoning comment cites a claim about view mechanics that is false | FAST |
 | **T205** | `v_leaderboard_students` is readable by the unauthenticated `anon` key *(owner ruled — check the row)* | HEAVY |
 | **T202** | Zero-goal `ProgressBar`s announce a fabricated `aria-valuemax` to assistive tech | STANDARD |
@@ -277,10 +271,14 @@ Give both to one machine, or split strictly: W4 takes the SQL, W5 takes the `.ts
 > **STATUS 2026-08-04.** **T702** merged (adult-volunteer season totals dropped from RPT-03, PRD
 > amended by owner ruling). **T198 is RULED** — season-wide, no per-coach team concept — which also
 > releases the `CoachHomeData` bundle parked since T173. **T156 is PARKED** by owner ruling on
-> concurrency risk, with unpark conditions on its row. **T187 remains the highest-value open row
-> here** — the only one putting a wrong value in front of a real user today — and note its ledger
-> text mis-states the mechanism: `resolveStudentScope` reads `v_student_goal_projection.team_id`,
-> not `students.team_id` directly, which makes T186 and T187 one mechanism seen from two sides.
+> concurrency risk, with unpark conditions on its row. **T186, T187 and T198 are all MERGED**
+> (2026-08-04), so none of them is an open row here any more. T187 moved `StudentHome`'s scoping onto
+> ACTIVE `student_teams` memberships; T186 recorded the one display-only `team_id` read that
+> survives. They were one mechanism seen from two sides — `resolveStudentScope` reads
+> `v_student_goal_projection.team_id`, not `students.team_id` directly. T198 shipped `CoachHome`
+> season-wide: six real queries, no per-coach team concept. Residuals from those closures: **T801
+> closed**, **T803 in flight (PR #93)**, **T802 open**, and **T804 WITHDRAWN as an incorrect filing**
+> — the view it named had already been migrated onto ACTIVE memberships; see its ledger row.
 
 
 > What a student, parent, or coach sees when they land.
@@ -291,9 +289,7 @@ declared closed. Most of what remains is residue plus real loader gaps.
 | Row | What | Tier |
 |---|---|---|
 | **T199** | `StudentHome`'s `events`/`sessions`/`rsvps`/`participation` still have **no real loader** | STANDARD |
-| **T187** | `StudentHome`'s team scoping reads the legacy single-team column — a dual-member student sees one team | HEAVY |
 | **T192** | `ParentHome` issues unfiltered full-table reads once per child card | STANDARD |
-| **T198** | Does `CoachHome` need a real per-coach team concept? *(open question)* | STANDARD |
 | **T200** | `students.test.ts`'s row-not-found test asserts a bare `rejects.toThrow()` | FAST |
 | **T182** | `StudentHomeSlot.tsx` is unreachable, untested, consciously superseded | FAST |
 | **T166** | `loaders/dashboard.ts` has 0 tests — deliberately deferred | STANDARD |
@@ -346,7 +342,7 @@ The workflow that actually works. Low risk, good throughput.
 |---|---|---|
 | **T159** | `StudentDialog.season` was deferred pending T091; T091 landed and nothing followed up | STANDARD |
 | **T326** | Roster actions begin ~560px offscreen on mobile | STANDARD |
-| **T167** | Ten remaining loaders have 0 tests | STANDARD |
+| **T167** | ~~Ten remaining loaders have 0 tests~~ — **PREMISE PARTLY FALSE, measure before packeting.** Same bad audit (`2ec47d8`) as T161/T162/T163/T321: it counted *files named* `<module>.test.ts`, not tests *of* a module. `attendance.ts` has 12 tests and `students.ts` 23. | STANDARD |
 | **T168** | The placeholder-default sweep covered 7 sites; `src/pages/**` and `src/components/**` are unswept | STANDARD |
 | **T064** | **Owner-only** — ~20 student email addresses; the migration creates no accounts, so the roster is correct and entirely unlinked | — |
 

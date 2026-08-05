@@ -103,16 +103,19 @@
  *    (`AuthUser` carries no team field, no table links a staff profile to a
  *    team, and every `staff_all` RLS policy grants program-wide access).
  *
- *    All six are now real, SEASON-scoped queries above. Two consequences of
- *    the ruling that this file does not hide:
+ *    FIVE of the six are real, SEASON-scoped queries above. Two consequences
+ *    of the ruling that this file does not hide:
  *
- *    (a) `teamParticipation` is GONE, replaced by `seasonParticipation` --
- *        `v_team_participation` is per-team with no season-grain rollup, so
- *        a season-wide figure comes from `v_season_attendance_rate`
- *        instead. See `CoachHomeSeasonParticipationDbRow`'s own doc for the
- *        two disclosed consequences (a slightly different denominator, and
- *        a duplicate of a figure already rendered elsewhere on the page --
- *        filed as T803).
+ *    (a) `teamParticipation` is GONE, and so is the `seasonParticipation`
+ *        that briefly replaced it. **T803 removed both** (owner: *"drop the
+ *        duplicate tile"*). T198 had pointed the tile at
+ *        `v_season_attendance_rate`, which `loaders/dashboard.ts`'s
+ *        `queryAttendanceRate` ALREADY reads for the same page's T124
+ *        analytics section -- one metric, fetched twice, rendered in two
+ *        tiles under two independent load states. This file no longer
+ *        queries that view at all; the figure still reaches `CoachHome` via
+ *        `DashboardData.attendanceRate`, unchanged. Nothing is lost but the
+ *        second round trip.
  *
  *    (b) `PLACEHOLDER_CURRENT_TEAM_ID` no longer filters anything on this
  *        page. `CoachHome.tsx`'s own team-scope predicate and the six
@@ -145,7 +148,6 @@ import type {
   HomeStudentRow,
   HomeTeamRow,
   LoadCoachHomeDataFn,
-  SeasonParticipationMetric,
   SeasonSetupStatus,
   StudentHoursMetric,
 } from '../../../pages/home/CoachHome';
@@ -166,7 +168,7 @@ interface CoachHomeTeamDbRow {
  * Column sets are verbatim against the real schema, not re-derived:
  * `events` (`20260717000000_scheduling_attendance.sql:38-50`),
  * `event_sessions` (`:53-63`), `rsvps` (`:67+`), `attendance`, and the two
- * views `v_student_hours` / `v_season_attendance_rate`.
+ * view `v_student_hours`.
  *
  * The `events` -> `event_sessions` -> (`rsvps`, `attendance`) chain is the
  * same sequential-dependency shape `dashboard.ts`'s `loadActivityFeedSource`
@@ -211,32 +213,6 @@ interface CoachHomeStudentHoursDbRow {
   student_id: string;
   season_id: string;
   confirmed_hours: number;
-}
-
-/**
- * `v_season_attendance_rate` (`20260723000000_kpi_views.sql`) -- the
- * SEASON-grain participation figure that replaces T173's per-team
- * `v_team_participation` read under the season-wide ruling.
- *
- * **Two disclosed consequences of that swap, neither hidden:**
- *
- * 1. **The number changes meaning slightly.** `v_team_participation`'s
- *    denominator EXCLUDES excused absences (`greatest(sum(expected_ct) -
- *    sum(excused_ct), 1)`); `v_season_attendance_rate`'s does NOT
- *    (`greatest(count(*), 1)`). So the season figure is generally lower than
- *    a team figure over the same data. This is the honest season-wide
- *    metric that already exists, not a new one invented here.
- *
- * 2. **This exact view is already loaded on this page**, by
- *    `dashboard.ts`'s `queryAttendanceRate`, and already rendered in the
- *    T124 analytics section (`CoachHome.tsx:2603-2604`). The primary KPI
- *    tile and that analytics tile therefore now show the SAME metric from
- *    two independent load states. Filed as T803 rather than resolved here:
- *    de-duplicating them is a UI decision, not a data-wiring one.
- */
-interface CoachHomeSeasonParticipationDbRow {
-  season_id: string;
-  attendance_rate_pct: number;
 }
 
 interface CoachHomeStudentDbRow {
@@ -304,12 +280,6 @@ function mapCoachHomeStudentHours(row: CoachHomeStudentHoursDbRow): StudentHours
     // Verbatim passthrough (constitution item 3) -- already summed in SQL.
     confirmedHours: row.confirmed_hours,
   };
-}
-
-function mapCoachHomeSeasonParticipation(
-  row: CoachHomeSeasonParticipationDbRow,
-): SeasonParticipationMetric {
-  return { seasonId: row.season_id, participationPct: row.attendance_rate_pct };
 }
 
 async function queryCoachHomeTeams(
@@ -386,21 +356,6 @@ async function queryCoachHomeStudentHours(
   };
 }
 
-async function queryCoachHomeSeasonParticipation(
-  client: SupabaseClient,
-  seasonId: string,
-): Promise<LoaderQueryResult<CoachHomeSeasonParticipationDbRow>> {
-  const result = await client
-    .from('v_season_attendance_rate')
-    .select('season_id, attendance_rate_pct')
-    .eq('season_id', seasonId)
-    .maybeSingle();
-  return {
-    data: (result.data as CoachHomeSeasonParticipationDbRow | null) ?? null,
-    error: result.error,
-  };
-}
-
 /**
  * `getClient` is injectable (defaults to the shared singleton), the same
  * convention every prior loader module in this directory already
@@ -432,23 +387,17 @@ export function makeLoadCoachHomeData(
     queryCoachHomeStudentHours,
     getClient,
   );
-  const loadSeasonParticipation = createLoader<string, CoachHomeSeasonParticipationDbRow>(
-    queryCoachHomeSeasonParticipation,
-    getClient,
-  );
 
   return async (seasonId: string): Promise<CoachHomeData> => {
     // Independent reads issued together; the events -> sessions -> (rsvps,
     // attendance) chain below is sequential because each stage needs the
     // previous stage's ids (`dashboard.ts` module doc #2's own shape).
-    const [teamRows, studentRows, eventRows, studentHoursRows, seasonParticipationRow] =
-      await Promise.all([
-        loadTeams(),
-        loadStudents(),
-        loadEvents(seasonId),
-        loadStudentHours(seasonId),
-        loadSeasonParticipation(seasonId),
-      ]);
+    const [teamRows, studentRows, eventRows, studentHoursRows] = await Promise.all([
+      loadTeams(),
+      loadStudents(),
+      loadEvents(seasonId),
+      loadStudentHours(seasonId),
+    ]);
 
     const events = (eventRows ?? []).map(mapCoachHomeEvent);
     const eventIds = events.map((event) => event.id);
@@ -478,10 +427,6 @@ export function makeLoadCoachHomeData(
       sessions,
       rsvps: (rsvpRows ?? []).map(mapCoachHomeRsvp),
       attendance: (attendanceRows ?? []).map(mapCoachHomeAttendance),
-      seasonParticipation:
-        seasonParticipationRow === null
-          ? null
-          : mapCoachHomeSeasonParticipation(seasonParticipationRow),
       studentHours: (studentHoursRows ?? []).map(mapCoachHomeStudentHours),
       seasonSetupStatus,
     };

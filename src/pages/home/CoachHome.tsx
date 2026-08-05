@@ -711,23 +711,11 @@ export interface HomeAttendanceRow {
   status: AttendanceStatus;
 }
 
-/**
- * T198 -- was `TeamParticipationMetric`, a verbatim rename of
- * `v_team_participation`'s three columns. The owner's season-wide ruling
- * removes the per-team grain this page had no way to scope (no coach->team
- * link exists), so this is now a verbatim rename of
- * `v_season_attendance_rate`'s season-grain columns and carries NO `teamId`.
- *
- * `participationPct` maps `attendance_rate_pct`. The two views compute
- * slightly different things -- `v_team_participation` excludes excused
- * absences from its denominator and this one does not -- which is disclosed
- * rather than smoothed over; see `loaders/coachHome.ts`'s own row doc.
- * Never recomputed in this file.
- */
-export interface SeasonParticipationMetric {
-  seasonId: string;
-  participationPct: number;
-}
+/* T803 -- `SeasonParticipationMetric` is DELETED along with the tile that
+ * was its only consumer. The season attendance rate still reaches this page,
+ * unchanged, via `DashboardData.attendanceRate` (`loaders/dashboard.ts`'s
+ * `queryAttendanceRate`, same `v_season_attendance_rate` view) -- so no
+ * figure is lost, only a second, redundant path to it. */
 
 /** Verbatim camelCase rename of `v_student_hours`'s three real columns
  * (module doc #4, feeds MET-04). `confirmedHours` is never recomputed from
@@ -767,7 +755,6 @@ export interface CoachHomeData {
   sessions: readonly HomeSessionRow[];
   rsvps: readonly HomeRsvpRow[];
   attendance: readonly HomeAttendanceRow[];
-  seasonParticipation: SeasonParticipationMetric | null;
   studentHours: readonly StudentHoursMetric[];
   seasonSetupStatus: SeasonSetupStatus;
 }
@@ -1012,10 +999,6 @@ const FIXTURE_ATTENDANCE: readonly HomeAttendanceRow[] = [
 
 /** Pre-computed `v_team_participation` row (module doc #4) -- never
  * recomputed by this file. */
-const FIXTURE_SEASON_PARTICIPATION: readonly SeasonParticipationMetric[] = [
-  { seasonId: PLACEHOLDER_SEASON_ID, participationPct: 82.4 },
-];
-
 /** Pre-computed `v_student_hours` rows (module doc #4) -- never recomputed
  * by this file. Jordan deliberately has no row (no completed
  * counts_volunteer_hours sessions yet), the same "absence, not a fabricated
@@ -1523,8 +1506,6 @@ export async function defaultLoadCoachHomeData(seasonId: string): Promise<CoachH
     sessions: FIXTURE_SESSIONS,
     rsvps: FIXTURE_RSVPS,
     attendance: FIXTURE_ATTENDANCE,
-    seasonParticipation:
-      FIXTURE_SEASON_PARTICIPATION.find((row) => row.seasonId === seasonId) ?? null,
     studentHours: FIXTURE_STUDENT_HOURS.filter((row) => row.seasonId === seasonId),
     seasonSetupStatus: FIXTURE_SEASON_SETUP_STATUS,
   };
@@ -2337,7 +2318,6 @@ function CoachHomeContent({
 
   const data = loadState.data;
 
-  const seasonParticipation = data.seasonParticipation;
   const goalHours = preGoalHours;
   const confirmedHours = preConfirmedHours;
   const lastMeetingSummary = buildLastCompletedMeetingSummary(
@@ -2442,22 +2422,16 @@ function CoachHomeContent({
               )}
 
               <Grid columns={{ minWidth: 240, repeat: 'fit' }} gap={4}>
-                {/* T198 -- relabelled from "Team participation". The figure
-                    is season-wide (owner ruling), so the old label named a
-                    scope the number never had once the placeholder team
-                    stopped matching anything. */}
-                <KpiCard
-                  label="Participation"
-                  value={
-                    seasonParticipation !== null ? `${seasonParticipation.participationPct}%` : '—'
-                  }
-                  secondary={
-                    <Text type="supporting" color="secondary">
-                      Season to date
-                    </Text>
-                  }
-                />
-
+                {/* T803 -- the "Participation" tile that stood here is GONE.
+                    T198 pointed it at `v_season_attendance_rate`, which the
+                    T124 analytics section below ALREADY renders as "Attendance
+                    rate" from its own independent load state -- one metric, two
+                    tiles, able to disagree on screen while one was still
+                    loading. The analytics tile is the survivor: it predates
+                    this one and its "Of active roster per session" secondary
+                    describes the view's actual denominator, which "Season to
+                    date" did not. Nothing replaces this slot; the grid is
+                    `repeat: 'fit'` and simply reflows to three. */}
                 <KpiCard label="Hours vs. team goal" value={`${hoursPercent}%`}>
                   <ProgressBar
                     label="Hours vs. team goal"

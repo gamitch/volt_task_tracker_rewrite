@@ -9870,6 +9870,13 @@ Every migration then applied to a fresh database. **Two were skipped and the ski
 swallowed:** `20260719000000_cron.sql` (needs `pg_cron`) and `20260720000001_avatar_storage.sql`
 (needs `storage.buckets`) — both Supabase-managed, and neither defines or reads a dashboard view.
 
+> **CORRECTION, same day.** The second skip was my harness's fault, not a real limitation. This repo
+> already ships `supabase/tests/calendar_feed_platform_stub.sql`, which every sibling runner uses and
+> which provides `storage.buckets`; I hand-rolled a bootstrap instead of finding it. With the repo's
+> own stub, **21 of 22 migrations apply and only `_cron` is skipped.** Measured by running the new
+> `run_t801_dashboard_views_comments.sh` (added below) — the assertions pass identically either way,
+> so no conclusion above changes, but "two skipped" overstated the gap.
+
 | # | Mutation | Result |
 |---|---|---|
 | 1 | Drop one view's comment | **RED** — A1 names `v_season_attendance_rate` |
@@ -9884,6 +9891,19 @@ comment exists.
 
 **The "no view definition changes" claim is measured.** An `md5` over
 `pg_get_viewdef` for every public view is byte-identical before and after applying the migration.
+
+### A gap this task shipped with, found afterwards and fixed
+
+**The assertions file landed without a runner.** Every sibling assertion set in `supabase/tests/` has
+a `run_*.sh` — `run_t205_anon_grant.sh`, `run_t503_widen_rsvp_read.sh`,
+`run_volunteer_hours_outreach_only.sh`, `run_calendar_feed_lifecycle.sh` — and T801's did not. Since
+**nothing in CI runs any of them** (T701 covers the `tests/rls/run.sh` half of that problem), a
+missing runner meant the file could only be executed by someone reconstructing the harness by hand,
+which is exactly what I had done rather than looking for the convention.
+
+`supabase/tests/run_t801_dashboard_views_comments.sh` now exists, mirrors
+`run_volunteer_hours_outreach_only.sh` line for line, and was run end-to-end before commit: all four
+assertions PASS.
 
 ### The assertions file departs from its own precedent, deliberately
 
@@ -10013,3 +10033,71 @@ narrower than it sounded.
 **Gates:** tsc exit 0 · eslint 0 errors (5 pre-existing `react-refresh` warnings) · prettier clean ·
 vitest **80 files / 2027 tests, exit 0** (2024 → 2027, +3). Mutations ran in a throwaway worktree
 (item 23); shared tree verified clean with `git diff --quiet` after each.
+
+---
+
+## T803 — the duplicate participation tile, dropped along with the query behind it
+
+**Tier: STANDARD.** Owner ruled *"drop the duplicate tile"*. The question the ruling left open was
+**which** of the two.
+
+### Which tile survived, and why that way round
+
+Both read `v_season_attendance_rate` for the same season. The `Participation` tile in the primary KPI
+grid is the one T198 introduced; the `Attendance rate` tile in the T124 analytics section predates it
+and reaches the page through a different loader (`loaders/dashboard.ts`'s `queryAttendanceRate`).
+
+The newer one goes. Two reasons beyond seniority: its secondary read **"Season to date"**, while the
+survivor's reads **"Of active roster per session"** — which is what that view's denominator actually
+is. Keeping the tile with the more accurate label was the better of the two outcomes, not just the
+older one.
+
+**No figure is lost.** The same number still renders, from the same view, in the same page.
+
+### The dead query went with it
+
+`seasonParticipation`, `SeasonParticipationMetric`, its fixture, mapper, DB-row type and the
+`v_season_attendance_rate` read are all deleted from `loaders/coachHome.ts`. Removing the tile alone
+would have left a real network round trip feeding nothing — **the exact waste T198's own closure
+warned about** when it argued the queries and the de-scoping had to ship together. The KPI grid is
+`repeat: 'fit'`, so it reflows from four tiles to three; nothing fills the slot.
+
+### Guarded by a negative test, because this regression is invisible
+
+Re-adding the query would look **identical on screen** — the surviving tile renders the same number —
+and would surface only as a silent extra request. So the guard is an absence assertion:
+
+> `it('never queries v_season_attendance_rate -- that read belongs to loaders/dashboard.ts alone')`
+
+**Mutation replayed:** adding the read back into the loader's `Promise.all` reddens exactly that test
+and nothing else.
+
+### Two assertions that were passing for the wrong reason
+
+Found while updating the tile's neighbours, unrelated to the ruling, fixed because leaving them would
+be leaving known-bad coverage:
+
+- `expect(container.textContent).toContain('75%')`, commented *"last-meeting attendance rate KPI
+  value"*, was matching the **ProgressBar's own milestone labels** (`25%50%75%100%`). The real value
+  has been **60%** since T198 widened the roster season-wide — so this assertion would have passed
+  with the KPI card entirely absent.
+- `expect(container.textContent).toContain('2')` matched any digit `2` anywhere on the page.
+
+Both now use the file's existing `kpiCardValue()` helper against the specific card, so they assert
+`'60%'` and `'4'` rather than "these characters appear somewhere".
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `vitest` **80 files / 2010 tests** · `vite build` 0.
+
+### Noted while verifying, not fixed here
+
+**CI does not run `supabase/tests/*.sql`.** `.github/workflows/ci.yml` runs typecheck, lint, vitest,
+build and a bundle-size gate only. T801's assertions, and the pre-existing t205/t322/t503 ones, have
+never executed in CI — the only thing that has run them is a human on a scratch cluster. A green
+check does not cover the SQL layer today.
+
+**`docs/swarm/WORKFLOWS.md` has drifted from the ledger it summarizes.** It still lists T186, T187,
+T198 as open rows and T801 as merely "filed", all of which are merged/closed in the ledger on `main`.
+Its refresh (PR #89) landed *after* those merges, so the information was available. Reported to the
+owner rather than fixed inside this task.

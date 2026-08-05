@@ -1020,10 +1020,6 @@ describe('defaultLoadCoachHomeData (shipped fixture composition, against FIXTURE
     data = await defaultLoadCoachHomeData('season-placeholder-current');
   });
 
-  it('season participation is read verbatim from the fixture (no arithmetic)', () => {
-    expect(data.seasonParticipation?.participationPct).toBe(82.4);
-  });
-
   it('hours vs goal season-wide: 12 confirmed / 48 goal = 25%, crossing only the 25% milestone', () => {
     const goalHours = sumGoalHours(data.students, data.defaultGoalHours);
     const confirmedHours = sumConfirmedHours(data.students, data.studentHours);
@@ -1104,18 +1100,28 @@ describe('<CoachHome /> DES-12 states', () => {
     expect(container.textContent).toContain("Couldn't load Home");
   });
 
-  it('populated state renders the four primary KPI labels and Next up', async () => {
+  it('populated state renders the three primary KPI labels and Next up', async () => {
     window.localStorage.clear();
     renderAsUser(COACH_USER, { loadData: fixtureLoadData, nowFn: () => FIXTURE_REFERENCE_NOW });
     await flushMicrotasks();
 
-    expect(container.textContent).toContain('Participation');
+    // T803 -- was four labels; the "Participation" tile is gone (it duplicated
+    // the T124 analytics section's "Attendance rate", same view, same season).
+    expect(container.textContent).not.toContain('Participation');
     expect(container.textContent).toContain('Hours vs. team goal');
     expect(container.textContent).toContain('Last meeting attendance');
     expect(container.textContent).toContain('Events in next 7 days');
-    expect(container.textContent).toContain('82.4%'); // team participation KPI value
-    expect(container.textContent).toContain('75%'); // last-meeting attendance rate KPI value
-    expect(container.textContent).toContain('2'); // events in next 7 days KPI value
+    // T803 -- the `82.4%` assertion went with the Participation tile.
+    //
+    // The two below were rewritten from `toContain` to `kpiCardValue` because
+    // they were passing for the wrong reason: `toContain('75%')` was labelled
+    // "last-meeting attendance rate" but matched the ProgressBar's own
+    // milestone labels (`25%50%75%100%`) -- the real value is 60% since T198
+    // widened the roster season-wide, so that assertion would have passed
+    // even with the KPI absent. `toContain('2')` matched any digit 2 anywhere
+    // on the page. Both now read the specific card.
+    expect(kpiCardValue('Last meeting attendance')).toBe('60%');
+    expect(kpiCardValue('Events in next 7 days')).toBe('4');
 
     expect(container.textContent).toContain('Next up');
     expect(container.textContent).toContain('Community Food Bank Sort');
@@ -1268,7 +1274,7 @@ describe('<CoachHome /> T155 -- season-status literals (criterion 3)', () => {
     // Retry re-ran loadActiveSeason, which now resolves -- 'ready' delegates
     // to CoachHomeContent, proving Retry is genuinely wired to
     // activeSeason.refresh(), not a dead click handler.
-    expect(container.textContent).toContain('Participation');
+    expect(container.textContent).toContain('Events in next 7 days');
     expect(container.textContent).not.toContain("Couldn't load the active season");
   });
 
@@ -1350,7 +1356,8 @@ describe('<CoachHome /> T155 -- fail-loud without a <SeasonProvider> ancestor (c
     // CoachHome itself rendered real content -- proof the probe (CoachHome
     // calling useActiveSeason() at its own top level) genuinely did not
     // throw here, not merely that nothing crashed before it ran.
-    expect(container.textContent).toContain('Participation');
+    // T803 -- marker moved off the removed `Participation` tile.
+    expect(container.textContent).toContain('Events in next 7 days');
   });
 });
 
@@ -1470,8 +1477,12 @@ describe('<CoachHome /> T173 -- measured-reality proof for a REAL, non-placehold
     // `attendance`/`v_season_attendance_rate` genuinely return no rows --
     // a real empty result, not a scope mismatch. Same assertions, honest
     // mechanism.
-    expect(kpiCardValue('Participation')).toBe('—');
-    expect(container.textContent).not.toContain('82.4%'); // the fixture-only participation value must be genuinely gone
+    // T803 -- the `Participation` assertion that stood here is gone with its
+    // tile. The 82.4% check survives and is now STRONGER than it looks: that
+    // value only ever came from this loader's fixture, so its absence still
+    // proves the real loader is in play, and it now also proves the removed
+    // tile is not quietly rendering from somewhere else.
+    expect(container.textContent).not.toContain('82.4%');
     expect(container.textContent).toContain('No completed meetings yet this season'); // last-meeting attendance secondary
     expect(kpiCardValue('Last meeting attendance')).toBe('—');
     expect(kpiCardValue('Events in next 7 days')).toBe('0');
