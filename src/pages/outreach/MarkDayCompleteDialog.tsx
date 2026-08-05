@@ -572,7 +572,7 @@ export type AttendanceStatus = 'present' | 'late' | 'excused' | 'absent';
  * doc #9) via `resolveAttendanceWriteMethod`, never a hardcoded `'coach'`.
  * Textually identical to, but a distinct declaration from,
  * `../../lib/supabase/loaders/attendance.ts`'s own `AttendanceMethod`. */
-export type AttendanceMethod = 'qr' | 'coach' | 'import';
+export type AttendanceMethod = 'qr' | 'coach' | 'import' | 'self';
 
 export interface RosterStudent {
   id: string;
