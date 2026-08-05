@@ -3616,3 +3616,55 @@ these rulings it is a small epic, so it is split rather than run as one unbounde
   applies the migration.
 
 **Sequence T510 first** — T605 builds on the same dialog plumbing, and T606 builds on T605.
+
+---
+
+## 2026-08-05 (evening) — T508 shipped but moved no percentage; T510's team-scope lock is WITHDRAWN
+
+**The owner caught this, not the swarm.** Reviewing T510's design proposal he said: *"i thought we
+updated this so that when i close a meeting 'expected' participation is based on if i count them
+absent (or present) and not assumed everyone should be present… i would have expected that ruling to
+be doumented somewhere. can you check."* Then: *"i mention this becaue it may change your thought
+process on scoping a meeting series by team."*
+
+**He was right on every point, and the ruling was already documented** — D014, this same file, same
+day: *"the participation % shouldn't assume everyone is supposed to attend a meeting, even if it's
+scoped to p3. if i have the right tools to indicate absent students then it should use that as the
+calculation."* Filed as **T509**. **Not built.**
+
+### The part he did not have: T508 alone changed no coach-visible number
+
+`v_student_participation` is still defined at `20260722000000_membership_views.sql:59` — verified that
+none of the thirteen later migrations redefines it. Its `expected` CTE is a cross product of eligible
+students × completed sessions, `left join`ed to `attendance`, so **a student with no attendance row is
+counted in `expected_ct` exactly like one marked `absent`:**
+
+```sql
+join events e on e.counts_participation and (e.team_ids is null or st.team_id = any(e.team_ids))
+join event_sessions es on es.event_id = e.id and es.status = 'completed'
+...
+left join attendance a on a.session_id = x.session_id and a.student_id = x.student_id
+```
+
+- **Before T508** — unmarked student → a false `absent` row → in `expected_ct`, out of `present_ct`.
+- **After T508** — unmarked student → no row at all → in `expected_ct`, out of `present_ct`.
+
+**Byte-for-byte identical.** T508 is a real fix to what is *stored* and to what the end-meeting
+summary *says*, and it is precisely what stops T509 being a no-op. But **no participation percentage
+moved when it shipped, and nobody had told the owner that.** T509 is the row that delivers D014.
+
+### Consequence: the team-scope lock proposed this morning is withdrawn
+
+Proposed for T510: lock `events.team_ids` once any session completes, because editing it retroactively
+rewrites participation. **Correct about today's code, wrong as a fix** — it hard-codes into the
+meetings UI a workaround for a formula the owner has already ruled must change. Once T509 makes the
+denominator *"the students the coach actually marked"*, `team_ids` stops driving anyone's history and
+can stay freely editable — **the outreach parity he asked for in the first place.**
+
+**Recommended to him: sequence T509 before T510.** T509 is W4's surface and needs an owner-applied
+migration, so who takes it and when is his call. Put to him; pending.
+
+**Open question that belongs to T509's premise gate, recorded so it is not lost:** whether `team_ids`
+survives as a filter on *which events count at all*. A Gear Girls student marked present at a P3
+meeting either counts or she does not. If team scope survives in that role, a weaker form of the
+retroactivity survives with it, and T510 has to revisit the lock.
