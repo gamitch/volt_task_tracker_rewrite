@@ -512,3 +512,7 @@ describe('makeLoadOpenCheckinSessions (T400)', () => {
     expect(stub.eventsInSpy).toHaveBeenCalledWith('id', ['event-build']);
   });
 });
+
+// deliberate prettier violation, T175 gate proof -- this branch is a throwaway
+const    t175MutantProbe    =     1
+export { t175MutantProbe }
