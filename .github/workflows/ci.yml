@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   ci:
-    name: Typecheck, Lint, Test, Build, Bundle Size
+    name: Typecheck, Lint, Format, Test, Build, Bundle Size
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -51,6 +51,28 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      # T175. This gate was missing for the project's whole life, and the
+      # cost was not hypothetical: `checkin.test.ts` landed unformatted with
+      # T400 on 2026-08-04 and every subsequent PR merged green while the
+      # repo failed its own `format:check`. Prettier drift is invisible to
+      # typecheck, lint, test and build -- none of them read formatting --
+      # so without this step nothing in CI can ever observe it.
+      #
+      # Deliberately `npm run format:check` and not a bare `prettier --check`
+      # with its own glob. The script (package.json) scopes the gate to
+      # `src/**/*.{ts,tsx}` minus `src/theme/volt.ts`, plus root config files.
+      # `docs/**` is outside that scope ON PURPOSE: four machines append to
+      # the swarm docs concurrently, and reformatting them would rewrite
+      # thousands of lines straight into everyone's merge conflicts.
+      # Duplicating the glob here would also let the two drift apart, which
+      # is the same class of defect this step exists to catch.
+      #
+      # Placed after Lint rather than first: a PR with both a type error and
+      # a stray line break should report the type error, which is the one
+      # that needs thought. Formatting failures are fixed by `npm run format`.
+      - name: Format check
+        run: npm run format:check
 
       - name: Unit tests
         run: npm run test

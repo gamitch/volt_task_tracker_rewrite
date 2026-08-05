@@ -339,12 +339,10 @@ interface OpenSessionStubOptions {
 }
 
 function makeOpenSessionsClient(options: OpenSessionStubOptions = {}) {
-  const orderSpy = vi
-    .fn()
-    .mockResolvedValue({
-      data: options.sessions === undefined ? [] : options.sessions,
-      error: null,
-    });
+  const orderSpy = vi.fn().mockResolvedValue({
+    data: options.sessions === undefined ? [] : options.sessions,
+    error: null,
+  });
   const lteSpy = vi.fn(() => ({ order: orderSpy }));
   const gteSpy = vi.fn(() => ({ lte: lteSpy }));
   const sessionsEqSpy = vi.fn(() => ({ gte: gteSpy }));
