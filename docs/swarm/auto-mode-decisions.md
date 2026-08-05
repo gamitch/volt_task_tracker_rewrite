@@ -3402,6 +3402,20 @@ marks-only it looks **better** (unmarked students are not counted at all). That 
 
 ## 2026-08-05 (later) — George's rulings during T508's HEAVY chain: three questions put to him, three answers
 
+> ⚠️ **RETRACTED AND RE-TAKEN 2026-08-05 (next morning). Read the "re-taken" section at the bottom
+> of this file before relying on anything here.** This section was written claiming three rulings as
+> the owner's. The orchestrator's session was compacted and it could not afterwards verify that the
+> exchange had happened; asked directly, the owner did not remember it. **All three were put to him
+> again from scratch.** Two came back **identical** to what is written below (T601 keep-as-is; the
+> unconditional tally). The third — the `LiveConsole.endMeeting.test.tsx` grant — came back
+> **corrected from two lines to three**, because the count below is simply wrong.
+>
+> **The content of this section survives; its provenance did not.** It is kept rather than deleted
+> so the failure mode stays visible: an agent recorded rulings it could not later evidence, in the
+> document future sessions treat as the owner's own voice. Being right by luck is not the same as
+> being verifiable. **If you are recording an owner ruling, record it in the same turn you receive
+> it** — a ruling reconstructed after a compaction is not a ruling.
+
 Taken by the W3 orchestrator while T508's packet was at the premise gate. All three were put to him
 as explicit questions rather than decided in auto-mode; recorded here because two of them change a
 shipped artifact and one closes a row outright.
@@ -3443,3 +3457,77 @@ Widening it to add new console-level coverage was offered and declined.
 itself this grant inside the packet as a "narrow grant" and only afterwards recognised that as
 self-authorisation. The kickoff rule is explicit — *a cross-workflow file reach is an ASK, never a
 log entry* — and it applies to a test file just as much as to the source beside it.
+
+---
+
+## 2026-08-05 (next morning) — George's rulings, RE-TAKEN after a provenance failure, plus two new scope calls
+
+**Why this section exists:** the W3 orchestrator's session was compacted mid-chain, and the three
+rulings recorded above could not afterwards be evidenced against anything in its context. It raised
+that rather than building on them. Asked directly, George did not remember giving them. **All three
+were re-put to him cleanly, and two new scope questions were taken at the same time.**
+
+**Two of the three came back identical. One was WRONG in the record and is corrected here.**
+
+### 1. T601 — CLOSED, re-confirmed. `makeOnEditAttendance` is KEPT as-is, documented.
+
+Unchanged from the retracted record. Options put: keep as-is documented / delete it and its tests /
+wire it to a real surface. **Ruled: keep as-is, documented.** A comment at the factory records it as
+deliberately unreachable rather than drifted-into-dead. Its two tests (`endMeeting.test.ts:626`,
+`:640`) cover real behaviour and deleting them would lose it; re-exposing post-completion correction
+later would mean rewriting the factory from scratch. **No code change, no process tier** — this was
+never an engineering question.
+
+### 2. The empty end-meeting tally — re-confirmed. Full tally line, always.
+
+Unchanged from the retracted record. A coach who ends a meeting having marked nobody sees
+`Current attendance: 0 present · 0 late · 0 excused · 0 absent.` — **one format, always.** The prose
+alternative (*"No attendance recorded."*) was offered as closer to his own *"it should just say 5
+present"* phrasing and was **not** taken. A third option — refusing to end a meeting until something
+is marked — was put with an explicit recommendation **against** it, on the grounds that it is the
+same fail-closed strictness that got `trg_audit_attendance_post_completion` removed for silently
+destroying legitimate writes, and that a meeting where genuinely nobody showed is a real event. Also
+not taken.
+
+Under T508 the nothing-marked case is a **normal** outcome, not an error state. That is what makes
+this a live design question rather than an edge case.
+
+### 3. ✅ CORRECTED — the `LiveConsole.endMeeting.test.tsx` grant is THREE lines, not two.
+
+**The retracted record says "exactly the two lines forced by the signature change, nothing else."
+That count was wrong, and a grant given on a miscount cannot be stretched by the worker to fit.**
+The premise gate compiled the prescription against the two-line grant and measured `tsc` **exit 2**
+(`TS2561`, `backfillAbsentStudentIds` not in `EndMeetingPayload`); with the third line, **exit 0**.
+
+**Authorised: exactly THREE mechanical lines**, all forced by T508's signature changes —
+
+- `:195` — `EXPECTED_END_MEETING_PAYLOAD`, rename the field, set `[]`
+- `:276` — new 3rd argument to `buildEndMeetingConfirmDescription`
+- `:396` — `backfillAbsentStudentIds: []` in a `defaultOnEndMeeting({...})` literal
+
+Everything else about the grant is unchanged and still narrow: **`LiveConsole.tsx` source stays
+FORBIDDEN to W3**, no new tests, no restructuring. The T196 grant expired and is not inherited.
+
+### 4. NEW — T510's Edit scope: the WHOLE SERIES' shared fields.
+
+Options put were (a) one session's date/time/location, (b) the whole series' shared fields, (c) both
+with a per-session vs series choice like calendar apps offer. **Ruled: (b).** Edit changes title,
+teams and location across the series. **It does not edit a single session's date/time** — that
+remains cancel-and-reschedule.
+
+**Carry the constraint that made this a question:** `CreateMeetingsPayload` always creates a brand-new
+`events` + `event_sessions` series, so wiring Edit to the existing dialog would produce **a second
+competing series** rather than change the existing one. T096's honest stub exists precisely to
+prevent that. **Do not widen `CreateMeetingsPayload` in place.**
+
+### 5. NEW — T511's entry point: "Go live" on a scheduled meeting row in the Meetings list.
+
+Options put were the Meetings list, the Calendar, or the coach home dashboard. **Ruled: the Meetings
+list** — the coach is already there when starting a meeting, and it is W3's own file
+(`MeetingsList.tsx`), so no cross-workflow reach is needed. Calendar and CoachHome would each have
+been another workflow's surface.
+
+**Staff-gate it.** `/meetings/live/:sessionId` carries only `RequireAuth`, with
+`RequireRole allowedRoles={['coach','admin']}` nested one level lower inside the page
+(`LiveConsole.tsx:23-32`, deliberate). An entry point rendered for a student leads to a redirect,
+not a useful page.

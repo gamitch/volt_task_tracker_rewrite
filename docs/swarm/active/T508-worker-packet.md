@@ -16,13 +16,17 @@ serious; item 25 explicitly retires that reasoning.
 prescription in its own worktrees and ran every named mutation; §3's two refutations were
 **confirmed**, and §3g's three-red-tests list was **confirmed complete by execution**.
 
-**Round 2 status: NINE of the ten required revisions are applied below. The tenth is BLOCKED.**
+**Round 2 status: ALL TEN required revisions are applied. ✅ CLEARED FOR DISPATCH.**
 
-⛔ **DO NOT DISPATCH.** §4c's grant is arithmetically wrong: the owner was asked for, and gave, a
-grant of **two** lines in `LiveConsole.endMeeting.test.tsx`. The measured count is **three**
-(`:195`, `:276`, `:396`). Building against the two-line grant fails `tsc` at exit 2; widening it to
-three by worker judgement would be exactly the self-authorisation the grant exists to prevent. **The
-owner must re-confirm at three before this packet moves.** See §4c.
+The tenth was blocked on the owner and is now resolved. **He re-confirmed the
+`LiveConsole.endMeeting.test.tsx` grant at THREE mechanical lines** (2026-08-05 next morning,
+`auto-mode-decisions.md`), correcting the two-line count the earlier record carried. §4c is updated.
+
+Two further rulings behind this packet were **re-taken from scratch** in the same exchange, because
+their provenance could not be evidenced after a session compaction: **T601 stays closed** (keep
+`makeOnEditAttendance` as-is, documented) and **the tally line stays unconditional** (now **C11**).
+Both came back identical to the retracted record; the grant count did not. See that file's
+"re-taken" section — cite it, not the retracted one above it.
 
 Applied in round 2: §4a.3's untestable no-default criterion replaced with T300's paired `tsc` replay
 (now **C10**); **C8 re-sited** where the roster is actually in scope; explicit **Allowed Files**
@@ -254,20 +258,20 @@ deliberately and say so, never delete one to get green.
    that at `makeOnEditAttendance` (`:448`). T508 is the only row in flight touching this file; if you
    skip it, the ruling lands nowhere.
 
-### 4c. `LiveConsole.endMeeting.test.tsx` — ⛔ GRANT BLOCKED ON THE OWNER, DO NOT DISPATCH
+### 4c. `LiveConsole.endMeeting.test.tsx` — NARROW GRANT, THREE LINES, OWNER-CONFIRMED
 
-**`LiveConsole.tsx` (source) is FORBIDDEN. Its test file holds a mechanical-fallout grant only.**
+**`LiveConsole.tsx` (source) is FORBIDDEN and the T196 grant is NOT inherited. Its test file holds a
+mechanical-fallout grant only.** You may change **exactly these three lines**, all forced by §4a's
+signature changes — no new tests, no restructuring, nothing else in the file:
 
-**The recorded grant says "exactly the two lines forced by the signature change, nothing else."
-The measured count is THREE.** Verified by grep and by building the prescription and running `tsc`:
+| Line | Change |
+|---|---|
+| `:195` | `EXPECTED_END_MEETING_PAYLOAD` — rename the field to `markAbsentStudentIds`, set it to `[]` (the checkbox defaults unticked, so a plain confirm writes no absence) |
+| `:276` | pass `false` as the new 3rd argument to `buildEndMeetingConfirmDescription` |
+| `:396` | `backfillAbsentStudentIds: []` → `markAbsentStudentIds: []`, in the `defaultOnEndMeeting({...})` literal inside `describe("T196 -- the console's production defaults are the real backends")` |
 
-| Line | Change forced by | Status |
-|---|---|---|
-| `:195` | `EXPECTED_END_MEETING_PAYLOAD` — rename the field, set `[]` | in the granted two |
-| `:276` | new 3rd argument to `buildEndMeetingConfirmDescription` | in the granted two |
-| **`:396`** | **`backfillAbsentStudentIds: []` in a `defaultOnEndMeeting({...})` literal**, inside `describe("T196 -- the console's production defaults are the real backends")` | **NOT GRANTED** |
-
-With only the granted two applied, the gate measured:
+**The third line is the one an earlier grant missed, and the miss was load-bearing.** With only
+`:195` and `:276` changed, the gate measured:
 
 ```
 LiveConsole.endMeeting.test.tsx(399,9): error TS2561:
@@ -276,17 +280,13 @@ LiveConsole.endMeeting.test.tsx(399,9): error TS2561:
 TSC EXIT=2
 ```
 
-Adding the third line, everything else identical: **`TSC EXIT=0`**.
+With all three: **`TSC EXIT=0`**. The owner re-confirmed at three on 2026-08-05 (next morning) after
+the miscount was measured — see `auto-mode-decisions.md`'s "re-taken" section.
 
-**This is a hard deadlock, and it must not be resolved by the worker.** §7 requires `tsc` 0; the
-grant forbids the third line. A conscientious worker stops. A careless one silently widens an
-owner-scoped grant — which is the exact failure the grant was created to prevent, since this grant
-exists only because the orchestrator had originally self-authorised it inside this packet.
-
-**Required before dispatch:** the owner re-confirms the grant at **three** mechanical lines. The
-count he was given was wrong, and a grant given on a miscount cannot be stretched to fit. Nothing
-else about the grant changes: still no new tests, still no restructuring, still no `LiveConsole.tsx`
-source change of any kind.
+**If you find yourself needing a FOURTH line here, or any change to `LiveConsole.tsx` source, STOP
+and report it.** Do not extend this grant by judgement. It exists in the first place only because
+the orchestrator had originally self-authorised it inside this packet, and a cross-workflow reach is
+an ASK, never a log entry.
 
 ---
 
