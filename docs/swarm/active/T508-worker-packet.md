@@ -12,10 +12,24 @@ serious; item 25 explicitly retires that reasoning.
 
 ## §0 — premise gate verdict
 
-> _To be filled by `checker-premise` before dispatch (constitution item 19). Do not dispatch a
-> worker while this section reads PENDING._
+**Round 1: REVISE (BLOCKER).** One blocker, two majors, seven minors. The gate built the full
+prescription in its own worktrees and ran every named mutation; §3's two refutations were
+**confirmed**, and §3g's three-red-tests list was **confirmed complete by execution**.
 
-**Status: PENDING.**
+**Round 2 status: NINE of the ten required revisions are applied below. The tenth is BLOCKED.**
+
+⛔ **DO NOT DISPATCH.** §4c's grant is arithmetically wrong: the owner was asked for, and gave, a
+grant of **two** lines in `LiveConsole.endMeeting.test.tsx`. The measured count is **three**
+(`:195`, `:276`, `:396`). Building against the two-line grant fails `tsc` at exit 2; widening it to
+three by worker judgement would be exactly the self-authorisation the grant exists to prevent. **The
+owner must re-confirm at three before this packet moves.** See §4c.
+
+Applied in round 2: §4a.3's untestable no-default criterion replaced with T300's paired `tsc` replay
+(now **C10**); **C8 re-sited** where the roster is actually in scope; explicit **Allowed Files**
+added; §3e's "~21 tests" corrected to the measured **9**; §3d's past-EOF citation corrected; §3b's
+17-row attribution downgraded from established cause to one reachable mechanism; the expected
+**eslint delta declared**; the T602 fold extended from two stale ranges to four; and a criterion
+added for the owner's unconditional-tally ruling (**C11**).
 
 ---
 
@@ -62,13 +76,13 @@ Every claim below was checked against `origin/main` with `git show`, not the wor
 
 ### 3a. CONFIRMED — the automatic write exists and is unconditional
 
-- `loaders/endMeeting.ts:376-388` — `backfillAbsences` upserts
+- `loaders/endMeeting.ts:376-389` — `backfillAbsences` upserts
   `{status:'absent', method:'coach', recorded_by:null}` with
   `{onConflict:'session_id,student_id', ignoreDuplicates:true}`.
 - `:411-414` — it runs as step 1 of **every** `makeOnEndMeeting` call, with no condition.
 - Its input is `payload.backfillAbsentStudentIds`, computed by
   `EndMeetingDialog.tsx`'s `computeBackfillAbsentStudentIds` (`:324-331`) via
-  `buildEndMeetingPayload` (`:352-361`) — every roster member with no attendance row.
+  `buildEndMeetingPayload` (`:350-361`) — every roster member with no attendance row.
 - The "will be marked absent" callout is real: `buildEndMeetingConfirmDescription` (`:443-447`),
   rendered at `:798`.
 
@@ -86,10 +100,17 @@ const roster = (studentRows ?? [])
 (`queryActiveStudentsForRoster`, `:261-268`) has no team filter **server-side**, which is what the
 row misread; the scoping happens after it.
 
-**The real mechanism behind the owner's 17 rows** is one layer up:
+**ONE REACHABLE MECHANISM — not the established cause of the owner's 17 rows.** One layer up,
 `ScheduleMeetingsDialog.tsx:541` defaults the team picker to all teams selected, and
-`resolveTeamScope` (`:489-499`) converts "all selected" into `team_ids = null`, which means *open to
+`resolveTeamScope` (`:491-500`) converts "all selected" into `team_ids = null`, which means *open to
 every team*. A meeting created without narrowing the picker rosters the entire active student body.
+
+⚠️ **The code path is confirmed; the attribution is NOT, and two in-repo records point the other
+way.** `task-ledger.md:816` says *"A **P3-only** test meeting"* and the owner himself says *"even if
+it's **scoped to p3**"* (`auto-mode-decisions.md:3345`) — and a P3-scoped meeting has **non-null**
+`team_ids`, which is incompatible with this mechanism. An earlier version of this packet asserted it
+as the cause and it was presented to the owner that way; that was wrong and is corrected here.
+**Nothing in §4 changes either way** — the safety conclusion below holds under both readings.
 
 **Why this matters to you and is not pedantry:** do NOT add a team filter to the roster query. It is
 already there. The residual hazard is the opposite one — the new bulk control operates on that same
@@ -98,7 +119,7 @@ control must name its count.**
 
 ### 3c. ❌ FALSE — "the session summary already reports only what was marked"
 
-Close, but it fails in a way that matters. `computeEndMeetingSummaryCounts` (`:406-413`) iterates
+Close, but it fails in a way that matters. `computeEndMeetingSummaryCounts` (`:403-413`) iterates
 the **roster** and looks each member up:
 
 ```ts
@@ -109,22 +130,35 @@ for (const entry of roster) {
 ```
 
 So a student with a **real** `present` row who is not on the roster is dropped from "5 present".
-That is reachable: `v_student_participation` (`20260722000000_membership_views.sql:59-63`) scopes on
-`student_teams` ACTIVE memberships, while this roster scopes on the legacy `students.team_id` single
-FK — a dual-team student is inside one and outside the other. **Count the records, not the roster.**
+
+**This is reachable in one hop, on a write path, verified:** `loaders/selfCheckoff.ts:180-201`
+(`makeInsertSelfCheckoff`) `.insert()`s a real `status: 'present', method: 'self'` row into
+`attendance` with **no team or roster check anywhere in that file** (grepped: zero occurrences of
+`team_id` or `roster`). A student who self-checks-off into a session they are not rostered for has a
+real, coach-visible mark that the tally silently drops. **Count the records, not the roster.**
+
+*(A second, weaker route also exists — `v_student_participation`
+(`20260722000000_membership_views.sql:59-63`) scopes on `student_teams` ACTIVE memberships while this
+roster scopes on the legacy `students.team_id` single FK, so a dual-team student is inside one and
+outside the other. That view is a **read**; it creates no rows. Use the `selfCheckoff` route as the
+argument — it is a one-hop write.)*
 
 ### 3d. TRAP — `onEditAttendance` cannot be reused for the bulk control
 
 It is tempting: `LiveConsole.tsx:1191` already wires it with real coach identity, so reusing it
-would need no new seam. **It does not work.** `makeOnEditAttendance` (`endMeeting.ts:~486`) is an
-`.update()` scoped `.eq('session_id').eq('student_id')`. The students being marked have **no row**,
-so it updates zero rows and silently writes nothing. The upsert path is required.
+would need no new seam. **It does not work.** `makeOnEditAttendance` (`endMeeting.ts:448`; the
+`.update()` at `:456`, its two `.eq()`s at `:457-458`) is an `.update()` scoped
+`.eq('session_id').eq('student_id')`. The students being marked have **no row**, so it updates zero
+rows and silently writes nothing. The upsert path is required.
 
 ### 3e. TRAP — do not add `useAuth()` to `EndMeetingDialog.tsx`
 
 `app/guards.tsx:339-345` — `useAuth()` **throws** outside an `<AuthProvider>`.
-`EndMeetingDialog.test.tsx` renders the dialog bare. Adding the hook turns ~21 tests red for an
-attribution nicety. See §6 for what to do about `recorded_by` instead.
+`EndMeetingDialog.test.tsx` renders the dialog bare (`renderDialog`, `:91`, no provider).
+**Measured directly on this file at `4115ef4`, in a throwaway worktree: 9 failed / 12 passed of 21.**
+An earlier draft said "~21 tests", which was the file's *total* rather than the blast radius; the
+other 12 are pure-function tests that never render. Nine red tests for an attribution nicety is
+still the wrong trade. See §6 for what to do about `recorded_by` instead.
 
 ### 3f. Astryx — `CheckboxInput`, not `Switch`
 
@@ -160,9 +194,13 @@ deliberately and say so, never delete one to get green.
    it still returns roster members with no record. Computing the set is not acting on it.
 3. **`buildEndMeetingPayload` takes a new 4th parameter `markRemainingAbsent: boolean`, with NO
    default.** `markAbsentStudentIds` is `computeUnmarkedStudentIds(...)` when true, `[]` when false.
-   **The absence of a default is deliberate and is an acceptance criterion** — `tsc` must force every
-   call site to state the choice. A defaulted parameter is not mutation-observable (this repo has a
-   recorded instance: T300's C2, where restoring a default produced no `tsc` error at all).
+   The absence of a default is deliberate — `tsc` must force every call site to state the choice.
+
+   ⚠️ **This is verified by C10's PAIRED replay, not by a bare mutation.** Simply restoring
+   `= false` leaves the whole suite green at exit 0 with `tsc` clean, because every call site still
+   passes the argument — measured. That is precisely T300's C2 vacuity, which an earlier draft of
+   this packet cited as a warning and then reproduced. T300's ledger row (`task-ledger.md:233`)
+   records the working remedy: assert the *arity error* with a control. See **C10**.
 4. **`computeEndMeetingSummaryCounts` drops its `roster` parameter** and iterates
    `Object.values(attendanceByStudentId)` (§3c).
 5. **`buildEndMeetingConfirmDescription` takes `markRemainingAbsent: boolean`.** When true:
@@ -176,6 +214,12 @@ deliberately and say so, never delete one to get green.
 8. **Render a `CheckboxInput` in the `data.session.status === 'scheduled'` branch**, only when the
    unmarked count is `> 0`, labelled by `buildMarkRemainingAbsentLabel(count)`, with
    `description="Leave this unticked to end the meeting without recording anything for them."`
+
+   **Placement is forced, not chosen — do not burn a cycle fighting it.** `AlertDialog` takes **no
+   children**; its `description` is a required `string` (`astryx-api.md`, AlertDialog Props). The
+   checkbox therefore renders **beside the End meeting trigger, inside `EndMeetingDialog.tsx`'s own
+   scheduled branch** — not inside the confirm dialog. This needs no `LiveConsole.tsx` change; the
+   trigger already lives in this file.
 9. Update module doc sections 1 and 3, and add a section 1a carrying §2's ruling and its reasoning.
 
 ### 4b. `loaders/endMeeting.ts`
@@ -188,24 +232,77 @@ deliberately and say so, never delete one to get green.
    ruling says must not happen.
 3. Steps 2 (checkout) and 3 (flip) are **unchanged and still unconditional**. Do not reorder them;
    the ordering rationale in the module doc is independent of this row.
-4. **Fold T602 while you are here** (it is the same stale text this row makes wrong): the module doc
-   still says the factory is "NOT wired into `EndMeetingDialog.tsx`/`LiveConsole.tsx`/any route",
-   that the mount "is still filed as its own row, T196", and that `EndMeetingDialog.tsx` is "a
-   frozen, forbidden file". **All false since `6271ac6`** — T196 shipped; `LiveConsole.tsx:1187`
-   mounts the real dialog. Correct it and say what is true. Note T602 as folded in your report.
+4. **Fold T602 while you are here** (it is the same stale text this row makes wrong). The T602
+   ledger row cites **four** stale ranges and all four must be corrected — an earlier draft named
+   only two:
+   - `:8` — `EndMeetingDialog.tsx` called "a frozen, forbidden file".
+   - `:12-19` — "NOT wired into `EndMeetingDialog.tsx`/`LiveConsole.tsx`/any route"; the mount "is
+     still filed as its own row, T196".
+   - `:113-118` — "once T196 wires this factory to a real `useAuth()` ref"; "that wiring is T196's
+     job"; "ready when T196 unblocks".
+   - `:442-446` — "once T196 wires this factory to a real `useAuth()` ref (**not done by this
+     task**)".
 
-### 4c. `LiveConsole.endMeeting.test.tsx` — NARROW GRANT
+   **All false since `6271ac6`** — T196 shipped; `LiveConsole.tsx:1187` mounts the real dialog and
+   `:1024` wires `makeOnEditAttendance` with real coach identity. Correct each and say what is true.
+   Note T602 as folded in your report.
 
-**`LiveConsole.tsx` (source) is FORBIDDEN. Its test file gets a mechanical-fallout grant only.**
-You may make exactly two changes, both forced by §4a's signature changes:
+5. **Carry T601's owner-ruled comment while you are in this file — it has no other home.** T601 was
+   CLOSED by owner ruling (`auto-mode-decisions.md`, 2026-08-05 later; `task-ledger.md` row marked
+   *"owner ruling, no code"*): `makeOnEditAttendance` is **kept as-is**, and *"a comment at the
+   factory records that it is deliberately unreachable rather than drifted-into-dead."* Add exactly
+   that at `makeOnEditAttendance` (`:448`). T508 is the only row in flight touching this file; if you
+   skip it, the ruling lands nowhere.
 
-- `:276` — pass `false` as the new third argument to `buildEndMeetingConfirmDescription`.
-- `:195` — rename the field in `EXPECTED_END_MEETING_PAYLOAD` and set it to `[]` (the checkbox
-  defaults unticked, so no absence is written on a plain confirm).
+### 4c. `LiveConsole.endMeeting.test.tsx` — ⛔ GRANT BLOCKED ON THE OWNER, DO NOT DISPATCH
 
-**Nothing else in that file.** No new tests, no restructuring. If you find yourself needing a source
-change in `LiveConsole.tsx`, **STOP and report it** — that is another workflow's file and a
-cross-workflow reach is an ASK, never a judgement call.
+**`LiveConsole.tsx` (source) is FORBIDDEN. Its test file holds a mechanical-fallout grant only.**
+
+**The recorded grant says "exactly the two lines forced by the signature change, nothing else."
+The measured count is THREE.** Verified by grep and by building the prescription and running `tsc`:
+
+| Line | Change forced by | Status |
+|---|---|---|
+| `:195` | `EXPECTED_END_MEETING_PAYLOAD` — rename the field, set `[]` | in the granted two |
+| `:276` | new 3rd argument to `buildEndMeetingConfirmDescription` | in the granted two |
+| **`:396`** | **`backfillAbsentStudentIds: []` in a `defaultOnEndMeeting({...})` literal**, inside `describe("T196 -- the console's production defaults are the real backends")` | **NOT GRANTED** |
+
+With only the granted two applied, the gate measured:
+
+```
+LiveConsole.endMeeting.test.tsx(399,9): error TS2561:
+  Object literal may only specify known properties, but 'backfillAbsentStudentIds'
+  does not exist in type 'EndMeetingPayload'. Did you mean to write 'markAbsentStudentIds'?
+TSC EXIT=2
+```
+
+Adding the third line, everything else identical: **`TSC EXIT=0`**.
+
+**This is a hard deadlock, and it must not be resolved by the worker.** §7 requires `tsc` 0; the
+grant forbids the third line. A conscientious worker stops. A careless one silently widens an
+owner-scoped grant — which is the exact failure the grant was created to prevent, since this grant
+exists only because the orchestrator had originally self-authorised it inside this packet.
+
+**Required before dispatch:** the owner re-confirms the grant at **three** mechanical lines. The
+count he was given was wrong, and a grant given on a miscount cannot be stretched to fit. Nothing
+else about the grant changes: still no new tests, still no restructuring, still no `LiveConsole.tsx`
+source change of any kind.
+
+---
+
+### 4d. Allowed Files — the complete list
+
+Nothing outside this list may be edited. Two of these were implicit in earlier drafts and are now
+named, because `tsc` fails without them and C1/C2 cannot be written anywhere else:
+
+| File | Scope |
+|---|---|
+| `src/pages/meetings/EndMeetingDialog.tsx` | §4a, full |
+| `src/lib/supabase/loaders/endMeeting.ts` | §4b, full |
+| `src/pages/meetings/EndMeetingDialog.test.tsx` | re-derive §3g's two tests; add C3–C9 coverage |
+| **`src/lib/supabase/loaders/endMeeting.test.ts`** | **required.** `SAMPLE_PAYLOAD: EndMeetingPayload` (`:453`) carries the renamed field, so `tsc` fails without it — and it is the **only** file with a mutation-recording Supabase stub, so **C1 and C2 can only be written here.** |
+| `src/pages/meetings/LiveConsole.endMeeting.test.tsx` | ⛔ **three mechanical lines, BLOCKED — see §4c** |
+| `docs/swarm/active/T508-worker-packet.md` | your completion report only |
 
 ---
 
@@ -224,16 +321,24 @@ mutating** (item 26's fast-tier working rule — it applies to anyone mutating).
 | **C5** | The confirm description DOES state the consequence when opted in | Make both branches return the left-unmarked sentence. |
 | **C6** | The checkbox defaults to unticked | Change `useState(false)` → `useState(true)` in `4a.7`. |
 | **C7** | The checkbox label names the count | Drop the count from `buildMarkRemainingAbsentLabel`, returning a fixed string. |
-| **C8** | The summary counts a real mark for a student who is **not** on the roster (§3c) | Restore the roster-walking loop in `computeEndMeetingSummaryCounts`. |
+| **C8** | The summary counts a real mark for a student who is **not** on the roster — **asserted through `buildEndMeetingConfirmDescription`, which still receives the roster** | Inside `buildEndMeetingConfirmDescription`, re-scope the tally to roster members only, leaving `computeEndMeetingSummaryCounts` untouched. Signature-preserving, so `tsc` stays clean — the test is the only thing that can catch it. |
 | **C9** | The summary invents no row for an unmarked student | Seed `counts.absent` from the unmarked count. |
+| **C10** | `buildEndMeetingPayload`'s 4th parameter has **no default**, so every call site must state its choice — **paired `tsc` replay, per T300** | **(a)** drop the 4th argument at `EndMeetingDialog.tsx`'s call site → must be `tsc` **exit 2**, `TS2554 Expected 4 arguments, but got 3`. **(b)** control: restore `= false` *with the same omission* → must compile **clean**. Both legs required; (a) alone proves nothing. |
+| **C11** | The tally line renders **unconditionally**, including the all-zero `0 present · 0 late · 0 excused · 0 absent` case (owner ruling, 2026-08-05 later: *"one format, always"*) | Make the tally sentence conditional on any count being `> 0`, so the nothing-marked case falls back to prose. |
 
 **Fixture design requirements** (this repo has 7+ recorded assertions that passed for the wrong
 reason):
 
 - Give every fixture field a distinct value so a field swap is observable.
-- C8 needs a student with a real record who is **deliberately absent from the roster array** — assert
-  that absence explicitly in the test, so the fixture cannot silently drift into covering nothing.
+- **C8 must be asserted where the roster is still in scope.** After §4a.4,
+  `computeEndMeetingSummaryCounts` **never receives a roster array**, so a unit test on it that
+  "asserts the student is absent from the roster" is decorative — the array it checks is never
+  passed in. Assert instead against `buildEndMeetingConfirmDescription(roster, attendance, false)`,
+  which still takes both. Verified: one such line turns the signature-preserving mutation red at
+  exit 1, where the roster-shaped unit fixture leaves it green.
 - Prefer asserting against the **second** item in a list over the first.
+- **C1/C2 must assert at the transport** — the recorded Supabase call — not by inspecting the
+  payload object. An empty `upsert` is still a write request; only the stub sees it.
 
 ---
 
@@ -247,6 +352,13 @@ coach's own" id, and marking the same student absent via the console pill **does
 `LiveConsole.tsx` — another workflow's file.** Do not reach for it, and do not add `useAuth()` to the
 dialog (§3e). The value is unchanged from the backfill it replaces, so this is a pre-existing gap
 made visible, not a regression. **Disclose it in your report**; the orchestrator files the row.
+
+**A primitive does exist — this is unavoidable *within this row's file scope*, not in principle.**
+`loaders/attendance.ts:495-515` (`makeSetAttendanceStatus`) is an existing `upsert` on
+`(session_id, student_id)` that already carries `recorded_by`, and `LiveConsole.tsx` already wires it
+with real coach identity. It is correctly out of reach here — `loaders/attendance.ts` is forbidden by
+§8 and the seam lives in another workflow's file — so **do not change the prescription.** Stated
+plainly so the residual reads as a scope boundary rather than a technical impossibility.
 
 ---
 
@@ -262,7 +374,15 @@ npx vitest run
 ```
 
 **Baseline measured on `6db85c6`:** `tsc` **0** · eslint **0 errors / 365 warnings** ·
-`format:check` **clean** · vitest **80 files / 2027 tests, exit 0**.
+`format:check` **clean** · vitest **80 files / 2027 tests, exit 0**. (Independently re-measured by
+the premise gate at the same commit; all four figures exact.)
+
+**Expected eslint delta, declared up front: 365 → 366 warnings, still 0 errors.** The one new
+warning is `react-refresh/only-export-components` on §4a.6's newly **exported**
+`buildMarkRemainingAbsentLabel`, in `EndMeetingDialog.tsx` (11 → 12 for that file). It is a direct
+and unavoidable consequence of exporting the helper, which §4a.6 requires so C7 can test it
+directly. `format:check` stays clean. **Declaring this now so it is not litigated at review time**
+— a warning delta that appears unannounced reads as a regression.
 
 `format:check` is now enforced in CI (T175, PR #91) and is scoped to `src/**` — the
 `docs/swarm/*.md` files still fail prettier and that is **pre-existing and out of scope**. Do not
