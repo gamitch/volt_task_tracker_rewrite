@@ -9,6 +9,15 @@
             "command": "if [ -f package.json ]; then npm run lint --if-present; fi"
           }
         ]
+      },
+      {
+        "matcher": "mcp__github__merge_pull_request",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/verify-merge.sh\""
+          }
+        ]
       }
     ],
     "SubagentStop": [
