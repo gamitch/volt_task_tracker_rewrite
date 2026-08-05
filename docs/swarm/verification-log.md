@@ -9865,3 +9865,52 @@ throwaway worktree (item 23); the shared tree was verified clean with `git diff 
 does `(await loadPage({…})) ?? []` and `loader.ts:177` still returns `result.data ?? null` without
 throwing, so a `{data: null, error: null}` page still resolves as end-of-data. It is a W1 file and a
 one-line fix, but it is a distinct row and was not in this one's scope.
+
+---
+
+## T502 — a no-answer attendance page is not an empty page (2026-08-04, orchestrator, FAST tier)
+
+**Premise re-verified against the code before touching it**, because this row had been sitting since
+2026-08-03 and this session has already found five rows describing a repo state that no longer
+existed. Both halves were still exactly as filed: `attendance.ts:360` still did
+`(await loadPage({…})) ?? []`, and `loader.ts:177` still returned `result.data ?? null` with no throw
+when `data` and `error` are both null (`:174-177`).
+
+**The fix is in `attendance.ts`, deliberately NOT in `createLoader`.** Making `createLoader` throw on
+`{data: null, error: null}` would fix this caller and break others: `querySessionUserId`
+(`loaders/checkin.ts:382-390`) returns exactly that pair to mean *"nobody is signed in"*, and
+`makeGetAccessToken` is documented to never reject. A shared helper is the wrong place to encode one
+caller's interpretation of an ambiguous response.
+
+The paging loop now throws on a `null` page, matching the page-cap branch three lines below it —
+same principle, same reason: a caller who cannot get a trustworthy answer must be told, never handed
+a short list that looks complete.
+
+### Mutation evidence — 3 mutants, all red at exit 1
+
+| # | Mutation | Result |
+|---|---|---|
+| N1 | revert to `rows.push(...(pageRows ?? []))` | 2 failed, exit 1 |
+| N2 | guard only page 0 (`pageRows === null && page === 0`) | 1 failed, exit 1 |
+| N3 | throw on an empty page too (`|| pageRows.length === 0`) | 2 failed, exit 1 |
+
+**N2 is the one that matters.** It leaves the fix visibly present — the guard is still there, still
+throws, and a reviewer skimming the diff would call it correct — while restoring the exact
+real-world failure: a full page 0 of genuine attendance followed by an empty-bodied page 1, resolving
+as a complete-looking list short by however many rows followed. It is caught only because the test
+asserts on the **mid-stream** case rather than a first-page-null case, which would have passed under
+N2 and let a half-fix ship.
+
+**N3 guards the opposite error.** Throwing on `null` is only correct if `[]` still means "no rows";
+if the guard widened to cover empty pages, every brand-new session with no check-ins would start
+erroring. That test is what keeps the fix from over-reaching.
+
+**Corrects an earlier over-broad claim in this log.** Line 6454 states that `createLoader` *"throws
+on `result.error` so a failed query cannot resolve `[]` and masquerade as 'nobody attended'."* That is
+true for `result.error` and false for the `{data: null, error: null}` pair — which is precisely the
+gap T502 filed and this entry closes. The original claim was not wrong about what it examined; it was
+narrower than it sounded.
+
+**Gates:** tsc exit 0 · eslint 0 errors (5 pre-existing `react-refresh` warnings) · prettier clean ·
+vitest **80 files / 2027 tests, exit 0** (2024 → 2027, +3). Mutations ran in a throwaway worktree
+(item 23); shared tree verified clean with `git diff --quiet` after each.
