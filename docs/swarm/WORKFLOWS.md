@@ -56,27 +56,44 @@ Tier is the **heaviest** item in the workflow, per constitution item 26.
 
 | # | Workflow | Open rows | Tier | State | Safe to run beside |
 |---|---|---:|---|---|---|
-| **W1** | **Check in** — student arrives and gets counted | **0** | HEAVY | **CLOSED — T321/T161/T320/T403 merged (PR #28 +), T400 shipped 2026-08-04. No open rows.** *(This cell read "Broken end to end / 4 rows" until 2026-08-04; three rows had shipped and their statuses were never updated.)* | W4, W6, W7, W8 |
-| **W2** | **Run an outreach event** — create → RSVP → attend → complete | 13 | HEAVY | Partly working | W1, W3, W6, W7 |
-| **W3** | **Run a meeting** — schedule → attendance → participation % | **1** | HEAVY | **T197/T160/T162 shipped 2026-08-04; only T196 (the mount) remains** | W2, W4, W6, W7 |
-| **W4** | **Hours & goal accounting** — the numbers users are shown | 12 | HEAVY | **T205 + T322 merged 2026-08-04; both await owner cutover.** T500 closed unshipped (superseded by T702) | W1, W3, W6, W7 |
-| **W5** | **Home dashboards** — student/parent/coach landing state | 9 | STANDARD | T702 merged; **T198 ruled season-wide** (releases the CoachHome bundle); **T156 parked** | W6, W7, W8 |
-| **W6** | **Calendar & subscribe** | 0 | — | **Merged; database deployed; hosted smoke pending** | everything |
-| **W7** | **Roster & invites** | 5 | STANDARD | Working | everything |
+| **W1** | **Check in** — student arrives and gets counted | **0** | HEAVY | **CLOSED 2026-08-04** — T321/T161/T320/T403 merged, T400 shipped. | W4, W6, W7, W8 |
+| **W2** | **Run an outreach event** — create → RSVP → attend → complete | **0** | HEAVY | **CLOSED 2026-08-04** — 12 rows merged (T330, T401, T402, T174, T190, T306, T325, T152, T300, T301, T406, T165); T501/T505 closed won't-fix. | W1, W3, W6, W7 |
+| **W3** | **Run a meeting** — schedule → attendance → participation % | **5** | HEAVY | **RE-OPENED 2026-08-05 by live testing.** T196 shipped 2026-08-04; the owner then ran a real meeting and found four defects. **T508 is writing false data now.** | W2, W4, W6, W7 |
+| **W4** | **Hours & goal accounting** — the numbers users are shown | **9** | HEAVY | T205 + T322 applied to production 2026-08-04. **T509 added 2026-08-05 (MET-01 marks-only, D014) — BLOCKED on W3's T508.** | W1, W3, W6, W7 |
+| **W5** | **Home dashboards** — student/parent/coach landing state | **10** | STANDARD | T702/T187/T198 merged; T801-T803 filed from their closures; T156 parked | W6, W7, W8 |
+| **W6** | **Calendar & subscribe** | **0** | — | **CLOSED** — merged, database deployed | everything |
+| **W7** | **Roster & invites** | 5 | STANDARD | Working. T064 is a human gate; **T167's premise is UNVERIFIED — measure before packeting** | everything |
 | **W8** | **Email & notifications** | 2 | — | **Blocked on owner** | everything |
-| **W9** | **Migration & go-live** | 4 | HEAVY | Migration has run | everything |
-| **W10** | **Cross-cutting hygiene** | 8 | FAST/STANDARD | — | **nothing — see below** |
+| **W9** | **Migration & go-live** | 3 | HEAVY | **All three are HUMAN GATES (T064, T065, T070) — no machine can move them.** T333's data half was fixed by the owner in SQL; only the ETL half remains | everything |
+| **W10** | **Cross-cutting hygiene** | 8 | FAST/STANDARD | Includes **T175** (add `format:check` to CI) — cheapest row in the backlog | **nothing — see below** |
+| — | *unowned surface* | 1 | FAST | **T507** — login card overflows every phone under ~400px. `src/pages/login/**` belongs to no workflow; needs an owner assignment | — |
 
 **W10 must not run in parallel with anything.** Every row in it is a sweep across `src/pages/**` and
 `src/components/**` by definition, so it collides with all nine others. Run it alone, between waves,
 or fold each row into whichever workflow owns the file.
 
-**If you have three machines,** the highest-value non-colliding split is **W1 + W4 + W7**. W1 is the
-launch blocker, W4 is the only confirmed-wrong number on screen, and W7 is low-risk throughput. None
-of the three share a file.
+**Updated 2026-08-05.** W1, W2 and W6 are closed, so the old "W1 + W2" and "W1 + W4 + W7" advice is
+obsolete.
 
-**If you have two,** run **W1 + W2**. They are the two halves of "did this student's time get
-recorded", they do not share files, and between them they contain every remaining data-loss row.
+**If you have three machines:** **W3 + W4/W5 + W7.** W3 first — **T508 is writing false absence rows
+into production every time a meeting is ended**, and three of W3's five rows came from the owner
+actually using the app, which is the highest-confidence signal in this backlog. W4/W5 are one machine's
+work (they share `CoachHome`/`StudentHome` files). W7 is low-risk parallel throughput.
+
+**If you have two:** **W3 + W4/W5.**
+
+**One cross-machine dependency, and it is easy to get wrong:** **W4's T509 is inert until W3's T508
+ships.** While `backfillAbsences` writes a row for every eligible student, "explicit marks" and
+"eligibility" select the same set, so T509 would correctly produce no change and read as broken.
+Sequence T508 first, across machines.
+
+**Rows filed after this document was written** are not yet in the sections below. By surface:
+**W3** — T508, T510, T511, T601, T602 · **W4** — T509 · **W5** — T801, T802, T803 · **unowned** — T507.
+
+**Block-vs-surface mismatch, deliberate:** T507-T511 carry **W2's** number block (T500-599) because W2's
+orchestrator filed them, but T508/T510/T511 sit on **W3's** surface and T509 on **W4's**. The block is a
+collision-avoidance reservation, not an ownership claim. Whoever takes W3 should expect rows in the
+T500s.
 
 ---
 
