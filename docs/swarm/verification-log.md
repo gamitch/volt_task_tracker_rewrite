@@ -10178,3 +10178,95 @@ the first was the CI claim on a fast-moving `main`. Same failure mode, different
 
 `tsc` 0 · `format:check` 0 · `vitest` **80 files / 2027 tests** · T801 assertions **4/4** on live
 PostgreSQL 16.13, plus one mutation replayed.
+
+---
+
+## T204 + T700 + T701 — a wrong sentence that spread by citation, and a test suite nobody could run
+
+### T204: the named instance was already fixed; the class was not
+
+T204 named `loaders/students.ts:365-387`. **That comment was already corrected — by T186, commit
+`74489b8`, merged in PR #75 yesterday.** It carries a full "T186 CORRECTION" block. The row outlived
+its fix. Verified before touching anything rather than re-doing the work.
+
+But the same false claim was live in **three more files, as a citation chain**:
+
+| File | Said | Cited |
+|---|---|---|
+| `ParticipationTab.tsx:59` | "a plain view runs with the QUERYING USER's own permissions… not the view owner's" — backwards | — (origin) |
+| `reports.ts:133` | "so they run with the querying user's own RLS-scoped permissions" | `ParticipationTab.tsx` |
+| `dashboard.ts:79` | "so each runs under the querying session's own RLS" | `reports.ts` |
+
+**One confident sentence became three files of wrong reasoning, each citing the previous as
+authority.** All three are corrected together — fixing one link leaves the others pointing at a wrong
+source, which is how the claim survived being disproven in the first place.
+
+Each correction states the real mechanism (`security_invoker`, PG15+, defaults **off**, zero real
+clauses under `supabase/`), cites the measured run and T801's catalog comments, and says plainly that
+**no behaviour changes**: T185 closed no-change on the exposure itself under the owner's
+proportionality ruling. Only the explanation was ever wrong.
+
+### T701: the harness, and then what the harness was hiding
+
+**The row's diagnosis was right but mis-ordered.** It named `cron.sql`, `avatar_storage.sql`, and the
+missing roles. Measuring first showed the roles break it **first** — at `20260717000002_rls.sql`'s
+`grant … to authenticated`, long before either platform migration is reached. `auth_stub.sql`'s own
+comment claimed the roles "already exist… (confirmed directly)", which was true on the box it was
+authored on and false on bare Postgres. They are now created idempotently.
+
+**Then the sibling suite turned out to be rotten too, and worse.** `supabase/tests/run.sh` failed at
+apply time on a too-narrow `auth.users` stub. Fixing that let it reach its assertions for the first
+time in weeks — and **1 of 5 failed.**
+
+That failure is the real find. `seed.sql` seeds `students` and `teams` but **zero `student_teams`
+rows**, because `20260721000000_student_teams.sql` backfills memberships at *migration* time and this
+seed loads *after* migrations. The moment `20260722000000_membership_views.sql` moved
+`v_student_participation` onto ACTIVE memberships, `a-excused-shrinks-denominator` broke — **and
+nobody knew, because the runner could not start.** A real assertion was failing for two weeks behind
+a harness error. That is the cost of the rot, made concrete rather than asserted.
+
+Memberships added; all 5 now pass with real arithmetic (`expected_ct=2 present_ct=1 excused_ct=1 →
+100.0%`), not a vacuous zero.
+
+### T700: a guard, and two of my own errors caught by running it
+
+`t700_updatable_view_guard_assertions.sql` fails if any `public` view is both auto-updatable and
+write-granted to `anon`/`authenticated`. A2 pins the survey non-vacuous so A1 cannot pass for the
+wrong reason.
+
+**Two errors, both mine, both caught by running rather than reasoning:**
+
+1. **A3 tested the wrong property.** It asserted `is_updatable = NO` — but **T205 never changed the
+   view's shape and never claimed to.** `v_leaderboard_students` is still
+   `select id, display_name from students where is_active`: simple, therefore still auto-updatable.
+   T205 fixed the hazard by *revoking grants*. A3 now pins the absent write grant.
+2. **My runner undid the fix it was testing.** It applied blanket `grant … on all tables` *after* the
+   migrations, silently reversing T205's own `revoke` — so the guard failed against a correctly-fixed
+   database. It now uses `alter default privileges` *before* the migrations, which is how the real
+   platform behaves and leaves later explicit `REVOKE`s standing.
+
+Both would have shipped as confident wrong findings if I had reasoned instead of executed.
+
+### Mutations replayed
+
+| Suite | Mutation | Result |
+|---|---|---|
+| T700 | Comment out T205's two `revoke` lines | **RED** — A1 + A3, A3 naming `anon:DELETE, anon:INSERT, …` |
+| T700 | Add a **new** simple view | **RED** — A1 names `v_t700_probe_simple` |
+| RLS | `own_or_linked_read on students` → `using (true)` | **RED** — 2 assertions, non-zero exit |
+
+The second T700 mutation is the guard's actual purpose: a *future* view reintroducing the class.
+
+### The fix for the class, not the instances
+
+A new `sql` job in `ci.yml` runs **all eight** suites against a `postgres:16` service container, one
+step per suite so a red suite names itself. Dress-rehearsed locally against live PostgreSQL 16.13:
+**8/8 PASS**. Separate from the `ci` job on purpose — it needs a service container, it is slower, and
+a SQL failure should not hide inside a generic "CI failed".
+
+Nothing here can rot silently again, which was the actual complaint behind T701.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `eslint` 0 errors · `vitest` **80 files / 2027 tests** (unchanged — the
+TypeScript edits are comment-only) · **8/8 SQL suites** on live PG16.13 · 3 mutations replayed.

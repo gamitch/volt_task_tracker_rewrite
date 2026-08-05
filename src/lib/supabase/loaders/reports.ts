@@ -130,10 +130,26 @@
  * reference) each carry a `staff_all` policy granting `admin`/`coach` full
  * read access; `v_student_participation`/`v_student_hours` are plain views
  * over `students`/`attendance`/`event_sessions`/`events` with no
- * `security_definer`/`security_barrier` clause, so they run with the
- * querying user's own RLS-scoped permissions against those base tables
- * (same finding `ParticipationTab.tsx`'s own module doc #2 already made in
- * full). `ReportsShell.tsx` (forbidden/read-only) already restricts
+ * `security_definer`/`security_barrier` clause.
+ *
+ * **T204 CORRECTION.** This used to conclude "so they run with the querying
+ * user's own RLS-scoped permissions against those base tables", citing
+ * `ParticipationTab.tsx`'s module doc #2. Both the conclusion and the cited
+ * source are wrong, and `loaders/dashboard.ts` then cited THIS file in turn --
+ * a three-file citation chain from one bad premise, corrected together.
+ *
+ * The absence of `security_definer` proves nothing about views: the view-level knob is `security_invoker` (PG15+), which defaults OFF and
+ * appears as a real clause ZERO times under `supabase/`. These views therefore
+ * execute as their OWNER and do NOT apply the caller's RLS to the base tables.
+ * MEASURED, not reasoned: `20260731000000_leaderboard_students_view.sql:32-46`
+ * records the live run; `20260805000000_dashboard_views_comment_corrections.sql`
+ * now carries the same correction in the database catalog.
+ * NO BEHAVIOUR CHANGE is implied -- T185 closed no-change on the exposure
+ * itself under the owner's proportionality ruling (constitution item 25). Only
+ * the EXPLANATION was wrong.
+ *
+ * The staff-only access argument below is unaffected and is what makes these
+ * reads correct. `ReportsShell.tsx` (forbidden/read-only) already restricts
  * `/reports` to `coach`/`admin` via `RequireRole`, so every session reaching
  * any loader below is genuinely staff -- a real empty result from any query
  * here is "none exist yet for this season", not an RLS-caused false-empty.
