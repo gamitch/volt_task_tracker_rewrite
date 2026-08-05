@@ -4,9 +4,9 @@
 item 19's premise gate satisfied by orchestrator pre-verification and went to `checker-premise` anyway
 (process requires it regardless of what a packet claims about itself). The gate found a real defect
 v1's own read-verification could not see: a **seventh** narrow copy, and v1's prescribed six-file end
-state **does not compile**. v2 folds that finding in. **This is round 1 of a maximum of two (item
-19a). v2 has not been re-submitted or cleared — it must return to `checker-premise` before any worker
-runs.**
+state **does not compile**. v2 folds that finding in. **Round 1 was consumed by v1; round 2 reviewed
+v2 and returned DISPATCH (severity MINOR). Item 19a's two rounds are now spent — any further defect
+escalates to `boss-arbiter` rather than a third round. This packet is CLEARED for a worker.**
 
 Attempt count: 0. No worker has run against any version of this packet.
 
@@ -49,7 +49,22 @@ need opus.
   This is an **assignability break, not an exhaustiveness break** — read-verification (grepping for
   `Record<AttendanceMethod` or a `switch`) cannot catch it, because nothing is missing a branch;
   something stops being *assignable* once one side of a structural match widens and the other doesn't.
-- **This packet (v2)** is not yet cleared. It goes back to `checker-premise` before dispatch.
+- **Round 2 of 2:** a DIFFERENT `checker-premise` agent reviewed v2 and returned **DISPATCH, severity
+  MINOR**. It re-measured the full prescribed end state in its own isolated worktree rather than
+  reading it: all seven widened plus both doc blocks → `typecheck` **EXIT 0**, `format:check`
+  **EXIT 0**, `lint` **EXIT 0** (0 errors / 366 warnings, baseline unmoved), `npm test` **EXIT 0**
+  (81 files / 2051 tests). It independently reproduced both failing states too (five widened → exit 2
+  / two errors; six widened → exit 2 / four errors), and **proved the four collateral locations need
+  no edit**: with all seven widened, `git diff --stat` produces no output for
+  `MarkEventCompleteDialog.tsx`, `OutreachDetail.tsx` or `MarkDayCompleteDialog.test.tsx`, and
+  `MarkDayCompleteDialog.tsx` shows only `@@ -575 +575 @@`.
+
+  Its five findings are folded into this v2 text: the `:785` description corrected (Finding 1), a
+  **third** latent narrow copy added at `supabase/functions/checkin/attendance_upsert.ts:43`
+  (Finding 2 — the eighth-copy hunt result, latent not blocking), this section's round arithmetic
+  corrected (Finding 3), the stale ledger row left to the orchestrator (Finding 4), and the
+  `attendance.ts` post-edit shift measured at 211 → **222**, not "a few lines" (Finding 5).
+- **Item 19 is satisfied. A worker may now run against this packet.**
 
 ---
 
@@ -79,8 +94,9 @@ alter table public.attendance
 history — **do not touch anything under `supabase/migrations/`**, additive-only per constitution item
 10, and this migration is already applied.)
 
-**Line numbers for #1, #2, #6, #7 above are current-HEAD numbers; #1 and #2 will shift down a few
-lines once you add their doc comments (§3).** Match by file + content, not a literal line number that
+**Line numbers for #1, #2, #6, #7 above are current-HEAD numbers; #1 and #2 SHIFT once you add their
+doc comments (§3) — measured by premise-gate round 2: `attendance.ts` 211 → **222** (11 lines: 7 from
+the `:16-22` note, 4 from the declaration comment), `types.ts` 327 → **329**.** Match by file + content, not a literal line number that
 has since moved.
 
 **No exhaustiveness risk survives this task:** verified, there is no `Record<AttendanceMethod, …>` and
@@ -110,8 +126,9 @@ you are authorized to touch there. If, after widening all seven, any of these fo
 error, **stop and flag a dispute** — do not attempt to edit a Forbidden file to make it go away.
 
 **Reproducing §0's intermediate five-widened state yourself (optional, not required) will show the
-first `TS2322` at `MarkDayCompleteDialog.tsx:785`** — the enclosing `): AttendanceWriteRow[] {`
-return-type position of `buildAttendanceWriteRows` — not at `:795`, the actual
+first `TS2322` at `MarkDayCompleteDialog.tsx:785`** — the array-typed `return` statement of
+`buildAttendanceWriteRows` (`:785` is `return checkedStudentIds.map((studentId) => {`; the
+`): AttendanceWriteRow[] {` signature line is `:784`) — not at `:795`, the actual
 `resolveAttendanceWriteMethod(...)` call site whose value is the real mismatch. This is a `tsc`
 reporting-position quirk (the array-typed `return` statement is where the checker parks the
 diagnostic), not a sign your build disagrees with this packet. Do not spend time hunting for a
@@ -231,8 +248,14 @@ and (for the two DDL-quote corrections) that the quoted three-value text is hist
   narrow copy, structurally identical to the seven you are widening. It is safe to leave: `grep`
   confirms `buildAttendanceCsv` (the only consumer of `AttendanceCsvRow`) is called nowhere in `src/`
   outside its own test file, so nothing produces a real (possibly-`'self'`) row into this shape today.
-  This is a **second** known latent narrow copy, alongside `selfCheckoff.ts`'s fork — name both in
-  your report (§6).
+  This is a **second** known latent narrow copy, alongside `selfCheckoff.ts`'s fork.
+- **Do not touch `supabase/functions/checkin/attendance_upsert.ts`.** Its `:43`
+  `method: 'qr' | 'coach' | 'import';` is a **third** latent narrow copy, found by premise-gate round
+  2 — derived from at `:102` (`method: AttendanceRow['method']`) and consumed at `:131`/`:137`. It
+  cannot break this build and is not in AC3's residue count: it is Deno, `tsconfig.json` includes only
+  `["src", "vite.config.ts"]`, and `eslint.config.js:19` ignores `supabase/functions/**`. It is a
+  production QR-check-in path with no `'self'` writer today. Out of scope, but **name all three**
+  latent copies in your report (§6) — an enumeration that stops at two is incomplete under item 20.
 - **Do not touch any file under `supabase/migrations/`.** Everything you need from the migration is a
   read-only citation.
 - **Do not touch `MarkEventCompleteDialog.tsx`, `OutreachDetail.tsx`, or
