@@ -10717,3 +10717,46 @@ added to `KICKOFF-PROMPTS.md` asserted an owner instruction with no repo-side ev
 agent-authored doc claiming standing owner authorization is not owner consent. **Correct, and
 discharged**: the ruling is now recorded verbatim in `auto-mode-decisions.md` and all nine blocks cite
 it instead of asserting it.
+
+---
+
+## T603 — widen the attendance `method` shape to `'self'` — **PASS** (2026-08-05, `b80a9cf`)
+
+HEAVY. Full process: packet → **two** `checker-premise` rounds → `worker-implementer` → `checker-reviewer`.
+All sonnet; none of item 18's opus triggers fire. NIT only.
+
+**The premise gate is the whole story of this row.** The ledger said four narrow copies. The
+orchestrator hand-measured six. **There are seven** — plus a latent eighth. Every undercount came from
+the same anchored `^export type AttendanceMethod` grep, which structurally cannot see
+`loaders/outreach.ts:1258`, an inline `method` property inside `OutreachAttendanceWriteRow`.
+
+Round 1 returned **BLOCKER** because it *compiled* the prescription rather than reading it:
+
+| state | typecheck |
+|---|---|
+| five widened | **exit 2**, 2 errors |
+| six widened — the packet's own prescribed end state | **exit 2**, 4 errors |
+| seven widened | **0** |
+
+A worker obeying v1 could not have reached green: three of those four errors were in files outside its
+Allowed Files and the fourth was explicitly Forbidden. This is an *assignability* break, not an
+exhaustiveness break, so no amount of grepping for `Record<AttendanceMethod>` or a `switch` could ever
+have found it. Round 2 returned **DISPATCH** and, asked to assume the greps were still blind, found the
+eighth copy at `supabase/functions/checkin/attendance_upsert.ts:43`.
+
+**The checker reproduced the baseline itself** instead of accepting reported numbers: lint 366 warnings
+/ 0 errors at both ends with byte-identical normalised reports, vitest **2051/2051** across 81 files at
+both ends, typecheck 0, format:check 0.
+
+**Owner-authorised W2 scope held, verified by hunk:** `numstat` shows `1 1` for all five single-line
+files; `MarkDayCompleteDialog.tsx` has exactly one hunk, `@@ -575 +575 @@`; and `:936` — which appears
+in the mid-fix error list — is **byte-identical to baseline**, having self-resolved once the seventh
+widening landed. Both stale DDL quotes were annotated rather than edited, appearing only as unchanged
+context lines. `resolveAttendanceWriteMethod`'s body is untouched, so `'self'` still falls through to
+`'coach'`: representability only, no behaviour change.
+
+**"One union in one place" was NOT achieved, and the worker's evidence doc says so plainly** — a packet
+requirement, so a later reader cannot mistake this for consolidation. Three narrow copies survive and
+are now all owned by **T608**, whose scope was widened accordingly. The third is the one worth
+remembering: `attendance_upsert.ts:43` sits outside both `tsconfig`'s include and eslint's scope, so no
+gate in this repo will ever catch it.
