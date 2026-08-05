@@ -419,38 +419,27 @@ export const updateStudent: UpdateStudentFn = makeUpdateStudent();
  * column set.
  */
 interface StudentGoalProjectionDbRow {
-  /**
-   * **T186 -- this column is schema-documented as DISPLAY-ONLY, and this is
-   * the second consumer of it.** `dashboard_views.sql:311-320` says
-   * `v_student_goal_projection.team_id` (which is `students.team_id`, the
-   * legacy/primary-team column SCH-01 leaves in place "as legacy/primary-team
-   * until every reader migrates") is "used here ONLY for the row's display
-   * badge ... never for any rollup math" -- written when the view's only
-   * reader was `loaders/dashboard.ts`'s `queryGoalProjection`, feeding
-   * `CoachHome.tsx`'s projection rows. That comment cannot see THIS reader,
-   * and an editor of the view who trusts it would not know this one exists.
+  /* T802 -- `team_id` is NO LONGER SELECTED from this view here, and the
+   * field is gone from this row type.
    *
-   * History, because the near-miss is the point: T176 wired this value
-   * through to `StudentScope.teamId`, and `StudentHome.tsx` then used it for
-   * FUNCTIONAL team scoping -- gating meetings, live check-in and sign-up
-   * opportunities off a column the schema calls display-only. That was a real
-   * defect for dual-team students (T187), and T187 fixed it by moving every
-   * scope predicate onto `teamIds` from ACTIVE `student_teams` memberships.
+   * The chain it fed was dead end-to-end: `v_student_goal_projection.team_id`
+   * -> `StudentScope.teamId` -> `ResolvedStudentIdentity.teamId` -> nothing.
+   * T176 wired it through and `StudentHome.tsx` used it for FUNCTIONAL team
+   * scoping, which was a real defect for dual-team students; T187 fixed that
+   * by moving every scope predicate onto `teamIds` (ACTIVE `student_teams`
+   * memberships) and kept `teamId` only for shape stability.
    *
-   * So the view's "display badge only" claim is TRUE again today -- but only
-   * because T187 walked it back, and it was silently false in between. The
-   * dependency edge itself still exists: this column still reaches
-   * `StudentScope.teamId` -> `ResolvedStudentIdentity.teamId`, where (verified
-   * by grep across this repo) it is currently WRITTEN AND NEVER READ, kept for
-   * shape stability under T187's owner ruling rather than for any live use.
-   * Anything that starts reading it again is reintroducing the T187 defect.
+   * Removing the whole chain rather than just its last link is deliberate:
+   * dropping only `ResolvedStudentIdentity.teamId` would have left
+   * `StudentScope.teamId` written-and-unread, relocating the same hazard one
+   * layer down instead of removing it. The hazard was never the field's
+   * existence -- it was a plainly-named, already-populated value that a
+   * future reader would reasonably mistake for the right answer.
    *
-   * The matching correction could NOT be made in the migration itself:
-   * constitution item 10 makes editing an applied migration file a BLOCKER,
-   * and `20260723000001_dashboard_views.sql` is applied. Recorded here
-   * instead. See this task's verification-log entry.
+   * This view is now read here for hours only. `loaders/dashboard.ts:387`
+   * remains a real reader of `team_id` for its display badge -- that one is
+   * untouched and still correct.
    */
-  team_id: string;
   goal_hours: number;
   confirmed_hours: number;
   planned_hours: number;
@@ -462,7 +451,7 @@ async function queryStudentGoalProjectionById(
 ): Promise<LoaderQueryResult<StudentGoalProjectionDbRow>> {
   const result = await client
     .from('v_student_goal_projection')
-    .select('team_id, goal_hours, confirmed_hours, planned_hours')
+    .select('goal_hours, confirmed_hours, planned_hours')
     .eq('student_id', studentId)
     .maybeSingle();
   return { data: (result.data as StudentGoalProjectionDbRow | null) ?? null, error: result.error };
@@ -532,7 +521,6 @@ export function makeResolveStudentScope(
     // Verbatim passthrough (constitution item 3) -- `goal_hours` is already
     // the coalesced value; no coalesce/override arithmetic happens here.
     return {
-      teamId: row.team_id,
       teamIds: (activeTeamRows ?? []).map((teamRow) => teamRow.team_id),
       goalHours: row.goal_hours,
       confirmedHours: row.confirmed_hours,

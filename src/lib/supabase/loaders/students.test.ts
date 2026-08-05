@@ -127,7 +127,7 @@ describe('makeResolveStudentScope (T176 criterion 8, round 2: v_student_goal_pro
     expect(eqSpy).toHaveBeenCalledWith('student_id', 'student-real-1');
   });
 
-  it('maps team_id/goal_hours/confirmed_hours/planned_hours to teamId/goalHours/confirmedHours/plannedHours (camelCase, verbatim -- no coalesce/arithmetic here)', async () => {
+  it('maps goal_hours/confirmed_hours/planned_hours to goalHours/confirmedHours/plannedHours (camelCase, verbatim -- no coalesce/arithmetic here; T802 removed the team_id passthrough)', async () => {
     const { client } = makeRecordingClient({
       team_id: 'team-real-2',
       goal_hours: 42,
@@ -137,7 +137,6 @@ describe('makeResolveStudentScope (T176 criterion 8, round 2: v_student_goal_pro
     const resolveStudentScope = makeResolveStudentScope(() => client);
 
     await expect(resolveStudentScope('student-real-2')).resolves.toEqual({
-      teamId: 'team-real-2',
       teamIds: ['team-real-2'],
       goalHours: 42,
       confirmedHours: 10,
@@ -155,7 +154,6 @@ describe('makeResolveStudentScope (T176 criterion 8, round 2: v_student_goal_pro
     const resolveStudentScope = makeResolveStudentScope(() => client);
 
     await expect(resolveStudentScope('student-real-3')).resolves.toEqual({
-      teamId: 'team-real-3',
       teamIds: ['team-real-3'],
       goalHours: 7,
       confirmedHours: 0,
@@ -255,7 +253,6 @@ describe('makeResolveStudentScope (T187: ACTIVE student_teams memberships)', () 
     const resolveStudentScope = makeResolveStudentScope(() => client);
 
     await expect(resolveStudentScope('student-dual-6')).resolves.toEqual({
-      teamId: 'team-primary-6',
       teamIds: ['team-primary-6', 'team-second-6'],
       goalHours: 10,
       confirmedHours: 1,
@@ -271,7 +268,6 @@ describe('makeResolveStudentScope (T187: ACTIVE student_teams memberships)', () 
     const resolveStudentScope = makeResolveStudentScope(() => client);
 
     await expect(resolveStudentScope('student-real-7')).resolves.toEqual({
-      teamId: 'team-real-7',
       teamIds: [],
       goalHours: 10,
       confirmedHours: 1,

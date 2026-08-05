@@ -10101,3 +10101,80 @@ check does not cover the SQL layer today.
 T198 as open rows and T801 as merely "filed", all of which are merged/closed in the ledger on `main`.
 Its refresh (PR #89) landed *after* those merges, so the information was available. Reported to the
 owner rather than fixed inside this task.
+
+---
+
+## T802 + T805 — one dead chain removed, one suspected flake closed unreproducible
+
+### T805 first, because it closed on evidence rather than effort
+
+The row named exactly one untested condition: a **full-suite** run under CPU contention, which is what
+it originally failed under. Run twice, 8 busy-loops on a 4-core box: **80 files / 2027 tests green
+both times.** Eight failed reproductions now, across isolated / loaded / full-suite-loaded.
+
+**A mechanism was hypothesised and then disproven, rather than written into the row as if true.** Both
+failing tests were error-path tests, and this repo's `flushMicrotasks` helper — in **48 test files** —
+awaits a fixed **three** `Promise.resolve()` ticks. A fixed-depth drain is a *guess* at settledness,
+not a wait for it, and that is a genuinely plausible load-sensitive race.
+
+Tested by mutation instead of asserted: depth 2 → 113/113 pass. Depth 1 → 113/113. Depth **0** →
+113/113. `act()` drains React's own queue on exit, so those three awaits are **decorative here**.
+The hypothesis is dead, and the row says so.
+
+That inert-helper observation was deliberately NOT filed as its own row: it is harmless, and a
+48-file cleanup with no defect behind it is churn. It is recorded so nobody repeats the experiment.
+
+**Closed exactly as the row instructed** — reproduce first, close as unreproducible if you cannot. A
+row that cannot be reproduced is worth closing, not worth chasing.
+
+### T802 — the row understated the work, and re-measuring caught it
+
+The row named `ResolvedStudentIdentity.teamId`. Removing only that would have left
+`StudentScope.teamId` written-and-unread — **the same hazard relocated one layer down, not fixed.**
+
+Re-measured before cutting: `StudentScope.teamId` had no other reader (every other `.teamId` in `src`
+is an unrelated shape — roster tabs, create payloads). So the full chain went:
+
+```
+v_student_goal_projection.team_id  →  StudentScope.teamId  →  ResolvedStudentIdentity.teamId  →  ∅
+```
+
+`queryStudentGoalProjectionById` no longer selects the column. `loaders/dashboard.ts:387` still reads
+it for the display badge and is untouched — that reader was always legitimate.
+
+The hazard was never the field existing. It was a **plainly-named, already-populated value** that a
+future reader would reasonably mistake for the right answer — re-creating the T187 dual-team defect.
+
+### The part that made this more than a deletion
+
+T801 shipped a catalog comment **yesterday** saying this column has **TWO readers**, naming the exact
+reader T802 just deleted. The comment went stale the instant the code changed.
+`20260805000001_goal_projection_team_id_one_reader.sql` corrects it — additive, per item 10, the same
+route T801 itself took. The T187 history is **deliberately retained**: the reader is gone, but the
+column is still a single-team value that already caused one scoping defect, and dropping the history
+because the reader left would re-open the documentation gap T801 was filed to close.
+
+### The finding worth more than the cleanup
+
+**T801's assertion A2 kept PASSING while the comment it guards was false.**
+
+Verified live, not reasoned: after deleting the reader, the assertions ran **ALL PASS** against the
+now-wrong "TWO readers" text. A2 pins catalog *text*. It guards against someone rewriting the comment.
+It cannot see a TypeScript reader disappear.
+
+A2 now pins the current truth plus the retained history, and a mutation — withholding the new
+migration — turns it **RED**, quoting the stale text back:
+
+```
+A2: ... states ONE reader and keeps the T187 history: FAIL -- got: ... TWO readers, not one: ...
+```
+
+**Generalisable, and worth carrying: a catalog comment describing application code cannot be
+self-verifying.** The assertion proves the text is what someone intended; only a human keeps it true.
+This is the second time in two days that a correct-when-written statement went stale underneath me —
+the first was the CI claim on a fast-moving `main`. Same failure mode, different surface.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `vitest` **80 files / 2027 tests** · T801 assertions **4/4** on live
+PostgreSQL 16.13, plus one mutation replayed.

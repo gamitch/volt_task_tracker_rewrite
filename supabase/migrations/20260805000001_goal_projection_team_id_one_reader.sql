@@ -1,0 +1,34 @@
+-- T802: `v_student_goal_projection.team_id` now has ONE reader, not two.
+-- Corrects the column comment written one migration earlier by
+-- `20260805000000_dashboard_views_comment_corrections.sql` (T801), which is
+-- already applied -- so per constitution item 10 this lands as a new additive
+-- file rather than an edit, exactly as that migration's own header did.
+--
+-- **Comment-only. No view definition changes, no data changes.**
+--
+-- What changed in the same commit as this migration: T802 deleted the dead
+-- chain `v_student_goal_projection.team_id` -> `StudentScope.teamId` ->
+-- `ResolvedStudentIdentity.teamId`. `loaders/students.ts`'s
+-- `queryStudentGoalProjectionById` no longer selects `team_id` at all, so the
+-- "TWO readers" warning T801 wrote is now false: `loaders/dashboard.ts:387`
+-- is the only reader, and it renders the display badge the view's original
+-- comment described.
+--
+-- **Why this file exists at all, stated plainly because it is the useful
+-- lesson:** T801's assertion A2 pins the CATALOG TEXT ("TWO readers",
+-- "queryStudentGoalProjectionById"). When T802 deleted that reader, A2 kept
+-- PASSING -- it cannot see TypeScript. A comment assertion guards against
+-- someone rewriting the comment; it cannot guard against the world moving
+-- underneath it. The assertion was updated alongside this migration so the
+-- two stay in step, but the general point stands: catalog comments describing
+-- application code need a human to keep them true.
+--
+-- The T187 history is DELIBERATELY RETAINED below. The reader is gone, but
+-- the hazard that made it worth documenting is not: this column is a
+-- legacy/primary-team single value on a view whose own comment calls it
+-- display-only, and it already caused one dual-team scoping defect. Dropping
+-- the history because the reader went away would re-create exactly the
+-- documentation gap T801 was filed to close.
+
+comment on column v_student_goal_projection.team_id is
+  'Legacy/primary-team column (students.team_id). ONE reader as of T802: loaders/dashboard.ts:387, which renders it as a display badge -- matching the original claim in 20260723000001_dashboard_views.sql:311-320. This supersedes 20260805000000''s "TWO readers" text: loaders/students.ts (queryStudentGoalProjectionById) USED to select it into StudentScope.teamId, and that reader ONCE USED IT FOR FUNCTIONAL SCOPING -- the T187 defect, where a dual-team student was scoped to her primary team only. T187 fixed the reader; T802 deleted the whole dead chain (StudentScope.teamId and ResolvedStudentIdentity.teamId with it). History retained on purpose: the column is still a single-team value that already caused one scoping bug, so anything that starts scoping off it is reintroducing that bug. The rollup-math claim also still holds -- this view has no student_teams join and cannot double a row by membership.';

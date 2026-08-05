@@ -66,10 +66,18 @@ begin
     end);
 end $$;
 
--- Assertion 2: the column comment names the SECOND reader. This is the
--- correction's whole point -- the original comment was wrong by omission, not
--- by stating a falsehood -- so the assertion pins the omitted fact rather than
--- mere presence of a comment.
+-- Assertion 2: the column comment states the reader count correctly.
+--
+-- T802 UPDATED THIS, and how it had to be updated is the point. T801 wrote
+-- "TWO readers" and this assertion pinned that string. T802 then deleted one
+-- of those readers in TypeScript -- and this assertion KEPT PASSING, because
+-- it can only see the catalog. A comment assertion guards against someone
+-- rewriting the comment; it cannot notice the code it describes changing.
+--
+-- So it now pins the CURRENT truth (one reader, superseded text) AND the
+-- retained T187 history, which is the part that must survive every future
+-- edit: the reader is gone, but the column is still a single-team value that
+-- already caused one dual-team scoping defect.
 do $$
 declare
   body text;
@@ -83,10 +91,11 @@ begin
     and a.attname = 'team_id';
 
   insert into t801_results values (
-    'A2: v_student_goal_projection.team_id comment names the second reader',
+    'A2: v_student_goal_projection.team_id comment states ONE reader and keeps the T187 history',
     case when body is not null
-              and body like '%queryStudentGoalProjectionById%'
-              and body like '%TWO readers%'
+              and body like '%ONE reader as of T802%'
+              and body like '%T187 defect%'
+              and body not like '%TWO readers, not one%'
          then 'PASS'
          else 'FAIL -- got: ' || coalesce(left(body, 120), '<null>')
     end);
