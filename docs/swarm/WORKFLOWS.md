@@ -56,7 +56,7 @@ Tier is the **heaviest** item in the workflow, per constitution item 26.
 
 | # | Workflow | Open rows | Tier | State | Safe to run beside |
 |---|---|---:|---|---|---|
-| **W1** | **Check in** — student arrives and gets counted | **1** | HEAVY | **NOT broken — T321/T161/T320/T403 all merged (PR #28 +). Only T400 remains.** *(This cell read "Broken end to end / 4 rows" until 2026-08-04; three rows had shipped and their statuses were never updated.)* | W4, W6, W7, W8 |
+| **W1** | **Check in** — student arrives and gets counted | **0** | HEAVY | **CLOSED — T321/T161/T320/T403 merged (PR #28 +), T400 shipped 2026-08-04. No open rows.** *(This cell read "Broken end to end / 4 rows" until 2026-08-04; three rows had shipped and their statuses were never updated.)* | W4, W6, W7, W8 |
 | **W2** | **Run an outreach event** — create → RSVP → attend → complete | 13 | HEAVY | Partly working | W1, W3, W6, W7 |
 | **W3** | **Run a meeting** — schedule → attendance → participation % | **1** | HEAVY | **T197/T160/T162 shipped 2026-08-04; only T196 (the mount) remains** | W2, W4, W6, W7 |
 | **W4** | **Hours & goal accounting** — the numbers users are shown | 12 | HEAVY | **T205 + T322 merged 2026-08-04; both await owner cutover.** T500 closed unshipped (superseded by T702) | W1, W3, W6, W7 |

@@ -252,6 +252,20 @@ interface StudentDisplayDbRow {
   display_name: string;
 }
 
+/** T400. `title` is read from `events`, not `event_sessions` -- the session
+ * table has no title of its own (`20260717000000_scheduling_attendance.sql:53-63`). */
+interface OpenSessionDbRow {
+  id: string;
+  event_id: string;
+  starts_at: string;
+  ends_at: string;
+}
+
+interface OpenSessionEventDbRow {
+  id: string;
+  title: string;
+}
+
 // ---------------------------------------------------------------------------
 // Row mappers -- snake_case DB row -> `StudentMeetingView.tsx`'s own
 // camelCase types (module doc above, Trap #2).
@@ -410,6 +424,50 @@ async function queryStudentsByIds(
   return { data: (result.data as StudentDisplayDbRow[] | null) ?? null, error: result.error };
 }
 
+/**
+ * T400. Sessions a student standing in the room could plausibly be checking
+ * into, newest-starting last.
+ *
+ * The window is deliberately generous in BOTH directions and the reason is a
+ * product ruling, not a guess: the owner's stated case is *"if a student is
+ * leaving the meeting and forgot to check in they could do so"*, and students
+ * also arrive before the official start. `OPEN_SESSION_GRACE_MS` is applied to
+ * `ends_at` (late) and `starts_at` (early) symmetrically.
+ *
+ * Filtering is on `starts_at`/`ends_at` (`timestamptz`), NOT on `session_date`
+ * (`date`). A `date` comparison would have to pick a timezone to mean "today",
+ * and an evening meeting in US Central is already tomorrow in UTC -- the shop's
+ * 6-9pm build night would list as tomorrow's session, or as nothing at all.
+ * `timestamptz` comparisons carry the offset and have no such failure.
+ *
+ * Not filtered by team here: RLS does it. `event_sessions`'s
+ * `own_or_linked_read` policy (`20260717000002_rls.sql:180-189`) already limits
+ * a non-staff caller to sessions whose event is global or matches a linked
+ * student's team, so a duplicate client-side filter would be a second,
+ * silently-diverging copy of that rule.
+ */
+async function queryOpenSessions(
+  client: SupabaseClient,
+  nowMs: number,
+): Promise<LoaderQueryResult<OpenSessionDbRow[]>> {
+  const result = await client
+    .from('event_sessions')
+    .select('id, event_id, starts_at, ends_at')
+    .eq('status', 'scheduled')
+    .gte('ends_at', new Date(nowMs - OPEN_SESSION_GRACE_MS).toISOString())
+    .lte('starts_at', new Date(nowMs + OPEN_SESSION_GRACE_MS).toISOString())
+    .order('starts_at', { ascending: true });
+  return { data: (result.data as OpenSessionDbRow[] | null) ?? null, error: result.error };
+}
+
+async function queryEventTitlesByIds(
+  client: SupabaseClient,
+  eventIds: string[],
+): Promise<LoaderQueryResult<OpenSessionEventDbRow[]>> {
+  const result = await client.from('events').select('id, title').in('id', eventIds);
+  return { data: (result.data as OpenSessionEventDbRow[] | null) ?? null, error: result.error };
+}
+
 // ---------------------------------------------------------------------------
 // `getClient` is injectable (defaults to the shared singleton), same
 // convention every prior `loaders/*.ts` file in this directory already
@@ -487,6 +545,67 @@ export function makeLoadLinkedStudents(
 
 /** `StudentMeetingView.tsx`'s own default `loadLinkedStudents` -- real query. */
 export const loadLinkedStudents: LoadLinkedStudentsFn = makeLoadLinkedStudents();
+
+// ---------------------------------------------------------------------------
+// T400: the session picker's data source.
+//
+// A short code is meaningful ONLY relative to one session -- `verifyShortCode`
+// (`supabase/functions/checkin/hmac.ts:133-145`) HMACs it over
+// `${sessionId}:${bucket}`, and `validateCheckinRequest`
+// (`supabase/functions/checkin/validation.ts:69`) rejects any body whose
+// `session_id` is not a uuid. The kiosk shows the QR and the 6-char code but
+// never a readable session id, so a student who cannot scan has no way to
+// supply one. This loader is what closes that gap: the student picks the event
+// they are standing in, which supplies the session id, and T321's existing
+// short-code form does the rest.
+// ---------------------------------------------------------------------------
+
+/** T400: two hours either side of the session. See `queryOpenSessions`. */
+export const OPEN_SESSION_GRACE_MS = 2 * 60 * 60 * 1000;
+
+export interface OpenCheckinSession {
+  sessionId: string;
+  title: string;
+  startsAt: string;
+}
+
+export type LoadOpenCheckinSessionsFn = () => Promise<OpenCheckinSession[]>;
+
+/**
+ * T400. `now` is injected rather than read from the module so a test can pin
+ * the window without touching the system clock; it defaults to the real clock.
+ */
+export function makeLoadOpenCheckinSessions(
+  getClient: () => SupabaseClient = getSupabaseClient,
+  now: () => number = () => Date.now(),
+): LoadOpenCheckinSessionsFn {
+  const loadSessions = createLoader<number, OpenSessionDbRow[]>(queryOpenSessions, getClient);
+  const loadEventTitles = createLoader<string[], OpenSessionEventDbRow[]>(
+    queryEventTitlesByIds,
+    getClient,
+  );
+
+  return async (): Promise<OpenCheckinSession[]> => {
+    const sessionRows = (await loadSessions(now())) ?? [];
+    if (sessionRows.length === 0) {
+      return [];
+    }
+    const eventIds = [...new Set(sessionRows.map((row) => row.event_id))];
+    const eventRows = (await loadEventTitles(eventIds)) ?? [];
+    const titleById = new Map(eventRows.map((row) => [row.id, row.title] as const));
+    // A session whose event title did not come back is still listed -- the
+    // student can see it is there and tap it. Dropping it would hide a
+    // check-in surface because of a missing label, which is the worse failure.
+    return sessionRows.map((row) => ({
+      sessionId: row.id,
+      title: titleById.get(row.event_id) ?? 'Meeting',
+      startsAt: row.starts_at,
+    }));
+  };
+}
+
+/** `CheckinResult.tsx`'s own default `loadOpenSessions` -- real query. */
+export const loadOpenCheckinSessions: LoadOpenCheckinSessionsFn = makeLoadOpenCheckinSessions();
 
 // ---------------------------------------------------------------------------
 // `CheckinResult.tsx`'s real `getAccessToken` (Trap #3). Deliberately NOT
