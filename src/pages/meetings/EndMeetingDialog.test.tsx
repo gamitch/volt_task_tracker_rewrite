@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 /**
- * T036: tests for `EndMeetingDialog.tsx`.
+ * T036: tests for `EndMeetingDialog.tsx`. T508 UPDATED: three tests here
+ * encoded the OLD unconditional-absence-write behaviour and were re-derived
+ * deliberately (never deleted) -- see each one's own "T508 RE-DERIVED"
+ * comment for what changed and why. C3-C9 coverage for the new opt-in
+ * checkbox / renamed payload / roster-independent tally is added per this
+ * task's Allowed Files table.
  *
  * Per this task's Allowed Files ("A colocated `EndMeetingDialog.test.tsx` is
  * acceptable per established precedent") this is a deliberate, disclosed
@@ -10,14 +15,17 @@
  * "Required Worker Output" proof requirements:
  *
  *   1. Real proof of the confirm flow: the real `AlertDialog` opens with the
- *      live tally + backfill/checkout callouts, `onEndMeeting` is not called
- *      until the dialog's own action button is clicked, and confirming calls
- *      it exactly once with the single atomic `EndMeetingPayload` (module doc
- *      section 1) -- naming the correct backfill and checkout student id
- *      lists derived from the fixture data.
+ *      live tally + mark-absent/checkout callouts, `onEndMeeting` is not
+ *      called until the dialog's own action button is clicked, and
+ *      confirming calls it exactly once with the single atomic
+ *      `EndMeetingPayload` (module doc section 1) -- naming the correct
+ *      `markAbsentStudentIds`/`checkoutStudentIds` lists derived from the
+ *      fixture data AND the coach's own opt-in choice (section 1a).
  *   2. Real proof of the summary-count accuracy (module doc section 3): the
- *      pre-confirm tally reflects only currently-recorded rows, and a
- *      separate sentence discloses the about-to-be-backfilled count.
+ *      pre-confirm tally reflects every real record directly (not just
+ *      roster members, T508), and a separate sentence discloses the
+ *      no-record count worded by the coach's own opt-in choice -- never the
+ *      marked-absent claim unconditionally.
  *   3. Real proof of the post-completion correction path (module doc section
  *      2b): after the meeting ends, editing a row's status calls
  *      `onEditAttendance` with a plain `(sessionId, studentId, status)` --
@@ -37,10 +45,11 @@ import {
   applyEndMeetingResult,
   buildEndMeetingConfirmDescription,
   buildEndMeetingPayload,
-  computeBackfillAbsentStudentIds,
+  buildMarkRemainingAbsentLabel,
   computeCheckoutStudentIds,
   computeEndMeetingSummaryCounts,
   computeNoRecordCount,
+  computeUnmarkedStudentIds,
   EndMeetingDialog,
   formatEndMeetingSummaryLine,
   type AttendanceRecordState,
@@ -138,6 +147,22 @@ function clickAttendanceOption(name: string, value: string): void {
   clickButton(option as HTMLButtonElement);
 }
 
+/** Section 1a: `CheckboxInput` renders a real `<input type="checkbox">`
+ * (same resolution pattern `AdminToggles.test.tsx`/`SettingsPage.test.tsx`
+ * already use for Astryx checkbox-shaped controls in this repo). */
+function findMarkRemainingAbsentCheckbox(): HTMLInputElement {
+  const input = document.querySelector('input[type="checkbox"]');
+  expect(input, 'expected the opt-in CheckboxInput to render').toBeTruthy();
+  return input as HTMLInputElement;
+}
+
+function clickMarkRemainingAbsentCheckbox(): void {
+  const input = findMarkRemainingAbsentCheckbox();
+  act(() => {
+    input.click();
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Fixture builders -- distinct, obviously-fabricated data from the shipped
 // default fixture (constitution item 6), so tests exercise real injected
@@ -151,11 +176,18 @@ const TEST_SESSION: EndMeetingSessionInfo = {
   status: 'scheduled',
 };
 
+// T508: TWO roster members have no attendance row (`student-hal`,
+// `student-jet`), not one -- so the opt-in checkbox's plural label/count and
+// the "assert against the SECOND unmarked member, not just the first" fixture
+// design requirement are both exercisable. `student-jet` sits AFTER
+// `student-ivy` (mid/end of the list, not adjacent to `student-hal`) so a
+// test that only checked "the first unmarked id" would not accidentally pass.
 const TEST_ROSTER: EndMeetingRosterEntry[] = [
   { studentId: 'student-fox', name: 'Fox K.' },
   { studentId: 'student-gwen', name: 'Gwen L.' },
   { studentId: 'student-hal', name: 'Hal S.' },
   { studentId: 'student-ivy', name: 'Ivy P.' },
+  { studentId: 'student-jet', name: 'Jet Q.' },
 ];
 
 const TEST_ATTENDANCE: Record<string, AttendanceRecordState> = {
@@ -173,7 +205,7 @@ const TEST_ATTENDANCE: Record<string, AttendanceRecordState> = {
     method: 'coach',
     recordedBy: 'fixture-coach',
   },
-  // student-hal: deliberately no attendance row -- should be backfilled absent.
+  // student-hal: deliberately no attendance row -- unmarked candidate #1.
   'student-ivy': {
     status: 'late',
     checkInAt: '2026-07-23T01:30:00.000Z',
@@ -181,6 +213,8 @@ const TEST_ATTENDANCE: Record<string, AttendanceRecordState> = {
     method: 'coach',
     recordedBy: 'fixture-coach',
   },
+  // student-jet: deliberately no attendance row -- unmarked candidate #2,
+  // mid/end of the roster, not adjacent to student-hal.
 };
 
 function testSummary(overrides: Partial<EndMeetingSummaryData> = {}): EndMeetingSummaryData {
@@ -196,14 +230,21 @@ function testSummary(overrides: Partial<EndMeetingSummaryData> = {}): EndMeeting
 // Pure-function tests.
 // ---------------------------------------------------------------------------
 
-describe('computeBackfillAbsentStudentIds (module doc section 1b)', () => {
-  it('returns only roster members with zero attendance row', () => {
-    expect(computeBackfillAbsentStudentIds(TEST_ROSTER, TEST_ATTENDANCE)).toEqual(['student-hal']);
+describe('computeUnmarkedStudentIds (module doc section 1b, renamed from computeBackfillAbsentStudentIds)', () => {
+  it('returns only roster members with zero attendance row -- including the SECOND unmarked member', () => {
+    expect(computeUnmarkedStudentIds(TEST_ROSTER, TEST_ATTENDANCE)).toEqual([
+      'student-hal',
+      'student-jet',
+    ]);
   });
 
   it('returns an empty array when every roster member has a record', () => {
-    const complete = { ...TEST_ATTENDANCE, 'student-hal': TEST_ATTENDANCE['student-fox'] };
-    expect(computeBackfillAbsentStudentIds(TEST_ROSTER, complete)).toEqual([]);
+    const complete = {
+      ...TEST_ATTENDANCE,
+      'student-hal': TEST_ATTENDANCE['student-fox'],
+      'student-jet': TEST_ATTENDANCE['student-fox'],
+    };
+    expect(computeUnmarkedStudentIds(TEST_ROSTER, complete)).toEqual([]);
   });
 });
 
@@ -218,23 +259,40 @@ describe('computeCheckoutStudentIds (module doc section 1c)', () => {
   });
 });
 
-describe('buildEndMeetingPayload (module doc section 1 -- the atomicity contract)', () => {
-  it('names the session, endsAt, and both id lists in ONE payload', () => {
-    expect(buildEndMeetingPayload(TEST_SESSION, TEST_ROSTER, TEST_ATTENDANCE)).toEqual({
+describe('buildEndMeetingPayload (module doc section 1/1a -- the atomicity contract)', () => {
+  it('C3: markRemainingAbsent=false yields an EMPTY markAbsentStudentIds even though two roster members are unmarked', () => {
+    expect(buildEndMeetingPayload(TEST_SESSION, TEST_ROSTER, TEST_ATTENDANCE, false)).toEqual({
       sessionId: 'session-test-001',
       endsAt: '2026-07-23T02:00:00.000Z',
-      backfillAbsentStudentIds: ['student-hal'],
+      markAbsentStudentIds: [],
+      checkoutStudentIds: ['student-fox'],
+    });
+  });
+
+  it('C3: markRemainingAbsent=true yields exactly the unmarked roster members, including the SECOND one', () => {
+    expect(buildEndMeetingPayload(TEST_SESSION, TEST_ROSTER, TEST_ATTENDANCE, true)).toEqual({
+      sessionId: 'session-test-001',
+      endsAt: '2026-07-23T02:00:00.000Z',
+      markAbsentStudentIds: ['student-hal', 'student-jet'],
       checkoutStudentIds: ['student-fox'],
     });
   });
 });
 
 describe('applyEndMeetingResult (module doc section 1 -- local-state mirror)', () => {
-  it('backfills absent rows and stamps check_out_at, leaving unrelated rows untouched', () => {
-    const payload = buildEndMeetingPayload(TEST_SESSION, TEST_ROSTER, TEST_ATTENDANCE);
+  it('marks absent every opted-in student and stamps check_out_at, leaving unrelated rows untouched', () => {
+    const payload = buildEndMeetingPayload(TEST_SESSION, TEST_ROSTER, TEST_ATTENDANCE, true);
     const next = applyEndMeetingResult(TEST_ATTENDANCE, payload);
 
     expect(next['student-hal']).toEqual({
+      status: 'absent',
+      checkInAt: null,
+      checkOutAt: null,
+      method: 'coach',
+      recordedBy: null,
+    });
+    // The SECOND marked student, not just the first -- both must land.
+    expect(next['student-jet']).toEqual({
       status: 'absent',
       checkInAt: null,
       checkOutAt: null,
@@ -246,11 +304,20 @@ describe('applyEndMeetingResult (module doc section 1 -- local-state mirror)', (
     expect(next['student-gwen']).toEqual(TEST_ATTENDANCE['student-gwen']); // untouched.
     expect(next['student-ivy']).toEqual(TEST_ATTENDANCE['student-ivy']); // untouched.
   });
+
+  it('marks nobody absent when markRemainingAbsent is false, even though two roster members are unmarked (checkout still applies)', () => {
+    const payload = buildEndMeetingPayload(TEST_SESSION, TEST_ROSTER, TEST_ATTENDANCE, false);
+    const next = applyEndMeetingResult(TEST_ATTENDANCE, payload);
+
+    expect(next['student-hal']).toBeUndefined();
+    expect(next['student-jet']).toBeUndefined();
+    expect(next['student-fox'].checkOutAt).toBe('2026-07-23T02:00:00.000Z');
+  });
 });
 
 describe('computeEndMeetingSummaryCounts / formatEndMeetingSummaryLine (module doc section 3)', () => {
-  it('tallies only currently-recorded rows, grouped by status', () => {
-    expect(computeEndMeetingSummaryCounts(TEST_ROSTER, TEST_ATTENDANCE)).toEqual({
+  it('tallies only currently-recorded rows, grouped by status -- no roster parameter (T508)', () => {
+    expect(computeEndMeetingSummaryCounts(TEST_ATTENDANCE)).toEqual({
       present: 1,
       late: 1,
       excused: 1,
@@ -264,23 +331,73 @@ describe('computeEndMeetingSummaryCounts / formatEndMeetingSummaryLine (module d
     );
   });
 
-  it('does NOT fold the about-to-be-backfilled student into the tally', () => {
-    const counts = computeEndMeetingSummaryCounts(TEST_ROSTER, TEST_ATTENDANCE);
-    expect(counts.present + counts.late + counts.excused + counts.absent).toBe(3); // not 4 -- student-hal excluded.
+  it('C9: invents no absent count for the two unmarked roster members -- absent stays 0', () => {
+    const counts = computeEndMeetingSummaryCounts(TEST_ATTENDANCE);
+    expect(counts.absent).toBe(0);
+    // Sanity: there really are two unmarked roster members -- the C9
+    // mutation this guards against seeds `counts.absent` from exactly this
+    // number, which would make this assertion fail with `absent: 2`.
+    expect(computeNoRecordCount(TEST_ROSTER, TEST_ATTENDANCE)).toBe(2);
+  });
+
+  it('T508 (module doc section 3 fix): counts a real record for a student who is NOT on the roster at all', () => {
+    const offRosterAttendance: Record<string, AttendanceRecordState> = {
+      ...TEST_ATTENDANCE,
+      'student-koa': {
+        // A real, recorded row for a student absent from TEST_ROSTER
+        // entirely -- the `loaders/selfCheckoff.ts` route (module doc
+        // section 3): a student can self-check off into a session with no
+        // roster/team check anywhere in that file.
+        status: 'present',
+        checkInAt: '2026-07-23T01:10:00.000Z',
+        checkOutAt: '2026-07-23T01:50:00.000Z',
+        method: 'qr',
+        recordedBy: null,
+      },
+    };
+    expect(computeEndMeetingSummaryCounts(offRosterAttendance)).toEqual({
+      present: 2, // student-fox + the off-roster student-koa.
+      late: 1,
+      excused: 1,
+      absent: 0,
+    });
   });
 });
 
-describe('computeNoRecordCount / buildEndMeetingConfirmDescription (module doc section 3)', () => {
+describe('computeNoRecordCount / buildEndMeetingConfirmDescription (module doc section 3/1a)', () => {
   it('counts the roster members with no record separately from the tally', () => {
-    expect(computeNoRecordCount(TEST_ROSTER, TEST_ATTENDANCE)).toBe(1);
+    expect(computeNoRecordCount(TEST_ROSTER, TEST_ATTENDANCE)).toBe(2);
   });
 
-  it('includes the live tally, the no-record callout, and the checkout callout', () => {
-    const description = buildEndMeetingConfirmDescription(TEST_ROSTER, TEST_ATTENDANCE);
+  it('C4 / T508 RE-DERIVED (was: "includes ... will be marked absent" unconditionally -- encoded the automatic-write defect): opted OUT (false, the default) states the LEFT-UNMARKED consequence, never "will be marked absent"', () => {
+    const description = buildEndMeetingConfirmDescription(TEST_ROSTER, TEST_ATTENDANCE, false);
     expect(description).toContain('1 present · 1 late · 1 excused · 0 absent');
-    expect(description).toContain('1 student has no attendance record yet');
-    expect(description).toContain('will be marked absent');
+    expect(description).toContain(
+      '2 students have no attendance record and will be left unmarked.',
+    );
+    expect(description).not.toContain('will be marked absent');
     expect(description).toContain('1 open check-in will be checked out');
+  });
+
+  it('C5: opted IN (true) states the marked-absent consequence, never the left-unmarked one', () => {
+    const description = buildEndMeetingConfirmDescription(TEST_ROSTER, TEST_ATTENDANCE, true);
+    expect(description).toContain('2 students with no attendance record will be marked absent.');
+    expect(description).not.toContain('left unmarked');
+  });
+
+  it('C8: counts a real record for an off-roster student in the live tally -- the roster is still passed in (for the no-record count), but the tally no longer joins through it', () => {
+    const offRosterAttendance: Record<string, AttendanceRecordState> = {
+      ...TEST_ATTENDANCE,
+      'student-koa': {
+        status: 'present',
+        checkInAt: '2026-07-23T01:10:00.000Z',
+        checkOutAt: '2026-07-23T01:50:00.000Z',
+        method: 'qr',
+        recordedBy: null,
+      },
+    };
+    const description = buildEndMeetingConfirmDescription(TEST_ROSTER, offRosterAttendance, false);
+    expect(description).toContain('2 present · 1 late · 1 excused · 0 absent');
   });
 
   it('omits the no-record/checkout sentences entirely when there is nothing to disclose', () => {
@@ -289,10 +406,27 @@ describe('computeNoRecordCount / buildEndMeetingConfirmDescription (module doc s
       'student-gwen': TEST_ATTENDANCE['student-gwen'],
       'student-hal': TEST_ATTENDANCE['student-ivy'],
       'student-ivy': TEST_ATTENDANCE['student-ivy'],
+      'student-jet': TEST_ATTENDANCE['student-ivy'],
     };
-    const description = buildEndMeetingConfirmDescription(TEST_ROSTER, complete);
-    expect(description).not.toContain('no attendance record yet');
+    const description = buildEndMeetingConfirmDescription(TEST_ROSTER, complete, false);
+    expect(description).not.toContain('no attendance record');
     expect(description).not.toContain('checked out at');
+  });
+
+  it('C11 (owner ruling, 2026-08-05 later: "one format, always"): the tally sentence renders unconditionally, including the all-zero case', () => {
+    const description = buildEndMeetingConfirmDescription(TEST_ROSTER, {}, false);
+    expect(description).toContain('0 present · 0 late · 0 excused · 0 absent');
+  });
+});
+
+describe('buildMarkRemainingAbsentLabel (module doc section 1a -- C7)', () => {
+  it('names the count and pluralizes correctly', () => {
+    expect(buildMarkRemainingAbsentLabel(1)).toBe(
+      'Mark 1 student with no attendance record absent',
+    );
+    expect(buildMarkRemainingAbsentLabel(2)).toBe(
+      'Mark 2 students with no attendance record absent',
+    );
   });
 });
 
@@ -321,7 +455,7 @@ describe('<EndMeetingDialog /> DES-12 states', () => {
 // ---------------------------------------------------------------------------
 
 describe('<EndMeetingDialog /> End meeting confirm flow', () => {
-  it('opens a real AlertDialog with the live tally and disclosure sentences, and does not call onEndMeeting before confirm', async () => {
+  it('T508 RE-DERIVED (§3g -- was: asserted "1 student has no attendance record yet" + "will be marked absent" unconditionally, which encoded the automatic-write defect this row removes): opens a real AlertDialog with the live tally, the opt-in checkbox unticked by default (C6) naming its count (C7), the LEFT-UNMARKED disclosure (C4), and does not call onEndMeeting before confirm', async () => {
     const onEndMeeting = vi.fn().mockResolvedValue(undefined);
     renderDialog({
       sessionId: 'session-test-001',
@@ -330,16 +464,28 @@ describe('<EndMeetingDialog /> End meeting confirm flow', () => {
     });
     await flushMicrotasks();
 
+    // C6: the opt-in checkbox is unticked by default.
+    const checkbox = findMarkRemainingAbsentCheckbox();
+    expect(checkbox.checked).toBe(false);
+    // C7: the checkbox label names the count (2 unmarked -- student-hal,
+    // student-jet).
+    expect(document.body.textContent).toContain('Mark 2 students with no attendance record absent');
+
     clickButtonWithText('End meeting');
 
     expect(document.body.textContent).toContain('End this meeting?');
     expect(document.body.textContent).toContain('1 present · 1 late · 1 excused · 0 absent');
-    expect(document.body.textContent).toContain('1 student has no attendance record yet');
+    // C4: the checkbox is unticked, so the honest disclosure is the
+    // LEFT-UNMARKED sentence, never the marked-absent claim.
+    expect(document.body.textContent).toContain(
+      '2 students have no attendance record and will be left unmarked.',
+    );
+    expect(document.body.textContent).not.toContain('will be marked absent');
     expect(document.body.textContent).toContain('1 open check-in will be checked out');
     expect(onEndMeeting).not.toHaveBeenCalled();
   });
 
-  it('confirming calls onEndMeeting exactly once with the single atomic payload, then flips to completed', async () => {
+  it('T508 RE-DERIVED (§3g -- was: asserted the old backfillAbsentStudentIds payload with student-hal auto-marked absent, the exact live-data-corruption defect this row exists to stop): confirming with the checkbox left unticked (the ordinary case) calls onEndMeeting exactly once with an EMPTY markAbsentStudentIds, then flips to completed with nobody marked absent', async () => {
     const onEndMeeting = vi.fn().mockResolvedValue(undefined);
     renderDialog({
       sessionId: 'session-test-001',
@@ -367,7 +513,7 @@ describe('<EndMeetingDialog /> End meeting confirm flow', () => {
     expect(onEndMeeting).toHaveBeenCalledWith({
       sessionId: 'session-test-001',
       endsAt: '2026-07-23T02:00:00.000Z',
-      backfillAbsentStudentIds: ['student-hal'],
+      markAbsentStudentIds: [],
       checkoutStudentIds: ['student-fox'],
     });
 
@@ -376,11 +522,74 @@ describe('<EndMeetingDialog /> End meeting confirm flow', () => {
     expect(findButtonByText('End meeting')).toBeUndefined();
     expect(document.body.textContent).toContain('This meeting has ended');
 
-    // Backfilled + checked-out state is reflected in the post-completion list.
-    expect(document.body.textContent).toContain('Hal S.'); // the backfilled student is listed.
+    // Neither unmarked student was written as absent -- their
+    // SegmentedControl shows no selected ("checked") option at all.
     const halGroup = findAttendanceRadioGroup('Hal S.');
-    const absentOption = halGroup.querySelector('[data-value="absent"]');
-    expect(absentOption?.getAttribute('aria-checked')).toBe('true');
+    expect(halGroup.querySelector('[aria-checked="true"]')).toBeNull();
+    const jetGroup = findAttendanceRadioGroup('Jet Q.');
+    expect(jetGroup.querySelector('[aria-checked="true"]')).toBeNull();
+  });
+
+  it('C3/C5 (opt-in): ticking the checkbox before confirming sends the FULL unmarked set -- including the SECOND student -- and both end up marked absent', async () => {
+    const onEndMeeting = vi.fn().mockResolvedValue(undefined);
+    renderDialog({
+      sessionId: 'session-test-001',
+      loadSummary: () => Promise.resolve(testSummary()),
+      onEndMeeting,
+    });
+    await flushMicrotasks();
+
+    clickMarkRemainingAbsentCheckbox();
+    expect(findMarkRemainingAbsentCheckbox().checked).toBe(true);
+
+    clickButtonWithText('End meeting');
+    expect(document.body.textContent).toContain(
+      '2 students with no attendance record will be marked absent.',
+    );
+    expect(document.body.textContent).not.toContain('left unmarked');
+
+    const dialogEl = document.querySelector('dialog[open]') as HTMLElement;
+    const actionButton = Array.from(dialogEl.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'End meeting',
+    );
+    clickButton(actionButton as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(onEndMeeting).toHaveBeenCalledTimes(1);
+    expect(onEndMeeting).toHaveBeenCalledWith({
+      sessionId: 'session-test-001',
+      endsAt: '2026-07-23T02:00:00.000Z',
+      markAbsentStudentIds: ['student-hal', 'student-jet'],
+      checkoutStudentIds: ['student-fox'],
+    });
+
+    // Both unmarked students -- including the SECOND one -- now show absent
+    // in the post-completion list.
+    const halGroup = findAttendanceRadioGroup('Hal S.');
+    expect(halGroup.querySelector('[data-value="absent"]')?.getAttribute('aria-checked')).toBe(
+      'true',
+    );
+    const jetGroup = findAttendanceRadioGroup('Jet Q.');
+    expect(jetGroup.querySelector('[data-value="absent"]')?.getAttribute('aria-checked')).toBe(
+      'true',
+    );
+  });
+
+  it('C11: the tally sentence renders unconditionally in the real dialog, including the all-zero case, rather than falling back to prose', async () => {
+    const emptySummary: EndMeetingSummaryData = {
+      session: TEST_SESSION,
+      roster: TEST_ROSTER,
+      attendanceByStudentId: {},
+    };
+    renderDialog({
+      sessionId: 'session-test-001',
+      loadSummary: () => Promise.resolve(emptySummary),
+    });
+    await flushMicrotasks();
+
+    clickButtonWithText('End meeting');
+
+    expect(document.body.textContent).toContain('0 present · 0 late · 0 excused · 0 absent');
   });
 
   it('shows an error banner and leaves the session unflipped when onEndMeeting rejects', async () => {
