@@ -3531,3 +3531,88 @@ been another workflow's surface.
 `RequireRole allowedRoles={['coach','admin']}` nested one level lower inside the page
 (`LiveConsole.tsx:23-32`, deliberate). An entry point rendered for a student leads to a redirect,
 not a useful page.
+
+---
+
+## 2026-08-05 (later) — George's T510 rulings: meeting edit is FUTURE-FORWARD, and two hazards were caught before building
+
+Taken as five explicit questions during T510's scoping, after he pointed out that his mental model is
+*"i create meetings and then later edit them, similar to the functionality i have for outreach
+events."* That pointer was load-bearing — reading the shipped outreach edit path is what surfaced
+both hazards below.
+
+### The governing principle, in his words
+
+> *"If i am narrowing a date range or drop a weekday, those 'cancelled' events should go away (either
+> deleted or cancelled in the db but not shown on ui or calendar). This should not, however happen to
+> past meetings that have occured in the series. If those meetings have occured they should stay and
+> the series edit is only future forward."*
+
+**FUTURE-FORWARD ONLY.** A series edit may never alter a session that has already happened. This is
+the rule every other decision below serves.
+
+### 1. Team scope LOCKS once any session in the series is completed
+
+**The hazard, measured not assumed.** `v_student_participation`
+(`20260722000000_membership_views.sql:59-80`) reads `events.team_ids` **live** and applies it to
+already-`completed` sessions:
+
+```sql
+join events e on e.counts_participation and (e.team_ids is null or st.team_id = any(e.team_ids))
+join event_sessions es on es.event_id = e.id and es.status = 'completed'
+```
+
+So adding a team to an existing series retroactively makes those students "expected" at meetings that
+already happened, silently changing their participation percentage for weeks they could not have
+attended. **Editing team scope is not future-forward** — it rewrites history.
+
+**Ruled: lock it.** Title, location and description stay editable forever. Team scope becomes
+read-only once any session in the series is `completed`, with an on-screen note saying why. Options
+"editable with a warning" and "freely editable" were both put and declined. Freely editable is what
+outreach does, so **this is a deliberate divergence from the parity he asked for**, taken because the
+metric consequence does not exist on the outreach side.
+
+### 2. Sessions dropped by a narrowing edit are DELETED, RSVPs first
+
+Future sessions routinely carry student RSVPs, and `rsvps.session_id` is `on delete restrict`
+against `event_sessions` (`20260717000000_scheduling_attendance.sql:69`), so the delete fails while
+they exist. **Ruled: delete the RSVPs, then the session.** The meeting is not happening, so its RSVPs
+are meaningless.
+
+**Why not cancel:** `status = 'canceled'` is already what the per-session Cancel button produces, and
+those sessions are deliberately still *shown* ("Canceled — no attendance recorded"). He wants dropped
+sessions to **vanish**. Deleting keeps "Canceled" meaning only *"I cancelled this on purpose"* — two
+different concepts that would otherwise collide, and telling them apart would need a new column plus a
+matching Calendar change on another workflow's surface.
+
+**Bounded by the governing principle:** only sessions that have **not yet occurred** are ever dropped.
+A past or `completed` session outside the new range stays exactly as it is. If a dropped session
+somehow carries `attendance` (also `on delete restrict`), the delete must fall back to cancelling it
+rather than failing the save.
+
+### 3. Per-session editing — all four, and one needs a migration
+
+He selected every option: **date and time · notes · its own location · cancel just that one.**
+
+- **date / time / notes** — `event_sessions` already owns `session_date`, `starts_at`, `ends_at`,
+  `notes` (verified against the table definition). `notes` exists and the meetings UI has never
+  surfaced it.
+- **cancel just that one** — exists today as the per-session Cancel button; he wants it reachable
+  from the edit flow too.
+- **its own location** — **`event_sessions` has NO location column.** Location lives on `events`
+  (series-level). This needs an additive migration, which makes it HEAVY tier (item 26 names
+  migrations explicitly), an opus worker (item 18), and an owner-applied cutover (item 16). **Filed
+  separately as T606 rather than smuggled into T510.**
+
+### Consequence: T510 is three rows, not one
+
+The original row already warned *"expect it to be larger than 'wire up the button'"*. Measured against
+these rulings it is a small epic, so it is split rather than run as one unbounded task:
+
+- **T510** — series edit: shared fields, the team-scope lock, and future-forward schedule editing
+  with the delete-dropped-sessions behaviour. HEAVY (write path + deletes).
+- **T605** — per-session edit: date, time, notes, and cancel-from-the-edit-flow. No migration.
+- **T606** — per-session location: the `event_sessions` migration plus surfacing it. HEAVY, owner
+  applies the migration.
+
+**Sequence T510 first** — T605 builds on the same dialog plumbing, and T606 builds on T605.
