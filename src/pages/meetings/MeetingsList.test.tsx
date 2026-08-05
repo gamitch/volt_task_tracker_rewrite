@@ -2486,15 +2486,33 @@ describe('T511 -- live console entry point (coach session row)', () => {
   });
 
   it('C3: the student/parent view renders no Go live link at all', async () => {
+    // BOTH loaders are supplied, and that is the whole point. An earlier
+    // version of this test passed `loadStudentData` only, and was VACUOUS:
+    // widening the role gate handed the student the coach view, but with no
+    // coach fixture and no expansion no session rows rendered, so "no Go live
+    // links" was trivially true and the mutation left this test green while
+    // turning 23 others red. Supplying the coach fixture too means that if the
+    // gate ever widens, this student really would be handed a rendered coach
+    // row -- which is the thing being guarded against.
     renderAsUser(STUDENT_OR_PARENT_USER, {
       resolveStudentId: fakeResolveStudentId('student-fixture'),
       resolveStudentIsActive: fakeResolveStudentIsActive(true),
       loadStudentData: () => Promise.resolve({ history: [], participation: null }),
+      loadCoachData: () => Promise.resolve(T511_ROW),
     });
     await flushMicrotasks();
     await flushMicrotasks();
 
-    // The gate is structural -- `CoachMeetingSessionRow` only renders under
+    // Expanding is what makes session rows exist at all. A student has no such
+    // expander, so its absence is the expected path here -- but if the gate
+    // widens, this call succeeds and the links appear.
+    try {
+      expandRow('Build Night');
+    } catch {
+      // No coach expander rendered -- the correct outcome for a student.
+    }
+
+    // The gate is structural: `CoachMeetingSessionRow` only renders under
     // `CoachMeetingsView`. This asserts that existing gate rather than adding
     // a second one beside the link that could drift out of step with it.
     expect(goLiveLinks()).toHaveLength(0);

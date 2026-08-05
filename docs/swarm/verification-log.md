@@ -10370,3 +10370,85 @@ right to leave them and file instead of widening a deliberate list by judgement.
 A primitive exists (`attendance.ts:495-515` already carries it) but the seam is in another
 workflow's file. The value is unchanged from the backfill it replaces — a pre-existing gap made
 visible, not a regression.
+
+---
+
+## T511 — the live console gets an entry point, and one of my own criteria was vacuous
+
+**Tier FAST** (item 26), defended in `active/T511-scope.md` §1: pure navigation, no write path, no
+schema/RLS/auth change, no exported signature change, ~15 lines of production code, four named
+mutations. The "it exposes a staff console, so it is auth-adjacent" argument was considered and
+rejected — item 25 retires "it sounds sensitive" as a tier trigger, and the gate here is
+pre-existing and untouched.
+
+**What shipped.** `CoachMeetingSessionRow`'s `status === 'scheduled'` block now renders
+`<Link as={RouterLink} href={routePaths.meetingLiveSession(session.sessionId)} isStandalone>`
+beside the existing Cancel button. `routePaths.meetingLiveSession` previously had **zero call
+sites**; `/meetings/live/:sessionId` was reachable only by typing the URL.
+
+### ⚠️ C3 passed for the wrong reason on its first pass, and the mutation is what caught it
+
+C3 asserts a student never sees a Go live link. Its named mutation — widen `isCoachOrAdminView` to
+`user !== null` — turned **23 tests red, and C3 was not one of them.**
+
+The test supplied `loadStudentData` only. Under the mutation the student was handed the coach view,
+but with no coach fixture and no expander click, **no session rows rendered at all** — so "no Go
+live links" was trivially true. A criterion guarding a role gate was green in a build where the role
+gate was gone.
+
+Fixed by supplying `loadCoachData` **and** attempting the expansion inside a `try/catch` (a student
+has no expander, so its absence is the normal path; if the gate ever widens, the call succeeds and
+the links appear). Re-run: **24 failures, C3 among them.**
+
+Recording this against myself deliberately. I flagged the identical shape in T508's packet review —
+a fixture asserting against something the code under test never receives — and then wrote one. The
+lesson that generalises: **a "renders nothing" assertion is only meaningful if the fixture would
+have rendered something.** Negative assertions need a positive control.
+
+### All four mutations, run in an isolated worktree
+
+| # | Mutation | Result |
+|---|---|---|
+| **C1** | `href` → `routePaths.kioskSession(...)` (same `/…/<sessionId>` shape, wrong route) | **exit 1**, C1 only |
+| **C2** | guard → `(true \|\| status === 'scheduled')`, link on every status | **exit 1**, 4 failed |
+| **C3** | `isCoachOrAdminView` → `user !== null` | **exit 1**, 24 failed incl. C3 (**23 excl. C3 before the fix**) |
+| **C4** | drop the date, leaving a bare `Go live` | **exit 1**, C4 only |
+
+Committed before mutating; `git diff --quiet` clean after; worktree removed.
+
+### Two design decisions, both recorded because the obvious choice was wrong
+
+**No time window.** `isSessionCheckInEligible` (`CoachHome.tsx:1179-1190`) already implements
+"live now, or starting within 60 minutes" and reusing it looked obviously right. Rejected: a window
+makes the console unreachable again outside it — including a meeting that started 90 minutes ago and
+is still running, which is the case that matters most. Fixing "no entry point" with "an entry point
+that is usually absent" is not a fix. Reusing it would also mean W3's page importing W5's page;
+re-deriving it locally is **T600**'s recorded debt shape exactly.
+
+**`Link`, not `Button`.** `astryx-api.md`'s Link Best Practices reserve Button for actions that do
+*not* navigate. `LiveConsole.tsx:886` is the in-repo precedent. It sits beside a `Button` and does
+not look identical — the disclosed cost of a real anchor that supports middle-click, ctrl-click and
+the correct screen-reader announcement. The date is in the **visible text** because Astryx forbids
+`label` on text links, so that text *is* the accessible name; without it a multi-session row renders
+several links all called "Go live" (C4).
+
+### Two things deliberately not done
+
+**Did not extend the shared `MULTI_SESSION_SESSIONS` fixture.** Adding a second scheduled session to
+it broke **7 unrelated tests** that encode its session count. T511 got its own `T511_ROW` fixture
+instead. Modifying a shared fixture to serve one new test, then rewriting the correct assertions it
+breaks, is how over-replacement damage happens.
+
+**Did not add a role check beside the link.** The gate is structural — `CoachMeetingSessionRow`
+renders only under `CoachMeetingsView`. A second gate can drift out of step with the first; C3
+asserts the existing one instead.
+
+### Gates
+
+`tsc` **0** · eslint **0 errors / 366 warnings** (no delta — nothing new exported) ·
+`format:check` **clean** · vitest **80 files / 2042 tests, exit 0** (baseline 2038; `MeetingsList.test.tsx`
+84 → 88).
+
+`MemoryRouter` was added to this file's shared `renderAsUser` helper — `RouterLink` throws outside a
+router context. Same wrapper `LiveConsole.test.tsx` and `CheckinResult.test.tsx` already use, and
+additive: all 84 pre-existing tests pass unchanged.
