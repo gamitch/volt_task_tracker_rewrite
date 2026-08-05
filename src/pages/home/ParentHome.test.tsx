@@ -795,6 +795,35 @@ describe("<ParentHome /> C4: a deactivated linked student's card is honest and p
     expect(container.textContent).toContain('not shown while this student is inactive');
     expect(container.textContent?.split('not shown while this student is inactive').length).toBe(2);
   });
+
+  // T202: an ACTIVE child with a genuine zero goal.
+  //
+  // T191 answered "no bar at all" for a DEACTIVATED child, and T202's own row
+  // believed that removed the clamp here. It did not -- `max={goalHours > 0 ?
+  // goalHours : 1}` survived and still fired for this case, announcing a goal
+  // of 1 h that exists in no data source.
+  //
+  // The assertion is on `aria-valuemax` deliberately. `formatValueLabel` only
+  // shapes the VISIBLE label; Astryx emits `aria-valuemax={safeMax}`
+  // unconditionally (`ProgressBar.js:212`), so a test that checked only the
+  // visible text would pass while assistive tech still heard the invented
+  // number -- which is exactly how this survived T191.
+  it('T202: a zero-goal active child announces aria-valuemax="0", never a fabricated 1', async () => {
+    renderAsUser(PARENT_USER, {
+      loadLinkedStudents: async () => ({
+        students: [ACTIVE_STUDENT],
+        teams: [{ id: 'team-c4-active', name: 'Echo Rift' }],
+      }),
+      loadStudentData: async () => ({ ...EMPTY_CARD_DATA, goalHours: 0, confirmedHours: 0 }),
+    });
+    await flushMicrotasks();
+
+    const bars = hoursVsGoalProgressBars(container);
+    expect(bars).toHaveLength(1);
+    expect(bars[0].getAttribute('aria-valuemax')).toBe('0');
+    // And the visible copy agrees -- no "/ 1 h" anywhere on the card.
+    expect(container.textContent).not.toContain('/ 1 h');
+  });
 });
 
 describe('<ParentHome /> C5: next-3-events sourced from real data (row-mapper mutation target, MAJOR 6)', () => {

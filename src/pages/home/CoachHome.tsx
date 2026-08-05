@@ -1979,7 +1979,11 @@ function TeamHoursRowItem({
           label={`${entry.teamName} hours`}
           isLabelHidden
           value={entry.confirmedHours}
-          max={maxHours > 0 ? maxHours : 1}
+          // T202 -- a chart SCALE (largest value across entries), not a goal.
+          // Same fabrication though: when every team has 0 h the clamp
+          // announced a scale topping out at 1 h. 0 is the honest scale for
+          // "nothing to compare yet". See `ParentHome.tsx` for the mechanism.
+          max={maxHours}
           style={COACH_HOME_PROGRESS_BAR_MAX_WIDTH_STYLE}
         />
       }
@@ -2009,7 +2013,8 @@ function TopEventRowItem({
             label={`${entry.title} hours`}
             isLabelHidden
             value={entry.totalHours}
-            max={maxHours > 0 ? maxHours : 1}
+            // T202 -- chart scale, same as the Hours-by-team bar above.
+            max={maxHours}
             style={COACH_HOME_PROGRESS_BAR_MAX_WIDTH_STYLE}
           />
         </VStack>
@@ -2037,7 +2042,8 @@ function GoalProjectionRowItem({ row }: { row: StudentGoalProjectionEntry }): Re
             label={`${row.displayName} hours vs. goal`}
             isLabelHidden
             value={row.confirmedHours}
-            max={row.goalHours > 0 ? row.goalHours : 1}
+            // T202 -- a real goal; `: 1` invented one. See `ParentHome.tsx`.
+            max={row.goalHours}
             style={COACH_HOME_PROGRESS_BAR_MAX_WIDTH_STYLE}
           />
           <Text type="supporting">
@@ -2437,7 +2443,8 @@ function CoachHomeContent({
                     label="Hours vs. team goal"
                     isLabelHidden
                     value={confirmedHours}
-                    max={goalHours > 0 ? goalHours : 1}
+                    // T202 -- a real goal; `: 1` invented one.
+                    max={goalHours}
                     hasValueLabel
                     formatValueLabel={(value, max) => `${value} / ${max} hrs`}
                     style={COACH_HOME_PROGRESS_BAR_MAX_WIDTH_STYLE}
