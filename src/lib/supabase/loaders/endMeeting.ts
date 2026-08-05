@@ -99,18 +99,20 @@
  * story above does NOT cover:** `runMutation` (`../loader.ts`) normalizes
  * EVERY rejection through `toLoaderError` into a plain `SupabaseLoaderError`
  * object (`{code, message, cause}`), never an `Error` instance.
- * `EndMeetingDialog.tsx`'s own frozen `handleConfirmEndMeeting` catch block
+ * `EndMeetingDialog.tsx`'s own `handleConfirmEndMeeting` catch block
  * does `error instanceof Error ? error.message : 'Something went wrong
- * ending this meeting.'` -- since this file's rejections are never `Error`
- * instances, that check always falls through to the frozen generic
+ * ending this meeting.'` (`:827-829`) -- since this file's rejections are
+ * never `Error` instances, that check always falls through to the generic
  * fallback. A coach who hits a partial failure sees only "Couldn't end
  * this meeting... Something went wrong ending this meeting," concatenated
  * with the `AlertDialog`'s own fixed title -- NEVER the real Postgres
- * error, and NOTHING about which partial state was reached. This cannot be
- * improved inside this file (`EndMeetingDialog.tsx` is frozen, out of scope
- * for this task) -- stated here plainly so the database-level safety
- * property above is not mistaken for the coach also being informed. They
- * are not.
+ * error, and NOTHING about which partial state was reached. It still cannot
+ * be improved from inside THIS file, but the reason it was never fixed at
+ * the other end has expired: `EndMeetingDialog.tsx` is no longer frozen
+ * (T196 mounted it, T508 edited it directly), so it is fixable there now
+ * and is filed as **T607**. Stated here plainly so the database-level
+ * safety property above is not mistaken for the coach also being informed.
+ * They are not.
  *
  * -----------------------------------------------------------------------
  * 2. `onEditAttendance` identity -- read fresh on every call, never baked.
@@ -294,7 +296,7 @@ async function queryActiveStudentsForRoster(
  * `Error`, not a `SupabaseLoaderError` -- there is no Postgrest error to
  * normalize here, this is a "the id itself doesn't resolve" case) rather
  * than resolving a placeholder `EndMeetingSummaryData` -- `LoadEndMeetingSummaryFn`'s
- * own signature (`EndMeetingDialog.tsx`, frozen) is non-nullable, unlike
+ * own signature (`EndMeetingDialog.tsx`) is non-nullable, unlike
  * `loaders/kiosk.ts`'s own `KioskTallyLoader`/`KioskSessionTitleLoader`
  * (both nullable), so there is no first-class "not found" value this
  * function's return type can express -- rejecting is the honest choice
