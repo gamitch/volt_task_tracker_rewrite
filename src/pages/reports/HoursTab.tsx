@@ -936,7 +936,8 @@ function renderPercentCell(row: HoursTableRow): ReactNode {
       label={`${row.label}: confirmed hours vs. goal`}
       isLabelHidden
       value={row.confirmedHours}
-      max={row.goalHours > 0 ? row.goalHours : 1}
+      // T202 -- see the note in `ParentHome.tsx`; `: 1` invented a goal.
+      max={row.goalHours}
       hasValueLabel
       formatValueLabel={() => `${row.percentToGoal}%`}
     />

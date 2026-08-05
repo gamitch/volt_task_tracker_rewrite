@@ -1278,7 +1278,19 @@ function StudentHomeCard({
               label={`${displayName}'s hours vs. goal`}
               isLabelHidden
               value={data.confirmedHours}
-              max={goalHours > 0 ? goalHours : 1}
+              // T202 -- was `max={goalHours > 0 ? goalHours : 1}`. Astryx's
+              // ProgressBar emits `aria-valuemax={safeMax}` unconditionally and
+              // passes 0 through (`ProgressBar.js:160`), so the `: 1` was the
+              // only thing inventing a goal of "1 h" that exists in no data
+              // source. Verified by rendering: max=1 announces
+              // `aria-valuemax="1"`, max=0 announces `"0"` and does not crash
+              // (`:162` already guards the percentage with `safeMax > 0`).
+              //
+              // T191 fixed the DEACTIVATED-child case here by removing the bar
+              // entirely. It never touched this clamp, which still fired for an
+              // ACTIVE child with a zero goal -- T202's own row believed
+              // otherwise.
+              max={goalHours}
               hasValueLabel
               formatValueLabel={(value, max) => `${value} / ${max} h (${hoursPercent}%)`}
             />
