@@ -13,7 +13,39 @@ Fresh orchestrator session: read this, then `constitution.md`, then the open row
 newest is first and supersedes what follows it. Do not act on anything below an UPDATE
 without checking whether that UPDATE moved it.**
 
-## UPDATE — 2026-08-04 (LATEST, supersedes the W4+W5 section below): **W2 outreach wave — nine tasks merged, T406 in flight, T165 is the last one**
+## UPDATE — 2026-08-05 (LATEST): **W3 re-opened by live testing. `WORKFLOWS.md`'s summary table is the authority for what is open.**
+
+**Read `WORKFLOWS.md`'s summary table before anything below this line.** Every prose section in
+this file and in `WORKFLOWS.md` is historical reasoning; the table is the only current status.
+
+**The owner ran a real meeting on 2026-08-05 and found four defects.** Three landed on W3
+(**T508, T510, T511**) and one on W4 (**T509**), re-opening W3 from 0 rows to 5.
+
+**T508 is the urgent one — it is writing false records into production now.** Ending a meeting
+backfills an `absent` row for every unmarked student, and the roster it uses selects *every active
+student with no team filter*, so a P3-only meeting wrote 17 absence rows for students who were
+never expected. Owner's ruling: *"only count 'absent' if i click the pill."* **W4's T509 is inert
+until T508 lands — sequence T508 first, across machines.**
+
+**W1 is CLOSED at 0 rows.** T321/T161/T320/T403 merged in PR #28; **T400 and T502 shipped in PR
+#85** (the live-session picker for a student who cannot scan, and the attendance paging fix so a
+`{data: null, error: null}` page can no longer read as end-of-data). **W2 and W6 are also closed.**
+
+**Two rows below this line are known stale and are NOT mine to edit** — flagged for whoever owns
+them: **T175** still reads *"not yet packeted"* though it merged as PR #91 (`format:check` is in CI
+now, scoped to `src/**` — the `docs/swarm/*.md` files still fail prettier and that remains
+pre-existing and out of scope), and **W10's summary cell** still advertises T175 as its cheapest
+open row.
+
+**The habit that keeps paying here:** verify a row's premise against the code before packeting it.
+One recent session found five ledger rows describing a repo state that no longer existed, and two
+whose stated scope was simply wrong. Read files with `git show origin/main:<path>` — the working
+tree goes stale within the hour, and a session that read a tree 13 commits behind reported a
+workflow's status backwards.
+
+---
+
+## UPDATE — 2026-08-04 (supersedes the W4+W5 section below): **W2 outreach wave — nine tasks merged, T406 in flight, T165 is the last one**
 
 **W2's queue is nearly done.** Merged this session, each with a ledger row and a verification-log
 entry (item 24): **T330, T401, T402, T174, T190, T306, T325, T152, T300** — plus **T301** (PR open at
@@ -62,7 +94,7 @@ SUPERSEDED** by W4's T702.
 
 ---
 
-## UPDATE — 2026-08-04 (LATEST): W4+W5 wave — **T205, T702, T322 merged. TWO MIGRATIONS AWAIT THE OWNER'S CUTOVER.**
+## UPDATE — 2026-08-04: W4+W5 wave — **T205, T702, T322 merged. TWO MIGRATIONS AWAIT THE OWNER'S CUTOVER.**
 
 **Three tasks shipped, one closed unshipped, five owner rulings taken.** Gates at the last merge:
 `tsc` **0** · `vite build` **0** · prettier clean · eslint **0 errors / 364 warnings** ·
@@ -140,7 +172,7 @@ structurally frozen at `0.0` yet the KPI card renders it — **needs an owner ru
 
 ---
 
-## UPDATE — 2026-08-04 (LATEST): W3-A wave COMPLETE (T197, T160, T162). **Four "0 tests" ledger rows were measured wrong.**
+## UPDATE — 2026-08-04: W3-A wave COMPLETE (T197, T160, T162). **Four "0 tests" ledger rows were measured wrong.**
 
 **All three W3-A rows shipped.** Gates: `tsc` **0** · eslint **0 errors** · prettier clean ·
 vitest **78 files / 1949 tests, exit 0**. Full detail in `active/W3A-handoff.md`; decisions the

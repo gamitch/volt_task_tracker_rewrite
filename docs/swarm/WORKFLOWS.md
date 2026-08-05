@@ -56,7 +56,7 @@ Tier is the **heaviest** item in the workflow, per constitution item 26.
 
 | # | Workflow | Open rows | Tier | State | Safe to run beside |
 |---|---|---:|---|---|---|
-| **W1** | **Check in** — student arrives and gets counted | **0** | HEAVY | **CLOSED 2026-08-04** — T321/T161/T320/T403 merged, T400 shipped. | W4, W6, W7, W8 |
+| **W1** | **Check in** — student arrives and gets counted | **0** | HEAVY | **CLOSED 2026-08-04** — T321/T161/T320/T403 merged, **T400 + T502 shipped (PR #85)**. | W4, W6, W7, W8 |
 | **W2** | **Run an outreach event** — create → RSVP → attend → complete | **0** | HEAVY | **CLOSED 2026-08-04** — 12 rows merged (T330, T401, T402, T174, T190, T306, T325, T152, T300, T301, T406, T165); T501/T505 closed won't-fix. | W1, W3, W6, W7 |
 | **W3** | **Run a meeting** — schedule → attendance → participation % | **5** | HEAVY | **RE-OPENED 2026-08-05 by live testing.** T196 shipped 2026-08-04; the owner then ran a real meeting and found four defects. **T508 is writing false data now.** | W2, W4, W6, W7 |
 | **W4** | **Hours & goal accounting** — the numbers users are shown | **9** | HEAVY | T205 + T322 applied to production 2026-08-04. **T509 added 2026-08-05 (MET-01 marks-only, D014) — BLOCKED on W3's T508.** | W1, W3, W6, W7 |
@@ -104,7 +104,7 @@ T500s.
 
 > A student walks in, scans a QR code (or types a short code), and their attendance is recorded.
 
-**This is the workflow that decides whether the app is launchable.** It does not work today.
+~~**This is the workflow that decides whether the app is launchable.** It does not work today.~~ **It works.** That sentence was true when this section was written and false from 2026-08-04; it is struck rather than deleted because it is the reason W1 was sequenced first.
 
 | Row | What | Tier |
 |---|---|---|
@@ -135,12 +135,7 @@ this grant obliges more process, not less.
 > `v_student_participation` were verified to return identical results before and after the
 > migration, without either file being edited. That is the pattern for any future change here.
 
-**~~Start with T321.~~ T321 shipped in PR #28** — the manual short-code form is live. **W1's only
-genuinely open row is T400** (a student who cannot scan has no session id, so the short code alone
-cannot check them in; owner-ruled option (a), un-sequenced from T196's wave on 2026-08-04). **T161 is still open and still worth
-pairing with any further `LiveConsole` work** — making that console real without tests on its loader
-is what produced the fixture shell in the first place, and T403 shipped the real console without
-closing T161.
+**~~Start with T321.~~ T321 shipped in PR #28** — the manual short-code form is live. ~~**W1's only genuinely open row is T400**~~ — **T400 shipped 2026-08-04 (PR #85)**: `/checkin` now lists the currently-open sessions so a student who cannot scan taps the meeting they are at, which supplies the session id the short code is meaningless without. **T502 shipped in the same PR** — the attendance paging loop no longer reads a `{data: null, error: null}` page as end-of-data, so a paged read cannot come back silently short. ~~**T161 is still open**~~ — **T161 merged in PR #28**; `checkin.test.ts` runs 20 tests on `main`. The pairing advice it carried still holds in principle: making a console real without tests on its loader is what produced the fixture shell in the first place.
 
 **Overlap warning — DISCHARGED 2026-08-03.** This used to read *"whoever takes W1 should tell
 whoever has W3 when `LiveConsole` becomes real."* It is real (T403), W3 has been told
@@ -346,7 +341,7 @@ The workflow that actually works. Low risk, good throughput.
 |---|---|---|
 | **T159** | `StudentDialog.season` was deferred pending T091; T091 landed and nothing followed up | STANDARD |
 | **T326** | Roster actions begin ~560px offscreen on mobile | STANDARD |
-| **T167** | Ten remaining loaders have 0 tests | STANDARD |
+| **T167** | ~~Ten remaining loaders have 0 tests~~ — **PREMISE PARTLY FALSE, measure before packeting.** Same bad audit (`2ec47d8`) as T161/T162/T163/T321: it counted *files named* `<module>.test.ts`, not tests *of* a module. `attendance.ts` has 12 tests and `students.ts` 23. | STANDARD |
 | **T168** | The placeholder-default sweep covered 7 sites; `src/pages/**` and `src/components/**` are unswept | STANDARD |
 | **T064** | **Owner-only** — ~20 student email addresses; the migration creates no accounts, so the roster is correct and entirely unlinked | — |
 
