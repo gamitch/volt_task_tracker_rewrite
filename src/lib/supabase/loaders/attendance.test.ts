@@ -104,6 +104,64 @@ function makePagingClient(pages: AttendanceRowFixture[][]) {
   };
 }
 
+/**
+ * T502: serves a caller-chosen sequence of RAW postgrest responses, so a
+ * `{data: null, error: null}` page — the pair `createLoader` passes through as
+ * `null` without throwing — can be produced deliberately. `makePagingClient`
+ * above cannot express it: it coerces every page to `[]`.
+ */
+function makeRawPagingClient(responses: Array<{ data: unknown; error: unknown }>) {
+  let index = -1;
+  const orderSpy = vi.fn(() => ({
+    range: vi.fn(() => {
+      index += 1;
+      return Promise.resolve(responses[index] ?? { data: [], error: null });
+    }),
+  }));
+  const inSpy = vi.fn(() => ({ order: orderSpy }));
+  const selectSpy = vi.fn(() => ({ in: inSpy }));
+  const fromSpy = vi.fn((table: string) => {
+    if (table === 'attendance') return { select: selectSpy };
+    throw new Error(`unexpected table: ${table}`);
+  });
+  return { client: { from: fromSpy } as unknown as SupabaseClient };
+}
+
+describe('makeLoadAttendanceForSessions — T502 (a no-answer page is not an empty page)', () => {
+  it('throws rather than reporting a short list when the FIRST page answers with neither rows nor an error', async () => {
+    const stub = makeRawPagingClient([{ data: null, error: null }]);
+    await expect(makeLoadAttendanceForSessions(() => stub.client)(['session-1'])).rejects.toThrow(
+      /neither rows nor an error/,
+    );
+  });
+
+  it('throws mid-stream instead of silently dropping every page after the anomaly', async () => {
+    // The real shape of the bug: page 0 is a FULL page of genuine attendance,
+    // page 1 comes back empty-bodied. Under the old `?? []` this resolved
+    // happily with only page 0's rows — a complete-looking list that is short
+    // by however many rows followed. Asserting on the rejection is what makes
+    // "returned 1000 of an unknown number of rows" impossible to pass off as
+    // success.
+    const stub = makeRawPagingClient([
+      { data: fullPage(0), error: null },
+      { data: null, error: null },
+    ]);
+    await expect(makeLoadAttendanceForSessions(() => stub.client)(['session-1'])).rejects.toThrow(
+      /page 1 resolved with neither rows nor an error/,
+    );
+  });
+
+  it('still treats a genuinely empty result set as "no attendance yet", not an error', async () => {
+    // The ordinary path must be untouched: PostgREST returns `[]` for a query
+    // that matched nothing, never `null`, so a brand-new session with no
+    // check-ins still resolves normally.
+    const stub = makeRawPagingClient([{ data: [], error: null }]);
+    await expect(makeLoadAttendanceForSessions(() => stub.client)(['session-1'])).resolves.toEqual(
+      [],
+    );
+  });
+});
+
 describe('makeLoadAttendanceForSessions — T320 pagination', () => {
   it('issues no query at all for an empty session list', async () => {
     const stub = makePagingClient([]);

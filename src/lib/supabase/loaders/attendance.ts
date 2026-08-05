@@ -357,7 +357,27 @@ export function makeLoadAttendanceForSessions(
     // whatever followed it. That ambiguity is the entire bug being fixed.
     const rows: AttendanceDbRow[] = [];
     for (let page = 0; page < ATTENDANCE_MAX_PAGES; page += 1) {
-      const pageRows = (await loadPage({ sessionIds, from: page * ATTENDANCE_PAGE_SIZE })) ?? [];
+      const pageRows = await loadPage({ sessionIds, from: page * ATTENDANCE_PAGE_SIZE });
+      // T502: `null` here is NOT "zero rows" -- it is "no answer". `createLoader`
+      // returns `result.data ?? null` WITHOUT throwing when `data` and `error`
+      // are both null (`loader.ts:174-177`), and postgrest-js really can produce
+      // that pair: an empty 2xx body, and a 404 that it rewrites to status 204
+      // leaving `error` null. The previous `?? []` collapsed that anomaly into
+      // an empty page, which this loop then reads as "shorter than a full page,
+      // so we are done" -- and it returns fewer attendance rows than exist,
+      // silently. That is the exact silent-truncation class T320 exists to
+      // remove, re-entering through the one door T320 left open.
+      //
+      // Throwing is deliberate and matches the page-cap branch below: a caller
+      // that cannot get a trustworthy answer must be told, never handed a short
+      // list that looks complete. A genuinely empty result set arrives as `[]`,
+      // not `null`, so the ordinary "no attendance yet" path is untouched.
+      if (pageRows === null) {
+        throw new Error(
+          `loadAttendanceForSessions: page ${page} resolved with neither rows nor an ` +
+            `error, so the result set cannot be trusted to be complete`,
+        );
+      }
       rows.push(...pageRows);
       if (pageRows.length < ATTENDANCE_PAGE_SIZE) {
         return rows.map(mapAttendanceDbRowToAttendanceRow);
