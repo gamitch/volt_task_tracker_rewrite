@@ -64,8 +64,8 @@ Tier is the **heaviest** item in the workflow, per constitution item 26.
 | **W6** | **Calendar & subscribe** | **0** | — | **CLOSED** — merged, database deployed | everything |
 | **W7** | **Roster & invites** | 5 | STANDARD | Working. T064 is a human gate; **T167's premise is UNVERIFIED — measure before packeting** | everything |
 | **W8** | **Email & notifications** | 2 | — | **Blocked on owner** | everything |
-| **W9** | **Migration & go-live** | 3 | HEAVY | **All three are HUMAN GATES (T064, T065, T070) — no machine can move them.** T333's data half was fixed by the owner in SQL; only the ETL half remains | everything |
-| **W10** | **Cross-cutting hygiene** | 8 | FAST/STANDARD | Includes **T175** (add `format:check` to CI) — cheapest row in the backlog | **nothing — see below** |
+| **W9** | **Migration & go-live** | **4** | HEAVY | **3 human gates (T064, T065, T070) — no machine can move those — plus T333's ETL half, which IS machine-workable.** T333's data half was fixed by the owner in SQL; the ETL still hardcodes `is_active: false` with no season argument and no post-run notice, so the next import repeats the surprise. **Do not read this row as fully blocked.** | everything |
+| **W10** | **Cross-cutting hygiene** | **9** | FAST/STANDARD | Includes **T175** (add `format:check` to CI) — cheapest row in the backlog | **nothing — see below** |
 | — | *unowned surface* | 1 | FAST | **T507** — login card overflows every phone under ~400px. `src/pages/login/**` belongs to no workflow; needs an owner assignment | — |
 
 **W10 must not run in parallel with anything.** Every row in it is a sweep across `src/pages/**` and
@@ -98,6 +98,9 @@ T500s.
 ---
 
 ## W1 — Check in
+
+> **This section is HISTORICAL as of 2026-08-05.** W1 is closed and every row listed below has shipped. The
+> summary table above is authoritative for what is open. Kept for the reasoning, not as a work queue.
 
 > A student walks in, scans a QR code (or types a short code), and their attendance is recorded.
 
@@ -148,6 +151,9 @@ to W3 on this.
 
 ## W2 — Run an outreach event
 
+> **This section is HISTORICAL as of 2026-08-05.** W2 is closed — all twelve rows below have merged, including
+> T193, T309 and T327. The summary table above is authoritative. **Do not pick work from this list.**
+
 > A coach creates an event, students RSVP, they attend, the coach marks the day complete, hours land.
 
 The most-worked path in the project and still the most defect-dense. T305 and T307 fixed the two
@@ -182,6 +188,10 @@ scoped together, carefully — T305/T307 added protections to this exact path th
 ---
 
 ## W3 — Run a meeting
+
+> **This section is OUT OF DATE in both directions as of 2026-08-05.** Every row listed below has shipped, and
+> W3 has since been re-opened by live testing with five NEW rows — **T508, T510, T511, T601, T602** — none of which
+> appear here. The summary table above is authoritative.
 
 > A coach schedules meetings, takes attendance, students see their participation percentage.
 
@@ -299,6 +309,9 @@ student) precisely to exercise this path, so it is testable in the real app.
 ---
 
 ## W6 — Calendar & subscribe
+
+> **This section is HISTORICAL as of 2026-08-05.** W6 is closed and deployed. The summary table above is
+> authoritative.
 
 > A student subscribes to the team calendar and it stays current in their phone.
 
