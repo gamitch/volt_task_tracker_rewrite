@@ -65,7 +65,7 @@ Tier is the **heaviest** item in the workflow, per constitution item 26.
 | **W7** | **Roster & invites** | 5 | STANDARD | Working. T064 is a human gate; **T167's premise is UNVERIFIED — measure before packeting** | everything |
 | **W8** | **Email & notifications** | 2 | — | **Blocked on owner** | everything |
 | **W9** | **Migration & go-live** | **4** | HEAVY | **3 human gates (T064, T065, T070) — no machine can move those — plus T333's ETL half, which IS machine-workable.** T333's data half was fixed by the owner in SQL; the ETL still hardcodes `is_active: false` with no season argument and no post-run notice, so the next import repeats the surprise. **Do not read this row as fully blocked.** | everything |
-| **W10** | **Cross-cutting hygiene** | **9** | FAST/STANDARD | Includes **T175** (add `format:check` to CI) — cheapest row in the backlog | **nothing — see below** |
+| **W10** | **Cross-cutting hygiene** | **6** | FAST/STANDARD | Includes **T175** (add `format:check` to CI) — cheapest row in the backlog | **nothing — see below** |
 | — | *unowned surface* | 1 | FAST | **T507** — login card overflows every phone under ~400px. `src/pages/login/**` belongs to no workflow; needs an owner assignment | — |
 
 **W10 must not run in parallel with anything.** Every row in it is a sweep across `src/pages/**` and
@@ -393,7 +393,10 @@ The migration **has been run for real** (2026-08-02): 20 students, 4 teams, 16 e
 
 **Do not run this beside anything.** Every row is a sweep.
 
-T157 · T168 · T171 · T172 · T175 · T204 · T301 · T332
+T168 · T171 · T172 · T175 · T204 · T332
+
+(**T157** and **T301** were also listed here; both have merged. Check `docs/swarm/ledger.md`
+before trusting this list — it is hand-maintained and the ledger is authoritative.)
 
 Two worth pulling forward because they are cheap and prevent recurrence:
 
