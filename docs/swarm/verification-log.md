@@ -10423,3 +10423,79 @@ this session's other two: a filed row is not evidence, and a comment cannot veri
 
 `tsc` 0 · `format:check` 0 · `vitest` **80 files / 2027 tests** · 4 mutations replayed. No production
 code changed — this task closes a row and records why.
+
+---
+
+## T163 — the row said "0 tests"; it was wrong, and checking found the real gap
+
+### Checked first, because the owner said prior reviews had got this wrong
+
+They were right to say so. T163 read *"`loaders/reports.ts` has 0 tests (729 lines)"*. **All six
+exports were already imported as VALUES and exercised against stubbed clients** by
+`pages/reports/{Participation,Hours,Events}Tab.test.tsx`. The file had no *colocated* test file, which
+is a different claim. (It is also 744 lines now, not 729.)
+
+Had I taken the row at face value, I would have written a from-scratch suite duplicating coverage that
+already existed — and, worse, most likely reproduced the same blind spot, because the obvious thing to
+copy is the existing fake client.
+
+### Measuring found a real gap, narrower and sharper than the row
+
+Five mutations against the live loaders, run through the existing `pages/reports` suite:
+
+| Mutation | Tab suite |
+|---|---|
+| participation: return `[]` instead of built rows | **RED** — caught |
+| events: skip the sessions chain entirely | **RED** — caught |
+| participation: wrong `seasonId` to the metrics query | **GREEN** — missed |
+| hours: wrong `seasonId` to the season-goal query | **GREEN** — missed |
+| events: wrong `seasonId` to the events query | **GREEN** — missed |
+
+**Season scoping was unguarded in all three loaders.** Structural breakage is caught; sending a query
+to the wrong season is not — and that is the failure that would silently show a coach another season's
+numbers.
+
+### Why the existing tests cannot catch it — mechanism, not speculation
+
+Their fake clients build the filter spy inline and throw the handle away:
+
+```ts
+select: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ data, error }) }))
+```
+
+That `.eq` returns identical rows for every argument and is unreachable from the test body, so no
+assertion about what was passed is even expressible. This is the same passthrough-fake trap
+`loaders/coachHome.test.ts` documents (T198) and `t700_updatable_view_guard_assertions.sql` guards
+against in SQL: **a fixture-visibility test passes identically whether or not the filter is applied.**
+
+### What shipped
+
+`src/lib/supabase/loaders/reports.test.ts` — 9 tests that deliberately do **not** re-test mapping or
+row building, since the tab tests already cover those well (proven above). It retains the spy handles
+and pins every query's *filter argument*: season scoping across all three loaders, the shared
+`is_active` students filter, the `events → sessions → (attendance, rsvps)` id chain, and the
+empty-`.in(...)` guards.
+
+### Proof the gap closed, in both directions
+
+| Mutation | Tab suite | New file |
+|---|---|---|
+| participation: wrong `seasonId` | GREEN | **RED** |
+| hours: wrong `seasonId` | GREEN | **RED** |
+| events: wrong `seasonId` | GREEN | **RED** |
+| hours: drop the `is_active` filter | RED | **RED** |
+
+The last row matters: it shows the new file is **additive**, not a replacement — where the tab tests
+already guard something, both catch it.
+
+### The pattern this closes on
+
+Three rows today whose premise did not survive contact: T204 (already fixed), T703 (superseded), and
+now T163 (wrong about coverage entirely). In every case the row pointed somewhere useful — but the
+useful thing was never quite what the row said. **Check the premise, then keep looking; a wrong
+premise often sits next to a real defect.**
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `eslint` 0 errors · `vitest` **81 files / 2047 tests** (was 80 / 2038) ·
+9 mutations replayed.
