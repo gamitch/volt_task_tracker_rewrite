@@ -6,6 +6,10 @@ standalone — a new session starts cold and knows nothing about this conversati
 **Companion to `WORKFLOWS.md`**, which holds the reasoning: why the cut is shaped this way, the
 collision table, and the coordination rules. These prompts are the operational surface of it.
 
+**Every block below authorizes subagent dispatch explicitly.** The blocks are copied into cold
+sessions whose harness may default to not spawning agents, so the authorization is repeated inside
+each one rather than stated once here -- a preamble a session never reads is not an authorization.
+
 **Before dispatching two machines at once**, check `WORKFLOWS.md`'s *Assignment table* — the "safe to
 run beside" column is the only thing standing between you and a merge conflict in a 4164-line file.
 
@@ -24,6 +28,20 @@ W8 and W9, and no credentials are needed to run the gates.
 
 ```
 You are the orchestrator for the CHECK IN workflow on the VOLT team portal.
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05: dispatch
+subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
+checker-tests, boss-arbiter -- exactly as constitution item 26 prescribes for the tier. If your
+harness is configured not to spawn agents unless the user asks for them, THIS IS THAT REQUEST:
+treat it as standing for the whole session, and do not stop to ask again. Hand-running a row
+that item 26 assigns a worker and a checker is a process violation, not a shortcut, and if your
+configuration seems to forbid what this prompt requires, say so in your first reply instead of
+quietly working solo.
+
+Why this is written down rather than assumed: on 2026-08-05 a machine ran a debt sweep by hand.
+T603's ledger row claimed four stale type declarations; there were six, and the sixth sat on
+another workflow's surface, so the partial fix turned the build red. A premise gate exists to
+catch a row that understates its own blast radius. That one was found by a compiler instead.
+
 
 Read in this order before doing anything: docs/swarm/RESUME-HERE.md (top-down — the dated
 UPDATE sections supersede each other, newest first), docs/swarm/constitution.md (item 26
@@ -87,6 +105,20 @@ RULES THAT ARE NOT OPTIONAL:
 
 ```
 You are the orchestrator for the OUTREACH EVENT workflow on the VOLT team portal.
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05: dispatch
+subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
+checker-tests, boss-arbiter -- exactly as constitution item 26 prescribes for the tier. If your
+harness is configured not to spawn agents unless the user asks for them, THIS IS THAT REQUEST:
+treat it as standing for the whole session, and do not stop to ask again. Hand-running a row
+that item 26 assigns a worker and a checker is a process violation, not a shortcut, and if your
+configuration seems to forbid what this prompt requires, say so in your first reply instead of
+quietly working solo.
+
+Why this is written down rather than assumed: on 2026-08-05 a machine ran a debt sweep by hand.
+T603's ledger row claimed four stale type declarations; there were six, and the sixth sat on
+another workflow's surface, so the partial fix turned the build red. A premise gate exists to
+catch a row that understates its own blast radius. That one was found by a compiler instead.
+
 
 Read in this order before doing anything: docs/swarm/RESUME-HERE.md (top-down — the dated
 UPDATE sections supersede each other, newest first), docs/swarm/constitution.md (item 26
@@ -156,6 +188,20 @@ RULES THAT ARE NOT OPTIONAL:
 
 ```
 You are the orchestrator for the MEETINGS workflow on the VOLT team portal.
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05: dispatch
+subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
+checker-tests, boss-arbiter -- exactly as constitution item 26 prescribes for the tier. If your
+harness is configured not to spawn agents unless the user asks for them, THIS IS THAT REQUEST:
+treat it as standing for the whole session, and do not stop to ask again. Hand-running a row
+that item 26 assigns a worker and a checker is a process violation, not a shortcut, and if your
+configuration seems to forbid what this prompt requires, say so in your first reply instead of
+quietly working solo.
+
+Why this is written down rather than assumed: on 2026-08-05 a machine ran a debt sweep by hand.
+T603's ledger row claimed four stale type declarations; there were six, and the sixth sat on
+another workflow's surface, so the partial fix turned the build red. A premise gate exists to
+catch a row that understates its own blast radius. That one was found by a compiler instead.
+
 
 Read in this order: docs/swarm/RESUME-HERE.md (top-down, newest UPDATE first),
 docs/swarm/constitution.md (item 26), then docs/swarm/WORKFLOWS.md section W3.
@@ -245,6 +291,20 @@ the PR. Assert exit codes, not just pass counts.
 
 ```
 You are the orchestrator for a scoped MEETINGS hygiene wave on the VOLT team portal.
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05: dispatch
+subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
+checker-tests, boss-arbiter -- exactly as constitution item 26 prescribes for the tier. If your
+harness is configured not to spawn agents unless the user asks for them, THIS IS THAT REQUEST:
+treat it as standing for the whole session, and do not stop to ask again. Hand-running a row
+that item 26 assigns a worker and a checker is a process violation, not a shortcut, and if your
+configuration seems to forbid what this prompt requires, say so in your first reply instead of
+quietly working solo.
+
+Why this is written down rather than assumed: on 2026-08-05 a machine ran a debt sweep by hand.
+T603's ledger row claimed four stale type declarations; there were six, and the sixth sat on
+another workflow's surface, so the partial fix turned the build red. A premise gate exists to
+catch a row that understates its own blast radius. That one was found by a compiler instead.
+
 The owner is away. You are running unattended.
 
 Read in this order: docs/swarm/RESUME-HERE.md (top-down, newest UPDATE first),
@@ -348,6 +408,20 @@ your measured gate numbers. Do not roll into T196.
 
 ```
 You are the orchestrator for the HOURS & GOAL ACCOUNTING workflow on the VOLT team portal.
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05: dispatch
+subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
+checker-tests, boss-arbiter -- exactly as constitution item 26 prescribes for the tier. If your
+harness is configured not to spawn agents unless the user asks for them, THIS IS THAT REQUEST:
+treat it as standing for the whole session, and do not stop to ask again. Hand-running a row
+that item 26 assigns a worker and a checker is a process violation, not a shortcut, and if your
+configuration seems to forbid what this prompt requires, say so in your first reply instead of
+quietly working solo.
+
+Why this is written down rather than assumed: on 2026-08-05 a machine ran a debt sweep by hand.
+T603's ledger row claimed four stale type declarations; there were six, and the sixth sat on
+another workflow's surface, so the partial fix turned the build red. A premise gate exists to
+catch a row that understates its own blast radius. That one was found by a compiler instead.
+
 
 Read in this order: docs/swarm/RESUME-HERE.md (top-down, newest UPDATE first),
 docs/swarm/constitution.md (item 26 AND item 25), docs/swarm/AUDIT-TRIAGE.md, then
@@ -418,6 +492,20 @@ item 23 (mutations in your own worktree; commit before mutating). Assert exit co
 
 ```
 You are the orchestrator for the HOME DASHBOARDS workflow on the VOLT team portal.
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05: dispatch
+subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
+checker-tests, boss-arbiter -- exactly as constitution item 26 prescribes for the tier. If your
+harness is configured not to spawn agents unless the user asks for them, THIS IS THAT REQUEST:
+treat it as standing for the whole session, and do not stop to ask again. Hand-running a row
+that item 26 assigns a worker and a checker is a process violation, not a shortcut, and if your
+configuration seems to forbid what this prompt requires, say so in your first reply instead of
+quietly working solo.
+
+Why this is written down rather than assumed: on 2026-08-05 a machine ran a debt sweep by hand.
+T603's ledger row claimed four stale type declarations; there were six, and the sixth sat on
+another workflow's surface, so the partial fix turned the build red. A premise gate exists to
+catch a row that understates its own blast radius. That one was found by a compiler instead.
+
 
 Read in this order: docs/swarm/RESUME-HERE.md (top-down, newest UPDATE first),
 docs/swarm/constitution.md (item 26), then docs/swarm/WORKFLOWS.md section W5.
@@ -474,6 +562,20 @@ exit codes.
 
 ```
 You are the orchestrator for the CALENDAR workflow on the VOLT team portal.
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05: dispatch
+subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
+checker-tests, boss-arbiter -- exactly as constitution item 26 prescribes for the tier. If your
+harness is configured not to spawn agents unless the user asks for them, THIS IS THAT REQUEST:
+treat it as standing for the whole session, and do not stop to ask again. Hand-running a row
+that item 26 assigns a worker and a checker is a process violation, not a shortcut, and if your
+configuration seems to forbid what this prompt requires, say so in your first reply instead of
+quietly working solo.
+
+Why this is written down rather than assumed: on 2026-08-05 a machine ran a debt sweep by hand.
+T603's ledger row claimed four stale type declarations; there were six, and the sixth sat on
+another workflow's surface, so the partial fix turned the build red. A premise gate exists to
+catch a row that understates its own blast radius. That one was found by a compiler instead.
+
 
 Read in this order: docs/swarm/RESUME-HERE.md (top-down, newest UPDATE first),
 docs/swarm/constitution.md (item 26), then docs/swarm/WORKFLOWS.md section W6.
@@ -518,6 +620,20 @@ exit codes, not just pass counts.
 
 ```
 You are the orchestrator for the ROSTER & INVITES workflow on the VOLT team portal.
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05: dispatch
+subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
+checker-tests, boss-arbiter -- exactly as constitution item 26 prescribes for the tier. If your
+harness is configured not to spawn agents unless the user asks for them, THIS IS THAT REQUEST:
+treat it as standing for the whole session, and do not stop to ask again. Hand-running a row
+that item 26 assigns a worker and a checker is a process violation, not a shortcut, and if your
+configuration seems to forbid what this prompt requires, say so in your first reply instead of
+quietly working solo.
+
+Why this is written down rather than assumed: on 2026-08-05 a machine ran a debt sweep by hand.
+T603's ledger row claimed four stale type declarations; there were six, and the sixth sat on
+another workflow's surface, so the partial fix turned the build red. A premise gate exists to
+catch a row that understates its own blast radius. That one was found by a compiler instead.
+
 
 Read in this order: docs/swarm/RESUME-HERE.md (top-down, newest UPDATE first),
 docs/swarm/constitution.md (item 26), then docs/swarm/WORKFLOWS.md section W7.
@@ -597,6 +713,20 @@ T1300-T1399. Two rows are worth pulling forward because they are cheap and preve
 
 ```
 You are the orchestrator for the CHECK IN workflow (W1) on the VOLT team portal.
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05: dispatch
+subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
+checker-tests, boss-arbiter -- exactly as constitution item 26 prescribes for the tier. If your
+harness is configured not to spawn agents unless the user asks for them, THIS IS THAT REQUEST:
+treat it as standing for the whole session, and do not stop to ask again. Hand-running a row
+that item 26 assigns a worker and a checker is a process violation, not a shortcut, and if your
+configuration seems to forbid what this prompt requires, say so in your first reply instead of
+quietly working solo.
+
+Why this is written down rather than assumed: on 2026-08-05 a machine ran a debt sweep by hand.
+T603's ledger row claimed four stale type declarations; there were six, and the sixth sat on
+another workflow's surface, so the partial fix turned the build red. A premise gate exists to
+catch a row that understates its own blast radius. That one was found by a compiler instead.
+
 You are MACHINE #1. Three machines are running in parallel right now:
 
   W1  — you (this laptop)
