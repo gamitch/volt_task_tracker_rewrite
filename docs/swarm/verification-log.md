@@ -10749,3 +10749,141 @@ to apply is indistinguishable from a test that does not guard.
 
 `tsc` 0 · `format:check` 0 · `eslint` 0 errors · `vitest` **81 files / 2052 tests** (was 2051) · 1
 mutation replayed.
+
+---
+
+## T201 — diagnosed, not fixed: "Hours by team" counts students a coach cannot see
+
+### This row asked for scoping, and scoping is the deliverable
+
+T201 says it plainly: *"Scope genuinely unknown… establish where, if anywhere… a deactivated
+student's historical hours should be shown before designing a fix — not decided by this row."*
+
+So this entry contains a measurement and a question, and **no code changed**.
+
+### Premise re-verified against the LIVE definitions
+
+The row cites `20260717000003_metric_views.sql` for `v_student_hours`, but T322's
+`20260804000000` create-or-replaced it. Checking the live one rather than the cited one (the T804
+lesson): it still has **no `is_active` filter** — it never joins `students` at all, so one is not
+even possible — and `v_student_goal_projection` still ends `where s.is_active`. Both halves hold.
+
+### Three of four consumers are safe, and the row did not know which
+
+| Consumer | Reads | Safe because |
+|---|---|---|
+| `leaderboard.ts:138` | `v_student_hours` | joins `v_leaderboard_students`, which is `where is_active` |
+| `reports.ts:414` | `v_student_hours` | three `.eq('is_active', true)` roster filters |
+| `coachHome.ts:350` | `v_student_hours` | filters in JS (`sumConfirmedHours` on `student.isActive`) |
+| **`v_team_hours`** | `v_student_hours` | **nothing — no `is_active` filter at any level** |
+
+`v_team_hours` sums `v_student_hours` joined only to `student_teams`, and feeds `dashboard.ts:308`
+→ CoachHome's **"Hours by team"**.
+
+### Measured, on live PostgreSQL 16.13
+
+Two students on one team, both present at the same 4 h outreach session, one since deactivated:
+
+```
+v_student_hours          Fixture Active   4.0     Fixture Departed  4.0   (no is_active filter)
+v_team_hours             8.0     <-- what "Hours by team" shows
+sum via goal_projection  4.0     <-- the students a coach can actually see
+```
+
+**The coach sees a team total double the roster they are shown**, with nothing on screen accounting
+for the gap. That is the `is_active` family's third instance, made concrete rather than suspected.
+
+### Why it stops here
+
+The remaining question is not an engineering one. **Should a departed student's historical hours
+still count toward their team's total?**
+
+- **(a) No** — filter them, so the total always equals the visible roster. Consistent and
+  explicable; understates what the team actually did.
+- **(b) Yes** — the hours were genuinely volunteered for that team, and erasing them rewrites
+  history. But the total then legitimately will not match the roster sum, so it needs a visible
+  explanation ("8 h, incl. 4 h from past members") or coaches read it as a bug.
+- **(c) Yes, and surface departed students per-student** so the arithmetic reconciles. Largest
+  change — and note this row's own warning: `v_student_goal_projection`'s filter **cannot** simply
+  be relaxed, because T184's `{kind:'inactive'}` branch depends on its null-for-inactive signal. It
+  needs a new, separate read.
+
+All three produce different migrations, so writing one before the ruling would be guessing at a
+product decision the row explicitly reserves.
+
+### Gates
+
+No code changed — docs only. `tsc` 0 · `format:check` 0 · `vitest` **81 files / 2052 tests**
+(unchanged).
+
+---
+
+## T201 (fix) — the hours were always right; HoursTab was hiding the people
+
+### The ruling, and what it implied
+
+Owner, 2026-08-05: *"that's actual work that was done regardless if that person is no longer with the
+team or not. That's like asking if your work done today counts for my token usage if i deactivate your
+session."* Option **(c)** — keep the total AND surface departed members per-student. The goal-column
+sub-decision was delegated.
+
+That inverts which side is broken. If the hours count, **`v_team_hours`'s 8.0 h was correct all along**
+and HoursTab's 4.0 h was the defect — it hid the person, and their hours went with them.
+
+### The fix was cheap because the data was already being fetched
+
+`queryHoursStudentHours` reads `v_student_hours` **unfiltered**, so departed students' hours were
+already arriving in `HoursLoadResult`. `buildStudentRows` is roster-driven — it iterates
+`data.students` and looks up hours — so a student with no roster row silently vanished, hours and all.
+The roster query's `.eq('is_active', true)` was the only thing discarding them.
+
+**No migration.** `v_team_hours`, `v_student_hours` and `v_student_goal_projection` are all untouched,
+so T184's null-for-inactive signal — this row's own stated hazard — is unaffected.
+
+| Change | File |
+|---|---|
+| drop `.eq('is_active', true)`, select `is_active` | `loaders/reports.ts` |
+| keep an inactive student **only when they have hours** | `buildStudentRows` |
+| new `'past-member'` row kind: badge, `—` goal/%, excluded from goal subtotal | `HoursTab.tsx` |
+
+### The goal column, decided
+
+A past member shows `—` for goal and percent, contributes 0 to the goal subtotal, and renders **no
+ProgressBar**. Counting their goal would make a team's "% to goal" **drop because somebody left** —
+trading one wrong number for another. Rendering the bar would announce `aria-valuemax="0"` and a 0%
+label, fabricating the "missed their goal" reading the em dash exists to avoid (T202's lesson,
+one row later).
+
+Confirmed and planned hours count in full. That is what makes the subtotal reconcile with
+`v_team_hours`.
+
+### Mutations — and one that stayed green for the right reason
+
+| Mutation | Result |
+|---|---|
+| Drop past members again (the original defect) | **RED** |
+| Give a past member a real goal | **RED** |
+| Remove the goal-subtotal filter **alone** | **GREEN** |
+| Both of the last two together | **RED** |
+
+The green one is not a coverage gap. `goalHours: 0` in `buildStudentRows` already enforces "no goal
+from a past member", so the subtotal filter is a **second, independent mechanism** — removing either
+alone changes nothing, and defeating both at once is caught by the subtotal assertion. Defence in
+depth, with every single-point failure pinned.
+
+Worth stating because a green mutation looks like a hole at first glance, and this session already
+had one that genuinely was (T703) and one that only appeared to be (a mutation that never applied).
+The way to tell them apart is to keep mutating until you find what the assertion is actually holding.
+
+### A test of mine, inverted rather than deleted
+
+`makeLoadHoursData … "scopes students to active only"` — written by me this morning for T163 —
+asserted the exact filter that turned out to be the defect. It now asserts the filter is **absent**,
+and notes that the participation loader legitimately still filters. Two fake-client doubles were also
+reshaped to the real `.select(...).order(...)` call rather than left permissive enough to accept both
+shapes; a permissive double would have gone on passing if the filter were silently reinstated.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `eslint` 0 errors · `vitest` **81 files / 2055 tests** (was 2052) ·
+`vite build` 0 · 4 mutations replayed.
