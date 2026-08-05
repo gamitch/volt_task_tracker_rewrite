@@ -3397,3 +3397,49 @@ marks-only it looks **better** (unmarked students are not counted at all). That 
 
 **NOT authorised:** modelling sub-teams, adding an expected-attendee list to meetings, or any change to
 `v_student_hours` / volunteer-hours math. Item 4 changes participation only.
+
+---
+
+## 2026-08-05 (later) — George's rulings during T508's HEAVY chain: three questions put to him, three answers
+
+Taken by the W3 orchestrator while T508's packet was at the premise gate. All three were put to him
+as explicit questions rather than decided in auto-mode; recorded here because two of them change a
+shipped artifact and one closes a row outright.
+
+### 1. T601 — CLOSED. `makeOnEditAttendance` is KEPT as-is, documented.
+
+The factory has no reachable product caller after T196 (`EndMeetingDialog`'s only mount passes
+`hasAttendanceCorrections={false}`, and that prop gates the sole UI path to it). Options put to him
+were keep / delete / wire to a real surface. **Ruled: keep as-is, documented.** Its two tests
+(`endMeeting.test.ts:626`/`:640`) cover real behaviour, deleting it would lose that, and re-exposing
+post-completion correction later would mean rewriting it. A comment at the factory records that it is
+deliberately unreachable rather than drifted-into-dead.
+
+**T601 needs no engineering work and no process tier.** It was never an engineering question — it was
+a decision only the owner could make, and a HEAVY chain on it would have burned effort producing an
+answer no agent was entitled to give. His framing, worth carrying: **tier per ROW, not per workflow.**
+
+### 2. The end-meeting summary when NOTHING was marked keeps the full tally line
+
+A coach who ends a meeting having marked nobody sees `Current attendance: 0 present · 0 late ·
+0 excused · 0 absent.` — the tally line renders unconditionally rather than being replaced by a
+prose "No attendance recorded." sentence. **Ruled for consistency: one format, always.**
+
+The alternative (prose on the empty case) was argued as closer to his own *"it should just say 5
+present"* phrasing. He chose the uniform tally anyway. **A third option — refusing to end a meeting
+until something is marked — was put to him with a recommendation AGAINST**, on the grounds that it is
+the same fail-closed strictness that got `trg_audit_attendance_post_completion` removed. Not taken.
+
+### 3. T508's worker may edit `LiveConsole.endMeeting.test.tsx` — MECHANICAL FALLOUT ONLY
+
+**This is a scoped cross-workflow grant, and it is narrow on purpose.** `LiveConsole.tsx` (source)
+stays forbidden to W3 — the T196 grant expired and is not inherited. But its colocated test file
+asserts on the payload shape `EndMeetingDialog` builds, so T508's rename of
+`backfillAbsentStudentIds` → `markAbsentStudentIds` and the new `markRemainingAbsent` parameter break
+it mechanically. **Authorised: exactly the two lines forced by the signature change, nothing else.**
+Widening it to add new console-level coverage was offered and declined.
+
+**Why this is recorded rather than logged in a packet:** the orchestrator had originally written
+itself this grant inside the packet as a "narrow grant" and only afterwards recognised that as
+self-authorisation. The kickoff rule is explicit — *a cross-workflow file reach is an ASK, never a
+log entry* — and it applies to a test file just as much as to the source beside it.
