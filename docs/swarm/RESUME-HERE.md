@@ -1265,7 +1265,7 @@ the backlog grows. These five are the only path to "finished".
 | Row | Why |
 |---|---|
 | T156 | the loader throws away the real Postgres error. This is why diagnosing the dashboard bug needed DevTools and a screenshot. Makes every future bug cheaper. |
-| T175 | add `format:check` to CI — minutes of work, closes a silent-drift class |
+| ~~T175~~ | **Done — shipped as PR #91**, `format:check` is a CI step now. |
 
 ## CLOSE — process artifacts, no user impact (13)
 
@@ -1275,10 +1275,10 @@ the backlog grows. These five are the only path to "finished".
 | T171 | a true property that no test pins. The code is correct. |
 | T190 | fixture id-space rekeying so *future* tests are discriminating by construction |
 | T174 | `FIXTURE_RSVPS` id-space confusion — fixture-only |
-| T186 | a view column's comment says display-only. A comment. |
+| ~~T186~~ | **Superseded — MERGED 2026-08-04, not closed.** The comment was corrected and the surviving display-only read recorded. |
 | T160 | a type is still called `FixtureTeam`. Cosmetic. |
 | T182 | delete `StudentHomeSlot.tsx` — dead code hurting nobody |
-| T187 | dual-team narrowing, deliberate and disclosed. **Re-open when a student actually joins two teams.** |
+| ~~T187~~ | **Superseded — MERGED 2026-08-04, not closed.** Scoping now reads ACTIVE `student_teams` memberships, so it no longer waits on a student joining two teams. |
 | T192 | per-card full-table reads — fine at one team, one season (item 25) |
 | T168 | the placeholder sweep. **The audits are done**; both families were found and closed. |
 | T172 | the mechanism fix. T151 already made the dialogs compiler-enforced and every known instance is fixed; this now only prevents hypothetical future ones. |
