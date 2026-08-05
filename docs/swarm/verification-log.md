@@ -9870,6 +9870,13 @@ Every migration then applied to a fresh database. **Two were skipped and the ski
 swallowed:** `20260719000000_cron.sql` (needs `pg_cron`) and `20260720000001_avatar_storage.sql`
 (needs `storage.buckets`) — both Supabase-managed, and neither defines or reads a dashboard view.
 
+> **CORRECTION, same day.** The second skip was my harness's fault, not a real limitation. This repo
+> already ships `supabase/tests/calendar_feed_platform_stub.sql`, which every sibling runner uses and
+> which provides `storage.buckets`; I hand-rolled a bootstrap instead of finding it. With the repo's
+> own stub, **21 of 22 migrations apply and only `_cron` is skipped.** Measured by running the new
+> `run_t801_dashboard_views_comments.sh` (added below) — the assertions pass identically either way,
+> so no conclusion above changes, but "two skipped" overstated the gap.
+
 | # | Mutation | Result |
 |---|---|---|
 | 1 | Drop one view's comment | **RED** — A1 names `v_season_attendance_rate` |
@@ -9884,6 +9891,19 @@ comment exists.
 
 **The "no view definition changes" claim is measured.** An `md5` over
 `pg_get_viewdef` for every public view is byte-identical before and after applying the migration.
+
+### A gap this task shipped with, found afterwards and fixed
+
+**The assertions file landed without a runner.** Every sibling assertion set in `supabase/tests/` has
+a `run_*.sh` — `run_t205_anon_grant.sh`, `run_t503_widen_rsvp_read.sh`,
+`run_volunteer_hours_outreach_only.sh`, `run_calendar_feed_lifecycle.sh` — and T801's did not. Since
+**nothing in CI runs any of them** (T701 covers the `tests/rls/run.sh` half of that problem), a
+missing runner meant the file could only be executed by someone reconstructing the harness by hand,
+which is exactly what I had done rather than looking for the convention.
+
+`supabase/tests/run_t801_dashboard_views_comments.sh` now exists, mirrors
+`run_volunteer_hours_outreach_only.sh` line for line, and was run end-to-end before commit: all four
+assertions PASS.
 
 ### The assertions file departs from its own precedent, deliberately
 
