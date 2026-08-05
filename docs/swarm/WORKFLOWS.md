@@ -395,7 +395,7 @@ The migration **has been run for real** (2026-08-02): 20 students, 4 teams, 16 e
 
 T168 · T171 · T172 · T175 · T204 · T332
 
-(**T157** and **T301** were also listed here; both have merged. Check `docs/swarm/ledger.md`
+(**T157** and **T301** were also listed here; both have merged. Check `docs/swarm/task-ledger.md`
 before trusting this list — it is hand-maintained and the ledger is authoritative.)
 
 Two worth pulling forward because they are cheap and prevent recurrence:
