@@ -3333,3 +3333,67 @@ Neither row was wrong to file. Both were filed honestly by a checker or a worker
 them in place. **What changed was measuring them before building** — T505's row asserted the fix
 needed a migration or an insert/update split, and did not know the dialog already handled the
 non-race case or that the owner had ruled on the trade-off two days earlier.
+
+---
+
+## 2026-08-05 — George rules on absence marking and MET-01: only explicit marks count, because expected-attendance is NOT derivable from this app's data
+
+**Three verbatim rulings, from live testing of the meetings flow:**
+
+1. *"i think we should only count 'absent' if i click the pill for absent"*
+2. *"it should just say 5 present unless i explicetly mark some as absent"*
+3. *"the participation % shouldn't assume everyone is supposed to attend a meeting, even if it's
+   scoped to p3. if i have the right tools to indicate absent students then it should use that as
+   the calculation."*
+
+And on legacy data: *"leave as is"* — the absence rows already written by the auto-backfill (including
+17 from this test) stay, and are treated as real markings rather than cleaned up.
+
+### The reason, which is a data-model fact and not a preference
+
+The orchestrator first proposed keeping MET-01's eligibility denominator and scoping meetings via
+`events.team_ids`, which the metric already honours. **George corrected it, and the correction is the
+whole point:**
+
+> *"What i mean by subteam meeting is not P3 (a team) but below that. for example the busines team or
+> build team or software team may have meetings that broader P3 team members are not required to
+> attend. These concepts were not sent to you because i do not intend to overcompliate the
+> application."*
+
+`teams` in this app means P3 / Gear Girls. The **sub-teams that actually determine who is expected at a
+given meeting — business, build, software — are deliberately NOT modelled**, and he does not want them
+to be. So `team_ids` cannot express "the software team met tonight."
+
+**Therefore expected-attendance is not derivable from any data the app holds.** An eligibility-based
+denominator assumes the app knows the expected set; for a build-team meeting it does not and never
+will. **The coach's markings are the only honest source of truth about who was expected**, which makes
+ruling 3 a consequence of the data model, not a matter of taste.
+
+### The risk that was put to him, and why it is acceptable
+
+The orchestrator flagged that this **inverts how the metric fails**: today a coach who forgets to mark
+anyone makes participation look **worse** than reality (everyone counts as expected-and-absent); under
+marks-only it looks **better** (unmarked students are not counted at all). That matters because RPT-02's
+"below 70%" filter exists to surface students falling behind.
+
+**Two things make it acceptable, both measured rather than assumed:**
+
+- **RPT-02 already displays `expected / present / late / excused` counts beside the %**, so a student
+  at `100%` with `2 expected` shows their own thin denominator. The inflation is visible, not hidden.
+- Under the current model an unmarked student surfaces as *falsely* low, which is its own error. Neither
+  model is failure-free; this one at least never asserts an absence nobody recorded.
+
+### What is authorised
+
+1. **Session summary shows only what was marked** — "5 present", silent about unmarked students.
+2. **No `absent` row is ever written unless a coach taps Absent.** The `backfillAbsences` step in
+   `loaders/endMeeting.ts` goes.
+3. **A one-click "mark all remaining absent"** in the end-meeting flow, so the whole-team case stays
+   one action rather than seventeen. This is the "right tools" ruling 3 is conditional on.
+4. **MET-01's denominator becomes explicit marks** — `present + late + absent`, still minus `excused`.
+   A student with no mark for a session is not counted for that session; display `—` when a student has
+   no marks at all, extending MET-01's existing "display — when no completed meetings" rule.
+5. **Legacy rows stay.** No cleanup migration, no deletion of the auto-backfilled absences.
+
+**NOT authorised:** modelling sub-teams, adding an expected-attendee list to meetings, or any change to
+`v_student_hours` / volunteer-hours math. Item 4 changes participation only.
