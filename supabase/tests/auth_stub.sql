@@ -13,9 +13,21 @@
 -- local dev stack plays for T009-T013's own scratch-Postgres validation.
 create schema if not exists auth;
 
+-- T701 -- this stub declared only `id`/`email`, which was enough when it was
+-- written and stopped being enough once `20260718000000_invite_trigger.sql`
+-- began referencing `new.email_confirmed_at` / `old.email_confirmed_at` /
+-- `new.last_sign_in_at` / `old.last_sign_in_at` / `new.raw_user_meta_data`.
+-- The trigger body is only parsed when the migration applies, so the suite
+-- failed at apply time with `column old.email_confirmed_at does not exist`
+-- and never reached a single assertion. The columns below are exactly the
+-- set that migration touches -- not a guess at Supabase's real table, and
+-- deliberately no wider than what is referenced.
 create table if not exists auth.users (
   id uuid primary key default gen_random_uuid(),
-  email text
+  email text,
+  email_confirmed_at timestamptz,
+  last_sign_in_at timestamptz,
+  raw_user_meta_data jsonb default '{}'::jsonb
 );
 
 -- Every command in this test suite runs as the Postgres superuser (which

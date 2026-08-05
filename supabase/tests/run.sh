@@ -65,8 +65,26 @@ echo "==> creating scratch database $DBNAME"
 echo "==> applying auth schema stub"
 "${PSQL[@]}" -d "$DBNAME" -f "$SCRIPT_DIR/auth_stub.sql"
 
+# T701 -- same two Supabase-platform migrations `tests/rls/run.sh` and
+# `supabase/tests/run_calendar_feed_lifecycle.sh:29-31` already skip by name.
+# Neither defines a metric view this suite asserts against, so skipping them
+# does not narrow the proof; without the skip the runner cannot start at all.
+SKIPPED_MIGRATIONS=(
+  "20260719000000_cron.sql"           # pg_cron + pg_net (pg_net is Supabase-only)
+  "20260720000001_avatar_storage.sql" # storage.buckets, created by Supabase storage
+)
+
 for f in "$MIGRATIONS_DIR"/*.sql; do
-  echo "==> applying migration: $(basename "$f")"
+  base="$(basename "$f")"
+  skip=false
+  for skipped in "${SKIPPED_MIGRATIONS[@]}"; do
+    if [[ "$base" == "$skipped" ]]; then skip=true; break; fi
+  done
+  if [[ "$skip" == true ]]; then
+    echo "==> SKIPPING migration (Supabase-platform dependency): $base"
+    continue
+  fi
+  echo "==> applying migration: $base"
   "${PSQL[@]}" -d "$DBNAME" -f "$f"
 done
 

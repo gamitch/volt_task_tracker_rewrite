@@ -74,12 +74,29 @@
  *    checked for `.length > 0` before every `.in(...)` query below.
  *
  * -----------------------------------------------------------------------
- * 6. RLS -- same finding as the migration's own header comment and
- *    `loaders/reports.ts`'s own module doc #7: none of the nine views this
- *    file reads are `security_definer`, so each runs under the querying
- *    session's own RLS against `students`/`student_teams`/`teams`/
- *    `seasons`/`events`/`event_sessions`/`rsvps`/`attendance`
- *    (`20260717000002_rls.sql`, read-only), all of which already grant
+ * 6. RLS -- **T204 CORRECTION.** This paragraph used to say none of the nine
+ *    views are `security_definer`, "so each runs under the querying session's
+ *    own RLS against its base tables", citing `loaders/reports.ts`'s module
+ *    doc #7 as authority. That claim is FALSE, and it reached this file by
+ *    citation: `reports.ts` cited `ParticipationTab.tsx`, and this file cited
+ *    `reports.ts`. All three are corrected together, because fixing one link
+ *    of a citation chain leaves the other links pointing at a wrong source.
+ *
+ *    `security_definer` is a **function** attribute, not the view knob;
+ *    the view-level knob is `security_invoker` (PG15+), which defaults OFF and
+ * appears as a real clause ZERO times under `supabase/`. These views therefore
+ * execute as their OWNER and do NOT apply the caller's RLS to the base tables.
+ * MEASURED, not reasoned: `20260731000000_leaderboard_students_view.sql:32-46`
+ * records the live run; `20260805000000_dashboard_views_comment_corrections.sql`
+ * now carries the same correction in the database catalog.
+ * NO BEHAVIOUR CHANGE is implied -- T185 closed no-change on the exposure
+ * itself under the owner's proportionality ruling (constitution item 25). Only
+ * the EXPLANATION was wrong.
+ *
+ *    What remains TRUE and is what actually makes these reads safe: the base
+ *    tables `students`/`student_teams`/`teams`/`seasons`/`events`/
+ *    `event_sessions`/`rsvps`/`attendance` (`20260717000002_rls.sql`,
+ *    read-only) already grant
  *    `admin`/`coach` full read via `staff_all`. `CoachHome.tsx` is
  *    coach/admin-only, so a real empty result here means "none exist yet",
  *    not an RLS-caused false-empty.

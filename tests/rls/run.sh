@@ -9,8 +9,11 @@
 # `tests/rls/auth_stub.sql` (minimal `auth` schema scaffolding a bare
 # Postgres instance doesn't otherwise have -- see that file's header comment
 # for why this is a separate, wider stub than `supabase/tests/auth_stub.sql`,
-# not a copy/modification of it), then applies EVERY file under
-# `supabase/migrations/` UNCHANGED and in filename order (identity_roster ->
+# not a copy/modification of it), then applies every file under
+# `supabase/migrations/` UNCHANGED and in filename order, EXCEPT two that
+# depend on Supabase-platform objects a bare Postgres lacks (named and
+# justified at the loop below -- T701 corrected this sentence, which
+# promised "EVERY file" long after that stopped being true) (identity_roster ->
 # scheduling_attendance -> support_audit -> rls -> metric_views ->
 # invite_trigger), then `tests/rls/grants.sql` (post-migration table grants
 # to the `authenticated` role, mirroring the real Supabase platform's default
@@ -68,8 +71,38 @@ echo "==> creating scratch database $DBNAME"
 echo "==> applying auth schema stub"
 "${PSQL[@]}" -d "$DBNAME" -f "$SCRIPT_DIR/auth_stub.sql"
 
+# T701 -- this loop used to apply EVERY migration unchanged, which the header
+# above still promised long after it stopped being achievable. Two migrations
+# depend on Supabase-platform objects a bare Postgres does not have, so they
+# are skipped BY NAME with the reason stated, exactly as
+# `supabase/tests/run_calendar_feed_lifecycle.sh:29-31` already proved:
+#
+#   20260719000000_cron.sql          -- needs pg_cron AND pg_net; pg_net is
+#                                       Supabase-platform-only and is not
+#                                       packaged for Debian/Ubuntu at all.
+#   20260720000001_avatar_storage.sql -- needs `storage.buckets`, created by
+#                                       the Supabase storage service.
+#
+# Neither defines or alters a table, view, or policy this RLS suite asserts
+# against, so skipping them does not narrow what the suite proves. Anything
+# they DID cover would be invisible here either way -- the alternative is not
+# "more coverage", it is a runner that cannot start.
+SKIPPED_MIGRATIONS=(
+  "20260719000000_cron.sql"
+  "20260720000001_avatar_storage.sql"
+)
+
 for f in "$MIGRATIONS_DIR"/*.sql; do
-  echo "==> applying migration: $(basename "$f")"
+  base="$(basename "$f")"
+  skip=false
+  for skipped in "${SKIPPED_MIGRATIONS[@]}"; do
+    if [[ "$base" == "$skipped" ]]; then skip=true; break; fi
+  done
+  if [[ "$skip" == true ]]; then
+    echo "==> SKIPPING migration (Supabase-platform dependency): $base"
+    continue
+  fi
+  echo "==> applying migration: $base"
   "${PSQL[@]}" -d "$DBNAME" -f "$f"
 done
 
