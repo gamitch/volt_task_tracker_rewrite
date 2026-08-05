@@ -10749,3 +10749,69 @@ to apply is indistinguishable from a test that does not guard.
 
 `tsc` 0 · `format:check` 0 · `eslint` 0 errors · `vitest` **81 files / 2052 tests** (was 2051) · 1
 mutation replayed.
+
+---
+
+## T201 — diagnosed, not fixed: "Hours by team" counts students a coach cannot see
+
+### This row asked for scoping, and scoping is the deliverable
+
+T201 says it plainly: *"Scope genuinely unknown… establish where, if anywhere… a deactivated
+student's historical hours should be shown before designing a fix — not decided by this row."*
+
+So this entry contains a measurement and a question, and **no code changed**.
+
+### Premise re-verified against the LIVE definitions
+
+The row cites `20260717000003_metric_views.sql` for `v_student_hours`, but T322's
+`20260804000000` create-or-replaced it. Checking the live one rather than the cited one (the T804
+lesson): it still has **no `is_active` filter** — it never joins `students` at all, so one is not
+even possible — and `v_student_goal_projection` still ends `where s.is_active`. Both halves hold.
+
+### Three of four consumers are safe, and the row did not know which
+
+| Consumer | Reads | Safe because |
+|---|---|---|
+| `leaderboard.ts:138` | `v_student_hours` | joins `v_leaderboard_students`, which is `where is_active` |
+| `reports.ts:414` | `v_student_hours` | three `.eq('is_active', true)` roster filters |
+| `coachHome.ts:350` | `v_student_hours` | filters in JS (`sumConfirmedHours` on `student.isActive`) |
+| **`v_team_hours`** | `v_student_hours` | **nothing — no `is_active` filter at any level** |
+
+`v_team_hours` sums `v_student_hours` joined only to `student_teams`, and feeds `dashboard.ts:308`
+→ CoachHome's **"Hours by team"**.
+
+### Measured, on live PostgreSQL 16.13
+
+Two students on one team, both present at the same 4 h outreach session, one since deactivated:
+
+```
+v_student_hours          Fixture Active   4.0     Fixture Departed  4.0   (no is_active filter)
+v_team_hours             8.0     <-- what "Hours by team" shows
+sum via goal_projection  4.0     <-- the students a coach can actually see
+```
+
+**The coach sees a team total double the roster they are shown**, with nothing on screen accounting
+for the gap. That is the `is_active` family's third instance, made concrete rather than suspected.
+
+### Why it stops here
+
+The remaining question is not an engineering one. **Should a departed student's historical hours
+still count toward their team's total?**
+
+- **(a) No** — filter them, so the total always equals the visible roster. Consistent and
+  explicable; understates what the team actually did.
+- **(b) Yes** — the hours were genuinely volunteered for that team, and erasing them rewrites
+  history. But the total then legitimately will not match the roster sum, so it needs a visible
+  explanation ("8 h, incl. 4 h from past members") or coaches read it as a bug.
+- **(c) Yes, and surface departed students per-student** so the arithmetic reconciles. Largest
+  change — and note this row's own warning: `v_student_goal_projection`'s filter **cannot** simply
+  be relaxed, because T184's `{kind:'inactive'}` branch depends on its null-for-inactive signal. It
+  needs a new, separate read.
+
+All three produce different migrations, so writing one before the ruling would be guessing at a
+product decision the row explicitly reserves.
+
+### Gates
+
+No code changed — docs only. `tsc` 0 · `format:check` 0 · `vitest` **81 files / 2052 tests**
+(unchanged).
