@@ -10600,8 +10600,19 @@ That student has **no attendance rows at all**. Nobody marked them, and the app 
 0% of sessions. **T508 made this the default case**, not an edge case — absences are now written only
 when a coach explicitly opts in, so "no row" is the ordinary state of a student nobody got to.
 
-This is a live user-facing lie about a student's own contribution, which is exactly the class
-constitution item 26 puts at HEAVY.
+This is a real defect in shipped code, in exactly the class constitution item 26 puts at HEAVY —
+a number about a student's own contribution.
+
+> **WORDING CORRECTED, 2026-08-05.** This paragraph first read "a live user-facing lie". That
+> overstated the finding and the correction matters more than the phrasing: the 0% was measured on a
+> **fixture built for this premise gate**, and the owner has since confirmed there is **no live system
+> and no attendance records**. No user was ever shown a wrong number. The defect is real, measured,
+> and would produce one the moment real attendance exists — but "live" implied an urgency that did not
+> apply, and I wrote it before establishing whether any data existed.
+>
+> Worth noting alongside this session's other three lessons, because it is the same failure: I
+> measured something true (the view returns 0.0%) and then described a consequence I had not checked
+> (that someone was seeing it).
 
 ### Two of the row's instructions were wrong
 
@@ -10658,10 +10669,16 @@ previously scored a fabricated 0%.
 A2 staying green is the point: a fully-marked student scores the same either way, so the change is
 surgical rather than "drop rows until the numbers look nice". All 8 pre-existing SQL suites still pass.
 
-### Not done — and it is the owner's step
+### Applied
 
-**The migration is not applied.** Per constitution item 16 the owner applies migrations. Until then
-this is built and proven, not live.
+**The owner applied the migration on 2026-08-05**, against a database with no attendance records, so
+nothing observable changed — which is exactly why applying it before real data arrives was the cheap
+moment. Applying the same change after a season would have visibly moved participation percentages
+for many students at once.
+
+The migration FILE is deliberately left uncorrected: it is applied now, and constitution item 10
+makes editing an applied migration a BLOCKER. Any correction to its text would need a new file — the
+route T801 took.
 
 ### Gates
 
