@@ -153,6 +153,7 @@ const MOCK_HOURS_RESULT: HoursLoadResult = {
       id: 'student-jordan-blake',
       name: 'Jordan Blake',
       teamId: 'team-hawks',
+      isActive: true,
       goalHoursOverride: null,
     },
   ],

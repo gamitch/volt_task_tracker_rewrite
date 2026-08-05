@@ -10815,3 +10815,75 @@ product decision the row explicitly reserves.
 
 No code changed — docs only. `tsc` 0 · `format:check` 0 · `vitest` **81 files / 2052 tests**
 (unchanged).
+
+---
+
+## T201 (fix) — the hours were always right; HoursTab was hiding the people
+
+### The ruling, and what it implied
+
+Owner, 2026-08-05: *"that's actual work that was done regardless if that person is no longer with the
+team or not. That's like asking if your work done today counts for my token usage if i deactivate your
+session."* Option **(c)** — keep the total AND surface departed members per-student. The goal-column
+sub-decision was delegated.
+
+That inverts which side is broken. If the hours count, **`v_team_hours`'s 8.0 h was correct all along**
+and HoursTab's 4.0 h was the defect — it hid the person, and their hours went with them.
+
+### The fix was cheap because the data was already being fetched
+
+`queryHoursStudentHours` reads `v_student_hours` **unfiltered**, so departed students' hours were
+already arriving in `HoursLoadResult`. `buildStudentRows` is roster-driven — it iterates
+`data.students` and looks up hours — so a student with no roster row silently vanished, hours and all.
+The roster query's `.eq('is_active', true)` was the only thing discarding them.
+
+**No migration.** `v_team_hours`, `v_student_hours` and `v_student_goal_projection` are all untouched,
+so T184's null-for-inactive signal — this row's own stated hazard — is unaffected.
+
+| Change | File |
+|---|---|
+| drop `.eq('is_active', true)`, select `is_active` | `loaders/reports.ts` |
+| keep an inactive student **only when they have hours** | `buildStudentRows` |
+| new `'past-member'` row kind: badge, `—` goal/%, excluded from goal subtotal | `HoursTab.tsx` |
+
+### The goal column, decided
+
+A past member shows `—` for goal and percent, contributes 0 to the goal subtotal, and renders **no
+ProgressBar**. Counting their goal would make a team's "% to goal" **drop because somebody left** —
+trading one wrong number for another. Rendering the bar would announce `aria-valuemax="0"` and a 0%
+label, fabricating the "missed their goal" reading the em dash exists to avoid (T202's lesson,
+one row later).
+
+Confirmed and planned hours count in full. That is what makes the subtotal reconcile with
+`v_team_hours`.
+
+### Mutations — and one that stayed green for the right reason
+
+| Mutation | Result |
+|---|---|
+| Drop past members again (the original defect) | **RED** |
+| Give a past member a real goal | **RED** |
+| Remove the goal-subtotal filter **alone** | **GREEN** |
+| Both of the last two together | **RED** |
+
+The green one is not a coverage gap. `goalHours: 0` in `buildStudentRows` already enforces "no goal
+from a past member", so the subtotal filter is a **second, independent mechanism** — removing either
+alone changes nothing, and defeating both at once is caught by the subtotal assertion. Defence in
+depth, with every single-point failure pinned.
+
+Worth stating because a green mutation looks like a hole at first glance, and this session already
+had one that genuinely was (T703) and one that only appeared to be (a mutation that never applied).
+The way to tell them apart is to keep mutating until you find what the assertion is actually holding.
+
+### A test of mine, inverted rather than deleted
+
+`makeLoadHoursData … "scopes students to active only"` — written by me this morning for T163 —
+asserted the exact filter that turned out to be the defect. It now asserts the filter is **absent**,
+and notes that the participation loader legitimately still filters. Two fake-client doubles were also
+reshaped to the real `.select(...).order(...)` call rather than left permissive enough to accept both
+shapes; a permissive double would have gone on passing if the filter were silently reinstated.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `eslint` 0 errors · `vitest` **81 files / 2055 tests** (was 2052) ·
+`vite build` 0 · 4 mutations replayed.

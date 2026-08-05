@@ -128,10 +128,23 @@ describe('makeLoadHoursData -- season scoping', () => {
     expect(eqArgsFor(calls, 'events')).toContainEqual(['season_id', 'season-bravo']);
   });
 
-  it('scopes students to active only', async () => {
+  // T201 -- INVERTED, not deleted. This asserted the hours roster was filtered
+  // to active students. That filter was the whole defect: `v_student_hours`
+  // (read unfiltered) already contained departed students' hours, and the
+  // roster filter silently discarded them, making HoursTab's team subtotal
+  // disagree with `v_team_hours` and so with CoachHome's "Hours by team".
+  //
+  // Owner ruled 2026-08-05 that the hours count: "that's actual work that was
+  // done regardless if that person is no longer with the team or not."
+  // `buildStudentRows` now keeps an inactive student ONLY when they have
+  // hours, so the filter must NOT come back here.
+  //
+  // Note the participation loader above still DOES filter to active, and its
+  // test still asserts that -- these two loaders legitimately differ now.
+  it('does NOT filter the roster to active students -- departed members with hours must survive (T201)', async () => {
     const { client, calls } = makeRecordingClient();
     await makeLoadHoursData(() => client)('season-bravo');
-    expect(eqArgsFor(calls, 'students')).toContainEqual(['is_active', true]);
+    expect(eqArgsFor(calls, 'students')).not.toContainEqual(['is_active', true]);
   });
 
   it('never issues an empty .in(...) -- no events means no session or rsvp query', async () => {
