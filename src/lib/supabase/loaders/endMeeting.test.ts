@@ -341,10 +341,10 @@ describe('makeLoadEndMeetingSummary', () => {
 interface MutationRecordingSetup {
   client: SupabaseClient;
   fromSpy: ReturnType<typeof vi.fn>;
-  backfillCalls: { upsertArgs: [unknown, unknown][] };
+  markCalls: { upsertArgs: [unknown, unknown][] };
   checkoutCalls: { updateArgs: unknown[]; chainCalls: [string, unknown[]][] };
   flipCalls: { updateArgs: unknown[]; chainCalls: [string, unknown[]][] };
-  backfillDeferred: Deferred<MutationResult>;
+  markDeferred: Deferred<MutationResult>;
   checkoutDeferred: Deferred<MutationResult>;
   flipDeferred: Deferred<MutationResult>;
 }
@@ -359,18 +359,18 @@ interface MutationRecordingSetup {
  * crash (same discipline `students.test.ts`'s own criterion-8 MINOR fix
  * established for this directory).
  *
- * `.from('attendance')` dispatches on the METHOD called (`upsert` ->
- * backfill, `update` -> checkout), not on call order -- this also makes the
+ * `.from('attendance')` dispatches on the METHOD called (`upsert` -> mark
+ * absences, `update` -> checkout), not on call order -- this also makes the
  * criterion-5 concurrent-mutation proof step (running the old
  * `Promise.all`-based implementation against this same client) route each
  * call to the correct recorder regardless of dispatch order.
  */
 function makeMutationRecordingClient(): MutationRecordingSetup {
-  const backfillDeferred = makeDeferred<MutationResult>();
+  const markDeferred = makeDeferred<MutationResult>();
   const checkoutDeferred = makeDeferred<MutationResult>();
   const flipDeferred = makeDeferred<MutationResult>();
 
-  const backfillCalls: MutationRecordingSetup['backfillCalls'] = { upsertArgs: [] };
+  const markCalls: MutationRecordingSetup['markCalls'] = { upsertArgs: [] };
   const checkoutCalls: MutationRecordingSetup['checkoutCalls'] = { updateArgs: [], chainCalls: [] };
   const flipCalls: MutationRecordingSetup['flipCalls'] = { updateArgs: [], chainCalls: [] };
 
@@ -396,12 +396,12 @@ function makeMutationRecordingClient(): MutationRecordingSetup {
     if (table === 'attendance') {
       return {
         upsert: (rows: unknown, opts: unknown) => {
-          backfillCalls.upsertArgs.push([rows, opts]);
+          markCalls.upsertArgs.push([rows, opts]);
           return {
             then: (
               onFulfilled: (value: MutationResult) => unknown,
               onRejected?: (reason: unknown) => unknown,
-            ) => backfillDeferred.promise.then(onFulfilled, onRejected),
+            ) => markDeferred.promise.then(onFulfilled, onRejected),
           };
         },
         update: (patch: unknown) => {
@@ -428,17 +428,17 @@ function makeMutationRecordingClient(): MutationRecordingSetup {
   return {
     client: { from: fromSpy } as unknown as SupabaseClient,
     fromSpy,
-    backfillCalls,
+    markCalls,
     checkoutCalls,
     flipCalls,
-    backfillDeferred,
+    markDeferred,
     checkoutDeferred,
     flipDeferred,
   };
 }
 
 function resolveAllMutations(setup: MutationRecordingSetup): void {
-  setup.backfillDeferred.resolve({ data: null, error: null });
+  setup.markDeferred.resolve({ data: null, error: null });
   setup.checkoutDeferred.resolve({ data: null, error: null });
   setup.flipDeferred.resolve({ data: null, error: null });
 }
@@ -450,7 +450,7 @@ function chainArgsFor(chainCalls: [string, unknown[]][], method: string): unknow
 const SAMPLE_PAYLOAD: EndMeetingPayload = {
   sessionId: 'session-real-mtg',
   endsAt: '2026-07-31T02:00:00.000Z',
-  backfillAbsentStudentIds: ['student-backfill-a'],
+  markAbsentStudentIds: ['student-mark-a'],
   checkoutStudentIds: ['student-checkout-b'],
 };
 
@@ -461,13 +461,13 @@ describe('makeOnEndMeeting', () => {
 
     const resultPromise = onEndMeeting(SAMPLE_PAYLOAD);
 
-    // Only the backfill call has been issued so far -- checkout's and the
-    // flip's underlying client.from(...) calls have NOT happened yet.
-    expect(setup.backfillCalls.upsertArgs).toHaveLength(1);
+    // Only the mark-absences call has been issued so far -- checkout's and
+    // the flip's underlying client.from(...) calls have NOT happened yet.
+    expect(setup.markCalls.upsertArgs).toHaveLength(1);
     expect(setup.checkoutCalls.updateArgs).toHaveLength(0);
     expect(setup.flipCalls.updateArgs).toHaveLength(0);
 
-    setup.backfillDeferred.resolve({ data: null, error: null });
+    setup.markDeferred.resolve({ data: null, error: null });
     await flushMicrotasks();
 
     expect(setup.checkoutCalls.updateArgs).toHaveLength(1);
@@ -482,26 +482,68 @@ describe('makeOnEndMeeting', () => {
     await expect(resultPromise).resolves.toBeUndefined();
   });
 
-  it('criterion 6: backfill upsert shape -- one absent/coach/null row per backfilled student, plus onConflict + ignoreDuplicates:true', async () => {
+  it('criterion 6: mark-absences upsert shape -- one absent/coach/null row per marked student, plus onConflict + ignoreDuplicates:true', async () => {
     const setup = makeMutationRecordingClient();
     resolveAllMutations(setup);
     const onEndMeeting = makeOnEndMeeting(() => setup.client);
 
     await onEndMeeting(SAMPLE_PAYLOAD);
 
-    expect(setup.backfillCalls.upsertArgs[0][0]).toEqual([
+    expect(setup.markCalls.upsertArgs[0][0]).toEqual([
       {
         session_id: 'session-real-mtg',
-        student_id: 'student-backfill-a',
+        student_id: 'student-mark-a',
         status: 'absent',
         method: 'coach',
         recorded_by: null,
       },
     ]);
-    expect(setup.backfillCalls.upsertArgs[0][1]).toEqual({
+    expect(setup.markCalls.upsertArgs[0][1]).toEqual({
       onConflict: 'session_id,student_id',
       ignoreDuplicates: true,
     });
+  });
+
+  it('C1 (T508): with markAbsentStudentIds empty (box left unticked), no upsert call reaches attendance at all -- asserted at the transport, not by reading the payload object', async () => {
+    const OPTED_OUT_PAYLOAD: EndMeetingPayload = {
+      sessionId: 'session-opt-out-1',
+      endsAt: '2026-08-05T02:00:00.000Z',
+      markAbsentStudentIds: [], // the ordinary case -- checkbox left unticked.
+      checkoutStudentIds: ['student-checkout-x', 'student-checkout-y'],
+    };
+    const setup = makeMutationRecordingClient();
+    resolveAllMutations(setup);
+    const onEndMeeting = makeOnEndMeeting(() => setup.client);
+
+    await onEndMeeting(OPTED_OUT_PAYLOAD);
+
+    // The recorded call to the fake client's own `.upsert(...)`, not the
+    // payload object -- an `upsert([])` with an empty row array is still a
+    // real write request against `attendance`, and this is what would catch
+    // it if the `length > 0` guard were deleted.
+    expect(setup.markCalls.upsertArgs).toHaveLength(0);
+  });
+
+  it('C2 (T508): the checkout and status-flip legs still run when nothing is marked absent', async () => {
+    const OPTED_OUT_PAYLOAD: EndMeetingPayload = {
+      sessionId: 'session-opt-out-2',
+      endsAt: '2026-08-05T03:00:00.000Z',
+      markAbsentStudentIds: [],
+      checkoutStudentIds: ['student-checkout-p', 'student-checkout-q'],
+    };
+    const setup = makeMutationRecordingClient();
+    resolveAllMutations(setup);
+    const onEndMeeting = makeOnEndMeeting(() => setup.client);
+
+    await onEndMeeting(OPTED_OUT_PAYLOAD);
+
+    expect(setup.checkoutCalls.updateArgs).toHaveLength(1);
+    expect(chainArgsFor(setup.checkoutCalls.chainCalls, 'in')).toContainEqual([
+      'student_id',
+      ['student-checkout-p', 'student-checkout-q'],
+    ]);
+    expect(setup.flipCalls.updateArgs).toHaveLength(1);
+    expect(setup.flipCalls.updateArgs[0]).toEqual({ status: 'completed' });
   });
 
   it('criterion 7: checkout write shape -- check_out_at: endsAt, scoped by session_id + .in(student_id), guarded .is(check_out_at, null)', async () => {
@@ -542,7 +584,7 @@ describe('makeOnEndMeeting', () => {
 
   it('criterion 9 (CORRECTED, MAJOR 3): rejection satisfies isSupabaseLoaderError, with the injected detail surfacing only via .cause -- never asserts the top-level .message', async () => {
     const setup = makeMutationRecordingClient();
-    setup.backfillDeferred.resolve({ data: null, error: null });
+    setup.markDeferred.resolve({ data: null, error: null });
     setup.checkoutDeferred.resolve({ data: null, error: null });
     setup.flipDeferred.resolve({
       data: null,
@@ -563,9 +605,9 @@ describe('makeOnEndMeeting', () => {
       message: 'flip exploded',
       code: 'FLIP_FAIL',
     });
-    // (a) the backfill call was issued, (b) the checkout call was issued,
-    // before the rejection.
-    expect(setup.backfillCalls.upsertArgs).toHaveLength(1);
+    // (a) the mark-absences call was issued, (b) the checkout call was
+    // issued, before the rejection.
+    expect(setup.markCalls.upsertArgs).toHaveLength(1);
     expect(setup.checkoutCalls.updateArgs).toHaveLength(1);
   });
 
@@ -577,7 +619,7 @@ describe('makeOnEndMeeting', () => {
     await expect(onEndMeeting(SAMPLE_PAYLOAD)).resolves.toBeUndefined();
     await expect(onEndMeeting(SAMPLE_PAYLOAD)).resolves.toBeUndefined();
 
-    expect(setup.backfillCalls.upsertArgs).toHaveLength(2);
+    expect(setup.markCalls.upsertArgs).toHaveLength(2);
     expect(setup.checkoutCalls.updateArgs).toHaveLength(2);
     expect(setup.flipCalls.updateArgs).toHaveLength(2);
   });

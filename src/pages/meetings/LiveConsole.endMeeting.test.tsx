@@ -192,7 +192,7 @@ const SCHEDULED_SUMMARY: EndMeetingSummaryData = {
 const EXPECTED_END_MEETING_PAYLOAD = {
   sessionId: TEST_SESSION_ID,
   endsAt: '2026-08-04T02:00:00.000Z',
-  backfillAbsentStudentIds: ['student-vik'],
+  markAbsentStudentIds: [],
   checkoutStudentIds: ['student-uma'],
 };
 
@@ -276,6 +276,7 @@ describe('T196 C2 -- the console forwards its OWN loadEndMeetingSummary seam to 
     const expectedDescription = buildEndMeetingConfirmDescription(
       SCHEDULED_SUMMARY.roster,
       SCHEDULED_SUMMARY.attendanceByStudentId,
+      false,
     );
     expect(container.textContent).toContain(expectedDescription);
   });
@@ -393,7 +394,7 @@ describe("T196 -- the console's production defaults are the real backends", () =
       defaultOnEndMeeting({
         sessionId: 'session-1',
         endsAt: '2026-08-04T19:00:00.000Z',
-        backfillAbsentStudentIds: [],
+        markAbsentStudentIds: [],
         checkoutStudentIds: [],
       }),
     ).rejects.toThrow(/Supabase isn't configured yet/);
