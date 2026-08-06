@@ -29,6 +29,7 @@ import {
   makeLoadStudentMeetingsData,
   makeResolveCurrentStudentId,
   makeSaveMeetingSeries,
+  makeSaveMeetingSession,
 } from '../../lib/supabase/loaders/meetings';
 import { LoginAs } from '../../test-utils/authHarness';
 import {
@@ -54,7 +55,9 @@ import {
   type StudentParticipationMetric,
 } from './MeetingsList';
 import { defaultLoadConsistencyStripData, type ConsistencyStripData } from './StudentMeetingView';
+import { chicagoWallTimeToUtcIso } from './ScheduleMeetingsDialog';
 import type { CreateMeetingsPayload, SaveMeetingSeriesPayload } from './ScheduleMeetingsDialog';
+import type { SaveMeetingSessionPayload } from './EditMeetingSessionDialog';
 import type { ResolveStudentIsActiveFn } from '../../lib/supabase/loaders/students';
 
 // ---------------------------------------------------------------------------
@@ -546,6 +549,51 @@ describe('buildCoachMeetingRows (NAV-07, T122 module doc #10a)', () => {
     expect(completed?.attendeeNames).toEqual(['Amir Lee', 'Unknown student', 'Zoe Ann']);
     // Scheduled sessions have no attendance yet -- no names.
     expect(scheduled?.attendeeNames).toEqual([]);
+  });
+
+  // T605 §6.1/§7 test 1 -- real `event_sessions.notes` threading, the first
+  // time this file's own pure builder ever surfaces that column. Own minimal
+  // fixture (not `MULTI_SESSION_SESSIONS`, which carries no `notes` field and
+  // is shared by other tests in this describe block) so this addition is
+  // purely additive.
+  it('T605: threads a fixture session’s real `notes` value into the built `CoachMeetingSessionDetail`', () => {
+    const event = {
+      id: 'event-notes',
+      seasonId: 's1',
+      type: 'meeting' as const,
+      title: 'Notes Fixture Meeting',
+      teamIds: null,
+      countsParticipation: true,
+      locationName: 'Robotics Lab',
+      address: '123 Main St',
+    };
+    const sessions = [
+      {
+        id: 'sess-with-notes',
+        eventId: 'event-notes',
+        sessionDate: '2026-07-22',
+        startsAt: '2026-07-22T23:00:00.000Z',
+        endsAt: '2026-07-23T01:00:00.000Z',
+        status: 'scheduled' as const,
+        notes: 'Bring extra batteries.',
+      },
+      {
+        id: 'sess-without-notes',
+        eventId: 'event-notes',
+        sessionDate: '2026-07-15',
+        startsAt: '2026-07-15T23:00:00.000Z',
+        endsAt: '2026-07-16T01:00:00.000Z',
+        status: 'scheduled' as const,
+        // `notes` omitted entirely -- proves the `?? ''` fallback for a
+        // fixture literal that never supplied one (every pre-existing
+        // literal in this file's own suite, `FIXTURE_SESSIONS` included).
+      },
+    ];
+    const rows = buildCoachMeetingRows([event], sessions, [], []);
+    const withNotes = rows[0].sessions.find((s) => s.sessionId === 'sess-with-notes');
+    const withoutNotes = rows[0].sessions.find((s) => s.sessionId === 'sess-without-notes');
+    expect(withNotes?.notes).toBe('Bring extra batteries.');
+    expect(withoutNotes?.notes).toBe('');
   });
 });
 
@@ -1206,6 +1254,406 @@ describe('<MeetingsList /> coach view', () => {
     // section, so the same expanded `Table` instance still has it.
     expect(findButtonByText('Cancel Wed, Jul 22 session')).toBeTruthy();
     expect(container.textContent).toContain("Couldn't cancel meeting");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T605 -- per-session Edit dialog (date/time/notes) + Cancel-from-edit-flow.
+//
+// Fixture prerequisite + anti-rot requirement (packet §7, fixes B2): the
+// default `FIXTURE_SESSIONS`/`T511_ROW` fixtures are all dated in their own
+// eventual past relative to any real wall clock (§3.9/MINOR-4 of this task's
+// own packet) -- `isMeetingSessionReconcilable` returns `false` for every one
+// of them against any real clock from their own month onward, so they have no
+// session the new Edit affordance would ever render on. This describe block
+// freezes `Date` at ONE fixed instant and derives every one of its own
+// fixture's dates as an offset from that SAME instant, so it stays correct
+// forever regardless of when it actually runs -- never a bare hardcoded
+// calendar-date string.
+// ---------------------------------------------------------------------------
+
+describe('<MeetingsList /> coach view -- T605 per-session Edit dialog', () => {
+  const EDIT_FIXTURE_NOW = new Date('2026-08-06T12:00:00.000Z');
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'], now: EDIT_FIXTURE_NOW });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function daysFromFixtureNow(days: number): string {
+    return new Date(EDIT_FIXTURE_NOW.getTime() + days * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+  }
+
+  /** Same 6:00-8:00 PM America/Chicago (CDT, UTC-5) shape `FIXTURE_SESSIONS`
+   * already establishes (23:00 UTC same day -> 01:00 UTC next day). */
+  function chicagoEveningSession(dateOnly: string): { startsAt: string; endsAt: string } {
+    const nextDay = new Date(new Date(`${dateOnly}T00:00:00.000Z`).getTime() + 86400000)
+      .toISOString()
+      .slice(0, 10);
+    return { startsAt: `${dateOnly}T23:00:00.000Z`, endsAt: `${nextDay}T01:00:00.000Z` };
+  }
+
+  const RECONCILABLE_DATE = daysFromFixtureNow(7);
+  const SIBLING_DATE = daysFromFixtureNow(14);
+  const FREE_DATE = daysFromFixtureNow(21);
+  const PAST_SCHEDULED_DATE = daysFromFixtureNow(-1);
+  const COMPLETED_DATE = daysFromFixtureNow(-10);
+  const CANCELED_DATE = daysFromFixtureNow(-5);
+  // A past date that is NOT any existing sibling session's own date (unlike
+  // `PAST_SCHEDULED_DATE`, which IS `sess-edit-past-scheduled`'s own date) --
+  // test 5 retargets onto this one specifically so the future-forward guard
+  // is exercised in isolation, not entangled with the duplicate-date guard.
+  const PAST_RETARGET_DATE = daysFromFixtureNow(-2);
+
+  /** Additive, dedicated `CoachMeetingsData` (not `FIXTURE_SESSIONS`/`T511_ROW`)
+   * with at least one genuinely reconcilable session, a sibling session on
+   * another date (for the duplicate-date guard), a scheduled-but-expired
+   * session (distinct from `ScheduleMeetingsDialog.test.tsx`'s own
+   * `PAST_SESSION`, which is `status: 'completed'`), one completed, and one
+   * canceled session. */
+  function buildEditFixtureData(): CoachMeetingsData {
+    return {
+      rows: [
+        {
+          eventId: 'event-edit-fixture',
+          title: 'Edit Fixture Meeting',
+          locationName: 'Robotics Lab',
+          teamScopeLabel: 'All teams',
+          sessions: [
+            {
+              sessionId: 'sess-edit-reconcilable',
+              sessionDate: RECONCILABLE_DATE,
+              ...chicagoEveningSession(RECONCILABLE_DATE),
+              status: 'scheduled',
+              durationHours: 2,
+              expectedCt: 3,
+              attendanceSummary: null,
+              attendeeNames: [],
+              notes: 'Bring extra batteries.',
+            },
+            {
+              sessionId: 'sess-edit-sibling',
+              sessionDate: SIBLING_DATE,
+              ...chicagoEveningSession(SIBLING_DATE),
+              status: 'scheduled',
+              durationHours: 2,
+              expectedCt: 2,
+              attendanceSummary: null,
+              attendeeNames: [],
+              notes: '',
+            },
+            {
+              sessionId: 'sess-edit-past-scheduled',
+              sessionDate: PAST_SCHEDULED_DATE,
+              ...chicagoEveningSession(PAST_SCHEDULED_DATE),
+              status: 'scheduled',
+              durationHours: 2,
+              expectedCt: 0,
+              attendanceSummary: null,
+              attendeeNames: [],
+              notes: '',
+            },
+            {
+              sessionId: 'sess-edit-completed',
+              sessionDate: COMPLETED_DATE,
+              ...chicagoEveningSession(COMPLETED_DATE),
+              status: 'completed',
+              durationHours: 2,
+              expectedCt: 4,
+              attendanceSummary: { presentCt: 4, lateCt: 0, excusedCt: 0, absentCt: 0 },
+              attendeeNames: ['Riley Doe'],
+              notes: '',
+            },
+            {
+              sessionId: 'sess-edit-canceled',
+              sessionDate: CANCELED_DATE,
+              ...chicagoEveningSession(CANCELED_DATE),
+              status: 'canceled',
+              durationHours: 2,
+              expectedCt: 0,
+              attendanceSummary: null,
+              attendeeNames: [],
+              notes: '',
+            },
+          ],
+        },
+      ],
+      teams: [],
+    };
+  }
+
+  function setNativeTextAreaValue(textarea: HTMLTextAreaElement, value: string): void {
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLTextAreaElement.prototype,
+      'value',
+    )?.set;
+    setter?.call(textarea, value);
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  /** `DateInput`'s own displayed value is a long-form string
+   * (`Intl.DateTimeFormat(undefined, {year:'numeric',month:'long',day:'numeric'})`
+   * over a LOCAL-midnight `Date`, per `@astryxdesign/core`'s own
+   * `DateInput.tsx`/`utils/plainDate.ts`) -- independently reimplemented here
+   * the exact same way, so the prefill assertion (test 3) proves real VALUE
+   * equality, not mere presence. */
+  function formatLongDateForAssertion(isoDate: string): string {
+    const [year, month, day] = isoDate.split('-').map(Number);
+    return new Intl.DateTimeFormat(undefined, {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    }).format(new Date(year, month - 1, day));
+  }
+
+  /** `TimeInput`'s own default `hourFormat="12h"` display
+   * (`@astryxdesign/core`'s own `formatDisplayTime12h`), reimplemented here
+   * for the same reason as `formatLongDateForAssertion` above. */
+  function formatTime12hForAssertion(isoTime: string): string {
+    const [hourStr, minuteStr] = isoTime.split(':');
+    const hour = Number(hourStr);
+    const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    const meridiem = hour < 12 ? 'AM' : 'PM';
+    return `${hour12}:${minuteStr} ${meridiem}`;
+  }
+
+  function clickEdit(sessionDate: string): void {
+    const editButton = findButtonByText(`Edit ${formatWeekdayDate(sessionDate)} session`);
+    expect(editButton).toBeTruthy();
+    clickButton(editButton as HTMLButtonElement);
+  }
+
+  /** `ScheduleMeetingsDialog`'s own edit-mode confirmation `AlertDialog`
+   * ("Save changes to this meeting series?") is ALSO always mounted inside
+   * `CoachMeetingsView` (same `Dialog`-children-render-unconditionally shape
+   * this describe block's own module comment on `EditMeetingSessionDialog.tsx`
+   * §6.4 already notes) and its own `actionLabel` is the SAME literal text,
+   * "Save changes" -- a bare `findButtonByText('Save changes')` is genuinely
+   * ambiguous on this page (measured: 2 matches). Scope every lookup to
+   * `EditMeetingSessionDialog`'s own `<dialog>` element, same
+   * `findButtonInAlertDialog` precedent `ScheduleMeetingsDialog.test.tsx`
+   * already establishes for its own analogous ambiguity. */
+  function findEditSessionDialogElement(): HTMLElement | undefined {
+    return Array.from(document.querySelectorAll('dialog')).find((dialog) =>
+      dialog.textContent?.includes('Edit session'),
+    );
+  }
+
+  function findButtonInEditSessionDialog(text: string): HTMLButtonElement | undefined {
+    return Array.from(findEditSessionDialogElement()?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent?.trim() === text,
+    );
+  }
+
+  // Test 2 -- presence/absence, all four branches.
+  it('test 2: the "Edit … session" button is present only for a genuinely reconcilable session', async () => {
+    renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(buildEditFixtureData()) });
+    await flushMicrotasks();
+    expandRow('Edit Fixture Meeting');
+
+    // (a) absent for a `completed` session.
+    expect(findButtonByText(`Edit ${formatWeekdayDate(COMPLETED_DATE)} session`)).toBeUndefined();
+    // (b) absent for a `canceled` session.
+    expect(findButtonByText(`Edit ${formatWeekdayDate(CANCELED_DATE)} session`)).toBeUndefined();
+    // (c) absent for a **`scheduled`** session whose `startsAt` is in the
+    // past -- distinct from `ScheduleMeetingsDialog.test.tsx`'s own
+    // `PAST_SESSION` fixture (`status: 'completed'`), which cannot exercise
+    // this branch.
+    expect(
+      findButtonByText(`Edit ${formatWeekdayDate(PAST_SCHEDULED_DATE)} session`),
+    ).toBeUndefined();
+    // Its Cancel button, by contrast, is still present -- "not stranded"
+    // (§6.2) -- proving the Edit absence above is a deliberate, stricter gate
+    // (`isMeetingSessionReconcilable`), not an accident of this fixture.
+    expect(
+      findButtonByText(`Cancel ${formatWeekdayDate(PAST_SCHEDULED_DATE)} session`),
+    ).toBeTruthy();
+    // (d) present for the new reconcilable fixture session.
+    expect(findButtonByText(`Edit ${formatWeekdayDate(RECONCILABLE_DATE)} session`)).toBeTruthy();
+  });
+
+  // Test 3 -- prefill by VALUE, not presence (the same standard the T510
+  // boss ruling required for the series dialog's own Grant A property 2).
+  it('test 3: clicking Edit opens the dialog prefilled with the real session’s own date/time/notes', async () => {
+    renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(buildEditFixtureData()) });
+    await flushMicrotasks();
+    expandRow('Edit Fixture Meeting');
+    clickEdit(RECONCILABLE_DATE);
+
+    expect(findEditSessionDialogElement()?.hasAttribute('open')).toBe(true);
+    expect(container.textContent).toContain('Edit Fixture Meeting');
+
+    expect((getFieldControl('Session date') as HTMLInputElement).value).toBe(
+      formatLongDateForAssertion(RECONCILABLE_DATE),
+    );
+    expect((getFieldControl('Session start time') as HTMLInputElement).value).toBe(
+      formatTime12hForAssertion('18:00'),
+    );
+    expect((getFieldControl('Session end time') as HTMLInputElement).value).toBe(
+      formatTime12hForAssertion('20:00'),
+    );
+    expect((getFieldControl('Session notes') as HTMLTextAreaElement).value).toBe(
+      'Bring extra batteries.',
+    );
+  });
+
+  // Test 4 -- save calls the injected mutation with the exact payload, then
+  // reloads via `loadData()` and shows the success `Banner` -- mirrors
+  // `handleSaveMeetingSeriesSubmit`'s/`handleCreateMeetingsSubmit`'s own
+  // tested reload-and-feedback shape.
+  it('test 4: saving a valid change calls onSaveMeetingSession with the exact payload, then reloads and shows success', async () => {
+    const onSaveMeetingSession = vi.fn().mockResolvedValue(undefined);
+    let loadCallCount = 0;
+    const loadCoachData = (): Promise<CoachMeetingsData> => {
+      loadCallCount += 1;
+      return Promise.resolve(buildEditFixtureData());
+    };
+    renderAsUser(COACH_USER, { loadCoachData, onSaveMeetingSession });
+    await flushMicrotasks();
+    expandRow('Edit Fixture Meeting');
+    clickEdit(RECONCILABLE_DATE);
+
+    const dateInput = getFieldControl('Session date') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(dateInput, FREE_DATE);
+    });
+    const notesArea = getFieldControl('Session notes') as HTMLTextAreaElement;
+    act(() => {
+      setNativeTextAreaValue(notesArea, 'Updated notes for this session.');
+    });
+
+    expect(onSaveMeetingSession).not.toHaveBeenCalled();
+    clickButton(findButtonInEditSessionDialog('Save changes') as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(onSaveMeetingSession).toHaveBeenCalledTimes(1);
+    const payload = onSaveMeetingSession.mock.calls[0][0] as SaveMeetingSessionPayload;
+    expect(payload).toEqual({
+      sessionId: 'sess-edit-reconcilable',
+      sessionDate: FREE_DATE,
+      startsAt: chicagoWallTimeToUtcIso(FREE_DATE, '18:00'),
+      endsAt: chicagoWallTimeToUtcIso(FREE_DATE, '20:00'),
+      notes: 'Updated notes for this session.',
+    });
+
+    expect(loadCallCount).toBe(2);
+    expect(container.textContent).toContain('Meeting session updated');
+  });
+
+  // Test 5 -- future-value guard, both directions (new, fixes B1). Named
+  // mutation: removing the `now`-comparison from
+  // `computeMeetingSessionEditPayload` must turn the rejection case from a
+  // real proof into a false pass (see this task's own worker output for the
+  // measured before/after).
+  it('test 5: a candidate startsAt that lands in the past disables Save with an inline message; a future value re-enables it', async () => {
+    renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(buildEditFixtureData()) });
+    await flushMicrotasks();
+    expandRow('Edit Fixture Meeting');
+    clickEdit(RECONCILABLE_DATE);
+
+    const saveButton = (): HTMLButtonElement =>
+      findButtonInEditSessionDialog('Save changes') as HTMLButtonElement;
+    expect(saveButton().disabled).toBe(false);
+
+    const dateInput = getFieldControl('Session date') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(dateInput, PAST_RETARGET_DATE);
+    });
+    expect(saveButton().disabled).toBe(true);
+    expect(container.textContent).toContain('This start time has already passed.');
+
+    act(() => {
+      setNativeInputValue(dateInput, FREE_DATE);
+    });
+    expect(saveButton().disabled).toBe(false);
+  });
+
+  // Test 6 -- end-after-start guard (new, fixes m6). Named mutation: removing
+  // that comparison must turn the rejection case into a false pass.
+  it('test 6: an end time at or before the computed start time disables Save with an inline message', async () => {
+    renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(buildEditFixtureData()) });
+    await flushMicrotasks();
+    expandRow('Edit Fixture Meeting');
+    clickEdit(RECONCILABLE_DATE);
+
+    const saveButton = (): HTMLButtonElement =>
+      findButtonInEditSessionDialog('Save changes') as HTMLButtonElement;
+    expect(saveButton().disabled).toBe(false);
+
+    const endTimeInput = getFieldControl('Session end time') as HTMLInputElement;
+    act(() => {
+      // The fixture's own start time is 18:00 ("6:00 PM") -- setting End to
+      // the SAME wall time makes `endsAt === startsAt`, not strictly after.
+      setNativeInputValue(endTimeInput, '6:00 PM');
+    });
+    expect(saveButton().disabled).toBe(true);
+    expect(container.textContent).toContain('End time must be after the start time.');
+  });
+
+  // Test 7 -- duplicate-date guard, both directions. Named mutation: removing
+  // `sessionDateCollidesWithSibling` must turn the rejection case into a
+  // false pass.
+  it('test 7: retargeting onto a sibling session’s existing date is rejected; retargeting onto a free date succeeds', async () => {
+    renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(buildEditFixtureData()) });
+    await flushMicrotasks();
+    expandRow('Edit Fixture Meeting');
+    clickEdit(RECONCILABLE_DATE);
+
+    const saveButton = (): HTMLButtonElement =>
+      findButtonInEditSessionDialog('Save changes') as HTMLButtonElement;
+    const dateInput = getFieldControl('Session date') as HTMLInputElement;
+
+    act(() => {
+      setNativeInputValue(dateInput, SIBLING_DATE);
+    });
+    expect(saveButton().disabled).toBe(true);
+    expect(container.textContent).toContain(
+      'Another session in this series is already scheduled on this date.',
+    );
+
+    act(() => {
+      setNativeInputValue(dateInput, FREE_DATE);
+    });
+    expect(saveButton().disabled).toBe(false);
+  });
+
+  // Test 8 -- Cancel reuses the existing mechanism, proven against the new
+  // fixture (fixes B2's self-contradiction and m3). Opens the edit dialog,
+  // clicks "Cancel this meeting", asserts the SAME confirmation-copy shape
+  // already proven in 'Cancel (inline, per-session) + AlertDialog (DES-11)
+  // really calls the injected onCancelSession mutation' -- built from THIS
+  // fixture's own event title/date, not the July fixture's -- confirms it,
+  // and asserts `onCancelSession` was called exactly once with this
+  // session's id via the pre-existing `cancelTarget` seam.
+  it('test 8: "Cancel this meeting" inside the edit dialog reuses the existing cancelTarget/AlertDialog seam', async () => {
+    const onCancelSession = vi.fn().mockResolvedValue(undefined);
+    renderAsUser(COACH_USER, {
+      loadCoachData: () => Promise.resolve(buildEditFixtureData()),
+      onCancelSession,
+    });
+    await flushMicrotasks();
+    expandRow('Edit Fixture Meeting');
+    clickEdit(RECONCILABLE_DATE);
+
+    clickButton(findButtonByText('Cancel this meeting') as HTMLButtonElement);
+
+    expect(document.body.textContent).toContain(
+      `Cancel "Edit Fixture Meeting" on ${formatWeekdayDate(RECONCILABLE_DATE)}?`,
+    );
+    const confirmButton = Array.from(document.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'Cancel session',
+    );
+    expect(confirmButton).toBeTruthy();
+    clickButton(confirmButton as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(onCancelSession).toHaveBeenCalledTimes(1);
+    expect(onCancelSession).toHaveBeenCalledWith('sess-edit-reconcilable');
   });
 });
 
@@ -2200,6 +2648,87 @@ describe('cancelMeetingSession (T096 real mutation)', () => {
 
     const cancel = makeCancelMeetingSession(() => client);
     await expect(cancel('session-99')).rejects.toMatchObject({ code: '42501' });
+  });
+});
+
+/**
+ * T605 §7 test 9 -- the write-side guard, fake-client, full chain depth.
+ * Precedent: `buildAC9FakeClient` (T510, AC9, below in this file), whose own
+ * doc comment explains why a shallow mirror is insufficient (its mock does
+ * not resolve `{data, error}` until `.select(...)` is actually reached).
+ * This mock covers the full `update -> eq -> eq -> gt -> select` chain the
+ * same way, for `makeSaveMeetingSession` instead of the series delete guard.
+ */
+function buildSaveMeetingSessionFakeClient(outcome: 'ok' | 'zero'): {
+  client: SupabaseClient;
+  updateSpy: ReturnType<typeof vi.fn>;
+} {
+  const updateSpy = vi.fn();
+  const client = {
+    from: vi.fn((table: string) => {
+      if (table !== 'event_sessions') throw new Error(`unexpected table: ${table}`);
+      return {
+        update: (patch: Record<string, unknown>) => {
+          updateSpy(patch);
+          return {
+            eq: () => ({
+              eq: () => ({
+                gt: () => ({
+                  // Nothing resolves a real `{data, error}` shape until
+                  // `.select(...)` is actually reached -- dropping
+                  // `.select('id')` in production would make `.gt(...)`'s
+                  // return value (a plain `{ select }` object) the awaited
+                  // result instead.
+                  select: () =>
+                    outcome === 'zero'
+                      ? Promise.resolve({ data: [], error: null })
+                      : Promise.resolve({ data: [{ id: 'sess-x' }], error: null }),
+                }),
+              }),
+            }),
+          };
+        },
+      };
+    }),
+  } as unknown as SupabaseClient;
+  return { client, updateSpy };
+}
+
+const SAVE_MEETING_SESSION_SAMPLE_PAYLOAD: SaveMeetingSessionPayload = {
+  sessionId: 'sess-x',
+  sessionDate: '2099-01-01',
+  startsAt: '2099-01-01T23:00:00.000Z',
+  endsAt: '2099-01-02T01:00:00.000Z',
+  notes: 'Updated notes.',
+};
+
+describe('saveMeetingSession (T605, write-side guard, full chain depth)', () => {
+  it('the .update({...}) argument object has exactly the keys session_date, starts_at, ends_at, notes', async () => {
+    const { client, updateSpy } = buildSaveMeetingSessionFakeClient('ok');
+    const save = makeSaveMeetingSession(() => client);
+    await save(SAVE_MEETING_SESSION_SAMPLE_PAYLOAD);
+
+    expect(updateSpy).toHaveBeenCalledTimes(1);
+    const patch = updateSpy.mock.calls[0][0] as Record<string, unknown>;
+    expect(Object.keys(patch).sort()).toEqual(['ends_at', 'notes', 'session_date', 'starts_at']);
+    expect(patch).toEqual({
+      session_date: SAVE_MEETING_SESSION_SAMPLE_PAYLOAD.sessionDate,
+      starts_at: SAVE_MEETING_SESSION_SAMPLE_PAYLOAD.startsAt,
+      ends_at: SAVE_MEETING_SESSION_SAMPLE_PAYLOAD.endsAt,
+      notes: SAVE_MEETING_SESSION_SAMPLE_PAYLOAD.notes,
+    });
+  });
+
+  it('a non-empty result resolves without throwing', async () => {
+    const { client } = buildSaveMeetingSessionFakeClient('ok');
+    const save = makeSaveMeetingSession(() => client);
+    await expect(save(SAVE_MEETING_SESSION_SAMPLE_PAYLOAD)).resolves.toBeUndefined();
+  });
+
+  it('an empty-array result REJECTS with a real error -- named mutation: dropping .select(\'id\') from the production chain must break this describe block\'s own proof that .select(\'id\') is load-bearing (see worker output for the measured before/after)', async () => {
+    const { client } = buildSaveMeetingSessionFakeClient('zero');
+    const save = makeSaveMeetingSession(() => client);
+    await expect(save(SAVE_MEETING_SESSION_SAMPLE_PAYLOAD)).rejects.toThrow();
   });
 });
 

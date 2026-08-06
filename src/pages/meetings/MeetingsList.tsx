@@ -558,8 +558,10 @@ import {
   loadStudentMeetingsData,
   resolveCurrentStudentId,
   saveMeetingSeries,
+  saveMeetingSession,
 } from '../../lib/supabase/loaders/meetings';
 import {
+  isMeetingSessionReconcilable,
   ScheduleMeetingsDialog,
   type CreateMeetingsPayload,
   type EditMeetingSeriesInitialData,
@@ -567,6 +569,18 @@ import {
   type OnSaveMeetingSeriesFn,
   type SaveMeetingSeriesPayload,
 } from './ScheduleMeetingsDialog';
+// T605 -- the new per-session edit dialog (§6.4 of this task's own packet).
+// This file OWNS the mount/wiring; the dialog file owns its own payload/fn
+// types, imported here as VALUES (the component itself) and TYPES (its own
+// `SaveMeetingSessionPayload`/`OnSaveMeetingSessionFn`), mirroring exactly how
+// `ScheduleMeetingsDialog`/its own payload types are imported immediately
+// above.
+import {
+  EditMeetingSessionDialog,
+  type EditMeetingSessionInitialData,
+  type OnSaveMeetingSessionFn,
+  type SaveMeetingSessionPayload,
+} from './EditMeetingSessionDialog';
 // T189 -- honest "your account is inactive" copy (packet v2). Reads
 // `students.is_active` directly (`loaders/students.ts`'s own module doc has
 // the full reasoning for why this is NOT inferred from `resolveStudentScope`
@@ -639,6 +653,14 @@ interface FixtureEventSession {
   startsAt: string;
   endsAt: string;
   status: SessionStatus;
+  /** T605 -- optional (every existing `FIXTURE_SESSIONS`/hand-built literal in
+   * this file and its test needs no edit), same "additive, optional at every
+   * app-level layer" precedent `teamIds?`/`description?` (below) already
+   * established. Real, already-existing `event_sessions.notes` column
+   * (`not null` at the DB layer -- see `loaders/meetings.ts`'s own
+   * `EventSessionDbRow.notes: string`, required there since a real row always
+   * has one); optional here only because fixture literals may omit it. */
+  notes?: string;
 }
 
 interface FixtureAttendanceRecord {
@@ -693,6 +715,12 @@ export interface CoachMeetingSessionDetail {
    * attendance rows (module doc #10a) -- empty for a non-completed session
    * (no attendance exists yet to name). */
   attendeeNames: readonly string[];
+  /** T605 -- optional, same reasoning as `FixtureEventSession.notes` above.
+   * `buildCoachMeetingRows` below always sets this to a real string
+   * (`session.notes ?? ''`), never leaves it `undefined` on a built row --
+   * optional only so the type itself stays additive over every pre-existing
+   * literal `CoachMeetingSessionDetail` in this file's own test file. */
+  notes?: string;
 }
 
 /** T122 (module doc #10a) -- now one row per meeting EVENT (recurring
@@ -1041,6 +1069,12 @@ export function buildCoachMeetingRows(
         expectedCt,
         attendanceSummary,
         attendeeNames,
+        // T605 -- real `event_sessions.notes` column, threaded through for the
+        // first time (§3.2/§6.1). `?? ''` matches this same file's own
+        // "never leave a real not-null column undefined on a built row"
+        // posture, and the real DB column is `not null` with no default
+        // regardless.
+        notes: session.notes ?? '',
       };
     });
 
@@ -1599,6 +1633,7 @@ function CoachMeetingSessionRow({
   eventTitle,
   session,
   onCancelRequest,
+  onEditRequest,
   anchorId,
 }: {
   eventId: string;
@@ -1609,6 +1644,9 @@ function CoachMeetingSessionRow({
     eventTitle: string,
     session: CoachMeetingSessionDetail,
   ) => void;
+  // T605 -- same signature shape as `onCancelRequest` above, threaded
+  // alongside it at every one of this component's own five call sites (§6.2).
+  onEditRequest: (eventId: string, eventTitle: string, session: CoachMeetingSessionDetail) => void;
   anchorId?: string;
 }): ReactNode {
   const statusBadge = SESSION_STATUS_BADGE[session.status];
@@ -1676,6 +1714,26 @@ function CoachMeetingSessionRow({
                   the identical problem the same way. */}
               {`Go live — ${formatWeekdayDate(session.sessionDate)}`}
             </Link>
+            {/* T605 -- gated on `isMeetingSessionReconcilable` (imported from
+                `./ScheduleMeetingsDialog`, not reimplemented -- §6.2), which is
+                STRICTER than the surrounding `status === 'scheduled'` block: a
+                scheduled-but-already-started/expired session still gets
+                Cancel (immediately above/below) but not Edit -- it is "not
+                stranded," per the decisions log's own narration of this
+                trade-off (`auto-mode-decisions.md:3770`, inside the section
+                recording George's rulings, though this specific sentence is
+                the log's own writing, not a quote from him): "it is not
+                stranded, though -- it is still cancellable individually
+                through the existing per-session Cancel." */}
+            {isMeetingSessionReconcilable(session, new Date()) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                style={MIN_TOUCH_TARGET_STYLE}
+                label={`Edit ${formatWeekdayDate(session.sessionDate)} session`}
+                onClick={() => onEditRequest(eventId, eventTitle, session)}
+              />
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -1750,6 +1808,8 @@ function renderMeetingSessionDetailCell(
     eventTitle: string,
     session: CoachMeetingSessionDetail,
   ) => void,
+  // T605 -- threaded alongside `onCancelRequest` (§6.2 item 2).
+  onEditRequest: (eventId: string, eventTitle: string, session: CoachMeetingSessionDetail) => void,
 ): ReactNode {
   return (
     <CoachMeetingSessionRow
@@ -1757,6 +1817,7 @@ function renderMeetingSessionDetailCell(
       eventTitle={row.eventTitle}
       session={row.session}
       onCancelRequest={onCancelRequest}
+      onEditRequest={onEditRequest}
       anchorId={sessionDetailAnchorId(row.eventId, row.session.sessionId)}
     />
   );
@@ -1771,6 +1832,8 @@ interface BuildCoachMeetingColumnsArgs {
     eventTitle: string,
     session: CoachMeetingSessionDetail,
   ) => void;
+  // T605 -- threaded alongside `onCancelRequest` (§6.2 item 3).
+  onEditRequest: (eventId: string, eventTitle: string, session: CoachMeetingSessionDetail) => void;
   isNarrow: boolean;
 }
 
@@ -1798,6 +1861,7 @@ function buildCoachMeetingColumns({
   onToggleExpand,
   onEdit,
   onCancelRequest,
+  onEditRequest,
   isNarrow,
 }: BuildCoachMeetingColumnsArgs): TableColumn<CoachMeetingTableRow>[] {
   if (isNarrow) {
@@ -1812,7 +1876,7 @@ function buildCoachMeetingColumns({
         width: proportional(1),
         renderCell: (row) => {
           if (row.kind === 'sessionDetail') {
-            return renderMeetingSessionDetailCell(row, onCancelRequest);
+            return renderMeetingSessionDetailCell(row, onCancelRequest, onEditRequest);
           }
           const isExpanded = expandedEventIds.has(row.row.eventId);
           return (
@@ -1878,7 +1942,7 @@ function buildCoachMeetingColumns({
         row.kind === 'event' ? (
           <CoachMeetingTitleCell row={row.row} />
         ) : (
-          renderMeetingSessionDetailCell(row, onCancelRequest)
+          renderMeetingSessionDetailCell(row, onCancelRequest, onEditRequest)
         ),
     },
     {
@@ -1931,6 +1995,7 @@ function CoachMeetingsSection({
   onToggleExpand,
   onEdit,
   onCancelRequest,
+  onEditRequest,
 }: {
   title: string;
   rows: CoachMeetingRow[];
@@ -1943,6 +2008,8 @@ function CoachMeetingsSection({
     eventTitle: string,
     session: CoachMeetingSessionDetail,
   ) => void;
+  // T605 -- threaded alongside `onCancelRequest` (§6.2 item 5).
+  onEditRequest: (eventId: string, eventTitle: string, session: CoachMeetingSessionDetail) => void;
 }): ReactNode {
   // T129/UXC-01: stable id for this section's `Heading`, so the alternating
   // Table/EmptyState below gets the heading as its accessible name via
@@ -1969,9 +2036,10 @@ function CoachMeetingsSection({
         onToggleExpand,
         onEdit,
         onCancelRequest,
+        onEditRequest,
         isNarrow,
       }),
-    [expandedEventIds, onToggleExpand, onEdit, onCancelRequest, isNarrow],
+    [expandedEventIds, onToggleExpand, onEdit, onCancelRequest, onEditRequest, isNarrow],
   );
 
   return (
@@ -2029,6 +2097,13 @@ export interface CoachMeetingsViewProps {
    * future-forward `events`/`event_sessions` reconciliation (`saveMeetingSeries`,
    * same loader module). */
   onSaveMeetingSeries: OnSaveMeetingSeriesFn;
+  /** T605 (§6.2/§6.3). Passed straight through to
+   * `<EditMeetingSessionDialog onSaveMeetingSession={...} />` (via
+   * `handleSaveMeetingSessionSubmit` below); defaults to a real guarded,
+   * in-place `event_sessions` update (`saveMeetingSession`, same loader
+   * module). Mirrors `onSaveMeetingSeries`'s own identical four-point thread
+   * exactly (§6.2). */
+  onSaveMeetingSession: OnSaveMeetingSessionFn;
 }
 
 /** T122 (module doc #10d) -- Cancel now targets one SESSION within one
@@ -2039,11 +2114,27 @@ interface CancelTarget {
   session: CoachMeetingSessionDetail;
 }
 
+/** T605 -- which session (if any) `<EditMeetingSessionDialog>` is currently
+ * editing; `null` => closed. Unlike `ScheduleMeetingsDialog`'s shared
+ * create/edit instance (`isScheduleDialogOpen` + `editTarget`), this new
+ * dialog has exactly one mode, so `editSessionTarget !== null` IS its own
+ * `isOpen` -- same shape `cancelTarget`/`AlertDialog` below already use
+ * (§6.2). */
+interface EditSessionTarget {
+  eventId: string;
+  eventTitle: string;
+  session: CoachMeetingSessionDetail;
+  /** Every OTHER session's own `sessionDate` on this same event, any status
+   * (§6.5's `sessionDateCollidesWithSibling`/§3.5's duplicate-date guard). */
+  otherSessionDates: readonly string[];
+}
+
 function CoachMeetingsView({
   loadData,
   onCancelSession,
   onCreateMeetings,
   onSaveMeetingSeries,
+  onSaveMeetingSession,
 }: CoachMeetingsViewProps): ReactNode {
   const loadState = useLoadState(loadData, [loadData]);
   const [rows, setRows] = useState<CoachMeetingRow[]>([]);
@@ -2053,6 +2144,9 @@ function CoachMeetingsView({
   // own `teams` prop.
   const [teams, setTeams] = useState<readonly Team[]>([]);
   const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
+  // T605 -- drives the one rendered `<EditMeetingSessionDialog>` instance
+  // (§6.2).
+  const [editSessionTarget, setEditSessionTarget] = useState<EditSessionTarget | null>(null);
   // T096 (module doc #7a) -- drives the one rendered `<ScheduleMeetingsDialog>`
   // instance, shared by both CREATE mode (`editTarget === null`) and T510's
   // real EDIT mode (`editTarget !== null`, module doc #7b).
@@ -2104,6 +2198,23 @@ function CoachMeetingsView({
   function openEditDialog(row: CoachMeetingRow): void {
     setEditTarget(row);
     setIsScheduleDialogOpen(true);
+  }
+
+  // T605 (§6.2) -- `rows` is already in scope; no new query, no widening of
+  // `CoachMeetingSessionDetailTableRow`. `otherSessionDates` is every OTHER
+  // session's own `sessionDate` on this same event, any status (mirrors
+  // `computeMeetingSeriesReconcilePlan`'s own `allExistingDates` -- ANY
+  // status, not just scheduled).
+  function handleEditRequest(
+    eventId: string,
+    eventTitle: string,
+    session: CoachMeetingSessionDetail,
+  ): void {
+    const row = rows.find((r) => r.eventId === eventId);
+    const otherSessionDates = (row?.sessions ?? [])
+      .filter((s) => s.sessionId !== session.sessionId)
+      .map((s) => s.sessionDate);
+    setEditSessionTarget({ eventId, eventTitle, session, otherSessionDates });
   }
 
   // T096 (module doc #7c) -- real mutation, optimistic update + rollback on
@@ -2214,6 +2325,32 @@ function CoachMeetingsView({
     }
   }
 
+  // T605 (§6.2) -- real `onSaveMeetingSession` wiring, mirroring
+  // `handleSaveMeetingSeriesSubmit`'s own identical reload-and-feedback shape
+  // immediately above.
+  async function handleSaveMeetingSessionSubmit(payload: SaveMeetingSessionPayload): Promise<void> {
+    await onSaveMeetingSession(payload);
+    try {
+      const fresh = await loadData();
+      setRows(fresh.rows);
+      setTeams(fresh.teams);
+      setFeedback({
+        status: 'success',
+        title: 'Meeting session updated',
+        description: 'This meeting session was updated.',
+      });
+    } catch {
+      // The save itself already succeeded (this catch only guards the
+      // follow-up reload) -- disclosed, not fatal: `rows` just won't reflect
+      // the change until the next successful load/retry.
+      setFeedback({
+        status: 'success',
+        title: 'Meeting session updated',
+        description: 'This meeting session was updated. Refresh the page to see the change.',
+      });
+    }
+  }
+
   if (loadState.status === 'loading') {
     return (
       <VStack gap={6} aria-busy="true">
@@ -2294,6 +2431,7 @@ function CoachMeetingsView({
             onCancelRequest={(eventId, eventTitle, session) =>
               setCancelTarget({ eventId, eventTitle, session })
             }
+            onEditRequest={handleEditRequest}
           />
           <CoachMeetingsSection
             title="Past"
@@ -2305,6 +2443,7 @@ function CoachMeetingsView({
             onCancelRequest={(eventId, eventTitle, session) =>
               setCancelTarget({ eventId, eventTitle, session })
             }
+            onEditRequest={handleEditRequest}
           />
         </>
       )}
@@ -2369,6 +2508,49 @@ function CoachMeetingsView({
             : undefined
         }
         onSaveMeetingSeries={handleSaveMeetingSeriesSubmit}
+      />
+
+      {/* T605 (§6.2) -- a SEPARATE, single-purpose dialog (not a second mode
+          on `ScheduleMeetingsDialog`, which owns a series-wide schedule-mode
+          model this fixed-identity single-session edit has no use for -- §6.4).
+          `editSessionTarget !== null` IS its own `isOpen`, same shape the
+          `cancelTarget`/`AlertDialog` pair above already uses -- this dialog
+          has exactly one mode, unlike `ScheduleMeetingsDialog`'s shared
+          create/edit instance. "Cancel this meeting" inside this dialog
+          triggers the SAME `cancelTarget` state/`AlertDialog` above (§3.4) --
+          no second confirmation, no second copy of that text, no second call
+          to `onCancelSession`. */}
+      <EditMeetingSessionDialog
+        isOpen={editSessionTarget !== null}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setEditSessionTarget(null);
+        }}
+        initialData={
+          editSessionTarget !== null
+            ? ({
+                eventId: editSessionTarget.eventId,
+                eventTitle: editSessionTarget.eventTitle,
+                session: {
+                  sessionId: editSessionTarget.session.sessionId,
+                  sessionDate: editSessionTarget.session.sessionDate,
+                  startsAt: editSessionTarget.session.startsAt,
+                  endsAt: editSessionTarget.session.endsAt,
+                  notes: editSessionTarget.session.notes,
+                },
+                otherSessionDates: editSessionTarget.otherSessionDates,
+              } satisfies EditMeetingSessionInitialData)
+            : null
+        }
+        onSaveMeetingSession={handleSaveMeetingSessionSubmit}
+        onRequestCancelSession={() => {
+          if (editSessionTarget === null) return;
+          setCancelTarget({
+            eventId: editSessionTarget.eventId,
+            eventTitle: editSessionTarget.eventTitle,
+            session: editSessionTarget.session,
+          });
+          setEditSessionTarget(null);
+        }}
       />
     </VStack>
   );
@@ -2727,6 +2909,9 @@ export interface MeetingsListProps {
   /** T510 (module doc #7b). Defaults to a real future-forward reconciliation
    * mutation, same module. */
   onSaveMeetingSeries?: OnSaveMeetingSeriesFn;
+  /** T605 (§6.2/§6.3). Defaults to a real guarded, in-place `event_sessions`
+   * update mutation, same module. */
+  onSaveMeetingSession?: OnSaveMeetingSessionFn;
   /** T096 (module doc #6, Trap #4). Defaults to a real resolution, same
    * module. Only ever invoked when `studentId` below is NOT supplied. */
   resolveStudentId?: ResolveCurrentStudentIdFn;
@@ -2755,6 +2940,7 @@ export function MeetingsList({
   onCancelSession = cancelMeetingSession,
   onCreateMeetings = createMeetings,
   onSaveMeetingSeries = saveMeetingSeries,
+  onSaveMeetingSession = saveMeetingSession,
   resolveStudentId = resolveCurrentStudentId,
   resolveStudentIsActive = defaultResolveStudentIsActive,
   studentId,
@@ -2786,6 +2972,7 @@ export function MeetingsList({
           onCancelSession={onCancelSession}
           onCreateMeetings={onCreateMeetings}
           onSaveMeetingSeries={onSaveMeetingSeries}
+          onSaveMeetingSession={onSaveMeetingSession}
         />
       ) : (
         <StudentMeetingsViewContainer

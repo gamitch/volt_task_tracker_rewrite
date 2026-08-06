@@ -183,6 +183,18 @@ import {
   type OnSaveMeetingSeriesFn,
   type SaveMeetingSeriesPayload,
 } from '../../../pages/meetings/ScheduleMeetingsDialog';
+// T605 -- `import type` only (fixes m9). `MeetingsList.tsx` <-> this file is
+// already a mutual runtime value-import cycle
+// (buildCoachMeetingRows/buildStudentMeetingsData imported one way,
+// cancelMeetingSession/createMeetings/loadCoachMeetingsData/
+// loadStudentMeetingsData/resolveCurrentStudentId/saveMeetingSeries the
+// other). `EditMeetingSessionDialog.tsx` must not close a third edge into
+// that cycle at the value level -- only its types cross into this file,
+// fully erased at compile time.
+import type {
+  SaveMeetingSessionPayload,
+  OnSaveMeetingSessionFn,
+} from '../../../pages/meetings/EditMeetingSessionDialog';
 
 // ---------------------------------------------------------------------------
 // Raw DB row shapes (snake_case, exactly as Postgrest returns them). Cited
@@ -215,6 +227,13 @@ interface EventSessionDbRow {
   starts_at: string;
   ends_at: string;
   status: SessionStatus;
+  // T605 -- real, already-existing `event_sessions.notes` column (`not null`,
+  // no default -- §3.1 of this task's own packet), now selected so
+  // `CoachMeetingSessionDetail.notes` (`MeetingsList.tsx`) can thread it into
+  // the new per-session edit dialog's own initial form state. REQUIRED here
+  // (unlike `MeetingsList.tsx`'s own optional `FixtureEventSession.notes`)
+  // because a real row always has a real string value.
+  notes: string;
 }
 
 interface TeamDbRow {
@@ -308,6 +327,7 @@ function mapSessionDbRow(row: EventSessionDbRow) {
     startsAt: row.starts_at,
     endsAt: row.ends_at,
     status: row.status,
+    notes: row.notes, // T605 -- §6.1.
   };
 }
 
@@ -362,7 +382,8 @@ async function querySessions(
 ): Promise<LoaderQueryResult<EventSessionDbRow[]>> {
   const result = await client
     .from('event_sessions')
-    .select('id, event_id, session_date, starts_at, ends_at, status')
+    // T605 -- `notes` added (§6.1).
+    .select('id, event_id, session_date, starts_at, ends_at, status, notes')
     .order('starts_at', { ascending: true });
   return { data: (result.data as EventSessionDbRow[] | null) ?? null, error: result.error };
 }
@@ -975,6 +996,96 @@ export function makeCancelMeetingSession(
 
 /** `MeetingsList.tsx`'s own default `onCancelSession`. */
 export const cancelMeetingSession: CancelMeetingSessionFn = makeCancelMeetingSession();
+
+/**
+ * T605 -- a real, guarded, IN-PLACE `event_sessions` UPDATE for editing ONE
+ * session inside a series (date, start/end time, notes). NOT a call into
+ * `makeSaveMeetingSeries`/`computeMeetingSeriesReconcilePlan`: that
+ * function's `toUpdate` path only ever changes `starts_at`/`ends_at` for a
+ * session matched BY ITS EXISTING `session_date` -- a date change there is
+ * remove-old+insert-new (new `id`, RSVPs deleted per D015). Editing one
+ * session in place must preserve its `id` and its existing RSVPs. This is
+ * not invented from nothing -- `loaders/outreach.ts:1497-1512`/`:254-262` is
+ * the same shape, same rationale (matching by `session_date`, updating in
+ * place, preserving `id` so already-attached `rsvps`/`attendance` rows stay
+ * correctly attached), with one disclosed difference: outreach's version
+ * never rewrites `session_date` itself (it matches an existing row BY that
+ * column, so a date change there is handled as a different row entirely);
+ * this task's mutation explicitly DOES rewrite `session_date` in place,
+ * because moving one session to a different calendar day while preserving
+ * its identity/RSVPs is the entire point of an "edit," not a limitation to
+ * route around.
+ *
+ * Enforcement split (fixes B1's framing error in an earlier packet
+ * revision) -- this task has TWO distinct hazards, with TWO distinct
+ * enforcement points; do not conflate them:
+ *   1. "The session changed state between dialog-open and save" (started,
+ *      canceled, completed, deleted) -- the DB-level guard below
+ *      (`.eq('status','scheduled').gt('starts_at','now').select('id')`) is
+ *      real enforcement, because it reads the row's LIVE pre-update state at
+ *      write time -- the same defense-in-depth split D015/D016 established
+ *      for the series path's own delete guard.
+ *   2. "The coach's own new value is nonsensical" (a mistyped date/time that
+ *      lands in the past, or an end time before the start time) -- the DB
+ *      guard STRUCTURALLY CANNOT catch this, because a `WHERE` clause only
+ *      ever evaluates a row's EXISTING column values, never the values being
+ *      written in the same statement's `SET`. There is no CHECK constraint
+ *      on `event_sessions` for this (adding one is a migration, out of
+ *      scope). For hazard 2, the app-level validation in
+ *      `computeMeetingSessionEditPayload`
+ *      (`../../../pages/meetings/EditMeetingSessionDialog.tsx`) is the ONLY
+ *      enforcement point that exists.
+ *
+ * Do not adopt `postgrest-js`'s `maxAffected()` even though it ships in the
+ * installed `@supabase/postgrest-js@2.110.7` -- it depends on a PostgREST
+ * server version this repo has not verified against hosted Supabase.
+ */
+interface UpdatedMeetingSessionIdRow {
+  id: string;
+}
+
+export function makeSaveMeetingSession(
+  getClient: () => SupabaseClient = getSupabaseClient,
+): OnSaveMeetingSessionFn {
+  const updateSession = runMutation<SaveMeetingSessionPayload, UpdatedMeetingSessionIdRow[]>(
+    (client, payload) =>
+      client
+        .from('event_sessions')
+        .update({
+          session_date: payload.sessionDate,
+          starts_at: payload.startsAt,
+          ends_at: payload.endsAt,
+          notes: payload.notes,
+        })
+        .eq('id', payload.sessionId)
+        .eq('status', 'scheduled')
+        .gt('starts_at', 'now')
+        .select('id'),
+    getClient,
+  );
+
+  return async (payload: SaveMeetingSessionPayload): Promise<void> => {
+    const updatedRows = await updateSession(payload);
+    if ((updatedRows ?? []).length === 0) {
+      // REJECT, never silently succeed (D016's own honesty-bar reasoning,
+      // applied to an update instead of a delete). Two real,
+      // indistinguishable-over-PostgREST causes collapse into this one
+      // branch: (a) the pre-update row no longer matched
+      // status='scheduled'/starts_at>now (it started, or changed, between
+      // dialog-open and save), or (b) RLS silently filtered the row because
+      // the caller lacks permission -- a non-staff UPDATE also returns zero
+      // matched rows, not an error (fixes m5: do not assert a single
+      // specific cause).
+      throw new Error(
+        "This meeting session couldn't be updated. It may have already started, your permissions may " +
+          "have changed, or your changes may be out of date. Refresh the page and try again.",
+      );
+    }
+  };
+}
+
+/** `EditMeetingSessionDialog.tsx`'s own default `onSaveMeetingSession`. */
+export const saveMeetingSession: OnSaveMeetingSessionFn = makeSaveMeetingSession();
 
 /** Trap #4 -- real `studentId` resolution (module doc above; full reasoning
  * also documented directly on `MeetingsList.tsx`'s own module doc #6). */
