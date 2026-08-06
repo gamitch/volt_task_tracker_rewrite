@@ -11036,3 +11036,50 @@ requirement, so a later reader cannot mistake this for consolidation. Three narr
 are now all owned by **T608**, whose scope was widened accordingly. The third is the one worth
 remembering: `attendance_upsert.ts:43` sits outside both `tsconfig`'s include and eslint's scope, so no
 gate in this repo will ever catch it.
+
+---
+
+## T510 — edit a meeting series — **PASS** (2026-08-06, `0444798`)
+
+HEAVY. The longest review chain in this project: packet → **two** `checker-premise` rounds → **D015**
+arbitration → conformance check → **D016** arbitration → conformance check → **D016-A** addendum →
+`worker-implementer` → `checker-reviewer`. NIT only.
+
+**Eight independent reviews, none by an agent reviewing its own work. Four found real defects — and
+three of those were faults in the orchestrator's or the arbiter's own decisions, not the worker's.**
+
+**Two data-loss paths, both proven in live Postgres clusters rather than argued.** The first: the
+orchestrator's design deleted RSVPs then the session in one batch, with cancel as the fallback — but
+nothing FK-references `rsvps`, so the `23503` could only ever come from the *session* delete, by which
+point the whole batch's RSVPs were gone. Innocent sessions lost their RSVPs as collateral. The second
+was created by D015's *own* mandated fix: chaining a server-side `starts_at > now` guard onto the
+delete meant a session whose start time crossed mid-save matched zero rows, **raised no error**,
+resolved, and survived as an ordinary `scheduled` row with its RSVPs already destroyed — the save
+reporting success. Neither was visible to any amount of reading; both needed a cluster.
+
+**The resulting asymmetry is deliberate and is the thing most likely to be "fixed" back into a bug:**
+`cancelSession` is permanently time-unguarded while the delete beside it carries `.gt('starts_at',
+'now')`. A conformance check added the symmetric guard and watched the orphan return, so the
+load-bearing comment above it is measured, not asserted.
+
+**The checker earned the verdict rather than relaying it.** It derived its own baselines from a
+worktree at `eaa9070` (366 warnings / 2055 tests) instead of accepting the worker's numbers, and
+verified the 366→370 rise by diffing warning sets keyed on `(file, rule)` — all four are
+`react-refresh/only-export-components` in the single file that already carried nine, mapping to the
+four named new exports. It replayed all three named mutations itself and confirmed the trap the packet
+warned of: dropping `.select('id')` leaves *"X is canceled"* green, because X really is still
+cancelled; Branch F reddens only because `session-y` is *also* wrongly cancelled. A checker expecting
+the obvious assertion to fail would have called a working test vacuous.
+
+Grant A's six properties hold, with the en dash verified by codepoint and `onCreateMeetings` confirmed
+live-wired through `renderAsUser` rather than a dead import — it still guards against an edit silently
+creating a second competing series. MTG-02's tripwire is byte-identical and green, so the Description
+field did not leak out of edit mode. Scope is exactly the six authorized paths and **no W2 file**,
+which also resolves a stale "two W2 files" instruction the orchestrator had carried over from T603 and
+the worker correctly declined to follow.
+
+Gates, each bare with `$?` captured: typecheck 0 · format:check 0 · lint 0 errors · **2087/2087 across
+81 files**.
+
+**NIT, no action:** the worker's evidence doc says "no commit was made", true when written; the
+orchestrator committed afterward at `0444798`, which the checker verified independently.
