@@ -94,7 +94,7 @@ five test call sites; the `readonly` type fix; the `AlertDialog` joined-string c
 | Q1 | `f2` chains `.select('id')`; an empty result routes to the SAME time-unguarded `cancelSession` D015 already blessed | **Landed** — §4b's `deleteSessionIfStillFuture` now selects the deleted row back; `removeOneSession` routes a zero-length result to `cancelSession`, identically to the `23503` branch. |
 | Q2 | AC9 gains Branch F, mirrored on Branch D's two-pair independence shape, with a named red mutation | **Landed** — §8 AC9 Branch F: X's guarded delete resolves `{ data: [], error: null }`, Y's resolves with its row; X-only cancel, Y genuinely deleted, save resolves; red under dropping `.select('id')` or dropping the empty-result routing. |
 | Q3 | All three f-step helpers (`deleteRsvpsForSession`, `deleteSessionIfStillFuture`, `cancelSession`) get explicit `runMutation` definitions, with `deleteSessionIfStillFuture`'s result type concrete and zero-rows checked as `(data ?? []).length === 0` | **Landed** — §4b now gives all three explicit `runMutation<...>` definitions in place of v3's inline-comment shorthand. |
-| Q4 | Fake-client mirror covers the full chain depth (`delete → eq → gt → select`, not one filter deep); citation corrected to `TeamsTab.test.tsx:1184-1194` | **Landed** — §2/§8 cite the corrected range; §8 AC9 states the four-deep chain explicitly. |
+| Q4 | Fake-client mirror covers the full chain depth (`delete → eq → gt → select`, not one filter deep); precedent citation is `TeamsTab.test.tsx:1185-1195` (D016-A: the range D016 §5 originally mandated, `:1184-1194`, itself started on a blank line and truncated the block — v3's original `:1185-1195` was exact) | **Landed** — §2/§8 cite `:1185-1195`; §8 AC9 states the four-deep chain explicitly. |
 | Q5 | Known Risks merges the `23503` trigger and the zero-row trigger into ONE disclosed residual class (identical, identically-visible outcomes) | **Landed** — Known Risks item 1 rewritten to name both triggers under one residual, per D016 §5. |
 
 **Also required, load-bearing, not decoration (D016 §3):** `cancelSession` stays deliberately
@@ -197,9 +197,8 @@ boss-verified premise): zero occurrences of `starts_at`, `now(`, `new Date`, or 
 — a coach can write attendance to a still-`'scheduled'`, still-future session from the LiveConsole at
 any time, including while another coach is narrowing this series.
 
-**The FK-restrict error-code convention already exists in this codebase**, fully qualified path,
-**citation range per D016 §5/Q4**: `src/pages/roster/TeamsTab.test.tsx:1184-1194` proves the shape — a
-fake client whose
+**The FK-restrict error-code convention already exists in this codebase**, fully qualified path:
+`src/pages/roster/TeamsTab.test.tsx:1185-1195` proves the shape — a fake client whose
 `.delete().eq(...)` resolves `{ data: null, error: { message: 'FK violation', code: '23503' } }`,
 asserting the mutation **rejects** `.toMatchObject({ code: '23503' })`. `loader.ts`'s `runMutation`/
 `toLoaderError` (`:116-121`, `:203-227`) turns that into a thrown `SupabaseLoaderError`;
@@ -891,7 +890,7 @@ Report file/test totals against a named baseline SHA (`git rev-parse HEAD` befor
 - **AC8 — partial `events` update.** The `.update({...})` argument object has **exactly** the keys
   `title`, `team_ids`, `location_name`, `description`.
 - **AC9 — the D015-ruled per-session-paired removal sequence with D016's `f2` fix, every branch proven
-  with a fake client** (mirror `src/pages/roster/TeamsTab.test.tsx:1184-1194`'s SHAPE only — that
+  with a fake client** (mirror `src/pages/roster/TeamsTab.test.tsx:1185-1195`'s SHAPE only — that
   precedent is one filter deep (`delete → eq`); §4b's own `deleteSessionIfStillFuture` chain is FOUR
   deep (`delete → eq → gt → select`) and the fake-client mirror must cover the FULL depth, not stop at
   the first filter. Sequencing is PARALLEL per §4b — align assertions accordingly):
