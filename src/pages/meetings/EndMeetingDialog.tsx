@@ -326,7 +326,7 @@ import {
 /** `attendance.status` check constraint (migration lines 79-91). */
 export type AttendanceStatus = 'present' | 'late' | 'excused' | 'absent';
 /** `attendance.method` check constraint (same migration). */
-export type AttendanceMethod = 'qr' | 'coach' | 'import';
+export type AttendanceMethod = 'qr' | 'coach' | 'import' | 'self';
 /** `event_sessions.status` check constraint (migration lines 53-63). */
 export type SessionStatus = 'scheduled' | 'completed' | 'canceled';
 

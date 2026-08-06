@@ -189,7 +189,13 @@
  * 7. T096 (ED-1 Packet P7): real load/mutation/dialog wiring -- three of the
  *    four former stubs are now real; "Edit" alone remains a disclosed stub
  *    (with new, accurate copy, since the underlying reason changed -- see
- *    (b) below).
+ *    (b) below). **T510 UPDATE (below, after (b)'s own historical record):
+ *    "Edit" is no longer a stub** -- `ScheduleMeetingsDialog.tsx` now has a
+ *    real edit mode (`initialData`/`onSaveMeetingSeries`), so a real
+ *    edit-dialog opener replaces the old stub handler at both
+ *    `CoachMeetingsSection` mounts, and the info-banner-notice machinery this
+ *    module doc originally described for that stub is deleted (AC14, this
+ *    task's own worker output).
  *
  *    a. "Schedule meetings" button (coach view) -- `ScheduleMeetingsDialog.tsx`
  *       (T031, already Passed, already built, already has its own real
@@ -229,6 +235,22 @@
  *       old "dialog not built yet" text, since the dialog genuinely IS built
  *       now; the real remaining gap is narrower and different: "this
  *       particular dialog has no edit mode to open").
+ *
+ *       **T510 UPDATE: the gap (b) describes is now closed.**
+ *       `ScheduleMeetingsDialog.tsx` gained a real, additive edit mode
+ *       (`initialData`/`onSaveMeetingSeries` -- see that file's own module doc)
+ *       per George's fully-settled T510 design ruling
+ *       (`docs/swarm/auto-mode-decisions.md`, "George closes out T510's
+ *       design"). `openEditDialog(row)` (below) sets `editTarget(row)` and
+ *       opens the SAME `<ScheduleMeetingsDialog>` instance already mounted for
+ *       create mode -- one dialog serves both, same "one dialog, one
+ *       `initialData`-computed-by-ternary" shape `OutreachEventDialog.tsx`/
+ *       `OutreachList.tsx` already established. `handleSaveMeetingSeriesSubmit`
+ *       wires the dialog's own `onSaveMeetingSeries` prop to a real default
+ *       (`saveMeetingSeries`, `../../lib/supabase/loaders/meetings.ts`) that
+ *       reconciles the event's own `events`/`event_sessions` rows
+ *       (future-forward only -- George's own ruling), then reloads `rows` the
+ *       same way `handleCreateMeetingsSubmit` above already does.
  *    c. Row "Cancel" menu item + `AlertDialog` (coach view) -- was already
  *       real-LOOKING before this task (a genuine `AlertDialog`, DES-11), but
  *       only ever flipped local `rows` state; this task pairs it with a real
@@ -535,11 +557,15 @@ import {
   loadCoachMeetingsData,
   loadStudentMeetingsData,
   resolveCurrentStudentId,
+  saveMeetingSeries,
 } from '../../lib/supabase/loaders/meetings';
 import {
   ScheduleMeetingsDialog,
   type CreateMeetingsPayload,
+  type EditMeetingSeriesInitialData,
   type OnCreateMeetingsFn,
+  type OnSaveMeetingSeriesFn,
+  type SaveMeetingSeriesPayload,
 } from './ScheduleMeetingsDialog';
 // T189 -- honest "your account is inactive" copy (packet v2). Reads
 // `students.is_active` directly (`loaders/students.ts`'s own module doc has
@@ -600,6 +626,10 @@ interface FixtureEvent {
    * (`not null`, UXP-08's own resolution note). */
   locationName: string;
   address: string;
+  /** T510 -- optional (the 3 existing `FIXTURE_EVENTS` literals need no edit) --
+   * real, already-existing `events.description` column, threaded through so
+   * `ScheduleMeetingsDialog`'s edit mode can prefill it. */
+  description?: string;
 }
 
 interface FixtureEventSession {
@@ -675,6 +705,14 @@ export interface CoachMeetingRow {
   teamScopeLabel: string;
   /** Sorted ascending by `startsAt`. */
   sessions: CoachMeetingSessionDetail[];
+  /** T510 -- optional (the 3 existing hand-built `CoachMeetingRow` literals in
+   * `MeetingsList.test.tsx` need no edit). The event's real `team_ids` (`null`
+   * = all teams) -- threaded through so `ScheduleMeetingsDialog`'s edit mode
+   * can prefill team scope; `teamScopeLabel` above stays the display-only
+   * derived string, unchanged. */
+  teamIds?: readonly string[] | null;
+  /** T510 -- optional, same reasoning as `teamIds` above. */
+  description?: string;
 }
 
 export interface CoachMeetingsData {
@@ -1012,6 +1050,9 @@ export function buildCoachMeetingRows(
       locationName: event.locationName,
       teamScopeLabel: teamScopeLabel(event.teamIds, teams),
       sessions: sessionDetails,
+      // T510 -- threaded through for `ScheduleMeetingsDialog`'s edit mode.
+      teamIds: event.teamIds ?? null,
+      description: event.description ?? '',
     });
   }
   return rows;
@@ -1376,29 +1417,6 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
 // ---------------------------------------------------------------------------
 // Coach view -- module doc #7/#8.
 // ---------------------------------------------------------------------------
-
-interface StubNotice {
-  title: string;
-  description: string;
-}
-
-function StubBanner({
-  notice,
-  onDismiss,
-}: {
-  notice: StubNotice;
-  onDismiss: () => void;
-}): ReactNode {
-  return (
-    <Banner
-      status="info"
-      title={notice.title}
-      description={notice.description}
-      isDismissable
-      onDismiss={onDismiss}
-    />
-  );
-}
 
 /**
  * T135 (VOLT UX Craft PRD v3.1, UXC-02/03/07) -- REWORK of T122's `ListItem`
@@ -2006,6 +2024,11 @@ export interface CoachMeetingsViewProps {
    * `<ScheduleMeetingsDialog onCreateMeetings={...} />`; defaults to a real
    * `events`/`event_sessions` insert (`createMeetings`, same loader module). */
   onCreateMeetings: OnCreateMeetingsFn;
+  /** T510 (module doc #7b). Passed straight through to
+   * `<ScheduleMeetingsDialog onSaveMeetingSeries={...} />`; defaults to a real
+   * future-forward `events`/`event_sessions` reconciliation (`saveMeetingSeries`,
+   * same loader module). */
+  onSaveMeetingSeries: OnSaveMeetingSeriesFn;
 }
 
 /** T122 (module doc #10d) -- Cancel now targets one SESSION within one
@@ -2020,6 +2043,7 @@ function CoachMeetingsView({
   loadData,
   onCancelSession,
   onCreateMeetings,
+  onSaveMeetingSeries,
 }: CoachMeetingsViewProps): ReactNode {
   const loadState = useLoadState(loadData, [loadData]);
   const [rows, setRows] = useState<CoachMeetingRow[]>([]);
@@ -2028,12 +2052,15 @@ function CoachMeetingsView({
   // `handleCreateMeetingsSubmit`), threaded to `<ScheduleMeetingsDialog>`'s
   // own `teams` prop.
   const [teams, setTeams] = useState<readonly Team[]>([]);
-  const [stubNotice, setStubNotice] = useState<StubNotice | null>(null);
   const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
   // T096 (module doc #7a) -- drives the one rendered `<ScheduleMeetingsDialog>`
-  // instance, in CREATE mode only (module doc #7b: this dialog has no edit
-  // mode to open at all).
+  // instance, shared by both CREATE mode (`editTarget === null`) and T510's
+  // real EDIT mode (`editTarget !== null`, module doc #7b).
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
+  // T510 (module doc #7b) -- which row (if any) `<ScheduleMeetingsDialog>` is
+  // currently editing; `null` => create mode. Mirrors `OutreachList.tsx`'s own
+  // `editingTarget` state.
+  const [editTarget, setEditTarget] = useState<CoachMeetingRow | null>(null);
   const [feedback, setFeedback] = useState<FeedbackBanner | null>(null);
   // T135 (Table migration, Trap 1/2) -- ONE expansion-state set for BOTH the
   // Upcoming and Past `CoachMeetingsSection` instances, deliberately NOT one
@@ -2067,20 +2094,16 @@ function CoachMeetingsView({
   const { upcoming, past } = useMemo(() => partitionCoachMeetingRows(rows), [rows]);
 
   function openScheduleDialog(): void {
+    setEditTarget(null);
     setIsScheduleDialogOpen(true);
   }
 
-  // T096 (module doc #7b, Trap #3 finding) -- `ScheduleMeetingsDialog.tsx`
-  // has no `initialData`/"meeting to edit" prop of any kind and its own
-  // `CreateMeetingsPayload` shape always creates a brand-new
-  // `events`/`event_sessions` series; it genuinely cannot edit one
-  // already-scheduled session in place. Honest, accurate stub copy -- NOT
-  // the old "dialog not built yet" text, since the dialog IS built now.
-  function showEditStub(row: CoachMeetingRow): void {
-    setStubNotice({
-      title: "Editing an existing meeting isn't supported yet",
-      description: `"${row.title}" can't be edited in place. The scheduling tool only knows how to create a brand-new meeting series -- it has no way to load an already-scheduled session's fields, so opening it here would create a second, competing series instead of changing this one. Cancel this meeting and schedule a new one if its details need to change.`,
-    });
+  // T510 (module doc #7b) -- `ScheduleMeetingsDialog.tsx` now has a real edit
+  // mode; opens the SAME dialog instance already mounted for create, in EDIT
+  // mode for this row.
+  function openEditDialog(row: CoachMeetingRow): void {
+    setEditTarget(row);
+    setIsScheduleDialogOpen(true);
   }
 
   // T096 (module doc #7c) -- real mutation, optimistic update + rollback on
@@ -2166,6 +2189,31 @@ function CoachMeetingsView({
     }
   }
 
+  // T510 (module doc #7b) -- real `onSaveMeetingSeries` wiring, mirroring
+  // `handleCreateMeetingsSubmit`'s own reload-and-feedback shape.
+  async function handleSaveMeetingSeriesSubmit(payload: SaveMeetingSeriesPayload): Promise<void> {
+    await onSaveMeetingSeries(payload);
+    try {
+      const fresh = await loadData();
+      setRows(fresh.rows);
+      setTeams(fresh.teams);
+      setFeedback({
+        status: 'success',
+        title: 'Meeting series updated',
+        description: 'This meeting series was updated.',
+      });
+    } catch {
+      // The save itself already succeeded (this catch only guards the
+      // follow-up reload) -- disclosed, not fatal: `rows` just won't reflect
+      // the change until the next successful load/retry.
+      setFeedback({
+        status: 'success',
+        title: 'Meeting series updated',
+        description: 'This meeting series was updated. Refresh the page to see the change.',
+      });
+    }
+  }
+
   if (loadState.status === 'loading') {
     return (
       <VStack gap={6} aria-busy="true">
@@ -2211,10 +2259,6 @@ function CoachMeetingsView({
         <Button label="Schedule meetings" variant="primary" onClick={openScheduleDialog} />
       </HStack>
 
-      {stubNotice !== null && (
-        <StubBanner notice={stubNotice} onDismiss={() => setStubNotice(null)} />
-      )}
-
       {feedback !== null && (
         <Banner
           status={feedback.status}
@@ -2246,7 +2290,7 @@ function CoachMeetingsView({
             emptyDescription="No meetings are currently scheduled."
             expandedEventIds={expandedEventIds}
             onToggleExpand={toggleExpand}
-            onEdit={showEditStub}
+            onEdit={openEditDialog}
             onCancelRequest={(eventId, eventTitle, session) =>
               setCancelTarget({ eventId, eventTitle, session })
             }
@@ -2257,7 +2301,7 @@ function CoachMeetingsView({
             emptyDescription="Completed and canceled meetings will show up here."
             expandedEventIds={expandedEventIds}
             onToggleExpand={toggleExpand}
-            onEdit={showEditStub}
+            onEdit={openEditDialog}
             onCancelRequest={(eventId, eventTitle, session) =>
               setCancelTarget({ eventId, eventTitle, session })
             }
@@ -2284,20 +2328,47 @@ function CoachMeetingsView({
 
       {/* T096 (module doc #7a) -- `ScheduleMeetingsDialog.tsx` (T031,
           already Passed, already built) wired into this page for the first
-          time, in CREATE mode only (module doc #7b: this dialog has no edit
-          mode). T147: `teams` now real too -- `loaders/meetings.ts`'s
+          time. T147: `teams` now real too -- `loaders/meetings.ts`'s
           `makeLoadCoachMeetingsData` already fetched this list for its own
           per-row team-scope label; it is now threaded through
           `CoachMeetingsData`/this view's own `teams` state instead of the
           dialog falling back to its own `DEFAULT_TEAMS` fixture
           (`'team-ravens'`/`'team-titans'`, non-uuid strings that failed the
           real `events.team_ids uuid[]` insert -- the report that blocked
-          meeting creation outright). No new query, no new round trip. */}
+          meeting creation outright). No new query, no new round trip.
+          T510 (module doc #7b) -- ONE dialog instance now serves BOTH create
+          (`editTarget === null`) and edit (`editTarget !== null`) mode,
+          mirroring `OutreachList.tsx`'s own `initialData` ternary shape.
+          `onOpenChange` also clears `editTarget` on close, mirroring
+          `OutreachList.tsx:3505-3508`, so the next "Schedule meetings" open
+          never inherits a stale edit target. */}
       <ScheduleMeetingsDialog
         isOpen={isScheduleDialogOpen}
-        onOpenChange={setIsScheduleDialogOpen}
+        onOpenChange={(nextIsOpen) => {
+          setIsScheduleDialogOpen(nextIsOpen);
+          if (!nextIsOpen) setEditTarget(null);
+        }}
         teams={teams}
         onCreateMeetings={handleCreateMeetingsSubmit}
+        initialData={
+          editTarget !== null
+            ? ({
+                eventId: editTarget.eventId,
+                title: editTarget.title,
+                teamIds: editTarget.teamIds ?? null,
+                locationName: editTarget.locationName,
+                description: editTarget.description ?? '',
+                sessions: editTarget.sessions.map((s) => ({
+                  sessionId: s.sessionId,
+                  sessionDate: s.sessionDate,
+                  startsAt: s.startsAt,
+                  endsAt: s.endsAt,
+                  status: s.status,
+                })),
+              } satisfies EditMeetingSeriesInitialData)
+            : undefined
+        }
+        onSaveMeetingSeries={handleSaveMeetingSeriesSubmit}
       />
     </VStack>
   );
@@ -2653,6 +2724,9 @@ export interface MeetingsListProps {
   onCancelSession?: CancelMeetingSessionFn;
   /** T096 (module doc #7a). Defaults to a real mutation, same module. */
   onCreateMeetings?: OnCreateMeetingsFn;
+  /** T510 (module doc #7b). Defaults to a real future-forward reconciliation
+   * mutation, same module. */
+  onSaveMeetingSeries?: OnSaveMeetingSeriesFn;
   /** T096 (module doc #6, Trap #4). Defaults to a real resolution, same
    * module. Only ever invoked when `studentId` below is NOT supplied. */
   resolveStudentId?: ResolveCurrentStudentIdFn;
@@ -2680,6 +2754,7 @@ export function MeetingsList({
   loadStudentData = loadStudentMeetingsData,
   onCancelSession = cancelMeetingSession,
   onCreateMeetings = createMeetings,
+  onSaveMeetingSeries = saveMeetingSeries,
   resolveStudentId = resolveCurrentStudentId,
   resolveStudentIsActive = defaultResolveStudentIsActive,
   studentId,
@@ -2710,6 +2785,7 @@ export function MeetingsList({
           loadData={loadCoachData}
           onCancelSession={onCancelSession}
           onCreateMeetings={onCreateMeetings}
+          onSaveMeetingSeries={onSaveMeetingSeries}
         />
       ) : (
         <StudentMeetingsViewContainer

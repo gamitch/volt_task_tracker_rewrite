@@ -21,6 +21,13 @@
  *      (nullable, restrict), updated_at, created_at, unique (session_id,
  *      student_id).
  *
+ *    `method`'s check constraint above is the ORIGINAL three-value list --
+ *    SUPERSEDED (widened to add `'self'`) by
+ *    `supabase/migrations/20260724000000_self_checkoff.sql:31-33`; see this
+ *    file's own `AttendanceMethod` comment below. Kept here verbatim as the
+ *    historical record of `20260717000000_scheduling_attendance.sql`'s
+ *    original text -- do not delete.
+ *
  *    SCH-04 (PRD v2 section 3, resolved 2026-07-20 by T114): `staff_all`
  *    (`for all ... using (is_staff()) with check (is_staff())`) has existed
  *    on `attendance` since v1 -- staff (admin/coach) may write any student's
@@ -208,7 +215,11 @@ import { getSupabaseClient } from '../client';
 // ---------------------------------------------------------------------------
 
 export type AttendanceStatus = 'present' | 'late' | 'excused' | 'absent';
-export type AttendanceMethod = 'qr' | 'coach' | 'import';
+/** `attendance.method` check constraint -- widened to permit `'self'` by
+ * `supabase/migrations/20260724000000_self_checkoff.sql:31-33` (current
+ * source of truth; the original three-value constraint was
+ * `20260717000000_scheduling_attendance.sql` line 90). */
+export type AttendanceMethod = 'qr' | 'coach' | 'import' | 'self';
 
 export interface AttendanceRow {
   id: string;

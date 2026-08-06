@@ -323,8 +323,10 @@ export interface RsvpRow {
 export type AttendanceStatus = 'present' | 'late' | 'excused' | 'absent';
 
 /** `attendance.method` check constraint, line 90 (see `AttendanceRow`
- * below). */
-export type AttendanceMethod = 'qr' | 'coach' | 'import';
+ * below) -- widened to permit `'self'` by
+ * `supabase/migrations/20260724000000_self_checkoff.sql:31-33`, the current
+ * source of truth. */
+export type AttendanceMethod = 'qr' | 'coach' | 'import' | 'self';
 
 /**
  * `public.attendance` -- `supabase/migrations/20260717000000_scheduling_attendance.sql`,
@@ -344,6 +346,9 @@ export type AttendanceMethod = 'qr' | 'coach' | 'import';
  *   created_at timestamptz not null default now()                         -- line 93
  * );
  * ```
+ * Line 90's `method` constraint above was later widened to add `'self'` by
+ * `supabase/migrations/20260724000000_self_checkoff.sql:31-33` -- see the
+ * `AttendanceMethod` comment above for the current constraint.
  */
 export interface AttendanceRow {
   id: string;

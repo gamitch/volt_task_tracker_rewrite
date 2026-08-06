@@ -1352,3 +1352,307 @@ the migration header cites both. For checkers: a `v_student_participation` that 
 verbatim is **expected** from this task onward, and the exemption covers **that view and MET-01 only** —
 not `v_student_hours`, not MET-02's aggregation shape beyond the denominator it inherits, and nothing on
 the volunteer-hours side.
+
+## D015 - T510 packet's dropped-session removal sequence: item-19a rounds exhausted, arbiter rules per-session pairing
+
+**Filed and ruled by boss-arbiter, 2026-08-06.** Escalated by the orchestrator after T510's packet
+(`docs/swarm/active/T510-worker-packet.md`, v2 at `ceb1ce2`) consumed both `checker-premise` rounds
+(item 19a) and both returned REVISE. Two different gate agents ran; neither wrote the packet. Worker
+attempt count: 0 — this is a gate-rounds exhaustion, not a worker/checker loop, so the Loop Limit's
+three-failure rule does not apply; the Dispute Rule does.
+
+Worker position (here, the packet's — the foreman's v2 design):
+Removal of dropped future sessions runs batched: (a) still-future guard query, (c) batched
+`attendance` pre-check, (e) batched cancel for attendance-bearing sessions, (f) batched
+`delete from rsvps where session_id in (:toDelete)` then batched
+`delete from event_sessions where id in (:toDelete)`, with a residual `23503` fallback that cancels
+the WHOLE `toDelete` batch. AC9 Branch D asserts the fallback path's promise resolves.
+
+Checker position (gate round 2, proven in a live scratch Postgres cluster with all 24 migrations):
+The batched fallback IS the data loss. Nothing in the schema references `rsvps`, so the rsvps delete
+can never raise `23503`; the `23503` can only come from the SECOND call — by which time every batched
+session's RSVPs are already gone in a separately-committed PostgREST transaction. Branch D then
+cancels the whole batch, leaving innocent sessions visible as `canceled` with their RSVPs destroyed
+(cluster output: `S5 | canceled | rsvps_left 0 | att 0` for a session that never had attendance).
+Reachable in ordinary operation because `loaders/attendance.ts` has no `starts_at`/`now` guard — a
+coach can pre-mark attendance on a still-future session from the LiveConsole while another coach
+narrows the series. Separately: the packet's own AC9 Branch D would certify this defect green, since
+it asserts only that the promise resolves, never that any RSVPs survive. The gate offered three fixes
+(capture-and-restore; per-session pairing; a `security definer` RPC) and chose none.
+
+Boss decision:
+
+**1. The checker is right on the defect, and I verified its premises independently rather than
+taking either side's word:** `rsvps` is referenced by no FK anywhere under `supabase/migrations/`
+(its delete cannot `23503`); `attendance.session_id` and `rsvps.session_id` are both
+`on delete restrict` against `event_sessions` (`20260717000000_scheduling_attendance.sql:69,84`);
+`rsvps` carries `unique (session_id, student_id)` (`:75`); `loaders/attendance.ts` contains zero
+occurrences of `starts_at`, `now(`, `new Date`, or `Date.now`. PostgREST commits each request as its
+own transaction, so v2's two batched deletes cannot be atomic. v2's AC9 Branch D is a test that
+passes while the data is lost — the exact vacuous-assertion class this project has caught before.
+
+**2. Ruled path: PER-SESSION PAIRING (the gate's option 2), minimal delta from v2.** Steps a-e of
+§4b step 6 stand unchanged — the batched still-future guard, the batched attendance pre-check, and
+the batched cancel (whose keep-the-RSVPs semantics are preserved for every pre-check-detected
+session). Only step f changes. For each id in `toDelete`, as an independent pair:
+
+  f1. `delete from rsvps where session_id = :id` (RSVPs first — the owner's own ordering). If this
+      fails with ANY error, do not attempt this session's delete; the save rejects.
+  f2. `delete from event_sessions where id = :id`. On `23503` (attendance raced in, or a fresh RSVP
+      raced in behind f1 — cancel is correct either way, and a fresh RSVP survives attached to a
+      canceled session): `update event_sessions set status = 'canceled' where id = :id` for THIS id
+      only. If that cancel itself errors, the save rejects — never swallow it. Any non-`23503`
+      error: the save rejects.
+
+  Cross-pair sequencing (sequential, or `Promise.all` over pairs — pairs touch disjoint rows and are
+  independent) is the foreman's choice, but v3 must state which and align AC9's Branch D/E
+  assertions to it. If parallel: a rejected pair rejects the save while sibling pairs may still
+  complete — the same disclosed non-atomicity class the packet already carries for "events insert
+  succeeds, sessions insert fails."
+
+**Why this path, against each alternative:**
+
+- **vs v2 (batched + batch fallback):** the blast radius drops from "every session in the batch" to
+  "at most the one raced session," and the bound is enforced by the database's own FK — not by
+  client code surviving to run a compensation step.
+- **vs option 1 (capture-and-restore): REJECTED.** It is RLS-feasible (`staff_all on rsvps` is
+  `for all ... is_staff() with check (is_staff())`, `20260717000002_rls.sql:197-199`, so a staff
+  client can re-insert other students' rows) — but the primary path still deletes the whole batch's
+  RSVPs before any session delete, meaning the only copy of live production rows is a browser tab's
+  memory for the duration of the window. A closed tab, a navigation, or a network failure
+  mid-restore loses everything, invisibly. And the restore-insert is itself failable: a student
+  re-RSVPing to a batched session inside the window collides with `unique (session_id, student_id)`.
+  A failable compensation for a failable operation, with a worst case strictly worse than option
+  2's, at higher complexity.
+- **vs option 3 (`security definer` RPC): REJECTED for T510, declared not absorbed.** It is the only
+  fully atomic fix, and the gate was right that it must be escalated rather than smuggled — this
+  entry is that escalation, and the owner may veto toward it. It is rejected on proportionality
+  (item 25's spirit; the owner's standing "keep it simple"): it converts a race whose window is the
+  sub-second gap between the attendance pre-check and that session's own delete — and whose worst
+  case under pairing is "one coach-condemned session lingers as Canceled," which is the owner's own
+  ruled fallback outcome — into a migration, an opus worker (item 18), an owner-applied cutover
+  (item 16), and a §5/§6 rewrite. If a later migration wave touches this area (T606 already needs
+  one), an atomic removal RPC may be reconsidered there on its own row.
+- **vs option 4 (narrow to cancel-only): REJECTED outright.** It would overturn the owner's
+  explicit, twice-confirmed ruling that dropped sessions VANISH and that `canceled` keeps meaning
+  "a coach cancelled this on purpose" (auto-mode-decisions.md, "Sessions dropped by a narrowing
+  edit are DELETED, RSVPs first" and "George closes out T510's design," Check 01). An arbiter does
+  not overturn the owner, and there is no need to ask him: pairing delivers his rule set verbatim.
+
+**3. The residual, stated so it is a disclosure and not a discovery:** if attendance lands between
+the pre-check and that one session's delete, that session ends `canceled` with its RSVPs already
+deleted. This satisfies the owner's fallback ruling verbatim ("the delete must fall back to
+cancelling rather than failing the coach's save"), and the RSVP deletion that precedes it is the
+owner's own ruled step one of dropping. The keep-the-RSVPs nicety remains for every pre-check-
+detected case (Branch B). This is a disclosed limitation, not a deferred defect — no item-20 ledger
+row is required — but it MUST appear in v3's Known Risks and the worker output's known-risks list.
+
+**4. AC9 is rewritten to the pairing design (mandatory; supersedes round 2's version of the
+complaint):**
+- Branch A (clean): for each no-attendance id, the fake client shows that id's OWN rsvps delete
+  strictly before that id's OWN session delete; no `event_sessions.update` for it.
+- Branch B (unchanged): pre-check returns the id → batched cancel; `rsvps.delete` is NEVER called
+  for it.
+- Branch C (unchanged): an id absent from the still-future result reaches no subsequent call.
+- Branch D (rewritten, the load-bearing one — at least TWO pairs in flight): session X's delete
+  rejects `{ code: '23503' }`, session Y's resolves. Assert: X receives
+  `update({ status: 'canceled' })` and X ONLY; Y is genuinely deleted and receives NO update; Y's
+  rsvps delete is its own paired call, unconditioned on X's failure; no batch-wide cancel occurs
+  anywhere; the promise resolves. The assertion that certifies the fix — Y's fate is independent of
+  X's — is exactly what v2's Branch D lacked.
+- Branch E: a non-`23503` error on any pair (either half) → the promise rejects; assertions on
+  sibling pairs match the sequencing choice v3 states.
+
+**5. The nine other round-2 revisions, ruled by class** (the arbiter was given severities, not
+texts; the foreman holds the findings): the AC9 rewrite (covered above) and the one MAJOR land in v3
+before dispatch — the constitution's decision rule lets a boss defer a MAJOR only knowingly, and I
+will not blind-approve deferring one I cannot read. The seven MINOR/NITs land in v3 by default: a
+packet is consumed at dispatch, so a packet correction deferred is a correction never made, and any
+MINOR that corrects a fact a worker would cite (a line number, a count, a citation) MUST land —
+item 19c's lesson. The foreman may accept an individual MINOR/NIT as-is only with a one-line reason.
+**v3's §0 gate history must carry a disposition line for every round-2 label** (landed / accepted
+as-is + reason), so this ruling is auditable against findings the log does not itself contain.
+
+**6. Dispatch after v3 — what stands in for the gate round that no longer exists.** Item 19a's two
+rounds are spent and its economics are respected: no third premise round runs. But the Definition of
+Ready's first condition exists to guarantee no plan reaches a worker checked only by its author, and
+that principle survives the cap. Mechanism: the foreman revises to v3; a FRESH `checker-premise`
+instance (a third agent — not the foreman, not either prior gate) runs a LIGHT check under item
+19b's own scoping, with a conformance-only charter: does §4b step 6 match this ruling's sequence
+exactly; does AC9 match the branches above; did the MAJOR land; does §0 carry the full disposition
+table. It re-opens nothing the two full rounds settled — item 19b says settled premises are not
+re-audited. On conformance it returns DISPATCH, satisfying Definition of Ready item 1 literally; a
+REVISE from it returns to the arbiter, not into a loop; a NEW finding outside its charter is
+reported to the arbiter without a verdict. This is an interpretation of items 19a/19b recorded here
+— the constitution's text is deliberately NOT amended; if the owner wants this mechanism ratified
+into 19a, that is his edit to authorize.
+
+Outcome:
+Packet returns to the foreman for v3 per this entry. No worker dispatched by this ruling. The
+constitution is not modified. The owner's T510 rule set is preserved verbatim — no migration, no
+design change, and nothing here needs his input; the RPC option is declared above for his veto or
+later opt-in, and the decisions log carries a dated pointer entry he will read.
+
+## D016 - T510 follow-on to D015: the ruled f1/f2 pairing and the ruled time guard interact to create a silent zero-row orphan; arbiter orders the select-and-route fix
+
+**Filed and ruled by boss-arbiter, 2026-08-06.** Raised by the D015 §6 conformance check on packet v3
+(`6da5574`) as a NEW finding outside its charter, reported without a verdict exactly as D015 §6
+prescribes. The conformance verdict itself was DISPATCH on all four questions and is NOT disturbed by
+this entry — v3 conforms to D015; the defect ruled on here is D015's own, not the foreman's.
+
+Worker position (the packet's, v3 — which implements D015 faithfully):
+Step f runs per-id: f1 `deleteRsvpsForSession(id)`, then f2 `deleteSessionIfStillFuture(id)` —
+`.eq('id', id).gt('starts_at', 'now')`, the chained server-side guard the D015-required MAJOR landed.
+On `23503`, cancel that id. v3's comment (`:605-608`) presents the guard's zero-row outcome as purely
+protective.
+
+Checker position (conformance instance, proven in a live cluster against v3 as written):
+If a session's `starts_at` crosses `now` between step a's batched guard and that id's own f2 — a
+window of three-plus round trips, not sub-millisecond — f2 matches ZERO rows and raises NO error.
+`runMutation` resolves on `{ data: null, error: null }` (`src/lib/supabase/loader.ts:203-227`,
+verified: it throws only on `result.error`). No `23503`, so no cancel; no rejection; the save reports
+success. But f1 has already run. End state, from the cluster: `scheduled | rsvps_left 0 | att 0 |
+past` — an ordinary-looking scheduled session whose RSVPs are silently gone. A control run without
+the chained guard deletes the session cleanly: **the guard is what creates the state.** Worse than
+D015 §3's accepted residual on three axes: silent, invisible (v2's victims at least read `canceled`),
+and absent from v3's Known Risks.
+
+Boss decision:
+
+**1. The finding is confirmed, and the fault is D015's, not the foreman's.** D015 §2 ordered f1
+before f2 (the owner's RSVPs-first ordering); D015 §5 ordered the chained-guard MAJOR landed. Each is
+correct alone; together they turn the guard's "affect zero rows rather than delete a protected
+session" semantics into "leave a session whose RSVP data was already destroyed, and say nothing."
+Verified independently before ruling: `runMutation`'s resolve-on-null behavior; the cluster
+reproduction; the installed `@supabase/postgrest-js@2.110.7` supporting `.select()` after `.delete()`
+(`node_modules/@supabase/postgrest-js/src/PostgrestTransformBuilder.ts`, `select<...>` on the
+transform builder every mutation builder extends).
+
+**2. Ruled fix: the checker's remedy 2 — detect at the destructive call, route to the ruled
+fallback.** f2 becomes `.delete().eq('id', id).gt('starts_at', 'now').select('id')`, and its helper
+inspects the result: empty (`[]`/`null`) means the guard fired after f1 had already acted — or the
+session no longer exists at all (concurrently removed; indistinguishable over PostgREST and benign
+either way) — and routes to the SAME `cancelSession(id)` D015 already blessed, which on a
+nonexistent id updates zero rows and resolves. Non-empty means the session was genuinely deleted.
+The `23503` branch is unchanged (`.select()` does not alter error surfacing). Two lines and one
+helper-shape change; no migration, no new dependency, no tier change, no escalation.
+
+**Remedy 1 (zero-code, disclose only) is REJECTED.** D015 §3's residual was accepted because its
+outcome is visible (`canceled`) and matches the owner's own ruled fallback. This one reports success
+while leaving a session that lies on screen — an ordinary `scheduled` meeting whose RSVP data was
+destroyed. The Non-Negotiables rank data integrity and honest on-screen values above the cost of two
+lines. Not close.
+
+**3. `cancelSession` stays time-UNGUARDED, deliberately — do not "harden" it.** A symmetric
+`.gt('starts_at', 'now')` on the cancel would silently no-op in exactly the raced case and re-open
+this hole one call later. The cancel is the repair path; its entire purpose is to mark a session
+whose RSVPs were already destroyed. v4 must state this in the code comment so no worker or checker
+adds the symmetry back.
+
+**4. The rule-1 tension, addressed rather than glossed:** canceling a session whose `starts_at`
+crossed into the past mid-save does "touch" a past session. Ruled acceptable, and required: the
+future-forward DECISION POINT is step a's server-side guarded read at save time — the coach's
+confirmed intent to drop this session was formed and verified while it was strictly future. f2's
+chained guard is defense-in-depth, not a second decision point. Once f1 has irreversibly acted, the
+choice is between a session that claims to be an ordinary scheduled meeting with its RSVPs silently
+gone, and the owner's own ruled fallback state, visibly canceled. The second is the least-false
+state, and the session in question is one the coach dropped seconds earlier — the owner's "a
+forgotten session can still be ended late" trade-off is not meaningfully implicated.
+
+**5. Consequential packet requirements for v4 (foreman's edit, not mine):**
+- **f-step helpers get explicit `runMutation` definitions** (the conformance check's smaller item,
+  now MANDATORY rather than derivable): f2's return value is load-bearing, so
+  `deleteSessionIfStillFuture` must carry a concrete result type (the `.select('id')` row array,
+  zero-rows checked as `(data ?? []).length === 0` per `runMutation`'s null-coercion at
+  `loader.ts:220-225`), alongside definitions for `deleteRsvpsForSession` and `cancelSession`,
+  matching the batched precedent's explicitness.
+- **AC9 gains Branch F**, mirrored on Branch D's two-pair independence shape: session X's guarded
+  delete resolves `{ data: [], error: null }` while session Y's resolves with its row → assert
+  `cancelSession` is called for X and X only; Y is genuinely deleted with no update; the save
+  RESOLVES. Branch A additionally asserts the delete chain ends `.select('id')` and treats the
+  returned row as success. Prove-it-can-fail: a named mutation (drop `.select('id')` or the
+  empty-result routing) turns Branch F red.
+- **The fake-client mirror** covers the full chain depth `delete → eq → gt → select` (the cited
+  precedent is one filter deep), and the citation is corrected to `TeamsTab.test.tsx:1184-1194`
+  **[THIS RANGE IS WRONG — corrected by D016-A below to `:1185-1195`; v3's original range was
+  exact and this "correction" inverted it]** (19c: a citation a worker will rely on must be true). There is no in-repo precedent for
+  `.delete().select()`; the packet cites the installed source
+  (`node_modules/@supabase/postgrest-js/src/PostgrestTransformBuilder.ts`) directly, the same
+  verified-against-installed-artifact posture it already uses for `AlertDialog.d.ts`.
+- **Known Risks merges the two triggers into ONE residual class:** a session raced at its own f2
+  ends `canceled` with its RSVPs already deleted, whether the race was attendance/fresh-RSVP (the
+  `23503` path) or the time boundary (the zero-row path). With this fix the two outcomes are
+  identical and identically visible; both routes are disclosed in the packet and the worker output.
+
+**6. Dispatch after v4 — the D015 §6 instrument, charter narrowed to this entry.** The DISPATCH on
+D015's four questions stands and is not re-litigated. A fresh gate instance answers five conformance
+questions only: (Q1) f2 chains `.select('id')` and empty-result routes to the time-unguarded cancel;
+(Q2) AC9 Branch F present with the independence assertion and a named red mutation; (Q3) the three
+helpers have explicit definitions with f2's concrete result type; (Q4) mirror chain depth and the
+`:1184-1194` citation corrected; (Q5) Known Risks carries the merged two-trigger residual. DISPATCH
+satisfies Definition of Ready item 1; REVISE returns to the arbiter; a new finding outside the
+charter comes to the arbiter without a verdict, exactly as this one did — the channel worked and is
+retained unchanged.
+
+**7. For the record, the orchestrator's self-reported Q4 gloss:** its dispatch to the checker
+parenthesized round-1 labels (B1-B3, M1-M4, m1-m10) where D015 §5 requires round-2 labels. The
+checker judged against the ruling's text over the dispatch's paraphrase and flagged the discrepancy
+instead of silently picking one. That was correct on both counts, no ruling needed: v3's nine-row
+round-2 disposition table is what D015 requires, and Q4 conforms. Noted because it is the same
+lesson as D015's own verify-don't-relay posture: the ruling text, not the relay, is the standard.
+
+Outcome:
+Packet returns to the foreman for v4 per §5 above. No worker dispatched by this ruling. The
+constitution is not modified. No owner input required: the fix produces the identical outcome class
+the owner already ruled acceptable, at a cost of two lines and one test branch. D016 does not reopen
+D015's path choice — a per-session pair whose failure modes all terminate in "visibly canceled, save
+honest" is the design working as ruled; this entry closes the one failure mode that terminated
+somewhere silent.
+
+## D016-A - Correction to D016 §5: the authoritative citation range is `TeamsTab.test.tsx:1185-1195`; D016's "correction" was the error
+
+**Filed and ruled by boss-arbiter, 2026-08-06.** Raised by the v4 conformance check (which returned
+DISPATCH on all five D016 questions and cluster-proved the data-loss path closed) as a defect in
+D016's OWN text, reported without a verdict per D015 §6.
+
+**Measured directly before ruling, this time:** `TeamsTab.test.tsx:1185` is the opening
+`it('rejects with the real SupabaseLoaderError when the FK restrict genuinely rejects the delete',`
+line and `:1195` is its closing `});`. `:1184` is a blank line; `:1194` is the final assertion, one
+line short of the block's close. **v3's original `:1185-1195` was exact. D016 §5's mandated
+`:1184-1194` starts on a blank line and truncates the block** — it defeated the purpose (19c
+citation truth) that D016 gave for mandating it.
+
+**Ruled:**
+
+1. **The authoritative range is `:1185-1195`.** D016 §5's bullet is annotated in place (marked, not
+   silently rewritten — the log records what was ruled, including wrongly) and this addendum is the
+   correction of record.
+2. **The foreman folds `:1185-1195` into v4 alongside the two MINOR prose fixes and the NIT already
+   in hand. No re-gate.** The v4 DISPATCH stands: the conformance check judged Q4 against D016's
+   ruled text and was right to; with the ruling corrected, the packet follows the ruling. Requiring
+   a gate instance to confirm two integers whose correctness is measured in this very entry is the
+   over-process item 25 warns against. **Dispatch may proceed once the fold lands.**
+3. **Provenance of the error, recorded because the mechanism matters more than the two integers:**
+   the wrong range originated in the D015 conformance check's "smaller item" ("the real range is
+   `:1184-1194`"), and the arbiter adopted it into D016 unverified — while citing 19c as the reason
+   for the edit. That is 19c's own failure shape ("roughly half of round 1's findings were the
+   author's own unverified line numbers") committed by the agent enforcing it, and the
+   Non-Negotiables' "No agent is above verification, including the boss" applying literally. The
+   working rule this confirms: **a ruling that mandates a citation change must measure the citation
+   itself, even when the change arrives from a checker that was right about everything else in the
+   same report.** D016's main finding was cluster-proven and is untouched by this; being right on
+   the defect does not transfer to being right on a line number.
+4. **The coordinator's handling was correct on all three calls:** not blocking dispatch on a range
+   that still lands inside the intended test; not letting the foreman silently "fix" a number the
+   dispute log said was authoritative the other way; and striking the foreman's own false
+   "off by one line in both directions" sentence without a ruling — foreman prose, conflicting with
+   nothing, is the foreman's to correct.
+
+Also recorded, nothing to rule: the same v4 check tested D016 §3's prediction directly — adding the
+symmetric `.gt('starts_at','now')` to `cancelSession` in the cluster brought the orphan back. The
+time-unguarded cancel and its load-bearing comment are doing real work, as ruled.
+
+Outcome:
+D016 §5 corrected by annotation + this addendum. One two-integer packet edit rides with the pending
+prose fixes; v4's DISPATCH stands; worker dispatch proceeds after the fold. Constitution not
+modified; no owner input required.

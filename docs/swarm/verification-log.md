@@ -10960,3 +10960,126 @@ conforming to an existing ruling rather than making a new decision, and could sh
 ### Gates
 
 Docs only. `tsc` 0 · `format:check` 0 · `vitest` **81 files / 2055 tests** (unchanged).
+
+---
+
+## T604 — stale "frozen" residue in `loaders/endMeeting.ts` — **PASS** (2026-08-05, `3b2ffd5`)
+
+Checker `checker-reviewer` (sonnet), against `docs/swarm/active/T604-checker-packet.md`. NIT only.
+
+Four comments called `EndMeetingDialog.tsx` frozen or forbidden — false since T196 mounted it, doubly
+so since T508 edited it directly. **The substance of those comments was NOT stale and was kept:**
+`EndMeetingDialog.tsx:827-830` still does `error instanceof Error ? error.message : 'Something went
+wrong ending this meeting.'`, and `loader.ts:78-82`/`:116-121` confirm `SupabaseLoaderError` is a
+plain interface, never an `Error` — so the `instanceof` check really does always fall through and a
+coach really does learn nothing about which partial state was reached. The checker re-verified that at
+both ends; a "fix" that deleted the warning with the stale word would have failed C5. Filed as **T607**.
+
+**Comment-only proven, not asserted** — T506 precedent, `ts.transpileModule({removeComments:true})` +
+sha256 across `3b2ffd5~1` vs `3b2ffd5`: `IDENTICAL`, length 12189 both sides. Lines 1-98 byte-identical,
+so T508's correct historical "frozen" note at `:10` was provably untouched.
+
+Sites were relocated **by content**, not by the ledger's line numbers, which had drifted — `:297` is
+now `:299`. Gates run standalone with `$?` captured directly, never through a pipe: typecheck 0,
+format:check 0, lint 0 errors, vitest 2051/2051 across 81 files.
+
+**T602 discharged in the same pass, on evidence.** T508 had already folded it; grepping
+`NOT wired|not yet wired|unwired|forbidden file` over `endMeeting.ts` returns zero matches. No code
+written for T602.
+
+**Two NITs.** (1) The new catch-block citation stopped one line short — `:827-829` → `:827-830`, fixed
+same day. (2) Outside this row's diff, the checker flagged that the subagent-dispatch authorization
+added to `KICKOFF-PROMPTS.md` asserted an owner instruction with no repo-side evidence, and that an
+agent-authored doc claiming standing owner authorization is not owner consent. **Correct, and
+discharged**: the ruling is now recorded verbatim in `auto-mode-decisions.md` and all nine blocks cite
+it instead of asserting it.
+
+---
+
+## T603 — widen the attendance `method` shape to `'self'` — **PASS** (2026-08-05, `b80a9cf`)
+
+HEAVY. Full process: packet → **two** `checker-premise` rounds → `worker-implementer` → `checker-reviewer`.
+All sonnet; none of item 18's opus triggers fire. NIT only.
+
+**The premise gate is the whole story of this row.** The ledger said four narrow copies. The
+orchestrator hand-measured six. **There are seven** — plus a latent eighth. Every undercount came from
+the same anchored `^export type AttendanceMethod` grep, which structurally cannot see
+`loaders/outreach.ts:1258`, an inline `method` property inside `OutreachAttendanceWriteRow`.
+
+Round 1 returned **BLOCKER** because it *compiled* the prescription rather than reading it:
+
+| state | typecheck |
+|---|---|
+| five widened | **exit 2**, 2 errors |
+| six widened — the packet's own prescribed end state | **exit 2**, 4 errors |
+| seven widened | **0** |
+
+A worker obeying v1 could not have reached green: three of those four errors were in files outside its
+Allowed Files and the fourth was explicitly Forbidden. This is an *assignability* break, not an
+exhaustiveness break, so no amount of grepping for `Record<AttendanceMethod>` or a `switch` could ever
+have found it. Round 2 returned **DISPATCH** and, asked to assume the greps were still blind, found the
+eighth copy at `supabase/functions/checkin/attendance_upsert.ts:43`.
+
+**The checker reproduced the baseline itself** instead of accepting reported numbers: lint 366 warnings
+/ 0 errors at both ends with byte-identical normalised reports, vitest **2051/2051** across 81 files at
+both ends, typecheck 0, format:check 0.
+
+**Owner-authorised W2 scope held, verified by hunk:** `numstat` shows `1 1` for all five single-line
+files; `MarkDayCompleteDialog.tsx` has exactly one hunk, `@@ -575 +575 @@`; and `:936` — which appears
+in the mid-fix error list — is **byte-identical to baseline**, having self-resolved once the seventh
+widening landed. Both stale DDL quotes were annotated rather than edited, appearing only as unchanged
+context lines. `resolveAttendanceWriteMethod`'s body is untouched, so `'self'` still falls through to
+`'coach'`: representability only, no behaviour change.
+
+**"One union in one place" was NOT achieved, and the worker's evidence doc says so plainly** — a packet
+requirement, so a later reader cannot mistake this for consolidation. Three narrow copies survive and
+are now all owned by **T608**, whose scope was widened accordingly. The third is the one worth
+remembering: `attendance_upsert.ts:43` sits outside both `tsconfig`'s include and eslint's scope, so no
+gate in this repo will ever catch it.
+
+---
+
+## T510 — edit a meeting series — **PASS** (2026-08-06, `0444798`)
+
+HEAVY. The longest review chain in this project: packet → **two** `checker-premise` rounds → **D015**
+arbitration → conformance check → **D016** arbitration → conformance check → **D016-A** addendum →
+`worker-implementer` → `checker-reviewer`. NIT only.
+
+**Eight independent reviews, none by an agent reviewing its own work. Four found real defects — and
+three of those were faults in the orchestrator's or the arbiter's own decisions, not the worker's.**
+
+**Two data-loss paths, both proven in live Postgres clusters rather than argued.** The first: the
+orchestrator's design deleted RSVPs then the session in one batch, with cancel as the fallback — but
+nothing FK-references `rsvps`, so the `23503` could only ever come from the *session* delete, by which
+point the whole batch's RSVPs were gone. Innocent sessions lost their RSVPs as collateral. The second
+was created by D015's *own* mandated fix: chaining a server-side `starts_at > now` guard onto the
+delete meant a session whose start time crossed mid-save matched zero rows, **raised no error**,
+resolved, and survived as an ordinary `scheduled` row with its RSVPs already destroyed — the save
+reporting success. Neither was visible to any amount of reading; both needed a cluster.
+
+**The resulting asymmetry is deliberate and is the thing most likely to be "fixed" back into a bug:**
+`cancelSession` is permanently time-unguarded while the delete beside it carries `.gt('starts_at',
+'now')`. A conformance check added the symmetric guard and watched the orphan return, so the
+load-bearing comment above it is measured, not asserted.
+
+**The checker earned the verdict rather than relaying it.** It derived its own baselines from a
+worktree at `eaa9070` (366 warnings / 2055 tests) instead of accepting the worker's numbers, and
+verified the 366→370 rise by diffing warning sets keyed on `(file, rule)` — all four are
+`react-refresh/only-export-components` in the single file that already carried nine, mapping to the
+four named new exports. It replayed all three named mutations itself and confirmed the trap the packet
+warned of: dropping `.select('id')` leaves *"X is canceled"* green, because X really is still
+cancelled; Branch F reddens only because `session-y` is *also* wrongly cancelled. A checker expecting
+the obvious assertion to fail would have called a working test vacuous.
+
+Grant A's six properties hold, with the en dash verified by codepoint and `onCreateMeetings` confirmed
+live-wired through `renderAsUser` rather than a dead import — it still guards against an edit silently
+creating a second competing series. MTG-02's tripwire is byte-identical and green, so the Description
+field did not leak out of edit mode. Scope is exactly the six authorized paths and **no W2 file**,
+which also resolves a stale "two W2 files" instruction the orchestrator had carried over from T603 and
+the worker correctly declined to follow.
+
+Gates, each bare with `$?` captured: typecheck 0 · format:check 0 · lint 0 errors · **2087/2087 across
+81 files**.
+
+**NIT, no action:** the worker's evidence doc says "no commit was made", true when written; the
+orchestrator committed afterward at `0444798`, which the checker verified independently.

@@ -172,7 +172,7 @@ import {
 export type AttendanceStatus = 'present' | 'late' | 'excused' | 'absent';
 
 /** How the row was recorded, per the DB check constraint T032 reads/writes against. */
-export type AttendanceMethod = 'qr' | 'coach' | 'import';
+export type AttendanceMethod = 'qr' | 'coach' | 'import' | 'self';
 
 export interface AttendanceInfo {
   status: AttendanceStatus;
