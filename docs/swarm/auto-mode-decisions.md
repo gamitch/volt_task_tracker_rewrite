@@ -3725,3 +3725,60 @@ criterion in the packets written since captures `$?` on the bare command.**
   foreman had declared "already satisfied" by its own verification. **Self-certification by the agent
   that wrote the packet is not a premise gate**, and accepting it would have repeated the original
   error one level up.
+
+---
+
+## 2026-08-05 — George closes out T510's design: the last three questions
+
+Answered against the design proposal after T509 shipped and he applied it. All three went the way the
+proposal recommended, so **T510's design is now fully settled and the row is ready to packet.**
+
+### Check 01 — deleting RSVPs alongside a dropped meeting is acceptable
+
+Verbatim: *"Delete rsvps alongside a dropped meeting is acceptable."*
+
+Confirms the earlier ruling rather than re-opening it. `rsvps.session_id` is `on delete restrict`
+(`20260717000000_scheduling_attendance.sql:69`), so a future session carrying RSVPs cannot be deleted
+while they exist. **A dropped session's RSVPs are deleted first, then the session.** The meeting is not
+happening, so its RSVPs are meaningless. This keeps `status = 'canceled'` meaning only *"a coach
+cancelled this on purpose"* — those stay visible in the list, which is the existing per-session Cancel
+behaviour he asked to keep.
+
+**Bounded by the governing rule:** only sessions that have not yet occurred are ever dropped. If a
+dropped session somehow carries `attendance` rows (also `on delete restrict`), the delete must fall
+back to cancelling rather than failing the coach's save.
+
+### Check 02 — list the removed dates, don't just count them
+
+Verbatim: *"list the dates when something is being removed."*
+
+The proposal offered a bare count (*"3 added · 5 removed · 6 unchanged"*) or the actual dates. He chose
+dates, **conditionally — only when something is being removed.** A pure addition does not need a list.
+This is the confirmation step in front of the one irreversible action in the feature, so the coach sees
+*which* five Thursdays are going, not merely that five are.
+
+### Check 03 — "already happened" means the start time passed, even if nobody ended it
+
+Verbatim: *"'already happened' means a start time passed, even if noone ended it."*
+
+The stricter of the two options. A session is **protected from series edits** when `starts_at` is in the
+past, regardless of whether its status ever moved off `scheduled`. The looser alternative — freeze only
+sessions a coach actually ended — was put and declined.
+
+**The accepted trade-off, stated when the question was put:** a meeting that was scheduled and then
+forgotten is frozen forever as far as a series edit is concerned. It is not stranded, though — it is
+still cancellable individually through the existing per-session Cancel, and can still be ended late
+from the live console. And because it never reached `completed`, it contributes nothing to
+participation either way (T509's view inner-joins `attendance` on `status = 'completed'` sessions).
+
+### The full T510 rule set, now closed
+
+1. **Future-forward only.** A series edit never touches a session whose `starts_at` has passed.
+2. **Title, location, description** — always editable.
+3. **Team scope** — freely editable. T509 removed the hazard; the lock proposed on 5 August is
+   withdrawn and stays withdrawn.
+4. **Range, weekdays and time** — future sessions only.
+5. **Dropped future sessions** — RSVPs deleted, then the session; cancel as a fallback if attendance
+   exists.
+6. **Confirmation before saving** — counts always, plus the explicit list of removed dates whenever
+   anything is being removed.
