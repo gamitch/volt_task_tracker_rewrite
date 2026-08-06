@@ -4092,3 +4092,33 @@ disclosed the hazard and asked for a separate row rather than absorbing it.
 **Standing:** T605 v3 carries T611 as a header-level dispatch precondition — no T605 worker runs until
 T611 has merged. Both packets may now cite **this section** rather than asserting the ordering on
 their own authority.
+
+---
+
+## 2026-08-06 — D017: T611's gate rounds exhausted; arbiter authorizes one closure revision and quarantines a suite-wide test-fixture calendar fuse
+
+T611's packet spent both item-19a `checker-premise` rounds (REVISE twice; round 2: 3 MAJOR,
+2 MINOR, **no BLOCKER** — and round 2 *built and ran* the whole §3 fix: full suite 2095/2095, the
+§6 mutation reddening with a real 2-hour `getTime()` delta). The escalation went to boss-arbiter
+under the D015 precedent. Full ruling: `dispute-log.md` **D017**. What George should know:
+
+- **The fix's design is proven and untouched.** What failed round 2 is verification coverage: two
+  §3 deliverables (the divergence-only disclosure condition, the confirmation-overwrite suffix) had
+  acceptance criteria that could not fail. Both gaps are confirmed and get one-assertion-each
+  closures in a final v3 revision; dispatch then rides on the same narrow conformance-only check
+  that closed out T510 (D015 §6 / D016 §6 — **third use of that instrument**; if you want it
+  written into item 19a's text, that edit is yours to authorize, per D015).
+- **A real four-day fuse sits in the EXISTING test suite, independent of T611.** The arbiter
+  replicated it directly (own worktree, faked clock): `ScheduleMeetingsDialog.test.tsx`'s
+  `RECONCILABLE_SESSION_A` is dated 2026-08-10, so on **2026-08-11 three currently-green tests go
+  red** for purely calendar reasons (a second fixture follows on 2026-08-18) — and any worker in
+  that window would trip a mandatory stop-and-escalate rule through no fault of its own, T605's
+  included. Ruled: an immediate FAST-tier fix (orchestrator, no worker) pins a Date-only fake
+  clock in that test file — measured 57/57 green under exactly that shape — with the test-file
+  modification explicitly boss-approved in D017, a red/green proof required, and the fix merging
+  **before** T611's worker dispatches. Until it merges, those three named calendar reds are
+  pre-ruled not-a-stop for any worker that verifies the cause in its own worktree.
+- **Nothing needed your decision:** no owner-ruled design moves, the T611-before-T605 ordering
+  stands as you recorded it, and every required change is additive verification or disclosure.
+  One pre-existing, out-of-scope hazard (a coach touching only Start time can persist an inverted
+  span) is now disclosed in the packet and gets its own item-20 ledger row rather than a comment.

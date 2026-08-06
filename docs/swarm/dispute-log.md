@@ -1656,3 +1656,175 @@ Outcome:
 D016 §5 corrected by annotation + this addendum. One two-integer packet edit rides with the pending
 prose fixes; v4's DISPATCH stands; worker dispatch proceeds after the fold. Constitution not
 modified; no owner input required.
+
+## D017 - T611 packet: item-19a rounds exhausted at a second REVISE (3 MAJOR, 2 MINOR, no BLOCKER); arbiter authorizes one closure revision under the D015 §6 instrument, and quarantines a suite-wide calendar fuse in the existing tests
+
+**Filed and ruled by boss-arbiter, 2026-08-06.** Escalated by the orchestrator after T611's packet
+(`docs/swarm/active/T611-worker-packet.md`, v2 at `2838681`) consumed both `checker-premise` rounds
+(item 19a) with REVISE both times. Two different gate instances ran; neither wrote the packet.
+Worker attempt count: 0 — this is a gate-rounds exhaustion, not a worker/checker loop, so the Loop
+Limit does not apply and the Dispute Rule does. Same fact pattern as D015; the same disposition
+mechanics are used, deliberately, for the third time (D015 §6, D016 §6, here).
+
+Worker position (the packet's — the foreman's v2 design):
+The §3 fix (option 2, interaction-tracking via a `timeFieldsTouched` flag; new pure
+`buildEditDesiredFutureSessions`; additive second parameter on `buildEditConfirmationDescription`;
+inline divergence disclosure) prevents the silent per-session time rewrite; §5's criteria and §6's
+mutation replay verify it; §4's new fixtures construct the unreachable trigger state.
+
+Checker position (gate round 2 — which BUILT the entire §3 prescription in an isolated worktree and
+ran it: typecheck 0, full suite 2095/2095, dialog file 64 passing = 57 existing unmodified + 7 new,
+§6 mutation reddening with a real `AssertionError: expected 1790024400000 to be 1790031600000`):
+the mechanism is proven; the verification coverage is not. MAJOR-A: §5's disclosure criterion cannot
+fail on the divergence term — with the divergence check removed entirely (warning renders on every
+edit of every series), all 66 tests still passed. MAJOR-B: the §3.3-item-2/§3.6 confirmation-suffix
+deliverable has no §5 criterion at all; the only tests touching `buildEditConfirmationDescription`
+call it with one argument, so the sole verification of the new parameter is that it is inert.
+MAJOR-C: `RECONCILABLE_SESSION_A` in the EXISTING suite expires 2026-08-10 and takes three
+currently-green tests red, tripping §9's stop-and-escalate on an innocent worker. MINOR-D: §7's
+Allowed enumeration omits `buildEditConfirmationDescription`'s own definition (`:716-723`) while
+§3.6 mandates changing its signature. MINOR-E: touching only Start can persist an inverted span
+(end before start) — pre-existing, undisclosed on a HEAVY silent-data-loss row. Round 2's own
+closing line: the findings are "worth one more revision rather than a worker's first attempt."
+
+Boss decision:
+
+**1. All three MAJORs are CONFIRMED — and MAJOR-C was replicated independently before ruling, not
+taken from either side.** Evidence posture, per finding:
+- **MAJOR-A: confirmed by reading v2 §5 directly.** The disclosure bullet requires exactly two
+  assertions — present on the divergent §4 fixtures, absent after touching a time field — and
+  explicitly steers the worker AWAY from the non-divergent fixture ("do not substitute the
+  unmodified `EDIT_INITIAL_DATA` fixture ... for the 'shown' half"). No criterion anywhere asserts
+  absence on a non-divergent series, so the divergence term of §3.3's "only while times genuinely
+  disagree" is uncovered; round 2's executed proof (divergence term deleted, warning rendered
+  unconditionally when untouched, all 66 green) is exactly what that textual gap predicts.
+- **MAJOR-B: confirmed by reading v2 §5 against §3.3/§3.6.** The pure-function bullets cover only
+  `buildEditDesiredFutureSessions`; the component bullets cover the regression proof, the
+  apply-to-all path, the disclosure, and the clearing/disable case. Nothing tests the confirmation
+  suffix. §9's own analysis confirms the only existing tests of the function (AC11/AC12) are
+  one-argument calls. A worker can satisfy every criterion with the mandated deliverable absent, or
+  present and wrong.
+- **MAJOR-C: replicated by this office in its own worktree (item 23), against an UNMODIFIED test
+  file at `2838681`,** via an opt-in Date-only fake clock (`vi.useFakeTimers({ toFake: ['Date'],
+  now: ... })` — timers left real):
+  - clock `2026-08-10T22:00:00Z` → **57 passed** (the file's real count today);
+  - clock `2026-08-11T00:00:00Z` → **3 failed / 54 passed**, the exact three round 2 named:
+    `"opens prefilled from initialData, edit-mode title, and the 'already happened' disclosure
+    (AC10, prefill)"` (non-reconcilable count flips 1→2), `"AC10 (other direction): no disclosure
+    line when every session is still reconcilable"` (SESSION_A is no longer reconcilable, so the
+    disclosure appears), and `"AC-B1: saving with no schedule change preserves every toUpdate
+    session's starts_at/ends_at..."` (`toUpdate` drops `session-a`: `expected [...] to have a
+    length of 2 but got 1`).
+  Root cause confirmed at HEAD: `RECONCILABLE_SESSION_A.startsAt = '2026-08-10T23:00:00.000Z'`
+  (test file `:907`), `RECONCILABLE_SESSION_B.startsAt = '2026-08-17T23:00:00.000Z'` (`:914` — the
+  second fuse, one week later), and the dialog reconciles against a real `new Date()` at `:807`,
+  `:888`, `:936` with no fake clock anywhere in the test file. The fuse is real, it is in the
+  EXISTING suite, and §9 as written would oblige an innocent worker to stop and escalate for a
+  calendar event it did not cause.
+- Both MINORs confirmed by reading: §7's Allowed parenthetical enumerates §3's edit regions
+  exhaustively and omits the `:716-723` definition §3.6 requires changing, then closes "every other
+  line stays byte-identical" — a packet that mandates an edit its own Allowed list forbids. By
+  round 1's own yardstick (its MAJOR-2 was this identical omission shape, one function over) this
+  is MAJOR-shaped; it is not re-graded here because it lands in v3 either way. MINOR-E's inverted
+  span is pre-existing and out of this row's scope, but a HEAVY silent-data-loss row discloses its
+  known adjacent hazards; it gets a disclosure line and an item-20 ledger row, below.
+
+**2. What is settled stays settled.** Round 2 built and ran the §3 prescription: the design (option
+2, interaction-tracking), the HEAVY tier, the sonnet worker, the T611-before-T605 ordering (owner's
+recorded instruction), and the no-change findings on `computeMeetingSeriesReconcilePlan`,
+`loaders/meetings.ts`, and `MeetingsList.tsx` are all confirmed by execution or byte-exact
+comparison. **None of it is reopened by this entry, and v3 may not touch it.** The failure is
+verification coverage, not mechanism.
+
+**3. One final revision (v3) is AUTHORIZED. No third premise round runs. No owner input is
+required.** Grounds: this is D015's fact pattern verbatim (rounds spent, zero worker attempts,
+Dispute Rule engaged); round 2 returned zero BLOCKERs and itself judged the residue worth one more
+revision; every required fix is additive and closed-form — two test criteria, one Allowed-list
+clause, and disclosures — and none touches anything owner-ruled or gate-settled. Item 19a's
+economics are respected: what runs against v3 is not a premise round but the narrow conformance
+instrument (§6 below), which D015 established and D016/D016-A proved twice. On 19a's literal text
+("a third REVISE escalates to the human owner"): no third round exists to produce one, and D015
+already interpreted this situation as the arbiter's to dispose of, with the owner's veto channel
+being the decisions log. The constitution is deliberately NOT amended, same as D015; if the owner
+wants the instrument ratified into 19a's text after three uses, that is his edit to authorize.
+
+**4. v3 requirements (the foreman's edit, not mine — the packet is the foreman's):**
+- **(a) MAJOR-A closure.** §5's disclosure test gains a third mandatory assertion: with a
+  NON-divergent fixture — the unmodified `EDIT_INITIAL_DATA` is named and sufficient; its three
+  sessions share one 18:00–20:00 CDT wall time by construction — and zero interaction with either
+  time field, the §3.3 divergence disclosure is ABSENT. Together the three assertions pin both
+  terms of §3.3's conditional: divergent+untouched → shown; divergent+touched → absent;
+  non-divergent+untouched → absent. (Distinguish the assert from AC10's separate "already
+  happened" disclosure, which `EDIT_INITIAL_DATA`'s `PAST_SESSION` does render.)
+- **(b) MAJOR-B closure.** §5 gains criteria for `buildEditConfirmationDescription`'s second
+  parameter: (i) **component-level, exercising the real `AlertDialog` call site** — with the §4
+  divergent fixtures and a touched time field, the rendered confirmation description contains the
+  overwrite suffix (exact copy is the worker's, but it must state that session times will be
+  overwritten); (ii) the untouched path yields today's exact one-argument output byte-for-byte
+  (unit-level on the two-argument call with the flag false is acceptable; AC11/AC12 remain the
+  one-argument back-compat proof and stay untouched). A named mutation must redden (i) — e.g.
+  reverting the call site to one argument, or hardcoding the suffix off.
+- **(c) MAJOR-C disclosure.** §4/§9 name the `RECONCILABLE_SESSION_A`/`_B` fuses with their dates,
+  cite this entry, drop the "other already-passing tests" framing, and state the new dispatch
+  precondition: **T611's worker does not dispatch until ruling 5's fuse fix has merged**, at which
+  point §8's baseline is re-confirmed green.
+- **(d) MINOR-D closure.** §7's Allowed bullet adds `buildEditConfirmationDescription`'s own
+  definition (`:716-723`, the §3.6 additive signature change) to the enumeration, so the packet no
+  longer forbids an edit it mandates.
+- **(e) MINOR-E closure.** §3.4's measured-consequences list gains the inverted-span disclosure
+  (consequence 2's touch-only-Start path can persist an end that precedes its start; pre-existing
+  class, not this row's to fix). The underlying defect gets an **item-20 ledger row** (foreman
+  files it; it is NOT a T611 dispatch blocker and most plausibly lands with or near T605's
+  per-session editing territory, where a per-row time UI makes span validation buildable).
+- **(f) Nothing else changes.** The v2→v3 diff is confined to (a)-(e) plus mechanical §0-table and
+  cross-reference updates. Anything settled by rounds 1-2 that moves in the diff is a conformance
+  failure.
+
+**5. The calendar fuse is bigger than T611 and is quarantined for the whole suite:**
+- **Fix vehicle: FAST tier under item 26, implemented by the orchestrator directly** — test
+  infrastructure only, no write path, a handful of lines, and a named red/green proof exists
+  (below). **Primary remedy, proven viable by this ruling's own experiment: pin a Date-only fake
+  clock at the top of `ScheduleMeetingsDialog.test.tsx`** — `vi.useFakeTimers({ toFake: ['Date'],
+  now: new Date('2026-08-06T12:00:00Z') })` (or another fixed instant in the fixture era; timers
+  stay real). Measured here: the full file runs 57/57 green under exactly this shape, with zero
+  fixture or assertion edits, and the file never expires again. Fallback remedy if the pin
+  misbehaves under the full suite: static refresh of `RECONCILABLE_SESSION_A`/`_B` to dates months
+  out, wall times and CDT regime preserved. **Boss approval for this existing-test-file
+  modification is GRANTED by this entry** (the Non-Negotiable's own override mechanism; D003
+  precedent). Required proof: pin temporarily set to `2026-08-11T00:00:00Z` reproduces exactly the
+  three reds above; pin at the chosen date → 57 green; full suite green; both outputs reported in
+  the PR per item 26's FAST rules (commit before mutating).
+- **Sweep, same PR:** grep the rest of the suite for real-clock-relative future fixtures; report
+  findings. Fix only fuses shorter than ~60 days, under this same approval; file item-20 rows for
+  anything longer that is left in place.
+- **Sequencing: the fix merges BEFORE T611's worker dispatches** (it touches T611's own Allowed
+  test file, and §8's `npm test → EXIT:0` baseline must hold through and past 2026-08-10). T605
+  sits behind T611 and is protected automatically.
+- **Interim pre-authorization, until the fix merges:** any worker or checker on any row that finds
+  exactly these three named tests red at an unmodified HEAD, and green with the clock faked before
+  `2026-08-10T23:00:00Z` in its own worktree (item 23), is pre-ruled NOT in a §9 stop condition
+  and NOT in violation of "Existing tests must pass ..." — it cites this entry, records the
+  observation, and continues if its own gates can still be discharged. If its packet makes the
+  full-suite exit code load-bearing (as T611 §8 does), it pauses for the fuse fix rather than
+  filing a `boss-architect` ruling request. No test edits by that worker under this
+  pre-authorization — the fix is the orchestrator's FAST task, exactly once.
+
+**6. Dispatch after v3 — the D015 §6 instrument, charter for this entry.** A FRESH
+`checker-premise` instance (not the foreman, not either prior gate instance) runs a conformance-only
+check answering six questions: **(Q1)** ruling 4(a)'s non-divergent absence assertion present and
+mandatory; **(Q2)** 4(b)'s two suffix criteria present, (i) at the real call site, with a named red
+mutation; **(Q3)** 4(c)'s fuse disclosure and the merge-before-dispatch precondition present;
+**(Q4)** 4(d)'s Allowed-list clause present; **(Q5)** 4(e)'s disclosure present and the item-20
+ledger row filed; **(Q6)** the v2→v3 diff confined per 4(f). DISPATCH satisfies Definition of Ready
+item 1 literally; REVISE returns to the arbiter, not into a loop; a new finding outside the charter
+is reported to the arbiter without a verdict — the channel D016 and D016-A already proved works.
+
+Outcome:
+Packet returns to the foreman for v3 per ruling 4. No worker dispatched by this ruling; dispatch
+requires BOTH the Q1-Q6 conformance DISPATCH and ruling 5's fuse fix merged. The calendar fuse gets
+an immediate FAST-tier fix with boss-approved test-file modification, plus an interim §9
+pre-authorization protecting T611's and T605's workers. Constitution not modified (D015's stance
+preserved; instrument now used three times — ratification into 19a's text remains available to the
+owner). No owner input required: nothing owner-ruled moves, and every fix is additive verification
+or disclosure. Round 2's execution-based method — building the prescription and mutating it — is
+what made this dispute cheap to rule; both gate instances' substantive work stands confirmed.
