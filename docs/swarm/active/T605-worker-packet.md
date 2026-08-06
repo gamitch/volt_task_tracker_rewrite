@@ -1,19 +1,19 @@
 # Worker Packet: T605 — edit one meeting session (date, time, notes) and cancel it from the edit flow
 
-**Packet v2 — REVISED per `checker-premise` round 1.** Attempt count: 0 — no worker has run against any
-version of this packet. Per item 19a this gate is capped at two rounds; a second REVISE on v2 escalates to
-`boss-arbiter`. **v2 still goes to a fresh `checker-premise` pass before any worker sees it** — this
-revision does not self-certify. Do not commission a checker-reviewer packet in the same call as worker
-dispatch (`swarm-run` steps 4→5 are separate commissions, written after the worker's own output exists).
+**Packet v3 — FINAL. `checker-premise` round 2: DISPATCH.** Item 19a's two rounds are spent; this packet
+is not revised further on findings of this class. Attempt count: 0 — no worker has run against any version
+of this packet.
 
 **Row:** T605 (`task-ledger.md`, filed 2026-08-05) · **Tier: HEAVY** (constitution item 26 — real write
 path to `event_sessions`) · **Worker model: sonnet** (no item 18 opus trigger fires) · **Branch:**
 `claude/w3-meeting-workflow-0bl669`. This machine holds **W1 + W3**. *(Tier and model reasoning confirmed
 exact by round 1 — not reopened.)*
 
-**Dependency:** T510 (series edit) merged to `main`, PR #108. **T609 (dead Notes-field fix, see §3.6) is
-independent of T605 and, per this gate round, already lands separately** — verify its state at dispatch
-time (§8).
+**Dependency:** T510 (series edit) merged to `main`, PR #108. **T609** (dead Notes-field fix, see §3.6) is
+independent of T605 and already lands separately — verify its state at dispatch time (§8), it does not
+block dispatch either way. **T611 (see §3.10/§9.4) is a HARD BLOCKING DEPENDENCY, owner-ruled: T605 does
+not dispatch to a worker until T611 has merged.** This is a dispatch precondition, not a worker-side
+judgment call — if T611 has not merged, this packet is not run.
 
 ---
 
@@ -34,7 +34,7 @@ reasoning (header), and that `isMeetingSessionReconcilable` compiles when import
 | M4 | MAJOR | T609 (owner-ordered, independent) already fixes the dead-Notes-field issue v1's §2.6/§7.1/§8.3 were built around; v1's §7.1 would have made the worker re-report an already-filed-and-fixed defect | **Landed.** §3.6/§8/§9 rewritten: T609 and T605 ruled independent/complementary (T605's own dialog has its own `TextArea`, never touches the series dialog's Notes field); worker instructed to confirm T609's landed state and NOT re-report/re-fix it; polarity noted (`:1021` gates Description **on** `isEditMode`; T609 gates Notes **on** `!isEditMode`). |
 | m1 | MINOR | §2.7 (v1) citation should be `:761-770`, not `:745-770` | **Landed** (§3.7). |
 | m2 | MINOR | Add `MeetingsList.tsx:1815` and `:1881` to the `onCancelRequest` thread — both are real call sites inside `buildCoachMeetingColumns` (narrow + wide) | **Landed**, verified directly — both lines call `renderMeetingSessionDetailCell(row, onCancelRequest)` (§6.2). |
-| m3 | MINOR | `PAST_SESSION` (`ScheduleMeetingsDialog.test.tsx:921-927`) is `status: 'completed'`, so it cannot serve test 2(c)'s "scheduled but expired" case; also convert line-range test citations to name/content per §6/§7's own rule | **Landed.** §7 test 2(c) gets its own fixture (status `'scheduled'`, past `startsAt`) distinct from a completed/canceled one. All test citations in §7 converted to describe/it/fixture names. |
+| m3 | MINOR | `ScheduleMeetingsDialog.test.tsx`'s `PAST_SESSION` fixture is `status: 'completed'`, so it cannot serve test 2(c)'s "scheduled but expired" case; also convert line-range test citations to name/content per §6/§7's own rule | **Landed.** §7 test 2(c) gets its own fixture (status `'scheduled'`, past `startsAt`) distinct from a completed/canceled one. All test citations in §7 converted to describe/it/fixture names. |
 | m4 | MINOR | `SaveMeetingSessionPayload` defined in both §5.3 and §5.4 (v1) — pick one home | **Landed.** Owned solely by the new dialog file (§6.4), mirroring `SaveMeetingSeriesPayload`'s ownership by `ScheduleMeetingsDialog.tsx`. `loaders/meetings.ts` imports it via `import type` only. |
 | m5 | MINOR | The rejection message ("it may have already started") is not always true — an RLS-blocked (non-staff) UPDATE also returns zero rows | **Landed.** Reworded to cover both causes honestly (§6.3). |
 | m6 | MINOR | No `end > start` validation — the DB accepts a negative interval and `v_planned_rsvp_hours` would carry negative hours | **Landed** in `computeMeetingSessionEditPayload` (§6.5). |
@@ -42,6 +42,27 @@ reasoning (header), and that `isMeetingSessionReconcilable` compiles when import
 | m8 | MINOR | Give the full path for `StudentDialog.tsx` | **Landed** — `src/pages/roster/StudentDialog.tsx` everywhere. |
 | m9 | MINOR | Require `import type` on new cross-file type imports — `loaders/meetings.ts` ↔ `MeetingsList.tsx` is already a runtime value cycle; the new dialog file must not close a third edge | **Landed** — mandated explicitly in §6.3/§6.4. |
 | — | Named risk | `maxAffected()` (shipped in installed `postgrest-js@2.110.7`) must not be adopted — depends on a PostgREST version this repo has not verified against hosted Supabase | **Landed** as an explicit "do not use" note in §6.3/§8. |
+
+## 0b. Gate round 2 (`checker-premise`, re-proved both round-1 blockers closed on a live cluster; applied
+§6.1/§6.2 in an isolated worktree — `npm run typecheck` exit 0, `npm test` 81 files / 2088 passed, zero
+edits to any existing test; confirmed no T609 citation drift, every `ScheduleMeetingsDialog.tsx` citation
+resolves above T609's `:1139` hunk) — **DISPATCH.** 6 MINOR, 3 NIT. Disposition table.
+
+**Confirmed exact, not reopened in v3:** everything round 1 confirmed, plus that a worker can reach a
+fully green tree applying §6.1/§6.2 alone, and that no existing `ScheduleMeetingsDialog.tsx` citation in
+this packet is disturbed by T609's own edit.
+
+| # | Severity | Finding | Disposition in v3 |
+|---|---|---|---|
+| MINOR-1 | MINOR | §9.4 (v2) ruled Known Risk 4 "accepted-and-disclosed for T605's own ship." **T611's ledger row rules the opposite** — filed after v2 was written, it requires T611 to land with or before T605 so T605 does not ship a feature the next title edit quietly deletes. The owner has ruled: T611 lands first | **Landed.** §9.4 rewritten: T611 cited by number, "accepted-for-ship" framing dropped — T605 no longer ships this hazard because T611 closes it first. Added the write-path citation the gate found and v2 lacked: `loaders/meetings.ts:705` (`updateSessionTime`), applied per `plan.toUpdate` at `:839`. New §3.10 records the T611 dependency as a verified fact; header and §5/§8/§10 updated to make it a hard blocking dependency, not a worker-side judgment call. |
+| MINOR-2 | MINOR | §6.2's five-site `onEditRequest` threading list implies completeness, then only says "call the injected mutation" for the save seam — but §7 test 4 requires `onSaveMeetingSession` be asserted as called, which is only possible if it is an injectable prop. Mirror: `MeetingsListProps.onSaveMeetingSeries?` (`:2729`), defaulted (`:2757`), forwarded (`:2788`), required on `CoachMeetingsViewProps` (`:2031`), consumed (`:2046`/`:2195`) | **Landed** — §6.2 now states the `onSaveMeetingSession` threading explicitly, with the mirrored citations, as its own numbered requirement rather than leaving it implicit. |
+| MINOR-3 | MINOR | §6.3 told the worker to reimplement `chicagoWallTimeToUtcIso` locally citing this codebase's cross-file reimplementation convention — but that convention was established between files that do NOT import each other, and §6.2 already requires a runtime import from `./ScheduleMeetingsDialog`, where the function is exported at `:466`. The stated reason does not hold here | **Landed** — §6.3 rewritten: the import option is named and explicitly declined for pair-cohesion with the non-exported reverse direction (`formatChicagoWallTime`, `:694`, which must be local regardless), not because of an inapplicable convention. |
+| MINOR-4 | MINOR | `T511_ROW` (`MeetingsList.test.tsx:2813+`) has two genuinely reconcilable sessions today (`sess-live-1` 2026-09-02, `sess-live-2` 2026-09-09), so the new Edit affordance renders inside the existing T511 test block too. Nothing asserts on it (measured green), but it silently stops rendering there after 2026-09-09 | **Landed** — §7 now discloses this explicitly and instructs the worker not to add assertions in that block. |
+| MINOR-5 | MINOR | `computeMeetingSessionEditPayload` derives `endsAt` from the same `date` as `startsAt`, so a session crossing local midnight can never satisfy `endsAt > startsAt` — Save stays permanently disabled behind a confusing message. Not a regression (`buildEventSessionsPayload`, `:475-488`, has the identical shape); this task's new inline error surfaces it for the first time | **Landed** — one-line disclosure added to §6.5. |
+| MINOR-6 | MINOR | Known Risk 2's "no unique constraint on `(event_id, session_date)`" is correct but stated as asserted, not measured — `\d public.event_sessions` shows only the PK and the status check | **Landed** — §9.2 reworded to state this was measured. |
+| NIT-1 | NIT | Round-1 table's m3 row cites `ScheduleMeetingsDialog.test.tsx:921-927` for a fixture — a line range, against §7's own rule (defensible there since it quotes the gate's own finding rather than instructing a worker, but cleaner named) | **Landed** — reworded to name the `PAST_SESSION` fixture alone. |
+| NIT-2 | NIT | §6.2 item 3's range is wrong: the interface is `:1765-1775` and the destructure `:1796-1802` (`onCancelRequest` at `:1800`), not the bundled `:1765-1799` | **Landed** — split into the two correct ranges. |
+| NIT-3 | NIT | §6.2 attributes *"still cancellable individually"* to George verbatim; it is the decisions log's own narration of the trade-off (`auto-mode-decisions.md:3770`), inside a section recording his rulings, not a quote from him | **Landed** — attributed to the log's narration, not to George directly. |
 
 ---
 
@@ -227,6 +248,15 @@ month onward, **zero** of them satisfy `isMeetingSessionReconcilable` — the de
 `loadCoachData`) has **no session the new Edit affordance would ever appear on**. Required tests (§7)
 must supply their own additive fixture; they cannot reuse `FIXTURE_SESSIONS` for the reconcilable case.
 
+**3.10 T611 is a hard blocking dependency, owner-ruled, not this packet's to relax.** T611's own ledger
+row states the hazard this packet discloses as Known Risk 4 (§9.4) must not ship ahead of its fix: *"this
+must land with or before T605, or T605 ships a feature whose result the next title edit quietly
+deletes."* The owner has ruled T611 lands first. **This packet is not dispatched to a worker until T611
+has merged** — verify the merge (a real commit SHA on `main` or this branch, not a packet/ledger row
+claiming intent) before proceeding; if it has not merged, stop and report rather than starting T605's own
+work or attempting T611's fix. T611's own fix lives inside `ScheduleMeetingsDialog.tsx` (Forbidden here,
+§5) — T605 does not build it under any circumstance, merged or not.
+
 ---
 
 ## 4. Allowed Files
@@ -240,10 +270,12 @@ must supply their own additive fixture; they cannot reuse `FIXTURE_SESSIONS` for
 ## 5. Forbidden Files
 
 - `src/pages/meetings/ScheduleMeetingsDialog.tsx` and `ScheduleMeetingsDialog.test.tsx` — T510's
-  already-arbitrated (D015/D016) territory, and now also T609's. Read-only reference for
+  already-arbitrated (D015/D016) territory, and now also T609's and T611's. Read-only reference for
   `isMeetingSessionReconcilable` (import it) and layout/precedent citations. **Do not fix or touch
-  anything related to T609** (§3.6) — verify its landing state, do not act on it. **Do not attempt to fix
-  the M3 hazard (§9, Known Risk 4)** — it lives entirely in this file's already-arbitrated logic.
+  anything related to T609** (§3.6) — verify its landing state, do not act on it; it does not block
+  dispatch. **Do not fix or touch anything related to T611** (§3.10/§9.4) — it DOES block dispatch (a
+  hard precondition, verified before this packet runs at all), but the fix itself is never this packet's
+  to build, merged or not.
 - `src/pages/meetings/LiveConsole*.tsx`, `LiveConsole*.test.tsx`, `Kiosk.tsx`, `EndMeetingDialog.tsx`.
 - `supabase/migrations/**` — no migration in this task.
 - `src/lib/supabase/loader.ts` — shared seam, import only (`runMutation`, `createLoader`,
@@ -302,20 +334,36 @@ Inside `CoachMeetingSessionRow` (`:1597-1694`), within the existing
   `:1686`), structurally distinct from the series-level `` `Edit – ${row.title}` `` chip (`:1533`, en
   dash) already on the same expanded row.
 - Gating on `isMeetingSessionReconcilable` (stricter than Cancel's `status === 'scheduled'` alone) is
-  deliberate: a `scheduled`-but-expired session keeps Cancel (George's "still cancellable individually"
-  fallback) but must not show Edit.
+  deliberate: a `scheduled`-but-expired session keeps Cancel — per the decisions log's own narration of
+  the accepted trade-off (`auto-mode-decisions.md:3770`, inside the section recording George's rulings,
+  but this specific sentence is the log's own writing, not a quote from him: *"it is not stranded,
+  though -- it is still cancellable individually through the existing per-session Cancel"*) — but must
+  not show Edit.
 
 **Threading `onEditRequest` — five sites, corrected to include both column-factory call sites (fixes
 m2):** same signature shape as `onCancelRequest`, `(eventId: string, eventTitle: string, session:
 CoachMeetingSessionDetail) => void`, added alongside it at every one of:
 1. `CoachMeetingSessionRow` props (`:1607-1612`).
 2. `renderMeetingSessionDetailCell`'s own signature (`:1746-1763`).
-3. `BuildCoachMeetingColumnsArgs` / `buildCoachMeetingColumns`'s destructured args (`:1765-1799`).
+3. `BuildCoachMeetingColumnsArgs`'s interface (`:1765-1775`) and `buildCoachMeetingColumns`'s own
+   destructured args (`:1796-1802`, `onCancelRequest` itself at `:1800`) — two adjacent but distinct
+   ranges, not one bundled span.
 4. **Both** `renderMeetingSessionDetailCell(row, onCancelRequest)` call sites inside
    `buildCoachMeetingColumns` — the narrow-viewport card branch (`:1815`) **and** the wide-viewport
    `title` column (`:1881`). Verified directly: these are two distinct call sites, not one.
 5. `CoachMeetingsSection` (`:1926-1975`, including its `useMemo` deps at `:1974`) and the two
    `<CoachMeetingsSection>` call sites in `CoachMeetingsView` (`:2287-2308`).
+
+**`onSaveMeetingSession` must be threaded as an injectable prop, not called directly from a hardcoded
+import — required for §7 test 4 to be assertable at all.** Mirror `onSaveMeetingSeries`'s own identical
+four-point thread exactly: `MeetingsListProps.onSaveMeetingSeries?` (`:2729`), defaulted to the real
+loader export (`:2757`), forwarded to `<CoachMeetingsView>` (`:2788`); `CoachMeetingsViewProps.
+onSaveMeetingSeries` required, non-optional (`:2031`), destructured and consumed inside
+`handleSaveMeetingSeriesSubmit` (`:2046`/`:2195`). `onSaveMeetingSession` gets the same four-point
+thread: an optional `MeetingsListProps.onSaveMeetingSession?` defaulted to `saveMeetingSession`
+(§6.3) and forwarded into `<CoachMeetingsView>`; a required `CoachMeetingsViewProps.onSaveMeetingSession`
+consumed by `handleSaveMeetingSessionSubmit` below. Without this, a test cannot inject a `vi.fn()` in
+its place, and §7 test 4's assertion has nothing to assert against.
 
 **In `CoachMeetingsView`:**
 
@@ -448,12 +496,23 @@ export const saveMeetingSession: OnSaveMeetingSessionFn = makeSaveMeetingSession
 `@supabase/postgrest-js@2.110.7` — it depends on a PostgREST server version this repo has not verified
 against hosted Supabase. If a worker finds it while reading the installed package, do not use it here.
 
-Wall-time ↔ UTC conversion (`chicagoWallTimeToUtcIso` and its reverse) belongs in the **new dialog file**
-(§6.4), reimplemented locally per this codebase's established convention (`OutreachEventDialog.tsx`/
-`OutreachDetail.tsx` each reimplement the identical pair independently) rather than importing
-`ScheduleMeetingsDialog.tsx`'s copies. Prove behavioral parity against the same two cases
+**Wall-time ↔ UTC conversion — the import option exists and is deliberately declined for pair-cohesion,
+not because of a convention that applies here (corrects v2's framing, MINOR-3).** `chicagoWallTimeToUtcIso`
+IS exported (`ScheduleMeetingsDialog.tsx:466`), and §6.2 already requires a runtime import from
+`./ScheduleMeetingsDialog` for `isMeetingSessionReconcilable` — so citing this codebase's
+cross-file-reimplementation convention (`OutreachEventDialog.tsx`/`OutreachDetail.tsx` reimplement the
+identical pair independently) does not actually hold here: that convention was established between files
+that do NOT already import each other, and this file already does. **The real reason to reimplement it
+locally in the new dialog file (§6.4) is pair-cohesion:** its reverse direction,
+`formatChicagoWallTime` (`ScheduleMeetingsDialog.tsx:694`), is deliberately NOT exported (needed to derive
+the dialog's initial `TimeInput` values from `session.startsAt`/`endsAt`), so that half must be local
+regardless — keeping the conversion pair together in one file, both written the same way, is the
+defensible choice, not an inapplicable convention. A worker preferring to import
+`chicagoWallTimeToUtcIso` and only reimplement `formatChicagoWallTime` is not wrong on the facts; keeping
+both local is this packet's stated preference. Prove behavioral parity against the same two cases
 `ScheduleMeetingsDialog.test.tsx`'s own `describe('chicagoWallTimeToUtcIso', ...)` block proves
-(`'2026-07-22'+'18:00' → '2026-07-22T23:00:00.000Z'` CDT; the January CST case).
+(`'2026-07-22'+'18:00' → '2026-07-22T23:00:00.000Z'` CDT; the January CST case) regardless of which choice
+is made.
 
 ### 6.4 New file: `src/pages/meetings/EditMeetingSessionDialog.tsx`
 
@@ -577,6 +636,16 @@ export function sessionDateCollidesWithSibling(
 false. Surface *which* validation failed as an inline message near the relevant field(s) — the coach
 needs to know why, not just that Save is disabled.
 
+**Disclosure, not a defect to fix (MINOR-5):** because `endsAt` is derived from the SAME `date` as
+`startsAt`, a session genuinely crossing local midnight (e.g. 11 PM start, 1 AM end) can never satisfy
+`endsAt > startsAt` here, and Save stays permanently disabled behind a message that reads like a mistake
+rather than an unsupported case. This is not a regression this task introduces —
+`buildEventSessionsPayload` (`ScheduleMeetingsDialog.tsx:475-488`) has the identical same-date-for-both
+shape in the create path today, silently producing the same inverted interval with no validation at all.
+This task's new inline error is simply the first place in the app that surfaces the limitation instead of
+storing a nonsensical row unnoticed. Do not attempt to fix midnight-crossing sessions in this task — it is
+a pre-existing, wider limitation than T605's own scope.
+
 ---
 
 ## 7. Verification requirements
@@ -659,13 +728,30 @@ real `Date.now()` at test-run time (e.g. `+30` days) — never a bare hardcoded 
     this task's changes required zero edits to any existing test's assertions. If the worker believes an
     existing test's assertion is forced to change, it **stops and files a dispute** — see §8.
 
+**Disclosure (MINOR-4), not an action item:** the existing `T511_ROW` fixture
+(`MeetingsList.test.tsx:2813+`) has two genuinely `scheduled` sessions dated in its own future
+(`sess-live-1`, 2026-09-02; `sess-live-2`, 2026-09-09) — the new Edit affordance from §6.2 **will render
+inside those existing T511 tests too**, since nothing about it is gated to the new describe block. Verified
+green today because nothing in that block currently asserts on the Edit button one way or the other. **Do
+not add any Edit-related assertion inside the T511 describe block** — this task's own required coverage
+belongs entirely in the new, clock-anchored describe block above. `T511_ROW`'s own dates will age past
+2026-09-09 like `FIXTURE_SESSIONS`' already have (§3.9); that is a pre-existing pattern in this file, not
+something this task fixes.
+
 ---
 
 ## 8. What this worker must NOT do, and where genuine judgment calls stop
 
 1. **T609 is not this packet's territory.** Verify it has landed (§3.6); do not re-fix or re-report the
    dead-Notes-field finding regardless of what you find — if it has not landed, report the mismatch and
-   stop rather than acting on `ScheduleMeetingsDialog.tsx` yourself (Forbidden either way, §5).
+   stop rather than acting on `ScheduleMeetingsDialog.tsx` yourself (Forbidden either way, §5). T609 does
+   NOT block dispatch.
+1b. **T611 (§3.10) is a HARD blocking dependency and is not this packet's territory either.** Verify T611
+   has actually merged (a real commit, not a filed intent) before doing anything else in this packet. If
+   it has not merged, stop immediately and report that — do not proceed with any part of T605, and do not
+   attempt T611's own fix yourself even temporarily. This is a dispatch precondition; a worker finding
+   itself running this packet before T611 merged means the precondition was not checked upstream, and that
+   is itself worth reporting.
 2. **Do not build per-session location editing** — that is T606, gated on a migration.
 3. **Do not modify any existing test's assertions.** If this task's own required behavior seems to force
    an existing test's assertion to change, stop, state exactly which test (by name and content) and why,
@@ -679,9 +765,12 @@ real `Date.now()` at test-run time (e.g. `+30` days) — never a bare hardcoded 
 4. **This packet does not authorize any test amendment.** Only a `boss-architect` ruling (recorded in
    `docs/swarm/auto-mode-decisions.md`, citable by name) can authorize changing an existing test. None is
    anticipated (§7, test 11), and none is granted here.
-5. **Do not attempt to fix Known Risk 4 (§9)** — the per-session-time-divergence hazard T605 creates for
-   T510's series edit to silently destroy. The fix lives inside `ScheduleMeetingsDialog.tsx`'s
-   already-arbitrated logic (Forbidden). Disclose it in the worker's own output; do not touch it.
+5. **Do not attempt to fix Known Risk 4 (§9.4)** — the per-session-time-divergence hazard T605 would
+   otherwise create for T510's series edit to silently destroy. Per the owner's ruling, **T611 closes this
+   hazard by landing before T605 ever runs** (§1b/§3.10) — this packet's worker never has to see the
+   hazard live, because dispatch itself is blocked until T611 has merged. Confirm in the worker's own
+   output that T611's fix is present (§3.10) rather than re-deriving or re-verifying the hazard from
+   scratch; do not touch `ScheduleMeetingsDialog.tsx` regardless.
 6. **Do not adopt `postgrest-js`'s `maxAffected()`** (§6.3) even if found while reading the installed
    package — unverified against this repo's actual hosted PostgREST version.
 
@@ -693,38 +782,41 @@ real `Date.now()` at test-run time (e.g. `+30` days) — never a bare hardcoded 
    `starts_at` crosses `now`, or its status changes, in the window between the dialog opening and Save,
    the write's own DB-level guard (§6.3) makes the save **reject with an explicit error** — never a
    silent no-op, never a corrupted write.
-2. **Duplicate-date guard is application-level only.** No unique constraint exists on
-   `(event_id, session_date)`, so two coaches concurrently retargeting two different sessions of the same
-   series onto the identical date could both pass the app-level check and both write — reproducing, for
-   real, the exact `computeMeetingSeriesReconcilePlan` ambiguity §3.5 cites. Narrow; accepted rather than
-   closed with a migration, consistent with this task's no-migration boundary. A schema-level fix belongs
-   with T606's migration wave.
-3. **T609 (§3.6) is independent and, per this gate round, already resolves the dead Notes-field issue** —
-   not a residual risk of this task; recorded here only so a reader of this section does not go looking
-   for it as one.
-4. **NEW (M3) — T605 makes per-session time divergence reachable for the first time, and T510's series
-   edit silently destroys it.** Every session in a series today shares one wall time by construction.
-   Once a coach uses this task's dialog to give one session a genuinely different time,
-   `ScheduleMeetingsDialog.tsx`'s `resetForm()` derives a single shared `startTime`/`endTime` from only
-   the *earliest* reconcilable session (`:811-827`), and `handleSubmit` reapplies that ONE time to every
-   date via `buildEventSessionsPayload(sessionDates, startTime, endTime, '')` (`:932`) — so the next time
-   **anyone** saves the series (even a title-only save; `isValid` in edit mode is title-only per
-   `:879-881`), the coach's per-session time edit is silently overwritten back to the shared time, with
-   the confirmation copy reporting only "N session(s) kept," no warning that a time changed. **Ruled
-   here, not silently absorbed:** accepted-and-disclosed for T605's own ship — the alternative would
-   block a small, high-value fix behind reopening `ScheduleMeetingsDialog.tsx`'s already-arbitrated
-   (D015/D016) design, which this packet does not authorize. **This is flagged to the boss/owner as a
-   required follow-up ledger row**, at a severity matching D015's own bar (silent, undisclosed
-   state loss from an interaction between two shipped features) — not something the worker or this
-   packet closes out unilaterally.
+2. **Duplicate-date guard is application-level only — measured, not assumed.** `\d public.event_sessions`
+   shows only the primary key and the `status` check constraint: no unique index on
+   `(event_id, session_date)` exists. So two coaches concurrently retargeting two different sessions of
+   the same series onto the identical date could both pass the app-level check and both write —
+   reproducing, for real, the exact `computeMeetingSeriesReconcilePlan` ambiguity §3.5 cites. Narrow;
+   accepted rather than closed with a migration, consistent with this task's no-migration boundary. A
+   schema-level fix belongs with T606's migration wave.
+3. **T609 (§3.6) is independent and, per the checker's own gate rounds, already resolves the dead
+   Notes-field issue** — not a residual risk of this task; recorded here only so a reader of this section
+   does not go looking for it as one.
+4. **T605 makes per-session time divergence reachable for the first time — CLOSED BY T611, not shipped
+   here.** Every session in a series today shares one wall time by construction. Once a coach could use
+   this task's dialog to give one session a genuinely different time, `ScheduleMeetingsDialog.tsx`'s
+   `resetForm()` derives a single shared `startTime`/`endTime` from only the *earliest* reconcilable
+   session (`:811-827`), `handleSubmit` reapplies that ONE time to every date via
+   `buildEventSessionsPayload(sessionDates, startTime, endTime, '')` (`:932`), and the actual write lands
+   through `loaders/meetings.ts:705`'s `updateSessionTime`, applied per `plan.toUpdate` at `:839` — so the
+   next time **anyone** saved the series (even a title-only save; `isValid` in edit mode is title-only per
+   `:879-881`), a coach's per-session time edit would be silently overwritten back to the shared time,
+   with the confirmation copy reporting only "N session(s) kept," no warning that a time changed.
+   **Ruled by the owner: T611 lands with or before T605** (§1b/§3.10), specifically so T605 never ships
+   this hazard live — "accepted-and-disclosed for T605's own ship" (v2's framing) is superseded; T605 no
+   longer carries this risk at all once its hard dispatch precondition (T611 merged) is satisfied. Record
+   in the worker's own output that T611's fix was found in place, not that this hazard is merely
+   disclosed.
 
 ---
 
 ## 10. Required Worker Output
 
+- Confirmation, FIRST, before any other work: **T611 has merged** (§1b/§3.10) — a real commit reference,
+  not a status claim. If it has not, stop here and report that instead of proceeding.
 - Files changed (exact paths).
 - Confirmation that T609 was found already landed in the tree before starting (§3.6), or a stopped/
-  reported mismatch if not.
+  reported mismatch if not (T609 does not block; T611 does).
 - Commit SHA, and confirmation `git log`/`git diff` against the merge base shows the work landed in the
   commit (constitution item 21).
 - Summary of changes, keyed to §6's numbered subsections.
@@ -732,5 +824,5 @@ real `Date.now()` at test-run time (e.g. `+30` days) — never a bare hardcoded 
 - The five named-mutation proofs from §7 (tests 5, 6, 7, 9), with real before/after output.
 - Explicit confirmation of §7 test 11 (no existing test needed modification) OR a filed dispute per §8.3.
 - The §9 known risks, restated or improved with anything discovered during implementation — Known Risk 4
-  in particular, restated for the boss/owner's attention, not softened.
+  in particular, confirmed as closed by T611 rather than merely disclosed.
 - Whether a dispute is needed, and if so, exactly which packet section it concerns.

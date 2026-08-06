@@ -45,6 +45,27 @@ import {
 } from './ScheduleMeetingsDialog';
 
 // ---------------------------------------------------------------------------
+// D017 ruling 5 (docs/swarm/dispute-log.md) -- the "T510 edit mode" describe
+// below builds fixtures (RECONCILABLE_SESSION_A/_B) whose startsAt are fixed
+// 2026 ISO literals, reconciled by this dialog's own production code against
+// an unseeded `new Date()`. Left alone, RECONCILABLE_SESSION_A.startsAt
+// ('2026-08-10T23:00:00.000Z') silently flips three currently-green tests
+// red the moment real wall-clock time crosses it. Pinning ONLY `Date` (never
+// other timers -- this file relies on real setTimeout/microtask scheduling
+// via `act`/`flushMicrotasks`/genuine promise resolution, and faking those
+// too would likely hang it) removes the fuse with zero fixture or assertion
+// edits. `2026-08-06T12:00:00.000Z` is not a new value -- it is the same
+// literal already used as the local NOW constant in the
+// isMeetingSessionReconcilable/computeMeetingSeriesReconcilePlan describes
+// below. Boss approval for this existing-test-file modification: D017
+// ruling 5 (Non-Negotiable override mechanism, D003 precedent). This is a
+// ONE-TIME module-level pin, deliberately NOT inside beforeEach -- there
+// must be no `vi.useRealTimers()` call anywhere in this file, or the clock
+// silently un-pins after the first test.
+// ---------------------------------------------------------------------------
+vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-08-06T12:00:00.000Z') });
+
+// ---------------------------------------------------------------------------
 // T151: `teams` is now a required prop (the deleted `DEFAULT_TEAMS` module
 // fixture no longer exists) -- one shared local fixture for this file,
 // referenced at every render site below, not per-site inline arrays
