@@ -4045,3 +4045,50 @@ Recorded for the process, not buried: the wrong range came from the prior confor
 side-note and the arbiter adopted it unverified while citing 19c as the reason for the edit — 19c's
 own failure shape, committed by its enforcer. "No agent is above verification, including the boss"
 applied literally. A ruling that mandates a citation change must measure the citation itself.
+
+---
+
+## 2026-08-06 — George orders T611 ahead of T605
+
+**Recorded because a premise gate caught the same defect twice in one day, and was right both times.**
+T611's gate reported: *"Packet line 18 asserts, bolded: 'The owner has ordered this row ahead of
+T605.' `T611` appears **zero** times in `auto-mode-decisions.md`, `verification-log.md` and
+`dispute-log.md`."* It cited this file's own earlier ruling back at the orchestrator —
+*"an agent-authored doc asserting standing owner authorization is not itself owner consent for any
+downstream session"* — and noted that **two** packets (T611's and T605 v3's) were by then
+cross-citing an authorization with no recorded source.
+
+The instruction was real. The record was not. That is precisely the failure this file exists to
+prevent, and this is the second instance in a single session; the first was the subagent-dispatch
+authorization written into `KICKOFF-PROMPTS.md`.
+
+### What he actually said
+
+> **"do T611 next, it needs to land before T605"**
+
+Preceded, when T609 was filed against T510's shipped code:
+
+> **"fix T609 now, don't wait for T605"**
+
+and, on merge order:
+
+> **"merge T609 when it passes, then continue with T605"**
+
+### Why the ordering is correct on the merits, independent of who asked for it
+
+T611's own row states it: every meeting in a series currently shares one wall time, so per-session
+time divergence is **unreachable today and the defect cannot fire**. T605 is the change that makes it
+reachable — and T510's shipped edit path then destroys it. `resetForm()` derives **one** time from the
+earliest reconcilable session (`ScheduleMeetingsDialog.tsx:811-827`), `handleSubmit` applies it to
+**every** date (`:932`), and edit-mode `isValid` checks the title **alone** (`:879-881`), so **a
+title-only save silently rewrites every meeting's time**, with the confirmation reporting only
+*"N session(s) kept"* (`:716-723`). The write lands via `loaders/meetings.ts:698-708`, applied per
+`toUpdate` at `:839`.
+
+So T605 shipping first would deliver a feature whose result the next title edit quietly deletes. The
+fix lives in `ScheduleMeetingsDialog.tsx`, **Forbidden to T605**, which is why T605's own foreman
+disclosed the hazard and asked for a separate row rather than absorbing it.
+
+**Standing:** T605 v3 carries T611 as a header-level dispatch precondition — no T605 worker runs until
+T611 has merged. Both packets may now cite **this section** rather than asserting the ordering on
+their own authority.
