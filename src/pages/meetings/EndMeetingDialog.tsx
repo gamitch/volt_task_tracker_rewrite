@@ -17,41 +17,83 @@
  * Confirming "End meeting" needs to produce, as ONE logical action:
  *   (a) `event_sessions.status` flips `'scheduled' -> 'completed'` for this
  *       session (one row).
- *   (b) Every roster member with **zero** `attendance` row for this session
- *       gets a real, new `absent` row (`method: 'coach'` -- the coach ending
- *       the meeting is the one implicitly marking these students absent by
- *       not having recorded anything for them).
+ *   (b) T508: EVERY roster member with **zero** `attendance` row for this
+ *       session gets a real, new `absent` row (`method: 'coach'`) **only if
+ *       the coach explicitly opts in** via the checkbox described in section
+ *       1a below. This used to run unconditionally, and that was live data
+ *       corruption -- it wrote a false `absent` record for every unmarked
+ *       roster member on every meeting close, whether or not that student
+ *       was ever actually expected at this specific meeting. See section 1a.
  *   (c) Every existing `attendance` row that is `present`/`late` with
  *       `check_in_at` set but `check_out_at` still null gets `check_out_at`
- *       set to the session's `ends_at`.
+ *       set to the session's `ends_at`. UNCHANGED and unconditional -- (c)
+ *       corrects real check-ins the coach is not choosing anything about.
  *
  * `EndMeetingPayload` below is the single shape naming ALL THREE: the
  * session being ended (`sessionId`, `endsAt` -- the stamp (c) uses), the
- * full set of students to backfill (`backfillAbsentStudentIds`), and the
- * full set of students to check out (`checkoutStudentIds`). There is no
- * separate "flip status" call, "backfill absences" call, and "close
- * check-ins" call the UI could dispatch independently and leave the DB
- * half-done between them if one leg failed -- `handleConfirmEndMeeting`
- * below computes this ONE payload from the current live roster/attendance
- * state and awaits ONE `onEndMeeting(payload)` call; local state is only
- * ever updated (via `applyEndMeetingResult`, the sole place backfill/
- * checkout are ever simulated locally, mirroring `SeasonSettings.tsx`'s own
+ * full set of students to mark absent (`markAbsentStudentIds` -- renamed
+ * from `backfillAbsentStudentIds`, T508 section 1a: empty unless the coach
+ * opted in), and the full set of students to check out
+ * (`checkoutStudentIds`). There is no separate "flip status" call, "mark
+ * absences" call, and "close check-ins" call the UI could dispatch
+ * independently and leave the DB half-done between them if one leg failed --
+ * `handleConfirmEndMeeting` below computes this ONE payload from the current
+ * live roster/attendance state (plus the coach's own opt-in choice, section
+ * 1a) and awaits ONE `onEndMeeting(payload)` call; local state is only ever
+ * updated (via `applyEndMeetingResult`, the sole place mark-absent/checkout
+ * are ever simulated locally, mirroring `SeasonSettings.tsx`'s own
  * `withActiveSeason` precedent for "the one place a derived mutation is ever
  * applied to local state") AFTER that call resolves -- if it rejects, local
  * state is never touched (no optimistic half-flip). CORRECTED (T178): a real
  * backend implementation (`src/lib/supabase/loaders/endMeeting.ts`, a
  * separate task's own file, not this one) is THREE sequenced writes, not a
- * single transaction/RPC -- no `supabase.rpc(...)` call, backfill (INSERT
- * ... ON CONFLICT DO NOTHING) then checkout (UPDATE) then the
- * `event_sessions` status flip (UPDATE), always in that order, always
- * awaited sequentially. No RPC is needed because that ordering already
- * makes every reachable partial-failure state safe on its own (see that
- * file's own module doc for the full property) -- this file cannot prove
- * that safety property itself (no Supabase client is wired in here, section
- * 5 below), but the callback's own single-payload shape is deliberately
- * built so a real implementation CAN satisfy the "one coherent action"
- * contract this way, rather than forcing the caller to dispatch three
- * uncoordinated calls of its own.
+ * single transaction/RPC -- no `supabase.rpc(...)` call, mark-absent (INSERT
+ * ... ON CONFLICT DO NOTHING, now GUARDED -- T508 section 1a) then checkout
+ * (UPDATE, unconditional) then the `event_sessions` status flip (UPDATE,
+ * unconditional), always in that order, always awaited sequentially. No RPC
+ * is needed because that ordering already makes every reachable
+ * partial-failure state safe on its own (see that file's own module doc for
+ * the full property) -- this file cannot prove that safety property itself
+ * (no Supabase client is wired in here, section 5 below), but the
+ * callback's own single-payload shape is deliberately built so a real
+ * implementation CAN satisfy the "one coherent action" contract this way,
+ * rather than forcing the caller to dispatch three uncoordinated calls of
+ * its own.
+ *
+ * -----------------------------------------------------------------------
+ * 1a. T508 -- the automatic absence write was live data corruption. Now an
+ *     explicit coach opt-in. The owner's ruling, and why it is a data-model
+ *     fact, not a preference.
+ * -----------------------------------------------------------------------
+ *
+ * `docs/swarm/auto-mode-decisions.md`, 2026-08-05, verbatim: *"i think we
+ * should only count 'absent' if i click the pill for absent"*; *"it should
+ * just say 5 present unless i explicetly mark some as absent"*; *"the
+ * participation % shouldn't assume everyone is supposed to attend a
+ * meeting, even if it's scoped to p3. if i have the right tools to indicate
+ * absent students then it should use that as the calculation."*
+ *
+ * **The reason is a data-model fact, not a preference, and it decides the
+ * design.** The sub-teams that determine who is expected at a given
+ * meeting -- business, build, software -- are deliberately NOT modelled, and
+ * `events.team_ids` (P3 / Gear Girls) is one level too coarse to derive them.
+ * So the expected-attendee set is not derivable from any data this app
+ * holds, and the coach's own markings are the only honest source of truth.
+ * That is why (b) above is gated behind `markRemainingAbsent`, a real
+ * `useState(false)`-defaulted boolean (never defaults `true` -- that would
+ * silently restore the exact defect), surfaced as a `CheckboxInput` beside
+ * the "End meeting" trigger (never inside the confirm `AlertDialog` itself --
+ * `AlertDialog` takes no children and a required string `description`, so
+ * there is nowhere inside it to put a real control), shown only when there
+ * is at least one unmarked roster member to ask about.
+ *
+ * `buildEndMeetingPayload`'s new 4th parameter, `markRemainingAbsent:
+ * boolean`, has **no default** on purpose -- `tsc` must force every call
+ * site to state the choice explicitly rather than silently inheriting one.
+ *
+ * The rows already written under the old, unconditional design are left
+ * alone -- owner ruling, verbatim: *"leave as is."* This file writes no
+ * cleanup migration for them.
  *
  * -----------------------------------------------------------------------
  * 2. Post-completion attendance edits are NOT audit-logged.
@@ -75,7 +117,7 @@
  *
  * Consequences for this file:
  *
- *   (a) ORDERING within `handleConfirmEndMeeting`: the backfill/checkout
+ *   (a) ORDERING within `handleConfirmEndMeeting`: the mark-absent/checkout
  *       mutations in section 1 run before `event_sessions.status` flips to
  *       `'completed'`. That ordering originally existed to stop the trigger
  *       from logging the coach's own routine meeting-close checkout as a
@@ -95,16 +137,34 @@
  *
  * -----------------------------------------------------------------------
  * 3. Pre-confirm summary design choice (Known Context/Traps #3) -- decided
- *    and disclosed, not silently assumed.
+ *    and disclosed, not silently assumed. UPDATED (T508): counts real
+ *    records, not roster membership; the no-record sentence names the
+ *    coach's own opt-in choice instead of asserting one outcome.
  * -----------------------------------------------------------------------
  *
  * The `AlertDialog`'s description shows the LIVE tally of currently-recorded
  * `attendance` rows ("N present · N late · N excused · N absent", a plain
- * `.filter`/count over the real rows via `computeEndMeetingSummaryCounts`,
- * no formula, no view) -- it does NOT fold the about-to-be-backfilled
- * absences into that tally. Instead, a SEPARATE sentence
- * (`buildEndMeetingConfirmDescription`) discloses "N student(s) have no
- * attendance record yet and will be marked absent when this meeting ends"
+ * `.filter`/count via `computeEndMeetingSummaryCounts`, no formula, no view)
+ * -- it does NOT fold the about-to-be-marked absences into that tally.
+ * T508 CORRECTED (section 1a's ruling 3, owner: *"the participation %
+ * shouldn't assume everyone is supposed to attend"*): `computeEndMeetingSummaryCounts`
+ * used to iterate the ROSTER and look each member up by id, which silently
+ * DROPPED any real attendance row for a student not on that roster (e.g.
+ * `loaders/selfCheckoff.ts`'s `makeInsertSelfCheckoff` writes a real
+ * `present` row with no roster check anywhere in that file) -- a real,
+ * coach-visible mark the tally used to lie about. It now iterates
+ * `Object.values(attendanceByStudentId)` directly: every real record
+ * counts, whether or not its student is on this roster. Count the records,
+ * not the roster.
+ *
+ * A SEPARATE sentence (`buildEndMeetingConfirmDescription`, now taking
+ * `markRemainingAbsent: boolean`) discloses the no-record count, worded by
+ * the coach's own opt-in choice -- never the marked-absent claim
+ * unconditionally, which was itself the defect in copy form:
+ *   - opted in (`true`): "N student(s) with no attendance record will be
+ *     marked absent."
+ *   - opted out (`false`, the default): "N student(s) have no attendance
+ *     record and will be left unmarked."
  * (and, symmetrically, how many open check-ins will be checked out) as its
  * own explicit callout. Reasoning: the tally line's job is to accurately
  * describe CURRENT DB state (a coach scanning it should be able to trust
@@ -116,6 +176,13 @@
  * coach before they confirm) without conflating "what is" with "what is
  * about to become." The packet's own text states either choice is
  * defensible -- this is the one made here, stated explicitly.
+ *
+ * The tally line itself renders UNCONDITIONALLY, including the all-zero "0
+ * present · 0 late · 0 excused · 0 absent" case -- owner ruling, 2026-08-05
+ * (later): *"one format, always."* A prose fallback for the nothing-marked
+ * case was considered and explicitly declined; a meeting where genuinely
+ * nobody was marked is a normal outcome under this design, not an error
+ * state that needs different copy.
  *
  * -----------------------------------------------------------------------
  * 4. Scope: a trigger + confirm dialog + a minimal post-completion
@@ -196,6 +263,13 @@
  *    `onClick` used. Per that doc's own "Don't: use a button for
  *    navigation" line, this is fine -- "End meeting" is a real action, not
  *    navigation.
+ *  - `CheckboxInput` ("CheckboxInput" Props table, `astryx-api.md` lines
+ *    943-964, T508 section 1a): `label`, `value`, `onChange`, `description`
+ *    used (all required except `description`). `Switch` is ruled out by its
+ *    OWN "Best Practices" line -- *"Don't: Use for options that require a
+ *    form submission to take effect"* -- the opt-in only takes effect when
+ *    "End meeting" is confirmed, not immediately; `CheckboxInput`'s own doc
+ *    names "opt-in choices" as its fit.
  *  - `Banner` ("Banner" Props table, lines 2749-2763): `status`, `title`,
  *    `description`, `isDismissable`, `onDismiss` used.
  *  - `List` ("List" Props table, lines 4574-4584): `hasDividers`, `header`
@@ -233,6 +307,7 @@ import {
   AlertDialog,
   Banner,
   Button,
+  CheckboxInput,
   EmptyState,
   List,
   ListItem,
@@ -251,7 +326,7 @@ import {
 /** `attendance.status` check constraint (migration lines 79-91). */
 export type AttendanceStatus = 'present' | 'late' | 'excused' | 'absent';
 /** `attendance.method` check constraint (same migration). */
-export type AttendanceMethod = 'qr' | 'coach' | 'import';
+export type AttendanceMethod = 'qr' | 'coach' | 'import' | 'self';
 /** `event_sessions.status` check constraint (migration lines 53-63). */
 export type SessionStatus = 'scheduled' | 'completed' | 'canceled';
 
@@ -296,8 +371,12 @@ export interface EndMeetingPayload {
   sessionId: string;
   /** `event_sessions.ends_at` -- the value every checkout stamp uses. */
   endsAt: string;
-  /** Roster members with zero `attendance` row for this session (section 1b). */
-  backfillAbsentStudentIds: string[];
+  /**
+   * T508 (renamed from `backfillAbsentStudentIds`, section 1a): the students
+   * the coach EXPLICITLY chose to mark absent; empty unless opted in via the
+   * `markRemainingAbsent` checkbox. Never populated automatically.
+   */
+  markAbsentStudentIds: string[];
   /** `present`/`late` rows with `check_in_at` set, `check_out_at` still null (section 1c). */
   checkoutStudentIds: string[];
 }
@@ -320,8 +399,13 @@ export type OnEditAttendanceFn = (
 // Pure helpers -- exported for direct testing.
 // ---------------------------------------------------------------------------
 
-/** Section 1b: roster members with NO `attendance` row at all for this session. */
-export function computeBackfillAbsentStudentIds(
+/** Section 1b: roster members with NO `attendance` row at all for this
+ * session -- "unmarked," in the sense that the coach has recorded nothing
+ * for them. Renamed from `computeBackfillAbsentStudentIds` (T508 section
+ * 1a): behaviour is UNCHANGED -- computing this set is not acting on it;
+ * whether it is used to mark anyone absent is the coach's own opt-in choice
+ * (`markRemainingAbsent`), applied in `buildEndMeetingPayload`. */
+export function computeUnmarkedStudentIds(
   roster: readonly EndMeetingRosterEntry[],
   attendanceByStudentId: Readonly<Record<string, AttendanceRecordState>>,
 ): string[] {
@@ -346,39 +430,47 @@ export function computeCheckoutStudentIds(
     .map(([studentId]) => studentId);
 }
 
-/** Section 1: the ONE payload representing all three legs of "end meeting". */
+/** Section 1 / 1a: the ONE payload representing all three legs of "end
+ * meeting". `markRemainingAbsent` has NO default -- deliberately (section
+ * 1a): `tsc` must force every call site to state the coach's opt-in choice
+ * rather than silently inheriting one. */
 export function buildEndMeetingPayload(
   session: EndMeetingSessionInfo,
   roster: readonly EndMeetingRosterEntry[],
   attendanceByStudentId: Readonly<Record<string, AttendanceRecordState>>,
+  markRemainingAbsent: boolean,
 ): EndMeetingPayload {
   return {
     sessionId: session.id,
     endsAt: session.endsAt,
-    backfillAbsentStudentIds: computeBackfillAbsentStudentIds(roster, attendanceByStudentId),
+    markAbsentStudentIds: markRemainingAbsent
+      ? computeUnmarkedStudentIds(roster, attendanceByStudentId)
+      : [],
     checkoutStudentIds: computeCheckoutStudentIds(attendanceByStudentId),
   };
 }
 
-const BACKFILL_METHOD: AttendanceMethod = 'coach';
+const MARK_ABSENT_METHOD: AttendanceMethod = 'coach';
 
 /**
- * Section 1: the ONLY place backfill/checkout are ever simulated in local
- * state, and ONLY called after a real `onEndMeeting` call has already
+ * Section 1: the ONLY place mark-absent/checkout are ever simulated in
+ * local state, and ONLY called after a real `onEndMeeting` call has already
  * resolved (mirrors `SeasonSettings.tsx`'s own `withActiveSeason` -- "the
  * one place a derived mutation is ever applied to local state" pattern).
+ * `payload.markAbsentStudentIds` is empty unless the coach opted in (section
+ * 1a) -- this loop is a no-op in the ordinary case.
  */
 export function applyEndMeetingResult(
   attendanceByStudentId: Readonly<Record<string, AttendanceRecordState>>,
   payload: EndMeetingPayload,
 ): Record<string, AttendanceRecordState> {
   const next: Record<string, AttendanceRecordState> = { ...attendanceByStudentId };
-  for (const studentId of payload.backfillAbsentStudentIds) {
+  for (const studentId of payload.markAbsentStudentIds) {
     next[studentId] = {
       status: 'absent',
       checkInAt: null,
       checkOutAt: null,
-      method: BACKFILL_METHOD,
+      method: MARK_ABSENT_METHOD,
       recordedBy: null,
     };
   }
@@ -398,16 +490,19 @@ export interface EndMeetingSummaryCounts {
   absent: number;
 }
 
-/** Section 3: a plain tally of CURRENTLY-recorded `attendance` rows, grouped
- * by `status` -- no formula, no view, just a `.filter`/count. */
+/** Section 3 (T508 CORRECTED): a plain tally of CURRENTLY-recorded
+ * `attendance` rows, grouped by `status` -- counts every real record
+ * directly, no roster join. Previously iterated the roster and looked each
+ * member up by id, which silently dropped a real record for a student not
+ * on that roster (e.g. a self-check-off into a session they are not
+ * rostered for, `loaders/selfCheckoff.ts`) -- count the records, not the
+ * roster. No formula, no view, just a `.filter`/count. */
 export function computeEndMeetingSummaryCounts(
-  roster: readonly EndMeetingRosterEntry[],
   attendanceByStudentId: Readonly<Record<string, AttendanceRecordState>>,
 ): EndMeetingSummaryCounts {
   const counts: EndMeetingSummaryCounts = { present: 0, late: 0, excused: 0, absent: 0 };
-  for (const entry of roster) {
-    const record = attendanceByStudentId[entry.studentId];
-    if (record !== undefined) counts[record.status] += 1;
+  for (const record of Object.values(attendanceByStudentId)) {
+    counts[record.status] += 1;
   }
   return counts;
 }
@@ -417,32 +512,39 @@ export function formatEndMeetingSummaryLine(counts: EndMeetingSummaryCounts): st
   return `${counts.present} present · ${counts.late} late · ${counts.excused} excused · ${counts.absent} absent`;
 }
 
-/** Section 3: the count behind the separate "will be marked absent" callout. */
+/** Section 1a/3: the count behind the checkbox label and the no-record
+ * disclosure sentence (worded by the coach's own opt-in choice, never
+ * unconditionally "will be marked absent" -- section 1a). */
 export function computeNoRecordCount(
   roster: readonly EndMeetingRosterEntry[],
   attendanceByStudentId: Readonly<Record<string, AttendanceRecordState>>,
 ): number {
-  return computeBackfillAbsentStudentIds(roster, attendanceByStudentId).length;
+  return computeUnmarkedStudentIds(roster, attendanceByStudentId).length;
 }
 
 /**
- * Section 3: the full `AlertDialog` description -- the live tally (current
- * DB state) PLUS separate, explicit callouts for what confirming will
- * change (about-to-be-backfilled absences, about-to-be-closed check-ins),
- * never folded into the tally itself.
+ * Section 3 / 1a: the full `AlertDialog` description -- the live tally
+ * (current DB state, counted from real records directly -- section 3) PLUS
+ * separate, explicit callouts for what confirming will change, never folded
+ * into the tally itself. `markRemainingAbsent` selects which no-record
+ * sentence is honest -- never the marked-absent claim when the coach opted
+ * out; that sentence IS the defect in copy form (section 1a).
  */
 export function buildEndMeetingConfirmDescription(
   roster: readonly EndMeetingRosterEntry[],
   attendanceByStudentId: Readonly<Record<string, AttendanceRecordState>>,
+  markRemainingAbsent: boolean,
 ): string {
-  const counts = computeEndMeetingSummaryCounts(roster, attendanceByStudentId);
+  const counts = computeEndMeetingSummaryCounts(attendanceByStudentId);
   const noRecord = computeNoRecordCount(roster, attendanceByStudentId);
   const checkoutCount = computeCheckoutStudentIds(attendanceByStudentId).length;
 
   const sentences = [`Current attendance: ${formatEndMeetingSummaryLine(counts)}.`];
   if (noRecord > 0) {
     sentences.push(
-      `${noRecord} ${noRecord === 1 ? 'student has' : 'students have'} no attendance record yet and will be marked absent when this meeting ends.`,
+      markRemainingAbsent
+        ? `${noRecord} ${noRecord === 1 ? 'student' : 'students'} with no attendance record will be marked absent.`
+        : `${noRecord} ${noRecord === 1 ? 'student has' : 'students have'} no attendance record and will be left unmarked.`,
     );
   }
   if (checkoutCount > 0) {
@@ -452,6 +554,12 @@ export function buildEndMeetingConfirmDescription(
   }
   sentences.push('This meeting will be marked completed. Attendance stays editable afterward.');
   return sentences.join(' ');
+}
+
+/** Section 1a: the checkbox's own label, naming the count directly so the
+ * count-naming requirement is testable without relying on JSX. */
+export function buildMarkRemainingAbsentLabel(count: number): string {
+  return `Mark ${count} ${count === 1 ? 'student' : 'students'} with no attendance record absent`;
 }
 
 /** DES-05's literal mapping (PRD line 195) -- module doc section 7. */
@@ -505,7 +613,7 @@ const FIXTURE_ATTENDANCE: Readonly<Record<string, AttendanceRecordState>> = {
     recordedBy: 'fixture-coach',
   },
   // student-dee: deliberately no entry -- "no attendance row at all," the
-  // exact condition `computeBackfillAbsentStudentIds` (section 1b) targets.
+  // exact condition `computeUnmarkedStudentIds` (section 1b) targets.
   'student-eli': {
     status: 'present',
     checkInAt: '2026-07-21T23:02:00.000Z',
@@ -532,15 +640,16 @@ export async function defaultLoadEndMeetingSummary(
 
 /**
  * Module doc section 5. Represents "the real single transaction that flips
- * `event_sessions.status`, backfills absences, and closes out check-ins
- * happened" -- nothing else. No `audit_log` write, no `audit_log`
- * reference, anywhere in this function (module doc section 2).
+ * `event_sessions.status`, marks absences the coach opted into (section 1a),
+ * and closes out check-ins happened" -- nothing else. No `audit_log` write,
+ * no `audit_log` reference, anywhere in this function (module doc section 2).
  */
 export const defaultOnEndMeeting: OnEndMeetingFn = async (payload) => {
   console.warn(
     '[EndMeetingDialog] No Supabase client wired in yet (module doc section 5) -- this ' +
-      'stub only logs the end-meeting payload (status flip + absence backfill + checkout) ' +
-      'a real single transaction would have applied atomically (module doc section 1).',
+      'stub only logs the end-meeting payload (status flip + opt-in absence marking + ' +
+      'checkout) a real single transaction would have applied atomically (module doc ' +
+      'section 1).',
     payload,
   );
 };
@@ -646,7 +755,7 @@ export interface EndMeetingDialogProps {
   /**
    * Injectable atomic end-meeting seam (module doc section 1). Defaults to a
    * `console.warn` stub. See `EndMeetingPayload` for the single-payload
-   * status-flip + backfill + checkout contract.
+   * status-flip + mark-absent + checkout contract.
    */
   onEndMeeting?: OnEndMeetingFn;
   /**
@@ -684,11 +793,21 @@ export function EndMeetingDialog({
   const [isEnding, setIsEnding] = useState(false);
   const [endError, setEndError] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
+  // Section 1a -- MUST default `false`. Defaulting `true` silently restores
+  // the exact defect (an automatic, unconditional absence write) this row
+  // exists to remove.
+  const [markRemainingAbsent, setMarkRemainingAbsent] = useState(false);
 
   async function handleConfirmEndMeeting(): Promise<void> {
     if (data === null) return;
-    // Section 1: ONE payload naming all three legs, computed from live state.
-    const payload = buildEndMeetingPayload(data.session, data.roster, data.attendanceByStudentId);
+    // Section 1 / 1a: ONE payload naming all three legs, computed from live
+    // state plus the coach's own opt-in choice.
+    const payload = buildEndMeetingPayload(
+      data.session,
+      data.roster,
+      data.attendanceByStudentId,
+      markRemainingAbsent,
+    );
     setIsEnding(true);
     setEndError(null);
     try {
@@ -748,6 +867,12 @@ export function EndMeetingDialog({
     }
   }
 
+  // Section 1a: how many roster members have no record at all -- gates
+  // whether the opt-in checkbox renders (only when there is something to
+  // ask about) and names its own label/disclosure sentence count.
+  const unmarkedCount =
+    data !== null ? computeNoRecordCount(data.roster, data.attendanceByStudentId) : 0;
+
   return (
     <VStack gap={4}>
       {/* T081 (DES-12 loading-state sweep) judgment call: kept as `Spinner`,
@@ -784,6 +909,19 @@ export function EndMeetingDialog({
 
           {data.session.status === 'scheduled' && (
             <>
+              {/* Section 1a: the opt-in control -- beside the trigger, NOT
+                  inside the confirm AlertDialog (it takes no children and a
+                  required string `description`, so there is nowhere inside
+                  it to put a real control). Only rendered when there is at
+                  least one unmarked roster member to ask about. */}
+              {unmarkedCount > 0 && (
+                <CheckboxInput
+                  label={buildMarkRemainingAbsentLabel(unmarkedCount)}
+                  value={markRemainingAbsent}
+                  onChange={setMarkRemainingAbsent}
+                  description="Leave this unticked to end the meeting without recording anything for them."
+                />
+              )}
               <Button
                 label="End meeting"
                 variant="primary"
@@ -798,6 +936,7 @@ export function EndMeetingDialog({
                 description={buildEndMeetingConfirmDescription(
                   data.roster,
                   data.attendanceByStudentId,
+                  markRemainingAbsent,
                 )}
                 actionLabel="End meeting"
                 actionVariant="primary"

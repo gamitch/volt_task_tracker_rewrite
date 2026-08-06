@@ -58,10 +58,25 @@
  * `v_student_participation` (and its sibling views in the same migration)
  * is a plain `create or replace view` -- no `security_definer`, no
  * `security_barrier` clause anywhere in
- * `20260717000003_metric_views.sql`. Per Postgres semantics, a plain view
- * runs with the QUERYING USER's own permissions against the underlying
- * base tables (`students`, `attendance`, `event_sessions`, `events`), not
- * the view owner's. Reading `20260717000002_rls.sql` directly: all three
+ * `20260717000003_metric_views.sql`.
+ *
+ * **T204 CORRECTION -- this file was the ORIGIN of the chain.** It used to
+ * state: "Per Postgres semantics, a plain view runs with the QUERYING USER's
+ * own permissions against the underlying base tables, not the view owner's."
+ * That is backwards. `loaders/reports.ts` cited this paragraph, and
+ * `loaders/dashboard.ts` cited that -- so one confident sentence here became
+ * three files' worth of wrong reasoning. All three are corrected together.
+ *
+ * The absence of `security_definer` says nothing about a view, because
+ * the view-level knob is `security_invoker` (PG15+), which defaults OFF and
+ * appears as a real clause ZERO times under `supabase/`. These views therefore
+ * execute as their OWNER and do NOT apply the caller's RLS to the base tables.
+ * MEASURED, not reasoned: `20260731000000_leaderboard_students_view.sql:32-46`
+ * records the live run; `20260805000000_dashboard_views_comment_corrections.sql`
+ * now carries the same correction in the database catalog.
+ * NO BEHAVIOUR CHANGE is implied -- T185 closed no-change on the exposure
+ * itself under the owner's proportionality ruling (constitution item 25). Only
+ * the EXPLANATION was wrong. Reading `20260717000002_rls.sql` directly: all three
  * of `students` (lines 94-102), `attendance` (lines 224-232), and
  * `event_sessions` (lines 170-182) carry a `staff_all` policy
  * (`using (is_staff())`, where `is_staff()` = `auth_role() in ('admin',
@@ -781,7 +796,15 @@ function buildColumns(): TableColumn<ParticipationDisplayRow>[] {
     { key: 'studentName', header: 'Student', width: proportional(2) },
     {
       key: 'expectedCt',
-      header: 'Expected',
+      // T509/D014 -- was 'Expected'. This column now counts EXPLICIT MARKS,
+      // not eligibility, so the old header named something the number stopped
+      // meaning. The SQL column keeps `expected_ct` (three loaders select it
+      // by name; renaming breaks them at runtime -- see
+      // `20260806000000_met01_explicit_marks.sql`), so this label is where the
+      // correction is visible. D014's mitigation for the inverted failure
+      // direction is that RPT-02 SHOWS these counts -- which only works if the
+      // label is true.
+      header: 'Marked',
       width: proportional(1),
       align: 'end',
       renderCell: (row) => renderCountCell(row.expectedCt),

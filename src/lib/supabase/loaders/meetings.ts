@@ -153,7 +153,12 @@
  *      function's own doc for the full decision record and citation.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { createLoader, runMutation, type LoaderQueryResult } from '../loader';
+import {
+  createLoader,
+  isSupabaseLoaderError,
+  runMutation,
+  type LoaderQueryResult,
+} from '../loader';
 import { getSupabaseClient } from '../client';
 import {
   buildCoachMeetingRows,
@@ -169,9 +174,14 @@ import {
   type SessionStatus,
   type StudentMeetingsData,
 } from '../../../pages/meetings/MeetingsList';
-import type {
-  CreateMeetingsPayload,
-  OnCreateMeetingsFn,
+import {
+  computeMeetingSeriesReconcilePlan,
+  type CreateMeetingsPayload,
+  type CreateMeetingsSessionPayload,
+  type ExistingMeetingSeriesSession,
+  type OnCreateMeetingsFn,
+  type OnSaveMeetingSeriesFn,
+  type SaveMeetingSeriesPayload,
 } from '../../../pages/meetings/ScheduleMeetingsDialog';
 
 // ---------------------------------------------------------------------------
@@ -192,6 +202,10 @@ interface EventDbRow {
   // for the coach view's dense rows (UXD-02 "where").
   location_name: string;
   address: string;
+  // T510 -- real, already-existing `events.description` column (`not null`),
+  // now selected so `CoachMeetingRow.description` (`MeetingsList.tsx`) can
+  // prefill `ScheduleMeetingsDialog`'s own edit-mode Description field.
+  description: string;
 }
 
 interface EventSessionDbRow {
@@ -282,6 +296,7 @@ function mapEventDbRow(row: EventDbRow) {
     countsParticipation: row.counts_participation,
     locationName: row.location_name,
     address: row.address,
+    description: row.description,
   };
 }
 
@@ -335,7 +350,10 @@ async function queryEvents(client: SupabaseClient): Promise<LoaderQueryResult<Ev
   const result = await client
     .from('events')
     // T122 (module doc above, item a) -- `location_name`/`address` added.
-    .select('id, season_id, type, title, team_ids, counts_participation, location_name, address');
+    // T510 -- `description` added (real, already-existing column).
+    .select(
+      'id, season_id, type, title, team_ids, counts_participation, location_name, address, description',
+    );
   return { data: (result.data as EventDbRow[] | null) ?? null, error: result.error };
 }
 
@@ -523,6 +541,333 @@ async function queryActiveSeasonId(
   const result = await client.from('seasons').select('id').eq('is_active', true).maybeSingle();
   return { data: (result.data as SeasonIdDbRow | null) ?? null, error: result.error };
 }
+
+// ---------------------------------------------------------------------------
+// T510 -- series edit for scheduled meetings (worker packet §4b). Additive
+// only: `makeCreateMeetings`/`createMeetings` (below) are untouched.
+// ---------------------------------------------------------------------------
+
+interface EditableMeetingSessionDbRow {
+  id: string;
+  session_date: string;
+  starts_at: string;
+  ends_at: string;
+  status: SessionStatus;
+}
+
+/** Routed through the existing `createLoader` seam, matching every other read in this file. */
+async function queryEditableSessionsForEvent(
+  client: SupabaseClient,
+  eventId: string,
+): Promise<LoaderQueryResult<EditableMeetingSessionDbRow[]>> {
+  const result = await client
+    .from('event_sessions')
+    .select('id, session_date, starts_at, ends_at, status')
+    .eq('event_id', eventId);
+  return {
+    data: (result.data as EditableMeetingSessionDbRow[] | null) ?? null,
+    error: result.error,
+  };
+}
+
+interface FutureSessionIdDbRow {
+  id: string;
+}
+
+/**
+ * D015 MAJOR fix. The future-forward guard up to this point is
+ * `computeMeetingSeriesReconcilePlan`'s own `now`-based filter, an
+ * APPLICATION-level check. This query re-enforces the SAME invariant at
+ * the DATABASE boundary using Postgres's own `'now'` timestamptz literal
+ * (a string Postgres parses as "the current instant, evaluated when this
+ * statement runs on the server" -- NOT a client-computed `new Date()
+ * .toISOString()`, which is still an app-clock value even though it is
+ * accurate). Given a candidate id list, returns only the subset that is
+ * STILL, right now (server time), strictly in the future. The result of
+ * THIS query -- not `plan.toRemove` directly -- is what reaches the
+ * destructive calls below.
+ */
+async function queryStillFutureSessionIds(
+  client: SupabaseClient,
+  candidateIds: readonly string[],
+): Promise<LoaderQueryResult<FutureSessionIdDbRow[]>> {
+  const result = await client
+    .from('event_sessions')
+    .select('id')
+    .in('id', [...candidateIds])
+    .gt('starts_at', 'now');
+  return { data: (result.data as FutureSessionIdDbRow[] | null) ?? null, error: result.error };
+}
+
+interface AttendanceExistsDbRow {
+  session_id: string;
+}
+
+/** One batched read: given the (already `'now'`-guarded) candidate ids, returns which of them have at
+ * least one `attendance` row. */
+async function queryAttendanceExistsForSessions(
+  client: SupabaseClient,
+  sessionIds: readonly string[],
+): Promise<LoaderQueryResult<AttendanceExistsDbRow[]>> {
+  const result = await client
+    .from('attendance')
+    .select('session_id')
+    .in('session_id', [...sessionIds]);
+  return { data: (result.data as AttendanceExistsDbRow[] | null) ?? null, error: result.error };
+}
+
+/**
+ * `makeSaveMeetingSeries` (D015/D016 -- full record: `docs/swarm/dispute-log.md`). Does, in order:
+ *
+ * 1. Partial `events` update -- `title`, `team_ids`, `location_name`, `description` ONLY. `address`,
+ *    `counts_participation`, `counts_volunteer_hours`, `adult_volunteers_count`,
+ *    `adult_volunteer_hours` are never named in the update's column set.
+ * 2. Load fresh sessions via `queryEditableSessionsForEvent` (via `createLoader`) -- fresh, not the
+ *    page's stale in-memory rows.
+ * 3. Map to `ExistingMeetingSeriesSession[]`, call `computeMeetingSeriesReconcilePlan(existing,
+ *    payload.desiredFutureSessions, new Date())` -- a FRESH `now`, independent of the dialog's own
+ *    confirmation-preview `now` (disclosed race, same non-atomicity class as this file's own existing
+ *    "events insert succeeds, sessions insert fails" risk).
+ * 4. `plan.toUpdate` -> `Promise.all`-parallelized per-row updates of `starts_at`/`ends_at` ONLY
+ *    (matches `outreach.ts:1553-1559`'s own handling of per-row-DISTINCT-value updates -- not
+ *    batched, Postgrest cannot batch one statement into per-row-different values without an RPC).
+ * 5. `plan.toInsert` -> one batched insert (`status: 'scheduled'`), same shape `makeCreateMeetings`'s
+ *    own `insertSessions` (each session's own `notes` is already `''` by the time it reaches here --
+ *    the dialog computes `desiredFutureSessions` with `notes` hardcoded to `''`, per-session notes
+ *    being T605's scope).
+ * 6. `plan.toRemove` -> steps a-e BATCHED, step f PER-ID PAIRED (D015's ruled fix, D016's fixed `f2`),
+ *    only if `plan.toRemove.length > 0`:
+ *    a. `safeIds = await queryStillFutureSessionIds(plan.toRemove.map(r => r.sessionId))` -- the
+ *       D015 MAJOR-fixed guard, `'now'` evaluated server-side.
+ *    b. If `safeIds.length === 0`, stop here.
+ *    c. `attendanceIds` = the subset of `safeIds` with at least one `attendance` row -- batched, one
+ *       query for the whole `safeIds` set.
+ *    d. `toCancel = safeIds` with attendance; `toDelete = safeIds` without.
+ *    e. If `toCancel.length > 0`: ONE batched `update event_sessions set status = 'canceled' where id
+ *       in (:toCancel)` -- RSVPs for these are NOT touched.
+ *    f. If `toDelete.length > 0`, PER ID, as an independent pair -- see `removeOneSession` below.
+ *
+ * An equivalent `starts_at`-guarded delete on `rsvps` is impossible to express over PostgREST
+ * (stated so no reader goes hunting for it): `rsvps` has no `starts_at` column of its own, and
+ * PostgREST has no mechanism to filter a `DELETE` by a column on a different, embedded/joined table.
+ * The protection for `rsvps` comes entirely from `safeIds` already having passed the `'now'`-guarded
+ * query in step a before step f ever runs -- and, per D016, from the fact that `cancelSession` (not a
+ * second RSVP-side guard) is what absorbs the residual race.
+ *
+ * The residual, MERGED into one class per D016 §5/Q5 (a limitation, not a deferred defect): if a
+ * session's `starts_at` crosses `now`, OR attendance/a fresh RSVP lands, in the window between step
+ * c's batched pre-check and that ONE session's own `f2` call, that session ends `'canceled'` with its
+ * own RSVPs already deleted by its own `f1`. Both triggers now produce the identical,
+ * identically-visible outcome -- there is no longer a silent variant. This is bounded to AT MOST the
+ * one raced session -- never the whole `toDelete` batch -- and it satisfies the owner's own fallback
+ * ruling verbatim ("the delete must fall back to cancelling rather than failing the coach's save").
+ */
+export function makeSaveMeetingSeries(
+  getClient: () => SupabaseClient = getSupabaseClient,
+): OnSaveMeetingSeriesFn {
+  const loadEditableSessions = createLoader<string, EditableMeetingSessionDbRow[]>(
+    queryEditableSessionsForEvent,
+    getClient,
+  );
+  const loadStillFutureIds = createLoader<readonly string[], FutureSessionIdDbRow[]>(
+    queryStillFutureSessionIds,
+    getClient,
+  );
+  const loadAttendanceExists = createLoader<readonly string[], AttendanceExistsDbRow[]>(
+    queryAttendanceExistsForSessions,
+    getClient,
+  );
+
+  const updateEvent = runMutation<
+    { eventId: string; event: SaveMeetingSeriesPayload['event'] },
+    void
+  >(
+    (client, args) =>
+      client
+        .from('events')
+        .update({
+          title: args.event.title,
+          team_ids: args.event.teamIds,
+          location_name: args.event.locationName,
+          description: args.event.description,
+        })
+        .eq('id', args.eventId),
+    getClient,
+  );
+
+  const updateSessionTime = runMutation<
+    { sessionId: string; session: CreateMeetingsSessionPayload },
+    void
+  >(
+    (client, args) =>
+      client
+        .from('event_sessions')
+        .update({ starts_at: args.session.startsAt, ends_at: args.session.endsAt })
+        .eq('id', args.sessionId),
+    getClient,
+  );
+
+  const insertSessionsForEvent = runMutation<
+    { eventId: string; sessions: CreateMeetingsSessionPayload[] },
+    void
+  >(
+    (client, args) =>
+      client.from('event_sessions').insert(
+        args.sessions.map((session) => ({
+          event_id: args.eventId,
+          session_date: session.sessionDate,
+          starts_at: session.startsAt,
+          ends_at: session.endsAt,
+          status: 'scheduled',
+          notes: session.notes,
+        })),
+      ),
+    getClient,
+  );
+
+  const cancelSessionsBatched = runMutation<readonly string[], void>(
+    (client, ids) =>
+      client
+        .from('event_sessions')
+        .update({ status: 'canceled' })
+        .in('id', [...ids]),
+    getClient,
+  );
+
+  // D016 §5/Q3 -- explicit `runMutation` definitions for all three f-step
+  // helpers; `deleteSessionIfStillFuture`'s result type is concrete (its
+  // return value is load-bearing, not decorative -- see its own doc below).
+  const deleteRsvpsForSession = runMutation<string, void>(
+    (client, sessionId) => client.from('rsvps').delete().eq('session_id', sessionId),
+    getClient,
+  );
+
+  interface DeletedSessionIdRow {
+    id: string;
+  }
+
+  /**
+   * D016's fix. Chains the SAME server-side `'now'` guard directly onto the delete (D015's
+   * MAJOR) AND selects the deleted row's id back (D016's addition) -- `.select()` after
+   * `.delete()` is real in the installed `@supabase/postgrest-js@2.110.7`
+   * (`PostgrestTransformBuilder.select`, which the delete builder extends). The return value is
+   * LOAD-BEARING: an empty array means the guard fired AFTER `deleteRsvpsForSession` had already
+   * run for this same id -- `starts_at` crossed `now` in the three-plus round trips between step
+   * a's batched guard and this call -- OR the session was concurrently removed by something else
+   * entirely. PostgREST cannot distinguish the two, and D016 rules that distinguishing them is
+   * unnecessary: `cancelSession` below is benign either way (a cancel on an already-gone id
+   * updates zero rows and resolves).
+   */
+  const deleteSessionIfStillFuture = runMutation<string, DeletedSessionIdRow[]>(
+    (client, sessionId) =>
+      client
+        .from('event_sessions')
+        .delete()
+        .eq('id', sessionId)
+        .gt('starts_at', 'now')
+        .select('id'),
+    getClient,
+  );
+
+  /**
+   * D015's ruled fallback, reused by BOTH the `23503` branch (attendance/fresh-RSVP raced in)
+   * and D016's empty-result branch (the time boundary raced instead) -- as of D016 these are
+   * ONE residual class with an identical, identically-visible outcome, not two (Known Risks).
+   *
+   * DELIBERATELY, PERMANENTLY NOT time-guarded (D016 §3 -- load-bearing, do not "harden" this
+   * back into the defect): a symmetric `.gt('starts_at', 'now')` here would silently no-op in
+   * EXACTLY the raced case this function exists to repair -- by the time this runs, the session
+   * has already crossed into the past, and its RSVPs are already gone. This function's entire
+   * purpose is to mark that session visibly `canceled` instead of leaving it lying on screen as
+   * an ordinary `scheduled` meeting with destroyed RSVP data. Refusing to touch a past session
+   * here is not caution; it is the bug D016 exists to close.
+   */
+  const cancelSession = runMutation<string, void>(
+    (client, sessionId) =>
+      client.from('event_sessions').update({ status: 'canceled' }).eq('id', sessionId),
+    getClient,
+  );
+
+  async function removeOneSession(sessionId: string): Promise<void> {
+    // f1 -- RSVPs first (the owner's own ordering). ANY error here means this pair's
+    // session delete is never attempted, and the error propagates (the save rejects) --
+    // never caught, never swallowed.
+    await deleteRsvpsForSession(sessionId);
+    try {
+      const deletedRows = await deleteSessionIfStillFuture(sessionId);
+      // D016 -- zero rows means f1 already acted on a session that then turned out to be no
+      // longer strictly future (or was concurrently removed). Route to the SAME repair as the
+      // 23503 branch below -- deliberately, since both triggers now produce one identical,
+      // identically-visible outcome. `?? []` defends the same "empty is `[]` or `undefined`"
+      // case D016's own text names (`runMutation` coerces a `null` `data` to `undefined`),
+      // even though a successful non-`.single()` select should always resolve `[]` on zero
+      // rows. The `?? []` stays -- it is still necessary defensively.
+      if ((deletedRows ?? []).length === 0) {
+        await cancelSession(sessionId);
+      }
+    } catch (error) {
+      if (isSupabaseLoaderError(error) && error.code === '23503') {
+        // Attendance (or a fresh RSVP) raced in between the batched pre-check (c) and THIS
+        // id's own delete -- cancel THIS id only. If this cancel itself throws, it
+        // propagates (never swallowed).
+        await cancelSession(sessionId);
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  return async (payload: SaveMeetingSeriesPayload): Promise<void> => {
+    await updateEvent({ eventId: payload.eventId, event: payload.event });
+
+    const existingRows = await loadEditableSessions(payload.eventId);
+    const existing: ExistingMeetingSeriesSession[] = (existingRows ?? []).map((row) => ({
+      sessionId: row.id,
+      sessionDate: row.session_date,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      status: row.status,
+    }));
+
+    // A fresh `now`, independent of the dialog's own confirmation-preview `now`.
+    const plan = computeMeetingSeriesReconcilePlan(
+      existing,
+      payload.desiredFutureSessions,
+      new Date(),
+    );
+
+    await Promise.all(plan.toUpdate.map((item) => updateSessionTime(item)));
+
+    if (plan.toInsert.length > 0) {
+      await insertSessionsForEvent({ eventId: payload.eventId, sessions: plan.toInsert });
+    }
+
+    if (plan.toRemove.length > 0) {
+      const stillFutureRows = await loadStillFutureIds(plan.toRemove.map((r) => r.sessionId));
+      const safeIds = (stillFutureRows ?? []).map((r) => r.id);
+      if (safeIds.length > 0) {
+        const attendanceRows = await loadAttendanceExists(safeIds);
+        const attendanceIds = new Set((attendanceRows ?? []).map((r) => r.session_id));
+        const toCancel = safeIds.filter((id) => attendanceIds.has(id));
+        const toDelete = safeIds.filter((id) => !attendanceIds.has(id));
+
+        if (toCancel.length > 0) {
+          await cancelSessionsBatched(toCancel);
+        }
+
+        // Cross-pair sequencing: PARALLEL. Pairs touch disjoint rows and are independent
+        // (D015 §2). Consequence, disclosed: if one pair rejects, `Promise.all` rejects (the
+        // save rejects) while sibling pairs already in flight may still complete their own
+        // mutations against the database -- the same disclosed non-atomicity class this file
+        // already carries for "events insert succeeds, sessions insert fails."
+        await Promise.all(toDelete.map((id) => removeOneSession(id)));
+      }
+    }
+  };
+}
+
+/** `ScheduleMeetingsDialog.tsx`'s own default `onSaveMeetingSeries`. */
+export const saveMeetingSeries: OnSaveMeetingSeriesFn = makeSaveMeetingSeries();
 
 // ---------------------------------------------------------------------------
 // `getClient` is injectable (defaults to the shared singleton), same

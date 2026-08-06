@@ -24,16 +24,23 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  buildEditConfirmationDescription,
   buildEventSessionsPayload,
   chicagoWallTimeToUtcIso,
   computeConfirmLabel,
+  computeMeetingSeriesReconcilePlan,
   computeScheduleSessionDates,
   generateCustomSessionDates,
   generateRecurringSessionDates,
   generateSingleSessionDates,
+  isMeetingSessionReconcilable,
   resolveTeamScope,
   ScheduleMeetingsDialog,
   type CreateMeetingsPayload,
+  type CreateMeetingsSessionPayload,
+  type EditMeetingSeriesInitialData,
+  type ExistingMeetingSeriesSession,
+  type SaveMeetingSeriesPayload,
   type ScheduleTeamOption,
 } from './ScheduleMeetingsDialog';
 
@@ -350,10 +357,279 @@ describe('resolveTeamScope', () => {
 
 describe('computeConfirmLabel (BEH-07)', () => {
   it('never renders a bare "Create"/"Submit"/"OK" -- always states the computed count', () => {
-    expect(computeConfirmLabel(0)).toBe('Create 0 meetings');
-    expect(computeConfirmLabel(1)).toBe('Create 1 meeting');
-    expect(computeConfirmLabel(14)).toBe('Create 14 meetings');
-    expect(computeConfirmLabel(2)).toBe('Create 2 meetings');
+    // T510 -- `computeConfirmLabel` gains a leading required `isEditMode`
+    // parameter (packet §4a/AC1, boss ruling Grant B,
+    // `auto-mode-decisions.md` "2026-08-06 -- Boss ruling (constitution item
+    // 10)"). Every call site here is CREATE mode (`false`) -- zero asserted
+    // strings change.
+    expect(computeConfirmLabel(false, 0)).toBe('Create 0 meetings');
+    expect(computeConfirmLabel(false, 1)).toBe('Create 1 meeting');
+    expect(computeConfirmLabel(false, 14)).toBe('Create 14 meetings');
+    expect(computeConfirmLabel(false, 2)).toBe('Create 2 meetings');
+  });
+
+  // T510 -- new call sites (additions, not modifications to the five
+  // pre-existing ones above/at `:480`, Grant B). Edit-mode output is the
+  // literal string 'Save changes', regardless of count.
+  it('T510: edit mode always renders "Save changes", regardless of count', () => {
+    expect(computeConfirmLabel(true, 0)).toBe('Save changes');
+    expect(computeConfirmLabel(true, 1)).toBe('Save changes');
+    expect(computeConfirmLabel(true, 14)).toBe('Save changes');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T510 -- series edit for scheduled meetings. Pure-function proofs for the
+// worker packet's Acceptance Criteria (§8): AC2-AC7, AC-B2b, AC-B3a/b/c,
+// AC-Bdup, AC11/AC12.
+// ---------------------------------------------------------------------------
+
+describe('isMeetingSessionReconcilable (T510 rule 1, AC2)', () => {
+  const NOW = new Date('2026-08-06T12:00:00.000Z');
+
+  it('a scheduled session with startsAt exactly equal to now is NOT reconcilable (strict `>` on this function; the protection boundary it produces is non-strict/inclusive)', () => {
+    expect(
+      isMeetingSessionReconcilable({ status: 'scheduled', startsAt: NOW.toISOString() }, NOW),
+    ).toBe(false);
+  });
+
+  it('one millisecond in the future IS reconcilable', () => {
+    const oneMsLater = new Date(NOW.getTime() + 1).toISOString();
+    expect(isMeetingSessionReconcilable({ status: 'scheduled', startsAt: oneMsLater }, NOW)).toBe(
+      true,
+    );
+  });
+
+  it("`canceled` with a future startsAt is NOT reconcilable (this packet's own design decision)", () => {
+    const future = new Date(NOW.getTime() + 86400000).toISOString();
+    expect(isMeetingSessionReconcilable({ status: 'canceled', startsAt: future }, NOW)).toBe(false);
+  });
+
+  it('`completed` with a future startsAt is NOT reconcilable', () => {
+    const future = new Date(NOW.getTime() + 86400000).toISOString();
+    expect(isMeetingSessionReconcilable({ status: 'completed', startsAt: future }, NOW)).toBe(
+      false,
+    );
+  });
+});
+
+describe('computeMeetingSeriesReconcilePlan (T510 rules 1/5, AC3-AC7, AC-B2b, AC-B3a/b/c)', () => {
+  const NOW = new Date('2026-08-06T12:00:00.000Z');
+  const PAST_DATE = '2026-07-01';
+  const PAST_STARTS_AT = '2026-07-01T23:00:00.000Z';
+  const PAST_ENDS_AT = '2026-07-02T01:00:00.000Z';
+  const FUTURE_DATE_1 = '2026-08-10';
+  const FUTURE_STARTS_AT_1 = '2026-08-10T23:00:00.000Z';
+  const FUTURE_ENDS_AT_1 = '2026-08-11T01:00:00.000Z';
+  const FUTURE_DATE_2 = '2026-08-17';
+  const FUTURE_STARTS_AT_2 = '2026-08-17T23:00:00.000Z';
+  const FUTURE_ENDS_AT_2 = '2026-08-18T01:00:00.000Z';
+
+  function existingSession(
+    overrides: Partial<ExistingMeetingSeriesSession> = {},
+  ): ExistingMeetingSeriesSession {
+    return {
+      sessionId: 'session-1',
+      sessionDate: FUTURE_DATE_1,
+      startsAt: FUTURE_STARTS_AT_1,
+      endsAt: FUTURE_ENDS_AT_1,
+      status: 'scheduled',
+      ...overrides,
+    };
+  }
+
+  function desiredSession(
+    overrides: Partial<CreateMeetingsSessionPayload> = {},
+  ): CreateMeetingsSessionPayload {
+    return {
+      sessionDate: FUTURE_DATE_1,
+      startsAt: FUTURE_STARTS_AT_1,
+      endsAt: FUTURE_ENDS_AT_1,
+      notes: '',
+      ...overrides,
+    };
+  }
+
+  it('AC3: a reconcilable session whose date persists in the desired schedule appears in toUpdate', () => {
+    const existing = [existingSession({ sessionId: 's1' })];
+    const desired = [desiredSession()];
+    const plan = computeMeetingSeriesReconcilePlan(existing, desired, NOW);
+    expect(plan.toUpdate).toEqual([{ sessionId: 's1', session: desired[0] }]);
+    expect(plan.toInsert).toEqual([]);
+    expect(plan.toRemove).toEqual([]);
+  });
+
+  it('AC4: a reconcilable session whose date is dropped from the desired schedule appears in toRemove', () => {
+    const existing = [existingSession({ sessionId: 's1' })];
+    const plan = computeMeetingSeriesReconcilePlan(existing, [], NOW);
+    expect(plan.toRemove).toEqual([{ sessionId: 's1', sessionDate: FUTURE_DATE_1 }]);
+    expect(plan.toUpdate).toEqual([]);
+    expect(plan.toInsert).toEqual([]);
+  });
+
+  it('AC5: a desired date with no existing match of any status appears in toInsert', () => {
+    const desired = [
+      desiredSession({
+        sessionDate: FUTURE_DATE_2,
+        startsAt: FUTURE_STARTS_AT_2,
+        endsAt: FUTURE_ENDS_AT_2,
+      }),
+    ];
+    const plan = computeMeetingSeriesReconcilePlan([], desired, NOW);
+    expect(plan.toInsert).toEqual(desired);
+    expect(plan.toUpdate).toEqual([]);
+    expect(plan.toRemove).toEqual([]);
+  });
+
+  it('AC6: a past session is excluded from every list -- NEVER removed (rule 1: future-forward only)', () => {
+    const existing = [
+      existingSession({
+        sessionId: 's-past',
+        sessionDate: PAST_DATE,
+        startsAt: PAST_STARTS_AT,
+        endsAt: PAST_ENDS_AT,
+      }),
+    ];
+    const plan = computeMeetingSeriesReconcilePlan(existing, [], NOW);
+    expect(plan.toUpdate).toEqual([]);
+    expect(plan.toInsert).toEqual([]);
+    expect(plan.toRemove).toEqual([]);
+  });
+
+  it('AC7: an already-canceled future session is excluded from every list (this packet\'s own design decision, NOT the owner\'s "regardless of status" wording)', () => {
+    const existing = [existingSession({ sessionId: 's-canceled', status: 'canceled' })];
+    const plan = computeMeetingSeriesReconcilePlan(existing, [], NOW);
+    expect(plan.toUpdate).toEqual([]);
+    expect(plan.toInsert).toEqual([]);
+    expect(plan.toRemove).toEqual([]);
+  });
+
+  it('AC-B2b: narrowing to zero desired sessions moves EVERY reconcilable session to toRemove', () => {
+    const existing = [
+      existingSession({
+        sessionId: 's1',
+        sessionDate: FUTURE_DATE_1,
+        startsAt: FUTURE_STARTS_AT_1,
+      }),
+      existingSession({
+        sessionId: 's2',
+        sessionDate: FUTURE_DATE_2,
+        startsAt: FUTURE_STARTS_AT_2,
+      }),
+    ];
+    const plan = computeMeetingSeriesReconcilePlan(existing, [], NOW);
+    expect(plan.toRemove.map((r) => r.sessionId).sort()).toEqual(['s1', 's2']);
+    expect(plan.toInsert).toEqual([]);
+    expect(plan.toUpdate).toEqual([]);
+  });
+
+  it('AC-B3a: a desired date matching an existing PAST session is absorbed, not inserted', () => {
+    const existing = [
+      existingSession({
+        sessionId: 's-past',
+        sessionDate: PAST_DATE,
+        startsAt: PAST_STARTS_AT,
+        endsAt: PAST_ENDS_AT,
+      }),
+    ];
+    // The desired entry's OWN startsAt is future (constructed directly, since
+    // this is a pure-function test) -- no existing UI path can produce this
+    // collision, per this function's own disclosed-limitation doc.
+    const desired = [
+      desiredSession({
+        sessionDate: PAST_DATE,
+        startsAt: FUTURE_STARTS_AT_1,
+        endsAt: FUTURE_ENDS_AT_1,
+      }),
+    ];
+    const plan = computeMeetingSeriesReconcilePlan(existing, desired, NOW);
+    expect(plan.toInsert).toEqual([]); // absorbed -- not inserted
+    expect(plan.toUpdate).toEqual([]); // not reconcilable -- protected
+    expect(plan.toRemove).toEqual([]);
+  });
+
+  it('AC-B3b: a desired date matching an existing CANCELED future session is absorbed, not inserted', () => {
+    const existing = [existingSession({ sessionId: 's-canceled', status: 'canceled' })];
+    const desired = [desiredSession()];
+    const plan = computeMeetingSeriesReconcilePlan(existing, desired, NOW);
+    expect(plan.toInsert).toEqual([]);
+    expect(plan.toUpdate).toEqual([]);
+    expect(plan.toRemove).toEqual([]);
+  });
+
+  it('AC-B3c: a desired session whose own startsAt is not strictly future is dropped before any matching happens', () => {
+    // `sessionDate` says "future," but `startsAt` (what this function
+    // actually checks) is exactly `now` -- non-strict `>`, dropped.
+    const desired = [desiredSession({ startsAt: NOW.toISOString() })];
+    const plan = computeMeetingSeriesReconcilePlan([], desired, NOW);
+    expect(plan.toInsert).toEqual([]);
+    expect(plan.toUpdate).toEqual([]);
+    expect(plan.toRemove).toEqual([]);
+  });
+});
+
+describe('computeMeetingSeriesReconcilePlan -- duplicate session_date among reconcilable sessions (D015 disposition MINOR 3, AC-Bdup)', () => {
+  const NOW = new Date('2026-08-06T12:00:00.000Z');
+  const SHARED_DATE = '2026-08-10';
+  const STARTS_AT_A = '2026-08-10T23:00:00.000Z';
+  const ENDS_AT_A = '2026-08-11T01:00:00.000Z';
+  const STARTS_AT_B = '2026-08-10T22:00:00.000Z'; // a different instant, same calendar date
+  const ENDS_AT_B = '2026-08-11T00:00:00.000Z';
+
+  function dupeSession(id: string, startsAt: string, endsAt: string): ExistingMeetingSeriesSession {
+    return { sessionId: id, sessionDate: SHARED_DATE, startsAt, endsAt, status: 'scheduled' };
+  }
+
+  it('when the shared date IS still desired: exactly one duplicate appears in toUpdate, the other in neither list', () => {
+    const existing = [
+      dupeSession('dup-a', STARTS_AT_A, ENDS_AT_A),
+      dupeSession('dup-b', STARTS_AT_B, ENDS_AT_B),
+    ];
+    const desired: CreateMeetingsSessionPayload[] = [
+      { sessionDate: SHARED_DATE, startsAt: STARTS_AT_A, endsAt: ENDS_AT_A, notes: '' },
+    ];
+    const plan = computeMeetingSeriesReconcilePlan(existing, desired, NOW);
+    expect(plan.toUpdate).toHaveLength(1);
+    expect(['dup-a', 'dup-b']).toContain(plan.toUpdate[0].sessionId);
+    expect(plan.toRemove).toEqual([]);
+    expect(plan.toInsert).toEqual([]);
+  });
+
+  it('when the shared date is NOT desired: BOTH duplicates appear in toRemove', () => {
+    const existing = [
+      dupeSession('dup-a', STARTS_AT_A, ENDS_AT_A),
+      dupeSession('dup-b', STARTS_AT_B, ENDS_AT_B),
+    ];
+    const plan = computeMeetingSeriesReconcilePlan(existing, [], NOW);
+    expect(plan.toRemove.map((r) => r.sessionId).sort()).toEqual(['dup-a', 'dup-b']);
+    expect(plan.toUpdate).toEqual([]);
+    expect(plan.toInsert).toEqual([]);
+  });
+});
+
+describe('buildEditConfirmationDescription (rule 6, AC11/AC12)', () => {
+  it('AC11: no "Removed:" segment when toRemove.length === 0', () => {
+    const description = buildEditConfirmationDescription({
+      toInsert: [{ sessionDate: '2026-08-10', startsAt: '', endsAt: '', notes: '' }],
+      toUpdate: [],
+      toRemove: [],
+    });
+    expect(description).toBe('1 session(s) added · 0 session(s) removed · 0 session(s) kept.');
+    expect(description).not.toContain('Removed:');
+  });
+
+  it('AC12: "Removed:" followed by each removed date, human-readable', () => {
+    const description = buildEditConfirmationDescription({
+      toInsert: [],
+      toUpdate: [],
+      toRemove: [
+        { sessionId: 's1', sessionDate: '2026-08-10' },
+        { sessionId: 's2', sessionDate: '2026-08-17' },
+      ],
+    });
+    expect(description).toBe(
+      '0 session(s) added · 2 session(s) removed · 0 session(s) kept. Removed: Mon, Aug 10, Mon, Aug 17.',
+    );
   });
 });
 
@@ -477,7 +753,7 @@ describe('<ScheduleMeetingsDialog /> disabled/enabled confirm button (Known Cont
       .slice(0, 10);
     const expected = generateRecurringSessionDates({ start: today, end: sixWeeksOut }, ['mon']);
 
-    const confirmButton = findButtonByText(computeConfirmLabel(expected.length));
+    const confirmButton = findButtonByText(computeConfirmLabel(false, expected.length));
     expect(confirmButton).toBeDefined();
     expect(confirmButton?.disabled).toBe(false);
   });
@@ -614,5 +890,255 @@ describe('<ScheduleMeetingsDialog /> submit + cancel behavior', () => {
     // not persist across the close/re-open cycle.
     expect(findButtonByText('Create 0 meetings')).toBeDefined();
     expect(findButtonByText('Create 1 meeting')).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T510 -- <ScheduleMeetingsDialog /> edit mode (worker packet §4a/§8): prefill,
+// AC10's "already happened" disclosure both directions, AC-B2a (fully-past
+// series stays editable), AC-B1 (heterogeneous-time no-op proof), rule 6's
+// confirm-before-save `AlertDialog` flow (both confirming and declining).
+// ---------------------------------------------------------------------------
+
+describe('<ScheduleMeetingsDialog /> T510 edit mode', () => {
+  const RECONCILABLE_SESSION_A: ExistingMeetingSeriesSession = {
+    sessionId: 'session-a',
+    sessionDate: '2026-08-10',
+    startsAt: '2026-08-10T23:00:00.000Z',
+    endsAt: '2026-08-11T01:00:00.000Z',
+    status: 'scheduled',
+  };
+  const RECONCILABLE_SESSION_B: ExistingMeetingSeriesSession = {
+    sessionId: 'session-b',
+    sessionDate: '2026-08-17',
+    startsAt: '2026-08-17T23:00:00.000Z',
+    endsAt: '2026-08-18T01:00:00.000Z',
+    status: 'scheduled',
+  };
+  // Already happened relative to any real clock this repo's own tests run
+  // under (well before this task's own 2026 fixture era) -- deliberately
+  // NOT `new Date()`-relative, so this fixture never flips reconcilable.
+  const PAST_SESSION: ExistingMeetingSeriesSession = {
+    sessionId: 'session-past',
+    sessionDate: '2026-07-01',
+    startsAt: '2026-07-01T23:00:00.000Z',
+    endsAt: '2026-07-02T01:00:00.000Z',
+    status: 'completed',
+  };
+
+  const EDIT_INITIAL_DATA: EditMeetingSeriesInitialData = {
+    eventId: 'event-1',
+    title: 'Weekly Build Meeting',
+    teamIds: null,
+    locationName: 'Robotics Lab',
+    description: 'Bring your laptops.',
+    sessions: [RECONCILABLE_SESSION_A, RECONCILABLE_SESSION_B, PAST_SESSION],
+  };
+
+  /** AlertDialog renders its own native `<dialog role="alertdialog">`
+   * (`node_modules/@astryxdesign/core/src/AlertDialog/AlertDialog.tsx`) --
+   * an unambiguous scope for its own "Save changes"/"Cancel" buttons, which
+   * otherwise share visible text with the MAIN dialog's own footer buttons. */
+  function findAlertDialogElement(): HTMLElement | undefined {
+    return (
+      (document.querySelector('dialog[role="alertdialog"]') as HTMLElement | null) ?? undefined
+    );
+  }
+
+  function findButtonInAlertDialog(text: string): HTMLButtonElement | undefined {
+    return Array.from(findAlertDialogElement()?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent?.trim() === text,
+    );
+  }
+
+  it('opens prefilled from initialData, edit-mode title, and the "already happened" disclosure (AC10, prefill)', () => {
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          initialData={EDIT_INITIAL_DATA}
+        />,
+      );
+    });
+
+    expect(document.body.textContent).toContain('Edit meeting series');
+    expect((getFieldControl('Title') as HTMLInputElement).value).toBe('Weekly Build Meeting');
+    expect((getFieldControl('Location') as HTMLInputElement).value).toBe('Robotics Lab');
+    expect((getFieldControl('Description') as HTMLTextAreaElement).value).toBe(
+      'Bring your laptops.',
+    );
+    // AC10 -- disclosure present: exactly 1 of the 3 sessions is not reconcilable.
+    expect(container.textContent).toContain(
+      '1 session(s) have already happened and are not affected by this edit.',
+    );
+    // Edit mode's confirm label is always 'Save changes', per computeConfirmLabel.
+    expect(findButtonByText('Save changes')).toBeDefined();
+  });
+
+  it('AC10 (other direction): no disclosure line when every session is still reconcilable', () => {
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          initialData={{
+            ...EDIT_INITIAL_DATA,
+            sessions: [RECONCILABLE_SESSION_A, RECONCILABLE_SESSION_B],
+          }}
+        />,
+      );
+    });
+    expect(container.textContent).not.toContain('have already happened');
+  });
+
+  it('AC-B2a: a fully-past series (zero reconcilable sessions) stays editable -- the confirm button is enabled', () => {
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          initialData={{ ...EDIT_INITIAL_DATA, sessions: [PAST_SESSION] }}
+        />,
+      );
+    });
+    const confirmButton = findButtonByText('Save changes');
+    expect(confirmButton).toBeDefined();
+    expect(confirmButton?.disabled).toBe(false);
+  });
+
+  it("AC-B1: saving with no schedule change preserves every toUpdate session's starts_at/ends_at as the SAME instant (heterogeneous-time no-op proof)", async () => {
+    const onSaveMeetingSeries = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          initialData={EDIT_INITIAL_DATA}
+          onSaveMeetingSeries={onSaveMeetingSeries}
+        />,
+      );
+    });
+
+    clickButton(findButtonByText('Save changes') as HTMLButtonElement);
+    await flushMicrotasks();
+    // Rule 6 -- does NOT call onSaveMeetingSeries yet; a confirmation opens first.
+    expect(onSaveMeetingSeries).not.toHaveBeenCalled();
+    expect(findAlertDialogElement()?.hasAttribute('open')).toBe(true);
+
+    const confirmInAlert = findButtonInAlertDialog('Save changes');
+    expect(confirmInAlert).toBeTruthy();
+    clickButton(confirmInAlert as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(onSaveMeetingSeries).toHaveBeenCalledTimes(1);
+    const payload = onSaveMeetingSeries.mock.calls[0][0] as SaveMeetingSeriesPayload;
+    expect(payload.eventId).toBe('event-1');
+    expect(payload.desiredFutureSessions).toHaveLength(2);
+    for (const original of [RECONCILABLE_SESSION_A, RECONCILABLE_SESSION_B]) {
+      const saved = payload.desiredFutureSessions.find(
+        (s) => s.sessionDate === original.sessionDate,
+      );
+      expect(saved).toBeDefined();
+      // Compare via getTime() (pins the intent -- the same INSTANT -- not
+      // literal string equality, per AC-B1's own scoping note).
+      expect(new Date(saved?.startsAt ?? '').getTime()).toBe(new Date(original.startsAt).getTime());
+      expect(new Date(saved?.endsAt ?? '').getTime()).toBe(new Date(original.endsAt).getTime());
+    }
+  });
+
+  it('confirming saves the current field edits (title/location/description) alongside the schedule', async () => {
+    const onSaveMeetingSeries = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          initialData={EDIT_INITIAL_DATA}
+          onSaveMeetingSeries={onSaveMeetingSeries}
+        />,
+      );
+    });
+
+    const titleInput = getFieldControl('Title') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(titleInput, 'Renamed Build Meeting');
+    });
+
+    clickButton(findButtonByText('Save changes') as HTMLButtonElement);
+    await flushMicrotasks();
+    clickButton(findButtonInAlertDialog('Save changes') as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(onSaveMeetingSeries).toHaveBeenCalledTimes(1);
+    const payload = onSaveMeetingSeries.mock.calls[0][0] as SaveMeetingSeriesPayload;
+    expect(payload.event.title).toBe('Renamed Build Meeting');
+    expect(payload.event.locationName).toBe('Robotics Lab');
+    expect(payload.event.description).toBe('Bring your laptops.');
+  });
+
+  it('declining the confirmation returns to the form with field state intact, and never calls onSaveMeetingSeries', async () => {
+    const onSaveMeetingSeries = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          initialData={EDIT_INITIAL_DATA}
+          onSaveMeetingSeries={onSaveMeetingSeries}
+        />,
+      );
+    });
+
+    const titleInput = getFieldControl('Title') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(titleInput, 'Renamed Meeting');
+    });
+
+    clickButton(findButtonByText('Save changes') as HTMLButtonElement);
+    await flushMicrotasks();
+    const cancelInAlert = findButtonInAlertDialog('Cancel');
+    expect(cancelInAlert).toBeTruthy();
+    clickButton(cancelInAlert as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(onSaveMeetingSeries).not.toHaveBeenCalled();
+    // Field state intact -- the rename survived declining the confirmation.
+    expect((getFieldControl('Title') as HTMLInputElement).value).toBe('Renamed Meeting');
+    // And the main dialog is still open (declining the confirmation must not
+    // also close the whole edit dialog).
+    expect(document.body.textContent).toContain('Edit meeting series');
+  });
+
+  it('create mode is unaffected: no Description field, no "already happened" disclosure, no AlertDialog opens on submit', async () => {
+    const onCreateMeetings = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          onCreateMeetings={onCreateMeetings}
+        />,
+      );
+    });
+    expect(() => getFieldControl('Description')).toThrow();
+    expect(container.textContent).not.toContain('have already happened');
+
+    const dateInput = getFieldControl('Date') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(dateInput, '2026-08-10');
+    });
+    clickButton(findButtonByText('Create 1 meeting') as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(onCreateMeetings).toHaveBeenCalledTimes(1);
+    expect(findAlertDialogElement()?.hasAttribute('open')).toBe(false);
   });
 });

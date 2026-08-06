@@ -64,11 +64,30 @@ grant execute on function auth.uid() to public;
 -- do not bypass RLS). Without this, every query below would fail with a
 -- Postgres "permission denied for table ..." error before RLS is even
 -- evaluated, which would be a false negative for this suite's purpose (it
--- must prove *zero rows*, not merely *an error*). `anon`/`authenticated`/
--- `service_role` already exist as roles in this scratch environment
--- (confirmed directly: `select rolname from pg_roles where rolname in
--- ('anon','authenticated','service_role')` returns all three) -- this file
--- does not create those roles, only grants against them.
+-- must prove *zero rows*, not merely *an error*).
+--
+-- T701 -- this comment used to read: "`anon`/`authenticated`/`service_role`
+-- already exist as roles in this scratch environment (confirmed directly...)
+-- this file does not create those roles, only grants against them." That was
+-- true of the box it was authored on and FALSE on a bare Postgres, where the
+-- roles are a Supabase-platform fact, not a Postgres one. It was the FIRST
+-- thing to break this runner -- `20260717000002_rls.sql` fails at
+-- `grant ... to authenticated` long before the pg_cron/storage migrations
+-- the T701 row named. The roles are now created here, idempotently, instead
+-- of assumed. Same approach `supabase/tests/calendar_feed_platform_stub.sql`
+-- already proved (`:7-13`).
+do $$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'anon') then
+    create role anon nologin noinherit;
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'authenticated') then
+    create role authenticated nologin noinherit;
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'service_role') then
+    create role service_role nologin noinherit bypassrls;
+  end if;
+end $$;
 --
 -- Deferred to run.sh, AFTER the migrations create the actual tables (a GRANT
 -- ... ON ALL TABLES IN SCHEMA public here, before any table exists, would

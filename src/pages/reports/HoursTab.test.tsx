@@ -252,6 +252,94 @@ describe('buildStudentRows / buildTeamGroups -- fixture walkthrough', () => {
     data = await defaultLoadHoursData(PLACEHOLDER_CURRENT_SEASON_ID);
   });
 
+  // -------------------------------------------------------------------------
+  // T201: a departed student's hours reconcile the team subtotal.
+  //
+  // The defect: `v_student_hours` has no `is_active` filter and never could
+  // (it does not join `students` at all), so `v_team_hours` -- and therefore
+  // CoachHome's "Hours by team" -- counted a departed member's hours. HoursTab
+  // built its subtotal from an ACTIVE-ONLY roster, so the same team read 8.0 h
+  // on one screen and 4.0 h on another. Measured on live PG 16.13.
+  //
+  // Owner ruled 2026-08-05 that the hours count: "that's actual work that was
+  // done regardless if that person is no longer with the team or not." So the
+  // total was right and HoursTab was wrong -- it hid the person, and the
+  // hours went with them.
+  //
+  // These build on the loader's OWN shape (`HoursStudentFixture`), not on a
+  // hand-made row, so they fail if `buildStudentRows` stops honouring
+  // `isActive`.
+  // -------------------------------------------------------------------------
+  function withPastMember(base: HoursLoadResult): HoursLoadResult {
+    const team = base.students[0]!;
+    return {
+      ...base,
+      students: [
+        ...base.students,
+        {
+          id: 'student-departed-t201',
+          name: 'Fixture Departed T201',
+          teamId: team.teamId,
+          isActive: false,
+          goalHoursOverride: null,
+        },
+      ],
+      studentHours: [
+        ...base.studentHours,
+        { studentId: 'student-departed-t201', seasonId: base.seasonId, confirmedHours: 4 },
+      ],
+    };
+  }
+
+  it("T201: a departed student with hours appears, marked, and their hours land in the team's subtotal", () => {
+    const withPast = withPastMember(data);
+    const rows = buildStudentRows(withPast);
+    const departed = rows.find((r) => r.rowId === 'student-departed-t201');
+
+    expect(departed?.kind).toBe('past-member');
+    expect(departed?.confirmedHours).toBe(4);
+
+    // The reconciliation itself: the subtotal grows by exactly their hours.
+    const teamId = withPast.students[0]!.teamId;
+    const before = buildTeamGroups(buildStudentRows(data)).find((g) => g.teamId === teamId);
+    const after = buildTeamGroups(rows).find((g) => g.teamId === teamId);
+    expect(after!.subtotal.confirmedHours).toBe(
+      Math.round((before!.subtotal.confirmedHours + 4) * 10) / 10,
+    );
+  });
+
+  it('T201: a departed student contributes NO goal, so "% to goal" cannot drop because someone left', () => {
+    const withPast = withPastMember(data);
+    const rows = buildStudentRows(withPast);
+    const departed = rows.find((r) => r.rowId === 'student-departed-t201');
+    expect(departed?.goalHours).toBe(0);
+    expect(departed?.percentToGoal).toBe(0);
+
+    const teamId = withPast.students[0]!.teamId;
+    const before = buildTeamGroups(buildStudentRows(data)).find((g) => g.teamId === teamId);
+    const after = buildTeamGroups(rows).find((g) => g.teamId === teamId);
+    // Unchanged -- the goal subtotal excludes past members entirely.
+    expect(after!.subtotal.goalHours).toBe(before!.subtotal.goalHours);
+  });
+
+  it('T201: a departed student with NO hours never appears at all', () => {
+    const team = data.students[0]!;
+    const rows = buildStudentRows({
+      ...data,
+      students: [
+        ...data.students,
+        {
+          id: 'student-departed-nohours',
+          name: 'Fixture Departed NoHours',
+          teamId: team.teamId,
+          isActive: false,
+          goalHoursOverride: null,
+        },
+      ],
+    });
+    expect(rows.find((r) => r.rowId === 'student-departed-nohours')).toBeUndefined();
+  });
+
   it('confirmedHours is a verbatim v_student_hours copy, never recomputed', () => {
     const rows = buildStudentRows(data);
     const jordan = rows.find((r) => r.rowId === 'student-jordan-blake');
@@ -464,11 +552,14 @@ function buildFakeHoursClient(db: {
           })),
         };
       case 'students':
+        // T201 -- the roster query no longer chains through `.eq('is_active',
+        // true)`, so this double no longer nests `order` under `eq`. It is
+        // shaped to the REAL call (`.select(...).order(...)`) rather than kept
+        // permissive: a double that accepted both would have gone on passing
+        // if the filter were silently reinstated.
         return {
           select: vi.fn(() => ({
-            eq: vi.fn(() => ({
-              order: vi.fn().mockResolvedValue({ data: db.students, error: null }),
-            })),
+            order: vi.fn().mockResolvedValue({ data: db.students, error: null }),
           })),
         };
       case 'teams':
@@ -517,6 +608,7 @@ describe('loadHoursData (T095 real load)', () => {
           id: 'student-1',
           display_name: 'DB Student',
           team_id: 'team-1',
+          is_active: true,
           goal_hours_override: null,
         },
       ],
@@ -559,7 +651,13 @@ describe('loadHoursData (T095 real load)', () => {
       seasonId: 'season-1',
       defaultGoalHours: 80,
       students: [
-        { id: 'student-1', name: 'DB Student', teamId: 'team-1', goalHoursOverride: null },
+        {
+          id: 'student-1',
+          name: 'DB Student',
+          teamId: 'team-1',
+          isActive: true,
+          goalHoursOverride: null,
+        },
       ],
       teams: [{ id: 'team-1', name: 'DB Team' }],
       // Verbatim rename, not recomputed -- 12.5 is a direct copy of the
@@ -637,9 +735,11 @@ describe('loadHoursData (T095 real load)', () => {
         };
       }
       if (table === 'students') {
+        // T201 -- shaped to the real call (`.select(...).order(...)`); the
+        // roster query no longer chains through `.eq('is_active', true)`.
         return {
           select: vi.fn(() => ({
-            eq: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: [], error: null }) })),
+            order: vi.fn().mockResolvedValue({ data: [], error: null }),
           })),
         };
       }

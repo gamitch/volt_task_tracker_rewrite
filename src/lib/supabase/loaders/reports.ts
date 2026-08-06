@@ -130,10 +130,26 @@
  * reference) each carry a `staff_all` policy granting `admin`/`coach` full
  * read access; `v_student_participation`/`v_student_hours` are plain views
  * over `students`/`attendance`/`event_sessions`/`events` with no
- * `security_definer`/`security_barrier` clause, so they run with the
- * querying user's own RLS-scoped permissions against those base tables
- * (same finding `ParticipationTab.tsx`'s own module doc #2 already made in
- * full). `ReportsShell.tsx` (forbidden/read-only) already restricts
+ * `security_definer`/`security_barrier` clause.
+ *
+ * **T204 CORRECTION.** This used to conclude "so they run with the querying
+ * user's own RLS-scoped permissions against those base tables", citing
+ * `ParticipationTab.tsx`'s module doc #2. Both the conclusion and the cited
+ * source are wrong, and `loaders/dashboard.ts` then cited THIS file in turn --
+ * a three-file citation chain from one bad premise, corrected together.
+ *
+ * The absence of `security_definer` proves nothing about views: the view-level knob is `security_invoker` (PG15+), which defaults OFF and
+ * appears as a real clause ZERO times under `supabase/`. These views therefore
+ * execute as their OWNER and do NOT apply the caller's RLS to the base tables.
+ * MEASURED, not reasoned: `20260731000000_leaderboard_students_view.sql:32-46`
+ * records the live run; `20260805000000_dashboard_views_comment_corrections.sql`
+ * now carries the same correction in the database catalog.
+ * NO BEHAVIOUR CHANGE is implied -- T185 closed no-change on the exposure
+ * itself under the owner's proportionality ruling (constitution item 25). Only
+ * the EXPLANATION was wrong.
+ *
+ * The staff-only access argument below is unaffected and is what makes these
+ * reads correct. `ReportsShell.tsx` (forbidden/read-only) already restricts
  * `/reports` to `coach`/`admin` via `RequireRole`, so every session reaching
  * any loader below is genuinely staff -- a real empty result from any query
  * here is "none exist yet for this season", not an RLS-caused false-empty.
@@ -322,6 +338,11 @@ interface HoursStudentDbRow {
   id: string;
   display_name: string;
   team_id: string;
+  // T201 -- selected so a departed student's row can be MARKED rather than
+  // dropped. The owner ruled 2026-08-05 that hours a student volunteered
+  // still count for their team after they leave ("that's actual work that was
+  // done regardless"), so hiding the person hid real hours.
+  is_active: boolean;
   goal_hours_override: number | null;
 }
 
@@ -384,8 +405,14 @@ async function queryHoursStudents(
 ): Promise<LoaderQueryResult<HoursStudentDbRow[]>> {
   const result = await client
     .from('students')
-    .select('id, display_name, team_id, goal_hours_override')
-    .eq('is_active', true)
+    // T201 -- the `.eq('is_active', true)` filter that stood here is GONE.
+    // `v_student_hours` (read below, unfiltered) already contained departed
+    // students' hours; this roster filter was the only thing discarding them,
+    // which made HoursTab's team subtotal disagree with `v_team_hours` (and so
+    // with CoachHome's "Hours by team") whenever a past member had hours.
+    // `buildStudentRows` now keeps an inactive student ONLY when they have
+    // hours, so a departed student with nothing still never appears.
+    .select('id, display_name, team_id, is_active, goal_hours_override')
     .order('display_name', { ascending: true });
   return { data: (result.data as HoursStudentDbRow[] | null) ?? null, error: result.error };
 }
@@ -441,6 +468,7 @@ function mapHoursStudentDbRowToFixture(row: HoursStudentDbRow): HoursStudentFixt
     id: row.id,
     name: row.display_name,
     teamId: row.team_id,
+    isActive: row.is_active,
     goalHoursOverride: row.goal_hours_override,
   };
 }

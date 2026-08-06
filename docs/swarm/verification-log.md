@@ -10178,3 +10178,908 @@ the first was the CI claim on a fast-moving `main`. Same failure mode, different
 
 `tsc` 0 · `format:check` 0 · `vitest` **80 files / 2027 tests** · T801 assertions **4/4** on live
 PostgreSQL 16.13, plus one mutation replayed.
+
+---
+
+## T204 + T700 + T701 — a wrong sentence that spread by citation, and a test suite nobody could run
+
+### T204: the named instance was already fixed; the class was not
+
+T204 named `loaders/students.ts:365-387`. **That comment was already corrected — by T186, commit
+`74489b8`, merged in PR #75 yesterday.** It carries a full "T186 CORRECTION" block. The row outlived
+its fix. Verified before touching anything rather than re-doing the work.
+
+But the same false claim was live in **three more files, as a citation chain**:
+
+| File | Said | Cited |
+|---|---|---|
+| `ParticipationTab.tsx:59` | "a plain view runs with the QUERYING USER's own permissions… not the view owner's" — backwards | — (origin) |
+| `reports.ts:133` | "so they run with the querying user's own RLS-scoped permissions" | `ParticipationTab.tsx` |
+| `dashboard.ts:79` | "so each runs under the querying session's own RLS" | `reports.ts` |
+
+**One confident sentence became three files of wrong reasoning, each citing the previous as
+authority.** All three are corrected together — fixing one link leaves the others pointing at a wrong
+source, which is how the claim survived being disproven in the first place.
+
+Each correction states the real mechanism (`security_invoker`, PG15+, defaults **off**, zero real
+clauses under `supabase/`), cites the measured run and T801's catalog comments, and says plainly that
+**no behaviour changes**: T185 closed no-change on the exposure itself under the owner's
+proportionality ruling. Only the explanation was ever wrong.
+
+### T701: the harness, and then what the harness was hiding
+
+**The row's diagnosis was right but mis-ordered.** It named `cron.sql`, `avatar_storage.sql`, and the
+missing roles. Measuring first showed the roles break it **first** — at `20260717000002_rls.sql`'s
+`grant … to authenticated`, long before either platform migration is reached. `auth_stub.sql`'s own
+comment claimed the roles "already exist… (confirmed directly)", which was true on the box it was
+authored on and false on bare Postgres. They are now created idempotently.
+
+**Then the sibling suite turned out to be rotten too, and worse.** `supabase/tests/run.sh` failed at
+apply time on a too-narrow `auth.users` stub. Fixing that let it reach its assertions for the first
+time in weeks — and **1 of 5 failed.**
+
+That failure is the real find. `seed.sql` seeds `students` and `teams` but **zero `student_teams`
+rows**, because `20260721000000_student_teams.sql` backfills memberships at *migration* time and this
+seed loads *after* migrations. The moment `20260722000000_membership_views.sql` moved
+`v_student_participation` onto ACTIVE memberships, `a-excused-shrinks-denominator` broke — **and
+nobody knew, because the runner could not start.** A real assertion was failing for two weeks behind
+a harness error. That is the cost of the rot, made concrete rather than asserted.
+
+Memberships added; all 5 now pass with real arithmetic (`expected_ct=2 present_ct=1 excused_ct=1 →
+100.0%`), not a vacuous zero.
+
+### T700: a guard, and two of my own errors caught by running it
+
+`t700_updatable_view_guard_assertions.sql` fails if any `public` view is both auto-updatable and
+write-granted to `anon`/`authenticated`. A2 pins the survey non-vacuous so A1 cannot pass for the
+wrong reason.
+
+**Two errors, both mine, both caught by running rather than reasoning:**
+
+1. **A3 tested the wrong property.** It asserted `is_updatable = NO` — but **T205 never changed the
+   view's shape and never claimed to.** `v_leaderboard_students` is still
+   `select id, display_name from students where is_active`: simple, therefore still auto-updatable.
+   T205 fixed the hazard by *revoking grants*. A3 now pins the absent write grant.
+2. **My runner undid the fix it was testing.** It applied blanket `grant … on all tables` *after* the
+   migrations, silently reversing T205's own `revoke` — so the guard failed against a correctly-fixed
+   database. It now uses `alter default privileges` *before* the migrations, which is how the real
+   platform behaves and leaves later explicit `REVOKE`s standing.
+
+Both would have shipped as confident wrong findings if I had reasoned instead of executed.
+
+### Mutations replayed
+
+| Suite | Mutation | Result |
+|---|---|---|
+| T700 | Comment out T205's two `revoke` lines | **RED** — A1 + A3, A3 naming `anon:DELETE, anon:INSERT, …` |
+| T700 | Add a **new** simple view | **RED** — A1 names `v_t700_probe_simple` |
+| RLS | `own_or_linked_read on students` → `using (true)` | **RED** — 2 assertions, non-zero exit |
+
+The second T700 mutation is the guard's actual purpose: a *future* view reintroducing the class.
+
+### The fix for the class, not the instances
+
+A new `sql` job in `ci.yml` runs **all eight** suites against a `postgres:16` service container, one
+step per suite so a red suite names itself. Dress-rehearsed locally against live PostgreSQL 16.13:
+**8/8 PASS**. Separate from the `ci` job on purpose — it needs a service container, it is slower, and
+a SQL failure should not hide inside a generic "CI failed".
+
+Nothing here can rot silently again, which was the actual complaint behind T701.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `eslint` 0 errors · `vitest` **80 files / 2027 tests** (unchanged — the
+TypeScript edits are comment-only) · **8/8 SQL suites** on live PG16.13 · 3 mutations replayed.
+
+---
+
+## T508 — the automatic absence backfill is gone; absences are now an explicit coach opt-in
+
+**Commit `0cd559e`** on `claude/w3-meeting-workflow-0bl669`. Tier HEAVY (write path, item 26):
+packet → `checker-premise` → `worker-implementer` (sonnet, per item 18 — none of the four opus
+triggers apply) → orchestrator replay.
+
+**What shipped.** `backfillAbsences` no longer runs unconditionally. `makeOnEndMeeting` now guards
+the mark-absences upsert on `payload.markAbsentStudentIds.length > 0`, so the ordinary case issues
+**no `attendance` write request at all** — not even an empty-array upsert, which is still a real
+write. The dialog's "will be marked absent" callout is replaced by an honest pair of sentences, and
+a `CheckboxInput` beside the End meeting trigger is the owner's required one-click bulk control:
+ticking it marks **every** unmarked roster member absent in one action, labelled with the live count
+("Mark 17 students with no attendance record absent"). It defaults unticked. Checkout and the status
+flip remain unconditional and unreordered.
+
+### The premise gate paid for itself twice
+
+**Round 1 returned REVISE (BLOCKER).** It built the full prescription in its own worktrees and ran
+every named mutation rather than reading, and it caught two criteria that would have shipped
+believing they were covered:
+
+- **§4a.3 was vacuous** — the packet declared "no default is an acceptance criterion", cited T300's
+  C2 as the cautionary precedent, and then reproduced T300's exact error. Restoring the default left
+  the suite green at exit 0 with `tsc` clean. Replaced with T300's paired `tsc` replay (C10).
+- **C8 could not bite** — it asserted an off-roster mark through `computeEndMeetingSummaryCounts`,
+  which after the prescription never receives a roster at all, so its "assert the student is absent
+  from the roster array" fixture checked an array that was never passed in. Re-sited at
+  `buildEndMeetingConfirmDescription`, which still takes both.
+
+It also caught a **BLOCKER that no amount of reading would have found**: the owner's grant on
+`LiveConsole.endMeeting.test.tsx` was recorded as "exactly two lines" and **three are forced**
+(`:195`, `:276`, `:396`). Two fails `tsc` at exit 2. The grant was re-confirmed at three by the owner
+before dispatch rather than widened by worker judgement — see `auto-mode-decisions.md`.
+
+### Orchestrator replay — four criteria re-run independently, in a throwaway worktree
+
+Not trusted from the worker's report. Applied, measured, reverted; `git diff --quiet` clean after.
+
+| # | What was mutated | Result |
+|---|---|---|
+| **C1** | deleted the `length > 0` write guard | **vitest exit 1**, 1 failed — the empty-array upsert was issued and caught at the transport |
+| **C6** | `useState(false)` → `useState(true)` | **vitest exit 1**, 3 failed |
+| **C8** | re-scoped the tally to roster members *inside* `buildEndMeetingConfirmDescription`, leaving `computeEndMeetingSummaryCounts` untouched | **`tsc` exit 0** (genuinely signature-preserving) and **vitest exit 1**, exactly 1 failed |
+| **C10** | paired replay — (a) omit the 4th arg, no default; (b) same omission, default restored | (a) **`tsc` exit 2**, `EndMeetingDialog.tsx(805,21): error TS2554: Expected 4 arguments, but got 3`; (b) **`tsc` exit 0 clean** — confirming the default would have made it vacuous |
+
+The worker independently reported all 11 red, including confirming that the "decorative" unit-test
+shape for C8 **stays green** under the same mutation — it verified that from its own output rather
+than repeating the packet's claim.
+
+### Gates, measured by the orchestrator on `0cd559e`, not quoted from the worker
+
+`tsc` **0** · eslint **0 errors / 366 warnings** · `format:check` **clean** · vitest
+**80 files / 2038 tests, exit 0**.
+
+Baseline was 365 warnings / 2027 tests. **The +1 warning is the declared, pre-announced delta** —
+`react-refresh/only-export-components` on the newly exported `buildMarkRemainingAbsentLabel`
+(`EndMeetingDialog.tsx` 11→12). Declaring it in the packet before the work started is what stopped
+it being litigated at review. **+11 tests**: `endMeeting.test.ts` 16→18, `EndMeetingDialog.test.tsx`
+21→30.
+
+### The worker's report contained one false claim about its own work
+
+Its "Known risks" section states that *"T508 alone does not add a bulk control … a whole-team opt-in
+still costs one tap per student today."* **That is wrong, and the code contradicts it.** Ticking the
+one checkbox sets `markAbsentStudentIds = computeUnmarkedStudentIds(...)` — the entire unmarked set,
+in one action (`EndMeetingDialog.tsx:437-451`, `:918-923`). The bulk control the owner's MET-01
+ruling is conditional on **is present and working**; the worker built it correctly and then
+mis-described it.
+
+Recorded because taking that sentence at face value would have led to declaring T508 incomplete and
+leaving **W4's T509 blocked for no reason**. A worker's summary is not evidence about its own diff —
+this is the second recorded instance in this project of a report contradicting the artifact it
+describes (T142 was the first, in the opposite direction).
+
+### Scope discipline held
+
+Exactly the five Allowed Files changed; `LiveConsole.tsx` source was never opened; the grant was used
+for exactly its three authorised lines. §3g's three tests were each re-derived deliberately, and the
+second one is worth noting — its old assertion, that an unmarked student *is* auto-marked absent,
+literally encoded the live data corruption as correct behaviour.
+
+### Filed, not fixed (item 20)
+
+**T603** — `AttendanceMethod` omits `'self'` in **four** declarations while the database has allowed
+it since 2026-07-24. The worker reported one; the other three came from grepping the symbol. Already
+worked around once rather than fixed (`selfCheckoff.ts:93` forked a correct parallel type and its
+module doc says why). No live crash — there is no `Record<AttendanceMethod, …>` anywhere — but
+`resolveAttendanceWriteMethod` is on a write path.
+
+**T604** — four more "frozen"/"forbidden" claims about `EndMeetingDialog.tsx` survive in
+`endMeeting.ts` at `:102`, `:105`, `:110`, `:297`, outside T602's four named ranges. The worker was
+right to leave them and file instead of widening a deliberate list by judgement.
+
+**Unchanged residual (§6, disclosed not fixed):** `recorded_by` on bulk-marked rows stays `null`.
+A primitive exists (`attendance.ts:495-515` already carries it) but the seam is in another
+workflow's file. The value is unchanged from the backfill it replaces — a pre-existing gap made
+visible, not a regression.
+
+---
+
+## T703 — closed superseded, and a mutation that lied
+
+### The row was right to sequence itself after T702, and T702 dissolved it
+
+T703's premise: the `buildSeasonTotals` fixture's meeting event carries `adultVolunteersCount: 0,
+adultVolunteerHours: 0`, so including or excluding it yields the identical total — a fixture
+advertising a proof it cannot deliver.
+
+**Those fields no longer exist.** T702 deleted the adult-volunteer season figures outright rather than
+filtering them. And `buildSeasonTotals(sessions)` no longer receives an `events` argument, so it
+cannot see event `type` at all — the regression T703 guards against is not merely unguarded, it is
+**structurally inexpressible**.
+
+`HoursTab.tsx` module doc #6 already recorded this, naming the row: *"an earlier plan (T500/T703) …
+is superseded and removed along with the figures it guarded; there is nothing left for that guard to
+protect once the sum itself is gone."* The row outlived its own resolution — the same shape as T204,
+which was also already fixed when its row was picked up.
+
+### The concern, re-checked against today's code
+
+A superseded premise does not mean today's tests are sound, so both surviving claims were mutation-tested:
+
+| Mutation | Result |
+|---|---|
+| Truncate `buildSeasonTotals`'s loop (`sessions.slice(0, -1)`) | **RED** — 2 tests |
+| Count nulls into the total instead of bucketing them separately | **RED** — same 2 |
+| Remove the `countsVolunteerHours` guard (the fixture's *new* advertised proof) | **RED** — 2 tests, one named for exactly that behaviour |
+
+Nothing here advertises a proof it cannot deliver.
+
+### The mutation that lied, and why it is worth writing down
+
+The first attempt at mutation 1 replaced `for (const session of sessions) {` with a single
+`replace(…, 1)`. That string appears **twice**. It hit line 443 — a different function — and left
+`buildSeasonTotals` at line 596 untouched.
+
+The test passed. And a passing test under a "mutation" looks exactly like T703's defect **confirmed**:
+a test that cannot detect the regression it names. I was one step from filing that as the finding.
+
+What caught it was checking that the mutation landed where intended — printing the changed line
+number rather than trusting `replace` to have hit the right occurrence.
+
+**A mutation that did not apply is indistinguishable from a test that does not guard.** Mutation
+testing only proves something if you verify the mutation itself took effect. That belongs alongside
+this session's other two: a filed row is not evidence, and a comment cannot verify itself.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `vitest` **80 files / 2027 tests** · 4 mutations replayed. No production
+code changed — this task closes a row and records why.
+
+---
+
+## T511 — the live console gets an entry point, and one of my own criteria was vacuous
+
+**Tier FAST** (item 26), defended in `active/T511-scope.md` §1: pure navigation, no write path, no
+schema/RLS/auth change, no exported signature change, ~15 lines of production code, four named
+mutations. The "it exposes a staff console, so it is auth-adjacent" argument was considered and
+rejected — item 25 retires "it sounds sensitive" as a tier trigger, and the gate here is
+pre-existing and untouched.
+
+**What shipped.** `CoachMeetingSessionRow`'s `status === 'scheduled'` block now renders
+`<Link as={RouterLink} href={routePaths.meetingLiveSession(session.sessionId)} isStandalone>`
+beside the existing Cancel button. `routePaths.meetingLiveSession` previously had **zero call
+sites**; `/meetings/live/:sessionId` was reachable only by typing the URL.
+
+### ⚠️ C3 passed for the wrong reason on its first pass, and the mutation is what caught it
+
+C3 asserts a student never sees a Go live link. Its named mutation — widen `isCoachOrAdminView` to
+`user !== null` — turned **23 tests red, and C3 was not one of them.**
+
+The test supplied `loadStudentData` only. Under the mutation the student was handed the coach view,
+but with no coach fixture and no expander click, **no session rows rendered at all** — so "no Go
+live links" was trivially true. A criterion guarding a role gate was green in a build where the role
+gate was gone.
+
+Fixed by supplying `loadCoachData` **and** attempting the expansion inside a `try/catch` (a student
+has no expander, so its absence is the normal path; if the gate ever widens, the call succeeds and
+the links appear). Re-run: **24 failures, C3 among them.**
+
+Recording this against myself deliberately. I flagged the identical shape in T508's packet review —
+a fixture asserting against something the code under test never receives — and then wrote one. The
+lesson that generalises: **a "renders nothing" assertion is only meaningful if the fixture would
+have rendered something.** Negative assertions need a positive control.
+
+### All four mutations, run in an isolated worktree
+
+| # | Mutation | Result |
+|---|---|---|
+| **C1** | `href` → `routePaths.kioskSession(...)` (same `/…/<sessionId>` shape, wrong route) | **exit 1**, C1 only |
+| **C2** | guard → `(true \|\| status === 'scheduled')`, link on every status | **exit 1**, 4 failed |
+| **C3** | `isCoachOrAdminView` → `user !== null` | **exit 1**, 24 failed incl. C3 (**23 excl. C3 before the fix**) |
+| **C4** | drop the date, leaving a bare `Go live` | **exit 1**, C4 only |
+
+Committed before mutating; `git diff --quiet` clean after; worktree removed.
+
+### Two design decisions, both recorded because the obvious choice was wrong
+
+**No time window.** `isSessionCheckInEligible` (`CoachHome.tsx:1179-1190`) already implements
+"live now, or starting within 60 minutes" and reusing it looked obviously right. Rejected: a window
+makes the console unreachable again outside it — including a meeting that started 90 minutes ago and
+is still running, which is the case that matters most. Fixing "no entry point" with "an entry point
+that is usually absent" is not a fix. Reusing it would also mean W3's page importing W5's page;
+re-deriving it locally is **T600**'s recorded debt shape exactly.
+
+**`Link`, not `Button`.** `astryx-api.md`'s Link Best Practices reserve Button for actions that do
+*not* navigate. `LiveConsole.tsx:886` is the in-repo precedent. It sits beside a `Button` and does
+not look identical — the disclosed cost of a real anchor that supports middle-click, ctrl-click and
+the correct screen-reader announcement. The date is in the **visible text** because Astryx forbids
+`label` on text links, so that text *is* the accessible name; without it a multi-session row renders
+several links all called "Go live" (C4).
+
+### Two things deliberately not done
+
+**Did not extend the shared `MULTI_SESSION_SESSIONS` fixture.** Adding a second scheduled session to
+it broke **7 unrelated tests** that encode its session count. T511 got its own `T511_ROW` fixture
+instead. Modifying a shared fixture to serve one new test, then rewriting the correct assertions it
+breaks, is how over-replacement damage happens.
+
+**Did not add a role check beside the link.** The gate is structural — `CoachMeetingSessionRow`
+renders only under `CoachMeetingsView`. A second gate can drift out of step with the first; C3
+asserts the existing one instead.
+
+### Gates
+
+`tsc` **0** · eslint **0 errors / 366 warnings** (no delta — nothing new exported) ·
+`format:check` **clean** · vitest **80 files / 2042 tests, exit 0** (baseline 2038; `MeetingsList.test.tsx`
+84 → 88).
+
+`MemoryRouter` was added to this file's shared `renderAsUser` helper — `RouterLink` throws outside a
+router context. Same wrapper `LiveConsole.test.tsx` and `CheckinResult.test.tsx` already use, and
+additive: all 84 pre-existing tests pass unchanged.
+
+---
+
+## T163 — the row said "0 tests"; it was wrong, and checking found the real gap
+
+### Checked first, because the owner said prior reviews had got this wrong
+
+They were right to say so. T163 read *"`loaders/reports.ts` has 0 tests (729 lines)"*. **All six
+exports were already imported as VALUES and exercised against stubbed clients** by
+`pages/reports/{Participation,Hours,Events}Tab.test.tsx`. The file had no *colocated* test file, which
+is a different claim. (It is also 744 lines now, not 729.)
+
+Had I taken the row at face value, I would have written a from-scratch suite duplicating coverage that
+already existed — and, worse, most likely reproduced the same blind spot, because the obvious thing to
+copy is the existing fake client.
+
+### Measuring found a real gap, narrower and sharper than the row
+
+Five mutations against the live loaders, run through the existing `pages/reports` suite:
+
+| Mutation | Tab suite |
+|---|---|
+| participation: return `[]` instead of built rows | **RED** — caught |
+| events: skip the sessions chain entirely | **RED** — caught |
+| participation: wrong `seasonId` to the metrics query | **GREEN** — missed |
+| hours: wrong `seasonId` to the season-goal query | **GREEN** — missed |
+| events: wrong `seasonId` to the events query | **GREEN** — missed |
+
+**Season scoping was unguarded in all three loaders.** Structural breakage is caught; sending a query
+to the wrong season is not — and that is the failure that would silently show a coach another season's
+numbers.
+
+### Why the existing tests cannot catch it — mechanism, not speculation
+
+Their fake clients build the filter spy inline and throw the handle away:
+
+```ts
+select: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ data, error }) }))
+```
+
+That `.eq` returns identical rows for every argument and is unreachable from the test body, so no
+assertion about what was passed is even expressible. This is the same passthrough-fake trap
+`loaders/coachHome.test.ts` documents (T198) and `t700_updatable_view_guard_assertions.sql` guards
+against in SQL: **a fixture-visibility test passes identically whether or not the filter is applied.**
+
+### What shipped
+
+`src/lib/supabase/loaders/reports.test.ts` — 9 tests that deliberately do **not** re-test mapping or
+row building, since the tab tests already cover those well (proven above). It retains the spy handles
+and pins every query's *filter argument*: season scoping across all three loaders, the shared
+`is_active` students filter, the `events → sessions → (attendance, rsvps)` id chain, and the
+empty-`.in(...)` guards.
+
+### Proof the gap closed, in both directions
+
+| Mutation | Tab suite | New file |
+|---|---|---|
+| participation: wrong `seasonId` | GREEN | **RED** |
+| hours: wrong `seasonId` | GREEN | **RED** |
+| events: wrong `seasonId` | GREEN | **RED** |
+| hours: drop the `is_active` filter | RED | **RED** |
+
+The last row matters: it shows the new file is **additive**, not a replacement — where the tab tests
+already guard something, both catch it.
+
+### The pattern this closes on
+
+Three rows today whose premise did not survive contact: T204 (already fixed), T703 (superseded), and
+now T163 (wrong about coverage entirely). In every case the row pointed somewhere useful — but the
+useful thing was never quite what the row said. **Check the premise, then keep looking; a wrong
+premise often sits next to a real defect.**
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `eslint` 0 errors · `vitest` **81 files / 2047 tests** (was 80 / 2038) ·
+9 mutations replayed.
+
+---
+
+## T509 — MET-01 counts explicit marks, and the premise gate found a live lie
+
+### The gate found the defect is worse than the row says
+
+The row frames T509 as a PRD deviation (D014). Run against live PostgreSQL 16.13 with a two-student
+fixture, the shipped view says something worse:
+
+```
+BEFORE   Fixture Marked     expected_ct=2  present_ct=1  ->  50.0%
+         Fixture Unmarked   expected_ct=2  present_ct=0  ->   0.0%   <-- ZERO attendance rows
+```
+
+That student has **no attendance rows at all**. Nobody marked them, and the app reports they attended
+0% of sessions. **T508 made this the default case**, not an edge case — absences are now written only
+when a coach explicitly opts in, so "no row" is the ordinary state of a student nobody got to.
+
+This is a real defect in shipped code, in exactly the class constitution item 26 puts at HEAVY —
+a number about a student's own contribution.
+
+> **WORDING CORRECTED, 2026-08-05.** This paragraph first read "a live user-facing lie". That
+> overstated the finding and the correction matters more than the phrasing: the 0% was measured on a
+> **fixture built for this premise gate**, and the owner has since confirmed there is **no live system
+> and no attendance records**. No user was ever shown a wrong number. The defect is real, measured,
+> and would produce one the moment real attendance exists — but "live" implied an urgency that did not
+> apply, and I wrote it before establishing whether any data existed.
+>
+> Worth noting alongside this session's other three lessons, because it is the same failure: I
+> measured something true (the view returns 0.0%) and then described a consequence I had not checked
+> (that someone was seeing it).
+
+### Two of the row's instructions were wrong
+
+**The denominator would double-subtract.** The row says *"present+late ÷ (present+late+absent −
+excused)"*. But `attendance.status` is `check (status in ('present','late','excused','absent'))` —
+four **mutually exclusive** values, so `present+late+absent` already excludes excused. Implemented as
+`count(*) − count(*) filter (where status='excused')`, which reads as the rule rather than an
+enumeration that would drift if a fifth status were added.
+
+**"Re-derive T014's MET-01 fixture tests, they encode the old denominator" — measured, and they
+don't.** `supabase/tests/run.sh` passes **identically** with T509 applied and withheld. Its fixture
+marks every student for every session, so eligibility and explicit marks select the same set there.
+The assertions are still correct; they are simply blind to this change. Re-deriving them would have
+produced identical numbers and proved nothing — the same fixture-cannot-tell-the-difference shape
+T703 was filed for. A **diverging** fixture was written instead.
+
+### A decision made, then reversed on measurement
+
+`expected_ct` now counts marks, so the name is wrong. A rename to `marked_ct` was drafted and proven
+to work: `create or replace view` refuses it (Postgres hints at `ALTER VIEW … RENAME COLUMN`), and the
+dependent `v_team_participation` auto-follows by attribute number.
+
+**It was reverted.** `expected_ct` is selected **by name** from this view in three loaders —
+`reports.ts:253`, `checkin.ts:336`, `meetings.ts:425`. Renaming would break all three **at runtime**,
+not merely churn types. I had recommended the rename on an estimate of "migration + one loader + one
+page + tests"; measuring showed that estimate was wrong, and the recommendation with it.
+
+Two near-misses recorded so nobody "finishes the rename": `v_season_attendance_rate` has its **own**
+`expected_ct` (different view), and `MeetingsList.tsx`'s `expectedCt` is an RSVP going-count
+(unrelated).
+
+So the column keeps its name with a catalog comment, and the correction lands where a user sees it:
+**RPT-02's header "Expected" → "Marked"** — which is precisely what D014's mitigation depends on,
+since that mitigation is *"RPT-02 shows the counts"*.
+
+### NULL, not a floor
+
+Both views divided by `greatest(…, 1)`, which fabricated 0% when there was no denominator. Both now
+return NULL, which the UI already renders as an em dash. This also fixes the all-excused student, who
+previously scored a fabricated 0%.
+
+### Proof
+
+`t509_explicit_marks_assertions.sql` + runner, wired into CI's `sql` job (now 12 steps).
+
+| Assertion | With T509 | Migration withheld |
+|---|---|---|
+| A1 unmarked student has no row | PASS | **FAIL** — *"expected 0 rows, got 1 (the pre-T509 0% lie is back)"* |
+| A2 marked student scores 50.0 | PASS | PASS — correctly unchanged |
+| A3 all-excused yields NULL | PASS | **FAIL** — `pct=0.0` |
+| A4 team rollup matches | PASS | **FAIL** — `25.0` |
+| A5 fixture is non-vacuous | PASS | **FAIL** |
+
+A2 staying green is the point: a fully-marked student scores the same either way, so the change is
+surgical rather than "drop rows until the numbers look nice". All 8 pre-existing SQL suites still pass.
+
+### Applied
+
+**The owner applied the migration on 2026-08-05**, against a database with no attendance records, so
+nothing observable changed — which is exactly why applying it before real data arrives was the cheap
+moment. Applying the same change after a season would have visibly moved participation percentages
+for many students at once.
+
+The migration FILE is deliberately left uncorrected: it is applied now, and constitution item 10
+makes editing an applied migration a BLOCKER. Any correction to its text would need a new file — the
+route T801 took.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `vitest` **81 files / 2051 tests** · **9 SQL suites** green on live
+PG 16.13 · 1 withhold mutation replayed.
+
+---
+
+## T202 — a one-site a11y NIT that was six sites, and two carve-outs that weren't real
+
+### The audit the row asked for contradicted the row
+
+T202 named one site (`HoursTab.tsx`) and deferred everything else. Both deferrals were wrong.
+
+**T191 did not remove the clamp from `ParentHome.tsx`.** Its owner ruling was *"no bar at all"* for a
+**deactivated** child — it swaps the bar for a marker on `!isActive`. The clamp survived at
+`ParentHome.tsx:1281` and still fired for an **active** child with a genuine zero goal. That is the
+page T181 existed to stop fabricating on, so the fabrication outlived two tasks aimed near it.
+
+**The CoachHome carve-out pointed at nothing.** The row deferred four clamps to *"T173/T198's
+territory"* — but `T173`'s row does not contain the words ProgressBar, aria, valuemax or clamp, and
+T198 closed the day before without touching them. Orphaned.
+
+`StudentHome.tsx:1465`'s carve-out **is** real — T184's row does name progressbar — so it is
+deliberately untouched.
+
+### Mechanism read from the component, then confirmed by rendering
+
+```js
+const safeMax = Number.isFinite(max) ? max : 0;                    // :160  passes 0 THROUGH
+const percentage = safeMax > 0 ? clampedValue / safeMax * 100 : 0; // :162  already guards
+"aria-valuemax": isIndeterminate ? undefined : safeMax,            // :212  unconditional
+```
+
+The component never floors `max` at 1 and already handles 0 safely. **The app-level `: 1` was the only
+thing inventing the number**, so passing the real 0 is both correct and safe.
+
+That was a claim worth testing rather than reasoning about, so a throwaway probe rendered the real
+component: `max={1}` announces `aria-valuemax="1"`; `max={0}` announces `"0"` and does not crash.
+Probe deleted after.
+
+### Six clamps, two kinds
+
+| Kind | Sites | Why it fabricated |
+|---|---|---|
+| A real **goal** | `HoursTab:939`, `ParentHome:1281`, `CoachHome:2040`, `CoachHome:2441` | announced a goal of 1 h existing in no data source |
+| A chart **scale** | `CoachHome:1982`, `CoachHome:2012` | with every team at 0 h, announced a scale topping out at 1 h |
+
+The distinction is recorded in-code because they are different questions — one is a data value, the
+other a display device — even though both invent the same number.
+
+### The test asserts the right attribute, and that is the whole point
+
+The new `ParentHome.test.tsx` case pins `aria-valuemax="0"` for a zero-goal **active** child, reusing
+T191's own scoped `hoursVsGoalProgressBars` helper (which exists because a page-wide progressbar count
+would catch `ConsistencyStrip`'s bar too — T191's checker found that vacuity).
+
+It asserts on `aria-valuemax`, **not** the visible text, deliberately: `formatValueLabel` only shapes
+the visible label, so a text-only assertion would pass while assistive tech still heard the invented
+number. **That is precisely how this survived T191** — the visible copy was already honest, and only
+the a11y tree lied.
+
+Mutation: reinstating the clamp turns it RED (`expected '1' to be '0'`). The mutation's landing line
+was printed before running, after this session's earlier lesson that a mutation which silently fails
+to apply is indistinguishable from a test that does not guard.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `eslint` 0 errors · `vitest` **81 files / 2052 tests** (was 2051) · 1
+mutation replayed.
+
+---
+
+## T201 — diagnosed, not fixed: "Hours by team" counts students a coach cannot see
+
+### This row asked for scoping, and scoping is the deliverable
+
+T201 says it plainly: *"Scope genuinely unknown… establish where, if anywhere… a deactivated
+student's historical hours should be shown before designing a fix — not decided by this row."*
+
+So this entry contains a measurement and a question, and **no code changed**.
+
+### Premise re-verified against the LIVE definitions
+
+The row cites `20260717000003_metric_views.sql` for `v_student_hours`, but T322's
+`20260804000000` create-or-replaced it. Checking the live one rather than the cited one (the T804
+lesson): it still has **no `is_active` filter** — it never joins `students` at all, so one is not
+even possible — and `v_student_goal_projection` still ends `where s.is_active`. Both halves hold.
+
+### Three of four consumers are safe, and the row did not know which
+
+| Consumer | Reads | Safe because |
+|---|---|---|
+| `leaderboard.ts:138` | `v_student_hours` | joins `v_leaderboard_students`, which is `where is_active` |
+| `reports.ts:414` | `v_student_hours` | three `.eq('is_active', true)` roster filters |
+| `coachHome.ts:350` | `v_student_hours` | filters in JS (`sumConfirmedHours` on `student.isActive`) |
+| **`v_team_hours`** | `v_student_hours` | **nothing — no `is_active` filter at any level** |
+
+`v_team_hours` sums `v_student_hours` joined only to `student_teams`, and feeds `dashboard.ts:308`
+→ CoachHome's **"Hours by team"**.
+
+### Measured, on live PostgreSQL 16.13
+
+Two students on one team, both present at the same 4 h outreach session, one since deactivated:
+
+```
+v_student_hours          Fixture Active   4.0     Fixture Departed  4.0   (no is_active filter)
+v_team_hours             8.0     <-- what "Hours by team" shows
+sum via goal_projection  4.0     <-- the students a coach can actually see
+```
+
+**The coach sees a team total double the roster they are shown**, with nothing on screen accounting
+for the gap. That is the `is_active` family's third instance, made concrete rather than suspected.
+
+### Why it stops here
+
+The remaining question is not an engineering one. **Should a departed student's historical hours
+still count toward their team's total?**
+
+- **(a) No** — filter them, so the total always equals the visible roster. Consistent and
+  explicable; understates what the team actually did.
+- **(b) Yes** — the hours were genuinely volunteered for that team, and erasing them rewrites
+  history. But the total then legitimately will not match the roster sum, so it needs a visible
+  explanation ("8 h, incl. 4 h from past members") or coaches read it as a bug.
+- **(c) Yes, and surface departed students per-student** so the arithmetic reconciles. Largest
+  change — and note this row's own warning: `v_student_goal_projection`'s filter **cannot** simply
+  be relaxed, because T184's `{kind:'inactive'}` branch depends on its null-for-inactive signal. It
+  needs a new, separate read.
+
+All three produce different migrations, so writing one before the ruling would be guessing at a
+product decision the row explicitly reserves.
+
+### Gates
+
+No code changed — docs only. `tsc` 0 · `format:check` 0 · `vitest` **81 files / 2052 tests**
+(unchanged).
+
+---
+
+## T201 (fix) — the hours were always right; HoursTab was hiding the people
+
+### The ruling, and what it implied
+
+Owner, 2026-08-05: *"that's actual work that was done regardless if that person is no longer with the
+team or not. That's like asking if your work done today counts for my token usage if i deactivate your
+session."* Option **(c)** — keep the total AND surface departed members per-student. The goal-column
+sub-decision was delegated.
+
+That inverts which side is broken. If the hours count, **`v_team_hours`'s 8.0 h was correct all along**
+and HoursTab's 4.0 h was the defect — it hid the person, and their hours went with them.
+
+### The fix was cheap because the data was already being fetched
+
+`queryHoursStudentHours` reads `v_student_hours` **unfiltered**, so departed students' hours were
+already arriving in `HoursLoadResult`. `buildStudentRows` is roster-driven — it iterates
+`data.students` and looks up hours — so a student with no roster row silently vanished, hours and all.
+The roster query's `.eq('is_active', true)` was the only thing discarding them.
+
+**No migration.** `v_team_hours`, `v_student_hours` and `v_student_goal_projection` are all untouched,
+so T184's null-for-inactive signal — this row's own stated hazard — is unaffected.
+
+| Change | File |
+|---|---|
+| drop `.eq('is_active', true)`, select `is_active` | `loaders/reports.ts` |
+| keep an inactive student **only when they have hours** | `buildStudentRows` |
+| new `'past-member'` row kind: badge, `—` goal/%, excluded from goal subtotal | `HoursTab.tsx` |
+
+### The goal column, decided
+
+A past member shows `—` for goal and percent, contributes 0 to the goal subtotal, and renders **no
+ProgressBar**. Counting their goal would make a team's "% to goal" **drop because somebody left** —
+trading one wrong number for another. Rendering the bar would announce `aria-valuemax="0"` and a 0%
+label, fabricating the "missed their goal" reading the em dash exists to avoid (T202's lesson,
+one row later).
+
+Confirmed and planned hours count in full. That is what makes the subtotal reconcile with
+`v_team_hours`.
+
+### Mutations — and one that stayed green for the right reason
+
+| Mutation | Result |
+|---|---|
+| Drop past members again (the original defect) | **RED** |
+| Give a past member a real goal | **RED** |
+| Remove the goal-subtotal filter **alone** | **GREEN** |
+| Both of the last two together | **RED** |
+
+The green one is not a coverage gap. `goalHours: 0` in `buildStudentRows` already enforces "no goal
+from a past member", so the subtotal filter is a **second, independent mechanism** — removing either
+alone changes nothing, and defeating both at once is caught by the subtotal assertion. Defence in
+depth, with every single-point failure pinned.
+
+Worth stating because a green mutation looks like a hole at first glance, and this session already
+had one that genuinely was (T703) and one that only appeared to be (a mutation that never applied).
+The way to tell them apart is to keep mutating until you find what the assertion is actually holding.
+
+### A test of mine, inverted rather than deleted
+
+`makeLoadHoursData … "scopes students to active only"` — written by me this morning for T163 —
+asserted the exact filter that turned out to be the defect. It now asserts the filter is **absent**,
+and notes that the participation loader legitimately still filters. Two fake-client doubles were also
+reshaped to the real `.select(...).order(...)` call rather than left permissive enough to accept both
+shapes; a permissive double would have gone on passing if the filter were silently reinstated.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `eslint` 0 errors · `vitest` **81 files / 2055 tests** (was 2052) ·
+`vite build` 0 · 4 mutations replayed.
+
+---
+
+## T188 — diagnosed: valid, and four divergences rather than one
+
+Validity check requested by the owner before any work. **No code changed.**
+
+### First, a hypothesis worth killing
+
+T201 merged the same day and fixed a two-numbers-disagree bug in the same family, so it was worth
+asking whether it had dissolved this one. **It had not.** T201 was roster filtering (`is_active`
+discarding departed students); T188 is RSVP-versus-attendance. Different mechanism entirely.
+
+That check cost two minutes and would have cost an afternoon if skipped — the same shape as T204 and
+T703, which were already fixed when picked up.
+
+### The row's finding holds
+
+`computeStudentHours` (`OutreachList.tsx`) still computes confirmed hours from RSVP `status = 'going'`
+plus session `status = 'completed'`, and still never reads `attendance`. `v_student_hours` computes
+from attendance. A student who RSVPs and does not attend accrues hours on `/outreach` and none in the
+view.
+
+### Three more the row does not name — and two hit normal usage
+
+| # | Divergence | Who it affects |
+|---|---|---|
+| 1 | RSVP vs attendance *(the filed finding)* | RSVP'd `going`, didn't attend |
+| 2 | `hours_override` invisible to `computeStudentHours` | anyone a coach adjusted |
+| 3 | check-in/out clamping invisible to it | anyone who arrived late or left early |
+| 4 | counts NON-OUTREACH events | anyone who RSVP'd `going` to a meeting |
+
+**#2 and #3 are the ones that matter most**, because they need no misuse at all: a student who attends
+properly, is marked present, and checked in twenty minutes late sees the full session length on
+`/outreach` and the clamped figure everywhere else. Neither number is wrong. Nothing on screen says
+they answer different questions.
+
+### #4 was measured, not inferred
+
+A probe called `computeStudentHours` with a completed **meeting** session and a `going` RSVP:
+
+```
+counted: 2, sessionLength: 2
+```
+
+It counted the meeting. The function takes only `(studentId, sessions, rsvps)` — it has no access to
+event `type` or `countsVolunteerHours`, so it **cannot** filter — and `loaders/outreach.ts:739`
+queries `events` for the season with no type filter, with nothing filtering in between.
+
+**This contradicts T322's ruling** — *"volunteer hours = `type = 'outreach'` ONLY"* — which landed
+after T188 was filed, so the row could not have known.
+
+**Stated limit:** the probe proves the function counts a meeting and the loader applies no type
+filter. It does not render the live page. "A meeting's hours appear on screen for a real user" is
+inferred from those two facts, not observed — recorded as inference because this session has already
+produced one withdrawn row from asserting a consequence that was not checked.
+
+### Why it stops here
+
+The row says the owner fields this, and its two suggested fixes point opposite ways:
+
+- **(a) Name them differently on screen** — cheap and honest, keeps both numbers, but the `/outreach`
+  figure goes on contradicting T322.
+- **(b) Make `/outreach` read the attendance-backed number** — one number everywhere, but that page
+  exists to show planned-vs-confirmed from RSVPs, and attendance cannot express "planned".
+
+**#4 may be separable.** Making `computeStudentHours` respect `type = 'outreach'` is arguably
+conforming to an existing ruling rather than making a new decision, and could ship without settling
+(a) or (b).
+
+### Gates
+
+Docs only. `tsc` 0 · `format:check` 0 · `vitest` **81 files / 2055 tests** (unchanged).
+
+---
+
+## T604 — stale "frozen" residue in `loaders/endMeeting.ts` — **PASS** (2026-08-05, `3b2ffd5`)
+
+Checker `checker-reviewer` (sonnet), against `docs/swarm/active/T604-checker-packet.md`. NIT only.
+
+Four comments called `EndMeetingDialog.tsx` frozen or forbidden — false since T196 mounted it, doubly
+so since T508 edited it directly. **The substance of those comments was NOT stale and was kept:**
+`EndMeetingDialog.tsx:827-830` still does `error instanceof Error ? error.message : 'Something went
+wrong ending this meeting.'`, and `loader.ts:78-82`/`:116-121` confirm `SupabaseLoaderError` is a
+plain interface, never an `Error` — so the `instanceof` check really does always fall through and a
+coach really does learn nothing about which partial state was reached. The checker re-verified that at
+both ends; a "fix" that deleted the warning with the stale word would have failed C5. Filed as **T607**.
+
+**Comment-only proven, not asserted** — T506 precedent, `ts.transpileModule({removeComments:true})` +
+sha256 across `3b2ffd5~1` vs `3b2ffd5`: `IDENTICAL`, length 12189 both sides. Lines 1-98 byte-identical,
+so T508's correct historical "frozen" note at `:10` was provably untouched.
+
+Sites were relocated **by content**, not by the ledger's line numbers, which had drifted — `:297` is
+now `:299`. Gates run standalone with `$?` captured directly, never through a pipe: typecheck 0,
+format:check 0, lint 0 errors, vitest 2051/2051 across 81 files.
+
+**T602 discharged in the same pass, on evidence.** T508 had already folded it; grepping
+`NOT wired|not yet wired|unwired|forbidden file` over `endMeeting.ts` returns zero matches. No code
+written for T602.
+
+**Two NITs.** (1) The new catch-block citation stopped one line short — `:827-829` → `:827-830`, fixed
+same day. (2) Outside this row's diff, the checker flagged that the subagent-dispatch authorization
+added to `KICKOFF-PROMPTS.md` asserted an owner instruction with no repo-side evidence, and that an
+agent-authored doc claiming standing owner authorization is not owner consent. **Correct, and
+discharged**: the ruling is now recorded verbatim in `auto-mode-decisions.md` and all nine blocks cite
+it instead of asserting it.
+
+---
+
+## T603 — widen the attendance `method` shape to `'self'` — **PASS** (2026-08-05, `b80a9cf`)
+
+HEAVY. Full process: packet → **two** `checker-premise` rounds → `worker-implementer` → `checker-reviewer`.
+All sonnet; none of item 18's opus triggers fire. NIT only.
+
+**The premise gate is the whole story of this row.** The ledger said four narrow copies. The
+orchestrator hand-measured six. **There are seven** — plus a latent eighth. Every undercount came from
+the same anchored `^export type AttendanceMethod` grep, which structurally cannot see
+`loaders/outreach.ts:1258`, an inline `method` property inside `OutreachAttendanceWriteRow`.
+
+Round 1 returned **BLOCKER** because it *compiled* the prescription rather than reading it:
+
+| state | typecheck |
+|---|---|
+| five widened | **exit 2**, 2 errors |
+| six widened — the packet's own prescribed end state | **exit 2**, 4 errors |
+| seven widened | **0** |
+
+A worker obeying v1 could not have reached green: three of those four errors were in files outside its
+Allowed Files and the fourth was explicitly Forbidden. This is an *assignability* break, not an
+exhaustiveness break, so no amount of grepping for `Record<AttendanceMethod>` or a `switch` could ever
+have found it. Round 2 returned **DISPATCH** and, asked to assume the greps were still blind, found the
+eighth copy at `supabase/functions/checkin/attendance_upsert.ts:43`.
+
+**The checker reproduced the baseline itself** instead of accepting reported numbers: lint 366 warnings
+/ 0 errors at both ends with byte-identical normalised reports, vitest **2051/2051** across 81 files at
+both ends, typecheck 0, format:check 0.
+
+**Owner-authorised W2 scope held, verified by hunk:** `numstat` shows `1 1` for all five single-line
+files; `MarkDayCompleteDialog.tsx` has exactly one hunk, `@@ -575 +575 @@`; and `:936` — which appears
+in the mid-fix error list — is **byte-identical to baseline**, having self-resolved once the seventh
+widening landed. Both stale DDL quotes were annotated rather than edited, appearing only as unchanged
+context lines. `resolveAttendanceWriteMethod`'s body is untouched, so `'self'` still falls through to
+`'coach'`: representability only, no behaviour change.
+
+**"One union in one place" was NOT achieved, and the worker's evidence doc says so plainly** — a packet
+requirement, so a later reader cannot mistake this for consolidation. Three narrow copies survive and
+are now all owned by **T608**, whose scope was widened accordingly. The third is the one worth
+remembering: `attendance_upsert.ts:43` sits outside both `tsconfig`'s include and eslint's scope, so no
+gate in this repo will ever catch it.
+
+---
+
+## T510 — edit a meeting series — **PASS** (2026-08-06, `0444798`)
+
+HEAVY. The longest review chain in this project: packet → **two** `checker-premise` rounds → **D015**
+arbitration → conformance check → **D016** arbitration → conformance check → **D016-A** addendum →
+`worker-implementer` → `checker-reviewer`. NIT only.
+
+**Eight independent reviews, none by an agent reviewing its own work. Four found real defects — and
+three of those were faults in the orchestrator's or the arbiter's own decisions, not the worker's.**
+
+**Two data-loss paths, both proven in live Postgres clusters rather than argued.** The first: the
+orchestrator's design deleted RSVPs then the session in one batch, with cancel as the fallback — but
+nothing FK-references `rsvps`, so the `23503` could only ever come from the *session* delete, by which
+point the whole batch's RSVPs were gone. Innocent sessions lost their RSVPs as collateral. The second
+was created by D015's *own* mandated fix: chaining a server-side `starts_at > now` guard onto the
+delete meant a session whose start time crossed mid-save matched zero rows, **raised no error**,
+resolved, and survived as an ordinary `scheduled` row with its RSVPs already destroyed — the save
+reporting success. Neither was visible to any amount of reading; both needed a cluster.
+
+**The resulting asymmetry is deliberate and is the thing most likely to be "fixed" back into a bug:**
+`cancelSession` is permanently time-unguarded while the delete beside it carries `.gt('starts_at',
+'now')`. A conformance check added the symmetric guard and watched the orphan return, so the
+load-bearing comment above it is measured, not asserted.
+
+**The checker earned the verdict rather than relaying it.** It derived its own baselines from a
+worktree at `eaa9070` (366 warnings / 2055 tests) instead of accepting the worker's numbers, and
+verified the 366→370 rise by diffing warning sets keyed on `(file, rule)` — all four are
+`react-refresh/only-export-components` in the single file that already carried nine, mapping to the
+four named new exports. It replayed all three named mutations itself and confirmed the trap the packet
+warned of: dropping `.select('id')` leaves *"X is canceled"* green, because X really is still
+cancelled; Branch F reddens only because `session-y` is *also* wrongly cancelled. A checker expecting
+the obvious assertion to fail would have called a working test vacuous.
+
+Grant A's six properties hold, with the en dash verified by codepoint and `onCreateMeetings` confirmed
+live-wired through `renderAsUser` rather than a dead import — it still guards against an edit silently
+creating a second competing series. MTG-02's tripwire is byte-identical and green, so the Description
+field did not leak out of edit mode. Scope is exactly the six authorized paths and **no W2 file**,
+which also resolves a stale "two W2 files" instruction the orchestrator had carried over from T603 and
+the worker correctly declined to follow.
+
+Gates, each bare with `$?` captured: typecheck 0 · format:check 0 · lint 0 errors · **2087/2087 across
+81 files**.
+
+**NIT, no action:** the worker's evidence doc says "no commit was made", true when written; the
+orchestrator committed afterward at `0444798`, which the checker verified independently.

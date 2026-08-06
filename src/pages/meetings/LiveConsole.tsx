@@ -499,7 +499,7 @@ import {
 /** `attendance.status` check constraint (`types.ts` line 180). */
 export type AttendanceStatus = 'present' | 'late' | 'excused' | 'absent';
 /** `attendance.method` check constraint (`types.ts` line 184). */
-export type AttendanceMethod = 'qr' | 'coach' | 'import';
+export type AttendanceMethod = 'qr' | 'coach' | 'import' | 'self';
 
 /** The subset of an `attendance` row this console cares about, per student. */
 export interface AttendanceRecordState {

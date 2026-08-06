@@ -1255,7 +1255,7 @@ export interface OutreachAttendanceWriteRow {
   checkInAt: string | null;
   checkOutAt: string | null;
   hoursOverride: number | null;
-  method: 'qr' | 'coach' | 'import';
+  method: 'qr' | 'coach' | 'import' | 'self';
   recordedBy: string;
 }
 

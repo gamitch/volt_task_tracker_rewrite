@@ -161,3 +161,91 @@ jobs:
 
           echo ""
           echo "PASS: initial route JS gzip size is within the 300 KB budget."
+
+  # ---------------------------------------------------------------------------
+  # T701: the SQL suites now actually run.
+  #
+  # Every `run*.sh` under `supabase/tests/` and `tests/rls/` was unrunnable,
+  # green-but-never-executed, or both -- and NOTHING invoked them. `tests/rls/
+  # run.sh` had been unable to even start on a bare Postgres since roughly the
+  # time `student_teams` landed, and `supabase/tests/run.sh` was hiding a
+  # genuinely failing assertion (its fixture never seeded `student_teams`, so
+  # `v_student_participation` returned zero rows once that view migrated onto
+  # ACTIVE memberships). Neither failure was visible, because the only thing
+  # that would have shown them was a runner nobody ran.
+  #
+  # This job is the fix for the CLASS, not just the two instances. It is a
+  # separate job from `ci` on purpose: it needs a Postgres service container,
+  # it is slower, and a red SQL suite should name itself rather than hide
+  # inside a generic "CI failed".
+  #
+  # Two migrations are skipped INSIDE the runners (not here) because they need
+  # Supabase-platform objects that do not exist on stock Postgres -- pg_net is
+  # not packaged for Debian/Ubuntu at all. Each runner names its own skips.
+  sql:
+    name: SQL suites (RLS denial, metric views, migration guards)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        # Without a healthcheck the steps below can start before Postgres is
+        # accepting connections, which would fail as a confusing psql error
+        # rather than an honest "database not ready".
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install psql client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Sanity-check the connection before running any suite
+        run: psql -X -v ON_ERROR_STOP=1 -c 'select version();'
+
+      # Each suite runs in its own step so a failure names the suite directly.
+      - name: 'RLS denial suite (NFR-02)'
+        run: bash tests/rls/run.sh
+
+      - name: 'Metric-view fixture suite (NFR-03)'
+        run: bash supabase/tests/run.sh
+
+      - name: 'T700 updatable-view write-path guard'
+        run: bash supabase/tests/run_t700_updatable_view_guard.sh
+
+      - name: 'T801 dashboard-views comment assertions'
+        run: bash supabase/tests/run_t801_dashboard_views_comments.sh
+
+      - name: 'T205 anon grant assertions'
+        run: bash supabase/tests/run_t205_anon_grant.sh
+
+      - name: 'T322 volunteer-hours outreach-only assertions'
+        run: bash supabase/tests/run_volunteer_hours_outreach_only.sh
+
+      - name: 'T503 widen-rsvp-read assertions'
+        run: bash supabase/tests/run_t503_widen_rsvp_read.sh
+
+      - name: 'T195 calendar-feed lifecycle assertions'
+        run: bash supabase/tests/run_calendar_feed_lifecycle.sh
+
+      - name: 'T509 explicit-marks denominator (MET-01/D014)'
+        run: bash supabase/tests/run_t509_explicit_marks.sh

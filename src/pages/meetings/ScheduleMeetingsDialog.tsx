@@ -240,6 +240,7 @@
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
+  AlertDialog,
   Banner,
   Button,
   CheckboxList,
@@ -500,8 +501,16 @@ export function resolveTeamScope(
 }
 
 /** BEH-07 (module doc #2) -- the ONLY place the confirm button's label is
- * produced. Never a bare "Create"/"Submit"/"OK". */
-export function computeConfirmLabel(sessionCount: number): string {
+ * produced. Never a bare "Create"/"Submit"/"OK".
+ *
+ * T510 -- gains a leading required `isEditMode` parameter (packet §4a/AC1).
+ * Create-mode output is pixel-identical to before this task
+ * (`computeConfirmLabel(false, 0) === 'Create 0 meetings'`, etc). Edit-mode
+ * output is the literal string `'Save changes'`, regardless of count --
+ * precedent `StudentDialog.tsx:299`'s own `computeConfirmLabel('edit') ===
+ * 'Save changes'`. */
+export function computeConfirmLabel(isEditMode: boolean, sessionCount: number): string {
+  if (isEditMode) return 'Save changes';
   return `Create ${sessionCount} meeting${sessionCount === 1 ? '' : 's'}`;
 }
 
@@ -518,6 +527,208 @@ export const defaultOnCreateMeetings: OnCreateMeetingsFn = async (payload) => {
 };
 
 // ---------------------------------------------------------------------------
+// T510 -- series edit for scheduled meetings (worker packet §4a). Additive
+// only: nothing above this point (the CREATE-only types/functions) changes.
+// ---------------------------------------------------------------------------
+
+export interface ExistingMeetingSeriesSession {
+  sessionId: string;
+  sessionDate: string; // 'YYYY-MM-DD'
+  startsAt: string; // ISO timestamptz
+  endsAt: string; // ISO timestamptz
+  status: 'scheduled' | 'completed' | 'canceled';
+}
+
+/**
+ * Rule 1: a session is eligible for a series edit's reconciliation only
+ * while it is still `'scheduled'` AND its `startsAt` is STRICTLY after
+ * `now` (a strict `>`, not `>=`, on THIS function's own condition). The
+ * consequence, restated because it is the more useful way to read it: a
+ * session is "already happened" (protected -- this function returns
+ * `false`) when `now >= startsAt`, a NON-STRICT/inclusive boundary on the
+ * protection side -- so a session whose `startsAt` exactly equals `now` is
+ * already protected, matching the owner's stricter ruling that "already
+ * happened" is a start time that has passed, checked inclusively.
+ *
+ * The status half of this check (excluding `'canceled'`/`'completed'`
+ * sessions even when still future-dated) is THIS PACKET'S OWN design
+ * decision, not the owner's "regardless of status" wording -- that wording
+ * governs only the time boundary above. Precedent for the shape (a status
+ * check layered on top of a bare time check): `RsvpControl.tsx:324-326`'s
+ * own doc comment, "a disclosed addition beyond the bare time check."
+ * Reimplemented locally (not imported) per this file's own established
+ * cross-page practice.
+ */
+export function isMeetingSessionReconcilable(
+  session: Pick<ExistingMeetingSeriesSession, 'status' | 'startsAt'>,
+  now: Date,
+): boolean {
+  return session.status === 'scheduled' && new Date(session.startsAt).getTime() > now.getTime();
+}
+
+export interface MeetingSeriesReconcilePlan {
+  toUpdate: Array<{ sessionId: string; session: CreateMeetingsSessionPayload }>;
+  toInsert: CreateMeetingsSessionPayload[];
+  toRemove: Array<{ sessionId: string; sessionDate: string }>;
+}
+
+/**
+ * Pure, exported, directly testable without a fake `SupabaseClient` -- same
+ * shape `resolveAttendanceWriteMethod` (`loaders/attendance.ts:287-291`)
+ * already established.
+ *
+ * TWO invariants are enforced BY THIS FUNCTION ITSELF, not by the caller or
+ * by a variable's name:
+ *
+ * 1. **A desired session whose own computed `startsAt` is not strictly
+ *    after `now` is dropped before any matching happens** -- regardless of
+ *    what mode/range/weekday/date inputs produced it. (This is an
+ *    application-level, in-memory filter -- it is NOT the database-level
+ *    guard; see `loaders/meetings.ts` for why a second, independent,
+ *    database-evaluated guard also exists for the destructive path.)
+ * 2. **`toInsert` never creates a same-calendar-date duplicate of ANY
+ *    existing session**, not only a reconcilable one. A desired date that
+ *    coincides with an existing PAST session's date, or an existing
+ *    already-`'canceled'`/`'completed'` future session's date, is silently
+ *    absorbed: excluded from `toUpdate` (not reconcilable -- protected) AND
+ *    excluded from `toInsert` (a same-date row already exists), so no
+ *    action is taken for that date at all. Disclosed, accepted
+ *    simplification -- no existing UI path can produce this collision.
+ *
+ * **Duplicate `session_date` among reconcilable sessions** -- not possible
+ * via any existing create-mode path today (`generateCustomSessionDates`
+ * dedupes; `single`/`weekly` modes cannot repeat a date within one event),
+ * so this is a disclosed limitation for whoever builds T605 next (per-
+ * session date edits are where a genuine duplicate could first appear):
+ *   - If the shared date IS still desired: `toUpdate`'s `Map`-keyed lookup
+ *     (`reconcilableByDate`) silently picks ONE of the duplicates (last
+ *     one inserted into the `Map` wins); the other is excluded from every
+ *     list -- neither updated nor removed, silently orphaned as a stale
+ *     `'scheduled'` row.
+ *   - If the shared date is NOT desired: `toRemove` is built by filtering
+ *     the raw `reconcilable` ARRAY (never the date-keyed `Map`), so **both**
+ *     duplicates independently satisfy the filter and **both** are removed.
+ *   T605 must revisit this the moment per-session date edits make
+ *   duplicates reachable.
+ */
+export function computeMeetingSeriesReconcilePlan(
+  existingSessions: readonly ExistingMeetingSeriesSession[],
+  desiredFutureSessions: readonly CreateMeetingsSessionPayload[],
+  now: Date,
+): MeetingSeriesReconcilePlan {
+  const desiredFuture = desiredFutureSessions.filter(
+    (s) => new Date(s.startsAt).getTime() > now.getTime(),
+  );
+
+  const reconcilable = existingSessions.filter((s) => isMeetingSessionReconcilable(s, now));
+  const reconcilableByDate = new Map(reconcilable.map((s) => [s.sessionDate, s] as const));
+  const allExistingDates = new Set(existingSessions.map((s) => s.sessionDate));
+  const desiredByDate = new Map(desiredFuture.map((s) => [s.sessionDate, s] as const));
+
+  const toUpdate = desiredFuture
+    .filter((s) => reconcilableByDate.has(s.sessionDate))
+    .map((s) => ({
+      sessionId: (reconcilableByDate.get(s.sessionDate) as ExistingMeetingSeriesSession).sessionId,
+      session: s,
+    }));
+  const toInsert = desiredFuture.filter((s) => !allExistingDates.has(s.sessionDate));
+  const toRemove = reconcilable
+    .filter((s) => !desiredByDate.has(s.sessionDate))
+    .map((s) => ({ sessionId: s.sessionId, sessionDate: s.sessionDate }));
+
+  return { toUpdate, toInsert, toRemove };
+}
+
+export interface EditMeetingSeriesInitialData {
+  eventId: string;
+  title: string;
+  /** `readonly`, matching `FixtureEvent.teamIds`/`CoachMeetingRow.teamIds`'s own type
+   * (`MeetingsList.tsx`) -- a plain `string[]` here produces a real `TS2322` at that
+   * file's own call site. */
+  teamIds: readonly string[] | null;
+  locationName: string;
+  description: string;
+  /** The FULL session list (past + future + canceled) -- this dialog itself filters to
+   * `isMeetingSessionReconcilable` for pre-filling "Custom dates" AND for deriving `startTime`/
+   * `endTime` (below); it does not trust a caller-side pre-filter, and `MeetingsList.tsx` supplies
+   * none of the time derivation (`startTime`/`endTime` are NOT fields on this interface; deriving
+   * them requires calling this file's own unexported `formatChicagoWallTime`, which cannot cross a
+   * file boundary). */
+  sessions: readonly ExistingMeetingSeriesSession[];
+}
+
+export interface SaveMeetingSeriesPayload {
+  eventId: string;
+  /** Reuses `CreateMeetingsEventPayload`'s shape. `address` is ALWAYS IGNORED by the update mutation
+   * (`loaders/meetings.ts`) -- construct with `address: ''`, matching the create path's own existing
+   * default. */
+  event: CreateMeetingsEventPayload;
+  /** The coach's full desired FUTURE schedule, post schedule-mode computation. The loader does not
+   * trust this to already be future-only (`computeMeetingSeriesReconcilePlan` re-derives it, and the
+   * loader's own destructive path re-derives it AGAIN at the database boundary). */
+  desiredFutureSessions: CreateMeetingsSessionPayload[];
+}
+
+export type OnSaveMeetingSeriesFn = (payload: SaveMeetingSeriesPayload) => Promise<void>;
+
+export const defaultOnSaveMeetingSeries: OnSaveMeetingSeriesFn = async (payload) => {
+  console.warn(
+    '[ScheduleMeetingsDialog] No Supabase client wired in yet -- this stub only logs the ' +
+      'events/event_sessions reconciliation that would have been applied.',
+    payload,
+  );
+};
+
+/** Reimplemented locally from `OutreachList.tsx:1660-1665`/`OutreachDetail.tsx:1449` (both named
+ * `formatChicagoWallTime`), per this file's own cross-page-reimplementation convention.
+ * DELIBERATELY NOT EXPORTED: it is called only from this file's own `resetForm()`, never from
+ * `MeetingsList.tsx` -- `EditMeetingSeriesInitialData` carries raw `startsAt`/`endsAt` timestamps,
+ * and the wall-time derivation happens entirely inside this file. */
+const CHICAGO_24H_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+  timeZone: CHICAGO_TIME_ZONE,
+});
+
+function formatChicagoWallTime(isoDateTime: string): string {
+  const parts = CHICAGO_24H_TIME_FORMATTER.formatToParts(new Date(isoDateTime));
+  const hour = parts.find((part) => part.type === 'hour')?.value ?? '00';
+  const minute = parts.find((part) => part.type === 'minute')?.value ?? '00';
+  return `${hour}:${minute}`;
+}
+
+/** Reimplement this file's own local copy of `MeetingsList.tsx:1198-1228`'s
+ * `Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone:
+ * 'America/Chicago' })`, for `buildEditConfirmationDescription` below. */
+const WEEKDAY_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  timeZone: CHICAGO_TIME_ZONE,
+});
+
+/** `AlertDialogProps.description` is a plain string with no `children` slot
+ * (`node_modules/@astryxdesign/core/dist/AlertDialog/AlertDialog.d.ts`) -- builds ONE joined string
+ * satisfying rule 6: counts always; the actual removed dates listed, comma-joined, ONLY when
+ * `plan.toRemove.length > 0`. Reuses this file's own existing `parseDateOnly` (`:335`) directly --
+ * not reimplemented. */
+export function buildEditConfirmationDescription(plan: MeetingSeriesReconcilePlan): string {
+  const base = `${plan.toInsert.length} session(s) added · ${plan.toRemove.length} session(s) removed · ${plan.toUpdate.length} session(s) kept.`;
+  if (plan.toRemove.length === 0) return base;
+  const removedDates = plan.toRemove
+    .map((item) => WEEKDAY_DATE_FORMATTER.format(parseDateOnly(item.sessionDate)))
+    .join(', ');
+  return `${base} Removed: ${removedDates}.`;
+}
+
+/** Deliberately NOT built: the confirmation copy above does not distinguish "removed and deleted"
+ * from "removed and canceled because attendance exists" -- both mean "no longer appears as upcoming"
+ * to the coach, and the distinction is accurate either way. Surfacing it would need a new field
+ * threaded onto an existing, widely-fixture-literal'd exported type for a UI nuance the owner never
+ * asked for. Do not build this speculatively. */
+
+// ---------------------------------------------------------------------------
 // Component.
 // ---------------------------------------------------------------------------
 
@@ -527,6 +738,20 @@ export interface ScheduleMeetingsDialogProps {
   teams: readonly ScheduleTeamOption[];
   /** Defaults to `defaultOnCreateMeetings` (module doc #4). */
   onCreateMeetings?: OnCreateMeetingsFn;
+  /** T510 -- present => "edit" mode, pre-filled from this existing series + its
+   * sessions. Absent => "create" mode (byte-identical to before this task). */
+  initialData?: EditMeetingSeriesInitialData;
+  /** T510 -- defaults to `defaultOnSaveMeetingSeries`. Only ever invoked in edit mode. */
+  onSaveMeetingSeries?: OnSaveMeetingSeriesFn;
+}
+
+/** T510 -- captured at submit time (edit mode only), so the confirmation
+ * `AlertDialog`'s eventual `onAction` does not need to re-read `initialData`/
+ * re-derive the plan a second time. */
+interface PendingEditSave {
+  eventId: string;
+  plan: MeetingSeriesReconcilePlan;
+  desiredFutureSessions: CreateMeetingsSessionPayload[];
 }
 
 export function ScheduleMeetingsDialog({
@@ -534,12 +759,19 @@ export function ScheduleMeetingsDialog({
   onOpenChange,
   teams,
   onCreateMeetings = defaultOnCreateMeetings,
+  initialData,
+  onSaveMeetingSeries = defaultOnSaveMeetingSeries,
 }: ScheduleMeetingsDialogProps): ReactNode {
   const allTeamIds = useMemo(() => teams.map((team) => team.id), [teams]);
+  // T510 -- present => edit mode (mirrors `OutreachEventDialog.tsx`'s own
+  // `isEditMode = initialEvent !== undefined`).
+  const isEditMode = initialData !== undefined;
 
   const [title, setTitle] = useState(DEFAULT_TITLE);
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>(allTeamIds);
   const [location, setLocation] = useState('');
+  // T510 -- edit-mode-only field (rendered only when `isEditMode`).
+  const [description, setDescription] = useState('');
   const [mode, setMode] = useState<ScheduleMode>('single');
 
   const [singleDate, setSingleDate] = useState<ISODateString | undefined>(undefined);
@@ -554,25 +786,68 @@ export function ScheduleMeetingsDialog({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // T510 -- set by `handleSubmit`'s edit-mode branch; drives the confirmation
+  // `AlertDialog` below. `onSaveMeetingSeries` is NOT called until the coach
+  // confirms (rule 6: confirmation before saving).
+  const [pendingEditSave, setPendingEditSave] = useState<PendingEditSave | null>(null);
 
   function resetForm(): void {
-    setTitle(DEFAULT_TITLE);
-    setSelectedTeamIds(allTeamIds);
-    setLocation('');
-    setMode('single');
-    setSingleDate(undefined);
-    setRecurringRange(null);
-    setRecurringWeekdays([]);
-    setCustomDates([]);
-    setCustomDatePicker(undefined);
-    setStartTime(DEFAULT_START_TIME);
-    setEndTime(DEFAULT_END_TIME);
-    setNotes('');
+    if (initialData !== undefined) {
+      // T510 edit mode (packet §4a) -- mirrors `OutreachEventDialog.tsx:1016-1079`'s
+      // own `initialEvent !== undefined` branch shape.
+      setTitle(initialData.title);
+      setSelectedTeamIds(initialData.teamIds !== null ? [...initialData.teamIds] : allTeamIds);
+      setLocation(initialData.locationName);
+      setDescription(initialData.description);
+      setMode('custom');
+      setSingleDate(undefined);
+      setRecurringRange(null);
+      setRecurringWeekdays([]);
+      const reconcilableSessions = initialData.sessions.filter((s) =>
+        isMeetingSessionReconcilable(s, new Date()),
+      );
+      setCustomDates(generateCustomSessionDates(reconcilableSessions.map((s) => s.sessionDate)));
+      setCustomDatePicker(undefined);
+      // `startTime`/`endTime` are DERIVED here, not read off `initialData` (that
+      // interface deliberately carries no `startTime`/`endTime` fields -- see its
+      // own doc comment): the earliest-`startsAt` reconcilable session's own wall
+      // time, or this file's existing `DEFAULT_START_TIME`/`DEFAULT_END_TIME` for
+      // a fully-past series (none reconcilable).
+      const earliest = reconcilableSessions
+        .slice()
+        .sort((a, b) => a.startsAt.localeCompare(b.startsAt))[0];
+      if (earliest !== undefined) {
+        setStartTime(
+          createISOTimeString(formatChicagoWallTime(earliest.startsAt)) ?? DEFAULT_START_TIME,
+        );
+        setEndTime(createISOTimeString(formatChicagoWallTime(earliest.endsAt)) ?? DEFAULT_END_TIME);
+      } else {
+        setStartTime(DEFAULT_START_TIME);
+        setEndTime(DEFAULT_END_TIME);
+      }
+      setNotes('');
+    } else {
+      setTitle(DEFAULT_TITLE);
+      setSelectedTeamIds(allTeamIds);
+      setLocation('');
+      setDescription('');
+      setMode('single');
+      setSingleDate(undefined);
+      setRecurringRange(null);
+      setRecurringWeekdays([]);
+      setCustomDates([]);
+      setCustomDatePicker(undefined);
+      setStartTime(DEFAULT_START_TIME);
+      setEndTime(DEFAULT_END_TIME);
+      setNotes('');
+    }
     setSubmitError(null);
+    setPendingEditSave(null);
   }
 
   // Nothing persists across opens (module doc "Nothing persists" acceptance
-  // criterion) -- every fresh open starts from the same pristine defaults.
+  // criterion) -- every fresh open starts from either the same pristine
+  // defaults (create mode) or `initialData`'s own values (T510 edit mode).
   useEffect(() => {
     if (isOpen) resetForm();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only on the isOpen transition.
@@ -595,16 +870,74 @@ export function ScheduleMeetingsDialog({
     [sessionDates, startTime, endTime, notes],
   );
 
-  const isValid = title.trim() !== '' && sessionsPayload.length > 0;
-  const confirmLabel = computeConfirmLabel(sessionsPayload.length);
+  // T510 -- rule 2 ("title/location/description always editable") would be
+  // impossible for a fully-past series (zero reconcilable sessions) under the
+  // create-mode rule below; in edit mode, `isValid` drops the session-count
+  // requirement entirely. This also permits narrowing a series to zero future
+  // sessions in one save (every remaining future session moves to `toRemove`)
+  // -- a coherent action, not a bug to guard against.
+  const isValid = isEditMode
+    ? title.trim() !== ''
+    : title.trim() !== '' && sessionsPayload.length > 0;
+  const confirmLabel = computeConfirmLabel(isEditMode, sessionsPayload.length);
+
+  // T510 -- "already happened" disclosure (packet §4a component-changes list).
+  const nonReconcilableSessionCount =
+    initialData === undefined
+      ? 0
+      : initialData.sessions.filter((s) => !isMeetingSessionReconcilable(s, new Date())).length;
 
   function handleCancel(): void {
     resetForm();
     onOpenChange(false);
   }
 
+  async function handleConfirmEditSave(): Promise<void> {
+    if (pendingEditSave === null) return;
+    const { eventId, desiredFutureSessions } = pendingEditSave;
+    setPendingEditSave(null);
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      await onSaveMeetingSeries({
+        eventId,
+        event: {
+          title: title.trim(),
+          teamIds: resolveTeamScope(selectedTeamIds, allTeamIds),
+          locationName: location,
+          description,
+          address: '', // T510 -- always ignored by the update mutation; matches the create default.
+        },
+        desiredFutureSessions,
+      });
+      resetForm();
+      onOpenChange(false);
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : 'Something went wrong saving these changes.',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   async function handleSubmit(): Promise<void> {
     if (!isValid) return; // extra guard; the button is already natively disabled.
+    if (initialData !== undefined) {
+      // T510 edit mode -- do NOT call `onSaveMeetingSeries` yet (rule 6:
+      // confirmation before saving). `notes` is fixed to `''` here regardless
+      // of this dialog's own `notes` state -- per-session notes are T605's
+      // scope, and the loader itself never trusts this to already be
+      // future-only (it re-derives the plan again at the database boundary).
+      const desiredFutureSessions = buildEventSessionsPayload(sessionDates, startTime, endTime, '');
+      const plan = computeMeetingSeriesReconcilePlan(
+        initialData.sessions,
+        desiredFutureSessions,
+        new Date(),
+      );
+      setPendingEditSave({ eventId: initialData.eventId, plan, desiredFutureSessions });
+      return;
+    }
     setIsSubmitting(true);
     setSubmitError(null);
     const payload: CreateMeetingsPayload = {
@@ -646,7 +979,12 @@ export function ScheduleMeetingsDialog({
     // module doc #1 has the full sourcing writeup).
     <Dialog isOpen={isOpen} onOpenChange={onOpenChange} purpose="form" variant="fullscreen">
       <Layout
-        header={<DialogHeader title="Schedule meetings" onOpenChange={onOpenChange} />}
+        header={
+          <DialogHeader
+            title={isEditMode ? 'Edit meeting series' : 'Schedule meetings'}
+            onOpenChange={onOpenChange}
+          />
+        }
         content={
           <LayoutContent>
             {/* T125 module doc 9 -- field order per MTG-02 / constitution
@@ -654,7 +992,13 @@ export function ScheduleMeetingsDialog({
                 scope, location, schedule mode, date/time pickers, notes --
                 exact, not a suggestion. Sections below only add labeled
                 headings around contiguous runs of that same order (see
-                module doc 9 for the disclosed grouping). */}
+                module doc 9 for the disclosed grouping). T510's own
+                "Description" field is additive-only, rendered ONLY in edit
+                mode (`isEditMode`) -- create mode's Basics section stays
+                byte-identical to today, so the MTG-02 field-order tripwire
+                (`ScheduleMeetingsDialog.test.tsx`'s own
+                `describe('<ScheduleMeetingsDialog /> field order ...')`)
+                stays green unedited. */}
             <EventFormLayout>
               <EventFormSection title="Basics" description="What this meeting is and who it's for.">
                 <TextInput
@@ -673,6 +1017,16 @@ export function ScheduleMeetingsDialog({
                   hasSelectAll
                   triggerDisplay="labels"
                 />
+
+                {isEditMode && (
+                  <TextArea
+                    label="Description"
+                    value={description}
+                    onChange={setDescription}
+                    isOptional
+                    rows={3}
+                  />
+                )}
               </EventFormSection>
 
               <EventFormSection title="Location" description="Where the meeting happens.">
@@ -688,6 +1042,15 @@ export function ScheduleMeetingsDialog({
                 title="Schedule"
                 description="Pick when this meeting happens, and its start/end times."
               >
+                {/* T510 -- "already happened" disclosure (rule 1: future-forward
+                    only). Present only in edit mode, and only when at least one
+                    of this series' own sessions is no longer reconcilable. */}
+                {isEditMode && nonReconcilableSessionCount > 0 && (
+                  <Text type="supporting">
+                    {`${nonReconcilableSessionCount} session(s) have already happened and are not affected by this edit.`}
+                  </Text>
+                )}
+
                 <SegmentedControl
                   value={mode}
                   onChange={(value) => setMode(value as ScheduleMode)}
@@ -783,7 +1146,9 @@ export function ScheduleMeetingsDialog({
               {submitError !== null && (
                 <Banner
                   status="error"
-                  title="Couldn't create these meetings"
+                  title={
+                    isEditMode ? "Couldn't save these changes" : "Couldn't create these meetings"
+                  }
                   description={submitError}
                 />
               )}
@@ -804,6 +1169,25 @@ export function ScheduleMeetingsDialog({
             </HStack>
           </LayoutFooter>
         }
+      />
+
+      {/* T510 -- rule 6: confirmation before saving. Only ever opened by
+          `handleSubmit`'s edit-mode branch (`pendingEditSave !== null`);
+          `AlertDialog` does NOT auto-close (its own doc comment) -- confirming
+          or declining both explicitly drive `pendingEditSave` back to `null`. */}
+      <AlertDialog
+        isOpen={pendingEditSave !== null}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setPendingEditSave(null);
+        }}
+        title="Save changes to this meeting series?"
+        description={
+          pendingEditSave !== null ? buildEditConfirmationDescription(pendingEditSave.plan) : ''
+        }
+        actionLabel="Save changes"
+        onAction={() => {
+          void handleConfirmEditSave();
+        }}
       />
     </Dialog>
   );

@@ -44,6 +44,33 @@ insert into students (id, profile_id, display_name, team_id, grad_year, is_activ
   ('00000000-0000-0000-0000-00000000c004', null, 'Fixture Student Delta',   '00000000-0000-0000-0000-00000000a004', 2027, true, null),
   ('00000000-0000-0000-0000-00000000c005', null, 'Fixture Student Echo',    '00000000-0000-0000-0000-00000000a005', 2027, true, null);
 
+-- T701 -- ACTIVE `student_teams` memberships, one per fixture student,
+-- mirroring each student's own `team_id` above.
+--
+-- WHY THIS WAS MISSING, because the mechanism is the interesting part:
+-- `20260721000000_student_teams.sql` backfills a membership row for every
+-- existing student's primary team -- but that backfill runs at MIGRATION
+-- time, and this seed file loads AFTER all migrations. Fixture students
+-- created here were therefore never backfilled and have never had a
+-- membership row.
+--
+-- That did not matter until `20260722000000_membership_views.sql` redefined
+-- `v_student_participation`'s `expected` CTE to join `student_teams` on
+-- ACTIVE memberships (`left_on is null`) instead of the legacy
+-- `students.team_id`. From that day this fixture produced ZERO expected rows
+-- and assertion `a-excused-shrinks-denominator` was broken -- and nobody
+-- knew, because this runner could not start (T701). The rot hid a real
+-- stale-fixture failure for two weeks.
+--
+-- `left_on` is NULL on every row: these are active memberships, which is
+-- what every migrated reader filters on.
+insert into student_teams (student_id, team_id, joined_on, left_on) values
+  ('00000000-0000-0000-0000-00000000c001', '00000000-0000-0000-0000-00000000a001', '2026-01-01', null),
+  ('00000000-0000-0000-0000-00000000c002', '00000000-0000-0000-0000-00000000a002', '2026-01-01', null),
+  ('00000000-0000-0000-0000-00000000c003', '00000000-0000-0000-0000-00000000a003', '2026-01-01', null),
+  ('00000000-0000-0000-0000-00000000c004', '00000000-0000-0000-0000-00000000a004', '2026-01-01', null),
+  ('00000000-0000-0000-0000-00000000c005', '00000000-0000-0000-0000-00000000a005', '2026-01-01', null);
+
 -- ---------------------------------------------------------------------------
 -- Case (a): excused-shrinks-denominator
 -- One counts_participation event, two completed sessions, scoped to Team
