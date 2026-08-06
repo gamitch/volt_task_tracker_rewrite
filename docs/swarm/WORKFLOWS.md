@@ -109,8 +109,17 @@ ships.** While `backfillAbsences` writes a row for every eligible student, "expl
 "eligibility" select the same set, so T509 would correctly produce no change and read as broken.
 Sequence T508 first, across machines.
 
-**Rows filed after this document was written** are not yet in the sections below. By surface:
-**W3** — T508, T510, T511, T601, T602 · **W4** — T509 · **W5** — T802 *(T801 closed; T803 in flight, PR #93)* · **unowned** — T507.
+**Rows filed after this document was written** are not yet in the sections below. By surface, **updated 2026-08-06**:
+**W3** — ✅ T508, T511, T601, T602, T603, T604 and **T510** all closed or passed; **T605, T606, T607, T608 open** ·
+**W4** — ✅ T509 shipped and the owner applied the migration · **W5** — T802 *(T801 closed; T803 in flight, PR #93)* ·
+**unowned** — T507.
+
+**W3's remaining four, all filed 2026-08-05/06 and all downstream of T510:** T605 (edit ONE meeting inside a
+series — date, time, notes, cancel-from-the-edit-flow) · T606 (per-meeting location — **needs a migration the
+owner applies**) · T607 (ending a meeting that partly fails tells the coach nothing about which partial state
+was reached — safety-relevant, in the most safety-critical loader in the feature) · T608 (collapse the three
+surviving narrow `AttendanceMethod` copies; **one of them, `supabase/functions/checkin/attendance_upsert.ts:43`,
+sits outside both `tsconfig`'s include and eslint's ignore, so no gate in this repo will ever catch it**).
 
 **Block-vs-surface mismatch, deliberate:** T507-T511 carry **W2's** number block (T500-599) because W2's
 orchestrator filed them, but T508/T510/T511 sit on **W3's** surface and T509 on **W4's**. The block is a
@@ -206,9 +215,18 @@ scoped together, carefully — T305/T307 added protections to this exact path th
 
 ## W3 — Run a meeting
 
-> **This section is OUT OF DATE in both directions as of 2026-08-05.** Every row listed below has shipped, and
-> W3 has since been re-opened by live testing with five NEW rows — **T508, T510, T511, T601, T602** — none of which
-> appear here. The summary table above is authoritative.
+> **This section is OUT OF DATE in both directions. Updated 2026-08-06.** Every row listed below has shipped.
+> W3 was re-opened by the owner's live testing on 2026-08-05 and that wave is now **complete**: T508 (ending a
+> meeting no longer fabricates an absent record for everyone nobody marked), T511 (the live console got an entry
+> point), T601/T602/T603/T604 (debt), and **T510 — a saved meeting series can finally be edited.** Four rows
+> remain open, all downstream of T510: **T605, T606, T607, T608.** The summary table above is authoritative.
+>
+> **T510 is worth reading about before touching this surface.** It ran the longest review chain in the project —
+> two premise rounds, two arbitrations (D015, D016), two conformance checks — and closed **two data-loss paths
+> that were only ever visible by running the sequence against a real Postgres cluster.** The surviving asymmetry
+> in `loaders/meetings.ts` is deliberate: `cancelSession` is permanently time-unguarded while the delete beside
+> it carries `.gt('starts_at', 'now')`. **Adding the guard for consistency was measured to bring the data loss
+> back.** The comment above it says so; believe it.
 
 > A coach schedules meetings, takes attendance, students see their participation percentage.
 
