@@ -1,35 +1,71 @@
 # Worker Packet: T510 — series edit for scheduled meetings (shared fields + future-forward schedule)
 
-**Packet v2 — REVISED after `checker-premise` round 1 of 2, verdict REVISE / BLOCKER** (3 blockers, 4
-majors, 10 minors, all proven against a scratch Postgres cluster with all 24 migrations plus two
-compiler experiments in an isolated worktree — treated as fact, not re-derived). **Item 19a: round 1 of
-2 consumed by v1. If round 2 also returns REVISE, this escalates to `boss-arbiter` rather than a third
-round.** v2 folds in every finding below. Attempt count: 0 — no worker has run against any version of
-this packet.
+**Packet v3 — REVISED per `boss-arbiter` ruling D015** (`docs/swarm/dispute-log.md`, plus the dated
+operative entry in `docs/swarm/auto-mode-decisions.md`, "2026-08-06 — Boss-arbiter ruling (Dispute
+Rule / item 19a): T510 removes dropped sessions PER-SESSION-PAIRED"). **Item 19a's two rounds are now
+spent** (round 1 REVISE, round 2 REVISE) — this did not loop to a third round; it escalated per the
+Dispute Rule, D015 ruled, and v3 implements the ruling. **v3 does not get a third full premise round.**
+Per D015 point 6, it goes to a **fresh** `checker-premise` instance for a **conformance-only** check
+against D015 (does §4b step 6 match the ruled sequence; does AC9 match the ruled branches; did the
+MAJOR land; does §0 carry the full disposition table below) — nothing settled by rounds 1-2 is
+re-audited. Attempt count: 0 — no worker has run against any version of this packet.
 
 **Row:** T510 (`task-ledger.md`, filed 2026-08-05) · **Tier: HEAVY** (constitution item 26) · **Worker
 model: sonnet** (default — no item 18 trigger fires; see §3) · **Branch:**
 `claude/w3-meeting-workflow-0bl669`. This machine holds **W1 + W3**.
 
-## 0. Gate history (item 19)
+## 0. Gate history (item 19) and D015 disposition table
 
-- **Round 1 of 2:** `checker-premise` reviewed v1 and returned **REVISE, severity BLOCKER**, by
-  building the prescription in a scratch cluster and in an isolated worktree rather than reading it.
-  Three blockers (an unauthorized-but-impossible time prefill, an impossible always-editable rule for a
-  fully-past series, and a future-forward invariant enforced only by a variable's name), four majors (a
-  real data-loss path on the cancel fallback — the gate's own design error, not the foreman's; a
-  client-clock-only future-forward guard; an undercounted `computeConfirmLabel` call-site list; and
-  unresolved ambiguities left for the worker to invent answers to), and ten minors (a wrong type
-  producing a real `TS2322`, two wrong fixture-literal counts, an unused existing `createLoader` seam,
-  test ranges identified by line number rather than name/content, two prose errors, a duplicate-date
-  gap, and a citation-completeness nit). Full findings folded into §2/§4/§8 below with their own labels
-  (B1-B3, M1-M4, m1-m10) preserved so this revision is auditable against the round-1 report.
-- **A separate boss-architect ruling landed in the same window**, `auto-mode-decisions.md:3843-3938`
-  ("2026-08-06 — Boss ruling (constitution item 10): T510's test updates are AUTHORIZED, with exact
-  bounds"), resolving §9's open authorization gate. **§9 is rewritten to match it exactly — Grant A (six
-  required properties for the replacement test) and Grant B (the true `computeConfirmLabel` call-site
-  count, five in the test file) are quoted, not paraphrased.**
-- **Item 19 is not yet satisfied.** This v2 is submitted for round 2.
+- **Round 1 of 2** (`checker-premise` on v1): REVISE/BLOCKER — 3 blockers, 4 majors, 10 minors, proven
+  in a scratch cluster and an isolated worktree. All folded into v2 and preserved in §2/§4/§8 with
+  their labels (B1-B3, M1-M4, m1-m10): the impossible time prefill, the impossible always-editable
+  rule for a fully-past series, the future-forward invariant enforced only by a variable's name, a
+  batched cancel-fallback that (as first drafted) lost RSVPs, a client-clock-only future-forward guard,
+  an undercounted `computeConfirmLabel` call-site list, unresolved §4a ambiguities, a wrong `readonly`
+  type, two wrong fixture counts, an unused `createLoader` seam, tests identified by line range instead
+  of name/content, two prose errors, a duplicate-date gap, and a citation-completeness nit.
+- **Round 2 of 2** (`checker-premise` on v2): REVISE/BLOCKER, proven in a live scratch Postgres cluster.
+  **The finding: v2's own fix for round 1's M1 (a batched cancel-fallback) WAS the data loss, not the
+  fix for it.** Nothing under `supabase/migrations/` FK-references `rsvps`, so the `rsvps` delete can
+  never raise `23503`; `23503` can only come from the session delete, by which point every batched
+  session's RSVPs are already gone in a separately-committed PostgREST transaction. The fallback then
+  canceled the WHOLE batch, leaving innocent sessions `canceled` with RSVPs destroyed. Reachable in
+  ordinary use (`loaders/attendance.ts` has no `starts_at`/`now` guard anywhere — a coach can pre-mark
+  attendance on a still-future session from the LiveConsole while another coach narrows the series).
+  v2's own AC9 Branch D would have certified this defect green — it asserted only that the promise
+  resolved, never that RSVPs survived.
+- **Item 19a exhausted at round 2 → escalated per the Dispute Rule → `boss-arbiter` ruled D015.**
+  **Ruled: PER-SESSION PAIRING** (§4b step 6's a-e stand; step f becomes per-id: delete that session's
+  RSVPs, then that session; on `23503`, cancel that id only; any other error rejects the save).
+  Rejected: capture-and-restore (the only live copy of removed RSVPs would be a browser tab's memory,
+  and the restore-insert can collide with `rsvps`' `unique (session_id, student_id)`); a `security
+  definer` RPC (the only fully atomic option, rejected for T510 on proportionality but **declared** to
+  the owner with a veto path — it costs a migration, an opus worker, and an owner-applied cutover for a
+  sub-second race whose worst case under pairing is already the owner's own ruled fallback outcome);
+  cancel-only (would overturn the owner's explicit "dropped sessions vanish" ruling). **No migration,
+  no design change to the owner's rule set, no owner input required to proceed.**
+
+### D015 disposition table (every round-2 finding — required so this is auditable against records the
+logs themselves do not itemize)
+
+| # | Finding (round 2) | Disposition in v3 |
+|---|---|---|
+| BLOCKER | Batched cancel-fallback destroys innocent sessions' RSVPs (§0 above) | **Landed.** §4b step 6f rewritten to per-session pairing (D015 §2); AC9 rewritten to the ruled branches (D015 §4). |
+| MAJOR (M2) | `queryStillFutureSessionIds` guarded with an app-computed `new Date().toISOString()` — still "the client clock," not the database's | **Landed.** Guard query now uses `.gt('starts_at', 'now')` — Postgres's own `'now'` timestamptz literal, evaluated server-side, verified by the gate over the wire — and the same `.gt('starts_at', 'now')` is chained onto the per-id `event_sessions` delete itself (§4b). **Stated explicitly, so no reader hunts for it: an equivalent guard on the `rsvps` delete is not expressible over PostgREST** — `rsvps` has no `starts_at` column, and PostgREST has no DELETE-on-embedded-resource filter. |
+| MINOR 1 | v2's §0 attributed the flawed batched-fallback design to "the gate" | **Landed.** Corrected: the gate (round 1) *reported* the data-loss risk in the design; the batched-fallback design itself was the orchestrator's. Fixed here and in §4b's own comments. |
+| MINOR 2 | v2 instructed reimplementing `parseDateOnly` inside `buildEditConfirmationDescription`'s helper note, duplicating a function that already exists in this exact file | **Landed.** Struck. `parseDateOnly` already exists, unexported, at `ScheduleMeetingsDialog.tsx:335` — call it directly; nothing about it changes. |
+| MINOR 3 | v2's duplicate-`session_date` disclosure was incomplete/wrong for the "date not desired" case | **Landed.** Corrected in §4a: when the shared date IS still desired, `toUpdate`'s `Map` lookup silently favors one duplicate (unchanged claim). When the shared date is NOT desired, **both** duplicates independently pass `toRemove`'s array filter and both are removed — `toRemove` never went through the date-keyed `Map`, so v2's blanket "silently excluded from every list" claim was wrong for this branch. |
+| MINOR 4 | The sixth `computeConfirmLabel` call site (the component's own internal render call) was never named, only "the internal render call" | **Landed.** Named explicitly: `ScheduleMeetingsDialog.tsx:599`, `const confirmLabel = computeConfirmLabel(sessionsPayload.length);` → `computeConfirmLabel(isEditMode, sessionsPayload.length)` — passes the real `isEditMode` value, not a literal `false` like the five test call sites. |
+| MINOR 5 | `chicagoWallTimeToUtcIso` (existing, unmodified, reused as-is) is not round-trip-stable for wall times in `[02:00, 04:00)` on the March DST transition date | **Landed as a disclosed Known Risk**, not a fix — this task does not modify that pre-existing function. AC-B1 is scoped to exclude that window/date explicitly (§8). |
+| MINOR 6 | v2's `startTime`/`endTime` derivation was not executable: `MeetingsList.tsx` (§4c) called `formatChicagoWallTime`, which §4a declared non-exported in `ScheduleMeetingsDialog.tsx` — a real `TS2614` | **Landed, cheaper path adopted.** `EditMeetingSeriesInitialData` no longer carries `startTime`/`endTime` at all. `resetForm()`'s edit branch derives them itself, inside `ScheduleMeetingsDialog.tsx`, from `initialData.sessions`, calling the same-file non-exported `formatChicagoWallTime` directly — no export needed, no cross-file call. |
+| MINOR 7 | §9's citation of the MTG-02 field-order tripwire test used only a line range | **Landed.** Describe name added: `describe('<ScheduleMeetingsDialog /> field order (MTG-02 / constitution item 13)', …)`. |
+
+**What round 2 confirmed clean — not reopened, per D015's own instruction not to churn it:** B1's
+time-prefill round-trip fix (swept 366 days × 8 wall times, stable across both 2026 DST transitions,
+outside the one narrow window MINOR 5 disclosed); B2's fully-past-series fix (introduces no create-mode
+defect — create mode still cannot submit an empty series); B3's future-forward/duplicate-date
+enforcement (verified against 11 adversarial inputs); the corrected fixture counts (3 and 3); Grant B's
+five test call sites; the `readonly` type fix; the `AlertDialog` joined-string confirmation approach.
 
 ## 1. Objective
 
@@ -55,7 +91,7 @@ explicit: *"'already happened' means a start time passed, even if noone ended it
 of status" wording is the owner's, and it governs exactly one boundary: the future-forward time check.
 It does not extend to §4's separate, foreman-made design decision to also exclude already-`'canceled'`
 sessions from reconciliation — that is this packet's own call, justified on its own merits below, not
-attributed to him** (round-1 minor m9).
+attributed to him.**
 
 **Explicitly OUT of scope, already split into their own rows — do not build any of this here:**
 per-session date/time/notes editing and per-session cancel-from-the-edit-flow (**T605**), per-session
@@ -74,6 +110,8 @@ literally.
   `onCreateMeetings(payload)` — no id-bearing branch anywhere.
 - `CreateMeetingsPayload` (`:305-308`) is `{ event: CreateMeetingsEventPayload; sessions:
   CreateMeetingsSessionPayload[] }` — no `id` field in the shape.
+- `parseDateOnly` (`:335-338`) already exists in this file, unexported — reused directly by §4a's new
+  code, never reimplemented (D015 disposition MINOR 2).
 
 **`MeetingsList.tsx`'s stub is exactly what its own comment says.** `showEditStub`
 (`:2079-2084`) sets an info `Banner` reading *"Editing an existing meeting isn't supported yet"*, wired
@@ -91,17 +129,26 @@ copy.** `updateOutreachEvent` (`loaders/outreach.ts:1537-1563`) reconciles sessi
 (`:1560-1562`); **an existing date absent from the payload is left completely untouched — never
 deleted** (module doc #5, `:254-274`, verbatim: *"A session date REMOVED from the payload … is
 deliberately left UNTOUCHED — never deleted"*). **My own inference from that mechanism, not the doc's
-own words** (round-1 NIT): changing a session's date this way doesn't move it — the old date's row
-survives untouched (nothing matches it anymore) while a new row is inserted for the new date, so a
-single intended change produces two sessions. T510 must genuinely **drop** dates removed from the new
-schedule (rule 5), which is exactly the behavior outreach's own module doc discloses as missing.
+own words:** changing a session's date this way doesn't move it — the old date's row survives untouched
+while a new row is inserted for the new date, so a single intended change produces two sessions. T510
+must genuinely **drop** dates removed from the new schedule (rule 5), which is exactly the behavior
+outreach's own module doc discloses as missing.
 
 **Real schema**, `supabase/migrations/20260717000000_scheduling_attendance.sql`:
 `event_sessions` (`:53-63`, `event_id … on delete cascade`, `session_date date not null`, `starts_at`/
 `ends_at timestamptz not null`, `status … check (… 'scheduled','completed','canceled')`, `notes text not
 null`); `rsvps` (`:67-76`, `session_id … on delete restrict`); `attendance` (`:82-95`, `session_id … on
 delete restrict`); `events` (`:33-48`, `title`/`description`/`location_name`/`address text not null`,
-`team_ids uuid[]` nullable = all teams).
+`team_ids uuid[]` nullable = all teams). **`rsvps` is referenced by no foreign key anywhere under
+`supabase/migrations/`** (D015's boss-verified premise — its own delete can never raise `23503`; only
+the `event_sessions` delete can, from `attendance`'s or `rsvps`' own restrict FK against it). `rsvps`
+carries `unique (session_id, student_id)` (`:75` — this is why capture-and-restore was rejected, D015
+§2).
+
+**`loaders/attendance.ts` has no time guard, which is why the race is reachable in ordinary use** (D015
+boss-verified premise): zero occurrences of `starts_at`, `now(`, `new Date`, or `Date.now` in that file
+— a coach can write attendance to a still-`'scheduled'`, still-future session from the LiveConsole at
+any time, including while another coach is narrowing this series.
 
 **The FK-restrict error-code convention already exists in this codebase**, fully qualified path:
 `src/pages/roster/TeamsTab.test.tsx:1185-1195` proves the shape — a fake client whose `.delete().eq(...)`
@@ -112,7 +159,7 @@ resolves `{ data: null, error: { message: 'FK violation', code: '23503' } }`, as
 
 **The "already happened" boundary reuses an established shape, not an import** —
 `RsvpControl.tsx:320-329` (a different page, reimplemented locally per this file's own established
-practice, e.g. module doc #3 on `parseDateOnly`):
+practice, e.g. its own `parseDateOnly`):
 ```ts
 export function isSessionTimeEditable(startsAt: string, now: Date): boolean {
   return now.getTime() < new Date(startsAt).getTime();
@@ -123,7 +170,7 @@ export function isRsvpEditable(session: RsvpControlSession, now: Date): boolean 
 ```
 `RsvpControl.tsx:324-326`'s own doc comment calls the status check *"a disclosed addition beyond the
 bare time check"* — cited here as the precedent SHAPE for §4's own status exclusion, which is this
-packet's design decision, not an owner ruling (round-1 m9, corrected from v1).
+packet's design decision, not an owner ruling.
 
 **The precedent for a pure, separately-testable decision function** is `resolveAttendanceWriteMethod`
 (`loaders/attendance.ts:287-291`): *"pure, exported, directly tested without a fake `SupabaseClient`"*.
@@ -137,19 +184,17 @@ side `OutreachList.tsx` has one `editingTarget` state, one dialog mount, `initia
 ternary (`:3396-3399`).
 
 **The inverse time converter this design needs (timestamptz → `'HH:MM'` America/Chicago) already
-exists twice** (round-1 B1) — `OutreachList.tsx:1660-1665` and the identical `OutreachDetail.tsx:1449`
+exists twice** — `OutreachList.tsx:1660-1665` and the identical `OutreachDetail.tsx:1449`
 (`export function formatChicagoWallTime`), both `Intl.DateTimeFormat` `formatToParts` reads, tested at
-`OutreachDetail.test.tsx:1178-1182`. The caller pattern is `OutreachList.tsx:1727-1728`:
-`startTime: formatChicagoWallTime(session.startsAt), endTime: formatChicagoWallTime(session.endsAt)`.
-§4a reimplements the identical function locally in `ScheduleMeetingsDialog.tsx`, per this file's own
-established "reimplement, don't cross-import pages" convention.
+`OutreachDetail.test.tsx:1178-1182`. §4a reimplements the identical function locally in
+`ScheduleMeetingsDialog.tsx` (unexported — D015 disposition MINOR 6; it is called only from inside this
+same file's `resetForm()`, never from `MeetingsList.tsx`).
 
-**`AlertDialogProps` cannot render a list** (round-1, "also required"): read directly from
+**`AlertDialogProps` cannot render a list**: read directly from
 `node_modules/@astryxdesign/core/dist/AlertDialog/AlertDialog.d.ts` — `description: string` (a plain
 string prop, linked via `aria-describedby`), and `AlertDialogProps extends BaseProps<HTMLDialogElement>`
-carries no `children` slot. The component renders `description` inside one `<Text>` (confirmed by the
-gate at `AlertDialog.tsx:165-167`). **§4a's confirmation therefore builds one joined string**, not a
-child list — see §4a for the exact function.
+carries no `children` slot. The component renders `description` inside one `<Text>`. **§4a's
+confirmation therefore builds one joined string**, not a child list.
 
 **The batched-`.in()`-delete shape already exists** — `outreach.ts:1590-1597`:
 ```ts
@@ -158,15 +203,15 @@ const deleteRsvpsByIds = runMutation<readonly string[], void>(
   getClient,
 );
 ```
-§4b reuses this exact shape, filtering on `session_id` instead of `id` where noted.
+§4b reuses this exact shape for the **batched** parts of step 6 (a/c/e — the still-future guard, the
+attendance pre-check, and the attendance-bearing cancel). **Step 6f is per-id, not batched** — see §4b
+and D015 for why.
 
-**`createLoader` already exists and must be used for the new read** (round-1 m3):
-`loader.ts:159-179`, `export function createLoader<TArgs, TData>(query, getClient)`. §4b's new session
-read is wrapped in it, matching every other query in this file.
+**`createLoader` already exists and must be used for the new read**: `loader.ts:159-179`,
+`export function createLoader<TArgs, TData>(query, getClient)`. §4b's new session read is wrapped in
+it, matching every other query in this file.
 
-**Fixture literal counts, corrected** (round-1 m2 — v1's counts were wrong, from a grep shape that
-conflated `CoachMeetingRow.locationName`/`CoachMeetingRow.teamScopeLabel` with `FixtureEvent`'s
-same-named fields): exactly **3** hand-built `CoachMeetingRow` literals exist in
+**Fixture literal counts**: exactly **3** hand-built `CoachMeetingRow` literals exist in
 `MeetingsList.test.tsx` (the `pastOnlyRow` object starting `:844`, one more starting near `:928`, and
 the `T511_ROW` fixture starting near `:2390`), and exactly **3** `FIXTURE_EVENTS`-shaped literals exist
 in `MeetingsList.tsx` (`:766-800`: `event-weekly-build`, `event-ravens-strategy`, `event-food-drive`).
@@ -175,8 +220,7 @@ literals need editing.
 
 **No existing test encodes the create-only insert behavior in a way that blocks this design** — it
 must simply keep passing. The tests that must NOT be touched, identified by **name and content, not by
-line range** (round-1 m7, the T604 lesson — line ranges drift the moment this task inserts anything
-above them):
+line range** (the T604 lesson — line ranges drift the moment this task inserts anything above them):
 - `'"Schedule meetings" opens the real ScheduleMeetingsDialog (module doc #7a)'`
   (`MeetingsList.test.tsx`, currently near `:884-917`).
 - `'creating a meeting via the real dialog calls the injected onCreateMeetings seam and reloads the
@@ -200,7 +244,7 @@ topic sensitivity (item 25).
 "touches a write path" alone is not a trigger — same reasoning already used for T603 in this file
 family.
 
-## 4. Design — additive types, one pure function, two new loader-side guard queries
+## 4. Design — additive types, one pure function, per-session-paired removal (D015)
 
 **Do not modify `CreateMeetingsPayload`, `CreateMeetingsEventPayload`, `CreateMeetingsSessionPayload`,
 `OnCreateMeetingsFn`, or `defaultOnCreateMeetings` in any way.** They stay byte-identical, and the
@@ -220,8 +264,7 @@ export interface ExistingMeetingSeriesSession {
 /**
  * Rule 1: a session is eligible for a series edit's reconciliation only
  * while it is still `'scheduled'` AND its `startsAt` is STRICTLY after
- * `now` (a strict `>`, not `>=`, on THIS function's own condition —
- * round-1 m8 corrected a prior draft's confused prose here). The
+ * `now` (a strict `>`, not `>=`, on THIS function's own condition). The
  * consequence, restated because it is the more useful way to read it: a
  * session is "already happened" (protected -- this function returns
  * `false`) when `now >= startsAt`, a NON-STRICT/inclusive boundary on the
@@ -236,7 +279,7 @@ export interface ExistingMeetingSeriesSession {
  * check layered on top of a bare time check): `RsvpControl.tsx:324-326`'s
  * own doc comment, "a disclosed addition beyond the bare time check."
  * Reimplemented locally (not imported) per this file's own established
- * cross-page practice (module doc #3).
+ * cross-page practice.
  */
 export function isMeetingSessionReconcilable(
   session: Pick<ExistingMeetingSeriesSession, 'status' | 'startsAt'>,
@@ -257,40 +300,40 @@ export interface MeetingSeriesReconcilePlan {
  * already established.
  *
  * TWO invariants are enforced BY THIS FUNCTION ITSELF, not by the caller or
- * by a variable's name (round-1 B3 — v1 relied on a parameter literally
- * named `desiredFutureSessions` to already be future-only, which nothing
- * enforced):
+ * by a variable's name:
  *
  * 1. **A desired session whose own computed `startsAt` is not strictly
  *    after `now` is dropped before any matching happens** — regardless of
- *    what mode/range/weekday/date inputs produced it. This is the single
- *    source of truth for "future sessions only" on the write side; the UI
- *    additionally SHOULD prevent picking past dates (§4a component notes),
- *    but correctness never depends on that.
+ *    what mode/range/weekday/date inputs produced it. (This is an
+ *    application-level, in-memory filter — it is NOT the database-level
+ *    guard; see §4b for why a second, independent, database-evaluated
+ *    guard also exists for the destructive path.)
  * 2. **`toInsert` never creates a same-calendar-date duplicate of ANY
  *    existing session**, not only a reconcilable one. A desired date that
  *    coincides with an existing PAST session's date, or an existing
  *    already-`'canceled'`/`'completed'` future session's date, is silently
- *    absorbed: it is excluded from `toUpdate` (not reconcilable — protected)
- *    AND excluded from `toInsert` (a same-date row already exists), so no
- *    action is taken for that date at all. This is a disclosed, accepted
- *    simplification — no UI surfaces the collision to the coach, because no
- *    existing schedule-generation path can currently produce it (every
- *    create-mode date is picked against today's calendar, and edit mode's
- *    own custom-dates picker is the same component), and building detection
- *    UI for an unreachable case is out of scope.
+ *    absorbed: excluded from `toUpdate` (not reconcilable — protected) AND
+ *    excluded from `toInsert` (a same-date row already exists), so no
+ *    action is taken for that date at all. Disclosed, accepted
+ *    simplification — no existing UI path can produce this collision.
  *
- * **Duplicate `session_date` among reconcilable sessions** (round-1 m10, a
- * question for whoever builds T605 next, since per-session date edits are
- * where a genuine duplicate could first appear): not possible via any
- * existing create-mode path today (`generateCustomSessionDates` dedupes;
- * `single`/`weekly` modes cannot repeat a date within one event), so this
- * function's `Map`-keyed-by-`sessionDate` matching has an untested,
- * disclosed limitation if it ever occurs — the LAST reconcilable session
- * with a given date wins the `toUpdate` match; any earlier one sharing that
- * date is silently excluded from every list (neither updated nor removed).
- * T605 must revisit this the moment per-session date edits make duplicates
- * reachable.
+ * **Duplicate `session_date` among reconcilable sessions** — not possible
+ * via any existing create-mode path today (`generateCustomSessionDates`
+ * dedupes; `single`/`weekly` modes cannot repeat a date within one event),
+ * so this is a disclosed limitation for whoever builds T605 next (per-
+ * session date edits are where a genuine duplicate could first appear),
+ * corrected here from an earlier draft that got the "date not desired"
+ * branch wrong:
+ *   - If the shared date IS still desired: `toUpdate`'s `Map`-keyed lookup
+ *     (`reconcilableByDate`) silently picks ONE of the duplicates (last
+ *     one inserted into the `Map` wins); the other is excluded from every
+ *     list — neither updated nor removed, silently orphaned as a stale
+ *     `'scheduled'` row.
+ *   - If the shared date is NOT desired: `toRemove` is built by filtering
+ *     the raw `reconcilable` ARRAY (never the date-keyed `Map`), so **both**
+ *     duplicates independently satisfy the filter and **both** are removed.
+ *   T605 must revisit this the moment per-session date edits make
+ *   duplicates reachable.
  */
 export function computeMeetingSeriesReconcilePlan(
   existingSessions: readonly ExistingMeetingSeriesSession[],
@@ -323,45 +366,28 @@ export function computeMeetingSeriesReconcilePlan(
 export interface EditMeetingSeriesInitialData {
   eventId: string;
   title: string;
-  /** `readonly` (round-1 m1 — a plain `string[]` here produces a real
-   * `TS2322` at the `MeetingsList.tsx` call site, since `FixtureEvent
-   * .teamIds`/`CoachMeetingRow.teamIds` are themselves `readonly string[] |
-   * null`; see §4c). */
+  /** `readonly`, matching `FixtureEvent.teamIds`/`CoachMeetingRow.teamIds`'s own type (§4c) — a plain
+   * `string[]` here produces a real `TS2322` at the `MeetingsList.tsx` call site. */
   teamIds: readonly string[] | null;
   locationName: string;
   description: string;
-  /**
-   * `'HH:MM'` America/Chicago wall-clock (round-1 B1), derived from the
-   * EARLIEST `isMeetingSessionReconcilable` session in `sessions` below —
-   * if there is none (a fully-past series, §4a "always-editable" note),
-   * fall back to this file's own existing `DEFAULT_START_TIME`/
-   * `DEFAULT_END_TIME` (`:314-315`), matching create mode's defaults.
-   * **Disclosed behavior for heterogeneous times** (not reachable via any
-   * existing UI path today, since `buildEventSessionsPayload` always
-   * applies one shared time to every date it generates — but not
-   * database-enforced, so state it anyway): if a save is submitted WITHOUT
-   * touching these fields, every `toUpdate` row is written back with this
-   * SAME single time-of-day, which is a no-op for a series that already had
-   * one uniform time and a NORMALIZING write for a series that somehow did
-   * not. §8 AC-B1 pins the no-op case.
-   */
-  startTime: string;
-  endTime: string;
-  /** The FULL session list (past + future + canceled) — the dialog itself
-   * filters to `isMeetingSessionReconcilable` for pre-filling "Custom
-   * dates"; it does not trust a caller-side pre-filter. */
+  /** The FULL session list (past + future + canceled) — the dialog itself filters to
+   * `isMeetingSessionReconcilable` for pre-filling "Custom dates" AND for deriving `startTime`/
+   * `endTime` (below); it does not trust a caller-side pre-filter, and `MeetingsList.tsx` supplies
+   * none of the time derivation (D015 disposition MINOR 6 — `startTime`/`endTime` are NOT fields on
+   * this interface; deriving them requires calling this file's own unexported `formatChicagoWallTime`,
+   * which cannot cross a file boundary). */
   sessions: readonly ExistingMeetingSeriesSession[];
 }
 
 export interface SaveMeetingSeriesPayload {
   eventId: string;
-  /** Reuses `CreateMeetingsEventPayload`'s shape. `address` is ALWAYS
-   * IGNORED by the update mutation (§4b) — construct with `address: ''`,
-   * matching the create path's own existing default. */
+  /** Reuses `CreateMeetingsEventPayload`'s shape. `address` is ALWAYS IGNORED by the update mutation
+   * (§4b) — construct with `address: ''`, matching the create path's own existing default. */
   event: CreateMeetingsEventPayload;
-  /** The coach's full desired FUTURE schedule, post schedule-mode
-   * computation. The loader does not trust this to already be future-only
-   * (§4a's `computeMeetingSeriesReconcilePlan` re-derives it). */
+  /** The coach's full desired FUTURE schedule, post schedule-mode computation. The loader does not
+   * trust this to already be future-only (§4a's `computeMeetingSeriesReconcilePlan` re-derives it, and
+   * §4b's destructive path re-derives it AGAIN at the database boundary). */
   desiredFutureSessions: CreateMeetingsSessionPayload[];
 }
 
@@ -375,9 +401,11 @@ export const defaultOnSaveMeetingSeries: OnSaveMeetingSeriesFn = async (payload)
   );
 };
 
-/** Round-1 "also required" — reimplemented locally from `OutreachList.tsx:1660-1665`/
- * `OutreachDetail.tsx:1449` (both named `formatChicagoWallTime`), per this file's own
- * cross-page-reimplementation convention. */
+/** Reimplemented locally from `OutreachList.tsx:1660-1665`/`OutreachDetail.tsx:1449` (both named
+ * `formatChicagoWallTime`), per this file's own cross-page-reimplementation convention.
+ * DELIBERATELY NOT EXPORTED (D015 disposition MINOR 6): it is called only from this file's own
+ * `resetForm()`, never from `MeetingsList.tsx` — `EditMeetingSeriesInitialData` carries raw
+ * `startsAt`/`endsAt` timestamps, and the wall-time derivation happens entirely inside this file. */
 function formatChicagoWallTime(isoDateTime: string): string {
   const parts = CHICAGO_24H_TIME_FORMATTER.formatToParts(new Date(isoDateTime));
   const hour = parts.find((part) => part.type === 'hour')?.value ?? '00';
@@ -387,10 +415,11 @@ function formatChicagoWallTime(isoDateTime: string): string {
 // (CHICAGO_24H_TIME_FORMATTER: same `Intl.DateTimeFormat('en-US', { hour: '2-digit', minute:
 // '2-digit', hourCycle: 'h23', timeZone: CHICAGO_TIME_ZONE })` shape as both existing copies.)
 
-/** Round-1 "also required" (AlertDialog cannot render a list — `AlertDialogProps.description:
- * string`, no `children`, `node_modules/@astryxdesign/core/dist/AlertDialog/AlertDialog.d.ts`).
- * Builds ONE joined string satisfying rule 6: counts always; the actual removed dates listed,
- * comma-joined, ONLY when `plan.toRemove.length > 0`. */
+/** `AlertDialogProps.description` is a plain string with no `children` slot
+ * (`node_modules/@astryxdesign/core/dist/AlertDialog/AlertDialog.d.ts`) — builds ONE joined string
+ * satisfying rule 6: counts always; the actual removed dates listed, comma-joined, ONLY when
+ * `plan.toRemove.length > 0`. Reuses this file's own existing `parseDateOnly` (`:335`) directly —
+ * not reimplemented. */
 export function buildEditConfirmationDescription(plan: MeetingSeriesReconcilePlan): string {
   const base = `${plan.toInsert.length} session(s) added · ${plan.toRemove.length} session(s) removed · ${plan.toUpdate.length} session(s) kept.`;
   if (plan.toRemove.length === 0) return base;
@@ -401,54 +430,63 @@ export function buildEditConfirmationDescription(plan: MeetingSeriesReconcilePla
 }
 // (WEEKDAY_DATE_FORMATTER: reimplement this file's own local copy of
 // `MeetingsList.tsx:1198-1228`'s `Intl.DateTimeFormat('en-US', { weekday: 'short', month:
-// 'short', day: 'numeric', timeZone: 'America/Chicago' })` + `parseDateOnly`, per this file's
-// established reimplement-don't-import practice.)
+// 'short', day: 'numeric', timeZone: 'America/Chicago' })`; `parseDateOnly` is the EXISTING function
+// at `:335`, reused directly.)
 ```
 
-**Deliberately NOT built** (round-1 M1's "also required" opportunity, declined explicitly rather than
-silently skipped): the confirmation copy above does not distinguish "removed and deleted" from "removed
-and canceled because attendance exists" — both mean "no longer appears as upcoming" to the coach, and
-the distinction is accurate either way. Surfacing it would need `hasRecordedAttendance` threaded onto
-`CoachMeetingSessionDetail` (a new field on an existing, widely-fixture-literal'd exported type) for a
-UI nuance the owner never asked for. **Do not build this speculatively.**
+**Deliberately NOT built:** the confirmation copy above does not distinguish "removed and deleted" from
+"removed and canceled because attendance exists" — both mean "no longer appears as upcoming" to the
+coach, and the distinction is accurate either way. Surfacing it would need a new field threaded onto an
+existing, widely-fixture-literal'd exported type for a UI nuance the owner never asked for. **Do not
+build this speculatively.**
 
 **Component changes** (`ScheduleMeetingsDialog`/`ScheduleMeetingsDialogProps`):
 - Add `initialData?: EditMeetingSeriesInitialData` and `onSaveMeetingSeries?: OnSaveMeetingSeriesFn =
   defaultOnSaveMeetingSeries`. `isEditMode = initialData !== undefined`.
 - New local state: `description` (rendered **only when `isEditMode`** — create mode's Basics section
-  stays byte-identical to today; `ScheduleMeetingsDialog.test.tsx:364-387`'s exact-label-array test is
-  the tripwire, per §2/§9, and must stay green **unedited**).
+  stays byte-identical to today; `ScheduleMeetingsDialog.test.tsx`'s
+  `describe('<ScheduleMeetingsDialog /> field order (MTG-02 / constitution item 13)', …)` (currently
+  `:364-387`) is the tripwire and must stay green **unedited**).
 - `resetForm()` branches on `initialData !== undefined`, mirroring `OutreachEventDialog.tsx:1016-1079`:
   present → `title`/`selectedTeamIds` (`initialData.teamIds !== null ? [...initialData.teamIds] :
   allTeamIds` — the `[...]` spread is required, `selectedTeamIds` state is `string[]`, `initialData
-  .teamIds` is `readonly string[] | null`)/`location`/`description`/`startTime`/`endTime` from it (the
-  latter two via `createISOTimeString`, same as `DEFAULT_START_TIME`/`DEFAULT_END_TIME`'s own
-  construction, `:314-315`); `mode('custom')`; `customDates` seeded from
+  .teamIds` is `readonly string[] | null`)/`location`/`description` from it directly; **`startTime`/
+  `endTime` are DERIVED here, not read off `initialData`** (D015 disposition MINOR 6): find the
+  earliest-`startsAt` session in `initialData.sessions.filter(s => isMeetingSessionReconcilable(s, new
+  Date()))`; if one exists, `setStartTime(createISOTimeString(formatChicagoWallTime(that.startsAt)) ??
+  DEFAULT_START_TIME)` and the equivalent for `endTime`/`endsAt`; if none exists (a fully-past series),
+  fall back to this file's own existing `DEFAULT_START_TIME`/`DEFAULT_END_TIME` (`:314-315`). **Disclosed
+  behavior for heterogeneous times** (not reachable via any existing UI path today, since
+  `buildEventSessionsPayload` always applies one shared time to every date it generates — but not
+  database-enforced, so state it anyway): saving without touching these fields writes every `toUpdate`
+  row back with this SAME single derived time-of-day — a no-op for a series that already had one
+  uniform time (§8 AC-B1, with its DST-window exception per MINOR 5), a normalizing write for one that
+  somehow did not. `mode('custom')`; `customDates` seeded from
   `generateCustomSessionDates(initialData.sessions.filter(s => isMeetingSessionReconcilable(s, new
   Date())).map(s => s.sessionDate))` (reuses the ALREADY-EXPORTED, untouched `generateCustomSessionDates`);
   absent → the existing pristine-defaults branch, **byte-for-byte unchanged**.
-- **`isValid`, round-1 B2 fix.** Today: `title.trim() !== '' && sessionsPayload.length > 0` (`:598`).
-  **This makes "title/location/description always editable" (rule 2) impossible for a series with zero
-  future sessions** — a fully-past series could never be saved at all, contradicting an owner-facing
-  rule. **Fix: in edit mode, `isValid = title.trim() !== ''` — no session-count requirement.** Create
-  mode's `isValid` is UNCHANGED (`title.trim() !== '' && sessionsPayload.length > 0`, still required
-  there, since a brand-new series with zero sessions is meaningless). This deliberately ALSO permits
-  narrowing an edited series down to zero future sessions in one save (every remaining future session
-  moves to `toRemove`) — a coherent action (e.g. winding a recurring meeting down while keeping its
-  title/location/history correct), not a bug to guard against. §8 has the ACs for both directions.
+- **`isValid`.** Today: `title.trim() !== '' && sessionsPayload.length > 0` (`:598`). **This makes
+  "title/location/description always editable" (rule 2) impossible for a series with zero future
+  sessions** — a fully-past series could never be saved at all, contradicting an owner-facing rule.
+  **Fix: in edit mode, `isValid = title.trim() !== ''` — no session-count requirement.** Create mode's
+  `isValid` is UNCHANGED. This deliberately ALSO permits narrowing an edited series down to zero future
+  sessions in one save (every remaining future session moves to `toRemove`) — a coherent action, not a
+  bug to guard against.
 - Dialog title: `isEditMode ? 'Edit meeting series' : 'Schedule meetings'`.
-- `computeConfirmLabel` gains a **leading required** `isEditMode: boolean` parameter — see §9 Grant B
-  for the authorized, corrected call-site count (five in the test file, not four). Create-mode output
-  stays pixel-identical: `computeConfirmLabel(false, 0) === 'Create 0 meetings'`, etc. Edit-mode output:
-  the literal string `'Save changes'`, regardless of count (precedent: `StudentDialog.tsx:299`,
-  `computeConfirmLabel('edit') === 'Save changes'` — no count suffix; simpler than Outreach's
-  `"Save changes — N sessions"` since this dialog's own confirmation step already shows counts in
-  detail immediately before the real save).
+- **`computeConfirmLabel` gains a leading required `isEditMode: boolean` parameter — SIX call sites
+  change, not five** (D015 disposition MINOR 4): five in `ScheduleMeetingsDialog.test.tsx` gain a
+  literal `false` (see §9 Grant B for the exact list), and the component's own internal render call,
+  currently `ScheduleMeetingsDialog.tsx:599` (`const confirmLabel =
+  computeConfirmLabel(sessionsPayload.length);`), changes to pass the REAL `isEditMode` variable —
+  `computeConfirmLabel(isEditMode, sessionsPayload.length)` — not a literal `false`. Create-mode output
+  stays pixel-identical: `computeConfirmLabel(false, 0) === 'Create 0 meetings'`, etc. Edit-mode
+  output: the literal string `'Save changes'`, regardless of count (precedent: `StudentDialog.tsx:299`,
+  `computeConfirmLabel('edit') === 'Save changes'`).
 - A `TextArea` "Description" field (matching `OutreachEventDialog.tsx:1259-1261`'s own `label` wiring),
   rendered only when `isEditMode`.
 - If `initialData.sessions` contains any session that is not `isMeetingSessionReconcilable`, render a
   short disclosure line, e.g. `${count} session(s) have already happened and are not affected by this
-  edit.` — present only when that count is > 0 (§8 AC10 checks both directions).
+  edit.` — present only when that count is > 0.
 - **Submit branches on `isEditMode`:**
   - `false` (create): **byte-identical to today.**
   - `true` (edit): build `desiredFutureSessions` via the SAME `computeScheduleSessionDates`/
@@ -456,14 +494,13 @@ UI nuance the owner never asked for. **Do not build this speculatively.**
     — per-session notes are T605's scope). Compute `const plan = computeMeetingSeriesReconcilePlan(
     initialData.sessions, desiredFutureSessions, new Date())`. **Do not call `onSaveMeetingSeries`
     yet.** Open an `AlertDialog` confirmation (add the import; cross-check props against
-    `astryx-api.md`'s "AlertDialog" section per this file's own module doc #8 discipline) with
-    `description={buildEditConfirmationDescription(plan)}` — this is what satisfies rule 6 given
-    `AlertDialogProps.description` is a plain string (§2). Confirming triggers the real
-    `onSaveMeetingSeries({ eventId: initialData.eventId, event: {...}, desiredFutureSessions })` call,
-    then `resetForm()` + close. Declining/closing returns to the form with all field state intact.
+    `astryx-api.md`'s "AlertDialog" section) with `description={buildEditConfirmationDescription(plan)}`.
+    Confirming triggers the real `onSaveMeetingSeries({ eventId: initialData.eventId, event: {...},
+    desiredFutureSessions })` call, then `resetForm()` + close. Declining/closing returns to the form
+    with all field state intact.
 
 ### 4b. New loader-side code in `loaders/meetings.ts` (additive; `makeCreateMeetings`/`createMeetings`
-untouched)
+untouched) — **per-session-paired removal, D015**
 
 ```ts
 interface EditableMeetingSessionDbRow {
@@ -474,8 +511,7 @@ interface EditableMeetingSessionDbRow {
   status: SessionStatus;
 }
 
-/** Round-1 m3: routed through the existing `createLoader` seam, matching
- * every other read in this file — v1 hand-rolled this instead. */
+/** Routed through the existing `createLoader` seam, matching every other read in this file. */
 async function queryEditableSessionsForEvent(
   client: SupabaseClient,
   eventId: string,
@@ -489,15 +525,19 @@ async function queryEditableSessionsForEvent(
 
 interface FutureSessionIdDbRow { id: string; }
 
-/** Round-1 M2 — defense in depth. The future-forward guard up to this point
- * is `computeMeetingSeriesReconcilePlan`'s own `now`-based filter, which is
- * an APPLICATION-level check (the gate's own framing: "the future-forward
- * guard is the client clock"). This query re-enforces the SAME invariant at
- * the database boundary, independent of whether the pure function is ever
- * wrong: given a candidate id list, it returns only the subset that is
- * STILL, right now, strictly in the future. The result of this query — not
- * `plan.toRemove` directly — is what actually reaches the destructive
- * calls below. */
+/**
+ * D015 MAJOR fix. The future-forward guard up to this point is
+ * `computeMeetingSeriesReconcilePlan`'s own `now`-based filter, an
+ * APPLICATION-level check. This query re-enforces the SAME invariant at
+ * the DATABASE boundary using Postgres's own `'now'` timestamptz literal
+ * (a string Postgres parses as "the current instant, evaluated when this
+ * statement runs on the server" — NOT a client-computed `new Date()
+ * .toISOString()`, which is still an app-clock value even though it is
+ * accurate). Given a candidate id list, returns only the subset that is
+ * STILL, right now (server time), strictly in the future. The result of
+ * THIS query — not `plan.toRemove` directly — is what reaches the
+ * destructive calls below.
+ */
 async function queryStillFutureSessionIds(
   client: SupabaseClient,
   candidateIds: readonly string[],
@@ -506,15 +546,14 @@ async function queryStillFutureSessionIds(
     .from('event_sessions')
     .select('id')
     .in('id', [...candidateIds])
-    .gt('starts_at', new Date().toISOString());
+    .gt('starts_at', 'now');
   return { data: (result.data as FutureSessionIdDbRow[] | null) ?? null, error: result.error };
 }
 
 interface AttendanceExistsDbRow { session_id: string; }
 
-/** Round-1 M1's fix. One batched read, given the (already `now`-and-
- * `startsAt`-guarded) candidate ids, returns which of them have at least
- * one `attendance` row. */
+/** One batched read: given the (already `'now'`-guarded) candidate ids, returns which of them have at
+ * least one `attendance` row. */
 async function queryAttendanceExistsForSessions(
   client: SupabaseClient,
   sessionIds: readonly string[],
@@ -531,58 +570,84 @@ async function queryAttendanceExistsForSessions(
 
 1. **Partial `events` update** — `title`, `team_ids`, `location_name`, `description` **only**.
    `address`, `counts_participation`, `counts_volunteer_hours`, `adult_volunteers_count`,
-   `adult_volunteer_hours` are **never named** in the update's column set (unlike `outreach.ts`'s own
-   full-row `updateEvent`, whose dialog collects every one of those fields and can safely resend all of
-   them — this dialog collects only four).
-2. Load fresh sessions via `queryEditableSessionsForEvent(eventId)` (via `createLoader`, round-1 m3) —
-   fresh, not the page's stale in-memory rows (mirrors `outreach.ts`'s `loadExistingSessions`
-   re-read-before-reconciling pattern, `:1543`).
+   `adult_volunteer_hours` are **never named** in the update's column set.
+2. Load fresh sessions via `queryEditableSessionsForEvent(eventId)` (via `createLoader`) — fresh, not
+   the page's stale in-memory rows.
 3. Map to `ExistingMeetingSeriesSession[]`, call `computeMeetingSeriesReconcilePlan(existing,
    payload.desiredFutureSessions, new Date())` — a **fresh** `now`, independent of the dialog's
-   confirmation-preview `now` (disclosed race: if enough wall-clock time passes between confirmation and
-   the real save that a session crosses from future to past, the server-side plan may differ slightly
-   from what the coach was shown — same disclosed-non-atomicity class as this file's own existing
+   confirmation-preview `now` (disclosed race, same non-atomicity class as this file's own existing
    "events insert succeeds, sessions insert fails" risk, `:115-121`).
-4. `plan.toUpdate` → `Promise.all`-parallelized per-row updates of `starts_at`/`ends_at` **only** (id
-   preserved; `notes`/`session_date`/`people_reached` untouched) — matches `outreach.ts:1553-1559`'s own
-   handling of per-row-DISTINCT-value updates (not batched — Postgrest cannot batch a single statement
-   into per-row-different values without an RPC).
+4. `plan.toUpdate` → `Promise.all`-parallelized per-row updates of `starts_at`/`ends_at` **only**
+   (matches `outreach.ts:1553-1559`'s own handling of per-row-DISTINCT-value updates — not batched,
+   Postgrest cannot batch one statement into per-row-different values without an RPC).
 5. `plan.toInsert` → one batched insert (`status: 'scheduled'`, `notes: ''`), same shape
    `makeCreateMeetings`'s own `insertSessions`.
-6. **`plan.toRemove` → the M1/M2 layered sequence, only if `plan.toRemove.length > 0`:**
-   a. `safeIds = await queryStillFutureSessionIds(plan.toRemove.map(r => r.sessionId))` (M2's guard —
-      drop, don't touch, any candidate id that is no longer strictly future).
-   b. If `safeIds.length === 0`, stop here (nothing left to remove).
+6. **`plan.toRemove` → steps a-e BATCHED (unchanged from the design D015 preserved); step f PER-ID
+   PAIRED (D015's ruled fix), only if `plan.toRemove.length > 0`:**
+   a. `safeIds = await queryStillFutureSessionIds(plan.toRemove.map(r => r.sessionId))` — the D015
+      MAJOR-fixed guard, `'now'` evaluated server-side.
+   b. If `safeIds.length === 0`, stop here.
    c. `attendanceIds = new Set((await queryAttendanceExistsForSessions(safeIds)).map(r =>
-      r.session_id))` (M1's pre-check, deduplicated).
+      r.session_id))` — batched, one query for the whole `safeIds` set.
    d. `toCancel = safeIds.filter(id => attendanceIds.has(id))`; `toDelete = safeIds.filter(id =>
       !attendanceIds.has(id))`.
-   e. If `toCancel.length > 0`: one batched `update event_sessions set status = 'canceled' where id in
-      (:toCancel)` — **RSVPs for these are NOT touched**, fixing M1's proven data loss (the gate's own
-      cluster measurement: deleting RSVPs unconditionally before the delete-vs-cancel decision left
-      `session_rsvps_left = 0` on the fallback path — a real, silent data-loss bug in the design, not
-      the foreman's implementation, per the gate's own words).
-   f. If `toDelete.length > 0`: batched `delete from rsvps where session_id in (:toDelete)`
-      (`outreach.ts:1590-1597`'s shape, filtered on `session_id`), THEN batched `delete from
-      event_sessions where id in (:toDelete)`. **Residual safety net** (a TOCTOU race narrower than
-      M1's original bug — the window between step c's read and this delete, not the whole
-      confirmation-to-save window): on a caught `SupabaseLoaderError` with `.code === '23503'`, fall
-      back to canceling the WHOLE `toDelete` batch instead of re-throwing. A false cancel on a session
-      that turned out fine is harmless and visible (same disclosed-limitation posture as the per-session
-      Cancel button's own existing behavior); silently losing RSVPs is not, which is exactly what this
-      fallback avoids repeating.
+   e. If `toCancel.length > 0`: ONE batched `update event_sessions set status = 'canceled' where id in
+      (:toCancel)` — RSVPs for these are NOT touched (Branch B, unchanged from v2).
+   f. **If `toDelete.length > 0`, PER ID, as an independent pair (D015 §2, replacing v2's batched
+      step f entirely):**
+      ```ts
+      async function removeOneSession(sessionId: string): Promise<void> {
+        // f1 -- RSVPs first (the owner's own ordering). ANY error here means this pair's
+        // session delete is never attempted, and the error propagates (the save rejects) --
+        // never caught, never swallowed.
+        await deleteRsvpsForSession(sessionId);
+        try {
+          // f2 -- the SAME 'now' guard chained directly onto the delete itself: even if a stale
+          // id somehow reached this point, the delete affects zero rows for it rather than
+          // deleting a session that is not (or no longer) strictly future.
+          await deleteSessionIfStillFuture(sessionId); // .eq('id', sessionId).gt('starts_at', 'now')
+        } catch (error) {
+          if (isSupabaseLoaderError(error) && error.code === '23503') {
+            // Attendance (or a fresh RSVP) raced in between the batched pre-check (c) and THIS
+            // id's own delete -- cancel THIS id only. If this cancel itself throws, it
+            // propagates (never swallowed).
+            await cancelSession(sessionId); // .eq('id', sessionId), no batching
+          } else {
+            throw error;
+          }
+        }
+      }
+
+      // Cross-pair sequencing: PARALLEL. Pairs touch disjoint rows and are independent (D015 §2
+      // explicitly sanctions this choice). Consequence, disclosed: if one pair rejects,
+      // `Promise.all` rejects (the save rejects) while sibling pairs already in flight may still
+      // complete their own mutations against the database -- the same disclosed non-atomicity
+      // class this file already carries for "events insert succeeds, sessions insert fails."
+      await Promise.all(toDelete.map((id) => removeOneSession(id)));
+      ```
+   **An equivalent `starts_at`-guarded delete on `rsvps` is impossible to express over PostgREST**
+   (D015 MAJOR disposition, stated so no reader goes hunting for it): `rsvps` has no `starts_at` column
+   of its own, and PostgREST has no mechanism to filter a `DELETE` by a column on a different,
+   embedded/joined table. The protection for `rsvps` comes entirely from `safeIds` already having
+   passed the `'now'`-guarded query in step a before step f ever runs.
+
+**The residual, disclosed exactly as D015 states it — a limitation, not a deferred defect (no item-20
+ledger row required):** if attendance (or a fresh RSVP) lands in the sub-second window between step c's
+batched pre-check and that ONE session's own step-f2 delete, that session ends `'canceled'` with its
+own RSVPs already deleted by its own f1. This is bounded to **at most the one raced session** — never
+the whole `toDelete` batch — and it satisfies the owner's own fallback ruling verbatim ("the delete
+must fall back to cancelling rather than failing the coach's save"). **This MUST appear in the worker's
+Known Risks output**, not just in this packet.
 
 `export const saveMeetingSeries: OnSaveMeetingSeriesFn = makeSaveMeetingSeries();`
 
 ### 4c. `MeetingsList.tsx` wiring
 
 - `CoachMeetingRow` (`:671-678`) gains **two optional** fields (optional so the 3 existing hand-built
-  `CoachMeetingRow` literals need no mechanical edit — round-1 m2 corrected this count from 7):
-  `teamIds?: readonly string[] | null;` (round-1 m1 — `readonly`, matching `FixtureEvent.teamIds`'s own
-  type at `:597`, or `buildCoachMeetingRows`'s assignment produces `TS2322` at `:1014`) and
+  `CoachMeetingRow` literals need no mechanical edit): `teamIds?: readonly string[] | null;` and
   `description?: string;`.
 - `FixtureEvent` (`:592-603`) gains `description?: string;` (optional — the 3 existing `FIXTURE_EVENTS`
-  literals, `:766-800`, round-1 m2, need no edit).
+  literals, `:766-800`, need no edit).
 - `buildCoachMeetingRows`'s `rows.push({...})` (`:1009-1015`) gains `teamIds: event.teamIds ?? null,
   description: event.description ?? ''`.
 - `loaders/meetings.ts`: `EventDbRow` (`:183-195`) gains `description: string;`; `queryEvents`'s select
@@ -599,9 +664,11 @@ async function queryAttendanceExistsForSessions(
 - Compute `initialData` by ternary at the render call (mirrors `OutreachList.tsx:3396-3399`):
   `editTarget !== null ? { eventId: editTarget.eventId, title: editTarget.title, teamIds: editTarget
   .teamIds ?? null, locationName: editTarget.locationName, description: editTarget.description ?? '',
-  startTime/endTime: derived per §4a's fallback rule, sessions: editTarget.sessions.map(s => ({
-  sessionId: s.sessionId, sessionDate: s.sessionDate, startsAt: s.startsAt, endsAt: s.endsAt, status: s
-  .status })) } : undefined`.
+  sessions: editTarget.sessions.map(s => ({ sessionId: s.sessionId, sessionDate: s.sessionDate,
+  startsAt: s.startsAt, endsAt: s.endsAt, status: s.status })) } : undefined`. **No `startTime`/
+  `endTime` field is constructed here** (D015 disposition MINOR 6 — `MeetingsList.tsx` never calls
+  `formatChicagoWallTime`; that derivation lives entirely inside `ScheduleMeetingsDialog.tsx`'s own
+  `resetForm()`, §4a).
 - New `handleSaveMeetingSeriesSubmit(payload: SaveMeetingSeriesPayload): Promise<void>` mirrors
   `handleCreateMeetingsSubmit`'s (`:2145-2167`) reload-and-feedback shape.
 - `<ScheduleMeetingsDialog>` mount (`:2296-2301`) gains `initialData={initialData}`,
@@ -626,7 +693,9 @@ docs/swarm/active/T510-worker-output.md      (create — your evidence doc)
 
 - Everything under `supabase/migrations/`.
 - `src/pages/meetings/LiveConsole.tsx`, `EndMeetingDialog.tsx`, `Kiosk.tsx`, `StudentMeetingView.tsx`
-  and their test files.
+  and their test files. **`loaders/attendance.ts` is Forbidden even though §2 cites its missing time
+  guard** — that guard's absence is out of this task's scope; D015's fix is entirely on the T510 write
+  path, not on attendance-writing.
 - `src/pages/outreach/**` and its loaders — read-only precedent only.
 - `src/lib/supabase/loaders/outreach.ts`, `endMeeting.ts`, `attendance.ts`, `students.ts`, `client.ts`,
   `loader.ts` (import from `loader.ts`; do not edit it), `src/lib/supabase/types.ts`.
@@ -638,9 +707,10 @@ docs/swarm/active/T510-worker-output.md      (create — your evidence doc)
 ## 6. Rules (constitution)
 
 Item 10 — no migration is touched. Item 20 — genuine out-of-scope defects go in your output doc as a
-named follow-up. Item 21 — completion report states a commit SHA. Item 22 — stage named paths only.
-Item 23 — mutation experiments run in your own worktree. Non-Negotiables — existing tests pass unless
-explicitly approved (§9 names the one exception and its exact authorized bounds); no
+named follow-up (the residual race in §4b is a disclosed limitation per D015, NOT an item-20 deferral —
+do not file it as one). Item 21 — completion report states a commit SHA. Item 22 — stage named paths
+only. Item 23 — mutation experiments run in your own worktree. Non-Negotiables — existing tests pass
+unless explicitly approved (§9 names the one exception and its exact authorized bounds); no
 self-certification; a checker inspects the real artifact.
 
 ## 7. Six gates — capture `$?` on the BARE command, never through a pipe
@@ -655,80 +725,80 @@ Report file/test totals against a named baseline SHA (`git rev-parse HEAD` befor
 
 ## 8. Acceptance Criteria — each individually checkable by file/line, exact command, or test name
 
-- **AC1 — additive-only guarantee, correct count (round-1 M3 / §9 Grant B).** `git diff` on
-  `ScheduleMeetingsDialog.tsx` shows no changed line inside the existing `CreateMeetingsEventPayload`,
-  `CreateMeetingsSessionPayload`, `CreateMeetingsPayload`, `OnCreateMeetingsFn`,
-  `defaultOnCreateMeetings` declarations. `computeConfirmLabel` gains a leading required `isEditMode:
-  boolean`. **Exactly five call sites in `ScheduleMeetingsDialog.test.tsx` gain `false` as a new
-  leading argument** — identify by test/describe name, not line number (round-1 m7): the four
-  assertions inside `describe('computeConfirmLabel (BEH-07)', …)` and the one inside the
-  Weekly-recurring test's `findButtonByText(computeConfirmLabel(expected.length))` call. **Zero
-  asserted strings change.**
-- **AC-B1 — heterogeneous-time no-op proof (round-1 B1).** Open edit on a series whose reconcilable
-  future sessions all share one time-of-day (e.g. 16:00–17:30 Chicago). Save with no schedule change.
-  Assert every `toUpdate` row's `starts_at`/`ends_at` is byte-identical to its pre-save value.
-- **AC-B2a — fully-past series stays editable (round-1 B2).** `initialData` with zero
-  `isMeetingSessionReconcilable` sessions and a nonempty title → the confirm button is enabled
-  (`isValid` true) with an empty/whatever-custom-dates schedule.
-- **AC-B2b — narrowing to zero is permitted (round-1 B2).** `initialData` with reconcilable future
-  sessions; save with an empty desired schedule → `isValid` stays true, `plan.toRemove` contains every
-  reconcilable session, `plan.toInsert`/`toUpdate` are empty, and the save completes (does not throw
-  for having "no sessions").
-- **AC-B3a — a desired date matching an existing PAST session is absorbed, not inserted.** Build
-  `existingSessions` with one past `'scheduled'` session on date D; `desiredFutureSessions` with an
-  entry also dated D (constructed with a future `startsAt`, since the function itself filters on
-  `startsAt`, not `sessionDate`, for the leading future-filter — see design note). Assert D appears in
-  neither `toInsert` nor `toUpdate`.
+- **AC1 — additive-only guarantee, correct count.** `git diff` on `ScheduleMeetingsDialog.tsx` shows no
+  changed line inside the existing `CreateMeetingsEventPayload`, `CreateMeetingsSessionPayload`,
+  `CreateMeetingsPayload`, `OnCreateMeetingsFn`, `defaultOnCreateMeetings` declarations.
+  `computeConfirmLabel` gains a leading required `isEditMode: boolean`. **Six call sites change, not
+  five**: the five named in §9 Grant B (each gains a literal `false`) plus the component's own internal
+  render call at `ScheduleMeetingsDialog.tsx:599`, which gains the real `isEditMode` variable, NOT a
+  literal `false` — a test asserting `:599`'s call site passes a hardcoded `false` is itself wrong.
+  **Zero asserted strings change.**
+- **AC-B1 — heterogeneous-time no-op proof, scoped correctly.** Open edit on a series whose
+  reconcilable future sessions all share one time-of-day, on dates OTHER than a March DST transition
+  date and at times OUTSIDE `[02:00, 04:00)` local. Save with no schedule change. Assert every
+  `toUpdate` row's `starts_at`/`ends_at` represents the **same instant** as its pre-save value —
+  compare via `new Date(a).getTime() === new Date(b).getTime()`, not literal string equality (this
+  repo's own fixtures happen to use the `.000Z` suffix consistently, but a real PostgREST response
+  returns `+00:00`; pin the intent, not the string form). **Do not extend this proof to sessions dated
+  on the DST transition date with a time in `[02:00,04:00)`** — see Known Risks; that combination is a
+  disclosed, out-of-scope exception, since it exercises a pre-existing, unmodified conversion function
+  this task does not touch.
+- **AC-B2a — fully-past series stays editable.** `initialData` with zero `isMeetingSessionReconcilable`
+  sessions and a nonempty title → the confirm button is enabled (`isValid` true).
+- **AC-B2b — narrowing to zero is permitted.** `initialData` with reconcilable future sessions; save
+  with an empty desired schedule → `isValid` stays true, `plan.toRemove` contains every reconcilable
+  session, `plan.toInsert`/`toUpdate` are empty, and the save completes.
+- **AC-B3a — a desired date matching an existing PAST session is absorbed, not inserted.**
 - **AC-B3b — a desired date matching an existing CANCELED future session is absorbed, not inserted.**
-  Same shape, existing session is `'canceled'` and future-dated. Assert the same absorption.
 - **AC-B3c — a desired session whose own `startsAt` is not strictly future is dropped before matching.**
-  A `desiredFutureSessions` entry with a past `startsAt` never appears in `toInsert`, `toUpdate`, or
-  affects `toRemove`, regardless of what existing sessions are present.
-- **AC2 — `isMeetingSessionReconcilable` boundary, prose corrected (round-1 m8).** A `'scheduled'`
-  session with `startsAt` exactly equal to `now` → `false` (the function's own condition is strict `>`;
-  the protection boundary this produces is the non-strict `>=` — do not describe the function's own
-  operator as non-strict). One millisecond in the future → `true`. `'canceled'` with a future `startsAt`
-  → `false`.
+- **AC-Bdup — duplicate `session_date`, both directions, corrected per D015 disposition MINOR 3:** two
+  reconcilable sessions sharing one `sessionDate` where that date IS still desired → exactly one
+  appears in `toUpdate`, the other in neither list. Two reconcilable sessions sharing one `sessionDate`
+  where that date is NOT desired → **both** appear in `toRemove`.
+- **AC2 — `isMeetingSessionReconcilable` boundary.** A `'scheduled'` session with `startsAt` exactly
+  equal to `now` → `false` (the function's own condition is strict `>`; the protection boundary this
+  produces is the non-strict `>=`). One millisecond in the future → `true`. `'canceled'` with a future
+  `startsAt` → `false`.
 - **AC3/AC4/AC5 — core reconcile behavior**: a reconcilable session whose date persists → `toUpdate`;
-  one whose date is dropped → `toRemove`; a desired date with no reconcilable match (and no existing
-  match of any status, per AC-B3a/b) → `toInsert`.
-- **AC6 — past sessions never touched.** A past-dated session whose date is absent from the desired
-  schedule does not appear in `toRemove`.
-- **AC7 — already-canceled sessions never touched**, presented as this packet's own design decision
-  (round-1 m9) — do not cite the owner's "regardless of status" words for this specific exclusion.
+  one whose date is dropped → `toRemove`; a desired date with no existing match of any status →
+  `toInsert`.
+- **AC6 — past sessions never touched.**
+- **AC7 — already-canceled sessions never touched** (this packet's own design decision — do not cite
+  the owner's "regardless of status" words for this specific exclusion).
 - **AC8 — partial `events` update.** The `.update({...})` argument object has **exactly** the keys
-  `title`, `team_ids`, `location_name`, `description` — `address`/`counts_participation`/
-  `counts_volunteer_hours`/`adult_volunteers_count`/`adult_volunteer_hours` absent.
-- **AC9 — the M1/M2 layered removal sequence, every branch proven with a fake client** (mirror
-  `src/pages/roster/TeamsTab.test.tsx:1185-1195`'s exact shape):
-  - Branch A (clean, no attendance): `queryStillFutureSessionIds` called with the candidate ids;
-    `queryAttendanceExistsForSessions` returns none of them; `rsvps.delete().in('session_id', …)` is
-    called BEFORE `event_sessions.delete().in('id', …)`; no `event_sessions.update` call happens.
-  - Branch B (M1's fix, attendance exists): `queryAttendanceExistsForSessions` returns the id;
-    `event_sessions.update({ status: 'canceled' })` is called for it; **`rsvps.delete` is NEVER called
-    for this id** (M1's data-loss fix — assert the RSVPs are not targeted, not merely that the session
-    survives).
-  - Branch C (M2's guard): a candidate id absent from `queryStillFutureSessionIds`'s result set is
-    never passed to any subsequent delete/cancel/attendance-check call.
-  - Branch D (residual fallback): `event_sessions.delete().in('id', …)` for the `toDelete` batch
-    rejects with `{ code: '23503' }` → `event_sessions.update({ status: 'canceled' })` is called for
-    that whole batch, and the overall promise **resolves**.
-  - Branch E: a non-`'23503'` error on that same delete → the promise **rejects**.
+  `title`, `team_ids`, `location_name`, `description`.
+- **AC9 — the D015-ruled per-session-paired removal sequence, every branch proven with a fake client**
+  (mirror `src/pages/roster/TeamsTab.test.tsx:1185-1195`'s exact shape; sequencing is PARALLEL per §4b
+  — align assertions accordingly):
+  - **Branch A (clean, at least two ids, no attendance):** for EACH id independently, that id's OWN
+    `rsvps.delete().eq('session_id', X)` call happens strictly before that SAME id's OWN
+    `event_sessions.delete().eq('id', X)` call; no `event_sessions.update` call for either.
+  - **Branch B (unchanged, batched):** `queryAttendanceExistsForSessions` returns an id →
+    `event_sessions.update({ status: 'canceled' })` is called for it (batched, may include other
+    `toCancel` ids); `rsvps.delete` is NEVER called for it.
+  - **Branch C (unchanged, batched):** an id absent from `queryStillFutureSessionIds`'s result never
+    reaches any subsequent delete/cancel/attendance-check call.
+  - **Branch D — THE LOAD-BEARING ASSERTION, rewritten per D015, at least TWO pairs in flight:**
+    session X's `event_sessions.delete()` rejects `{ code: '23503' }`; session Y's resolves cleanly.
+    Assert, ALL of: (i) X receives `event_sessions.update({ status: 'canceled' }).eq('id', X)` and X
+    ONLY (not Y, not a batch call covering both); (ii) Y's `event_sessions.delete().eq('id', Y)` is
+    genuinely called and Y receives **no** update call; (iii) Y's `rsvps.delete().eq('session_id', Y)`
+    is its own independent call, made regardless of X's outcome; (iv) at **no point** does any
+    `event_sessions.update` call target both X and Y together (no `.in('id', [X, Y])` cancel); (v) the
+    overall `saveMeetingSeries(...)` promise **resolves**. This is the assertion v2's Branch D lacked —
+    Y's fate must be proven independent of X's failure, not merely that the overall call "succeeded."
+  - **Branch E:** a non-`23503` error on EITHER half of any pair (its `rsvps` delete or its
+    `event_sessions` delete) → the overall promise **rejects**. Given parallel sequencing, a sibling
+    pair may have already completed its own mutations before the rejection surfaces — assert the
+    rejection itself, not the absence of sibling side effects.
 - **AC10 — the "already happened" disclosure, both directions.**
-- **AC11 — confirmation, pure-addition case.** `buildEditConfirmationDescription` on a plan with
-  `toRemove.length === 0` produces a string with counts and **no** "Removed:" segment.
-- **AC12 — confirmation, removal case.** `toRemove.length > 0` → the string contains "Removed:"
-  followed by each removed date in human-readable form (weekday + month + day).
-- **AC13 — Edit opens the real dialog, prefilled** — see §9 Grant A for the full, authorized
-  replacement-test spec; this AC is satisfied by that test passing.
+- **AC11 — confirmation, pure-addition case.** No "Removed:" segment when `toRemove.length === 0`.
+- **AC12 — confirmation, removal case.** "Removed:" followed by each removed date, human-readable.
+- **AC13 — Edit opens the real dialog, prefilled** — see §9 Grant A.
 - **AC14 — dead code removed.** `grep -rn "StubNotice\|StubBanner\|showEditStub\|stubNotice"
   src/pages/meetings/MeetingsList.tsx` returns zero matches.
-- **AC15 — create path unchanged, frozen by NAME (round-1 m7), not line range:**
-  `'"Schedule meetings" opens the real ScheduleMeetingsDialog (module doc #7a)'`,
-  `'creating a meeting via the real dialog calls the injected onCreateMeetings seam and reloads the
-  list'` (and its sibling in the same block), `describe('createMeetings (T096, Trap #3 real
-  onCreateMeetings default)', …)`, and `describe('<ScheduleMeetingsDialog /> field order (MTG-02 /
-  constitution item 13)', …)` all pass **without modification to their assertions**.
+- **AC15 — create path unchanged, frozen by NAME, not line range** (the four tests/describe blocks
+  listed in §2's last bullet list, all passing without modification to their assertions).
 - **AC16 — §9's authorized test change, exactly as Grant A specifies**, no more and no less.
 - **AC17-AC20 — the four gates from §7**, each `EXIT:0`, reported against a named baseline SHA.
 
@@ -758,17 +828,45 @@ new behavior.
 6. Prove it can fail — RED under a named mutation (reverting `onEdit={openEditDialog}` to a stub/no-op
    at both `CoachMeetingsSection` mounts, or removing the `initialData` ternary).
 
-**Grant B — `computeConfirmLabel`'s true call-site count: five in the test file** (packet §4a/AC1) —
-`:353`, `:354`, `:355`, `:356` (the BEH-07 describe block) and **`:480`** (inside the Weekly-recurring
-test, invisible to a describe-block-shaped search). **Exactly five call sites gain `false` as a new
-leading argument. Zero asserted strings change.**
+**Grant B — `computeConfirmLabel`'s call sites in the TEST FILE: five** (packet §4a/AC1) — `:353`,
+`:354`, `:355`, `:356` (the BEH-07 describe block) and **`:480`** (inside the Weekly-recurring test,
+invisible to a describe-block-shaped search). **Exactly five call sites in
+`ScheduleMeetingsDialog.test.tsx` gain `false` as a new leading argument. Zero asserted strings
+change.** (A **sixth** site exists in the component itself, `ScheduleMeetingsDialog.tsx:599` — not
+covered by Grant B since it is not a test-file edit; it gains the real `isEditMode` value, per §4a/AC1.)
 
 **Explicitly NOT authorized:** deleting the stub test without Grant A's replacement; any edit to
-`ScheduleMeetingsDialog.test.tsx:364-387` (the MTG-02 field-order tripwire — it goes red only if
+`describe('<ScheduleMeetingsDialog /> field order (MTG-02 / constitution item 13)', …)` (currently
+`ScheduleMeetingsDialog.test.tsx:364-387` — the MTG-02 field-order tripwire; it goes red only if
 Description leaks into create mode, and the fix is then the code, never the test); any edit to the
-create-path tests §8 AC15 freezes; any other existing-test modification anywhere. **If a worker
+create-path tests §2/§8 AC15 freezes; any other existing-test modification anywhere. **If a worker
 believes one is forced, it stops and files a dispute citing this entry** — it does not reason its way
 to "obviously also covered."
+
+## Known Risks (must also appear in the worker's own output doc)
+
+1. **The D015 residual race**, stated exactly as the ruling states it: attendance (or a fresh RSVP)
+   landing in the sub-second window between the batched attendance pre-check and one specific session's
+   own paired delete leaves that ONE session `'canceled'` with its own RSVPs already deleted. Bounded to
+   at most one session per save, never the whole batch. This is the owner's own ruled fallback outcome,
+   disclosed as a limitation — not an item-20 deferral.
+2. **`chicagoWallTimeToUtcIso` DST edge case** (existing, unmodified function, reused as-is): not
+   proven round-trip-stable for wall-clock times in `[02:00, 04:00)` local on the calendar date of the
+   March DST spring-forward transition (2026: March 8). If a series' derived start/end time falls in
+   that window and a future session lands on that exact date, saving without touching the time fields
+   can rewrite that session's stored `starts_at`/`ends_at` to a different instant than before, even
+   though the intent was a no-op. Fixing the underlying function is out of this task's scope (it is
+   shared, pre-existing, and used elsewhere unmodified) — AC-B1 is scoped to exclude this case rather
+   than claim unconditional stability.
+3. **Confirmation-preview vs. real-save race** (disclosed, §4b step 3): the dialog computes its
+   confirmation preview against `now` at open/submit time; the loader re-derives everything against a
+   fresh `now` at actual-save time. A long-idle confirmation dialog could see a slightly different
+   outcome than what was shown.
+4. **Cancel-vs-delete distinction not surfaced in the confirmation copy** (deliberate, §4a) — both
+   outcomes read as "no longer upcoming" to the coach; building the distinction was declined as
+   speculative scope growth.
+5. **Duplicate `session_date` among reconcilable sessions** (§4a) — not reachable via any existing UI
+   path today; disclosed for T605's attention since per-session date edits could make it reachable.
 
 ## Required Worker Output (`docs/swarm/active/T510-worker-output.md`)
 
@@ -776,12 +874,13 @@ to "obviously also covered."
 - Confirmation that `CreateMeetingsPayload`'s family is byte-identical (AC1), with the diff excerpt.
 - Every new/changed exported symbol's final signature.
 - Every command from §7/§8 run directly, with real captured exit codes and outputs.
-- The AC9 fake-client test's actual mock call sequence for all five branches (A-E).
+- The AC9 fake-client test's actual mock call sequence for all five branches (A-E), with Branch D's
+  independence assertions (§8) called out explicitly.
 - Baseline SHA and before/after lint warning count + vitest file/test totals against it.
 - Commit SHA (item 21) and confirmation of explicit pathspecs (item 22).
 - Confirmation that the Grant A replacement test satisfies all six numbered properties, and the
   mutation used for property 6.
-- Any genuine out-of-scope defect found, named as a follow-up per item 20.
-- Known risks: the disclosed confirmation-preview-vs-real-save race (§4b step 3); the disclosed
-  duplicate-`session_date` limitation (§4a, m10) for T605's attention; the deliberately-not-built
-  cancel-vs-delete confirmation-copy distinction (§4a).
+- Any genuine out-of-scope defect found, named as a follow-up per item 20 — **the D015 residual race
+  and the DST edge case are NOT such a follow-up; they are disclosed limitations already ruled/scoped,
+  restate them in Known Risks, do not file them as new deferrals.**
+- Known risks: all five items above, restated with your own verification evidence.
