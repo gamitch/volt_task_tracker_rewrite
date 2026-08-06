@@ -375,6 +375,10 @@ export interface HoursStudentFixture {
   id: string;
   name: string;
   teamId: string;
+  /** T201 -- verbatim `students.is_active`. Present so a departed student who
+   * volunteered real hours can be shown and MARKED, instead of being dropped
+   * from the roster and silently taking their hours out of the team subtotal. */
+  isActive: boolean;
   /** Verbatim rename of `students.goal_hours_override` -- module doc #3. */
   goalHoursOverride: number | null;
 }
@@ -470,7 +474,12 @@ export function hoursVsGoalPercent(confirmedHours: number, goalHours: number): n
   return Math.min(100, round1((confirmedHours / goalHours) * 100));
 }
 
-export type HoursRowKind = 'student' | 'subtotal';
+/** T201 adds `'past-member'`: a student who is no longer active but who
+ * volunteered hours this season. It is a distinct kind rather than a boolean
+ * flag because three separate decisions key off it -- the row's badge, the
+ * em-dash goal/percent cells, and its EXCLUSION from the goal subtotal (its
+ * confirmed and planned hours are still included, per the owner's ruling). */
+export type HoursRowKind = 'student' | 'past-member' | 'subtotal';
 
 /** One `Table` row -- either a real student or (module doc #7) one literal
  * team-subtotal row appended per team. */
@@ -500,15 +509,24 @@ export function buildStudentRows(data: HoursLoadResult): HoursTableRow[] {
   return data.students
     .map((student) => {
       const confirmedHours = confirmedByStudentId.get(student.id) ?? 0;
+      // T201 -- a departed student appears ONLY if they actually volunteered
+      // hours this season. Their goal is deliberately 0/'—': they are not
+      // working toward one any more, and counting it would make the team's
+      // "% to goal" DROP because somebody left -- trading one wrong number
+      // for another. Confirmed and planned hours still count in full, which
+      // is what makes this subtotal reconcile with `v_team_hours`.
+      const isPastMember = !student.isActive;
       const plannedHours = computeStudentPlannedHours(
         student.id,
         data.sessions,
         data.events,
         data.rsvps,
       );
-      const goalHours = resolveGoalHours(student.goalHoursOverride, data.defaultGoalHours);
+      const goalHours = isPastMember
+        ? 0
+        : resolveGoalHours(student.goalHoursOverride, data.defaultGoalHours);
       return {
-        kind: 'student' as const,
+        kind: isPastMember ? ('past-member' as const) : ('student' as const),
         rowId: student.id,
         label: student.name,
         teamId: student.teamId,
@@ -516,9 +534,10 @@ export function buildStudentRows(data: HoursLoadResult): HoursTableRow[] {
         confirmedHours,
         plannedHours,
         goalHours,
-        percentToGoal: hoursVsGoalPercent(confirmedHours, goalHours),
+        percentToGoal: isPastMember ? 0 : hoursVsGoalPercent(confirmedHours, goalHours),
       };
     })
+    .filter((row) => row.kind !== 'past-member' || row.confirmedHours > 0)
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
@@ -554,7 +573,16 @@ export function buildTeamGroups(studentRows: readonly HoursTableRow[]): HoursTea
     .map((group) => {
       const confirmedHours = round1(group.rows.reduce((sum, row) => sum + row.confirmedHours, 0));
       const plannedHours = round1(group.rows.reduce((sum, row) => sum + row.plannedHours, 0));
-      const goalHours = round1(group.rows.reduce((sum, row) => sum + row.goalHours, 0));
+      // T201 -- confirmed and planned sum over EVERY row including past
+      // members (their hours are real work and count for the team, per the
+      // owner's ruling). The goal subtotal sums only current students: a past
+      // member carries `goalHours: 0` by construction in `buildStudentRows`,
+      // and the explicit filter here says so rather than relying on that.
+      const goalHours = round1(
+        group.rows
+          .filter((row) => row.kind !== 'past-member')
+          .reduce((sum, row) => sum + row.goalHours, 0),
+      );
       const subtotal: HoursTableRow = {
         kind: 'subtotal',
         rowId: `subtotal-${group.teamId}`,
@@ -711,9 +739,16 @@ const FIXTURE_STUDENTS: readonly HoursStudentFixture[] = [
     id: 'student-jordan-blake',
     name: 'Jordan Blake',
     teamId: 'team-hawks',
+    isActive: true,
     goalHoursOverride: null,
   },
-  { id: 'student-maya-osei', name: 'Maya Osei', teamId: 'team-hawks', goalHoursOverride: 50 },
+  {
+    id: 'student-maya-osei',
+    name: 'Maya Osei',
+    teamId: 'team-hawks',
+    isActive: true,
+    goalHoursOverride: 50,
+  },
   // No v_student_hours row below -- the "hasn't confirmed any hours yet" 0
   // case (module doc #1). Has a `going` RSVP on a scheduled
   // counts_volunteer_hours session -- planned-hours base case.
@@ -721,15 +756,23 @@ const FIXTURE_STUDENTS: readonly HoursStudentFixture[] = [
     id: 'student-theo-nakamura',
     name: 'Theo Nakamura',
     teamId: 'team-hawks',
+    isActive: true,
     goalHoursOverride: null,
   },
   {
     id: 'student-priya-anand',
     name: 'Priya Anand',
     teamId: 'team-otters',
+    isActive: true,
     goalHoursOverride: null,
   },
-  { id: 'student-eli-vance', name: 'Eli Vance', teamId: 'team-otters', goalHoursOverride: null },
+  {
+    id: 'student-eli-vance',
+    name: 'Eli Vance',
+    teamId: 'team-otters',
+    isActive: true,
+    goalHoursOverride: null,
+  },
 ];
 
 /** Pre-computed `v_student_hours` rows (module doc #1) -- what the view's
@@ -919,6 +962,18 @@ function useHoursData(seasonId: string, loadData: LoadHoursDataFn): HoursLoadSta
 // ---------------------------------------------------------------------------
 
 function renderLabelCell(row: HoursTableRow): ReactNode {
+  // T201 -- a past member's row must be legible AS a past member, or the
+  // reconciled subtotal just looks like an unexplained extra person.
+  if (row.kind === 'past-member') {
+    return (
+      <Text>
+        {row.label}{' '}
+        <Text type="supporting" color="secondary">
+          {'(past member)'}
+        </Text>
+      </Text>
+    );
+  }
   return <Text weight={row.kind === 'subtotal' ? 'semibold' : undefined}>{row.label}</Text>;
 }
 
@@ -931,6 +986,12 @@ function renderHoursCell(value: number, isSubtotal: boolean): ReactNode {
 }
 
 function renderPercentCell(row: HoursTableRow): ReactNode {
+  // T201 -- no goal means no percentage. Rendering the ProgressBar here would
+  // announce `aria-valuemax="0"` and a 0% label, i.e. fabricate the very
+  // "missed their goal" reading the em dash exists to avoid.
+  if (row.kind === 'past-member') {
+    return <Text color="secondary">{'—'}</Text>;
+  }
   return (
     <ProgressBar
       label={`${row.label}: confirmed hours vs. goal`}
@@ -966,7 +1027,15 @@ function buildColumns(): TableColumn<HoursTableRow>[] {
       header: 'Goal hrs',
       width: proportional(1),
       align: 'end',
-      renderCell: (row) => renderHoursCell(row.goalHours, row.kind === 'subtotal'),
+      // T201 -- a past member has no goal: they are not working toward one.
+      // Rendering 0.0 would read as "missed their goal"; the em dash is the
+      // same "this number does not exist" convention T202/T509 established.
+      renderCell: (row) =>
+        row.kind === 'past-member' ? (
+          <Text color="secondary">{'—'}</Text>
+        ) : (
+          renderHoursCell(row.goalHours, row.kind === 'subtotal')
+        ),
     },
     {
       key: 'percentToGoal',

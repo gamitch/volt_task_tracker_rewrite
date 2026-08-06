@@ -338,6 +338,11 @@ interface HoursStudentDbRow {
   id: string;
   display_name: string;
   team_id: string;
+  // T201 -- selected so a departed student's row can be MARKED rather than
+  // dropped. The owner ruled 2026-08-05 that hours a student volunteered
+  // still count for their team after they leave ("that's actual work that was
+  // done regardless"), so hiding the person hid real hours.
+  is_active: boolean;
   goal_hours_override: number | null;
 }
 
@@ -400,8 +405,14 @@ async function queryHoursStudents(
 ): Promise<LoaderQueryResult<HoursStudentDbRow[]>> {
   const result = await client
     .from('students')
-    .select('id, display_name, team_id, goal_hours_override')
-    .eq('is_active', true)
+    // T201 -- the `.eq('is_active', true)` filter that stood here is GONE.
+    // `v_student_hours` (read below, unfiltered) already contained departed
+    // students' hours; this roster filter was the only thing discarding them,
+    // which made HoursTab's team subtotal disagree with `v_team_hours` (and so
+    // with CoachHome's "Hours by team") whenever a past member had hours.
+    // `buildStudentRows` now keeps an inactive student ONLY when they have
+    // hours, so a departed student with nothing still never appears.
+    .select('id, display_name, team_id, is_active, goal_hours_override')
     .order('display_name', { ascending: true });
   return { data: (result.data as HoursStudentDbRow[] | null) ?? null, error: result.error };
 }
@@ -457,6 +468,7 @@ function mapHoursStudentDbRowToFixture(row: HoursStudentDbRow): HoursStudentFixt
     id: row.id,
     name: row.display_name,
     teamId: row.team_id,
+    isActive: row.is_active,
     goalHoursOverride: row.goal_hours_override,
   };
 }
