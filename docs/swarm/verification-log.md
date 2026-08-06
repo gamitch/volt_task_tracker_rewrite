@@ -11083,3 +11083,36 @@ Gates, each bare with `$?` captured: typecheck 0 · format:check 0 · lint 0 err
 
 **NIT, no action:** the worker's evidence doc says "no commit was made", true when written; the
 orchestrator committed afterward at `0444798`, which the checker verified independently.
+
+---
+
+## T609 — Notes field accepted input and discarded it in edit mode — **PASS** (2026-08-06, `b0f94f6`)
+
+STANDARD. **Premise gate skipped under item 19b** — the same `isEditMode` gating idiom already shipped
+in that file for Description, inverted — which made `checker-reviewer` the only independent
+verification this row received. NIT only.
+
+The defect was live on `main` for about an hour after PR #108: the edit dialog rendered a Notes box
+with no gate while `handleSubmit` hardcoded `notes` to `''`. A coach typed a note, saved successfully,
+and it vanished. Not saving it was deliberate and documented; leaving the input visible was not — the
+class this repo already ruled on as *"worse than an absent UI"*.
+
+**The whole risk of this row was polarity**, and the orchestrator's own briefing got it wrong:
+"matching Description's existing pattern" is right about the mechanism and wrong about the condition,
+since Description is gated **on** `isEditMode` and Notes needs `!isEditMode`. A T605 premise gate
+caught the error in that phrasing while reviewing an unrelated packet, and the correction reached the
+foreman before it finished writing.
+
+**The checker ran two mutations beyond the one specified, and both were worth it.** Hiding Notes in
+*both* modes fails on the create-mode half — so that assertion is load-bearing and the test is not the
+trivial pass an absence-assertion invites. Inverting the gate outright fails **two** tests including
+the MTG-02 tripwire — so the tripwire really does catch inversion, which is the property the whole row
+depended on and which nobody had actually tested.
+
+Baseline derived independently in a worktree at `47966ef` rather than reused: lint 370/370 with **zero
+delta**, tests 2087 → **2088**, exactly +1, file count unchanged.
+
+**NIT worth acting on, filed as T612:** `mutation-replay`'s `replay.py` reported this genuine red
+replay as `UNTRUSTWORTHY: the mutated run executed no tests`, while its own captured output showed a
+real assertion failure. The checker caught it only by refusing the tool's verdict and re-running by
+hand. A false `UNTRUSTWORTHY` on the project's primary anti-vacuity check is worse than no check.
