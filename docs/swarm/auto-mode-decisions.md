@@ -3837,3 +3837,102 @@ session when a foreman declared its own premise gate satisfied.
 - **Worker packet and checker packet are separate commissions.** Never request both in one call. The
   checker packet is written after the worker's output document exists.
 - **"Small enough to just do" is the tell, not the exception.** Every instance above passed that test.
+
+---
+
+## 2026-08-06 — Boss ruling (constitution item 10): T510's test updates are AUTHORIZED, with exact bounds
+
+**Ruled by boss-architect, on the T510 foreman's escalation.** The foreman found that
+`src/pages/meetings/MeetingsList.test.tsx:1082-1095` asserts the honest-stub behaviour T510
+deliberately removes, declined to authorize the edit itself (citing the T148/T149 false-authorization
+incidents), and required this ruling to exist as a record before any worker touches the test. That
+refusal was correct and is the process working: the claim "George's design closure necessarily implies
+this test's premise is now false" and the claim "the boss approved updating this specific test" are
+different claims, and this entry is what makes the second one true. Cites
+`docs/swarm/active/T510-worker-packet.md` (§0, §9, AC16) by name, as that packet requires.
+
+### The ruling
+
+**Re-derivation of `MeetingsList.test.tsx:1082-1095` is AUTHORIZED. Deletion is NOT.**
+
+Basis, verified against the artifacts rather than taken from the dispatch: the test correctly encodes
+a deliberate prior decision (T096, module doc #7b — the Edit chip was left a disclosed stub because
+`ScheduleMeetingsDialog` genuinely has no edit mode and wiring it up would have created a second
+competing series). **The owner has explicitly reversed that decision**: he reported the stub as the
+defect in live testing 2026-08-05 (T510's ledger row), then closed a full series-edit design across
+three recorded sections of this file — *"George's T510 rulings"*, *"T508 shipped but moved no
+percentage"*, and *"George closes out T510's design"*, the last ending *"T510's design is now fully
+settled and the row is ready to packet."* A test whose asserted behaviour the owner has ruled must
+change is exactly the case item 10's approval clause exists for, and this is that approval. The right
+precedent is `OutreachDetail.test.tsx:1058-1065` (stub → real edit dialog: re-derived, old stub copy
+asserted absent), not `LiveConsole.test.tsx:857`'s deletion — deletion was right there because the
+test's *subject* had ceased to exist; here the subject (the Edit affordance) survives with new
+behaviour, so the test survives with new assertions.
+
+### Grant A — the behavioural re-derivation, six required properties
+
+The replacement for `MeetingsList.test.tsx:1082-1095` (identify by test name and content, not by these
+line numbers — the T604 lesson; the range will drift as the file is edited) must:
+
+1. **Find the Edit control by its real accessible name** — `aria-label` starting with
+   `Edit – Weekly Build Meeting` (en dash) — preserving the T135 lesson the current comment block
+   records: a generic text search once kept this test green while asserting a dead affordance.
+2. **Prove edit mode by prefill, not by presence.** After the click, assert the real dialog is open
+   with the edit-mode title (`Edit meeting series`) AND with Title and Location prefilled from the
+   clicked row's own values. "A dialog opened" would pass against a mislabeled create dialog;
+   row-value prefill cannot.
+3. **Keep the negative space, widened by one.** Assert `container.textContent` does NOT contain
+   `"Editing an existing meeting isn't supported yet"` (the copy this task deletes must never
+   return) and does NOT contain `'not built yet'` (the pre-T096 copy, already asserted absent today).
+4. **Inherit the stub's real duty.** Assert `onCreateMeetings` is NOT called by the edit
+   interaction. T096's stub existed to prevent Edit from silently creating a second competing
+   series; the replacement must keep that hazard guarded at this exact interaction point, or the
+   coverage has been quietly weakened even with everything above green.
+5. **No net loss.** One `it` is replaced by at least one `it`; `MeetingsList.test.tsx`'s test count
+   must not decrease against the baseline SHA. The checker verifies the count. The provenance
+   comment above the test (T096/T135) is re-derived to add T510 and cite this entry — not deleted.
+6. **Prove it can fail.** The replacement must go RED under a named mutation — reverting
+   `onEdit={openEditDialog}` to a stub/no-op handler at both `CoachMeetingsSection` mounts, or
+   removing the `initialData` ternary. This project has already caught one vacuous replacement this
+   week (T511's C3); the checker replays the mutation, not the worker's report of it.
+
+### Grant B — the mechanical signature edits: FIVE call sites, not the packet's four
+
+`computeConfirmLabel` gains a required leading `isEditMode: boolean` (packet §4a). The packet's AC1
+names *"four call sites in `ScheduleMeetingsDialog.test.tsx:353-356`"*. **That is an undercount.
+Measured directly: there are five** — `:353`, `:354`, `:355`, `:356` (the BEH-07 describe block) and
+**`:480`** (`findButtonByText(computeConfirmLabel(expected.length))` inside the Weekly-recurring
+test), which no describe-block-shaped search can see. Per the three-not-two-lines correction recorded
+above (*"a grant given on a miscount cannot be stretched by the worker to fit"*), the grant is stated
+at the true count: **exactly five call sites gain `false` as a new leading argument. Zero asserted
+strings change. Nothing else in that file's existing tests changes.** `checker-premise` should align
+AC1 with this count before DISPATCH; the boss does not edit the packet (foreman owns it).
+
+### Explicitly NOT authorized
+
+- **Deleting the stub test** without the Grant A replacement — that is a REVISE/FAIL, not a judgment
+  call.
+- **Any edit to the MTG-02 field-order test** (`ScheduleMeetingsDialog.test.tsx:364-387`). It renders
+  create mode and is a deliberate tripwire: it goes red only if the Description field leaks out of
+  edit mode, and the fix is then the code, never the test.
+- **Any edit to the create-path tests** the packet's AC15 already freezes
+  (`MeetingsList.test.tsx:884-918`, `:919-1063`, `:2294-2371`) or to the four exact `Create N
+  meeting(s)` strings.
+- **Any other existing-test modification anywhere.** If a worker believes one is forced, it stops and
+  files a dispute citing this entry — it does not reason its way to "obviously also covered."
+
+### The search that bounds this ruling, recorded because two undercounts came from one-shape greps
+
+T603's row claimed four affected sites when there were seven; this packet's AC1 claims four call
+sites when there are five — both because the grep's shape could not see the answer. This ruling's
+bound rests on **seven shapes, not one**: the stub copy (`supported yet` / `not built yet` /
+`Editing an existing`), the stub's description copy (`competing series` / `edited in place` /
+`schedule a new one`), the stub symbols (`showEditStub|StubNotice|StubBanner|stubNotice`), the Edit
+chip's accessible name (`Edit – `, en dash and hyphen), `computeConfirmLabel` call sites,
+`ScheduleMeetingsDialog`/`makeCreateMeetings`/`onEdit` references across all test files, and the
+`tests/` + `playwright` e2e/RLS surfaces. **Result: the stub behaviour is encoded in exactly ONE
+test** (`MeetingsList.test.tsx:1082-1095` — the foreman's count was right), the signature change
+forces exactly FIVE mechanical call-site edits (one more than the packet's count), and everything
+else that references the stub or the create-only dialog is either a negative assertion that stays
+true, an unaffected surface (e2e specs are route-level; RLS suites are SQL-side; T510 needs no
+migration), or a hand-built fixture literal the packet's optional-field design deliberately spares.
