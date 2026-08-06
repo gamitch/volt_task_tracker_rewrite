@@ -2725,7 +2725,7 @@ describe('saveMeetingSession (T605, write-side guard, full chain depth)', () => 
     await expect(save(SAVE_MEETING_SESSION_SAMPLE_PAYLOAD)).resolves.toBeUndefined();
   });
 
-  it('an empty-array result REJECTS with a real error -- named mutation: dropping .select(\'id\') from the production chain must break this describe block\'s own proof that .select(\'id\') is load-bearing (see worker output for the measured before/after)', async () => {
+  it("an empty-array result REJECTS with a real error -- named mutation: dropping .select('id') from the production chain must break this describe block's own proof that .select('id') is load-bearing (see worker output for the measured before/after)", async () => {
     const { client } = buildSaveMeetingSessionFakeClient('zero');
     const save = makeSaveMeetingSession(() => client);
     await expect(save(SAVE_MEETING_SESSION_SAMPLE_PAYLOAD)).rejects.toThrow();

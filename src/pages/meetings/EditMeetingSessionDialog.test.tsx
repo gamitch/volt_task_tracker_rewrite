@@ -30,7 +30,7 @@ describe('chicagoWallTimeToUtcIso (packet §6.3 -- local reimplementation, parit
 describe('computeMeetingSessionEditPayload (packet §6.5)', () => {
   const NOW = new Date('2026-08-06T12:00:00.000Z');
 
-  it('incomplete inputs -> null (mirrors buildEventSessionsPayload\'s own shape, singular)', () => {
+  it("incomplete inputs -> null (mirrors buildEventSessionsPayload's own shape, singular)", () => {
     expect(
       computeMeetingSessionEditPayload('sess-1', undefined, '18:00', '20:00', '', NOW),
     ).toBeNull();
@@ -42,7 +42,7 @@ describe('computeMeetingSessionEditPayload (packet §6.5)', () => {
     ).toBeNull();
   });
 
-  it('a candidate startsAt that is not strictly after `now` -> null (B1 fix -- the ONLY enforcement point for a coach\'s own bad new value)', () => {
+  it("a candidate startsAt that is not strictly after `now` -> null (B1 fix -- the ONLY enforcement point for a coach's own bad new value)", () => {
     // '2026-08-05' 18:00 Chicago -> before NOW ('2026-08-06T12:00:00.000Z').
     expect(
       computeMeetingSessionEditPayload('sess-1', '2026-08-05', '18:00', '20:00', '', NOW),
@@ -90,9 +90,7 @@ describe('sessionDateCollidesWithSibling (packet §6.5, §3.5)', () => {
   });
 
   it('false when the candidate date matches no existing sibling date', () => {
-    expect(sessionDateCollidesWithSibling('2026-08-20', ['2026-08-06', '2026-08-13'])).toBe(
-      false,
-    );
+    expect(sessionDateCollidesWithSibling('2026-08-20', ['2026-08-06', '2026-08-13'])).toBe(false);
   });
 
   it('false against an empty sibling list', () => {

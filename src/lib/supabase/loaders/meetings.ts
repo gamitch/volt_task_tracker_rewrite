@@ -1078,7 +1078,7 @@ export function makeSaveMeetingSession(
       // specific cause).
       throw new Error(
         "This meeting session couldn't be updated. It may have already started, your permissions may " +
-          "have changed, or your changes may be out of date. Refresh the page and try again.",
+          'have changed, or your changes may be out of date. Refresh the page and try again.',
       );
     }
   };

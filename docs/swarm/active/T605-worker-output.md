@@ -315,18 +315,44 @@ describe *this specific session*, rather than an ambiguous bare "Date".
 
 ## 8. Verification — bare commands, real exit codes, never piped
 
+**Amended after attempt 1's FAIL.** The packet requires all four project gates — typecheck, `format:check`,
+lint, test. My original version of this section listed only typecheck and two vitest invocations plus the
+full suite; **`format:check` was never run**, and the commit that shipped (`f8cba40`) failed it: 5 sites,
+all inside T605's own added lines (quote style, one over-wrap), in `loaders/meetings.ts:1081`,
+`EditMeetingSessionDialog.test.tsx:33`/`:45`/`:92-94`, and `MeetingsList.test.tsx:2728`. The checker
+(`checker-reviewer`, `T605-checker-packet.md`) caught this directly against the committed blobs
+(`git cat-file -p f8cba40:<path>`), confirmed it fails CI (`.github/workflows/ci.yml:75`'s own blocking
+`format:check` step), and returned FAIL/BLOCKER with the omission traced to this exact gap in this
+document's own gate list. No logic, assertion semantics, or test outcome was ever in question — running
+`npm run format` (nothing else) resolved all 5 sites, byte-identical to what the checker named, and all
+four gates below are now recorded, not three.
+
+Rework performed: `npm run format` (auto-fixes only — quote style and one line-wrap, verified via `git diff`
+to touch only those three files, no logic changed), then all four gates re-run bare, fresh, `$?` captured
+on each:
+
 ```
 npm run typecheck                                                          → 0
-npx vitest run src/pages/meetings/EditMeetingSessionDialog.test.tsx        → 0  (9/9)
-npx vitest run src/pages/meetings/MeetingsList.test.tsx                    → 0  (106/106)
+npm run format:check                                                       → 0  ("All matched files use Prettier code style!")
+npm run lint                                                                → 0  (375 problems, 0 errors, 375 warnings)
 npm test        (= vitest run, full suite)                                 → 0  (82 files / 2121 tests)
 ```
+
+(Also re-run individually during development, both green: `npx vitest run
+src/pages/meetings/EditMeetingSessionDialog.test.tsx` → 0 (9/9); `npx vitest run
+src/pages/meetings/MeetingsList.test.tsx` → 0 (106/106).)
 
 `git diff` (parent `a13c8fa` → `f8cba40`) on `MeetingsList.test.tsx` shows zero deleted lines (confirmed
 via `grep -c '^-'` returning only the diff header) — matching §7 test 11's "zero edits to any existing
 test." No existing test's assertion was forced to change. Grant A's own pre-existing test
 (`it('T510: Edit opens the real dialog in edit mode, prefilled from the clicked row (not the old stub)',
 ...)`) is untouched by this diff.
+
+**Process note for the ledger:** the packet's own "Required Worker Output" section asks for "every command
+run, with its real exit code captured on the bare command" — that requirement was satisfied in letter (the
+commands I did run were reported honestly) but not in substance (a required gate was missing from the list
+entirely, not merely reported inaccurately). The fix is procedural: this section now names all four gates
+explicitly, so the omission is visible in the record rather than repeated on a future task.
 
 ## 9. Whether a dispute is needed
 
