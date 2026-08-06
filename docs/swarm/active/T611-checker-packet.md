@@ -25,9 +25,9 @@ re-derive, not a fact to relay.
   full REVISE/D017 history if you need it, but do not re-litigate anything it marks settled).
 - **Worker output:** `docs/swarm/active/T611-worker-output.md`.
 - **Artifact location: the shared branch itself, not a worktree.** `claude/w3-meeting-workflow-0bl669`,
-  **committed at `5884488`, parent `1e2f2b6`.** Confirm this commit exists and that its parent is
-  `1e2f2b6` before relying on anything below (`git log --oneline -3 5884488`).
-- **Anchor every diff and every scope claim to `git diff 1e2f2b6 5884488`.** A bare `git diff` against
+  **committed at `5884488`, parent `40aa199`.** Confirm this commit exists and that its parent is
+  `40aa199` before relying on anything below (`git log --oneline -3 5884488`).
+- **Anchor every diff and every scope claim to `git diff 40aa199 5884488`.** A bare `git diff` against
   the working tree will be empty (the tree is clean at `5884488`) and would pass every scope criterion
   vacuously. **This project has been bitten by exactly this before — say explicitly in your output that
   you diffed against the commit range, not the working tree.**
@@ -157,7 +157,7 @@ required criteria is asserted, not just that they exist:
 
 Run, against the real commit range:
 ```
-git diff 1e2f2b6 5884488 --stat
+git diff 40aa199 5884488 --stat
 ```
 **Must show exactly three paths**: `src/pages/meetings/ScheduleMeetingsDialog.tsx`,
 `src/pages/meetings/ScheduleMeetingsDialog.test.tsx`, `docs/swarm/active/T611-worker-output.md`.
@@ -167,14 +167,14 @@ of the two prior figures was correct, or that neither was.
 
 Then, specifically:
 ```
-git diff 1e2f2b6 5884488 -- src/lib/supabase/loaders/meetings.ts
-git diff 1e2f2b6 5884488 -- src/pages/meetings/MeetingsList.tsx src/pages/meetings/MeetingsList.test.tsx
+git diff 40aa199 5884488 -- src/lib/supabase/loaders/meetings.ts
+git diff 40aa199 5884488 -- src/pages/meetings/MeetingsList.tsx src/pages/meetings/MeetingsList.test.tsx
 ```
 Both must be **empty**. These matter more than most Forbidden-file checks in this project: they are
 `T613`'s and `T605`'s territory, and this packet's own scope claims depend on them being untouched.
 
 ```
-git diff 1e2f2b6 5884488 -- src/pages/meetings/ScheduleMeetingsDialog.tsx | grep -n '^@@'
+git diff 40aa199 5884488 -- src/pages/meetings/ScheduleMeetingsDialog.tsx | grep -n '^@@'
 ```
 Confirm no hunk's line range overlaps `computeMeetingSeriesReconcilePlan`'s definition (currently
 `:614-640`), the `:598-612` doc comment ("Duplicate `session_date`..."), `buildEventSessionsPayload`'s
@@ -183,7 +183,7 @@ it still has exactly the three fields `eventId`, `plan`, `desiredFutureSessions`
 Locate all four by content if line numbers have drifted, per this project's own citation discipline.
 
 ```
-git diff 1e2f2b6 5884488 -- src/pages/meetings/ScheduleMeetingsDialog.test.tsx | grep -c '^-'
+git diff 40aa199 5884488 -- src/pages/meetings/ScheduleMeetingsDialog.test.tsx | grep -c '^-'
 ```
 Expect exactly **1** (the `--- a/...` diff header line only) — i.e., **zero actual deletions**. Then
 confirm the `RECONCILABLE_SESSION_A`/`_B`/`PAST_SESSION`/`EDIT_INITIAL_DATA` fixture block is untouched
@@ -192,10 +192,10 @@ depends on `EDIT_INITIAL_DATA` being exactly what it already was.
 
 ## 7. Priority 4 — independent gates, `$?` on the bare command, never piped
 
-Do not reuse the worker's reported numbers. Stand up your own worktree at `1e2f2b6` and derive a fresh
+Do not reuse the worker's reported numbers. Stand up your own worktree at `40aa199` and derive a fresh
 baseline, then compare to `5884488`:
 ```
-git worktree add <path> 1e2f2b6
+git worktree add <path> 40aa199
 # (symlink node_modules, do not npm install fresh, matching this project's own convention)
 npm run typecheck; echo "EXIT:$?"
 npm run format:check; echo "EXIT:$?"
@@ -213,9 +213,9 @@ Repeat at `5884488`. Confirm typecheck/format/lint/test all exit 0 at the final 
   `grep -cE "^\s*it\(|^\s*test\(" src/pages/meetings/ScheduleMeetingsDialog.test.tsx` at both commits.
   Confirm both shapes agree with each other and with the claimed 2088→2101 (+13) full-suite delta.
 
-## 8. Priority 5 — sabotage / scope, against `1e2f2b6`
+## 8. Priority 5 — sabotage / scope, against `40aa199`
 
-Beyond §6's targeted checks, confirm via the same `git diff 1e2f2b6 5884488 --stat` that **nothing**
+Beyond §6's targeted checks, confirm via the same `git diff 40aa199 5884488 --stat` that **nothing**
 touches: `.claude/**`, `docs/swarm/task-ledger.md`, `docs/swarm/verification-log.md`,
 `docs/swarm/dispute-log.md`, `docs/swarm/constitution.md`, any `supabase/migrations/**` file, or any
 `src/` file other than `ScheduleMeetingsDialog.tsx`/`.test.tsx`. If anything else appears in the stat
@@ -260,7 +260,7 @@ not for matching a phrase that was never specified.
   is the test case here — confirm it is filed (it is; do not re-file it), and confirm the worker's own
   output states the deferral plainly rather than only in a source comment.
 - **Item 21:** the worker's completion report must name a commit SHA whose existence you verify —
-  confirmed here as `5884488`, parent `1e2f2b6`; check it, don't assume it.
+  confirmed here as `5884488`, parent `40aa199`; check it, don't assume it.
 - **Item 22:** explicit pathspecs only. If you inspect how the commit was staged, confirm no
   `git add -A`/`git add .`.
 - **Item 23:** your own mutation experiments (§4, §5a) run in your own worktree, never the shared tree.
@@ -289,7 +289,7 @@ not for matching a phrase that was never specified.
 
 Per the constitution's Evidence Requirements:
 - files inspected
-- commands run, including the full `git diff 1e2f2b6 5884488` invocations and every mutation applied
+- commands run, including the full `git diff 40aa199 5884488` invocations and every mutation applied
   and reverted
 - relevant output — paste the real RED/GREEN transcripts for §4 and §5a's mutations verbatim, not a
   paraphrase
