@@ -28,6 +28,7 @@ import {
   makeLoadCoachMeetingsData,
   makeLoadStudentMeetingsData,
   makeResolveCurrentStudentId,
+  makeSaveMeetingSeries,
 } from '../../lib/supabase/loaders/meetings';
 import { LoginAs } from '../../test-utils/authHarness';
 import {
@@ -53,7 +54,7 @@ import {
   type StudentParticipationMetric,
 } from './MeetingsList';
 import { defaultLoadConsistencyStripData, type ConsistencyStripData } from './StudentMeetingView';
-import type { CreateMeetingsPayload } from './ScheduleMeetingsDialog';
+import type { CreateMeetingsPayload, SaveMeetingSeriesPayload } from './ScheduleMeetingsDialog';
 import type { ResolveStudentIsActiveFn } from '../../lib/supabase/loaders/students';
 
 // ---------------------------------------------------------------------------
@@ -1062,36 +1063,70 @@ describe('<MeetingsList /> coach view', () => {
     }
   });
 
-  // T096 (module doc #7b, Trap #3 finding) -- Edit is left as an honest,
-  // accurately-worded stub since `ScheduleMeetingsDialog` genuinely has no
+  // T096 (module doc #7b, Trap #3 finding) -- Edit WAS left as an honest,
+  // accurately-worded stub since `ScheduleMeetingsDialog` genuinely had no
   // edit mode, not the old misleading "dialog not built yet" copy.
   //
   // T135 (Table migration) §2, tenth authorized assertion change (on top of
   // Trap 1's nine): the row-level `MoreMenu` this test used to open no
   // longer exists (Edit is now a standalone chip, since Cancel already left
   // the menu for a per-session button under T122, leaving exactly one item
-  // behind a menu). Before this rewrite, `moreMenuButton` resolved to
+  // behind a menu). Before that rewrite, `moreMenuButton` resolved to
   // `undefined` (nothing has `aria-label^="Actions for Weekly Build
-  // Meeting"` anymore), the optional-chained `?.dispatchEvent(...)` at the
-  // old `:850` silently no-opped, and the generic `el.textContent?.trim()
-  // === 'Edit'` search at the old `:852-854` still found the new Edit chip
-  // directly in the DOM (no menu-open needed) -- so the test would have kept
-  // passing while asserting an affordance (open a menu, click a menu item)
-  // that no longer exists. Rewritten to find and click the Edit chip
-  // directly, by its real accessible name.
-  it('Edit shows an honest stub explaining the dialog has no edit mode (not the old misleading copy)', async () => {
-    renderAsUser(COACH_USER, { loadCoachData: defaultLoadCoachMeetingsData });
+  // Meeting"` anymore), the optional-chained `?.dispatchEvent(...)` silently
+  // no-opped, and a generic `el.textContent?.trim() === 'Edit'` search still
+  // found the new Edit chip directly in the DOM (no menu-open needed) -- so
+  // the test would have kept passing while asserting an affordance (open a
+  // menu, click a menu item) that no longer existed. Rewritten then to find
+  // and click the Edit chip directly, by its real accessible name.
+  //
+  // T510 UPDATE -- RE-DERIVED (boss ruling, `auto-mode-decisions.md`,
+  // "2026-08-06 -- Boss ruling (constitution item 10): T510's test updates
+  // are AUTHORIZED, with exact bounds"; precedent
+  // `OutreachDetail.test.tsx:1058-1065`, stub -> real edit dialog). George
+  // reversed the T096 decision this test encoded (`docs/swarm/
+  // auto-mode-decisions.md`, "George closes out T510's design"):
+  // `ScheduleMeetingsDialog.tsx` now has a real, additive edit mode
+  // (`initialData`/`onSaveMeetingSeries`), so the honest-stub assertion this
+  // test made is no longer true, and the ruling's Grant A six-property bar
+  // governs its replacement below (re-derivation, NOT a deletion -- the Edit
+  // affordance survives with new behavior).
+  it('T510: Edit opens the real dialog in edit mode, prefilled from the clicked row (not the old stub)', async () => {
+    // Grant A property 4 -- inherits the T096 stub's real duty: the edit
+    // interaction, by itself, must never call the CREATE seam.
+    const onCreateMeetings = vi.fn().mockResolvedValue(undefined);
+    renderAsUser(COACH_USER, { loadCoachData: defaultLoadCoachMeetingsData, onCreateMeetings });
     await flushMicrotasks();
 
+    // Grant A property 1 -- find the Edit control by its real accessible
+    // name (en dash), same lookup the T135 rewrite already established.
     const editButton = Array.from(container.querySelectorAll('button')).find((btn) =>
       btn.getAttribute('aria-label')?.startsWith('Edit – Weekly Build Meeting'),
     );
     expect(editButton).toBeTruthy();
     clickButton(editButton as HTMLButtonElement);
 
-    expect(container.textContent).toContain("Editing an existing meeting isn't supported yet");
-    // NOT the old, now-inaccurate copy (the dialog IS built).
+    // Grant A property 2 -- prove edit mode by PREFILL, not by presence: the
+    // real dialog is open with the edit-mode title AND Title/Location carry
+    // the clicked row's own values (`FIXTURE_EVENTS`'s own
+    // `event-weekly-build`: title 'Weekly Build Meeting', locationName
+    // 'Robotics Lab') -- "a dialog opened" would pass against a mislabeled
+    // create dialog; row-value prefill cannot.
+    function findEditDialogElement(): HTMLElement | undefined {
+      return Array.from(document.querySelectorAll('dialog')).find((dialog) =>
+        dialog.textContent?.includes('Edit meeting series'),
+      );
+    }
+    expect(findEditDialogElement()?.hasAttribute('open')).toBe(true);
+    expect((getFieldControl('Title') as HTMLInputElement).value).toBe('Weekly Build Meeting');
+    expect((getFieldControl('Location') as HTMLInputElement).value).toBe('Robotics Lab');
+
+    // Grant A property 3 -- keep the negative space, widened by one: neither
+    // the old stub copy nor its pre-T096 sibling ever appears.
+    expect(container.textContent).not.toContain("Editing an existing meeting isn't supported yet");
     expect(container.textContent).not.toContain('not built yet');
+
+    expect(onCreateMeetings).not.toHaveBeenCalled();
   });
 
   // T122 (module doc #10d) -- Cancel moved from the row's own MoreMenu into
@@ -2367,6 +2402,397 @@ describe('createMeetings (T096, Trap #3 real onCreateMeetings default)', () => {
 
     const create = makeCreateMeetings(() => client);
     await expect(create(SAMPLE_PAYLOAD)).rejects.toThrow(/No active season/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T510 -- saveMeetingSeries (worker packet §4b/§8, AC8/AC9). Far-future
+// (year 2099) session dates throughout, since `makeSaveMeetingSeries`'s own
+// `now` (the D015/D016-required FRESH now, independent of the dialog's own
+// confirmation-preview `now`) is a real, un-injectable `new Date()` -- these
+// fixtures must stay "future" regardless of when this suite actually runs.
+// ---------------------------------------------------------------------------
+
+interface FakeExistingSessionRow {
+  id: string;
+  session_date: string;
+  starts_at: string;
+  ends_at: string;
+  status: 'scheduled' | 'completed' | 'canceled';
+}
+
+describe('saveMeetingSeries (T510, AC8 partial events update)', () => {
+  it('AC8: the .update({...}) argument object has EXACTLY the keys title, team_ids, location_name, description', async () => {
+    const eventsUpdateSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+    const client = {
+      from: vi.fn((table: string) => {
+        if (table === 'events') {
+          return {
+            update: (patch: Record<string, unknown>) => ({
+              eq: (...args: unknown[]) => eventsUpdateSpy(patch, ...args),
+            }),
+          };
+        }
+        if (table === 'event_sessions') {
+          return { select: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) };
+        }
+        throw new Error(`unexpected table: ${table}`);
+      }),
+    } as unknown as SupabaseClient;
+
+    const save = makeSaveMeetingSeries(() => client);
+    const payload: SaveMeetingSeriesPayload = {
+      eventId: 'event-1',
+      event: {
+        title: 'New title',
+        teamIds: ['team-a'],
+        locationName: 'New location',
+        description: 'New description',
+        address: 'ignored-by-the-update-mutation',
+      },
+      desiredFutureSessions: [],
+    };
+    await save(payload);
+
+    expect(eventsUpdateSpy).toHaveBeenCalledTimes(1);
+    const [patch, , eventId] = eventsUpdateSpy.mock.calls[0] as [
+      Record<string, unknown>,
+      string,
+      string,
+    ];
+    expect(Object.keys(patch).sort()).toEqual([
+      'description',
+      'location_name',
+      'team_ids',
+      'title',
+    ]);
+    expect(patch).toEqual({
+      title: 'New title',
+      team_ids: ['team-a'],
+      location_name: 'New location',
+      description: 'New description',
+    });
+    expect(eventId).toBe('event-1');
+  });
+});
+
+/**
+ * AC9's shared fake client. Records every call by intent onto ONE ordered
+ * `log`, so per-id sequencing assertions (Branch A) are checkable, and covers
+ * the FULL four-deep `delete -> eq -> gt -> select` chain (D016 §5/Q4) for
+ * `deleteSessionIfStillFuture` -- not a one-filter-deep mirror like
+ * `TeamsTab.test.tsx:1185-1195`'s own precedent (that precedent is cited for
+ * SHAPE only; this mock's own `event_sessions.delete()` branch does not
+ * resolve anything until `.select(...)` is actually called, so a mutation
+ * that drops `.select('id')` changes this mock's own observable behavior,
+ * not just the production code's).
+ */
+function buildAC9FakeClient(options: {
+  existingSessions: FakeExistingSessionRow[];
+  stillFutureIds: string[];
+  attendanceSessionIds: string[];
+  deleteOutcomeById: Record<string, 'ok' | 'zero' | '23503'>;
+}): {
+  client: SupabaseClient;
+  log: Array<{ type: string; id?: string; ids?: string[] }>;
+} {
+  const log: Array<{ type: string; id?: string; ids?: string[] }> = [];
+
+  const client = {
+    from: vi.fn((table: string) => {
+      if (table === 'events') {
+        return {
+          update: () => ({
+            eq: () => {
+              log.push({ type: 'eventsUpdate' });
+              return Promise.resolve({ data: null, error: null });
+            },
+          }),
+        };
+      }
+      if (table === 'event_sessions') {
+        return {
+          select: (columns: string) => {
+            if (columns === 'id') {
+              // queryStillFutureSessionIds -- `.select('id').in(...).gt(...)`.
+              return {
+                in: () => ({
+                  gt: () =>
+                    Promise.resolve({
+                      data: options.stillFutureIds.map((id) => ({ id })),
+                      error: null,
+                    }),
+                }),
+              };
+            }
+            // queryEditableSessionsForEvent -- `.select('id, ...').eq('event_id', ...)`.
+            return { eq: () => Promise.resolve({ data: options.existingSessions, error: null }) };
+          },
+          update: (patch: Record<string, unknown>) => ({
+            eq: (_col: string, id: string) => {
+              if ('status' in patch) {
+                log.push({ type: 'cancelEq', id });
+              } else {
+                log.push({ type: 'updateTimeEq', id });
+              }
+              return Promise.resolve({ data: null, error: null });
+            },
+            in: (_col: string, ids: readonly string[]) => {
+              log.push({ type: 'cancelBatchIn', ids: [...ids] });
+              return Promise.resolve({ data: null, error: null });
+            },
+          }),
+          insert: () => {
+            log.push({ type: 'sessionsInsert' });
+            return Promise.resolve({ data: null, error: null });
+          },
+          // The FULL four-deep chain (D016 §5/Q4): nothing resolves a real
+          // `{data, error}` shape until `.select(...)` is actually reached --
+          // dropping `.select('id')` in production would make `.gt(...)`'s
+          // return value (a plain `{ select }` object) the awaited result
+          // instead, which is exactly the named mutation's own effect
+          // (`deletedRows` becomes `undefined` for EVERY call).
+          delete: () => ({
+            eq: (_col: string, id: string) => ({
+              gt: () => ({
+                select: () => {
+                  log.push({ type: 'sessionDeleteEqGtSelect', id });
+                  const outcome = options.deleteOutcomeById[id] ?? 'ok';
+                  if (outcome === '23503') {
+                    return Promise.resolve({
+                      data: null,
+                      error: { message: 'FK violation', code: '23503' },
+                    });
+                  }
+                  if (outcome === 'zero') {
+                    return Promise.resolve({ data: [], error: null });
+                  }
+                  return Promise.resolve({ data: [{ id }], error: null });
+                },
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === 'rsvps') {
+        return {
+          delete: () => ({
+            eq: (_col: string, id: string) => {
+              log.push({ type: 'rsvpsDelete', id });
+              return Promise.resolve({ data: null, error: null });
+            },
+          }),
+        };
+      }
+      if (table === 'attendance') {
+        return {
+          select: () => ({
+            in: () =>
+              Promise.resolve({
+                data: options.attendanceSessionIds.map((id) => ({ session_id: id })),
+                error: null,
+              }),
+          }),
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    }),
+  } as unknown as SupabaseClient;
+
+  return { client, log };
+}
+
+const AC9_SAMPLE_EVENT: SaveMeetingSeriesPayload['event'] = {
+  title: 'Weekly Build Meeting',
+  teamIds: null,
+  locationName: 'Robotics Lab',
+  description: '',
+  address: '',
+};
+
+function ac9Session(
+  id: string,
+  dateSeed: number,
+  status: FakeExistingSessionRow['status'] = 'scheduled',
+): FakeExistingSessionRow {
+  const date = `2099-01-${String(dateSeed).padStart(2, '0')}`;
+  return {
+    id,
+    session_date: date,
+    starts_at: `${date}T23:00:00.000Z`,
+    ends_at: `2099-01-${String(dateSeed + 1).padStart(2, '0')}T01:00:00.000Z`,
+    status,
+  };
+}
+
+describe("saveMeetingSeries (T510, AC9 -- D015-ruled per-session-paired removal, D016's f2 fix, six branches)", () => {
+  it("Branch A (clean, at least two ids, no attendance): per-id ordering (rsvps delete before that SAME id's session delete), the chain ends .select('id'), no update call for either", async () => {
+    const sessionX = ac9Session('session-x', 1);
+    const sessionY = ac9Session('session-y', 8);
+    const { client, log } = buildAC9FakeClient({
+      existingSessions: [sessionX, sessionY],
+      stillFutureIds: ['session-x', 'session-y'],
+      attendanceSessionIds: [],
+      deleteOutcomeById: {},
+    });
+    const save = makeSaveMeetingSeries(() => client);
+
+    await save({ eventId: 'event-1', event: AC9_SAMPLE_EVENT, desiredFutureSessions: [] });
+
+    for (const id of ['session-x', 'session-y']) {
+      const rsvpIndex = log.findIndex((entry) => entry.type === 'rsvpsDelete' && entry.id === id);
+      const deleteIndex = log.findIndex(
+        (entry) => entry.type === 'sessionDeleteEqGtSelect' && entry.id === id,
+      );
+      expect(rsvpIndex).toBeGreaterThanOrEqual(0);
+      expect(deleteIndex).toBeGreaterThanOrEqual(0);
+      // That id's OWN rsvps delete happens strictly before that SAME id's
+      // OWN session delete (D015 §2's ordering) -- the FULL chain, not just
+      // a first-filter mirror (D016 §5/Q4): `sessionDeleteEqGtSelect` is
+      // only ever logged once `.select(...)` is reached.
+      expect(rsvpIndex).toBeLessThan(deleteIndex);
+    }
+    expect(log.some((entry) => entry.type === 'cancelEq')).toBe(false);
+    expect(log.some((entry) => entry.type === 'cancelBatchIn')).toBe(false);
+  });
+
+  it('Branch B (unchanged, batched): an id with attendance is batch-canceled and its RSVPs are never touched', async () => {
+    const sessionWithAttendance = ac9Session('session-attend', 1);
+    const { client, log } = buildAC9FakeClient({
+      existingSessions: [sessionWithAttendance],
+      stillFutureIds: ['session-attend'],
+      attendanceSessionIds: ['session-attend'],
+      deleteOutcomeById: {},
+    });
+    const save = makeSaveMeetingSeries(() => client);
+
+    await save({ eventId: 'event-1', event: AC9_SAMPLE_EVENT, desiredFutureSessions: [] });
+
+    const batchCancel = log.find((entry) => entry.type === 'cancelBatchIn');
+    expect(batchCancel).toBeDefined();
+    expect(batchCancel?.ids).toEqual(['session-attend']);
+    expect(log.some((entry) => entry.type === 'rsvpsDelete' && entry.id === 'session-attend')).toBe(
+      false,
+    );
+    expect(log.some((entry) => entry.type === 'sessionDeleteEqGtSelect')).toBe(false);
+  });
+
+  it("Branch C (unchanged, batched): an id absent from queryStillFutureSessionIds's result never reaches any subsequent delete/cancel/attendance-check call", async () => {
+    const sessionStillFuture = ac9Session('session-safe', 1);
+    const sessionRaced = ac9Session('session-raced', 8);
+    const { client, log } = buildAC9FakeClient({
+      existingSessions: [sessionStillFuture, sessionRaced],
+      // Only ONE of the two toRemove candidates is still future by the time
+      // this guard runs.
+      stillFutureIds: ['session-safe'],
+      attendanceSessionIds: [],
+      deleteOutcomeById: {},
+    });
+    const save = makeSaveMeetingSeries(() => client);
+
+    await save({ eventId: 'event-1', event: AC9_SAMPLE_EVENT, desiredFutureSessions: [] });
+
+    expect(log.some((entry) => entry.id === 'session-raced')).toBe(false);
+    expect(
+      log.some((entry) => entry.type === 'sessionDeleteEqGtSelect' && entry.id === 'session-safe'),
+    ).toBe(true);
+  });
+
+  it("Branch D (LOAD-BEARING, the 23503 trigger): X is canceled and X ONLY; Y is genuinely deleted and receives no update call; Y's own rsvps delete is independent of X; no update call ever targets both; the save resolves", async () => {
+    const sessionX = ac9Session('session-x', 1);
+    const sessionY = ac9Session('session-y', 8);
+    const { client, log } = buildAC9FakeClient({
+      existingSessions: [sessionX, sessionY],
+      stillFutureIds: ['session-x', 'session-y'],
+      attendanceSessionIds: [],
+      deleteOutcomeById: { 'session-x': '23503', 'session-y': 'ok' },
+    });
+    const save = makeSaveMeetingSeries(() => client);
+
+    await expect(
+      save({ eventId: 'event-1', event: AC9_SAMPLE_EVENT, desiredFutureSessions: [] }),
+    ).resolves.toBeUndefined();
+
+    const cancelEntries = log.filter((entry) => entry.type === 'cancelEq');
+    expect(cancelEntries).toEqual([{ type: 'cancelEq', id: 'session-x' }]);
+    expect(log.some((entry) => entry.type === 'cancelBatchIn')).toBe(false);
+    expect(log.some((entry) => entry.type === 'rsvpsDelete' && entry.id === 'session-y')).toBe(
+      true,
+    );
+    expect(
+      log.some((entry) => entry.type === 'sessionDeleteEqGtSelect' && entry.id === 'session-y'),
+    ).toBe(true);
+  });
+
+  it('Branch E: a non-23503 error on either half of any pair rejects the overall save', async () => {
+    const sessionX = ac9Session('session-x', 1);
+    const client = {
+      from: vi.fn((table: string) => {
+        if (table === 'events') {
+          return { update: () => ({ eq: () => Promise.resolve({ data: null, error: null }) }) };
+        }
+        if (table === 'event_sessions') {
+          return {
+            select: (columns: string) => {
+              if (columns === 'id') {
+                return {
+                  in: () => ({
+                    gt: () => Promise.resolve({ data: [{ id: 'session-x' }], error: null }),
+                  }),
+                };
+              }
+              return { eq: () => Promise.resolve({ data: [sessionX], error: null }) };
+            },
+            delete: () => ({
+              eq: () => ({
+                gt: () => ({
+                  select: () =>
+                    Promise.resolve({
+                      data: null,
+                      error: { message: 'unexpected failure', code: 'UNEXPECTED' },
+                    }),
+                }),
+              }),
+            }),
+          };
+        }
+        if (table === 'rsvps') {
+          return { delete: () => ({ eq: () => Promise.resolve({ data: null, error: null }) }) };
+        }
+        if (table === 'attendance') {
+          return { select: () => ({ in: () => Promise.resolve({ data: [], error: null }) }) };
+        }
+        throw new Error(`unexpected table: ${table}`);
+      }),
+    } as unknown as SupabaseClient;
+
+    const save = makeSaveMeetingSeries(() => client);
+    await expect(
+      save({ eventId: 'event-1', event: AC9_SAMPLE_EVENT, desiredFutureSessions: [] }),
+    ).rejects.toMatchObject({ code: 'UNEXPECTED' });
+  });
+
+  it("Branch F (NEW, D016's load-bearing assertion, the ZERO-ROW trigger): X's guarded delete resolves { data: [], error: null } (no rejection) -- X is canceled and X ONLY, Y is genuinely deleted and receives no update call, the save resolves", async () => {
+    const sessionX = ac9Session('session-x', 1);
+    const sessionY = ac9Session('session-y', 8);
+    const { client, log } = buildAC9FakeClient({
+      existingSessions: [sessionX, sessionY],
+      stillFutureIds: ['session-x', 'session-y'],
+      attendanceSessionIds: [],
+      deleteOutcomeById: { 'session-x': 'zero', 'session-y': 'ok' },
+    });
+    const save = makeSaveMeetingSeries(() => client);
+
+    await expect(
+      save({ eventId: 'event-1', event: AC9_SAMPLE_EVENT, desiredFutureSessions: [] }),
+    ).resolves.toBeUndefined();
+
+    const cancelEntries = log.filter((entry) => entry.type === 'cancelEq');
+    expect(cancelEntries).toEqual([{ type: 'cancelEq', id: 'session-x' }]);
+    expect(
+      log.some((entry) => entry.type === 'sessionDeleteEqGtSelect' && entry.id === 'session-y'),
+    ).toBe(true);
+    expect(log.some((entry) => entry.type === 'cancelEq' && entry.id === 'session-y')).toBe(false);
   });
 });
 
