@@ -1139,9 +1139,20 @@ export function ScheduleMeetingsDialog({
                 </HStack>
               </EventFormSection>
 
-              <EventFormSection title="Notes" hasDivider={false}>
-                <TextArea label="Notes" value={notes} onChange={setNotes} isOptional rows={3} />
-              </EventFormSection>
+              {/* T609 -- create-mode-only field (mirrors Description's own
+                  `isEditMode &&` gate above, inverted): edit mode never
+                  persists this dialog's `notes` state (see `handleSubmit`'s
+                  own `:927-931` comment), so showing an editable Notes box in
+                  edit mode silently discarded whatever a coach typed into it.
+                  Per `auto-mode-decisions.md`'s "2026-07-30 -- George's ruling
+                  on T169 (owner input, verbatim)" finding 1, a control that
+                  accepts input, shows it applied, and silently discards it is
+                  worse than no control at all -- hide it instead. */}
+              {!isEditMode && (
+                <EventFormSection title="Notes" hasDivider={false}>
+                  <TextArea label="Notes" value={notes} onChange={setNotes} isOptional rows={3} />
+                </EventFormSection>
+              )}
 
               {submitError !== null && (
                 <Banner

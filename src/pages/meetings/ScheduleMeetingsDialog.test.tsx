@@ -1141,4 +1141,23 @@ describe('<ScheduleMeetingsDialog /> T510 edit mode', () => {
     expect(onCreateMeetings).toHaveBeenCalledTimes(1);
     expect(findAlertDialogElement()?.hasAttribute('open')).toBe(false);
   });
+
+  it('T609: Notes is create-mode only -- absent when editing, present when creating', () => {
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          initialData={EDIT_INITIAL_DATA}
+        />,
+      );
+    });
+    expect(() => getFieldControl('Notes')).toThrow();
+
+    act(() => {
+      root.render(<ScheduleMeetingsDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+    });
+    expect(getFieldControl('Notes')).toBeDefined();
+  });
 });
