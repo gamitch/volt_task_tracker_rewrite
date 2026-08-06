@@ -712,14 +712,32 @@ const WEEKDAY_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
  * (`node_modules/@astryxdesign/core/dist/AlertDialog/AlertDialog.d.ts`) -- builds ONE joined string
  * satisfying rule 6: counts always; the actual removed dates listed, comma-joined, ONLY when
  * `plan.toRemove.length > 0`. Reuses this file's own existing `parseDateOnly` (`:335`) directly --
- * not reimplemented. */
-export function buildEditConfirmationDescription(plan: MeetingSeriesReconcilePlan): string {
+ * not reimplemented.
+ *
+ * T611 -- `timesWillBeOverwritten` is an ADDITIVE, optional second parameter (worker packet
+ * §3.6): its absence (or `false`) must reproduce the pre-T611 one-argument output byte for
+ * byte -- both existing call sites of this function (`AC11`/`AC12` in the test file) pass only
+ * `plan` and must keep passing unmodified. When `true` (this dialog's own `timeFieldsTouched`
+ * state was set before the coach submitted -- see the `AlertDialog` `description` call site),
+ * an extra sentence is appended disclosing that every upcoming session's time is about to be
+ * overwritten with the newly entered value -- the single-shared-time defect this task exists to
+ * stop from happening silently (worker packet §1). */
+export function buildEditConfirmationDescription(
+  plan: MeetingSeriesReconcilePlan,
+  timesWillBeOverwritten: boolean = false,
+): string {
   const base = `${plan.toInsert.length} session(s) added · ${plan.toRemove.length} session(s) removed · ${plan.toUpdate.length} session(s) kept.`;
-  if (plan.toRemove.length === 0) return base;
-  const removedDates = plan.toRemove
-    .map((item) => WEEKDAY_DATE_FORMATTER.format(parseDateOnly(item.sessionDate)))
-    .join(', ');
-  return `${base} Removed: ${removedDates}.`;
+  let description = base;
+  if (plan.toRemove.length > 0) {
+    const removedDates = plan.toRemove
+      .map((item) => WEEKDAY_DATE_FORMATTER.format(parseDateOnly(item.sessionDate)))
+      .join(', ');
+    description = `${base} Removed: ${removedDates}.`;
+  }
+  if (timesWillBeOverwritten) {
+    description = `${description} Every upcoming session's time will be overwritten with the new start/end time you entered.`;
+  }
+  return description;
 }
 
 /** Deliberately NOT built: the confirmation copy above does not distinguish "removed and deleted"
@@ -727,6 +745,55 @@ export function buildEditConfirmationDescription(plan: MeetingSeriesReconcilePla
  * to the coach, and the distinction is accurate either way. Surfacing it would need a new field
  * threaded onto an existing, widely-fixture-literal'd exported type for a UI nuance the owner never
  * asked for. Do not build this speculatively. */
+
+/** T611 -- for a series edit, resolves each desired date's own starts_at/ends_at. When
+ * `timeFieldsTouched` is `false`, a date matching an existing RECONCILABLE session's own
+ * `sessionDate` reuses THAT session's own `starts_at`/`ends_at` verbatim (no re-derivation, no
+ * Chicago-wall-time round trip) -- preserving whatever value it already has, including a value
+ * that diverges from every other session's. A date with no such match (newly added), or every
+ * date once `timeFieldsTouched` is `true`, uses the currently displayed `startTime`/`endTime`
+ * via the same `chicagoWallTimeToUtcIso` conversion `buildEventSessionsPayload` (above) already
+ * performs. Pure, exported, independently testable without a DOM -- same convention
+ * `computeMeetingSeriesReconcilePlan` documents for itself (worker packet §3.5).
+ *
+ * Precondition, documented rather than defended with a fallback: by the time `handleSubmit`
+ * calls this, the edit-mode `isValid` guarantee (worker packet §3.4) ensures that whenever
+ * `timeFieldsTouched` is `true`, `startTime`/`endTime` are both defined. This function does not
+ * silently fabricate a value if that guarantee is ever violated -- it mirrors
+ * `buildEventSessionsPayload`'s OWN posture above (`if (startTime === undefined || endTime ===
+ * undefined) return [];`, "skip rather than fabricate"), not `handleSubmit`'s unrelated `:925`
+ * guard (a redundant belt-and-suspenders check before the handler runs at all, per worker packet
+ * §3.5): a date that would need a currently-undefined `startTime`/`endTime` is dropped from the
+ * result instead of being given a made-up value. */
+export function buildEditDesiredFutureSessions(
+  dates: readonly string[],
+  startTime: string | undefined,
+  endTime: string | undefined,
+  timeFieldsTouched: boolean,
+  originalTimesByDate: ReadonlyMap<string, { startsAt: string; endsAt: string }>,
+): CreateMeetingsSessionPayload[] {
+  const result: CreateMeetingsSessionPayload[] = [];
+  for (const date of dates) {
+    const original = timeFieldsTouched ? undefined : originalTimesByDate.get(date);
+    if (original !== undefined) {
+      result.push({
+        sessionDate: date,
+        startsAt: original.startsAt,
+        endsAt: original.endsAt,
+        notes: '',
+      });
+      continue;
+    }
+    if (startTime === undefined || endTime === undefined) continue; // skip rather than fabricate
+    result.push({
+      sessionDate: date,
+      startsAt: chicagoWallTimeToUtcIso(date, startTime),
+      endsAt: chicagoWallTimeToUtcIso(date, endTime),
+      notes: '',
+    });
+  }
+  return result;
+}
 
 // ---------------------------------------------------------------------------
 // Component.
@@ -790,6 +857,16 @@ export function ScheduleMeetingsDialog({
   // `AlertDialog` below. `onSaveMeetingSeries` is NOT called until the coach
   // confirms (rule 6: confirmation before saving).
   const [pendingEditSave, setPendingEditSave] = useState<PendingEditSave | null>(null);
+  // T611 -- an INTERACTION flag, not a value comparison (worker packet §3.4):
+  // set `true` the moment either time `TimeInput`'s own `onChange` fires this
+  // edit session (wrapped below, `handleStartTimeChange`/`handleEndTimeChange`),
+  // reset `false` only inside `resetForm()`'s single shared reset point. One
+  // shared flag covers BOTH fields (packet §3.4, "why one shared flag, not
+  // two") -- `updateSessionTime` always persists `starts_at`/`ends_at`
+  // together, so splitting this in two could produce a session whose start
+  // comes from "touched" and whose end comes from "untouched, preserved," a
+  // hybrid neither the original schedule nor the coach's own screen shows.
+  const [timeFieldsTouched, setTimeFieldsTouched] = useState(false);
 
   function resetForm(): void {
     if (initialData !== undefined) {
@@ -843,6 +920,9 @@ export function ScheduleMeetingsDialog({
     }
     setSubmitError(null);
     setPendingEditSave(null);
+    // T611 -- single shared reset point (worker packet §3.4); NOT duplicated
+    // inside either branch above.
+    setTimeFieldsTouched(false);
   }
 
   // Nothing persists across opens (module doc "Nothing persists" acceptance
@@ -870,14 +950,50 @@ export function ScheduleMeetingsDialog({
     [sessionDates, startTime, endTime, notes],
   );
 
+  // T611 -- computed together, over `initialData`, the same way `resetForm()`
+  // already computes (and currently discards) the reconcilable filter
+  // (worker packet §0.1's adopted guidance). `originalTimesByDate` feeds
+  // `buildEditDesiredFutureSessions` (§3.5) at submit time so an untouched
+  // date reuses its OWN session's stored time verbatim, never re-derived.
+  // `timesDivergeAcrossSessions` drives the §3.3 inline disclosure: `true`
+  // only when two or more reconcilable sessions' own Chicago wall times
+  // (start AND end) genuinely differ from each other -- a single reconcilable
+  // session, or several that all share one wall time, is NOT divergent.
+  const { originalTimesByDate, timesDivergeAcrossSessions } = useMemo(() => {
+    const map = new Map<string, { startsAt: string; endsAt: string }>();
+    if (initialData === undefined) {
+      return { originalTimesByDate: map, timesDivergeAcrossSessions: false };
+    }
+    const reconcilableSessions = initialData.sessions.filter((s) =>
+      isMeetingSessionReconcilable(s, new Date()),
+    );
+    for (const session of reconcilableSessions) {
+      map.set(session.sessionDate, { startsAt: session.startsAt, endsAt: session.endsAt });
+    }
+    const distinctWallTimes = new Set(
+      reconcilableSessions.map(
+        (s) => `${formatChicagoWallTime(s.startsAt)}-${formatChicagoWallTime(s.endsAt)}`,
+      ),
+    );
+    return { originalTimesByDate: map, timesDivergeAcrossSessions: distinctWallTimes.size > 1 };
+  }, [initialData]);
+
   // T510 -- rule 2 ("title/location/description always editable") would be
   // impossible for a fully-past series (zero reconcilable sessions) under the
   // create-mode rule below; in edit mode, `isValid` drops the session-count
   // requirement entirely. This also permits narrowing a series to zero future
   // sessions in one save (every remaining future session moves to `toRemove`)
   // -- a coherent action, not a bug to guard against.
+  //
+  // T611 -- edit mode ALSO requires, per worker packet §3.4's "Consequence
+  // for `isValid`": if the coach has touched either time field this session
+  // (`timeFieldsTouched`), both `startTime`/`endTime` must resolve to real
+  // values before the button enables -- untouched fields never gate validity
+  // on a value, since untouched sessions reuse their own stored time
+  // regardless of what the shared fields currently display.
   const isValid = isEditMode
-    ? title.trim() !== ''
+    ? title.trim() !== '' &&
+      (!timeFieldsTouched || (startTime !== undefined && endTime !== undefined))
     : title.trim() !== '' && sessionsPayload.length > 0;
   const confirmLabel = computeConfirmLabel(isEditMode, sessionsPayload.length);
 
@@ -890,6 +1006,22 @@ export function ScheduleMeetingsDialog({
   function handleCancel(): void {
     resetForm();
     onOpenChange(false);
+  }
+
+  // T611 -- wrap `setStartTime`/`setEndTime` rather than calling them
+  // directly from JSX (worker packet §3.4), so every `onChange` the coach's
+  // OWN interaction fires also latches `timeFieldsTouched`. `TimeInput`
+  // itself already guards against a same-value retype re-firing `onChange`
+  // (its own `handleInputChange`, `parsed !== value`), so this dialog never
+  // needs its own value-comparison to avoid a no-op retype latching the flag.
+  function handleStartTimeChange(value: ISOTimeString | undefined): void {
+    setTimeFieldsTouched(true);
+    setStartTime(value);
+  }
+
+  function handleEndTimeChange(value: ISOTimeString | undefined): void {
+    setTimeFieldsTouched(true);
+    setEndTime(value);
   }
 
   async function handleConfirmEditSave(): Promise<void> {
@@ -929,7 +1061,21 @@ export function ScheduleMeetingsDialog({
       // of this dialog's own `notes` state -- per-session notes are T605's
       // scope, and the loader itself never trusts this to already be
       // future-only (it re-derives the plan again at the database boundary).
-      const desiredFutureSessions = buildEventSessionsPayload(sessionDates, startTime, endTime, '');
+      //
+      // T611 -- time resolution changed from a direct `buildEventSessionsPayload`
+      // call (which always applies the ONE shared `startTime`/`endTime` to every
+      // date) to `buildEditDesiredFutureSessions` (worker packet §3.5): a series
+      // edit must not silently rewrite every session's own time just because the
+      // coach only meant to change the title. An untouched date reuses its own
+      // session's stored time verbatim; only a date the coach actually touched
+      // (or a newly added date) picks up the currently displayed shared time.
+      const desiredFutureSessions = buildEditDesiredFutureSessions(
+        sessionDates,
+        startTime,
+        endTime,
+        timeFieldsTouched,
+        originalTimesByDate,
+      );
       const plan = computeMeetingSeriesReconcilePlan(
         initialData.sessions,
         desiredFutureSessions,
@@ -1128,14 +1274,34 @@ export function ScheduleMeetingsDialog({
                   </VStack>
                 )}
 
+                {/* T611 -- §3.3 disclosure: edit mode only, shown only while this
+                    series' own reconcilable sessions genuinely disagree on wall
+                    time AND the coach has not yet touched either time field this
+                    edit session. Disappears the moment either field is touched
+                    (whether or not the new value actually differs), because at
+                    that point the confirmation `AlertDialog`'s own suffix (§3.6)
+                    takes over disclosing the overwrite. */}
+                {isEditMode && timesDivergeAcrossSessions && !timeFieldsTouched && (
+                  <Text type="supporting">
+                    {'Sessions in this series currently have different times. Leave these ' +
+                      'fields unchanged to keep each session’s own time, or enter a new ' +
+                      'time to apply it to every upcoming session.'}
+                  </Text>
+                )}
+
                 <HStack gap={2} wrap="wrap">
                   <TimeInput
                     label="Start time"
                     value={startTime}
-                    onChange={setStartTime}
+                    onChange={handleStartTimeChange}
                     isRequired
                   />
-                  <TimeInput label="End time" value={endTime} onChange={setEndTime} isRequired />
+                  <TimeInput
+                    label="End time"
+                    value={endTime}
+                    onChange={handleEndTimeChange}
+                    isRequired
+                  />
                 </HStack>
               </EventFormSection>
 
@@ -1193,7 +1359,14 @@ export function ScheduleMeetingsDialog({
         }}
         title="Save changes to this meeting series?"
         description={
-          pendingEditSave !== null ? buildEditConfirmationDescription(pendingEditSave.plan) : ''
+          pendingEditSave !== null
+            ? // T611 -- `timeFieldsTouched` (§3.4) is not reset between `handleSubmit`
+              // setting `pendingEditSave` and the coach confirming here (only
+              // `resetForm()` resets it), so it can be read directly at this call
+              // site instead of threading a new field through `PendingEditSave`
+              // itself (worker packet §3.6 -- the cheaper, required path).
+              buildEditConfirmationDescription(pendingEditSave.plan, timeFieldsTouched)
+            : ''
         }
         actionLabel="Save changes"
         onAction={() => {
