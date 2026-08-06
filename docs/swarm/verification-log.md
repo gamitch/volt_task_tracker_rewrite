@@ -11116,3 +11116,50 @@ delta**, tests 2087 → **2088**, exactly +1, file count unchanged.
 replay as `UNTRUSTWORTHY: the mutated run executed no tests`, while its own captured output showed a
 real assertion failure. The checker caught it only by refusing the tool's verdict and re-running by
 hand. A false `UNTRUSTWORTHY` on the project's primary anti-vacuity check is worse than no check.
+
+---
+
+## T611 — a series edit no longer rewrites meeting times the coach did not touch — **PASS** (2026-08-06, `5884488`)
+
+HEAVY. Packet → **two** `checker-premise` rounds (REVISE, REVISE) → **D017** arbitration → conformance
+check → accuracy pass → `worker-implementer` → `checker-reviewer`. A blocking dependency, **T613**, was
+found, filed, built and merged mid-flight. NIT only.
+
+**Preventive, which inverted the usual risk.** Every meeting in a series shares one wall time today, so
+the defect cannot fire — T605 makes per-meeting times reachable, and the shipped edit path would then
+erase them: one time derived from the earliest meeting, applied to all, behind a save button checking
+only the title. Editing a series *title* would have wiped every custom time. So the danger was never a
+live regression; it was **a fix that silently does nothing, undetectably**, and the whole review chain
+was spent on the tests rather than the code.
+
+**Two acceptance criteria could not fail, and both are now closed by construction.** A premise gate
+proved the first by deleting the divergence condition outright — the "different times" warning then
+rendered on every edit of every series, false for most users, and **every test still passed**. The fix
+binds the present-case and absent-case assertions to one shared `DIVERGENCE_DISCLOSURE_TEXT` constant,
+so a separately-worded absence check — the way that hole reopens — is not expressible. The second
+criterion previously verified only that a new parameter was *inert*; it is now asserted against the
+real `AlertDialog` DOM element.
+
+**The checker proved it rather than reading it**, and deliberately did not use `replay.py`, whose
+false-negative bug is filed as T612. Re-running the gate's own mutation now yields exactly
+`1 failed | 2 passed` — assertion 3 alone. The two named mutations each reddened with real assertion
+failures, one a 2-hour instant delta, one a DOM text assertion.
+
+**Frozen scope verified by hash:** `sha256sum` of the first 711 lines is identical across both
+revisions, covering `buildEventSessionsPayload`, the duplicate-`session_date` doc comment and
+`computeMeetingSeriesReconcilePlan`. `loaders/meetings.ts` and `MeetingsList.tsx` diffs are empty, the
+test file has zero deletions, and `RECONCILABLE_SESSION_A`/`_B` are byte-identical — T613's territory
+untouched.
+
+**Two numbers in our own packets were wrong; the checker corrected both.** The lint reference said
+370→372; the truth is **370→371**, verified by rule and file — one new non-component export at
+`buildEditDesiredFutureSessions`. And the "worker self-reported 197 insertions" discrepancy dissolved:
+`197` is git's combined changed-lines histogram column (185+12). **The worker reported it correctly;
+the packet misread it.** Worth remembering — a discrepancy between two honest sources was itself a
+third party's error.
+
+Gates from an independently derived baseline: typecheck 0 · format:check 0 · lint 0 errors · **2101
+tests**, +13, and `ScheduleMeetingsDialog.test.tsx` the only file whose count moved.
+
+**NIT, log only:** the two new copy strings mix a typographic apostrophe with an ASCII one. No test is
+fragile today. Route to a copy-polish row; do not reopen this.
