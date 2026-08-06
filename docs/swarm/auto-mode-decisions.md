@@ -3936,3 +3936,48 @@ forces exactly FIVE mechanical call-site edits (one more than the packet's count
 else that references the stub or the create-only dialog is either a negative assertion that stays
 true, an unaffected surface (e2e specs are route-level; RLS suites are SQL-side; T510 needs no
 migration), or a hand-built fixture literal the packet's optional-field design deliberately spares.
+
+---
+
+## 2026-08-06 — Boss-arbiter ruling (Dispute Rule / item 19a): T510 removes dropped sessions PER-SESSION-PAIRED; no migration, no design change, packet clearable after v3
+
+**Full record: `dispute-log.md` D015.** T510's packet spent both `checker-premise` rounds (item 19a),
+both REVISE, on the same underlying defect: v2's batched removal sequence deletes EVERY batched
+session's RSVPs in one separately-committed PostgREST transaction before the session delete can
+raise its residual `23503` — so the fallback branch cancels innocent sessions whose RSVPs are
+already destroyed. The gate proved it in a live cluster and proved it reachable (`loaders/
+attendance.ts` has no time guard; a coach can pre-mark a future session while another narrows the
+series). The gate's evidence was verified independently before ruling; it holds.
+
+### The ruling, operative parts
+
+1. **Per-session pairing.** §4b step 6's a-e stand (batched still-future guard, batched attendance
+   pre-check, batched cancel that never touches RSVPs). Step f becomes, per id: delete that
+   session's rsvps, then that session; on `23503`, cancel THAT id only; any other error rejects the
+   save. The database's own FK bounds any race to the one raced session — no client-side
+   compensation, no dependence on a browser tab surviving.
+2. **Capture-and-restore rejected** (RLS-feasible via `staff_all`, but the only copy of live rows
+   is tab memory for the window, and the restore collides with `unique (session_id, student_id)` if
+   a student re-RSVPs). **The RPC rejected for T510 on proportionality, and DECLARED here rather
+   than absorbed** — George: it is the only fully-atomic option; it costs a migration, an opus
+   worker, and your cutover sign-off, for a sub-second race whose worst case under pairing is one
+   coach-removed session lingering as Canceled (your own ruled fallback outcome). Veto toward it if
+   you want atomicity; T606's migration wave is a natural place to revisit. **Cancel-only rejected
+   outright** — it would overturn your explicit ruling that dropped sessions vanish.
+3. **Your rule set is preserved verbatim.** RSVPs deleted first, then the session; attendance →
+   cancel instead of a failed save; future-forward untouched. The residual raced case produces
+   exactly your ruled fallback, disclosed in the packet's Known Risks.
+4. **AC9 rewritten** (mandatory): Branch D now runs two pairs, fails one with `23503`, and asserts
+   the innocent session is genuinely deleted, unconditioned on the failure, with no batch-wide
+   cancel — the assertion v2's Branch D lacked, which would have certified the defect green.
+5. **The nine other round-2 revisions:** the MAJOR and the AC9 rewrite land in v3 before dispatch;
+   the seven MINOR/NITs land by default (a packet correction deferred is never made), with any
+   accept-as-is justified in one line. v3's §0 carries a disposition line per round-2 label.
+6. **Dispatch mechanism, since no gate round remains:** foreman writes v3; a FRESH gate instance
+   runs a 19b-light, conformance-only check against D015 (sequence, AC9, MAJOR, disposition table —
+   nothing settled is re-audited). DISPATCH from it satisfies Definition of Ready item 1; REVISE
+   returns to the arbiter, not a loop. The constitution is NOT amended — this is a recorded 19a/19b
+   interpretation, the owner's to ratify or reject.
+
+No owner input is required to proceed. Packet edits are the foreman's; no worker was dispatched by
+this ruling.
