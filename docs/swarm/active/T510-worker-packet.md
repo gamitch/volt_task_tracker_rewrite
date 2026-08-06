@@ -1,20 +1,23 @@
 # Worker Packet: T510 — series edit for scheduled meetings (shared fields + future-forward schedule)
 
-**Packet v3 — REVISED per `boss-arbiter` ruling D015** (`docs/swarm/dispute-log.md`, plus the dated
-operative entry in `docs/swarm/auto-mode-decisions.md`, "2026-08-06 — Boss-arbiter ruling (Dispute
-Rule / item 19a): T510 removes dropped sessions PER-SESSION-PAIRED"). **Item 19a's two rounds are now
-spent** (round 1 REVISE, round 2 REVISE) — this did not loop to a third round; it escalated per the
-Dispute Rule, D015 ruled, and v3 implements the ruling. **v3 does not get a third full premise round.**
-Per D015 point 6, it goes to a **fresh** `checker-premise` instance for a **conformance-only** check
-against D015 (does §4b step 6 match the ruled sequence; does AC9 match the ruled branches; did the
-MAJOR land; does §0 carry the full disposition table below) — nothing settled by rounds 1-2 is
-re-audited. Attempt count: 0 — no worker has run against any version of this packet.
+**Packet v4 — REVISED per `boss-arbiter` ruling D016** (`docs/swarm/dispute-log.md`, plus the dated
+operative entry in `docs/swarm/auto-mode-decisions.md`, "2026-08-06 — Boss-arbiter ruling (D016): D015's
+own two fixes interacted into a silent orphan"). **D015's conformance check on v3 returned DISPATCH on
+all four of its questions, verified in a live cluster including a 12-pair concurrent run — that
+DISPATCH stands and is not re-litigated.** The same check surfaced a NEW finding outside its charter,
+reported without a verdict exactly as D015 §6 prescribes, and `boss-arbiter` ruled it as **D016**: v3's
+own per-session pairing (D015 §2) and its own required chained time guard (D015 §5) combine to create a
+silent, undisclosed data-loss path — **D015's fault, explicitly, not a conformance failure and not the
+foreman's design error.** v4 implements D016's ruled fix. Per D016 §6, v4 goes to a **fresh**
+`checker-premise` instance for a **conformance-only** check against **five** D016 questions (enumerated
+in §0) — nothing D015's conformance check already confirmed clean is re-audited. Attempt count: 0 — no
+worker has run against any version of this packet.
 
 **Row:** T510 (`task-ledger.md`, filed 2026-08-05) · **Tier: HEAVY** (constitution item 26) · **Worker
 model: sonnet** (default — no item 18 trigger fires; see §3) · **Branch:**
 `claude/w3-meeting-workflow-0bl669`. This machine holds **W1 + W3**.
 
-## 0. Gate history (item 19) and D015 disposition table
+## 0. Gate history (item 19) and D015/D016 disposition tables
 
 - **Round 1 of 2** (`checker-premise` on v1): REVISE/BLOCKER — 3 blockers, 4 majors, 10 minors, proven
   in a scratch cluster and an isolated worktree. All folded into v2 and preserved in §2/§4/§8 with
@@ -66,6 +69,50 @@ outside the one narrow window MINOR 5 disclosed); B2's fully-past-series fix (in
 defect — create mode still cannot submit an empty series); B3's future-forward/duplicate-date
 enforcement (verified against 11 adversarial inputs); the corrected fixture counts (3 and 3); Grant B's
 five test call sites; the `readonly` type fix; the `AlertDialog` joined-string confirmation approach.
+
+- **D015 conformance check (fresh `checker-premise` instance on v3, `6da5574`): DISPATCH on all four
+  D015 questions**, verified in a live cluster including a 12-pair concurrent run with no deadlocks and
+  no cross-pair coupling. **This DISPATCH is final and is not reopened by v4.** Step 6f's per-session-
+  paired structure, AC9 Branches A-E, the MAJOR's three parts (the `'now'` literal on the guard query,
+  the same guard chained onto the delete, the disclosed PostgREST limitation on `rsvps`), and the §0
+  disposition table above all stand unchanged.
+- **The same conformance run surfaced D016 as a NEW finding outside its charter** (D015 §6 requires
+  exactly this: report, no verdict) — escalated to `boss-arbiter`, ruled. **The defect is D015's own:**
+  D015 §2 ordered `f1` (delete RSVPs) before `f2` (delete the session); D015 §5 required `f2` to chain
+  `.gt('starts_at', 'now')`. Each rule is correct alone. Together, if a session's `starts_at` crosses
+  `now` in the three-plus round trips between step a's batched guard and that same id's own `f2`, the
+  guarded delete matches **zero rows and raises no error** — `runMutation` resolves cleanly on `{ data:
+  null, error: null }` (`loader.ts:203-227`) — so there is no `23503`, no cancel, no rejection, and
+  `f1` has already destroyed that session's RSVPs. The save reports success; the session survives
+  looking like an ordinary `scheduled` meeting. Proven in a live cluster; a control run without the
+  chained guard deletes cleanly, isolating the guard itself as what creates the silent state.
+
+### D016 disposition — the five conformance questions v4 must satisfy (per D016 §6)
+
+| Q | Requirement | Disposition in v4 |
+|---|---|---|
+| Q1 | `f2` chains `.select('id')`; an empty result routes to the SAME time-unguarded `cancelSession` D015 already blessed | **Landed** — §4b's `deleteSessionIfStillFuture` now selects the deleted row back; `removeOneSession` routes a zero-length result to `cancelSession`, identically to the `23503` branch. |
+| Q2 | AC9 gains Branch F, mirrored on Branch D's two-pair independence shape, with a named red mutation | **Landed** — §8 AC9 Branch F: X's guarded delete resolves `{ data: [], error: null }`, Y's resolves with its row; X-only cancel, Y genuinely deleted, save resolves; red under dropping `.select('id')` or dropping the empty-result routing. |
+| Q3 | All three f-step helpers (`deleteRsvpsForSession`, `deleteSessionIfStillFuture`, `cancelSession`) get explicit `runMutation` definitions, with `deleteSessionIfStillFuture`'s result type concrete and zero-rows checked as `(data ?? []).length === 0` | **Landed** — §4b now gives all three explicit `runMutation<...>` definitions in place of v3's inline-comment shorthand. |
+| Q4 | Fake-client mirror covers the full chain depth (`delete → eq → gt → select`, not one filter deep); citation corrected to `TeamsTab.test.tsx:1184-1194` | **Landed** — §2/§8 cite the corrected range; §8 AC9 states the four-deep chain explicitly. |
+| Q5 | Known Risks merges the `23503` trigger and the zero-row trigger into ONE disclosed residual class (identical, identically-visible outcomes) | **Landed** — Known Risks item 1 rewritten to name both triggers under one residual, per D016 §5. |
+
+**Also required, load-bearing, not decoration (D016 §3):** `cancelSession` stays deliberately
+time-UNGUARDED. A symmetric `.gt('starts_at', 'now')` on the cancel would silently no-op in exactly the
+raced case this function exists to repair, and re-open the same hole one call later. §4b's code comment
+says this explicitly so no future worker or checker "hardens" it back into the defect.
+
+**The future-forward tension, ruled rather than glossed (D016 §4), reproduced here because it is what
+defends the design if the owner ever asks why a past session got canceled:** routing to cancel does
+touch a session whose `starts_at` has, by the time of the cancel, crossed into the past. The
+future-forward DECISION POINT is step a's server-side `'now'`-guarded read at save time — the coach's
+confirmed intent to drop this session was formed and verified while it was still strictly future. `f2`'s
+chained guard is defense-in-depth, not a second decision point. Once `f1` has irreversibly deleted the
+RSVPs, the only remaining choice is between a session that lies on screen as an ordinary `scheduled`
+meeting with its RSVP data silently gone, and the owner's own ruled fallback state, visibly `canceled`.
+The second is the least-false repair — and the session in question is one the coach dropped seconds
+earlier, so the owner's separate "a forgotten session can still be ended late" trade-off is not
+meaningfully implicated here.
 
 ## 1. Objective
 
@@ -150,12 +197,26 @@ boss-verified premise): zero occurrences of `starts_at`, `now(`, `new Date`, or 
 — a coach can write attendance to a still-`'scheduled'`, still-future session from the LiveConsole at
 any time, including while another coach is narrowing this series.
 
-**The FK-restrict error-code convention already exists in this codebase**, fully qualified path:
-`src/pages/roster/TeamsTab.test.tsx:1185-1195` proves the shape — a fake client whose `.delete().eq(...)`
-resolves `{ data: null, error: { message: 'FK violation', code: '23503' } }`, asserting the mutation
-**rejects** `.toMatchObject({ code: '23503' })`. `loader.ts`'s `runMutation`/`toLoaderError`
-(`:116-121`, `:203-227`) turns that into a thrown `SupabaseLoaderError`; `isSupabaseLoaderError`
-(`:125-133`) is the exported type guard.
+**The FK-restrict error-code convention already exists in this codebase**, fully qualified path,
+**corrected citation** (D016 §5/Q4 — v3 cited `:1185-1195`, which was off by one line in both
+directions): `src/pages/roster/TeamsTab.test.tsx:1184-1194` proves the shape — a fake client whose
+`.delete().eq(...)` resolves `{ data: null, error: { message: 'FK violation', code: '23503' } }`,
+asserting the mutation **rejects** `.toMatchObject({ code: '23503' })`. `loader.ts`'s `runMutation`/
+`toLoaderError` (`:116-121`, `:203-227`) turns that into a thrown `SupabaseLoaderError`;
+`isSupabaseLoaderError` (`:125-133`) is the exported type guard. **That precedent is only ONE filter
+deep** (`delete → eq`); §4b's `deleteSessionIfStillFuture` chain is FOUR deep (`delete → eq → gt →
+select`), and there is no in-repo precedent for `.delete().select()` — the packet cites the installed
+source directly instead, same posture as the `AlertDialog.d.ts` citation below: `.select()` after
+`.delete()` is real in the installed `@supabase/postgrest-js@2.110.7` —
+`node_modules/@supabase/postgrest-js/src/PostgrestTransformBuilder.ts`, `select<...>` (`:85`), which
+every mutation builder (including the one `.delete()` returns) extends.
+
+**`runMutation` resolves cleanly on a zero-row match, which is the exact mechanism D016 rules on.**
+Confirmed directly: `loader.ts:203-227` only throws when `result.error` is truthy; a successful
+Postgrest response matching zero rows is `{ data: [], error: null }` (not an error), so a guarded
+delete that matches nothing resolves normally with an empty array — it does not raise `23503` and does
+not reject. §4b's `deleteSessionIfStillFuture` treats that empty array as load-bearing signal, not as
+"nothing to do."
 
 **The "already happened" boundary reuses an established shape, not an import** —
 `RsvpControl.tsx:320-329` (a different page, reimplemented locally per this file's own established
@@ -593,25 +654,83 @@ async function queryAttendanceExistsForSessions(
       !attendanceIds.has(id))`.
    e. If `toCancel.length > 0`: ONE batched `update event_sessions set status = 'canceled' where id in
       (:toCancel)` — RSVPs for these are NOT touched (Branch B, unchanged from v2).
-   f. **If `toDelete.length > 0`, PER ID, as an independent pair (D015 §2, replacing v2's batched
-      step f entirely):**
+   f. **If `toDelete.length > 0`, PER ID, as an independent pair (D015 §2's structure, D016 §2's
+      fixed `f2`):**
+
+      **Explicit `runMutation` definitions for all three helpers (D016 §5/Q3 — mandatory; `f2`'s
+      return value is now load-bearing, not decorative, so it needs a concrete result type):**
       ```ts
+      const deleteRsvpsForSession = runMutation<string, void>(
+        (client, sessionId) => client.from('rsvps').delete().eq('session_id', sessionId),
+        getClient,
+      );
+
+      interface DeletedSessionIdRow { id: string; }
+
+      /**
+       * D016's fix. Chains the SAME server-side `'now'` guard directly onto the delete (D015's
+       * MAJOR) AND selects the deleted row's id back (D016's addition) -- `.select()` after
+       * `.delete()` is real in the installed `@supabase/postgrest-js@2.110.7`
+       * (`PostgrestTransformBuilder.select`, `:85`, which the delete builder extends; see §2's
+       * citation). The return value is LOAD-BEARING: an empty array means the guard fired AFTER
+       * `deleteRsvpsForSession` had already run for this same id -- `starts_at` crossed `now` in
+       * the three-plus round trips between step a's batched guard and this call -- OR the session
+       * was concurrently removed by something else entirely. PostgREST cannot distinguish the two,
+       * and D016 rules that distinguishing them is unnecessary: `cancelSession` below is benign
+       * either way (a cancel on an already-gone id updates zero rows and resolves).
+       */
+      const deleteSessionIfStillFuture = runMutation<string, DeletedSessionIdRow[]>(
+        (client, sessionId) =>
+          client
+            .from('event_sessions')
+            .delete()
+            .eq('id', sessionId)
+            .gt('starts_at', 'now')
+            .select('id'),
+        getClient,
+      );
+
+      /**
+       * D015's ruled fallback, reused by BOTH the `23503` branch (attendance/fresh-RSVP raced in)
+       * and D016's empty-result branch (the time boundary raced instead) -- as of D016 these are
+       * ONE residual class with an identical, identically-visible outcome, not two (Known Risks).
+       *
+       * DELIBERATELY, PERMANENTLY NOT time-guarded (D016 §3 -- load-bearing, do not "harden" this
+       * back into the defect): a symmetric `.gt('starts_at', 'now')` here would silently no-op in
+       * EXACTLY the raced case this function exists to repair -- by the time this runs, the session
+       * has already crossed into the past, and its RSVPs are already gone. This function's entire
+       * purpose is to mark that session visibly `canceled` instead of leaving it lying on screen as
+       * an ordinary `scheduled` meeting with destroyed RSVP data. Refusing to touch a past session
+       * here is not caution; it is the bug D016 exists to close.
+       */
+      const cancelSession = runMutation<string, void>(
+        (client, sessionId) =>
+          client.from('event_sessions').update({ status: 'canceled' }).eq('id', sessionId),
+        getClient,
+      );
+
       async function removeOneSession(sessionId: string): Promise<void> {
         // f1 -- RSVPs first (the owner's own ordering). ANY error here means this pair's
         // session delete is never attempted, and the error propagates (the save rejects) --
         // never caught, never swallowed.
         await deleteRsvpsForSession(sessionId);
         try {
-          // f2 -- the SAME 'now' guard chained directly onto the delete itself: even if a stale
-          // id somehow reached this point, the delete affects zero rows for it rather than
-          // deleting a session that is not (or no longer) strictly future.
-          await deleteSessionIfStillFuture(sessionId); // .eq('id', sessionId).gt('starts_at', 'now')
+          const deletedRows = await deleteSessionIfStillFuture(sessionId);
+          // D016 -- zero rows means f1 already acted on a session that then turned out to be no
+          // longer strictly future (or was concurrently removed). Route to the SAME repair as the
+          // 23503 branch below -- deliberately, since both triggers now produce one identical,
+          // identically-visible outcome. `?? []` defends the same "empty is `[]` or `null`" case
+          // D016's own text names, even though a successful non-`.single()` select should always
+          // resolve `[]`, never `null`, on zero rows.
+          if ((deletedRows ?? []).length === 0) {
+            await cancelSession(sessionId);
+          }
         } catch (error) {
           if (isSupabaseLoaderError(error) && error.code === '23503') {
             // Attendance (or a fresh RSVP) raced in between the batched pre-check (c) and THIS
             // id's own delete -- cancel THIS id only. If this cancel itself throws, it
             // propagates (never swallowed).
-            await cancelSession(sessionId); // .eq('id', sessionId), no batching
+            await cancelSession(sessionId);
           } else {
             throw error;
           }
@@ -619,25 +738,28 @@ async function queryAttendanceExistsForSessions(
       }
 
       // Cross-pair sequencing: PARALLEL. Pairs touch disjoint rows and are independent (D015 §2
-      // explicitly sanctions this choice). Consequence, disclosed: if one pair rejects,
-      // `Promise.all` rejects (the save rejects) while sibling pairs already in flight may still
-      // complete their own mutations against the database -- the same disclosed non-atomicity
-      // class this file already carries for "events insert succeeds, sessions insert fails."
+      // explicitly sanctions this choice; D016 does not disturb it). Consequence, disclosed: if
+      // one pair rejects, `Promise.all` rejects (the save rejects) while sibling pairs already in
+      // flight may still complete their own mutations against the database -- the same disclosed
+      // non-atomicity class this file already carries for "events insert succeeds, sessions
+      // insert fails."
       await Promise.all(toDelete.map((id) => removeOneSession(id)));
       ```
    **An equivalent `starts_at`-guarded delete on `rsvps` is impossible to express over PostgREST**
-   (D015 MAJOR disposition, stated so no reader goes hunting for it): `rsvps` has no `starts_at` column
-   of its own, and PostgREST has no mechanism to filter a `DELETE` by a column on a different,
-   embedded/joined table. The protection for `rsvps` comes entirely from `safeIds` already having
-   passed the `'now'`-guarded query in step a before step f ever runs.
+   (stated so no reader goes hunting for it): `rsvps` has no `starts_at` column of its own, and
+   PostgREST has no mechanism to filter a `DELETE` by a column on a different, embedded/joined table.
+   The protection for `rsvps` comes entirely from `safeIds` already having passed the `'now'`-guarded
+   query in step a before step f ever runs — and, per D016, from the fact that `cancelSession` (not a
+   second RSVP-side guard) is what absorbs the residual race.
 
-**The residual, disclosed exactly as D015 states it — a limitation, not a deferred defect (no item-20
-ledger row required):** if attendance (or a fresh RSVP) lands in the sub-second window between step c's
-batched pre-check and that ONE session's own step-f2 delete, that session ends `'canceled'` with its
-own RSVPs already deleted by its own f1. This is bounded to **at most the one raced session** — never
-the whole `toDelete` batch — and it satisfies the owner's own fallback ruling verbatim ("the delete
-must fall back to cancelling rather than failing the coach's save"). **This MUST appear in the worker's
-Known Risks output**, not just in this packet.
+**The residual, MERGED into one class per D016 §5/Q5 (a limitation, not a deferred defect — no item-20
+ledger row required):** if a session's `starts_at` crosses `now`, OR attendance/a fresh RSVP lands, in
+the window between step c's batched pre-check and that ONE session's own `f2` call, that session ends
+`'canceled'` with its own RSVPs already deleted by its own `f1`. **Both triggers now produce the
+identical, identically-visible outcome** — there is no longer a silent variant. This is bounded to **at
+most the one raced session** — never the whole `toDelete` batch — and it satisfies the owner's own
+fallback ruling verbatim ("the delete must fall back to cancelling rather than failing the coach's
+save"). **This MUST appear in the worker's Known Risks output**, not just in this packet.
 
 `export const saveMeetingSeries: OnSaveMeetingSeriesFn = makeSaveMeetingSeries();`
 
@@ -707,11 +829,11 @@ docs/swarm/active/T510-worker-output.md      (create — your evidence doc)
 ## 6. Rules (constitution)
 
 Item 10 — no migration is touched. Item 20 — genuine out-of-scope defects go in your output doc as a
-named follow-up (the residual race in §4b is a disclosed limitation per D015, NOT an item-20 deferral —
-do not file it as one). Item 21 — completion report states a commit SHA. Item 22 — stage named paths
-only. Item 23 — mutation experiments run in your own worktree. Non-Negotiables — existing tests pass
-unless explicitly approved (§9 names the one exception and its exact authorized bounds); no
-self-certification; a checker inspects the real artifact.
+named follow-up (the merged residual race in §4b is a disclosed limitation per D015/D016, NOT an
+item-20 deferral — do not file it as one). Item 21 — completion report states a commit SHA. Item 22 —
+stage named paths only. Item 23 — mutation experiments run in your own worktree. Non-Negotiables —
+existing tests pass unless explicitly approved (§9 names the one exception and its exact authorized
+bounds); no self-certification; a checker inspects the real artifact.
 
 ## 7. Six gates — capture `$?` on the BARE command, never through a pipe
 
@@ -767,30 +889,47 @@ Report file/test totals against a named baseline SHA (`git rev-parse HEAD` befor
   the owner's "regardless of status" words for this specific exclusion).
 - **AC8 — partial `events` update.** The `.update({...})` argument object has **exactly** the keys
   `title`, `team_ids`, `location_name`, `description`.
-- **AC9 — the D015-ruled per-session-paired removal sequence, every branch proven with a fake client**
-  (mirror `src/pages/roster/TeamsTab.test.tsx:1185-1195`'s exact shape; sequencing is PARALLEL per §4b
-  — align assertions accordingly):
+- **AC9 — the D015-ruled per-session-paired removal sequence with D016's `f2` fix, every branch proven
+  with a fake client** (mirror `src/pages/roster/TeamsTab.test.tsx:1184-1194`'s SHAPE only — that
+  precedent is one filter deep (`delete → eq`); §4b's own `deleteSessionIfStillFuture` chain is FOUR
+  deep (`delete → eq → gt → select`) and the fake-client mirror must cover the FULL depth, not stop at
+  the first filter. Sequencing is PARALLEL per §4b — align assertions accordingly):
   - **Branch A (clean, at least two ids, no attendance):** for EACH id independently, that id's OWN
     `rsvps.delete().eq('session_id', X)` call happens strictly before that SAME id's OWN
-    `event_sessions.delete().eq('id', X)` call; no `event_sessions.update` call for either.
+    `event_sessions.delete().eq('id', X).gt('starts_at', 'now').select('id')` call; the fake client's
+    delete chain resolves a non-empty row array; no `event_sessions.update` call for either.
+    **Additionally assert the chain ends `.select('id')`** (D016 §5/Q4) — a mock missing that final
+    link is not proof of this criterion.
   - **Branch B (unchanged, batched):** `queryAttendanceExistsForSessions` returns an id →
     `event_sessions.update({ status: 'canceled' })` is called for it (batched, may include other
     `toCancel` ids); `rsvps.delete` is NEVER called for it.
   - **Branch C (unchanged, batched):** an id absent from `queryStillFutureSessionIds`'s result never
     reaches any subsequent delete/cancel/attendance-check call.
-  - **Branch D — THE LOAD-BEARING ASSERTION, rewritten per D015, at least TWO pairs in flight:**
-    session X's `event_sessions.delete()` rejects `{ code: '23503' }`; session Y's resolves cleanly.
-    Assert, ALL of: (i) X receives `event_sessions.update({ status: 'canceled' }).eq('id', X)` and X
-    ONLY (not Y, not a batch call covering both); (ii) Y's `event_sessions.delete().eq('id', Y)` is
-    genuinely called and Y receives **no** update call; (iii) Y's `rsvps.delete().eq('session_id', Y)`
-    is its own independent call, made regardless of X's outcome; (iv) at **no point** does any
-    `event_sessions.update` call target both X and Y together (no `.in('id', [X, Y])` cancel); (v) the
-    overall `saveMeetingSeries(...)` promise **resolves**. This is the assertion v2's Branch D lacked —
-    Y's fate must be proven independent of X's failure, not merely that the overall call "succeeded."
+  - **Branch D — LOAD-BEARING, at least TWO pairs in flight, the `23503` trigger:** session X's
+    `event_sessions.delete()...select('id')` chain rejects `{ code: '23503' }`; session Y's resolves
+    with a non-empty row array. Assert, ALL of: (i) X receives `event_sessions.update({ status:
+    'canceled' }).eq('id', X)` and X ONLY (not Y, not a batch call covering both); (ii) Y's own delete
+    chain is genuinely called and Y receives **no** update call; (iii) Y's `rsvps.delete()
+    .eq('session_id', Y)` is its own independent call, made regardless of X's outcome; (iv) at **no
+    point** does any `event_sessions.update` call target both X and Y together; (v) the overall
+    `saveMeetingSeries(...)` promise **resolves**.
   - **Branch E:** a non-`23503` error on EITHER half of any pair (its `rsvps` delete or its
     `event_sessions` delete) → the overall promise **rejects**. Given parallel sequencing, a sibling
     pair may have already completed its own mutations before the rejection surfaces — assert the
     rejection itself, not the absence of sibling side effects.
+  - **Branch F — NEW, D016's load-bearing assertion, mirrored on Branch D's independence shape, at
+    least TWO pairs in flight, the ZERO-ROW trigger (D016 §5/Q2):** session X's
+    `event_sessions.delete().eq('id', X).gt('starts_at', 'now').select('id')` chain resolves `{ data:
+    [], error: null }` (no rejection — this is D016's whole point, the guard produces success with an
+    empty result, not an error); session Y's resolves with a non-empty row array. Assert, ALL of: (i)
+    `cancelSession` (`event_sessions.update({ status: 'canceled' }).eq('id', X)`) is called for X and
+    X ONLY; (ii) Y is genuinely deleted (its own delete chain was called) and receives NO update call;
+    (iii) the overall promise **resolves** (this is not an error path). **Prove it can fail** — a named
+    mutation that turns this branch RED: either drop `.select('id')` from `deleteSessionIfStillFuture`
+    (the empty-result signal disappears, so the fake client cannot distinguish "deleted" from "matched
+    nothing," and the assertion that X is canceled must fail), or drop the `(deletedRows ?? []).length
+    === 0` routing check entirely (X's zero-row delete is then silently treated as success, and the
+    assertion that `cancelSession` was called for X must fail).
 - **AC10 — the "already happened" disclosure, both directions.**
 - **AC11 — confirmation, pure-addition case.** No "Removed:" segment when `toRemove.length === 0`.
 - **AC12 — confirmation, removal case.** "Removed:" followed by each removed date, human-readable.
@@ -845,11 +984,17 @@ to "obviously also covered."
 
 ## Known Risks (must also appear in the worker's own output doc)
 
-1. **The D015 residual race**, stated exactly as the ruling states it: attendance (or a fresh RSVP)
-   landing in the sub-second window between the batched attendance pre-check and one specific session's
-   own paired delete leaves that ONE session `'canceled'` with its own RSVPs already deleted. Bounded to
-   at most one session per save, never the whole batch. This is the owner's own ruled fallback outcome,
-   disclosed as a limitation — not an item-20 deferral.
+1. **The D015/D016 residual race — ONE merged class, two triggers, one identical outcome** (D016 §5/Q5
+   — do not split this back into two entries): in the window between step c's batched attendance
+   pre-check and one specific session's own `f2` call, EITHER (a) attendance or a fresh RSVP lands on
+   that session (raises `23503` on the delete), OR (b) that session's own `starts_at` crosses `now`
+   (the guarded delete matches zero rows and raises no error) — both are routed to the exact same
+   repair, `cancelSession(id)`, and both leave that ONE session `'canceled'` with its own RSVPs already
+   deleted by its own `f1`. Bounded to at most one session per save, never the whole batch. This is the
+   owner's own ruled fallback outcome, disclosed as a limitation — not an item-20 deferral. (D016 exists
+   because trigger (b) was, before this fix, silent and undisclosed — the save reported success while
+   an ordinary-looking `scheduled` session's RSVPs were already gone; both triggers are now identically
+   visible.)
 2. **`chicagoWallTimeToUtcIso` DST edge case** (existing, unmodified function, reused as-is): not
    proven round-trip-stable for wall-clock times in `[02:00, 04:00)` local on the calendar date of the
    March DST spring-forward transition (2026: March 8). If a series' derived start/end time falls in
@@ -874,13 +1019,14 @@ to "obviously also covered."
 - Confirmation that `CreateMeetingsPayload`'s family is byte-identical (AC1), with the diff excerpt.
 - Every new/changed exported symbol's final signature.
 - Every command from §7/§8 run directly, with real captured exit codes and outputs.
-- The AC9 fake-client test's actual mock call sequence for all five branches (A-E), with Branch D's
-  independence assertions (§8) called out explicitly.
+- The AC9 fake-client test's actual mock call sequence for all six branches (A-F), with Branch D's and
+  Branch F's independence assertions (§8) called out explicitly, and confirmation that the mirror
+  covers the full four-deep chain (`delete → eq → gt → select`).
 - Baseline SHA and before/after lint warning count + vitest file/test totals against it.
 - Commit SHA (item 21) and confirmation of explicit pathspecs (item 22).
 - Confirmation that the Grant A replacement test satisfies all six numbered properties, and the
   mutation used for property 6.
-- Any genuine out-of-scope defect found, named as a follow-up per item 20 — **the D015 residual race
-  and the DST edge case are NOT such a follow-up; they are disclosed limitations already ruled/scoped,
-  restate them in Known Risks, do not file them as new deferrals.**
+- Any genuine out-of-scope defect found, named as a follow-up per item 20 — **the D015/D016 merged
+  residual race and the DST edge case are NOT such a follow-up; they are disclosed limitations already
+  ruled/scoped, restate them in Known Risks, do not file them as new deferrals.**
 - Known risks: all five items above, restated with your own verification evidence.
