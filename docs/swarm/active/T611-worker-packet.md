@@ -1,33 +1,83 @@
 # Worker Packet: T611 — stop a series edit from silently rewriting per-session meeting times
 
-**Packet v1.** Attempt count: 0 — no worker has run against this packet yet.
+**Packet v2 — REVISED per `checker-premise` round 1 (REVISE, BLOCKER: 1 blocker, 4 majors, 6 minor/NIT).**
+Attempt count: 0 — no worker has run against any version of this packet. Per item 19a this gate is capped
+at two rounds; a second REVISE on v2 escalates to `boss-arbiter`. **v2 still goes to a fresh
+`checker-premise` pass before any worker sees it** — this revision does not self-certify. See §0 for the
+full round-1 disposition, finding by finding. Round 1's own headline finding, preserved here rather than
+re-litigated: **the core §3 fix genuinely prevents the regression** — implemented in an isolated worktree,
+the untouched-submit path preserved both divergent sessions verbatim, the §6 mutation reddened with a real
+`getTime()` failure, all 57 existing tests passed unmodified, and the `AC-B1` test-gap finding (§5) held.
+None of that is reopened below; what follows fixes two unbuildable prescriptions and one false rationale.
 
-**Row:** T611 (`task-ledger.md`, filed 2026-08-06) · **Tier: HEAVY** (constitution item 26 — see §0 for
-the full justification) · **Worker model: sonnet** (default — none of item 18's four opus triggers fire:
-no migration, no RLS/`security definer` change, no metric-SQL view, no auth/session/role logic; item 25's
-second obligation also applies — "silent data loss" sounds serious but is not on item 18's trigger list,
-so this does not get bumped to opus on vibes). **Branch:** `claude/w3-meeting-workflow-0bl669`, HEAD
-`b6870ab`. This machine holds **W1 + W3**.
+**Row:** T611 (`task-ledger.md`, filed 2026-08-06) · **Tier: HEAVY** (constitution item 26 — see §0.1 for
+the full justification; **confirmed exact by round 1, not reopened**) · **Worker model: sonnet** (default —
+none of item 18's four opus triggers fire: no migration, no RLS/`security definer` change, no metric-SQL
+view, no auth/session/role logic; item 25's second obligation also applies — "silent data loss" sounds
+serious but is not on item 18's trigger list, so this does not get bumped to opus on vibes). **Branch:**
+`claude/w3-meeting-workflow-0bl669`, HEAD `b6870ab`. This machine holds **W1 + W3**.
 
 **Ledger "Deps" column reads `T605` — this is provenance, not a blocking prerequisite, and the two must
 not be conflated.** T611 was *found by* T605's foreman and *confirmed by* T605's own `checker-premise`
-round 1 (see §1.1's independent corroboration) — that is what the Deps cell is recording. T605 itself is
-still mid-gate (v2 packet, not yet dispatched to a worker — `docs/swarm/active/T605-worker-packet.md`
-header) and its own packet explicitly **forbids** its worker from touching `ScheduleMeetingsDialog.tsx`
-because that file is "already through two arbitrated gate rounds (D015/D016)" — this row is what discharges
-that disclosed gap. **The owner has ordered this row ahead of T605.** This packet does not require T605 to
-exist, does not touch any file T605's own packet claims, and constructs its trigger state entirely through
-fixtures (§4) rather than through any UI T605 would build.
+round 1 (see §1.1's independent corroboration) — that is what the Deps cell is recording. **T605 is now at
+v3, FINAL (`checker-premise` round 2: DISPATCH)** — not v2/not-yet-dispatched, which is what v1 of this
+packet said and round 1 correctly flagged as stale. v3 makes **T611 a hard, owner-ruled blocking dependency
+of T605's own dispatch**: per `docs/swarm/active/T605-worker-packet.md`'s own header, "T605 does not
+dispatch to a worker until T611 has merged." This packet still does not require T605 to exist, does not
+touch any file T605's own packet claims, and constructs its trigger state entirely through fixtures (§4)
+rather than through any UI T605 would build.
 
-**HEAVY tier means a `checker-premise` round is required on this packet before any worker sees it.** That
-gate is **not run by this document and not self-certified by the foreman that wrote it** — send this packet
-to `checker-premise` next; do not dispatch to a worker on the strength of this packet alone. A separate
-`checker-reviewer` round is commissioned after the worker's own diff exists — do not write that packet now
-and do not treat its absence here as this task being unchecked.
+**Ordering authority — corrected, not asserted (round 1's MAJOR-3).** v1 of this packet stated, in this
+document's own voice, "the owner has ordered this row ahead of T605," with nothing behind it — round 1
+measured that `T611` appeared **zero** times across `auto-mode-decisions.md`, `verification-log.md`, and
+`dispute-log.md`, and correctly invoked this project's own standing rule that an agent-authored doc
+asserting owner authorization is not itself owner consent. That gap is now closed, by the coordinator, not
+by this foreman re-asserting itself: `auto-mode-decisions.md`, section **"2026-08-06 — George orders T611
+ahead of T605,"** records his verbatim instruction — *"do T611 next, it needs to land before T605"* — plus
+the merits reasoning independent of who asked. **Cite that section going forward; this document does not
+restate the authorization as its own claim.**
+
+**HEAVY tier means a `checker-premise` round is required on this packet before any worker sees it.** This
+is round 2 of at most 2 under item 19a. That gate is **not run by this document and not self-certified by
+the foreman that wrote it** — send this v2 packet to `checker-premise` next; do not dispatch to a worker on
+the strength of this document alone. A separate `checker-reviewer` round is commissioned after the worker's
+own diff exists — do not write that packet now and do not treat its absence here as this task being
+unchecked.
 
 ---
 
-## 0. Tier — stated and defended, not asserted
+## 0. Gate Round 1 (`checker-premise`) — disposition, finding by finding
+
+Round 1 ran §3's fix for real, in an isolated worktree — not merely reviewed it — and confirmed the
+approach works (restated in the header). Two prescriptions could not be built as written and one rationale
+was factually wrong about the vendor `TimeInput` component; all three are fixed below, plus six minor/NIT
+items. Nothing marked "confirmed exact, not reopened" below is revisited in this revision.
+
+| # | Severity | Finding (short) | Disposition in v2 |
+|---|---|---|---|
+| B1 | BLOCKER | §5's clearing test cannot pass as written — `TimeInput` fires `onChange(undefined)` **only** from `handleBlur` (`TimeInput.js:215-227`); a change-to-empty calls `handleInputChange` (`:187-201`), which runs `parseTimeInput('')` → `null` and never reaches `fireChange`. Measured: `disabled=false` after change-to-empty, `disabled=true` only after a real focusout. The Title-field precedent §5 cited is a different component (`TextInput` fires on `input` alone) | **Fixed (§5, §7).** The clearing test now requires an explicit blur/focusout dispatch after emptying the pending input, via a new `blurInput` test helper (added to Allowed, §7). The false "mirrors the Title-clearing test" framing is removed. §3.4's "cover it with a component test, not a new exported pure function" is **kept**, now correct because the mechanism is. |
+| M1 | MAJOR | §3.4's stated reason for choosing interaction-tracking over value-comparison — "re-typing the identical value would silently reintroduce the bug" — is false. `TimeInput.js:198`'s own `parsed !== value` guard already makes an identical retype a no-op **inside the vendor component**; the event never reaches this dialog. The behavior §3.4 promised was unreachable without ejecting `TimeInput` | **Fixed (§3.4).** Rationale rewritten to the true reason (interaction-tracking is trivially testable; the vendor's own guard is what makes a same-value retype a genuine no-op, not this dialog's design). Two measured consequences are now disclosed rather than left silent: change-then-change-back latches the flag and clobbers anyway; touching only Start rewrites both fields for every session. |
+| M2 | MAJOR | §7 closed `ScheduleMeetingsDialog.tsx` to "every other line stays byte-identical," but §3.6 requires editing the `buildEditConfirmationDescription` call site (the `AlertDialog`'s `description` prop, ~`:1196`) — `MeetingSeriesReconcilePlan.toUpdate` (`:570`) carries only the *desired* session, so the original time cannot be derived from `plan` alone at that site | **Fixed (§3.6, §7).** The `AlertDialog` `description` call site is now named Allowed explicitly. Per the gate's own cheaper-path instruction: the suffix is computed at that call site from the component's own `timeFieldsTouched` state, already in scope there — **no new field is threaded through `PendingEditSave`**, since that state is not reset between submit and confirm and needs no snapshot. |
+| M3 | MAJOR | Line 18's "the owner has ordered this row ahead of T605" was an unsourced claim in this document's own voice — `T611` appeared zero times in the decision/verification/dispute logs at gate time | **Fixed, sourced to the coordinator's own record, not re-asserted by this foreman.** Header now cites `auto-mode-decisions.md`, "2026-08-06 — George orders T611 ahead of T605," verbatim ("do T611 next, it needs to land before T605"), and states plainly that the citation — not this document — is the source of authority. |
+| M4 | MAJOR | §4's fixture (`starts_at: '2026-08-10T21:00:00.000Z'`) sits 4 days from today (2026-08-06); `isMeetingSessionReconcilable` compares against a real `new Date()` and this test file installs no fake clock, so the fixture stops being reconcilable after 2026-08-10 and the regression test (plus §6's replay) breaks for reasons unrelated to the fix | **Fixed (§4), and strengthened beyond the literal ask.** Both new fixture sessions move to 2026-09-xx (same CDT regime, same wall times as originally chosen). Additionally, this revision stops pairing the new fixture with `RECONCILABLE_SESSION_B` (itself only ~11 days out) for this specific test, so the new coverage carries no inherited expiry risk from a pre-existing fixture either — disclosed as a self-imposed safety margin, not something round 1 asked for by name. |
+| m1 | MINOR | §3.2's third bullet claimed the "opens prefilled" test already covers the time derivation — false; that test asserts Title/Location/Description/disclosure/confirm-label only, nothing about times | **Fixed (§3.2).** Bullet removed; the argument stands on the remaining two. |
+| m2 | MINOR | §3.5 attributed handleSubmit's own `:925` comment ("extra guard; the button is already natively disabled") to `buildEventSessionsPayload`, whose own guard is `:481` | **Fixed (§3.5).** Citation corrected to `:481` (`buildEventSessionsPayload`'s own early return on an unset time). |
+| m3 | MINOR | §5's disclosure-visibility bullet let a worker satisfy it without ever exercising the touched flag (an "either/or" framing between two coverage options) | **Fixed (§5).** The after-touch negative is now a separate, mandatory assertion, not one arm of an alternation. |
+| m4 | MINOR | §4/§5 fixture times are written in 24-hour ISO, but `TimeInput` renders 12-hour by default (`formatDisplayTime12h`, e.g. "4:00 PM") | **Fixed (§4, §5).** Both sections now say so explicitly, so a worker asserting on a rendered `<input>` value is not chasing a 24-hour string that never appears in the DOM. |
+| m5 | MINOR | §3.4 described the flag reset as living in "both branches" of `resetForm()` — it is one line, in the single shared reset point after the if/else | **Fixed (§3.4).** Wording corrected to name the single shared reset point. |
+| m6 | MINOR | Worker needs a lint baseline for §8's comparison | **Added**, sourced to this gate round's own measurement, not re-derived here: 370 warnings / 0 errors baseline, 372 after a faithful §3 implementation (§8). |
+| NIT | NIT | Header described T605 as "v2, not yet dispatched" — stale; v3 is FINAL/DISPATCH | **Fixed** (header, above). |
+
+**Also adopted, non-binding implementation guidance from round 1 ("also worth taking"):** reuse this file's
+own `formatChicagoWallTime` (`:694`, unexported — implement the divergence check in the same file rather
+than exporting it elsewhere) for the divergence comparison in §3.3, and compute `originalTimesByDate`
+together with the divergence boolean in one `useMemo` over `initialData`, the same way `resetForm()`
+already computes (and currently discards) the reconcilable filter at `:806-808`. Both are suggestions, not
+acceptance criteria — the worker may implement differently provided §3's observable behavior holds.
+
+---
+
+## 0.1 Tier — stated and defended, not asserted
 
 **HEAVY**, per item 26's own test: *"can a mistake here corrupt data, or lie to a user about their own
 data?"* — yes on both halves. A mistake in this fix's logic changes what `desiredFutureSessions` carries
@@ -228,8 +278,10 @@ inputs) — reasons below.
 
 T605's own ledger row is titled *"Edit ONE meeting inside a series — its date, time and notes"* — building a
 UI where an individual session's date/time is independently editable is **T605's named deliverable**, not
-this row's. T605's own packet header confirms it is not yet dispatched. Pre-building that UI here would be
-scope creep in the direction this project has already been burned by (constitution item 20's rationale).
+this row's. T605 is now packet v3/DISPATCH-ready but **still not dispatched to a worker** — its own header
+makes dispatch conditional on this row merging first (see this packet's own header). Pre-building that UI
+here would be scope creep in the direction this project has already been burned by (constitution item 20's
+rationale).
 There is also no way to test a full per-row UI today without first inventing UI T605 hasn't built yet —
 directly contradicting "whatever you choose must be testable now, before T605 exists."
 
@@ -253,9 +305,11 @@ is). Reasons, not just convenience:
 - Because of §3.3's disclosure, "one representative value is shown" is no longer a silent lie — the coach is
   told, in the same section, that sessions disagree and what leaving the field alone versus editing it each
   do.
-- Changing what's displayed would touch `EDIT_INITIAL_DATA`-adjacent rendering that today's tests already
-  exercise indirectly (the "opens prefilled..." test, §5) — keeping the displayed value's *derivation* fixed
-  keeps that surface stable while the *consequence* of leaving it alone is what actually changes.
+
+(Round 1, m1: a third bullet here previously claimed the existing "opens prefilled..." test already covers
+this derivation. **False, and removed** — that test asserts Title, Location, Description, the "already
+happened" disclosure, and the confirm label; it makes no assertion about the time fields at all. The
+argument above stands on the two bullets that remain.)
 
 ### 3.3 The confirmation/disclosure copy must say something when times differ — yes, in two places
 
@@ -268,21 +322,45 @@ is). Reasons, not just convenience:
    > "Sessions in this series currently have different times. Leave these fields unchanged to keep each
    > session's own time, or enter a new time to apply it to every upcoming session."
 2. **`buildEditConfirmationDescription`** gains an **optional, additive** second parameter so a save that is
-   actually about to overwrite times says so. See §6.3 for the exact backward-compatibility constraint (this
+   actually about to overwrite times says so. See §3.6 for the exact backward-compatibility constraint (this
    must not break either of its two existing tests, §5).
 
 ### 3.4 "Touched" is an interaction event, not a value comparison — resolved explicitly, per the row's own question
 
 Track a single boolean, e.g. `timeFieldsTouched`, set `true` the moment **either** the Start time or End
 time `TimeInput`'s `onChange` fires (wrap `setStartTime`/`setEndTime` rather than calling them directly from
-JSX), reset to `false` inside `resetForm()` (both branches, alongside the existing
-`setSubmitError(null); setPendingEditSave(null)` reset at the bottom).
+JSX), reset to `false` inside `resetForm()` — **one line**, in the single shared reset point after the
+if/else (currently `setSubmitError(null); setPendingEditSave(null);`), not duplicated inside either branch
+above it.
 
-**Why interaction-based, not value-based:** if a coach opens the field and re-types the exact value already
-shown, that is a deliberate act on a control the file presents as "this series' time" — treating it as a
-no-op because the string happens to match would silently reintroduce a value-comparison version of the same
-class of bug this row exists to fix (a control that looks like it did something but didn't). Interaction-
-based tracking is also trivially testable without needing to reason about coincidental string equality.
+**Why interaction-based, not value-based — corrected in v2 (round 1's MAJOR-1).** v1 rejected
+value-comparison on the theory that "a coach re-typing the exact value already shown would silently
+reintroduce the bug." **That is false, and the claim is withdrawn.** `TimeInput`'s own `handleInputChange`
+(`node_modules/@astryxdesign/core/dist/TimeInput/TimeInput.js:198`) only calls `fireChange` when `parsed !==
+value` — the vendor component **already performs value-comparison itself**, before this dialog's `onChange`
+prop is ever invoked. Measured directly: re-typing the identical displayed value leaves this dialog's
+`timeFieldsTouched` flag unset, because the event never arrives. So the design actually shipped **is** a
+value-comparison design, performed inside `TimeInput`, not an interaction-tracking design that avoids one.
+The real reason to track by interaction (an `onChange` firing) rather than re-deriving a value diff in this
+dialog is narrower and true: it is trivially testable, requires no re-implementation of `TimeInput`'s own
+parsing/range logic, and correctly treats a change that round-trips to the *same effective value* as
+"nothing to do," which is exactly what the vendor guard already gives for free.
+
+**Two consequences of this design, measured and disclosed rather than left silent (round 1's MAJOR-1):**
+1. **Change-then-change-back still latches and clobbers.** If a coach changes Start time to a new value and
+   then changes it back to the original displayed value, **two** distinct `onChange` events fire (the first
+   because the new value differs from the original `value`; the second because, by then, `value` itself has
+   already updated to the intermediate one, so changing back differs from *that*). `timeFieldsTouched` is set
+   `true` by the first event and never unset by the second — the final save still overwrites every session's
+   time with the (now-restored) displayed value, even though nothing looks different on screen. This is a
+   real, accepted limitation of interaction-based tracking, not a bug to fix in this task: undoing a genuine
+   edit back to its starting value does not undo the fact that the coach edited the field.
+2. **Touching only Start rewrites both fields for every session.** Because one shared flag covers the paired
+   control (rationale below), changing Start alone and leaving End alone still applies **both** the (changed)
+   Start and the (unchanged, but now "touched") End to every future session once submitted — including
+   sessions whose original End time differed from what's displayed. This is the direct consequence of the
+   "why one shared flag" design choice immediately below, not a separate defect; disclosing it here so it is
+   a decision, not a surprise.
 
 **Why one shared flag, not two independent ones (Start vs. End):** `updateSessionTime` (§2.2) always writes
 `starts_at` and `ends_at` together, for the same session, in the same call — there is no code path that
@@ -290,7 +368,7 @@ persists one without the other. The UI already presents them as one paired contr
 `isRequired`, both derived together in `resetForm()`). Splitting the dirty-tracking in two would let a coach
 end up with a session whose start comes from "touched" state and whose end comes from "untouched, preserved"
 state — a span that matches neither the original schedule nor anything the coach saw on screen. One flag
-avoids inventing that hybrid, unrepresentable state.
+avoids inventing that hybrid, unrepresentable state; consequence 2 above is the accepted cost of avoiding it.
 
 **Consequence for `isValid`:** in edit mode, `isValid` must become `title.trim() !== '' && (!timeFieldsTouched
 || (startTime !== undefined && endTime !== undefined))`. Untouched fields never gate validity on a value
@@ -298,8 +376,11 @@ avoids inventing that hybrid, unrepresentable state.
 touched fields must still resolve to real values before the coach can save, because §3.5's resolver depends
 on them for every date that needs the new value. This is a real, currently-absent edge case (today, in edit
 mode, clearing the time field cannot ever disable the button) — cover it with a new component test (§5), not
-a new exported pure function; the existing file tests every other edit-mode validity state
-(`AC-B2a`) the same way, through the rendered button, not through a standalone `isValid` unit.
+a new exported pure function; the existing file tests every other edit-mode validity state (`AC-B2a`) the
+same way, through the rendered button, not through a standalone `isValid` unit. **Round 1's BLOCKER-1
+established that this specific test requires an explicit blur/focusout dispatch to be reachable at all —
+see §5 for the corrected mechanism; this section's instruction to use a component test, not a pure function,
+still stands.**
 
 ### 3.5 Required new pure, exported, independently testable function
 
@@ -346,15 +427,33 @@ changed and cite this section.
 `isValid` guarantees that if `timeFieldsTouched` is true, `startTime`/`endTime` are both defined — the
 function does not need its own fallback-to-default branch for that case, but should not silently produce
 wrong output if it is ever called outside that guarantee (e.g., drop the date rather than fabricate a
-value) — mirror `buildEventSessionsPayload`'s own "extra guard; the button is already natively disabled"
-posture (`:925`).
+value). Mirror `buildEventSessionsPayload`'s **own** posture for this, not `handleSubmit`'s: its early
+return on an unset time (`:481`, `if (startTime === undefined || endTime === undefined) return [];`,
+documented as "Returns `[]` (no valid sessions) when either time is unset") is the precedent for "skip
+rather than fabricate," not `handleSubmit`'s own `:925` guard comment ("extra guard; the button is already
+natively disabled"), which is a different thing — a redundant belt-and-suspenders check before the handler
+does anything at all, not a per-field fallback. (Round 1's m2: v1 conflated these two citations; corrected
+here.)
 
-### 3.6 `buildEditConfirmationDescription` — additive signature only
+### 3.6 `buildEditConfirmationDescription` — additive signature only, at its one real call site
 
 Add an optional second argument (exact shape is the worker's call — e.g. a label string to append, or a
 boolean plus the two new time strings) whose **absence must reproduce today's exact output, byte for byte.**
 This is a hard constraint, not a suggestion — see §5's two existing tests that call this function with a
 single argument.
+
+**Where this actually gets used — named explicitly per round 1's MAJOR-2.** `buildEditConfirmationDescription`
+has exactly one call site in the whole file: the `AlertDialog`'s `description` prop (currently ~`:1195-1197`,
+`pendingEditSave !== null ? buildEditConfirmationDescription(pendingEditSave.plan) : ''`). `plan.toUpdate`
+(`MeetingSeriesReconcilePlan`, `:570`) carries only the *desired* session for each date — it does not carry
+that date's *original* time — so whether times are actually changing cannot be derived from `plan` alone at
+that site. **Do not solve this by threading a new field through `PendingEditSave`.** The component's own
+`timeFieldsTouched` state (§3.4) is not reset between `handleSubmit` setting `pendingEditSave` and the coach
+confirming — it is only reset inside `resetForm()` — so the call site can simply read it directly:
+`buildEditConfirmationDescription(pendingEditSave.plan, timeFieldsTouched)` (or whatever the worker's chosen
+second-argument shape is). This is the cheaper path and the one required here: **`PendingEditSave`'s own
+shape does not change.** The `AlertDialog`'s `description` prop is therefore an Allowed edit region (§7),
+not a violation of "every other line stays byte-identical."
 
 ---
 
@@ -366,12 +465,32 @@ the trigger state as **fixture data**, the same way `ScheduleMeetingsDialog.test
 `ExistingMeetingSeriesSession` objects by hand and feed them into `initialData.sessions` — bypassing the
 create flow entirely, exactly as those constants already do.
 
-**Concretely:** define at least one new fixture session whose Chicago wall-clock time genuinely differs from
-both `RECONCILABLE_SESSION_B` (18:00–20:00 CDT, already in the file) and `DEFAULT_START_TIME`/
-`DEFAULT_END_TIME` (also 18:00–20:00) — e.g. `starts_at: '2026-08-10T21:00:00.000Z'` / `ends_at:
-'2026-08-10T22:30:00.000Z'` (16:00–17:30 CDT, same DST regime as the existing fixtures so the only variable
-is wall time, not UTC-offset arithmetic). Reuse `RECONCILABLE_SESSION_B` verbatim as the second, divergent
-session rather than inventing a duplicate value.
+**Corrected in v2 (round 1's MAJOR-4).** v1 proposed `starts_at: '2026-08-10T21:00:00.000Z'` — 4 days from
+this packet's own date (2026-08-06). `isMeetingSessionReconcilable` compares against a real `new Date()`,
+and this test file installs no fake clock (`vi.setSystemTime` or equivalent) anywhere — so that fixture
+would stop being reconcilable after 2026-08-10, and both the new regression test and §6's mutation replay
+would break for a reason that has nothing to do with this fix, at a date this task cannot control.
+
+**Concretely, use two dedicated new fixture sessions, both dated well clear of any near-term expiry, and do
+not reuse `RECONCILABLE_SESSION_B` for this specific test** (that fixture is itself only ~11 days out from
+2026-08-06 and carries the same class of risk, just a smaller fuse — a pre-existing condition in other
+already-passing tests, not something to inherit into new coverage when a self-contained alternative costs
+nothing extra):
+
+- `starts_at: '2026-09-14T21:00:00.000Z'` / `ends_at: '2026-09-14T22:30:00.000Z'` — 16:00–17:30 CDT.
+- `starts_at: '2026-09-21T23:00:00.000Z'` / `ends_at: '2026-09-22T01:00:00.000Z'` — 18:00–20:00 CDT (same
+  wall time as `DEFAULT_START_TIME`/`DEFAULT_END_TIME` and as `RECONCILABLE_SESSION_A`/`_B`, on a different,
+  safely-future date — this is deliberate: it proves the fix by *date*, not only by an unusual time value).
+
+Both dates are in the same CDT DST regime as the existing fixtures (Sept, before the November fallback), so
+the only variable between the two new sessions is wall time, not UTC-offset arithmetic. Status `'scheduled'`
+for both, matching the reconcilable shape.
+
+**Display-format note (round 1's m4):** these times are written above as 24-hour ISO for precision, but
+`TimeInput` renders in 12-hour format by default (`hourFormat` defaults to `'12h'`, `formatDisplayTime12h`
+— e.g. 16:00 displays as `"4:00 PM"`, not `"16:00"`). Any assertion against a rendered `<input>` element's
+`value` must use the 12-hour string; assertions against `onSaveMeetingSeries`'s payload (real ISO
+timestamps) are unaffected and are the primary evidence this task's tests should rely on.
 
 This construction technique is exactly what makes this task **testable now, before T605 exists**: real
 sessions with genuinely different times can be handed to the pure function (§3.5) and to `initialData`
@@ -400,17 +519,36 @@ mode', ...)` block, using the §4 fixtures via `initialData`:
   preserves each session's own original time in the `onSaveMeetingSeries` payload — assert via `getTime()`
   equality per session, following the existing `"AC-B1: saving with no schedule change preserves every
   toUpdate session's starts_at/ends_at as the SAME instant (heterogeneous-time no-op proof)"` test's own
-  shape, but with genuinely divergent fixture times (unlike that existing test — see the note below). This
-  is the test the §6 mutation must redden.
+  shape, but with the two genuinely-divergent, safely-dated fixtures from §4 (unlike that existing test —
+  see the note below). This is the test the §6 mutation must redden.
 - Explicitly changing the Start time and/or End time field, then submitting, applies the new time to every
   future session, including ones whose original times previously diverged from each other.
-- The §3.3 disclosure text is present when the fixture sessions' times diverge and is **not** present once
-  the coach has edited a time field (or, more simply, is never present in the unmodified `EDIT_INITIAL_DATA`
-  fixture, whose two reconcilable sessions share the same wall time — pick whichever framing is cleaner, but
-  cover both "shown when divergent" and "not shown when not divergent / after touch").
-- Clearing a touched time field (dispatch a change resulting in `undefined`, mirroring how the existing
-  `"Single mode: clicking title empty re-disables the button..."` test clears the Title field) disables the
-  **Save changes** button in edit mode — the new `isValid` edge case from §3.4.
+- **The §3.3 disclosure text is present** when the §4 fixture sessions' genuinely-divergent times are used
+  (they diverge by construction) **and is separately, mandatorily asserted absent after the coach has edited
+  a time field** in that same render — two required assertions, not one framed as either/or (round 1's m3:
+  v1 let this be satisfied by only the "not shown on a non-divergent fixture" arm, which never exercises
+  `timeFieldsTouched` at all). Use the §4 fixtures for both halves of this test; do not substitute the
+  unmodified `EDIT_INITIAL_DATA` fixture (whose sessions share one wall time) for the "shown" half — it
+  cannot produce divergence to disclose.
+- **Clearing a touched time field disables the Save changes button in edit mode — corrected mechanism
+  (round 1's BLOCKER-1).** `TimeInput` fires `onChange(undefined)` **only from its own `handleBlur`**
+  (`TimeInput.js:215-227`); emptying the input's text via `handleInputChange` alone (`:187-201`) parses to
+  `null` and never calls `fireChange` — confirmed by running this exact scenario: `disabled` stays `false`
+  after a change-to-empty and only becomes `true` after a real blur/focusout. **v1's framing that this
+  "mirrors" the existing Title-clearing test is wrong and withdrawn** — that test clears a `TextInput`, which
+  fires on `input` alone; `TimeInput` does not. The correct sequence is: `setNativeInputValue(startTimeInput,
+  '')` (sets `pendingInput` to empty, matching real typing), then a new `blurInput` helper (§7) that
+  dispatches a real blur so `handleBlur` runs and calls `fireChange(undefined)`:
+  ```tsx
+  function blurInput(input: HTMLInputElement): void {
+    act(() => {
+      input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    });
+  }
+  ```
+  (React delegates `onBlur` via the bubbling native `focusout` event, not the non-bubbling `blur` event —
+  confirmed against this file's own `clickButton` precedent for dispatching a bubbling native event that
+  React's delegated listener picks up.) Only after both steps does the Save changes button become disabled.
 
 **A note on the existing `"AC-B1"` test, for your own understanding — do not edit it:** its two fixture
 sessions (`RECONCILABLE_SESSION_A`/`RECONCILABLE_SESSION_B`) happen to share the exact same Chicago wall
@@ -447,10 +585,14 @@ In your own worktree (constitution item 23 — never the shared tree), after you
 **Allowed:**
 - `src/pages/meetings/ScheduleMeetingsDialog.tsx` — §3's changes only (the new pure function, the
   `timeFieldsTouched` state + wrapped `onChange` handlers, `resetForm()`'s reset of that flag, `isValid`'s
-  new condition, `handleSubmit`'s call-site swap, the new disclosure `Text`, `buildEditConfirmationDescription`'s
-  additive parameter, and the doc-comment updates named in §3.5/§9). Every other line, including `:598-612`
-  (§1.5) and `:614-640` (§2.1), stays byte-identical.
-- `src/pages/meetings/ScheduleMeetingsDialog.test.tsx` — additions only, per §5. Zero existing lines change.
+  new condition, `handleSubmit`'s call-site swap, the new disclosure `Text`, and the doc-comment updates
+  named in §3.5/§9), **plus the `AlertDialog`'s `description` prop / `buildEditConfirmationDescription` call
+  site (~`:1195-1197`, named explicitly per round 1's MAJOR-2 — §3.6)**. Every other line, including
+  `:598-612` (§1.5) and `:614-640` (§2.1), stays byte-identical. `PendingEditSave`'s own interface (§3.6)
+  does **not** change — do not add a field to it.
+- `src/pages/meetings/ScheduleMeetingsDialog.test.tsx` — additions only, per §5, including the new
+  `blurInput` helper (§5, round 1's BLOCKER-1) alongside the file's existing `getFieldControl`/
+  `findButtonByText`/`setNativeInputValue`/`clickButton` helpers. Zero existing lines change.
 - `docs/swarm/active/T611-worker-output.md` (create — your evidence doc).
 
 **Forbidden:**
@@ -477,17 +619,20 @@ In your own worktree (constitution item 23 — never the shared tree), after you
 - **`npm run typecheck; echo "EXIT:$?"` → `EXIT:0`.**
 - **`npm run format:check; echo "EXIT:$?"` → `EXIT:0`.**
 - **`npm run lint; echo "EXIT:$?"` → `EXIT:0` errors.** Record the baseline warning count at `b6870ab` before
-  changing anything, and the count after — this task adds one exported function and some component state; if
-  the warning count moves, explain the delta, don't assert it away.
+  changing anything, and the count after. **Round 1 already measured this on a faithful §3 implementation in
+  its own isolated worktree: 370 warnings / 0 errors baseline, 372 after.** Treat that as the expected
+  delta (+2), not a target to hit exactly if your own implementation differs in shape — but if your own count
+  diverges meaningfully from that, explain the delta, don't assert it away.
 - **`npm test; echo "EXIT:$?"` → `EXIT:0`.** Record file/test totals at `b6870ab` and after your change, via
   **two independent shapes**, not one — e.g. `vitest run`'s own summary line AND a count of `it(`/`test(`
   occurrences added to `ScheduleMeetingsDialog.test.tsx` via `grep -c`. This project has had counts be wrong
   four times in three days because a single search shape couldn't see the real answer (per the current
   governing guidance) — do not repeat that with this task's own test-count claim.
 - **§6's mutation, replayed in your own worktree, with real before/after output.**
-- **`git diff` for `ScheduleMeetingsDialog.tsx`** is confined to the regions named in §7's Allowed bullet —
-  no hunk anywhere in `computeMeetingSeriesReconcilePlan`, the `:598-612` comment, or `buildEventSessionsPayload`'s
-  body.
+- **`git diff` for `ScheduleMeetingsDialog.tsx`** is confined to the regions named in §7's Allowed bullet
+  (including the `AlertDialog` `description` call site, round 1's MAJOR-2) — no hunk anywhere in
+  `computeMeetingSeriesReconcilePlan`, the `:598-612` comment, `buildEventSessionsPayload`'s body, or
+  `PendingEditSave`'s own interface definition.
 - **`git diff` for `ScheduleMeetingsDialog.test.tsx`** contains only added lines — no existing test's content
   changes (confirm this with the diff itself, not by memory).
 - Identify every test you discuss **by describe/it name and content**, never by line range — T609's own merge
@@ -497,15 +642,17 @@ In your own worktree (constitution item 23 — never the shared tree), after you
 
 ## 9. If any existing test would need to change — stop, do not resolve it yourself
 
-**Investigated in this packet, not left for the worker to discover cold.** Verified via two independent
-search shapes across `ScheduleMeetingsDialog.test.tsx`: (1) `grep -n 'Start time|End time'` — the only hits
-are the field-order label assertions (`'Start time ∙ Required'`, `'End time ∙ Required'`), not interactive
-use; (2) every `setNativeInputValue(`/`getFieldControl(` call site in the file, enumerated exhaustively — none
-targets a time input, in either mode. **Conclusion: no existing test currently interacts with the Start
-time/End time controls at all**, and §3.6 requires `buildEditConfirmationDescription`'s signature change to
-be additive so its two existing call sites (`"AC11: no \"Removed:\" segment when toRemove.length === 0"` and
-`"AC12: \"Removed:\" followed by each removed date, human-readable"`) keep passing unmodified. On this
-analysis, **zero existing tests require modification.**
+**Investigated in this packet, not left for the worker to discover cold — and independently re-confirmed by
+round 1 on five search shapes, not just the two below.** Verified via two independent search shapes across
+`ScheduleMeetingsDialog.test.tsx`: (1) `grep -n 'Start time|End time'` — the only hits are the field-order
+label assertions (`'Start time ∙ Required'`, `'End time ∙ Required'`), not interactive use; (2) every
+`setNativeInputValue(`/`getFieldControl(` call site in the file, enumerated exhaustively — none targets a
+time input, in either mode. **Conclusion: no existing test currently interacts with the Start time/End time
+controls at all**, and §3.6 requires `buildEditConfirmationDescription`'s signature change to be additive so
+its two existing call sites (`"AC11: no \"Removed:\" segment when toRemove.length === 0"` and `"AC12:
+\"Removed:\" followed by each removed date, human-readable"`) keep passing unmodified. On this analysis,
+**zero existing tests require modification** — and round 1's own worktree run confirmed it directly: all 57
+existing tests passed unmodified against a faithful §3 implementation.
 
 **If your own implementation contradicts that** — if making this fix real would require changing any
 existing test's assertions or fixtures to keep it green — **you must stop and file a request for a
@@ -532,7 +679,7 @@ the ambiguity, until T610 resolves it.
   explicitly approves a test update."** "No worker may mark its own work complete." "Every checker must
   inspect the actual artifact, not just the worker's summary."
 - **Item 18 / 25:** worker tier stays sonnet — no migration/RLS/metric-SQL/auth trigger fires; do not bump
-  for "sounds sensitive" (§0).
+  for "sounds sensitive" (§0.1).
 - **Item 19 / 19a / 19c:** this packet must clear `checker-premise` (DISPATCH) before any worker sees it —
   not self-certified here. Verify your own citations before submitting anything downstream of this packet
   (19c) — everything in §1/§2 was re-read against `b6870ab` directly, not relayed.
@@ -540,7 +687,7 @@ the ambiguity, until T610 resolves it.
   not assumed.
 - **Item 22:** explicit pathspecs only — never `git add -A` or `git add .`.
 - **Item 23:** mutation experiments (§6) run in your own worktree, never the shared tree.
-- **Item 26** (HEAVY definition quoted and applied in §0).
+- **Item 26** (HEAVY definition quoted and applied in §0.1).
 - **Definition of Ready item 5:** "Any reversal of previously-passed work is explicit and authorized." This
   fix reverses previously-shipped T510 behavior (`isValid`'s edit-mode condition, the single-time submit
   path). Authorization is the ledger filing itself (T611, a Defect row, plus T605's own gate independently
