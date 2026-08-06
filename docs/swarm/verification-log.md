@@ -10890,6 +10890,79 @@ shapes; a permissive double would have gone on passing if the filter were silent
 
 ---
 
+## T188 — diagnosed: valid, and four divergences rather than one
+
+Validity check requested by the owner before any work. **No code changed.**
+
+### First, a hypothesis worth killing
+
+T201 merged the same day and fixed a two-numbers-disagree bug in the same family, so it was worth
+asking whether it had dissolved this one. **It had not.** T201 was roster filtering (`is_active`
+discarding departed students); T188 is RSVP-versus-attendance. Different mechanism entirely.
+
+That check cost two minutes and would have cost an afternoon if skipped — the same shape as T204 and
+T703, which were already fixed when picked up.
+
+### The row's finding holds
+
+`computeStudentHours` (`OutreachList.tsx`) still computes confirmed hours from RSVP `status = 'going'`
+plus session `status = 'completed'`, and still never reads `attendance`. `v_student_hours` computes
+from attendance. A student who RSVPs and does not attend accrues hours on `/outreach` and none in the
+view.
+
+### Three more the row does not name — and two hit normal usage
+
+| # | Divergence | Who it affects |
+|---|---|---|
+| 1 | RSVP vs attendance *(the filed finding)* | RSVP'd `going`, didn't attend |
+| 2 | `hours_override` invisible to `computeStudentHours` | anyone a coach adjusted |
+| 3 | check-in/out clamping invisible to it | anyone who arrived late or left early |
+| 4 | counts NON-OUTREACH events | anyone who RSVP'd `going` to a meeting |
+
+**#2 and #3 are the ones that matter most**, because they need no misuse at all: a student who attends
+properly, is marked present, and checked in twenty minutes late sees the full session length on
+`/outreach` and the clamped figure everywhere else. Neither number is wrong. Nothing on screen says
+they answer different questions.
+
+### #4 was measured, not inferred
+
+A probe called `computeStudentHours` with a completed **meeting** session and a `going` RSVP:
+
+```
+counted: 2, sessionLength: 2
+```
+
+It counted the meeting. The function takes only `(studentId, sessions, rsvps)` — it has no access to
+event `type` or `countsVolunteerHours`, so it **cannot** filter — and `loaders/outreach.ts:739`
+queries `events` for the season with no type filter, with nothing filtering in between.
+
+**This contradicts T322's ruling** — *"volunteer hours = `type = 'outreach'` ONLY"* — which landed
+after T188 was filed, so the row could not have known.
+
+**Stated limit:** the probe proves the function counts a meeting and the loader applies no type
+filter. It does not render the live page. "A meeting's hours appear on screen for a real user" is
+inferred from those two facts, not observed — recorded as inference because this session has already
+produced one withdrawn row from asserting a consequence that was not checked.
+
+### Why it stops here
+
+The row says the owner fields this, and its two suggested fixes point opposite ways:
+
+- **(a) Name them differently on screen** — cheap and honest, keeps both numbers, but the `/outreach`
+  figure goes on contradicting T322.
+- **(b) Make `/outreach` read the attendance-backed number** — one number everywhere, but that page
+  exists to show planned-vs-confirmed from RSVPs, and attendance cannot express "planned".
+
+**#4 may be separable.** Making `computeStudentHours` respect `type = 'outreach'` is arguably
+conforming to an existing ruling rather than making a new decision, and could ship without settling
+(a) or (b).
+
+### Gates
+
+Docs only. `tsc` 0 · `format:check` 0 · `vitest` **81 files / 2055 tests** (unchanged).
+
+---
+
 ## T604 — stale "frozen" residue in `loaders/endMeeting.ts` — **PASS** (2026-08-05, `3b2ffd5`)
 
 Checker `checker-reviewer` (sonnet), against `docs/swarm/active/T604-checker-packet.md`. NIT only.

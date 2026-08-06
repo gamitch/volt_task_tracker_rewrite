@@ -1574,7 +1574,8 @@ forgotten session can still be ended late" trade-off is not meaningfully implica
   empty-result routing) turns Branch F red.
 - **The fake-client mirror** covers the full chain depth `delete → eq → gt → select` (the cited
   precedent is one filter deep), and the citation is corrected to `TeamsTab.test.tsx:1184-1194`
-  (19c: a citation a worker will rely on must be true). There is no in-repo precedent for
+  **[THIS RANGE IS WRONG — corrected by D016-A below to `:1185-1195`; v3's original range was
+  exact and this "correction" inverted it]** (19c: a citation a worker will rely on must be true). There is no in-repo precedent for
   `.delete().select()`; the packet cites the installed source
   (`node_modules/@supabase/postgrest-js/src/PostgrestTransformBuilder.ts`) directly, the same
   verified-against-installed-artifact posture it already uses for `AlertDialog.d.ts`.
@@ -1607,3 +1608,51 @@ the owner already ruled acceptable, at a cost of two lines and one test branch. 
 D015's path choice — a per-session pair whose failure modes all terminate in "visibly canceled, save
 honest" is the design working as ruled; this entry closes the one failure mode that terminated
 somewhere silent.
+
+## D016-A - Correction to D016 §5: the authoritative citation range is `TeamsTab.test.tsx:1185-1195`; D016's "correction" was the error
+
+**Filed and ruled by boss-arbiter, 2026-08-06.** Raised by the v4 conformance check (which returned
+DISPATCH on all five D016 questions and cluster-proved the data-loss path closed) as a defect in
+D016's OWN text, reported without a verdict per D015 §6.
+
+**Measured directly before ruling, this time:** `TeamsTab.test.tsx:1185` is the opening
+`it('rejects with the real SupabaseLoaderError when the FK restrict genuinely rejects the delete',`
+line and `:1195` is its closing `});`. `:1184` is a blank line; `:1194` is the final assertion, one
+line short of the block's close. **v3's original `:1185-1195` was exact. D016 §5's mandated
+`:1184-1194` starts on a blank line and truncates the block** — it defeated the purpose (19c
+citation truth) that D016 gave for mandating it.
+
+**Ruled:**
+
+1. **The authoritative range is `:1185-1195`.** D016 §5's bullet is annotated in place (marked, not
+   silently rewritten — the log records what was ruled, including wrongly) and this addendum is the
+   correction of record.
+2. **The foreman folds `:1185-1195` into v4 alongside the two MINOR prose fixes and the NIT already
+   in hand. No re-gate.** The v4 DISPATCH stands: the conformance check judged Q4 against D016's
+   ruled text and was right to; with the ruling corrected, the packet follows the ruling. Requiring
+   a gate instance to confirm two integers whose correctness is measured in this very entry is the
+   over-process item 25 warns against. **Dispatch may proceed once the fold lands.**
+3. **Provenance of the error, recorded because the mechanism matters more than the two integers:**
+   the wrong range originated in the D015 conformance check's "smaller item" ("the real range is
+   `:1184-1194`"), and the arbiter adopted it into D016 unverified — while citing 19c as the reason
+   for the edit. That is 19c's own failure shape ("roughly half of round 1's findings were the
+   author's own unverified line numbers") committed by the agent enforcing it, and the
+   Non-Negotiables' "No agent is above verification, including the boss" applying literally. The
+   working rule this confirms: **a ruling that mandates a citation change must measure the citation
+   itself, even when the change arrives from a checker that was right about everything else in the
+   same report.** D016's main finding was cluster-proven and is untouched by this; being right on
+   the defect does not transfer to being right on a line number.
+4. **The coordinator's handling was correct on all three calls:** not blocking dispatch on a range
+   that still lands inside the intended test; not letting the foreman silently "fix" a number the
+   dispute log said was authoritative the other way; and striking the foreman's own false
+   "off by one line in both directions" sentence without a ruling — foreman prose, conflicting with
+   nothing, is the foreman's to correct.
+
+Also recorded, nothing to rule: the same v4 check tested D016 §3's prediction directly — adding the
+symmetric `.gt('starts_at','now')` to `cancelSession` in the cluster brought the orphan back. The
+time-unguarded cancel and its load-bearing comment are doing real work, as ruled.
+
+Outcome:
+D016 §5 corrected by annotation + this addendum. One two-integer packet edit rides with the pending
+prose fixes; v4's DISPATCH stands; worker dispatch proceeds after the fold. Constitution not
+modified; no owner input required.

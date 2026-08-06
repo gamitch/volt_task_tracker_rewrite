@@ -4021,3 +4021,27 @@ cleanly. The fault is the arbiter's own two rulings interacting, not the foreman
 No owner input required — the fix lands inside the outcome class George already accepted. The
 orchestrator's Q4 parenthetical (round-1 labels where D015 requires round-2) is recorded in D016 §7:
 the checker judged the ruling text over the relay and was right; Q4 conforms.
+
+---
+
+## 2026-08-06 — Boss-arbiter correction (D016-A): D016's citation "fix" was itself the wrong number; `:1185-1195` is authoritative; v4 dispatches after a two-integer fold
+
+**Full record: `dispute-log.md` D016-A.** v4's conformance check returned DISPATCH on all five D016
+questions, cluster-proved the zero-row orphan closed (and that v3's shape still reproduces it —
+isolating the two-line remedy as the fix), confirmed all three D015 outcomes, and directly tested
+D016 §3's prediction: a symmetric time guard on `cancelSession` brings the orphan back. The one item
+returned without a verdict was a defect in D016's own text: §5 mandated "correcting"
+`TeamsTab.test.tsx:1185-1195` to `:1184-1194`, and measurement shows the original was exact —
+`:1185` is the `it(` line, `:1195` its closing `});`, while the ruled range starts on a blank line
+and truncates the block.
+
+Ruled: **`:1185-1195` is authoritative.** D016 §5 is annotated in place and D016-A is the
+correction of record. The foreman folds the two integers into v4 with the prose fixes already in
+hand; **no re-gate** — the v4 DISPATCH stands (the checker rightly judged against the ruled text;
+the ruling is what changed), and re-gating two measured integers is item-25 over-process. **Worker
+dispatch proceeds once the fold lands.**
+
+Recorded for the process, not buried: the wrong range came from the prior conformance check's
+side-note and the arbiter adopted it unverified while citing 19c as the reason for the edit — 19c's
+own failure shape, committed by its enforcer. "No agent is above verification, including the boss"
+applied literally. A ruling that mandates a citation change must measure the citation itself.
