@@ -11163,3 +11163,52 @@ tests**, +13, and `ScheduleMeetingsDialog.test.tsx` the only file whose count mo
 
 **NIT, log only:** the two new copy strings mix a typographic apostrophe with an ASCII one. No test is
 fragile today. Route to a copy-polish row; do not reopen this.
+
+---
+
+## T605 — edit one meeting inside a series — **PASS** (2026-08-06, `7676b78`, attempt 2)
+
+HEAVY. Packet → two `checker-premise` rounds → worker → checker (**FAIL**) → rework → re-check
+(**PASS**). The last row of the meeting-editing work the owner opened on 2026-08-05.
+
+**Attempt 1 failed on a process gap, not a code defect.** `npm run format:check` exited 1 at `f8cba40`
+and 0 at its parent — a **blocking CI step**, so the commit would have gone red on push. The worker's
+evidence document listed typecheck and two vitest runs; `format` appeared nowhere in it. Five sites,
+all quote-style and one wrap, all in its own added lines. Worth recording plainly: nothing about the
+feature was wrong. A gate that exists and runs in CI simply was not on the checklist.
+
+**The rework was `npm run format` and the re-check proved it semantically inert two independent ways.**
+The reworked blobs are byte-identical to a fresh prettier pass over the originals, and an AST token
+comparison **including string-literal values** returned **0 differing tokens** (1574/1574, 178/178,
+6705/6705). That was the right instrument for the concern — five lines of "formatting" is exactly what
+a quiet logic edit looks like in a diffstat — and it also proves the two re-quoted `it()` titles still
+match `-t` filters and the user-facing error string is character-identical.
+
+**Three findings from attempt 1 outlive this row.**
+
+*The worker corrected the packet, and was right.* §7 predicted that dropping `.select('id')` breaks
+assertion (c). Measured, it breaks **(a) and (b)** and (c) stays green — `runMutation` returns `.gt()`'s
+plain object, `data` coerces to `undefined`, and the wrapper throws for every call. The worker measured
+it, a foreman traced `runMutation` by hand and agreed, and the checker made it three. **All three
+independently contradicted the plan.** Recorded as a packet defect before that packet is reused.
+
+*The worker found a false pass in its own test.* A retarget date coincided with a sibling session, so
+the duplicate-date guard disabled Save where the future-forward guard was supposed to — the test proved
+nothing about the guard it named. The checker **reproduced both states**: the pre-fix date passes with
+the guard deleted, the shipped date fails. That is the strongest single result of the row, and it only
+surfaced because the worker deliberately broke its own code to see whether the test would notice.
+
+*Astryx renders dialog children regardless of `isOpen`*, so several dialogs' fields coexist in the DOM —
+measured as **2 real matches** for "Save changes". Hence scoped lookups and Session-prefixed labels, a
+disclosed design choice rather than verbosity.
+
+**Also recorded:** the worker's evidence document did not exist when its checker packet was written. A
+foreman found it by trying to open the file and logged it as an item 21 gap rather than deriving around
+it silently; the document was then written and committed at `35ee8b5`. And that same foreman, having no
+shell access, derived the parent SHA from `.git/logs` rather than accepting the orchestrator's — a
+sound instinct, since the orchestrator had fabricated one on the previous row.
+
+Frozen scope proven by **blob SHA identity** on `ScheduleMeetingsDialog.tsx`/`.test.tsx`, and Grant A
+byte-identical by **sha256 of its extracted body** across all three revisions after a 1094→1142 line
+shift. Gates `0/0/0/0`; **82 files / 2121 tests**; lint +4, all `react-refresh/only-export-components`
+in the new dialog file, verified by rule and file.
