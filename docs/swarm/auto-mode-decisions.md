@@ -3981,3 +3981,43 @@ series). The gate's evidence was verified independently before ruling; it holds.
 
 No owner input is required to proceed. Packet edits are the foreman's; no worker was dispatched by
 this ruling.
+
+---
+
+## 2026-08-06 — Boss-arbiter ruling (D016): D015's own two fixes interacted into a silent orphan; f2 gains `.select('id')` + route-to-cancel; v4 then clearable
+
+**Full record: `dispute-log.md` D016.** The D015 conformance check returned DISPATCH on packet v3
+(`6da5574`) — v3 implements the per-session pairing correctly and does not reproduce v2's defect —
+but surfaced a NEW path in the same class through D015 §6's no-verdict channel: D015's f1-before-f2
+ordering (the owner's RSVPs-first rule) and the D015-required chained time guard on f2 combine so
+that a session crossing `starts_at` mid-save is matched by ZERO rows, raising no error.
+`runMutation` resolves (`loader.ts:203-227`, verified), the coach is told the save succeeded, and
+the session survives as an ordinary `scheduled` row with its RSVPs already deleted — silent,
+invisible, and absent from v3's Known Risks. Cluster-proven; the control without the guard deletes
+cleanly. The fault is the arbiter's own two rulings interacting, not the foreman's.
+
+### Ruled
+
+1. **f2 becomes `.delete().eq('id', id).gt('starts_at', 'now').select('id')`**; empty result (guard
+   fired after f1 already acted, or session concurrently removed — indistinguishable, both benign)
+   routes to the SAME `cancelSession(id)` already blessed. Supported by installed
+   `@supabase/postgrest-js@2.110.7`; no migration, no dependency, no tier change. Zero-code
+   disclosure was rejected: a save that reports success while a session lies on screen as ordinary-
+   `scheduled` with destroyed RSVP data fails the Non-Negotiables' honesty bar; the fix is two lines.
+2. **`cancelSession` stays time-UNGUARDED, deliberately** — a symmetric guard on the cancel would
+   no-op in exactly the raced case and re-open the hole. v4's code comment must say so.
+3. **The rule-1 tension is ruled, not glossed:** future-forward's decision point is step a's
+   server-side guarded read at save time; f2's guard is defense-in-depth. Once f1 has acted, visibly
+   canceled is the least-false repair, and it is the owner's own ruled fallback outcome.
+4. **v4 requirements:** explicit `runMutation` definitions for all three f-step helpers (f2's result
+   is now load-bearing); AC9 Branch F (two pairs, empty-result on X → cancel X only, Y genuinely
+   deleted, save resolves, named mutation goes red); fake-client mirror at full chain depth with the
+   citation corrected to `TeamsTab.test.tsx:1184-1194`; Known Risks merges both race triggers
+   (`23503` and zero-row) into one disclosed residual — identical, identically visible outcomes.
+5. **Dispatch:** the D015 instrument, charter narrowed to D016's five conformance questions; the
+   existing DISPATCH on D015's four is not re-litigated. REVISE returns to the arbiter. The
+   no-verdict channel for new findings is retained unchanged — it just worked.
+
+No owner input required — the fix lands inside the outcome class George already accepted. The
+orchestrator's Q4 parenthetical (round-1 labels where D015 requires round-2) is recorded in D016 §7:
+the checker judged the ruling text over the relay and was right; Q4 conforms.
