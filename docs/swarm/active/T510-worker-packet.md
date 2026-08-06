@@ -198,8 +198,8 @@ boss-verified premise): zero occurrences of `starts_at`, `now(`, `new Date`, or 
 any time, including while another coach is narrowing this series.
 
 **The FK-restrict error-code convention already exists in this codebase**, fully qualified path,
-**corrected citation** (D016 §5/Q4 — v3 cited `:1185-1195`, which was off by one line in both
-directions): `src/pages/roster/TeamsTab.test.tsx:1184-1194` proves the shape — a fake client whose
+**citation range per D016 §5/Q4**: `src/pages/roster/TeamsTab.test.tsx:1184-1194` proves the shape — a
+fake client whose
 `.delete().eq(...)` resolves `{ data: null, error: { message: 'FK violation', code: '23503' } }`,
 asserting the mutation **rejects** `.toMatchObject({ code: '23503' })`. `loader.ts`'s `runMutation`/
 `toLoaderError` (`:116-121`, `:203-227`) turns that into a thrown `SupabaseLoaderError`;
@@ -719,9 +719,10 @@ async function queryAttendanceExistsForSessions(
           // D016 -- zero rows means f1 already acted on a session that then turned out to be no
           // longer strictly future (or was concurrently removed). Route to the SAME repair as the
           // 23503 branch below -- deliberately, since both triggers now produce one identical,
-          // identically-visible outcome. `?? []` defends the same "empty is `[]` or `null`" case
-          // D016's own text names, even though a successful non-`.single()` select should always
-          // resolve `[]`, never `null`, on zero rows.
+          // identically-visible outcome. `?? []` defends the same "empty is `[]` or `undefined`"
+          // case D016's own text names (`runMutation` coerces a `null` `data` to `undefined` at
+          // `loader.ts:225`), even though a successful non-`.single()` select should always
+          // resolve `[]` on zero rows. The `?? []` stays -- it is still necessary defensively.
           if ((deletedRows ?? []).length === 0) {
             await cancelSession(sessionId);
           }
@@ -924,12 +925,18 @@ Report file/test totals against a named baseline SHA (`git rev-parse HEAD` befor
     empty result, not an error); session Y's resolves with a non-empty row array. Assert, ALL of: (i)
     `cancelSession` (`event_sessions.update({ status: 'canceled' }).eq('id', X)`) is called for X and
     X ONLY; (ii) Y is genuinely deleted (its own delete chain was called) and receives NO update call;
-    (iii) the overall promise **resolves** (this is not an error path). **Prove it can fail** — a named
-    mutation that turns this branch RED: either drop `.select('id')` from `deleteSessionIfStillFuture`
-    (the empty-result signal disappears, so the fake client cannot distinguish "deleted" from "matched
-    nothing," and the assertion that X is canceled must fail), or drop the `(deletedRows ?? []).length
-    === 0` routing check entirely (X's zero-row delete is then silently treated as success, and the
-    assertion that `cancelSession` was called for X must fail).
+    (iii) the overall promise **resolves** (this is not an error path). **Prove it can fail** — two
+    named mutations, and neither fails the branch the way it might look at first:
+    - Drop `.select('id')` from `deleteSessionIfStillFuture`: `deletedRows` becomes `undefined` for
+      EVERY call (not just X's), so `(deletedRows ?? []).length === 0` is always `true` and
+      `cancelSession` fires for every id — **including Y**. X is still canceled; that assertion still
+      passes. What fails is (i)'s **"X ONLY"** (Y is wrongly canceled too) and (ii)'s **"Y receives NO
+      update call"** (Y now receives one). Do not read a passing "X is canceled" as this mutation
+      having no effect — check (i) and (ii) specifically.
+    - Drop the `(deletedRows ?? []).length === 0` routing check entirely (never call `cancelSession` on
+      an empty result): X's zero-row delete is then silently treated as success and nothing happens to
+      X — it survives as an ordinary `'scheduled'` row, D016's original defect. The assertion that
+      `cancelSession` was called for X must fail.
 - **AC10 — the "already happened" disclosure, both directions.**
 - **AC11 — confirmation, pure-addition case.** No "Removed:" segment when `toRemove.length === 0`.
 - **AC12 — confirmation, removal case.** "Removed:" followed by each removed date, human-readable.
