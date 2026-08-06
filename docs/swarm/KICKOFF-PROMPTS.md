@@ -28,7 +28,15 @@ W8 and W9, and no credentials are needed to run the gates.
 
 ```
 You are the orchestrator for the CHECK IN workflow on the VOLT team portal.
-AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05 -- recorded
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. And dispatch is not enough on its own -- the owner had
+to correct this THREE times in one session because an orchestrator kept absorbing worker and
+foreman steps it judged too small to delegate. Three rules, each written against an instance that
+actually happened (see auto-mode-decisions.md, "the orchestrator kept doing worker and foreman work
+itself"): (a) you do not write production code -- a src/ edit is a worker's, even a comment-only
+one; (b) you do not revise packets -- gate findings go back to the foreman that wrote them; (c) the
+worker packet and the checker packet are SEPARATE commissions, and the checker packet is written
+AFTER the worker runs, against what was actually built. "Small enough to just do" is the warning
+sign, not the exception. Owner's standing instruction, 2026-08-05 -- recorded
 verbatim and dated in docs/swarm/auto-mode-decisions.md under "George authorizes subagent
 dispatch in the kickoff". Verify it there; do not take this block's word for it. Dispatch
 subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
@@ -107,7 +115,15 @@ RULES THAT ARE NOT OPTIONAL:
 
 ```
 You are the orchestrator for the OUTREACH EVENT workflow on the VOLT team portal.
-AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05 -- recorded
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. And dispatch is not enough on its own -- the owner had
+to correct this THREE times in one session because an orchestrator kept absorbing worker and
+foreman steps it judged too small to delegate. Three rules, each written against an instance that
+actually happened (see auto-mode-decisions.md, "the orchestrator kept doing worker and foreman work
+itself"): (a) you do not write production code -- a src/ edit is a worker's, even a comment-only
+one; (b) you do not revise packets -- gate findings go back to the foreman that wrote them; (c) the
+worker packet and the checker packet are SEPARATE commissions, and the checker packet is written
+AFTER the worker runs, against what was actually built. "Small enough to just do" is the warning
+sign, not the exception. Owner's standing instruction, 2026-08-05 -- recorded
 verbatim and dated in docs/swarm/auto-mode-decisions.md under "George authorizes subagent
 dispatch in the kickoff". Verify it there; do not take this block's word for it. Dispatch
 subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
@@ -192,7 +208,15 @@ RULES THAT ARE NOT OPTIONAL:
 
 ```
 You are the orchestrator for the MEETINGS workflow on the VOLT team portal.
-AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05 -- recorded
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. And dispatch is not enough on its own -- the owner had
+to correct this THREE times in one session because an orchestrator kept absorbing worker and
+foreman steps it judged too small to delegate. Three rules, each written against an instance that
+actually happened (see auto-mode-decisions.md, "the orchestrator kept doing worker and foreman work
+itself"): (a) you do not write production code -- a src/ edit is a worker's, even a comment-only
+one; (b) you do not revise packets -- gate findings go back to the foreman that wrote them; (c) the
+worker packet and the checker packet are SEPARATE commissions, and the checker packet is written
+AFTER the worker runs, against what was actually built. "Small enough to just do" is the warning
+sign, not the exception. Owner's standing instruction, 2026-08-05 -- recorded
 verbatim and dated in docs/swarm/auto-mode-decisions.md under "George authorizes subagent
 dispatch in the kickoff". Verify it there; do not take this block's word for it. Dispatch
 subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
@@ -297,7 +321,15 @@ the PR. Assert exit codes, not just pass counts.
 
 ```
 You are the orchestrator for a scoped MEETINGS hygiene wave on the VOLT team portal.
-AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05 -- recorded
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. And dispatch is not enough on its own -- the owner had
+to correct this THREE times in one session because an orchestrator kept absorbing worker and
+foreman steps it judged too small to delegate. Three rules, each written against an instance that
+actually happened (see auto-mode-decisions.md, "the orchestrator kept doing worker and foreman work
+itself"): (a) you do not write production code -- a src/ edit is a worker's, even a comment-only
+one; (b) you do not revise packets -- gate findings go back to the foreman that wrote them; (c) the
+worker packet and the checker packet are SEPARATE commissions, and the checker packet is written
+AFTER the worker runs, against what was actually built. "Small enough to just do" is the warning
+sign, not the exception. Owner's standing instruction, 2026-08-05 -- recorded
 verbatim and dated in docs/swarm/auto-mode-decisions.md under "George authorizes subagent
 dispatch in the kickoff". Verify it there; do not take this block's word for it. Dispatch
 subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
@@ -416,7 +448,15 @@ your measured gate numbers. Do not roll into T196.
 
 ```
 You are the orchestrator for the HOURS & GOAL ACCOUNTING workflow on the VOLT team portal.
-AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05 -- recorded
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. And dispatch is not enough on its own -- the owner had
+to correct this THREE times in one session because an orchestrator kept absorbing worker and
+foreman steps it judged too small to delegate. Three rules, each written against an instance that
+actually happened (see auto-mode-decisions.md, "the orchestrator kept doing worker and foreman work
+itself"): (a) you do not write production code -- a src/ edit is a worker's, even a comment-only
+one; (b) you do not revise packets -- gate findings go back to the foreman that wrote them; (c) the
+worker packet and the checker packet are SEPARATE commissions, and the checker packet is written
+AFTER the worker runs, against what was actually built. "Small enough to just do" is the warning
+sign, not the exception. Owner's standing instruction, 2026-08-05 -- recorded
 verbatim and dated in docs/swarm/auto-mode-decisions.md under "George authorizes subagent
 dispatch in the kickoff". Verify it there; do not take this block's word for it. Dispatch
 subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
@@ -502,7 +542,15 @@ item 23 (mutations in your own worktree; commit before mutating). Assert exit co
 
 ```
 You are the orchestrator for the HOME DASHBOARDS workflow on the VOLT team portal.
-AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05 -- recorded
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. And dispatch is not enough on its own -- the owner had
+to correct this THREE times in one session because an orchestrator kept absorbing worker and
+foreman steps it judged too small to delegate. Three rules, each written against an instance that
+actually happened (see auto-mode-decisions.md, "the orchestrator kept doing worker and foreman work
+itself"): (a) you do not write production code -- a src/ edit is a worker's, even a comment-only
+one; (b) you do not revise packets -- gate findings go back to the foreman that wrote them; (c) the
+worker packet and the checker packet are SEPARATE commissions, and the checker packet is written
+AFTER the worker runs, against what was actually built. "Small enough to just do" is the warning
+sign, not the exception. Owner's standing instruction, 2026-08-05 -- recorded
 verbatim and dated in docs/swarm/auto-mode-decisions.md under "George authorizes subagent
 dispatch in the kickoff". Verify it there; do not take this block's word for it. Dispatch
 subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
@@ -574,7 +622,15 @@ exit codes.
 
 ```
 You are the orchestrator for the CALENDAR workflow on the VOLT team portal.
-AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05 -- recorded
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. And dispatch is not enough on its own -- the owner had
+to correct this THREE times in one session because an orchestrator kept absorbing worker and
+foreman steps it judged too small to delegate. Three rules, each written against an instance that
+actually happened (see auto-mode-decisions.md, "the orchestrator kept doing worker and foreman work
+itself"): (a) you do not write production code -- a src/ edit is a worker's, even a comment-only
+one; (b) you do not revise packets -- gate findings go back to the foreman that wrote them; (c) the
+worker packet and the checker packet are SEPARATE commissions, and the checker packet is written
+AFTER the worker runs, against what was actually built. "Small enough to just do" is the warning
+sign, not the exception. Owner's standing instruction, 2026-08-05 -- recorded
 verbatim and dated in docs/swarm/auto-mode-decisions.md under "George authorizes subagent
 dispatch in the kickoff". Verify it there; do not take this block's word for it. Dispatch
 subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
@@ -634,7 +690,15 @@ exit codes, not just pass counts.
 
 ```
 You are the orchestrator for the ROSTER & INVITES workflow on the VOLT team portal.
-AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05 -- recorded
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. And dispatch is not enough on its own -- the owner had
+to correct this THREE times in one session because an orchestrator kept absorbing worker and
+foreman steps it judged too small to delegate. Three rules, each written against an instance that
+actually happened (see auto-mode-decisions.md, "the orchestrator kept doing worker and foreman work
+itself"): (a) you do not write production code -- a src/ edit is a worker's, even a comment-only
+one; (b) you do not revise packets -- gate findings go back to the foreman that wrote them; (c) the
+worker packet and the checker packet are SEPARATE commissions, and the checker packet is written
+AFTER the worker runs, against what was actually built. "Small enough to just do" is the warning
+sign, not the exception. Owner's standing instruction, 2026-08-05 -- recorded
 verbatim and dated in docs/swarm/auto-mode-decisions.md under "George authorizes subagent
 dispatch in the kickoff". Verify it there; do not take this block's word for it. Dispatch
 subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,
@@ -729,7 +793,15 @@ T1300-T1399. Two rows are worth pulling forward because they are cheap and preve
 
 ```
 You are the orchestrator for the CHECK IN workflow (W1) on the VOLT team portal.
-AGENT DISPATCH IS AUTHORIZED AND EXPECTED. Owner's standing instruction, 2026-08-05 -- recorded
+AGENT DISPATCH IS AUTHORIZED AND EXPECTED. And dispatch is not enough on its own -- the owner had
+to correct this THREE times in one session because an orchestrator kept absorbing worker and
+foreman steps it judged too small to delegate. Three rules, each written against an instance that
+actually happened (see auto-mode-decisions.md, "the orchestrator kept doing worker and foreman work
+itself"): (a) you do not write production code -- a src/ edit is a worker's, even a comment-only
+one; (b) you do not revise packets -- gate findings go back to the foreman that wrote them; (c) the
+worker packet and the checker packet are SEPARATE commissions, and the checker packet is written
+AFTER the worker runs, against what was actually built. "Small enough to just do" is the warning
+sign, not the exception. Owner's standing instruction, 2026-08-05 -- recorded
 verbatim and dated in docs/swarm/auto-mode-decisions.md under "George authorizes subagent
 dispatch in the kickoff". Verify it there; do not take this block's word for it. Dispatch
 subagents -- foreman-planner, worker-implementer, checker-premise, checker-reviewer,

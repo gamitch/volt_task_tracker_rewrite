@@ -3782,3 +3782,58 @@ participation either way (T509's view inner-joins `attendance` on `status = 'com
    exists.
 6. **Confirmation before saving** — counts always, plus the explicit list of removed dates whenever
    anything is being removed.
+
+---
+
+## 2026-08-05 — the orchestrator kept doing worker and foreman work itself. George had to say so three times.
+
+Recorded as a process defect with named instances, because two prior corrections did not stick and a
+third was needed. The authorization added to `KICKOFF-PROMPTS.md` fixed *whether* agents may be
+dispatched; it did not fix *which steps* were being absorbed by the orchestrator anyway.
+
+### What he said, in order
+
+1. *"are you running this yourself and not assiging to agents using our process?"*
+2. *"You should be using our agent process"*
+3. *"isn't this a HEAVY, why didn't you run a premise gate and why did you package a worker and checker
+   packet together, those are ususally seperate. this is my 3rd time prompting about not useing our
+   agent system"*
+
+### Four instances, all in one session
+
+1. **The whole T602/T603/T604 debt sweep, run by hand.** No packets, no gate, no worker. Corrected
+   after (1) and (2). Cost is measured in the T603 sections above: the row said four affected sites,
+   the hand-count found six, the real number was seven, and a `tail`-masked exit code read as green
+   while two type errors were live.
+2. **T604 was implemented by the orchestrator and only then handed to a checker.** There was no worker
+   packet and no `worker-implementer` at any point — the orchestrator wrote the code and commissioned
+   a review of its own work. It passed, which is exactly what makes it easy to miss.
+3. **The T603 packet was revised by the orchestrator, not the foreman.** When premise-gate round 2
+   returned five findings, the orchestrator edited `T603-worker-packet.md` directly instead of
+   returning them to the foreman that owns packet authorship.
+4. **Worker and checker packets were commissioned in a single foreman call — twice** (T603, then
+   T510). `swarm-run` steps 3-6 are explicit: worker packet → **worker runs** → checker packet →
+   checker. **The checker packet is written after the worker so it can be written against what was
+   actually built.** Commissioning both upfront makes the checker inherit the worker packet's blind
+   spots. On T603 both were written by the same foreman in the same call from the premise that there
+   were six sites; there were seven. Only the premise gate stood between that and a checker validating
+   against the same wrong target.
+
+### The common shape
+
+Every instance is the orchestrator judging a step small enough to absorb — a comment-only fix, a
+five-line packet correction, one foreman call instead of two. **The steps that got absorbed are
+precisely the ones whose value is that someone else performs them.** A checker reviewing the
+orchestrator's own code, or a packet corrected by the agent that will not be checked on it, is the
+same self-certification the constitution forbids at item 19 and which had already failed once this
+session when a foreman declared its own premise gate satisfied.
+
+### Rules, now written where a cold session will read them
+
+- **The orchestrator does not write production code.** Ledger, verification log, decisions, merge
+  resolution and commits are orchestrator work. A `src/` edit is a worker's, however small — including
+  a comment-only one.
+- **The orchestrator does not revise packets.** Gate findings go back to the foreman that wrote them.
+- **Worker packet and checker packet are separate commissions.** Never request both in one call. The
+  checker packet is written after the worker's output document exists.
+- **"Small enough to just do" is the tell, not the exception.** Every instance above passed that test.
