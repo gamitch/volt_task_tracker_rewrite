@@ -4169,3 +4169,29 @@ its charter:
 
 **Sequence matters:** the repair migration must not land before the write path, or the same drift
 starts accumulating again the moment a coach edits a student.
+
+### Scope gap found while assessing feasibility (2026-08-06, same day) — READ BEFORE PACKETING
+
+This ruling's ownership list was incomplete. **Three roster filters do FUNCTIONAL single-team
+scoping off `students.team_id`**, and every one of them is wrong the moment a student has two
+teams — this is T187's defect class, live again in three new places:
+
+| site | what breaks under multi-team |
+|---|---|
+| `endMeeting.ts:340` | Builds the End Meeting **roster**. A dual-team student whose primary team is not the event's team is **omitted entirely** — never marked, and interacting badly with T508's absence backfill. |
+| `kiosk.ts:324` | The kiosk `expected` tally undercounts. |
+| `kiosk.ts:458` | Same filter a third time. |
+
+All three read `students.team_id`, not memberships. Note `kiosk.ts`'s `loadActiveStudentTeams` is
+**misleadingly named** — `queryActiveStudentTeams` (`:238-240`) selects from **`students`**, not
+`student_teams`. The only `student_teams` access anywhere in the app remains a single
+`.select('team_id')` at `loaders/students.ts:482`.
+
+**Consequence for ownership:** this spans **W1** (`kiosk.ts`) and **W3** (`endMeeting.ts`) as well
+as W7/W9/W4. `endMeeting.ts` is also the file W3's T508 just changed, so that one needs
+coordination rather than a parallel dispatch.
+
+**Consequence for sequencing:** these three filters must be migrated onto memberships **in the
+same wave as the write path**. Shipping multi-team while they still scope on the primary team
+would let a coach put a student on two teams and then silently drop her from one team's meeting
+roster — worse than today's behaviour, where at least the single team is always right.
