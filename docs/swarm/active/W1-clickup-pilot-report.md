@@ -63,10 +63,15 @@ filed into it is invisible to the migration.
 Verified by re-reading each task: correct List, status `filed`, 5 custom fields attached, full
 descriptions intact including literal `|` characters.
 
-**One thing to eyeball during review.** No tool in this MCP set returns custom *field values* on
-read — `get_task` gives `custom_fields_count: 5`, which proves the fields are attached, not what
-they hold. The writes returned success, but the values are unconfirmed from this side. Please spot
-check `Legacy ID`, `Provenance`, `Attempts` and `Premise gate` on one task in the UI.
+**Field values confirmed by the owner in the UI, 2026-08-07.** No tool in this MCP set returns
+custom *field values* on read — `get_task` gives only `custom_fields_count: 5`, which proves the
+fields are attached, not what they hold — so this was checked visually instead. All three carry
+`Attempts 0`, the correct `Legacy ID`, `Premise gate = not-run` and `Provenance = other`; `Tier` is
+`HEAVY` on T606 and correctly empty on T607 and T608.
+
+The same review confirmed the rendering: Markdown survives the round trip (code spans, bold,
+emphasis), the full untruncated titles display, and T608's recovered text renders with literal
+pipes intact in `'qr' | 'coach' | 'import'`.
 
 `Premise gate` was set to `not-run` on all three. The payload carries no value for it — `not-run` is
 the accurate state for a filed row, but it is this session's inference, not migrated data.
