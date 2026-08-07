@@ -88,7 +88,7 @@ Tier is the **heaviest** item in the workflow, per constitution item 26.
 | **W8** | **Email & notifications** | 2 | — | **Blocked on owner** | everything |
 | **W9** | **Migration & go-live** | **4** | HEAVY | **3 human gates (T064, T065, T070) — no machine can move those — plus T333's ETL half, which IS machine-workable.** T333's data half was fixed by the owner in SQL; the ETL still hardcodes `is_active: false` with no season argument and no post-run notice, so the next import repeats the surprise. **Do not read this row as fully blocked.** | everything |
 | **W10** | **Cross-cutting hygiene** | **6** | FAST/STANDARD | Includes **T175** (add `format:check` to CI) — cheapest row in the backlog | **nothing — see below** |
-| — | *unowned surface* | 1 | FAST | **T507** — login card overflows every phone under ~400px. `src/pages/login/**` belongs to no workflow; needs an owner assignment | — |
+| — | *unowned surface* | 2 | FAST/STANDARD | **T507** — login card overflows every phone under ~400px (`src/pages/login/**`). **T407 (2026-08-07)** — the Outreach nav badge is a hardcoded `0` while the page reads "74 awaiting your RSVP" (`src/components/nav/**`). Both belong to no workflow; both need an owner assignment | — |
 
 **W10 must not run in parallel with anything.** Every row in it is a sweep across `src/pages/**` and
 `src/components/**` by definition, so it collides with all nine others. Run it alone, between waves,
