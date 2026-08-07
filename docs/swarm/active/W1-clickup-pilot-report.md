@@ -107,28 +107,59 @@ payload**, so what is in ClickUp now is right. T606 and T607 came out byte-ident
 only T608 differed. But the payload file itself is still wrong and must be rebuilt with an
 escape-aware parser before the other 30 are touched.
 
-## 5. Three smaller things the pilot surfaced
+## 5. Payload rebuilt
 
-**`blocked by owner` vs `Blocked on owner`.** The Space status reads *by*; the payload sends *on*
-for 3 rows (T333, T806, T407). Not a pilot issue — all three W3 rows are `Filed` — but those three
-will fail or mis-set on the full import. Either rename the status or map it in the importer; the
-ledger's own prose says *on*.
+`clickup-migration-payload.json` has been regenerated with an escape-aware split and **replaces the
+defective file in place**. Only `name` and `description_md` were re-derived; every other key was
+carried across untouched and verified unchanged, so this is a repair, not a rebuild from scratch.
 
-**Nowhere to put `worker` and `checker`.** The payload carries both for every row, and the Space has
-5 custom fields, none of which is either. They are currently dropped. They are not real assignees
-(`*not yet packeted*`, `—`), so a text field or nothing are both defensible — but it should be a
-decision, not an omission.
+- **18 names restored** past the 117-character cap. Longest is now 184 (T705).
+- **2 descriptions recovered** — exactly the two the escaped-pipe signature predicted:
+  **T608** 729 → 1,591 chars, **T807** 2,161 → 2,751.
+- All 33 rows matched a ledger row; none went missing.
 
-**Dependencies cannot be wired for this pilot.** T606 depends on T605 and T608 on T603; both targets
-are merged rows, deliberately excluded from the 33. Native ClickUp dependency links need both ends
-to exist, so each was recorded as a description footnote instead. Any dep pointing at a closed row
-has the same problem across the full import.
+The three pilot tasks already in ClickUp were built from this same corrected parse, so they need no
+re-import.
 
-## 6. Recommended order from here
+## 6. Owner rulings, 2026-08-07
 
-1. Owner reviews the three tasks — especially the custom field values noted in §3.
-2. Rebuild the payload with an escape-aware parser; restore full titles from the `**Title:**` line.
-3. Diff the rebuilt payload against the current one and confirm only truncations changed.
-4. Resolve §5's three items.
-5. Import the remaining 30, then wire dependencies among imported rows only.
-6. Delete the default `List`.
+**Status wording: rename ClickUp to match the docs.** The Space status becomes `Blocked on owner`,
+not `by`. The ledger prose, the spec table and the payload all say *on*; renaming the one status is
+cheaper than making ClickUp permanently disagree with them. Affects **T188 (W4), T329 (W8) and
+T507 (Unassigned)** — the three rows whose status is `Blocked on owner`.
+
+**`worker` / `checker`: dropped, no fields added.** 28 of 33 workers and 26 of 33 checkers are
+placeholders, and T063's checker holds corrupted parse output (`T062,T014`, which is dependency
+data in the wrong column while its own `deps` is empty). ClickUp's native assignee is the right
+home from here. The keys stay in the payload as a faithful record of the ledger; the importer
+ignores them.
+
+**Dependencies: split by kind.** Only 4 of 20 edges point inside the 33 and get native ClickUp
+dependencies:
+
+`T064→T063` · `T065→T064` · `T070→T065` · `T172→T168`
+
+The other 16 point at already-merged rows, which are provenance rather than blockers — encoding
+them as live dependencies would show 12 rows waiting on work that finished days ago. They go in a
+new Space-level short-text field **`Blocked by (legacy)`**, across 12 rows:
+
+| Row | Blocked by (legacy) | | Row | Blocked by (legacy) |
+|---|---|---|---|---|
+| T052 | T051 | | T200 | T183 |
+| T070 | T066, T067, T068, T069 | | T600 | T162 |
+| T159 | T091 | | T606 | T605 |
+| T166 | T155 | | T608 | T603 |
+| T171 | T154 | | T806 | T187, T199 |
+| T172 | T151 | | T807 | T509 |
+
+Note **T070 takes both treatments** — a native link to T065 and four legacy references.
+
+## 7. Two owner UI steps before the remaining 30 import
+
+Neither is reachable from the MCP toolset, which has no status setter and no custom-field setter:
+
+1. **Rename** the Space status `Blocked by owner` → `Blocked on owner`.
+2. **Create** a Space-level short text field named `Blocked by (legacy)`.
+
+Then the import runs unattended: 30 tasks, the 4 native dependency links, and the legacy field
+populated on 12 rows. The default `List` (`901114287846`) should be deleted at the same time.
