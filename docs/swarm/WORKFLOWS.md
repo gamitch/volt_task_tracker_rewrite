@@ -81,14 +81,14 @@ Tier is the **heaviest** item in the workflow, per constitution item 26.
 | **W1** | **Check in** — student arrives and gets counted | **0** | HEAVY | **CLOSED 2026-08-04** — T321/T161/T320/T403 merged, **T400 + T502 shipped (PR #85)**. | W4, W6, W7, W8 |
 | **W2** | **Run an outreach event** — create → RSVP → attend → complete | **0** | HEAVY | **CLOSED 2026-08-04** — 12 rows merged (T330, T401, T402, T174, T190, T306, T325, T152, T300, T301, T406, T165); T501/T505 closed won't-fix. | W1, W3, W6, W7 |
 | **W3** | **Run a meeting** — schedule → attendance → participation % | **5** | HEAVY | **RE-OPENED 2026-08-05 by live testing.** T196 shipped 2026-08-04; the owner then ran a real meeting and found four defects. **T508 is writing false data now.** | W2, W4, W6, W7 |
-| **W4** | **Hours & goal accounting** — the numbers users are shown | **9** | HEAVY | T205 + T322 applied to production 2026-08-04. **T509 added 2026-08-05 (MET-01 marks-only, D014) — BLOCKED on W3's T508.** | W1, W3, W6, W7 |
+| **W4** | **Hours & goal accounting** — the numbers users are shown | **10** | HEAVY | T205 + T322 applied to production 2026-08-04. **T509 added 2026-08-05 (MET-01 marks-only, D014) — BLOCKED on W3's T508.** **T705 added 2026-08-06 — `student_teams` has no writer, so team rollups and participation are silently wrong in production TODAY. Confirm against the database before packeting; the fix spans W7's `loaders/students.ts` and a W9 migration.** | W1, W3, W6, W7 |
 | **W5** | **Home dashboards** — student/parent/coach landing state | **8** | STANDARD | T186/T187/T198 merged; **T801 closed**; **T803 in flight (PR #93)**; T802 open; T156 parked | W6, W7, W8 |
 | **W6** | **Calendar & subscribe** | **0** | — | **CLOSED** — merged, database deployed | everything |
 | **W7** | **Roster & invites** | 5 | STANDARD | Working. T064 is a human gate; **T167's premise is UNVERIFIED — measure before packeting** | everything |
 | **W8** | **Email & notifications** | 2 | — | **Blocked on owner** | everything |
 | **W9** | **Migration & go-live** | **4** | HEAVY | **3 human gates (T064, T065, T070) — no machine can move those — plus T333's ETL half, which IS machine-workable.** T333's data half was fixed by the owner in SQL; the ETL still hardcodes `is_active: false` with no season argument and no post-run notice, so the next import repeats the surprise. **Do not read this row as fully blocked.** | everything |
 | **W10** | **Cross-cutting hygiene** | **6** | FAST/STANDARD | Includes **T175** (add `format:check` to CI) — cheapest row in the backlog | **nothing — see below** |
-| — | *unowned surface* | 1 | FAST | **T507** — login card overflows every phone under ~400px. `src/pages/login/**` belongs to no workflow; needs an owner assignment | — |
+| — | *unowned surface* | 2 | FAST/STANDARD | **T507** — login card overflows every phone under ~400px (`src/pages/login/**`). **T407 (2026-08-07)** — the Outreach nav badge is a hardcoded `0` while the page reads "74 awaiting your RSVP" (`src/components/nav/**`). Both belong to no workflow; both need an owner assignment | — |
 
 **W10 must not run in parallel with anything.** Every row in it is a sweep across `src/pages/**` and
 `src/components/**` by definition, so it collides with all nine others. Run it alone, between waves,
