@@ -97,9 +97,13 @@ import type {
 // `loaders/meetings.ts` already established for that file's own T096
 // resolution) -- imported here as types only.
 import type {
+  HomeEventRow,
+  HomeRsvpRow,
+  HomeSessionRow,
   LoadStudentHomeDataFn,
   ResolveStudentScopeFn,
   StudentHomeData,
+  StudentParticipationMetric,
 } from '../../../pages/home/StudentHome';
 
 /**
@@ -538,13 +542,20 @@ export const resolveStudentScope: ResolveStudentScopeFn = makeResolveStudentScop
  * `StudentHome.tsx:1763` production `loadData` default, narrowed to the ONE
  * user-facing defect that row's own citations name -- the fabricated
  * `'Ada Reyes'` greeting (`defaultLoadStudentHomeData`, `StudentHome.tsx:1023`,
- * untouched, still exported for tests). Per this task's own scope ruling,
- * every OTHER `StudentHomeData` field is left an honest literal empty value
+ * untouched, still exported for tests). Per that task's own scope ruling,
+ * every OTHER `StudentHomeData` field was left an honest literal empty value
  * (`[]`/`null`/`0`) -- no new queries for events/sessions/rsvps/hours/
- * participation; those are already correctly empty today (T176), not
- * fabricated, and a real implementation of that rest-of-the-seam is its own
- * separate follow-up (see `StudentHome.tsx`'s own module doc #9, lines
- * 277-279).
+ * participation -- and the real implementation of that rest-of-the-seam was
+ * filed as its own separate follow-up.
+ *
+ * **T199 IS THAT FOLLOW-UP, and it has landed** -- `events`/`sessions`/
+ * `rsvps`/`participation` are real queries now; see the T199 doc block below
+ * `queryStudentDisplayNameById`. Three fields DO remain literals
+ * (`defaultGoalHours`/`goalHoursOverride`/`studentHours`), for a different
+ * and narrower reason than T183's: the render path provably does not read
+ * them (T176 round 2 moved those three numbers onto props). The sentence
+ * above is kept in past tense rather than deleted, so T183's own narrowing
+ * decision stays legible.
  *
  * Same shape as `queryStudentGoalProjectionById`/`makeResolveStudentScope`
  * above: a single-row query via `createLoader`, injectable `getClient`,
@@ -599,6 +610,320 @@ async function queryStudentDisplayNameById(
   return { data: (result.data as StudentDisplayNameDbRow | null) ?? null, error: result.error };
 }
 
+/* ==========================================================================
+ * T199 -- the rest of `StudentHome`'s seam. Real `events`/`sessions`/`rsvps`/
+ * `participation` reads, replacing the four honest-empty literals T183
+ * deliberately left behind (its own narrowing is quoted in the doc block
+ * above; this is the follow-up that block's last paragraph points at).
+ *
+ * -------------------------------------------------------------------------
+ * (1) WHAT WAS ACTUALLY BROKEN. Not a crash -- the page rendered fine and
+ * every section was simply, permanently empty. Traced through the render
+ * path, the four literals cost exactly five on-screen surfaces
+ * (`StudentHome.tsx`):
+ *
+ *   `data.events`/`sessions`/`rsvps` feed `selectLiveMeetingSession`
+ *   (`:1403`), `buildNextUp` (`:1404`) and
+ *   `getUnansweredOutreachOpportunities` (`:1405`). With all three inputs
+ *   `[]`:
+ *     - "Next up" always rendered its "Nothing scheduled" `EmptyState`,
+ *     - "Sign-up opportunities" always rendered "You're all caught up",
+ *     - `liveSession` was always `null`, so the live check-in hero could
+ *       never appear -- a student physically at a meeting had no way to
+ *       check in from Home,
+ *     - `selectHeroState(false, 0)` therefore always returned
+ *       `'quiet-greeting'`, so the hero was permanently the "You're all
+ *       caught up. Nothing needs your attention right now." line.
+ *   `data.participation` feeds `:1471`, which rendered `Participation: —`
+ *   for every student in every state.
+ *
+ * -------------------------------------------------------------------------
+ * (2) NO SIGNATURE CHANGE, and team scope deliberately stays CLIENT-side.
+ *
+ * `LoadStudentHomeDataFn` is `(studentId, seasonId)` -- no team parameter.
+ * That is kept, and the `events` read below is SEASON-scoped rather than
+ * team-scoped, because `StudentHome.tsx` already owns the team predicate:
+ * `isEventInTeamScope` (`:686`, its own comment: *"The ONLY team-scope
+ * predicate in this file"*) is applied inside all three consumers listed
+ * above, against the `teamIds` the page resolves separately via
+ * `resolveStudentScope`. Filtering server-side too would mean a SECOND
+ * implementation of "in scope" -- in PostgREST array syntax, against a
+ * different team source -- that could drift from the page's. One predicate,
+ * in one place, is the smaller and safer shape, and it needs no change to
+ * the shared function type (so no `StudentHome.test.tsx`/
+ * `DashboardPage.test.tsx` stub churn either).
+ *
+ * -------------------------------------------------------------------------
+ * (3) DISCLOSED LIMIT -- RLS scopes these rows by the LEGACY
+ * `students.team_id`, while the page scopes by ACTIVE `student_teams`.
+ *
+ * `supabase/migrations/20260717000002_rls.sql:153-161`, quoted verbatim:
+ * ```sql
+ * create policy own_or_linked_read on events
+ *   for select to authenticated
+ *   using (
+ *     exists (
+ *       select 1 from students s
+ *       where s.id in (select my_student_ids())
+ *         and (events.team_ids is null or s.team_id = any(events.team_ids))
+ *     )
+ *   );
+ * ```
+ * `event_sessions`'s own policy (`:180-188`) inherits the same test through
+ * `event_id`. Both read `s.team_id` -- the single legacy primary-team
+ * column. T187 moved this PAGE onto `student_teams` (`StudentScope.teamIds`,
+ * `makeResolveStudentScope` above), and the two sources disagree for a
+ * DUAL-TEAM student: an event scoped to `team_ids = {their SECOND team}`
+ * passes the page's `isEventInTeamScope` but is filtered out by RLS before
+ * it ever arrives, so that student silently misses their second team's
+ * meetings and outreach.
+ *
+ * This is pre-existing (T187 created the divergence; the policies predate
+ * it) and it is NOT fixable here -- it needs a migration, which per
+ * constitution item 16 the owner applies. **T199 makes it observable for
+ * the first time**: until now the page had no rows at all, so nothing could
+ * be missing from them. Filed as its own row rather than worked around with
+ * a client-side compensation that would hide a policy bug behind a loader.
+ * Single-team students -- every student in the system today -- are
+ * unaffected, since for them the two sources name the same team.
+ *
+ * Read from the policy text, which is unambiguous on this point; not
+ * measured against a live database.
+ *
+ * -------------------------------------------------------------------------
+ * (4) `studentHours`/`defaultGoalHours`/`goalHoursOverride` stay inert, ON
+ * PURPOSE -- and this is not the same call as leaving `events` empty was.
+ *
+ * Those three fields are not on T199's scope list, and they are provably
+ * unread: T176 round 2 moved the page onto `confirmedHours`/`plannedHours`/
+ * `goalHours` PROPS sourced from `v_student_goal_projection` via
+ * `resolveStudentScope`, and `StudentHome.tsx:1415-1424` states so in its
+ * own comment. Querying `v_student_hours` here would add a round trip whose
+ * result no pixel depends on -- the same trade T198 weighed on `CoachHome`
+ * and resolved the same way. They are inert literals, not empty data.
+ * ==========================================================================
+ */
+
+/** `events` -- `supabase/migrations/20260717000000_scheduling_attendance.sql:
+ * 33-48`. Five columns, exactly `HomeEventRow`'s shape; `counts_volunteer_
+ * hours` is included because that interface declares it
+ * (`StudentHome.tsx:436`) and `computePlannedHours` reads it. */
+interface StudentHomeEventDbRow {
+  id: string;
+  season_id: string;
+  type: HomeEventRow['type'];
+  title: string;
+  team_ids: string[] | null;
+  counts_volunteer_hours: boolean;
+}
+
+/** `event_sessions` -- same migration, `:53-63`. */
+interface StudentHomeSessionDbRow {
+  id: string;
+  event_id: string;
+  starts_at: string;
+  ends_at: string;
+  status: HomeSessionRow['status'];
+}
+
+/** `rsvps` -- same migration. */
+interface StudentHomeRsvpDbRow {
+  id: string;
+  session_id: string;
+  student_id: string;
+  status: HomeRsvpRow['status'];
+  updated_at: string;
+}
+
+/**
+ * `v_student_participation`'s seven real columns.
+ *
+ * `participation_pct` is typed `number | null`, and that is NOT cosmetic --
+ * T509 (`20260806000000_met01_explicit_marks.sql`) replaced the view's old
+ * `greatest(expected_ct - excused_ct, 1)` floor with an explicit `case ...
+ * then null`, so a student whose every mark is `excused` now yields SQL
+ * NULL rather than a fabricated `0.0`. The three other loaders that read
+ * this view still type this column as non-nullable `number`; that mismatch
+ * is T509 fallout, filed as its own row and deliberately not patched from
+ * here.
+ */
+interface StudentHomeParticipationDbRow {
+  student_id: string;
+  team_id: string;
+  season_id: string;
+  expected_ct: number;
+  present_ct: number;
+  late_ct: number;
+  excused_ct: number;
+  participation_pct: number | null;
+}
+
+function mapStudentHomeEvent(row: StudentHomeEventDbRow): HomeEventRow {
+  return {
+    id: row.id,
+    seasonId: row.season_id,
+    type: row.type,
+    title: row.title,
+    // `null` stays `null` -- the real `events.team_ids` "all teams" sentinel
+    // (`HomeEventRow`'s own doc), never coerced to `[]`. `isEventInTeamScope`
+    // depends on that distinction: `[]` would mean "no team matches".
+    teamIds: row.team_ids,
+    countsVolunteerHours: row.counts_volunteer_hours,
+  };
+}
+
+function mapStudentHomeSession(row: StudentHomeSessionDbRow): HomeSessionRow {
+  return {
+    id: row.id,
+    eventId: row.event_id,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    status: row.status,
+  };
+}
+
+function mapStudentHomeRsvp(row: StudentHomeRsvpDbRow): HomeRsvpRow {
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    studentId: row.student_id,
+    status: row.status,
+    updatedAt: row.updated_at,
+  };
+}
+
+/**
+ * Collapses a student's `v_student_participation` rows into the single
+ * metric `StudentHomeData.participation` declares.
+ *
+ * WHY THERE CAN BE MORE THAN ONE. The view groups by `(student_id, team_id,
+ * season_id)` (`20260806000000_met01_explicit_marks.sql`), so a DUAL-TEAM
+ * student has one row per active membership even within a single season.
+ * Taking an arbitrary one is a known, already-made mistake: `loaders/
+ * meetings.ts:437-446` records `.limit(1)` doing exactly that and being
+ * removed for it. So this sums.
+ *
+ * THE ARITHMETIC IS NOT INVENTED (constitution item 3). It is
+ * `v_team_participation`'s own expression, which performs this identical
+ * sum-then-recompute over the identical view, quoted verbatim from the same
+ * migration:
+ * ```sql
+ * case
+ *   when sum(expected_ct) - sum(excused_ct) = 0 then null
+ *   else round(100.0 * sum(present_ct) / (sum(expected_ct) - sum(excused_ct)), 1)
+ * end
+ * ```
+ * Note what that is NOT: `loaders/meetings.ts:504`'s `aggregateParticipation
+ * Rows` does the same job with `Math.max(expectedCt - excusedCt, 1)` -- the
+ * PRE-T509 floor, which fabricates `0%` in precisely the case the view now
+ * returns NULL for. That function is stale, not a model to copy; it is
+ * covered by the same T509-fallout row cited on the row type above.
+ *
+ * NULL ARRIVES AS `null` FOR THE WHOLE FIELD. `StudentParticipationMetric.
+ * participationPct` is `number`, and widening it reaches four other files
+ * that share the shape (`MeetingsList`, `StudentMeetingView`, `ParentHome`,
+ * and their tests) -- T509 fallout again, out of scope here. The screen is
+ * unharmed by the narrower choice: `StudentHome.tsx:1471` renders `—` for a
+ * `null` participation, which is exactly what "no denominator" should show,
+ * and the counts this drops are not rendered anywhere on the page. A future
+ * caller that wants the counts needs that widening first.
+ */
+export function aggregateStudentHomeParticipation(
+  rows: readonly StudentHomeParticipationDbRow[],
+): StudentParticipationMetric | null {
+  if (rows.length === 0) return null;
+  const expectedCt = rows.reduce((sum, row) => sum + row.expected_ct, 0);
+  const presentCt = rows.reduce((sum, row) => sum + row.present_ct, 0);
+  const lateCt = rows.reduce((sum, row) => sum + row.late_ct, 0);
+  const excusedCt = rows.reduce((sum, row) => sum + row.excused_ct, 0);
+  const denominator = expectedCt - excusedCt;
+  if (denominator === 0) return null;
+  return {
+    studentId: rows[0].student_id,
+    // Carries no "the team" meaning for a summed row -- disclosed the same
+    // way `aggregateParticipationRows` disclosed it, and unrendered here.
+    teamId: rows[0].team_id,
+    seasonId: rows[0].season_id,
+    expectedCt,
+    presentCt,
+    lateCt,
+    excusedCt,
+    // `round(x, 1)` -> `Math.round(x * 10) / 10`; non-negative here, so this
+    // matches Postgres `round`'s round-half-away-from-zero behavior.
+    participationPct: Math.round(((100.0 * presentCt) / denominator) * 10) / 10,
+  };
+}
+
+async function queryStudentHomeEvents(
+  client: SupabaseClient,
+  seasonId: string,
+): Promise<LoaderQueryResult<StudentHomeEventDbRow[]>> {
+  const result = await client
+    .from('events')
+    .select('id, season_id, type, title, team_ids, counts_volunteer_hours')
+    .eq('season_id', seasonId);
+  return { data: (result.data as StudentHomeEventDbRow[] | null) ?? null, error: result.error };
+}
+
+async function queryStudentHomeSessions(
+  client: SupabaseClient,
+  eventIds: readonly string[],
+): Promise<LoaderQueryResult<StudentHomeSessionDbRow[]>> {
+  const result = await client
+    .from('event_sessions')
+    .select('id, event_id, starts_at, ends_at, status')
+    .in('event_id', eventIds as string[]);
+  return { data: (result.data as StudentHomeSessionDbRow[] | null) ?? null, error: result.error };
+}
+
+/**
+ * Filtered on BOTH `session_id` and `student_id`. The student filter is not
+ * redundant with the `own_or_linked_read` RLS policy (`student_id in (select
+ * my_student_ids())`): that function unions in `guardian_links`, so a parent
+ * profile's session legitimately sees several children's RSVPs. Every
+ * consumer on this page already narrows by `rsvp.studentId === studentId`
+ * (`buildNextUp`, `getUnansweredOutreachOpportunities`), so an unfiltered
+ * read would fetch rows only to discard them -- and would put another
+ * student's RSVPs into `StudentHomeData`, where `withLocalRsvpOverride`
+ * mutates the array on a "Can't go" click.
+ */
+async function queryStudentHomeRsvps(
+  client: SupabaseClient,
+  args: { sessionIds: readonly string[]; studentId: string },
+): Promise<LoaderQueryResult<StudentHomeRsvpDbRow[]>> {
+  const result = await client
+    .from('rsvps')
+    .select('id, session_id, student_id, status, updated_at')
+    .in('session_id', args.sessionIds as string[])
+    .eq('student_id', args.studentId);
+  return { data: (result.data as StudentHomeRsvpDbRow[] | null) ?? null, error: result.error };
+}
+
+/**
+ * SEASON-scoped, unlike `loaders/meetings.ts`'s `queryParticipationRowsFor
+ * Student` -- that one is deliberately season-unaware because
+ * `LoadStudentMeetingsDataFn` has no season parameter and it sums across
+ * seasons as a disclosed fallback (`meetings.ts:448-455`). This signature
+ * DOES carry `seasonId`, so the narrower, correct filter is available and is
+ * used; multi-season summing never happens here.
+ */
+async function queryStudentHomeParticipation(
+  client: SupabaseClient,
+  args: { studentId: string; seasonId: string },
+): Promise<LoaderQueryResult<StudentHomeParticipationDbRow[]>> {
+  const result = await client
+    .from('v_student_participation')
+    .select(
+      'student_id, team_id, season_id, expected_ct, present_ct, late_ct, excused_ct, participation_pct',
+    )
+    .eq('student_id', args.studentId)
+    .eq('season_id', args.seasonId);
+  return {
+    data: (result.data as StudentHomeParticipationDbRow[] | null) ?? null,
+    error: result.error,
+  };
+}
+
 /**
  * `getClient` is injectable (defaults to the shared singleton), same
  * convention every export above already established, so tests can supply a
@@ -612,25 +937,63 @@ export function makeLoadStudentHomeData(
     queryStudentDisplayNameById,
     getClient,
   );
+  const loadEvents = createLoader<string, StudentHomeEventDbRow[]>(
+    queryStudentHomeEvents,
+    getClient,
+  );
+  const loadSessions = createLoader<readonly string[], StudentHomeSessionDbRow[]>(
+    queryStudentHomeSessions,
+    getClient,
+  );
+  const loadRsvps = createLoader<
+    { sessionIds: readonly string[]; studentId: string },
+    StudentHomeRsvpDbRow[]
+  >(queryStudentHomeRsvps, getClient);
+  const loadParticipation = createLoader<
+    { studentId: string; seasonId: string },
+    StudentHomeParticipationDbRow[]
+  >(queryStudentHomeParticipation, getClient);
+
   return async (studentId: string, seasonId: string): Promise<StudentHomeData> => {
-    const row = await loadRow(studentId);
+    // Three independent reads issued together; the events -> sessions ->
+    // rsvps chain below is sequential because each stage needs the previous
+    // stage's ids (the shape `loaders/coachHome.ts` and `loaders/dashboard.ts`
+    // module doc #2 already establish).
+    const [row, eventRows, participationRows] = await Promise.all([
+      loadRow(studentId),
+      loadEvents(seasonId),
+      loadParticipation({ studentId, seasonId }),
+    ]);
+
     // Fail loud, never bridged to fixture data -- see module doc above.
     if (row === null) {
       throw new Error('No student record was found for your account.');
     }
-    // Return shape: real displayName, verbatim seasonId passthrough, every
-    // other field an honest literal empty value (this task's own scope
-    // ruling above) -- no `FIXTURE_*` symbol referenced anywhere here.
+
+    const events = (eventRows ?? []).map(mapStudentHomeEvent);
+    const eventIds = events.map((event) => event.id);
+
+    // Empty-`.in(...)` guard (`dashboard.ts` module doc #5) -- a season with
+    // no events issues no session query at all, rather than `.in('event_id',
+    // [])`, and likewise no sessions issues no rsvp query.
+    const sessionRows = eventIds.length > 0 ? await loadSessions(eventIds) : null;
+    const sessions = (sessionRows ?? []).map(mapStudentHomeSession);
+    const sessionIds = sessions.map((session) => session.id);
+
+    const rsvpRows = sessionIds.length > 0 ? await loadRsvps({ sessionIds, studentId }) : null;
+
     return {
       seasonId,
       displayName: row.display_name,
+      // Inert literals, NOT empty data -- provably unread by the render
+      // path (section (4) of this task's doc block above).
       defaultGoalHours: 0,
       goalHoursOverride: null,
-      events: [],
-      sessions: [],
-      rsvps: [],
       studentHours: null,
-      participation: null,
+      events,
+      sessions,
+      rsvps: (rsvpRows ?? []).map(mapStudentHomeRsvp),
+      participation: aggregateStudentHomeParticipation(participationRows ?? []),
     };
   };
 }
