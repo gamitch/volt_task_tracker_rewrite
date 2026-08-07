@@ -1,0 +1,34 @@
+Task Name,Description,Status,Legacy ID,Tier,Provenance,Attempts,Premise gate,Blocked by (legacy)
+T171 — T154's no-stale-frame property is true in the code and pinned by nothing,"**Legacy ledger row:** `T171`
+
+**Type / provenance:** Debt / test integrity
+
+**Title:** T154's no-stale-frame property is true in the code and pinned by nothing
+
+**Status at migration:** Filed (item 20, from T154's PASS)
+
+---
+
+**MINOR carried from T154's PASS, measured by the checker and worth more than its grade suggests.** Moving the re-seed out of the render body into a `useEffect` keyed on `[user, lastSeededUserId]` — a change that demonstrably reintroduces a stale frame — leaves **all 36 tests passing**. The property IS true in the shipped code (measured: commits are `[""none:dark"",""user-bob:light""]` shipped vs `[""none:dark"",""user-bob:dark"",""user-bob:light""]` under the mutation, the middle entry being Bob signed in with Alice's theme still on screen), but nothing would notice if it broke. **Two independent causes, both instructive.** (1) `RecordingProbe` consumes only `useThemeMode()`, and the provider's `useMemo(() => ({mode, refresh}), [mode, refresh])` memoizes the consumer away when `user` changes but `mode` does not — so a stale commit is structurally invisible to it. Only a **dual-context** recorder (`useThemeMode()` **and** `useAuth()`) can see it. (2) The test literally named `the stale theme never reaches the DOM even for one frame during the switch` does `renders.slice(beforeSwitch).filter((m) => m !== 'dark')` and asserts on the survivors — **it filters out the very value it should assert absent**, so `['dark','light']` passes. **This is the round-1 failure shape recurring inside the one test written to prevent it**, which is why it is filed rather than logged. Fix: dual-context recorder asserting `not.toContain('user-bob:dark')` on commits after the switch, and drop the `.filter`. Acceptance: moving the re-seed into a `useEffect` must fail the suite; it currently does not. The checker also corrected itself here — its own first strict `not.toContain('dark')` probe reported no stale frame under the mutation and was worthless for the same structural reason.",Filed,T171,,checker,0,not-run,T154
+"T172 — make the placeholder-default class structurally hard to reintroduce, instead of sweeping for it forever","**Legacy ledger row:** `T172`
+
+**Type / provenance:** **Debt (mechanism)** — actual work, not an audit
+
+**Title:** make the placeholder-default class structurally hard to reintroduce, instead of sweeping for it forever
+
+**Status at migration:** Filed
+
+---
+
+**Filed 2026-07-30 because the owner caught the orchestrator treating ""audit the class"" and ""fix the class"" as one thing.** T168 finds instances; T151/T155/T158/T159/T170 fix individual instances; **nothing yet stops the sixth pattern becoming a seventh.** Every instance has the identical shape — an optional prop, a plausible fixture default, and a call site that passes nothing — and it has produced **three of the owner's four production bugs**, plus two more found only by audit. The instance-by-instance approach cannot converge: `src/pages/**` and `src/components/**` are still unswept, and a new component added tomorrow can reintroduce it with a green suite. **Candidate mechanisms, to be chosen in the packet, not here.** (a) A lint rule or `tsc`-level check flagging an optional prop whose default is a module-level fixture constant — cheap, mechanical, runs on every commit, and directly encodes the discriminator. (b) Generalise T151: make these props **required** wherever a fixture default exists, which the T151 probe measured as far cheaper than feared (34 TS2741 errors, **zero in production source**, all in two test files) — the compiler then enforces it permanently. (c) Naming convention plus a grep gate, weakest of the three. **Prefer (b) then (a):** (b) is enforcement by the type system rather than by a convention someone must remember, and today's measurement shows the cost is a test-file change, not a refactor. **A fourth shape, found during T176:** the same *metric* coalesce is duplicated in TypeScript in **four** places (`StudentHome.tsx:815`, `HoursTab.tsx:449`, `csvExport.test.ts:372`, `CoachHome.tsx:979 sumGoalHours`) against **one** SQL definition in `v_student_goal_projection`. T176's MAJOR was one instance of exactly this, and consolidating the four is the general form of that fix. **Sequenced after T151** so the pattern is proven on three real dialogs before being generalised, and after T168 so the true instance count is known rather than estimated. Relates to `architecture-review-parallelism.md` §3.2, which argues the same case for turning a judgement into a computed property.",Filed,T172,,audit,0,not-run,T151
+T332 — The login shell has slight overflow and weak landmarks,"**Legacy ledger row:** `T332`
+
+**Type / provenance:** Cosmetic + minor a11y — **audit LIVE-014**
+
+**Title:** The login shell has slight overflow and weak landmarks
+
+**Status at migration:** **Filed 2026-08-02 — see `docs/swarm/AUDIT-TRIAGE.md`**
+
+---
+
+P2.",Filed,T332,,audit,0,not-run,

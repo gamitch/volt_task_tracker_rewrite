@@ -1,0 +1,12 @@
+Task Name,Description,Status,Legacy ID,Tier,Provenance,Attempts,Premise gate,Blocked by (legacy)
+T329 — Duplicate digest switches leave email preference authority unresolved,"**Legacy ledger row:** `T329`
+
+**Type / provenance:** Debt (UI cleanup) — **audit SRC-016**
+
+**Title:** Duplicate digest switches leave email preference authority unresolved
+
+**Status at migration:** **Filed 2026-08-02 — see `docs/swarm/AUDIT-TRIAGE.md`**
+
+---
+
+**The data question is already closed** — owner ruling 2026-07-19: `weekly_digest` alone gates the weekly send; `digest_enabled` is vestigial. If two switches still render, this is UI cleanup, not an unresolved authority question. Scope accordingly.",Blocked on owner,T329,,audit,0,not-run,

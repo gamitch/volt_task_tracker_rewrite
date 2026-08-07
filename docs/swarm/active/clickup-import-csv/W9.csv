@@ -1,0 +1,12 @@
+Task Name,Description,Status,Legacy ID,Tier,Provenance,Attempts,Premise gate,Blocked by (legacy)
+T333 — ~~The migration attached all 16 imported events to a NEW inactive season~~ — **DATA HALF FIXED BY THE OWNER IN SQL.** Narrowed to: the ETL will do it again on the next import,"**Legacy ledger row:** `T333`
+
+**Type / provenance:** Bug (migration) — **found by the owner in live data, 2026-08-02**
+
+**Title:** ~~The migration attached all 16 imported events to a NEW inactive season~~ — **DATA HALF FIXED BY THE OWNER IN SQL.** Narrowed to: the ETL will do it again on the next import
+
+**Status at migration:** **NARROWED 2026-08-05 — the urgent half is resolved**
+
+---
+
+**The data half is DONE and this row overstated the problem until now.** The owner repointed the rows directly in SQL after the import; confirmed 2026-08-05 from the live app rather than from the record — the KPI strip shows **337.8 volunteer hours** and **Vine Street Market** under the active **2026-27 FIRST CANOPY** season, which is the imported data rendering. (341.75 → 337.8 is T322 excluding non-outreach types, not loss.) **The orchestrator had called this ""the highest-value untouched row"" on 2026-08-05 reading `Filed` from this ledger; that was wrong and is retracted — the record was stale, the world had moved.** **WHAT REMAINS, and it is much smaller:** `scripts/migrate/transform.ts:70-84`'s `buildSeasonUpsert` still hardcodes `is_active: false` and `MIGRATION_SEASON_NAME = '2025–2026'`, and the ETL still takes **no `--season-id`/`--season-name` argument and prints no post-run notice** (verified by grep across `scripts/migrate/`). So a future import repeats the same silent surprise and needs the same manual SQL repair. **Priority: low** — it only bites on the next import, and the caution itself is defensible (`seasons_single_active_idx` permits one active season; a migration should not hijack it). **The fix is to make it loud, not to change the default:** either accept a target season argument, or print a named warning identifying the inactive season it created and the `update` needed to repoint.",Filed,T333,,owner-live-testing,0,not-run,
