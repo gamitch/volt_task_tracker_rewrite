@@ -1939,6 +1939,65 @@ describe('<StudentHome /> T176 round 2 -- goal-hours denominator + confirmed/pla
   });
 });
 
+/**
+ * T199 -- one stubbed transport that knows every table the REAL production
+ * `loadStudentHomeData` reads: `students`, `events`, `event_sessions`,
+ * `rsvps`, `v_student_participation`.
+ *
+ * Teaching it all five is load-bearing, not tidying. The prior inline stub
+ * threw `unexpected table` for anything but `students`; once the loader
+ * gained its other reads, that throw propagated as a rejected `loadData` and
+ * the page rendered its "Couldn't load Home" banner -- so the enumeration
+ * test below started failing on the greeting assertion, with nothing in the
+ * message pointing at the real cause. A stub that throws on an unknown table
+ * turns "the loader grew a query" into "the page is broken", which is the
+ * masking failure `coachHome.test.ts` records from T198.
+ *
+ * Deliberately a passthrough: it ignores every filter and returns whatever
+ * rows the caller supplied. Filter arguments are asserted in
+ * `loaders/students.test.ts`, where the spy handles are retained; asserting
+ * them here too would only prove the stub ignores them.
+ */
+function makeStubbedStudentHomeClient(
+  rows: {
+    events?: unknown[];
+    event_sessions?: unknown[];
+    rsvps?: unknown[];
+    v_student_participation?: unknown[];
+  } = {},
+  displayName = 'Priya Chen',
+): SupabaseClient {
+  return {
+    from: (table: string) => {
+      if (table === 'students') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: { display_name: displayName }, error: null }),
+            }),
+          }),
+        };
+      }
+      if (
+        table === 'events' ||
+        table === 'event_sessions' ||
+        table === 'rsvps' ||
+        table === 'v_student_participation'
+      ) {
+        const data = rows[table as keyof typeof rows] ?? [];
+        const chain: Record<string, unknown> = {
+          eq: () => chain,
+          in: () => chain,
+          then: (resolve: (value: { data: unknown[]; error: null }) => unknown) =>
+            Promise.resolve({ data, error: null }).then(resolve),
+        };
+        return { select: () => chain };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    },
+  } as unknown as SupabaseClient;
+}
+
 describe('<StudentHome /> T176/T183 -- render-and-enumerate live over container.innerHTML, real ids + the REAL production loadData (criterion 11)', () => {
   it('confirms or corrects the gate-measured enumeration table (T176-gate-round1-findings.md), now against the real T183 loader', async () => {
     const REAL_SEASON: SeasonRow = {
@@ -1954,7 +2013,7 @@ describe('<StudentHome /> T176/T183 -- render-and-enumerate live over container.
       createdAt: '2026-01-01T00:00:00.000Z',
     };
 
-    // T183 -- direct DI against a stubbed `students` client, mirroring
+    // T183 -- direct DI against a stubbed client, mirroring
     // `students.test.ts`'s own `makeRecordingClient` helper (that file,
     // lines 40-62) but for the real `queryStudentDisplayNameById` query
     // (`.from('students').select('display_name').eq('id', studentId)
@@ -1963,19 +2022,12 @@ describe('<StudentHome /> T176/T183 -- render-and-enumerate live over container.
     // default (`StudentHome.tsx:1763`'s `loadStudentHomeData`) actually
     // returns, field by field -- so it must exercise the real loader, not
     // the harness's `defaultLoadStudentHomeData` fixture fallback.
-    const stubbedStudentsClient = {
-      from: (table: string) => {
-        if (table !== 'students') throw new Error(`unexpected table: ${table}`);
-        return {
-          select: () => ({
-            eq: () => ({
-              maybeSingle: async () => ({ data: { display_name: 'Priya Chen' }, error: null }),
-            }),
-          }),
-        };
-      },
-    } as unknown as SupabaseClient;
-    const realLoadData = makeLoadStudentHomeData(() => stubbedStudentsClient);
+    //
+    // T199: `makeStubbedStudentHomeClient` (above this describe) replaces
+    // the inline `students`-only stub. Supplying no rows keeps this case
+    // exactly as it was -- an empty database, every assertion below
+    // unchanged.
+    const realLoadData = makeLoadStudentHomeData(() => makeStubbedStudentHomeClient());
 
     renderAsUser(
       STUDENT_USER,
@@ -2027,10 +2079,15 @@ describe('<StudentHome /> T176/T183 -- render-and-enumerate live over container.
     expect(html).not.toContain('0 h confirmed + 0 h planned');
 
     // Row 6 -- participation -> null -> em dash, never a fabricated 0%.
+    // T199 RE-SOURCED: this used to be null because the loader hardcoded it.
+    // It is now a real `v_student_participation` read that legitimately
+    // returns no row for this student, which is the same outcome for the
+    // right reason -- and is exactly what T509 made the no-marks case do.
     expect(html).toContain('Participation: —');
 
-    // Row 7 -- events filtered to [] (the real season id never matches the
-    // fixture's own hardcoded placeholder literal) -> Next up empty.
+    // Row 7 -- T199 RE-SOURCED: the events read is real and season-scoped
+    // now; this stub supplies no rows, so `events` is genuinely empty rather
+    // than hardcoded empty -> Next up empty.
     expect(html).toContain('Nothing scheduled');
 
     // Rows 8/9 -- BOTH literally "You're all caught up" (enumeration
@@ -2055,6 +2112,221 @@ describe('<StudentHome /> T176/T183 -- render-and-enumerate live over container.
     // miss once `events` is `[]`).
     expect(html).not.toContain('Meeting live now');
     expect(html).not.toContain('events to answer');
+  });
+});
+
+/**
+ * T199 POSITIVE CONTROLS -- the same real production loader, same real
+ * render path, with rows this time.
+ *
+ * Every assertion in the enumeration test above is satisfied by an empty
+ * page, and an empty page is precisely what the pre-T199 loader always
+ * produced: `events`/`sessions`/`rsvps` were `[]` and `participation` was
+ * `null`, permanently. So that test could not tell a working loader from the
+ * broken one -- it passed identically before and after this change. These
+ * two cases are what make the difference observable, and they are the only
+ * tests in the repo that render the five surfaces the four literals cost:
+ *
+ *   1. "Next up" listing a real session
+ *   2. the live check-in hero (a student at a meeting could not check in
+ *      from Home at all)
+ *   3. "Sign-up opportunities" listing a real unanswered outreach session
+ *   4. the unanswered-RSVP hero
+ *   5. a real participation percentage instead of the em dash
+ *
+ * Hero priority is strict (`selectHeroState`: live > unanswered > quiet), so
+ * 2 and 4 cannot both render in one page and get one case each.
+ *
+ * All names fabricated (constitution item 6). `nowFn` is
+ * `FIXTURE_REFERENCE_NOW` (2026-07-19T12:00:00.000Z) and every timestamp
+ * below is positioned relative to it.
+ */
+describe('<StudentHome /> T199 -- the REAL loader with real rows lights up the five surfaces the literals kept dark', () => {
+  const T199_SCOPE = {
+    resolveStudentId: async () => 'student-real-t199',
+    resolveStudentScope: async () => ({
+      teamIds: ['team-real-t199'],
+      goalHours: 50,
+      confirmedHours: 5,
+      plannedHours: 2,
+    }),
+    nowFn: () => FIXTURE_REFERENCE_NOW,
+  };
+
+  const T199_SEASON: SeasonRow = {
+    id: 'season-real-t199',
+    name: 'Real Season T199',
+    startsOn: '2026-01-01',
+    endsOn: '2026-12-31',
+    defaultGoalHours: 999,
+    isActive: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  it('renders the live check-in hero, a populated "Next up", and a real participation percentage', async () => {
+    const client = makeStubbedStudentHomeClient({
+      events: [
+        {
+          id: 'event-t199-build',
+          season_id: 'season-real-t199',
+          type: 'meeting',
+          title: 'Fixture Build Night',
+          // `null` = all teams. Exercises the sentinel `isEventInTeamScope`
+          // honors, which a `[]` coercion in the mapper would break.
+          team_ids: null,
+          counts_volunteer_hours: false,
+        },
+      ],
+      event_sessions: [
+        {
+          id: 'session-t199-live',
+          event_id: 'event-t199-build',
+          // Straddles FIXTURE_REFERENCE_NOW -> genuinely live.
+          starts_at: '2026-07-19T11:00:00.000Z',
+          ends_at: '2026-07-19T14:00:00.000Z',
+          status: 'scheduled',
+        },
+      ],
+      rsvps: [],
+      v_student_participation: [
+        {
+          student_id: 'student-real-t199',
+          team_id: 'team-real-t199',
+          season_id: 'season-real-t199',
+          expected_ct: 4,
+          present_ct: 3,
+          late_ct: 1,
+          excused_ct: 0,
+          participation_pct: 75.0,
+        },
+      ],
+    });
+
+    renderAsUser(
+      STUDENT_USER,
+      { ...T199_SCOPE, loadData: makeLoadStudentHomeData(() => client) },
+      async () => T199_SEASON,
+    );
+    await flushMicrotasks();
+
+    const html = container.innerHTML;
+
+    // Surface 2 -- unreachable before T199 for EVERY student in EVERY state.
+    expect(html).toContain('Meeting live now');
+    // ...which also means the quiet greeting is gone, so `selectHeroState`
+    // is genuinely being driven by data now rather than pinned.
+    expect(html).not.toContain("You're all caught up. Nothing needs your attention right now.");
+
+    // Surface 1.
+    expect(html).toContain('Fixture Build Night');
+    expect(html).not.toContain('Nothing scheduled');
+
+    // Surface 5 -- a real percentage where the em dash used to be permanent.
+    expect(container.textContent).toContain('Participation: 75%');
+    expect(container.textContent).not.toContain('Participation: —');
+  });
+
+  it('renders the unanswered-RSVP hero and a populated "Sign-up opportunities" for a future outreach session with no rsvp row', async () => {
+    const client = makeStubbedStudentHomeClient({
+      events: [
+        {
+          id: 'event-t199-cleanup',
+          season_id: 'season-real-t199',
+          type: 'outreach',
+          // Team-scoped rather than `null`, so this also proves the mapper
+          // carries a real `team_ids` array through to `isEventInTeamScope`.
+          team_ids: ['team-real-t199'],
+          title: 'Fixture Park Cleanup',
+          counts_volunteer_hours: true,
+        },
+      ],
+      event_sessions: [
+        {
+          id: 'session-t199-future',
+          event_id: 'event-t199-cleanup',
+          // Well after FIXTURE_REFERENCE_NOW -> not live, so the hero falls
+          // through to priority 2 rather than 1.
+          starts_at: '2026-07-25T15:00:00.000Z',
+          ends_at: '2026-07-25T19:00:00.000Z',
+          status: 'scheduled',
+        },
+      ],
+      // No rsvp row for this session -> "unanswered".
+      rsvps: [],
+      v_student_participation: [],
+    });
+
+    renderAsUser(
+      STUDENT_USER,
+      { ...T199_SCOPE, loadData: makeLoadStudentHomeData(() => client) },
+      async () => T199_SEASON,
+    );
+    await flushMicrotasks();
+
+    const html = container.innerHTML;
+
+    // Surface 4 -- singular copy, so the count is genuinely derived.
+    expect(html).toContain('You have 1 event to answer');
+    expect(html).not.toContain('Meeting live now');
+
+    // Surface 3 -- the section's own EmptyState is gone and the real session
+    // is listed. Scoped to the opportunities group rather than the whole
+    // page, since "You're all caught up" is an enumeration hazard shared
+    // with the quiet-greeting hero (criterion 11 above).
+    const opportunitiesGroup = Array.from(container.querySelectorAll('[role="group"]')).find((el) =>
+      el.textContent?.includes('Fixture Park Cleanup'),
+    );
+    expect(opportunitiesGroup).toBeTruthy();
+    expect(container.textContent).not.toContain(
+      'Outreach events awaiting your response will show up here.',
+    );
+  });
+
+  /**
+   * A team-scope negative control. The loader reads events season-wide ON
+   * PURPOSE -- `isEventInTeamScope` (`StudentHome.tsx`) is the single
+   * team-scope predicate and it lives on the page, not in the query. That
+   * design is only safe if the page really does filter, so this pins it:
+   * identical rows to the case above, one different `team_ids`, and the
+   * student must see nothing.
+   */
+  it('does not show an event scoped to a team the student is not on -- the page-side predicate is doing real work', async () => {
+    const client = makeStubbedStudentHomeClient({
+      events: [
+        {
+          id: 'event-t199-other',
+          season_id: 'season-real-t199',
+          type: 'outreach',
+          team_ids: ['team-somebody-else'],
+          title: 'Fixture Other Team Cleanup',
+          counts_volunteer_hours: true,
+        },
+      ],
+      event_sessions: [
+        {
+          id: 'session-t199-other',
+          event_id: 'event-t199-other',
+          starts_at: '2026-07-25T15:00:00.000Z',
+          ends_at: '2026-07-25T19:00:00.000Z',
+          status: 'scheduled',
+        },
+      ],
+      rsvps: [],
+      v_student_participation: [],
+    });
+
+    renderAsUser(
+      STUDENT_USER,
+      { ...T199_SCOPE, loadData: makeLoadStudentHomeData(() => client) },
+      async () => T199_SEASON,
+    );
+    await flushMicrotasks();
+
+    expect(container.textContent).not.toContain('Fixture Other Team Cleanup');
+    expect(container.innerHTML).toContain('Nothing scheduled');
+    expect(container.innerHTML).toContain(
+      "You're all caught up. Nothing needs your attention right now.",
+    );
   });
 });
 
