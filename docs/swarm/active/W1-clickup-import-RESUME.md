@@ -83,3 +83,20 @@ gate is **T052**, which the doc's parenthetical omits.
 
 So the payload is right and the doc's shorthand is loose. Worth correcting in the doc, because the
 consequence of believing it is putting a human-only row where an agent can claim it.
+
+## What actually tripped the limit — pace the resume
+
+ClickUp documents **100 requests per minute per token** on Free/Unlimited/Business, and a window
+that size resets in a minute. It cannot produce the ~22 hour cooldown seen here, and volume was not
+the cause either: about 44 tool calls reached ClickUp across a 90-minute session.
+
+The likely trigger is **burst shape, not total volume** — this session fired 11 `create_list` calls
+in one parallel batch and later 5 `create_task` calls in another. If each tool call fans out into
+several underlying requests, a batch like that can exceed 100 in a single second.
+
+The penalty is far harsher than the documented rule (it locks reads too, and counts down in
+minutes), so it appears to come from the MCP connector rather than ClickUp's published limit. That
+could not be confirmed from inside the session, because every read was refused as well.
+
+**When resuming: issue creates sequentially, not in parallel batches.** 24 rows one at a time stays
+comfortably inside 100/min even if each call costs several requests.
