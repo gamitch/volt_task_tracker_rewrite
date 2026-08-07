@@ -100,3 +100,17 @@ could not be confirmed from inside the session, because every read was refused a
 
 **When resuming: issue creates sequentially, not in parallel batches.** 24 rows one at a time stays
 comfortably inside 100/min even if each call costs several requests.
+
+## CSV route: the W9 test, and why Tier looked broken
+
+`W9.csv` imported cleanly, with one apparent gap — `Tier` did not map. **It is not a mapping
+failure.** Its only row, T333, has no Tier in the source, so there was nothing to map.
+
+Only **2 of the 33 rows carry a Tier at all**: T606 (HEAVY, already imported by API and confirmed
+rendering) and T407 (STANDARD, in `Unassigned.csv`). Every row in `W9`, `W7`, `W8`, `W10` and
+`Human-gates` is blank at source. So **T407 is the only row that can test Tier through CSV**, and if
+it lands blank the fix is one field on one task.
+
+Do not read the 31 blank Tiers as migration damage. It is the gap `CLICKUP-MIGRATION.md` already
+records — invisible as optional prose in Markdown, obvious as 31 blanks in a field — and it is owner
+review work, not an import defect.
