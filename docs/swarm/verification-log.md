@@ -11212,3 +11212,136 @@ Frozen scope proven by **blob SHA identity** on `ScheduleMeetingsDialog.tsx`/`.t
 byte-identical by **sha256 of its extracted body** across all three revisions after a 1094→1142 line
 shift. Gates `0/0/0/0`; **82 files / 2121 tests**; lint +4, all `react-refresh/only-export-components`
 in the new dialog file, verified by rule and file.
+
+## T199 — `StudentHome`'s missing loader: four literals, five dark surfaces — **PASS** (2026-08-07)
+
+### The premise held, and the reported symptom was slightly off
+
+Reported as "the student home page is blank," then corrected by the owner: *"it doesnt crash, it a
+missing loader."* That correction is the accurate one and it changed where I looked. Nothing throws.
+`makeLoadStudentHomeData` resolved a **real** `displayName` (T183) and then returned
+`events: []`, `sessions: []`, `rsvps: []`, `participation: null` as hardcoded literals.
+
+### What four literals actually cost, traced through the render path
+
+Not "some sections are empty" — the three arrays are the sole input to every dynamic element on the
+page, so the failure fans out:
+
+| Surface | Driven by | State before T199 |
+|---|---|---|
+| "Next up" list | `buildNextUp` (`:1404`) | always the "Nothing scheduled" `EmptyState` |
+| "Sign-up opportunities" | `getUnansweredOutreachOpportunities` (`:1405`) | always "You're all caught up" |
+| Live check-in hero | `selectLiveMeetingSession` (`:1403`) | **unreachable** — a student standing in the meeting could not check in from Home |
+| Hero selection | `selectHeroState(false, 0)` (`:1413`) | pinned to `'quiet-greeting'` |
+| Participation line | `data.participation` (`:1471`) | always `—` |
+
+The third one is the one worth naming out loud. It is not a cosmetic empty state; the page's primary
+call to action could never appear for anyone.
+
+### Team scope stays on the page, deliberately
+
+`LoadStudentHomeDataFn` is `(studentId, seasonId)` — no team parameter — and it is unchanged. The
+`events` read is **season**-scoped, because `isEventInTeamScope` (`StudentHome.tsx:686`, its own
+comment: *"The ONLY team-scope predicate in this file"*) already runs inside all three consumers
+against the `teamIds` the page resolves separately. Filtering server-side as well would mean a second
+implementation of "in scope", in PostgREST array syntax, free to drift from the page's. One predicate
+in one place — and no change to the shared function type, so no stub churn in
+`StudentHome.test.tsx`/`DashboardPage.test.tsx`.
+
+The negative control that makes this safe is a real test, not an assertion of intent: an event scoped
+to `team_ids: ['team-somebody-else']` is fetched and must not reach the screen.
+
+### DISCLOSED LIMIT — RLS scopes these rows by a different team source than the page does
+
+`20260717000002_rls.sql:153-161`, verbatim:
+
+```sql
+create policy own_or_linked_read on events
+  for select to authenticated
+  using (
+    exists (
+      select 1 from students s
+      where s.id in (select my_student_ids())
+        and (events.team_ids is null or s.team_id = any(events.team_ids))
+    )
+  );
+```
+
+`event_sessions` inherits the same test through `event_id` (`:180-188`). Both read the **legacy
+`students.team_id`**. T187 moved this page onto **ACTIVE `student_teams`** memberships. For a
+dual-team student the two disagree: an event scoped to their *second* team passes
+`isEventInTeamScope` but never arrives, because RLS filtered it first.
+
+Pre-existing — T187 opened the gap and the policies predate it. **T199 is what makes it observable:**
+until now the page had no rows at all, so nothing could be missing from them. Not fixable here (it
+needs a migration; item 16, the owner applies those). Filed as **T806** rather than papered over
+with a client-side compensation, which would hide a policy bug inside a loader. Single-team students
+— everyone in the system today — are unaffected.
+
+**Stated limit:** read from the policy text, which is unambiguous on this point. Not measured against
+a live database.
+
+### Three fields stay literal, and that is a different judgement than T183's
+
+`defaultGoalHours`, `goalHoursOverride` and `studentHours` are still `0`/`null`/`null`. They are not
+on this row's scope list and they are **provably unread**: T176 round 2 moved the page onto
+`confirmedHours`/`plannedHours`/`goalHours` props sourced from `v_student_goal_projection`, and
+`StudentHome.tsx:1415-1424` says so in its own comment. A `v_student_hours` read here buys a round
+trip that changes no pixel — the same trade T198 weighed on `CoachHome`. Inert, not unimplemented,
+and a test now pins that no `v_student_hours` query is issued.
+
+### The dual-team participation case, and a stale sibling found on the way
+
+`v_student_participation` groups by `(student_id, team_id, season_id)`, so a dual-team student has
+more than one row **within one season**. Taking `rows[0]` is a mistake the repo has already made and
+already fixed once — `meetings.ts:437-446` records `.limit(1)` doing exactly that. So this sums, and
+the summing expression is not invented: it is `v_team_participation`'s own, which performs the
+identical sum-then-recompute over the identical view.
+
+Which surfaced a real problem in the neighbours. **T509 replaced that view's
+`greatest(expected_ct - excused_ct, 1)` floor with an explicit `case ... then null`** so an
+all-excused student stops reporting a fabricated 0%. Two loaders still apply the removed floor when
+they aggregate — `meetings.ts:516` and `checkin.ts:375` — and three row types still declare
+`participation_pct: number` when the view can now return SQL NULL (`meetings.ts:283`,
+`checkin.ts:239`, `reports.ts:221`). Filed as **T807**; deliberately not patched from this row, and
+deliberately not copied into the new code.
+
+### Mutations — 8 written, 8 killed, each verified applied
+
+Every mutation printed the file and line it landed on before the suite ran. That check exists because
+a `replace(..., 1)` in the T703 session hit the wrong one of two identical strings and produced a
+green run that looked exactly like a confirmed defect.
+
+| # | Mutation | Line | Result |
+|---|---|---|---|
+| M1 | drop `.eq('season_id')` from the events read | `students.ts:863` | 2 red |
+| M2 | drop `.eq('student_id')` from the rsvps read | `:897` | 1 red |
+| M3 | restore the pre-T509 `greatest(x,1)` floor | `:839` | 2 red |
+| M4 | `rows[0]` instead of summing (the pre-T122 `.limit(1)` bug) | `:835` | 2 red |
+| M5 | coerce `team_ids` `null` → `[]` | `:770` | 2 red |
+| M6 | drop the empty-`.in()` guard | `:979` | 1 red |
+| M7 | revert all four fields to the pre-T199 literals | `:993` | 4 red |
+| M8 | drop `.eq('season_id')` from the participation read | `:919` | 1 red |
+
+M5 is worth a note: `null` on `events.team_ids` is the real "all teams" sentinel, so coercing it to
+`[]` inverts `isEventInTeamScope` for precisely the events every student is meant to see.
+
+### Two fake clients had to learn the new tables, or a test would have passed for the wrong reason
+
+Both `students.test.ts`'s harness and `StudentHome.test.tsx`'s inline stub threw `unexpected table`
+for anything but `students`. Once the loader gained three more reads, that throw surfaced as a
+rejected `loadData` and the page rendered its "Couldn't load Home" banner — so the row-not-found test
+would have kept passing while asserting the wrong cause, and the enumeration test failed on its
+*greeting* assertion with nothing pointing at the real reason. Same masking shape T198 hit.
+
+The pre-existing criterion-11 enumeration test is a good example of the limit this row had to work
+around: **every one of its assertions is satisfied by an empty page**, so it passed identically before
+and after this change. Its expected object did not have to move (an empty database still yields
+`[]`/`[]`/`[]`/`null`, and that stability is worth keeping) — but it proves nothing about T199. The
+three new render tests are what make the difference observable.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `eslint` **0 errors / 375 warnings (unchanged from `main`, measured by
+stashing)** · `vitest` **82 files / 2139 tests, up from 2121** (`students.test.ts` 23→38,
+`StudentHome.test.tsx` 61→64) · `vite build` 0.

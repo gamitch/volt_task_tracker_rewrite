@@ -114,6 +114,15 @@ Sequence T508 first, across machines.
 **W4** — ✅ T509 shipped and the owner applied the migration · **W5** — T802 *(T801 closed; T803 in flight, PR #93)* ·
 **unowned** — T507.
 
+**Updated 2026-08-07 (W5 only — the counts in the table above are NOT recounted here; that is T512's job,
+and hand-recounting is the exact failure mode T512 was filed for).** **W5** — ✅ **T199 closed** (`StudentHome`'s
+`events`/`sessions`/`rsvps`/`participation` are real queries; the live check-in hero was unreachable for every
+student before it). Two rows **filed** out of it and both are open: **T806** (`events`/`event_sessions` RLS scopes
+by the legacy `students.team_id` while the page scopes by ACTIVE `student_teams` — a dual-team student never
+receives their second team's events; **needs a migration the owner applies**) and **T807** (T509 fallout —
+`meetings.ts`/`checkin.ts` still apply the `greatest(x,1)` floor T509 removed, so an all-excused student reads
+`—` on one screen and `0%` on another; TypeScript-only, no migration).
+
 **W3's remaining four, all filed 2026-08-05/06 and all downstream of T510:** T605 (edit ONE meeting inside a
 series — date, time, notes, cancel-from-the-edit-flow) · T606 (per-meeting location — **needs a migration the
 owner applies**) · T607 (ending a meeting that partly fails tells the coach nothing about which partial state

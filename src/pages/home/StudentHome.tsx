@@ -280,10 +280,10 @@
  * 9. Data loading -- T176 UPDATE: `studentId`/`teamId` are real. T183
  *    UPDATE: `loadData`'s `displayName` is now real too (real
  *    `students.display_name`, own row, `loaders/students.ts`'s
- *    `loadStudentHomeData`) -- everything ELSE it returns remains an
- *    honest-empty literal, not fixture-derived (deliberately out of T183's
- *    bounded scope, per its own packet, except for the ONE field module doc
- *    #4 above already covers: MET-04's denominator).
+ *    `loadStudentHomeData`). **T199 UPDATE: so are `events`, `sessions`,
+ *    `rsvps` and `participation`** -- the four fields whose emptiness this
+ *    section used to describe as deferred. Only three literals remain, and
+ *    they are inert rather than empty: see below.
  *
  * `loadData` is the injectable seam (`(studentId, seasonId) =>
  * Promise<StudentHomeData>`), defaulting to the REAL `loadStudentHomeData`
@@ -292,14 +292,30 @@
  * no longer what this default parameter points at). `seasonId` is now the
  * REAL `useActiveSeason().season.id` (T176, same mechanism `CoachHome.tsx`'s
  * own T155 already established for its sibling), not a placeholder default.
- * `displayName` is the real, per-student `students.display_name` (T183); the
- * other SEVEN fields (`defaultGoalHours`, `goalHoursOverride`, `events`,
- * `sessions`, `rsvps`, `studentHours`, `participation`) are honest-empty
- * literals in the new default (`0`/`null`/`[]`, never `FIXTURE_*`-derived),
- * genuinely empty/absent for a real signed-in student rather than
- * fabricated-and-wrong. A real implementation of the REST of this seam, once
- * a shared Supabase client exists for this page's own remaining fields, is
- * filed as its own follow-up (same criterion 12a), not built here.
+ * `displayName` is the real, per-student `students.display_name` (T183).
+ *
+ * **T199** made the four data fields real: `events` (season-scoped),
+ * `sessions` and `rsvps` (chained on the previous stage's ids, the RSVPs
+ * additionally filtered to this student), and `participation` (a
+ * `v_student_participation` read scoped to student + season, summed across a
+ * dual-team student's per-team rows using `v_team_participation`'s own
+ * expression). Until then all four were permanently `[]`/`null`, which cost
+ * this page five surfaces at once: "Next up" and "Sign-up opportunities"
+ * could only ever show their `EmptyState`s, `selectLiveMeetingSession`
+ * could only ever return `null` so the live check-in hero was unreachable,
+ * `selectHeroState` was therefore pinned to `'quiet-greeting'`, and the
+ * participation line always read `—`. Team scope is still applied HERE, by
+ * `isEventInTeamScope` below -- the loader deliberately does not re-implement
+ * it server-side. `loaders/students.ts`'s own T199 doc block carries the
+ * reasoning, plus a disclosed RLS limit for dual-team students.
+ *
+ * Three fields stay literal: `defaultGoalHours`, `goalHoursOverride` and
+ * `studentHours`. These are INERT, not empty -- module doc #4 / the T176
+ * round 2 note at the hours bar below record that `goalHours`/
+ * `confirmedHours`/`plannedHours` come from props
+ * (`v_student_goal_projection` via `resolveStudentScope`), so nothing on
+ * screen reads those three. Querying them would buy a round trip and change
+ * no pixel.
  *
  * -----------------------------------------------------------------------
  * 10. DES-12 four states.

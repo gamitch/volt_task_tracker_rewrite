@@ -22,6 +22,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  aggregateStudentHomeParticipation,
   makeLoadStudentHomeData,
   makeResolveStudentIsActive,
   makeResolveStudentScope,
@@ -325,13 +326,73 @@ describe('makeResolveStudentScope (T187: ACTIVE student_teams memberships)', () 
  * mirroring the `makeResolveStudentScope` describe block above but for the
  * raw `students` table (`.eq('id', studentId)`, not the view's own
  * `student_id`).
+ *
+ * T199 EXTENSION. `makeLoadStudentHomeData` now reads four tables, so this
+ * harness has to know all four. The `students` branch is byte-unchanged and
+ * still owns `selectSpy`/`eqSpy`/`maybeSingleSpy` EXCLUSIVELY -- every T183
+ * assertion above (`selectSpy` called once, `eqSpy` called once) still means
+ * what it meant, and the eq-drop mutation test still gets a non-thenable
+ * chain to walk. The three new branches carry their own recorded args.
+ *
+ * Teaching it the new tables is not optional bookkeeping: the old dispatcher
+ * threw `unexpected table` for anything but `students`, and a throw there
+ * would surface as a rejected `loadStudentHomeData` -- which is EXACTLY what
+ * the row-not-found test asserts. It would have passed for the wrong reason.
+ * That masking is the same trap T198 hit and `coachHome.test.ts` documents.
+ *
+ * Filter arguments are RETAINED rather than rebuilt inline (T163's lesson,
+ * `reports.test.ts`'s module doc): a passthrough fake returns the same rows
+ * whatever it is filtered on, so only the recorded arguments can prove a
+ * filter is still there.
  */
-function makeStudentsRecordingClient(row: { display_name: string } | null) {
+interface StudentHomeTableRows {
+  events?: unknown[];
+  event_sessions?: unknown[];
+  rsvps?: unknown[];
+  v_student_participation?: unknown[];
+}
+
+function makeStudentsRecordingClient(
+  row: { display_name: string } | null,
+  rows: StudentHomeTableRows = {},
+) {
   const maybeSingleSpy = vi.fn().mockResolvedValue({ data: row, error: null });
   const eqSpy = vi.fn(() => ({ maybeSingle: maybeSingleSpy }));
   const selectSpy = vi.fn(() => ({ eq: eqSpy, maybeSingle: maybeSingleSpy }));
+
+  // One entry per `.select()` issued against a non-`students` table, with the
+  // `.eq`/`.in` arguments that followed it.
+  const calls: { table: string; select: string; eq: unknown[][]; in: unknown[][] }[] = [];
+
+  function makeChain(table: string, columns: string) {
+    const entry = { table, select: columns, eq: [] as unknown[][], in: [] as unknown[][] };
+    calls.push(entry);
+    const data = rows[table as keyof StudentHomeTableRows] ?? [];
+    const chain: Record<string, unknown> = {
+      eq: vi.fn((...args: unknown[]) => {
+        entry.eq.push(args);
+        return chain;
+      }),
+      in: vi.fn((...args: unknown[]) => {
+        entry.in.push(args);
+        return chain;
+      }),
+      then: (resolve: (value: { data: unknown[]; error: null }) => unknown) =>
+        Promise.resolve({ data, error: null }).then(resolve),
+    };
+    return chain;
+  }
+
   const fromSpy = vi.fn((table: string) => {
     if (table === 'students') return { select: selectSpy };
+    if (
+      table === 'events' ||
+      table === 'event_sessions' ||
+      table === 'rsvps' ||
+      table === 'v_student_participation'
+    ) {
+      return { select: vi.fn((columns: string) => makeChain(table, columns)) };
+    }
     throw new Error(`unexpected table: ${table}`);
   });
   return {
@@ -340,7 +401,23 @@ function makeStudentsRecordingClient(row: { display_name: string } | null) {
     selectSpy,
     eqSpy,
     maybeSingleSpy,
+    calls,
   };
+}
+
+/** Every `.eq(column, value)` / `.in(column, values)` recorded for one table. */
+function studentHomeEqArgs(
+  calls: ReturnType<typeof makeStudentsRecordingClient>['calls'],
+  table: string,
+): unknown[][] {
+  return calls.filter((call) => call.table === table).flatMap((call) => call.eq);
+}
+
+function studentHomeInArgs(
+  calls: ReturnType<typeof makeStudentsRecordingClient>['calls'],
+  table: string,
+): unknown[][] {
+  return calls.filter((call) => call.table === table).flatMap((call) => call.in);
 }
 
 describe('makeLoadStudentHomeData (T183 criterion 8)', () => {
@@ -359,7 +436,16 @@ describe('makeLoadStudentHomeData (T183 criterion 8)', () => {
     expect(eqSpy).toHaveBeenCalledWith('id', 'student-real-1');
   });
 
-  it('maps display_name to displayName (real, per-student), passes seasonId through verbatim, and returns the SEVEN remaining fields as honest-empty literals -- no FIXTURE_* symbol', async () => {
+  // T199 RETITLED, assertion byte-unchanged. Four of the seven fields it
+  // covers are no longer literals -- `events`/`sessions`/`rsvps`/
+  // `participation` are real reads now, which for a client supplying NO rows
+  // land on exactly the same `[]`/`[]`/`[]`/`null`. That the expected object
+  // did not have to change is the point worth keeping: the empty case still
+  // renders identically, so nothing downstream shifted underneath it. The
+  // three that ARE still literals (`defaultGoalHours`/`goalHoursOverride`/
+  // `studentHours`) are inert-by-design, not unimplemented -- see the T199
+  // doc block in `students.ts`.
+  it('maps display_name to displayName (real, per-student), passes seasonId through verbatim, and returns [] / [] / [] / null for a student with no events, plus the three inert literals -- no FIXTURE_* symbol', async () => {
     const { client } = makeStudentsRecordingClient({ display_name: 'Priya Chen' });
     const loadStudentHomeData = makeLoadStudentHomeData(() => client);
 
@@ -434,6 +520,340 @@ describe('makeLoadStudentHomeData (T183 criterion 8)', () => {
     expect(maybeSingleSpy).toHaveBeenCalledTimes(1);
     // The intended guard: eqSpy was never called under the mutated path.
     expect(eqSpy).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * T199 -- the four fields T183 left as literals: `events`, `sessions`,
+ * `rsvps`, `participation`.
+ *
+ * These tests cover what the T183 block above structurally cannot: it
+ * supplies no rows, so every one of its assertions holds equally well
+ * whether the loader queries anything at all. The cases below therefore all
+ * carry rows, and they assert FILTER ARGUMENTS rather than returned data
+ * wherever a filter is what is at stake -- the passthrough fake returns the
+ * same rows regardless of what it was filtered on, so returned data cannot
+ * distinguish a scoped read from an unscoped one (T163's finding, recorded
+ * at length in `reports.test.ts`'s module doc).
+ *
+ * All names fabricated (constitution item 6).
+ */
+const T199_EVENT_ROWS = [
+  {
+    id: 'event-build-night',
+    season_id: 'season-real-9',
+    type: 'meeting',
+    title: 'Fixture Build Night',
+    team_ids: null,
+    counts_volunteer_hours: false,
+  },
+  {
+    id: 'event-park-cleanup',
+    season_id: 'season-real-9',
+    type: 'outreach',
+    title: 'Fixture Park Cleanup',
+    team_ids: ['team-real-9'],
+    counts_volunteer_hours: true,
+  },
+];
+
+const T199_SESSION_ROWS = [
+  {
+    id: 'session-build-1',
+    event_id: 'event-build-night',
+    starts_at: '2026-08-10T23:00:00.000Z',
+    ends_at: '2026-08-11T01:00:00.000Z',
+    status: 'scheduled',
+  },
+];
+
+const T199_RSVP_ROWS = [
+  {
+    id: 'rsvp-1',
+    session_id: 'session-build-1',
+    student_id: 'student-real-9',
+    status: 'going',
+    updated_at: '2026-08-01T12:00:00.000Z',
+  },
+];
+
+describe('makeLoadStudentHomeData -- events/sessions/rsvps (T199)', () => {
+  it('reads events season-scoped, selecting counts_volunteer_hours -- the column HomeEventRow declares and computePlannedHours reads', async () => {
+    const { client, calls } = makeStudentsRecordingClient({ display_name: 'Priya Chen' });
+
+    await makeLoadStudentHomeData(() => client)('student-real-9', 'season-real-9');
+
+    expect(calls.filter((call) => call.table === 'events')).toHaveLength(1);
+    expect(calls.find((call) => call.table === 'events')?.select).toBe(
+      'id, season_id, type, title, team_ids, counts_volunteer_hours',
+    );
+    expect(studentHomeEqArgs(calls, 'events')).toContainEqual(['season_id', 'season-real-9']);
+  });
+
+  it('passes a DIFFERENT seasonId through to the events read on a second call -- a real passthrough, not a constant', async () => {
+    const { client, calls } = makeStudentsRecordingClient({ display_name: 'Priya Chen' });
+    const load = makeLoadStudentHomeData(() => client);
+
+    await load('student-real-9', 'season-one');
+    await load('student-real-9', 'season-two');
+
+    expect(studentHomeEqArgs(calls, 'events').map(([, value]) => value)).toEqual([
+      'season-one',
+      'season-two',
+    ]);
+  });
+
+  it('chains events -> sessions -> rsvps on the ids each stage returns, never on a hardcoded set', async () => {
+    const { client, calls } = makeStudentsRecordingClient(
+      { display_name: 'Priya Chen' },
+      {
+        events: T199_EVENT_ROWS,
+        event_sessions: T199_SESSION_ROWS,
+        rsvps: T199_RSVP_ROWS,
+      },
+    );
+
+    await makeLoadStudentHomeData(() => client)('student-real-9', 'season-real-9');
+
+    expect(studentHomeInArgs(calls, 'event_sessions')).toContainEqual([
+      'event_id',
+      ['event-build-night', 'event-park-cleanup'],
+    ]);
+    expect(studentHomeInArgs(calls, 'rsvps')).toContainEqual(['session_id', ['session-build-1']]);
+  });
+
+  /**
+   * The RSVP student filter is NOT redundant with RLS: `my_student_ids()`
+   * unions in `guardian_links`, so a parent's session legitimately sees
+   * several children's rows. Dropping this `.eq` would put another student's
+   * RSVPs into `StudentHomeData.rsvps`, which `withLocalRsvpOverride`
+   * mutates on a "Can't go" click.
+   */
+  it("filters rsvps by BOTH session_id and the student's own id", async () => {
+    const { client, calls } = makeStudentsRecordingClient(
+      { display_name: 'Priya Chen' },
+      { events: T199_EVENT_ROWS, event_sessions: T199_SESSION_ROWS, rsvps: T199_RSVP_ROWS },
+    );
+
+    await makeLoadStudentHomeData(() => client)('student-real-9', 'season-real-9');
+
+    expect(studentHomeEqArgs(calls, 'rsvps')).toContainEqual(['student_id', 'student-real-9']);
+  });
+
+  it('never issues an empty .in(...) -- a season with no events queries neither sessions nor rsvps', async () => {
+    const { client, fromSpy } = makeStudentsRecordingClient({ display_name: 'Priya Chen' });
+
+    await makeLoadStudentHomeData(() => client)('student-real-9', 'season-real-9');
+
+    expect(fromSpy).toHaveBeenCalledWith('events');
+    expect(fromSpy).not.toHaveBeenCalledWith('event_sessions');
+    expect(fromSpy).not.toHaveBeenCalledWith('rsvps');
+  });
+
+  it('never issues an empty .in(...) -- events with no sessions queries no rsvps', async () => {
+    const { client, fromSpy } = makeStudentsRecordingClient(
+      { display_name: 'Priya Chen' },
+      { events: T199_EVENT_ROWS },
+    );
+
+    await makeLoadStudentHomeData(() => client)('student-real-9', 'season-real-9');
+
+    expect(fromSpy).toHaveBeenCalledWith('event_sessions');
+    expect(fromSpy).not.toHaveBeenCalledWith('rsvps');
+  });
+
+  /**
+   * `team_ids: null` is the real "all teams" sentinel. Coercing it to `[]`
+   * would invert `isEventInTeamScope` (`StudentHome.tsx:686`) for exactly
+   * the events every student is meant to see: `null` means "in scope for
+   * everyone", `[]` means "in scope for nobody".
+   */
+  it('maps snake_case to camelCase and preserves team_ids: null as null, never []', async () => {
+    const { client } = makeStudentsRecordingClient(
+      { display_name: 'Priya Chen' },
+      { events: T199_EVENT_ROWS, event_sessions: T199_SESSION_ROWS, rsvps: T199_RSVP_ROWS },
+    );
+
+    const data = await makeLoadStudentHomeData(() => client)('student-real-9', 'season-real-9');
+
+    expect(data.events).toEqual([
+      {
+        id: 'event-build-night',
+        seasonId: 'season-real-9',
+        type: 'meeting',
+        title: 'Fixture Build Night',
+        teamIds: null,
+        countsVolunteerHours: false,
+      },
+      {
+        id: 'event-park-cleanup',
+        seasonId: 'season-real-9',
+        type: 'outreach',
+        title: 'Fixture Park Cleanup',
+        teamIds: ['team-real-9'],
+        countsVolunteerHours: true,
+      },
+    ]);
+    expect(data.sessions).toEqual([
+      {
+        id: 'session-build-1',
+        eventId: 'event-build-night',
+        startsAt: '2026-08-10T23:00:00.000Z',
+        endsAt: '2026-08-11T01:00:00.000Z',
+        status: 'scheduled',
+      },
+    ]);
+    expect(data.rsvps).toEqual([
+      {
+        id: 'rsvp-1',
+        sessionId: 'session-build-1',
+        studentId: 'student-real-9',
+        status: 'going',
+        updatedAt: '2026-08-01T12:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('keeps the three inert fields literal -- no v_student_hours read is issued', async () => {
+    const { client, fromSpy } = makeStudentsRecordingClient(
+      { display_name: 'Priya Chen' },
+      { events: T199_EVENT_ROWS, event_sessions: T199_SESSION_ROWS },
+    );
+
+    const data = await makeLoadStudentHomeData(() => client)('student-real-9', 'season-real-9');
+
+    expect(fromSpy).not.toHaveBeenCalledWith('v_student_hours');
+    expect(data.defaultGoalHours).toBe(0);
+    expect(data.goalHoursOverride).toBeNull();
+    expect(data.studentHours).toBeNull();
+  });
+});
+
+describe('makeLoadStudentHomeData -- participation (T199)', () => {
+  it('reads v_student_participation scoped to BOTH student_id and season_id', async () => {
+    const { client, calls } = makeStudentsRecordingClient({ display_name: 'Priya Chen' });
+
+    await makeLoadStudentHomeData(() => client)('student-real-9', 'season-real-9');
+
+    const eqArgs = studentHomeEqArgs(calls, 'v_student_participation');
+    expect(eqArgs).toContainEqual(['student_id', 'student-real-9']);
+    expect(eqArgs).toContainEqual(['season_id', 'season-real-9']);
+  });
+
+  it('maps a single row verbatim into StudentHomeData.participation', async () => {
+    const { client } = makeStudentsRecordingClient(
+      { display_name: 'Priya Chen' },
+      {
+        v_student_participation: [
+          {
+            student_id: 'student-real-9',
+            team_id: 'team-real-9',
+            season_id: 'season-real-9',
+            expected_ct: 4,
+            present_ct: 3,
+            late_ct: 1,
+            excused_ct: 0,
+            participation_pct: 75.0,
+          },
+        ],
+      },
+    );
+
+    const data = await makeLoadStudentHomeData(() => client)('student-real-9', 'season-real-9');
+
+    expect(data.participation).toEqual({
+      studentId: 'student-real-9',
+      teamId: 'team-real-9',
+      seasonId: 'season-real-9',
+      expectedCt: 4,
+      presentCt: 3,
+      lateCt: 1,
+      excusedCt: 0,
+      participationPct: 75.0,
+    });
+  });
+});
+
+/**
+ * `aggregateStudentHomeParticipation` is exported and tested directly, the
+ * same posture `StudentHome.tsx` takes with its own pure helpers -- the
+ * dual-team and all-excused cases are arithmetic, and going through a fake
+ * transport to reach them would add noise without adding coverage.
+ */
+describe('aggregateStudentHomeParticipation (T199)', () => {
+  type T199ParticipationRow = Parameters<typeof aggregateStudentHomeParticipation>[0][number];
+
+  function participationRow(overrides: Partial<T199ParticipationRow> = {}): T199ParticipationRow {
+    return {
+      student_id: 'student-real-9',
+      team_id: 'team-frc',
+      season_id: 'season-real-9',
+      expected_ct: 0,
+      present_ct: 0,
+      late_ct: 0,
+      excused_ct: 0,
+      participation_pct: null,
+      ...overrides,
+    };
+  }
+
+  it('returns null when the student has no row at all -- T509 made "never marked" produce no row', () => {
+    expect(aggregateStudentHomeParticipation([])).toBeNull();
+  });
+
+  /**
+   * The case `loaders/meetings.ts`'s `.limit(1)` got wrong before T122, and
+   * the reason this cannot just take `rows[0]`: the view groups by
+   * `(student_id, team_id, season_id)`, so a dual-team student has one row
+   * per membership WITHIN one season.
+   */
+  it('sums a dual-team student across both membership rows rather than picking one', () => {
+    // Fixture chosen so the correct answer is distinguishable from EITHER
+    // wrong one: team-frc alone scores 100.0, team-ftc alone scores 0.0, and
+    // only the sum scores 40.0. A `.limit(1)`-style pick would land on one
+    // of the extremes, not near the right answer.
+    const result = aggregateStudentHomeParticipation([
+      participationRow({ team_id: 'team-frc', expected_ct: 4, present_ct: 4, excused_ct: 0 }),
+      participationRow({ team_id: 'team-ftc', expected_ct: 6, present_ct: 0, excused_ct: 0 }),
+    ]);
+
+    // v_team_participation's own expression over the sums:
+    // round(100.0 * (4+0) / ((4+6) - (0+0)), 1) = 40.0
+    expect(result).toMatchObject({ expectedCt: 10, presentCt: 4, excusedCt: 0 });
+    expect(result?.participationPct).toBe(40.0);
+  });
+
+  /**
+   * T509 (`20260806000000_met01_explicit_marks.sql`) replaced the view's
+   * `greatest(expected_ct - excused_ct, 1)` floor with an explicit
+   * `case ... then null`, precisely so an all-excused student stops
+   * reporting a fabricated 0%. `loaders/meetings.ts:516` still applies the
+   * old floor; this must not copy it.
+   */
+  it('returns null when every mark is excused -- never the pre-T509 fabricated 0%', () => {
+    const result = aggregateStudentHomeParticipation([
+      participationRow({ expected_ct: 3, present_ct: 0, excused_ct: 3, participation_pct: null }),
+    ]);
+
+    expect(result).toBeNull();
+  });
+
+  it('returns null when a dual-team student is all-excused across BOTH teams', () => {
+    const result = aggregateStudentHomeParticipation([
+      participationRow({ team_id: 'team-frc', expected_ct: 2, present_ct: 0, excused_ct: 2 }),
+      participationRow({ team_id: 'team-ftc', expected_ct: 5, present_ct: 0, excused_ct: 5 }),
+    ]);
+
+    expect(result).toBeNull();
+  });
+
+  it("rounds to one decimal, matching the view's own round(x, 1)", () => {
+    const result = aggregateStudentHomeParticipation([
+      participationRow({ expected_ct: 3, present_ct: 1, excused_ct: 0 }),
+    ]);
+
+    // 100 * 1 / 3 = 33.333... -> 33.3
+    expect(result?.participationPct).toBe(33.3);
   });
 });
 
