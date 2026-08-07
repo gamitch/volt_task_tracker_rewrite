@@ -11,8 +11,11 @@
 >   rate limited (~20 hours as of this note).
 > - **Delete the default `List`** (`901114287846`). No delete-List tool exists in the MCP set, so
 >   this is a UI action regardless.
-> - **Verify the import by count** — 33 tasks total, no duplicate `Legacy ID`. This could not be
->   done from the session because reads are refused while the limit holds.
+> - ~~**Verify the import by count**~~ — **done 2026-08-07 from the Space sidebar**, since the API
+>   still refuses reads. Every list matches the payload exactly and the total is **33**:
+>   W3 3 · W4 1 · W5 5 · W7 5 · W8 1 · W9 1 · W10 3 · Unassigned 10 · Human Gate 4.
+>   W1, W2 and W6 are empty, which is correct — the payload places no open rows in them. A
+>   duplicated row would have pushed one list over its expected count, and none did.
 > - **`T407`'s `Tier`** should read `STANDARD`; it is the only row that exercises Tier through CSV.
 
 **W1, 2026-08-07.** The full import stopped partway. ClickUp returned
