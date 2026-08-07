@@ -4122,3 +4122,50 @@ under the D015 precedent. Full ruling: `dispute-log.md` **D017**. What George sh
   stands as you recorded it, and every required change is additive verification or disclosure.
   One pre-existing, out-of-scope hazard (a coach touching only Start time can persist an inverted
   span) is now disclosed in the packet and gets its own item-20 ledger row rather than a comment.
+
+---
+
+## 2026-08-06 — D018: multi-team is the product. T705 takes branch (a); the views were right all along
+
+**Owner's ruling, verbatim: _"it has to be multi-team."_** A student can belong to more than one
+team, and the portal must represent that.
+
+This resolves the fork T705 was filed with. The schema (`student_teams`, `primary key
+(student_id, team_id)` + `left_on`) and all four consuming views were **already** built for
+multi-team — `v_team_hours` documents that a dual-member student's hours "appear in full in both
+of her teams' rows", `v_student_participation` emits one `expected` row per (session,
+membership-team), and T187 was a live defect about a dual-team student being scoped to her primary
+team only. What never happened is the UI and write-path half: `StudentDialog` offers a
+single-select team `Selector`, and `loaders/students.ts` writes `students.team_id` and nothing
+else, so `student_teams` has held only its one-time 2026-07-21 backfill ever since.
+
+**Direction is now fixed: the UI and write path move onto `student_teams`. The views do not
+change.** T705's *do-not-packet* hold is lifted; it can be packeted against branch (a).
+
+### What this ruling does NOT settle — decide these while packeting, don't assume
+
+1. **What becomes of `students.team_id`.** It is `not null`, and it is the display-badge source
+   for `v_student_goal_projection` (whose own catalog comment, re-pinned by T802 one day ago,
+   calls it "Legacy/primary-team column … display-only"). Either it survives as an explicit
+   *primary team* that the write path keeps in step with the membership rows, or it is dropped —
+   which is a schema change that must relax a `not null` and re-point that view. **Keeping it is
+   not free:** two sources of truth for the same fact is what produced this row in the first place.
+2. **"Hours by team" will legitimately exceed total volunteer hours** once any student is on two
+   teams — that is `v_team_hours`'s deliberate D-3 personal-vs-team split, not a defect. It needs
+   a label in the UI, or it will be re-filed as a bug by whoever sees it next.
+3. **Existing data needs repair, not just a forward fix.** Students added since 2026-07-21 have no
+   membership row; any student re-teamed since then has a stale row still `left_on is null`, so
+   they currently roll up under their *old* team while the badge shows the new one.
+
+### Ownership
+
+Three workflows, and the row is filed in W4's block only because "the numbers users are shown" is
+its charter:
+
+- **W7** — `StudentDialog.tsx` (multi-select) and `loaders/students.ts` (membership writes:
+  insert on join, set `left_on` on leave; never hard-delete, the views filter on `left_on is null`).
+- **W9** — the repair migration for the drift above.
+- **W4** — confirm the four rollups come right afterwards.
+
+**Sequence matters:** the repair migration must not land before the write path, or the same drift
+starts accumulating again the moment a coach edits a student.
