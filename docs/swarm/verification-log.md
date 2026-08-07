@@ -11083,3 +11083,132 @@ Gates, each bare with `$?` captured: typecheck 0 · format:check 0 · lint 0 err
 
 **NIT, no action:** the worker's evidence doc says "no commit was made", true when written; the
 orchestrator committed afterward at `0444798`, which the checker verified independently.
+
+---
+
+## T609 — Notes field accepted input and discarded it in edit mode — **PASS** (2026-08-06, `b0f94f6`)
+
+STANDARD. **Premise gate skipped under item 19b** — the same `isEditMode` gating idiom already shipped
+in that file for Description, inverted — which made `checker-reviewer` the only independent
+verification this row received. NIT only.
+
+The defect was live on `main` for about an hour after PR #108: the edit dialog rendered a Notes box
+with no gate while `handleSubmit` hardcoded `notes` to `''`. A coach typed a note, saved successfully,
+and it vanished. Not saving it was deliberate and documented; leaving the input visible was not — the
+class this repo already ruled on as *"worse than an absent UI"*.
+
+**The whole risk of this row was polarity**, and the orchestrator's own briefing got it wrong:
+"matching Description's existing pattern" is right about the mechanism and wrong about the condition,
+since Description is gated **on** `isEditMode` and Notes needs `!isEditMode`. A T605 premise gate
+caught the error in that phrasing while reviewing an unrelated packet, and the correction reached the
+foreman before it finished writing.
+
+**The checker ran two mutations beyond the one specified, and both were worth it.** Hiding Notes in
+*both* modes fails on the create-mode half — so that assertion is load-bearing and the test is not the
+trivial pass an absence-assertion invites. Inverting the gate outright fails **two** tests including
+the MTG-02 tripwire — so the tripwire really does catch inversion, which is the property the whole row
+depended on and which nobody had actually tested.
+
+Baseline derived independently in a worktree at `47966ef` rather than reused: lint 370/370 with **zero
+delta**, tests 2087 → **2088**, exactly +1, file count unchanged.
+
+**NIT worth acting on, filed as T612:** `mutation-replay`'s `replay.py` reported this genuine red
+replay as `UNTRUSTWORTHY: the mutated run executed no tests`, while its own captured output showed a
+real assertion failure. The checker caught it only by refusing the tool's verdict and re-running by
+hand. A false `UNTRUSTWORTHY` on the project's primary anti-vacuity check is worse than no check.
+
+---
+
+## T611 — a series edit no longer rewrites meeting times the coach did not touch — **PASS** (2026-08-06, `5884488`)
+
+HEAVY. Packet → **two** `checker-premise` rounds (REVISE, REVISE) → **D017** arbitration → conformance
+check → accuracy pass → `worker-implementer` → `checker-reviewer`. A blocking dependency, **T613**, was
+found, filed, built and merged mid-flight. NIT only.
+
+**Preventive, which inverted the usual risk.** Every meeting in a series shares one wall time today, so
+the defect cannot fire — T605 makes per-meeting times reachable, and the shipped edit path would then
+erase them: one time derived from the earliest meeting, applied to all, behind a save button checking
+only the title. Editing a series *title* would have wiped every custom time. So the danger was never a
+live regression; it was **a fix that silently does nothing, undetectably**, and the whole review chain
+was spent on the tests rather than the code.
+
+**Two acceptance criteria could not fail, and both are now closed by construction.** A premise gate
+proved the first by deleting the divergence condition outright — the "different times" warning then
+rendered on every edit of every series, false for most users, and **every test still passed**. The fix
+binds the present-case and absent-case assertions to one shared `DIVERGENCE_DISCLOSURE_TEXT` constant,
+so a separately-worded absence check — the way that hole reopens — is not expressible. The second
+criterion previously verified only that a new parameter was *inert*; it is now asserted against the
+real `AlertDialog` DOM element.
+
+**The checker proved it rather than reading it**, and deliberately did not use `replay.py`, whose
+false-negative bug is filed as T612. Re-running the gate's own mutation now yields exactly
+`1 failed | 2 passed` — assertion 3 alone. The two named mutations each reddened with real assertion
+failures, one a 2-hour instant delta, one a DOM text assertion.
+
+**Frozen scope verified by hash:** `sha256sum` of the first 711 lines is identical across both
+revisions, covering `buildEventSessionsPayload`, the duplicate-`session_date` doc comment and
+`computeMeetingSeriesReconcilePlan`. `loaders/meetings.ts` and `MeetingsList.tsx` diffs are empty, the
+test file has zero deletions, and `RECONCILABLE_SESSION_A`/`_B` are byte-identical — T613's territory
+untouched.
+
+**Two numbers in our own packets were wrong; the checker corrected both.** The lint reference said
+370→372; the truth is **370→371**, verified by rule and file — one new non-component export at
+`buildEditDesiredFutureSessions`. And the "worker self-reported 197 insertions" discrepancy dissolved:
+`197` is git's combined changed-lines histogram column (185+12). **The worker reported it correctly;
+the packet misread it.** Worth remembering — a discrepancy between two honest sources was itself a
+third party's error.
+
+Gates from an independently derived baseline: typecheck 0 · format:check 0 · lint 0 errors · **2101
+tests**, +13, and `ScheduleMeetingsDialog.test.tsx` the only file whose count moved.
+
+**NIT, log only:** the two new copy strings mix a typographic apostrophe with an ASCII one. No test is
+fragile today. Route to a copy-polish row; do not reopen this.
+
+---
+
+## T605 — edit one meeting inside a series — **PASS** (2026-08-06, `7676b78`, attempt 2)
+
+HEAVY. Packet → two `checker-premise` rounds → worker → checker (**FAIL**) → rework → re-check
+(**PASS**). The last row of the meeting-editing work the owner opened on 2026-08-05.
+
+**Attempt 1 failed on a process gap, not a code defect.** `npm run format:check` exited 1 at `f8cba40`
+and 0 at its parent — a **blocking CI step**, so the commit would have gone red on push. The worker's
+evidence document listed typecheck and two vitest runs; `format` appeared nowhere in it. Five sites,
+all quote-style and one wrap, all in its own added lines. Worth recording plainly: nothing about the
+feature was wrong. A gate that exists and runs in CI simply was not on the checklist.
+
+**The rework was `npm run format` and the re-check proved it semantically inert two independent ways.**
+The reworked blobs are byte-identical to a fresh prettier pass over the originals, and an AST token
+comparison **including string-literal values** returned **0 differing tokens** (1574/1574, 178/178,
+6705/6705). That was the right instrument for the concern — five lines of "formatting" is exactly what
+a quiet logic edit looks like in a diffstat — and it also proves the two re-quoted `it()` titles still
+match `-t` filters and the user-facing error string is character-identical.
+
+**Three findings from attempt 1 outlive this row.**
+
+*The worker corrected the packet, and was right.* §7 predicted that dropping `.select('id')` breaks
+assertion (c). Measured, it breaks **(a) and (b)** and (c) stays green — `runMutation` returns `.gt()`'s
+plain object, `data` coerces to `undefined`, and the wrapper throws for every call. The worker measured
+it, a foreman traced `runMutation` by hand and agreed, and the checker made it three. **All three
+independently contradicted the plan.** Recorded as a packet defect before that packet is reused.
+
+*The worker found a false pass in its own test.* A retarget date coincided with a sibling session, so
+the duplicate-date guard disabled Save where the future-forward guard was supposed to — the test proved
+nothing about the guard it named. The checker **reproduced both states**: the pre-fix date passes with
+the guard deleted, the shipped date fails. That is the strongest single result of the row, and it only
+surfaced because the worker deliberately broke its own code to see whether the test would notice.
+
+*Astryx renders dialog children regardless of `isOpen`*, so several dialogs' fields coexist in the DOM —
+measured as **2 real matches** for "Save changes". Hence scoped lookups and Session-prefixed labels, a
+disclosed design choice rather than verbosity.
+
+**Also recorded:** the worker's evidence document did not exist when its checker packet was written. A
+foreman found it by trying to open the file and logged it as an item 21 gap rather than deriving around
+it silently; the document was then written and committed at `35ee8b5`. And that same foreman, having no
+shell access, derived the parent SHA from `.git/logs` rather than accepting the orchestrator's — a
+sound instinct, since the orchestrator had fabricated one on the previous row.
+
+Frozen scope proven by **blob SHA identity** on `ScheduleMeetingsDialog.tsx`/`.test.tsx`, and Grant A
+byte-identical by **sha256 of its extracted body** across all three revisions after a 1094→1142 line
+shift. Gates `0/0/0/0`; **82 files / 2121 tests**; lint +4, all `react-refresh/only-export-components`
+in the new dialog file, verified by rule and file.

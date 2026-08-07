@@ -25,6 +25,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildEditConfirmationDescription,
+  buildEditDesiredFutureSessions,
   buildEventSessionsPayload,
   chicagoWallTimeToUtcIso,
   computeConfirmLabel,
@@ -43,6 +44,27 @@ import {
   type SaveMeetingSeriesPayload,
   type ScheduleTeamOption,
 } from './ScheduleMeetingsDialog';
+
+// ---------------------------------------------------------------------------
+// D017 ruling 5 (docs/swarm/dispute-log.md) -- the "T510 edit mode" describe
+// below builds fixtures (RECONCILABLE_SESSION_A/_B) whose startsAt are fixed
+// 2026 ISO literals, reconciled by this dialog's own production code against
+// an unseeded `new Date()`. Left alone, RECONCILABLE_SESSION_A.startsAt
+// ('2026-08-10T23:00:00.000Z') silently flips three currently-green tests
+// red the moment real wall-clock time crosses it. Pinning ONLY `Date` (never
+// other timers -- this file relies on real setTimeout/microtask scheduling
+// via `act`/`flushMicrotasks`/genuine promise resolution, and faking those
+// too would likely hang it) removes the fuse with zero fixture or assertion
+// edits. `2026-08-06T12:00:00.000Z` is not a new value -- it is the same
+// literal already used as the local NOW constant in the
+// isMeetingSessionReconcilable/computeMeetingSeriesReconcilePlan describes
+// below. Boss approval for this existing-test-file modification: D017
+// ruling 5 (Non-Negotiable override mechanism, D003 precedent). This is a
+// ONE-TIME module-level pin, deliberately NOT inside beforeEach -- there
+// must be no `vi.useRealTimers()` call anywhere in this file, or the clock
+// silently un-pins after the first test.
+// ---------------------------------------------------------------------------
+vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-08-06T12:00:00.000Z') });
 
 // ---------------------------------------------------------------------------
 // T151: `teams` is now a required prop (the deleted `DEFAULT_TEAMS` module
@@ -138,6 +160,21 @@ function setNativeInputValue(input: HTMLInputElement, value: string): void {
 function clickButton(button: HTMLButtonElement): void {
   act(() => {
     button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+}
+
+/** T611 (worker packet §5, round 1's BLOCKER-1) -- `TimeInput` fires
+ * `onChange(undefined)` ONLY from its own `handleBlur`
+ * (`node_modules/@astryxdesign/core/dist/TimeInput/TimeInput.js:215-227`);
+ * emptying the input's text via `setNativeInputValue` alone runs
+ * `handleInputChange` (`:187-201`), which parses `''` to `null` and never
+ * calls `fireChange`. React delegates `onBlur` via the bubbling native
+ * `focusout` event, not the non-bubbling `blur` event -- same bubbling-event
+ * dispatch precedent as `clickButton` above, applied to blur instead of
+ * click. */
+function blurInput(input: HTMLInputElement): void {
+  act(() => {
+    input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
   });
 }
 
@@ -634,6 +671,138 @@ describe('buildEditConfirmationDescription (rule 6, AC11/AC12)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// T611 -- `buildEditConfirmationDescription`'s additive, optional second
+// parameter (worker packet §3.3 item 2/§3.6; D017 ruling 4(b)/MAJOR-B
+// criterion (ii)). AC11/AC12 above are NOT edited -- this is additive
+// coverage of the two-argument form, not a replacement for them.
+// ---------------------------------------------------------------------------
+
+describe('buildEditConfirmationDescription (T611 overwrite suffix, D017 ruling 4(b)/MAJOR-B criterion ii)', () => {
+  it('the untouched path (second argument false) reproduces the one-argument output byte-for-byte', () => {
+    const plan = {
+      toInsert: [{ sessionDate: '2026-08-10', startsAt: '', endsAt: '', notes: '' }],
+      toUpdate: [],
+      toRemove: [{ sessionId: 's1', sessionDate: '2026-08-17' }],
+    };
+    expect(buildEditConfirmationDescription(plan, false)).toBe(
+      buildEditConfirmationDescription(plan),
+    );
+  });
+
+  it('the omitted-argument path also reproduces the one-argument output (default false)', () => {
+    const plan = {
+      toInsert: [],
+      toUpdate: [
+        {
+          sessionId: 's1',
+          session: { sessionDate: '2026-08-10', startsAt: '', endsAt: '', notes: '' },
+        },
+      ],
+      toRemove: [],
+    };
+    // Calling with explicit `undefined` exercises the parameter's own
+    // default value, the same as a genuinely one-argument call.
+    expect(buildEditConfirmationDescription(plan, undefined)).toBe(
+      buildEditConfirmationDescription(plan),
+    );
+  });
+
+  it('the touched path (second argument true) appends wording stating session times will be overwritten', () => {
+    const plan = {
+      toInsert: [],
+      toUpdate: [
+        {
+          sessionId: 's1',
+          session: { sessionDate: '2026-08-10', startsAt: '', endsAt: '', notes: '' },
+        },
+      ],
+      toRemove: [],
+    };
+    const untouched = buildEditConfirmationDescription(plan, false);
+    const touched = buildEditConfirmationDescription(plan, true);
+    expect(touched).not.toBe(untouched);
+    expect(touched.startsWith(untouched)).toBe(true);
+    expect(touched.toLowerCase()).toContain('overwritten');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T611 -- `buildEditDesiredFutureSessions` (worker packet §3.5): pure,
+// exported, independently testable without a DOM. Fixture times are the
+// same two genuinely-divergent, safely-dated values worker packet §4
+// specifies (16:00-17:30 CDT on 2026-09-14; 18:00-20:00 CDT on 2026-09-21).
+// ---------------------------------------------------------------------------
+
+describe('buildEditDesiredFutureSessions (T611 per-session time preservation)', () => {
+  const ORIGINAL_SEP_14 = {
+    startsAt: '2026-09-14T21:00:00.000Z', // 16:00 CDT
+    endsAt: '2026-09-14T22:30:00.000Z', // 17:30 CDT
+  };
+  const ORIGINAL_SEP_21 = {
+    startsAt: '2026-09-21T23:00:00.000Z', // 18:00 CDT
+    endsAt: '2026-09-22T01:00:00.000Z', // 20:00 CDT
+  };
+  const originalTimesByDate = new Map<string, { startsAt: string; endsAt: string }>([
+    ['2026-09-14', ORIGINAL_SEP_14],
+    ['2026-09-21', ORIGINAL_SEP_21],
+  ]);
+
+  it("preserves each matching date's own original starts_at/ends_at when timeFieldsTouched is false, even though the two originals genuinely diverge", () => {
+    const result = buildEditDesiredFutureSessions(
+      ['2026-09-14', '2026-09-21'],
+      '18:00',
+      '20:00',
+      false,
+      originalTimesByDate,
+    );
+    expect(result).toHaveLength(2);
+    const sep14 = result.find((s) => s.sessionDate === '2026-09-14');
+    const sep21 = result.find((s) => s.sessionDate === '2026-09-21');
+    expect(sep14?.startsAt).toBe(ORIGINAL_SEP_14.startsAt);
+    expect(sep14?.endsAt).toBe(ORIGINAL_SEP_14.endsAt);
+    expect(sep21?.startsAt).toBe(ORIGINAL_SEP_21.startsAt);
+    expect(sep21?.endsAt).toBe(ORIGINAL_SEP_21.endsAt);
+    // The two preserved results genuinely diverge from each other -- proves
+    // this isn't accidentally re-deriving one shared value for both dates.
+    expect(sep14?.startsAt).not.toBe(sep21?.startsAt);
+  });
+
+  it('applies the new shared startTime/endTime to every date when timeFieldsTouched is true, overriding any prior divergence', () => {
+    const result = buildEditDesiredFutureSessions(
+      ['2026-09-14', '2026-09-21'],
+      '18:00',
+      '20:00',
+      true,
+      originalTimesByDate,
+    );
+    expect(result).toHaveLength(2);
+    for (const date of ['2026-09-14', '2026-09-21']) {
+      const session = result.find((s) => s.sessionDate === date);
+      expect(session?.startsAt).toBe(chicagoWallTimeToUtcIso(date, '18:00'));
+      expect(session?.endsAt).toBe(chicagoWallTimeToUtcIso(date, '20:00'));
+    }
+    const sep14 = result.find((s) => s.sessionDate === '2026-09-14');
+    expect(sep14?.startsAt).not.toBe(ORIGINAL_SEP_14.startsAt);
+  });
+
+  it('uses the currently displayed startTime/endTime for a date with no entry in originalTimesByDate (a newly added date), regardless of timeFieldsTouched', () => {
+    const newDate = '2026-09-28';
+    for (const timeFieldsTouched of [false, true]) {
+      const result = buildEditDesiredFutureSessions(
+        [newDate],
+        '18:00',
+        '20:00',
+        timeFieldsTouched,
+        originalTimesByDate,
+      );
+      expect(result).toHaveLength(1);
+      expect(result[0].startsAt).toBe(chicagoWallTimeToUtcIso(newDate, '18:00'));
+      expect(result[0].endsAt).toBe(chicagoWallTimeToUtcIso(newDate, '20:00'));
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // <ScheduleMeetingsDialog /> -- field order + disabled/enabled proof.
 // ---------------------------------------------------------------------------
 
@@ -935,6 +1104,43 @@ describe('<ScheduleMeetingsDialog /> T510 edit mode', () => {
     sessions: [RECONCILABLE_SESSION_A, RECONCILABLE_SESSION_B, PAST_SESSION],
   };
 
+  // ---------------------------------------------------------------------------
+  // T611 (worker packet §4) -- two DEDICATED fixture sessions with genuinely
+  // divergent Chicago wall times, dated well clear of any near-term expiry
+  // (September 2026, same CDT DST regime as RECONCILABLE_SESSION_A/_B).
+  // Deliberately NOT reusing RECONCILABLE_SESSION_B for this purpose: that
+  // fixture carries its own real calendar fuse (quarantined by this file's
+  // own T613 fake-clock pin above, not by this task) -- a self-contained
+  // alternative costs nothing extra and carries no inherited expiry risk.
+  // ---------------------------------------------------------------------------
+  const DIVERGENT_SESSION_1: ExistingMeetingSeriesSession = {
+    sessionId: 'session-divergent-1',
+    sessionDate: '2026-09-14',
+    startsAt: '2026-09-14T21:00:00.000Z', // 16:00 CDT
+    endsAt: '2026-09-14T22:30:00.000Z', // 17:30 CDT
+    status: 'scheduled',
+  };
+  const DIVERGENT_SESSION_2: ExistingMeetingSeriesSession = {
+    sessionId: 'session-divergent-2',
+    sessionDate: '2026-09-21',
+    // Same wall time as DEFAULT_START_TIME/DEFAULT_END_TIME and
+    // RECONCILABLE_SESSION_A/_B (18:00-20:00 CDT), on a different,
+    // safely-future date -- deliberate: proves the fix by DATE, not only by
+    // an unusual time value (worker packet §4).
+    startsAt: '2026-09-21T23:00:00.000Z', // 18:00 CDT
+    endsAt: '2026-09-22T01:00:00.000Z', // 20:00 CDT
+    status: 'scheduled',
+  };
+  const EDIT_INITIAL_DATA_DIVERGENT: EditMeetingSeriesInitialData = {
+    ...EDIT_INITIAL_DATA,
+    sessions: [DIVERGENT_SESSION_1, DIVERGENT_SESSION_2],
+  };
+  // Assertion 3 (D017 ruling 4(a)/MAJOR-A) requires querying for the EXACT
+  // SAME disclosure string assertion 1 queries for -- one shared constant so
+  // that requirement cannot silently drift into two independently-worded
+  // checks (worker packet §5).
+  const DIVERGENCE_DISCLOSURE_TEXT = 'Sessions in this series currently have different times.';
+
   /** AlertDialog renders its own native `<dialog role="alertdialog">`
    * (`node_modules/@astryxdesign/core/src/AlertDialog/AlertDialog.tsx`) --
    * an unambiguous scope for its own "Save changes"/"Cancel" buttons, which
@@ -1140,5 +1346,218 @@ describe('<ScheduleMeetingsDialog /> T510 edit mode', () => {
 
     expect(onCreateMeetings).toHaveBeenCalledTimes(1);
     expect(findAlertDialogElement()?.hasAttribute('open')).toBe(false);
+  });
+
+  it('T609: Notes is create-mode only -- absent when editing, present when creating', () => {
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          initialData={EDIT_INITIAL_DATA}
+        />,
+      );
+    });
+    expect(() => getFieldControl('Notes')).toThrow();
+
+    act(() => {
+      root.render(<ScheduleMeetingsDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+    });
+    expect(getFieldControl('Notes')).toBeDefined();
+  });
+
+  // ---------------------------------------------------------------------------
+  // T611 -- stop a series edit from silently rewriting per-session meeting
+  // times (worker packet, all of §5). Uses the DIVERGENT_SESSION_1/2 fixtures
+  // above (§4) -- never RECONCILABLE_SESSION_A/_B, which are T613's territory.
+  // ---------------------------------------------------------------------------
+
+  it("T611 regression proof: saving with no time-field interaction preserves each session's own original time even though the two sessions genuinely diverge", async () => {
+    const onSaveMeetingSeries = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          initialData={EDIT_INITIAL_DATA_DIVERGENT}
+          onSaveMeetingSeries={onSaveMeetingSeries}
+        />,
+      );
+    });
+
+    clickButton(findButtonByText('Save changes') as HTMLButtonElement);
+    await flushMicrotasks();
+    clickButton(findButtonInAlertDialog('Save changes') as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(onSaveMeetingSeries).toHaveBeenCalledTimes(1);
+    const payload = onSaveMeetingSeries.mock.calls[0][0] as SaveMeetingSeriesPayload;
+    expect(payload.desiredFutureSessions).toHaveLength(2);
+    for (const original of [DIVERGENT_SESSION_1, DIVERGENT_SESSION_2]) {
+      const saved = payload.desiredFutureSessions.find(
+        (s) => s.sessionDate === original.sessionDate,
+      );
+      expect(saved).toBeDefined();
+      // Compare via getTime() (pins the intent -- the same INSTANT -- not
+      // literal string equality, mirroring AC-B1's own scoping note above).
+      expect(new Date(saved?.startsAt ?? '').getTime()).toBe(new Date(original.startsAt).getTime());
+      expect(new Date(saved?.endsAt ?? '').getTime()).toBe(new Date(original.endsAt).getTime());
+    }
+    // The two preserved sessions genuinely diverge from each other -- this is
+    // the direct regression proof the §6 mutation must redden.
+    const saved1 = payload.desiredFutureSessions.find((s) => s.sessionDate === '2026-09-14');
+    const saved2 = payload.desiredFutureSessions.find((s) => s.sessionDate === '2026-09-21');
+    expect(new Date(saved1?.startsAt ?? '').getTime()).not.toBe(
+      new Date(saved2?.startsAt ?? '').getTime(),
+    );
+  });
+
+  it('explicitly changing the Start time field applies the new time to every future session, including ones whose original times previously diverged from each other', async () => {
+    const onSaveMeetingSeries = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          initialData={EDIT_INITIAL_DATA_DIVERGENT}
+          onSaveMeetingSeries={onSaveMeetingSeries}
+        />,
+      );
+    });
+
+    // TimeInput renders 12-hour by default (worker packet §4's display-format
+    // note) -- "5:00 PM" parses immediately (TimeInput's own
+    // `handleInputChange`, no blur required) to the ISO time "17:00".
+    const startTimeInput = getFieldControl('Start time') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(startTimeInput, '5:00 PM');
+    });
+
+    clickButton(findButtonByText('Save changes') as HTMLButtonElement);
+    await flushMicrotasks();
+    clickButton(findButtonInAlertDialog('Save changes') as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(onSaveMeetingSeries).toHaveBeenCalledTimes(1);
+    const payload = onSaveMeetingSeries.mock.calls[0][0] as SaveMeetingSeriesPayload;
+    const saved1 = payload.desiredFutureSessions.find((s) => s.sessionDate === '2026-09-14');
+    const saved2 = payload.desiredFutureSessions.find((s) => s.sessionDate === '2026-09-21');
+    expect(saved1?.startsAt).toBe(chicagoWallTimeToUtcIso('2026-09-14', '17:00'));
+    expect(saved2?.startsAt).toBe(chicagoWallTimeToUtcIso('2026-09-21', '17:00'));
+    // Neither preserves its own original, genuinely-divergent starting time.
+    expect(saved1?.startsAt).not.toBe(DIVERGENT_SESSION_1.startsAt);
+    expect(saved2?.startsAt).not.toBe(DIVERGENT_SESSION_2.startsAt);
+  });
+
+  describe('T611 §3.3 divergence disclosure (D017 ruling 4(a)/MAJOR-A -- three assertions, all required, not any two)', () => {
+    it('1. present -- the divergent fixtures, zero time-field interaction', () => {
+      act(() => {
+        root.render(
+          <ScheduleMeetingsDialog
+            isOpen
+            onOpenChange={() => {}}
+            teams={TEST_TEAMS}
+            initialData={EDIT_INITIAL_DATA_DIVERGENT}
+          />,
+        );
+      });
+      expect(container.textContent).toContain(DIVERGENCE_DISCLOSURE_TEXT);
+    });
+
+    it('2. absent after touch -- the divergent fixtures, a time field edited', () => {
+      act(() => {
+        root.render(
+          <ScheduleMeetingsDialog
+            isOpen
+            onOpenChange={() => {}}
+            teams={TEST_TEAMS}
+            initialData={EDIT_INITIAL_DATA_DIVERGENT}
+          />,
+        );
+      });
+      expect(container.textContent).toContain(DIVERGENCE_DISCLOSURE_TEXT);
+
+      const startTimeInput = getFieldControl('Start time') as HTMLInputElement;
+      act(() => {
+        setNativeInputValue(startTimeInput, '5:00 PM');
+      });
+      expect(container.textContent).not.toContain(DIVERGENCE_DISCLOSURE_TEXT);
+    });
+
+    it('3. absent on a non-divergent series -- EDIT_INITIAL_DATA (its three sessions share one 18:00-20:00 CDT wall time by construction), zero interaction', () => {
+      act(() => {
+        root.render(
+          <ScheduleMeetingsDialog
+            isOpen
+            onOpenChange={() => {}}
+            teams={TEST_TEAMS}
+            initialData={EDIT_INITIAL_DATA}
+          />,
+        );
+      });
+      // Same query string as assertion 1 above -- not a separately-worded
+      // absence check (worker packet §5's own mandate, closing the exact gap
+      // round 2's gate proved: deleting the divergence condition entirely
+      // left all tests green because nothing asserted this negative case).
+      expect(container.textContent).not.toContain(DIVERGENCE_DISCLOSURE_TEXT);
+    });
+  });
+
+  it("T611 confirmation suffix (D017 ruling 4(b)/MAJOR-B criterion i): touching a time field on divergent sessions discloses the overwrite in the real AlertDialog's own description", async () => {
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          initialData={EDIT_INITIAL_DATA_DIVERGENT}
+        />,
+      );
+    });
+
+    const startTimeInput = getFieldControl('Start time') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(startTimeInput, '5:00 PM');
+    });
+
+    clickButton(findButtonByText('Save changes') as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(findAlertDialogElement()?.hasAttribute('open')).toBe(true);
+    expect(findAlertDialogElement()?.textContent?.toLowerCase()).toContain('overwritten');
+  });
+
+  it('clearing a touched time field disables the Save changes button in edit mode (round 1 BLOCKER-1 mechanism: change-to-empty alone is NOT enough, a real blur is required)', () => {
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          initialData={EDIT_INITIAL_DATA}
+        />,
+      );
+    });
+    expect(findButtonByText('Save changes')?.disabled).toBe(false);
+
+    const startTimeInput = getFieldControl('Start time') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(startTimeInput, '');
+    });
+    // Emptying the text alone does NOT disable the button yet -- TimeInput's
+    // own `handleInputChange` parses '' to `null` and never calls
+    // `fireChange` (round 1's BLOCKER-1); this dialog's `onChange` prop is
+    // never invoked, so `timeFieldsTouched` has not latched yet either.
+    expect(findButtonByText('Save changes')?.disabled).toBe(false);
+
+    blurInput(startTimeInput);
+    // Only after a real blur/focusout does TimeInput's own `handleBlur` call
+    // `fireChange(undefined)`, which both latches `timeFieldsTouched` and
+    // leaves `startTime` undefined -- the new edit-mode `isValid` condition
+    // (worker packet §3.4's "Consequence for isValid") disables the button.
+    expect(findButtonByText('Save changes')?.disabled).toBe(true);
   });
 });

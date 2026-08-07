@@ -4045,3 +4045,80 @@ Recorded for the process, not buried: the wrong range came from the prior confor
 side-note and the arbiter adopted it unverified while citing 19c as the reason for the edit — 19c's
 own failure shape, committed by its enforcer. "No agent is above verification, including the boss"
 applied literally. A ruling that mandates a citation change must measure the citation itself.
+
+---
+
+## 2026-08-06 — George orders T611 ahead of T605
+
+**Recorded because a premise gate caught the same defect twice in one day, and was right both times.**
+T611's gate reported: *"Packet line 18 asserts, bolded: 'The owner has ordered this row ahead of
+T605.' `T611` appears **zero** times in `auto-mode-decisions.md`, `verification-log.md` and
+`dispute-log.md`."* It cited this file's own earlier ruling back at the orchestrator —
+*"an agent-authored doc asserting standing owner authorization is not itself owner consent for any
+downstream session"* — and noted that **two** packets (T611's and T605 v3's) were by then
+cross-citing an authorization with no recorded source.
+
+The instruction was real. The record was not. That is precisely the failure this file exists to
+prevent, and this is the second instance in a single session; the first was the subagent-dispatch
+authorization written into `KICKOFF-PROMPTS.md`.
+
+### What he actually said
+
+> **"do T611 next, it needs to land before T605"**
+
+Preceded, when T609 was filed against T510's shipped code:
+
+> **"fix T609 now, don't wait for T605"**
+
+and, on merge order:
+
+> **"merge T609 when it passes, then continue with T605"**
+
+### Why the ordering is correct on the merits, independent of who asked for it
+
+T611's own row states it: every meeting in a series currently shares one wall time, so per-session
+time divergence is **unreachable today and the defect cannot fire**. T605 is the change that makes it
+reachable — and T510's shipped edit path then destroys it. `resetForm()` derives **one** time from the
+earliest reconcilable session (`ScheduleMeetingsDialog.tsx:811-827`), `handleSubmit` applies it to
+**every** date (`:932`), and edit-mode `isValid` checks the title **alone** (`:879-881`), so **a
+title-only save silently rewrites every meeting's time**, with the confirmation reporting only
+*"N session(s) kept"* (`:716-723`). The write lands via `loaders/meetings.ts:698-708`, applied per
+`toUpdate` at `:839`.
+
+So T605 shipping first would deliver a feature whose result the next title edit quietly deletes. The
+fix lives in `ScheduleMeetingsDialog.tsx`, **Forbidden to T605**, which is why T605's own foreman
+disclosed the hazard and asked for a separate row rather than absorbing it.
+
+**Standing:** T605 v3 carries T611 as a header-level dispatch precondition — no T605 worker runs until
+T611 has merged. Both packets may now cite **this section** rather than asserting the ordering on
+their own authority.
+
+---
+
+## 2026-08-06 — D017: T611's gate rounds exhausted; arbiter authorizes one closure revision and quarantines a suite-wide test-fixture calendar fuse
+
+T611's packet spent both item-19a `checker-premise` rounds (REVISE twice; round 2: 3 MAJOR,
+2 MINOR, **no BLOCKER** — and round 2 *built and ran* the whole §3 fix: full suite 2095/2095, the
+§6 mutation reddening with a real 2-hour `getTime()` delta). The escalation went to boss-arbiter
+under the D015 precedent. Full ruling: `dispute-log.md` **D017**. What George should know:
+
+- **The fix's design is proven and untouched.** What failed round 2 is verification coverage: two
+  §3 deliverables (the divergence-only disclosure condition, the confirmation-overwrite suffix) had
+  acceptance criteria that could not fail. Both gaps are confirmed and get one-assertion-each
+  closures in a final v3 revision; dispatch then rides on the same narrow conformance-only check
+  that closed out T510 (D015 §6 / D016 §6 — **third use of that instrument**; if you want it
+  written into item 19a's text, that edit is yours to authorize, per D015).
+- **A real four-day fuse sits in the EXISTING test suite, independent of T611.** The arbiter
+  replicated it directly (own worktree, faked clock): `ScheduleMeetingsDialog.test.tsx`'s
+  `RECONCILABLE_SESSION_A` is dated 2026-08-10, so on **2026-08-11 three currently-green tests go
+  red** for purely calendar reasons (a second fixture follows on 2026-08-18) — and any worker in
+  that window would trip a mandatory stop-and-escalate rule through no fault of its own, T605's
+  included. Ruled: an immediate FAST-tier fix (orchestrator, no worker) pins a Date-only fake
+  clock in that test file — measured 57/57 green under exactly that shape — with the test-file
+  modification explicitly boss-approved in D017, a red/green proof required, and the fix merging
+  **before** T611's worker dispatches. Until it merges, those three named calendar reds are
+  pre-ruled not-a-stop for any worker that verifies the cause in its own worktree.
+- **Nothing needed your decision:** no owner-ruled design moves, the T611-before-T605 ordering
+  stands as you recorded it, and every required change is additive verification or disclosure.
+  One pre-existing, out-of-scope hazard (a coach touching only Start time can persist an inverted
+  span) is now disclosed in the packet and gets its own item-20 ledger row rather than a comment.
