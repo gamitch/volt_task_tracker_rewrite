@@ -1,4 +1,19 @@
-# ClickUp import — halted on a rate limit, 9 of 33 in
+# ClickUp import — all 33 rows in
+
+> **RESOLVED 2026-08-07.** All 33 rows are now in ClickUp: 9 by API before the rate limit, the
+> remaining 24 by CSV through the UI. The history below is kept because it records how the state was
+> reached and the IDs a later session needs — but the "not yet imported" list is **no longer
+> outstanding**.
+>
+> **Still outstanding, all requiring either the API or the UI:**
+> - The **4 native dependency links** — `T064→T063`, `T065→T064`, `T070→T065`, `T172→T168`.
+>   Addable by hand today via *Relate items or add dependencies* on each task; the API is still
+>   rate limited (~20 hours as of this note).
+> - **Delete the default `List`** (`901114287846`). No delete-List tool exists in the MCP set, so
+>   this is a UI action regardless.
+> - **Verify the import by count** — 33 tasks total, no duplicate `Legacy ID`. This could not be
+>   done from the session because reads are refused while the limit holds.
+> - **`T407`'s `Tier`** should read `STANDARD`; it is the only row that exercises Tier through CSV.
 
 **W1, 2026-08-07.** The full import stopped partway. ClickUp returned
 `Rate limit exceeded. Please wait 1325 minutes` — roughly **22 hours** — on the 7th create of the
