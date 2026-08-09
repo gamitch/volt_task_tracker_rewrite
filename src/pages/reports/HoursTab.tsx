@@ -167,12 +167,43 @@
  *    because a season total that quietly folds in "not recorded yet"
  *    sessions as literal zeroes would understate the real number without
  *    telling anyone, whereas the "N of M" framing is honest about
- *    incompleteness. No `event.type` filter is applied to this sum (the
- *    packet's own ground truth text says "summing these across all of a
- *    season's events/sessions", with no type restriction stated) --
- *    `FIXTURE_EVENTS` deliberately includes one `type: 'meeting'` event
- *    specifically to prove this file does not silently drop non-outreach
- *    events from this sum.
+ *    incompleteness. No `event.type` or `countsVolunteerHours` filter is
+ *    applied here (the packet's own ground truth text says "summing these
+ *    across all of a season's events/sessions", with no type restriction
+ *    stated) -- unlike planned hours (module doc #2), which DOES filter on
+ *    `countsVolunteerHours`. `FIXTURE_SESSIONS` deliberately includes
+ *    `session-meeting-upcoming`, belonging to a `type: 'meeting'`,
+ *    `countsVolunteerHours: false` event, to hold that contract.
+ *
+ *    T703 CORRECTION (2026-08-09). This paragraph used to say the meeting
+ *    fixture existed "specifically to prove this file does not silently drop
+ *    non-outreach events from this sum". MEASURED, and it does not: applying
+ *    exactly that regression -- filtering the sessions fed to
+ *    `buildSeasonTotals` down to `type === 'outreach'` -- leaves
+ *    `peopleReachedTotal` at 125, UNCHANGED. It cannot do otherwise. A
+ *    meeting session's `people_reached` is structurally always null: no
+ *    meeting write path sets it (`loaders/meetings.ts` inserts sessions with
+ *    `session_date`/`starts_at`/`ends_at`/`status`/`notes` only, `:736` and
+ *    `:1154`; its updates touch time, notes and cancellation only, `:726`/
+ *    `:753`/`:1054`; `EndMeetingDialog` writes `ends_at`/`status`), and the
+ *    one path that DOES write `people_reached` (`loaders/outreach.ts:1284`)
+ *    is unreachable for a meeting -- `OutreachList.tsx`'s
+ *    `filterOutreachEvents` is the only `event.type` predicate on that
+ *    surface and excludes meetings, and `OutreachEventDialog`'s type
+ *    Selector never offers 'meeting'. So the meeting fixture can move this
+ *    sum in neither direction: the same "advertises a proof it cannot
+ *    deliver" shape T703 was filed for, and the same structurally-frozen
+ *    figure as T704's `meeting_hours`.
+ *
+ *    What that regression DOES redden, and therefore what this fixture
+ *    genuinely holds, is the DENOMINATOR pair: `totalSessionCount` and
+ *    `sessionsMissingHeadcountCount` count the meeting session too ("3 of
+ *    5", which the filter turns into "2 of 4"). That contract is guarded by
+ *    name in `HoursTab.test.tsx` ("a session whose event does not count
+ *    volunteer hours still counts toward the season-totals denominators").
+ *    Do NOT "strengthen" this by giving the meeting session a non-zero
+ *    `peopleReached` -- that encodes a row the app cannot produce, trading
+ *    one dishonest fixture for another.
  *
  * -----------------------------------------------------------------------
  * 7. "Grouped Table" -- same resolution `ParticipationTab.tsx`'s (T056,
@@ -856,7 +887,10 @@ const FIXTURE_SESSIONS: readonly HoursSessionRow[] = [
   },
   {
     // Boundary case: going + scheduled, but countsVolunteerHours FALSE ->
-    // must NOT count toward planned hours (module doc #2).
+    // must NOT count toward planned hours (module doc #2), while still
+    // counting toward the season-totals denominators (module doc #6, T703
+    // correction). `peopleReached` stays null and must: no app path can set
+    // it on a meeting session -- see module doc #6 for the write-path proof.
     id: 'session-meeting-upcoming',
     eventId: 'event-weekly-meeting',
     startsAt: '2026-07-22T23:00:00.000Z',
