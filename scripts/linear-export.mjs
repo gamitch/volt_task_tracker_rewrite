@@ -29,7 +29,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { gql, paginate, resolveTeam, requestsMade } from './linear/client.mjs';
+import { paginate, resolveTeam, requestsMade } from './linear/client.mjs';
 
 const OUT_DIR = 'docs/swarm';
 const JSON_OUT = path.join(OUT_DIR, 'linear-export.json');
