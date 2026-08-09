@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-09T16:12:34.493Z from team `Gamitch`.
+Exported 2026-08-09T16:45:03.080Z from team `Gamitch`.
 
 - **309** issues (242 archived)
-- **37** not yet completed or cancelled
+- **36** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -50,7 +50,6 @@ Exported 2026-08-09T16:12:34.493Z from team `Gamitch`.
 | [GAM-306](https://linear.app/gamitch/issue/GAM-306/t616-no-event-records-who-created-it-so-outreach-detail-permanently) | T616 | Backlog | area/w3 tier/unreviewed | T616 — No event records who created it, so outreach detail permanently reads "Unknown creator" |
 | [GAM-307](https://linear.app/gamitch/issue/GAM-307/t1300-sweep-the-four-non-fixed-closures-for-residual-work-left-behind) | T1300 | Backlog | tier/unreviewed | T1300 — Sweep the four non-"fixed" closures for residual work left behind when the row closed |
 | [GAM-308](https://linear.app/gamitch/issue/GAM-308/coachhomes-goal-projection-row-prints-the-same-raw-float-hours-t808) | — | Backlog | area/w5 provenance/other tier/fast | CoachHome's goal-projection row prints the same raw float hours T808 fixed for students and parents |
-| [GAM-309](https://linear.app/gamitch/issue/GAM-309/replaypy-cannot-read-python-test-runner-output-so-mutating-a-python) | — | In Progress | area/w10 tier/standard | replay.py cannot read Python test-runner output, so mutating a Python file needs a hand-written shim |
 
 ## Closed and cancelled
 
@@ -328,5 +327,6 @@ Exported 2026-08-09T16:12:34.493Z from team `Gamitch`.
 | [GAM-296](https://linear.app/gamitch/issue/GAM-296/t805-outreachdetailtesttsx-and-outreachlisttesttsx-failed-once-in-a) | T805 | Done | T805 — `OutreachDetail.test.tsx` and `OutreachList.test.tsx` failed once in a full-suite run and have not been reproduced since |
 | [GAM-298](https://linear.app/gamitch/issue/GAM-298/t705-the-schema-and-all-four-consuming-views-are-multi-team-the-roster) | T705 | Done | T705 — The schema and all four consuming views are multi-team; the roster UI and write path are still single-team, and three roster filters still scope on the legacy `students.team_id` |
 | [GAM-303](https://linear.app/gamitch/issue/GAM-303/t808-students-and-parents-see-raw-float-hours-39999983633333334-100-h) | T808 | Done | T808 — Students and parents see raw float hours (`3.9999983633333334 / 100 h`) beside a rounded percentage |
+| [GAM-309](https://linear.app/gamitch/issue/GAM-309/replaypy-cannot-read-python-test-runner-output-so-mutating-a-python) | — | Done | replay.py cannot read Python test-runner output, so mutating a Python file needs a hand-written shim |
 
 Full descriptions, relations and timestamps are in `linear-export.json`.
