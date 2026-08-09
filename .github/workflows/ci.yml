@@ -278,3 +278,81 @@ jobs:
       # skill with.
       - name: Mutation-replay parser and verdict tests
         run: python3 .claude/skills/mutation-replay/scripts/test_replay.py
+
+  # ---------------------------------------------------------------------------
+  # Edge Function unit tests (Deno).
+  #
+  # THESE TESTS EXISTED AND NOTHING RAN THEM. `supabase/functions/checkin/`
+  # has shipped five `*.test.ts` files since T032 -- hmac, grace, liveness,
+  # rate_limit, validation -- and this repository had no Deno job, so every
+  # one of them was a test nobody ran. That is the same defect class T701 was
+  # filed for and the same shape section 6 of the tracker-migration doc keeps
+  # recording: a guard that never fires is indistinguishable from one that
+  # works. Adding `linear-dispatch`'s tests without this job would have made
+  # it two directories of unenforced coverage instead of one.
+  #
+  # A separate job, like `sql` and `skill-scripts`: it needs no `npm ci`, and
+  # a broken Edge Function should name itself rather than hide inside a
+  # generic "CI failed".
+  #
+  # `deno test` type-checks as it runs, so this covers the functions'
+  # TypeScript too -- `tsconfig`/vitest do not, since `supabase/functions/**`
+  # is Deno-resolved (`npm:` specifiers, `.ts` import suffixes) and would not
+  # type-check under the app's Node config.
+  edge-functions:
+    name: Edge Function tests (Deno)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          # Matches `deno_version = 2` in supabase/config.toml, which is the
+          # runtime these actually run on in production.
+          deno-version: v2.x
+
+      # Per-directory, not one `deno test supabase/functions/` over the lot.
+      # Each function owns a `deno.json`, and Deno applies the config nearest
+      # the working directory -- so a single root-level invocation resolves
+      # every function's npm specifiers against the WRONG config and dies on
+      # the first one it cannot find (`ical-generator` in `ics/`,
+      # `@supabase/supabase-js` in `checkin-token/`) before running a single
+      # test. Measured, not assumed: the root-level form fails at collection.
+      #
+      # The loop DISCOVERS directories rather than listing them. A hardcoded
+      # list is how the gap this job closes would silently reopen -- the next
+      # function would ship with tests nobody runs and nothing would say so.
+      #
+      # `--allow-env --allow-read`: `send-invite` and `send-reminders` read
+      # `RESEND_SEND_MODE`/`RESEND_API_KEY` to prove their fail-closed
+      # defaults, and `send-invite` asserts against its own source text. Both
+      # are legitimately unit tests; neither needs `--allow-net`, and none of
+      # these should ever need it.
+      #
+      # `failed=1` rather than a bare `set -e` exit: every directory runs even
+      # after one goes red, so a single failure does not hide the state of the
+      # other five.
+      - name: Run Edge Function unit tests
+        shell: bash
+        run: |
+          set -uo pipefail
+          failed=0
+          ran=0
+          for dir in supabase/functions/*/; do
+            compgen -G "${dir}*.test.ts" > /dev/null || continue
+            ran=$((ran + 1))
+            echo "::group::${dir}"
+            ( cd "$dir" && deno test --allow-env --allow-read ) || failed=1
+            echo "::endgroup::"
+          done
+          # A pass because nothing ran is the failure mode this whole job
+          # exists to prevent, so it is an explicit error rather than a green
+          # tick over an empty loop.
+          if [ "$ran" -eq 0 ]; then
+            echo "::error::No Edge Function test directories were found. Expected at least one."
+            exit 1
+          fi
+          echo "Ran Deno tests in ${ran} Edge Function directories."
+          exit "$failed"

@@ -242,6 +242,25 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
+# `verify_jwt` defaults to TRUE: Supabase rejects any request that arrives
+# without a valid Supabase JWT in the Authorization header, before the
+# function's own code runs. That default is correct for every other function
+# in this project and wrong for exactly one.
+#
+# Linear signs its webhooks with an HMAC over the request body and cannot be
+# made to send a Supabase JWT. With the default left in place the function
+# would return 401 to Linear forever, and — the part that costs an afternoon —
+# it would do so *before* any of this repo's code executed, so no log line
+# from index.ts would ever appear to explain it.
+#
+# Turning the platform check off does NOT make this endpoint unauthenticated.
+# It moves authentication into the handler, where signature.ts discharges it:
+# HMAC-SHA256 over the raw body against LINEAR_WEBHOOK_SECRET, verified before
+# the body is even parsed. "Public" and "unverified" are different things and
+# only the first one applies here.
+[functions.linear-dispatch]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327
