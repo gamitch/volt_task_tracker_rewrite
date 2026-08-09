@@ -515,3 +515,48 @@ After the third failure, the task must be escalated to boss-arbiter.
     It is not — it is a hosted service on a free plan, and if the account lapses
     the history goes with it. That is precisely why (b) exists and why the
     ledger file is frozen rather than deleted.
+
+30. **An issue nobody can prioritize is not filed, it is parked.** Every Linear
+    issue an agent writes — a new filing, a deferral under item 20, a finding a
+    skill produced — follows `.claude/skills/linear-task-writing`. Invoke the
+    skill; do not reproduce its structure from memory.
+
+    **The four rules that carry the weight:**
+
+    a. **Lead with the defect, not the provenance.** The first sentence says what
+       a user sees or what breaks. Who filed it, under which item, during which
+       gate, belongs in the provenance table at the bottom.
+
+    b. **State a priority and defend it.** Name who is affected today, whether
+       anyone has actually seen it, what it blocks, what it costs, and the
+       trigger that ends the deferral. "Critical" is not a priority; it does not
+       help anyone choose between two rows. The owner can overrule a
+       recommendation and cannot overrule its absence.
+
+    c. **Verify before writing, and keep the corrections.** Re-check every line
+       number and claim against current `main`. A recorded citation is historical
+       evidence, not proof of current state. When re-verification contradicts the
+       filing, the issue carries a `Verification note` saying what was wrong —
+       deleting the error deletes the evidence that the check happened.
+
+    d. **Rewriting preserves the original.** The pre-rewrite text goes in a
+       `<details>` block at the bottom, verbatim. Item 29 makes Linear the source
+       and git the backup; a rewrite that discards the original breaks the
+       backup.
+
+    **This binds the writer, not the reader.** Nothing here licenses reformatting
+    someone else's open issue mid-flight. Rewrite an issue you are filing, one you
+    have claimed, or one the owner asked you to fix.
+
+    **Authorized by the human owner 2026-08-09**, whose words are the rationale:
+    *"i have to know which ones to prioritize and i can't understand what it's
+    saying."* The trigger was **T808/GAM-303**, a real defect whose filing opened
+    with the harness that found it and reached the symptom in paragraph two.
+    Rewriting it also surfaced three errors nobody had caught — a wrong line
+    number, a second render site that does not exist, and a missing root cause
+    that would have sent the implementer to a `round1` helper belonging to a
+    function the render path no longer calls. **The rewrite was not cosmetic; the
+    verification it forced is what found the errors.** Item 29 is why this is a
+    rule rather than a preference: with the ledger frozen, the issue text is the
+    whole record, and 46 rows migrated carrying `tier/unreviewed` in a house
+    style written for the filer rather than the reader.
