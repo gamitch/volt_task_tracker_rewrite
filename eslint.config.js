@@ -16,7 +16,12 @@ export default [
   // this repo. eslint does not read `.gitignore` either, so without this
   // `npx eslint .` lints every worker's in-flight copy alongside the real
   // tree (see the matching note in `vite.config.ts`).
-  { ignores: ['dist', 'node_modules', '.claude', 'supabase/functions/**'] },
+  // `dist-e2e` is the persona harness's own build output (a second Vite
+  // outDir, kept separate from `dist` so the two Playwright suites cannot
+  // serve each other's bundle). eslint does not read `.gitignore`, so it needs
+  // naming here alongside `dist` or `npm run lint` reports hundreds of
+  // `no-undef` errors against minified vendor code.
+  { ignores: ['dist', 'dist-e2e', 'node_modules', '.claude', 'supabase/functions/**'] },
   js.configs.recommended,
   {
     files: ['**/*.{ts,tsx}'],
@@ -46,6 +51,19 @@ export default [
   // break the gate rather than merely warn.
   {
     files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: globals.node,
+    },
+  },
+  // `tests/e2e-harness/**/*.mjs` is the local Supabase-compatible API shim
+  // (auth + PostgREST + storage + Edge Functions) that lets the real browser
+  // bundle run against a real Postgres cluster in this sandbox. Same
+  // situation as `scripts/**/*.mjs` above: Node CLI/server code, not part of
+  // the browser bundle, legitimately using `process`/`console`/`Buffer`.
+  {
+    files: ['tests/e2e-harness/**/*.mjs'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
