@@ -45,7 +45,7 @@ const PAYLOAD_OUT = path.join(OUT_DIR, 'linear-migration-payload.json');
 const REPORT_OUT = path.join(OUT_DIR, 'linear-migration-report.md');
 
 /** Abort if the ledger does not parse to exactly this many rows. */
-const EXPECTED_ROWS = 296;
+const EXPECTED_ROWS = 300;
 
 const argv = process.argv.slice(2);
 const EXECUTE = argv.includes('--execute');
@@ -278,6 +278,10 @@ function build() {
     const tier = tierFor(row, isOpen);
     if (tier) labels.push(tier);
     if (/resolved|yes/i.test(row.escalated)) labels.push('escalated');
+    // HUMAN GATE is recorded in the TITLE, not the Status column, so the
+    // status rules never see it. These are the rows no machine may close, so
+    // the label is a safety marker rather than a nicety.
+    if (/human gate/i.test(row.title) && !labels.includes('gate/human')) labels.push('gate/human');
 
     issues.push({
       legacyId: row.id,
@@ -459,7 +463,10 @@ async function ensureLabels(teamId) {
   for (const [spec, description] of LABEL_SPECS) {
     if (byPath[spec]) continue;
     const [head, child] = spec.split('/');
-    const isGroup = !child;
+    // A spec is a GROUP only if some other spec is its child. Inferring
+    // "no slash means group" made `escalated` a group, and Linear refuses to
+    // assign a group to an issue — which failed the run 151 issues in.
+    const isGroup = !child && LABEL_SPECS.some(([other]) => other.startsWith(`${head}/`));
     const parentId = child ? byPath[head] : undefined;
     if (child && !parentId) throw new Error(`Label group "${head}" must exist before "${spec}"`);
     const { data: d } = await gql(
@@ -495,7 +502,39 @@ async function execute(b) {
   saveCheckpoint(cp);
   console.log(`already present: ${Object.keys(existing).length} issue(s)`);
 
-  // --- create ------------------------------------------------------------
+  // Closed rows that BLOCK an open row must stay unarchived: Linear refuses
+  // to modify an archived issue ("Could not modify archived issue"), so a
+  // relation cannot be attached to one. Measured: 25 such rows, so peak active
+  // is 50 open + 25 = 75, comfortably under the free plan's 250 cap.
+  //
+  // The other 299 edges are archived-to-archived — historical, and already
+  // recorded in every description's `Deps` provenance row. Chasing them would
+  // cost ~978 unarchive/re-archive requests to relate rows nobody can act on.
+  const keepActive = new Set();
+  for (const i of b.issues) if (i.open) for (const dep of i.blockedBy) keepActive.add(dep);
+  const shouldArchive = (i) => !i.open && !keepActive.has(i.legacyId);
+
+  // --- archive FIRST, to free cap space -----------------------------------
+  // Archiving used to run last, so the active count peaked at 296 and tripped
+  // USAGE_LIMIT_EXCEEDED at exactly 250. It now runs before the remaining
+  // creates, and each new closed issue is archived as soon as it is made.
+  const backlogToArchive = b.issues.filter(
+    (i) => shouldArchive(i) && cp.created[i.legacyId] && !cp.archived.includes(i.legacyId),
+  );
+  if (backlogToArchive.length) {
+    console.log(`archiving ${backlogToArchive.length} already-created closed issue(s) to free cap…`);
+    for (const [n, issue] of backlogToArchive.entries()) {
+      await gql(`mutation($id:String!){ issueArchive(id:$id){ success } }`, { id: cp.created[issue.legacyId] });
+      cp.archived.push(issue.legacyId);
+      if (n % 50 === 0 || n === backlogToArchive.length - 1) {
+        saveCheckpoint(cp);
+        console.log(`  archived ${n + 1}/${backlogToArchive.length}`);
+      }
+    }
+    saveCheckpoint(cp);
+  }
+
+  // --- create, archiving each closed issue immediately ---------------------
   const todo = b.issues.filter((i) => !cp.created[i.legacyId]).slice(0, LIMIT ?? Infinity);
   console.log(`creating ${todo.length} issue(s)…`);
   for (const [n, issue] of todo.entries()) {
@@ -513,6 +552,10 @@ async function execute(b) {
       },
     );
     cp.created[issue.legacyId] = data.issueCreate.issue.id;
+    if (shouldArchive(issue)) {
+      await gql(`mutation($id:String!){ issueArchive(id:$id){ success } }`, { id: cp.created[issue.legacyId] });
+      cp.archived.push(issue.legacyId);
+    }
     if (n % 10 === 0 || n === todo.length - 1) {
       saveCheckpoint(cp);
       console.log(`  ${n + 1}/${todo.length}  ${issue.legacyId} -> ${data.issueCreate.issue.identifier}  (quota ${remaining})`);
@@ -520,17 +563,21 @@ async function execute(b) {
   }
   saveCheckpoint(cp);
 
-  // --- relations BEFORE archiving, so both ends are still active ----------
-  const known = new Set(Object.keys(cp.created));
+  // --- relations: only where the BLOCKED row is open ----------------------
+  // Those are the edges that inform dispatch, and both ends are guaranteed
+  // active — the blocked row because it is open, the blocker because
+  // keepActive held it back from archiving.
   const edges = [];
   for (const i of b.issues) {
+    if (!i.open) continue;
     for (const dep of i.blockedBy) {
-      if (!known.has(dep) || !known.has(i.legacyId)) continue;
       const sig = `${dep}->${i.legacyId}`;
-      if (!cp.related.includes(sig)) edges.push({ sig, blocker: dep, blocked: i.legacyId });
+      if (cp.created[dep] && cp.created[i.legacyId] && !cp.related.includes(sig)) {
+        edges.push({ sig, blocker: dep, blocked: i.legacyId });
+      }
     }
   }
-  console.log(`creating ${edges.length} blockedBy relation(s)…`);
+  console.log(`creating ${edges.length} dispatch-relevant blockedBy relation(s)…`);
   for (const e of edges) {
     await gql(
       `mutation($input:IssueRelationCreateInput!){ issueRelationCreate(input:$input){ success } }`,
@@ -541,22 +588,9 @@ async function execute(b) {
   }
   saveCheckpoint(cp);
 
-  // --- archive the closed ones LAST ---------------------------------------
-  const toArchive = b.issues.filter((i) => !i.open && cp.created[i.legacyId] && !cp.archived.includes(i.legacyId));
-  console.log(`archiving ${toArchive.length} closed issue(s)…`);
-  for (const [n, issue] of toArchive.entries()) {
-    await gql(`mutation($id:String!){ issueArchive(id:$id){ success } }`, { id: cp.created[issue.legacyId] });
-    cp.archived.push(issue.legacyId);
-    if (n % 25 === 0 || n === toArchive.length - 1) {
-      saveCheckpoint(cp);
-      console.log(`  archived ${n + 1}/${toArchive.length}`);
-    }
-  }
-  saveCheckpoint(cp);
-
   console.log(
     `\nDONE. ${Object.keys(cp.created).length} issues, ${cp.related.length} relations, ` +
-      `${cp.archived.length} archived, in ${requestCount} requests.\nCheckpoint: ${CHECKPOINT}`,
+      `${cp.archived.length} archived, ${keepActive.size} blockers kept active, in ${requestCount} requests.`,
   );
 }
 
@@ -591,7 +625,7 @@ async function main() {
     console.log('\nDRY RUN — no network calls made. Review the report, then re-run with --execute.');
     return;
   }
-  await execute();
+  await execute(b);
 }
 
 main().catch((err) => {

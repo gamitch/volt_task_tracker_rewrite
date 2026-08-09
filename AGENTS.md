@@ -4,6 +4,30 @@ This repository has an established swarm process under `.claude/` and
 `docs/swarm/`. Codex uses the same process and project records. Do not create a
 second ledger, constitution, severity scale, or set of role definitions.
 
+## Where work comes from
+
+**The live queue is the `Todo` column of the `Gamitch` Linear team, not the
+ledger.** `docs/swarm/task-ledger.md` remains the historical record — read it for
+a row's provenance — but it is no longer where you discover what to work on.
+
+Constitution **item 28** is binding and its order matters:
+
+1. Take only from `Todo`. `Backlog` means filed, not dispatchable.
+2. Ours are the issues carrying a `tier/*` label. Linear's own onboarding
+   issues sit in `Todo` too and carry no labels. Migrated rows also begin
+   `Tnnn — `, but a finding filed by a skill has no `Tnnn` and is still ours.
+3. **Claim first.** Move the issue `Todo → In Progress` before opening a single
+   file, then re-read it to confirm you hold it. Linear has no compare-and-set,
+   so without that read-back two agents can both claim the same row.
+4. A `tier/unreviewed` row may **not** enter `In Progress` until you have tiered
+   it (item 26). Judging the tier is part of claiming, not of finishing.
+5. On completion move it to `In Review` and add the trailer
+   `Linear-Issue: GAM-nnn (Tnnn)`.
+
+Labels carry what custom fields used to: `tier/*` (item 26 process tier),
+`area/w1`…`w10` (workflow surface), `gate/human` (no machine may close it),
+`gate/unverified` (premise measured as false or partial — re-measure first).
+
 ## Natural-language entry point
 
 The owner normally starts work by saying some variation of:
@@ -30,7 +54,8 @@ Before planning or changing a task:
 3. Read `docs/swarm/constitution.md` completely. Item 26 selects FAST,
    STANDARD, or HEAVY process; items 20-24 govern deferrals, commits, staging,
    worktrees, and integration records.
-4. Locate the exact task row in `docs/swarm/task-ledger.md`. Read the relevant
+4. Claim the Linear issue before anything else (item 28), then locate the same
+   row in `docs/swarm/task-ledger.md` for its provenance. Read the relevant
    section of `docs/swarm/WORKFLOWS.md` and any referenced audit ruling, active
    packet, PRD section, or dispute ruling.
 5. Re-check every operative claim and citation against the current repository.

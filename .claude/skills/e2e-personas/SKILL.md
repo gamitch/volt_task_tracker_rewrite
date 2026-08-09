@@ -155,7 +155,88 @@ Only when Tier 1 is genuinely not enough.
   applied. Nothing depending on scheduled jobs is represented — do not
   generalise past that.
 
+## When you find a bug, file it — a report is not a record
+
+**A finding that lives only in your output, a PR body, or an HTML artifact is
+lost.** This is not a style preference; it is constitution **item 20**, which
+exists because three production bugs shipped when a correct scope deferral was
+recorded in a comment instead of a row. This skill's own first run found four
+UI bugs, recorded them in a PR body, and none had a ledger row the day it
+merged — one of them (`events.created_by`) appeared **zero** times anywhere in
+the project's records.
+
+### Where work lives
+
+The queue is the **`Todo` column of the `Gamitch` Linear team** (constitution
+item 28). Findings you file go to **`Backlog`**, never `Todo` — filing is not
+dispatching, and promotion is the owner's decision.
+
+### Verify before you file
+
+**Re-verify every claim against the current tree, and say how.** A finding is an
+input to triage, not a verdict. This project has filed five rows on premises
+that turned out false, all from one audit that counted filenames instead of
+invocations. The first run of this skill reported a bug against a component path
+that did not exist.
+
+Prefer, in descending order of weight: **watched it happen in the browser**,
+**proved it with a mutation**, **read it back from the database**, **read it in
+source**. Record which one in `verifiedBy`.
+
+### How this project writes a bug
+
+Match the existing rows — read two or three in `docs/swarm/task-ledger.md`
+first. The shape:
+
+1. **Title states the defect as a fact, not a task.** *"The Sign up control
+   writes nothing"*, never *"Fix the Sign up control"*. A title that names a fix
+   has already decided the scope.
+2. **Lead with how it was established, and against what commit.** *"Filed from
+   the persona harness, re-verified in source at `d5d420a`"*.
+3. **Quote the evidence verbatim with `file:line`.** Not a summary of the code —
+   the code.
+4. **State the user-visible consequence.** Who sees what wrong thing. If the
+   answer is "nobody, yet", say that too — it changes the priority honestly.
+5. **Say what you are NOT claiming.** Scope honesty is the norm here: which
+   surfaces you did not check, which behaviour you did not reproduce.
+6. **Propose a scope as a candidate, not a prescription** — and prefer reusing an
+   existing helper to writing a second one (item 3).
+7. **Cross-reference related rows** by `Tnnn`/`GAM-nnn`.
+
+Severity uses the constitution's scale — `BLOCKER` / `MAJOR` / `MINOR` / `NIT`.
+Grade against **this** threat model: a volunteer team, no PII stored (item 25).
+Do not manufacture a security-class finding.
+
+### Emit findings as data, then file them
+
+Write `docs/swarm/inbox/<branch>-findings.json` in the schema in
+`docs/swarm/active/FINDINGS-PIPELINE.md`, then file it. **Emit the file even
+when you found nothing** — an empty `findings` array is a claim that you looked;
+a missing file is indistinguishable from never having checked.
+
+Per finding, the fields Linear needs:
+
+| Field | Becomes | Notes |
+| --- | --- | --- |
+| `title` | issue title | the defect as a fact |
+| `body` | description | evidence, consequence, scope, cross-refs |
+| `severity` | in the body | BLOCKER/MAJOR/MINOR/NIT |
+| `area` | `area/w1`…`w10` label | omit if genuinely unknown — do not guess |
+| `source` | `provenance/e2e-personas` label | who found it |
+| `findingKey` | `Finding-Key:` line in the body | **stable dedupe id** — `<source>/<slug>`, never `file:line`, which moves |
+| — | `tier/unreviewed` label | **always.** Never default a tier; "not yet judged" must stay distinguishable from a judged `standard` |
+| — | state `Backlog` | filing is not dispatching |
+
+Issues land unassigned and untimed. Do not set priority — this project's
+dispatch runs on the `tier/*` labels, not on priority.
+
 ## Before reporting green
+
+**A run with unfiled findings is not green.** Before you report, confirm you
+emitted `docs/swarm/inbox/<branch>-findings.json` — empty array included — and
+that every finding in it either has a Linear issue or a stated reason it does
+not.
+
 
 Run the counterfactual on anything role- or policy-shaped, per
 `mutation-replay`. Promoting the student to `coach` must turn the RLS

@@ -416,3 +416,51 @@ After the third failure, the task must be escalated to boss-arbiter.
     Rows already marked Passed are **not** retroactively re-graded; this item
     governs new work. T407 is the exception worth correcting by hand, because
     it is open and its surface is a hardcoded zero on screen today.
+
+28. **Work is dispatched from Linear, and claiming it is the first act — not a
+    later one.** The live queue is the `Todo` column of the `Gamitch` Linear
+    team. `Backlog` means filed, not dispatchable. `docs/swarm/task-ledger.md`
+    remains the historical record and is **not** superseded for provenance, but
+    it is no longer where an agent discovers what to work on.
+
+    **The rules, in order:**
+
+    a. **Take only from `Todo`.** Never start a `Backlog` row because it looks
+       ready. Promotion to `Todo` is the owner's signal and the only one.
+
+    b. **Our issues are the ones carrying a `tier/*` label.** Linear ships its
+       own onboarding issues and they live in `Todo` too; they carry no labels.
+       Migrated rows also begin `Tnnn — `, and that prefix is worth preserving
+       because 300 rows of cross-references depend on it — but it is **not** the
+       identity test. A finding filed by a skill has no `Tnnn` and is still
+       ours. Keying identity to the title would make newly filed work invisible
+       to every agent, which is a queue nobody may take from.
+
+    c. **Claim before reading anything else.** Move the issue `Todo → In
+       Progress` the moment you pick it up, *before* opening a file. Then
+       **re-read the issue and confirm you hold it** — Linear has no
+       compare-and-set, so two agents can both read `Todo` and both claim. A
+       read-after-write shrinks the race to milliseconds; without it there is no
+       claim at all, only a hope.
+
+    d. **A `tier/unreviewed` row may not enter `In Progress` until it is
+       tiered.** Judging the tier is part of claiming, not part of finishing.
+       Item 26 already requires that judgement to be stated and defended; this
+       says *when*.
+
+    e. **On completion move the issue to `In Review`**, and put its identifier
+       in the commit trailer as `Linear-Issue: GAM-nnn (Tnnn)`. Item 24 joins
+       recording to merging; this is that rule's Linear form.
+
+    **Authorized by the human owner 2026-08-09, and filed because the failure was
+    measured rather than imagined.** The first agent dispatched through Linear
+    found its issue correctly and unaided — and then did not claim it. The owner
+    had to say "go update the ticket and claim it." The agent was not at fault:
+    it read `AGENTS.md`, whose entry point still described the owner naming a row
+    in chat, and **`constitution.md` contained the word "Linear" zero times.**
+    Every rule above existed only in a plan document and a conversation, neither
+    of which an agent reads at startup. The migration moved 296 rows of data and
+    left the protocol behind. **A queue nobody is told to consume is a document,
+    not a dispatch system** — and the atomic claim, which exists so two agents
+    cannot take the same row, does not exist at all if it depends on a human
+    asking for it.
