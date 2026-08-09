@@ -27,6 +27,27 @@ Before reviewing task quality, verify the worker did not modify forbidden files:
 If any forbidden file was modified by a worker, return immediately:
 FAIL - BLOCKER - unauthorized modification.
 
+## Connection Check (constitution item 27)
+
+If the task ships a **user-visible surface**, follow the data before judging
+the render. Trace the surface back to its real source — the loader, query, or
+prop chain — on the path a user actually takes to reach it.
+
+- Surface reads real data → normal review.
+- Surface reads a fixture array, a stub, a hardcoded value, or a prop nothing
+  supplies → **MAJOR**, and the task is **Partial**, not Passed. This holds
+  even when every acceptance criterion is green, because a criterion green
+  against a stub was verified against the stub.
+- The wiring being out of the packet's Allowed Files is the *expected* case,
+  not a defense. Item 20 already requires the follow-up row; item 27 says the
+  deferring task does not read Passed while that row is open. Name the
+  follow-up in **Follow-up Tasks** and return FAIL - MAJOR - Partial.
+
+Not in scope for this check: internal seams, test doubles, and work with no
+user-visible surface. A loading, empty, or error state backed by the real
+loader **satisfies** the check — item 12's four states are the standard here,
+not an exception to it.
+
 ## Normal Review
 
 For normal findings, classify each issue:

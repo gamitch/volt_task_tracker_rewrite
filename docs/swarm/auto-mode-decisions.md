@@ -4195,3 +4195,54 @@ coordination rather than a parallel dispatch.
 same wave as the write path**. Shipping multi-team while they still scope on the primary team
 would let a coach put a student on two teams and then silently drop her from one team's meeting
 roster — worse than today's behaviour, where at least the single team is always right.
+
+## 2026-08-09 — George adopts two primitives from an external skill: constitution items 19d and 27
+
+**Origin.** The owner asked for an evaluation of a public "software-factory" skill
+(Dex Horthy / HumanLayer, 4 gates: Product → Architecture → Program Design → Vertical Slices,
+each with explicit human approval before implementation code exists) and whether it should be
+adopted here.
+
+**Ruled: not adopted as a process. Two of its primitives adopted as constitution items.**
+
+Rejected, with reasons recorded so this is not re-litigated:
+
+- **Its four human approval gates are read-and-approve.** Item 26 already concluded the opposite
+  from measured evidence — "a gate that only reads is worth much less than one that runs." T510's
+  data-loss defect (the `23503` fallback that can never fire, because nothing under
+  `supabase/migrations/` FK-references `rsvps`) was invisible to reading and surfaced only because
+  the gate executed against a live cluster. T305 and T189 are the same story.
+- **Its trigger is size** ("multiple files, roughly 100+ lines"). Item 26 fixes the trigger to risk
+  and says so explicitly — "neither is the number of files touched." Adopting it would reinstate
+  the heuristic item 26 was written to retire, after George's own T321/T323 question.
+- **Its `docs/plans/<slug>/00-status.md` is a second ledger**, which `AGENTS.md` forbids outright,
+  and whose failure mode this project has already lived: `state-summary.md` is stale today.
+- **Its approval standard is weaker than the dispatch gate.** It presents "at most 5–10 bullets,"
+  explicitly does not paste the doc, and treats the owner saying yes as approval. Item 19 exists
+  because a real PRD cleared human approval here carrying two false defect claims and one
+  physically impossible prescription.
+- Its "real tests only" rule is a prose version of the `mutation-replay` skill plus item 26's
+  named-mutation requirement. No gain.
+
+Adopted:
+
+- **Item 19d — "Least confident decisions" in every HEAVY packet.** Measured before adopting:
+  **0 of 63** packets in `docs/swarm/active/` carried anything of the kind; 11 carried "Known
+  Risk," which is a different thing (a disclosed *accepted* hazard, not an unresolved doubt).
+  `checker-premise` gains a §0 that attacks the list first and a response section for it.
+- **Item 27 — a user-visible surface reading a fixture, stub, or hardcoded value closes `Partial`,
+  not `Passed`.** This is item 20's failure shape (T101, T121, `SettingsPage`) answered with a
+  status rule instead of bookkeeping. `checker-reviewer` gains a Connection Check that follows the
+  data before judging the render, and grades fixture-only criteria MAJOR.
+
+**`Partial` is a new ledger status value** (prior vocabulary: Passed / Filed / Blocked /
+Escalated). Passed rows are **not** retroactively re-graded. **T407 is the one open row matching
+item 27 today** — verified while writing this: `task-ledger.md:845`, status Filed, nav badge
+hardcoded `0` at `src/components/nav/SideNav.tsx:117` while `/outreach` reads "74 awaiting your
+RSVP" in the same session.
+
+**Not adopted but kept on the shelf:** splitting `dispute-log.md` (115KB) and this file (268KB)
+into per-decision ADR files. The function already exists — D-numbered rulings with supersede
+semantics — but retrieval is poor enough that `AGENTS.md` tells agents not to read either file end
+to end. Real migration cost, nothing currently breaking. Revisit if a session ever misses a ruling
+because it could not find it.

@@ -47,6 +47,28 @@ Work from the real repository. Read the actual source, the actual installed
 dependencies (`node_modules/...`), the actual migrations, the actual tests.
 Run commands. Cite `file:line`. A claim you did not verify is not verified.
 
+### 0. Attack the author's least-confident list first
+A HEAVY packet ends with a numbered **Least confident decisions** section
+(constitution item 19d) — the author's own account of where the plan is
+weakest. Start there, before anything else, and spend your budget in that
+order. Half of this project's round-1 findings have historically been the
+author's own unverified claims, so the author frequently knows where the
+weak ground is; this list is that knowledge, handed to you.
+
+Return a verdict on each entry: **SOUND / WRONG / UNRESOLVED**, with
+evidence. Where an entry names a falsifiable condition, *test the
+condition* — do not reason about it.
+
+Two things this list is not:
+- **Not a scope limit.** Steps 1-5 still run over the whole plan. An author
+  who knew every weak spot would not need a gate.
+- **Not a confession that lowers severity.** A declared doubt that turns out
+  to be a real defect is graded exactly as if it had been undeclared. The
+  list changes your search order, never your verdict.
+
+A HEAVY packet arriving with no such section, or with an empty one and no
+stated reason, is a **MINOR** finding — report it and check the plan anyway.
+
 ### 1. Fact-check every factual claim
 For each defect/observation the plan asserts, return **CONFIRMED /
 PARTLY TRUE / FALSE**, with evidence. Overstated claims ("~10× larger than
@@ -108,6 +130,10 @@ BLOCKER / MAJOR / MINOR / NIT
 - Files:
 - Commands:
 - Outputs:
+
+# Least-Confident List Verdicts
+(one line per declared entry: SOUND / WRONG / UNRESOLVED + evidence.
+State "packet declared no list" if absent — that is a MINOR finding.)
 
 # Claim-by-Claim Verdicts
 (one line per factual claim: CONFIRMED / PARTLY TRUE / FALSE + evidence)

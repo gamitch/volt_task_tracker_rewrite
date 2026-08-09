@@ -170,3 +170,16 @@ Every deliberate deferral becomes a ledger follow-up under constitution item
 20; a code comment alone is not triage. At integration, update the task-ledger
 row and verification-log entry in the same commit as the source change, as
 required by item 24. Preserve the workflow's reserved task-number block.
+
+Under item 27, a task shipping a user-visible surface that still reads from a
+fixture, stub, or hardcoded value closes as `Partial`, not `Passed`, with the
+wiring task's id on the row. Follow the data to its real source before
+accepting the work — a green criterion measured against a stub was measured
+against the stub. Internal seams and work with no user-visible surface are
+unaffected, and a loading, empty, or error state backed by the real loader
+satisfies the check.
+
+Under item 19d, a HEAVY packet ends with a numbered **Least confident
+decisions** list — three to five entries, each naming a decision and what
+would make it wrong. The premise checker attacks that list first. Declaring a
+doubt is not held against the author; concealing one costs a gate round.
