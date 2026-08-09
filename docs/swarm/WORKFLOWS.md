@@ -476,9 +476,24 @@ These are not suggestions. Each one is written against a failure this project ha
    **Row IDs go to four digits from W7 on.** That is fine — nothing parses these — but do not
    "helpfully" renumber T1000 back down into a gap. Gaps are the point.
 
-2. **Branch names are task-scoped, never session-scoped: `claude/t<row>-<short-slug>`.**
-   `claude/t193-persist-rsvp`, `claude/t321-manual-code`. **Never a session-plan name** like
-   `claude/swarm-plan-<id>`.
+2. **Branch names are task-scoped, never session-scoped: `claude/gam-<n>-<short-slug>`.**
+   `claude/gam-288-replay-false-untrustworthy`, `claude/gam-303-round-student-hours`.
+
+   **Updated 2026-08-09 for Linear (item 29).** This rule said `claude/t<row>-` and its examples
+   still read correctly for pre-migration branches like `claude/t193-persist-rsvp`; those stay
+   valid, because the frozen ledger's ids are still cited everywhere. New work has no `Tnnn` and
+   uses the Linear identifier.
+
+   **Never a session-derived name.** Claude Code names a branch from the *session title*, which
+   produced `claude/linear-mcp-todo-item-966jtq` — a branch that says nothing about the work it
+   carries. Rename it after claiming, or create it from the issue's own `gitBranchName`.
+
+   **A second reason, new since this rule was written:** Linear links a branch whose name contains
+   the issue identifier, so the issue connects **from the first push** rather than waiting on a PR
+   title. Constitution item 28f depends on it.
+
+   Work with no issue — a governance edit, a one-off fix — uses `claude/<short-slug>` and says so in
+   the PR. That is the exception, not the pattern.
 
    **This is the row-number failure wearing different clothes.** A generic branch name looks
    reserved and is not. `claude/swarm-plan-zl575z` was used by one session for PR #27 and, the same

@@ -26,8 +26,16 @@ Constitution **item 28** is binding and its order matters:
    so without that read-back two agents can both claim the same row.
 4. A `tier/unreviewed` row may **not** enter `In Progress` until you have tiered
    it (item 26). Judging the tier is part of claiming, not of finishing.
-5. On completion move it to `In Review` and add the trailer
-   `Linear-Issue: GAM-nnn (Tnnn)`.
+5. **Name the branch `claude/gam-nnn-short-slug`** — Linear links on the
+   identifier in the branch name, so the issue connects from the first push, and
+   a human reading `git branch` can tell what it is. Claude Code's default name
+   comes from the session title and carries neither; rename it after claiming.
+6. On completion move it to `In Review` — **never `Done`**. The merge closes
+   the issue; an agent closing its own is self-certification. Open the PR with
+   **`Closes GAM-nnn` as its first body line** — that magic word both links the
+   issue and moves it to `Done` on merge. An identifier in the title or branch
+   links but does **not** close. Add the trailer `Linear-Issue: GAM-nnn (Tnnn)`
+   for the git-side record, which Linear does not read.
 
 Labels carry what custom fields used to: `tier/*` (item 26 process tier),
 `area/w1`…`w10` (workflow surface), `gate/human` (no machine may close it),

@@ -448,9 +448,44 @@ After the third failure, the task must be escalated to boss-arbiter.
        Item 26 already requires that judgement to be stated and defended; this
        says *when*.
 
-    e. **On completion move the issue to `In Review`**, and put its identifier
-       in the commit trailer as `Linear-Issue: GAM-nnn (Tnnn)`. Item 24 joins
-       recording to merging; this is that rule's Linear form.
+    e. **On completion move the issue to `In Review` — never to `Done`.**
+       `In Review` means "the agent is finished; a human has not accepted it."
+       An agent that closes its own issue is grading its own work, which the
+       Definition of Done forbids and `worker-implementer`'s own definition
+       rules out ("does not self-certify completion"). **The merge closes the
+       issue, not the author.**
+
+    f. **Put the identifier in the PR title, and keep the commit trailer.**
+       Both, because they serve different readers:
+
+       - **`Closes GAM-nnn` as the PR body's first line.** This is the
+         mechanism that demonstrably works: PR #126 used it and `GAM-303` went
+         to `Done` on merge with the PR linked on the card. It is a Linear magic
+         word (`Closes`/`Fixes`/`Resolves`), and it does two things a bare
+         identifier does not — it links **and** it closes.
+
+         An identifier in the title or branch name **links only**. Useful, and
+         `WORKFLOWS.md` rule 2 requires it in the branch for readability, but on
+         its own it leaves the issue sitting in `In Review` after merge.
+
+         **Linear does not read commit trailers**, so the trailer alone gives
+         traceability and no automation.
+       - **Commit trailer** — `Linear-Issue: GAM-nnn (Tnnn)`. This survives in
+         git history independently of any hosted account, which is the same
+         reason item 29 keeps an export. Item 24 joins recording to merging;
+         this is that rule's Linear form.
+
+    g. **Branch names carry the issue identifier — `WORKFLOWS.md` rule 2 is
+       the rule and is not restated here** (item 3). It already existed; item 29
+       only changed its format from `claude/t<row>-` to `claude/gam-<n>-`. Its
+       original rationale is unchanged and worth knowing: a session-scoped name
+       looks reserved and is not, and two sessions once worked one mutable ref
+       because of it.
+
+       **Owner action, once, outside the repo:** enable the Linear workflow
+       automation *PR merged → Done* for the `Gamitch` team. Until that is on,
+       issues will sit in `In Review` after their PR lands and must be closed
+       by hand.
 
     **Authorized by the human owner 2026-08-09, and filed because the failure was
     measured rather than imagined.** The first agent dispatched through Linear
