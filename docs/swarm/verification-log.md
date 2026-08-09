@@ -11490,3 +11490,76 @@ Canceled) and T163 (`PREMISE UNVERIFIED` → Backlog + `gate/unverified`) are co
 **~10 closed rows sitting in Linear as pickable `Backlog`**: T201, T204, T700, T701, T509, T801, T802,
 T803, T805 — and T703, which is how this task began. Filed as a follow-up under item 20 rather than
 fixed here; a FAST row that reopened itself must not quietly rewrite nine other rows' statuses.
+
+## T612 — the anti-vacuity check called a genuinely red replay UNTRUSTWORTHY (STANDARD tier)
+
+Linear **GAM-288**, taken from `Todo` and claimed before any file was opened (item 28c), then tiered
+STANDARD under item 26: no write path, no schema/RLS/auth, no user-visible surface — but well past
+FAST's ~20-line production ceiling (~110 lines of `replay.py`), so FAST was not available. Area label
+corrected `w3` → `w10`: the issue's own text records that `.claude/skills/**` is not W3's surface.
+**Deviation, stated rather than buried:** STANDARD dispatches a worker and has the orchestrator replay
+the mutation. This session was instructed not to spawn subagents, so the orchestrator implemented it
+as well. STANDARD's *verification* half is unreduced — three mutations, below. All mutation work ran
+in a dedicated detached worktree (item 23), against a commit that already existed (item 26's
+commit-before-mutating rule).
+
+### The premise was reproduced before anything was changed
+
+`replay.py` at `03037af`, replaying a real mutation of the T510 disclosure string against a focused
+`-t` run of `ScheduleMeetingsDialog.test.tsx`:
+
+```
+[mutated] reword the already-happened disclosure
+  exit=1  failed=0 passed=0 skipped=69
+UNTRUSTWORTHY: the mutated run executed no tests (likely a build or parse error from the edit).
+AssertionError: expected 'Edit meeting series…' to contain '1 session(s) have already happened an…'
+```
+
+The run was red, the assertion is printed by the tool's own output, and the verdict said no tests ran.
+Cause, measured from the runner rather than assumed: a focused run whose only matched test **fails**
+prints `Tests  1 failed | 69 skipped (70)` — **no `passed` segment at all** — and `COUNT_RE` required
+one, so it matched nothing and both counts fell through to 0. The green focused run
+(`1 passed | 69 skipped`) parsed fine, which is why the shape survived: it only breaks on the half of
+the replay that carries the evidence.
+
+### The fix, and what it refuses
+
+The whole summary line is now parsed — segments split on `|` (vitest) or `,` (Jest, whose `Tests:`
+shape the docstring had always claimed and the old regex could never match), colour codes stripped,
+last summary-shaped line preferred — and cross-checked against the runner's own declared total. Any
+shape not *fully* understood raises `SummaryParseError`, and the replay refuses by name with the last
+20 lines of the run rather than emitting a count it guessed. Same rule T512 carries for ledger counts:
+a mis-read number becomes a confident wrong verdict, which is worse than no verdict.
+
+Same command, same mutation, after the fix:
+
+```
+[mutated] reword the already-happened disclosure
+  exit=1  failed=1 passed=0 skipped=69
+REDDENED -- the guard is real. 1 test(s) failed.
+```
+
+### Mutations — the tool replayed against its own new tests
+
+Baseline `test_replay.py` exit 0 / 19 passed. (unittest prints no vitest-shaped summary, so the test
+command was wrapped in a shim that re-prints `Ran N tests` as a `Tests  …` line — the parser's own
+scope limit, and out of scope to widen here.)
+
+| Mutation | Result |
+|---|---|
+| `failed = seen.get("failed", 0)` → `failed = 0` (re-blind the parser to failures — the exact T612 defect) | **REDDENED** — 7 failed |
+| unreadable output returns `(0, 0, 0)` instead of raising | **REDDENED** — 2 failed |
+| drop the declared-total cross-check (`if False:`) | **REDDENED** — 1 failed |
+
+### A test nobody runs is the same defect wearing a different hat
+
+Vitest's `exclude` covers `**/.claude/**` and the script is Python, so nothing in this repo could ever
+have executed these tests. New CI job **`skill-scripts`** runs them on stdlib python3, separate from
+`ci` for T701's reason: a broken replay tool should name itself rather than hide inside "CI failed".
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `eslint` **0 errors / 375 warnings (unchanged)** · `vitest`
+**83 files / 2153 tests, exit 0 (unchanged — this task adds no vitest test)** · `vite build` 0
+(the >500 kB chunk warning is pre-existing on `main`) · targeted run: `test_replay.py` **19 passed,
+exit 0**.

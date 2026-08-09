@@ -70,6 +70,27 @@ times in one session here: an anchor that threw yet still printed `exit=0`, a
 `-t` filter that silently skipped all 108 tests, and a hash comparison of two
 empty strings that "matched".
 
+**A verdict you cannot parse is not a verdict.** `replay.py` reads the runner's
+whole summary line and refuses the replay outright — naming the line it could
+not read — rather than counting an unreadable shape as zero. It did the latter
+once (T612): a focused `-t` run where the only matched test *failed* prints
+`Tests  1 failed | 69 skipped (70)`, with no `passed` segment at all, and the
+old parser scored that genuinely red run `failed=0 passed=0` and called it
+`UNTRUSTWORTHY: the mutated run executed no tests`. A false UNTRUSTWORTHY is
+worse than a crash: it tells you to throw away real evidence. If you ever see
+that verdict, check the counts it printed against the run's own output before
+believing it.
+
+The parser has its own tests, over summary lines captured from real runs
+(vitest and Jest shapes, colour codes, and every refusal path):
+
+```bash
+python3 .claude/skills/mutation-replay/scripts/test_replay.py
+```
+
+They run in CI as the `skill-scripts` job — vitest's `exclude` covers
+`.claude/**`, so nothing else would ever execute them.
+
 **Distinguish a genuinely equivalent mutation from a coverage gap.** Sometimes the
 mutated code really does behave identically, and no test *should* redden. Work out
 which you are looking at before concluding either — the question is whether an
