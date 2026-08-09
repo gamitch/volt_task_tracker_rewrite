@@ -11404,3 +11404,89 @@ adding a season filter will fail that test visibly rather than changing behaviou
 `tsc` 0 · `format:check` 0 · `eslint` **0 errors / 375 warnings (unchanged)** · `vitest`
 **83 files / 2152 tests, up from 82 / 2139** (+13, exactly the new file) · `vite build` 0
 (the >500 kB chunk warning is pre-existing on `main`).
+
+## T703 — a stale module doc kept advertising a proof its fixture cannot deliver (FAST tier)
+
+Reopened 2026-08-09 from Linear **GAM-267**, which the Linear migration had placed in `Backlog`
+carrying `tier/unreviewed` despite the ledger row reading CLOSED. Tiered FAST under item 26 (no
+write path, no schema/RLS/auth, no exported signature change, ~10 lines of production change, and
+a named mutation that reddens a test). All mutations run in a dedicated worktree (item 23).
+
+### The closure claim was re-measured, not read
+
+The row's 2026-08-05 CLOSURE note is **correct**: `HoursSeasonTotals` carries no
+`adultVolunteersCount`/`adultVolunteerHours`, and `buildSeasonTotals(sessions)` takes no `events`
+argument, so the originally-filed regression is structurally inexpressible. All three mutations
+that closure recorded replay exactly as claimed. Baseline `HoursTab.test.tsx` exit 0 / 34 passed.
+
+| Mutation | Result |
+|---|---|
+| truncate `buildSeasonTotals`'s loop to the first session | **REDDENED** — 2 failed (`expected +0 to be 125`) |
+| mis-bucket null headcounts into the total | **REDDENED** — 2 failed (`expected +0 to be 3`) |
+| drop the `countsVolunteerHours` guard from planned hours | **REDDENED** — 2 failed (`expected 2 to be +0`) |
+
+### What the closure missed, and what this row now fixes
+
+Module doc #6 (lines 170-175) still said `FIXTURE_EVENTS`' `type: 'meeting'` event existed
+*"specifically to prove this file does not silently drop non-outreach events from this sum"* —
+**T703's own defect shape**, left behind when T702 deleted the code that sentence described, and
+contradicting the same doc's lines 145-149.
+
+Measured rather than argued. Applying literally the regression the sentence names — filtering the
+sessions fed to `buildSeasonTotals` down to `type === 'outreach'` — left `peopleReachedTotal` at
+**125, unchanged**, and reddened **1** test. Only the denominators moved (`3 of 5` → `2 of 4`), and
+the test that caught it was the render assertion, **not** the unit test named for module doc #6 —
+which cannot catch it, since the filter is only expressible at the call site.
+
+**The fixture can never move that sum.** A meeting session's `people_reached` is structurally always
+null: no meeting write path sets it (`loaders/meetings.ts:736`/`:1154` insert `session_date`/
+`starts_at`/`ends_at`/`status`/`notes` only; `:726`/`:753`/`:1054` touch time, notes and
+cancellation; `EndMeetingDialog` writes `ends_at`/`status`), and the one path that does write it
+(`loaders/outreach.ts:1284`) is unreachable for a meeting — `OutreachList.tsx`'s
+`filterOutreachEvents` is the only `event.type` predicate on that surface and excludes meetings, and
+`OutreachEventDialog`'s type Selector never offers `'meeting'`. Same structurally-frozen figure as
+**T704**'s `meeting_hours`.
+
+### The original prescription was deliberately NOT followed
+
+T703 said to *"give the meeting fixture non-zero adult figures and assert the resulting total"*. Its
+2026-08-09 analogue would be a non-zero `peopleReached` on the meeting session — which encodes a row
+the app cannot produce, trading one dishonest fixture for another. The row's own text anticipated
+this: it sequenced itself after T702 precisely so the corrected assertion would encode the new rule.
+The doc now records the real contract instead, and forbids that "strengthening" by name.
+
+### The guard that replaced it, proven load-bearing
+
+The denominator contract is the only one the fixture can hold, so it now has its own named test
+rather than riding unattributed on an existing DOM assertion. Re-run post-fix:
+
+| Mutation | Before fix | After fix |
+|---|---|---|
+| drop non-outreach events from the season totals | REDDENED — 1 failed | **REDDENED — 2 failed** |
+| apply a `countsVolunteerHours` filter to the season totals | not previously measured | **REDDENED — 2 failed** |
+
+Both halves of the corrected doc claim ("no `event.type` **or** `countsVolunteerHours` filter") are
+now guarded. The second mutation is the one worth having: `computeStudentPlannedHours` *does* filter
+on `countsVolunteerHours` (module doc #2), so copying that filter up into the season totals is the
+plausible regression, and nothing named it before.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `eslint` **0 errors / 375 warnings (unchanged)** · `vitest`
+**83 files / 2153 tests, up from 2152** (+1, exactly the new guard) · `vite build` 0 (the >500 kB
+chunk warning is pre-existing on `main`).
+
+### Root cause of the reopen — the ledger, not the mapper
+
+This closed row reached Linear as open `Backlog` work. First reading blamed `scripts/linear-migrate.mjs`;
+**measured, and that was wrong.** The mapper reads the head of the **Status** column (`STATUS_HEAD = 90`,
+deliberately — its own note records that a whole-cell scan mis-migrated T173 and T156). T703's Status
+cell still began `Filed 2026-08-03 …` because the 2026-08-05 closure was written into the **Epic** and
+**Last Result** columns and never into Status. The mapper mapped its input correctly; the input was stale.
+
+T703's Status cell is corrected in this commit. **It is not the only one.** Scanning all 296 rows for
+"Epic says CLOSED/SUPERSEDED but the Status head does not" returns **12**, of which T804 (`WITHDRAWN` →
+Canceled) and T163 (`PREMISE UNVERIFIED` → Backlog + `gate/unverified`) are correctly mapped. That leaves
+**~10 closed rows sitting in Linear as pickable `Backlog`**: T201, T204, T700, T701, T509, T801, T802,
+T803, T805 — and T703, which is how this task began. Filed as a follow-up under item 20 rather than
+fixed here; a FAST row that reopened itself must not quietly rewrite nine other rows' statuses.

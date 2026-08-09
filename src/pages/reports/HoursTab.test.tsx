@@ -407,6 +407,10 @@ describe('buildStudentRows / buildTeamGroups -- fixture walkthrough', () => {
   });
 });
 
+// T703 correction: module doc #6's "no event filter is applied" contract is
+// NOT guarded at this level and cannot be -- `buildSeasonTotals(sessions)`
+// takes no `events` argument, so the filter is only expressible at the call
+// site. Its guard lives in the render block below, by name.
 describe('buildSeasonTotals -- module doc #6', () => {
   it('sums non-null peopleReached, counts missing separately', async () => {
     const data = await defaultLoadHoursData(PLACEHOLDER_CURRENT_SEASON_ID);
@@ -488,6 +492,35 @@ describe('HoursTab render', () => {
     await flushMicrotasks();
     expect(container.textContent).toContain('125');
     expect(container.textContent).toContain('3 of 5 sessions have no recorded headcount yet');
+  });
+
+  // T703 correction (module doc #6). The named mutation: filter the sessions
+  // fed to `buildSeasonTotals` down to `type === 'outreach'`, dropping
+  // `session-meeting-upcoming`. Measured -- `peopleReachedTotal` stays 125,
+  // because a meeting session's `people_reached` is structurally always null
+  // (write-path proof in module doc #6); the DENOMINATORS are what move,
+  // 3-of-5 -> 2-of-4. This is the only contract that fixture can hold, so it
+  // gets its own named guard rather than riding along unattributed on the
+  // assertion above. Season totals are session-scoped and apply no event
+  // filter -- unlike planned hours (module doc #2), which filter on
+  // `countsVolunteerHours`; the boundary case below is the same fixture
+  // session on both sides of that difference.
+  it('a session whose event does not count volunteer hours still counts toward the season-totals denominators', async () => {
+    const data = await defaultLoadHoursData(PLACEHOLDER_CURRENT_SEASON_ID);
+    const meetingEvent = data.events.find((event) => event.id === 'event-weekly-meeting');
+    const meetingSessions = data.sessions.filter(
+      (session) => session.eventId === 'event-weekly-meeting',
+    );
+    // The fixture this guard depends on, asserted rather than assumed.
+    expect(meetingEvent?.countsVolunteerHours).toBe(false);
+    expect(meetingSessions).toHaveLength(1);
+    expect(meetingSessions[0]?.peopleReached).toBeNull();
+
+    render({ seasonId: PLACEHOLDER_CURRENT_SEASON_ID });
+    await flushMicrotasks();
+    // 5 and 3, not 4 and 2: the meeting session is inside both denominators.
+    expect(container.textContent).toContain('3 of 5 sessions have no recorded headcount yet');
+    expect(container.textContent).not.toContain('2 of 4 sessions have no recorded headcount yet');
   });
 
   // Packet acceptance criterion 1: "The Hours tab renders no adult-volunteer
