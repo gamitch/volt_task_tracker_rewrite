@@ -11563,3 +11563,122 @@ have executed these tests. New CI job **`skill-scripts`** runs them on stdlib py
 **83 files / 2153 tests, exit 0 (unchanged — this task adds no vitest test)** · `vite build` 0
 (the >500 kB chunk warning is pre-existing on `main`) · targeted run: `test_replay.py` **19 passed,
 exit 0**.
+
+---
+
+## GAM-309 — `replay.py` could not read either Python test runner
+Result: PASS
+Checker: orchestrator (STANDARD tier, item 26 — mutation replay in place of a separate checker round)
+Branch: `claude/next-ready-task-rcda0y` · commit `dfbbec6` · base `850fbdf`
+
+### Tier, stated and defended (item 26)
+
+**STANDARD.** No write path, no schema, RLS, migration or metric SQL, no auth or role logic, and no
+user-visible surface — so not HEAVY. Over FAST's ~20-line ceiling: the change is ~165 lines because
+unittest's total and its outcome arrive on two separate lines and have to be reconciled. The issue's
+own estimate of *"~30 lines"* was low, which does not move the tier — FAST was already excluded by
+the combining step the issue itself named as non-trivial.
+
+**No worker subagent was dispatched**, on a session-level instruction not to spawn agents. The
+orchestrator took the worker's part and kept every piece of STANDARD's evidence: the premise was
+reproduced before anything changed, and all eight named mutations were replayed. Item 26's own words
+— what a lighter tier removes is *coordination, not evidence*.
+
+### The premise was reproduced before anything was changed
+
+`origin/main`'s `replay.py` (`850fbdf`), pointed at this repo's only Python test suite, in a
+worktree at the same commit:
+
+```
+Ran 47 tests in 0.392s
+
+OK
+UNTRUSTWORTHY: could not read the test counts of the baseline run: no test-count summary line
+(`Tests  ...`) in the output. Refusing to guess ...   [exit 2]
+```
+
+Exit 2 at the **baseline**, before a single mutation — exactly as filed. The run underneath was green
+and readable to a human; only the parser could not see it.
+
+### Every fixture was measured, none quoted
+
+The issue flagged pytest's shape as **unverified** ("pytest is not installed in this environment ...
+check it before writing the fixture"). It was installed into a throwaway venv (pytest 9.1.1) purely
+to observe real output, and every shape in the tests is a captured string:
+
+| Shape | How it was obtained |
+|---|---|
+| `Ran 1 test` / `Ran 19 tests` | CPython 3.11.15, run against fixtures exercising each bucket |
+| `FAILED (failures=1, errors=1, skipped=1, expected failures=1, unexpected successes=1)` | one run carrying all five at once |
+| the five bucket names are the complete vocabulary | read out of CPython's `unittest/runner.py`, not recalled |
+| `3 failed, 2 passed, 1 skipped, 1 xfailed in 0.03s` | pytest 9.1.1, with and without `-q` |
+| `1 failed, 1 passed, 1 deselected, 1 warning in 0.02s` | a warning-emitting test plus `-k` deselection |
+| `no tests ran in 0.00s`, `1 error in 0.12s`, `2 deselected in 0.00s` | empty file, import error, filtered-out run |
+| `1 passed in 61.01s (0:01:01)` | a real `time.sleep(61)` test, to watch the clock suffix appear |
+
+**`-q` mattered.** pytest drops the `=` padding in quiet mode, so an anchor keyed to those rules would
+have failed on exactly the invocation an agent is most likely to use.
+
+### The decision the issue asked for, taken deliberately
+
+pytest **declares no total**, so the cross-check T612 added has nothing to check against. Ruled:
+accept the shape, and make **exhaustiveness** the guard instead of arithmetic. The whole line must be
+comma-separated `<int> <word>` parts followed by a duration, and every word must be in a closed
+vocabulary — so no segment can be silently dropped, which is the specific failure T612 punished. One
+unknown word refuses the line.
+
+unittest gets the arithmetic guard instead, because it *does* declare a total: `passed` is never
+printed, so it is derived by subtracting the printed buckets from `Ran N tests`, and buckets
+exceeding the run's own total leave a negative remainder and are refused.
+
+Two sub-rulings worth naming, both following the runner's own verdict rather than an opinion:
+
+- **An unexpected success counts as failing.** CPython fails the run over it (`FAILED (unexpected
+  successes=1)`, measured). Counting it as a pass would print `STILL GREEN` for a run that exited 1 —
+  a false finding, the T612 shape inverted.
+- **`warning` and `deselected` are recognised and ignored, not refused.** Refusing them would make an
+  ordinary run carrying one deprecation warning unreplayable — reintroducing the very friction this
+  issue is about.
+
+### The near-miss the issue warned about, and the test that pins it
+
+Loosening `SUMMARY_LINE_RE` until it reached `19 passed in 0.18s` would also match prose inside a
+stack trace. Each runner instead gets its **own anchored whole-line pattern, tried in turn**;
+`test_pytest_body_must_start_the_line` asserts that `assert 19 passed in 0.18s == True` still raises.
+
+### Mutations — all eight replayed, none survived
+
+Harness run from the main tree against a worktree copy, so the tool was never the file under
+mutation. Baseline in every run: `exit=0  failed=0 passed=47 skipped=0` — **parsed straight from
+`Ran 47 tests … OK` with no shim**, which is itself the proof of the fix.
+
+| Mutation | Result |
+|---|---|
+| M1 `tests?` → `tests` (blind to singular `Ran 1 test`) | **REDDENED** — 2 failed |
+| M2 drop the verdict/count cross-check | **REDDENED** — 2 failed |
+| M3 drop the negative-remainder cross-check | **REDDENED** — 1 failed |
+| M4 stop counting `unexpected successes` as failing | **REDDENED** — 2 failed |
+| M5 drop pytest's closed-vocabulary refusal | **REDDENED** — 1 failed |
+| M6 count `warning` as a failure | **REDDENED** — 1 failed |
+| M7 make the duration optional in the pytest anchor | **REDDENED** — 1 failed |
+| M8 stop counting `xfailed`/`xpassed` as executed | **REDDENED** — 3 failed |
+
+No exit-0 survivor. T612's own shim is now unnecessary and its removal is what M1–M8 ran on.
+
+### Gates
+
+Measured on `dfbbec6` with `.env.local` absent. `tsc` **0** · `format:check` **clean** · `eslint`
+**0 errors / 375 warnings (unchanged)** · `vite build` **0** (the >500 kB chunk warning is
+pre-existing) · `vitest` **83 files / 2155 tests, exit 0** (unchanged — this task adds no vitest
+test) · `skill-scripts`: `test_replay.py` **19 → 47 tests, exit 0**.
+
+**Note on a figure, not a correction:** T612's entry above records vitest at 2153. This tree measures
+2155 on an unmodified baseline; the two tests are T808's, merged in PR #126. Both figures are right
+for the tree they were taken on — quoted here only so the next reader does not treat the difference
+as drift.
+
+### Follow-up
+
+None filed. `pytest-rerunfailures`' `rerun` bucket and other plugin vocabularies are deliberately
+unsupported: they raise a named refusal rather than a wrong count, which is the correct behaviour
+until a suite here actually uses one.
