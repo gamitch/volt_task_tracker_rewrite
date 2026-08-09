@@ -132,3 +132,36 @@ it lands blank the fix is one field on one task.
 Do not read the 31 blank Tiers as migration damage. It is the gap `CLICKUP-MIGRATION.md` already
 records — invisible as optional prose in Markdown, obvious as 31 blanks in a field — and it is owner
 review work, not an import defect.
+
+## COMPLETE 2026-08-08 — dependencies wired, CSV Markdown repaired
+
+**All four native dependency links created and verified** by re-reading each task's
+`dependencies_count`, not by trusting the success flag: `T064→T063`, `T065→T064`, `T070→T065`,
+`T172→T168`, all as `waiting_on`.
+
+**All 24 CSV-imported descriptions repaired.** The importer had escaped every Markdown special
+character, storing `\*\*bold\*\*`, `` \`code\` `` and even `v\_student\_goal\_projection`, so the
+formatting rendered as literal backslashes and asterisks. Each was rewritten from
+`clickup-migration-payload.json` via `update_task`.
+
+**How the repair was proven, since "it looks right" is not evidence here:** ClickUp's
+`text_content` field renders the description as plain text. While the Markdown was escaped,
+`text_content` still contained the literal `**` and backtick markers, because they were data. After
+the repair it contains none of them — the markers are consumed as syntax. That flip is what
+distinguishes parsed Markdown from escaped text, and it was checked on T070, T512 and T063.
+
+T063 was the sharpest check: it is the 9-cell row whose columns are shifted, and it came through
+with the correct title (`**HUMAN GATE** — MIG-04 validation gates + sign-off`) rather than the
+`worker-implementer (sonnet)` a fixed-index parse produces, with its dependency intact.
+
+**Pacing held.** Roughly 32 calls across the session, issued at most two at a time, and the limit
+was never approached — against the 11-parallel burst that triggered the 22-hour lockout.
+
+### Still open
+
+- **Delete the default `List`** (`901114287846`) — empty, still carries a competing 10-status
+  override, and no delete-List tool exists in the MCP set, so it is a UI action.
+- **`T407`'s `Tier`** should read `STANDARD` — the only row that exercises Tier through CSV.
+- **Four task names carry literal `**HUMAN GATE**` markers** (T052, T063, T065, T070), because the
+  ledger titles use bold and ClickUp names are plain text. The `human gate` status already carries
+  that meaning, so the markers are redundant and could be stripped. Not done — awaiting a decision.
