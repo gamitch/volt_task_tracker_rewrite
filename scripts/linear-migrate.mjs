@@ -26,11 +26,15 @@
 //
 // Usage:
 //   node scripts/linear-migrate.mjs                 # dry run, writes no network calls
-//   LINEAR_API_KEY=lin_api_… node scripts/linear-migrate.mjs --execute
+//   LINEAR_API_KEY=lin_api_… node scripts/linear-migrate.mjs --execute --limit=5   # cautious first run
+//   LINEAR_API_KEY=lin_api_… node scripts/linear-migrate.mjs --execute             # the rest
 //
-// The GraphQL endpoint, client and --phase flag land together with execution;
-// they are absent rather than stubbed, because dead code that fails lint is
-// worse than code that does not exist yet.
+// Execution is idempotent: every issue is keyed by the `Tnnn` prefixing its
+// title, existing issues are read back before anything is created, and a
+// checkpoint file records what landed. Re-running resumes; it does not
+// duplicate. Relations are created BEFORE archiving so both ends are still
+// active, and archiving is last because it is the only step that is awkward to
+// undo (there is no delete in the MCP surface, though issueDelete exists here).
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -45,6 +49,9 @@ const EXPECTED_ROWS = 296;
 
 const argv = process.argv.slice(2);
 const EXECUTE = argv.includes('--execute');
+/** Cap how many issues a single run creates — use a small value for a first real run. */
+const LIMIT = Number((argv.find((a) => a.startsWith('--limit=')) || '').split('=')[1]) || null;
+const TEAM_NAME = 'Gamitch';
 
 // ---------------------------------------------------------------------------
 // Ledger parsing
@@ -365,19 +372,191 @@ function writeReport(b) {
 // Execute (only with --execute)
 // ---------------------------------------------------------------------------
 
-async function execute() {
-  throw new Error(
-    [
-      'Execution is intentionally not wired yet.',
-      '',
-      'The dry run must be reviewed and its report signed off first — that review',
-      'is the substitute for a premise gate (LINEAR-MIGRATION.md §9), and it is the',
-      'step the ClickUp migration skipped, which is why its payload shipped with',
-      'silently truncated cells.',
-      '',
-      `Report: ${REPORT_OUT}`,
-      `Payload: ${PAYLOAD_OUT}`,
-    ].join('\n'),
+const API = 'https://api.linear.app/graphql';
+const CHECKPOINT = path.join(OUT_DIR, 'linear-migration-checkpoint.json');
+
+/** Abort rather than get throttled mid-migration. */
+const RATE_FLOOR = 150;
+
+/** Label groups, with the descriptions that carry their meaning. */
+const LABEL_SPECS = [
+  ['tier', 'Process tier per constitution item 26 — triggered by risk, not topic or ticket size.'],
+  ['tier/fast', 'Orchestrator implements directly. No packet, no worker, no checker. Verification is NOT reduced.'],
+  ['tier/standard', 'Worker implements, orchestrator replays the mutation. No separate checker round.'],
+  ['tier/heavy', 'Packet + premise gate + worker + checker. Required for write paths, RLS/auth, migrations, metric SQL.'],
+  ['tier/unreviewed', 'No tier judged yet. A row carrying this must NOT be moved to In Progress until it is tiered.'],
+  ['area', 'Workflow surface. A label, not a project — see LINEAR-MIGRATION.md §1.3.'],
+  ...['w1', 'w2', 'w3', 'w4', 'w5', 'w6', 'w7', 'w8', 'w9', 'w10'].map((w) => [`area/${w}`, `Workflow ${w.toUpperCase()}.`]),
+  ['gate', 'Premise-gate state (constitution item 19).'],
+  ['gate/human', 'Requires the human owner. No machine may close this.'],
+  ['gate/unverified', 'Premise measured as unverified or partly false — re-measure before packeting.'],
+  ['escalated', 'Escalated to boss-arbiter or the human owner.'],
+];
+
+let requestCount = 0;
+
+async function gql(query, variables) {
+  const key = process.env.LINEAR_API_KEY;
+  if (!key) throw new Error('LINEAR_API_KEY is not set — refusing to run --execute.');
+  const res = await fetch(API, {
+    method: 'POST',
+    headers: { Authorization: key, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, variables }),
+  });
+  requestCount += 1;
+  const remaining = Number(res.headers.get('x-ratelimit-requests-remaining') ?? NaN);
+  if (Number.isFinite(remaining) && remaining < RATE_FLOOR) {
+    throw new Error(
+      `Rate-limit floor reached: ${remaining} requests left this hour (floor ${RATE_FLOOR}).\n` +
+        `Stopping cleanly — ${requestCount} requests made. Re-run the same command after the window\n` +
+        'resets; the checkpoint makes it resume rather than duplicate.',
+    );
+  }
+  const json = await res.json();
+  if (json.errors) throw new Error(`GraphQL: ${JSON.stringify(json.errors)}`);
+  return { data: json.data, remaining };
+}
+
+function loadCheckpoint() {
+  try {
+    return JSON.parse(fs.readFileSync(CHECKPOINT, 'utf8'));
+  } catch {
+    return { created: {}, archived: [], related: [] };
+  }
+}
+
+function saveCheckpoint(cp) {
+  fs.writeFileSync(CHECKPOINT, JSON.stringify(cp, null, 2) + '\n');
+}
+
+/** Every issue already in the workspace, keyed by the `Tnnn` its title starts with. */
+async function fetchExistingByLegacyId(teamId) {
+  const map = {};
+  let cursor = null;
+  do {
+    const { data } = await gql(
+      `query($teamId:String!,$after:String){ team(id:$teamId){ issues(first:250, after:$after,
+         includeArchived:true){ nodes{ id title } pageInfo{ hasNextPage endCursor } } } }`,
+      { teamId, after: cursor },
+    );
+    for (const n of data.team.issues.nodes) {
+      const m = n.title.match(/^(T\d+[a-z0-9]*)\s+—/);
+      if (m) map[m[1]] = n.id;
+    }
+    cursor = data.team.issues.pageInfo.hasNextPage ? data.team.issues.pageInfo.endCursor : null;
+  } while (cursor);
+  return map;
+}
+
+async function ensureLabels(teamId) {
+  const { data } = await gql(
+    `query($teamId:String!){ team(id:$teamId){ labels(first:250){ nodes{ id name parent{ name } } } } }`,
+    { teamId },
+  );
+  const byPath = {};
+  for (const l of data.team.labels.nodes) byPath[l.parent ? `${l.parent.name}/${l.name}` : l.name] = l.id;
+
+  for (const [spec, description] of LABEL_SPECS) {
+    if (byPath[spec]) continue;
+    const [head, child] = spec.split('/');
+    const isGroup = !child;
+    const parentId = child ? byPath[head] : undefined;
+    if (child && !parentId) throw new Error(`Label group "${head}" must exist before "${spec}"`);
+    const { data: d } = await gql(
+      `mutation($input:IssueLabelCreateInput!){ issueLabelCreate(input:$input){ issueLabel{ id } } }`,
+      { input: { name: child ?? head, description, teamId, isGroup: isGroup || undefined, parentId } },
+    );
+    byPath[spec] = d.issueLabelCreate.issueLabel.id;
+    console.log(`  + label ${spec}`);
+  }
+  return byPath;
+}
+
+async function execute(b) {
+  const cp = loadCheckpoint();
+  console.log('\n--- EXECUTE ---');
+
+  const { data: me } = await gql(`{ viewer{ id name } teams(first:10){ nodes{ id key name } } }`);
+  const team = me.teams.nodes.find((t) => t.name === TEAM_NAME) ?? me.teams.nodes[0];
+  if (!team) throw new Error('No team found on this account.');
+  console.log(`viewer ${me.viewer.name} · team ${team.name} (${team.key})`);
+
+  const { data: st } = await gql(
+    `query($teamId:String!){ team(id:$teamId){ states(first:50){ nodes{ id name } } } }`,
+    { teamId: team.id },
+  );
+  const stateId = Object.fromEntries(st.team.states.nodes.map((s) => [s.name, s.id]));
+  const missingStates = [...new Set(b.issues.map((i) => i.state))].filter((s) => !stateId[s]);
+  if (missingStates.length) throw new Error(`Team is missing workflow states: ${missingStates.join(', ')}`);
+
+  const labelId = await ensureLabels(team.id);
+  const existing = await fetchExistingByLegacyId(team.id);
+  Object.assign(cp.created, existing); // anything already there counts as created
+  saveCheckpoint(cp);
+  console.log(`already present: ${Object.keys(existing).length} issue(s)`);
+
+  // --- create ------------------------------------------------------------
+  const todo = b.issues.filter((i) => !cp.created[i.legacyId]).slice(0, LIMIT ?? Infinity);
+  console.log(`creating ${todo.length} issue(s)…`);
+  for (const [n, issue] of todo.entries()) {
+    const labelIds = issue.labels.map((l) => labelId[l]).filter(Boolean);
+    const { data, remaining } = await gql(
+      `mutation($input:IssueCreateInput!){ issueCreate(input:$input){ issue{ id identifier } } }`,
+      {
+        input: {
+          teamId: team.id,
+          title: issue.title,
+          description: issue.description,
+          stateId: stateId[issue.state],
+          labelIds,
+        },
+      },
+    );
+    cp.created[issue.legacyId] = data.issueCreate.issue.id;
+    if (n % 10 === 0 || n === todo.length - 1) {
+      saveCheckpoint(cp);
+      console.log(`  ${n + 1}/${todo.length}  ${issue.legacyId} -> ${data.issueCreate.issue.identifier}  (quota ${remaining})`);
+    }
+  }
+  saveCheckpoint(cp);
+
+  // --- relations BEFORE archiving, so both ends are still active ----------
+  const known = new Set(Object.keys(cp.created));
+  const edges = [];
+  for (const i of b.issues) {
+    for (const dep of i.blockedBy) {
+      if (!known.has(dep) || !known.has(i.legacyId)) continue;
+      const sig = `${dep}->${i.legacyId}`;
+      if (!cp.related.includes(sig)) edges.push({ sig, blocker: dep, blocked: i.legacyId });
+    }
+  }
+  console.log(`creating ${edges.length} blockedBy relation(s)…`);
+  for (const e of edges) {
+    await gql(
+      `mutation($input:IssueRelationCreateInput!){ issueRelationCreate(input:$input){ success } }`,
+      { input: { issueId: cp.created[e.blocker], relatedIssueId: cp.created[e.blocked], type: 'blocks' } },
+    );
+    cp.related.push(e.sig);
+    if (cp.related.length % 10 === 0) saveCheckpoint(cp);
+  }
+  saveCheckpoint(cp);
+
+  // --- archive the closed ones LAST ---------------------------------------
+  const toArchive = b.issues.filter((i) => !i.open && cp.created[i.legacyId] && !cp.archived.includes(i.legacyId));
+  console.log(`archiving ${toArchive.length} closed issue(s)…`);
+  for (const [n, issue] of toArchive.entries()) {
+    await gql(`mutation($id:String!){ issueArchive(id:$id){ success } }`, { id: cp.created[issue.legacyId] });
+    cp.archived.push(issue.legacyId);
+    if (n % 25 === 0 || n === toArchive.length - 1) {
+      saveCheckpoint(cp);
+      console.log(`  archived ${n + 1}/${toArchive.length}`);
+    }
+  }
+  saveCheckpoint(cp);
+
+  console.log(
+    `\nDONE. ${Object.keys(cp.created).length} issues, ${cp.related.length} relations, ` +
+      `${cp.archived.length} archived, in ${requestCount} requests.\nCheckpoint: ${CHECKPOINT}`,
   );
 }
 
