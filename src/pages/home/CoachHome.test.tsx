@@ -1672,6 +1672,23 @@ describe('<CoachHome /> T124 goal projection', () => {
     expect(container.textContent).toContain('Amara Webb hours vs. goal');
   });
 
+  it("GAM-308: confirmed/planned/goal hours are formatted to one decimal, matching HoursTab.tsx's renderHoursCell convention", async () => {
+    renderAsUser(COACH_USER, {
+      loadData: fixtureLoadData,
+      loadDashboardData: fixtureLoadDashboardData,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+    // Amara Webb: confirmedHours 6, plannedHours 0, goalHours 90 -- integers
+    // that only diverge from their pre-fix rendering once `.toFixed(1)` is
+    // applied (unlike Dana Voss's fixture, whose values already happen to
+    // look formatted). `totalHours` and the percent are untouched by this fix
+    // (round1's own output, per the issue) -- '= 6h /' and '6.7%' stay bare.
+    expect(container.textContent).toContain(
+      '6.0h confirmed + 0.0h planned = 6h / 90.0h · 6.7% · 84h short',
+    );
+  });
+
   it('T149/UXC-06: the two-option SegmentedControl is gone, replaced by a standalone ToggleButton', async () => {
     renderAsUser(COACH_USER, {
       loadData: fixtureLoadData,
