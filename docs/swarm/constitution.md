@@ -464,3 +464,54 @@ After the third failure, the task must be escalated to boss-arbiter.
     not a dispatch system** — and the atomic claim, which exists so two agents
     cannot take the same row, does not exist at all if it depends on a human
     asking for it.
+
+29. **The ledger is frozen, the number blocks are retired, and the git-side
+    record is generated rather than maintained.** `docs/swarm/task-ledger.md`
+    stops growing. It remains in the repository as the pre-migration historical
+    record — 301 rows whose cross-references are cited throughout the code,
+    commits, PRDs and the verification log — and it is still authoritative for
+    the provenance of anything filed before 2026-08-09. **Do not add rows to
+    it, and do not edit a row's Status to reflect new work.** Linear is where
+    state lives now.
+
+    a. **Stop minting `Tnnn`.** The block table (`W1 T400-499`, `W3 T600-699`,
+       …) existed for exactly one reason: collision avoidance between parallel
+       agents, because a Markdown file has no allocator. Linear allocates
+       `GAM-nnn` atomically server-side, so the scheme is obsolete. It was also
+       actively misleading — `WORKFLOWS.md` states the block is *"a
+       collision-avoidance reservation, not an ownership claim,"* and `T509`
+       sits in W2's range while being W4's work, which forced hard-coded
+       exceptions into the migration. New work is `GAM-nnn` and carries no
+       `Tnnn`. Item 28b already keys agent identity to the `tier/*` label
+       precisely so this is safe.
+
+    b. **`scripts/linear-export.mjs` writes the git-side record**, as
+       `docs/swarm/linear-export.json` (complete, what you restore from) and
+       `docs/swarm/linear-export.md` (readable, what git diffs and a human
+       greps). Both are **generated whole on every run and never hand-edited**;
+       both carry a DO-NOT-EDIT banner. The export is **one-directional** —
+       Linear is the source, these are a backup. Nothing writes back.
+
+    c. **Run the export after any batch of work, and let CI enforce it.**
+       `--check` fails when the committed export is stale. Without that the
+       backup rots silently, which is the same failure as an unmaintained
+       ledger wearing a different hat.
+
+    **Authorized by the human owner 2026-08-09.** Rationale, all measured on the
+    day this was written rather than argued: a hand-maintained table failed
+    three independent ways in a single audit. **T063b** was merged, tested,
+    live work with no row at all. **`WORKFLOWS.md`** claimed 40 open rows
+    against a true 50, every workflow disagreeing. And **eleven rows recorded
+    their closure in the Epic column** while Status still read `Filed`, so the
+    migration made them live issues and an agent worked a row superseded four
+    days earlier. None of these was carelessness — each edit reads correctly to
+    a human. They are what a schema-less table does at 301 rows and four
+    concurrent machines. **A generated file cannot put a closure in the wrong
+    column, and a server-side allocator cannot hand two agents the same
+    number.** The distinction that matters is not Markdown versus JSON; it is
+    maintained versus generated.
+
+    **What is deliberately NOT claimed:** that Linear is more durable than git.
+    It is not — it is a hosted service on a free plan, and if the account lapses
+    the history goes with it. That is precisely why (b) exists and why the
+    ledger file is frozen rather than deleted.
