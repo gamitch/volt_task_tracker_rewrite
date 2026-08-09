@@ -33,6 +33,19 @@ python3 .claude/skills/mutation-replay/scripts/replay.py \
   --label "drop the checked-set guard"
 ```
 
+**`--test` may be a Python runner too.** vitest, Jest, `unittest` and `pytest`
+summaries are all read, each on its own anchored line, so replaying a mutation
+against `.claude/skills/**` needs no wrapper:
+
+```bash
+  --test "python3 .claude/skills/mutation-replay/scripts/test_replay.py"
+```
+
+Until GAM-309 only the vitest/Jest shape was recognised, and a Python target
+exited 2 at the *baseline* — T612 had to re-print `Ran N tests` as a `Tests …`
+line through a throwaway shell shim to replay anything at all. If you find
+yourself writing that shim, the parser has regressed; do not work around it.
+
 ## What makes a mutation worth running
 
 **Name the mutation before you write the test.** A criterion that cannot name one
@@ -82,7 +95,9 @@ that verdict, check the counts it printed against the run's own output before
 believing it.
 
 The parser has its own tests, over summary lines captured from real runs
-(vitest and Jest shapes, colour codes, and every refusal path):
+(vitest, Jest, `unittest` and `pytest` shapes, colour codes, and every refusal
+path). The Python fixtures are captured output, not an imported dependency, so
+the job stays standard-library-only:
 
 ```bash
 python3 .claude/skills/mutation-replay/scripts/test_replay.py

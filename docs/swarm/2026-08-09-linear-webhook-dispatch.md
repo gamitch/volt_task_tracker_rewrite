@@ -1,66 +1,123 @@
 # 2026-08-09 — the Linear → Claude dispatch webhook
 
-Companion to `2026-08-09-tracker-migration.md`. That document moved the queue to Linear and left
-dispatch as a manual act: the owner drags a card to `Todo`, then separately goes and starts an agent.
-This one closes that gap — the drag *is* the dispatch.
+**Status: BUILT and unit-tested. Not yet live** — §9 is the runbook, tracked as `GAM-310`.
 
-**One-line summary:** four constraints could each have invalidated the design; all four were
-resolved before any code was written, and one of them changed the design.
+This document was written twice: first as a design, by a session that ended before it could build
+anything, and then extended by the session that built it. **Both halves are kept.** The design half
+recorded constraints measured from primary sources that the build half never re-measured — the
+5-second delivery timeout and the retry schedule in §3 especially — and discarding them to make room
+for an implementation record would have thrown away the more expensive information.
 
----
-
-## 1. Where things stand
-
-| | |
-|---|---|
-| Trigger | an issue enters `Todo` in Linear team `Gamitch` |
-| Transport | Linear webhook → Supabase Edge Function `linear-dispatch` → GitHub `repository_dispatch` |
-| Runner | `.github/workflows/claude-linear-dispatch.yml` → `anthropics/claude-code-action@v1` |
-| Auth, inbound | HMAC-SHA256 over the raw body (`Linear-Signature`) + a 60s replay window |
-| Auth, outbound | a **human-owned** GitHub PAT |
-| Tests | 45, `deno test supabase/functions/linear-dispatch/` |
-| Status | **built and unit-tested; not yet live.** Section 6 is the runbook that makes it live. |
-
-Nothing in section 6 has been performed. Every step there needs a credential or an admin session
-this session did not have, and none of it should be guessed at.
+The design half also marked four items **UNVERIFIED** and said any of them could invalidate the
+design. All four are now resolved (§4). One of them changed the design.
 
 ---
 
-## 2. The four UNVERIFIED items, resolved
+## 1. What this is for
+
+The owner's original question, asked at the start of the tracker migration and still the thing
+driving all of it:
+
+> _"how do you know if i move something from our backlog and wanting you to execute?"_
+
+and, restated:
+
+> _"part of the integration with linear over clickup is because linear also has a webhook that would
+> allow me to put an item in the TODO state and trigger claude to take action"_
+
+So the target is **not** merely refreshing the export faster. It is: **the owner drags a card to
+`Todo`, and an agent starts working it.** No polling, no owner message in chat, no quota burned
+idling. This was one of the stated reasons Linear beat ClickUp.
+
+---
+
+## 2. Where things stand
+
+|                |                                                                                          |
+| -------------- | ---------------------------------------------------------------------------------------- |
+| Trigger        | an issue enters `Todo` in Linear team `Gamitch`                                          |
+| Transport      | Linear webhook → Supabase Edge Function `linear-dispatch` → GitHub `repository_dispatch` |
+| Runner         | `.github/workflows/claude-linear-dispatch.yml` → `anthropics/claude-code-action@v1`      |
+| Auth, inbound  | HMAC-SHA256 over the raw body (`Linear-Signature`) + a 60s replay window                 |
+| Auth, outbound | a **human-owned** GitHub PAT                                                             |
+| Tests          | 45, `deno test supabase/functions/linear-dispatch/`                                      |
+| Setup          | steps 1–2 done; **3–7 outstanding** (§9, `GAM-310`)                                      |
+
+---
+
+## 3. Why there must be a relay — and two constraints it imposes
+
+**VERIFIED** from <https://linear.app/developers/webhooks>, and load-bearing:
+
+| Property              | Value                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| Method / content type | `POST`, `application/json; charset=utf-8`                                             |
+| Authentication        | `Linear-Signature` — hex HMAC-SHA256 of the **raw body**, keyed by the signing secret |
+| **Custom headers**    | **Not supported**                                                                     |
+| Filtering             | by `resourceTypes` (e.g. `["Issue"]`) and to all public teams **or a single team**    |
+| **Timeout**           | **5 seconds**, then the delivery is a failure                                         |
+| **Retries**           | **3 attempts, backing off 1 minute, 1 hour, 6 hours**                                 |
+
+GitHub's `POST /repos/{owner}/{repo}/dispatches` requires an `Authorization: Bearer` header and a
+`{"event_type", "client_payload"}` body. **Linear can supply neither.** So a relay is not an
+architectural preference that can be simplified away — it is a consequence of two fixed APIs. Any
+future session proposing "just point the Linear webhook at GitHub" should stop here.
+
+Two consequences the build has to live with, both surfaced by reconciling this section against the
+implementation:
+
+**3a. The 5-second budget is real, and the handler spends it synchronously.** `index.ts` awaits the
+GitHub dispatch before responding, so a Supabase cold start plus the GitHub round trip is on the
+clock. In practice the dispatch call is a few hundred milliseconds and this fits — but it is not
+guaranteed, and the alternative (respond 200 first, fire the dispatch afterwards) trades the
+timeout risk for losing the ability to report a failed dispatch at all. Left synchronous
+deliberately; the per-issue `concurrency` group in the workflow is what stops a timeout-plus-retry
+from starting two agents on one issue.
+
+**3b. The retry schedule and the replay window are in direct tension, and the replay window wins.**
+Linear retries at 1 minute, 1 hour and 6 hours. `isFresh` rejects anything more than 60 seconds from
+`webhookTimestamp`. So **if `webhookTimestamp` is not re-stamped on retry, the 1-hour and 6-hour
+retries arrive as `STALE_DELIVERY` and the retry mechanism is defeated** — exactly when it would
+matter, since a retry only happens after a real failure.
+
+Whether Linear re-stamps on retry is **UNVERIFIED** and needs one real failed delivery to settle.
+The window stays at 60 seconds regardless, because that is Linear's own published guidance and
+widening it to six hours to accommodate a retry would trade a certain security property for a
+speculative reliability one. **Recovery is by re-dragging the card**: `Todo → In Progress → Todo`
+fires a fresh update with `stateId` in `updatedFrom`, which dispatches normally.
+
+---
+
+## 4. The four UNVERIFIED items, resolved
 
 Recorded in full because each was load-bearing, and because "resolved" without its evidence is just
 a more confident version of unverified.
 
-### 2a. Webhooks on the Linear free plan — **AVAILABLE**
+### 4a. Webhooks on the Linear free plan — **AVAILABLE**
 
-Three independent lines, because the first one alone is negative evidence:
+Three independent lines, because the first alone is negative evidence:
 
 - Linear's pricing matrix lists **"API and webhook access"** as a **Core** row, present on Free,
   Basic, Business and Enterprise alike.
-- The webhooks doc gates creation on *role*, not plan: *"Only workspace admins, or OAuth
-  applications with the `admin` scope, can create or read webhooks."*
-- And that role gate is satisfied automatically here — Linear's own member docs state that
-  **"All members of a workspace on the Free plan are considered an Admin."**
+- The webhooks doc gates creation on _role_, not plan: _"Only workspace admins, or OAuth
+  applications with the `admin` scope, can create or read webhooks."_
+- That role gate is satisfied automatically here — Linear's member docs state **"All members of a
+  workspace on the Free plan are considered an Admin."**
 
-The negative evidence is worth something too, given how Linear writes docs: plan-gated features
-carry an explicit banner (*"Available to workspaces on our Business and Enterprise plans"* on private
-teams, Enterprise on audit log, Business/Enterprise on review Guides). The webhooks page carries no
-such banner.
+The negative evidence counts too, given how Linear writes docs: plan-gated features carry an
+explicit banner (Business/Enterprise on private teams, Enterprise on audit log). The webhooks page
+carries none.
 
-> **Residual.** No webhook was actually created — that needs the owner's admin session. Section 6
-> step 1 is the empirical confirmation, and it is the cheapest of the six.
+> **Residual.** No webhook has been created — that needs the owner's admin session (§9 step 5).
 
-### 2b. `verify_jwt` — **HANDLED, and it is a trap worth naming**
+### 4b. `verify_jwt` — **HANDLED, and it is a trap worth naming**
 
 Supabase Edge Functions reject any request without a valid Supabase JWT **before the function's own
-code runs**. `verify_jwt` defaults to `true`. Linear does not send a Supabase JWT and cannot be made
-to.
+code runs**. `verify_jwt` defaults to `true`. Linear does not send one and cannot be made to.
 
-The trap is not the 401. It is that the 401 is issued by the platform, so **no `console.log` in
-`index.ts` ever fires** — the function looks dead rather than misconfigured, and the natural next
-move (adding logging) produces no new information.
-
-Fixed in `supabase/config.toml`:
+The trap is not the 401. It is that the platform issues it, so **no `console.log` in `index.ts` ever
+fires** — the function looks dead rather than misconfigured, and the natural next move (add logging)
+produces no new information.
 
 ```toml
 [functions.linear-dispatch]
@@ -68,111 +125,89 @@ verify_jwt = false
 ```
 
 This travels with the deploy; it is not local-only. **"Public" is not "unverified"** — the platform
-check is replaced by, not merely removed in favour of, the HMAC check in `signature.ts`.
+check is _replaced by_, not merely removed in favour of, the HMAC check in `signature.ts`.
 
-> **Known sharp edge:** `supabase/cli#4059` reports the per-function `verify_jwt` setting being
-> ignored on *update* deploys. Section 6 step 4 therefore verifies the deployed setting rather than
-> assuming the config file won.
+> **Known sharp edge:** `supabase/cli#4059` reports the per-function setting being ignored on
+> _update_ deploys. §9 step 4 verifies the deployed setting rather than assuming the file won.
 
-### 2c. The PAT scope for `repository_dispatch` — **RESOLVED, use fine-grained**
+### 4c. The PAT scope for `repository_dispatch` — **RESOLVED, use fine-grained**
 
-`POST /repos/{owner}/{repo}/dispatches`.
+| Token type              | Requirement         | Source                                      |
+| ----------------------- | ------------------- | ------------------------------------------- |
+| **Fine-grained** (used) | **Contents: write** | GitHub's own endpoint permissions reference |
+| Classic                 | `repo`              | GitHub REST reference, verbatim             |
 
-| Token type | Requirement | Source |
-|---|---|---|
-| **Fine-grained** (recommended) | **Contents: read & write** (Metadata: read is auto-selected) | GitHub fine-grained permissions reference |
-| Classic | `repo` | GitHub REST reference, verbatim: *"need the `repo` scope"* |
+The repo is **public** (measured), so classic `public_repo` is widely reported to suffice — but that
+narrowing is **not stated by GitHub itself**, so it is flagged rather than recommended.
 
-`gamitch/volt_task_tracker_rewrite` is **public** (measured this session via the API, not assumed),
-so the narrower classic `public_repo` is widely reported to suffice. That narrowing is **not stated
-by GitHub itself** — it comes from `peter-evans/repository-dispatch`'s README — so it is flagged
-rather than recommended. Prefer the fine-grained token: it is narrower than either classic option
-and it expires.
-
-Also verified, and easy to lose an afternoon to:
+Also verified, each easy to lose an afternoon to:
 
 - `event_type` ≤ 100 characters.
-- `client_payload` ≤ **10 top-level properties**, < **64KB**. Ours has 7 and weighs a few hundred
-  bytes; a test asserts both bounds so a future field addition trips a test rather than a 422.
-- **`repository_dispatch` only runs workflows from the DEFAULT BRANCH.** The workflow file does
-  nothing until it is on `main`. A dispatch that matches no workflow still returns **204** — the
-  success code — so this failure is completely silent from the caller's side.
+- `client_payload` ≤ **10 top-level properties**, < **64KB**. Ours has 7; a test asserts both bounds
+  so a future field addition trips a test rather than a 422.
+- **`repository_dispatch` only runs workflows from the DEFAULT BRANCH**, and a dispatch matching no
+  workflow still returns **204** — the success code. That failure is completely silent.
 
-### 2d. Does a PAT-fired `repository_dispatch` pass the human-actor check? — **YES, conditionally**
+### 4d. Does a PAT-fired `repository_dispatch` pass the human-actor check? — **YES, conditionally**
 
-This is the one that could have killed the design, so it was settled by reading the implementation
-rather than the docs. `anthropics/claude-code-action`, `src/github/validation/actor.ts`:
+Settled by reading the implementation rather than the docs. `src/github/validation/actor.ts`:
 
 ```ts
 const { data: userData } = await octokit.users.getByUsername({ username: actor });
-actorType = userData.type;
-...
-if (actorType !== "User") { /* throws unless allowed_bots matches */ }
+if (userData.type !== 'User') {
+  /* throws unless allowed_bots matches */
+}
 ```
 
-The whole test is `userData.type === "User"`. The chain, each link checked:
+The whole test is `type === "User"`. Each link checked: for `repository_dispatch` the actor is the
+identity that called the API — the PAT's owner; the PAT is owned by `gamitch`; `gamitch` is
+`"type": "User"`, read from the API, not inferred. So it passes.
 
-1. For `repository_dispatch`, `github.actor` is the identity that called the API — the **PAT's
-   owner**.
-2. The PAT will be owned by `gamitch`.
-3. `gamitch` is `"type": "User"` — read directly from the GitHub API in this session, not inferred.
-4. Therefore `checkHumanActor` passes.
+**The condition is the finding:** this holds _because the token belongs to a human account_. A
+GitHub App installation token or machine account resolves to `Bot` and the run dies before Claude
+starts. Issue #835 is exactly that case, and its bug report is this design's confirmation.
 
-**The condition, and it is the whole finding:** this holds *because the token belongs to a human
-account*. A GitHub App installation token or a machine account resolves to type `Bot` and the run
-dies before Claude starts. Issue #835 is exactly that case — a user whose dispatch broke after PR
-#826 added the check, because they fired it with an automation token. Their bug report is this
-design's confirmation: the mechanism is real, and the human-owned PAT is what steps around it.
+`allowed_bots` is **not** the escape hatch — it would admit bot-triggered runs generally, discarding
+the loop protection instead of satisfying it.
 
-`allowed_bots` is **not** the escape hatch. It would admit bot-triggered runs generally, which
-discards the loop protection instead of satisfying it.
+Two further checks, both favourable:
 
-One further check, resolved favourably: `checkWritePermissions` applies *"on issue and pull request
-events"*. `repository_dispatch` is neither, so it is skipped.
+- `checkWritePermissions` applies _"on issue and pull request events"_. `repository_dispatch` is
+  neither, so it is skipped.
+- **Does the action accept `repository_dispatch` at all?** It does. `src/github/context.ts` handles
+  exactly `issues`, `issue_comment`, `pull_request` (+`_target`), `pull_request_review`,
+  `pull_request_review_comment`, `workflow_dispatch`, **`repository_dispatch`**, `schedule`,
+  `workflow_run`. Anything else hits `default: throw`. Measured the expensive way — the step-2 smoke
+  test was first written `on: push` and died in 340ms with `Unsupported event type: push`.
 
-**And the prior question, which had been assumed rather than checked: does the action accept
-`repository_dispatch` at all?** It does. `src/github/context.ts` switches on `eventName` and handles
-exactly `issues`, `issue_comment`, `pull_request` (and `pull_request_target`),
-`pull_request_review`, `pull_request_review_comment`, `workflow_dispatch`, **`repository_dispatch`**,
-`schedule` and `workflow_run`. Anything else hits `default: throw new Error(...)`.
-
-This was measured the expensive way. The step-2 smoke test was first written with `on: push`, and
-the action rejected it in 340ms with `Unsupported event type: push`. A cheap failure in scaffolding,
-but it proves the list is enforced rather than advisory — and had the main workflow been built on a
-trigger outside that set, the same error would have arrived only at step 6, with a live webhook and
-five other new things to blame.
-
-> **Residual, and it is real.** Steps 1–4 are each verified; the *composition* is not. Only a live
-> dispatch proves it end to end, which is section 6 step 6.
+> **Residual, and it is real.** Each link is verified; the _composition_ is not. Only a live dispatch
+> proves it end to end (§9 step 6).
 
 ---
 
-## 3. The design
+## 5. The chain
 
 ```
 owner drags GAM-nnn  Backlog → Todo
-        │
-        ▼
-Linear webhook  (Issue, action=update)
-        │  Linear-Signature: HMAC-SHA256(secret, RAW body)
+        │  Linear webhook (resourceTypes ["Issue"], team Gamitch), 5s budget
         ▼
 supabase/functions/linear-dispatch/
         │  1. read raw body ONCE          index.ts
         │  2. verify signature            signature.ts   ← before any parse
         │  3. verify webhookTimestamp     signature.ts   ← 60s replay window
         │  4. parse
-        │  5. decide                      filter.ts      ← 8 rules, section 4
-        │  6. fire                        dispatch.ts
+        │  5. decide                      filter.ts      ← 8 rules, §6
+        │  6. fire                        dispatch.ts    ← asserts 204, not "any 2xx"
         ▼
 POST /repos/gamitch/volt_task_tracker_rewrite/dispatches
-        │  event_type: linear-issue-dispatch
-        │  client_payload: 7 fields
+        │  event_type: linear-issue-dispatch · client_payload: 7 fields
         ▼
 .github/workflows/claude-linear-dispatch.yml   (default branch only)
         ▼
-anthropics/claude-code-action@v1  — automation mode
+anthropics/claude-code-action@v1 — automation mode
         ▼
-agent reads AGENTS.md § "Where work comes from", claims per item 28
+agent reads AGENTS.md § "Where work comes from", claims per item 28,
+opens a PR whose body starts `Closes GAM-nnn`
 ```
 
 **Verify, then parse — never the reverse.** `JSON.stringify(JSON.parse(x))` is not byte-identical to
@@ -180,68 +215,73 @@ agent reads AGENTS.md § "Where work comes from", claims per item 28
 fails (and gets "fixed" by weakening it) or silently compares the wrong bytes. Two tests pin this: a
 key-reordered encoding and a pretty-printed one must both fail to verify.
 
-| File | Holds |
-|---|---|
-| `signature.ts` | HMAC-SHA256 verify, constant-time compare, `isFresh` replay window |
-| `filter.ts` | the 8 rules; returns a reason on every rejection; extracts the client payload |
-| `dispatch.ts` | the GitHub POST; injectable `fetch`; asserts **204**, not "any 2xx" |
-| `index.ts` | HTTP shell, env, status codes |
-| `signature.test.ts` | 15 tests |
-| `filter.test.ts` | 24 tests |
+| File                                   | Holds                                                                 |
+| -------------------------------------- | --------------------------------------------------------------------- |
+| `signature.ts`                         | HMAC verify, constant-time compare, `isFresh` replay window           |
+| `filter.ts`                            | the 8 rules; a reason on every rejection; extracts the client payload |
+| `dispatch.ts`                          | the GitHub POST; injectable `fetch`                                   |
+| `index.ts`                             | HTTP shell, env, status codes                                         |
+| `signature.test.ts` / `filter.test.ts` | 15 + 30 tests                                                         |
 
 ---
 
-## 4. The filter, and why each rule exists
+## 6. The filter, and why each rule exists
 
-| # | Rule | Skip reason | Grounding |
-|---|---|---|---|
-| 1 | `type === 'Issue'` | `NOT_AN_ISSUE_EVENT` | belt-and-braces if the subscription widens |
-| 2 | `action === 'update'` | `NOT_AN_UPDATE` | a dispatch is a *transition* |
-| 3 | `data.id` and `data.identifier` present | `MALFORMED_ISSUE` | nothing to hand an agent otherwise |
-| 4 | new state is `Todo` (by name, case-insensitive) | `NOT_TARGET_STATE` | item 28: *"the live queue is the `Todo` column"* |
-| 5 | **`updatedFrom` contains `stateId`** | `STATE_UNCHANGED` | see below |
-| 6 | a `labels` array exists at all | `LABELS_UNAVAILABLE` | distinguishes a payload-shape regression from a correct skip |
-| 7 | carries a `tier` label (see 4a) | `NO_TIER_LABEL` | item 28b's identity test |
-| 8 | does **not** carry `gate/human` | `HUMAN_GATED` | see section 5 |
+| #   | Rule                                            | Skip reason          | Grounding                                        |
+| --- | ----------------------------------------------- | -------------------- | ------------------------------------------------ |
+| 1   | `type === 'Issue'`                              | `NOT_AN_ISSUE_EVENT` | belt-and-braces if the subscription widens       |
+| 2   | `action === 'update'`                           | `NOT_AN_UPDATE`      | a dispatch is a _transition_                     |
+| 3   | `data.id` and `data.identifier` present         | `MALFORMED_ISSUE`    | nothing to hand an agent                         |
+| 4   | new state is `Todo` (by name, case-insensitive) | `NOT_TARGET_STATE`   | item 28 names the column                         |
+| 5   | **`updatedFrom` contains `stateId`**            | `STATE_UNCHANGED`    | see below                                        |
+| 6   | a `labels` array exists at all                  | `LABELS_UNAVAILABLE` | separates a shape regression from a correct skip |
+| 7   | carries a `tier` label (§7)                     | `NO_TIER_LABEL`      | item 28b's identity test                         |
+| 8   | does **not** carry `gate/human`                 | `HUMAN_GATED`        | §8                                               |
 
-**Rule 5 is the load-bearing one.** Linear sends an `update` for *every* edit — a label added, a
-typo fixed, an estimate set — and on all of those the issue is still sitting in `Todo`. Rule 4 alone
-would re-dispatch on each one and start a second agent on already-claimed work. `updatedFrom` carries
-the previous values of exactly the fields that changed, so `stateId` appearing in it is the precise
-signal *"the state moved in this event"*.
+**Rule 5 is the load-bearing one.** Linear sends an `update` for _every_ edit — a label added, a typo
+fixed, an estimate set — and on all of those the issue is still in `Todo`, so rule 4 alone would
+re-dispatch on every keystroke-level change and start a second agent on claimed work. `updatedFrom`
+holds the previous values of exactly the fields that changed, so `stateId` appearing in it is the
+precise signal "the state moved in this event".
 
-**Every skip is named, and that is deliberate.** The tracker-migration doc's section 6 names the
-recurring defect: *"a silent no-op that looks like success."* A filter is that shape by nature. So
-`decideDispatch` never returns a bare boolean — every rejection carries a reason and a detail, both
-land in the 200 body and the log, and **the tests assert the reason, not merely that dispatch did not
-happen.** Asserting `dispatch === false` alone would pass for a filter that rejected everything.
+This also settles the **loop-safety** question the design half flagged: the agent's own claim moves
+the issue to `In Progress` (filtered by rule 4), and the merge moves it to `Done` (rule 4). An agent
+that fails and leaves the issue in `Todo` cannot re-trigger itself, because no further state
+transition occurs — rule 5 stops it.
 
-**The guards were proven by making them fire** (three mutations, each reverted):
+**Every skip is named.** §6 of the migration doc names the recurring defect: _"a silent no-op that
+looks like success."_ A filter is that shape by nature. So `decideDispatch` never returns a bare
+boolean — every rejection carries a reason and a detail, both land in the 200 body and the log, and
+**the tests assert the reason**, not merely that dispatch did not happen.
 
-| Mutation | Result |
-|---|---|
-| rule 5's `updatedFrom.stateId` check → `if (false)` | **2 tests red** |
-| `isFresh` rewritten as the naive `Math.abs(now - ts) <= tol` | **1 test red** |
-| `tierFromLabels` returns `'standard'` instead of `null` | **3 tests red** |
+**The guards were proven by making them fire** (four mutations, each reverted):
 
-The `isFresh` mutation is the interesting one. The naive version is what anyone would write, and it
+| Mutation                                                     | Result    |
+| ------------------------------------------------------------ | --------- |
+| rule 5's `updatedFrom.stateId` check → `if (false)`          | **2 red** |
+| `isFresh` rewritten as the naive `Math.abs(now - ts) <= tol` | **1 red** |
+| `tierFromLabels` returns `'standard'` instead of `null`      | **3 red** |
+| label handling reverted to the pre-§7 version                | **6 red** |
+
+The `isFresh` mutation is the instructive one. The naive version is what anyone would write, and it
 is wrong: a missing `webhookTimestamp` yields `NaN`, every comparison against `NaN` is `false`, so
-`elapsed > tolerance` is false and **an unstamped delivery passes as fresh**. The explicit
-`typeof !== 'number'` guard exists for that, and the test proves it by removing it.
+`elapsed > tolerance` is false and **an unstamped delivery passes as fresh**.
 
-### 4a. `tier/fast` is not a label name — caught one commit before shipping
+---
+
+## 7. `tier/fast` is not a label name — caught one commit before shipping
 
 **The filter was written wrong, and the queue would have silently never dispatched.**
 
-Every document in this project writes the tiers as `tier/fast`, `tier/unreviewed`, and
-`linear-export.json` contains exactly those strings. The obvious conclusion — that a Linear label
-named `tier/fast` exists — is false. Read from the live workspace while filing the follow-up issue:
+Every document in this project writes the tiers as `tier/fast`, and `linear-export.json` contains
+exactly those strings. The obvious conclusion — that a label named `tier/fast` exists — is false.
+Read from the live workspace:
 
-| What the docs show | What Linear actually stores |
-|---|---|
-| a label `tier/fast` | group `tier` → child named **`fast`** |
+| What the docs show   | What Linear actually stores            |
+| -------------------- | -------------------------------------- |
+| a label `tier/fast`  | group `tier` → child named **`fast`**  |
 | a label `gate/human` | group `gate` → child named **`human`** |
-| a label `area/w4` | group `area` → child named **`w4`** |
+| a label `area/w4`    | group `area` → child named **`w4`**    |
 
 The slashes are **synthesised by the exporter**, `scripts/linear-export.mjs`:
 
@@ -249,211 +289,154 @@ The slashes are **synthesised by the exporter**, `scripts/linear-export.mjs`:
 .map((l) => (l.parent ? `${l.parent.name}/${l.name}` : l.name))
 ```
 
-So the original `name.startsWith('tier/')` test would have matched **nothing, ever**. And its failure
-mode is the worst one available: every issue skipped with reason `NO_TIER_LABEL`, which is a
-*plausible* reason. A queue that never dispatches, a log full of lines that each look like a correct
-decision, and no error anywhere. The migration doc's own recurring shape — *"a silent no-op that
-looks like success"* — reproduced exactly, by a filter written to prevent it.
+So `name.startsWith('tier/')` would have matched **nothing, ever** — skipping every issue with the
+_plausible_ reason `NO_TIER_LABEL`. A queue that never dispatches, a log full of lines that each look
+like a correct decision, and no error anywhere.
 
-Caught by reading the live label set rather than the documents describing it. This is the same
-lesson as §6a of the migration doc: **the citation is evidence of what was believed, not proof of
-current state.**
+The fix normalises to the exporter's `group/name` path when the payload carries a `parent`, and falls
+back to the bare child names otherwise — both, because Linear's docs do not pin the serialised shape
+of `labels`, saying only that the payload _"reflects the corresponding GraphQL entity"_.
 
-The fix normalises labels to the exporter's `group/name` path when the payload carries a `parent`,
-and falls back to matching the bare child names (`unreviewed`, `fast`, `standard`, `heavy`)
-otherwise. Both, because Linear's webhook docs do not pin the serialised shape of `labels` — they
-say only that the payload *"reflects the corresponding GraphQL entity"* — and which of the two
-arrives is not worth betting the queue on.
-
-Reverting to the buggy version turns **6 tests red**, so the fix is load-bearing rather than
-belt-and-braces.
-
-> **Residual.** Which shape Linear actually sends is still unconfirmed — it needs one real delivery
-> to settle. Both are handled, so this does not block; setup step 7 will reveal it.
+> **Residual.** Which shape Linear actually sends is unconfirmed; both are handled, and §9 step 7
+> will reveal it.
 
 ---
 
-## 5. Decisions, with their reasoning
+## 8. Decisions, with their reasoning
 
-**`gate/human` is not dispatched — and this is the one rule that is an inference.** AGENTS.md defines
-the label as *"no machine may close it"*, which is strictly about closing, not about working. But
-starting an autonomous agent on a row explicitly gated on a person is the quiet over-reach the
-constitution exists to prevent, and the cost of being wrong is asymmetric: a wrongly-skipped issue
-costs one drag of a card, a wrongly-dispatched one costs an agent's worth of unwanted change. The
-skip is loud — reason `HUMAN_GATED` in the response body and the log — so it is a visible decision
-rather than a silent drop. **Flagged for review** in section 8.
+**`gate/human` is not dispatched — the one rule that is an inference.** AGENTS.md defines it as _"no
+machine may close it"_, which is about closing, not working. But starting an autonomous agent on a
+row gated on a person is the quiet over-reach the constitution exists to prevent, and the cost is
+asymmetric: a wrongly-skipped issue costs one drag, a wrongly-dispatched one costs an agent's worth
+of unwanted change. The skip is loud. **Flagged for review** in §11.
 
-**`tier/unreviewed` *is* dispatched.** Item 28d: such a row *"may not enter `In Progress` until it is
-tiered"*, and *"judging the tier is part of claiming, not part of finishing."* Tiering is therefore
-the dispatched agent's first job, not a precondition for dispatching it. Filtering these out would
-quietly strand every skill-filed finding, since the filer applies `tier/unreviewed` by design.
+**`tier/unreviewed` _is_ dispatched.** Item 28d: such a row _"may not enter `In Progress` until it is
+tiered"_, and _"judging the tier is part of claiming, not part of finishing."_ Filtering these out
+would quietly strand every skill-filed finding, since the filer applies `tier/unreviewed` by design —
+and would make promotion look broken to the owner.
 
-**Identity is the `tier/*` label, never the `Tnnn` prefix.** Item 28b rules the prefix out
-explicitly. A test asserts a `GAM-412` with no `Tnnn` still dispatches — the migration doc's whole
-point that a skill-filed finding "has no `Tnnn` and is still ours" would otherwise decay silently
-the first time it mattered.
+**Identity is the tier label, never the `Tnnn` prefix** (item 28b). A test asserts a `GAM-412` with
+no `Tnnn` still dispatches.
 
-**The issue description is not forwarded.** It is the largest field and the least useful to freeze:
-item 28c requires the agent to re-read the issue and confirm it holds the claim before doing
-anything, so it fetches live text regardless. A copy in `client_payload` would only ever be a
-staler second version for the agent to disagree with. This also keeps the payload trivially inside
-both GitHub limits.
+**The issue description is not forwarded.** Item 28c requires the agent to re-read the issue and
+confirm it holds the claim, so it fetches live text regardless; a copy would only ever be a staler
+second version to disagree with.
 
-**Skips return 200; failures return non-2xx.** Linear retries non-2xx deliveries, so the status code
-is a statement about whether retrying could ever help. A correct decision not to dispatch is a
-*successful* delivery and returns 200 with its reason. A bad signature returns 401 — not because
-retrying helps, but because a 2xx would tell anyone probing the endpoint that their unsigned request
-was accepted. GitHub rejecting the dispatch returns 502, which Linear *should* retry.
+**Skips return 200; failures return non-2xx.** Linear retries non-2xx, so the status code states
+whether retrying could ever help. A bad signature returns 401 — not because retrying helps, but
+because a 2xx would tell anyone probing the endpoint that their unsigned request was accepted.
 
-**State is matched by name, case-insensitively, and is configurable.** Item 28 names the column
-`Todo`, and the name is what the owner actually drags a card into. Case-insensitivity means a rename
-to `TODO` does not silently stop the queue; `LINEAR_DISPATCH_STATE` covers a real rename.
+**Concurrency is grouped per issue and does not cancel in progress.** Two agents on one row is the
+race item 28c exists to shrink; but a half-finished agent that has already claimed the issue should
+be allowed to finish.
 
-**Concurrency is grouped per issue, and does not cancel in progress.** Two agents on one row is the
-race item 28c's claim-then-re-read exists to shrink. But a half-finished agent that has already
-claimed the issue in Linear should be allowed to finish, so a later dispatch queues rather than
-killing it.
+**A separate Linear key for the workflow.** `linear-export.yml` deliberately uses a read-only key on
+a daily schedule. The dispatched agent must _write_, so it gets `LINEAR_DISPATCH_API_KEY` (Read +
+Write + Create comments, limited to `Gamitch`) rather than the export's key being widened.
 
-**A separate Linear key for the workflow.** `linear-export.yml` deliberately uses a **read-only**
-key. The dispatched agent must *write* (claim the issue, move it to `In Review`), so it gets its own
-secret, `LINEAR_DISPATCH_API_KEY`, rather than the export's key being quietly widened to write.
+**Subscription auth over an API key.** Owner's choice, 2026-08-09: runs draw on the Claude
+subscription via `claude_code_oauth_token`.
 
 ---
 
-## 6. Setup — what the owner still has to do
+## 9. Setup — what the owner still has to do
 
-**Tracked as `GAM-310`** (`Backlog`, `tier/fast`, `gate/human`) — filed rather than left here alone,
-because item 29 makes Linear the queue and a runbook that lives only in a document is a step nobody
-is prompted to take.
+**Tracked as `GAM-310`** (`Backlog`, `tier/fast`, `gate/human`).
 
-**None of this has been done.** Each step needs a credential or an admin session this session did
-not have. In order; step 3 before step 1, or the first deliveries hit nothing.
+| #   | Step                                                                                         | State                                                           |
+| --- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| 1   | Fine-grained PAT, **Contents: write**, owned by `gamitch`                                    | **DONE** — verified `GET /user` → 200, `POST /dispatches` → 204 |
+| 2   | Secrets: `CLAUDE_CODE_OAUTH_TOKEN`, `LINEAR_DISPATCH_API_KEY`, `CLAUDE_PR_TOKEN`             | **DONE**                                                        |
+| 3   | Merge the workflow to `main`                                                                 | outstanding                                                     |
+| 4   | `supabase functions deploy linear-dispatch` + three `supabase secrets set`                   | outstanding                                                     |
+| 5   | Create the Linear webhook — Issues only, team `Gamitch`                                      | outstanding                                                     |
+| 6   | Move a real issue `Backlog → Todo`; confirm `Verified human actor` in the log                | outstanding                                                     |
+| 7   | Edit an issue already in `Todo`; expect `{"dispatched": false, "reason": "STATE_UNCHANGED"}` | outstanding                                                     |
 
-1. **Create the GitHub PAT.** Fine-grained, scoped to `gamitch/volt_task_tracker_rewrite` only, with
-   **Contents: read & write**. It must be created under a **human** account (2d). Owning it with a
-   machine account is the single most likely way to make this fail confusingly.
+Step 3 must precede step 6: `repository_dispatch` only runs workflows from the default branch, and a
+dispatch matching no workflow still returns 204.
 
-2. **Add the repository secrets** (Settings → Secrets and variables → Actions):
+Step 4's secrets: `LINEAR_WEBHOOK_SECRET` (from step 5), `GITHUB_DISPATCH_TOKEN` (the PAT),
+`GITHUB_DISPATCH_REPO=gamitch/volt_task_tracker_rewrite`. Then confirm JWT verification is really off
+— an unsigned `curl` should return **401 `INVALID_SIGNATURE`**, the function's own error shape. A 401
+about a _missing JWT_ means the config did not take.
 
-   | Secret | Value |
-   |---|---|
-   | `CLAUDE_CODE_OAUTH_TOKEN` | subscription auth, from `claude setup-token`. Chosen over `ANTHROPIC_API_KEY` by the owner on 2026-08-09; the workflow's input was changed to match |
-   | `LINEAR_DISPATCH_API_KEY` | a **write-capable** Linear key — Read + Write + Create comments, limited to the `Gamitch` team. **Not** the read-only key `linear-export.yml` uses |
-   | `CLAUDE_PR_TOKEN` | optional; the PAT from step 1. Without it the agent's pushes use `GITHUB_TOKEN`, and **commits made with `GITHUB_TOKEN` do not trigger CI** — a PR whose checks never run looks fine and is worse than a red one |
+`CLAUDE_PR_TOKEN` matters more than it looks: without it the agent's pushes use `GITHUB_TOKEN`, and
+**commits made with `GITHUB_TOKEN` do not trigger CI** — a PR whose checks never run looks fine and
+is worse than a red one.
 
-3. **Merge the workflow to `main`.** `repository_dispatch` runs workflows from the default branch
-   only, and a dispatch matching no workflow still returns 204 (2c).
-
-4. **Deploy the function and set its secrets:**
-
-   ```sh
-   supabase functions deploy linear-dispatch
-   supabase secrets set LINEAR_WEBHOOK_SECRET=...   # from step 5
-   supabase secrets set GITHUB_DISPATCH_TOKEN=...   # the PAT from step 1
-   supabase secrets set GITHUB_DISPATCH_REPO=gamitch/volt_task_tracker_rewrite
-   ```
-
-   Then **confirm JWT verification is actually off** on the deployed function (Dashboard → Edge
-   Functions → `linear-dispatch`), because of `supabase/cli#4059`. An unsigned `curl` should return
-   **401 `INVALID_SIGNATURE`** — the function's own error shape. A 401 about a *missing JWT* means
-   the platform is still intercepting and the config did not take.
-
-5. **Create the Linear webhook.** Settings → API → Webhooks:
-   - URL: `https://<project-ref>.supabase.co/functions/v1/linear-dispatch`
-   - Resource type: **Issues** only
-   - Copy the signing secret into `LINEAR_WEBHOOK_SECRET` (step 4)
-
-6. **Prove it end to end, and watch the actor line.** Move one real issue `Backlog → Todo`. Then
-   open the Actions run and confirm the log says:
-
-   ```
-   Actor type: User
-   Verified human actor: gamitch
-   ```
-
-   That line is the composition in 2d actually happening. If it instead says *"Workflow initiated by
-   non-human actor"*, the PAT is owned by the wrong kind of account — go back to step 1. Do not
-   reach for `allowed_bots`.
-
-7. **Check the negative case, because a filter that drops everything looks identical to one with
-   nothing to do.** Edit the description of an issue already in `Todo`. The function should return
-   **200 `{"dispatched": false, "reason": "STATE_UNCHANGED"}`** and no workflow should start.
+Also still outstanding from the migration: enable the Linear automation **PR merged → Done**.
 
 ---
 
-## 7. Found on the way: 224 Edge Function tests that nothing ran
+## 10. Found on the way: 224 Edge Function tests that nothing ran
 
-Not part of the ask, but discovered while wiring these tests into CI and worth more than the webhook
-itself.
+`ci.yml` had three jobs — `ci`, `sql`, `skill-scripts` — and **no Deno job**. Five function
+directories already carried 21 test files, **224 tests**, and CI ran none of them. The `checkin` HMAC
+tests this work was told to mirror have been unenforced since T032.
 
-`.github/workflows/ci.yml` had three jobs — `ci`, `sql`, `skill-scripts` — and **no Deno job**. Five
-function directories already carried 21 `*.test.ts` files, **224 tests**, and CI ran none of them.
-The `checkin` HMAC tests this task was told to mirror have been unenforced since T032.
-
-That is the defect class T701 was filed for, and the same shape as everything in the migration doc's
-section 6: a guard that never fires is indistinguishable from a guard that works. Adding
-`linear-dispatch`'s 39 tests without fixing this would have made it two directories of decorative
-coverage instead of one.
-
-The new `edge-functions` job runs all six. Two details, both measured rather than assumed:
+The new `edge-functions` job runs all six. Two details, both measured:
 
 - **Per-directory, not one root-level `deno test supabase/functions/`.** Each function owns a
-  `deno.json`, and Deno applies the config nearest the working directory. The root-level form
-  resolves every function's npm specifiers against the wrong config and dies at *collection* —
-  before running a single test — on `ical-generator` in `ics/`.
+  `deno.json`, and Deno applies the config nearest the working directory; the root-level form
+  resolves every function's npm specifiers against the wrong config and dies at _collection_.
 - **`--allow-env --allow-read`.** `send-invite` and `send-reminders` read `RESEND_SEND_MODE` /
-  `RESEND_API_KEY` to prove their fail-closed defaults, and `send-invite` asserts against its own
-  source text. Without the flags those two directories are red for a reason that has nothing to do
-  with their logic.
+  `RESEND_API_KEY` to prove their fail-closed defaults.
 
-The loop **discovers** directories rather than listing them — a hardcoded list is exactly how this
-gap would silently reopen — and errors if it finds none, because a green tick over an empty loop is
-the failure this job exists to prevent.
-
-**All 269 pass** — the 224 that were already there, plus this function's 45.
+The loop **discovers** directories rather than listing them, and errors if it finds none. **All 269
+pass.**
 
 ---
 
-## 8. Open questions
+## 11. The cheaper alternative, recorded honestly
 
-1. **Is excluding `gate/human` right?** Section 5's reasoning is an inference from *"no machine may
-   close it"*, not a quotation. The counter-argument is decent: an agent never closes its own issue
-   anyway (item 28e), so the label may already be satisfied by the normal flow and rule 8 may be
-   filtering work that should proceed. One line in `filter.ts` either way.
+A **GitHub Actions cron polling Linear every 5 minutes** needs no relay, no public endpoint, no
+signature verification, no PAT stored off-GitHub and no Supabase deploy — and reuses the
+`LINEAR_API_KEY` secret that already exists. Cost is ~288 requests a day against a measured budget of
+2,500 _per hour_. The only loss is latency: up to 5 minutes.
 
-2. **Issues created directly in `Todo` are not dispatched** (rule 2 requires `update`). This is
-   deliberate — item 28a makes promotion the owner's explicit signal — but a `create` straight into
-   `Todo` is a plausible thing to do by accident, and it currently produces silence.
-
-3. **Nothing tells the owner a dispatch was skipped.** The reason is in the function's response body
-   and the Supabase log, and Linear's webhook delivery view shows the 200. Nobody is watching either.
-   A skip for a *wrong* reason — say `LABELS_UNAVAILABLE` after a Linear payload change — would look
-   exactly like a quiet week.
-
-4. **`--allowedTools` in the workflow is broad** (`Bash` unrestricted, plus `WebFetch`/`WebSearch`).
-   An agent that cannot run `npm test` is useless, so some breadth is required, but this has not been
-   tuned against a real run.
-
-5. **`--max-turns 80` and `timeout-minutes: 60` are guesses.** Neither is grounded in an observed
-   run, because there has not been one.
-
-6. **The replay window is 60s**, per Linear's own recommendation. If Supabase cold starts push
-   delivery latency past that, deliveries will 401 with `STALE_DELIVERY` — which will look like a
-   signature problem and is not. `DEFAULT_TIMESTAMP_TOLERANCE_MS` is the knob.
+Recorded because item 25 (proportionality) exists and the owner's standing instruction is _"please
+keep it simple"_. The owner asked for the webhook twice, knowingly, and that is the decision — but if
+§9 hits real friction, this delivers the same outcome with a fraction of the surface area.
 
 ---
 
-## 9. Files
+## 12. Open questions
 
-| File | |
-|---|---|
-| `supabase/functions/linear-dispatch/signature.ts` | new |
-| `supabase/functions/linear-dispatch/filter.ts` | new |
-| `supabase/functions/linear-dispatch/dispatch.ts` | new |
-| `supabase/functions/linear-dispatch/index.ts` | new |
-| `supabase/functions/linear-dispatch/signature.test.ts` | new — 15 tests |
-| `supabase/functions/linear-dispatch/filter.test.ts` | new — 24 tests |
-| `supabase/functions/linear-dispatch/deno.json` | new |
-| `.github/workflows/claude-linear-dispatch.yml` | new |
-| `supabase/config.toml` | `[functions.linear-dispatch] verify_jwt = false` |
-| `.github/workflows/ci.yml` | new `edge-functions` job (section 7) |
+1. **Is excluding `gate/human` right?** §8's reasoning is an inference, not a quotation. The
+   counter-argument is decent: an agent never closes its own issue anyway (item 28e), so the label
+   may already be satisfied by the normal flow. One line in `filter.ts` either way.
+2. **Does Linear re-stamp `webhookTimestamp` on retry?** §3b — if not, the 1-hour and 6-hour retries
+   are rejected as stale and recovery is by re-dragging the card.
+3. **Issues created directly in `Todo` are not dispatched** (rule 2 requires `update`). Deliberate —
+   item 28a makes promotion the owner's signal — but a `create` straight into `Todo` is a plausible
+   accident and currently produces silence.
+4. **Nothing tells the owner a dispatch was skipped.** The reason is in the response body and the
+   Supabase log, and Linear's delivery view shows the 200. Nobody watches either. A skip for a
+   _wrong_ reason would look exactly like a quiet week.
+5. **`--allowedTools` is broad** (`Bash` unrestricted, plus `WebFetch`/`WebSearch`). An agent that
+   cannot run `npm test` is useless, so some breadth is required, but this is untuned.
+6. **`--max-turns 80` and `timeout-minutes: 60` are guesses**, not grounded in an observed run.
+7. **This wires a money tap to a drag gesture.** Bounded by the per-issue concurrency group,
+   `--max-turns` and the job timeout — but the bound has never been tested against a runaway.
+
+---
+
+## 13. Files
+
+| File                                                                      |                                                  |
+| ------------------------------------------------------------------------- | ------------------------------------------------ |
+| `supabase/functions/linear-dispatch/{signature,filter,dispatch,index}.ts` | new                                              |
+| `supabase/functions/linear-dispatch/{signature,filter}.test.ts`           | new — 45 tests                                   |
+| `.github/workflows/claude-linear-dispatch.yml`                            | new                                              |
+| `supabase/config.toml`                                                    | `[functions.linear-dispatch] verify_jwt = false` |
+| `.github/workflows/ci.yml`                                                | new `edge-functions` job (§10)                   |
+
+---
+
+## 14. The tier judgement, kept from the design
+
+**HEAVY**, and the reasoning still holds: this introduces a **publicly reachable endpoint that
+triggers an autonomous agent holding `contents: write` and `pull-requests: write`**. A mistake does
+not merely render something wrong — it lets an unauthenticated caller spend money and open pull
+requests. Item 26's tie-break ("if two tiers are arguable, take the heavier one") applies.

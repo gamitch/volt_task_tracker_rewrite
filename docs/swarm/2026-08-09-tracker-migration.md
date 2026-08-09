@@ -135,6 +135,7 @@ Recorded because the pattern is more useful than the list.
 | Committed a lint error twice (`API`, `gql` left unused after removing their callers) | `npm run lint` |
 | `T1300` filed as `tier/standard` because its own prose said "expect FAST or STANDARD" | checking the payload after filing |
 | `AGENTS.md` orientation order still claimed at step 4, contradicting item 28 | watching an agent take 9 commands to find its issue |
+| A commit message *explaining* the skip-CI marker contained the literal token — and silently skipped CI on its own PR | PR #130 showed **zero** check runs |
 
 **The recurring shape: a silent no-op that looks like success.** A too-strict regex returns a smaller
 plausible number. A replace with no anchor changes nothing and exits 0. A guard that never fires is
@@ -199,19 +200,72 @@ delete for rollback, cannot batch, and cannot be read before it runs.
 
 ## 8. Outstanding
 
-1. **`--check` is not wired into CI**, so the export can go stale silently.
-2. **`linear-export.json` is 867 KB, rewritten whole each run** — will accumulate.
-3. **`T1300` / `GAM-307`** — the residual sweep over the four non-"fixed" closures (`T163`, `T204`,
+1. ~~**`--check` is not wired into CI**~~ — **done**, PR #129. `.github/workflows/linear-export.yml`
+   exports on push to `main`, daily at 06:00 UTC, and on demand; it commits the two files when they
+   move and asserts `--check` against what it just wrote. Item 29c was **corrected rather than
+   implemented** — its original "let CI enforce it" would have failed every task PR, because
+   claiming an issue moves it `Todo → In Progress` and makes the committed export stale by
+   definition. Heal, do not gate.
+
+   Its first live run proved itself on real data: `exported 309 issues (242 archived) in 16
+   requests`, committed `ed2f7a1`, `--check` green — and the whole diff beyond timestamps was
+   `GAM-309` moving `Backlog → In Progress` with `tier/unreviewed → tier/standard`. That is an
+   agent claiming an issue under item 28, which is *precisely* the state change a `--check` gate
+   would have failed on.
+
+   **One caveat, recorded because this project keeps meeting it.** The job is documented as safe
+   from self-retriggering because of `paths-ignore` on the two export files. It did not retrigger —
+   but the bot's commit message also carries `[skip ci]`, which suppresses every workflow on that
+   push regardless of paths. **Two mechanisms, either sufficient, neither observed firing alone.**
+   Harmless, but it is the recurring shape from §6: a guard that never fires is indistinguishable
+   from a guard that works. Do not remove either believing the other is what holds.
+
+   **And a live trap that this very paragraph sprang.** GitHub scans the *whole* commit message for
+   the skip-CI marker, so a commit that merely **writes about** it skips CI itself. The first
+   attempt at this document did exactly that and its PR ran **zero** checks. `ci.yml` has no path
+   filters, so silence means suppressed, not "nothing to run" — when a PR shows no checks at all,
+   grep the commit message before assuming it is docs-only. Refer to the marker in prose, never
+   verbatim.
+2. **`linear-export.json` is 867 KB, rewritten whole each run.** Milder than feared: a full
+   regeneration produced a **6-line diff**, so git deltas it rather than storing a new copy.
+3. **The Linear → Claude dispatch webhook is designed but not built.** See
+   `docs/swarm/2026-08-09-linear-webhook-dispatch.md` — the verified constraints (a relay is
+   mandatory; Linear supports no custom headers), the reuse already in the repo, the owner-only
+   setup steps, and four UNVERIFIED items that could invalidate the design. This is the answer to
+   the owner's original question, *"how do you know if i move something from our backlog?"*
+4. **`T1300` / `GAM-307`** — the residual sweep over the four non-"fixed" closures (`T163`, `T204`,
    `T801`, `T805`). Its default is deliberately *no residual*.
-4. **`GAM-302`** — the T703 agent's finding, already fixed by PR #121; probably `Done`.
-5. **`RESUME-HERE.md` and `state-summary.md` predate the migration** and still describe the old
+5. **`GAM-302`** — the T703 agent's finding, already fixed by PR #121; probably `Done`.
+6. **`GAM-303`'s description still asserts the false coach-vs-student comparison** corrected in
+   §6a. Needs fixing in Linear; no agent session has held a key since.
+7. **`RESUME-HERE.md` and `state-summary.md` predate the migration** and still describe the old
    dispatch model. Now labelled as such, not yet rewritten.
-6. **The findings pipeline is end-to-end untested** — the skill emits, the filer consumes, but no
+8. **The findings pipeline is end-to-end untested** — the skill emits, the filer consumes, but no
    real run has gone through both.
+9. **Enable the Linear automation *PR merged → Done*** for the `Gamitch` team (item 28f). Until it
+   is on, issues sit in `In Review` after their PR lands and must be closed by hand.
 
 ---
 
 ## 9. PRs
 
 `#116` ClickUp migration + T166 · `#117` T063b recovery · `#118` persona harness (another session) ·
-`#119` item 28 + findings filed · `#121` reclassification + guard + T1300 · `#122` the export runs
+`#119` item 28 + findings filed · `#121` reclassification + guard + T1300 · `#122` the export runs ·
+`#124` T1300 · `#126` `GAM-303` (proved `Closes GAM-nnn` auto-closes) · `#128` board defects ·
+`#129` export automation + item 29c correction
+
+---
+
+## 10. Where the durable records are
+
+Written down because a session's own transcript lives in an ephemeral container and does not
+survive it. **Only what is committed to git carries over.** To bring a new session up to speed:
+
+| File | What it holds |
+|---|---|
+| `docs/swarm/2026-08-09-tracker-migration.md` | this file — the migration, the audit findings, the decisions and their reasoning, and the mistakes |
+| `docs/swarm/2026-08-09-linear-webhook-dispatch.md` | the dispatch webhook: verified constraints, design, owner steps, open questions |
+| `docs/swarm/constitution.md` items **28–30** | the rules an agent must follow: Linear dispatch, the frozen ledger, issue writing |
+| `AGENTS.md` § *Where work comes from* | the entry point an agent actually reads at startup |
+| `docs/swarm/linear-export.{json,md}` | the queue itself, regenerated by CI — greppable offline |
+| `docs/swarm/task-ledger.md` | frozen at 301 rows; historical provenance only |
