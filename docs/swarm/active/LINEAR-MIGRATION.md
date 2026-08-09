@@ -27,7 +27,7 @@ custom fields. Mapped by **meaning**, not by name.
 | `Title` | `title` | built-in | Direct. |
 | `Last Result` | `description` | built-in | Markdown verified lossless — see §2. |
 | `Status` (94 distinct) | `stateId` (7 states) **+ original string preserved verbatim in `description`** | built-in | Normalisation is lossy; preserving the source text makes it recoverable. See §3. |
-| `Epic` (109 distinct) | `projectId` — the ~10 **W-block** workflows, not the 109 epic codes | built-in | Projects are Linear's grouping primitive. The raw epic code (`E4`, `UXC (PRD v3.1)`) stays in the description. |
+| `Epic` (109 distinct) | label group `area` (`w1`…`w10`), **not** `projectId` | label | **DECIDED: Option 3.** See §1.3. The raw epic code (`E4`, `UXC (PRD v3.1)`) stays in the description. |
 | `Deps` | native `blockedBy` **issue relation** | built-in | Verified working on the probe. |
 | `Tier` | label group `tier` → `fast` / `standard` / `heavy` | label | **Created and verified.** Groups are mutually exclusive = dropdown semantics, and carry a description, so item 26's wording lives on the label. |
 | `Provenance` | label group `provenance` | label | Same mechanism. |
@@ -49,6 +49,52 @@ historical and belongs in the record, not in a routing field.
 **Future option worth noting:** `IssueCreateInput` exposes `delegateId` — *"the identifier of the
 agent user to delegate the issue to"*. Linear has a first-class agent-user concept. If agents are
 ever registered as Linear agent users, that becomes the correct home for `Worker`. Not today.
+
+### 1.3 Why `area` is a label and NOT a Linear Project — measured
+
+**Owner decision 2026-08-09: tags, not projects.** Two measurements drove it.
+
+**83% of rows predate the W-block system.** 245 of 295 are `T001`–`T399` and carry no W-number at
+all; only 50 do. Under a project-per-workflow scheme, 245 rows would sit in no project, which reads
+as "someone forgot to file this" rather than "this predates the scheme". An absent label reads as
+nothing at all, which is the truth.
+
+**The numbers are explicitly not ownership.** `WORKFLOWS.md` states it directly: *"the block is a
+collision-avoidance reservation, not an ownership claim."* `T509` sits in W2's `T500-599` range but
+is W4's work; `T508`/`T510`/`T511` are W3's. Deriving projects from id ranges would misfile them
+**silently** — the same class of defect as §4.1.
+
+**And a Linear Project is the wrong shape.** Projects carry a start date, target date, lead and
+progress bar; they are built for efforts that *finish*. "Run a meeting" is a permanent area of the
+app with no end date — every such project would sit at partial completion forever. An issue can also
+belong to only one project, and `T507`–`T511` prove a row can genuinely span two areas (filed under
+one workflow, living on another's surface). Labels are non-exclusive and cost one second to correct.
+
+Projects are reserved for work that genuinely ends — a go-live, a migration — if wanted later.
+
+### 1.4 `Tier` — `unreviewed`, not a defaulted `standard`
+
+The owner proposed populating blank tiers with `standard` and having the premise gate validate them.
+**The intent is right — every row should carry a tier so dispatch is never ambiguous — but a
+defaulted `standard` is unsafe for two reasons, so the plan implements the intent differently.**
+
+1. **It is the placeholder-default defect class**, which has produced more bugs in this project than
+   any other single pattern: an optional value, a plausible default, and nothing forcing a real
+   decision (T151, T155, T158, T159, T170, T176, T181, T407 — and T172 exists specifically to stop it
+   recurring). A defaulted `standard` is **indistinguishable from a judged `standard`**, which is the
+   exact property that makes the class dangerous. Item 26 requires the tier judgement to be *stated
+   and defended* so a wrong call is visible.
+2. **Only HEAVY runs `checker-premise`.** Item 26's FAST and STANDARD tiers have no gate at all — so a
+   row defaulted to `standard` would never reach the validation the proposal relies on. The gate
+   cannot catch what never reaches it.
+
+**Implementation:** the `tier` label group carries a fourth value, **`unreviewed`**, applied to every
+row with no tier in the ledger (31 of the 33 open rows). Nothing is blank, and "not yet judged" is
+visibly different from "judged as standard".
+
+**The enforcing rule is at pickup, not in a gate:** a row labelled `tier/unreviewed` may not be moved
+to `In Progress`. Tiering it is the first act of picking it up, which is where the judgement belongs
+and where item 26 already puts it.
 
 ### 1.2 Why `Attempts` is not `estimate`
 
@@ -144,8 +190,9 @@ They are hand-mapped. T063's correct shape is already known and recorded.
 
 Each phase is independently verifiable and independently abandonable.
 
-**Phase 0 — scaffolding (~15 requests).** Create label groups `tier`, `provenance`, `gate`, plus the
-standalone `escalated` label. Create ~10 projects for the W-blocks. `tier`/`tier:fast` already exist.
+**Phase 0 — scaffolding (~20 requests).** Create label groups `tier` (`fast`/`standard`/`heavy`/
+**`unreviewed`**), `area` (`w1`…`w10`), `provenance`, `gate`, plus the standalone `escalated` label.
+`tier` and `tier/fast` already exist. **No projects are created** (§1.3).
 
 **Phase 1 — dry run, writes nothing.** Parse all 288 rows, apply the mapping, and emit
 `linear-migration-payload.json` plus a report: rows per state, per project, per label; unmapped
@@ -218,12 +265,10 @@ migration verifies. Short-lived keys are the point: this one has already done it
 
 1. ~~**Migrate all rows, or only the 33 open?**~~ **DECIDED by the owner: all 295.** Plan assumes all — history is cheap now that
    archived rows are exempt, and the closed-blocker gap (T166→T155) only closes if closed rows exist.
-2. **Projects for W-blocks — confirm the ~10 groupings**, since `Epic`'s 109 distinct values are too
-   granular to be projects and will live in descriptions.
-3. **One team or two?** Free allows 2. A single `Gamitch` team is simplest; a second could separate
-   swarm process rows from product rows.
-4. **Tier is blank on 31 of 33 open rows.** Item 26 dispatches on tier. Migrating blanks is honest
-   but leaves dispatch ambiguous — set them during Phase 1 review, or accept blanks and set on pickup.
+2. ~~**Projects for W-blocks?**~~ **DECIDED: no projects — an `area` label group instead (§1.3).**
+3. ~~**One team or two?**~~ **DECIDED: one team (`Gamitch`).**
+4. ~~**Tier is blank on 31 of 33 open rows.**~~ **DECIDED: `tier/unreviewed`, enforced at pickup (§1.4)** —
+   the owner's intent, implemented without a defaulted `standard`. **Owner: confirm this variation.**
 
 ## 9. Process note
 
