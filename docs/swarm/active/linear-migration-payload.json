@@ -3421,5 +3421,53 @@
       "tier/standard"
     ],
     "blockedBy": []
+  },
+  {
+    "legacyId": "T808",
+    "title": "T808 — Students and parents see raw float hours (`3.9999983633333334 / 100 h`) beside a rounded percentage",
+    "description": "**Filed 2026-08-09 from PR #118's persona harness. INDEPENDENTLY RE-VERIFIED before filing, not taken from the report.** `StudentHome.tsx:1483` renders `formatValueLabel={(value, max) => `${value} / ${max} h (${hoursPercent}%)`}` — `hoursPercent` goes through `round1`, `value` is raw `confirmedHours`. `:1485`'s supporting `Text` repeats the raw value (`${confirmedHours} h confirmed + ${plannedHours} h planned`), and `ParentHome.tsx` ~1280 does the same. **The coach dashboard shows `4.0` for the same student**, so two roles are shown different-looking numbers for one fact — the MET/hours-honesty class, not cosmetics. **Scope note:** the fix is presentation-only; `confirmedHours` must NOT be rounded before the progress bar's own arithmetic (module doc #82-105 is explicit that no hours-clamping happens in this file). Round at the format boundary only.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T808` |\n| Epic | E9 |\n| Worker | *not yet packeted* |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Filed 2026-08-09** |\n",
+    "state": "Backlog",
+    "open": true,
+    "labels": [
+      "area/w5",
+      "tier/unreviewed"
+    ],
+    "blockedBy": []
+  },
+  {
+    "legacyId": "T809",
+    "title": "T809 — `StudentHome`'s Sign up / Can't go control writes nothing and says nothing — a documented deferral with no follow-up row",
+    "description": "**Filed 2026-08-09 from PR #118. RE-VERIFIED, and the code states the defect itself:** `StudentHome.tsx:1442-1445` is `function handleRsvpChange(...) { // Module doc #7: local-only. No Supabase write happens here. setRsvps((prev) => withLocalRsvpOverride(...)); }`. A student answers an RSVP, the UI updates, and a reload discards it, with nothing on screen saying so. **This is constitution item 20's exact failure shape and its third recorded instance** — a correct scope deferral recorded ONLY in a comment, exactly as T101/T121 shipped fixture teams and `SettingsPage` shipped an inert light/dark control. Item 20 exists because of those three. **Two candidate scopes, and the choice is the work:** wire the write through the existing rsvp upsert path, or — if that is out of scope for now — make the control honestly disabled with a reason. Shipping a control that silently discards a student's answer is the worse of the three states. Related: T407 (nav badge reads 0 while the page reads 74).\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T809` |\n| Epic | E9 |\n| Worker | *not yet packeted* |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Filed 2026-08-09** |\n",
+    "state": "Backlog",
+    "open": true,
+    "labels": [
+      "area/w5",
+      "tier/unreviewed"
+    ],
+    "blockedBy": []
+  },
+  {
+    "legacyId": "T615",
+    "title": "T615 — The schedule-meetings team picker offers archived teams; the roster picker excludes them",
+    "description": "**Filed 2026-08-09 from PR #118. RE-VERIFIED in source.** `ScheduleMeetingsDialog.tsx:1160` maps `teams` straight into `options` (`teams.map((team) => ({ value: team.id, label: team.name }))`) with no `archived` predicate anywhere in the file, while `StudentDialog.tsx:322`'s `filterSelectableTeams` excludes them and its own module doc calls itself *\"the ONLY place archived teams are excluded\"* — which is now demonstrably true and is the bug. The harness reports the archived team is not merely offered but **pre-selected** by default (`allTeamIds` at `:832` is every team passed in). **Consequence:** a meeting can be scheduled against a team no longer on the roster, and `events.team_ids` then scopes RLS and attendance to a dead team. **Cheapest credible fix:** reuse `filterSelectableTeams` rather than writing a second predicate — it is already tested and its module doc already claims uniqueness (constitution item 3).\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T615` |\n| Epic | E5 |\n| Worker | *not yet packeted* |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Filed 2026-08-09** |\n",
+    "state": "Backlog",
+    "open": true,
+    "labels": [
+      "area/w3",
+      "tier/unreviewed"
+    ],
+    "blockedBy": []
+  },
+  {
+    "legacyId": "T616",
+    "title": "T616 — No event records who created it, so outreach detail permanently reads \"Unknown creator\"",
+    "description": "**Filed 2026-08-09 from PR #118. RE-VERIFIED.** `loaders/meetings.ts:1137` inserts `{ season_id, type: 'meeting', title, … }` with **no `created_by`**, and the outreach create path does the same. The column exists and is read — `outreach.ts:446` types it, `:665` maps it to `createdBy`, and `:1148` loads the profile behind it — so the reader was built and the writer never was. Every event therefore renders \"Unknown creator\" forever, including events created today. **Ledger mentions of `created_by` before this row: ZERO**, so nothing tracked it. **Check before scoping:** whether `events.created_by` is nullable and whether any RLS policy or view reads it, since backfilling historical rows is not possible — the information was never captured.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T616` |\n| Epic | E5 |\n| Worker | *not yet packeted* |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Filed 2026-08-09** |\n",
+    "state": "Backlog",
+    "open": true,
+    "labels": [
+      "area/w3",
+      "tier/unreviewed"
+    ],
+    "blockedBy": []
   }
 ]

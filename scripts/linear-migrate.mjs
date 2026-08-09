@@ -45,7 +45,7 @@ const PAYLOAD_OUT = path.join(OUT_DIR, 'linear-migration-payload.json');
 const REPORT_OUT = path.join(OUT_DIR, 'linear-migration-report.md');
 
 /** Abort if the ledger does not parse to exactly this many rows. */
-const EXPECTED_ROWS = 296;
+const EXPECTED_ROWS = 300;
 
 const argv = process.argv.slice(2);
 const EXECUTE = argv.includes('--execute');
