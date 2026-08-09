@@ -1,5 +1,13 @@
 # Task Ledger — VOLT Team Portal Rewrite
 
+> **DISPATCH MOVED TO LINEAR — 2026-08-09.** All 296 rows below are mirrored in the `Gamitch`
+> Linear team, keyed by the `Tnnn` prefixing each issue title. **The live queue is Linear's `Todo`
+> column; this file is no longer where work is discovered.** It remains the authoritative historical
+> record — provenance, evidence and prior verdicts live here and are not duplicated there. See
+> constitution item 28 for the pickup rules and `docs/swarm/active/LINEAR-MIGRATION.md` for the
+> field mapping. This file is deliberately **not frozen**: it is still appended to, and it is the
+> fallback if Linear is abandoned.
+
 Source plan: `docs/swarm/VOLT_Portal_PRD.md` v1.6 (authoritative, requirement IDs outrank this ledger), `docs/swarm/constitution.md`, PRD Section 13 epics E1–E11.
 
 ## Legend / ledger-wide rules
