@@ -1,6 +1,8 @@
 # 2026-08-09 — the Linear → Claude dispatch webhook
 
-**Status: BUILT and unit-tested. Not yet live** — §9 is the runbook, tracked as `GAM-310`.
+**Status: LIVE.** Proven end to end on 2026-08-09 — the owner dragged `GAM-308` to `Todo`, an agent
+claimed it 87 seconds later, worked it, and opened PR #133 with CI green. §9 records every setup step
+with its evidence.
 
 This document was written twice: first as a design, by a session that ended before it could build
 anything, and then extended by the session that built it. **Both halves are kept.** The design half
@@ -41,7 +43,7 @@ idling. This was one of the stated reasons Linear beat ClickUp.
 | Auth, inbound  | HMAC-SHA256 over the raw body (`Linear-Signature`) + a 60s replay window                 |
 | Auth, outbound | a **human-owned** GitHub PAT                                                             |
 | Tests          | 45, `deno test supabase/functions/linear-dispatch/`                                      |
-| Setup          | steps 1–3 done; **4–7 outstanding** (§9, `GAM-310`)                                      |
+| Setup          | **all 7 steps done and verified** (§9, `GAM-310`)                                        |
 
 ---
 
@@ -108,7 +110,8 @@ The negative evidence counts too, given how Linear writes docs: plan-gated featu
 explicit banner (Business/Enterprise on private teams, Enterprise on audit log). The webhooks page
 carries none.
 
-> **Residual.** No webhook has been created — that needs the owner's admin session (§9 step 5).
+> **Resolved.** The webhook was created on the free plan without obstacle and has delivered
+> repeatedly. Free-plan availability is now observed rather than inferred.
 
 ### 4b. `verify_jwt` — **HANDLED, and it is a trap worth naming**
 
@@ -180,8 +183,11 @@ Two further checks, both favourable:
   `workflow_run`. Anything else hits `default: throw`. Measured the expensive way — the step-2 smoke
   test was first written `on: push` and died in 340ms with `Unsupported event type: push`.
 
-> **Residual, and it is real.** Each link is verified; the _composition_ is not. Only a live dispatch
-> proves it end to end (§9 step 6).
+> **RESOLVED by observation, and this was the item that could have killed the design.** Run
+> `31341830136`, event `repository_dispatch`, carried `actor: gamitch` / `triggering_actor: gamitch`;
+> `checkHumanActor` passed and the run worked for 7m 51s before opening PR #133. The PAT owner
+> propagated through as the human account exactly as the source read predicted, so the composition —
+> not just each link — is now proven.
 
 ---
 
@@ -297,8 +303,12 @@ The fix normalises to the exporter's `group/name` path when the payload carries 
 back to the bare child names otherwise — both, because Linear's docs do not pin the serialised shape
 of `labels`, saying only that the payload _"reflects the corresponding GraphQL entity"_.
 
-> **Residual.** Which shape Linear actually sends is unconfirmed; both are handled, and §9 step 7
-> will reveal it.
+> **Neutralised, not resolved — and the distinction is deliberate.** A live delivery for `GAM-80`
+> returned `HUMAN_GATED`, a reason only reachable _through_ rules 6 and 7, so the label handling
+> demonstrably works against a real Linear payload. It does **not** reveal _which_ shape arrived:
+> that reason fires for either `gate/human` or a bare `human`, and the detail string quotes the
+> constant rather than the payload. Both shapes stay handled. Had the fallback missed, the reason
+> would have read `NO_TIER_LABEL` — which is precisely why every skip carries one.
 
 ---
 
@@ -339,19 +349,19 @@ subscription via `claude_code_oauth_token`.
 
 ---
 
-## 9. Setup — what the owner still has to do
+## 9. Setup — done, with the evidence for each step
 
 **Tracked as `GAM-310`** (`Backlog`, `tier/fast`, `gate/human`).
 
-| #   | Step                                                                                         | State                                                               |
-| --- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| 1   | Fine-grained PAT, **Contents: write**, owned by `gamitch`                                    | **DONE** — verified `GET /user` → 200, `POST /dispatches` → 204     |
-| 2   | Secrets: `CLAUDE_CODE_OAUTH_TOKEN`, `LINEAR_DISPATCH_API_KEY`, `CLAUDE_PR_TOKEN`             | **DONE** — token proven by a real authentication, not by inspection |
-| 3   | Merge the workflow to `main`                                                                 | **DONE** — PR #132, merged `71d6ac9`                                |
-| 4   | `supabase functions deploy linear-dispatch` + three `supabase secrets set`                   | outstanding                                                         |
-| 5   | Create the Linear webhook — Issues only, team `Gamitch`                                      | outstanding                                                         |
-| 6   | Move a real issue `Backlog → Todo`; confirm `Verified human actor` in the log                | outstanding                                                         |
-| 7   | Edit an issue already in `Todo`; expect `{"dispatched": false, "reason": "STATE_UNCHANGED"}` | outstanding                                                         |
+| #   | Step                                                                                         | State                                                                                                                                                              |
+| --- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Fine-grained PAT, **Contents: write**, owned by `gamitch`                                    | **DONE** — verified `GET /user` → 200, `POST /dispatches` → 204                                                                                                    |
+| 2   | Secrets: `CLAUDE_CODE_OAUTH_TOKEN`, `LINEAR_DISPATCH_API_KEY`, `CLAUDE_PR_TOKEN`             | **DONE** — token proven by a real authentication, not by inspection                                                                                                |
+| 3   | Merge the workflow to `main`                                                                 | **DONE** — PR #132, merged `71d6ac9`                                                                                                                               |
+| 4   | `supabase functions deploy linear-dispatch` + three `supabase secrets set`                   | **DONE** — deployed `--use-api`; an unsigned `curl` returned `500 FUNCTION_MISCONFIGURED` naming only the missing secret, which is what proves `verify_jwt` is off |
+| 5   | Create the Linear webhook — Issues only, team `Gamitch`                                      | **DONE** — webhook `claude-dispatch`, Issues only, team `Gamitch`; the unsigned `curl` then flipped to `401 INVALID_SIGNATURE`                                     |
+| 6   | Move a real issue `Backlog → Todo`; confirm `Verified human actor` in the log                | **DONE** — `GAM-308` dragged at 23:24:58, dispatched, `actor: gamitch`; agent claimed at 23:26:25 and opened PR #133                                               |
+| 7   | Edit an issue already in `Todo`; expect `{"dispatched": false, "reason": "STATE_UNCHANGED"}` | **DONE** — `GAM-80` edited while sitting in `Todo` returned `STATE_UNCHANGED`, and no workflow ran                                                                 |
 
 Step 3 must precede step 6: `repository_dispatch` only runs workflows from the default branch, and a
 dispatch matching no workflow still returns 204.
@@ -366,6 +376,47 @@ about a _missing JWT_ means the config did not take.
 is worse than a red one.
 
 Also still outstanding from the migration: enable the Linear automation **PR merged → Done**.
+
+---
+
+## 9a. The proving run, in full
+
+`GAM-308` — _"CoachHome's goal-projection row prints the same raw float hours T808 fixed for students
+and parents"_, `tier/fast`.
+
+| Time (UTC) | Event                                                |
+| ---------- | ---------------------------------------------------- |
+| 23:24:58   | owner drags `Backlog → Todo`                         |
+| 23:24:59   | function returns 200 in 381 ms; dispatch fired       |
+| 23:25:01   | workflow run `31341830136` created, `actor: gamitch` |
+| 23:26:25   | **agent claims the issue** `Todo → In Progress`      |
+| 23:32:45   | PR #133 opened                                       |
+| 23:33:06   | run completes, `success`, 8m 02s                     |
+
+The claim at 23:26:25 is worth more than the dispatch. It proves `LINEAR_DISPATCH_API_KEY` is
+genuinely write-capable — nothing had exercised it — and that the agent read `AGENTS.md`, found item
+28c, and **claimed before working** rather than after. An agent that skipped that step would have
+looked identical from GitHub's side.
+
+**The work itself held up.** Reviewed as a checker would:
+
+- It used **`.toFixed(1)`, not `round1`** — the trap §6a of the migration doc exists to warn about.
+  `round1` would render `4` where the sibling surface renders `4.0`, replacing one cross-surface
+  mismatch with a smaller one.
+- **`ProgressBar` untouched**, so `aria-valuenow` keeps the real float — the constraint the issue
+  named explicitly.
+- `totalHours` and `percent` left bare, as the issue said they should be.
+- Its test **deliberately picked a fixture that can fail**: Amara Webb (6 / 0 / 90, integers) rather
+  than Dana Voss, whose values "already happen to look formatted". `(6).toFixed(1)` is `"6.0"`, so
+  the assertion cannot pass pre-fix — non-vacuous by construction, not by luck. It also pins
+  `= 6h /` and `6.7%` staying bare, guarding the opposite error.
+
+That last point is the one worth keeping: the issue's tier note warned about the vacuous-negative
+shape T808 hit, and the agent acted on the warning without being told to.
+
+**One worry that proved unfounded.** PR #133 is authored by `claude[bot]`, which looks like the
+`GITHUB_TOKEN`-doesn't-trigger-CI trap. It isn't: the _push_ used `CLAUDE_PR_TOKEN`, and CI triggers
+on the push. All 8 checks ran and passed. The precaution in §9 step 2 is why.
 
 ---
 
@@ -440,12 +491,17 @@ keep it simple"_. The owner asked for the webhook twice, knowingly, and that is 
 3. **Issues created directly in `Todo` are not dispatched** (rule 2 requires `update`). Deliberate —
    item 28a makes promotion the owner's signal — but a `create` straight into `Todo` is a plausible
    accident and currently produces silence.
-4. **Nothing tells the owner a dispatch was skipped.** The reason is in the response body and the
-   Supabase log, and Linear's delivery view shows the 200. Nobody watches either. A skip for a
-   _wrong_ reason would look exactly like a quiet week.
+4. **Nothing tells the owner a dispatch was skipped, and this is now the sharpest open item.** The
+   reason is in the response body and the Supabase log, and Linear's delivery view shows the 200.
+   Nobody watches either. Setting this up required reading those logs by hand at every step — and a
+   skip for a _wrong_ reason (`LABELS_UNAVAILABLE` after a Linear payload change, say) would look
+   exactly like a quiet week. Every other guard here is proven; this is the one that fails silently.
 5. **`--allowedTools` is broad** (`Bash` unrestricted, plus `WebFetch`/`WebSearch`). An agent that
    cannot run `npm test` is useless, so some breadth is required, but this is untuned.
-6. **`--max-turns 80` and `timeout-minutes: 60` are guesses**, not grounded in an observed run.
+6. **`--max-turns 80` and `timeout-minutes: 60` now have exactly one data point.** The `GAM-308`
+   run finished in **8m 02s** without approaching either bound. That says the numbers are not too
+   _low_ for a `tier/fast` issue; it says nothing about a `heavy` one, and nothing about whether
+   they would stop a runaway.
 7. **This wires a money tap to a drag gesture.** Bounded by the per-issue concurrency group,
    `--max-turns` and the job timeout — but the bound has never been tested against a runaway.
 
