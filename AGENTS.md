@@ -7,8 +7,13 @@ second ledger, constitution, severity scale, or set of role definitions.
 ## Where work comes from
 
 **The live queue is the `Todo` column of the `Gamitch` Linear team, not the
-ledger.** `docs/swarm/task-ledger.md` remains the historical record — read it for
-a row's provenance — but it is no longer where you discover what to work on.
+ledger.** `docs/swarm/task-ledger.md` is **FROZEN** (item 29) — read it for the
+provenance of anything filed before 2026-08-09, but never add a row or edit a
+Status there. New work is `GAM-nnn` and carries no `Tnnn`; the number blocks are
+retired because Linear allocates atomically.
+
+Offline or without Linear access, read `docs/swarm/linear-export.md` — a
+generated mirror, never hand-edited, refreshed by `scripts/linear-export.mjs`.
 
 Constitution **item 28** is binding and its order matters:
 

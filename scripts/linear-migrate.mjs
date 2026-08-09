@@ -45,7 +45,7 @@ const PAYLOAD_OUT = path.join(OUT_DIR, 'linear-migration-payload.json');
 const REPORT_OUT = path.join(OUT_DIR, 'linear-migration-report.md');
 
 /** Abort if the ledger does not parse to exactly this many rows. */
-const EXPECTED_ROWS = 300;
+const EXPECTED_ROWS = 301;
 
 const argv = process.argv.slice(2);
 const EXECUTE = argv.includes('--execute');
@@ -176,6 +176,9 @@ const STATUS_RULES = [
   { re: /filed|open/i, state: 'Backlog' },
 ];
 
+/** Closure words that, in any non-Status cell, contradict an open Status. */
+const CLOSED_ELSEWHERE = /\b(CLOSED|SUPERSEDED|WITHDRAWN|VOIDED)\b/;
+
 const OPEN_STATES = new Set(['Backlog', 'Todo', 'In Progress', 'In Review']);
 
 function normaliseStatus(raw) {
@@ -264,11 +267,24 @@ function build() {
   const parsed = parseLedger();
   const issues = [];
   const unmapped = [];
+  const contradictory = [];
 
   for (const row of parsed.rows) {
     const mapped = normaliseStatus(row.status);
     if (!mapped) {
       unmapped.push({ id: row.id, status: row.status.slice(0, 90) });
+      continue;
+    }
+    // CROSS-COLUMN GUARD. The Status column is not the only place this ledger
+    // records a closure: on 2026-08-04/05 eleven rows were closed by writing
+    // "CLOSED …" into the Epic cell, leaving Status reading "Filed". Reading
+    // Status alone migrated all eleven as live issues, and an agent picked one
+    // up and worked a superseded row (T703). A row that contradicts itself is
+    // withheld, never silently reclassified — the same rule as an unmapped
+    // status, for the same reason.
+    const contradiction = CLOSED_ELSEWHERE.test(`${row.epic} ${row.worker} ${row.checker}`);
+    if (OPEN_STATES.has(mapped.state) && contradiction) {
+      contradictory.push({ id: row.id, state: mapped.state, epic: row.epic.slice(0, 80) });
       continue;
     }
     const isOpen = OPEN_STATES.has(mapped.state);
@@ -293,7 +309,7 @@ function build() {
       blockedBy: depsFor(row),
     });
   }
-  return { ...parsed, issues, unmapped };
+  return { ...parsed, issues, unmapped, contradictory };
 }
 
 // ---------------------------------------------------------------------------
@@ -323,6 +339,7 @@ function writeReport(b) {
   L.push(`| Rows hand-mapped (column underflow) | ${b.handMapped.length} |`);
   L.push(`| Rows withheld (column underflow) | ${b.underflow.length} |`);
   L.push(`| Rows withheld (unmapped status) | ${b.unmapped.length} |`);
+  L.push(`| Rows withheld (Status contradicts another column) | ${b.contradictory.length} |`);
   L.push(`| Issues to create | **${b.issues.length}** |`);
   L.push(`| … of which active | ${openCt} |`);
   L.push(`| … of which archived on arrival | ${b.issues.length - openCt} |`);
@@ -333,6 +350,14 @@ function writeReport(b) {
     L.push('## ⚠ Withheld — column underflow (needs a hand-written override)');
     L.push('');
     for (const u of b.underflow) L.push(`- \`${u.id}\` — ${u.cols} columns, expected ${b.header.length}`);
+    L.push('');
+  }
+  if (b.contradictory.length) {
+    L.push('## ⚠ Withheld — Status says open, another column says closed');
+    L.push('');
+    L.push('Fix the ledger row so its columns agree; do not reclassify here.');
+    L.push('');
+    for (const c of b.contradictory) L.push(`- \`${c.id}\` — mapped \`${c.state}\`, but: ${c.epic}`);
     L.push('');
   }
   if (b.unmapped.length) {
@@ -601,7 +626,10 @@ async function main() {
 
   console.log(`parsed        : ${b.rows.length} rows (expected ${EXPECTED_ROWS})`);
   console.log(`repaired      : ${b.repaired.length} overflow, ${b.handMapped.length} hand-mapped underflow`);
-  console.log(`withheld      : ${b.underflow.length} underflow, ${b.unmapped.length} unmapped status`);
+  console.log(
+    `withheld      : ${b.underflow.length} underflow, ${b.unmapped.length} unmapped status, ` +
+      `${b.contradictory.length} self-contradictory`,
+  );
   console.log(`issues        : ${b.issues.length}  (${b.issues.filter((i) => i.open).length} active)`);
   console.log(`table lines   : ${b.tableLines} raw, ${b.accounted} accounted for`);
 
