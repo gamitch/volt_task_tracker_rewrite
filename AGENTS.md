@@ -26,7 +26,11 @@ Constitution **item 28** is binding and its order matters:
    so without that read-back two agents can both claim the same row.
 4. A `tier/unreviewed` row may **not** enter `In Progress` until you have tiered
    it (item 26). Judging the tier is part of claiming, not of finishing.
-5. On completion move it to `In Review` — **never `Done`**. The merge closes
+5. **Name the branch `claude/gam-nnn-short-slug`** — Linear links on the
+   identifier in the branch name, so the issue connects from the first push, and
+   a human reading `git branch` can tell what it is. Claude Code's default name
+   comes from the session title and carries neither; rename it after claiming.
+6. On completion move it to `In Review` — **never `Done`**. The merge closes
    the issue; an agent closing its own is self-certification. Put `GAM-nnn` in
    the **PR title** (this is what Linear's integration reads — it ignores commit
    trailers) and add the trailer `Linear-Issue: GAM-nnn (Tnnn)` for the git-side

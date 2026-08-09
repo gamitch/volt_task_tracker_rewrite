@@ -468,6 +468,13 @@ After the third failure, the task must be escalated to boss-arbiter.
          reason item 29 keeps an export. Item 24 joins recording to merging;
          this is that rule's Linear form.
 
+    g. **Branch names carry the issue identifier — `WORKFLOWS.md` rule 2 is
+       the rule and is not restated here** (item 3). It already existed; item 29
+       only changed its format from `claude/t<row>-` to `claude/gam-<n>-`. Its
+       original rationale is unchanged and worth knowing: a session-scoped name
+       looks reserved and is not, and two sessions once worked one mutable ref
+       because of it.
+
        **Owner action, once, outside the repo:** enable the Linear workflow
        automation *PR merged → Done* for the `Gamitch` team. Until that is on,
        issues will sit in `In Review` after their PR lands and must be closed
