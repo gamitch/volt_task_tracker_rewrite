@@ -201,6 +201,13 @@ Every deliberate deferral becomes a ledger follow-up under constitution item
 row and verification-log entry in the same commit as the source change, as
 required by item 24. Preserve the workflow's reserved task-number block.
 
+Any Linear issue you write — a new filing, an item 20 deferral, a finding a
+skill produced — follows `.claude/skills/linear-task-writing` under item 30.
+Invoke the skill rather than reproducing its structure from memory. Lead with
+the defect and not the provenance, state a priority and defend it, verify every
+line number against current `main` before writing, and keep the original text in
+a `<details>` block when rewriting. `GAM-303` is the reference rewrite.
+
 Under item 27, a task shipping a user-visible surface that still reads from a
 fixture, stub, or hardcoded value closes as `Partial`, not `Passed`, with the
 wiring task's id on the row. Follow the data to its real source before
