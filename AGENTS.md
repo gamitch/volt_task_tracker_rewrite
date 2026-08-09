@@ -50,27 +50,40 @@ the owner asked you to read the state documents.
 
 ## Orientation order
 
+**Measured 2026-08-09 and rewritten because the old order contradicted item 28.**
+An agent given "pick up the next ready task" spent nine commands and eight tool
+calls reading `RESUME-HERE.md`, `state-summary.md` and the migration docs before
+it ever reached the issue — because claiming used to be step 4, behind two
+whole-document reads. It followed the order correctly; the order was wrong.
+`state-summary.md` is known stale and this file said so, and the agent read it
+anyway, because the path led there.
+
 Before planning or changing a task:
 
 1. Inspect `git status` and preserve every pre-existing change. Never use
    `git stash` in this repository.
-2. Read `docs/swarm/RESUME-HERE.md` from the top. Its newest UPDATE sections
-   supersede older material lower in the file.
-3. Read `docs/swarm/constitution.md` completely. Item 26 selects FAST,
-   STANDARD, or HEAVY process; items 20-24 govern deferrals, commits, staging,
-   worktrees, and integration records.
-4. Claim the Linear issue before anything else (item 28), then locate the same
-   row in `docs/swarm/task-ledger.md` for its provenance. Read the relevant
-   section of `docs/swarm/WORKFLOWS.md` and any referenced audit ruling, active
-   packet, PRD section, or dispute ruling.
-5. Re-check every operative claim and citation against the current repository.
-   A packet's recorded SHA and line numbers are historical evidence, not proof
-   of current state.
+2. **Claim the Linear issue — before reading anything else** (item 28). Move it
+   `Todo → In Progress`, then re-read it to confirm you hold it. A
+   `tier/unreviewed` row must be tiered as part of claiming, not after.
+3. **Read the issue itself.** Its description carries the full provenance,
+   migrated verbatim: original status, epic, worker, checker, attempts and
+   dependencies. For most tasks this is all the history you need.
+4. Read `docs/swarm/constitution.md`. Item 26 selects FAST, STANDARD or HEAVY;
+   items 20-24 govern deferrals, commits, staging, worktrees and integration
+   records; items 28-29 govern dispatch and where records live.
+5. **Only if the issue leaves something unresolved**, follow its `Tnnn` into
+   `docs/swarm/task-ledger.md` (frozen, historical), the relevant section of
+   `docs/swarm/WORKFLOWS.md`, or a named audit ruling, packet, PRD section or
+   dispute ruling.
+6. Re-check every operative claim and citation against the current repository.
+   A recorded SHA and line numbers are historical evidence, not proof of current
+   state.
 
-Do not read `verification-log.md`, `dispute-log.md`, or the full ledger from
+Do not read `verification-log.md`, `dispute-log.md`, or the frozen ledger from
 start to finish for orientation. Search for the relevant task ID or ruling.
-`state-summary.md` and older status snapshots are known to be stale; use them
-only when a current document points to a specific entry.
+`RESUME-HERE.md`, `state-summary.md` and older status snapshots **predate the
+Linear migration** and are not a dispatch source; use them only when a current
+document points to a specific entry.
 
 ## Codex role mapping
 
