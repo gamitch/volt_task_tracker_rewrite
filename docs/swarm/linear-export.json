@@ -1,9 +1,9 @@
 {
   "meta": {
-    "exportedAt": "2026-08-09T14:56:35.856Z",
+    "exportedAt": "2026-08-09T15:02:02.472Z",
     "team": "Gamitch",
     "teamKey": "GAM",
-    "issueCount": 302,
+    "issueCount": 307,
     "generator": "scripts/linear-export.mjs",
     "note": "GENERATED FILE — DO NOT EDIT. Regenerated whole by `scripts/linear-export.mjs`.\nLinear is the source of truth; this is a backup so the history survives the account.\nEdits here are lost on the next run and change nothing in Linear."
   },
@@ -2922,13 +2922,11 @@
       "title": "T158 — `Leaderboard.tsx` is never rendered **and** has no real loader — embed in the dashboard, per the owner's ruling",
       "state": "Done",
       "stateType": "completed",
-      "archived": false,
+      "archived": true,
       "labels": [],
       "assignee": null,
       "blockedBy": [],
-      "blocks": [
-        "GAM-237"
-      ],
+      "blocks": [],
       "createdAt": "2026-08-09T12:48:41.136Z",
       "completedAt": "2026-08-09T12:48:41.170Z",
       "canceledAt": null,
@@ -3017,7 +3015,7 @@
       "title": "T163 — `loaders/reports.ts` has 0 tests (729 lines)",
       "state": "Done",
       "stateType": "completed",
-      "archived": false,
+      "archived": true,
       "labels": [
         "gate/unverified",
         "tier/unreviewed"
@@ -3343,13 +3341,11 @@
       "title": "T184 — a deactivated student who can still sign in was told \"we couldn't find a student record linked to your account\"",
       "state": "Done",
       "stateType": "completed",
-      "archived": false,
+      "archived": true,
       "labels": [],
       "assignee": null,
       "blockedBy": [],
-      "blocks": [
-        "GAM-234"
-      ],
+      "blocks": [],
       "createdAt": "2026-08-09T12:48:48.114Z",
       "completedAt": "2026-08-09T12:48:48.158Z",
       "canceledAt": null,
@@ -3379,14 +3375,11 @@
       "title": "T186 — `v_student_goal_projection.team_id` is documented display-only, and a live route now scopes off it",
       "state": "Done",
       "stateType": "completed",
-      "archived": false,
+      "archived": true,
       "labels": [],
       "assignee": null,
       "blockedBy": [],
-      "blocks": [
-        "GAM-292",
-        "GAM-293"
-      ],
+      "blocks": [],
       "createdAt": "2026-08-09T12:48:48.461Z",
       "completedAt": "2026-08-09T12:48:48.505Z",
       "canceledAt": null,
@@ -3404,7 +3397,6 @@
       "assignee": null,
       "blockedBy": [],
       "blocks": [
-        "GAM-293",
         "GAM-299"
       ],
       "createdAt": "2026-08-09T12:48:48.652Z",
@@ -3438,13 +3430,11 @@
       "title": "T189 — a deactivated student's `/meetings` showed real attendance dots beside \"no completed meetings recorded yet this season\"",
       "state": "Done",
       "stateType": "completed",
-      "archived": false,
+      "archived": true,
       "labels": [],
       "assignee": null,
       "blockedBy": [],
-      "blocks": [
-        "GAM-234"
-      ],
+      "blocks": [],
       "createdAt": "2026-08-09T12:48:49.045Z",
       "completedAt": "2026-08-09T12:48:49.239Z",
       "canceledAt": null,
@@ -3476,13 +3466,11 @@
       "title": "T191 — a deactivated child's card shows a goal of \"1 h\" that exists in no data source",
       "state": "Done",
       "stateType": "completed",
-      "archived": false,
+      "archived": true,
       "labels": [],
       "assignee": null,
       "blockedBy": [],
-      "blocks": [
-        "GAM-234"
-      ],
+      "blocks": [],
       "createdAt": "2026-08-09T12:48:50.023Z",
       "completedAt": "2026-08-09T12:48:50.071Z",
       "canceledAt": null,
@@ -4058,13 +4046,11 @@
       "title": "T198 — Does `CoachHome` need a real per-coach \"team\" concept, or should its remaining team-scoped widgets go season-wide like T124's already-shipped ones?",
       "state": "Done",
       "stateType": "completed",
-      "archived": false,
+      "archived": true,
       "labels": [],
       "assignee": null,
       "blockedBy": [],
-      "blocks": [
-        "GAM-294"
-      ],
+      "blocks": [],
       "createdAt": "2026-08-09T12:48:57.720Z",
       "completedAt": "2026-08-09T12:48:57.765Z",
       "canceledAt": null,
@@ -4113,16 +4099,12 @@
       "title": "T201 — a deactivated student's real historical hours sit in `v_student_hours` (no `is_active` filter) but are invisible everywhere a consumer reads through `v_student_goal_projection` instead (`where s.is_active`)",
       "state": "Done",
       "stateType": "completed",
-      "archived": false,
+      "archived": true,
       "labels": [
         "tier/unreviewed"
       ],
       "assignee": null,
-      "blockedBy": [
-        "GAM-192",
-        "GAM-197",
-        "GAM-199"
-      ],
+      "blockedBy": [],
       "blocks": [],
       "createdAt": "2026-08-09T12:48:58.681Z",
       "completedAt": "2026-08-09T14:05:12.404Z",
@@ -4153,13 +4135,11 @@
       "title": "T203 — embed `<Leaderboard>` in `CoachHome.tsx`, wired to the real `seasonId` and T158's new `loadLeaderboardData`",
       "state": "Done",
       "stateType": "completed",
-      "archived": false,
+      "archived": true,
       "labels": [],
       "assignee": null,
       "blockedBy": [],
-      "blocks": [
-        "GAM-237"
-      ],
+      "blocks": [],
       "createdAt": "2026-08-09T12:48:59.001Z",
       "completedAt": "2026-08-09T12:48:59.057Z",
       "canceledAt": null,
@@ -4172,15 +4152,12 @@
       "title": "T204 — `loaders/students.ts`'s own RLS-reasoning comment still cites a claim about view RLS mechanics constitution item 25 already found false elsewhere",
       "state": "Backlog",
       "stateType": "backlog",
-      "archived": false,
+      "archived": true,
       "labels": [
         "tier/unreviewed"
       ],
       "assignee": null,
-      "blockedBy": [
-        "GAM-169",
-        "GAM-236"
-      ],
+      "blockedBy": [],
       "blocks": [],
       "createdAt": "2026-08-09T12:48:59.208Z",
       "completedAt": null,
@@ -4194,13 +4171,11 @@
       "title": "T205 — T158's new `v_leaderboard_students` view is readable by Supabase's unauthenticated `anon` key, not just logged-in users",
       "state": "Done",
       "stateType": "completed",
-      "archived": false,
+      "archived": true,
       "labels": [],
       "assignee": null,
       "blockedBy": [],
-      "blocks": [
-        "GAM-262"
-      ],
+      "blocks": [],
       "createdAt": "2026-08-09T12:48:59.422Z",
       "completedAt": "2026-08-09T12:48:59.469Z",
       "canceledAt": null,
@@ -4645,15 +4620,13 @@
       "title": "T700 — An auto-updatable single-table view owned by a `BYPASSRLS` role silently bypasses RLS for writes; only `v_leaderboard_students` qualifies today and T205 closes it",
       "state": "Done",
       "stateType": "completed",
-      "archived": false,
+      "archived": true,
       "labels": [
         "area/w4",
         "tier/unreviewed"
       ],
       "assignee": null,
-      "blockedBy": [
-        "GAM-238"
-      ],
+      "blockedBy": [],
       "blocks": [],
       "createdAt": "2026-08-09T12:49:04.434Z",
       "completedAt": "2026-08-09T14:06:14.688Z",
@@ -4667,7 +4640,7 @@
       "title": "T701 — `tests/rls/run.sh` can no longer apply the migration set on a bare Postgres, and no CI job runs it",
       "state": "Done",
       "stateType": "completed",
-      "archived": false,
+      "archived": true,
       "labels": [
         "area/w4",
         "tier/unreviewed"
@@ -4728,15 +4701,13 @@
       "title": "T702 — Should \"adult volunteers this season\" exclude non-community-service events, the way the T322 rulings exclude meeting and competition hours from the *student* volunteer-hours goal?",
       "state": "Done",
       "stateType": "completed",
-      "archived": false,
+      "archived": true,
       "labels": [
         "area/w4"
       ],
       "assignee": null,
       "blockedBy": [],
-      "blocks": [
-        "GAM-267"
-      ],
+      "blocks": [],
       "createdAt": "2026-08-09T12:49:05.245Z",
       "completedAt": "2026-08-09T12:49:05.292Z",
       "canceledAt": null,
@@ -4749,15 +4720,13 @@
       "title": "T703 — The `buildSeasonTotals` fixture's `meeting` event is `0/0`, so it detects neither inclusion nor exclusion of non-outreach events",
       "state": "Done",
       "stateType": "completed",
-      "archived": false,
+      "archived": true,
       "labels": [
         "area/w4",
         "tier/fast"
       ],
       "assignee": "George Mitchom",
-      "blockedBy": [
-        "GAM-266"
-      ],
+      "blockedBy": [],
       "blocks": [],
       "createdAt": "2026-08-09T12:49:05.423Z",
       "completedAt": "2026-08-09T13:57:50.406Z",
@@ -4847,15 +4816,13 @@
       "title": "T508 — Ending a meeting writes an `absent` row for every unmarked student, including students who were never expected",
       "state": "Done",
       "stateType": "completed",
-      "archived": false,
+      "archived": true,
       "labels": [
         "area/w3"
       ],
       "assignee": null,
       "blockedBy": [],
-      "blocks": [
-        "GAM-273"
-      ],
+      "blocks": [],
       "createdAt": "2026-08-09T12:49:06.887Z",
       "completedAt": "2026-08-09T12:49:06.947Z",
       "canceledAt": null,
@@ -4874,9 +4841,7 @@
         "tier/heavy"
       ],
       "assignee": null,
-      "blockedBy": [
-        "GAM-272"
-      ],
+      "blockedBy": [],
       "blocks": [
         "GAM-300"
       ],
@@ -5252,15 +5217,13 @@
       "title": "T801 — `dashboard_views.sql` carries two wrong comments that constitution item 10 forbids fixing in place",
       "state": "Done",
       "stateType": "completed",
-      "archived": false,
+      "archived": true,
       "labels": [
         "area/w5",
         "tier/unreviewed"
       ],
       "assignee": null,
-      "blockedBy": [
-        "GAM-194"
-      ],
+      "blockedBy": [],
       "blocks": [],
       "createdAt": "2026-08-09T12:52:44.854Z",
       "completedAt": "2026-08-09T14:08:22.097Z",
@@ -5274,16 +5237,13 @@
       "title": "T802 — `ResolvedStudentIdentity.teamId` is written and never read",
       "state": "Done",
       "stateType": "completed",
-      "archived": false,
+      "archived": true,
       "labels": [
         "area/w5",
         "tier/unreviewed"
       ],
       "assignee": null,
-      "blockedBy": [
-        "GAM-194",
-        "GAM-195"
-      ],
+      "blockedBy": [],
       "blocks": [],
       "createdAt": "2026-08-09T12:52:45.092Z",
       "completedAt": "2026-08-09T14:06:39.786Z",
@@ -5297,15 +5257,13 @@
       "title": "T803 — `CoachHome` now renders the same season attendance rate in two tiles, from two independent load states",
       "state": "Done",
       "stateType": "completed",
-      "archived": false,
+      "archived": true,
       "labels": [
         "area/w5",
         "tier/unreviewed"
       ],
       "assignee": null,
-      "blockedBy": [
-        "GAM-231"
-      ],
+      "blockedBy": [],
       "blocks": [],
       "createdAt": "2026-08-09T12:52:45.268Z",
       "completedAt": "2026-08-09T14:06:50.574Z",
@@ -5338,7 +5296,7 @@
       "title": "T805 — `OutreachDetail.test.tsx` and `OutreachList.test.tsx` failed once in a full-suite run and have not been reproduced since",
       "state": "Done",
       "stateType": "completed",
-      "archived": false,
+      "archived": true,
       "labels": [
         "area/w5",
         "tier/unreviewed"
@@ -5474,6 +5432,105 @@
       "canceledAt": null,
       "url": "https://linear.app/gamitch/issue/GAM-302/9-closed-ledger-rows-are-sitting-in-linear-as-pickable-backlog-because",
       "description": "**Filed under constitution item 20 from** [GAM-267](https://linear.app/gamitch/issue/GAM-267/t703-the-buildseasontotals-fixtures-meeting-event-is-00-so-it-detects) **(T703), which is how this was found: a closed row was migrated as open Backlog work, moved to Todo, and picked up.**\n\n## Root cause — the ledger, not the mapper\n\nFirst reading blamed `scripts/linear-migrate.mjs`. **Measured, and that was wrong.** The mapper reads the head of the **Status** column only (`STATUS_HEAD = 90`), and it does so deliberately — its own note records that a whole-cell scan previously mis-migrated T173 (`Passed`, but its prose says \"Scope narrowed\") and T156 (parked, but contains \"in flight\"). The mapper mapped its input correctly.\n\nThe input was stale. T703's Status cell still began `Filed 2026-08-03 …` because its 2026-08-05 closure was written into the **Epic** and **Last Result** columns and never into **Status**. A closure that does not touch the Status cell is invisible to the migration.\n\n## Scope — measured across all 296 rows\n\nScanning for \"Epic says CLOSED/SUPERSEDED/WITHDRAWN but the Status head does not\" returns **12**. Two are correctly mapped and need nothing:\n\n* `T804` — Status head reads `WITHDRAWN` → Canceled. Correct.\n* `T163` — Status head reads `PREMISE UNVERIFIED` → Backlog + `gate/unverified`. Correct and intentional.\n\nThat leaves **9 closed rows currently open in Linear as** `Backlog`, each one pickable exactly the way T703 was:\n\n| Row | Epic column says |\n| -- | -- |\n| `T201` | CLOSED 2026-08-05, owner ruling |\n| `T204` | CLOSED 2026-08-05 (documentation accuracy, no functional defect) |\n| `T509` | CLOSED 2026-08-05 — migration APPLIED by the owner |\n| `T700` | CLOSED (convention guard, measured and currently empty) |\n| `T701` | CLOSED (test harness rot) |\n| `T801` | CLOSED 2026-08-04 |\n| `T802` | CLOSED 2026-08-05 (dead field) |\n| `T803` | CLOSED 2026-08-04 (duplicate metric on one page) |\n| `T805` | CLOSED 2026-08-05, UNREPRODUCIBLE |\n\n`T703`'s own Status cell is already corrected, in the same commit as its fix.\n\n## Why this was not fixed inside [GAM-267](https://linear.app/gamitch/issue/GAM-267/t703-the-buildseasontotals-fixtures-meeting-event-is-00-so-it-detects)\n\nA FAST row that reopened itself must not quietly rewrite nine other rows' statuses — each closure should be confirmed against its Epic/Last Result text before its Status cell is rewritten, and each corresponding Linear issue then moved to Done. `T509` in particular is a HEAVY row with an applied migration and deserves a real read, not a regex.\n\n## Suggested fix, two parts\n\n1. **Correct the 9 Status cells** in `docs/swarm/task-ledger.md`, and move the 9 matching Linear issues to Done.\n2. **Make the class impossible to re-enter.** The durable fix is a reconciliation check — `scripts/linear-migrate.mjs` already reports unmapped statuses loudly; it should also report rows where the Epic or Last Result column says CLOSED/SUPERSEDED while the Status head maps to an open state. That is the exact signal that would have caught all 10 before anything reached Linear.\n\n---\n\n*Generated by [Claude Code](<https://claude.ai/code>)*"
+    },
+    {
+      "identifier": "GAM-303",
+      "legacyId": "T808",
+      "title": "T808 — Students and parents see raw float hours (`3.9999983633333334 / 100 h`) beside a rounded percentage",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "archived": false,
+      "labels": [
+        "area/w5",
+        "tier/unreviewed"
+      ],
+      "assignee": null,
+      "blockedBy": [],
+      "blocks": [],
+      "createdAt": "2026-08-09T15:01:37.144Z",
+      "completedAt": null,
+      "canceledAt": null,
+      "url": "https://linear.app/gamitch/issue/GAM-303/t808-students-and-parents-see-raw-float-hours-39999983633333334-100-h",
+      "description": "**Filed 2026-08-09 from PR #118's persona harness. INDEPENDENTLY RE-VERIFIED before filing, not taken from the report.** `StudentHome.tsx:1483` renders `formatValueLabel={(value, max) => `${value} / ${max} h (${hoursPercent}%)`}` — `hoursPercent` goes through `round1`, `value` is raw `confirmedHours`. `:1485`'s supporting `Text` repeats the raw value (`${confirmedHours} h confirmed + ${plannedHours} h planned`), and `ParentHome.tsx` ~1280 does the same. **The coach dashboard shows** `4.0` **for the same student**, so two roles are shown different-looking numbers for one fact — the MET/hours-honesty class, not cosmetics. **Scope note:** the fix is presentation-only; `confirmedHours` must NOT be rounded before the progress bar's own arithmetic (module doc #82-105 is explicit that no hours-clamping happens in this file). Round at the format boundary only.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T808` |\n| Epic | E9 |\n| Worker | *not yet packeted* |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Filed 2026-08-09** |\n"
+    },
+    {
+      "identifier": "GAM-304",
+      "legacyId": "T809",
+      "title": "T809 — `StudentHome`'s Sign up / Can't go control writes nothing and says nothing — a documented deferral with no follow-up row",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "archived": false,
+      "labels": [
+        "area/w5",
+        "tier/unreviewed"
+      ],
+      "assignee": null,
+      "blockedBy": [],
+      "blocks": [],
+      "createdAt": "2026-08-09T15:01:37.384Z",
+      "completedAt": null,
+      "canceledAt": null,
+      "url": "https://linear.app/gamitch/issue/GAM-304/t809-studenthomes-sign-up-cant-go-control-writes-nothing-and-says",
+      "description": "**Filed 2026-08-09 from PR #118. RE-VERIFIED, and the code states the defect itself:** `StudentHome.tsx:1442-1445` is `function handleRsvpChange(...) { // Module doc #7: local-only. No Supabase write happens here. setRsvps((prev) => withLocalRsvpOverride(...)); }`. A student answers an RSVP, the UI updates, and a reload discards it, with nothing on screen saying so. **This is constitution item 20's exact failure shape and its third recorded instance** — a correct scope deferral recorded ONLY in a comment, exactly as T101/T121 shipped fixture teams and `SettingsPage` shipped an inert light/dark control. Item 20 exists because of those three. **Two candidate scopes, and the choice is the work:** wire the write through the existing rsvp upsert path, or — if that is out of scope for now — make the control honestly disabled with a reason. Shipping a control that silently discards a student's answer is the worse of the three states. Related: T407 (nav badge reads 0 while the page reads 74).\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T809` |\n| Epic | E9 |\n| Worker | *not yet packeted* |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Filed 2026-08-09** |\n"
+    },
+    {
+      "identifier": "GAM-305",
+      "legacyId": "T615",
+      "title": "T615 — The schedule-meetings team picker offers archived teams; the roster picker excludes them",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "archived": false,
+      "labels": [
+        "area/w3",
+        "tier/unreviewed"
+      ],
+      "assignee": null,
+      "blockedBy": [],
+      "blocks": [],
+      "createdAt": "2026-08-09T15:01:37.949Z",
+      "completedAt": null,
+      "canceledAt": null,
+      "url": "https://linear.app/gamitch/issue/GAM-305/t615-the-schedule-meetings-team-picker-offers-archived-teams-the",
+      "description": "**Filed 2026-08-09 from PR #118. RE-VERIFIED in source.** `ScheduleMeetingsDialog.tsx:1160` maps `teams` straight into `options` (`teams.map((team) => ({ value: team.id, label: team.name }))`) with no `archived` predicate anywhere in the file, while `StudentDialog.tsx:322`'s `filterSelectableTeams` excludes them and its own module doc calls itself *\"the ONLY place archived teams are excluded\"* — which is now demonstrably true and is the bug. The harness reports the archived team is not merely offered but **pre-selected** by default (`allTeamIds` at `:832` is every team passed in). **Consequence:** a meeting can be scheduled against a team no longer on the roster, and `events.team_ids` then scopes RLS and attendance to a dead team. **Cheapest credible fix:** reuse `filterSelectableTeams` rather than writing a second predicate — it is already tested and its module doc already claims uniqueness (constitution item 3).\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T615` |\n| Epic | E5 |\n| Worker | *not yet packeted* |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Filed 2026-08-09** |\n"
+    },
+    {
+      "identifier": "GAM-306",
+      "legacyId": "T616",
+      "title": "T616 — No event records who created it, so outreach detail permanently reads \"Unknown creator\"",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "archived": false,
+      "labels": [
+        "area/w3",
+        "tier/unreviewed"
+      ],
+      "assignee": null,
+      "blockedBy": [],
+      "blocks": [],
+      "createdAt": "2026-08-09T15:01:38.160Z",
+      "completedAt": null,
+      "canceledAt": null,
+      "url": "https://linear.app/gamitch/issue/GAM-306/t616-no-event-records-who-created-it-so-outreach-detail-permanently",
+      "description": "**Filed 2026-08-09 from PR #118. RE-VERIFIED.** `loaders/meetings.ts:1137` inserts `{ season_id, type: 'meeting', title, … }` with **no** `created_by`, and the outreach create path does the same. The column exists and is read — `outreach.ts:446` types it, `:665` maps it to `createdBy`, and `:1148` loads the profile behind it — so the reader was built and the writer never was. Every event therefore renders \"Unknown creator\" forever, including events created today. **Ledger mentions of** `created_by` **before this row: ZERO**, so nothing tracked it. **Check before scoping:** whether `events.created_by` is nullable and whether any RLS policy or view reads it, since backfilling historical rows is not possible — the information was never captured.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T616` |\n| Epic | E5 |\n| Worker | *not yet packeted* |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Filed 2026-08-09** |\n"
+    },
+    {
+      "identifier": "GAM-307",
+      "legacyId": "T1300",
+      "title": "T1300 — Sweep the four non-\"fixed\" closures for residual work left behind when the row closed",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "archived": false,
+      "labels": [
+        "tier/unreviewed"
+      ],
+      "assignee": null,
+      "blockedBy": [],
+      "blocks": [],
+      "createdAt": "2026-08-09T15:01:38.581Z",
+      "completedAt": null,
+      "canceledAt": null,
+      "url": "https://linear.app/gamitch/issue/GAM-307/t1300-sweep-the-four-non-fixed-closures-for-residual-work-left-behind",
+      "description": "**Filed because T703 proved the class exists and measurement showed where it hides.** Eleven rows were found closed in the Epic column while `Status` still read open, so the Linear migration made them live issues. All eleven were genuinely closed — each has a verification-log entry, so nothing vanished silently — but **T703 turned out to carry real residual work anyway**: it closed 2026-08-05 as superseded by T702, and a module-doc paragraph survived still advertising a proof T702 had made undeliverable. An agent working it in 2026-08-09 measured that directly (filtering `buildSeasonTotals`'s sessions to `type === 'outreach'` leaves `peopleReachedTotal` at 125, unchanged) and corrected it. **The pattern:** residuals hide where a row closed because *something else changed*, not because someone fixed the thing. **Scope — four rows, not eleven.** Six of the eleven closed as `fixed` and are low risk; someone did the work and evidenced it. T703 is now resolved. That leaves the non-fixed closures: **T163** (premise was WRONG), **T204** (no-change), **T801** (no-change), **T805** (UNREPRODUCIBLE). **Default to \"no residual\" — this row is NOT an instruction to find something.** Reopen a row only where specific remaining work can be named with `file:line` evidence, as T703's was. A sweep that finds something in all four has found nothing; it has restated the closures. **Where to look, from T703's own shape:** a stale comment, doc or test name that still claims a property the closing change removed. `T801`'s closure text already flags two wrong comments that item 10 forbade fixing, which is exactly this shape and the most likely hit. **Tier:** not judged here — that is the picker's first act under item 28. The work is reading four rows and their verification-log entries, then checking claims against current source. No write path, no schema. **Dispatch note:** this row is the second live test of constitution item 28, which did not exist when T703 was dispatched.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T1300` |\n| Epic | E12 |\n| Worker | *not yet packeted* |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Filed 2026-08-09** |\n"
     }
   ]
 }
