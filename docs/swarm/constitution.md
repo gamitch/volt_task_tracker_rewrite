@@ -428,8 +428,13 @@ After the third failure, the task must be escalated to boss-arbiter.
     a. **Take only from `Todo`.** Never start a `Backlog` row because it looks
        ready. Promotion to `Todo` is the owner's signal and the only one.
 
-    b. **Ignore any issue whose title does not begin `Tnnn — `.** Linear ships
-       its own onboarding issues and they live in `Todo` too.
+    b. **Our issues are the ones carrying a `tier/*` label.** Linear ships its
+       own onboarding issues and they live in `Todo` too; they carry no labels.
+       Migrated rows also begin `Tnnn — `, and that prefix is worth preserving
+       because 300 rows of cross-references depend on it — but it is **not** the
+       identity test. A finding filed by a skill has no `Tnnn` and is still
+       ours. Keying identity to the title would make newly filed work invisible
+       to every agent, which is a queue nobody may take from.
 
     c. **Claim before reading anything else.** Move the issue `Todo → In
        Progress` the moment you pick it up, *before* opening a file. Then

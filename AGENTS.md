@@ -13,8 +13,9 @@ a row's provenance — but it is no longer where you discover what to work on.
 Constitution **item 28** is binding and its order matters:
 
 1. Take only from `Todo`. `Backlog` means filed, not dispatchable.
-2. Ignore any issue whose title does not begin `Tnnn — ` — Linear's own
-   onboarding issues sit in `Todo` too.
+2. Ours are the issues carrying a `tier/*` label. Linear's own onboarding
+   issues sit in `Todo` too and carry no labels. Migrated rows also begin
+   `Tnnn — `, but a finding filed by a skill has no `Tnnn` and is still ours.
 3. **Claim first.** Move the issue `Todo → In Progress` before opening a single
    file, then re-read it to confirm you hold it. Linear has no compare-and-set,
    so without that read-back two agents can both claim the same row.
