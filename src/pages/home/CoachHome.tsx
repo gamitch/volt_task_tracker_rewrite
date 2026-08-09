@@ -2047,7 +2047,7 @@ function GoalProjectionRowItem({ row }: { row: StudentGoalProjectionEntry }): Re
             style={COACH_HOME_PROGRESS_BAR_MAX_WIDTH_STYLE}
           />
           <Text type="supporting">
-            {`${row.confirmedHours}h confirmed + ${row.plannedHours}h planned = ${totalHours}h / ${row.goalHours}h · ${percent}% · ${annotation}`}
+            {`${row.confirmedHours.toFixed(1)}h confirmed + ${row.plannedHours.toFixed(1)}h planned = ${totalHours}h / ${row.goalHours.toFixed(1)}h · ${percent}% · ${annotation}`}
           </Text>
         </VStack>
       }
