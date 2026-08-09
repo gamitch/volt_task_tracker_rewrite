@@ -249,3 +249,32 @@ jobs:
 
       - name: 'T509 explicit-marks denominator (MET-01/D014)'
         run: bash supabase/tests/run_t509_explicit_marks.sh
+
+  # ---------------------------------------------------------------------------
+  # T612: the anti-vacuity check now checks itself.
+  #
+  # `.claude/skills/mutation-replay/scripts/replay.py` decides whether an agent
+  # is allowed to believe its own evidence, and it shipped a summary parser that
+  # read a genuinely red focused run ("Tests  1 failed | 69 skipped (70)" -- no
+  # `passed` segment) as `failed=0 passed=0`, then announced UNTRUSTWORTHY: the
+  # mutated run executed no tests. A checker caught it only by refusing the
+  # tool's verdict and re-running the mutation by hand.
+  #
+  # A separate job, and not a step inside `ci`, for the same reason the `sql`
+  # job is separate (T701): this needs no npm install, and a broken replay tool
+  # should name itself rather than hide inside a generic "CI failed". Vitest
+  # cannot cover these -- `.claude/**` is in its exclude list, and the script is
+  # Python. Without this job it would be a test nobody runs, which is the exact
+  # class of defect T701 was filed for.
+  skill-scripts:
+    name: Skill script tests (mutation-replay parser)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Standard library only -- no pip install, no requirements file. The
+      # runner's system python3 is the same interpreter an agent invokes the
+      # skill with.
+      - name: Mutation-replay parser and verdict tests
+        run: python3 .claude/skills/mutation-replay/scripts/test_replay.py
