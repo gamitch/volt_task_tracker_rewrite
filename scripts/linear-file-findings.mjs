@@ -110,7 +110,10 @@ async function main() {
   // Dedupe against Finding-Key already in the workspace, so re-running a suite
   // that finds the same four bugs does not file them a second time.
   const existing = await paginate(
-    `query($teamId:String!,$after:String){ team(id:$teamId){ issues(first:100, after:$after,
+    // first:50, not 100. Linear caps a single query at 10,000 complexity points
+    // and the export's first version blew that at 22,861 by paging too wide.
+    // Descriptions are large; there is no reason to sail close to the limit.
+    `query($teamId:String!,$after:String){ team(id:$teamId){ issues(first:50, after:$after,
        includeArchived:true){ nodes{ identifier description } pageInfo{ hasNextPage endCursor } } } }`,
     { teamId: team.id },
     (d) => d.team.issues,

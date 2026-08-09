@@ -42,7 +42,21 @@ export async function gql(query, variables = {}) {
   }
 
   const json = await res.json();
-  if (json.errors) throw new Error(`GraphQL: ${JSON.stringify(json.errors)}`);
+  if (json.errors) {
+    const msg = JSON.stringify(json.errors);
+    // Complexity is charged per outer node and MULTIPLIED by nested
+    // connections, so an unbounded `labels`/`relations` field is the usual
+    // cause rather than the page size alone. Say so: the raw error names a
+    // number and not the fix.
+    if (/complex/i.test(msg)) {
+      throw new Error(
+        `GraphQL query too complex (cap 10,000 points): ${msg}\n` +
+          'Reduce the outer `first:` AND bound every nested connection — an unbounded\n' +
+          'nested field defaults to a large page and is charged once per outer node.',
+      );
+    }
+    throw new Error(`GraphQL: ${msg}`);
+  }
   return { data: json.data, remaining };
 }
 
