@@ -1,9 +1,9 @@
 {
   "meta": {
-    "exportedAt": "2026-08-09T15:02:02.472Z",
+    "exportedAt": "2026-08-09T15:55:09.003Z",
     "team": "Gamitch",
     "teamKey": "GAM",
-    "issueCount": 307,
+    "issueCount": 309,
     "generator": "scripts/linear-export.mjs",
     "note": "GENERATED FILE — DO NOT EDIT. Regenerated whole by `scripts/linear-export.mjs`.\nLinear is the source of truth; this is a backup so the history survives the account.\nEdits here are lost on the next run and change nothing in Linear."
   },
@@ -3856,8 +3856,8 @@
       "identifier": "GAM-221",
       "legacyId": "T312",
       "title": "T312 — reserved for follow-ups filed under constitution item 20 by the T173/T191/T158 session",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "Canceled",
+      "stateType": "canceled",
       "archived": false,
       "labels": [
         "tier/unreviewed"
@@ -3867,7 +3867,7 @@
       "blocks": [],
       "createdAt": "2026-08-09T12:48:55.413Z",
       "completedAt": null,
-      "canceledAt": null,
+      "canceledAt": "2026-08-09T15:54:44.369Z",
       "url": "https://linear.app/gamitch/issue/GAM-221/t312-reserved-for-follow-ups-filed-under-constitution-item-20-by-the",
       "description": "**Number reservation, not a task.** File here rather than at T206 — the sequential range below T300 is closed.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T312` |\n| Epic | **RESERVED — session A block (T173/T191/T158)** |\n| Worker | — |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Reserved 2026-07-31** |\n"
     },
@@ -3892,8 +3892,8 @@
       "identifier": "GAM-223",
       "legacyId": "T313",
       "title": "T313 — reserved for follow-ups filed under constitution item 20 by the T173/T191/T158 session",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "Canceled",
+      "stateType": "canceled",
       "archived": false,
       "labels": [
         "tier/unreviewed"
@@ -3903,7 +3903,7 @@
       "blocks": [],
       "createdAt": "2026-08-09T12:48:55.757Z",
       "completedAt": null,
-      "canceledAt": null,
+      "canceledAt": "2026-08-09T15:54:44.709Z",
       "url": "https://linear.app/gamitch/issue/GAM-223/t313-reserved-for-follow-ups-filed-under-constitution-item-20-by-the",
       "description": "See T312.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T313` |\n| Epic | **RESERVED — session A block (T173/T191/T158)** |\n| Worker | — |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Reserved 2026-07-31** |\n"
     },
@@ -3911,8 +3911,8 @@
       "identifier": "GAM-224",
       "legacyId": "T314",
       "title": "T314 — reserved for follow-ups filed under constitution item 20 by the T173/T191/T158 session",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "Canceled",
+      "stateType": "canceled",
       "archived": false,
       "labels": [
         "tier/unreviewed"
@@ -3922,7 +3922,7 @@
       "blocks": [],
       "createdAt": "2026-08-09T12:48:55.906Z",
       "completedAt": null,
-      "canceledAt": null,
+      "canceledAt": "2026-08-09T15:54:45.030Z",
       "url": "https://linear.app/gamitch/issue/GAM-224/t314-reserved-for-follow-ups-filed-under-constitution-item-20-by-the",
       "description": "See T312.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T314` |\n| Epic | **RESERVED — session A block (T173/T191/T158)** |\n| Worker | — |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Reserved 2026-07-31** |\n"
     },
@@ -3930,8 +3930,8 @@
       "identifier": "GAM-225",
       "legacyId": "T315",
       "title": "T315 — reserved for follow-ups filed under constitution item 20 by the T173/T191/T158 session",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "Canceled",
+      "stateType": "canceled",
       "archived": false,
       "labels": [
         "tier/unreviewed"
@@ -3941,7 +3941,7 @@
       "blocks": [],
       "createdAt": "2026-08-09T12:48:56.100Z",
       "completedAt": null,
-      "canceledAt": null,
+      "canceledAt": "2026-08-09T15:54:45.392Z",
       "url": "https://linear.app/gamitch/issue/GAM-225/t315-reserved-for-follow-ups-filed-under-constitution-item-20-by-the",
       "description": "See T312.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T315` |\n| Epic | **RESERVED — session A block (T173/T191/T158)** |\n| Worker | — |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Reserved 2026-07-31** |\n"
     },
@@ -3949,8 +3949,8 @@
       "identifier": "GAM-226",
       "legacyId": "T316",
       "title": "T316 — reserved for follow-ups filed under constitution item 20 by the T173/T191/T158 session",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "Canceled",
+      "stateType": "canceled",
       "archived": false,
       "labels": [
         "tier/unreviewed"
@@ -3960,7 +3960,7 @@
       "blocks": [],
       "createdAt": "2026-08-09T12:48:56.727Z",
       "completedAt": null,
-      "canceledAt": null,
+      "canceledAt": "2026-08-09T15:54:45.912Z",
       "url": "https://linear.app/gamitch/issue/GAM-226/t316-reserved-for-follow-ups-filed-under-constitution-item-20-by-the",
       "description": "See T312.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T316` |\n| Epic | **RESERVED — session A block (T173/T191/T158)** |\n| Worker | — |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Reserved 2026-07-31** |\n"
     },
@@ -3968,8 +3968,8 @@
       "identifier": "GAM-227",
       "legacyId": "T317",
       "title": "T317 — reserved for follow-ups filed under constitution item 20 by the T173/T191/T158 session",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "Canceled",
+      "stateType": "canceled",
       "archived": false,
       "labels": [
         "tier/unreviewed"
@@ -3979,7 +3979,7 @@
       "blocks": [],
       "createdAt": "2026-08-09T12:48:56.913Z",
       "completedAt": null,
-      "canceledAt": null,
+      "canceledAt": "2026-08-09T15:54:46.259Z",
       "url": "https://linear.app/gamitch/issue/GAM-227/t317-reserved-for-follow-ups-filed-under-constitution-item-20-by-the",
       "description": "See T312.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T317` |\n| Epic | **RESERVED — session A block (T173/T191/T158)** |\n| Worker | — |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Reserved 2026-07-31** |\n"
     },
@@ -3987,8 +3987,8 @@
       "identifier": "GAM-228",
       "legacyId": "T318",
       "title": "T318 — reserved for follow-ups filed under constitution item 20 by the T173/T191/T158 session",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "Canceled",
+      "stateType": "canceled",
       "archived": false,
       "labels": [
         "tier/unreviewed"
@@ -3998,7 +3998,7 @@
       "blocks": [],
       "createdAt": "2026-08-09T12:48:57.096Z",
       "completedAt": null,
-      "canceledAt": null,
+      "canceledAt": "2026-08-09T15:54:46.951Z",
       "url": "https://linear.app/gamitch/issue/GAM-228/t318-reserved-for-follow-ups-filed-under-constitution-item-20-by-the",
       "description": "See T312.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T318` |\n| Epic | **RESERVED — session A block (T173/T191/T158)** |\n| Worker | — |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Reserved 2026-07-31** |\n"
     },
@@ -4006,8 +4006,8 @@
       "identifier": "GAM-229",
       "legacyId": "T319",
       "title": "T319 — reserved for follow-ups filed under constitution item 20 by the T173/T191/T158 session",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "Canceled",
+      "stateType": "canceled",
       "archived": false,
       "labels": [
         "tier/unreviewed"
@@ -4017,7 +4017,7 @@
       "blocks": [],
       "createdAt": "2026-08-09T12:48:57.288Z",
       "completedAt": null,
-      "canceledAt": null,
+      "canceledAt": "2026-08-09T15:54:47.423Z",
       "url": "https://linear.app/gamitch/issue/GAM-229/t319-reserved-for-follow-ups-filed-under-constitution-item-20-by-the",
       "description": "See T312.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T319` |\n| Epic | **RESERVED — session A block (T173/T191/T158)** |\n| Worker | — |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Reserved 2026-07-31** |\n"
     },
@@ -4150,8 +4150,8 @@
       "identifier": "GAM-237",
       "legacyId": "T204",
       "title": "T204 — `loaders/students.ts`'s own RLS-reasoning comment still cites a claim about view RLS mechanics constitution item 25 already found false elsewhere",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "Done",
+      "stateType": "completed",
       "archived": true,
       "labels": [
         "tier/unreviewed"
@@ -4160,7 +4160,7 @@
       "blockedBy": [],
       "blocks": [],
       "createdAt": "2026-08-09T12:48:59.208Z",
-      "completedAt": null,
+      "completedAt": "2026-08-09T15:54:43.530Z",
       "canceledAt": null,
       "url": "https://linear.app/gamitch/issue/GAM-237/t204-loadersstudentstss-own-rls-reasoning-comment-still-cites-a-claim",
       "description": "**Found while re-verifying T158's own RLS reasoning, not this task's to fix (out of that task's Allowed Files, unrelated file).** `loaders/students.ts:365-387`'s own module doc reasons from `dashboard_views.sql:49-52`'s sentence — \"none of [these views] are `security_definer`/`security_barrier`, so [it] runs under the calling session's own RLS against its base tables\" — to justify `v_student_goal_projection` being safely readable by a student for their own row. Constitution item 25 already records that exact sentence as false (T176's checker's finding: the real per-view knob is `security_invoker`, PG15+, defaults off, appears zero times anywhere under `supabase/`). `students.ts`'s own comment predates that finding, was never revisited, and already hedges itself (\"reasoned, not measured... flagged for the checker to independently confirm\") — a stale, disclosed-as-uncertain claim, not a confidently wrong one. **Not a functional defect:** item 25's own resolution treats this class of cross-student view exposure as the deliberate, working, intended mechanism regardless of the exact Postgres/PostgREST detail, so the shipped behavior is not in question, only the comment's explanation of why it works. Low severity; fix is a comment rewrite citing item 25 instead of the corrected sentence, no code change implied. **CLOSURE 2026-08-05 — the named instance was ALREADY FIXED; the CLASS was not.** T204 named `loaders/students.ts:365-387`. That comment was corrected by **T186** (commit `74489b8`, merged in PR #75) and already carries a full \"T186 CORRECTION\" block; the row simply outlived its fix. Verified before touching anything, rather than re-doing work. **But the same false claim was live in three more files, as a CITATION CHAIN** — `ParticipationTab.tsx:59` stated it originally (\"a plain view runs with the QUERYING USER's own permissions... not the view owner's\" — backwards), `loaders/reports.ts:133` cited that paragraph, and `loaders/dashboard.ts:79` cited `reports.ts` in turn. One confident sentence became three files of wrong reasoning, each pointing at the previous as authority. **All three corrected together**, because fixing one link leaves the others citing a wrong source. Each correction states the real mechanism (`security_invoker`, PG15+, defaults OFF, zero real clauses under `supabase/`), cites the measured run (`20260731000000_leaderboard_students_view.sql:32-46`) and T801's catalog comments, and states explicitly that **no behaviour changes** — T185 closed no-change on the exposure under the owner's proportionality ruling.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T204` |\n| Epic | Debt (documentation accuracy, no functional defect) — **CLOSED 2026-08-05** |\n| Worker | orchestrator |\n| Checker | self-verified (live PG16 + mutations) |\n| Attempts | 1 |\n| Deps | none (independent of T158/T203 landing) |\n| Escalated | No |\n| Original status | Filed while packeting T158 (item 20) |\n"
@@ -5137,18 +5137,18 @@
       "identifier": "GAM-288",
       "legacyId": "T612",
       "title": "T612 — `mutation-replay`'s `replay.py` reports a genuine red replay as `UNTRUSTWORTHY: the mutated run executed no tests`",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "Done",
+      "stateType": "completed",
       "archived": false,
       "labels": [
-        "area/w3",
-        "tier/unreviewed"
+        "area/w10",
+        "tier/standard"
       ],
-      "assignee": null,
+      "assignee": "George Mitchom",
       "blockedBy": [],
       "blocks": [],
       "createdAt": "2026-08-09T12:52:43.504Z",
-      "completedAt": null,
+      "completedAt": "2026-08-09T15:51:18.566Z",
       "canceledAt": null,
       "url": "https://linear.app/gamitch/issue/GAM-288/t612-mutation-replays-replaypy-reports-a-genuine-red-replay-as",
       "description": "**Measured.** `.claude/skills/mutation-replay/scripts/replay.py` printed `UNTRUSTWORTHY: the mutated run executed no tests` for a run whose **own captured output** showed `Failed Tests 1` with a real assertion failure (`expected [Function] to throw an error`, `ScheduleMeetingsDialog.test.tsx:1156`). Its summary parser read `failed=0 passed=0 skipped=56` off a vitest output shape it mishandles — a focused `-t` run, where the counter line reports skips separately. **Why this matters more than a parser bug:** mutation replay is this project's primary defence against a test that cannot fail, and the constitution leans on it (*\"A gate that only reads is worth much less than one that runs\"*). A false `UNTRUSTWORTHY` teaches agents to distrust and re-do valid replays — or worse, to accept the verdict and discard the evidence. T609's checker caught it only because it refused the tool's verdict and re-ran the mutation strictly by hand. **Shape:** fix the parser for the focused-run output shape, and make it fail loudly on an output it cannot parse rather than emitting a confident wrong verdict — the same rule T512 carries for ledger counts. **Cross-cutting;** `.claude/skills/**` **is W10's or the boss's surface, not W3's.** | Not fixed. Reproduced live during T609's check.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T612` |\n| Epic | Defect (shared tooling — **the anti-vacuity check itself is unreliable**) — found by T609's checker |\n| Worker | *not yet packeted* |\n| Checker | — |\n| Attempts | 0 |\n| Deps | none |\n| Escalated | No |\n| Original status | **Filed 2026-08-06** |\n"
@@ -5437,21 +5437,21 @@
       "identifier": "GAM-303",
       "legacyId": "T808",
       "title": "T808 — Students and parents see raw float hours (`3.9999983633333334 / 100 h`) beside a rounded percentage",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "Done",
+      "stateType": "completed",
       "archived": false,
       "labels": [
         "area/w5",
-        "tier/unreviewed"
+        "tier/fast"
       ],
-      "assignee": null,
+      "assignee": "George Mitchom",
       "blockedBy": [],
       "blocks": [],
       "createdAt": "2026-08-09T15:01:37.144Z",
-      "completedAt": null,
+      "completedAt": "2026-08-09T15:41:13.412Z",
       "canceledAt": null,
       "url": "https://linear.app/gamitch/issue/GAM-303/t808-students-and-parents-see-raw-float-hours-39999983633333334-100-h",
-      "description": "**Filed 2026-08-09 from PR #118's persona harness. INDEPENDENTLY RE-VERIFIED before filing, not taken from the report.** `StudentHome.tsx:1483` renders `formatValueLabel={(value, max) => `${value} / ${max} h (${hoursPercent}%)`}` — `hoursPercent` goes through `round1`, `value` is raw `confirmedHours`. `:1485`'s supporting `Text` repeats the raw value (`${confirmedHours} h confirmed + ${plannedHours} h planned`), and `ParentHome.tsx` ~1280 does the same. **The coach dashboard shows** `4.0` **for the same student**, so two roles are shown different-looking numbers for one fact — the MET/hours-honesty class, not cosmetics. **Scope note:** the fix is presentation-only; `confirmedHours` must NOT be rounded before the progress bar's own arithmetic (module doc #82-105 is explicit that no hours-clamping happens in this file). Round at the format boundary only.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T808` |\n| Epic | E9 |\n| Worker | *not yet packeted* |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Filed 2026-08-09** |\n"
+      "description": "> **CORRECTION, added 2026-08-09 after this row shipped. One sentence below is measured false.**\n>\n> This row says *\"The coach looking up the same student sees* `4.0`*\"* and treats that as coach-vs-student. **The coach's home dashboard has the same bug** — `CoachHome.tsx:2050` prints `row.confirmedHours` raw from the same `v_student_goal_projection` passthrough. The `4.0` comes from the **Reports → Hours tab** (`HoursTab.tsx:1017`, `renderHoursCell`). So the inconsistency was real but it is **reports-vs-home, not coach-vs-student**.\n>\n> Measured twice independently: by the agent implementing this row, and by an agent on `claude/w1-linear-autoclose` which reached the same line unprompted. The CoachHome half is filed as [GAM-308](https://linear.app/gamitch/issue/GAM-308/coachhomes-goal-projection-row-prints-the-same-raw-float-hours-t808); it is not fixed by this row.\n>\n> The original text is left intact below rather than edited, since it is what was believed when the work was scoped.\n\nA student opening their home page sees their volunteer hours as `3.9999983633333334 / 100 h (4%)`. The percentage in that same label is rounded. The hours are not.\n\nParents see it on their page too. The coach looking up the same student sees `4.0`, so the app shows one fact two ways depending on who is logged in.\n\n## Why it is worth fixing\n\nVolunteer hours are the number students are measured on. A 17-digit float reads as broken arithmetic, and it visibly disagrees with what the coach sees for the same student. That puts it in the hours-honesty class rather than styling.\n\n## Why it happens\n\n`confirmedHours` is a verbatim passthrough from the `v_student_goal_projection` SQL view (`StudentHome.tsx:1431-1439` says so explicitly), and the render prints it as-is. Float division inside the view produces the long decimal. The percentage on the same line looks clean only because it goes through `round1` on the way to the screen (`:884`, called at `:1440`).\n\nThere is a `round1` a few hundred lines up at `StudentHome.tsx:868`, but it belongs to `computePlannedHours`, which this render path no longer calls. Anyone skimming the file will assume that helper covers these numbers. It does not.\n\n## Where it renders\n\n| File | Line | What renders |\n| -- | -- | -- |\n| `StudentHome.tsx` | 1483 | progress-bar label |\n| `StudentHome.tsx` | 1485 | supporting text below the bar |\n| `ParentHome.tsx` | 1293 | progress-bar label |\n\n`goalHours` is printed on those same lines and is also a raw passthrough. It reads fine today because the seeded goals are whole numbers, so an override like `62.5` would expose it the same way. Round both sides of the `value / max` pair.\n\n## The one constraint\n\nRound at the format boundary only. Do not round `confirmedHours` before the progress bar does its own arithmetic, which module doc #82-105 is explicit about.\n\n## Size and tier\n\nThree display strings. No schema change, no write path, no exported signature change, and nothing to coordinate across workflows. This is a FAST-tier row under item 26.\n\nOne decision the implementer has to make: there is no shared hours formatter to call. `src/lib/format/` holds date helpers only, and `StudentHome`, `ParentHome`, `CoachHome` and `HoursTab` each define their own private `round1`. So either call `.toFixed(1)` at the three sites, or add a shared formatter and leave the four copies of `round1` for a later cleanup. The second is tidier and slightly wider than FAST's \"presentation-only\" framing, so pick one deliberately rather than drifting into it.\n\n## Suggested priority: low urgency, low cost\n\nFix it when someone is already in these files. Two reasons it can wait:\n\n1. No student appears to have seen it. T509 records the owner confirming there is no live system and no attendance records as of 2026-08-05. Confirmed hours derive from that data, so the wrong-looking number is most likely reaching nobody yet. Worth confirming, because it stops being true the moment real hours land.\n2. Nothing is blocked on it. No dependencies, and no other row cites it.\n\nIt should be fixed before real students use the app, since it is one of the first numbers they will look at.\n\n## Verification note\n\nRe-checked against `main` on 2026-08-09 rather than taken from the filing. The core claim holds. Three details in the original were off:\n\n* **ParentHome is at** `:1293`**, not \\~1280.**\n* **ParentHome does not \"do the same\" in full.** It renders the progress-bar label only. There is no second supporting line there, so this is three render sites, not four.\n* **The filing did not say why the value is unrounded.** Naming `v_student_goal_projection` as the source matters, because it rules out fixing this by reaching for the local `round1` sitting a few hundred lines up in the same file.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T808` |\n| Epic | E9 |\n| Worker | *not yet packeted* |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Filed 2026-08-09** |\n\n---\n\n<details>\n<summary>Original filing text, kept verbatim</summary>\n\n**Filed 2026-08-09 from PR #118's persona harness. INDEPENDENTLY RE-VERIFIED before filing, not taken from the report.** `StudentHome.tsx:1483` renders `formatValueLabel={(value, max) => `${value} / ${max} h (${hoursPercent}%)`}` — `hoursPercent` goes through `round1`, `value` is raw `confirmedHours`. `:1485`'s supporting `Text` repeats the raw value (`${confirmedHours} h confirmed + ${plannedHours} h planned`), and `ParentHome.tsx` ~1280 does the same. **The coach dashboard shows** `4.0` **for the same student**, so two roles are shown different-looking numbers for one fact — the MET/hours-honesty class, not cosmetics. **Scope note:** the fix is presentation-only; `confirmedHours` must NOT be rounded before the progress bar's own arithmetic (module doc #82-105 is explicit that no hours-clamping happens in this file). Round at the format boundary only.\n\n</details>"
     },
     {
       "identifier": "GAM-304",
@@ -5531,6 +5531,47 @@
       "canceledAt": null,
       "url": "https://linear.app/gamitch/issue/GAM-307/t1300-sweep-the-four-non-fixed-closures-for-residual-work-left-behind",
       "description": "**Filed because T703 proved the class exists and measurement showed where it hides.** Eleven rows were found closed in the Epic column while `Status` still read open, so the Linear migration made them live issues. All eleven were genuinely closed — each has a verification-log entry, so nothing vanished silently — but **T703 turned out to carry real residual work anyway**: it closed 2026-08-05 as superseded by T702, and a module-doc paragraph survived still advertising a proof T702 had made undeliverable. An agent working it in 2026-08-09 measured that directly (filtering `buildSeasonTotals`'s sessions to `type === 'outreach'` leaves `peopleReachedTotal` at 125, unchanged) and corrected it. **The pattern:** residuals hide where a row closed because *something else changed*, not because someone fixed the thing. **Scope — four rows, not eleven.** Six of the eleven closed as `fixed` and are low risk; someone did the work and evidenced it. T703 is now resolved. That leaves the non-fixed closures: **T163** (premise was WRONG), **T204** (no-change), **T801** (no-change), **T805** (UNREPRODUCIBLE). **Default to \"no residual\" — this row is NOT an instruction to find something.** Reopen a row only where specific remaining work can be named with `file:line` evidence, as T703's was. A sweep that finds something in all four has found nothing; it has restated the closures. **Where to look, from T703's own shape:** a stale comment, doc or test name that still claims a property the closing change removed. `T801`'s closure text already flags two wrong comments that item 10 forbade fixing, which is exactly this shape and the most likely hit. **Tier:** not judged here — that is the picker's first act under item 28. The work is reading four rows and their verification-log entries, then checking claims against current source. No write path, no schema. **Dispatch note:** this row is the second live test of constitution item 28, which did not exist when T703 was dispatched.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T1300` |\n| Epic | E12 |\n| Worker | *not yet packeted* |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Filed 2026-08-09** |\n"
+    },
+    {
+      "identifier": "GAM-308",
+      "legacyId": null,
+      "title": "CoachHome's goal-projection row prints the same raw float hours T808 fixed for students and parents",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "archived": false,
+      "labels": [
+        "area/w5",
+        "provenance/other",
+        "tier/fast"
+      ],
+      "assignee": null,
+      "blockedBy": [],
+      "blocks": [],
+      "createdAt": "2026-08-09T15:29:40.728Z",
+      "completedAt": null,
+      "canceledAt": null,
+      "url": "https://linear.app/gamitch/issue/GAM-308/coachhomes-goal-projection-row-prints-the-same-raw-float-hours-t808",
+      "description": "Found while implementing [GAM-303](https://linear.app/gamitch/issue/GAM-303/t808-students-and-parents-see-raw-float-hours-39999983633333334-100-h) (T808), by tracing `v_student_goal_projection`'s consumers rather than the three render sites T808 named. Measured against `main` at `d709bab`, not inferred.\n\n## The defect\n\n`CoachHome.tsx:2050` (`GoalProjectionRowItem`) renders:\n\n```\n`${row.confirmedHours}h confirmed + ${row.plannedHours}h planned = ${totalHours}h / ${row.goalHours}h · ${percent}% · ${annotation}`\n```\n\n`totalHours` (`:2046`) and `percent` go through the file's private `round1`. `row.confirmedHours`, `row.plannedHours` and `row.goalHours` do not — they are printed raw.\n\nThose three fields come from `v_student_goal_projection` via `loaders/dashboard.ts:404` (`queryGoalProjection`), which applies no rounding. It is the same view, the same unrounded columns, and the same passthrough shape as the student and parent surfaces T808 fixed through `loaders/students.ts:457`. The view itself (`20260723000001_dashboard_views.sql:322-334`) coalesces `v_student_hours.confirmed_hours` straight through, and that is where the float division happens.\n\nSo a coach opening the dashboard sees the identical `3.9999983633333334h confirmed + 0h planned = 4h / 100h` reading, mixing a raw float and a rounded total inside one sentence.\n\n## This corrects a claim in [GAM-303](https://linear.app/gamitch/issue/GAM-303/t808-students-and-parents-see-raw-float-hours-39999983633333334-100-h)\n\n[GAM-303](https://linear.app/gamitch/issue/GAM-303/t808-students-and-parents-see-raw-float-hours-39999983633333334-100-h) states that \"the coach looking up the same student sees `4.0`\", and treats that as evidence students are shown a number the coach is not. **The** `4.0` **comes from the Reports → Hours tab** (`HoursTab.tsx:1017`, `renderHoursCell` → `value.toFixed(1)`), which is a different surface. **The coach *dashboard* has the bug too** — nobody had checked it. The cross-role inconsistency in [GAM-303](https://linear.app/gamitch/issue/GAM-303/t808-students-and-parents-see-raw-float-hours-39999983633333334-100-h) was real, but it was reports-vs-home, not coach-vs-student.\n\n## Why it was not folded into [GAM-303](https://linear.app/gamitch/issue/GAM-303/t808-students-and-parents-see-raw-float-hours-39999983633333334-100-h)\n\n[GAM-303](https://linear.app/gamitch/issue/GAM-303/t808-students-and-parents-see-raw-float-hours-39999983633333334-100-h)'s scope is an explicit three-site table in two files, and `CoachHome.tsx` is in neither. Filed rather than silently widened, per constitution item 20.\n\n## Fix\n\nSame shape as T808: format at the render boundary only, one decimal, matching `HoursTab.tsx`'s `renderHoursCell` convention. Do **not** round `row.confirmedHours` before `ProgressBar` at `:2055` receives it — `aria-valuenow` must keep the real number, which is the constraint T808's own tests now guard on the student and parent pages.\n\n`percent` and `totalHours` already read correctly and need no change.\n\n## Tier\n\nFAST under item 26: one display string, no write path, no schema, no exported signature change. `CoachHome.test.tsx` will have assertions pinned to the current unformatted digits — check them for the vacuous-negative shape T808 hit (`not.toContain('0 h confirmed …')` passes trivially once the format changes).\n\n---\n\n*Generated by [Claude Code](<https://claude.ai/code>)*\n\n---\n\n## Corrections to this issue's own citations, and to a nearby one\n\n**My line numbers were 12 low and are fixed above.** Re-measured against `origin/main` at `252e400`: the render is `:2050`, `totalHours` is `:2046`, the `ProgressBar` is `:2055`. An agent on `claude/w1-linear-autoclose` reached `:2050` independently — same defect, same line, two measurements.\n\n**One thing to get right before fixing this.** That agent's commit message says the Reports Hours tab \"rounds at `HoursTab.tsx:605`\". `:605` rounds **team subtotals only** (`round1(group.rows.reduce(...))`). The `4.0` a coach reads on a **per-student** row comes from `renderHoursCell` at `:1017`, which is `value.toFixed(1)`.\n\nThe distinction decides this fix: `round1` renders `4`, `.toFixed(1)` renders `4.0`. [GAM-303](https://linear.app/gamitch/issue/GAM-303/t808-students-and-parents-see-raw-float-hours-39999983633333334-100-h) shipped `.toFixed(1)` to match `renderHoursCell`, so matching `round1` here would reintroduce a smaller version of the same cross-surface mismatch.\n\n---\n\n*Generated by [Claude Code](<https://claude.ai/code>)*"
+    },
+    {
+      "identifier": "GAM-309",
+      "legacyId": null,
+      "title": "replay.py cannot read Python test-runner output, so mutating a Python file needs a hand-written shim",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "archived": false,
+      "labels": [
+        "area/w10",
+        "tier/unreviewed"
+      ],
+      "assignee": null,
+      "blockedBy": [],
+      "blocks": [],
+      "createdAt": "2026-08-09T15:47:11.830Z",
+      "completedAt": null,
+      "canceledAt": null,
+      "url": "https://linear.app/gamitch/issue/GAM-309/replaypy-cannot-read-python-test-runner-output-so-mutating-a-python",
+      "description": "An agent replaying a mutation against a Python test file gets `UNTRUSTWORTHY: could not read the test counts of the baseline run` before a single mutation is applied. `unittest` prints `Ran 19 tests in 0.177s` / `OK`, and `pytest` prints `19 passed in 0.18s`; `replay.py` reads only the vitest/Jest `Tests  N failed | M passed (T)` line, so both are unreadable to it.\n\nThis surfaced while fixing [GAM-288](https://linear.app/gamitch/issue/GAM-288/t612-mutation-replays-replaypy-reports-a-genuine-red-replay-as) (T612): proving that the skill's own new tests actually guard the parser fix required wrapping the runner in a throwaway shell script that re-printed `Ran N tests` as a vitest-shaped summary line. The mutations reddened correctly once wrapped, so nothing was left unproven — but the next agent has to invent that shim again, and an agent that does not think of it will read the refusal as \"this cannot be replayed\".\n\n## Why it is worth fixing\n\nTest-quality class, and specifically the friction that makes an agent skip the replay. `replay.py`'s refusal message is deliberately absolute (\"Run the command by hand\"), which is right when the summary is genuinely garbled and wrong when the runner is simply one the parser was never taught. The two Python scripts in `.claude/skills/` are the only Python under test today, but they include `replay.py` itself — the tool the constitution leans on — and its tests now run in CI as the `skill-scripts` job.\n\n## Why it happens\n\n`counts()` (`.claude/skills/mutation-replay/scripts/replay.py:105`) matches `SUMMARY_LINE_RE` (line 40), which anchors on a literal `Tests` label followed by `:` or two spaces. Neither Python runner emits anything of that shape. `SEGMENT_RE` (line 43) already accepts the words `passed`, `failed`, `skipped`, `todo` and `pending`, so only the line-level anchor is missing, not the vocabulary.\n\nThe near-miss to warn about: it is tempting to loosen `SUMMARY_LINE_RE` until it matches pytest's `19 passed in 0.18s`. Doing that by dropping the label anchor would make the pattern match arbitrary prose in a stack trace, and the whole point of [GAM-288](https://linear.app/gamitch/issue/GAM-288/t612-mutation-replays-replaypy-reports-a-genuine-red-replay-as) was that a summary read half-right is worse than one refused. A pytest/unittest shape needs its own anchored pattern, tried in turn.\n\n## Where it lives\n\n| File | Line | What it does |\n| -- | -- | -- |\n| `.claude/skills/mutation-replay/scripts/replay.py` | 40 | `SUMMARY_LINE_RE` — the vitest/Jest line anchor, the only shape recognised |\n| `.claude/skills/mutation-replay/scripts/replay.py` | 105 | `counts()` — raises `SummaryParseError` when no line matches |\n| `.claude/skills/mutation-replay/scripts/replay.py` | 132 | `counts_or_die()` — turns that into the exit-2 refusal an agent sees |\n| `.claude/skills/mutation-replay/scripts/test_replay.py` | 33 | `SummaryParsing` — where the new shapes' fixtures belong |\n\n## The one constraint\n\nWhatever is added must keep [GAM-288](https://linear.app/gamitch/issue/GAM-288/t612-mutation-replays-replaypy-reports-a-genuine-red-replay-as)'s rule intact: a shape not fully understood raises rather than returning a count. `unittest`'s failure line is `FAILED (failures=7)` with no total on it and the count on a separate `Ran N tests` line, so a Python reader has to combine two lines and then cross-check them the way the vitest path cross-checks against its declared total — not read one and assume the rest.\n\n## Size and tier\n\nOne extra pattern pair plus a combining step (~30 lines), and fixtures for the four shapes: unittest OK, unittest FAILED, pytest all-pass, pytest with failures. No schema change, no write path, no signature change — `counts()` keeps returning `(failed, passed, skipped)`.\n\nSTANDARD under item 26: the change is well under FAST's ~20-line ceiling only if the combining step is trivial, and it is not.\n\nDecide deliberately: whether pytest's `19 passed, 3 skipped in 0.18s` (no declared total) may be accepted at all, given that the cross-check [GAM-288](https://linear.app/gamitch/issue/GAM-288/t612-mutation-replays-replaypy-reports-a-genuine-red-replay-as) added has nothing to check against there.\n\n## Suggested priority: low urgency, low cost\n\nWorth doing the next time anyone touches `replay.py`, not before.\n\n1. It affects agents, not users, and it has been hit exactly once. The workaround is a four-line shell shim and the refusal message that precedes it is honest — nothing is silently wrong.\n2. Nothing is blocked on it. [GAM-288](https://linear.app/gamitch/issue/GAM-288/t612-mutation-replays-replaypy-reports-a-genuine-red-replay-as) shipped with all three of its mutations replayed.\n\nIt stops being deferrable when a second Python script under `.claude/skills/` acquires tests, or when a `skill-scripts` CI failure needs replaying under time pressure.\n\n## Verification note\n\nMeasured on `claude/next-ready-task-pw1k2y` at `0d5adbd`, 2026-08-09. `python3 .claude/skills/mutation-replay/scripts/test_replay.py` prints `Ran 19 tests in 0.177s` then `OK`; `replay.py` run against it without the shim exits 2 at the baseline. Line numbers above are from that commit. pytest is **not installed** in this environment, so its output shape is quoted from its documented format and is unverified here — check it before writing the fixture.\n\nFiled under constitution item 20 as a deliberate deferral from [GAM-288](https://linear.app/gamitch/issue/GAM-288/t612-mutation-replays-replaypy-reports-a-genuine-red-replay-as) (T612)."
     }
   ]
 }
