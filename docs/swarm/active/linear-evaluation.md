@@ -14,15 +14,30 @@ Linear clears those same limits before anyone invests in a second migration.
 
 | | Linear | ClickUp |
 |---|---|---|
-| Requests | **1,500–5,000/hour** (see discrepancy below) | ~30–50/**day**, inferred from two lockouts |
+| Requests | **2,500/hour** — MEASURED from response headers | ~30–50/**day**, inferred from two lockouts |
 | Remaining quota visible? | **Yes** — `X-RateLimit-Requests-Remaining` on every response | No |
 | On exceeding | HTTP 400, `code: RATELIMITED` | ~22 hour lockout, **reads blocked too** |
 | Reset | rolling hourly window, leaky bucket | ~1370 minutes |
 
-**Discrepancy, unresolved.** A live fetch of `linear.app/developers/rate-limiting` on 2026-08-09
-reported **5,000/hour** for both API key and OAuth. Third-party sources (merge.dev, lifestack.ai)
-report **1,500/hour**. The blogs are probably stale, but this was not resolved and the lower figure
-should be assumed. Either way it is two orders of magnitude beyond ClickUp's observed budget.
+**RESOLVED BY MEASUREMENT 2026-08-09 — and both documents were wrong.** A live fetch of
+`linear.app/developers/rate-limiting` reported **5,000/hour**; third-party sources (merge.dev,
+lifestack.ai) reported **1,500/hour**. A single authenticated `POST` to `api.linear.app/graphql` with
+a personal API key returned the truth in its own headers:
+
+```
+x-ratelimit-requests-limit:        2500
+x-ratelimit-requests-remaining:    2499
+x-ratelimit-requests-reset:        1786278433099   (rolling 1h window)
+x-ratelimit-complexity-limit:      3000000
+x-complexity:                      2               (cost of `{ viewer { id name } }`)
+```
+
+**2,500/hour.** Neither published figure. This is the third time this session that a measurement
+contradicted a document that sounded authoritative, and it is the cheapest of the three to have run.
+
+**Practical scale:** the full 33-row migration at ~2 calls per issue is ~66 requests — **2.6% of one
+hour's budget**. The identical work exhausted ClickUp's daily budget and cost a ~22 hour lockout.
+Complexity is a non-issue: a trivial query costs 2 points against 3,000,000.
 
 Complexity is limited separately: 2,000,000 points/hour (OAuth), max 10,000 points per single query.
 Irrelevant for task pickup, relevant for bulk reads.
@@ -42,9 +57,21 @@ made during this evaluation with no limit encountered**, which is only weak evid
 Measured: the workspace currently holds **5 issues**, four of which are Linear's onboarding defaults.
 So ~245 of the budget is free and the 33 open rows fit comfortably.
 
-⚠️ **Unverified:** whether archived issues count toward the 250. Third-party sources say they do not.
-This was NOT tested and it matters — the full ledger is 293 rows, so migrating everything rather than
-just the open rows depends entirely on this answer.
+⚠️ **Partially tested 2026-08-09, and still NOT settled — do not treat this as answered.** The
+`Organization` type exposes `createdIssueCount`. Measured: it read **5** before archiving an issue and
+**5** after, while the default `issues` query dropped from 5 nodes to 4. So `createdIssueCount` is a
+lifetime *ever-created* counter that includes archived issues, and the `issues` query excludes them
+by default.
+
+**That gives two candidate counters and no proof of which one enforces the 250 cap.** The pricing page
+says "250 issues" without qualification. Third-party sources claim archived issues are exempt, which
+is consistent with the `issues`-query notion of active but is not established by anything measured
+here. **The definitive check is the Billing page in the UI**, which displays the enforced number —
+archive one issue and watch whether it drops. That is a 30-second human check and is not reachable
+from the API.
+
+It matters because the full ledger is 293 rows: migrating everything rather than just the 33 open
+rows depends entirely on this answer.
 
 ## Write path — tested, and every ClickUp defect is absent
 
