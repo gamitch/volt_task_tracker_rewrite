@@ -13,6 +13,10 @@ bash tests/e2e-harness/stop.sh
 Screenshots land in `tests/e2e-personas/screenshots/`; the HTML report lands in
 `playwright-report/personas/`.
 
+**Adding a workflow?** Read `.claude/skills/e2e-personas/SKILL.md` first. It
+carries the spec-writing recipe, which flows reuse this harness untouched, and
+the Astryx/RLS traps that have already cost time here.
+
 ## Why it exists
 
 `playwright.config.ts` (repo root) documents a hard ceiling for the

@@ -16,7 +16,12 @@ export default [
   // this repo. eslint does not read `.gitignore` either, so without this
   // `npx eslint .` lints every worker's in-flight copy alongside the real
   // tree (see the matching note in `vite.config.ts`).
-  { ignores: ['dist', 'node_modules', '.claude', 'supabase/functions/**'] },
+  // `dist-e2e` is the persona harness's own build output (a second Vite
+  // outDir, kept separate from `dist` so the two Playwright suites cannot
+  // serve each other's bundle). eslint does not read `.gitignore`, so it needs
+  // naming here alongside `dist` or `npm run lint` reports hundreds of
+  // `no-undef` errors against minified vendor code.
+  { ignores: ['dist', 'dist-e2e', 'node_modules', '.claude', 'supabase/functions/**'] },
   js.configs.recommended,
   {
     files: ['**/*.{ts,tsx}'],
