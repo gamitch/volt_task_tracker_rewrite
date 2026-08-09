@@ -52,5 +52,18 @@ export default [
       globals: globals.node,
     },
   },
+  // `tests/e2e-harness/**/*.mjs` is the local Supabase-compatible API shim
+  // (auth + PostgREST + storage + Edge Functions) that lets the real browser
+  // bundle run against a real Postgres cluster in this sandbox. Same
+  // situation as `scripts/**/*.mjs` above: Node CLI/server code, not part of
+  // the browser bundle, legitimately using `process`/`console`/`Buffer`.
+  {
+    files: ['tests/e2e-harness/**/*.mjs'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: globals.node,
+    },
+  },
   eslintConfigPrettier,
 ];

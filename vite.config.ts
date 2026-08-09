@@ -11,6 +11,22 @@ export default defineConfig({
   // `test` key below requires so `defineConfig`'s config type recognizes it.
   test: {
     setupFiles: ['./src/test-setup.ts'],
+    // Pin the two Supabase env vars blank for the unit suite.
+    //
+    // Vitest loads `.env` the same way the dev server does, so before this the
+    // suite silently depended on the developer NOT having one — and
+    // `.env.example` tells every developer to create exactly that file. Seven
+    // tests assert the app "fails safely when no Supabase is configured"
+    // (AppShell, CoachHome, ParentHome, LiveConsole, LiveConsole.endMeeting);
+    // with any `.env` present those tests fail, on a real Supabase project
+    // they would also start reaching the network from a unit test.
+    //
+    // Tests that need the configured case set it explicitly with `vi.stubEnv`
+    // (see `src/lib/supabase/client.test.ts`), which still overrides this.
+    env: {
+      VITE_SUPABASE_URL: '',
+      VITE_SUPABASE_ANON_KEY: '',
+    },
     // supabase/functions/** are Deno-runtime Edge Functions with their own
     // *.test.ts files (Deno.test(...), run separately via `deno test`) --
     // exclude them from vitest's default discovery, same reasoning as the
@@ -35,7 +51,12 @@ export default defineConfig({
       // count, so a transient probe can make a real baseline look broken.
       '**/*.throwaway.*',
       'supabase/functions/**',
+      // Playwright suites and their harness. Vitest would otherwise collect
+      // `tests/e2e-personas/*.spec.ts`, which import `playwright/test` and
+      // cannot run under vitest at all.
       'tests/e2e/**',
+      'tests/e2e-personas/**',
+      'tests/e2e-harness/**',
     ],
   },
   build: {
