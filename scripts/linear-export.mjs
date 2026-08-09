@@ -38,19 +38,40 @@ const TEAM_NAME = 'Gamitch';
 
 const CHECK = process.argv.includes('--check');
 
+// Page size and every nested connection are bounded deliberately. Linear caps a
+// single query at 10,000 complexity points, and complexity multiplies: an
+// unbounded nested connection defaults to a large page and is charged per outer
+// node. The first version of this query used first:100 with `labels`,
+// `relations` and `inverseRelations` all unbounded and cost **22,861** — it
+// could never have run. 25 x (20+20+20) leaves a wide margin.
+const PAGE = 25;
+
 const ISSUES_QUERY = `
   query($teamId:String!, $after:String) {
     team(id:$teamId) {
-      issues(first:100, after:$after, includeArchived:true) {
+      issues(first:${PAGE}, after:$after, includeArchived:true) {
         nodes {
           identifier title description url
           createdAt updatedAt completedAt canceledAt archivedAt
           state { name type }
-          labels { nodes { name parent { name } } }
+          labels(first:20) { nodes { name parent { name } } }
           assignee { name }
-          relations { nodes { type relatedIssue { identifier } } }
-          inverseRelations { nodes { type issue { identifier } } }
+          relations(first:20) { nodes { type relatedIssue { identifier } } }
+          inverseRelations(first:20) { nodes { type issue { identifier } } }
         }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }`;
+
+// Identifier-only, so it is cheap enough to page in large chunks. This exists
+// to cross-check the expensive walk above; it must paginate too, or it counts
+// one page and the check compares 301 against a page size.
+const COUNT_QUERY = `
+  query($teamId:String!, $after:String) {
+    team(id:$teamId) {
+      issues(first:250, after:$after, includeArchived:true) {
+        nodes { identifier }
         pageInfo { hasNextPage endCursor }
       }
     }
@@ -145,18 +166,17 @@ async function main() {
     .map(toRecord)
     .sort((a, b) => a.identifier.localeCompare(b.identifier, undefined, { numeric: true }));
 
-  // A count that cannot be cross-checked is not a count. Linear reports its own
-  // total independently of the pages we walked; if they disagree, pagination
+  // A count that cannot be cross-checked is not a count. This walk is
+  // independent of the one above and cheap; if the two disagree, pagination
   // dropped something and a truncated backup is worse than none.
-  const { data: countData } = await gql(
-    `query($teamId:String!){ team(id:$teamId){ issues(includeArchived:true){ nodes{ id } } } }`,
-    { teamId: team.id },
-  );
-  const reported = countData.team.issues.nodes.length;
-  if (reported !== records.length) {
+  const ids = await paginate(COUNT_QUERY, { teamId: team.id }, (d) => d.team.issues);
+  if (ids.length !== records.length) {
+    const missing = ids
+      .map((i) => i.identifier)
+      .filter((i) => !records.some((r) => r.identifier === i));
     throw new Error(
-      `ABORT: paginated ${records.length} issues but the team reports ${reported}. ` +
-        'Refusing to write a partial backup.',
+      `ABORT: exported ${records.length} issues but the team has ${ids.length}. ` +
+        `Refusing to write a partial backup.${missing.length ? ` Missing: ${missing.slice(0, 10).join(', ')}` : ''}`,
     );
   }
 
