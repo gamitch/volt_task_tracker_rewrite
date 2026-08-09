@@ -458,11 +458,18 @@ After the third failure, the task must be escalated to boss-arbiter.
     f. **Put the identifier in the PR title, and keep the commit trailer.**
        Both, because they serve different readers:
 
-       - **PR title** — `GAM-nnn` anywhere in it. This is what Linear's GitHub
-         integration reads to link the issue and, with the workflow automation
-         enabled, to move it to `Done` on merge. **Linear does not read commit
-         trailers**, so the trailer alone gives traceability and no automation.
-         Using the issue's own `gitBranchName` for the branch links it too.
+       - **`Closes GAM-nnn` as the PR body's first line.** This is the
+         mechanism that demonstrably works: PR #126 used it and `GAM-303` went
+         to `Done` on merge with the PR linked on the card. It is a Linear magic
+         word (`Closes`/`Fixes`/`Resolves`), and it does two things a bare
+         identifier does not — it links **and** it closes.
+
+         An identifier in the title or branch name **links only**. Useful, and
+         `WORKFLOWS.md` rule 2 requires it in the branch for readability, but on
+         its own it leaves the issue sitting in `In Review` after merge.
+
+         **Linear does not read commit trailers**, so the trailer alone gives
+         traceability and no automation.
        - **Commit trailer** — `Linear-Issue: GAM-nnn (Tnnn)`. This survives in
          git history independently of any hosted account, which is the same
          reason item 29 keeps an export. Item 24 joins recording to merging;
