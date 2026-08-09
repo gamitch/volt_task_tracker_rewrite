@@ -103,13 +103,31 @@ relation is the better representation because it names *what* blocks.
 
 ## 4. Ledger parsing — measured, with a validated repair
 
-288 `Tnnn` rows. Parsed by locating `Status` via the **header name**, never a fixed index (T512).
+**295 task rows.** Parsed by locating `Status` via the **header name**, never a fixed index (T512).
 
 | Shape | Rows | Handling |
 |---|---|---|
-| 10 columns (matches header) | 251 | direct |
+| 10 columns (matches header) | 258 | direct |
 | 11–13 columns | **35** | **auto-repair, validated** |
 | 9 columns | **2** (`T063`, `T330`) | **manual — do not guess** |
+
+### 4.1 The count was wrong once already — 288, not 295
+
+The first pass of this plan said **288**, and the owner initially accepted that figure. It was wrong.
+The row pattern `^\|\s*T\d+\s*\|` requires a pipe immediately after the digits, which silently skipped
+**7 suffixed corrective-task ids**: `T002a`, `T002b`, `T006a`, `T016a`, `T073a`, `T073b1`, `T073b2`.
+
+Caught by cross-checking three independent counts against each other rather than trusting one:
+297 table lines − 2 (header + separator) = 295, which reconciles exactly.
+
+**This is the migration's own headline failure mode, committed by its own parser.** A regex that is
+slightly too strict does not error — it returns a smaller, entirely plausible number, and 7 rows of
+real history disappear with nothing to notice. It is the same shape as T512's `NARROWED`-treated-as-
+closed defect and the ClickUp payload builder's escaped-pipe truncation.
+
+**Consequence for the script:** it must assert `total == 295` and abort if the count moves
+unexpectedly, and it must reconcile parsed rows against raw table lines rather than trusting a single
+pattern. A count that cannot be cross-checked is not a count.
 
 **The overflow cause is understood, not worked around.** Extra columns come from unescaped `|`
 inside the prose-heavy `Last Result` cell. Rejoining cells `8 … n-2` restores it. Validated by
@@ -138,7 +156,7 @@ ClickUp migration lacked, and the escaped-pipe truncation is exactly what it wou
 descriptions for Markdown fidelity. Stop here if anything looks wrong; 33 rows is a recoverable
 mistake.
 
-**Phase 3 — the ~253 closed rows (~510 requests).** Create, then archive each. Archived issues are
+**Phase 3 — the ~260 closed rows (~525 requests).** Create, then archive each. Archived issues are
 **exempt from the 250 cap** (plan comparison: *"Issues (excluding archive) — 250"*), so the workspace
 settles at ~33 active with full history retained.
 
@@ -151,7 +169,7 @@ referenceable.
 `Linear-Issue:` commit trailer to `constitution.md` item 24, create the PR template, and add the CI
 trailer check as a **warning first**.
 
-**Total ≈ 600–700 requests ≈ 25% of ONE hour's budget** (measured limit: 2,500/hour). The same work
+**Total ≈ 620–720 requests ≈ 28% of ONE hour's budget** (measured limit: 2,500/hour). The same work
 exhausted ClickUp's daily budget and cost a ~22 hour lockout.
 
 ---
@@ -198,7 +216,7 @@ migration verifies. Short-lived keys are the point: this one has already done it
 
 ## 8. Open questions for the owner
 
-1. **Migrate all 288 rows, or only the 33 open?** Plan assumes all — history is cheap now that
+1. ~~**Migrate all rows, or only the 33 open?**~~ **DECIDED by the owner: all 295.** Plan assumes all — history is cheap now that
    archived rows are exempt, and the closed-blocker gap (T166→T155) only closes if closed rows exist.
 2. **Projects for W-blocks — confirm the ~10 groupings**, since `Epic`'s 109 distinct values are too
    granular to be projects and will live in descriptions.
