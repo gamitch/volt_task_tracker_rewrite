@@ -785,6 +785,17 @@
     ]
   },
   {
+    "legacyId": "T063b",
+    "title": "T063b — Migration manifest write path + manifest-driven `--teardown` (MIG-03b)",
+    "description": "**THIS ROW WAS MISSING ENTIRELY AND THE WORK IS LIVE ON `main`.** Found by the Linear-migration audit, which cross-referenced every `Tnnn` id mentioned anywhere in `docs/` against the ledger's own rows: T063b was referenced by `RESUME-HERE.md` and had a full `docs/swarm/active/T063b-worker-output.md`, but no ledger row and **no verification-log entry** — so it is a clean violation of constitution item 24 (recording and merging are one action), and item 24's own failure shape applied to itself. **Evidence, all primary:** `scripts/migrate/manifest.ts`, `teardown.ts` and `manifest.test.ts` are present on `origin/main`; they landed in `33c9e24` (PR #53); their suites run green at **31 tests / 2 files**, measured 2026-08-09. **Delivered:** a manifest written during a real run recording only rows that run CREATED (never rows matched by the natural-key upsert), and `--teardown=<manifest-path>` deleting exactly those ids in FK-safe order, structurally incapable of naming `profiles`/`guardian_links`/`auth.users`. **Status/attempt reconstructed from artifacts, not from a contemporaneous record** — no checker entry exists, so the Checker column is honestly `—` rather than a name invented to fill it.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T063b` |\n| Epic | E10 |\n| Worker | worker-implementer |\n| Checker | — |\n| Attempts | 1 |\n| Deps | T063 |\n| Escalated | No |\n| Original status | **MERGED — row reconstructed 2026-08-09** |\n",
+    "state": "Done",
+    "open": false,
+    "labels": [],
+    "blockedBy": [
+      "T063"
+    ]
+  },
+  {
     "legacyId": "T064",
     "title": "T064 — Roster → accounts post-migration verification (MIG-05)",
     "description": "None\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T064` |\n| Epic | E10 |\n| Worker | worker-implementer |\n| Checker | checker-reviewer |\n| Attempts | 0 |\n| Deps | T063 |\n| Escalated | No |\n| Original status | Blocked |\n",
