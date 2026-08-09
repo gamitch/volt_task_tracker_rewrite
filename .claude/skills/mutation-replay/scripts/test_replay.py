@@ -2,12 +2,13 @@
 """Tests for `replay.py`'s summary parser and its three verdicts.
 
 T612. The parser is the part of this skill that decides whether an agent
-believes its own evidence, and it shipped for weeks reading a genuinely red
-focused run as "executed no tests". Every summary line asserted below was
-captured from a real `npx vitest run` in this repository (vitest 3.2.7,
-`src/pages/meetings/ScheduleMeetingsDialog.test.tsx`, 70 tests) rather than
-written from memory -- the defect existed precisely because the shape was
-imagined instead of measured.
+believes its own evidence, and it shipped reading a genuinely red focused run
+as "executed no tests". The summary shapes below were captured from real
+`npx vitest run` output in this repository (vitest 3.2.7 --
+`src/pages/meetings/ScheduleMeetingsDialog.test.tsx`, 70 tests, and the whole
+suite at 83 files / 2153 tests) rather than written from memory; the two
+multi-outcome cases recombine those measured shapes. The defect existed
+precisely because the shape was imagined instead of measured.
 
     python3 .claude/skills/mutation-replay/scripts/test_replay.py
 """
@@ -55,12 +56,12 @@ class SummaryParsing(unittest.TestCase):
         self.assertEqual(counts(out), (0, 0, 70))
 
     def test_whole_suite(self):
-        out = " Test Files  75 passed (75)\n      Tests  1821 passed (1821)\n"
-        self.assertEqual(counts(out), (0, 1821, 0))
+        out = " Test Files  83 passed (83)\n      Tests  2153 passed (2153)\n"
+        self.assertEqual(counts(out), (0, 2153, 0))
 
     def test_whole_suite_with_failures(self):
-        out = "      Tests  2 failed | 1819 passed (1821)\n"
-        self.assertEqual(counts(out), (2, 1819, 0))
+        out = "      Tests  2 failed | 2151 passed (2153)\n"
+        self.assertEqual(counts(out), (2, 2151, 0))
 
     def test_todo_counts_as_not_executed(self):
         out = "      Tests  1 passed | 2 todo | 67 skipped (70)\n"
