@@ -527,10 +527,25 @@ After the third failure, the task must be escalated to boss-arbiter.
        both carry a DO-NOT-EDIT banner. The export is **one-directional** —
        Linear is the source, these are a backup. Nothing writes back.
 
-    c. **Run the export after any batch of work, and let CI enforce it.**
-       `--check` fails when the committed export is stale. Without that the
-       backup rots silently, which is the same failure as an unmaintained
-       ledger wearing a different hat.
+    c. **The export is refreshed by a scheduled job that commits, NOT by a gate
+       that blocks.** `.github/workflows/linear-export.yml` runs on push to
+       `main`, daily, and on demand; it commits the two files when they move and
+       asserts `--check` afterwards. Without it the backup rots silently, which
+       is the same failure as an unmaintained ledger wearing a different hat.
+
+       **This item originally said "let CI enforce it" with `--check` on pull
+       requests. That was wrong and is corrected here.** Such a gate would fail
+       every task PR for a correct reason: claiming an issue moves it
+       `Todo → In Progress`, which makes the committed export stale **by
+       definition**, and the agent cannot fix it — the final state only exists
+       after the merge closes the issue. The rule would have blocked work that
+       was proceeding exactly as designed, and agents would have learned to
+       ignore a red check. Heal, do not gate.
+
+       Requires the `LINEAR_API_KEY` repository secret. **A read-only key is
+       sufficient and is what should be used** — the export only reads, and a
+       scheduled job holding a write-capable key is more blast radius than the
+       work needs.
 
     **Authorized by the human owner 2026-08-09.** Rationale, all measured on the
     day this was written rather than argued: a hand-maintained table failed
