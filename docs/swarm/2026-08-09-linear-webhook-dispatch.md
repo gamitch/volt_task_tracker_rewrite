@@ -325,8 +325,8 @@ not have. In order; step 3 before step 1, or the first deliveries hit nothing.
 
    | Secret | Value |
    |---|---|
-   | `ANTHROPIC_API_KEY` | Claude API key (or use `CLAUDE_CODE_OAUTH_TOKEN` and change the workflow input) |
-   | `LINEAR_DISPATCH_API_KEY` | a **write-capable** Linear key |
+   | `CLAUDE_CODE_OAUTH_TOKEN` | subscription auth, from `claude setup-token`. Chosen over `ANTHROPIC_API_KEY` by the owner on 2026-08-09; the workflow's input was changed to match |
+   | `LINEAR_DISPATCH_API_KEY` | a **write-capable** Linear key — Read + Write + Create comments, limited to the `Gamitch` team. **Not** the read-only key `linear-export.yml` uses |
    | `CLAUDE_PR_TOKEN` | optional; the PAT from step 1. Without it the agent's pushes use `GITHUB_TOKEN`, and **commits made with `GITHUB_TOKEN` do not trigger CI** — a PR whose checks never run looks fine and is worse than a red one |
 
 3. **Merge the workflow to `main`.** `repository_dispatch` runs workflows from the default branch

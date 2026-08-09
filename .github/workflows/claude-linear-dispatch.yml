@@ -95,7 +95,15 @@ jobs:
           LINEAR_API_KEY: ${{ secrets.LINEAR_DISPATCH_API_KEY }}
           GH_TOKEN: ${{ secrets.CLAUDE_PR_TOKEN || github.token }}
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Subscription auth rather than an API key, by the owner's choice:
+          # runs draw on the Claude subscription instead of API billing.
+          # Generated locally with `claude setup-token`.
+          #
+          # This token is tied to the subscription of whoever generated it, so
+          # it is a personal credential, not a shared one — the org-level
+          # advice to prefer an API key applies when several repositories share
+          # a secret, which is not the case here.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
           # Providing `prompt` selects automation mode: Claude runs
           # immediately rather than waiting for an `@claude` mention.
