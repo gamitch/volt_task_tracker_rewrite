@@ -165,3 +165,50 @@ was never approached — against the 11-parallel burst that triggered the 22-hou
 - **Four task names carry literal `**HUMAN GATE**` markers** (T052, T063, T065, T070), because the
   ledger titles use bold and ClickUp names are plain text. The `human gate` status already carries
   that meaning, so the markers are redundant and could be stripped. Not done — awaiting a decision.
+
+## CORRECTION 2026-08-09 — the rate-limit diagnosis above is WRONG
+
+The "What actually tripped the limit" section blames **burst shape** and advises resuming with
+sequential calls. **That advice was followed and it did not work.** Second lockout, same day:
+
+| | ClickUp calls | Pacing | Penalty |
+|---|---|---|---|
+| Lockout 1 | ~44 | one 11-call parallel batch, one 5-call batch | 1325 min |
+| Lockout 2 | ~32 | never more than 2 concurrent, mostly sequential | 1370 min |
+
+Sequential pacing did not prevent it, so burst shape is not the trigger. The evidence now points at a
+**cumulative request budget of roughly 30-50 calls per rolling day** on this MCP connector, well
+below ClickUp's documented 100/min. Both penalties were ~22 hours and both locked reads as well as
+writes.
+
+**Consequence for using ClickUp as the live dispatch board.** One task pickup costs 4-6 calls
+(filter for `Ready to work`, read the task, claim it, update status on completion, optionally
+comment). At a ~40-call daily budget that is **6-10 task transitions per day** before the board goes
+read-only for a day. Worth measuring properly before the ledger is frozen.
+
+**Do not treat this as confirmed.** Two data points, no documentation, and every read was refused so
+the limit could not be inspected from inside the session. What IS confirmed is that ~32 sequential
+calls was enough.
+
+## Custom fields: a plan cap, and how much of it is avoidable
+
+Setting `Tier` on T166 returned **`Custom field usages exceeded for your plan`**. Six custom fields
+across 33 tasks is 198 usages, far beyond the Free tier's allowance.
+
+**Two of the six are redundant and can be dropped today — verified, not inferred:**
+
+- **`Legacy ID`** duplicates the task name, which already reads `T166 — <title>` on every row.
+- **`Blocked by (legacy)`** duplicates ClickUp's native dependencies, created and verified for four
+  links this session. Neither mechanism handles a blocker pointing at a row outside the Space
+  (T166 → T155, closed), so the custom field bought nothing there either.
+
+**The remaining four are plausibly replaceable but UNTESTED**, and must be measured before being
+relied on — the custom-field cap was itself an undocumented surprise:
+
+- `Tier` → `priority`, a standard field with exactly four levels (confirmed present in the update
+  schema, semantically imperfect: risk tier is not urgency).
+- `Provenance`, `Premise gate` → tags, IF tags are uncapped on this plan. `add_tag_to_task` requires
+  the tag to already exist in the Space and no create-tag tool is exposed, so this may be a UI step.
+- `Attempts` → one comment per attempt, which records history rather than just a count.
+
+Testing any of this is blocked until the rate limit clears.
