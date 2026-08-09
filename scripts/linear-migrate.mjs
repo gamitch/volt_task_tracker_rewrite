@@ -27,6 +27,10 @@
 // Usage:
 //   node scripts/linear-migrate.mjs                 # dry run, writes no network calls
 //   LINEAR_API_KEY=lin_api_… node scripts/linear-migrate.mjs --execute
+//
+// The GraphQL endpoint, client and --phase flag land together with execution;
+// they are absent rather than stubbed, because dead code that fails lint is
+// worse than code that does not exist yet.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -35,7 +39,6 @@ const LEDGER = 'docs/swarm/task-ledger.md';
 const OUT_DIR = 'docs/swarm/active';
 const PAYLOAD_OUT = path.join(OUT_DIR, 'linear-migration-payload.json');
 const REPORT_OUT = path.join(OUT_DIR, 'linear-migration-report.md');
-const API = 'https://api.linear.app/graphql';
 
 /** Abort if the ledger does not parse to exactly this many rows. */
 const EXPECTED_ROWS = 295;
