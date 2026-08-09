@@ -41,7 +41,7 @@ idling. This was one of the stated reasons Linear beat ClickUp.
 | Auth, inbound  | HMAC-SHA256 over the raw body (`Linear-Signature`) + a 60s replay window                 |
 | Auth, outbound | a **human-owned** GitHub PAT                                                             |
 | Tests          | 45, `deno test supabase/functions/linear-dispatch/`                                      |
-| Setup          | steps 1–2 done; **3–7 outstanding** (§9, `GAM-310`)                                      |
+| Setup          | steps 1–3 done; **4–7 outstanding** (§9, `GAM-310`)                                      |
 
 ---
 
@@ -343,15 +343,15 @@ subscription via `claude_code_oauth_token`.
 
 **Tracked as `GAM-310`** (`Backlog`, `tier/fast`, `gate/human`).
 
-| #   | Step                                                                                         | State                                                           |
-| --- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| 1   | Fine-grained PAT, **Contents: write**, owned by `gamitch`                                    | **DONE** — verified `GET /user` → 200, `POST /dispatches` → 204 |
-| 2   | Secrets: `CLAUDE_CODE_OAUTH_TOKEN`, `LINEAR_DISPATCH_API_KEY`, `CLAUDE_PR_TOKEN`             | **DONE**                                                        |
-| 3   | Merge the workflow to `main`                                                                 | outstanding                                                     |
-| 4   | `supabase functions deploy linear-dispatch` + three `supabase secrets set`                   | outstanding                                                     |
-| 5   | Create the Linear webhook — Issues only, team `Gamitch`                                      | outstanding                                                     |
-| 6   | Move a real issue `Backlog → Todo`; confirm `Verified human actor` in the log                | outstanding                                                     |
-| 7   | Edit an issue already in `Todo`; expect `{"dispatched": false, "reason": "STATE_UNCHANGED"}` | outstanding                                                     |
+| #   | Step                                                                                         | State                                                               |
+| --- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| 1   | Fine-grained PAT, **Contents: write**, owned by `gamitch`                                    | **DONE** — verified `GET /user` → 200, `POST /dispatches` → 204     |
+| 2   | Secrets: `CLAUDE_CODE_OAUTH_TOKEN`, `LINEAR_DISPATCH_API_KEY`, `CLAUDE_PR_TOKEN`             | **DONE** — token proven by a real authentication, not by inspection |
+| 3   | Merge the workflow to `main`                                                                 | **DONE** — PR #132, merged `71d6ac9`                                |
+| 4   | `supabase functions deploy linear-dispatch` + three `supabase secrets set`                   | outstanding                                                         |
+| 5   | Create the Linear webhook — Issues only, team `Gamitch`                                      | outstanding                                                         |
+| 6   | Move a real issue `Backlog → Todo`; confirm `Verified human actor` in the log                | outstanding                                                         |
+| 7   | Edit an issue already in `Todo`; expect `{"dispatched": false, "reason": "STATE_UNCHANGED"}` | outstanding                                                         |
 
 Step 3 must precede step 6: `repository_dispatch` only runs workflows from the default branch, and a
 dispatch matching no workflow still returns 204.
@@ -369,7 +369,36 @@ Also still outstanding from the migration: enable the Linear automation **PR mer
 
 ---
 
-## 10. Found on the way: 224 Edge Function tests that nothing ran
+## 10. Item 28f is wrong: a title identifier closes the issue too
+
+**Observed on this work, and it contradicts the constitution.**
+
+PR #132 deliberately withheld the `Closes GAM-310` magic word, because only three of GAM-310's seven
+steps were done. It carried the identifier in its **title** only, on item 28f's own stated basis:
+
+> An identifier in the title or branch name **links only**. Useful … but on its own it leaves the
+> issue sitting in `In Review` after merge.
+
+That is not what happened. Linear moved `GAM-310` `Backlog → In Progress` when the PR opened, and
+`→ Done` when it merged, and assigned it. The magic word was never used. Reopened by hand.
+
+Two consequences worth more than this issue:
+
+1. **The migration doc's outstanding item "enable the Linear automation _PR merged → Done_" is
+   already done.** The automation is live, and has been. That is why the title alone closes.
+2. **Omitting the magic word is not a way to avoid closing an issue.** Any agent that completes part
+   of a multi-step issue and names it in a PR title will have that issue closed on merge, whatever
+   it writes in the body. The options are to keep the identifier out of the title entirely, or to
+   give partial work its own issue.
+
+Item 28f's _recommendation_ (use `Closes`) is unaffected and still right. Its stated _mechanism_ —
+that a title links without closing — is false against this workspace's live automation, and an agent
+relying on that sentence to keep an issue open will be wrong. **Correcting item 28f is the owner's
+call and is not done here** (item 3: rules live in one place, and this document is not that place).
+
+---
+
+## 11. Found on the way: 224 Edge Function tests that nothing ran
 
 `ci.yml` had three jobs — `ci`, `sql`, `skill-scripts` — and **no Deno job**. Five function
 directories already carried 21 test files, **224 tests**, and CI ran none of them. The `checkin` HMAC
@@ -388,7 +417,7 @@ pass.**
 
 ---
 
-## 11. The cheaper alternative, recorded honestly
+## 12. The cheaper alternative, recorded honestly
 
 A **GitHub Actions cron polling Linear every 5 minutes** needs no relay, no public endpoint, no
 signature verification, no PAT stored off-GitHub and no Supabase deploy — and reuses the
@@ -401,7 +430,7 @@ keep it simple"_. The owner asked for the webhook twice, knowingly, and that is 
 
 ---
 
-## 12. Open questions
+## 13. Open questions
 
 1. **Is excluding `gate/human` right?** §8's reasoning is an inference, not a quotation. The
    counter-argument is decent: an agent never closes its own issue anyway (item 28e), so the label
@@ -422,7 +451,7 @@ keep it simple"_. The owner asked for the webhook twice, knowingly, and that is 
 
 ---
 
-## 13. Files
+## 14. Files
 
 | File                                                                      |                                                  |
 | ------------------------------------------------------------------------- | ------------------------------------------------ |
@@ -434,7 +463,7 @@ keep it simple"_. The owner asked for the webhook twice, knowingly, and that is 
 
 ---
 
-## 14. The tier judgement, kept from the design
+## 15. The tier judgement, kept from the design
 
 **HEAVY**, and the reasoning still holds: this introduces a **publicly reachable endpoint that
 triggers an autonomous agent holding `contents: write` and `pull-requests: write`**. A mistake does
