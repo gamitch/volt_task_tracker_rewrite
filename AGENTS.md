@@ -31,10 +31,11 @@ Constitution **item 28** is binding and its order matters:
    a human reading `git branch` can tell what it is. Claude Code's default name
    comes from the session title and carries neither; rename it after claiming.
 6. On completion move it to `In Review` — **never `Done`**. The merge closes
-   the issue; an agent closing its own is self-certification. Put `GAM-nnn` in
-   the **PR title** (this is what Linear's integration reads — it ignores commit
-   trailers) and add the trailer `Linear-Issue: GAM-nnn (Tnnn)` for the git-side
-   record.
+   the issue; an agent closing its own is self-certification. Open the PR with
+   **`Closes GAM-nnn` as its first body line** — that magic word both links the
+   issue and moves it to `Done` on merge. An identifier in the title or branch
+   links but does **not** close. Add the trailer `Linear-Issue: GAM-nnn (Tnnn)`
+   for the git-side record, which Linear does not read.
 
 Labels carry what custom fields used to: `tier/*` (item 26 process tier),
 `area/w1`…`w10` (workflow surface), `gate/human` (no machine may close it),
