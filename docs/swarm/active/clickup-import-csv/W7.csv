@@ -1,0 +1,56 @@
+Task Name,Description,Status,Legacy ID,Tier,Provenance,Attempts,Premise gate,Blocked by (legacy)
+T064 — Roster → accounts post-migration verification (MIG-05),"**Legacy ledger row:** `T064`
+
+**Type / provenance:** E10
+
+**Title:** Roster → accounts post-migration verification (MIG-05)
+
+**Status at migration:** Blocked
+
+---
+
+None",Filed,T064,,other,0,not-run,
+T159 — `StudentDialog.season` was deferred pending T091; T091 landed and nothing followed up,"**Legacy ledger row:** `T159`
+
+**Type / provenance:** Bug (latent) — same family as T155
+
+**Title:** `StudentDialog.season` was deferred pending T091; T091 landed and nothing followed up
+
+**Status at migration:** Filed
+
+---
+
+**Source: same external audit @ `2ec47d8`. Independently re-verified, measured.** `season?: ActiveSeasonGoalInfo` (`StudentDialog.tsx:414`) defaults to `DEFAULT_SEASON_INFO` (`:424`); `StudentsTab.tsx:317-324` documents omitting it *specifically* to avoid ""a false ordering dependency"" with T091, which is **Passed** (ledger `:171`). The blocker cleared; the follow-through was never filed — the deferral lived only in a module comment, which is exactly the failure constitution item 20 exists to prevent, recorded here as a fifth instance of it. **Fifth instance of the defect family** behind three of the owner's four production bugs: optional prop + plausible fixture default + call site passing nothing (after `OutreachEventDialog.teams`, `ScheduleMeetingsDialog.teams`, `CoachHome.seasonId`, `Leaderboard.seasonId`). **Why it is latent rather than visible, which is also why nothing caught it:** `DEFAULT_SEASON_INFO` is `{ defaultGoalHours: 100 }` and the real column default is `not null default 100`, so the fixture is indistinguishable from correct until a season is created with a different goal — at which point the student dialog silently uses 100. **Sequencing with T151:** `StudentDialog` carries a *fourth* optional-prop-with-fixture-default that T151's premise did not account for. T151 must not make `season` required without T159 supplying the value, or it forces a breaking change with nothing to pass. Order T159 before or with T151.",Filed,T159,,audit,0,not-run,T091
+T167 — ten remaining loaders have 0 tests — filed so they are not silently dropped,"**Legacy ledger row:** `T167`
+
+**Type / provenance:** Test coverage (batch)
+
+**Title:** ten remaining loaders have 0 tests — filed so they are not silently dropped
+
+**Status at migration:** **⚠️ PREMISE PARTLY FALSE — re-measure before packeting.** Filed
+
+---
+
+**CORRECTION 2026-08-04.** This row comes from the **same external audit (`2ec47d8`) that was measured wrong on T161, T162, T163 and T321** — it counted **files named `<module>.test.ts`** rather than tests *of* a module. **Measured today, at least two of its ten named loaders already have dedicated test files:** `attendance.ts` (**12** tests) and `students.ts` (**23** tests, re-measured at `6c8b2dd` after T198 reworked that loader). The remaining eight (`teams`, `kiosk`, `seasons`, `invites`, `parents`, `accept`, `selfCheckoff`, `leaderboard_privacy`) have no dedicated file, but that is **not** the same as untested — T163 showed a loader can be covered entirely by its importers. **Do not treat this as ten untested loaders. Measure invocation, not filenames, and split the row by what is actually uncovered.** **Original row text follows.** **Source: external audit @ `2ec47d8`, ""explicitly out of scope for this pass"".** `teams.ts`, `kiosk.ts`, `attendance.ts`, `seasons.ts`, `students.ts`, `invites.ts`, `parents.ts`, `accept.ts`, `selfCheckoff.ts`, `leaderboard_privacy.ts`. Recorded as one row rather than ten, to be split when picked up. Context from T146's measurement: **81** `as …DbRow` casts across the loader directory, each able to hide an omitted column exactly as the `teams.color` bug did, against **zero** tests in the directory before T146. Roughly ten real sites use `.select('*')`, where a cast cannot hide an omission. The structural remedy — generated Supabase `Database` types, which would let the compiler catch omitted columns and make the casts unnecessary — remains unavailable (no generated types in repo; `client.ts`'s single `createClient` passes no `Database` generic) and is a separate, larger decision than any of T161–T167.",Filed,T167,,audit,0,not-run,
+T168 — the placeholder-default sweep covered 7 sites; `src/pages/**` and `src/components/**` are unswept,"**Legacy ledger row:** `T168`
+
+**Type / provenance:** Audit (continuation) — **discovery only**
+
+**Title:** the placeholder-default sweep covered 7 sites; `src/pages/**` and `src/components/**` are unswept
+
+**Status at migration:** Filed
+
+---
+
+**BOUNDARY, added 2026-07-30 after the owner caught the orchestrator conflating the two halves.** T168 is **discovery only: it finds instances and produces findings. It fixes nothing.** Every instance found becomes its own work task through the normal worker→checker pipeline — as the five already found demonstrate: T151 (three dialogs' `teams`), T155 (`CoachHome.seasonId`), T158 (`Leaderboard.seasonId`), T159 (`StudentDialog.season`), T170 (`OutreachList.viewerStudentId`). So ""finish T168"" is a misleading phrase: completing the sweep leaves the whole remediation outstanding. **Consequence for delegation:** a plan-only session can perform T168's discovery and hand back drafts, but it cannot complete this row's remediation successors, and it must not be told it owns T168 — the orchestrator owns the row, the numbering, and every fix. Findings arrive as `docs/swarm/inbox/<branch>.md` and are folded in here. **Remediating the *mechanism* rather than the instances is separate work and is filed as T172.** **SWEEP RESULT, 2026-07-30 — `src/pages/**`/`src/components/**` is now covered** by external audit `claude/audit-batch-2` @ `c962b7f`, folded in and re-verified. It found **two** new confirmed instances (`StudentHome`'s three props → T176; `SubscribePopover.functionsBaseUrl` → T177), swept ~40 components clean with the per-component reasoning recorded in `docs/swarm/inbox/claude-audit-batch-2-t168-sweep.md`, and correctly declined to double-count `CoachHome.teamId` (already deferred by T155) and two props on unreachable components. **T168 is discovery-complete for the identity-placeholder shape. It is NOT complete for the class**, because verifying it surfaced a second shape the discriminator cannot see: a **function-typed default pointing at a fixture loader** (`ParentHome`, filed T181 — swept clean by the audit, yet its dashboard is entirely fabricated). Both shapes are the same defect; the second is harder to spot because `loadX` matches the codebase's legitimate DI convention. **A second discovery pass is needed for the fixture-loader shape before T168 can close**, and T172's mechanism must catch both or it will certify files like `ParentHome.tsx` as clean.",Filed,T168,,checker,0,not-run,
+T326 — Roster actions begin ~560px offscreen on mobile,"**Legacy ledger row:** `T326`
+
+**Type / provenance:** Bug (responsive) — **audit LIVE-007**
+
+**Title:** Roster actions begin ~560px offscreen on mobile
+
+**Status at migration:** **Filed 2026-08-02 — see `docs/swarm/AUDIT-TRIAGE.md`**
+
+---
+
+Plausible, not independently verified. A measured DOM offset, so likely real.",Filed,T326,,audit,0,not-run,

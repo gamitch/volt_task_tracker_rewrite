@@ -72,7 +72,7 @@ Each one names **who holds the ball**. Order matters; type in brackets.
 | 3 | `In progress` | active | one agent | Claimed. Packet, premise gate and implementation all happen here. |
 | 4 | `In review` | active | checker | PR open / `checker-reviewer` running. |
 | 5 | `Blocked on owner` | active | owner | An agent stopped mid-flight needing a decision. |
-| 6 | `Human gate` | active | owner | Only a human can ever do this (T063–T065, T070). |
+| 6 | `Human gate` | active | owner | Only a human can ever do this (T052, T063, T065, T070). |
 | 7 | `Merged` | closed | — | Done. |
 | 8 | `Won't fix` | closed | — | Closed deliberately (T505, T804). |
 
@@ -110,7 +110,7 @@ rows" becomes *"filter this Space for `Ready to work`, take the top one, move it
 ## The payload
 
 Built 2026-08-07 from `task-ledger.md`, ready to create via API:
-`clickup_migration.json` — **33 tasks**, being the 43 open rows minus 10 placeholders
+`active/clickup-migration-payload.json` — **33 tasks**, being the 43 open rows minus 10 placeholders
 (T310/T311 VOID, T312–T319 RESERVED). Those simply do not come across; that is free cleanup.
 
 Per task: `legacy_id`, `name`, target list, mapped status, tier, provenance, attempts, deps
@@ -140,8 +140,11 @@ for.
 
 1. Owner does the three UI steps above.
 2. W1 creates Lists `W1`…`W10`, `Unassigned`, `Human gates`.
-3. W1 migrates **W3 (3 rows) as a pilot** — most active workflow, and its rows carry
-   `owner-live-testing` provenance, so the field is exercised immediately.
+3. W1 migrates **W3 (3 rows) as a pilot** — most active workflow.
+   *(Corrected 2026-08-07: this step originally justified W3 by saying its rows carry
+   `owner-live-testing` provenance. They do not — T606, T607 and T608 are all `other`. The three
+   `owner-live-testing` rows are T333, T806 and T407. W3 stands as the pilot on the
+   most-active ground alone.)*
 4. Owner reviews the pilot. If it holds up, W1 imports the remaining 30 and wires dependencies.
 5. Freeze `task-ledger.md` with a header pointing at the Space; add the `ClickUp-Task` trailer
    requirement to `constitution.md` item 24 and to the PR template.

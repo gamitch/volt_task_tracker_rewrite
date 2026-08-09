@@ -11345,3 +11345,62 @@ three new render tests are what make the difference observable.
 `tsc` 0 · `format:check` 0 · `eslint` **0 errors / 375 warnings (unchanged from `main`, measured by
 stashing)** · `vitest` **82 files / 2139 tests, up from 2121** (`students.test.ts` 23→38,
 `StudentHome.test.tsx` 61→64) · `vite build` 0.
+
+---
+
+## T166 — first tests for `loaders/dashboard.ts` (FAST tier)
+
+**Commit:** `e876bb2` · **Tier:** FAST (item 26) · **Attempt:** 1 · **Verdict:** PASS
+
+First row dispatched through ClickUp instead of this ledger. The owner promoted it to
+`Ready to work` without naming it; it was found by filtering the Space for that status, which is the
+handshake the migration is meant to establish.
+
+### Tier choice, stated and defended (item 26)
+
+Test-only: **zero lines of production change**, no write path or destructive operation, no schema,
+RLS, migration or auth/role logic, and no change to a signature another module imports. All four
+FAST conditions hold, so no packet, no worker, no separate checker round. Verification was **not**
+reduced — mutations were run and all six gates executed.
+
+### Premise, re-measured rather than inherited
+
+The row asserted "0 tests". Measured at `d5d420a`: `dashboard.ts` carries 21 `export` lines but only
+**two value exports** — the 129-line `makeLoadDashboardData` factory and the bare
+`loadDashboardData` singleton. `makeLoadDashboardData` is invoked **0 times** anywhere in the suite.
+`CoachHome.test.tsx` mentions `loadDashboardData` 40+ times and **every one is that component's own
+injected prop being stubbed**, which exercises `CoachHome`'s handling of results and never this
+loader. The one test reaching the real function only proves it fails safely with no Supabase
+configured. So the premise held — but note it held for a reason filename-counting would have gotten
+right by luck; T167 records the same audit's filename measure being wrong on four other rows.
+
+The row's blocker (T155) merged 2026-07-30. **ClickUp did not carry that blocker** — the card showed
+`dependencies_count: 0`, because only the 33 open rows were migrated and T155 is closed. Filed as a
+gap in the migration, not in this task.
+
+### Mutation replay — three mutations, isolated worktree (item 23)
+
+Baseline 13 passed / exit 0 in every case.
+
+| Mutation | Result |
+|---|---|
+| drop the `feedEventIds.length > 0` guard before `.in()` | **REDDENED** — 2 failed; the loader queried `event_sessions` and `rsvps` on an empty season |
+| replace the `Unknown student` fallback with the raw `student_id` | **REDDENED** — 1 failed |
+| transpose `expected_ct`/`present_ct` in `mapAttendanceRate` | **REDDENED** — 1 failed |
+
+The first is the one worth having: `dashboard.ts`'s module doc #5 documents the empty-`.in()` guard
+as an invariant, and it had no test. It is not a cosmetic guard — `.in(col, [])` returns every row
+the caller can see rather than none, so dropping it turns an empty dashboard into a full-table read.
+
+### Residual, pinned rather than fixed
+
+`teams` and `students` are read **unfiltered** by season, so both name maps span every season. This
+is the residual T155's gate measured. Harmless today (ids are globally unique, and the maps are used
+only for name lookup), so it is pinned by a test asserting no `.eq` is issued on either table —
+adding a season filter will fail that test visibly rather than changing behaviour silently.
+
+### Gates
+
+`tsc` 0 · `format:check` 0 · `eslint` **0 errors / 375 warnings (unchanged)** · `vitest`
+**83 files / 2152 tests, up from 82 / 2139** (+13, exactly the new file) · `vite build` 0
+(the >500 kB chunk warning is pre-existing on `main`).

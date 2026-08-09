@@ -1,0 +1,263 @@
+List,Task Name,Description,Status,Legacy ID,Tier,Provenance,Attempts,Premise gate,Blocked by (legacy)
+Human gates,T052 — **HUMAN GATE** — production email enablement,"**Legacy ledger row:** `T052`
+
+**Type / provenance:** E8
+
+**Title:** **HUMAN GATE** — production email enablement
+
+**Status at migration:** Blocked
+
+---
+
+**2026-07-19, George**: confirmed the `digest_enabled`-vs-`weekly_digest` question — `weekly_digest` alone correctly gates the weekly-digest send; `digest_enabled` is unused/vestigial for now, no follow-up task needed. That question is now closed. Still externally blocked pending George's `mail.voltfrc.org` Resend domain verification (SPF/DKIM/DMARC) and final explicit sign-off to flip `RESEND_SEND_MODE` to `'production'` (constitution item 16) — no automated checker may approve this last step.",Human gate,T052,,checker,0,not-run,T051
+Human gates,T063 — **HUMAN GATE** — MIG-04 validation gates + sign-off,"**Legacy ledger row:** `T063`
+
+**Title:** **HUMAN GATE** — MIG-04 validation gates + sign-off
+
+**Status at migration:** **Validation report produced and OWNER-SIGNED-OFF 2026-08-01 — `56a9574`**
+
+---
+
+**The blocker was permanent, not pending.** This row sat blocked for weeks on `OLD_SUPABASE_URL`/`OLD_SERVICE_ROLE_KEY`. Those credentials **do not exist and cannot be obtained** — the old app runs on **Lovable Cloud**, which keeps Postgres inside its own platform and exposes no service-role key. Confirmed with the owner directly, after checking his Supabase org (only `volt-timetracker`) and Lovable's Secrets page (only `LOVABLE_API_KEY`). **Resolved by changing the source, not chasing the key.** The owner exported six tables as JSON from Lovable's SQL editor; a new `JsonFileOldDataSource` implements the **existing** `OldDataSource` interface, so `transform.ts` and every mapping rule are untouched. New `--from-dir=<path>` flag; `--dry-run --from-dir` needs **zero env vars**. **Report (reproduced independently by the orchestrator with old-project env vars unset):** teams 4 · seasons 1 · students 20 · events 16 · event_sessions 117 · **rsvps 254** · **attendance 79** · unmatched teams **0** · unparseable times **0** · attendees-backfill mismatches **0**. The 79 attendance rows carry **341.75 hours**. All eight figures match the orchestrator's own pre-ETL measurements from the raw exports. **Owner signed off:** *""looks good to me.""* **Scope honesty:** the dry run writes nothing, so this proves the **transform**, not the write. The real `--from-dir` write path is wired but unexercised — it needs `NEW_SERVICE_ROLE_KEY` and the owner's cutover decision (item 16). **T064/T065 remain open.** **Worker corrected the orchestrator's own baseline** (stated 1746 tests; `main` is 1777) rather than accepting it.",Human gate,T063,,other,0,not-run,"T062, T014"
+W7,T064 — Roster → accounts post-migration verification (MIG-05),"**Legacy ledger row:** `T064`
+
+**Type / provenance:** E10
+
+**Title:** Roster → accounts post-migration verification (MIG-05)
+
+**Status at migration:** Blocked
+
+---
+
+None",Filed,T064,,other,0,not-run,
+Human gates,T065 — **HUMAN GATE** — MIG-06 cutover,"**Legacy ledger row:** `T065`
+
+**Type / provenance:** E10
+
+**Title:** **HUMAN GATE** — MIG-06 cutover
+
+**Status at migration:** Blocked
+
+---
+
+None",Human gate,T065,,other,0,not-run,
+Human gates,T070 — **HUMAN GATE** — Vercel domain go-live,"**Legacy ledger row:** `T070`
+
+**Type / provenance:** E11
+
+**Title:** **HUMAN GATE** — Vercel domain go-live
+
+**Status at migration:** Blocked
+
+---
+
+None",Human gate,T070,,other,0,not-run,"T066, T067, T068, T069"
+W7,T159 — `StudentDialog.season` was deferred pending T091; T091 landed and nothing followed up,"**Legacy ledger row:** `T159`
+
+**Type / provenance:** Bug (latent) — same family as T155
+
+**Title:** `StudentDialog.season` was deferred pending T091; T091 landed and nothing followed up
+
+**Status at migration:** Filed
+
+---
+
+**Source: same external audit @ `2ec47d8`. Independently re-verified, measured.** `season?: ActiveSeasonGoalInfo` (`StudentDialog.tsx:414`) defaults to `DEFAULT_SEASON_INFO` (`:424`); `StudentsTab.tsx:317-324` documents omitting it *specifically* to avoid ""a false ordering dependency"" with T091, which is **Passed** (ledger `:171`). The blocker cleared; the follow-through was never filed — the deferral lived only in a module comment, which is exactly the failure constitution item 20 exists to prevent, recorded here as a fifth instance of it. **Fifth instance of the defect family** behind three of the owner's four production bugs: optional prop + plausible fixture default + call site passing nothing (after `OutreachEventDialog.teams`, `ScheduleMeetingsDialog.teams`, `CoachHome.seasonId`, `Leaderboard.seasonId`). **Why it is latent rather than visible, which is also why nothing caught it:** `DEFAULT_SEASON_INFO` is `{ defaultGoalHours: 100 }` and the real column default is `not null default 100`, so the fixture is indistinguishable from correct until a season is created with a different goal — at which point the student dialog silently uses 100. **Sequencing with T151:** `StudentDialog` carries a *fourth* optional-prop-with-fixture-default that T151's premise did not account for. T151 must not make `season` required without T159 supplying the value, or it forces a breaking change with nothing to pass. Order T159 before or with T151.",Filed,T159,,audit,0,not-run,T091
+W7,T167 — ten remaining loaders have 0 tests — filed so they are not silently dropped,"**Legacy ledger row:** `T167`
+
+**Type / provenance:** Test coverage (batch)
+
+**Title:** ten remaining loaders have 0 tests — filed so they are not silently dropped
+
+**Status at migration:** **⚠️ PREMISE PARTLY FALSE — re-measure before packeting.** Filed
+
+---
+
+**CORRECTION 2026-08-04.** This row comes from the **same external audit (`2ec47d8`) that was measured wrong on T161, T162, T163 and T321** — it counted **files named `<module>.test.ts`** rather than tests *of* a module. **Measured today, at least two of its ten named loaders already have dedicated test files:** `attendance.ts` (**12** tests) and `students.ts` (**23** tests, re-measured at `6c8b2dd` after T198 reworked that loader). The remaining eight (`teams`, `kiosk`, `seasons`, `invites`, `parents`, `accept`, `selfCheckoff`, `leaderboard_privacy`) have no dedicated file, but that is **not** the same as untested — T163 showed a loader can be covered entirely by its importers. **Do not treat this as ten untested loaders. Measure invocation, not filenames, and split the row by what is actually uncovered.** **Original row text follows.** **Source: external audit @ `2ec47d8`, ""explicitly out of scope for this pass"".** `teams.ts`, `kiosk.ts`, `attendance.ts`, `seasons.ts`, `students.ts`, `invites.ts`, `parents.ts`, `accept.ts`, `selfCheckoff.ts`, `leaderboard_privacy.ts`. Recorded as one row rather than ten, to be split when picked up. Context from T146's measurement: **81** `as …DbRow` casts across the loader directory, each able to hide an omitted column exactly as the `teams.color` bug did, against **zero** tests in the directory before T146. Roughly ten real sites use `.select('*')`, where a cast cannot hide an omission. The structural remedy — generated Supabase `Database` types, which would let the compiler catch omitted columns and make the casts unnecessary — remains unavailable (no generated types in repo; `client.ts`'s single `createClient` passes no `Database` generic) and is a separate, larger decision than any of T161–T167.",Filed,T167,,audit,0,not-run,
+W7,T168 — the placeholder-default sweep covered 7 sites; `src/pages/**` and `src/components/**` are unswept,"**Legacy ledger row:** `T168`
+
+**Type / provenance:** Audit (continuation) — **discovery only**
+
+**Title:** the placeholder-default sweep covered 7 sites; `src/pages/**` and `src/components/**` are unswept
+
+**Status at migration:** Filed
+
+---
+
+**BOUNDARY, added 2026-07-30 after the owner caught the orchestrator conflating the two halves.** T168 is **discovery only: it finds instances and produces findings. It fixes nothing.** Every instance found becomes its own work task through the normal worker→checker pipeline — as the five already found demonstrate: T151 (three dialogs' `teams`), T155 (`CoachHome.seasonId`), T158 (`Leaderboard.seasonId`), T159 (`StudentDialog.season`), T170 (`OutreachList.viewerStudentId`). So ""finish T168"" is a misleading phrase: completing the sweep leaves the whole remediation outstanding. **Consequence for delegation:** a plan-only session can perform T168's discovery and hand back drafts, but it cannot complete this row's remediation successors, and it must not be told it owns T168 — the orchestrator owns the row, the numbering, and every fix. Findings arrive as `docs/swarm/inbox/<branch>.md` and are folded in here. **Remediating the *mechanism* rather than the instances is separate work and is filed as T172.** **SWEEP RESULT, 2026-07-30 — `src/pages/**`/`src/components/**` is now covered** by external audit `claude/audit-batch-2` @ `c962b7f`, folded in and re-verified. It found **two** new confirmed instances (`StudentHome`'s three props → T176; `SubscribePopover.functionsBaseUrl` → T177), swept ~40 components clean with the per-component reasoning recorded in `docs/swarm/inbox/claude-audit-batch-2-t168-sweep.md`, and correctly declined to double-count `CoachHome.teamId` (already deferred by T155) and two props on unreachable components. **T168 is discovery-complete for the identity-placeholder shape. It is NOT complete for the class**, because verifying it surfaced a second shape the discriminator cannot see: a **function-typed default pointing at a fixture loader** (`ParentHome`, filed T181 — swept clean by the audit, yet its dashboard is entirely fabricated). Both shapes are the same defect; the second is harder to spot because `loadX` matches the codebase's legitimate DI convention. **A second discovery pass is needed for the fixture-loader shape before T168 can close**, and T172's mechanism must catch both or it will certify files like `ParentHome.tsx` as clean.",Filed,T168,,checker,0,not-run,
+W10,T171 — T154's no-stale-frame property is true in the code and pinned by nothing,"**Legacy ledger row:** `T171`
+
+**Type / provenance:** Debt / test integrity
+
+**Title:** T154's no-stale-frame property is true in the code and pinned by nothing
+
+**Status at migration:** Filed (item 20, from T154's PASS)
+
+---
+
+**MINOR carried from T154's PASS, measured by the checker and worth more than its grade suggests.** Moving the re-seed out of the render body into a `useEffect` keyed on `[user, lastSeededUserId]` — a change that demonstrably reintroduces a stale frame — leaves **all 36 tests passing**. The property IS true in the shipped code (measured: commits are `[""none:dark"",""user-bob:light""]` shipped vs `[""none:dark"",""user-bob:dark"",""user-bob:light""]` under the mutation, the middle entry being Bob signed in with Alice's theme still on screen), but nothing would notice if it broke. **Two independent causes, both instructive.** (1) `RecordingProbe` consumes only `useThemeMode()`, and the provider's `useMemo(() => ({mode, refresh}), [mode, refresh])` memoizes the consumer away when `user` changes but `mode` does not — so a stale commit is structurally invisible to it. Only a **dual-context** recorder (`useThemeMode()` **and** `useAuth()`) can see it. (2) The test literally named `the stale theme never reaches the DOM even for one frame during the switch` does `renders.slice(beforeSwitch).filter((m) => m !== 'dark')` and asserts on the survivors — **it filters out the very value it should assert absent**, so `['dark','light']` passes. **This is the round-1 failure shape recurring inside the one test written to prevent it**, which is why it is filed rather than logged. Fix: dual-context recorder asserting `not.toContain('user-bob:dark')` on commits after the switch, and drop the `.filter`. Acceptance: moving the re-seed into a `useEffect` must fail the suite; it currently does not. The checker also corrected itself here — its own first strict `not.toContain('dark')` probe reported no stale frame under the mutation and was worthless for the same structural reason.",Filed,T171,,checker,0,not-run,T154
+W10,"T172 — make the placeholder-default class structurally hard to reintroduce, instead of sweeping for it forever","**Legacy ledger row:** `T172`
+
+**Type / provenance:** **Debt (mechanism)** — actual work, not an audit
+
+**Title:** make the placeholder-default class structurally hard to reintroduce, instead of sweeping for it forever
+
+**Status at migration:** Filed
+
+---
+
+**Filed 2026-07-30 because the owner caught the orchestrator treating ""audit the class"" and ""fix the class"" as one thing.** T168 finds instances; T151/T155/T158/T159/T170 fix individual instances; **nothing yet stops the sixth pattern becoming a seventh.** Every instance has the identical shape — an optional prop, a plausible fixture default, and a call site that passes nothing — and it has produced **three of the owner's four production bugs**, plus two more found only by audit. The instance-by-instance approach cannot converge: `src/pages/**` and `src/components/**` are still unswept, and a new component added tomorrow can reintroduce it with a green suite. **Candidate mechanisms, to be chosen in the packet, not here.** (a) A lint rule or `tsc`-level check flagging an optional prop whose default is a module-level fixture constant — cheap, mechanical, runs on every commit, and directly encodes the discriminator. (b) Generalise T151: make these props **required** wherever a fixture default exists, which the T151 probe measured as far cheaper than feared (34 TS2741 errors, **zero in production source**, all in two test files) — the compiler then enforces it permanently. (c) Naming convention plus a grep gate, weakest of the three. **Prefer (b) then (a):** (b) is enforcement by the type system rather than by a convention someone must remember, and today's measurement shows the cost is a test-file change, not a refactor. **A fourth shape, found during T176:** the same *metric* coalesce is duplicated in TypeScript in **four** places (`StudentHome.tsx:815`, `HoursTab.tsx:449`, `csvExport.test.ts:372`, `CoachHome.tsx:979 sumGoalHours`) against **one** SQL definition in `v_student_goal_projection`. T176's MAJOR was one instance of exactly this, and consolidating the four is the general form of that fix. **Sequenced after T151** so the pattern is proven on three real dialogs before being generalised, and after T168 so the true instance count is known rather than estimated. Relates to `architecture-review-parallelism.md` §3.2, which argues the same case for turning a judgement into a computed property.",Filed,T172,,audit,0,not-run,T151
+W7,T326 — Roster actions begin ~560px offscreen on mobile,"**Legacy ledger row:** `T326`
+
+**Type / provenance:** Bug (responsive) — **audit LIVE-007**
+
+**Title:** Roster actions begin ~560px offscreen on mobile
+
+**Status at migration:** **Filed 2026-08-02 — see `docs/swarm/AUDIT-TRIAGE.md`**
+
+---
+
+Plausible, not independently verified. A measured DOM offset, so likely real.",Filed,T326,,audit,0,not-run,
+W8,T329 — Duplicate digest switches leave email preference authority unresolved,"**Legacy ledger row:** `T329`
+
+**Type / provenance:** Debt (UI cleanup) — **audit SRC-016**
+
+**Title:** Duplicate digest switches leave email preference authority unresolved
+
+**Status at migration:** **Filed 2026-08-02 — see `docs/swarm/AUDIT-TRIAGE.md`**
+
+---
+
+**The data question is already closed** — owner ruling 2026-07-19: `weekly_digest` alone gates the weekly send; `digest_enabled` is vestigial. If two switches still render, this is UI cleanup, not an unresolved authority question. Scope accordingly.",Blocked on owner,T329,,audit,0,not-run,
+W10,T332 — The login shell has slight overflow and weak landmarks,"**Legacy ledger row:** `T332`
+
+**Type / provenance:** Cosmetic + minor a11y — **audit LIVE-014**
+
+**Title:** The login shell has slight overflow and weak landmarks
+
+**Status at migration:** **Filed 2026-08-02 — see `docs/swarm/AUDIT-TRIAGE.md`**
+
+---
+
+P2.",Filed,T332,,audit,0,not-run,
+W9,T333 — ~~The migration attached all 16 imported events to a NEW inactive season~~ — **DATA HALF FIXED BY THE OWNER IN SQL.** Narrowed to: the ETL will do it again on the next import,"**Legacy ledger row:** `T333`
+
+**Type / provenance:** Bug (migration) — **found by the owner in live data, 2026-08-02**
+
+**Title:** ~~The migration attached all 16 imported events to a NEW inactive season~~ — **DATA HALF FIXED BY THE OWNER IN SQL.** Narrowed to: the ETL will do it again on the next import
+
+**Status at migration:** **NARROWED 2026-08-05 — the urgent half is resolved**
+
+---
+
+**The data half is DONE and this row overstated the problem until now.** The owner repointed the rows directly in SQL after the import; confirmed 2026-08-05 from the live app rather than from the record — the KPI strip shows **337.8 volunteer hours** and **Vine Street Market** under the active **2026-27 FIRST CANOPY** season, which is the imported data rendering. (341.75 → 337.8 is T322 excluding non-outreach types, not loss.) **The orchestrator had called this ""the highest-value untouched row"" on 2026-08-05 reading `Filed` from this ledger; that was wrong and is retracted — the record was stale, the world had moved.** **WHAT REMAINS, and it is much smaller:** `scripts/migrate/transform.ts:70-84`'s `buildSeasonUpsert` still hardcodes `is_active: false` and `MIGRATION_SEASON_NAME = '2025–2026'`, and the ETL still takes **no `--season-id`/`--season-name` argument and prints no post-run notice** (verified by grep across `scripts/migrate/`). So a future import repeats the same silent surprise and needs the same manual SQL repair. **Priority: low** — it only bites on the next import, and the caution itself is defensible (`seasons_single_active_idx` permits one active season; a migration should not hijack it). **The fix is to make it loud, not to change the default:** either accept a target season argument, or print a named warning identifying the inactive season it created and the `update` needed to repoint.",Filed,T333,,owner-live-testing,0,not-run,
+Unassigned,T600 — `aggregateParticipationRows` and `aggregateParticipationForStudent` are the same MET-01 arithmetic maintained in two files,"**Legacy ledger row:** `T600`
+
+**Type / provenance:** Debt (duplicated metric formula, two TypeScript copies of one SQL view) — **found by T162's premise gate round 1**
+
+**Title:** `aggregateParticipationRows` and `aggregateParticipationForStudent` are the same MET-01 arithmetic maintained in two files
+
+**Status at migration:** **Filed 2026-08-03 by the W3-A orchestrator in auto-mode (item 20); see `auto-mode-decisions.md`, ""W3-A auto-mode window""**
+
+---
+
+**Measured, not inferred.** `meetings.ts:465-489` and `checkin.ts:340-373` both re-implement `v_student_participation`'s expression in TypeScript: same summing, same `Math.max(expectedCt - excusedCt, 1)` denominator floor, same `Math.round(x*10)/10` rounding. They differ only in that `checkin.ts`'s variant applies a season filter. The live view is `20260722000000_membership_views.sql:72-76` (W4's; `20260717000003_metric_views.sql:33-34` was superseded by a later `create or replace`). **Why this matters:** MET-01 is a number shown to a student about their own participation, and it is now maintained in three places — the view plus two TS copies — with no shared helper and no test asserting the copies agree. A change to the view (W4's file) silently desynchronises both. **Not a bug today** — the gate verified all three agree at `d5d420a`. **Do not fix inside T162**; that packet forbids editing `meetings.ts` and the consolidation touches W1's `checkin.ts` too, so it needs its own row and an ownership call. Cheapest credible scope: one shared exported helper the two callers wrap, plus a test asserting it against the view's own documented expression.",Filed,T600,,premise-gate,0,not-run,T162
+Unassigned,T507 — The login card overflows the viewport on every phone narrower than ~400px,"**Legacy ledger row:** `T507`
+
+**Type / provenance:** Bug (responsive) — **found by the `layout-measurement` skill on its first run**
+
+**Title:** The login card overflows the viewport on every phone narrower than ~400px
+
+**Status at migration:** **Filed 2026-08-05 — MEASURED in real Chromium, not read from source**
+
+---
+
+`LoginPage.tsx:275` renders `<Card width={400} maxWidth=""100%"" padding={6}>`. **The author wrote the defensive `maxWidth` and it does nothing** — measured overflow by viewport: **320px → 40px · 360px → 20px · 375px → 13px · 390px → 5px · 414px and wider → 0**. So it affects most phones and worsens as the screen narrows; an iPhone SE is the worst case. **Presence-checked in the same run** (3 buttons, 2 inputs still rendered), so this is a real overflow and not the deleted-content artifact T325 caught. **Mechanism proven by walking the ancestor chain, not inferred:** the card is `rect=400 css-width=400px max-width=100%`, and its parent `.astryx-stack vertical` is **itself 400px with `max-width: none`** — so `100%` resolves against a box the card already sized, making the constraint a no-op. The first genuinely constrained ancestor is `.astryx-center` at 390px. **This is T325's exact mechanism on a second surface** (`maxWidth=""100%""` resolving against an unconstrained parent, measured there as *no change*) — see T325's verification-log entry before packeting. **Candidate direction, not a prescription:** `maxWidth={400}` + `width=""100%""` so the card fills the available width up to 400 rather than demanding 400 — but **measure it, do not assume it**; T325's obvious fix measured as a no-op. **No regression test is possible in jsdom** (no layout), so evidence is a before/after measurement, per the `layout-measurement` skill. **Not W2's surface** — `src/pages/login/**` belongs to no active workflow; needs an owner assignment before it is packeted.",Blocked on owner,T507,,other,0,not-run,
+Unassigned,"T610 — ""Item 10"" names two different rules depending on which part of the constitution you read","**Legacy ledger row:** `T610`
+
+**Type / provenance:** Debt (constitution citation hazard) — **found by T605's foreman while trying to cite the rule correctly**
+
+**Title:** ""Item 10"" names two different rules depending on which part of the constitution you read
+
+**Status at migration:** **Filed 2026-08-06**
+
+---
+
+The existing-tests rule lives as a **Non-Negotiables** bullet, while the numbered **Project-Specific Standards** list's actual item 10 is the **additive-migrations** rule. A 2026-08-06 decisions entry titles itself *""Boss ruling (constitution item 10)""* while ruling on a **test** amendment. Both readings are in active use. **Why this is more than tidiness:** ""item 10 authorizes this"" is the exact phrase that grants a worker permission to change a passed test, and this project has already had false authorizations (T148/T149) serious enough that a foreman refused to self-authorize on T510. A rule number that resolves to two different rules is a live hazard in the one place where being wrong is most expensive. The foreman correctly quoted the Non-Negotiables text verbatim rather than resolving the ambiguity itself, and forbade its worker from resolving it either. **Fix:** disambiguate in `constitution.md` — either number the Non-Negotiables separately or stop referring to tests as ""item 10"". Then sweep existing citations. **Cross-cutting; likely W10.**",Filed,T610,,other,0,not-run,
+Unassigned,T612 — `mutation-replay`'s `replay.py` reports a genuine red replay as `UNTRUSTWORTHY: the mutated run executed no tests`,"**Legacy ledger row:** `T612`
+
+**Type / provenance:** Defect (shared tooling — **the anti-vacuity check itself is unreliable**) — found by T609's checker
+
+**Title:** `mutation-replay`'s `replay.py` reports a genuine red replay as `UNTRUSTWORTHY: the mutated run executed no tests`
+
+**Status at migration:** **Filed 2026-08-06**
+
+---
+
+**Measured.** `.claude/skills/mutation-replay/scripts/replay.py` printed `UNTRUSTWORTHY: the mutated run executed no tests` for a run whose **own captured output** showed `Failed Tests 1` with a real assertion failure (`expected [Function] to throw an error`, `ScheduleMeetingsDialog.test.tsx:1156`). Its summary parser read `failed=0 passed=0 skipped=56` off a vitest output shape it mishandles — a focused `-t` run, where the counter line reports skips separately. **Why this matters more than a parser bug:** mutation replay is this project's primary defence against a test that cannot fail, and the constitution leans on it (*""A gate that only reads is worth much less than one that runs""*). A false `UNTRUSTWORTHY` teaches agents to distrust and re-do valid replays — or worse, to accept the verdict and discard the evidence. T609's checker caught it only because it refused the tool's verdict and re-ran the mutation strictly by hand. **Shape:** fix the parser for the focused-run output shape, and make it fail loudly on an output it cannot parse rather than emitting a confident wrong verdict — the same rule T512 carries for ledger counts. **Cross-cutting; `.claude/skills/**` is W10's or the boss's surface, not W3's.**",Filed,T612,,checker,0,not-run,
+Unassigned,"T614 — The End time field has no lower bound, so a series edit can persist a meeting whose end is before its start","**Legacy ledger row:** `T614`
+
+**Type / provenance:** Defect (silent data corruption, pre-existing) — **surfaced by T611's premise gate, and filed only because a conformance check noticed NOBODY had filed it**
+
+**Title:** The End time field has no lower bound, so a series edit can persist a meeting whose end is before its start
+
+**Status at migration:** **Filed 2026-08-06 under item 20**
+
+---
+
+**Measured, not inferred.** `ScheduleMeetingsDialog.tsx:1138`'s End `TimeInput` carries no `min={startTime}`. Running T611's own §4 fixtures, touching **only** the Start field produced, for the `2026-09-21` session, `startsAt 2026-09-22T00:00:00.000Z` and `endsAt 2026-09-21T22:30:00.000Z` — **an end 90 minutes before its start**, persisted through `updateSessionTime` (`loaders/meetings.ts:698-708`). **Pre-existing and NOT caused by T611** — today's create path inverts identically — which is why T611 was ruled to disclose it and explicitly not fix it (D017 4(e)). **Why it matters beyond tidiness:** `v_planned_rsvp_hours` derives from this interval, so an inverted span reaches the metric as **negative planned hours** for every RSVP'd student. There is **no CHECK constraint** on `event_sessions` guarding it — verified on a live cluster during T605's gate. **Process note worth keeping:** D017 assigned this filing to the foreman, T611's packet reassigned it to the orchestrator on an unrecorded relay, and the result was that **neither filed it**. The conformance check caught the gap by asking whether the row actually existed rather than whether the packet said it would. **W3's surface.**",Filed,T614,,premise-gate,0,not-run,
+Unassigned,T512 — `WORKFLOWS.md`'s open-row counts are hand-recounted from the document itself; derive them from the ledger with a script instead,"**Legacy ledger row:** `T512`
+
+**Type / provenance:** Debt (process) — **filed 2026-08-05 on the owner's suggestion during PR #89 review**
+
+**Title:** `WORKFLOWS.md`'s open-row counts are hand-recounted from the document itself; derive them from the ledger with a script instead
+
+**Status at migration:** **Filed 2026-08-05**
+
+---
+
+**Filed because hand-recounting produced two wrong numbers in one PR.** `docs/swarm/WORKFLOWS.md`'s assignment table carries an open-row count per workflow. PR #89 recomputed those counts by reading `WORKFLOWS.md` — which is the artifact under repair — and shipped **two** defects the owner caught in review. (1) The helper treated `NARROWED` as a closed status, so T333 was silently dropped from every count and W9 read `3 — all human gates` while the same cell described T333's machine-workable ETL half. (2) The helper split the file into sections on `^## (W\d+) — `; W10 is the **last** workflow section, so its section ran to EOF and swallowed the Coordination-rules block-allocation table that follows, counting `T333`, `T600-699` and `T700-799` as W10 rows — W10 went 8 → 9 when the true figure was **6** (8 listed, T157 and T301 merged). Both defects are the same class: a count derived from prose, where a parsing miss produces a plausible number instead of an error. **The owner's framing, which is the fix:** *""the ledger is the only place a row's status actually lives, so counts belong derived from it — even a scripted count would beat hand-recounting a doc that four machines are appending to.""* **Shape of the work:** a script reading `docs/swarm/task-ledger.md`'s pipe table (ID in column 1, Status in column 8), mapping each row ID to a workflow via the block allocation, and emitting open counts per workflow. Two requirements carried from the failures above — it must treat `NARROWED` as **open**, and it must **fail loudly** rather than return a number when a row ID maps to no workflow block or a status string matches none of the known keywords. A count that cannot be computed must say so; that is the same rule the `mutation-replay` skill enforces. Whether it runs in CI or by hand before a table edit is open. Suggested Allowed Files: `scripts/**`, `docs/swarm/WORKFLOWS.md`. **MEASURED 2026-08-05, and it raises the bar for this row: the table is NOT column-consistent, so ""Status is column 8"" is not a safe parse.** Splitting all 278 `|Tnnn|` rows on unescaped pipes gives **248 rows with the header's 10 columns, and 30 that disagree** — 2 with 9, 21 with 11, 6 with 12, 1 with 13. Found while updating T604 by column index: the patch asserted 10 columns and aborted rather than writing to the wrong cell. **A positional parser must therefore locate `Status` by header name and FAIL LOUDLY on any row whose column count does not match the header — never index blindly**, which is the same ""a miss must error, not return a plausible number"" requirement this row already carries. Normalising the 30 rows is the obvious companion fix and may be the cheaper half.",Filed,T512,,other,0,not-run,
+Unassigned,"T705 — The schema and all four consuming views are multi-team; the roster UI and write path are still single-team, and three roster filters still scope on the legacy `students.team_id`","**Legacy ledger row:** `T705`
+
+**Type / provenance:** Debt (multi-team migration never reached the UI or write path) — **found by W1 2026-08-06; RESTATED the same day after its data-derived cause was disproved**
+
+**Title:** The schema and all four consuming views are multi-team; the roster UI and write path are still single-team, and three roster filters still scope on the legacy `students.team_id`
+
+**Status at migration:** **Filed 2026-08-06, restated the same day. Source-verified. NOT blocked.**
+
+---
+
+**Scope, all verified in source on `main` and independent of any database:** (1) `student_teams` is written by **nothing** in the repo except the one-time backfill at `20260721000000_student_teams.sql:37` — verified across `src/`, `supabase/functions`, `scripts/` and every migration; no trigger, no edge function. Its sole application access is a `.select('team_id')` at `loaders/students.ts:482`. (2) `makeCreateStudent` (`:279`) and `makeUpdateStudent` (`:307`) write `students.team_id` only, so changing a student's team updates the badge and never the membership. (3) `StudentDialog.tsx` is single-select (one `teamId: string`), while `student_teams` is `primary key (student_id, team_id)` + `left_on` and the views are built for dual membership. (4) **Three roster filters do FUNCTIONAL single-team scoping** — `endMeeting.ts:340` (omits a dual-team student from the End Meeting roster entirely), `kiosk.ts:324`, `kiosk.ts:458` — the T187 defect class, live in three places. Note `kiosk.ts`'s `loadActiveStudentTeams` is misleadingly named: `queryActiveStudentTeams` (`:238-240`) selects from **`students`**. (5) Astryx ships `MultiSelector`, so the UI half is unblocked. ⚠️ **PRODUCTION DATA IS NOT EVIDENCE FOR THIS ROW AND WAS REMOVED FROM IT.** Three data-derived causes were filed and each was disproved by measurement: *students missing membership rows* (owner's query: **0** uncovered), *memberships pointing at archived teams* (**all 23 live**), and *most students inactive* (`kpi_views.sql:207` defines the strip's count as `count(*) from students where is_active`, which reads 22). A fourth — the observed Hours-by-team anomaly being season-scoping — was **not** pursued. **The owner then noted the database predates recent updates and has been through resets and manual edits, so it cannot testify about current code at all.** The dual membership found on George-Student (`test` + `Polytechnic Puzzle Pieces`, explaining 23 rows across 22 students) is therefore treated as development debris, not as a defect. **The earlier ""students see an empty portal"" severity claim is WITHDRAWN** — that student's `teamIds` scope to two teams with no matching upcoming events, so an empty Next up may simply be correct. **No user-facing defect is claimed by this row.** It is debt: the D018 work, scoped.",Filed,T705,,other,0,not-run,
+Unassigned,"T806 — `events`/`event_sessions` RLS scopes by the legacy `students.team_id`, so a dual-team student never receives their second team's events","**Legacy ledger row:** `T806`
+
+**Type / provenance:** Bug (RLS scoping divergence) — **filed 2026-08-07 while closing T199**
+
+**Title:** `events`/`event_sessions` RLS scopes by the legacy `students.team_id`, so a dual-team student never receives their second team's events
+
+**Status at migration:** **Filed 2026-08-07 (item 20). Needs a migration → OWNER APPLIES (item 16). Zero impact today.**
+
+---
+
+**Found while building T199's real `events` read, and T199 is what makes it observable** — before it the page had no rows at all, so nothing could be missing from them. `20260717000002_rls.sql:153-161`, verbatim: ```create policy own_or_linked_read on events for select to authenticated using (exists (select 1 from students s where s.id in (select my_student_ids()) and (events.team_ids is null or s.team_id = any(events.team_ids))));``` — and `event_sessions` (`:180-188`) inherits the identical test through `event_id`. **Both read the LEGACY single `students.team_id` column.** T187 (landed) moved `StudentHome` onto ACTIVE `student_teams` memberships (`StudentScope.teamIds`), so the page and the policy now scope by different sources. **They disagree for exactly one shape of user:** a dual-team student. An event scoped to `team_ids = {their SECOND team}` satisfies the page's `isEventInTeamScope` but is filtered out by RLS before it ever reaches the client — that student silently misses their second team's meetings, live check-in and sign-up opportunities. This is the SAME defect T187 fixed on the page side, still live one layer down. **Not the same as the withdrawn T804** — that row wrongly claimed `v_student_participation` scoped off `students.team_id` (it had already been migrated onto `student_teams` by `20260722000000_membership_views.sql`). These are RLS POLICIES, not views, and the grep is unambiguous: no later migration drops or replaces either policy. **Read from the policy text, NOT measured against a live database** — the text is unambiguous on this point, but the measurement was not run and this row should not be closed claiming it was. **Zero impact today:** every student in the system is single-team, and for them the two sources name the same team. **Scope, not yet designed:** a new additive migration replacing both policies' `s.team_id = any(...)` test with an ACTIVE `student_teams` membership test (`left_on is null`), matching what `membership_views.sql` already did for the views. Constitution item 10 forbids editing the applied `20260717000002_rls.sql`, so this is a NEW file using `drop policy if exists` + `create policy`, the route `20260720000001_avatar_storage.sql` already establishes for policy replacement. Needs an RLS assertion suite (the `sql` CI job now runs 12 steps) proving a dual-team fixture student sees BOTH teams' events. **Owner applies the migration (item 16).** Also check `attendance`/`rsvps` policies for the same pattern before designing — this row only verified `events` and `event_sessions`.",Filed,T806,,owner-live-testing,0,not-run,"T187, T199"
+Unassigned,"T807 — Two loaders still apply the `greatest(x, 1)` floor T509 removed, and three row types still declare `participation_pct` non-nullable","**Legacy ledger row:** `T807`
+
+**Type / provenance:** Bug (T509 fallout, two stale aggregates + three wrong types) — **filed 2026-08-07 while closing T199**
+
+**Title:** Two loaders still apply the `greatest(x, 1)` floor T509 removed, and three row types still declare `participation_pct` non-nullable
+
+**Status at migration:** **Filed 2026-08-07 (item 20). TypeScript-only — no migration.**
+
+---
+
+**Found while writing T199's own participation aggregate, by looking for an in-repo expression to reuse rather than inventing one (constitution item 3).** T509 (`20260806000000_met01_explicit_marks.sql`, APPLIED) replaced `v_student_participation`'s `round(100.0 * present_ct / greatest(expected_ct - excused_ct, 1), 1)` with an explicit `case when ... = 0 then null else round(...) end`, precisely so that a student whose every mark is `excused` stops reporting a fabricated `0.0%` and reports NULL (which the UI already renders as an em dash). **Two loaders re-apply the removed floor when they aggregate a dual-team student's per-team rows:** `loaders/meetings.ts:516` (`Math.max(expectedCt - excusedCt, 1)`, in `aggregateParticipationRows`) and `loaders/checkin.ts:375` (identical expression). Both comments cite the view's expression as their authority — that citation is now stale, and the citation being stale is what makes this hard to spot: the code looks correct and says why. **Behavioural consequence:** an all-excused student renders `—` on `ParticipationTab`/`StudentHome` (which read the view directly) and `0%` on `MeetingsList`/check-in (which go through these aggregates). Two screens, two different answers, for the case T509 exists to fix. **Three row types are also wrong at the type level:** `meetings.ts:283`, `checkin.ts:239` and `reports.ts:221` each declare `participation_pct: number` while the view can now return SQL NULL. `reports.ts`/`checkin.ts` happen to survive it (a null flows through the mapper and `ParticipationTab.tsx:830-831` renders `—`), so this is a lie in the types rather than a crash — but it is the lie that lets the two stale aggregates above look fine. T199's own `StudentHomeParticipationDbRow` types it `number | null` and returns `null` for the whole metric when the denominator is zero; that is the shape to converge on. **Consider widening `StudentParticipationMetric.participationPct` to `number | null`** — the shape is shared by `MeetingsList.tsx`, `StudentMeetingView.tsx`, `ParentHome.tsx` and `StudentHome.tsx` plus their tests, which is why T199 did not do it inline (item 25). **Verified before filing:** all five call sites read directly, and no later migration re-introduces the floor. **Not a migration** — T509's SQL is correct and applied; this is entirely TypeScript catching up to it.",Filed,T807,,other,0,not-run,T509
+Unassigned,"T407 — The Outreach nav badge is a hardcoded `0` while the page it links to reads ""74 awaiting your RSVP""","**Legacy ledger row:** `T407`
+
+**Type / provenance:** Bug (placeholder default on a live surface, same family as T199/T155/T176/T181) — **found by W1 2026-08-07 from the owner's screenshots**
+
+**Title:** The Outreach nav badge is a hardcoded `0` while the page it links to reads ""74 awaiting your RSVP""
+
+**Status at migration:** **Filed 2026-08-07 (item 20). UNOWNED SURFACE — see below. Live and user-visible.**
+
+---
+
+**Confirmed live, two surfaces disagreeing in the same session:** the left nav shows **Outreach 0**, while `/outreach` shows **""74 awaiting your RSVP""** and the student home banner reads **""You have 74 events to answer""**. **Cause:** `src/components/nav/SideNav.tsx:117` — `const PLACEHOLDER_OUTREACH_BADGE_COUNT = 0`, whose own comment says *""the real count is wired by T038""*. **T038 has PASSED and did not do it** — that row's checker note records it *""independently confirmed `SideNav.tsx` byte-unchanged""*, so the forward reference has been dangling ever since. This is the same dangling-forward-reference shape that left T199 unfixed for weeks, and the same placeholder-default family as T155 (`CoachHome`), T176 (`StudentHome`) and T181 (`ParentHome`); **T168 is the sweep that should have caught it and did not — worth a line in T168 rather than a separate finding.** **The computation already exists and must not be re-derived** (constitution item 3): `getUnansweredRsvpCount` (`OutreachList.tsx:1459`), signature `(sessions, rsvps, studentIds) => number`, already counts a `scheduled` session with no matching `rsvps` row per student. **Do NOT scope this as a one-line swap.** That signature is the whole difficulty: `SideNav` currently takes no data at all, so wiring it means giving the app-shell nav a real loader plus the viewer's resolved student ids — a new data dependency in the chrome, which is why T038 correctly declined to do it inline. Expect **STANDARD**, and expect the seam design (does the badge load its own data, or does `AppShell` thread it down?) to be the actual decision. **OWNERSHIP IS OPEN — the owner must assign it.** `src/components/nav/**` belongs to no workflow; the data is outreach (**W2**, CLOSED, 0 open rows) and the mount point is the shell (**W5**/W10 territory). Same situation as **T507**, which is parked in the WORKFLOWS table as *unowned surface* awaiting exactly this call. Filed in W1's block because W1 found it, **not** as an ownership claim.",Filed,T407,STANDARD,owner-live-testing,0,not-run,
