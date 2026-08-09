@@ -956,8 +956,8 @@ describe('StudentHome render -- BEH-02 confirmed/planned hours never summed', ()
     await flushMicrotasks();
 
     // Both real numbers appear...
-    expect(container.textContent).toContain('62 h confirmed');
-    expect(container.textContent).toContain('3 h planned');
+    expect(container.textContent).toContain('62.0 h confirmed');
+    expect(container.textContent).toContain('3.0 h planned');
     // ...and the sum (65) never appears anywhere as a combined figure.
     expect(container.textContent).not.toContain('65 h');
     // Never the still-fixture loadData's own (deliberately different,
@@ -1002,7 +1002,7 @@ describe('StudentHome DES-12 states', () => {
     // explicit `teamId` now takes the `resolveStudentIdentity` bypass path
     // unconditionally (goalHours/confirmedHours/plannedHours default to
     // seasonDefaultGoalHours/0/0, never consulting `resolveStudentScope` at
-    // all), which would make "62 h confirmed" structurally unreachable.
+    // all), which would make "62.0 h confirmed" structurally unreachable.
     // `resolveStudentScope` is injected directly instead, matching the same
     // fixture values `defaultLoadStudentHomeData`'s own (still-fixture)
     // `studentHours`/`FIXTURE_DEFAULT_GOAL_HOURS` used to supply, and the
@@ -1022,8 +1022,8 @@ describe('StudentHome DES-12 states', () => {
     await flushMicrotasks();
 
     expect(container.textContent).toContain('Hi Ada Reyes');
-    expect(container.textContent).toContain('62 h confirmed');
-    expect(container.textContent).toContain('3 h planned');
+    expect(container.textContent).toContain('62.0 h confirmed');
+    expect(container.textContent).toContain('3.0 h planned');
     expect(container.textContent).toContain('Participation: 87.5%');
     expect(container.textContent).toContain('Weekly Build Meeting');
     expect(container.textContent).toContain('STEM Fair');
@@ -1891,10 +1891,10 @@ describe('<StudentHome /> T176 round 2 -- goal-hours denominator + confirmed/pla
     const progressBar = container.querySelector('[role="progressbar"]');
     expect(progressBar).toBeTruthy();
     expect(progressBar!.getAttribute('aria-valuemax')).toBe('8');
-    expect(progressBar!.getAttribute('aria-valuetext')).toBe('2 / 8 h (25%)');
-    expect(container.innerHTML).toContain('2 / 8 h (25%)');
+    expect(progressBar!.getAttribute('aria-valuetext')).toBe('2.0 / 8.0 h (25%)');
+    expect(container.innerHTML).toContain('2.0 / 8.0 h (25%)');
     expect(container.innerHTML).toContain('aria-valuemax="8"');
-    expect(container.innerHTML).toContain('aria-valuetext="2 / 8 h (25%)"');
+    expect(container.innerHTML).toContain('aria-valuetext="2.0 / 8.0 h (25%)"');
     // Never the season default (999) -- proves no independent TS-side
     // coalesce/override happens anymore (the coordinator's own fix).
     expect(progressBar!.getAttribute('aria-valuemax')).not.toBe('999');
@@ -1905,8 +1905,8 @@ describe('<StudentHome /> T176 round 2 -- goal-hours denominator + confirmed/pla
     // `buildDataFixture`'s own default, so computePlannedHours would have
     // returned 0 here even if still called -- the 999 confirmedHours is the
     // genuinely discriminating value).
-    expect(container.textContent).toContain('2 h confirmed');
-    expect(container.textContent).toContain('1 h planned');
+    expect(container.textContent).toContain('2.0 h confirmed');
+    expect(container.textContent).toContain('1.0 h planned');
     expect(container.textContent).not.toContain('999');
   });
 
@@ -1930,12 +1930,45 @@ describe('<StudentHome /> T176 round 2 -- goal-hours denominator + confirmed/pla
     const progressBar = container.querySelector('[role="progressbar"]');
     expect(progressBar).toBeTruthy();
     expect(progressBar!.getAttribute('aria-valuemax')).toBe('40');
-    expect(progressBar!.getAttribute('aria-valuetext')).toBe('10 / 40 h (25%)');
-    expect(container.innerHTML).toContain('10 / 40 h (25%)');
-    expect(container.textContent).toContain('10 h confirmed');
-    expect(container.textContent).toContain('5 h planned');
+    expect(progressBar!.getAttribute('aria-valuetext')).toBe('10.0 / 40.0 h (25%)');
+    expect(container.innerHTML).toContain('10.0 / 40.0 h (25%)');
+    expect(container.textContent).toContain('10.0 h confirmed');
+    expect(container.textContent).toContain('5.0 h planned');
     expect(progressBar!.getAttribute('aria-valuemax')).not.toBe('8');
     expect(progressBar!.getAttribute('aria-valuemax')).not.toBe('999');
+  });
+
+  it('T808 -- a raw float from the view is formatted to one decimal on screen, while the bar keeps the unrounded value', async () => {
+    // The exact value the persona harness observed against a real database.
+    const RAW_FLOAT_HOURS = 3.9999983633333334;
+    renderAsUser(
+      STUDENT_USER,
+      {
+        loadData: async () => buildDataFixture({ studentHours: null }),
+        resolveStudentScope: async () => ({
+          teamIds: ['team-fixture-c10'],
+          goalHours: 100,
+          confirmedHours: RAW_FLOAT_HOURS,
+          plannedHours: RAW_FLOAT_HOURS,
+        }),
+        nowFn: () => FIXTURE_REFERENCE_NOW,
+      },
+      async () => CRITERION_10_SEASON,
+    );
+    await flushMicrotasks();
+
+    const progressBar = container.querySelector('[role="progressbar"]');
+    expect(progressBar).toBeTruthy();
+    // Both displayed surfaces: the bar's value label and the supporting line.
+    expect(progressBar!.getAttribute('aria-valuetext')).toBe('4.0 / 100.0 h (4%)');
+    expect(container.textContent).toContain('4.0 h confirmed + 4.0 h planned');
+    // The 17-digit float reaches no user-visible string anywhere on the page.
+    expect(container.textContent).not.toContain(String(RAW_FLOAT_HOURS));
+
+    // ...and the rounding is display-only: `value` is still handed to the bar
+    // unrounded, so its own arithmetic and `aria-valuenow` keep the real
+    // number. This is the half that must NOT change.
+    expect(progressBar!.getAttribute('aria-valuenow')).toBe(String(RAW_FLOAT_HOURS));
   });
 });
 
@@ -2064,8 +2097,8 @@ describe('<StudentHome /> T176/T183 -- render-and-enumerate live over container.
     // and never the (deliberately different, unused) season default (999).
     const progressBar = container.querySelector('[role="progressbar"]');
     expect(progressBar!.getAttribute('aria-valuemax')).toBe('50');
-    expect(progressBar!.getAttribute('aria-valuetext')).toBe('5 / 50 h (10%)');
-    expect(html).toContain('5 / 50 h (10%)');
+    expect(progressBar!.getAttribute('aria-valuetext')).toBe('5.0 / 50.0 h (10%)');
+    expect(html).toContain('5.0 / 50.0 h (10%)');
     expect(progressBar!.getAttribute('aria-valuemax')).not.toBe('100');
     expect(progressBar!.getAttribute('aria-valuemax')).not.toBe('999');
 
@@ -2075,8 +2108,8 @@ describe('<StudentHome /> T176/T183 -- render-and-enumerate live over container.
     // `v_student_goal_projection` columns (same single `resolveStudentScope`
     // read as the goal-hours denominator), so this real student's real
     // confirmed/planned numbers (5/2) render here, not a fixture-derived 0.
-    expect(html).toContain('5 h confirmed + 2 h planned');
-    expect(html).not.toContain('0 h confirmed + 0 h planned');
+    expect(html).toContain('5.0 h confirmed + 2.0 h planned');
+    expect(html).not.toContain('0.0 h confirmed + 0.0 h planned');
 
     // Row 6 -- participation -> null -> em dash, never a fabricated 0%.
     // T199 RE-SOURCED: this used to be null because the loader hardcoded it.
@@ -2358,7 +2391,7 @@ describe('<StudentHome /> T184 -- "sees nothing" is proven with a positive contr
     expect(container.textContent).toContain('Hi Ada Reyes');
     const progressBar = container.querySelector('[role="progressbar"]');
     expect(progressBar).toBeTruthy();
-    expect(progressBar!.getAttribute('aria-valuetext')).toBe('4 / 20 h (20%)');
+    expect(progressBar!.getAttribute('aria-valuetext')).toBe('4.0 / 20.0 h (20%)');
   });
 
   it('the inactive render shows NEITHER marker the positive control above proved real', async () => {

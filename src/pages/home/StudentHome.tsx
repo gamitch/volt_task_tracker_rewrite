@@ -1480,9 +1480,22 @@ function StudentHomeContent({
           value={confirmedHours}
           max={goalHours > 0 ? goalHours : 1}
           hasValueLabel
-          formatValueLabel={(value, max) => `${value} / ${max} h (${hoursPercent}%)`}
+          // T808 -- `confirmedHours`/`goalHours`/`plannedHours` are verbatim
+          // passthroughs of `v_student_goal_projection` (see the comment above
+          // `hoursPercent`), and that view's float division can produce
+          // `3.9999983633333334`. One decimal is the app's established hours
+          // display convention (`HoursTab.tsx`'s `renderHoursCell`), so a
+          // student and a coach now read the same digits for one fact.
+          //
+          // Rounding happens HERE, at the format boundary, and nowhere else:
+          // `value`/`max` above stay raw so the bar's own arithmetic and its
+          // `aria-valuenow`/`aria-valuemax` keep the real numbers (module doc
+          // #82-105 -- this file clamps no hours).
+          formatValueLabel={(value, max) =>
+            `${value.toFixed(1)} / ${max.toFixed(1)} h (${hoursPercent}%)`
+          }
         />
-        <Text type="supporting">{`${confirmedHours} h confirmed + ${plannedHours} h planned`}</Text>
+        <Text type="supporting">{`${confirmedHours.toFixed(1)} h confirmed + ${plannedHours.toFixed(1)} h planned`}</Text>
         <Text type="body">
           {`Participation: ${data.participation !== null ? `${data.participation.participationPct}%` : '—'}`}
         </Text>
