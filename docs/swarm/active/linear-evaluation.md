@@ -57,21 +57,23 @@ made during this evaluation with no limit encountered**, which is only weak evid
 Measured: the workspace currently holds **5 issues**, four of which are Linear's onboarding defaults.
 So ~245 of the budget is free and the 33 open rows fit comfortably.
 
-⚠️ **Partially tested 2026-08-09, and still NOT settled — do not treat this as answered.** The
-`Organization` type exposes `createdIssueCount`. Measured: it read **5** before archiving an issue and
-**5** after, while the default `issues` query dropped from 5 nodes to 4. So `createdIssueCount` is a
-lifetime *ever-created* counter that includes archived issues, and the `issues` query excludes them
-by default.
+✅ **SETTLED 2026-08-09 by the owner, from the in-app plan comparison.** The row is labelled
+**"Issues (excluding archive) — 250"**. **Archived issues do not count toward the cap.**
 
-**That gives two candidate counters and no proof of which one enforces the 250 cap.** The pricing page
-says "250 issues" without qualification. Third-party sources claim archived issues are exempt, which
-is consistent with the `issues`-query notion of active but is not established by anything measured
-here. **The definitive check is the Billing page in the UI**, which displays the enforced number —
-archive one issue and watch whether it drops. That is a 30-second human check and is not reachable
-from the API.
+This also explains the API measurement, which was inconclusive on its own: `Organization.createdIssueCount`
+read **5** before archiving an issue and **5** after, while the default `issues` query dropped from 5
+nodes to 4. `createdIssueCount` is a lifetime ever-created counter and is simply **not** the field the
+cap is enforced against; the active (non-archived) count is. Archiving genuinely frees a slot.
 
-It matters because the full ledger is 293 rows: migrating everything rather than just the 33 open
-rows depends entirely on this answer.
+**Consequence, and it is a significant unlock.** The full ledger is 293 rows but only **33 are open**.
+Migrating *everything* — closed rows archived on arrival — leaves ~33 active against a 250 ceiling,
+with the complete history preserved and searchable rather than discarded. At ~2 requests per row
+(create, then archive) that is ~586 requests, **23% of one hour's budget**. Feasible in a single
+sitting.
+
+Worth noting the API alone could not answer this. Two plausible counters existed and nothing exposed
+which one billing used; the answer was a label in the plan comparison UI. A measurement that cannot
+distinguish two hypotheses is not yet evidence for either.
 
 ## Write path — tested, and every ClickUp defect is absent
 
