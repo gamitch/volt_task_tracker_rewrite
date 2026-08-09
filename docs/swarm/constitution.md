@@ -448,9 +448,30 @@ After the third failure, the task must be escalated to boss-arbiter.
        Item 26 already requires that judgement to be stated and defended; this
        says *when*.
 
-    e. **On completion move the issue to `In Review`**, and put its identifier
-       in the commit trailer as `Linear-Issue: GAM-nnn (Tnnn)`. Item 24 joins
-       recording to merging; this is that rule's Linear form.
+    e. **On completion move the issue to `In Review` — never to `Done`.**
+       `In Review` means "the agent is finished; a human has not accepted it."
+       An agent that closes its own issue is grading its own work, which the
+       Definition of Done forbids and `worker-implementer`'s own definition
+       rules out ("does not self-certify completion"). **The merge closes the
+       issue, not the author.**
+
+    f. **Put the identifier in the PR title, and keep the commit trailer.**
+       Both, because they serve different readers:
+
+       - **PR title** — `GAM-nnn` anywhere in it. This is what Linear's GitHub
+         integration reads to link the issue and, with the workflow automation
+         enabled, to move it to `Done` on merge. **Linear does not read commit
+         trailers**, so the trailer alone gives traceability and no automation.
+         Using the issue's own `gitBranchName` for the branch links it too.
+       - **Commit trailer** — `Linear-Issue: GAM-nnn (Tnnn)`. This survives in
+         git history independently of any hosted account, which is the same
+         reason item 29 keeps an export. Item 24 joins recording to merging;
+         this is that rule's Linear form.
+
+       **Owner action, once, outside the repo:** enable the Linear workflow
+       automation *PR merged → Done* for the `Gamitch` team. Until that is on,
+       issues will sit in `In Review` after their PR lands and must be closed
+       by hand.
 
     **Authorized by the human owner 2026-08-09, and filed because the failure was
     measured rather than imagined.** The first agent dispatched through Linear
