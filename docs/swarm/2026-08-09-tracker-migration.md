@@ -143,6 +143,35 @@ expected count, abort when an edit anchor is missing, and prove a guard by makin
 
 ---
 
+## 6a. A correction to T808, made by the agent that worked it
+
+**The row I filed states something false, and `GAM-303` still carries it.** T808 says *"The coach
+dashboard shows `4.0` for the same student."* Measured by the agent working it, and confirmed
+independently: `CoachHome.tsx:2050` prints
+
+```
+`${row.confirmedHours}h confirmed + ${row.plannedHours}h planned = ${totalHours}h …`
+```
+
+`totalHours` is rounded; **`row.confirmedHours` and `row.plannedHours` are raw**, identical to
+`StudentHome.tsx:1485`. The coach's *home* dashboard has the same bug. The `4.0` is the
+**Reports → Hours tab**, which rounds at `HoursTab.tsx:605`.
+
+**The real inconsistency is reports-vs-home, not coach-vs-student.**
+
+How it happened: PR #118 reported the comparison, and when filing T808 I re-verified the StudentHome
+half and **took the comparison on trust**. That is the same failure this project keeps recording —
+inheriting a premise instead of measuring it — committed while writing a row whose own text warns
+about it. The e2e-personas skill now requires a `verifiedBy` field per finding for exactly this
+reason; had the original finding carried one, the comparison would have been marked as unverified.
+
+Filed as `GAM-308` rather than folded in, correctly: `CoachHome.tsx` is outside T808's stated scope
+(item 20).
+
+**Outstanding:** `GAM-303`'s description still asserts the false comparison and should be corrected
+in Linear. The frozen ledger's row is left as-is — it records what was believed on 2026-08-09, and
+rewriting history is not the same as correcting the record.
+
 ## 7. Tooling built
 
 | Script | Purpose |
