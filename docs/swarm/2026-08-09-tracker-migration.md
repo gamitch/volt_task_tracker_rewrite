@@ -155,7 +155,16 @@ independently: `CoachHome.tsx:2050` prints
 
 `totalHours` is rounded; **`row.confirmedHours` and `row.plannedHours` are raw**, identical to
 `StudentHome.tsx:1485`. The coach's *home* dashboard has the same bug. The `4.0` is the
-**Reports → Hours tab**, which rounds at `HoursTab.tsx:605`.
+**Reports → Hours tab**.
+
+**Corrected again, by the same agent, and it matters for the fix.** This document first cited
+`HoursTab.tsx:605`. That line is inside `Array.from(byTeam.values()).map(group => …)` reducing over
+`group.rows` — it rounds **team subtotals**. The per-student `4.0` comes from `renderHoursCell` at
+**`HoursTab.tsx:1017`**, which uses **`.toFixed(1)`**, not `round1`.
+
+The distinction is the whole point of `GAM-308`: `round1` renders `4`, `.toFixed(1)` renders `4.0`.
+Fixing `CoachHome` with `round1` would kill the float and leave a smaller version of the same
+cross-surface mismatch. Whoever takes `GAM-308` needs `:1017`, not `:605`.
 
 **The real inconsistency is reports-vs-home, not coach-vs-student.**
 
