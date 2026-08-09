@@ -1292,7 +1292,19 @@ function StudentHomeCard({
               // otherwise.
               max={goalHours}
               hasValueLabel
-              formatValueLabel={(value, max) => `${value} / ${max} h (${hoursPercent}%)`}
+              // T808 -- `confirmedHours`/`goalHours` are verbatim passthroughs
+              // of `v_student_goal_projection`, whose float division can
+              // produce `3.9999983633333334`. One decimal is the app's
+              // established hours display convention (`HoursTab.tsx`'s
+              // `renderHoursCell`), so a parent and a coach now read the same
+              // digits for one fact.
+              //
+              // Rounding happens HERE, at the format boundary, and nowhere
+              // else: `value`/`max` above stay raw so the bar's own arithmetic
+              // and its `aria-valuenow`/`aria-valuemax` keep the real numbers.
+              formatValueLabel={(value, max) =>
+                `${value.toFixed(1)} / ${max.toFixed(1)} h (${hoursPercent}%)`
+              }
             />
           )}
         </VStack>

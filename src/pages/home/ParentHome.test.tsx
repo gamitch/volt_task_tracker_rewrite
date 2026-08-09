@@ -640,7 +640,7 @@ describe('<ParentHome /> C2: per-card data is real and distinct (MAJOR 5)', () =
     const progressBar = container.querySelector('[role="progressbar"]');
     expect(progressBar).toBeTruthy();
     // hoursVsGoalPercent(31, 47) = 66.0 -> capped/rounded, matches the real render.
-    expect(progressBar!.getAttribute('aria-valuetext')).toBe('31 / 47 h (66%)');
+    expect(progressBar!.getAttribute('aria-valuetext')).toBe('31.0 / 47.0 h (66%)');
     // Never the shipped fixture's own figures/titles.
     expect(container.textContent).not.toContain('Weekly Build Meeting');
     expect(container.textContent).not.toContain('STEM Fair');
@@ -699,8 +699,50 @@ describe('<ParentHome /> C3: goalHours is a verbatim passthrough, never TS-recom
     const progressBar = container.querySelector('[role="progressbar"]');
     expect(progressBar).toBeTruthy();
     // value=confirmedHours(10), max=goalHours(63) -> hoursVsGoalPercent(10,63) = 15.9.
-    expect(progressBar!.getAttribute('aria-valuetext')).toBe('10 / 63 h (15.9%)');
+    expect(progressBar!.getAttribute('aria-valuetext')).toBe('10.0 / 63.0 h (15.9%)');
     expect(progressBar!.getAttribute('aria-valuetext')).not.toContain('999');
+  });
+
+  it('T808 -- a raw float from the view is formatted to one decimal on screen, while the bar keeps the unrounded value', async () => {
+    // The exact value the persona harness observed against a real database.
+    const RAW_FLOAT_HOURS = 3.9999983633333334;
+    const studentId = 'student-t808';
+    const teamId = 'team-t808';
+    const fakeClient = makeFakeClient({
+      event_sessions: { data: [], error: null },
+      attendance: { data: [], error: null },
+      v_student_participation: { data: [], error: null },
+      v_student_goal_projection: {
+        data: {
+          team_id: teamId,
+          goal_hours: 100,
+          confirmed_hours: RAW_FLOAT_HOURS,
+          planned_hours: 0,
+        },
+        error: null,
+      },
+      student_teams: { data: [{ team_id: teamId }], error: null },
+      events: { data: [], error: null },
+      rsvps: { data: [], error: null },
+      students: { data: [{ id: studentId, goal_hours_override: null }], error: null },
+    });
+    const loadStudentData = makeLoadStudentHomeCardDataForParentHome(() => fakeClient);
+    const injected: LinkedStudentsResult = {
+      students: [{ studentId, displayName: 'Nadia Okafor', teamId, isActive: true }],
+      teams: [{ id: teamId, name: 'Vector Vipers' }],
+    };
+
+    renderAsUser(PARENT_USER, { loadLinkedStudents: async () => injected, loadStudentData });
+    await flushMicrotasks();
+
+    const progressBar = container.querySelector('[role="progressbar"]');
+    expect(progressBar).toBeTruthy();
+    expect(progressBar!.getAttribute('aria-valuetext')).toBe('4.0 / 100.0 h (4%)');
+    // The 17-digit float reaches no user-visible string anywhere on the card.
+    expect(container.textContent).not.toContain(String(RAW_FLOAT_HOURS));
+    // ...and the rounding is display-only -- the bar still receives the real
+    // number, so its own arithmetic is unchanged. This half must NOT change.
+    expect(progressBar!.getAttribute('aria-valuenow')).toBe(String(RAW_FLOAT_HOURS));
   });
 });
 
@@ -787,7 +829,7 @@ describe("<ParentHome /> C4: a deactivated linked student's card is honest and p
     );
     expect(valueTexts).toHaveLength(1);
     // hoursVsGoalPercent(77, 120) = 64.2.
-    expect(valueTexts).toContain('77 / 120 h (64.2%)');
+    expect(valueTexts).toContain('77.0 / 120.0 h (64.2%)');
     expect(container.textContent).toContain('Not currently active');
     // Only Marisol's card carries the marker, not Owen's active one -- the
     // marker text appears exactly once.
