@@ -654,7 +654,8 @@
     "state": "Backlog",
     "open": true,
     "labels": [
-      "tier/unreviewed"
+      "tier/unreviewed",
+      "gate/human"
     ],
     "blockedBy": [
       "T051"
@@ -778,7 +779,9 @@
     "description": "**The blocker was permanent, not pending.** This row sat blocked for weeks on `OLD_SUPABASE_URL`/`OLD_SERVICE_ROLE_KEY`. Those credentials **do not exist and cannot be obtained** — the old app runs on **Lovable Cloud**, which keeps Postgres inside its own platform and exposes no service-role key. Confirmed with the owner directly, after checking his Supabase org (only `volt-timetracker`) and Lovable's Secrets page (only `LOVABLE_API_KEY`). **Resolved by changing the source, not chasing the key.** The owner exported six tables as JSON from Lovable's SQL editor; a new `JsonFileOldDataSource` implements the **existing** `OldDataSource` interface, so `transform.ts` and every mapping rule are untouched. New `--from-dir=<path>` flag; `--dry-run --from-dir` needs **zero env vars**. **Report (reproduced independently by the orchestrator with old-project env vars unset):** teams 4 · seasons 1 · students 20 · events 16 · event_sessions 117 · **rsvps 254** · **attendance 79** · unmatched teams **0** · unparseable times **0** · attendees-backfill mismatches **0**. The 79 attendance rows carry **341.75 hours**. All eight figures match the orchestrator's own pre-ETL measurements from the raw exports. **Owner signed off:** *\"looks good to me.\"* **Scope honesty:** the dry run writes nothing, so this proves the **transform**, not the write. The real `--from-dir` write path is wired but unexercised — it needs `NEW_SERVICE_ROLE_KEY` and the owner's cutover decision (item 16). **T064/T065 remain open.** **Worker corrected the orchestrator's own baseline** (stated 1746 tests; `main` is 1777) rather than accepting it.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T063` |\n| Epic | — |\n| Worker | worker-implementer (sonnet) |\n| Checker | orchestrator (dry run reproduced) |\n| Attempts | 0 |\n| Deps | T062,T014 |\n| Escalated | No |\n| Original status | **Validation report produced and OWNER-SIGNED-OFF 2026-08-01 — `56a9574`** |\n\n> Status mapping note: owner sign-off recorded on the row",
     "state": "Done",
     "open": false,
-    "labels": [],
+    "labels": [
+      "gate/human"
+    ],
     "blockedBy": [
       "T062",
       "T014"
@@ -815,7 +818,8 @@
     "state": "Backlog",
     "open": true,
     "labels": [
-      "tier/unreviewed"
+      "tier/unreviewed",
+      "gate/human"
     ],
     "blockedBy": [
       "T064"
@@ -882,7 +886,8 @@
     "state": "Backlog",
     "open": true,
     "labels": [
-      "tier/unreviewed"
+      "tier/unreviewed",
+      "gate/human"
     ],
     "blockedBy": [
       "T065",
