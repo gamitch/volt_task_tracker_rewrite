@@ -4,7 +4,7 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-09T15:55:09.003Z from team `Gamitch`.
+Exported 2026-08-09T16:12:34.493Z from team `Gamitch`.
 
 - **309** issues (242 archived)
 - **37** not yet completed or cancelled
@@ -50,7 +50,7 @@ Exported 2026-08-09T15:55:09.003Z from team `Gamitch`.
 | [GAM-306](https://linear.app/gamitch/issue/GAM-306/t616-no-event-records-who-created-it-so-outreach-detail-permanently) | T616 | Backlog | area/w3 tier/unreviewed | T616 — No event records who created it, so outreach detail permanently reads "Unknown creator" |
 | [GAM-307](https://linear.app/gamitch/issue/GAM-307/t1300-sweep-the-four-non-fixed-closures-for-residual-work-left-behind) | T1300 | Backlog | tier/unreviewed | T1300 — Sweep the four non-"fixed" closures for residual work left behind when the row closed |
 | [GAM-308](https://linear.app/gamitch/issue/GAM-308/coachhomes-goal-projection-row-prints-the-same-raw-float-hours-t808) | — | Backlog | area/w5 provenance/other tier/fast | CoachHome's goal-projection row prints the same raw float hours T808 fixed for students and parents |
-| [GAM-309](https://linear.app/gamitch/issue/GAM-309/replaypy-cannot-read-python-test-runner-output-so-mutating-a-python) | — | Backlog | area/w10 tier/unreviewed | replay.py cannot read Python test-runner output, so mutating a Python file needs a hand-written shim |
+| [GAM-309](https://linear.app/gamitch/issue/GAM-309/replaypy-cannot-read-python-test-runner-output-so-mutating-a-python) | — | In Progress | area/w10 tier/standard | replay.py cannot read Python test-runner output, so mutating a Python file needs a hand-written shim |
 
 ## Closed and cancelled
 

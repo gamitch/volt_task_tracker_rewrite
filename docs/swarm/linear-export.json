@@ -1,6 +1,6 @@
 {
   "meta": {
-    "exportedAt": "2026-08-09T15:55:09.003Z",
+    "exportedAt": "2026-08-09T16:12:34.493Z",
     "team": "Gamitch",
     "teamKey": "GAM",
     "issueCount": 309,
@@ -5557,12 +5557,12 @@
       "identifier": "GAM-309",
       "legacyId": null,
       "title": "replay.py cannot read Python test-runner output, so mutating a Python file needs a hand-written shim",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "In Progress",
+      "stateType": "started",
       "archived": false,
       "labels": [
         "area/w10",
-        "tier/unreviewed"
+        "tier/standard"
       ],
       "assignee": null,
       "blockedBy": [],
