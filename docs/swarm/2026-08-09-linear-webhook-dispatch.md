@@ -130,6 +130,18 @@ discards the loop protection instead of satisfying it.
 One further check, resolved favourably: `checkWritePermissions` applies *"on issue and pull request
 events"*. `repository_dispatch` is neither, so it is skipped.
 
+**And the prior question, which had been assumed rather than checked: does the action accept
+`repository_dispatch` at all?** It does. `src/github/context.ts` switches on `eventName` and handles
+exactly `issues`, `issue_comment`, `pull_request` (and `pull_request_target`),
+`pull_request_review`, `pull_request_review_comment`, `workflow_dispatch`, **`repository_dispatch`**,
+`schedule` and `workflow_run`. Anything else hits `default: throw new Error(...)`.
+
+This was measured the expensive way. The step-2 smoke test was first written with `on: push`, and
+the action rejected it in 340ms with `Unsupported event type: push`. A cheap failure in scaffolding,
+but it proves the list is enforced rather than advisory — and had the main workflow been built on a
+trigger outside that set, the same error would have arrived only at step 6, with a live webhook and
+five other new things to blame.
+
 > **Residual, and it is real.** Steps 1–4 are each verified; the *composition* is not. Only a live
 > dispatch proves it end to end, which is section 6 step 6.
 

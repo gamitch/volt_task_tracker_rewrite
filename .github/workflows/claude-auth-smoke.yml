@@ -7,18 +7,30 @@ name: Claude auth smoke test (TEMPORARY — delete after step 2)
 # between re-pasting on faith and running something that uses it. This runs
 # something that uses it.
 #
-# `on: push` rather than `workflow_dispatch` deliberately: a
-# `workflow_dispatch` workflow does not appear in the Actions UI, and cannot be
-# triggered by API, until it exists on the DEFAULT branch. This file is on a
-# feature branch, so the manual trigger would simply not be offered — which
-# would look like the workflow was broken rather than unreachable.
+# CHOOSING A TRIGGER HERE IS NARROWER THAN IT LOOKS, AND THE FIRST TRY FAILED.
+#
+# `workflow_dispatch` is out: such a workflow is not offered in the Actions UI,
+# and cannot be triggered by API, until it exists on the DEFAULT branch. On a
+# feature branch the manual trigger simply never appears.
+#
+# `push` is out too, and this is the one that cost a run —
+# **claude-code-action does not accept `push` events at all**. It failed with
+# `Unsupported event type: push` after 340ms. Verified against
+# `src/github/context.ts`, the action handles exactly: issues, issue_comment,
+# pull_request (and pull_request_target), pull_request_review,
+# pull_request_review_comment, workflow_dispatch, repository_dispatch,
+# schedule, workflow_run. Everything else hits `default: throw`.
+#
+# That leaves `pull_request` as the only supported trigger that runs from a
+# feature branch rather than from the default branch — which is fine, because
+# opening the PR is step 3 anyway.
 #
 # DELETE THIS FILE once the token is confirmed. It is scaffolding, and a smoke
-# test wired to a branch name rots the moment the branch is gone.
+# test rots the moment the thing it was scaffolding is done.
 
 on:
-  push:
-    branches: [claude/linear-webhook-dispatch-aoobwx]
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 jobs:
   smoke:
