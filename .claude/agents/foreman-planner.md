@@ -30,6 +30,24 @@ Rules:
 - Archive detailed logs when they grow too large.
 - Keep docs/swarm/state-summary.md short and current.
 
+Every HEAVY packet (constitution item 26) must end with a numbered
+**Least confident decisions** section — constitution item 19d:
+
+- Three to five entries. Each names one decision you made *and* what would
+  make it wrong ("if `rsvps` has no FK to `event_sessions`, the 23503
+  fallback in step 6f can never fire").
+- List real doubt, not disclosed hazards. A **Known Risk** is something you
+  identified, accepted, and scoped around; a least-confident decision is
+  something you are not sure you got right. They are different sections.
+- An empty list is a claim, not a default. Write "none, and here is why."
+- `checker-premise` attacks this list first. Declaring a doubt is not held
+  against you — concealing one costs a gate round.
+
+A task with a user-visible surface must carry, as one of its acceptance
+criteria, the real source that surface reads from — the loader, query, or
+prop chain (constitution item 27). "Renders correctly" is not sufficient;
+a checker must be able to verify the connection, not just the render.
+
 Each task in the ledger must include:
 - task id
 - task title

@@ -108,6 +108,25 @@ If a worker believes the standard is wrong, impossible, contradictory, or harmfu
     claims. That is cheap to prevent and expensive to have an opus agent
     discover.
 
+    **19d. Declare your least confident decisions.** Every HEAVY packet ends
+    with a numbered **Least confident decisions** list: the calls the author
+    would most want challenged while changing them is still free. Three to
+    five entries, each naming the decision *and* what would make it wrong.
+    An empty list is a claim, not a default — either write the list or write
+    "none, and here is why." `checker-premise` attacks this list before
+    anything else (its charter §0), and a HEAVY packet arriving without one is
+    itself a MINOR finding. Authorized by the human owner 2026-08-09.
+    Rationale: 19c records that roughly half of round 1's findings were the
+    author's own unverified claims — which means the author was, in half the
+    cases, already in a position to know where the weak ground was. A packet
+    that says where it is weakest converts the gate from a uniform re-audit of
+    a large document into targeted work on the parts most likely to be wrong,
+    at a round 19a prices at ~105-130K opus tokens. **A Known Risk is not this
+    list:** a Known Risk is a disclosed and accepted hazard (T510's DST window,
+    for example); this is an undisclosed and unresolved doubt. Declaring one
+    costs nothing and is not held against the author — concealing one is what
+    costs a round.
+
 ## Definition of Ready (dispatch gate)
 
 A plan may be dispatched to workers only when:
@@ -345,3 +364,55 @@ After the third failure, the task must be escalated to boss-arbiter.
     the PR**, so a wrong call is visible and correctable rather than silent. If
     two tiers are arguable, take the heavier one — but "it sounds important" is
     not a trigger, and neither is the number of files touched.
+
+27. **A user-visible surface that reads from a fixture, stub, or hardcoded
+    value is not Passed — it is Partial, and the wiring task is filed and
+    linked before the row moves.** Item 20 requires a deliberate deferral to
+    produce a ledger row; this item governs what the *deferring* task's own
+    status may be while that row is still open. A task whose acceptance
+    criteria are all green against a surface no user can actually use has not
+    been verified — it has been verified against a stub. Authorized by the
+    human owner 2026-08-09.
+
+    Rationale: item 20's three cited failures are one failure shape seen three
+    times. T101 and T121 each correctly declined out-of-scope wiring, and each
+    shipped a team picker rendering fixture teams; `SettingsPage` shipped an
+    inert light/dark control for the same reason. Every one of them passed a
+    checker, because in each case the checker was asked whether the component
+    *rendered* — never whether it was connected to anything. Item 20's remedy
+    is bookkeeping: file the follow-up. Bookkeeping does not stop the row from
+    reading Passed in the meantime, and the ledger is the exact document the
+    human owner reads to decide what is done. The escalation prices the gap:
+    because `events.team_ids` is `uuid[]` while the fixture ids were plain
+    strings, a deferral recorded as Passed became meeting creation failing
+    outright in production. T407 — the Outreach nav badge that is a hardcoded
+    zero — is the same shape, still open.
+
+    **Scope — this is not a demand for horizontal completeness, and it does not
+    enlarge any task.** Small, independently checkable tasks remain the unit of
+    work, and a task may still legitimately ship one thin capability and stop.
+    The test is narrow: *does the surface this task ships read real data, on the
+    real path a user takes to reach it?* A loading, empty, or error state backed
+    by the real loader satisfies this — item 12's four states are the standard,
+    not an exception to it. A picker populated from a fixture array does not.
+    Internal seams, test doubles, and work with no user-visible surface are
+    untouched. Deliberately shipping Partial remains a correct outcome; what is
+    no longer available is recording it as Passed.
+
+    **Consequence for packets and checkers.** A packet for a task with a
+    user-visible surface names, as one of its own acceptance criteria, the real
+    source that surface reads from — the loader, query, or prop chain — so the
+    checker verifies the *connection*, not the render. `checker-reviewer`
+    grades a criterion satisfied only against a fixture as MAJOR, not NIT. This
+    is the positive form of a rule item 26 already implies: a check that only
+    reads the component is worth much less than one that follows the data.
+
+    **`Partial` is a new ledger status value**, added by this item. The prior
+    vocabulary was Passed / Filed / Blocked / Escalated. It is none of those:
+    the work is done and merged (unlike Filed), nothing prevents progress
+    (unlike Blocked), and no one is disputing anything (unlike Escalated) — the
+    surface simply is not connected yet. A Partial row carries the id of the
+    wiring task that will close it, and becomes Passed when that task passes.
+    Rows already marked Passed are **not** retroactively re-graded; this item
+    governs new work. T407 is the exception worth correcting by hand, because
+    it is open and its surface is a hardcoded zero on screen today.
