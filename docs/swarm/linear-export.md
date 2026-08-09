@@ -4,9 +4,9 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-09T16:47:18.181Z from team `Gamitch`.
+Exported 2026-08-09T21:34:20.289Z from team `Gamitch`.
 
-- **309** issues (242 archived)
+- **310** issues (242 archived)
 - **36** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
@@ -328,5 +328,6 @@ Exported 2026-08-09T16:47:18.181Z from team `Gamitch`.
 | [GAM-298](https://linear.app/gamitch/issue/GAM-298/t705-the-schema-and-all-four-consuming-views-are-multi-team-the-roster) | T705 | Done | T705 — The schema and all four consuming views are multi-team; the roster UI and write path are still single-team, and three roster filters still scope on the legacy `students.team_id` |
 | [GAM-303](https://linear.app/gamitch/issue/GAM-303/t808-students-and-parents-see-raw-float-hours-39999983633333334-100-h) | T808 | Done | T808 — Students and parents see raw float hours (`3.9999983633333334 / 100 h`) beside a rounded percentage |
 | [GAM-309](https://linear.app/gamitch/issue/GAM-309/replaypy-cannot-read-python-test-runner-output-so-mutating-a-python) | — | Done | replay.py cannot read Python test-runner output, so mutating a Python file needs a hand-written shim |
+| [GAM-310](https://linear.app/gamitch/issue/GAM-310/linear-claude-dispatch-is-built-and-unit-tested-but-not-live-7-owner) | — | Done | Linear → Claude dispatch is built and unit-tested but not live — 7 owner steps remain (PAT, secrets, webhook) |
 
 Full descriptions, relations and timestamps are in `linear-export.json`.
