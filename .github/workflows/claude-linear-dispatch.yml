@@ -187,9 +187,84 @@ jobs:
           # Raising this raises the worst-case bill: budget ~$23 for a run
           # that spends the whole allowance, against $9.16 for one that spent
           # 80 turns.
+          # ---------------------------------------------------------------
+          # THE DELEGATION GRANT — `Task` / `Agent`
+          # ---------------------------------------------------------------
+          # Without a subagent tool, a dispatched run CANNOT delegate, and
+          # every model pin in `.claude/agents/*.md` is dead config: the
+          # `opus` premise checker, the `opus` reviewer, the `fable` boss and
+          # the `sonnet` worker are all unreachable, and one model plays every
+          # role. That is not a cheaper version of the process — it is a
+          # different process wearing its name, and it removes the reason to
+          # dispatch at all. `AGENTS.md` § "When Codex should delegate" makes
+          # STANDARD ("dispatch one worker subagent") and HEAVY ("a
+          # premise-checker subagent before dispatch, a separate worker, and a
+          # separate checker") unsatisfiable without it.
+          #
+          # BOTH names are granted deliberately. This repo's agent frontmatter
+          # says `Agent` (`.claude/agents/boss-architect.md`), while the CLI
+          # has historically called the same tool `Task`. An allowlist entry
+          # matching no tool is inert, so granting both costs nothing; getting
+          # it wrong costs a run that starts, thinks, delegates nothing, and
+          # looks exactly like a working one. That is the same failure shape
+          # as note 3 at the top of this file.
+          #
+          # ---------------------------------------------------------------
+          # `--model` — the ORCHESTRATOR only, and it is NEW POLICY
+          # ---------------------------------------------------------------
+          # Read this before changing it: the constitution does NOT prescribe
+          # the mapping below. Item 18 legislates the **worker's** model — a
+          # per-dispatch `model: "opus"` override the orchestrator passes when
+          # a task hits one of four concrete triggers (migrations, RLS or
+          # `security definer`, metric-view SQL, auth/session/role logic), and
+          # it says so explicitly: *"The override goes on the dispatch call,
+          # not in the agent definition."* That stays exactly where it is. This
+          # workflow must not try to encode it — the trigger depends on what
+          # the task touches, which is not knowable from a label. Granting
+          # `Agent` above is what finally makes item 18 executable at all.
+          #
+          # What is left unlegislated is the **orchestrator's own** model, and
+          # that is what this sets. Authorized by the human owner 2026-08-10,
+          # verbatim: *"this whole workflow is designed to be the multiagent
+          # setup, with larger decisions and architecture handled by frontier
+          # models and workers handled by cheaper models. This is a requirment
+          # of the workflow to be high quality while maintaining cost. The
+          # dispatch method needs to handle this or there is no real use for
+          # the dispatch method."*
+          #
+          # The orchestrator is the role that judges the tier (item 28d),
+          # chooses FAST/STANDARD/HEAVY and must "state and defend" that call
+          # (item 26), writes the packet and its item 19d "least confident
+          # decisions" list, and integrates verified work. Those are the
+          # decisions; the volume underneath them stays on the `sonnet` worker
+          # pin. Keyed to the payload tier rather than flat, because the tier
+          # is known at dispatch (§7 of the design doc) and paying frontier
+          # rates to orchestrate a `tier/fast` one-liner would dilute exactly
+          # the saving item 26's fast path exists to create:
+          #
+          #   heavy       -> opus    orchestrates premise gate + worker + checker
+          #   unreviewed  -> opus    judges the tier first, and that judgement
+          #                          decides every downstream cost
+          #   standard    -> sonnet  dispatches one worker, replays the mutation
+          #   fast        -> sonnet  implements directly; item 26 removes the
+          #                          ceremony here on purpose
+          #
+          # This is NOT item 25's retired "bump because it sounds sensitive."
+          # Item 25 binds the worker tier to genuine complexity and names the
+          # T157 sonnet->opus bump it retires; nothing here touches the worker
+          # tier. It is keyed to process depth, not to topic.
+          #
+          # **Ratification is outstanding.** Authority Boundaries reserve
+          # constitution edits to `boss-architect` / `boss-arbiter`, so this
+          # comment is not a constitution item and does not become one by
+          # being merged. Until an item exists, the constitution is silent
+          # here and this file is the only record — which is item 20's failure
+          # shape, and the reason it is written out in full rather than left
+          # as a flag value.
           claude_args: |
+            --model ${{ (github.event.client_payload.tier == 'heavy' || github.event.client_payload.tier == 'unreviewed') && 'opus' || 'sonnet' }}
             --max-turns 200
-            --allowedTools "Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch"
+            --allowedTools "Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,Task,Agent"
 
       # `if: always()` so a failed or timed-out run still yields its transcript —
       # which is exactly the run you want to read. The extra `!= ''` guard is
