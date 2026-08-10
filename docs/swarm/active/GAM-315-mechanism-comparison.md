@@ -22,6 +22,11 @@ The reasoning is below and the recommendation is defeasible, but the short form:
 
 - Option B removes the *class* of bug, which is the strongest argument on the
   row and it is a real one.
+- **But B's stated premise — "the trailer is already there" — is measurably
+  false.** The trailer is on 15% of the last 200 commits, on **zero** of the
+  last eleven merge commits, and is enforced by nothing. B needs a
+  trailer-enforcement CI check before it can work at all, which the proposal
+  does not include. See § "Measured implementation surface".
 - But B's failure mode is **silent and worse than A's**: a wrong trailer closes
   a wrong issue with nothing a human can see. A's wrong closes at least
   correlate with a branch name visible in `git branch`. Substituting an
@@ -114,7 +119,8 @@ contemplated so far.
 
 *(Implementation-surface measurements — merge strategy, trailer survival,
 existing workflows, credentials — are recorded in § "Measured implementation
-surface" below.)*
+surface" below. They are the strongest evidence in this document and they cut
+against B.)*
 
 ## Check 2 — the squash-merge case
 
@@ -136,6 +142,96 @@ thing, and the mitigation the owner named is unavailable.
 
 **This is decisive for the design and is measured, not assumed** — see
 § "Measured implementation surface".
+
+## Measured implementation surface
+
+Measured 2026-08-10 by a delegated agent against the real repository and the
+GitHub API. Every figure below is from a command that was run.
+
+### The finding that matters most: B's stated premise is false
+
+The proposal opens: *"**The trailer is already there.** `Linear-Issue: GAM-nnn
+(Tnnn)` appears on merged commits today; item 28f already requires it."*
+
+**Measured, it is mostly not there.**
+
+| Measurement | Result |
+| -- | -- |
+| Last 200 commits on `main` carrying a `Linear-Issue:` trailer | **30 (15%)** |
+| Merge commits (of 46) carrying one | **4** |
+| PRs #138-#148 whose **merge commit** carried one | **0 of 11** |
+| PRs #138-#148 with a trailer on any **branch** commit | **2 of 11** |
+| Recent merges with **no** trailer anywhere in the pushed range | **33 of 46 (72%)** |
+| CI checks enforcing the trailer | **none** — `grep -rn "Linear-Issue" .github/` finds one comment |
+
+The mechanical reason the trailer never reaches the merge commit is measured
+too: the repo's `merge_commit_message` setting is **`PR_TITLE`**, so the PR body
+— where the trailer is written — is never copied into the merge commit.
+
+**Be careful what this does and does not show.** It is a statement about
+*coverage*, not about missed closures: many of those 46 merges are chores that
+should close nothing, and a merge with no trailer fails **safe** under B (the
+issue sits visibly in `In Review`). The load-bearing point is narrower and
+survives that caveat: **B's reliability rests on a convention that is currently
+followed about 15% of the time and enforced nowhere.** Adopting B therefore
+carries a prerequisite the proposal does not mention — a CI check that fails a
+PR with no trailer — and that is new scope, not free.
+
+In B's favour, honestly: **the one merge that actually mattered would have
+worked.** PR #143, the real GAM-304 fix, carried the trailer on 8 of its 14
+branch commits.
+
+### The other measurements
+
+- **Squash is live.** All three merge methods are enabled. Every one of
+  #138-#148 landed as a true 2-parent merge commit, so branch commits are
+  readable *today* — but nothing prevents the next merge being a squash, which
+  collapses them into one hand-editable body. **The hazard the owner named in
+  Check 2 is not hypothetical; it is one dropdown away**, and the mitigation
+  ("read the pushed commits, not the merge commit") is unavailable the moment it
+  happens.
+- **A real ambiguity case already exists.** One merge range in the last 200
+  contained **two distinct** trailer identifiers (GAM-309 and GAM-310). A naive
+  "read the trailer, set that issue" rule has no answer for it.
+- **The trailer format is inconsistent.** 4 of the 7 distinct values omit the
+  `(Tnnn)` suffix item 28f prescribes, so a regex demanding it would miss most
+  of them.
+- **Two workflows already fire on push to `main`** (`ci.yml`,
+  `linear-export.yml`). Only `claude-linear-dispatch.yml` sets `fetch-depth: 0`;
+  every other checkout is shallow, so a new workflow must set it itself to read
+  branch commits at all.
+- **`linear-export.yml` commits back to `main` on every push to `main`.** A new
+  push-triggered workflow would fire on those bot commits too. Harmless (no
+  trailer) but it must be guarded, and `[skip ci]` does not suppress it.
+- **The write key is not wired for this.** `LINEAR_API_KEY` is deliberately
+  read-only; the write-capable `LINEAR_DISPATCH_API_KEY` is scoped to the
+  `repository_dispatch` workflow, which a push cannot trigger. B needs the write
+  key on a push-triggered workflow — a genuine widening of what a push to `main`
+  can do.
+- **No `issueUpdate` mutation exists anywhere in the repo.** The transport
+  (`gql`) and the state-name→UUID lookup are prior art; **the state write is
+  not.** B is a new write path, which is item 26's own HEAVY trigger.
+- **No loop risk at the `Done` edge** — good news for B. The dispatch workflow
+  fires only on a transition *into* `Todo` for `tier/*`-labelled rows, so a
+  workflow setting `Done` cannot re-trigger it.
+
+### Unmeasured, and the agent said so
+
+- The runtime push payload was never observed — no workflow reads
+  `github.event.commits`. GitHub's documented **20-commit cap** on that array is
+  untested here, and **PR #143 pushed 15 commits**. One larger PR truncates it
+  silently. Reading `git log before..after` with `fetch-depth: 0` avoids the cap
+  but was not verified against this repo's pushes.
+- `LINEAR_DISPATCH_API_KEY`'s write scope is asserted in a code comment, not
+  verified.
+- Whether the five wrong closures would have been *prevented* by B was not
+  established from git.
+
+**Net effect on the comparison: B is a larger piece of work than proposed.** It
+is not "a workflow plus a settings change" — it is a workflow, a new write path,
+a credential rewiring, a trailer-enforcement CI check, an ambiguity rule, a
+format fix, and a squash-merge decision. Each is tractable. Together they are a
+project, and none of them has had a premise gate.
 
 ## Check 3 — what replaces `start → In Progress` and `review → In Review`
 
@@ -283,7 +379,13 @@ the highest-value row of the three** — its option 1 (disable
 3. **Later, as its own row with its own gate:** Option B. It is a real
    improvement and should not be discarded — but it is a write-capable
    automation against a live tracker, and it deserves a premise gate that this
-   row is explicitly not authorized to run.
+   row is explicitly not authorized to run. Its row should carry the measured
+   prerequisites: a trailer-enforcement CI check (15% coverage today), a rule
+   for the two-identifier ambiguity case that already exists, the optional
+   `(Tnnn)` suffix, a squash-merge decision, and wiring the write-capable key
+   to a push-triggered workflow. **It is a new write path, which is item 26's
+   own HEAVY trigger** — so it gets the full chain regardless of how small the
+   YAML looks.
 
 ## Least confident decisions in this comparison (item 19d)
 
@@ -291,9 +393,12 @@ the highest-value row of the three** — its option 1 (disable
    text can be made B-proof by one sentence. Wrong if the owner intends B
    imminently, in which case writing A's wording twice is the waste.
 2. **That the visible-vs-invisible failure argument outweighs fail-safety.** It
-   is a judgement about which failure a human catches, not a measurement. Wrong
-   if trailers in practice turn out near-perfectly reliable — which
-   § "Measured implementation surface" bears on directly.
+   is a judgement about which failure a human catches, not a measurement.
+   *Partly resolved since drafting:* trailers are **not** near-perfectly
+   reliable (15% coverage, unenforced), which strengthens this. But note the
+   direction — a *missing* trailer fails safe, so the coverage figure argues B
+   is ineffective, not that it is dangerous. The danger case is a *wrong*
+   trailer, and its frequency is **not measured** because it has never run.
 3. **That disabling `start → In Progress` is safe.** It rests on Check 3's
    reading that items 28c and 28e already duplicate it. Wrong if any tooling
    reads `In Progress` as a signal set by something other than the agent — not

@@ -574,3 +574,31 @@ third millisecond-identical attachment/transition pair attributed to
   amendment to C1 that makes A's text true under either mechanism. Records five
   least-confident decisions and puts the gate question to the owner rather than
   assuming an answer.
+- **subagent dispatched** — `general-purpose` on opus, to measure Option B's
+  implementation surface (trailer coverage and survival, merge strategy,
+  push-workflow visibility, credentials, prior art, blast radius). Measurement
+  only; explicitly told not to design and not to edit.
+- **subagent verdict** — 29 tool calls, ~46K tokens. **The decisive finding is
+  that Option B's stated premise is false.** The owner's proposal opens *"the
+  trailer is already there"*; measured, a `Linear-Issue:` trailer is on **30 of
+  the last 200 commits (15%)**, on **0 of the last 11 merge commits**, and is
+  enforced by nothing. `merge_commit_message=PR_TITLE` is the mechanical reason
+  it never reaches the merge commit. Also measured: squash is enabled (the
+  owner's Check 2 hazard is one dropdown away), a two-identifier ambiguity case
+  already exists in the last 200 commits, the `(Tnnn)` suffix is omitted by 4 of
+  7 distinct values, the write-capable key is scoped to a workflow a push cannot
+  trigger, and **no `issueUpdate` mutation exists anywhere** — B is a new write
+  path, item 26's own HEAVY trigger. One point in B's favour: PR #143, the merge
+  that actually mattered, carried the trailer on 8 of 14 branch commits.
+  The agent flagged its own limits, including that "72% of merges have no
+  trailer" is a coverage figure and **not** a missed-closure figure — recorded
+  in the comparison rather than smoothed over.
+- **packet updated (bookkeeping only, no wording)** — applied the owner's 22:40
+  ruling, which postdates revision 4: `AGENTS.md` added as a fourth Allowed
+  File scoped to lines 30 and 37, and the "Deliberately NOT in scope" section
+  marked superseded. **New scope question raised, not assumed:** `AGENTS.md:35-36`
+  carries a *third* false sentence — *"that magic word both links the issue and
+  moves it to `Done` on merge"* — inside the same numbered item, falsified by
+  F5. Correcting line 37 alone leaves the paragraph self-contradictory. Asked
+  of the owner rather than taken, per round 3's rule that a packet may not
+  settle scope by assuming it.

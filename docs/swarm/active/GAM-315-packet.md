@@ -88,9 +88,62 @@ orchestrator-owned (`AGENTS.md` § Ownership). The edit goes to
   actions. Correcting one and leaving the other is the drift this row exists to
   stop, so both are in.
 
+- `AGENTS.md` — **the two named sentences only**, added by owner ruling
+  2026-08-10 (*"yes fold AGENTS.md in as a fourth allowed file"*):
+  - **`AGENTS.md:37`** — *"An identifier in the title or branch links but does
+    **not** close."* The same falsified sentence as `constitution.md:467`.
+  - **`AGENTS.md:30`** — *"the issue connects from the first push"*. The same
+    unmeasured claim as `WORKFLOWS.md:492`; treat as unmeasured, not false.
+
+  **Scope is these sentences, not the file.** The ruling states it grants a
+  specific exception for this packet and is **not** precedent: `AGENTS.md:190-192`
+  reserves the file to "the primary orchestrator" and names no boss role, while
+  Authority Boundaries reserve the constitution to `boss-architect`/
+  `boss-arbiter`. A future packet must ask again.
+
 Nothing else. No code. No `.claude/**`. Do not touch the frozen ledger.
 
-### Deliberately NOT in scope: `AGENTS.md:36-37` — deferred under item 20, and filed
+### ⚠ OPEN SCOPE QUESTION for the owner — a *third* false sentence sits between the two
+
+**Found in revision 5. Not assumed into scope, because scope is the owner's.**
+
+`AGENTS.md:35-36` reads:
+
+> **`Closes GAM-nnn` as its first body line** — that magic word both links the
+> issue and moves it to `Done` on merge.
+
+**"moves it to `Done` on merge" is false**, by the same measurement that
+falsifies the sentence one line below it: PR #143 carried `Closes GAM-304` as
+body line 1 and moved the issue **backwards** to `In Progress` (F5). The close
+is the team automation's and is conditional on being the last open linked PR
+(F3), not the magic word's.
+
+This matters because it sits **inside the same numbered item** as `AGENTS.md:37`:
+
+```
+36   **`Closes GAM-nnn` as its first body line** — that magic word both links the
+37   issue and moves it to `Done` on merge. An identifier in the title or branch
+38   links but does **not** close. Add the trailer ...
+```
+
+Correcting only line 37 leaves the paragraph **self-contradictory and still
+wrong**: it would delete the claim that a bare identifier does not close while
+leaving standing the claim that the magic word does. That is precisely the
+argument revision 4 used to pull `linear-webhook-dispatch.md:378` into scope as
+C5 — *"correcting one and leaving the other is the drift this row exists to
+stop."*
+
+**Recommendation: extend the `AGENTS.md` scope to the whole of item 6's
+mechanism sentences (lines 35-38), not two lines of it.** It is the same
+correction, in the same paragraph, from the same measurements — no new fact is
+required.
+
+**But it is one line beyond what the owner granted, so it is asked, not taken.**
+Round 3 established that a packet may not settle a scope question by assuming
+it. If the owner declines, C6 must be written to correct line 37 in a way that
+does not leave line 36 dangling, which is harder and worse.
+
+### Superseded: the former "Deliberately NOT in scope: `AGENTS.md:36-37`" section
 
 `AGENTS.md:36-37` reads *"An identifier in the title or branch links but does
 **not** close."* — verbatim the sentence 28f is being corrected for, in the file
