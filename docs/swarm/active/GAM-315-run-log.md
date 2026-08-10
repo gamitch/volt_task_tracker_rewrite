@@ -199,3 +199,11 @@ Item 26's trigger question still answers *no*.
   filed in Linear. Recommends option 1 (disable `start → In Progress`) and
   records that `targetBranch` cannot express a head-branch scheme, so scoping
   is not among the options.
+- **orchestrator probe of LCD #3's untested channels (commit trailers)** — could
+  not be settled from existing data. Eight issues carry `Linear-Issue: GAM-nnn`
+  commit trailers, but every one of them (GAM-303, 304, 307, 308, 309, 310, 288,
+  315) also has a PR linked by branch name or magic word, so no clean case
+  isolates the trailer channel. The constitution's existing claim that "Linear
+  does not read commit trailers" is therefore **unverified here, not refuted**.
+  Recorded rather than resolved; the packet's LCD #3 already forbids claiming
+  the link list is exhaustive.
