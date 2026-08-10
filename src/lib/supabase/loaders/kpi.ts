@@ -62,17 +62,39 @@
  *
  * -----------------------------------------------------------------------
  * RLS (read-only finding, same posture `loaders/reports.ts`'s own module
- * doc #7 already established) -- `v_season_kpis`/`v_season_kpi_team_counts`
- * are plain views with no `security definer`/`security barrier` clause
- * (this task's own migration), so both run under the querying session's own
- * RLS against `seasons`/`attendance`/`event_sessions`/`events`/`students`/
- * `teams`/`student_teams`, every one of which carries a `staff_all`
- * (`is_staff()`) SELECT policy. `KpiStrip.tsx` only ever calls this loader
- * for a session `useAuth()` has already confirmed is `admin`/`coach`
- * (UXD-01's own "staff-only" requirement, enforced in the UI component, not
- * this file) -- so a real empty/zero result from either query here is
- * "genuinely nothing logged yet for this season", not an RLS-caused
- * false-empty.
+ * doc #7 originally established, before its own T204 correction below).
+ *
+ * **T1300 CORRECTION.** This used to conclude that `v_season_kpis`/
+ * `v_season_kpi_team_counts` "run under the querying session's own RLS
+ * against" their base tables, because neither view carries a
+ * `security definer`/`security barrier` clause. That reasoning is wrong the
+ * same way three sibling files' now-corrected comments were wrong
+ * (`loaders/reports.ts` module doc #7, `loaders/dashboard.ts`,
+ * `loaders/students.ts`, `ParticipationTab.tsx`, all T204): the absence of
+ * `security_definer` proves nothing about a VIEW. The view-level knob is
+ * `security_invoker` (PG15+), which defaults OFF and appears as a real
+ * `with (...)` clause zero times under `supabase/` -- so these views execute
+ * as their OWNER and do NOT apply the querying session's RLS to their base
+ * tables. MEASURED, not reasoned: `20260731000000_leaderboard_students_view
+ * .sql:32-46` records the live run. This exact occurrence (then
+ * `20260723000000_kpi_views.sql:136-152`) was found and ruled on directly --
+ * see `docs/swarm/dispute-log.md` D010 and its correction, landed in
+ * `20260804000001_widen_rsvp_read_all_authenticated.sql`'s header, because
+ * constitution item 10 forbids editing the applied `kpi_views.sql` in place.
+ * This file's own copy of the same false claim was never corrected then --
+ * D010 and T503 fixed the SQL-side comment, not this loader's.
+ *
+ * NO BEHAVIOUR CHANGE is implied and no new exposure is being reported here:
+ * D010 already weighed the RLS-bypass mechanism against what these views
+ * actually return (season aggregates, no PII) and the owner ruled the schema
+ * stays as-is (`docs/swarm/dispute-log.md` D010, closed 2026-07-29, not
+ * reopened by this correction). The staff-only access argument below is
+ * unaffected and is what actually makes these reads safe today: `KpiStrip
+ * .tsx` only ever calls this loader for a session `useAuth()` has already
+ * confirmed is `admin`/`coach` (UXD-01's own "staff-only" requirement,
+ * enforced in the UI component, not this file) -- so a real empty/zero
+ * result from either query here is "genuinely nothing logged yet for this
+ * season", not an RLS-caused false-empty.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createLoader, type LoaderQueryResult } from '../loader';
