@@ -356,3 +356,11 @@ section is that run. **PR #149 stays open and unmerged** per the ruling.
   work **stacks on** #149 rather than racing it: both runs would otherwise have
   written this same file on two branches and conflicted head-on. The old remote
   branch is deleted.
+- **premise gate round 3 dispatched** — `checker-premise`, opus, on revision 3
+  of `docs/swarm/active/GAM-315-packet.md` at `ce16bdd`. Briefed with the
+  owner's three priorities (remaining unmeasured claims; the five-closes /
+  one-clean-exhibit arithmetic; the `targetBranch` base-vs-head finding), its
+  charter §0 duty to attack the item 19d list first, and this run's additions A
+  (`AGENTS.md:36-37`, outside Allowed Files) and B (push does not attach).
+  **This is the last round.** Per the ruling, a REVISE escalates to the owner;
+  it does not open a fourth.
