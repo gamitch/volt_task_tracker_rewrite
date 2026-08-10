@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-10T02:03:48.335Z from team `Gamitch`.
+Exported 2026-08-10T02:30:04.905Z from team `Gamitch`.
 
 - **311** issues (242 archived)
-- **36** not yet completed or cancelled
+- **35** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -40,15 +40,14 @@ Exported 2026-08-10T02:03:48.335Z from team `Gamitch`.
 | [GAM-284](https://linear.app/gamitch/issue/GAM-284/t608-collapse-the-three-surviving-narrow-copies-of-the-method-shape) | T608 | Backlog | area/w3 tier/unreviewed | T608 — Collapse the THREE surviving narrow copies of the `method` shape — `selfCheckoff.ts`'s fork plus two more T603 could not reach — and fix the module doc that T603 made false |
 | [GAM-286](https://linear.app/gamitch/issue/GAM-286/t610-item-10-names-two-different-rules-depending-on-which-part-of-the) | T610 | Backlog | area/w3 tier/unreviewed | T610 — "Item 10" names two different rules depending on which part of the constitution you read |
 | [GAM-290](https://linear.app/gamitch/issue/GAM-290/t614-the-end-time-field-has-no-lower-bound-so-a-series-edit-can) | T614 | Backlog | area/w3 tier/unreviewed | T614 — The End time field has no lower bound, so a series edit can persist a meeting whose end is before its start |
-| [GAM-297](https://linear.app/gamitch/issue/GAM-297/t512-workflowsmds-open-row-counts-are-hand-recounted-from-the-document) | T512 | Backlog | area/w2 tier/unreviewed | T512 — `WORKFLOWS.md`'s open-row counts are hand-recounted from the document itself; derive them from the ledger with a script instead |
+| [GAM-297](https://linear.app/gamitch/issue/GAM-297/t512-workflowsmd-reports-three-different-open-row-totals-60-42-36-item) | T512 | Backlog | area/w2 tier/unreviewed | T512 — `WORKFLOWS.md` reports three different open-row totals (~60, 42, 36); item 29 moved the source to the Linear export |
 | [GAM-299](https://linear.app/gamitch/issue/GAM-299/t806-eventsevent-sessions-rls-scopes-by-the-legacy-studentsteam-id-so) | T806 | Backlog | area/w5 tier/unreviewed | T806 — `events`/`event_sessions` RLS scopes by the legacy `students.team_id`, so a dual-team student never receives their second team's events |
 | [GAM-300](https://linear.app/gamitch/issue/GAM-300/t807-two-loaders-still-apply-the-greatestx-1-floor-t509-removed-and) | T807 | Backlog | area/w5 tier/unreviewed | T807 — Two loaders still apply the `greatest(x, 1)` floor T509 removed, and three row types still declare `participation_pct` non-nullable |
 | [GAM-301](https://linear.app/gamitch/issue/GAM-301/t407-the-outreach-nav-badge-is-a-hardcoded-0-while-the-page-it-links) | T407 | Backlog | area/w1 tier/standard | T407 — The Outreach nav badge is a hardcoded `0` while the page it links to reads "74 awaiting your RSVP" |
 | [GAM-302](https://linear.app/gamitch/issue/GAM-302/9-closed-ledger-rows-are-sitting-in-linear-as-pickable-backlog-because) | — | Backlog | tier/fast | ~9 closed ledger rows are sitting in Linear as pickable Backlog, because their closure never touched the Status column |
-| [GAM-304](https://linear.app/gamitch/issue/GAM-304/t809-studenthomes-sign-up-cant-go-control-writes-nothing-and-says) | T809 | Backlog | area/w5 tier/unreviewed | T809 — `StudentHome`'s Sign up / Can't go control writes nothing and says nothing — a documented deferral with no follow-up row |
+| [GAM-304](https://linear.app/gamitch/issue/GAM-304/t809-studenthomes-sign-up-cant-go-control-writes-nothing-and-says) | T809 | In Progress | area/w5 tier/heavy | T809 — `StudentHome`'s Sign up / Can't go control writes nothing and says nothing — a documented deferral with no follow-up row |
 | [GAM-305](https://linear.app/gamitch/issue/GAM-305/t615-the-schedule-meetings-team-picker-offers-archived-teams-the) | T615 | Backlog | area/w3 tier/unreviewed | T615 — The schedule-meetings team picker offers archived teams; the roster picker excludes them |
 | [GAM-306](https://linear.app/gamitch/issue/GAM-306/t616-no-event-records-who-created-it-so-outreach-detail-permanently) | T616 | Backlog | area/w3 tier/unreviewed | T616 — No event records who created it, so outreach detail permanently reads "Unknown creator" |
-| [GAM-310](https://linear.app/gamitch/issue/GAM-310/linear-claude-dispatch-is-built-and-unit-tested-but-not-live-7-owner) | — | In Progress | gate/human provenance/other tier/fast | Linear → Claude dispatch is built and unit-tested but not live — 7 owner steps remain (PAT, secrets, webhook) |
 | [GAM-311](https://linear.app/gamitch/issue/GAM-311/kpi-viewssqls-two-views-never-got-t801s-catalog-comment-rls-correction) | — | Backlog | tier/unreviewed | kpi_views.sql's two views never got T801's catalog-comment RLS correction -- D010 chose header-prose only |
 
 ## Closed and cancelled
@@ -330,5 +329,6 @@ Exported 2026-08-10T02:03:48.335Z from team `Gamitch`.
 | [GAM-307](https://linear.app/gamitch/issue/GAM-307/t1300-sweep-the-four-non-fixed-closures-for-residual-work-left-behind) | T1300 | Done | T1300 — Sweep the four non-"fixed" closures for residual work left behind when the row closed |
 | [GAM-308](https://linear.app/gamitch/issue/GAM-308/coachhomes-goal-projection-row-prints-the-same-raw-float-hours-t808) | — | Done | CoachHome's goal-projection row prints the same raw float hours T808 fixed for students and parents |
 | [GAM-309](https://linear.app/gamitch/issue/GAM-309/replaypy-cannot-read-python-test-runner-output-so-mutating-a-python) | — | Done | replay.py cannot read Python test-runner output, so mutating a Python file needs a hand-written shim |
+| [GAM-310](https://linear.app/gamitch/issue/GAM-310/linear-claude-dispatch-is-built-and-unit-tested-but-not-live-7-owner) | — | Done | Linear → Claude dispatch is built and unit-tested but not live — 7 owner steps remain (PAT, secrets, webhook) |
 
 Full descriptions, relations and timestamps are in `linear-export.json`.
