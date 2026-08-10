@@ -217,11 +217,48 @@ than the expensive one (65 vs 54) and consumed a third as much:
 31391626696   65 turns / 27 min /  91 Bash /  $8.61
 ```
 
-What tracks is **orchestrator Bash calls on opus** — `npm ci`, `tsc`, `vitest`,
-`eslint`, git, mutation replays — each result enlarging an opus context.
-Meanwhile `checker-tests` sits pinned to **haiku** with the charter *"runs lint,
-typecheck, tests, and build."* Filed as `GAM-321`, with the caveat that this is
-a three-run correlation and not an isolated experiment.
+**This lesson originally blamed orchestrator Bash calls on opus, and that was
+wrong.** It was filed as `GAM-321` on a three-run correlation, flagged there as
+"not an isolated experiment", and the caveat turned out to be the load-bearing
+part. The owner then supplied the full Claude Code Report for run
+`31385764526` — 20,890 lines carrying **per-call token usage** — and it settles
+the question by measurement. The analysis and its review are in
+`docs/swarm/PARKED-orchestrator-cost-analysis.md`.
+
+```
+367 calls carrying usage data
+input tokens   72,733,221
+output tokens       3,035      <- ratio ~24,000 : 1
+peak single call  385,150
+```
+
+Context growth across the run, which is the actual mechanism:
+
+| Calls | Avg input tokens |
+| -- | --: |
+| 1-20 | 48,050 |
+| 21-100 | 121,793 |
+| 101-250 | **290,773** |
+| 251-367 | 157,375 *(after a compaction)* |
+
+**Cost ≈ turns × context size.** Output is negligible — 3,035 tokens across an
+entire run. Almost the whole figure is re-sending accumulated context on every
+turn, and calls 101-250 are ~40% of the calls but ~60% of the input tokens.
+**Nothing about which model runs a shell command moves that.**
+
+Two specific corrections, both worth keeping because they are the interesting
+part:
+
+* **The proposal targeted about 2%.** Moving the six gates to `checker-tests` on
+  haiku removes on the order of 6 turns out of 367.
+* **The signal was read backwards.** **52 of the 238 Bash calls were `grep -n`**
+  — the orchestrator grepping instead of reading whole files into context. A
+  high Bash count was **context discipline working**, not waste. The correlation
+  was real; the causal story was inverted.
+
+The measured levers are **fewer turns** and **flatter context growth** —
+batching chainable commands into one call, and keeping large file content out of
+context. Both attack the actual term.
 
 **The second-order lesson is better news: resuming is cheap.** Because the run
 log made the state recoverable, the mid-chain-success bug cost ~$8.61 and 27
