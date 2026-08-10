@@ -151,3 +151,42 @@ Item 26's trigger question still answers *no*.
     automation silence, not attachment absence, is the proof.
   - LCD verdicts: #1 WRONG, #2 SOUND, #3 UNRESOLVED (wrong risk declared),
     #4 SOUND, #5 UNRESOLVED.
+- **corrections to the premise section above** (this log is append-only, so the
+  errors stay visible and are corrected here rather than edited away):
+  - **P1 is overstated.** "Every PR merge … produced a transition" is false:
+    #142 merged at 14:22:46Z and produced **none**, because GAM-304 was already
+    `Done` from the owner's hand-close at 14:18:16.288Z. A no-op merge is
+    unobservable in state history.
+  - **P1/F4 counts were wrong.** Of the seven linked PRs: six intended no magic
+    word, **three** contain no magic-word token at all (#139, #141, #144), and
+    **five** drove the issue to `Done`. #138 and #140 both contain
+    `close GAM-304` in the sentence disclaiming it, so neither is a clean
+    exhibit for the no-magic-word point — #140 was the round-1 packet's
+    flagship and was the weakest available.
+  - **P6 said "seven transitions".** There are six merge-coincident ones (four
+    user-attributed, two bot); the seventh is the owner's hand-close, which
+    follows no merge. The author→actor correlation itself is confirmed.
+  - **F1's instrument was weak.** Attachment count is the wrong test: GAM-304
+    moved `Backlog → In Progress` at 02:23:20.568Z on a branch push, 48 minutes
+    before #138 existed and with no attachment created. Automation firing is
+    the strong instrument. F1's conclusion survives and is now re-armed on
+    three independent negatives (#142→GAM-315, #146→GAM-304, #128→GAM-303/309).
+- **title disjunction probed and left open, deliberately.** Swept all 200 PRs
+  for an identifier in the title but not the branch: only #132, #131 and #125
+  (`GAM-000`, not a real issue). #132 and #131 both carry a magic-word token in
+  the body, so title-link and negated-magic-word-link cannot be separated by
+  any data in this repository. The experiment that would settle it — a
+  throwaway issue plus a PR titled with its identifier and no magic-word token
+  — was **not run**: it fires a live automation against the tracker to learn
+  something that changes no prescription, because the safe rule is identical
+  under both horns.
+- **re-tiered STANDARD → HEAVY** on the gate's MINOR 8. Item 26: take the
+  heavier when two are arguable. The row is in fact receiving the full HEAVY
+  chain (packet → premise gate → `boss-architect` → `checker-reviewer`), so
+  HEAVY is the honest label. Linear label updated and read back:
+  `In Progress | other, heavy`.
+- **packet revision 2 written** — all nine required revisions addressed, plus
+  the gate's three cheaper paths (own-issue as the primary instruction;
+  extend `WORKFLOWS.md:495` rather than add a competing paragraph; date-stamp
+  C2 and name the reproducing query). Allowed files now three; acceptance
+  criterion 8 is runnable and can fail.
