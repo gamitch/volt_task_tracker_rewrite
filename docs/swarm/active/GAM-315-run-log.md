@@ -602,3 +602,32 @@ third millisecond-identical attachment/transition pair attributed to
   F5. Correcting line 37 alone leaves the paragraph self-contradictory. Asked
   of the owner rather than taken, per round 3's rule that a packet may not
   settle scope by assuming it.
+
+## The convention worked, with a positive control 4 minutes earlier
+
+PRs #149 and #150 both asked to be watched **on merge**. This run produced the
+first live test on **open**, and it is a clean paired control in one window:
+
+| PR | identifier in branch/title? | magic word? | GAM attachment created? |
+| -- | -- | -- | -- |
+| #151 @ `22:48:28` | **yes** (`claude/gam-304-...`) | no | **yes** — GAM-304 `22:48:31.430Z`, and it reopened the row |
+| **#152 @ this run** | **no** (`claude/item-28f-revision-5-mechanism`) | no | **no** — GAM-315 still has **zero** attachments |
+
+Read back after opening PR #152: GAM-315 `In Progress`, attachments `0`. So a
+PR that names the row in prose only, from a branch carrying no identifier, does
+**not** enter the linked set — measured, with a positive control from the same
+repository minutes earlier proving the instrument fires.
+
+**This is C3's convention working, not an argument that it will.** It does not
+yet test the merge case, which is what #149 and #150 are still open to observe.
+
+- **gates run** — six-gate skill, `--baseline-tests 2162`. Figures below.
+- **PR opened** — **#152**, based on `claude/item-28f-gate-round3` (stacked, not
+  racing). No identifier in branch or title, no magic word, row named in prose
+  only. The `Linear-Issue: GAM-315` commit trailer is present per item 28f and
+  is measured (F8, now n=3 with a positive control) not to link.
+- **escalated** — comment posted on GAM-315 with the three questions (mechanism,
+  gate, `AGENTS.md` scope). Labels `gate/human` + `escalated` restored and read
+  back; row deliberately left `In Progress`, **not** `Todo`, because `Todo`
+  re-dispatches it and that is how runs 3 and 4 both began. Evidence comment
+  added to GAM-322 for the reopen; that row's option set is not rewritten.
