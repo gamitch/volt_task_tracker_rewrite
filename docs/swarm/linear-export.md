@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-10T05:29:37.639Z from team `Gamitch`.
+Exported 2026-08-10T07:06:24.387Z from team `Gamitch`.
 
-- **316** issues (242 archived)
-- **40** not yet completed or cancelled
+- **317** issues (242 archived)
+- **41** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -45,7 +45,7 @@ Exported 2026-08-10T05:29:37.639Z from team `Gamitch`.
 | [GAM-300](https://linear.app/gamitch/issue/GAM-300/t807-two-loaders-still-apply-the-greatestx-1-floor-t509-removed-and) | T807 | Backlog | area/w5 tier/unreviewed | T807 — Two loaders still apply the `greatest(x, 1)` floor T509 removed, and three row types still declare `participation_pct` non-nullable |
 | [GAM-301](https://linear.app/gamitch/issue/GAM-301/t407-the-outreach-nav-badge-is-a-hardcoded-0-while-the-page-it-links) | T407 | Backlog | area/w1 tier/standard | T407 — The Outreach nav badge is a hardcoded `0` while the page it links to reads "74 awaiting your RSVP" |
 | [GAM-302](https://linear.app/gamitch/issue/GAM-302/9-closed-ledger-rows-are-sitting-in-linear-as-pickable-backlog-because) | — | Backlog | tier/fast | ~9 closed ledger rows are sitting in Linear as pickable Backlog, because their closure never touched the Status column |
-| [GAM-304](https://linear.app/gamitch/issue/GAM-304/t809-studenthomes-sign-up-cant-go-control-writes-nothing-and-says) | T809 | Todo | area/w5 tier/heavy | T809 — `StudentHome`'s Sign up / Can't go control writes nothing and says nothing — a documented deferral with no follow-up row |
+| [GAM-304](https://linear.app/gamitch/issue/GAM-304/t809-studenthomes-sign-up-cant-go-control-writes-nothing-and-says) | T809 | In Progress | area/w5 tier/heavy | T809 — `StudentHome`'s Sign up / Can't go control writes nothing and says nothing — a documented deferral with no follow-up row |
 | [GAM-305](https://linear.app/gamitch/issue/GAM-305/t615-the-schedule-meetings-team-picker-offers-archived-teams-the) | T615 | Backlog | area/w3 tier/unreviewed | T615 — The schedule-meetings team picker offers archived teams; the roster picker excludes them |
 | [GAM-306](https://linear.app/gamitch/issue/GAM-306/t616-no-event-records-who-created-it-so-outreach-detail-permanently) | T616 | Backlog | area/w3 tier/unreviewed | T616 — No event records who created it, so outreach detail permanently reads "Unknown creator" |
 | [GAM-311](https://linear.app/gamitch/issue/GAM-311/kpi-viewssqls-two-views-never-got-t801s-catalog-comment-rls-correction) | — | Backlog | tier/unreviewed | kpi_views.sql's two views never got T801's catalog-comment RLS correction -- D010 chose header-prose only |
@@ -54,6 +54,7 @@ Exported 2026-08-10T05:29:37.639Z from team `Gamitch`.
 | [GAM-314](https://linear.app/gamitch/issue/GAM-314/a-dispatched-run-reports-success-while-its-work-is-still-running-in) | — | Backlog | provenance/other tier/unreviewed | A dispatched run reports `success` while its work is still "running in the background" — and the process takes it |
 | [GAM-315](https://linear.app/gamitch/issue/GAM-315/any-branch-named-claudegam-nnn-closes-that-issue-on-merge-item-28f) | — | Backlog | provenance/other tier/unreviewed | Any branch named `claude/gam-nnn-*` closes that issue on merge — item 28f says it only links, and that is false here |
 | [GAM-316](https://linear.app/gamitch/issue/GAM-316/item-19-requires-recording-the-premise-gate-verdict-the-dispatch-path) | — | Backlog | provenance/other tier/unreviewed | Item 19 requires recording the premise-gate verdict; the dispatch path has no mechanism, so the first real one lived only in a 30-day artifact |
+| [GAM-317](https://linear.app/gamitch/issue/GAM-317/an-escalated-row-has-no-reply-address-gatehuman-is-machine-settable) | — | Backlog | provenance/other tier/unreviewed | An escalated row has no reply address: `gate/human` is machine-settable, hand-clearable only, and sends the owner no notification |
 
 ## Closed and cancelled
 
