@@ -1,9 +1,31 @@
 # GAM-315 task packet — correct item 28f, and name the mention-vs-work distinction
 
-**Revision 2**, after premise-gate round 1 returned REVISE (2 BLOCKER, 2 MAJOR,
-4 MINOR, 2 NIT). Round 1's findings and this revision's response are in
-`GAM-315-run-log.md`. Item 19a caps the gate at two rounds; this is round 2's
-input.
+> ## ⛔ ESCALATED TO THE HUMAN OWNER — DO NOT DISPATCH THIS PACKET YET
+>
+> **Revision 3.** The item 19a premise gate ran its full two rounds and
+> returned **REVISE** both times (round 1: 2 BLOCKER, 2 MAJOR, 4 MINOR, 2 NIT;
+> round 2: 1 BLOCKER, 2 MAJOR, 3 MINOR, 1 NIT). Item 19a: *"The gate is capped
+> at two rounds. A third REVISE escalates to the human owner instead of
+> looping."* **The cap is reached.** No `boss-architect` dispatch has been made
+> and none may be made until the owner rules.
+>
+> Revision 3 applies all six of round 2's required changes — every one a
+> deletion or a one-line qualification, none needing new measurement — so the
+> owner reviews the best available version. **That is not a pass.** The
+> orchestrator may not certify its own packet through a gate that is closed;
+> saying "the fixes were easy, so it would have passed" is exactly the
+> self-certification item 28e forbids.
+>
+> **What the owner is being asked.** Item 19a says a plan still failing after
+> two rounds "has something wrong with the plan, not the wording." The honest
+> counter-argument is in the run log: both rounds' BLOCKERs were *unmeasured
+> factual claims*, not structural faults, and round 2's BLOCKER was the gate
+> correcting **its own** round-1 finding that the orchestrator had adopted.
+> That is a plan converging, not a plan broken. The owner decides which reading
+> holds, and whether `boss-architect` may proceed.
+
+Round 1's and round 2's findings, and each revision's response, are in
+`GAM-315-run-log.md`.
 
 Tier: **HEAVY** (re-tiered from STANDARD on the gate's finding — item 26 says
 take the heavier when two are arguable, and this row is in fact receiving the
@@ -30,11 +52,19 @@ Cite nothing that is not in this list.
 
 ### F1 — Three things are known to link a PR to an issue. A bare prose mention is not one of them.
 
-**(a) The branch name.** And it fires *before any PR exists*: GAM-304 moved
-`Backlog → In Progress` at `2026-08-10T02:23:20.568Z` on a branch push — 48
-minutes before PR #138 was created (`03:11:02Z`) and with no attachment
-recorded. **Automation firing, not attachment count, is the instrument here**;
-attachments are the weaker test because a link can act without creating one.
+**(a) The branch name.** Sole clean exhibit: **#141** — see F4. **Automation
+firing, not attachment count, is the instrument** wherever the two differ;
+F1d's GAM-315 negative rests on both firing *and* attachment, so it does not
+depend on the distinction.
+
+*Withdrawn in revision 3:* an earlier draft claimed GAM-304's
+`Backlog → In Progress` at `2026-08-10T02:23:20.568Z` was a branch push 48
+minutes before PR #138 existed. **That is not measured and git does not support
+it** — the earliest commit on any `gam-304`-named ref is `2467554` at
+`03:09:32Z`, *after* the transition, and GitHub's events API returns nothing
+for those refs. A branch pushed at `main`'s tip with no commit of its own would
+explain it, but that is a hypothesis. Whether the branch name links *on push,
+before a PR exists* is **unmeasured**; do not write it into the constitution.
 
 **(b) A magic word** (`Closes`/`Fixes`/`Resolves` + identifier) in the body.
 Clean exhibit: #126 → GAM-303, whose branch `claude/next-ready-task-xvmtcj`
@@ -104,20 +134,56 @@ won and moved the issue **backwards** from `In Review`.
 unobservable in state history, which bounds what this data can ever show — the
 predicate is only testable where the target state differs.
 
-### F4 — A branch-name link alone closes the issue.
+### F4 — A branch-name link alone closes the issue. One clean exhibit: #141.
 
-Clean exhibits — identifier in the branch name only, **no** magic-word token
-anywhere in the body: #139 (merged `04:56:36Z` → `In Progress → Done`
-`04:56:38.276Z`), #141 (`11:54:41Z` → `11:54:43.137Z`), #144 (`14:56:17Z` →
-`14:56:19.490Z`).
+Per-channel matrix for GAM-304's seven linked PRs. Every later claim is
+checkable against it:
 
-Counts, stated precisely because round 1 got them wrong: of GAM-304's seven
-linked PRs, **six** intended no magic word (only #143 did), **three** contain no
-magic-word token at all (#139, #141, #144), and **five** drove the issue to
-`Done` (#138, #139, #140, #141, #144). **#138 and #140 are not clean exhibits**
-— each contains `close GAM-304` inside the very sentence disclaiming it (#140:
-*"This PR does not close GAM-304. It deliberately omits the `Closes` magic
-word."*). Do not cite them for the "no magic word" point.
+| PR | `GAM-304` in title | in branch | magic-word token in body | outcome |
+| -- | -- | -- | -- | -- |
+| #138 | no | **yes** | **yes** | → Done |
+| #139 | **yes** | **yes** | no | → Done |
+| #140 | **yes** | **yes** | **yes** | → Done |
+| **#141** | **no** | **yes** | **no** | **→ Done** |
+| #142 | no | **yes** | **yes** | no transition (already Done) |
+| #143 | **yes** | **yes** | **yes** | → In Progress |
+| #144 | **yes** | **yes** | no | → Done |
+
+**Exactly one PR is a clean branch-name-only link: #141** (merged `11:54:41Z` →
+`In Progress → Done` `11:54:43.137Z`). Its body mentions `GAM-304` only in bare
+prose, which F1d measures as non-linking.
+
+**The other six are confounded** — #138, #140, #142 by a magic-word token;
+#139 and #144 by a **title** identifier, which F1c has just established as a
+live channel; #143 by both. Revision 2 removed the magic-word confound from
+this exhibit set and introduced a title confound in the same sentence, by not
+applying F1c backwards.
+
+**Say this plainly in the constitution: the branch-name channel rests on a
+single clean observation.** It is enough — #141's transition is unambiguous and
+2.1 seconds after merge — but an architect must not write "three PRs
+demonstrate".
+
+Counts, stated precisely because round 1 got them wrong: of the seven, **six**
+intended no magic word (only #143 did), **three** contain no magic-word token
+at all (#139, #141, #144), and **five** drove the issue to `Done`.
+
+### F8 — Commit messages do not link.
+
+Commit `c865b51` (`2026-08-10T13:33:21Z`), message *"docs(swarm): GAM-304 three
+MINOR follow-ups filed as GAM-318/319/320"*, sits on `claude/gam-304-rsvp-write`
+→ PR #143, whose branch, title and body reference **only** GAM-304. `GAM-318`
+appears nowhere but that commit message. Measured: **GAM-318 has zero
+attachments and zero state transitions**, created `13:33:06.738Z` and still
+`Backlog` — unmoved across the push (`13:33:21Z`), the PR opening (`13:37:13Z`)
+and the merge (`14:00:01Z`). On a team whose automations are unscoped, a link
+would have fired `start` at open and `merge → Done` at merge. Nothing fired.
+
+This is stronger than the constitution's existing "Linear does not read commit
+trailers" claim, because it is a commit-message **body** in canonical form.
+GAM-319 and GAM-320 corroborate only weakly — they appear as bare suffixes in
+`GAM-318/319/320`, so their tokenization is not established. **GAM-318 alone
+carries the test; say so.**
 
 ### F5 — `Closes GAM-304` on body line 1 did not close GAM-304.
 
@@ -157,8 +223,9 @@ name or title does **not** "link only", and it does **not** leave the issue
 
 Rewrite 28f to separate the two mechanisms it currently conflates:
 
-- **Linking** — branch name, title, or magic word (F1a-c). Note that the
-  branch name links on push, before a PR exists.
+- **Linking** — branch name, title, or magic word (F1a-c). Not a bare prose
+  mention (F1d) and not a commit message (F8). **Write "known to link", not an
+  exhaustive list** — PR comments were never testable here.
 - **Closing** — the team's `merge → Done` automation, when the last linked PR
   merges (F2, F3). Never the magic word by itself.
 
@@ -212,15 +279,31 @@ third-party parser, so prefer it.
 **Mechanical fallback, when a separate issue is not warranted.** Extend line
 495's existing sentence rather than adding a competing paragraph — the rule
 belongs in one place. The identifier must appear in **none** of: the branch
-name, the PR title, or adjacent to `close`/`fix`/`resolve` anywhere in the
-body. A bare prose mention elsewhere in the body is measured safe (F1d).
+name, the PR title, or the same sentence as a `close`/`fix`/`resolve` token.
+A bare prose mention elsewhere in the body is measured safe (F1d).
+
+**"Adjacent" must be defined, because a checker has to apply it.** Use
+*same sentence* — deliberately stricter than the parser. The bound is #142's
+own body line 1: *"Merging closes GAM-304 via the branch-name link
+(GAM-315)"*. `GAM-315` sits in the same sentence as `closes` and was measurably
+**not** linked (F1d), so Linear's parser is *not* sentence-scoped; the tight
+form (identifier must not immediately follow the token) is what the data
+supports. A rule should prescribe the safe side of a boundary it knows only
+approximately, so prescribe *same sentence* and say why it is stricter than
+measured.
 
 **This constraint is not optional and round 1 got it wrong.** Prose written
 *about* a linking hazard reliably contains the magic-word pattern: #142, #138
 and #140 each carry `close(s) GAM-304` in the sentence explaining they must not
 close it. A rule that renames the branch but permits that sentence converts a
-branch-name link into a magic-word link and changes nothing. Demonstrate the
-rewritten rule against #142, #138 and #140 and show it rejects all three.
+branch-name link into a magic-word link and changes nothing.
+
+**Show the compliant form, not only the rejections.** All three exhibits
+*needed* to say "merging this must not close GAM-304"; a rule that forbids the
+only sentence its authors wanted, without showing what to write instead,
+invites improvisation. The worked rewrite: **"merging this must not close the
+issue this branch is named for"** — no identifier, so no channel. Or take the
+primary instruction and give the work its own issue.
 
 Line 493 reads "Constitution item 28f depends on it." Check against 28f as
 rewritten and correct if it no longer holds.
@@ -255,14 +338,29 @@ because that script's glob (`src/**/*.{ts,tsx}`, `*.{ts,js,json,html}`) matches
 5. Item 28g states the three live automations, that they are unscoped,
    date-stamped, and names the reproducing query.
 6. `WORKFLOWS.md` rule 2 leads with "give mention-work its own issue" and gives
-   the three-place fallback (branch, title, magic-word adjacency), demonstrated
-   against #142, #138 and #140.
-7. Every factual claim added traces to F1-F7. No new unmeasured claim; in
-   particular nothing that resolves F1c's disjunction.
-8. **Runnable:** `grep -n "links only" docs/swarm/constitution.md` → no match.
-   `grep -n "sitting in" docs/swarm/constitution.md` → no match.
-   `grep -rn "Until that is on\|Until it is on" docs/swarm/` → no match.
-   `git diff --name-only main` lists only the three Allowed files.
+   the three-place fallback (branch, title, same-sentence magic word) with
+   "same sentence" stated explicitly, demonstrated against #142, #138 and #140
+   **plus one worked compliant rewrite**.
+7. Every factual claim added traces to F1-F8. No new unmeasured claim; in
+   particular nothing that resolves F1c's disjunction, and nothing asserting
+   that a branch name links on push (F1a, withdrawn).
+8. **Runnable — each check can fail, and none matches this packet.** Round 1's
+   `format:check` criterion could not fail; revision 2's greps 3 and 4 could
+   not pass. Both are corrected here:
+   - `grep -n "links only" docs/swarm/constitution.md` → no match
+     (matches `:467` today, so it can fail).
+   - `grep -n "sitting in" docs/swarm/constitution.md` → no match
+     (matches `:469` today).
+   - `grep -n "Until that is on" docs/swarm/constitution.md` → no match.
+   - `grep -n "Until it" docs/swarm/2026-08-09-tracker-migration.md` → no
+     match. **Anchored to the file, and to `Until it` alone**, because that
+     document wraps the phrase across `:245`/`:246` — revision 2's
+     `Until it is on` never matched it, and its `-r docs/swarm/` form matched
+     this packet, so correct work was marked failed.
+   - `git diff --name-only main -- docs/swarm/constitution.md
+     docs/swarm/WORKFLOWS.md docs/swarm/2026-08-09-tracker-migration.md` lists
+     exactly those three, and no file outside that set and
+     `docs/swarm/active/` is touched.
 
 ## Least confident decisions (item 19d)
 
@@ -275,11 +373,13 @@ because that script's glob (`src/**/*.{ts,tsx}`, `*.{ts,js,json,html}`) matches
    parser dependency for tracker noise: every CI fix touching an issue's
    context becomes a new row. Wrong if that noise is worse than the rare wrong
    close — the owner, not this packet, is the judge of that.
-3. **That the three-place fallback is complete.** It is the union of everything
-   measured to link. Wrong if a fourth channel exists — commit messages and PR
-   *comments* were never tested, and Linear parses both in some
-   configurations. C1 should not claim the list is exhaustive, only that these
-   three are known.
+3. **That the three-place fallback is complete.** Narrowed in revision 3: the
+   commit-message channel is now **closed** by F8 (GAM-318 took zero
+   attachments and zero transitions across push, open and merge), so the only
+   untested channel left is **PR comments**. Those were untestable here — the
+   sole comments naming an identifier anywhere in the window are
+   `linear-code[bot]`'s own linkbacks, posted *because* the PR is already
+   linked. C1 must therefore say "known to link", not "these are all".
 4. **That prose enumeration in C2 is acceptable at all.** LCD #4 of round 1 and
    the gate both note it goes stale silently the moment Deliverable B lands.
    The date-stamp and named query are a mitigation, not a fix. Wrong if the
@@ -290,10 +390,19 @@ because that script's glob (`src/**/*.{ts,tsx}`, `*.{ts,js,json,html}`) matches
    have now attacked. Wrong if the `checker-reviewer` round finds nothing a
    careful read would not — but item 26's tie-break makes that the cheap error.
 
-## Deliverable B — separate, not part of this diff
+## Deliverable B — a separate Linear filing, but its draft *is* in this diff
 
-File a Linear follow-up for the owner's automation decision (item 20, written
-per item 30 / `linear-task-writing`), labelled `gate/human`: three unscoped
-automations are live where item 28g asked for one, `start → In Progress` is
-what moves an issue backwards, and `targetBranch` cannot express a head-branch
-scheme. The owner decides; no agent may change it.
+Corrected in revision 3: revision 2 said "not part of this diff" while
+`docs/swarm/active/GAM-315-deliverable-b.md` was already committed at
+`929c0be`. Both could not be true.
+
+**The draft file is part of this diff** — it lives under
+`docs/swarm/active/`, which is orchestrator-owned, alongside the packet and run
+log. What is *not* part of this diff is the **Linear issue** it becomes, and
+the owner action it requests.
+
+The filing (item 20, written per item 30 / `linear-task-writing`) is labelled
+`gate/human`: three unscoped automations are live where item 28g asked for one,
+`start → In Progress` is what moves an issue backwards, and `targetBranch`
+scopes the PR's *base* branch so it cannot express a head-branch scheme. The
+owner decides; no agent may change it.

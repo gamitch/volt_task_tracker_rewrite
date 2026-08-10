@@ -207,3 +207,50 @@ Item 26's trigger question still answers *no*.
   does not read commit trailers" is therefore **unverified here, not refuted**.
   Recorded rather than resolved; the packet's LCD #3 already forbids claiming
   the link list is exhaustive.
+- **premise gate round 2 — VERDICT: REVISE.** 1 BLOCKER, 2 MAJOR, 3 MINOR,
+  1 NIT. Seven of round 1's nine required revisions were accepted as addressed;
+  two were "addressed in conclusion, broken in evidence."
+  - **BLOCKER 1 — and it is the gate correcting its own round-1 finding.** F1a
+    claimed GAM-304's `02:23:20.568Z` transition was a branch push 48 minutes
+    before #138 existed. Not measured: the earliest commit on any `gam-304`
+    ref is `2467554` at `03:09:32Z`, *after* the transition, and GitHub's
+    events API returns nothing for those refs. I adopted the gate's round-1
+    finding 9 verbatim without checking the git side. **An unmeasured claim was
+    one dispatch away from entering the constitution — which is the exact
+    defect GAM-315 exists to remove from item 28f.** Withdrawn in revision 3.
+  - **MAJOR 2 — the clean-exhibit set was wrong again, in a new way.** #139 and
+    #144 carry `GAM-304` in their *titles*, which F1c had just established as a
+    live channel one page earlier. Revision 2 removed the magic-word confound
+    and introduced a title confound in the same sentence by not applying F1c
+    backwards. **Exactly one PR of the seven is a clean branch-name-only link:
+    #141.** The premise still holds — but on one observation, not three, and
+    the packet now says so and carries the seven-row channel matrix.
+  - MAJOR 3 — criterion 8, the criterion advertised as "can fail", could not
+    *pass*: grep 3 matched the packet itself, and never matched the file it
+    targeted (`tracker-migration.md` wraps the phrase across `:245`/`:246`);
+    grep 4 was unsatisfiable. Both corrected.
+  - MINOR 5 — **the gate closed one of my open channels for me.** Commit
+    messages do not link: `GAM-318` is named only in commit `c865b51` on PR
+    #143's branch and took zero attachments and zero transitions across push,
+    open and merge. Promoted to F8; LCD #3 narrowed to PR comments alone.
+  - The gate also *upheld* the two judgement calls I most expected to lose:
+    declining the F1c experiment ("I would not require it" — the only team is
+    the live one, and `linear-export.yml` would commit the throwaway into the
+    git-side record), and the HEAVY re-tier ("a label that matches observed
+    reality is not inflation").
+- **ITEM 19a CAP REACHED — ESCALATED TO THE HUMAN OWNER.** Two rounds, two
+  REVISEs. Item 19a forbids a third round. **No `boss-architect` dispatch has
+  been made and the constitution is unchanged.** Revision 3 applies all six of
+  round 2's required changes so the owner reviews the best version, but that is
+  explicitly *not* a self-issued pass — certifying my own packet through a
+  closed gate is the self-certification item 28e forbids.
+- **branch renamed, applying this issue's own finding to itself.**
+  `claude/gam-315-branch-link-closes` → `claude/item-28f-linking-measurement`.
+  **Item 28f is still wrong in `constitution.md`, so GAM-315 must not close** —
+  and a branch carrying the identifier would have closed it on merge (F4/#141).
+  GAM-315 had no attachment at rename time (attachments are created when a PR
+  opens, not on branch push), so the link was still preventable. The PR carries
+  no identifier in its title and no magic word; the issue is referenced in
+  prose only, which F1d measures as non-linking. This is the C3 rule applied by
+  its own author before it is ratified — and the strongest evidence available
+  that the finding is real and actionable.
