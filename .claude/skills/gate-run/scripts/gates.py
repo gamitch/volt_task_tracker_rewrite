@@ -8,13 +8,26 @@ directly, not through a pipe", and why this script uses subprocess argument
 lists with no shell in between.
 
 Refuses to report a result it cannot stand behind:
-  - a vitest run that collected zero files or zero tests is not evidence,
-    however green its exit code
   - a summary line this script cannot read is reported as unreadable, never
     silently counted as zero
+  - a vitest run that collected zero files or zero tests is not evidence,
+    however green its exit code (see the note on reachability below)
+  - eslint exiting non-zero with no errors in its tally failed for a non-lint
+    reason, and says nothing about the code
   - a gate that timed out is untrustworthy, not failed
   - a missing scope leaves gate 6 SKIPPED and the verdict "5 of 6"; this script
     will not print "all six gates pass" when it ran five
+  - a dirty tree under --require-clean, because gates on uncommitted work do
+    not describe the commit they would name
+
+On the zero-collected branch, measured rather than assumed: vitest 3.2.7 in
+this repo exits **1** on an empty match ("No test files found, exiting with
+code 1") and prints no summary at all, so a bogus scope is caught by the
+unreadable-summary refusal and the exit code. `passWithNoTests` is not set
+anywhere in the config. The files==0/tests==0 branch is therefore insurance
+against someone setting it -- which flips an empty run to exit 0 -- and not
+the mechanism that catches a wrong --scope today. It is kept deliberately;
+the earlier claim that an empty run "exits 0" here was wrong.
 
 Exit codes:
   0  all gates run passed
@@ -132,6 +145,35 @@ def parse_eslint(output: str) -> tuple[int, int]:
 PASS, FAIL, SKIP, UNTRUSTED = "PASS", "FAIL", "SKIP", "UNTRUSTED"
 
 
+def eslint_verdict(
+    returncode: int, errors: int, warnings: int, max_warnings: int | None
+) -> tuple[str, str]:
+    """Decide gate 4 from the process status *and* the tally. Returns (status, note).
+
+    eslint's contract: 0 when the run was clean or found only warnings, 1 when
+    it found lint errors, 2 when eslint itself failed (bad config, missing
+    plugin, unresolvable import). The tally alone cannot tell those apart --
+    an eslint that dies before printing anything parses as (0, 0), which would
+    read as a pass.
+
+    That was the one place this script ignored the exit code it exists to
+    preserve, so it is decided here rather than inline: a non-zero status with
+    no errors in the tally means eslint failed for a reason that has nothing
+    to do with the code, and an agent must not record it as a clean gate.
+    """
+    if returncode != 0 and errors == 0:
+        return UNTRUSTED, (
+            f"eslint exited {returncode} with no errors in its tally -- it "
+            "failed for a non-lint reason (bad config, missing plugin), so "
+            "this says nothing about the code"
+        )
+    if errors:
+        return FAIL, ""
+    if max_warnings is not None and warnings > max_warnings:
+        return FAIL, f"warnings exceed --max-warnings {max_warnings}"
+    return PASS, ""
+
+
 class Gate:
     def __init__(self, number: int, name: str, argv: list[str] | None):
         self.number = number
@@ -242,6 +284,12 @@ def main() -> int:
         "report the count without judging it.",
     )
     parser.add_argument(
+        "--require-clean",
+        action="store_true",
+        help="Refuse to report on a dirty tree. Use it for the pre-PR run and "
+        "for a checker's run, where the claim is about a commit.",
+    )
+    parser.add_argument(
         "--fail-fast",
         action="store_true",
         help="Stop at the first failing gate. Off by default: a complete "
@@ -283,6 +331,22 @@ def main() -> int:
     sha = head.stdout.strip() or "unknown"
     branch_name = branch.stdout.strip() or "unknown"
     dirty = bool(porcelain.stdout.strip())
+
+    # Item 21: "clean" and "committed" are different claims, and T142 is the
+    # recorded case of work that was real, measured, and entirely uncommitted.
+    # Gates on a dirty tree describe the working directory, not the commit
+    # anyone will merge or review -- so a run that is about to become a verdict
+    # refuses rather than printing a SHA its numbers do not describe. Left
+    # advisory by default because mid-work runs are legitimate and frequent.
+    if dirty and args.require_clean:
+        print(
+            f"UNTRUSTWORTHY: working tree is dirty at {sha} and --require-clean "
+            "was given. These gates would describe uncommitted work while "
+            "naming a commit. Commit or stash first.\n"
+            + porcelain.stdout.rstrip(),
+            file=sys.stderr,
+        )
+        return 2
 
     scope = args.scope or derive_scope(cwd, args.base)
     scope_derived = args.scope is None and scope is not None
@@ -334,12 +398,11 @@ def main() -> int:
                 gate.status, gate.note, untrusted = UNTRUSTED, str(exc), True
             else:
                 gate.detail = f"{errors} errors, {warnings} warnings"
-                over = (
-                    args.max_warnings is not None and warnings > args.max_warnings
+                gate.status, gate.note = eslint_verdict(
+                    result.returncode, errors, warnings, args.max_warnings
                 )
-                gate.status = PASS if (errors == 0 and not over) else FAIL
-                if over:
-                    gate.note = f"warnings exceed --max-warnings {args.max_warnings}"
+                if gate.status == UNTRUSTED:
+                    untrusted = True
 
         elif gate.number in (5, 6):
             try:
