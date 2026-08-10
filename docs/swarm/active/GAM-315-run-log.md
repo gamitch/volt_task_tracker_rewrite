@@ -631,3 +631,37 @@ yet test the merge case, which is what #149 and #150 are still open to observe.
   back; row deliberately left `In Progress`, **not** `Todo`, because `Todo`
   re-dispatches it and that is how runs 3 and 4 both began. Evidence comment
   added to GAM-322 for the reopen; that row's option set is not rewritten.
+
+### Gate figures
+
+```
+GATE RUN — 3c2685b on claude/item-28f-revision-5-mechanism
+  1 tsc              exit 0  PASS
+  2 vite build       exit 0  PASS
+  3 format:check     exit 0  PASS
+  4 eslint           exit 0  PASS   0 errors, 377 warnings
+  5 vitest (full)    exit 0  PASS   83 files / 2162 tests  baseline 2162 (+0)
+  6 vitest (scoped)      –  SKIP   no scope derivable from the diff
+VERDICT: PASS — 5 of 6 gates. NOT all six: 1 skipped.
+```
+
+**Five, not six**, for the same reason as runs 2 and 3: gate 6 has no defensible
+scope because the diff contains no `src/` file. Figures match both prior runs
+exactly (83 files / 2162 tests, 0 errors / 377 warnings) across three containers
+and three agents, which is the independent agreement the skill exists to
+produce. `npm ci` was required first — the container had no `node_modules`.
+
+The run reported `tree DIRTY`: the only uncommitted file was `gate-out.txt`, the
+capture of this very output, since deleted. No source or tracked file was
+uncommitted.
+
+**These gates say the tree still builds and stays green. They say nothing about
+this diff**, which is markdown no gate reads — `format:check`'s glob is
+`src/**/*.{ts,tsx}` and `*.{ts,js,json,html}`. Stated rather than papered over
+with a green tick. CI runs them regardless.
+
+**A first attempt was discarded rather than quoted.** It exited 0 but its
+redirect did not survive the background shell, leaving an exit code and no
+evidence block. Reporting the prior runs' identical figures from memory would
+have been an unmeasured claim on a row that exists because of unmeasured claims,
+so the gates were re-run in the foreground and the block above is that run's.
