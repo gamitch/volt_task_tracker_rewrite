@@ -364,3 +364,45 @@ section is that run. **PR #149 stays open and unmerged** per the ruling.
   (`AGENTS.md:36-37`, outside Allowed Files) and B (push does not attach).
   **This is the last round.** Per the ruling, a REVISE escalates to the owner;
   it does not open a fourth.
+- **premise gate round 3 — VERDICT: REVISE.** `checker-premise` on opus, 35 tool
+  calls, ~81K tokens. **0 BLOCKER, 3 MAJOR, 4 MINOR, 1 NIT.** It ran rather than
+  only read (item 26): 7 Linear GraphQL calls, ~20 `gh` calls, a team-wide
+  attachment `sourceType` sweep, and GraphQL schema introspection.
+
+  **The owner's three priorities, answered:**
+  1. *A third unmeasured claim is present.* **Found — two of them**, both MAJOR,
+     and both in `WORKFLOWS.md`/C3 rather than in the F-list the last two rounds
+     had been polishing.
+  2. *The five-closes / one-clean-exhibit arithmetic.* **Both CONFIRMED.** All 28
+     cells of F4's matrix re-verified; #141 is the only PR with neither a title
+     identifier nor a magic-word token, merged `11:54:41Z` → transition
+     `11:54:43.137Z`, 2.1s.
+  3. *`targetBranch` is base, not head.* **CONFIRMED from the API's own schema
+     description** ("pull requests *targeting* the specified branch pattern"),
+     which is a better instrument than the behavioural inference. GAM-322's
+     option set stands.
+
+  **Clean item 19c round:** every line citation in revision 3 verified correct.
+  Rounds 1 and 2 each lost budget to citation drift; round 3 lost none.
+
+- **CORRECTION — this run's own "finding B" is withdrawn.** The gate refuted it,
+  and it is recorded here rather than quietly dropped, because getting this wrong
+  is the exact defect GAM-315 exists to remove.
+
+  This run claimed above that pushing `claude/gam-315-branch-link-closes-issue`
+  twice with no PR, and reading GAM-315's `attachments` back empty, showed **a
+  branch name does not link on push**. It shows no such thing. **Both instruments
+  were blind:**
+  - *Firing:* GAM-315 was already `In Progress` (`21:25:13.352Z`) before either
+    push, so `start → In Progress` would have been a **no-op** — unobservable, by
+    the packet's own F3 caveat, which this run had read and did not apply.
+  - *Attachments:* there is **no positive control**. A sweep of the first 40 GAM
+    issues returned 13 attachments, every one `sourceType: "github"` with a
+    `/pull/` URL and **zero** of branch type — so an empty array says nothing
+    about branch links either way.
+
+  Correct status: *consistent with, does not measure.* **F1a's withdrawal and
+  acceptance criterion 7 stand unchanged** — revision 3 was right and this run
+  was wrong. An unmeasured claim came within one packet revision of the
+  constitution for the third round running, and this time the orchestrator
+  supplied it.
