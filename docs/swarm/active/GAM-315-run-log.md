@@ -277,3 +277,23 @@ Item 26's trigger question still answers *no*.
   for MINOR 4's point that "adjacent" needs a definition a checker can apply:**
   the author of the rule broke it twice while writing the very PR that proposes
   it, and only a mechanical check caught it.
+- **gates run** — `gate-run` with `--require-clean`, on the final branch state:
+
+  ```
+  GATE RUN — 8f89fb6 on claude/item-28f-linking-measurement — tree clean
+    1 tsc              exit 0  PASS
+    2 vite build       exit 0  PASS
+    3 format:check     exit 0  PASS
+    4 eslint           exit 0  PASS   0 errors, 377 warnings
+    5 vitest (full)    exit 0  PASS   83 files / 2162 tests
+                                      (no baseline given — regression not checked)
+    6 vitest (scoped)      –  SKIP    no scope derivable from the diff
+  VERDICT: PASS — 5 of 6 gates. NOT all six: 1 skipped.
+  ```
+
+  **Five, not six**, and gate 5 carried no baseline. Gate 6 is unskippable-by-
+  choice here: the diff contains no `src/` file, so no scope exists to derive.
+  The 377 warnings match the standing pre-existing count the skill documents.
+  These gates say the tree still builds and stays green; they say **nothing**
+  about this diff, which is markdown that no gate reads — as PR #149 states
+  rather than implying a green tick covers it.
