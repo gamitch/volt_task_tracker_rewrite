@@ -426,3 +426,16 @@ section is that run. **PR #149 stays open and unmerged** per the ruling.
   GAM-315's Allowed Files. Line numbers re-verified against `origin/main` before
   writing; `git diff --stat origin/main -- AGENTS.md` empty. `Backlog`, not
   `Todo` — promotion is the owner's signal (item 28a).
+- **escalated to the owner on the row** — comment posted on GAM-315 with round
+  3's verdict, the three priorities answered, the retraction, and the
+  recommendation (rule on revision 4 directly, or dispatch `boss-architect` on it
+  as it stands; a fourth gate round is not worth ~81K opus tokens against a
+  0-BLOCKER result). Labels `gate/human` + `escalated` re-added; **state left
+  `In Progress`, deliberately not `Todo`** — `Todo` is what re-dispatches, and
+  dispatching a fresh agent onto a row awaiting an owner decision is how this run
+  began. Read back: `In Progress`, labels `other, heavy, human, escalated`.
+- **PR opened — #150**, base `main`, head `claude/item-28f-gate-round3`, stacked
+  on #149. No identifier in branch or title, no magic word, the row named in
+  prose only. **No `boss-architect` dispatch was made and the constitution is
+  untouched** — `git diff --name-only main` is three files, all markdown under
+  `docs/swarm/active/`.
