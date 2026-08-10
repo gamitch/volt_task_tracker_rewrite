@@ -111,3 +111,16 @@ Item 26's trigger question still answers *no*.
 **Authority (Authority Boundaries, constitution.md:22-24):** only
 `boss-architect` and `boss-arbiter` may modify `constitution.md`. A
 `worker-implementer` may not, so the edit is dispatched to `boss-architect`.
+
+## Run milestones (continued)
+
+- **packet written** — `docs/swarm/active/GAM-315-packet.md`. Scope: item 28f,
+  item 28g, `WORKFLOWS.md` rule 2. Six measured facts F1-F6, eight acceptance
+  criteria, five least-confident decisions (item 19d, included though STANDARD
+  does not require it). Assigned to `boss-architect` because Authority
+  Boundaries reserves `constitution.md` to boss roles.
+- **F1 measured (new, packet-blocking)** — a bare prose mention of `GAM-nnn` in
+  a PR body does **not** create a Linear link. PR #142's body line 1 names
+  GAM-315; GAM-315 has zero attachments; GAM-315 was created 04:54:22Z, eight
+  hours before #142 opened at 13:17:02Z, so the timing confound is eliminated.
+  This is what makes a mention-vs-work branch convention possible at all.
