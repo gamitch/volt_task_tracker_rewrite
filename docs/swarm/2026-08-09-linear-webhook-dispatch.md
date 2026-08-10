@@ -375,7 +375,9 @@ about a _missing JWT_ means the config did not take.
 **commits made with `GITHUB_TOKEN` do not trigger CI** — a PR whose checks never run looks fine and
 is worse than a red one.
 
-Also still outstanding from the migration: enable the Linear automation **PR merged → Done**.
+~~Also still outstanding from the migration: enable the Linear automation **PR merged → Done**.~~
+**Done** — and three automations are live, not one, all unscoped. Constitution item 28g carries the
+measured configuration, dated, with the query that reproduces it.
 
 ---
 

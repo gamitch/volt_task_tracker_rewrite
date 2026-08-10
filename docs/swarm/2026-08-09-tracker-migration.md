@@ -242,8 +242,9 @@ delete for rollback, cannot batch, and cannot be read before it runs.
    dispatch model. Now labelled as such, not yet rewritten.
 8. **The findings pipeline is end-to-end untested** — the skill emits, the filer consumes, but no
    real run has gone through both.
-9. **Enable the Linear automation *PR merged → Done*** for the `Gamitch` team (item 28f). Until it
-   is on, issues sit in `In Review` after their PR lands and must be closed by hand.
+9. ~~**Enable the Linear automation *PR merged → Done*** for the `Gamitch` team (item 28f).~~
+   **Done** — and three automations are live, not one, all unscoped. Constitution item 28g carries
+   the measured configuration, dated, with the query that reproduces it.
 
 ---
 
