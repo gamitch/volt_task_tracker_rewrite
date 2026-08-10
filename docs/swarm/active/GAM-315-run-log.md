@@ -190,3 +190,12 @@ Item 26's trigger question still answers *no*.
   extend `WORKFLOWS.md:495` rather than add a competing paragraph; date-stamp
   C2 and name the reproducing query). Allowed files now three; acceptance
   criterion 8 is runnable and can fail.
+- **premise gate round 2 dispatched** — same `checker-premise` agent resumed
+  with its round-1 context, so it verifies its own nine required revisions
+  rather than re-deriving them. Item 19a: this is the last round; a third
+  REVISE escalates to the human owner.
+- **Deliverable B drafted** — `docs/swarm/active/GAM-315-deliverable-b.md`,
+  written through `.claude/skills/linear-task-writing` per item 30. Not yet
+  filed in Linear. Recommends option 1 (disable `start → In Progress`) and
+  records that `targetBranch` cannot express a head-branch scheme, so scoping
+  is not among the options.
