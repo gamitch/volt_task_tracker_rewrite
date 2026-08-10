@@ -297,3 +297,62 @@ Item 26's trigger question still answers *no*.
   These gates say the tree still builds and stays green; they say **nothing**
   about this diff, which is markdown that no gate reads — as PR #149 states
   rather than implying a green tick covers it.
+
+---
+
+# Round 3 — second dispatch, 2026-08-10T21:25Z
+
+Different agent, different container. The owner ruled at `21:23:26Z`
+(*"approve the 3rd gate request"*), removed `gate/human` and `escalated`, and
+moved the row `In Progress → Todo` at `21:24:00Z`, which re-dispatched it. This
+section is that run. **PR #149 stays open and unmerged** per the ruling.
+
+- **claimed** — `Todo → In Progress` at `21:25:13.352Z` via Linear GraphQL
+  (no Linear MCP tool in this runtime; `LINEAR_API_KEY` is present). Read back:
+  `state.name = "In Progress"`. Item 28c satisfied. Label was already `heavy`,
+  so item 28d tiering was not part of claiming — the previous run re-tiered it.
+- **premise re-measured independently, before PR #149 was known.** The dispatch
+  order is explicit that a premise nobody checked is worse than a refusal, so
+  this run measured the load-bearing facts from scratch rather than reading them
+  off the row. It reached **the same three unscoped `gitAutomationStates`**
+  (`start → In Progress`, `review → In Review`, `merge → Done`, all
+  `branchPattern: null`, `targetBranch: null`) and **the same aggregate-state
+  conclusion** from the same #143/#142 exhibit. Two runs, two containers, one
+  result — recorded because independent corroboration is worth more than a
+  citation, and because it cost four API calls.
+
+  **This is corroboration, not new work.** The ruling says the measurements
+  "must not be re-derived"; that instruction was read after the fact, and the
+  duplicate spend is noted here rather than hidden.
+- **two things this run adds that the packet does not have:**
+
+  **A. `AGENTS.md:36-37` carries the same false claim and is outside the
+  packet's Allowed Files.** A delegated `checker-premise` (opus) verifying the
+  issue's repo-side citations found `AGENTS.md:36-37` — *"An identifier in the
+  title or branch links but does **not** close."* — verbatim the sentence item
+  28f is being corrected for, in the file agents read at startup. The packet's
+  Allowed Files are `constitution.md`, `WORKFLOWS.md`, and
+  `2026-08-09-tracker-migration.md:245`. **A correction that lands only in those
+  three leaves the falsehood standing in `AGENTS.md`.** This goes to round 3.
+
+  **B. A branch name does not link on push — the link is created when the PR is
+  opened.** The packet's F1a explicitly withdraws a claim here and marks it
+  *"unmeasured; do not write it into the constitution."* This run supplies the
+  negative: branch `claude/gam-315-branch-link-closes-issue` (identifier in the
+  name) was pushed to `origin` twice, at `21:27Z` and `21:36Z`, with **no PR
+  opened**. GAM-315's `attachments` read back **empty** at `21:40Z` and its
+  state history shows no transition from either push. Scope honestly: this shows
+  push-without-PR does not attach *in this workspace with these settings*; it
+  does not prove the timing of attachment in every case. It is enough to stop
+  F1a's withdrawn claim from being reinstated, and it is why the rename below
+  was still possible.
+- **branch restructured, and the finding applied to this run too.** This run
+  started on `claude/gam-315-branch-link-closes-issue` — which carries the
+  identifier and would have closed GAM-315 on merge, exactly the hazard under
+  repair, and wrong here because round 3 may yet return REVISE. Renamed to
+  **`claude/item-28f-gate-round3`**, no identifier, before any PR existed and
+  while attachments were still empty. Rebased onto
+  `claude/item-28f-linking-measurement` (PR #149) instead of `main`, so this
+  work **stacks on** #149 rather than racing it: both runs would otherwise have
+  written this same file on two branches and conflicted head-on. The old remote
+  branch is deleted.
