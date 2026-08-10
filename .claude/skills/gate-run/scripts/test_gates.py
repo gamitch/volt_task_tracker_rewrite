@@ -20,7 +20,16 @@ import unittest
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))
 
-from gates import Unreadable, common_scope, parse_eslint, parse_vitest  # noqa: E402
+from gates import (  # noqa: E402
+    FAIL,
+    PASS,
+    UNTRUSTED,
+    Unreadable,
+    common_scope,
+    eslint_verdict,
+    parse_eslint,
+    parse_vitest,
+)
 
 
 class ParseVitest(unittest.TestCase):
@@ -105,6 +114,50 @@ class ParseEslint(unittest.TestCase):
         """Lines with no tally could be anything; guessing would invent a pass."""
         with self.assertRaises(Unreadable):
             parse_eslint("Oops! Something went wrong! :(\nERR_MODULE_NOT_FOUND\n")
+
+
+class EslintVerdict(unittest.TestCase):
+    """Gate 4 is the only gate whose verdict is not the raw exit code.
+
+    That is right for warnings -- eslint exits 0 with 377 of them -- but it
+    once meant the exit code was ignored entirely, so an eslint that died
+    before printing anything parsed as (0, 0) and passed.
+    """
+
+    def test_clean_run_passes(self):
+        self.assertEqual(eslint_verdict(0, 0, 0, None), (PASS, ""))
+
+    def test_warnings_alone_pass(self):
+        """This repo's standing state: exit 0, zero errors, 377 warnings."""
+        self.assertEqual(eslint_verdict(0, 0, 377, None), (PASS, ""))
+
+    def test_errors_fail(self):
+        status, _ = eslint_verdict(1, 3, 377, None)
+        self.assertEqual(status, FAIL)
+
+    def test_warnings_over_explicit_ceiling_fail(self):
+        status, note = eslint_verdict(0, 0, 378, 377)
+        self.assertEqual(status, FAIL)
+        self.assertIn("377", note)
+
+    def test_warnings_at_the_ceiling_pass(self):
+        self.assertEqual(eslint_verdict(0, 0, 377, 377), (PASS, ""))
+
+    def test_nonzero_exit_with_no_errors_is_untrustworthy(self):
+        """eslint exit 2: bad config or a missing plugin, not a lint result.
+
+        The container this skill was written in reproduced exactly this --
+        `Cannot find package '@eslint/js'` -- and a tally-only verdict would
+        have called it a clean gate.
+        """
+        status, note = eslint_verdict(2, 0, 0, None)
+        self.assertEqual(status, UNTRUSTED)
+        self.assertIn("non-lint reason", note)
+
+    def test_nonzero_exit_with_errors_is_an_ordinary_failure(self):
+        """Exit 1 with errors in the tally is eslint working correctly."""
+        status, _ = eslint_verdict(1, 5, 0, None)
+        self.assertEqual(status, FAIL)
 
 
 class CommonScope(unittest.TestCase):

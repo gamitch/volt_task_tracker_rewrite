@@ -85,15 +85,24 @@ responses:
 - **FAIL** (exit 1) — a gate went red. The tree is not shippable. This is
   information; act on it.
 - **UNTRUSTWORTHY** (exit 2) — a summary could not be read, a run collected no
-  tests, a gate timed out, or `node_modules` is missing. **Do not record these
+  tests, eslint died for a non-lint reason, a gate timed out, `node_modules` is
+  missing, or the tree was dirty under `--require-clean`. **Do not record these
   numbers as evidence.** Fix the condition and re-run.
 - **SKIPPED** — gate 6 had no defensible scope. Five gates passed. Say five.
 
-The zero-collected case is the one worth internalising: a vitest run that
-matches no files exits 0. A filter typo, a scope pointing at a directory that
-was renamed, a worktree missing its dependencies — all of them produce a green
-exit code and prove nothing. The script refuses rather than passing, for the
-same reason `mutation-replay` checks that the count moved.
+What actually catches a wrong `--scope`, measured rather than assumed: vitest
+3.2.7 here exits **1** on an empty match, printing `No test files found,
+exiting with code 1` and no summary — so the unreadable-summary refusal and the
+exit code both fire. An earlier draft of this file claimed such a run "exits 0";
+that was wrong, and worth correcting because a reader who trusts it would go
+looking for a green tick that never appears.
+
+The zero-collected branch is kept anyway, as insurance rather than as today's
+mechanism: setting `passWithNoTests` — not set anywhere in this config — flips
+an empty run to exit 0, and at that point a filter typo or a renamed directory
+would produce a genuinely green run that proves nothing. That is the same
+reason `mutation-replay` checks the count moved rather than trusting the exit
+code alone.
 
 ## Every agent runs it themselves
 
@@ -112,6 +121,14 @@ Gates run against a **commit**, not a hope. The block prints the short SHA and
 whether the tree was dirty; a dirty-tree result describes uncommitted work and
 should not be quoted as a verdict on a commit. Re-run on the final branch state
 before opening a PR — appended log entries and doc edits can move gate 3.
+
+**Pass `--require-clean` whenever the run is about to become a verdict** — the
+pre-PR run, and a checker's run. It refuses outright on a dirty tree instead of
+printing a SHA its numbers do not describe. Item 21 puts it plainly: "clean"
+and "committed" are different claims, and T142 is the recorded case of work
+that was real, measured, and entirely uncommitted. Dirty runs stay allowed by
+default because mid-work gating is legitimate and frequent; the flag is how a
+final run stops relying on the operator to remember the difference.
 
 Running in a worktree is the normal case for a checker: pass `--cwd
 /tmp/whatever-check`, and run `npm ci` there first. The script refuses outright
