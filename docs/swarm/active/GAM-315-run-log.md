@@ -484,3 +484,74 @@ owner's ruling. Awaiting an owner decision on packet revision 4.
 
 Artifacts: PR #150 (stacked on #149), `GAM-315` `In Progress` + `gate/human` +
 `escalated`, `GAM-323` filed in `Backlog`.
+
+---
+
+# Run 4 — revision 5: evaluate the mechanism before writing wording
+
+Dispatched 2026-08-10T22:44:48Z by the owner's `In Progress → Todo` move at
+22:43:48Z, one minute after the ruling *"have the next revision evaluate your
+webhook idea first"*. Branch `claude/item-28f-revision-5-mechanism`, stacked on
+`claude/item-28f-gate-round3` (PR #150) for the same reason that branch stacked
+on #149 — three runs writing this file on three branches would collide head-on.
+
+- **claimed** — fetched GAM-315 live, `Todo → In Progress`, re-read and
+  confirmed `In Progress` (item 28c read-back). Labels `other, heavy`; already
+  tiered, so no item 28d judgement was required. `gate/human` and `escalated`
+  are **off**, consistent with the ruling's stated sequence.
+- **branch renamed before any PR existed** — this run's first branch was
+  `claude/gam-315-item-28f-links-only`, which carries the identifier and would
+  have closed this row on merge. GAM-315 had **zero attachments** at that
+  moment, so the link was still preventable; the remote branch was deleted and
+  the work moved to `claude/item-28f-revision-5-mechanism`. Third run running,
+  and third run to have to undo its own default branch name — which is itself
+  evidence for the packet's convention.
+- **prior work read, not re-derived** — PRs #149 and #150, the packet at
+  revision 4, this run log, and all six owner comments on GAM-315. The owner's
+  ruling to leave #149 and #150 open is honoured; neither is merged.
+
+## Independent re-measurement (item 28 step 6: a recorded figure is evidence, not proof)
+
+Before reading the prior runs' artifacts, this run measured the premise from
+scratch. Everything it found **agrees** with runs 1-3, by a different route:
+the merge→transition correlation on all of #138-#144, the aggregate-state
+behaviour, and the falsity of both of item 28f's operative sentences.
+
+Two observations this run adds:
+
+- **The actor column in Linear's history is not evidence of a human.** Two
+  transitions share a timestamp with the attachment that caused them *to the
+  millisecond* — GAM-303 `In Review → In Progress` at `15:38:55.013Z` equals
+  PR #126's attachment time; GAM-304 `Done → In Progress` at `14:50:55.661Z`
+  equals PR #144's. Both are attributed to `USER:George Mitchom`. A future
+  investigation that filters this history by actor will conclude a human did it.
+- **Item 28f's own cited precedent does not isolate the magic word.** 28f
+  offers PR #126/GAM-303 as proof that `Closes` "links **and** closes". #126's
+  branch is `claude/next-ready-task-xvmtcj` — no identifier — so the magic word
+  supplied the *link* and the team's `merge → Done` automation supplied the
+  *close*. The case is fully explained without the magic word closing anything.
+
+## F8 positive control — the owner's bar for Option B, met
+
+The ruling required that F8 (a commit message creates no link) get a positive
+control before any design rests on it, because "an empty result is informative
+rather than merely absent" only if the instrument is known to fire.
+
+**Commit `c865b51` was inside PR #143.** That single PR provides the positive
+and the negative in one webhook delivery, through one query:
+
+| Channel, same PR #143 | Issue | Attachment? |
+| -- | -- | -- |
+| Branch name `claude/gam-304-rsvp-write` | GAM-304 | **yes** — `13:37:17.125Z` |
+| Commit message only (`c865b51`) | GAM-318 | **no** — 0 attachments, 0 transitions |
+| Commit message only (`c865b51`) | GAM-319 | **no** — 0 attachments, 0 transitions |
+| Commit message only (`c865b51`) | GAM-320 | **no** — 0 attachments, 0 transitions |
+
+The timing confound is eliminated: GAM-318/319/320 were created
+`13:33:06-13:33:09Z`, **before** commit `c865b51` (`13:33:21Z`), before PR #143
+opened (`13:37:13Z`) and before it merged (`14:00:01Z`). They existed at every
+event that could have linked them.
+
+So F8 is no longer one observation. It is **n=3 on the negative side with a
+simultaneous positive control in the same delivery** — the instrument
+demonstrably fires, and it did not fire for the commit-message channel.
