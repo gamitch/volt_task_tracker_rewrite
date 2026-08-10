@@ -174,9 +174,16 @@ Item 28f makes two operative claims. Under B they do **not** both improve:
 
 | 28f's claim | True today? | True under B? |
 | -- | -- | -- |
-| "An identifier in the title or branch name **links only**" | **false** (it closes) | **becomes true** — linking survives, closing does not |
+| "An identifier in the title or branch name **links only**" | **false** (it closes) | **becomes true** — *if* linking survives; see below |
 | "…leaves the issue sitting in `In Review` after merge" | **false** (it leaves it `Done`) | **becomes true** |
 | "`Closes GAM-nnn` … links **and** it closes" | **false** (the automation closes) | **stays false** — the *trailer* would close |
+
+The "becomes true" column assumes disabling the three automations stops state
+changes without stopping linking. That assumption is **reasoned, not measured**
+and is flagged in Check 5. If linking also stopped, 28f's first sentence would
+be false in the opposite direction and B's correction would be *different*
+again, not shorter. Either way the row still needs correcting, which is the
+question being answered here.
 
 So B fixes two of the three sentences by accident and leaves the third wrong —
 and it makes the third wrong *in a new way*, because agents would keep writing
@@ -209,10 +216,17 @@ correctness. The trade-off the packet asks the owner to judge does evaporate.
 
 What does **not** evaporate:
 
-- Attachments still accumulate on the issue under B — Linear's *linking* is not
-  the automations, and disabling the three does not stop a PR attaching. So
-  GAM-304 would still show eight PRs, five of which are not its work. That is
-  cosmetic rather than dangerous, which is exactly the demotion B buys.
+- Attachments probably still accumulate on the issue under B, so GAM-304 would
+  still show eight PRs, five of which are not its work — cosmetic rather than
+  dangerous, which is exactly the demotion B buys.
+
+  **⚠ Reasoned, NOT measured.** This rests on linking and state-setting being
+  separate systems: attachments are `issue.attachments` records, while the state
+  rules are distinct `team.gitAutomationStates` entities, and the two are
+  separately represented in Linear's data model. That is structural evidence,
+  not behavioural proof — **only the owner can disable an automation and observe
+  the result**, so this cannot be measured from here. It is flagged because
+  three gate rounds on this row died on claims exactly this shape.
 - `WORKFLOWS.md` rule 2's identifier-in-branch requirement stands on its
   original rationale (collision avoidance, human readability), untouched by
   either option.
