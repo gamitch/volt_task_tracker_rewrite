@@ -28,6 +28,7 @@ from gates import (  # noqa: E402
     common_scope,
     eslint_verdict,
     parse_eslint,
+    porcelain_paths,
     parse_vitest,
 )
 
@@ -72,8 +73,10 @@ class ParseVitest(unittest.TestCase):
     def test_zero_collected_still_parses(self):
         """Parsing succeeds; refusing is the caller's job, and it does refuse.
 
-        Kept explicit because a run that collects nothing exits 0 -- the gate
-        treats (0, 0) as UNTRUSTWORTHY rather than a pass.
+        Measured, not assumed: vitest 3.2.7 here exits 1 on an empty match and
+        prints no summary at all, so this shape appears only under
+        `passWithNoTests`, which is not set in this config. The gate treats
+        (0, 0) as UNTRUSTWORTHY rather than a pass for that eventuality.
         """
         out = "\n Test Files  0 passed (0)\n      Tests  0 passed (0)\n"
         self.assertEqual(parse_vitest(out), (0, 0, 0))
@@ -144,13 +147,15 @@ class EslintVerdict(unittest.TestCase):
         self.assertEqual(eslint_verdict(0, 0, 377, 377), (PASS, ""))
 
     def test_nonzero_exit_with_no_errors_is_untrustworthy(self):
-        """eslint exit 2: bad config or a missing plugin, not a lint result.
+        """Exit 1 means eslint found lint errors -- but the tally shows none.
 
-        The container this skill was written in reproduced exactly this --
-        `Cannot find package '@eslint/js'` -- and a tally-only verdict would
-        have called it a clean gate.
+        The two disagree, so the run cannot be scored either way. This is the
+        catch-all behind the exit-2 contract check, and it covers the shape the
+        container this skill was written in produced: eslint dying before it
+        could print a tally (`Cannot find package '@eslint/js'`). A tally-only
+        verdict called that a clean gate.
         """
-        status, note = eslint_verdict(2, 0, 0, None)
+        status, note = eslint_verdict(1, 0, 0, None)
         self.assertEqual(status, UNTRUSTED)
         self.assertIn("non-lint reason", note)
 
@@ -158,6 +163,17 @@ class EslintVerdict(unittest.TestCase):
         """Exit 1 with errors in the tally is eslint working correctly."""
         status, _ = eslint_verdict(1, 5, 0, None)
         self.assertEqual(status, FAIL)
+
+    def test_exit_two_is_untrustworthy_even_with_a_tally(self):
+        """eslint's contract: 2 means eslint failed, whatever it printed.
+
+        Reading the tally first called this an ordinary lint failure, which
+        would send someone hunting for 5 errors that an aborted run never
+        really counted.
+        """
+        status, note = eslint_verdict(2, 5, 0, None)
+        self.assertEqual(status, UNTRUSTED)
+        self.assertIn("configuration or internal", note)
 
 
 class CommonScope(unittest.TestCase):
@@ -213,6 +229,45 @@ class CommonScope(unittest.TestCase):
         """
         self.assertIsNone(
             common_scope(["src/pages/home/A.tsx", "src/lib/home/B.ts"])
+        )
+
+
+class PorcelainPaths(unittest.TestCase):
+    """Scope derivation folds in uncommitted work, so these paths must parse.
+
+    `base...HEAD` sees only commits, but dirty runs are supported -- without
+    these, gate 6 could scope to a directory the current edits are not in.
+    """
+
+    def test_modified_and_untracked(self):
+        porcelain = " M src/pages/home/StudentHome.tsx\n?? src/pages/home/New.tsx\n"
+        self.assertEqual(
+            porcelain_paths(porcelain),
+            ["src/pages/home/StudentHome.tsx", "src/pages/home/New.tsx"],
+        )
+
+    def test_staged_and_partially_staged(self):
+        porcelain = "M  src/a.ts\nMM src/b.ts\nA  src/c.ts\n"
+        self.assertEqual(porcelain_paths(porcelain), ["src/a.ts", "src/b.ts", "src/c.ts"])
+
+    def test_rename_resolves_to_the_target(self):
+        """Gate 6 must test where the code lives now, not where it used to."""
+        porcelain = "R  src/old/Thing.tsx -> src/new/Thing.tsx\n"
+        self.assertEqual(porcelain_paths(porcelain), ["src/new/Thing.tsx"])
+
+    def test_quoted_paths_are_unwrapped(self):
+        porcelain = ' M "src/pages/odd name.tsx"\n'
+        self.assertEqual(porcelain_paths(porcelain), ["src/pages/odd name.tsx"])
+
+    def test_empty_is_empty(self):
+        self.assertEqual(porcelain_paths(""), [])
+
+    def test_uncommitted_work_reaches_the_scope(self):
+        """The whole point: a dirty-only change still scopes gate 6."""
+        committed: list[str] = []
+        dirty = " M src/pages/home/StudentHome.tsx\n M src/pages/home/ParentHome.tsx\n"
+        self.assertEqual(
+            common_scope(committed + porcelain_paths(dirty)), "src/pages/home/"
         )
 
 
