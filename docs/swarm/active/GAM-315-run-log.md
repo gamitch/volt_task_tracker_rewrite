@@ -439,3 +439,17 @@ section is that run. **PR #149 stays open and unmerged** per the ruling.
   prose only. **No `boss-architect` dispatch was made and the constitution is
   untouched** — `git diff --name-only main` is three files, all markdown under
   `docs/swarm/active/`.
+- **mitigation test on #150 — held, and this one has a positive control.**
+  Opening PR #150 (no identifier in branch or title, no magic word, row named in
+  prose only) produced **no attachment on GAM-315 and no state transition**;
+  state read back `In Progress`, `attachments: []`.
+
+  **Scoped honestly, because this run already over-claimed once today.** The
+  *state* half is confounded exactly as finding B was — the row was already
+  `In Progress`, so `start → In Progress` would be a no-op. The *attachment* half
+  is **not** confounded, and that is the difference: for PRs a positive control
+  exists, since all seven of GAM-304's linked PRs carry a `/pull/` attachment and
+  every one of the 13 attachments in round 3's 40-issue sweep is a `/pull/` URL.
+  So an empty array after a PR opens is informative, where an empty array after a
+  bare branch push was not. **This measures the PR channel only** and says
+  nothing about push timing; F1a stays withdrawn.
