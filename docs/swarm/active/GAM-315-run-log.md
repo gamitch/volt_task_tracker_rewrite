@@ -484,3 +484,184 @@ owner's ruling. Awaiting an owner decision on packet revision 4.
 
 Artifacts: PR #150 (stacked on #149), `GAM-315` `In Progress` + `gate/human` +
 `escalated`, `GAM-323` filed in `Backlog`.
+
+---
+
+# Run 4 — revision 5: evaluate the mechanism before writing wording
+
+Dispatched 2026-08-10T22:44:48Z by the owner's `In Progress → Todo` move at
+22:43:48Z, one minute after the ruling *"have the next revision evaluate your
+webhook idea first"*. Branch `claude/item-28f-revision-5-mechanism`, stacked on
+`claude/item-28f-gate-round3` (PR #150) for the same reason that branch stacked
+on #149 — three runs writing this file on three branches would collide head-on.
+
+- **claimed** — fetched GAM-315 live, `Todo → In Progress`, re-read and
+  confirmed `In Progress` (item 28c read-back). Labels `other, heavy`; already
+  tiered, so no item 28d judgement was required. `gate/human` and `escalated`
+  are **off**, consistent with the ruling's stated sequence.
+- **branch renamed before any PR existed** — this run's first branch was
+  `claude/gam-315-item-28f-links-only`, which carries the identifier and would
+  have closed this row on merge. GAM-315 had **zero attachments** at that
+  moment, so the link was still preventable; the remote branch was deleted and
+  the work moved to `claude/item-28f-revision-5-mechanism`. Third run running,
+  and third run to have to undo its own default branch name — which is itself
+  evidence for the packet's convention.
+- **prior work read, not re-derived** — PRs #149 and #150, the packet at
+  revision 4, this run log, and all six owner comments on GAM-315. The owner's
+  ruling to leave #149 and #150 open is honoured; neither is merged.
+
+## Independent re-measurement (item 28 step 6: a recorded figure is evidence, not proof)
+
+Before reading the prior runs' artifacts, this run measured the premise from
+scratch. Everything it found **agrees** with runs 1-3, by a different route:
+the merge→transition correlation on all of #138-#144, the aggregate-state
+behaviour, and the falsity of both of item 28f's operative sentences.
+
+Two observations this run adds:
+
+- **The actor column in Linear's history is not evidence of a human.** Two
+  transitions share a timestamp with the attachment that caused them *to the
+  millisecond* — GAM-303 `In Review → In Progress` at `15:38:55.013Z` equals
+  PR #126's attachment time; GAM-304 `Done → In Progress` at `14:50:55.661Z`
+  equals PR #144's. Both are attributed to `USER:George Mitchom`. A future
+  investigation that filters this history by actor will conclude a human did it.
+- **Item 28f's own cited precedent does not isolate the magic word.** 28f
+  offers PR #126/GAM-303 as proof that `Closes` "links **and** closes". #126's
+  branch is `claude/next-ready-task-xvmtcj` — no identifier — so the magic word
+  supplied the *link* and the team's `merge → Done` automation supplied the
+  *close*. The case is fully explained without the magic word closing anything.
+
+## F8 positive control — the owner's bar for Option B, met
+
+The ruling required that F8 (a commit message creates no link) get a positive
+control before any design rests on it, because "an empty result is informative
+rather than merely absent" only if the instrument is known to fire.
+
+**Commit `c865b51` was inside PR #143.** That single PR provides the positive
+and the negative in one webhook delivery, through one query:
+
+| Channel, same PR #143 | Issue | Attachment? |
+| -- | -- | -- |
+| Branch name `claude/gam-304-rsvp-write` | GAM-304 | **yes** — `13:37:17.125Z` |
+| Commit message only (`c865b51`) | GAM-318 | **no** — 0 attachments, 0 transitions |
+| Commit message only (`c865b51`) | GAM-319 | **no** — 0 attachments, 0 transitions |
+| Commit message only (`c865b51`) | GAM-320 | **no** — 0 attachments, 0 transitions |
+
+The timing confound is eliminated: GAM-318/319/320 were created
+`13:33:06-13:33:09Z`, **before** commit `c865b51` (`13:33:21Z`), before PR #143
+opened (`13:37:13Z`) and before it merged (`14:00:01Z`). They existed at every
+event that could have linked them.
+
+So F8 is no longer one observation. It is **n=3 on the negative side with a
+simultaneous positive control in the same delivery** — the instrument
+demonstrably fires, and it did not fire for the commit-message channel.
+
+## Live re-test of the automations, during this run
+
+`22:48:28Z` PR #151 opened (branch `claude/gam-304-failure-p3y021`, unrelated
+work) → `22:48:31.430Z` GAM-304 attachment → `22:48:31.430Z` GAM-304
+**`Done → In Progress`**, same millisecond. Three findings: the automations are
+live *now*, not just historically; this is a wrong **reopen** of a closed issue
+(the sixth wrong move on GAM-304, and the first of this shape); and it is a
+third millisecond-identical attachment/transition pair attributed to
+`USER:George Mitchom`.
+
+- **revision 5 written** — `docs/swarm/active/GAM-315-mechanism-comparison.md`.
+  Per the owner's ruling this is a **comparison with a recommendation, not
+  wording and not an implementation**. Packet revision 4 is left unchanged.
+  All five required checks answered; F8's positive control met. Recommends
+  **A now + GAM-322 option 1 + B as its own gated row**, with a one-sentence
+  amendment to C1 that makes A's text true under either mechanism. Records five
+  least-confident decisions and puts the gate question to the owner rather than
+  assuming an answer.
+- **subagent dispatched** — `general-purpose` on opus, to measure Option B's
+  implementation surface (trailer coverage and survival, merge strategy,
+  push-workflow visibility, credentials, prior art, blast radius). Measurement
+  only; explicitly told not to design and not to edit.
+- **subagent verdict** — 29 tool calls, ~46K tokens. **The decisive finding is
+  that Option B's stated premise is false.** The owner's proposal opens *"the
+  trailer is already there"*; measured, a `Linear-Issue:` trailer is on **30 of
+  the last 200 commits (15%)**, on **0 of the last 11 merge commits**, and is
+  enforced by nothing. `merge_commit_message=PR_TITLE` is the mechanical reason
+  it never reaches the merge commit. Also measured: squash is enabled (the
+  owner's Check 2 hazard is one dropdown away), a two-identifier ambiguity case
+  already exists in the last 200 commits, the `(Tnnn)` suffix is omitted by 4 of
+  7 distinct values, the write-capable key is scoped to a workflow a push cannot
+  trigger, and **no `issueUpdate` mutation exists anywhere** — B is a new write
+  path, item 26's own HEAVY trigger. One point in B's favour: PR #143, the merge
+  that actually mattered, carried the trailer on 8 of 14 branch commits.
+  The agent flagged its own limits, including that "72% of merges have no
+  trailer" is a coverage figure and **not** a missed-closure figure — recorded
+  in the comparison rather than smoothed over.
+- **packet updated (bookkeeping only, no wording)** — applied the owner's 22:40
+  ruling, which postdates revision 4: `AGENTS.md` added as a fourth Allowed
+  File scoped to lines 30 and 37, and the "Deliberately NOT in scope" section
+  marked superseded. **New scope question raised, not assumed:** `AGENTS.md:35-36`
+  carries a *third* false sentence — *"that magic word both links the issue and
+  moves it to `Done` on merge"* — inside the same numbered item, falsified by
+  F5. Correcting line 37 alone leaves the paragraph self-contradictory. Asked
+  of the owner rather than taken, per round 3's rule that a packet may not
+  settle scope by assuming it.
+
+## The convention worked, with a positive control 4 minutes earlier
+
+PRs #149 and #150 both asked to be watched **on merge**. This run produced the
+first live test on **open**, and it is a clean paired control in one window:
+
+| PR | identifier in branch/title? | magic word? | GAM attachment created? |
+| -- | -- | -- | -- |
+| #151 @ `22:48:28` | **yes** (`claude/gam-304-...`) | no | **yes** — GAM-304 `22:48:31.430Z`, and it reopened the row |
+| **#152 @ this run** | **no** (`claude/item-28f-revision-5-mechanism`) | no | **no** — GAM-315 still has **zero** attachments |
+
+Read back after opening PR #152: GAM-315 `In Progress`, attachments `0`. So a
+PR that names the row in prose only, from a branch carrying no identifier, does
+**not** enter the linked set — measured, with a positive control from the same
+repository minutes earlier proving the instrument fires.
+
+**This is C3's convention working, not an argument that it will.** It does not
+yet test the merge case, which is what #149 and #150 are still open to observe.
+
+- **gates run** — six-gate skill, `--baseline-tests 2162`. Figures below.
+- **PR opened** — **#152**, based on `claude/item-28f-gate-round3` (stacked, not
+  racing). No identifier in branch or title, no magic word, row named in prose
+  only. The `Linear-Issue: GAM-315` commit trailer is present per item 28f and
+  is measured (F8, now n=3 with a positive control) not to link.
+- **escalated** — comment posted on GAM-315 with the three questions (mechanism,
+  gate, `AGENTS.md` scope). Labels `gate/human` + `escalated` restored and read
+  back; row deliberately left `In Progress`, **not** `Todo`, because `Todo`
+  re-dispatches it and that is how runs 3 and 4 both began. Evidence comment
+  added to GAM-322 for the reopen; that row's option set is not rewritten.
+
+### Gate figures
+
+```
+GATE RUN — 3c2685b on claude/item-28f-revision-5-mechanism
+  1 tsc              exit 0  PASS
+  2 vite build       exit 0  PASS
+  3 format:check     exit 0  PASS
+  4 eslint           exit 0  PASS   0 errors, 377 warnings
+  5 vitest (full)    exit 0  PASS   83 files / 2162 tests  baseline 2162 (+0)
+  6 vitest (scoped)      –  SKIP   no scope derivable from the diff
+VERDICT: PASS — 5 of 6 gates. NOT all six: 1 skipped.
+```
+
+**Five, not six**, for the same reason as runs 2 and 3: gate 6 has no defensible
+scope because the diff contains no `src/` file. Figures match both prior runs
+exactly (83 files / 2162 tests, 0 errors / 377 warnings) across three containers
+and three agents, which is the independent agreement the skill exists to
+produce. `npm ci` was required first — the container had no `node_modules`.
+
+The run reported `tree DIRTY`: the only uncommitted file was `gate-out.txt`, the
+capture of this very output, since deleted. No source or tracked file was
+uncommitted.
+
+**These gates say the tree still builds and stays green. They say nothing about
+this diff**, which is markdown no gate reads — `format:check`'s glob is
+`src/**/*.{ts,tsx}` and `*.{ts,js,json,html}`. Stated rather than papered over
+with a green tick. CI runs them regardless.
+
+**A first attempt was discarded rather than quoted.** It exited 0 but its
+redirect did not survive the background shell, leaving an exit code and no
+evidence block. Reporting the prior runs' identical figures from memory would
+have been an unmeasured claim on a row that exists because of unmeasured claims,
+so the gates were re-run in the foreground and the block above is that run's.
