@@ -36,6 +36,10 @@ import type { SeasonRow } from '../../lib/supabase/types';
 // OTHER `it(` in this file keeps using the harness's `defaultLoadStudentHomeData`
 // default (`renderAsUser`'s own `mergedProps`, below) unchanged.
 import { makeLoadStudentHomeData } from '../../lib/supabase/loaders/students';
+// GAM-304 -- ONLY the type, for typing this file's own `onRsvpChange` spies
+// against the real seam's real shape (`outreach.ts` itself is a Forbidden
+// File for this task, read-only reference -- imported from, never edited).
+import type { SubmitRsvpChangeFn } from '../../lib/supabase/loaders/outreach';
 import {
   buildNextUp,
   computePlannedHours,
@@ -140,6 +144,18 @@ function renderAsUser(
     // exact original behavior, zero content changes. An individual test's
     // own `props.loadData` (spread after, below) always wins.
     loadData: defaultLoadStudentHomeData,
+    // GAM-304 -- `StudentHome`'s own production default for the new
+    // `onRsvpChange` seam is now the real `submitRsvpChange`, which throws
+    // `SupabaseNotConfiguredError` in this jsdom test environment (same
+    // shape as the `loadData` default just above -- same T183 remedy). This
+    // MUST sit above the `...props` spread (not below it), per this file's
+    // own comment immediately above `loadData`: "An individual test's own
+    // `props.loadData` (spread after, below) always wins." Placing it below
+    // the spread would override every per-test `onRsvpChange` spy this
+    // task's own new tests inject. Every pre-existing `it(` that clicks
+    // "Sign up"/"Can't go" without injecting its own `onRsvpChange` keeps
+    // its exact original (write-succeeds, opportunity moves) behavior.
+    onRsvpChange: async () => {},
     ...props,
   };
   act(() => {
@@ -1102,7 +1118,7 @@ describe('<StudentHome /> T129 UXC-01 -- exactly one heading per section, List/E
   });
 });
 
-describe("StudentHome inline Sign up / Can't go (real local-state update, not persisted)", () => {
+describe("StudentHome inline Sign up / Can't go (GAM-304: now a real persisted write via submitRsvpChange)", () => {
   it('clicking "Sign up" removes the opportunity from Sign-up opportunities', async () => {
     const loadData = async (): Promise<StudentHomeData> =>
       buildDataFixture({
@@ -1124,6 +1140,236 @@ describe("StudentHome inline Sign up / Can't go (real local-state update, not pe
     await flushMicrotasks();
 
     expect(container.textContent).toContain("You're all caught up");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GAM-304 -- acceptance criteria 1-4/7. New tests only (no existing `it(`
+// body above this point is modified -- only its enclosing `describe` title,
+// pre-authorized by the worker packet §3(iii)).
+// ---------------------------------------------------------------------------
+
+describe('GAM-304 -- RSVP writes reach the real submitRsvpChange seam with the correct identity (criteria 1/2)', () => {
+  it('sign-up calls onRsvpChange once with respondedBy = the signed-in user id and studentId = the resolved student row id, and the two differ (criterion 2)', async () => {
+    const onRsvpChange = vi.fn<SubmitRsvpChangeFn>(async () => {});
+    const loadData = async (): Promise<StudentHomeData> =>
+      buildDataFixture({
+        events: [UNANSWERED_EVENT],
+        sessions: [UNANSWERED_SESSION],
+        rsvps: [],
+      });
+
+    renderAsUser(STUDENT_USER, { loadData, onRsvpChange, nowFn: () => FIXTURE_REFERENCE_NOW });
+    await flushMicrotasks();
+
+    const signUpButton = findButtonByText('Sign up');
+    expect(signUpButton).toBeDefined();
+    act(() => {
+      signUpButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    expect(onRsvpChange).toHaveBeenCalledTimes(1);
+    const call = onRsvpChange.mock.calls[0]![0];
+    expect(call.sessionId).toBe(UNANSWERED_SESSION.id);
+    expect(call.status).toBe('going');
+    // The harness's own default `resolveStudentId` resolves
+    // `HARNESS_DEFAULT_RESOLVED_STUDENT_ID` here (no explicit `studentId`
+    // override), and `STUDENT_USER.id` is a real, distinct auth id -- the
+    // same "already distinct" setup this file's own §3 record establishes.
+    expect(call.studentId).toBe(HARNESS_DEFAULT_RESOLVED_STUDENT_ID);
+    expect(call.respondedBy).toBe(STUDENT_USER.id);
+    // T174's exact defect class: an assertion that only checks `respondedBy`
+    // is truthy would pass even if `studentId` were wrongly reused as
+    // `respondedBy`. This inequality is the whole point of criterion 2.
+    expect(call.respondedBy).not.toBe(call.studentId);
+  });
+
+  it('with no onRsvpChange prop, Sign up reaches the real submitRsvpChange default and its rejection surfaces the SupabaseNotConfiguredError copy (criterion 1, item 27)', async () => {
+    const loadData = async (): Promise<StudentHomeData> =>
+      buildDataFixture({
+        events: [UNANSWERED_EVENT],
+        sessions: [UNANSWERED_SESSION],
+        rsvps: [],
+      });
+
+    // A JS default parameter fires on `undefined` -- this is how "no prop"
+    // is expressed while still going through `renderAsUser`'s own `LoginAs`
+    // wrapper (this file's §3 record explains why that's preferred over
+    // rendering `<StudentHome />` bare).
+    renderAsUser(STUDENT_USER, {
+      loadData,
+      onRsvpChange: undefined,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+
+    const signUpButton = findButtonByText('Sign up');
+    expect(signUpButton).toBeDefined();
+    act(() => {
+      signUpButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    // The real, unconfigured-in-jsdom `submitRsvpChange` default rejects
+    // with `SupabaseNotConfiguredError`'s own DES-16 copy (`client.ts:32-34`)
+    // -- proving the real module default is wired to the real client path,
+    // not a fixture (item 27), now that the harness injects a fake
+    // `onRsvpChange` everywhere else.
+    expect(container.textContent).toContain("Supabase isn't configured yet");
+    // The optimistic update must also have rolled back -- the opportunity
+    // is still there, not silently "saved".
+    expect(container.textContent).toContain('Library Demo');
+  });
+});
+
+describe('GAM-304 -- a rejected RSVP write rolls back and renders the error banner (criteria 3/4)', () => {
+  it('rolls the Sign-up control back to its pre-click state and renders the rejection text', async () => {
+    const onRsvpChange = vi.fn(async () => {
+      throw new Error('boom rsvp write failed');
+    });
+    const loadData = async (): Promise<StudentHomeData> =>
+      buildDataFixture({
+        events: [UNANSWERED_EVENT],
+        sessions: [UNANSWERED_SESSION],
+        rsvps: [],
+      });
+
+    renderAsUser(STUDENT_USER, { loadData, onRsvpChange, nowFn: () => FIXTURE_REFERENCE_NOW });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('Library Demo');
+    const signUpButton = findButtonByText('Sign up');
+    act(() => {
+      signUpButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    // Rolled back: the opportunity is still in Sign-up opportunities, NOT
+    // moved to the "all caught up" empty state a successful write would
+    // have produced.
+    expect(container.textContent).toContain('Library Demo');
+    expect(container.textContent).not.toContain("You're all caught up");
+    // The rejection's own message is rendered verbatim.
+    expect(container.textContent).toContain('boom rsvp write failed');
+  });
+});
+
+describe('GAM-304 -- pending affordance: a DIFFERENT row disables while a write is in flight (criterion 7, sibling half)', () => {
+  // MEASURED (this task's own worker output -- see the final report, not
+  // reasoned): criterion 7's OTHER half ("the clicked button shows
+  // isLoading") is NOT asserted here, on purpose, because it is genuinely
+  // unobservable given this file's own PRE-EXISTING (not authored by this
+  // task, not editable here) `getUnansweredOutreachOpportunities` filter --
+  // "unanswered" means "no `rsvps` row at all". The optimistic
+  // `withLocalRsvpOverride` update (module doc §1c, mandatory, applied
+  // BEFORE `isRsvpSubmitting` is even read back) and `setIsRsvpSubmitting`/
+  // `setPendingSessionId` are all called synchronously in the SAME tick,
+  // which React 18+'s automatic batching commits as ONE render. By the time
+  // that render paints, the clicked session already has a real `rsvps` row,
+  // so it no longer qualifies as "unanswered" -- `SignupOpportunityRowItem`
+  // for that exact row is never rendered again; either a `NextUpRowItem`
+  // (if `status==='going'`) or nothing (if `status==='declined'`) replaces
+  // it in the SAME commit. Measured directly: clicking "Sign up" moves the
+  // row into "Next up" (rendered as a `NextUpRowItem`/`MoreMenu`, which has
+  // no `isLoading` concept at all) with `isRsvpSubmitting=true` already
+  // applied and the ORIGINAL `Button` already torn out of the tree --
+  // `aria-busy`/`disabled` on that specific `Button` instance are never set
+  // to the loading values because that instance never renders again after
+  // the click. This holds for a real browser too (not a jsdom/`act()`
+  // artifact) -- React never exposes an intermediate, un-batched paint here.
+  // The `isLoading` prop IS wired correctly in the source (verified by
+  // reading the render output) and would show correctly for a hypothetical
+  // status change that keeps the row in the SAME list, but no such
+  // transition exists in this file's own RSVP status vocabulary.
+  it('clicking Sign-up-opportunity "Sign up" disables a DIFFERENT row (Next up MoreMenu, via aria-disabled) while the write is in flight', async () => {
+    // A controllable, never-auto-resolving write so the DOM can be inspected
+    // mid-flight -- resolved manually at the end of the test.
+    let resolveWrite: (() => void) | undefined;
+    const onRsvpChange = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveWrite = resolve;
+        }),
+    );
+
+    // Two rows rendering SIMULTANEOUSLY, one per section that owns an RSVP
+    // control -- "Park Cleanup" is a `going` outreach session (Next up,
+    // `MoreMenu`), "Library Demo" is unanswered (Sign-up opportunities,
+    // `Button`s). `buildDataFixture`'s own override mechanism (already used
+    // throughout this file for every custom scenario) is what makes this
+    // writable -- the packet's own least-confident doubt about whether two
+    // simultaneous rows are reachable is resolved here: they are, via this
+    // same established override mechanism, not a new fixture.
+    const goingOutreachEvent: HomeEventRow = {
+      id: 'event-sibling-going',
+      seasonId: 'season-1',
+      type: 'outreach',
+      title: 'Park Cleanup',
+      teamIds: null,
+      countsVolunteerHours: true,
+    };
+    const goingOutreachSession: HomeSessionRow = {
+      id: 'session-sibling-going',
+      eventId: 'event-sibling-going',
+      startsAt: '2026-07-25T15:00:00.000Z',
+      endsAt: '2026-07-25T18:00:00.000Z',
+      status: 'scheduled',
+    };
+    const goingRsvp: HomeRsvpRow = {
+      id: 'rsvp-sibling-going',
+      sessionId: 'session-sibling-going',
+      studentId: HARNESS_DEFAULT_RESOLVED_STUDENT_ID,
+      status: 'going',
+      updatedAt: '2026-07-01T00:00:00.000Z',
+    };
+
+    const loadData = async (): Promise<StudentHomeData> =>
+      buildDataFixture({
+        events: [goingOutreachEvent, UNANSWERED_EVENT],
+        sessions: [goingOutreachSession, UNANSWERED_SESSION],
+        rsvps: [goingRsvp],
+      });
+
+    renderAsUser(STUDENT_USER, { loadData, onRsvpChange, nowFn: () => FIXTURE_REFERENCE_NOW });
+    await flushMicrotasks();
+
+    // Sanity: both rows are genuinely on screen before the click.
+    expect(container.textContent).toContain('Park Cleanup');
+    expect(container.textContent).toContain('Library Demo');
+
+    const signUpButton = findButtonByText('Sign up');
+    expect(signUpButton).toBeDefined();
+    const parkCleanupMenuTrigger = container.querySelector(
+      'button[aria-label="Actions for Park Cleanup"]',
+    ) as HTMLButtonElement | null;
+    expect(parkCleanupMenuTrigger).toBeTruthy();
+    // Not disabled before the click.
+    expect(parkCleanupMenuTrigger?.getAttribute('aria-disabled')).toBeNull();
+
+    act(() => {
+      signUpButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    expect(onRsvpChange).toHaveBeenCalledTimes(1);
+    // A DIFFERENT row's control (Park Cleanup's `MoreMenu` trigger, in the
+    // Next-up section, an entirely separate component instance from the
+    // clicked row -- unaffected by the churn described above) is disabled
+    // while Library Demo's write is in flight, via `isRsvpSubmitting`
+    // alone. Astryx's `MoreMenu` trigger always sets its own `tooltip`
+    // (`MoreMenu.tsx`: `button={{..., tooltip: label}}`), so `Button.tsx`'s
+    // `useAriaDisabled` branch fires and the disabled state is expressed as
+    // `aria-disabled="true"` -- NOT the native `disabled` DOM property
+    // (measured directly against the rendered output for this task; the
+    // native property stays `false` throughout, which would silently pass
+    // a `.disabled`-only assertion for the wrong reason).
+    expect(parkCleanupMenuTrigger?.getAttribute('aria-disabled')).toBe('true');
+
+    // Clean up: let the write settle so no dangling promise/act warning
+    // leaks into the next test.
+    resolveWrite?.();
+    await flushMicrotasks();
   });
 });
 

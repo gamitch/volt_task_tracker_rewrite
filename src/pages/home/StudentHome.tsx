@@ -191,9 +191,20 @@
  * packet's own text names only "meetings and outreach").
  *
  * -----------------------------------------------------------------------
- * 7. Sign-up opportunities -- inline Sign up / Can't go, real local-state
- *    update, not persisted (module doc's own instruction, same posture
- *    `OutreachList.tsx`/T038's own RSVP stub already established).
+ * 7. Sign-up opportunities -- inline Sign up / Can't go. **GAM-304 UPDATE:**
+ *    this used to be real-local-state-only, matching `OutreachList.tsx`/
+ *    T038's original RSVP stub; that premise is now retired. `RsvpControl.tsx`/
+ *    `ParentRsvp.tsx`/`OutreachList.tsx` (T193) are no longer blocked, and
+ *    `handleRsvpChange` below is now T193's own real, persisted,
+ *    rollback-on-failure write shape (`OutreachList.tsx:3916-3951`, the
+ *    verified precedent this file copies): optimistic `withLocalRsvpOverride`
+ *    update, `await onRsvpChange({..., respondedBy: viewerProfileId})` (the
+ *    injectable seam, module doc #9 below, defaulting to the real
+ *    `submitRsvpChange`, `loaders/outreach.ts`), and a snapshot-array
+ *    rollback plus an error `Banner` on rejection. `respondedBy` is
+ *    `viewerProfileId` (a real `profiles.id`, `useAuth().user.id` threaded
+ *    down from `StudentHome`) -- never `studentId` (a `students` row id;
+ *    passing it is denied by RLS with sqlstate `42501`, T174's exact defect).
  *
  * `getUnansweredOutreachOpportunities` below uses the exact same
  * "unanswered" definition `OutreachList.tsx`'s `getUnansweredRsvpCount`
@@ -203,10 +214,7 @@
  * (packet wording): since an absent RSVP row carries no timestamp of its
  * own to sort by, this is interpreted as the EARLIEST-STARTING eligible
  * session (soonest response deadline) -- a disclosed judgment call, not a
- * silent assumption. `handleRsvpChange` (`withLocalRsvpOverride`) updates
- * only this component's own React state; no Supabase write happens
- * anywhere in this file, same as `OutreachList.tsx`'s own SegmentedControl
- * stub.
+ * silent assumption.
  *
  * -----------------------------------------------------------------------
  * 8. `guards.tsx` `AuthUser`/`Role` gaps -- T176 UPDATE: `studentId`/`teamId`
@@ -347,7 +355,9 @@
  *  - `Button` (line 1768 section, Props table): `label`, `variant`,
  *    `onClick`, `isDisabled`, `isLoading` used.
  *  - `Banner` (line 2694 section, Props table): `status`, `title`,
- *    `description` used.
+ *    `description` used, plus (GAM-304) `isDismissable`/`onDismiss` for the
+ *    new rejected-RSVP-write error banner, matching `OutreachList.tsx:
+ *    3972-3980`'s own already-established usage of the same two props.
  *  - `ProgressBar` (line 5416 section, Props table): `label` (required),
  *    `value`, `max`, `isLabelHidden`, `hasValueLabel`, `formatValueLabel`
  *    used.
@@ -432,6 +442,21 @@ import {
   loadStudentHomeData,
   resolveStudentScope as defaultResolveStudentScope,
 } from '../../lib/supabase/loaders/students';
+// GAM-304 -- the ONE real `rsvps` upsert (module doc #3 on
+// `loaders/outreach.ts`), already shared by `RsvpControl.tsx`/
+// `ParentRsvp.tsx`/`OutreachList.tsx` (T193's precedent, `OutreachList.tsx:
+// 3916-3951`). `submitRsvpChange` is the real default for the new injectable
+// `onRsvpChange` seam below; `outreach.ts` itself is a Forbidden File for
+// this task (read-only reference) -- only imported from here, never edited.
+import { submitRsvpChange, type SubmitRsvpChangeFn } from '../../lib/supabase/loaders/outreach';
+// GAM-304 -- `SupabaseLoaderError` (what `submitRsvpChange`'s own
+// `runMutation` rejects with, `loader.ts`) is a plain, non-`Error` object
+// (measured directly, this task's own worker output: `error instanceof
+// Error` is `false` for it) -- `isSupabaseLoaderError` lets the rollback
+// catch below surface its real `.message` (e.g. `SupabaseNotConfiguredError`'s
+// own DES-16 copy) instead of silently falling through to the generic
+// fallback the way a bare `error instanceof Error` check would.
+import { isSupabaseLoaderError } from '../../lib/supabase/loader';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real columns/views. Module docs #4/#5/#6.
@@ -921,6 +946,26 @@ export function withLocalRsvpOverride(
   );
 }
 
+/** GAM-304 -- surfaces a rejected `onRsvpChange` write's own message when it
+ * is one this app's data layer produced: either a real `Error` (the same
+ * `error instanceof Error` branch `OutreachList.tsx:3946`/`RsvpControl.tsx:
+ * 501`/`ParentRsvp.tsx:561` already use), OR the plain-object
+ * `SupabaseLoaderError` shape `runMutation` (`loader.ts`) actually rejects
+ * with -- measured directly (this task's own worker output): calling the
+ * real `submitRsvpChange` unconfigured rejects with a `{code, message,
+ * cause}` object for which `error instanceof Error` is `false`, so an
+ * `instanceof Error`-only check (copied verbatim from the three files above)
+ * would silently swallow `SupabaseNotConfiguredError`'s own DES-16 copy and
+ * always show the generic fallback -- defeating criterion 1's own "no
+ * injected seam reaches the real client and its failure surfaces" proof.
+ * Falls back to the same generic copy those three files already use for
+ * every other rejection shape. */
+export function extractRsvpErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (isSupabaseLoaderError(error)) return error.message;
+  return 'Something went wrong saving your RSVP.';
+}
+
 // ---------------------------------------------------------------------------
 // NFR-09 date/time formatting -- timestamps stored UTC, displayed
 // America/Chicago. Independently reimplemented here (not imported --
@@ -1231,9 +1276,16 @@ function UnansweredRsvpHero({
 function NextUpRowItem({
   row,
   onCantGo,
+  isRsvpSubmitting,
 }: {
   row: NextUpRow;
-  onCantGo: (sessionId: string, status: RsvpStatus) => void;
+  onCantGo: (sessionId: string, status: RsvpStatus) => void | Promise<void>;
+  /** GAM-304 -- disables this row's `MoreMenu` trigger while ANY row's write
+   * is in flight (`Button.isDisabled` -- module doc §1d, packet
+   * `astryx-api.md:4822`). `MoreMenu` has no `isLoading` concept of its own
+   * (verified directly against its real prop table), so the clicked-row
+   * spinner affordance lives on `SignupOpportunityRowItem`'s `Button`s only. */
+  isRsvpSubmitting: boolean;
 }): ReactNode {
   const description = (
     <Text type="supporting">{formatDateTimeRange(row.startsAt, row.endsAt)}</Text>
@@ -1246,7 +1298,11 @@ function NextUpRowItem({
   const endContent = row.isOutreachGoing ? (
     <HStack gap={2} vAlign="center">
       <Badge variant="neutral" label="Going" />
-      <MoreMenu items={menuItems} label={`Actions for ${row.title}`} />
+      <MoreMenu
+        items={menuItems}
+        label={`Actions for ${row.title}`}
+        isDisabled={isRsvpSubmitting}
+      />
     </HStack>
   ) : undefined;
 
@@ -1256,11 +1312,19 @@ function NextUpRowItem({
 function SignupOpportunityRowItem({
   row,
   onRespond,
+  isRsvpSubmitting,
+  pendingSessionId,
 }: {
   row: SignupOpportunityRow;
-  onRespond: (sessionId: string, status: RsvpStatus) => void;
+  onRespond: (sessionId: string, status: RsvpStatus) => void | Promise<void>;
+  /** GAM-304 -- module doc §1d: `isDisabled` on BOTH buttons is driven by
+   * `isRsvpSubmitting` alone (every other control disables while any write
+   * is in flight); `isLoading` (below) is additionally scoped to THIS row. */
+  isRsvpSubmitting: boolean;
+  pendingSessionId: string | null;
 }): ReactNode {
   const description = <Text type="supporting">{formatDateOnly(row.startsAt)}</Text>;
+  const isThisRowPending = isRsvpSubmitting && pendingSessionId === row.sessionId;
 
   const endContent = (
     <HStack gap={2}>
@@ -1268,11 +1332,15 @@ function SignupOpportunityRowItem({
         label="Sign up"
         variant="secondary"
         onClick={() => onRespond(row.sessionId, 'going')}
+        isLoading={isThisRowPending}
+        isDisabled={isRsvpSubmitting}
       />
       <Button
         label="Can't go"
         variant="ghost"
         onClick={() => onRespond(row.sessionId, 'declined')}
+        isLoading={isThisRowPending}
+        isDisabled={isRsvpSubmitting}
       />
     </HStack>
   );
@@ -1359,6 +1427,17 @@ interface StudentHomeContentProps {
   loadData: LoadStudentHomeDataFn;
   nowFn: () => Date;
   submitCheckinCode: SubmitCheckinCodeFn;
+  /** GAM-304 -- the real, RLS-checked `profiles.id` of the signed-in
+   * viewer (`useAuth().user.id`, threaded down from `StudentHome` through
+   * `ResolvedStudentHomeView`'s own `viewer` prop). This -- never
+   * `studentId` above -- is what `handleRsvpChange` writes as
+   * `respondedBy`; passing `studentId` is T174's exact defect and is denied
+   * by RLS (`42501`). */
+  viewerProfileId: string;
+  /** GAM-304 -- injectable persistence seam (module doc #7 above). Defaults
+   * (at `StudentHome`) to the real `submitRsvpChange`, the SAME upsert
+   * `RsvpControl.tsx`/`ParentRsvp.tsx`/`OutreachList.tsx` already use. */
+  onRsvpChange: SubmitRsvpChangeFn;
 }
 
 function StudentHomeContent({
@@ -1371,12 +1450,25 @@ function StudentHomeContent({
   loadData,
   nowFn,
   submitCheckinCode,
+  viewerProfileId,
+  onRsvpChange,
 }: StudentHomeContentProps): ReactNode {
   const loadState = useLoadState(
     () => loadData(studentId, seasonId),
     [loadData, studentId, seasonId],
   );
   const [rsvps, setRsvps] = useState<readonly HomeRsvpRow[]>([]);
+  // GAM-304 -- one component-wide in-flight flag (module doc #7/packet §1c):
+  // ignores clicks while a write is outstanding, which is also what makes
+  // the snapshot-array rollback below concurrency-safe -- "Next up" and
+  // "Sign-up opportunities" share this ONE handler, so without it a click on
+  // a second row could snapshot an array a first in-flight write already
+  // mutated. `pendingSessionId` additionally scopes the `isLoading` spinner
+  // (module doc §1d) to the exact row that was clicked; every OTHER row's
+  // control disables via `isRsvpSubmitting` alone.
+  const [isRsvpSubmitting, setIsRsvpSubmitting] = useState(false);
+  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
+  const [rsvpError, setRsvpError] = useState<string | null>(null);
   const opportunitiesSectionRef = useRef<HTMLDivElement | null>(null);
 
   // T129/UXC-01: stable ids for the "Next up" / "Sign-up opportunities"
@@ -1439,14 +1531,60 @@ function StudentHomeContent({
   // from this render path anymore.
   const hoursPercent = hoursVsGoalPercent(confirmedHours, goalHours);
 
-  function handleRsvpChange(sessionId: string, status: RsvpStatus): void {
-    // Module doc #7: local-only. No Supabase write happens here.
-    setRsvps((prev) => withLocalRsvpOverride(prev, studentId, sessionId, status));
+  // GAM-304 -- module doc #7: real, persisted, rollback-on-failure RSVP
+  // write, T193's exact shape (`OutreachList.tsx:3916-3951`). Deliberately
+  // snapshots the whole `rsvps` ARRAY, not a scalar previous status:
+  // `withLocalRsvpOverride` takes a concrete `RsvpStatus` and, when no row
+  // exists yet, APPENDS one -- it cannot express "back to unanswered". A
+  // captured scalar `previousStatus` would be `undefined` in exactly the
+  // dominant case (a student answering for the first time), and restoring
+  // `undefined` on rejection would leave a stuck phantom RSVP row -- worse
+  // than the pre-GAM-304 silent-discard bug. Restoring the whole snapshot
+  // array always removes that phantom row correctly, appended or updated
+  // alike (see `OutreachList.tsx:3920-3929`, which this reasoning mirrors).
+  async function handleRsvpChange(sessionId: string, status: RsvpStatus): Promise<void> {
+    if (isRsvpSubmitting) return; // ignore clicks while a write is outstanding
+    const previousRsvps = rsvps; // snapshot the ARRAY (not a scalar status)
+    setRsvps((prev) => withLocalRsvpOverride(prev, studentId, sessionId, status)); // optimistic
+    setRsvpError(null);
+    setIsRsvpSubmitting(true);
+    setPendingSessionId(sessionId);
+    try {
+      await onRsvpChange({
+        sessionId,
+        studentId,
+        status,
+        respondedBy: viewerProfileId, // profiles.id, NOT studentId (T174's exact defect)
+      });
+    } catch (error) {
+      setRsvps(previousRsvps); // rollback: restore the snapshot array
+      setRsvpError(extractRsvpErrorMessage(error));
+    } finally {
+      setIsRsvpSubmitting(false);
+      setPendingSessionId(null);
+    }
   }
 
   return (
     <VStack gap={6} padding={6}>
       <Heading level={1}>{`Hi ${data.displayName}`}</Heading>
+
+      {/* GAM-304 -- honest error surfacing on a rejected RSVP write (module
+          doc #7): an optimistic update with no visible rollback would tell
+          the student it saved when it did not. Row-agnostic copy is
+          deliberate -- both control sites funnel into this ONE handler, so a
+          page-level banner cannot name the failing row; the rollback itself
+          visibly restores the exact row the student just clicked. Same
+          shape/copy discipline as `OutreachList.tsx:3972-3980`. */}
+      {rsvpError !== null && (
+        <Banner
+          status="error"
+          title="Couldn't save your RSVP"
+          description={rsvpError}
+          isDismissable
+          onDismiss={() => setRsvpError(null)}
+        />
+      )}
 
       {heroState === 'live-checkin' && liveSession !== null && (
         <LiveCheckInCard session={liveSession} submitCheckinCode={submitCheckinCode} />
@@ -1516,7 +1654,12 @@ function StudentHomeContent({
           ) : (
             <List hasDividers>
               {nextUp.map((row) => (
-                <NextUpRowItem key={row.sessionId} row={row} onCantGo={handleRsvpChange} />
+                <NextUpRowItem
+                  key={row.sessionId}
+                  row={row}
+                  onCantGo={handleRsvpChange}
+                  isRsvpSubmitting={isRsvpSubmitting}
+                />
               ))}
             </List>
           )}
@@ -1543,6 +1686,8 @@ function StudentHomeContent({
                     key={row.sessionId}
                     row={row}
                     onRespond={handleRsvpChange}
+                    isRsvpSubmitting={isRsvpSubmitting}
+                    pendingSessionId={pendingSessionId}
                   />
                 ))}
               </List>
@@ -1681,6 +1826,9 @@ interface ResolvedStudentHomeViewProps {
   loadData: LoadStudentHomeDataFn;
   nowFn: () => Date;
   submitCheckinCode: SubmitCheckinCodeFn;
+  /** GAM-304 -- forwarded straight through to `StudentHomeContent`'s own
+   * `onRsvpChange` (module doc #7). */
+  onRsvpChange: SubmitRsvpChangeFn;
 }
 
 /**
@@ -1703,6 +1851,7 @@ function ResolvedStudentHomeView({
   loadData,
   nowFn,
   submitCheckinCode,
+  onRsvpChange,
 }: ResolvedStudentHomeViewProps): ReactNode {
   const loadState = useLoadState(
     () =>
@@ -1790,6 +1939,15 @@ function ResolvedStudentHomeView({
       loadData={loadData}
       nowFn={nowFn}
       submitCheckinCode={submitCheckinCode}
+      // GAM-304 -- `viewer.id` (this component's own `viewer` prop, already
+      // used above for `resolveStudentIdentity`'s deps) IS the real
+      // `profiles.id` (`useAuth().user.id` === `session.user.id` ===
+      // `auth.uid()`, `guards.tsx:205`) -- forwarded here as
+      // `viewerProfileId` rather than adding a second, redundant prop field
+      // to `ResolvedStudentHomeViewProps` that would carry the exact same
+      // value `viewer.id` already does.
+      viewerProfileId={viewer.id}
+      onRsvpChange={onRsvpChange}
     />
   );
 }
@@ -1836,6 +1994,11 @@ export interface StudentHomeProps {
   /** Injectable check-in network call (module doc #5). Defaults to the real,
    * typed `fetch()` implementation. */
   submitCheckinCode?: SubmitCheckinCodeFn;
+  /** GAM-304 -- injectable persistence seam for the "Sign up"/"Can't go"/
+   * Next-up "Can't go" RSVP controls (module doc #7). Defaults to the real
+   * `submitRsvpChange` (`loaders/outreach.ts`), the SAME upsert
+   * `RsvpControl.tsx`/`ParentRsvp.tsx`/`OutreachList.tsx` already use. */
+  onRsvpChange?: SubmitRsvpChangeFn;
   /** T176 (module doc #8). Defaults to a real resolution
    * (`../../lib/supabase/loaders/meetings.ts`, reused verbatim from T096).
    * Only ever invoked when `studentId` above is NOT supplied. */
@@ -1852,6 +2015,7 @@ export function StudentHome({
   teamId: explicitTeamId,
   nowFn = () => new Date(),
   submitCheckinCode = defaultSubmitCheckinCode,
+  onRsvpChange = submitRsvpChange,
   resolveStudentId = resolveCurrentStudentId,
   resolveStudentScope = defaultResolveStudentScope,
 }: StudentHomeProps = {}): ReactNode {
@@ -1907,6 +2071,7 @@ export function StudentHome({
           loadData={loadData}
           nowFn={nowFn}
           submitCheckinCode={submitCheckinCode}
+          onRsvpChange={onRsvpChange}
         />
       );
   }

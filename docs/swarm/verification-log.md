@@ -11682,3 +11682,197 @@ as drift.
 None filed. `pytest-rerunfailures`' `rerun` bucket and other plugin vocabularies are deliberately
 unsupported: they raise a named refusal rather than a wrong count, which is the correct behaviour
 until a suite here actually uses one.
+
+## GAM-304 (T809) — `StudentHome`/`ParentHome` RSVP controls discarded every answer (HEAVY tier)
+Result: PASS
+Worker: `worker-implementer` (pinned default) · Checker: `checker-reviewer` (opus), independent
+Branch: `claude/gam-304-rsvp-write` · commit `4460dec` · base `49096db`
+
+### Tier, stated and defended (item 26)
+
+**HEAVY.** The change adds a **write path** — `rsvps` insert and update — on two user-visible
+surfaces. Item 26's question ("can a mistake here corrupt data, or lie to a user about their own
+data?") fires literally: both write policies on `rsvps` require `responded_by = auth.uid()`
+(`20260717000002_rls.sql:205-212`) and `makeSubmitRsvpChange` never re-derives it, so a wrong
+`responded_by` is **denied** with `42501` rather than saved wrong — an optimistic UI would paint
+"saved" over a row that never landed.
+
+**Item 18's opus override was NOT applied**, and that is the interesting half of the judgement. None
+of its four triggers is present: no migration, no RLS policy or `security definer` helper, no
+metric-view SQL, and no change to auth, session or role-resolution logic. The change *consumes* an
+already-resolved `useAuth().user.id`; it does not compute identity. Item 25's second obligation —
+do not bump a worker because a topic *sounds* sensitive — is the reason this was left on the
+pinned default, and the worker/checker loop then caught the one real defect (below).
+
+### The premise-gate history, which is not the normal shape
+
+This row reached the **item 19a two-round cap** with a REVISE on both rounds, and the human owner
+ruled on 2026-08-10, verbatim: *"1. I Authorize dispatch on the ungated revision 3"*. So revision 3
+of the packet went to a worker **without a DISPATCH verdict** — the one thing item 19 otherwise
+forbids — as a knowingly accepted risk.
+
+The authorization was explicitly narrow. It did not reduce the rest of the HEAVY chain: a separate
+worker and a separate `checker-reviewer` both still ran, and the checker was charged with attacking
+the packet's three least-confident decisions **first**, because the owner's stated basis for
+accepting the ungated packet was that the residual risk sat in exactly those three.
+
+Round 1's verdict is at `docs/swarm/active/GAM-304-premise-gate-round1.md`, round 2's at
+`-round2.md`, the packet at `-worker-packet.md`, the checker's charter at `-checker-packet.md`, and
+the run log at `-run-log.md`.
+
+**Round 2's BLOCKER stands and was re-confirmed:** `Button.clickAction` runs inside
+`startTransition(async …)`, so under React 19 Action semantics the optimistic paint is lost and the
+cross-row concurrency guard is **inert** — measured as two concurrent writes, not one swallowed
+click. The shipped code uses plain `onClick`. `grep -rn clickAction src/pages/home/` → exit 1.
+
+### The premise was re-measured before any work
+
+At HEAD `49096db`: `git diff --stat 5562e48..HEAD -- src/ supabase/ package.json package-lock.json`
+was **empty** (no source drift since round 2), and both defective handlers were still verbatim
+present — `StudentHome.tsx:1442-1445` with its `// Module doc #7: local-only. No Supabase write
+happens here.` comment, and `ParentHome.tsx:1255-1257`. **The premise held.**
+
+Round 1 had already proved the *consequence* by execution on a scratch PostgreSQL cluster carrying
+this repo's migrations: the fixture student's `v_planned_rsvp_hours` moves `declined → 0 rows / 0 h`
+and `going → 1 row / 2.0 h`, and all six RLS paths pass or deny as filed. Those measurements are
+quoted in `-round1.md` and were deliberately **not** re-run.
+
+### Acceptance criteria — every one mutated, twice, by different agents
+
+The worker replayed all seven in its own worktree; the checker independently replayed all seven in
+a separate worktree at `4460dec`; the orchestrator independently replayed criterion 2. **No
+criterion stayed green under its mutation.**
+
+| # | Criterion | Checker's mutation result |
+|---|---|---|
+| 1 | With no injected seam, a sign-up reaches the **real** `submitRsvpChange` and its failure surfaces | RED, exit 1 |
+| 2 | `respondedBy` is the auth/profile id and provably not `studentId` | RED — `expected 'student-fixture-harness-default' to be 'user-student'`, exit 1 |
+| 3 | A rejected write rolls the control back to its exact pre-click state | RED, exit 1 |
+| 4 | A rejected write says so on screen | RED, exit 1 |
+| 5 | The parent card writes for the child with the parent as responder | RED — `expected 'student-rsvp-write-child' to be 'user-parent'`, exit 1 |
+| 6 | Neither module doc still claims the file never writes | both retired sentences absent, grep exit 1 |
+| 7 | Sibling row's control is `isDisabled` during an in-flight write | RED — `expected null to be 'true'`, exit 1 |
+
+Criterion 7's **other** half — "the *clicked* button shows `isLoading`" — was graded
+**structurally unsatisfiable as written**; see Follow-up 1.
+
+### A real packet defect, found by execution rather than by reading
+
+The packet prescribed an `error instanceof Error` catch, copied verbatim from T193.
+`SupabaseLoaderError` is an **`interface`** (`loader.ts:78`) and `toLoaderError` returns a plain
+object literal (`:116-121`), so `instanceof Error` is structurally `false` for it. The prescription
+would have shown the generic fallback for **exactly** the `SupabaseNotConfiguredError` that
+criterion 1's no-prop test exists to prove reaches the banner.
+
+The worker found this by probing the real rejection, disclosed it, and replaced it with an
+`extractRsvpErrorMessage` helper built on `isSupabaseLoaderError`. The checker verified it by
+substituting the packet's prescription back in and capturing the real failure:
+
+```
+AssertionError: expected "…Couldn't save your RSVPSomething went wrong saving your RSVP.…"
+                to contain "Supabase isn't configured yet"     exit 1
+```
+
+**This is the ungated packet's one live defect, and the tier's own machinery caught it.** It is also
+a direct vindication of item 26's "a gate that only reads is worth much less than one that runs".
+
+### The three least-confident decisions (item 19d), attacked first
+
+1. **`isLoading` + `isDisabled` under plain `onClick` on the real row components** — **SPLIT**.
+   `isDisabled` **verified** on `SignupOpportunityRowItem`/`NextUpRowItem` as written; `ListItem`'s
+   `endContent` slot does not swallow it (`nativeDisabled=true` on siblings mid-flight). `isLoading`
+   **verified unreachable** — see Follow-up 1.
+2. **`MoreMenu.isDisabled` vs per-entry `DropdownMenuOption.isDisabled`** — **verified by direct DOM
+   measurement**, not taken from the worker's report: `aria-disabled="true"`, `nativeDisabled=false`,
+   `tabIndex=0`, no focus trap, focus order preserved. One residual, Follow-up 3. The checker also
+   recorded that its *first* probe read "menu opened" for the mouse path and that this was a **false
+   positive** (the `role="menu"` node is always in the jsdom DOM; `aria-expanded` is the real
+   signal), rather than banking it as a finding.
+3. **Criterion 7's sibling assertion is writable against the fixtures** — **verified unfounded**.
+   Two RSVP controls render simultaneously through existing `buildDataFixture` overrides; no new
+   fixture was invented.
+
+### Item 27 — the connection was followed, not the render
+
+The checker rendered `ParentHome` with **no** `onRsvpChange` prop, clicked a segment, and observed
+the real `submitRsvpChange` default reaching the real client (`hasNotConfiguredCopy=true`) with the
+optimistic paint rolling back. Proven on **both** surfaces, and on ParentHome the worker had not
+tested it. Not a stub — this closes as **Passed**, not Partial.
+
+### Responder threading, the defect class that decides the task
+
+`AuthUser.id === session.user.id === auth.uid() === profiles.id` (`guards.tsx:205`). `StudentHome`
+writes `studentId` = the resolved student row id and `respondedBy` = `viewer.id`; `ParentHome`
+writes `studentId` = the **card's child** and `respondedBy` = the **parent's** `user.id`. Verified
+independently by the orchestrator in the diff and by the checker under mutation (criteria 2 and 5
+both redden under T174's exact defect).
+
+### Test sufficiency — named, not counted
+
+The packet's standard (`-worker-packet.md:470-476`) is that **a count delta is not sufficiency**: a
+test can stay green by racing a rejection. The checker named the tests it audited rather than
+quoting totals:
+
+- `StudentHome.test.tsx:1122` — the only pre-existing RSVP-interaction test. Harness now injects a
+  resolving `onRsvpChange` above the `...props` spread and flushes after the click. **Meets it.**
+- `ParentHome.test.tsx:1179` — this is the packet's finding (ii) live. Pre-change it asserted
+  `aria-checked` with **no flush**, which after this task would have passed only by outrunning the
+  rejection. Remediated with a resolving spy, `await flushMicrotasks()` and
+  `toHaveBeenCalledTimes(1)`. **Correctly fixed.**
+- ParentHome's three segment-clicking tests (`:1205`, `:1284`, `:1320`) all inject a spy.
+
+**No test in either file survives on a raced rejection.** Concurrency guard measured live: a second
+click mid-flight leaves the write count at **1** on both surfaces.
+
+### Boundary (item 22)
+
+`git show --stat 4460dec` touches exactly four paths — `src/pages/home/{StudentHome,ParentHome}.tsx`
+and their `.test.tsx`. Zero hits in `loaders/outreach.ts`, `supabase/migrations/**`,
+`src/pages/outreach/**`, `docs/swarm/**`, `.claude/**`. Verified independently by the orchestrator
+and by the checker.
+
+### Existence (item 21)
+
+The change is in the **committed blob**, not merely in a working tree: `git show
+4460dec:src/pages/home/StudentHome.tsx` carries `respondedBy: viewerProfileId` at `:1557` and no
+longer contains "No Supabase write happens here". Local HEAD and
+`origin/claude/gam-304-rsvp-write` match.
+
+### Gates
+
+Measured by the orchestrator on `c865b51` (the final branch state, docs included), exit codes
+asserted directly rather than through a pipe:
+
+```
+npx tsc --noEmit          -> 0
+npx vite build            -> 0
+npm run format:check      -> 0
+npx eslint .              -> 0   (0 errors, 377 warnings — all pre-existing)
+npx vitest run            -> 0   83 files / 2162 tests   (baseline 2156, +6)
+npx vitest run src/pages/home/ -> 0   4 files / 225 tests   (baseline 219, +6)
+```
+
+Run three times by three agents — worker, checker, orchestrator — with identical figures each time.
+The eslint warnings are entirely the pre-existing `react-refresh/only-export-components` class and
+are unchanged from baseline.
+
+### Follow-up (item 20 — filed before the row moved, not after)
+
+Three MINOR findings, each a Linear row rather than a comment. This issue is item 20's own third
+recorded instance, so closing it by repeating the failure would have been unusually poor:
+
+1. **`GAM-318`** (low, `tier/standard`) — `pendingSessionId`/`isLoading` is shipped dead code and
+   `StudentHome.tsx:1321-1323` describes the spinner as working. Criterion 7's clicked half is
+   structurally unsatisfiable while `getUnansweredOutreachOpportunities` defines "unanswered" as
+   "no `rsvps` row", so the code is right and the criterion was defective.
+2. **`GAM-319`** (medium, `tier/fast`) — a failed RSVP *save* shows `loader.ts:93`'s read-flavoured
+   `DEFAULT_LOADER_ERROR_MESSAGE` under the correct "Couldn't save your RSVP" title. Graded MINOR
+   rather than MAJOR because no user is told a failed save succeeded. Must be fixed at the call
+   site: `loader.ts` is the root cause and changing it would re-word every read failure in the app.
+3. **`GAM-320`** (low, `tier/fast`) — `ArrowDown` opens the `aria-disabled` `MoreMenu` mid-write
+   while the mouse is correctly blocked (`Button.js:372-380` suppresses only Enter/Space). Measured
+   to carry **no data risk**: the `isRsvpSubmitting` guard held and the write count stayed at 1.
+   This is exactly what the packet's own least-confident decision #2 predicted — item 19d working.
+
+All three carry branch-relative line numbers and say so, because GAM-304 had not merged when they
+were written.

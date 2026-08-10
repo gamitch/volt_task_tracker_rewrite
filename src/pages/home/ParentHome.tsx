@@ -173,8 +173,18 @@
  * never a crash.
  *
  * -----------------------------------------------------------------------
- * 6. RSVP-on-behalf (OUT-06 preview) -- real, working, local-state only;
- *    explicitly NOT T043's full scope (Known Context/Traps #5).
+ * 6. RSVP-on-behalf (OUT-06 preview). **GAM-304 UPDATE:** this used to be
+ *    local-state-only, deferring the real write to `ParentRsvp.tsx`/T043 --
+ *    that deferral note has expired and is corrected here rather than left
+ *    standing. T043 has since passed (`task-ledger.md:97`) and `ParentRsvp`
+ *    is rendered at `OutreachDetail.tsx:2363` -- but that surface's own
+ *    scope is a DIFFERENT entry point (the outreach detail page), not this
+ *    one. `handleRsvpChange` below is now T193's own real, persisted,
+ *    rollback-on-failure write shape (`OutreachList.tsx:3916-3951`, the
+ *    verified precedent this file copies), per-CARD (module doc §6b below),
+ *    writing through the SAME `submitRsvpChange` upsert (`loaders/
+ *    outreach.ts`) `RsvpControl.tsx`/`ParentRsvp.tsx`/`OutreachList.tsx`
+ *    already share.
  *
  * Per the Parent Home wireframe's own annotation (PRD line 396, "[Going▾]
  * ← RSVP-on-behalf (OUT-06)" on the OUTREACH row only, vs. line 397's
@@ -184,26 +194,34 @@
  * distinction exactly (meetings are attendance-tracked via check-in, not
  * RSVP'd). `NextEventRowItem`'s `SegmentedControl` (Going/Maybe/Can't go,
  * the identical `RSVP_ITEMS` idiom `OutreachList.tsx`'s own student/parent
- * view already established) fires `applyRsvpOverride` on selection, which
- * updates this ONE card's own local `rsvps` state (synthesizing a new row
- * when none existed, same pattern `OutreachList.tsx`'s `withRsvpOverride`
- * already established, independently reimplemented here since that file is
- * Forbidden Files/read-only reference only) -- a real, immediately-visible
- * state change (the segment's checked state flips), not a no-op button.
+ * view already established) calls `handleRsvpChange` on selection, which
+ * optimistically updates this ONE card's own local `rsvps` state
+ * (`applyRsvpOverride`, synthesizing a new row when none existed) -- a real,
+ * immediately-visible state change (the segment's checked state flips) --
+ * THEN awaits the real `onRsvpChange` write, rolling the snapshot array back
+ * and rendering a card-level error `Banner` on rejection (module doc §6b).
  *
- * What this deliberately does NOT build (OUT-06's full scope, owned by
- * `ParentRsvp.tsx`/T043, currently Blocked, a Forbidden File never imported
- * here): no Supabase write/persistence anywhere in this file (Known Context/
- * Traps #7, same posture as every prior content page); no `responded_by =
- * parent` attribution copy rendered anywhere (`HomeRsvpRow` below DOES
- * carry a `respondedBy` field for schema fidelity with the real `rsvps`
- * table, but this file never reads or renders it -- OUT-06's own literal
- * text, PRD line 297, "Student sees 'Mom signed you up' (Timestamp +
- * responder name)" is explicitly a STUDENT-Home-surface concern, not
- * rendered on this parent-facing page regardless); no cross-role override
- * semantics (a student changing an RSVP a parent set, or vice versa) --
- * this card's local `rsvps` state is only ever written by this one parent
- * viewer's own control.
+ * -----------------------------------------------------------------------
+ * 6b. GAM-304 -- `respondedBy` identity and per-card in-flight state.
+ *
+ * `respondedBy` is `viewerProfileId` (the signed-in PARENT's real
+ * `profiles.id`, `useAuth().user.id`, threaded down from `ParentHome`) --
+ * `studentId` stays the CARD's own student (the child being answered for).
+ * `HomeRsvpRow.respondedBy` below still carries the field for schema
+ * fidelity with the real `rsvps` table, but this file still never reads or
+ * renders the attribution copy itself (OUT-06's "Mom signed you up" text,
+ * PRD line 297, is a STUDENT-Home-surface concern -- see
+ * `StudentHome.tsx`'s own module doc #7 -- not rendered on this
+ * parent-facing page regardless of who most recently wrote the row).
+ *
+ * Per-card in-flight/error state, NOT a page-wide flag hoisted to
+ * `ParentHome`: a parent with three children must be able to answer for one
+ * while another card's write is still in flight. Cross-card collision is
+ * structurally impossible -- `guardian_links` carries `unique
+ * (parent_profile_id, student_id)` (`identity_roster.sql:78`) and
+ * `makeLoadLinkedStudentsForParentHome` maps students 1:1 off `linkRows`
+ * (`loaders/parentHome.ts:426-436`), so no two cards can ever target the
+ * same `(session_id, student_id)` pair.
  *
  * -----------------------------------------------------------------------
  * 7. T181 UPDATE: a real Supabase backend IS now wired -- this section
@@ -314,7 +332,12 @@
  *    used -- the same idiom `CoachHome.tsx`/`OutreachList.tsx` already
  *    established for a pre-computed hours-vs-goal ratio.
  *  - `SegmentedControl` (line 5575 section, Props table): `value`
- *    (required), `onChange` (required), `label` (required) used.
+ *    (required), `onChange` (required), `label` (required) used, plus
+ *    (GAM-304) `isDisabled`/`disabledMessage` (`astryx-api.md:5614-5615`)
+ *    while this card's own RSVP write is in flight (module doc §6b) --
+ *    `disabledMessage` is required alongside `isDisabled` here because a
+ *    bare disabled `SegmentedControl` swallows the hover events a tooltip
+ *    would need, and the prop exists precisely for that.
  *    `SegmentedControlItem`'s own subsection (line 5615): `value`
  *    (required), `label` (required) used.
  *  - `List`/`ListItem` (line 4536 section): `List`'s Props table
@@ -332,7 +355,10 @@
  *    `aria-busy` carry the same "Loading…" announcements `Spinner`'s
  *    `label` used to provide.
  *  - `Banner` (line 2694 section, Props table): `status`, `title`,
- *    `description` used.
+ *    `description` used, plus (GAM-304) `isDismissable`/`onDismiss` for the
+ *    new card-level rejected-RSVP-write error banner (module doc §6b),
+ *    matching `OutreachList.tsx:3972-3980`'s own already-established usage
+ *    of the same two props.
  *  - `Layout`/`LayoutContent` (line 167/276 sections): `Layout`'s `height`,
  *    `content` used; `LayoutContent`'s `padding` used (same skeleton
  *    `CoachHome.tsx` already established for a Home-family page).
@@ -378,6 +404,21 @@ import {
   loadLinkedStudentsForParentHome,
   loadStudentHomeCardDataForParentHome,
 } from '../../lib/supabase/loaders/parentHome';
+// GAM-304 -- the ONE real `rsvps` upsert (module doc #3 on
+// `loaders/outreach.ts`), already shared by `RsvpControl.tsx`/
+// `ParentRsvp.tsx`/`OutreachList.tsx` (T193's precedent, `OutreachList.tsx:
+// 3916-3951`). `submitRsvpChange` is the real default for the new injectable
+// `onRsvpChange` seam below; `outreach.ts` itself is a Forbidden File for
+// this task (read-only reference) -- only imported from here, never edited.
+import { submitRsvpChange, type SubmitRsvpChangeFn } from '../../lib/supabase/loaders/outreach';
+// GAM-304 -- `SupabaseLoaderError` (what `submitRsvpChange`'s own
+// `runMutation` rejects with, `loader.ts`) is a plain, non-`Error` object
+// (measured directly, this task's own worker output: `error instanceof
+// Error` is `false` for it) -- `isSupabaseLoaderError` lets the rollback
+// catch below surface its real `.message` instead of silently falling
+// through to the generic fallback the way a bare `error instanceof Error`
+// check would.
+import { isSupabaseLoaderError } from '../../lib/supabase/loader';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real columns/views. Module docs #1/#2.
@@ -962,6 +1003,23 @@ export function applyRsvpOverride(
   );
 }
 
+/** GAM-304 -- surfaces a rejected `onRsvpChange` write's own message when it
+ * is one this app's data layer produced: either a real `Error` (the same
+ * `error instanceof Error` branch `OutreachList.tsx:3946`/`RsvpControl.tsx:
+ * 501`/`ParentRsvp.tsx:561` already use), OR the plain-object
+ * `SupabaseLoaderError` shape `runMutation` (`loader.ts`) actually rejects
+ * with -- measured directly (this task's own worker output): calling the
+ * real `submitRsvpChange` unconfigured rejects with a `{code, message,
+ * cause}` object for which `error instanceof Error` is `false`, so an
+ * `instanceof Error`-only check would silently swallow that message. Falls
+ * back to the same generic copy those three files already use for every
+ * other rejection shape. */
+export function extractRsvpErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (isSupabaseLoaderError(error)) return error.message;
+  return 'Something went wrong saving this RSVP.';
+}
+
 // ---------------------------------------------------------------------------
 // Fixture loaders -- obviously-fake data generators (module doc #7,
 // constitution item 6: fabricated names only). T181: these are no longer
@@ -1131,11 +1189,18 @@ function NextEventRowItem({
   studentDisplayName,
   status,
   onRsvpChange,
+  isRsvpSubmitting,
 }: {
   row: NextEventRow;
   studentDisplayName: string;
   status: RsvpStatus | null;
-  onRsvpChange: (sessionId: string, status: RsvpStatus) => void;
+  onRsvpChange: (sessionId: string, status: RsvpStatus) => void | Promise<void>;
+  /** GAM-304 -- module doc §6b: disables THIS card's control (`isDisabled`
+   * + `disabledMessage`, `astryx-api.md:5614-5615`) while THIS card's write
+   * is in flight. Per-card, not page-wide (module doc §6b) -- a parent with
+   * three children must be able to answer for one while another card's
+   * write is outstanding. */
+  isRsvpSubmitting: boolean;
 }): ReactNode {
   const description = <Text type="supporting">{formatSessionDateTime(row)}</Text>;
 
@@ -1148,6 +1213,8 @@ function NextEventRowItem({
         value={status ?? UNANSWERED_RSVP_SEGMENT_VALUE}
         onChange={(value) => onRsvpChange(row.sessionId, value as RsvpStatus)}
         label={`RSVP on behalf of ${studentDisplayName} for ${row.title} on ${formatSessionDateOnly(row)}`}
+        isDisabled={isRsvpSubmitting}
+        disabledMessage={isRsvpSubmitting ? 'Saving your RSVP…' : undefined}
       >
         {RSVP_ITEMS.map((item) => (
           <SegmentedControlItem key={item.value} value={item.value} label={item.label} />
@@ -1183,6 +1250,15 @@ interface StudentHomeCardProps {
    * renders an honest absence marker instead of a fabricated number. */
   isActive: boolean;
   loadData: LoadStudentHomeCardDataFn;
+  /** GAM-304 -- the real, RLS-checked `profiles.id` of the signed-in PARENT
+   * viewer (`useAuth().user.id`, threaded down from `ParentHome`). This --
+   * never the card's own `studentId` above -- is what `handleRsvpChange`
+   * writes as `respondedBy` (module doc §6b). */
+  viewerProfileId: string;
+  /** GAM-304 -- injectable persistence seam (module doc §6/§6b). Defaults
+   * (at `ParentHome`) to the real `submitRsvpChange`, the SAME upsert
+   * `RsvpControl.tsx`/`ParentRsvp.tsx`/`OutreachList.tsx` already use. */
+  onRsvpChange: SubmitRsvpChangeFn;
 }
 
 function StudentHomeCard({
@@ -1192,9 +1268,17 @@ function StudentHomeCard({
   teamName,
   isActive,
   loadData,
+  viewerProfileId,
+  onRsvpChange,
 }: StudentHomeCardProps): ReactNode {
   const loadState = useLoadState(() => loadData(studentId, teamId), [loadData, studentId, teamId]);
   const [rsvps, setRsvps] = useState<readonly HomeRsvpRow[]>([]);
+  // GAM-304 -- PER-CARD in-flight/error state (module doc §6b), NOT hoisted
+  // to `ParentHome`: a parent with three children must be able to answer
+  // for one while another card's write is in flight, and no two cards can
+  // ever collide on the same `(session_id, student_id)` (module doc §6b).
+  const [isRsvpSubmitting, setIsRsvpSubmitting] = useState(false);
+  const [rsvpError, setRsvpError] = useState<string | null>(null);
 
   useEffect(() => {
     if (loadState.status === 'success') {
@@ -1252,8 +1336,31 @@ function StudentHomeCard({
   const goalHours = data.goalHours;
   const hoursPercent = hoursVsGoalPercent(data.confirmedHours, goalHours);
 
-  function handleRsvpChange(sessionId: string, status: RsvpStatus): void {
+  // GAM-304 -- module doc §6/§6b: real, persisted, rollback-on-failure
+  // RSVP-on-behalf write, T193's exact shape (`OutreachList.tsx:3916-3951`).
+  // Snapshots the whole `rsvps` ARRAY, not a scalar previous status, for the
+  // identical reason `StudentHome.tsx`'s own copy of this handler documents
+  // (`applyRsvpOverride` appends a row when none exists yet, so it cannot
+  // express "back to unanswered").
+  async function handleRsvpChange(sessionId: string, status: RsvpStatus): Promise<void> {
+    if (isRsvpSubmitting) return;
+    const previousRsvps = rsvps;
     setRsvps((prev) => applyRsvpOverride(prev, studentId, sessionId, status));
+    setRsvpError(null);
+    setIsRsvpSubmitting(true);
+    try {
+      await onRsvpChange({
+        sessionId,
+        studentId, // the CHILD this card is for -- never the parent's own id
+        status,
+        respondedBy: viewerProfileId, // the PARENT's profiles.id (module doc §6b)
+      });
+    } catch (error) {
+      setRsvps(previousRsvps);
+      setRsvpError(extractRsvpErrorMessage(error));
+    } finally {
+      setIsRsvpSubmitting(false);
+    }
   }
 
   return (
@@ -1266,6 +1373,21 @@ function StudentHomeCard({
             {!isActive && <Badge variant="neutral" label={INACTIVE_STUDENT_MARKER_LABEL} />}
           </HStack>
         </HStack>
+
+        {/* GAM-304 -- card-level error surfacing (module doc §6b): the
+            asymmetry with `StudentHome.tsx`'s page-level banner is
+            deliberate -- a page-level banner here could not say WHICH
+            child's answer failed, a materially worse ambiguity than not
+            naming a row. */}
+        {rsvpError !== null && (
+          <Banner
+            status="error"
+            title="Couldn't save this RSVP"
+            description={rsvpError}
+            isDismissable
+            onDismiss={() => setRsvpError(null)}
+          />
+        )}
 
         <VStack gap={1}>
           <Text type="label">Hours vs. goal</Text>
@@ -1329,6 +1451,7 @@ function StudentHomeCard({
                   studentDisplayName={displayName}
                   status={rsvps.find((rsvp) => rsvp.sessionId === row.sessionId)?.status ?? null}
                   onRsvpChange={handleRsvpChange}
+                  isRsvpSubmitting={isRsvpSubmitting}
                 />
               ))}
             </List>
@@ -1350,6 +1473,11 @@ export interface ParentHomeProps {
   /** Injectable per-student data-loading seam (module doc #4/#7). T181:
    * defaults to the real `loaders/parentHome.ts` implementation. */
   loadStudentData?: LoadStudentHomeCardDataFn;
+  /** GAM-304 -- injectable persistence seam for each card's RSVP-on-behalf
+   * control (module doc #6/§6b). Defaults to the real `submitRsvpChange`
+   * (`loaders/outreach.ts`), the SAME upsert `RsvpControl.tsx`/
+   * `ParentRsvp.tsx`/`OutreachList.tsx` already use. */
+  onRsvpChange?: SubmitRsvpChangeFn;
 }
 
 /** PRD line 265's own literal footer copy, verbatim (module doc #9). */
@@ -1359,6 +1487,7 @@ export const WEEKLY_SUMMARY_FOOTER_NOTE =
 export function ParentHome({
   loadLinkedStudents = loadLinkedStudentsForParentHome,
   loadStudentData = loadStudentHomeCardDataForParentHome,
+  onRsvpChange = submitRsvpChange,
 }: ParentHomeProps = {}): ReactNode {
   const { user } = useAuth();
   const loadState = useLoadState(loadLinkedStudents, [loadLinkedStudents]);
@@ -1439,6 +1568,13 @@ export function ParentHome({
                 teamName={teamNameById.get(student.teamId) ?? 'Unassigned team'}
                 isActive={student.isActive}
                 loadData={loadStudentData}
+                // GAM-304 -- `user` is guaranteed non-null here (the
+                // `user === null` early return above already ran, module
+                // doc #8's own "load-bearing" citation), so `user.id` (the
+                // signed-in PARENT's real `profiles.id`) is safe to pass
+                // with no non-null assertion.
+                viewerProfileId={user.id}
+                onRsvpChange={onRsvpChange}
               />
             ))}
 
