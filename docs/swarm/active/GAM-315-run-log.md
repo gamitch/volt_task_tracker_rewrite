@@ -297,3 +297,190 @@ Item 26's trigger question still answers *no*.
   These gates say the tree still builds and stays green; they say **nothing**
   about this diff, which is markdown that no gate reads — as PR #149 states
   rather than implying a green tick covers it.
+
+---
+
+# Round 3 — second dispatch, 2026-08-10T21:25Z
+
+Different agent, different container. The owner ruled at `21:23:26Z`
+(*"approve the 3rd gate request"*), removed `gate/human` and `escalated`, and
+moved the row `In Progress → Todo` at `21:24:00Z`, which re-dispatched it. This
+section is that run. **PR #149 stays open and unmerged** per the ruling.
+
+- **claimed** — `Todo → In Progress` at `21:25:13.352Z` via Linear GraphQL
+  (no Linear MCP tool in this runtime; `LINEAR_API_KEY` is present). Read back:
+  `state.name = "In Progress"`. Item 28c satisfied. Label was already `heavy`,
+  so item 28d tiering was not part of claiming — the previous run re-tiered it.
+- **premise re-measured independently, before PR #149 was known.** The dispatch
+  order is explicit that a premise nobody checked is worse than a refusal, so
+  this run measured the load-bearing facts from scratch rather than reading them
+  off the row. It reached **the same three unscoped `gitAutomationStates`**
+  (`start → In Progress`, `review → In Review`, `merge → Done`, all
+  `branchPattern: null`, `targetBranch: null`) and **the same aggregate-state
+  conclusion** from the same #143/#142 exhibit. Two runs, two containers, one
+  result — recorded because independent corroboration is worth more than a
+  citation, and because it cost four API calls.
+
+  **This is corroboration, not new work.** The ruling says the measurements
+  "must not be re-derived"; that instruction was read after the fact, and the
+  duplicate spend is noted here rather than hidden.
+- **two things this run adds that the packet does not have:**
+
+  **A. `AGENTS.md:36-37` carries the same false claim and is outside the
+  packet's Allowed Files.** A delegated `checker-premise` (opus) verifying the
+  issue's repo-side citations found `AGENTS.md:36-37` — *"An identifier in the
+  title or branch links but does **not** close."* — verbatim the sentence item
+  28f is being corrected for, in the file agents read at startup. The packet's
+  Allowed Files are `constitution.md`, `WORKFLOWS.md`, and
+  `2026-08-09-tracker-migration.md:245`. **A correction that lands only in those
+  three leaves the falsehood standing in `AGENTS.md`.** This goes to round 3.
+
+  **B. A branch name does not link on push — the link is created when the PR is
+  opened.** The packet's F1a explicitly withdraws a claim here and marks it
+  *"unmeasured; do not write it into the constitution."* This run supplies the
+  negative: branch `claude/gam-315-branch-link-closes-issue` (identifier in the
+  name) was pushed to `origin` twice, at `21:27Z` and `21:36Z`, with **no PR
+  opened**. GAM-315's `attachments` read back **empty** at `21:40Z` and its
+  state history shows no transition from either push. Scope honestly: this shows
+  push-without-PR does not attach *in this workspace with these settings*; it
+  does not prove the timing of attachment in every case. It is enough to stop
+  F1a's withdrawn claim from being reinstated, and it is why the rename below
+  was still possible.
+- **branch restructured, and the finding applied to this run too.** This run
+  started on `claude/gam-315-branch-link-closes-issue` — which carries the
+  identifier and would have closed GAM-315 on merge, exactly the hazard under
+  repair, and wrong here because round 3 may yet return REVISE. Renamed to
+  **`claude/item-28f-gate-round3`**, no identifier, before any PR existed and
+  while attachments were still empty. Rebased onto
+  `claude/item-28f-linking-measurement` (PR #149) instead of `main`, so this
+  work **stacks on** #149 rather than racing it: both runs would otherwise have
+  written this same file on two branches and conflicted head-on. The old remote
+  branch is deleted.
+- **premise gate round 3 dispatched** — `checker-premise`, opus, on revision 3
+  of `docs/swarm/active/GAM-315-packet.md` at `ce16bdd`. Briefed with the
+  owner's three priorities (remaining unmeasured claims; the five-closes /
+  one-clean-exhibit arithmetic; the `targetBranch` base-vs-head finding), its
+  charter §0 duty to attack the item 19d list first, and this run's additions A
+  (`AGENTS.md:36-37`, outside Allowed Files) and B (push does not attach).
+  **This is the last round.** Per the ruling, a REVISE escalates to the owner;
+  it does not open a fourth.
+- **premise gate round 3 — VERDICT: REVISE.** `checker-premise` on opus, 35 tool
+  calls, ~81K tokens. **0 BLOCKER, 3 MAJOR, 4 MINOR, 1 NIT.** It ran rather than
+  only read (item 26): 7 Linear GraphQL calls, ~20 `gh` calls, a team-wide
+  attachment `sourceType` sweep, and GraphQL schema introspection.
+
+  **The owner's three priorities, answered:**
+  1. *A third unmeasured claim is present.* **Found — two of them**, both MAJOR,
+     and both in `WORKFLOWS.md`/C3 rather than in the F-list the last two rounds
+     had been polishing.
+  2. *The five-closes / one-clean-exhibit arithmetic.* **Both CONFIRMED.** All 28
+     cells of F4's matrix re-verified; #141 is the only PR with neither a title
+     identifier nor a magic-word token, merged `11:54:41Z` → transition
+     `11:54:43.137Z`, 2.1s.
+  3. *`targetBranch` is base, not head.* **CONFIRMED from the API's own schema
+     description** ("pull requests *targeting* the specified branch pattern"),
+     which is a better instrument than the behavioural inference. GAM-322's
+     option set stands.
+
+  **Clean item 19c round:** every line citation in revision 3 verified correct.
+  Rounds 1 and 2 each lost budget to citation drift; round 3 lost none.
+
+- **CORRECTION — this run's own "finding B" is withdrawn.** The gate refuted it,
+  and it is recorded here rather than quietly dropped, because getting this wrong
+  is the exact defect GAM-315 exists to remove.
+
+  This run claimed above that pushing `claude/gam-315-branch-link-closes-issue`
+  twice with no PR, and reading GAM-315's `attachments` back empty, showed **a
+  branch name does not link on push**. It shows no such thing. **Both instruments
+  were blind:**
+  - *Firing:* GAM-315 was already `In Progress` (`21:25:13.352Z`) before either
+    push, so `start → In Progress` would have been a **no-op** — unobservable, by
+    the packet's own F3 caveat, which this run had read and did not apply.
+  - *Attachments:* there is **no positive control**. A sweep of the first 40 GAM
+    issues returned 13 attachments, every one `sourceType: "github"` with a
+    `/pull/` URL and **zero** of branch type — so an empty array says nothing
+    about branch links either way.
+
+  Correct status: *consistent with, does not measure.* **F1a's withdrawal and
+  acceptance criterion 7 stand unchanged** — revision 3 was right and this run
+  was wrong. An unmeasured claim came within one packet revision of the
+  constitution for the third round running, and this time the orchestrator
+  supplied it.
+- **packet revision 4 written** — all eight of round 3's findings applied to
+  `docs/swarm/active/GAM-315-packet.md`: C3's PR count corrected to five (four
+  closes, one no-op); `WORKFLOWS.md:491-492`'s "from the first push" added to C3
+  as a strike-or-qualify instruction with new criterion 7b; `AGENTS.md:36-37`
+  ruled explicitly out of scope with the authority question named and a Linear
+  row filed (item 20); F1a's weak-instrument caveat removed since all three F1d
+  negatives are firing-armed; criterion 8's file-set check replaced with an
+  unrestricted form that can actually fail; "200 PRs" → 148;
+  `linear-webhook-dispatch.md:378` added as C5. **This is not a pass** — same
+  reason revision 3 was not.
+- **item 20 deferral filed — `GAM-323`** (`Backlog`, `tier/standard`, priority
+  Medium), written per item 30 via `.claude/skills/linear-task-writing`:
+  *"AGENTS.md tells every agent a branch-name identifier does not close its issue
+  — measured, it closes"*. Carries the unresolved authority question
+  (`AGENTS.md:190-192` reserves the file to the primary orchestrator and names no
+  boss role, while `constitution.md:22-24` reserves the constitution to boss
+  roles), both ways to close it, and a recommendation to fold it back into
+  GAM-315's Allowed Files. Line numbers re-verified against `origin/main` before
+  writing; `git diff --stat origin/main -- AGENTS.md` empty. `Backlog`, not
+  `Todo` — promotion is the owner's signal (item 28a).
+- **escalated to the owner on the row** — comment posted on GAM-315 with round
+  3's verdict, the three priorities answered, the retraction, and the
+  recommendation (rule on revision 4 directly, or dispatch `boss-architect` on it
+  as it stands; a fourth gate round is not worth ~81K opus tokens against a
+  0-BLOCKER result). Labels `gate/human` + `escalated` re-added; **state left
+  `In Progress`, deliberately not `Todo`** — `Todo` is what re-dispatches, and
+  dispatching a fresh agent onto a row awaiting an owner decision is how this run
+  began. Read back: `In Progress`, labels `other, heavy, human, escalated`.
+- **PR opened — #150**, base `main`, head `claude/item-28f-gate-round3`, stacked
+  on #149. No identifier in branch or title, no magic word, the row named in
+  prose only. **No `boss-architect` dispatch was made and the constitution is
+  untouched** — `git diff --name-only main` is three files, all markdown under
+  `docs/swarm/active/`.
+- **mitigation test on #150 — held, and this one has a positive control.**
+  Opening PR #150 (no identifier in branch or title, no magic word, row named in
+  prose only) produced **no attachment on GAM-315 and no state transition**;
+  state read back `In Progress`, `attachments: []`.
+
+  **Scoped honestly, because this run already over-claimed once today.** The
+  *state* half is confounded exactly as finding B was — the row was already
+  `In Progress`, so `start → In Progress` would be a no-op. The *attachment* half
+  is **not** confounded, and that is the difference: for PRs a positive control
+  exists, since all seven of GAM-304's linked PRs carry a `/pull/` attachment and
+  every one of the 13 attachments in round 3's 40-issue sweep is a `/pull/` URL.
+  So an empty array after a PR opens is informative, where an empty array after a
+  bare branch push was not. **This measures the PR channel only** and says
+  nothing about push timing; F1a stays withdrawn.
+- **gates run** — `gate-run --require-clean`, on the final branch state, after
+  `npm ci` (the container had no `node_modules`; the script refused outright
+  rather than reporting six failures that were really one missing install):
+
+  ```
+  GATE RUN — 202c6b9 on claude/item-28f-gate-round3 — tree clean
+    1 tsc              exit 0  PASS
+    2 vite build       exit 0  PASS
+    3 format:check     exit 0  PASS
+    4 eslint           exit 0  PASS   0 errors, 377 warnings
+    5 vitest (full)    exit 0  PASS   83 files / 2162 tests
+                                      (no baseline given — regression not checked)
+    6 vitest (scoped)      –  SKIP    no scope derivable from the diff
+  VERDICT: PASS — 5 of 6 gates. NOT all six: 1 skipped.
+  ```
+
+  **Five, not six.** Gate 6 has no defensible scope because the diff contains no
+  `src/` file, and gate 5 carried no baseline. **Every figure matches the run on
+  #149 exactly** — 83 files / 2162 tests, 0 errors / 377 warnings — which is the
+  independent agreement the skill exists to produce, across two containers and
+  two agents. These gates say the tree still builds and stays green; they say
+  **nothing** about this diff, which is markdown no gate reads.
+
+## Round 3 outcome
+
+**REVISE → escalated to the owner. The constitution is unchanged.** No
+`boss-architect` dispatch was made and no fourth gate round was opened, per the
+owner's ruling. Awaiting an owner decision on packet revision 4.
+
+Artifacts: PR #150 (stacked on #149), `GAM-315` `In Progress` + `gate/human` +
+`escalated`, `GAM-323` filed in `Backlog`.
