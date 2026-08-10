@@ -110,6 +110,11 @@ Silence was the one option round 3 ruled out, so this is the explicit deferral
 item 20 requires, **and the follow-up row is filed rather than left as a
 comment** — item 20's whole rationale being that comments are not triaged.
 
+**Filed as `GAM-323`** (`Backlog`, `tier/standard`, written per item 30). It
+carries the authority question, both ways to close it, and a recommendation to
+fold it back in here. It also records `AGENTS.md:30`'s *"connects from the first
+push"* as unmeasured rather than false — the same distinction F1a draws.
+
 **Owner: if you would rather fold this in than run a second row, say so and it
 becomes a fourth Allowed File.** That is a one-line change to this section.
 

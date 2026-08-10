@@ -416,3 +416,13 @@ section is that run. **PR #149 stays open and unmerged** per the ruling.
   unrestricted form that can actually fail; "200 PRs" → 148;
   `linear-webhook-dispatch.md:378` added as C5. **This is not a pass** — same
   reason revision 3 was not.
+- **item 20 deferral filed — `GAM-323`** (`Backlog`, `tier/standard`, priority
+  Medium), written per item 30 via `.claude/skills/linear-task-writing`:
+  *"AGENTS.md tells every agent a branch-name identifier does not close its issue
+  — measured, it closes"*. Carries the unresolved authority question
+  (`AGENTS.md:190-192` reserves the file to the primary orchestrator and names no
+  boss role, while `constitution.md:22-24` reserves the constitution to boss
+  roles), both ways to close it, and a recommendation to fold it back into
+  GAM-315's Allowed Files. Line numbers re-verified against `origin/main` before
+  writing; `git diff --stat origin/main -- AGENTS.md` empty. `Backlog`, not
+  `Todo` — promotion is the owner's signal (item 28a).
