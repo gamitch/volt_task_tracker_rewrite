@@ -58,7 +58,8 @@ jobs:
   work:
     name: ${{ github.event.client_payload.identifier }} — ${{ github.event.client_payload.title }}
     runs-on: ubuntu-latest
-    # A runaway agent is billed by the minute, so this stays bounded — but an
+    # A runaway agent consumes subscription capacity by the minute, so this
+    # stays bounded — but an
     # hour was measured too short for the work it has to hold. Run 31358757094
     # was CANCELLED by this timeout at 60:14 having pushed nothing: a full
     # HEAVY chain is worker + separate checker + a mutation replayed for every
@@ -214,15 +215,36 @@ jobs:
           # printing it into the log.
           display_report: true
 
+          # ---------------------------------------------------------------
+          # READ THIS BEFORE INTERPRETING ANY DOLLAR FIGURE BELOW
+          # ---------------------------------------------------------------
+          # **The `$` figures in these comments are NOT money anyone is
+          # charged.** This workflow authenticates with
+          # `claude_code_oauth_token` (see the note above), so runs draw on the
+          # owner's Claude subscription and `ANTHROPIC_API_KEY` is empty. The
+          # SDK still reports `total_cost_usd` on every run, computed by
+          # pricing that run's tokens at API list rates. No invoice follows.
+          #
+          # They are kept — not scrubbed — because they are the ONLY
+          # quantitative signal available. Subscription consumption is not
+          # exposed as a number anywhere, and this figure is proportional to
+          # tokens weighted by model tier, so it is a sound way to compare one
+          # run against another and to plan how many rows fit in a usage
+          # window. Read them as "notional consumption", never as spend. The
+          # real limit that bites is the subscription's usage window, and this
+          # project has stalled on it before.
+          # ---------------------------------------------------------------
+          #
           # `--max-turns` is a flat budget spent by rows of wildly different
           # size, and 80 was set from nothing in particular. GAM-304 is the
           # evidence it was too small: run 31349834462 died at turn 81 with
-          # `error_max_turns`, having spent $9.16 and 24.5 minutes to produce
-          # no branch, no commit, and no PR — and it left the issue claimed in
+          # `error_max_turns`, having consumed $9.16 notional over 24.5
+          # minutes to produce no branch, no commit, and no PR — and it left
+          # the issue claimed in
           # `In Progress`, where the `Backlog -> Todo` webhook can never
           # re-dispatch it. A cap that stops a heavy row mid-change is worse
-          # than one that never fires, because the money is spent either way
-          # and only this way is the work also lost.
+          # than one that never fires, because the capacity is consumed either
+          # way and only this way is the work also lost.
           #
           # That row is the shape this has to fit: a write path behind RLS is
           # item 26's HEAVY trigger, so it carries the full packet -> premise
@@ -237,9 +259,26 @@ jobs:
           # them is to make the CLOCK the binding backstop and this cap the
           # safety net for a genuinely looping agent — the reverse of what
           # happened here, where a cheap cap fired with 35 minutes unused.
-          # Raising this raises the worst-case bill: budget ~$23 for a run
-          # that spends the whole allowance, against $9.16 for one that spent
-          # 80 turns.
+          # Raising this raises worst-case consumption. Measured on GAM-304,
+          # all notional and all from the runs' own result objects:
+          #
+          #   run 31357084288   64 turns / 22 min   $8.52   one gate round
+          #   run 31385764526   54 turns / 59 min  $28.58   worker + checker
+          #
+          # So a full HEAVY row costs roughly $37-45 notional end to end, and
+          # ~$85 was consumed on GAM-304 in total — of which ~$36 went to two
+          # runs that delivered nothing because of the bugs this file has
+          # since fixed.
+          #
+          # The largest reducible share is NOT the turn cap. Run 31385764526
+          # made **238 Bash calls on an opus orchestrator** — `npm ci`, `tsc`,
+          # `vitest`, `eslint`, git, mutation replays — mechanical work at the
+          # most expensive tier, each result growing an opus context. Two
+          # cheaper shapes exist and are not being used: `checker-tests` is
+          # pinned **haiku** and its charter is literally "runs lint,
+          # typecheck, tests, and build", and item 26 assigns orchestrator
+          # mutation-replay to STANDARD while HEAVY gets a separate checker —
+          # doing both pays twice. Tracked separately; do not fix it here.
           # ---------------------------------------------------------------
           # THE DELEGATION GRANT — `Task` / `Agent`
           # ---------------------------------------------------------------
