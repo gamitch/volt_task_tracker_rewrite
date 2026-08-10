@@ -86,6 +86,7 @@ jobs:
           token: ${{ secrets.CLAUDE_PR_TOKEN || github.token }}
 
       - name: Work the issue
+        id: claude
         uses: anthropics/claude-code-action@v1
         env:
           # Used by scripts/linear/client.mjs to claim and update the issue.
@@ -143,6 +144,55 @@ jobs:
             premise nobody checked — that failure has its own section in
             `docs/swarm/2026-08-09-tracker-migration.md`.
 
+          # Renders Claude's own report into the GitHub Step Summary — the
+          # panel above the log, which is where anyone looks first.
+          #
+          # DEFAULTS TO FALSE, so this is a real change and not decoration.
+          # The action's own warning is that it puts Claude-authored content in
+          # the Step Summary and should be used "solely with trusted input".
+          # Here the input is a Linear issue written by the owner in a
+          # single-member workspace, which meets that bar. It would stop
+          # meeting it the moment anyone else can file into `Todo`.
+          #
+          # NOT enabling `show_full_output`. That emits every tool result, and
+          # this agent holds a write-capable Linear key and unrestricted Bash —
+          # so it is a debugging switch to flip deliberately for one run, not a
+          # standing setting. The artifact below gives the same detail without
+          # printing it into the log.
+          display_report: true
+
           claude_args: |
             --max-turns 80
             --allowedTools "Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch"
+
+      # `if: always()` so a failed or timed-out run still yields its transcript —
+      # which is exactly the run you want to read. The extra `!= ''` guard is
+      # load-bearing: on a run that dies before the action produces a file, the
+      # output is an empty string, and `upload-artifact` fails on an empty path
+      # rather than skipping. Without it, the step meant to explain a failure
+      # would itself fail, in a way that looks like a second unrelated problem.
+      - name: Keep the execution log
+        if: always() && steps.claude.outputs.execution_file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-run-${{ github.event.client_payload.identifier }}-${{ github.run_id }}
+          path: ${{ steps.claude.outputs.execution_file }}
+          if-no-files-found: warn
+          # Long enough to debug something noticed a fortnight later; short
+          # enough that transcripts of every dispatch do not accumulate forever.
+          retention-days: 30
+
+      # A dispatched run is otherwise a dead end: it leaves a PR and a log, and
+      # no way back into the conversation that produced them. The session id
+      # makes it resumable with `--resume`, which is the closest thing to the
+      # session view a human goes looking for after a run misbehaves.
+      - name: Record the session id
+        if: always() && steps.claude.outputs.session_id != ''
+        run: |
+          {
+            echo "### Resume this run"
+            echo
+            echo "\`\`\`"
+            echo "claude --resume ${{ steps.claude.outputs.session_id }}"
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"
