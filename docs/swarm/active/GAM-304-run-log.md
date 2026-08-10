@@ -28,3 +28,17 @@ Branch: `claude/gam-304-rsvp-write`. Baseline: `49096db`.
   - `clickAction` **not** reintroduced anywhere — both `Button`s use plain `onClick` with `isLoading`/`isDisabled` (`:1332-1345`). The owner's BLOCKER holds.
   - Criterion 6 confirmed by grep at my end: `no Supabase write happens` in `StudentHome.tsx` → exit 1 (no match); `no Supabase write/persistence` in `ParentHome.tsx` → exit 1. Both module docs rewritten, and `ParentHome`'s expired T043 deferral note is gone.
 - `13:20Z` — **criterion 2's mutation replayed by me independently**, in my own worktree `/tmp/gam304-replay` at `4460dec` (item 23; I did not take the worker's pasted output on trust). Changed `respondedBy: viewerProfileId` → `respondedBy: studentId` at `StudentHome.tsx:1557` — T174's exact defect, the one RLS denies with `42501`. Real red: `AssertionError: expected 'student-fixture-harness-default' to be 'user-student'` at `StudentHome.test.tsx:1181`, **exit 1**, `1 failed | 68 passed`. Restored with `git checkout --`, tree clean, re-ran: **exit 0**, `69 passed`. The assertion genuinely pins the inequality — it is not a truthiness check that would pass with the bug present.
+
+---
+
+## Run 2 — resumed after the previous run was killed
+
+The entries above are run 1. It was killed by the wall clock between dispatching
+`checker-reviewer` and recording its verdict; its last real commit is `b5deeda` at
+`12:56:05Z`. Its self-reported clock times run ahead of its own commit timestamps
+by 8-20 minutes, so read them as ordering, not wall time. Times below are the real
+container clock.
+
+- `13:12Z` — **claimed `Todo → In Progress`** in Linear and re-read to confirm (item 28c): state `In Progress`, labels `w5`/`heavy`; `gate/human` absent (removed by the owner's ruling), `gate/unverified` absent. Tier is `tier/heavy` and already judged, so item 28d does not apply.
+- `13:13Z` — prior-run state established before any new work: branch `claude/gam-304-rsvp-write` exists on the remote at `b5deeda`, carrying worker commit `4460dec` (+745/−44 across 4 source files and this log). **No PR was ever opened for it.** Resuming this branch rather than restarting — the work, the gate verdicts and the log all sit on it.
+- `13:13Z` — **outstanding at resumption: exactly one thing, the independent `checker-reviewer` verdict.** Run 1 dispatched it and died before it returned. Item 26's HEAVY chain and the owner's ruling both require it, and no agent may accept its own work, so it is re-dispatched rather than waived.
