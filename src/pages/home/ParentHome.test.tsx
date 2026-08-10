@@ -17,13 +17,17 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthUser } from '../../app/guards';
 import { LoginAs } from '../../test-utils/authHarness';
 import {
   makeLoadLinkedStudentsForParentHome,
   makeLoadStudentHomeCardDataForParentHome,
 } from '../../lib/supabase/loaders/parentHome';
+// GAM-304 -- ONLY the type, for typing this file's own `onRsvpChange` spies
+// against the real seam's real shape (`outreach.ts` itself is a Forbidden
+// File for this task, read-only reference -- imported from, never edited).
+import type { SubmitRsvpChangeFn } from '../../lib/supabase/loaders/outreach';
 import {
   applyRsvpOverride,
   buildNextEventsForStudent,
@@ -1135,7 +1139,7 @@ describe('<ParentHome /> C10: the two loadLinkedStudents contracts are never cro
   });
 });
 
-describe('<ParentHome /> RSVP-on-behalf control (OUT-06 preview, real local state)', () => {
+describe('<ParentHome /> RSVP-on-behalf control (OUT-06 preview, GAM-304: now a real persisted write via submitRsvpChange)', () => {
   it("reflects Ada's existing 'maybe' RSVP for STEM Fair as the pre-checked segment", async () => {
     renderAsUser(PARENT_USER, {
       loadLinkedStudents: defaultLoadLinkedStudents,
@@ -1172,10 +1176,22 @@ describe('<ParentHome /> RSVP-on-behalf control (OUT-06 preview, real local stat
     }
   });
 
-  it('clicking a segment updates the RSVP live (real local state, not a no-op)', async () => {
+  it('clicking a segment updates the RSVP live (real persisted write, flushed after the resolving write settles)', async () => {
+    // GAM-304 remedy for packet finding (ii): this test used to assert
+    // `aria-checked` immediately after a synchronous `act(() => click)` with
+    // no flush, which (after this task's change) would pass only by racing
+    // the write's own rejection -- the real, unconfigured-in-jsdom
+    // `submitRsvpChange` default rejects asynchronously, and without a
+    // flush the assertion below would run before that rejection (and its
+    // rollback) has a chance to land. A RESOLVING spy plus a flush after the
+    // click is T193's own established remedy for this identical trap
+    // (`OutreachList.test.tsx:1885-1890`, ruling recorded at
+    // `task-ledger.md:246`).
+    const onRsvpChange = vi.fn<SubmitRsvpChangeFn>(async () => {});
     renderAsUser(PARENT_USER, {
       loadLinkedStudents: defaultLoadLinkedStudents,
       loadStudentData: defaultLoadStudentHomeCardData,
+      onRsvpChange,
     });
     await flushMicrotasks();
 
@@ -1188,6 +1204,7 @@ describe('<ParentHome /> RSVP-on-behalf control (OUT-06 preview, real local stat
     act(() => {
       goingButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    await flushMicrotasks();
 
     expect(
       fairGroup?.querySelector('button[data-value="going"]')?.getAttribute('aria-checked'),
@@ -1195,6 +1212,7 @@ describe('<ParentHome /> RSVP-on-behalf control (OUT-06 preview, real local stat
     expect(
       fairGroup?.querySelector('button[data-value="maybe"]')?.getAttribute('aria-checked'),
     ).toBe('false');
+    expect(onRsvpChange).toHaveBeenCalledTimes(1);
   });
 
   it('a meeting-type next-up row is read-only -- no SegmentedControl rendered for it', async () => {
@@ -1211,6 +1229,112 @@ describe('<ParentHome /> RSVP-on-behalf control (OUT-06 preview, real local stat
     );
     expect(meetingGroup).toBeUndefined();
     expect(container.textContent).toContain('Meeting — read-only');
+  });
+});
+
+describe('GAM-304 -- the parent card writes for the child with the parent as responder (criterion 5)', () => {
+  const RSVP_WRITE_STUDENT: LinkedStudentRow = {
+    studentId: 'student-rsvp-write-child',
+    displayName: 'Nia P.',
+    teamId: 'team-rsvp-write',
+    isActive: true,
+  };
+  const RSVP_WRITE_LINKED: LinkedStudentsResult = {
+    students: [RSVP_WRITE_STUDENT],
+    teams: [{ id: 'team-rsvp-write', name: 'Comet Crew' }],
+  };
+  const RSVP_WRITE_CARD_DATA: StudentHomeCardData = {
+    goalHours: 10,
+    confirmedHours: 1,
+    participation: null,
+    consistencyEntries: [],
+    nextEvents: [
+      {
+        sessionId: 'session-rsvp-write',
+        eventId: 'event-rsvp-write',
+        title: 'Neighborhood Cleanup',
+        type: 'outreach',
+        sessionDate: '2026-08-02',
+        startsAt: '2026-08-02T15:00:00.000Z',
+        endsAt: '2026-08-02T17:00:00.000Z',
+      },
+    ],
+    rsvps: [],
+  };
+
+  it('writes the CHILD studentId with the PARENT profiles.id as respondedBy, not the reverse', async () => {
+    const onRsvpChange = vi.fn<SubmitRsvpChangeFn>(async () => {});
+    renderAsUser(PARENT_USER, {
+      loadLinkedStudents: async () => RSVP_WRITE_LINKED,
+      loadStudentData: async () => RSVP_WRITE_CARD_DATA,
+      onRsvpChange,
+    });
+    await flushMicrotasks();
+
+    const group = Array.from(container.querySelectorAll('[role="radiogroup"]')).find((el) =>
+      el
+        .getAttribute('aria-label')
+        ?.startsWith('RSVP on behalf of Nia P. for Neighborhood Cleanup'),
+    );
+    expect(group).toBeTruthy();
+    const goingButton = group?.querySelector('button[data-value="going"]');
+    expect(goingButton).toBeTruthy();
+
+    act(() => {
+      goingButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    expect(onRsvpChange).toHaveBeenCalledTimes(1);
+    const call = onRsvpChange.mock.calls[0]![0];
+    expect(call.sessionId).toBe('session-rsvp-write');
+    expect(call.status).toBe('going');
+    // The CHILD's own studentId, never the parent's.
+    expect(call.studentId).toBe(RSVP_WRITE_STUDENT.studentId);
+    // The PARENT's real profiles.id, never the child's studentId (T174's
+    // exact defect class -- an assertion that only checks `respondedBy` is
+    // truthy would pass even if `studentId` were wrongly reused).
+    expect(call.respondedBy).toBe(PARENT_USER.id);
+    expect(call.respondedBy).not.toBe(call.studentId);
+  });
+
+  it('a rejecting seam rolls this card back and renders the card-level error banner', async () => {
+    const onRsvpChange = vi.fn<SubmitRsvpChangeFn>(async () => {
+      throw new Error('boom parent rsvp write failed');
+    });
+    renderAsUser(PARENT_USER, {
+      loadLinkedStudents: async () => RSVP_WRITE_LINKED,
+      loadStudentData: async () => RSVP_WRITE_CARD_DATA,
+      onRsvpChange,
+    });
+    await flushMicrotasks();
+
+    const group = Array.from(container.querySelectorAll('[role="radiogroup"]')).find((el) =>
+      el
+        .getAttribute('aria-label')
+        ?.startsWith('RSVP on behalf of Nia P. for Neighborhood Cleanup'),
+    );
+    const goingButton = group?.querySelector('button[data-value="going"]');
+
+    act(() => {
+      goingButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    // Rolled back: no segment is checked (there was no pre-existing RSVP).
+    for (const value of ['going', 'maybe', 'declined']) {
+      expect(
+        Array.from(container.querySelectorAll('[role="radiogroup"]'))
+          .find((el) =>
+            el
+              .getAttribute('aria-label')
+              ?.startsWith('RSVP on behalf of Nia P. for Neighborhood Cleanup'),
+          )
+          ?.querySelector(`button[data-value="${value}"]`)
+          ?.getAttribute('aria-checked'),
+      ).toBe('false');
+    }
+    expect(container.textContent).toContain('boom parent rsvp write failed');
   });
 });
 
