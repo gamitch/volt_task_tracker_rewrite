@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-10T04:02:17.917Z from team `Gamitch`.
+Exported 2026-08-10T04:56:56.465Z from team `Gamitch`.
 
-- **311** issues (242 archived)
-- **34** not yet completed or cancelled
+- **316** issues (242 archived)
+- **39** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -48,6 +48,11 @@ Exported 2026-08-10T04:02:17.917Z from team `Gamitch`.
 | [GAM-305](https://linear.app/gamitch/issue/GAM-305/t615-the-schedule-meetings-team-picker-offers-archived-teams-the) | T615 | Backlog | area/w3 tier/unreviewed | T615 — The schedule-meetings team picker offers archived teams; the roster picker excludes them |
 | [GAM-306](https://linear.app/gamitch/issue/GAM-306/t616-no-event-records-who-created-it-so-outreach-detail-permanently) | T616 | Backlog | area/w3 tier/unreviewed | T616 — No event records who created it, so outreach detail permanently reads "Unknown creator" |
 | [GAM-311](https://linear.app/gamitch/issue/GAM-311/kpi-viewssqls-two-views-never-got-t801s-catalog-comment-rls-correction) | — | Backlog | tier/unreviewed | kpi_views.sql's two views never got T801's catalog-comment RLS correction -- D010 chose header-prose only |
+| [GAM-312](https://linear.app/gamitch/issue/GAM-312/two-live-dispatch-policies-exist-only-as-file-comments-no-constitution) | — | Backlog | provenance/other tier/unreviewed | Two live dispatch policies exist only as file comments — no constitution item, so nothing triages them |
+| [GAM-313](https://linear.app/gamitch/issue/GAM-313/resume-heremd-is-the-first-file-nine-kickoff-prompts-tell-an-agent-to) | — | Backlog | provenance/other tier/unreviewed | `RESUME-HERE.md` is the first file nine kickoff prompts tell an agent to read, and the word "Linear" appears in it zero times |
+| [GAM-314](https://linear.app/gamitch/issue/GAM-314/a-dispatched-run-reports-success-while-its-work-is-still-running-in) | — | Backlog | provenance/other tier/unreviewed | A dispatched run reports `success` while its work is still "running in the background" — and the process takes it |
+| [GAM-315](https://linear.app/gamitch/issue/GAM-315/any-branch-named-claudegam-nnn-closes-that-issue-on-merge-item-28f) | — | Backlog | provenance/other tier/unreviewed | Any branch named `claude/gam-nnn-*` closes that issue on merge — item 28f says it only links, and that is false here |
+| [GAM-316](https://linear.app/gamitch/issue/GAM-316/item-19-requires-recording-the-premise-gate-verdict-the-dispatch-path) | — | Backlog | provenance/other tier/unreviewed | Item 19 requires recording the premise-gate verdict; the dispatch path has no mechanism, so the first real one lived only in a 30-day artifact |
 
 ## Closed and cancelled
 
