@@ -214,6 +214,15 @@ emits one fixed-shape evidence block. Collapses 10–15 turns into one and makes
 *comparable across runs* instead of ad-hoc per orchestrator. Deterministic where it matters most —
 the evidence everyone quotes.
 
+> **Built, 2026-08-10** — `.claude/skills/gate-run/`. Two corrections to the paragraph above,
+> both measured while writing it. (1) The multi-agent chain is **not** where the turns go: the
+> analysed run made **2** `Agent` dispatches against **342** inline orchestrator calls (238 Bash,
+> 56 Read, 42 Edit), and 255 of those 344 sat *between* the worker and checker dispatches. Cutting
+> phases would have removed 2 calls out of 344. The target is the orchestrator's own inline loop.
+> (2) The turn saving comes from bundling a **script**, not from the prose — a pure-prose skill
+> would leave six shell calls in place and add its body to context, a net loss. Payoff remains
+> ~5% of a heavy run; the durable value is comparable evidence, not capacity.
+
 **Write `wait-until`.** Bounded poll on a real condition with a timeout and an explicit failure.
 Replaces `sleep N` and kills a whole nondeterminism class.
 

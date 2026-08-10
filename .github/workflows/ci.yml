@@ -267,7 +267,7 @@ jobs:
   # Python. Without this job it would be a test nobody runs, which is the exact
   # class of defect T701 was filed for.
   skill-scripts:
-    name: Skill script tests (mutation-replay parser)
+    name: Skill script tests (mutation-replay, gate-run parsers)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -278,6 +278,13 @@ jobs:
       # skill with.
       - name: Mutation-replay parser and verdict tests
         run: python3 .claude/skills/mutation-replay/scripts/test_replay.py
+
+      # gate-run reads the same vitest summary shapes, and reports the counts
+      # three agents then quote at each other. Its parser earns the same
+      # coverage for the same reason: a misread summary is a number nobody
+      # re-derives.
+      - name: Gate-run parser and scope-derivation tests
+        run: python3 .claude/skills/gate-run/scripts/test_gates.py
 
   # ---------------------------------------------------------------------------
   # Edge Function unit tests (Deno).
