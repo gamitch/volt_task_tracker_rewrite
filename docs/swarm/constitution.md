@@ -455,25 +455,59 @@ After the third failure, the task must be escalated to boss-arbiter.
        rules out ("does not self-certify completion"). **The merge closes the
        issue, not the author.**
 
-    f. **Put the identifier in the PR title, and keep the commit trailer.**
-       Both, because they serve different readers:
+    f. **Keep the identifier out of the PR title unless the PR is that issue's
+       work, and keep the commit trailer.** Linking and closing are two
+       different mechanisms. The previous wording of this item conflated them
+       and was false in this workspace; the correction is GAM-315, measured
+       2026-08-10.
 
-       - **`Closes GAM-nnn` as the PR body's first line.** This is the
-         mechanism that demonstrably works: PR #126 used it and `GAM-303` went
-         to `Done` on merge with the PR linked on the card. It is a Linear magic
-         word (`Closes`/`Fixes`/`Resolves`), and it does two things a bare
-         identifier does not — it links **and** it closes.
+       **What links a PR to an issue.** Three channels are *known* to link: the
+       **branch name**, the **PR title**, and a **magic word**
+       (`Closes`/`Fixes`/`Resolves`) beside the identifier in the body. Two are
+       measured *not* to link: a bare prose mention elsewhere in the body, and a
+       commit message. Read that as "known to link", not as an exhaustive list —
+       the PR-comment channel was never testable here.
 
-         An identifier in the title or branch name **links only**. Useful, and
-         `WORKFLOWS.md` rule 2 requires it in the branch for readability, but on
-         its own it leaves the issue sitting in `In Review` after merge.
+       One thing is unresolved and is recorded rather than papered over: the
+       title channel and a magic-word token appearing in *negated* prose cannot
+       be separated by any data in this repository, because every candidate PR
+       carries both. The experiment that would settle it — a throwaway issue and
+       a PR carrying its identifier in the title with no magic-word token — was
+       **deliberately not run**, because it fires a live automation against the
+       tracker to learn something that changes no rule. The safe rule is
+       identical under both horns: keep the identifier out of the branch name
+       *and* the title, and away from `close`/`fix`/`resolve`.
 
-         **Linear does not read commit trailers**, so the trailer alone gives
-         traceability and no automation.
-       - **Commit trailer** — `Linear-Issue: GAM-nnn (Tnnn)`. This survives in
-         git history independently of any hosted account, which is the same
-         reason item 29 keeps an export. Item 24 joins recording to merging;
-         this is that rule's Linear form.
+       **What closes the issue is not the magic word.** It is the `Gamitch`
+       team's Linear automation *PR merged → Done* (item 28g), and it fires when
+       the **last open linked PR** merges. Any linked PR will do it. The PR body
+       never enters into it.
+
+       Two consequences to act on:
+
+       1. **Once a PR is linked, its merge participates in that issue's state,
+          and omitting the magic word protects nothing.** A branch named for an
+          issue it merely mentions will close that issue on merge.
+       2. **An issue with more than one linked PR can be moved backwards by the
+          merge of its own fix** — that is what happens when the merge rule
+          finds another linked PR still open. Keep the linked set to one PR.
+
+       - **`Closes GAM-nnn` as the PR body's first line — still required, on
+         different grounds.** It is the explicit human-readable record of
+         *which* PR is the work, it survives a branch rename, and it is the only
+         link a branch without an identifier has. It is **not** what closes the
+         issue. Wherever this repository states what closes an issue, name the
+         mechanism and date the statement; never attribute closing to a token in
+         a PR body. If the mechanism is ever replaced, one dated sentence
+         changes and this requirement does not.
+       - **Commit trailer** — `Linear-Issue: GAM-nnn (Tnnn)`. **Linear does not
+         read commit messages** — an identifier appearing only in one produces
+         no attachment and no state change (measured on GAM-318/319/320, with a
+         positive control in the same PR delivery) — so the trailer gives
+         traceability and no automation. It survives in git history
+         independently of any hosted account, which is the same reason item 29
+         keeps an export. Item 24 joins recording to merging; this is that
+         rule's Linear form.
 
     g. **Branch names carry the issue identifier — `WORKFLOWS.md` rule 2 is
        the rule and is not restated here** (item 3). It already existed; item 29
@@ -482,10 +516,31 @@ After the third failure, the task must be escalated to boss-arbiter.
        looks reserved and is not, and two sessions once worked one mutable ref
        because of it.
 
-       **Owner action, once, outside the repo:** enable the Linear workflow
-       automation *PR merged → Done* for the `Gamitch` team. Until that is on,
-       issues will sit in `In Review` after their PR lands and must be closed
-       by hand.
+       **The owner action this item used to request is done, and there are
+       three automations, not one.** Read from Linear on **2026-08-10**; all
+       three are unscoped, so they apply to every branch:
+
+       ```
+       event=start   targetBranch=null (ANY) -> In Progress
+       event=review  targetBranch=null (ANY) -> In Review
+       event=merge   targetBranch=null (ANY) -> Done
+       ```
+
+       **Reproduce this rather than trust it.** A prose enumeration goes stale
+       silently the moment the owner changes a setting, which is the failure
+       this item is being corrected for:
+
+       ```js
+       gql('{ teams(first:5){ nodes{ key gitAutomationStates(first:30){ nodes{ event targetBranch{ id branchPattern isRegex } state{ name type } } } } } }')
+       ```
+
+       `targetBranch` scopes the PR's **base** branch, not its head, so no
+       branch-naming scheme can be expressed there. `start → In Progress` is the
+       rule that moves an issue backwards when a second linked PR is still open,
+       and that reopens a closed issue when a PR is opened on a stale branch
+       carrying its identifier. Whether to change any of this is the owner's
+       decision, outside the repo, and is tracked separately — do not change it
+       from here.
 
     **Authorized by the human owner 2026-08-09, and filed because the failure was
     measured rather than imagined.** The first agent dispatched through Linear

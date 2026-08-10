@@ -26,16 +26,22 @@ Constitution **item 28** is binding and its order matters:
    so without that read-back two agents can both claim the same row.
 4. A `tier/unreviewed` row may **not** enter `In Progress` until you have tiered
    it (item 26). Judging the tier is part of claiming, not of finishing.
-5. **Name the branch `claude/gam-nnn-short-slug`** — Linear links on the
-   identifier in the branch name, so the issue connects from the first push, and
-   a human reading `git branch` can tell what it is. Claude Code's default name
+5. **Name the branch `claude/gam-nnn-short-slug` when the branch does that
+   issue's work** — Linear links on the identifier in the branch name, and a
+   human reading `git branch` can tell what it is. Claude Code's default name
    comes from the session title and carries neither; rename it after claiming.
-6. On completion move it to `In Review` — **never `Done`**. The merge closes
-   the issue; an agent closing its own is self-certification. Open the PR with
-   **`Closes GAM-nnn` as its first body line** — that magic word both links the
-   issue and moves it to `Done` on merge. An identifier in the title or branch
-   links but does **not** close. Add the trailer `Linear-Issue: GAM-nnn (Tnnn)`
-   for the git-side record, which Linear does not read.
+   **If the branch only *mentions* an issue** — an investigation, a salvage, a
+   follow-up, an infrastructure fix — **keep the identifier out of the branch
+   name and the PR title** (`WORKFLOWS.md` rule 2), or merging will close a row
+   you never worked on.
+6. On completion move it to `In Review` — **never `Done`**. A team automation
+   closes the issue when the last linked PR merges; an agent closing its own is
+   self-certification. Open the PR with **`Closes GAM-nnn` as its first body
+   line** — that is the human-readable record of which PR is the work, and it
+   links the issue; it is **not** what closes it. An identifier in the title or
+   branch name links too, and **any** linked PR's merge can close the issue
+   (constitution item 28f). Add the trailer `Linear-Issue: GAM-nnn (Tnnn)` for
+   the git-side record, which Linear does not read.
 
 Labels carry what custom fields used to: `tier/*` (item 26 process tier),
 `area/w1`…`w10` (workflow surface), `gate/human` (no machine may close it),
