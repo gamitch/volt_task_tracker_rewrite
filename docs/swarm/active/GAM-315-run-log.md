@@ -453,3 +453,34 @@ section is that run. **PR #149 stays open and unmerged** per the ruling.
   So an empty array after a PR opens is informative, where an empty array after a
   bare branch push was not. **This measures the PR channel only** and says
   nothing about push timing; F1a stays withdrawn.
+- **gates run** — `gate-run --require-clean`, on the final branch state, after
+  `npm ci` (the container had no `node_modules`; the script refused outright
+  rather than reporting six failures that were really one missing install):
+
+  ```
+  GATE RUN — 202c6b9 on claude/item-28f-gate-round3 — tree clean
+    1 tsc              exit 0  PASS
+    2 vite build       exit 0  PASS
+    3 format:check     exit 0  PASS
+    4 eslint           exit 0  PASS   0 errors, 377 warnings
+    5 vitest (full)    exit 0  PASS   83 files / 2162 tests
+                                      (no baseline given — regression not checked)
+    6 vitest (scoped)      –  SKIP    no scope derivable from the diff
+  VERDICT: PASS — 5 of 6 gates. NOT all six: 1 skipped.
+  ```
+
+  **Five, not six.** Gate 6 has no defensible scope because the diff contains no
+  `src/` file, and gate 5 carried no baseline. **Every figure matches the run on
+  #149 exactly** — 83 files / 2162 tests, 0 errors / 377 warnings — which is the
+  independent agreement the skill exists to produce, across two containers and
+  two agents. These gates say the tree still builds and stays green; they say
+  **nothing** about this diff, which is markdown no gate reads.
+
+## Round 3 outcome
+
+**REVISE → escalated to the owner. The constitution is unchanged.** No
+`boss-architect` dispatch was made and no fourth gate round was opened, per the
+owner's ruling. Awaiting an owner decision on packet revision 4.
+
+Artifacts: PR #150 (stacked on #149), `GAM-315` `In Progress` + `gate/human` +
+`escalated`, `GAM-323` filed in `Backlog`.
