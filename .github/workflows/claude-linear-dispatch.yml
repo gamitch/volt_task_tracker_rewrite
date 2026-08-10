@@ -58,9 +58,22 @@ jobs:
   work:
     name: ${{ github.event.client_payload.identifier }} — ${{ github.event.client_payload.title }}
     runs-on: ubuntu-latest
-    # A runaway agent is billed by the minute. Item 28 work is scoped to one
-    # issue; an hour is generous for that and still bounded.
-    timeout-minutes: 60
+    # A runaway agent is billed by the minute, so this stays bounded — but an
+    # hour was measured too short for the work it has to hold. Run 31358757094
+    # was CANCELLED by this timeout at 60:14 having pushed nothing: a full
+    # HEAVY chain is worker + separate checker + a mutation replayed for every
+    # acceptance criterion, and that does not fit an hour. The two runs that
+    # did fit (22 and 32 minutes) only wrote packets and ran gates.
+    #
+    # 120 keeps `--max-turns` below as the real backstop for a looping agent
+    # while giving a genuine chain room to finish. The cost of a runaway
+    # doubles; the cost of a run that does 90 minutes of work and is killed at
+    # 60 is all of it, which is what happened.
+    #
+    # The better fix is probably to stop making one run hold the whole chain —
+    # worker and checker racing a single clock is the actual design smell —
+    # but that is a redesign, and this is the measurement-backed increment.
+    timeout-minutes: 120
 
     # The edge function already filters, but a workflow must not assume its
     # only caller is the one it was written for — anyone able to fire a
@@ -156,6 +169,33 @@ jobs:
             issue, is a better outcome than a confident change built on a
             premise nobody checked — that failure has its own section in
             `docs/swarm/2026-08-09-tracker-migration.md`.
+
+            **KEEP A RUN LOG, AND PUSH IT AS YOU GO. This is not optional and
+            it is not bookkeeping — it is the only thing that survives if you
+            are killed.** You run on an ephemeral container with a hard wall
+            clock. Anything living only in the working tree dies with it, and
+            the execution transcript is NOT saved when the job is cancelled.
+            Run 31358757094 held roughly an hour of real work in an
+            uncommitted tree, hit the timeout, and left nothing at all — no
+            commit, no artifact, no record of what it had done.
+
+            So: create `docs/swarm/active/<ISSUE>-run-log.md` as your FIRST
+            file write, and after every milestone append one line and
+            immediately `git add` that exact path and `git commit && git push`.
+            Milestones are: claimed; packet written or read; each subagent
+            dispatched; each subagent's verdict; gates run; PR opened. Push
+            the log even when nothing else is ready to push — a branch with
+            only a log on it is a good outcome compared to silence.
+
+            **Commit and push real work at every boundary too**, not once at
+            the end. A packet, a verdict, a worker's diff: push each as it
+            lands. Item 26 already teaches "commit before mutating" for
+            mutation proofs; this is the same discipline applied to the run.
+            Use explicit pathspecs — item 22 forbids `git add -A`.
+
+            If you are near the wall clock with work in flight, stop, push
+            what exists, and say so in the log and on the issue. A partial
+            result that is written down beats a complete one that is killed.
 
           # Renders Claude's own report into the GitHub Step Summary — the
           # panel above the log, which is where anyone looks first.
@@ -276,7 +316,7 @@ jobs:
           # as a flag value.
           claude_args: |
             --model ${{ (github.event.client_payload.tier == 'heavy' || github.event.client_payload.tier == 'unreviewed') && 'opus' || 'sonnet' }}
-            --max-turns 200
+            --max-turns 300
             --allowedTools "Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,Task,Agent"
 
       # `if: always()` so a failed or timed-out run still yields its transcript —
@@ -285,13 +325,33 @@ jobs:
       # output is an empty string, and `upload-artifact` fails on an empty path
       # rather than skipping. Without it, the step meant to explain a failure
       # would itself fail, in a way that looks like a second unrelated problem.
+      # CORRECTED 2026-08-10. The guard used to be
+      # `always() && steps.claude.outputs.execution_file != ''`, which was
+      # written to stop `upload-artifact` failing on an empty path — a real
+      # hazard, described in the note above. But a step that is CANCELLED
+      # never sets its outputs, so on the 60-minute timeout the guard read
+      # false, this step was skipped, and run 31358757094 produced
+      # `total_count: 0` artifacts. The guard protected against a confusing
+      # error by guaranteeing no evidence in the one case that most needed it.
+      #
+      # Fixed by falling back to the path the action actually writes (it logs
+      # `Log saved to /home/runner/work/_temp/claude-execution-output.json`)
+      # and letting `ignore` handle a genuinely absent file. `always()` still
+      # covers failure AND cancellation; only the output-emptiness test is
+      # gone, and `if-no-files-found: ignore` now does the job that test was
+      # doing.
+      #
+      # This is best-effort by nature: a hard kill may leave no file at all,
+      # since the SDK writes it at the end. That is exactly why the prompt
+      # above makes the agent commit a run log to git as it goes — git is the
+      # durable record, this artifact is the convenient one.
       - name: Keep the execution log
-        if: always() && steps.claude.outputs.execution_file != ''
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: claude-run-${{ github.event.client_payload.identifier }}-${{ github.run_id }}
-          path: ${{ steps.claude.outputs.execution_file }}
-          if-no-files-found: warn
+          path: ${{ steps.claude.outputs.execution_file || '/home/runner/work/_temp/claude-execution-output.json' }}
+          if-no-files-found: ignore
           # Long enough to debug something noticed a fortnight later; short
           # enough that transcripts of every dispatch do not accumulate forever.
           retention-days: 30
