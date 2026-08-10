@@ -555,3 +555,22 @@ event that could have linked them.
 So F8 is no longer one observation. It is **n=3 on the negative side with a
 simultaneous positive control in the same delivery** — the instrument
 demonstrably fires, and it did not fire for the commit-message channel.
+
+## Live re-test of the automations, during this run
+
+`22:48:28Z` PR #151 opened (branch `claude/gam-304-failure-p3y021`, unrelated
+work) → `22:48:31.430Z` GAM-304 attachment → `22:48:31.430Z` GAM-304
+**`Done → In Progress`**, same millisecond. Three findings: the automations are
+live *now*, not just historically; this is a wrong **reopen** of a closed issue
+(the sixth wrong move on GAM-304, and the first of this shape); and it is a
+third millisecond-identical attachment/transition pair attributed to
+`USER:George Mitchom`.
+
+- **revision 5 written** — `docs/swarm/active/GAM-315-mechanism-comparison.md`.
+  Per the owner's ruling this is a **comparison with a recommendation, not
+  wording and not an implementation**. Packet revision 4 is left unchanged.
+  All five required checks answered; F8's positive control met. Recommends
+  **A now + GAM-322 option 1 + B as its own gated row**, with a one-sentence
+  amendment to C1 that makes A's text true under either mechanism. Records five
+  least-confident decisions and puts the gate question to the owner rather than
+  assuming an answer.
