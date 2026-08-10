@@ -254,3 +254,26 @@ Item 26's trigger question still answers *no*.
   prose only, which F1d measures as non-linking. This is the C3 rule applied by
   its own author before it is ratified — and the strongest evidence available
   that the finding is real and actionable.
+- **GAM-322 filed** — `Backlog`, `gate/human`, `provenance/premise-gate`,
+  `tier/unreviewed` (tiering is the picker's first act, item 28c/d, so it is
+  not mine to pre-judge). The owner's automation decision, with three options
+  and a recommendation.
+- **escalation recorded on the row** — comment posted; labels now
+  `other, heavy, human, escalated`; state left `In Progress`, because the work
+  is not finished and item 28e's `In Review` would misrepresent it.
+- **PR #149 opened** — https://github.com/gamitch/volt_task_tracker_rewrite/pull/149
+- **THE MITIGATION IS CONFIRMED LIVE.** After PR #149 opened, GAM-315 has
+  **zero attachments** and no new state transitions. Every prior PR in this
+  investigation attached to its row within ~3 seconds of creation (GAM-304's
+  seven attachments each match a PR creation time to the millisecond). GAM-304
+  and GAM-322 are both named in #149's body in prose and neither took a new
+  attachment either. So: branch renamed off the identifier + no identifier in
+  the title + no magic word = **no link, therefore no close**. F1d and C3's
+  mechanical fallback hold under their first live test.
+- **the PR body had to be scrubbed to comply with the rule it proposes.** Two
+  sentences violated C3's same-sentence constraint — one put `fix` within a few
+  words of `GAM-304`, which under a looser parser could have moved *another*
+  issue. Caught by grepping the body before opening. **This is direct evidence
+  for MINOR 4's point that "adjacent" needs a definition a checker can apply:**
+  the author of the rule broke it twice while writing the very PR that proposes
+  it, and only a mechanical check caught it.
