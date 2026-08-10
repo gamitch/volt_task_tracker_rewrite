@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-10T14:00:32.780Z from team `Gamitch`.
+Exported 2026-08-10T14:23:12.422Z from team `Gamitch`.
 
 - **321** issues (242 archived)
-- **45** not yet completed or cancelled
+- **44** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -45,7 +45,6 @@ Exported 2026-08-10T14:00:32.780Z from team `Gamitch`.
 | [GAM-300](https://linear.app/gamitch/issue/GAM-300/t807-two-loaders-still-apply-the-greatestx-1-floor-t509-removed-and) | T807 | Backlog | area/w5 tier/unreviewed | T807 — Two loaders still apply the `greatest(x, 1)` floor T509 removed, and three row types still declare `participation_pct` non-nullable |
 | [GAM-301](https://linear.app/gamitch/issue/GAM-301/t407-the-outreach-nav-badge-is-a-hardcoded-0-while-the-page-it-links) | T407 | Backlog | area/w1 tier/standard | T407 — The Outreach nav badge is a hardcoded `0` while the page it links to reads "74 awaiting your RSVP" |
 | [GAM-302](https://linear.app/gamitch/issue/GAM-302/9-closed-ledger-rows-are-sitting-in-linear-as-pickable-backlog-because) | — | Backlog | tier/fast | ~9 closed ledger rows are sitting in Linear as pickable Backlog, because their closure never touched the Status column |
-| [GAM-304](https://linear.app/gamitch/issue/GAM-304/t809-studenthomes-sign-up-cant-go-control-writes-nothing-and-says) | T809 | In Progress | area/w5 tier/heavy | T809 — `StudentHome`'s Sign up / Can't go control writes nothing and says nothing — a documented deferral with no follow-up row |
 | [GAM-305](https://linear.app/gamitch/issue/GAM-305/t615-the-schedule-meetings-team-picker-offers-archived-teams-the) | T615 | Backlog | area/w3 tier/unreviewed | T615 — The schedule-meetings team picker offers archived teams; the roster picker excludes them |
 | [GAM-306](https://linear.app/gamitch/issue/GAM-306/t616-no-event-records-who-created-it-so-outreach-detail-permanently) | T616 | Backlog | area/w3 tier/unreviewed | T616 — No event records who created it, so outreach detail permanently reads "Unknown creator" |
 | [GAM-311](https://linear.app/gamitch/issue/GAM-311/kpi-viewssqls-two-views-never-got-t801s-catalog-comment-rls-correction) | — | Backlog | tier/unreviewed | kpi_views.sql's two views never got T801's catalog-comment RLS correction -- D010 chose header-prose only |
@@ -336,6 +335,7 @@ Exported 2026-08-10T14:00:32.780Z from team `Gamitch`.
 | [GAM-296](https://linear.app/gamitch/issue/GAM-296/t805-outreachdetailtesttsx-and-outreachlisttesttsx-failed-once-in-a) | T805 | Done | T805 — `OutreachDetail.test.tsx` and `OutreachList.test.tsx` failed once in a full-suite run and have not been reproduced since |
 | [GAM-298](https://linear.app/gamitch/issue/GAM-298/t705-the-schema-and-all-four-consuming-views-are-multi-team-the-roster) | T705 | Done | T705 — The schema and all four consuming views are multi-team; the roster UI and write path are still single-team, and three roster filters still scope on the legacy `students.team_id` |
 | [GAM-303](https://linear.app/gamitch/issue/GAM-303/t808-students-and-parents-see-raw-float-hours-39999983633333334-100-h) | T808 | Done | T808 — Students and parents see raw float hours (`3.9999983633333334 / 100 h`) beside a rounded percentage |
+| [GAM-304](https://linear.app/gamitch/issue/GAM-304/t809-studenthomes-sign-up-cant-go-control-writes-nothing-and-says) | T809 | Done | T809 — `StudentHome`'s Sign up / Can't go control writes nothing and says nothing — a documented deferral with no follow-up row |
 | [GAM-307](https://linear.app/gamitch/issue/GAM-307/t1300-sweep-the-four-non-fixed-closures-for-residual-work-left-behind) | T1300 | Done | T1300 — Sweep the four non-"fixed" closures for residual work left behind when the row closed |
 | [GAM-308](https://linear.app/gamitch/issue/GAM-308/coachhomes-goal-projection-row-prints-the-same-raw-float-hours-t808) | — | Done | CoachHome's goal-projection row prints the same raw float hours T808 fixed for students and parents |
 | [GAM-309](https://linear.app/gamitch/issue/GAM-309/replaypy-cannot-read-python-test-runner-output-so-mutating-a-python) | — | Done | replay.py cannot read Python test-runner output, so mutating a Python file needs a hand-written shim |
