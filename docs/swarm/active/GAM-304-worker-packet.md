@@ -14,9 +14,40 @@ pushed and no PR opened, so without this file the work below is lost.
 
 **Issue:** `GAM-304` · **Tier: HEAVY** · **Branch:** `claude/gam-304-wire-rsvp-controls`
 
+> ## ⚠ THIS PACKET IS NOT CLEARED FOR DISPATCH (constitution items 19 + 19a)
+>
+> **Revision 3 has never been through the premise gate, and cannot be.** Both
+> rounds item 19a allows are spent, and both returned REVISE:
+>
+> | Round | Verdict | Record |
+> | -- | -- | -- |
+> | 1 | REVISE — 1 BLOCKER, 3 MAJOR, 4 MINOR, 1 NIT | `GAM-304-premise-gate-round1.md` |
+> | 2 | REVISE — 1 BLOCKER, 4 MINOR, 1 NIT | `GAM-304-premise-gate-round2.md` |
+>
+> Item 19 forbids any packet reaching a worker without a **DISPATCH** verdict,
+> and 19a forbids a third round ("*a plan still failing after two rounds has
+> something wrong with the plan, not the wording*"). **GAM-304 is therefore
+> escalated to the human owner.** No worker has been dispatched and none may be
+> until the owner rules.
+>
+> Revision 3 exists so the owner's decision is a yes/no rather than homework: it
+> applies all six of round 2's required revisions, each backed by that round's
+> executed measurements. It is the author's fix to a gate finding, not a gated
+> artifact — treat every line added by revision 3 as unverified by anyone who
+> did not write it, which is precisely the exception item 19 exists to close.
+
 **Revision 2** — round 1 of the item 19 gate returned REVISE (1 BLOCKER, 3
 MAJOR, 4 MINOR, 1 NIT). Every finding is folded in below; the gate's executed
 results are quoted rather than re-derived, so round 2 need not re-measure them.
+
+**Revision 3** — round 2 returned REVISE on a BLOCKER confined to §1d, which was
+text revision 2 newly introduced (and introduced in response to round 1's own
+"cheaper paths" suggestion). Round 2 confirmed **all nine** of round 1's
+required revisions were genuinely fixed, and verified criteria 1-6, the
+corrected citations, and the entire `ParentHome` half of §2 as sound. Revision 3
+changes only: §1d (rewritten — `clickAction` removed), §3(i)'s insertion point
+(an off-by-one with teeth), three further citations, criterion 7, the no-prop
+test's mechanism, and the least-confident list.
 
 Two RSVP controls flip a button and throw the answer away. Connect both to the
 `rsvps` upsert that already exists, using the responder identity RLS requires.
@@ -46,15 +77,29 @@ path (below), and criterion 2 pins the one mistake that matters.
 ## Linear state (item 28) — recorded because round 1 asked
 
 Claimed live: read `Todo`, moved `Todo → In Progress`, re-read and confirmed
-`In Progress` at `2026-08-10T04:03:43Z`. **The generated export
-(`linear-export.md:328`) reads `Done`, and that is expected, not a
-contradiction** — the export was generated at `04:02:17Z` (`:7`), about 63
-seconds *before* the owner moved the issue into `Todo`, which is what dispatched
-this session. Item 29c states the export goes stale by definition on exactly
-this transition and heals on a schedule rather than gating. The defect is
-provably still present at HEAD `f2ca7e5`.
+`In Progress`. **The generated export (`linear-export.md:328`) reads `Done`, and
+that is expected, not a contradiction** — the export was generated at
+`04:02:17Z` (`:7`), about 63 seconds *before* the owner moved the issue into
+`Todo`, which is what dispatched this work. Item 29c states the export goes
+stale by definition on exactly this transition and heals on a schedule rather
+than gating.
 
-## What is already true — verified against `main` (`f2ca7e5`), twice
+**Re-claimed 2026-08-10 at `04:58:28Z` by the current session**, which is the
+claim in force. The prior run (dispatch 31354278407) claimed at `04:03:43Z` and
+then exited without pushing a branch or opening a PR, leaving the issue in
+`In Progress` with no work attached; the read-back this session performed
+returned `In Progress`, `tier/heavy`, `area/w5`, no competing comments. The
+earlier timestamp is kept above rather than overwritten because it is the
+evidence that the first claim happened (item 30c).
+
+**Baseline re-verified at HEAD `5562e48`.** The round-1 gate measured against
+`f2ca7e5`; `git diff --name-only f2ca7e5..HEAD` returns only
+`docs/swarm/active/GAM-304-*.md` and the two `linear-export.*` files, and
+`git diff --stat f2ca7e5..HEAD -- src/ supabase/ package.json package-lock.json`
+is empty. **No source drift**, so every executed measurement below still holds
+at HEAD. The defect is provably still present.
+
+## What is already true — verified against `main` (`f2ca7e5` ≡ HEAD `5562e48` for all source), twice
 
 Re-read at this branch point by the author, then independently re-verified by
 the round-1 gate. Every row below is CONFIRMED exact.
@@ -174,20 +219,48 @@ one. It is what makes the snapshot-array rollback concurrency-safe
 so without it a click on a second row could snapshot an array already mutated
 by a first in-flight write.
 
-**d. Pending affordance — decided, not deferred.** Revision 1 left this open as
-doubt 2; it is now resolved by adopting two documented Astryx props (item 2 —
-both are in `docs/swarm/astryx-api.md`, no escalation, no custom CSS):
+**d. Pending affordance — decided, and rewritten in revision 3 because round 2
+proved revision 2's version could not work.**
 
-- Switch the two `Button`s in `SignupOpportunityRowItem` (`:1267-1276`) from
-  `onClick` to **`clickAction`** (`astryx-api.md:1827` — "*Async click handler.
-  Shows loading state while the returned promise is pending*"). Because
-  `isInterruptible` defaults to `false`, the action is also deduped per button
-  (`:1819`). One prop swap buys the spinner, `aria-busy`, and per-button dedupe.
-- Thread the component-wide `isRsvpSubmitting` into `NextUpRowItem` (`:1231`)
-  and `SignupOpportunityRowItem` (`:1256`) and pass it as **`isDisabled`** on
-  their controls (`astryx-api.md:1820`). Without this, a click on a *different*
-  row during a write is silently swallowed — which is the same "says nothing"
-  failure this whole issue is about.
+**Do NOT use `clickAction`.** Revision 2 prescribed swapping the two `Button`s
+to Astryx's `clickAction`; round 2 executed that prescription and found it
+breaks two things silently. `Button.tsx:601-610` (`@astryxdesign/core@0.1.6`)
+runs `clickAction` inside `startTransition(async () => …)`, and under React 19
+Action semantics **every `setState` inside that action is deferred until the
+action settles** — so the optimistic `setRsvps(...)` never paints during the
+flight, and `setIsRsvpSubmitting(true)` is invisible to its own handler, leaving
+the cross-row concurrency guard inert (measured: two concurrent writes, not one
+swallowed click). Full evidence in `GAM-304-premise-gate-round2.md`. This note
+stays in the packet so the mechanism is not rediscovered the hard way.
+
+**Use plain `onClick` and drive the affordance from state you already have**
+(round 2's measured cheaper path 1). This also keeps §'s "copy T193's shape"
+promise literally true — T193 ships a plain handler with an ordinary state flag
+(`OutreachList.tsx:3930-3951`). Two documented Astryx props, no escalation, no
+custom CSS:
+
+- On the two `Button`s in `SignupOpportunityRowItem` (`:1267-1276`), pass
+  **`isLoading`** (`astryx-api.md:1818` — "*Shows a loading spinner and disables
+  interaction. Announces "Loading" via a live region*") driven by
+  `isRsvpSubmitting && pendingSessionId === row.sessionId`, and **`isDisabled`**
+  (`:1820`) driven by `isRsvpSubmitting` alone. The clicked button spins; every
+  other control disables. Track `pendingSessionId` alongside the existing
+  in-flight flag.
+- On `NextUpRowItem` (`:1231`), the control is **not a `Button`** — it is a
+  `MoreMenu` over `DropdownMenuOption[]` (`:1242-1249`). Disable it with
+  **`MoreMenu.isDisabled`** (`astryx-api.md:4822`) or per-entry
+  **`DropdownMenuOption.isDisabled`** (`:1884`). Revision 2 mis-cited
+  `Button.isDisabled` (`:1820`) here; that prop is real but belongs to the other
+  row component.
+
+Measured working under `onClick`: optimistic `status=going` during flight,
+`siblingDisabledDuringFlight=true`, correct rollback and error copy on reject.
+
+**NIT from round 2, worth doing while you are here:** widen the row prop types
+`onCantGo` (`:1236`) and `onRespond` (`:1261`) from `=> void` to
+`=> void | Promise<void>`. Nothing depends on it under `onClick`, but the
+current typing makes any future async wiring work only by a type-erased
+accident.
 
 **e. Error surface.** Render an error `Banner` when a write is rejected, in the
 `VStack` at `:1448`, above the sections that own the controls. Match
@@ -250,13 +323,13 @@ Both harnesses render under `LoginAs user={...}`, so the signed-in id is real
 and assertable, and it is **already distinct** from the fixture student id:
 `STUDENT_USER.id = 'user-student'` (`StudentHome.test.tsx:83-87`) against the
 harness's resolved `student-fixture-harness-default` (`:99`);
-`PARENT_USER.id = 'user-parent'` (`ParentHome.test.tsx:57`) against fixture
+`PARENT_USER.id = 'user-parent'` (`ParentHome.test.tsx:56`) against fixture
 children. Criterion 2's inequality is measurable with today's fixtures.
 
 **Two pre-existing tests are affected. Both remedies are pre-authorized here,
 with their precedents — you do not need to stop and ask.**
 
-**(i) `StudentHome.test.tsx:1107` will go RED and this fixes it.** That test
+**(i) `StudentHome.test.tsx:1106` will go RED and this fixes it.** That test
 injects no `onRsvpChange`, so after §1a the click reaches the real module
 default, `getSupabaseClient()` throws `SupabaseNotConfiguredError`
 (`lib/supabase/client.ts:101-103`), the rollback restores the array and the
@@ -264,11 +337,19 @@ opportunity reappears. The gate measured it: `1 failed | 2155 passed`, exit 1,
 against a `2156 passed` baseline.
 
 **Remedy — add `onRsvpChange: async () => {}` to `renderAsUser`'s
-`mergedProps`, immediately after `loadData: defaultLoadStudentHomeData,`
-(`:143`).** This is a *harness default*, not an edit to any `it(` body, and it
+`mergedProps`, on the line immediately after `loadData:
+defaultLoadStudentHomeData,` (which is `:142`), i.e. BEFORE `...props,` (which
+is `:143`).** This is a *harness default*, not an edit to any `it(` body, and it
 is exactly the mechanism T183 already established for `loadData` at
-`:135-143` — read that comment and follow it. The gate measured the remedy
+`:132-141` — read that comment and follow it. The gate measured the remedy
 restoring `src/pages/home/` to 219/219, exit 0.
+
+**Revision 3 correction, and this one has teeth:** revision 2 said "immediately
+after `:143`", which is *after* the `...props,` spread. Placing the default
+there would override every per-test `onRsvpChange` spy and silently break the
+new payload tests below. The file's own comment at `:141` states the rule — "An
+individual test's own `props.loadData` (spread after, below) always wins."
+**The default must go above the spread, not below it.**
 
 **(ii) `ParentHome.test.tsx:1175` would stay green for the wrong reason.** It
 asserts `aria-checked` immediately after a synchronous `act(() => click)` with
@@ -306,6 +387,19 @@ not merely that it fired:
   copy. This is the only assertion available that proves the *real module
   default* is wired to the real client path rather than a fixture (item 27), now
   that the harness injects a fake everywhere else.
+
+  **How it gets "no prop", since (i) just made the harness inject one:** call
+  `renderAsUser(STUDENT_USER, { onRsvpChange: undefined })`. A JS default
+  parameter fires on `undefined`, so the real `submitRsvpChange` is restored for
+  that one test. (Rendering `<StudentHome />` outside `renderAsUser` also works
+  but loses the `LoginAs` wrapper, so prefer the first.) The copy to match is
+  `client.ts:32-34` — "*Supabase isn't configured yet. Set VITE_SUPABASE_URL …*"
+  — which reaches the banner because `makeSubmitRsvpChange`'s returned function
+  is `async` (`outreach.ts:1236-1238`), so `getSupabaseClient()`'s synchronous
+  throw (`client.ts:101-103`) surfaces as a rejection your `catch` turns into
+  `error.message`. Round 2 graded this a fair item-27 check rather than a
+  tautology, and noted `vite.config.ts:16-24` records seven existing tests of
+  the same shape.
 
 **Do not rebuild loader-level assertions.** `RsvpControl.test.tsx:477-519`
 already tests `makeSubmitRsvpChange` for `responded_by` verbatim, for
@@ -347,7 +441,7 @@ so the check follows the data instead of watching a button flip.
 | 4 | A rejected write says so on screen | Delete the error `Banner` → the error-text assertion FAILS |
 | 5 | The parent card writes for the child with the parent as responder | Swap `respondedBy` to the child's `studentId` → the parent payload assertion FAILS |
 | 6 | Neither module doc still claims the file never writes | Restore the deleted sentence → a grep for `no Supabase write happens` (`StudentHome.tsx:207`, wrapping to `:208`) and `no Supabase write/persistence` (`ParentHome.tsx:196`) MATCHES and the criterion fails |
-| 7 | A second click during an in-flight write is visibly blocked, not silently dropped | Remove `isDisabled`/`clickAction` → the disabled-state assertion FAILS |
+| 7 | During an in-flight write: the **clicked** button shows `isLoading`, **and** a **different** row's control is `isDisabled` — both asserted, and both named here so the checker measures the same thing the packet argues for | Remove the `isDisabled` threading → the *sibling-row* assertion FAILS (this is the half revision 2 could not make passable at all) |
 
 Criterion 6 is inverted from revision 1, which the gate proved was **already
 green on unfixed code** because it quoted a string that appears nowhere: grep
@@ -383,33 +477,41 @@ against that standard, not just the totals.
 
 ## Least confident decisions (item 19d) — attack these first
 
-Revision 1's five are resolved: doubts 1 and 5 were proven sound by the gate
-(citations now in the packet), doubt 3 was sound for a stronger reason (both
-inner components are module-private, so no `AuthProvider`-absence case exists),
-and doubts 2 and 4 are now *decisions* stated in §1d/§1e/§2. These four are new.
+**Revision 2's four are all resolved, two of them by being proven wrong** —
+which is the mechanism working exactly as item 19d intends. Round 2 measured
+doubt 1 (`clickAction` composes with the in-flight guard) and doubt 2 (sibling
+`isDisabled` is worth the props) as **WRONG**, and worse than their authors'
+own falsifying conditions: the guard is not merely noisy, it is inert. §1d is
+rewritten accordingly. Doubt 3 (the no-prop item-27 test) and doubt 4
+(asymmetric banner placement) were both graded **SOUND** and stand as decisions.
 
-1. **That `clickAction` composes with the component-wide `isRsvpSubmitting`
-   guard rather than fighting it.** Both dedupe. Wrong if `clickAction`'s
-   internal pending state and the shared flag disagree — e.g. the guard returns
-   early, the returned promise resolves immediately, and the spinner flashes on
-   a click that did nothing. I have read both prop docs but have not rendered
-   the combination.
-2. **That `isDisabled` on the other rows' buttons is worth two new props on two
-   row components.** Wrong if `clickAction`'s own per-button spinner already
-   reads clearly enough that disabling siblings is noise — or if it makes the
-   list feel frozen on a slow write, which is a worse impression than one
-   swallowed click.
-3. **That the no-prop `SupabaseNotConfiguredError` test is a fair item 27
-   check and not a tautology.** It proves the default reaches the real client,
-   but it proves it *by that client failing*. Wrong if a reviewer reads it as
-   asserting a test-environment artifact rather than a production connection —
-   in which case the honest answer may be that no component test can satisfy
-   criterion 1 and it belongs to the `e2e-personas` harness instead.
-4. **That card-level error state on `ParentHome` and page-level on
-   `StudentHome` is right rather than merely defensible.** Wrong if a reviewer
-   holds that one page's two control sites also need row-level attribution, in
-   which case §1e's decision is inconsistent with §2's for no principled
-   reason beyond "T193 did it."
+Revision 1's five were resolved in revision 2 and remain so.
+
+**These three are revision 3's own, and no gate round remains to attack them —
+which is the substance of what the owner is being asked to accept:**
+
+1. **That `isLoading` + `isDisabled` under plain `onClick` really does deliver
+   the affordance, on the actual components rather than round 2's probe rig.**
+   Round 2 measured `siblingDisabledDuringFlight=true` and an optimistic
+   `status=going` during flight, but it measured that on a purpose-built probe,
+   not on `SignupOpportunityRowItem` and `NextUpRowItem` as they are written.
+   Wrong if something in the real row components — `ListItem`'s `endContent`
+   slot, or `MoreMenu`'s trigger — swallows or overrides either prop.
+2. **That `MoreMenu.isDisabled` is the right lever for the Next-up row rather
+   than per-entry `DropdownMenuOption.isDisabled`.** I chose the menu-level prop
+   because it matches "every other control disables," but the doc line
+   (`astryx-api.md:4822`, "*Whether the menu trigger is disabled*") describes
+   disabling the **trigger**, which may read to a user as the whole row going
+   dead rather than one action being unavailable. Wrong if disabling the trigger
+   hides the "Going" badge affordance context or traps focus; the per-entry prop
+   would then be correct and is a one-line change.
+3. **That criterion 7's sibling-row assertion is actually writable against these
+   fixtures.** It now asserts that clicking row A disables row B's control. That
+   requires the default fixture to render **at least two** rows across the
+   Next-up and Sign-up sections simultaneously. I have not confirmed the default
+   `buildDataFixture` does so on a single render. Wrong if it does not — in which
+   case the criterion needs a fixture with two rows, and adding one is a test
+   change the packet has not pre-authorized.
 
 ## Rules
 
