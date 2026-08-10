@@ -138,6 +138,19 @@ jobs:
             claiming (item 28d) — do it before moving the issue to
             `In Progress`, and state your reasoning.
 
+            Once you hold it, **item 26** decides how much process the row
+            gets and **item 19** decides what must happen before any packet
+            reaches a worker. Read both — they are binding, and neither is
+            restated here.
+
+            **You can delegate, and for STANDARD and HEAVY you are expected
+            to.** `.claude/agents/` holds the roster and its model pins, which
+            apply themselves when you spawn an agent; `SWARM-QUICKSTART.md`
+            § "Model Selection" explains how the three mechanisms interact,
+            including item 18's per-dispatch `model: "opus"` override. Note
+            that `AGENTS.md` is written for Codex and names Codex models — the
+            constitution is the runtime-neutral version and outranks it.
+
             Stop and leave the issue in `Todo` if the premise does not hold
             when you measure it. A correct refusal to proceed, recorded on the
             issue, is a better outcome than a confident change built on a
