@@ -124,3 +124,30 @@ Item 26's trigger question still answers *no*.
   GAM-315; GAM-315 has zero attachments; GAM-315 was created 04:54:22Z, eight
   hours before #142 opened at 13:17:02Z, so the timing confound is eliminated.
   This is what makes a mention-vs-work branch convention possible at all.
+- **premise gate round 1 (item 19) — VERDICT: REVISE.** `checker-premise` on
+  opus, 32 tool calls, ~98K tokens. 2 BLOCKER, 2 MAJOR, 4 MINOR, 2 NIT. It ran
+  rather than only read (item 26): five Linear GraphQL queries, ~20 `gh pr view`
+  calls, `npm run format:check`. All seven line-number citations verified
+  correct — a clean item 19c result. The gate paid for itself twice over:
+  - **BLOCKER 1 — the packet said the PR-title case "was not tested." It was,
+    and the result is in two already-merged documents in the same directory.**
+    `docs/swarm/2026-08-09-linear-webhook-dispatch.md:423-449` is headed *"Item
+    28f is wrong: a title identifier closes the issue too."* PR #132 (branch
+    `claude/linear-webhook-dispatch-aoobwx`, no identifier) closed GAM-310 on
+    merge. My F1 caveat was not caution, it was an unread repository.
+  - **BLOCKER 2 — C3's prose convention fails on the packet's own exhibits.**
+    Prose written *about* a linking hazard reliably contains the magic-word
+    pattern: #142, #138 and #140 all contain "close(s) GAM-304" in exactly the
+    sentence explaining that they must not close it. Renaming those branches
+    per C3 converts a branch-name link into a magic-word link and changes
+    nothing. LCD #3's stated mitigation ("degrades to a wrong link, not a wrong
+    close") is false — a magic word degrades to a close.
+  - MAJOR 3/4: my P1/F4 counts are wrong under every reading, and #142's merge
+    produced **no** transition (already `Done`), so the table is not exhaustive.
+  - The gate also *strengthened* F1's conclusion on three independent negatives
+    (#146→GAM-304, #128→GAM-303/309) and found a better instrument than
+    attachment count: GAM-304 moved `Backlog → In Progress` at 02:23:20.568Z on
+    a branch push, 48 minutes before #138 existed and with no attachment — so
+    automation silence, not attachment absence, is the proof.
+  - LCD verdicts: #1 WRONG, #2 SOUND, #3 UNRESOLVED (wrong risk declared),
+    #4 SOUND, #5 UNRESOLVED.
