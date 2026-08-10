@@ -161,8 +161,34 @@ jobs:
           # printing it into the log.
           display_report: true
 
+          # `--max-turns` is a flat budget spent by rows of wildly different
+          # size, and 80 was set from nothing in particular. GAM-304 is the
+          # evidence it was too small: run 31349834462 died at turn 81 with
+          # `error_max_turns`, having spent $9.16 and 24.5 minutes to produce
+          # no branch, no commit, and no PR — and it left the issue claimed in
+          # `In Progress`, where the `Backlog -> Todo` webhook can never
+          # re-dispatch it. A cap that stops a heavy row mid-change is worse
+          # than one that never fires, because the money is spent either way
+          # and only this way is the work also lost.
+          #
+          # That row is the shape this has to fit: a write path behind RLS is
+          # item 26's HEAVY trigger, so it carries the full packet -> premise
+          # gate -> worker -> checker chain, and item 26 requires the gate to
+          # RUN the prescription rather than read it. The same 80 turns also
+          # had to cover a one-line fast-tier fix. Only one of those was ever
+          # going to fit.
+          #
+          # 200 is read off that run rather than guessed: 81 turns in
+          # 1,473,147 ms is ~18s/turn, so ~200 turns is about what
+          # `timeout-minutes: 60` above already buys. The point of matching
+          # them is to make the CLOCK the binding backstop and this cap the
+          # safety net for a genuinely looping agent — the reverse of what
+          # happened here, where a cheap cap fired with 35 minutes unused.
+          # Raising this raises the worst-case bill: budget ~$23 for a run
+          # that spends the whole allowance, against $9.16 for one that spent
+          # 80 turns.
           claude_args: |
-            --max-turns 80
+            --max-turns 200
             --allowedTools "Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch"
 
       # `if: always()` so a failed or timed-out run still yields its transcript —
