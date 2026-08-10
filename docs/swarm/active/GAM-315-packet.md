@@ -2,30 +2,67 @@
 
 > ## ⛔ ESCALATED TO THE HUMAN OWNER — DO NOT DISPATCH THIS PACKET YET
 >
-> **Revision 3.** The item 19a premise gate ran its full two rounds and
-> returned **REVISE** both times (round 1: 2 BLOCKER, 2 MAJOR, 4 MINOR, 2 NIT;
-> round 2: 1 BLOCKER, 2 MAJOR, 3 MINOR, 1 NIT). Item 19a: *"The gate is capped
-> at two rounds. A third REVISE escalates to the human owner instead of
-> looping."* **The cap is reached.** No `boss-architect` dispatch has been made
-> and none may be made until the owner rules.
+> **Revision 4.** The premise gate has now run **three** rounds and returned
+> **REVISE** every time (round 1: 2 BLOCKER, 2 MAJOR, 4 MINOR, 2 NIT; round 2:
+> 1 BLOCKER, 2 MAJOR, 3 MINOR, 1 NIT; **round 3: 0 BLOCKER, 3 MAJOR, 4 MINOR,
+> 1 NIT**). Round 3 was an explicit owner exception to item 19a's two-round cap
+> (*"approve the 3rd gate request"*, 2026-08-10). That ruling closed with:
+> *"Do **not** open a fourth round. If round 3 returns REVISE, escalate to the
+> owner again — that is the same cap, one notch out."*
 >
-> Revision 3 applies all six of round 2's required changes — every one a
-> deletion or a one-line qualification, none needing new measurement — so the
-> owner reviews the best available version. **That is not a pass.** The
-> orchestrator may not certify its own packet through a gate that is closed;
-> saying "the fixes were easy, so it would have passed" is exactly the
-> self-certification item 28e forbids.
+> **So: no fourth round, and no `boss-architect` dispatch.** The constitution
+> is unchanged and stays unchanged until the owner rules again.
 >
-> **What the owner is being asked.** Item 19a says a plan still failing after
-> two rounds "has something wrong with the plan, not the wording." The honest
-> counter-argument is in the run log: both rounds' BLOCKERs were *unmeasured
-> factual claims*, not structural faults, and round 2's BLOCKER was the gate
-> correcting **its own** round-1 finding that the orchestrator had adopted.
-> That is a plan converging, not a plan broken. The owner decides which reading
-> holds, and whether `boss-architect` may proceed.
+> Revision 4 applies **all eight** of round 3's findings — see the change list
+> below — so the owner again reviews the best available version. **That is not
+> a pass**, for the same reason revision 3 was not: the orchestrator may not
+> certify its own packet through a gate it has closed.
+>
+> **What the owner is being asked, and the argument has changed since round 2.**
+> The counter-argument offered last time was that the gate's BLOCKERs were
+> unmeasured *factual* claims and the plan was converging. Round 3 weakens that
+> reading and the packet should say so rather than re-run it:
+>
+> - **The severity did fall** — 2 BLOCKER → 1 BLOCKER → **0 BLOCKER**, and
+>   round 3 was a clean item 19c round with zero citation drift, where rounds 1
+>   and 2 both lost budget to it. Every number the owner asked round 3 to
+>   re-check (five closes, one clean exhibit, `targetBranch` = base) **held**.
+> - **But round 3 still found two unmeasured claims**, and found them in
+>   `WORKFLOWS.md` — a file all three rounds had been treating as settled while
+>   they polished the F-list. One of them, *"connects from the first push"*, is
+>   the **same claim** F1a withdrew in revision 3: struck in one file and left
+>   standing in another.
+> - **And the orchestrator running round 3 supplied a third one itself** (the
+>   withdrawn "finding B" in the run log), which the gate refuted for want of a
+>   positive control.
+>
+> Three rounds, three different agents, and each one found an unmeasured claim
+> about the same subject. **That is the honest case for the owner deciding this
+> directly rather than authorizing a fourth round** — the residual risk is not
+> in any one sentence, it is that this topic reliably produces confident claims
+> nobody measured, which is precisely what the row exists to fix.
 
-Round 1's and round 2's findings, and each revision's response, are in
-`GAM-315-run-log.md`.
+Round 1's, round 2's and round 3's findings, and each revision's response, are
+in `GAM-315-run-log.md`.
+
+**Revision 4 change list** (round 3 finding → what moved):
+1. MAJOR — C3 said the branch "carried four PRs"; it carried **five** (#138,
+   #139, #141, #142, #144), with four closes and one no-op. Corrected in C3.
+2. MAJOR — `WORKFLOWS.md:491-492`'s "from the first push" is F1a's withdrawn
+   claim surviving in an Allowed File. New instruction in C3; new criterion 7b.
+3. MAJOR — `AGENTS.md:36-37` carries the same false sentence. Ruled out of
+   scope **explicitly**, with the authority question named, and filed as a
+   Linear row (item 20). See "Deliberately NOT in scope" below.
+4. MINOR — round 3 refuted this run's "branch does not link on push"
+   observation. **F1a and criterion 7 stand unchanged**; the retraction is in
+   the run log. F1a's weak-instrument caveat is instead *removed*, because all
+   three F1d negatives are firing-armed.
+5. MINOR — criterion 8's file-set check was pathspec-restricted and could not
+   detect a fourth file. Replaced with an unrestricted form.
+6. MINOR — "a sweep of all 200 PRs" → **148** (200 was the `--limit`).
+7. MINOR — the third stale "still outstanding" site,
+   `linear-webhook-dispatch.md:378`, is now in scope as **C5**.
+8. NIT — round 3's clean item 19c result recorded in the run log.
 
 Tier: **HEAVY** (re-tiered from STANDARD on the gate's finding — item 26 says
 take the heavier when two are arguable, and this row is in fact receiving the
@@ -42,8 +79,39 @@ orchestrator-owned (`AGENTS.md` § Ownership). The edit goes to
 - `docs/swarm/constitution.md` — item 28f, item 28g
 - `docs/swarm/WORKFLOWS.md` — rule 2
 - `docs/swarm/2026-08-09-tracker-migration.md` — line 245 only (F7)
+- `docs/swarm/2026-08-09-linear-webhook-dispatch.md` — **line 378 only (C5)**.
+  *Added in revision 4.* It carries the same falsified "still outstanding:
+  enable *PR merged → Done*" request as `tracker-migration.md:245`. Round 3
+  found the packet's scope arbitrary while it corrected one and not the other,
+  and the distinction it might have relied on — dated narrative vs live
+  checklist — does not hold, because both sentences are written as outstanding
+  actions. Correcting one and leaving the other is the drift this row exists to
+  stop, so both are in.
 
 Nothing else. No code. No `.claude/**`. Do not touch the frozen ledger.
+
+### Deliberately NOT in scope: `AGENTS.md:36-37` — deferred under item 20, and filed
+
+`AGENTS.md:36-37` reads *"An identifier in the title or branch links but does
+**not** close."* — verbatim the sentence 28f is being corrected for, in the file
+Codex agents read at startup. `AGENTS.md:30` carries the same unmeasured
+push-linking claim as `WORKFLOWS.md:491`. A repo-wide grep (gate round 3) finds
+exactly **two** live assertions of the falsified mechanism: `constitution.md:467`
+(in scope) and `AGENTS.md:37` (not). The two dated session reports quote it only
+to refute it.
+
+**It is excluded because the authority is genuinely unresolved, not because it
+is unimportant.** `AGENTS.md:188-192` reserves that file to "the primary
+orchestrator" and names **no boss role**; `constitution.md:22-24` reserves the
+constitution to `boss-architect`/`boss-arbiter`. So the agent this packet
+dispatches is the one agent the repository does not clearly authorize to edit
+`AGENTS.md`, and a packet may not settle an authority question by assuming it.
+Silence was the one option round 3 ruled out, so this is the explicit deferral
+item 20 requires, **and the follow-up row is filed rather than left as a
+comment** — item 20's whole rationale being that comments are not triaged.
+
+**Owner: if you would rather fold this in than run a second row, say so and it
+becomes a fourth Allowed File.** That is a one-line change to this section.
 
 ## The measured facts this edit must encode
 
@@ -53,9 +121,14 @@ Cite nothing that is not in this list.
 ### F1 — Three things are known to link a PR to an issue. A bare prose mention is not one of them.
 
 **(a) The branch name.** Sole clean exhibit: **#141** — see F4. **Automation
-firing, not attachment count, is the instrument** wherever the two differ;
-F1d's GAM-315 negative rests on both firing *and* attachment, so it does not
-depend on the distinction.
+firing, not attachment count, is the instrument** wherever the two differ.
+*Revision 4 removes the caveat that used to sit here:* **all three of F1d's
+negatives are firing-armed**, not just GAM-315, so none of them depends on
+attachment counts at all (gate round 3, measured). Attachment emptiness on its
+own proves nothing in this workspace — a sweep of the first 40 GAM issues
+returned 13 attachments, every one `sourceType: "github"` with a `/pull/` URL
+and **zero** of branch type, so there is no positive control that a branch link
+ever produces an attachment.
 
 *Withdrawn in revision 3:* an earlier draft claimed GAM-304's
 `Backlog → In Progress` at `2026-08-10T02:23:20.568Z` was a branch push 48
@@ -77,7 +150,7 @@ branch does not — and its body line 3 reads **"Deliberately not
 `Closes GAM-310`."**, which contains the magic-word token. GAM-310 went
 `Backlog → In Progress` on open and `→ Done` on merge, and was reopened by
 hand. #131 is confounded the same way (title `GAM-309`, plus a genuine
-`Closes GAM-309`). A sweep of all 200 PRs found exactly three with a
+`Closes GAM-309`). A sweep of all **148** PRs found exactly three with a
 title identifier absent from the branch — #132, #131, and #125 (`GAM-000`, not
 a real issue) — so no clean case exists.
 
@@ -265,9 +338,15 @@ and is filed as Deliverable B.
 ### C3 — `WORKFLOWS.md` rule 2 (`479-511`)
 
 The gap is work that **has** an issue but is **not that issue's
-implementation**: `claude/gam-304-failure-p3y021` carried four PRs of CI and
-salvage work and closed GAM-304 four times. Rule 2's existing exemption
-(line 495) covers only work with *no* issue.
+implementation**: `claude/gam-304-failure-p3y021` carried **five** PRs of CI and
+salvage work — #138, #139, #141, #142, #144 — and drove GAM-304 to `Done`
+**four** times. **The fifth (#142) was a no-op**, because the owner had
+hand-closed the issue four minutes before it merged; a merge rule is only
+observable where the target state differs (F3). *Corrected in revision 4 — the
+packet said "four PRs … four times", and the count of PRs was wrong.* Quote the
+numbers in this form, with the no-op named, so the fifth is not re-derived as a
+fifth close. Rule 2's existing exemption (line 495) covers only work with *no*
+issue.
 
 **Primary instruction — give mention-work its own issue.** This is already the
 repository's own recorded conclusion
@@ -305,6 +384,19 @@ invites improvisation. The worked rewrite: **"merging this must not close the
 issue this branch is named for"** — no identifier, so no channel. Or take the
 primary instruction and give the work its own issue.
 
+**Strike or qualify the "from the first push" clause at `WORKFLOWS.md:491-492`.
+Added in revision 4; the packet had missed it for three rounds.** The sentence
+reads: *"Linear links a branch whose name contains the issue identifier, so the
+issue connects **from the first push** rather than waiting on a PR title.
+Constitution item 28f depends on it."* **That is the exact claim F1a withdraws
+as unmeasured**, sitting in an Allowed File — and previous revisions told the
+editor to check line 493, the *last* sentence of that same paragraph, while
+saying nothing about the unmeasured claim two lines above it. Rewrite it to say
+only what is measured: a branch-name identifier links (F1a, one clean exhibit,
+#141) — with no claim about *when* the link is created. Round 3's attempt to
+measure the push timing was itself refuted for want of a positive control, so
+do not replace one unmeasured timing claim with another.
+
 Line 493 reads "Constitution item 28f depends on it." Check against 28f as
 rewritten and correct if it no longer holds.
 
@@ -317,6 +409,14 @@ only, and the issue's constraint is respected.
 
 Mark the "enable *PR merged → Done*" outstanding item done, pointing at 28g as
 rewritten. One line. Do not restructure the document.
+
+### C5 — `2026-08-09-linear-webhook-dispatch.md:378` *(added in revision 4)*
+
+Same one-line correction as C4, same reason. Line 378 reads *"Also still
+outstanding from the migration: enable the Linear automation **PR merged →
+Done**."* It is not outstanding — three automations are live and unscoped (F2).
+Mark it done and point at 28g as rewritten. Do not restructure the document,
+and do not touch §10 (`423-449`), which is already correct and is F1c's source.
 
 ## Acceptance criteria
 
@@ -344,6 +444,12 @@ because that script's glob (`src/**/*.{ts,tsx}`, `*.{ts,js,json,html}`) matches
 7. Every factual claim added traces to F1-F8. No new unmeasured claim; in
    particular nothing that resolves F1c's disjunction, and nothing asserting
    that a branch name links on push (F1a, withdrawn).
+7b. **Surviving claims count, not only added ones.** No unmeasured claim is
+   left standing in any Allowed File — specifically, `WORKFLOWS.md:491-492`'s
+   "connects **from the first push**" is struck or qualified. *Added in
+   revision 4:* criteria 1 and 7 between them covered `constitution.md`
+   surviving claims and `WORKFLOWS.md` *added* ones, and a checker applying
+   them literally would have passed a diff leaving that sentence in place.
 8. **Runnable — each check can fail, and none matches this packet.** Round 1's
    `format:check` criterion could not fail; revision 2's greps 3 and 4 could
    not pass. Both are corrected here:
@@ -357,10 +463,19 @@ because that script's glob (`src/**/*.{ts,tsx}`, `*.{ts,js,json,html}`) matches
      document wraps the phrase across `:245`/`:246` — revision 2's
      `Until it is on` never matched it, and its `-r docs/swarm/` form matched
      this packet, so correct work was marked failed.
-   - `git diff --name-only main -- docs/swarm/constitution.md
-     docs/swarm/WORKFLOWS.md docs/swarm/2026-08-09-tracker-migration.md` lists
-     exactly those three, and no file outside that set and
-     `docs/swarm/active/` is touched.
+   - `grep -n "from the first push" docs/swarm/WORKFLOWS.md` → no match
+     (matches `:491` today, so it can fail). *Added in revision 4 for 7b.*
+   - **File-set check, corrected in revision 4.** The previous form was
+     `git diff --name-only main -- <the three files>`, which is
+     pathspec-restricted and therefore **could only ever return a subset of
+     those three** — it could not detect a fourth file, so the second half of
+     the criterion had no command behind it. Use the unrestricted form:
+     ```sh
+     git diff --name-only main \
+       | grep -vE '^docs/swarm/(constitution|WORKFLOWS|2026-08-09-tracker-migration)\.md$' \
+       | grep -v '^docs/swarm/active/'
+     ```
+     → no output. This can fail, and it measures the whole diff.
 
 ## Least confident decisions (item 19d)
 

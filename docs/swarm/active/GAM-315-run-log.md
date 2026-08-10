@@ -406,3 +406,13 @@ section is that run. **PR #149 stays open and unmerged** per the ruling.
   was wrong. An unmeasured claim came within one packet revision of the
   constitution for the third round running, and this time the orchestrator
   supplied it.
+- **packet revision 4 written** — all eight of round 3's findings applied to
+  `docs/swarm/active/GAM-315-packet.md`: C3's PR count corrected to five (four
+  closes, one no-op); `WORKFLOWS.md:491-492`'s "from the first push" added to C3
+  as a strike-or-qualify instruction with new criterion 7b; `AGENTS.md:36-37`
+  ruled explicitly out of scope with the authority question named and a Linear
+  row filed (item 20); F1a's weak-instrument caveat removed since all three F1d
+  negatives are firing-armed; criterion 8's file-set check replaced with an
+  unrestricted form that can actually fail; "200 PRs" → 148;
+  `linear-webhook-dispatch.md:378` added as C5. **This is not a pass** — same
+  reason revision 3 was not.
