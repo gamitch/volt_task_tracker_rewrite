@@ -161,11 +161,20 @@ def eslint_verdict(
     no errors in the tally means eslint failed for a reason that has nothing
     to do with the code, and an agent must not record it as a clean gate.
     """
+    # Exit 2 is eslint saying *it* failed, not that the code did. Checked before
+    # the tally: whatever numbers accompany a fatal config error describe an
+    # aborted run, and reporting FAIL would send someone looking for lint errors
+    # that were never really counted.
+    if returncode == 2:
+        return UNTRUSTED, (
+            "eslint exited 2 -- its contract for a configuration or internal "
+            "failure, not a lint result. Any tally printed alongside it "
+            "describes an aborted run"
+        )
     if returncode != 0 and errors == 0:
         return UNTRUSTED, (
             f"eslint exited {returncode} with no errors in its tally -- it "
-            "failed for a non-lint reason (bad config, missing plugin), so "
-            "this says nothing about the code"
+            "failed for a non-lint reason, so this says nothing about the code"
         )
     if errors:
         return FAIL, ""
@@ -240,15 +249,45 @@ def common_scope(changed_paths: list[str]) -> str | None:
     return "/".join(common) + "/"
 
 
-def derive_scope(cwd: pathlib.Path, base: str) -> str | None:
-    """Ask git what changed, then hand it to `common_scope`."""
+def porcelain_paths(porcelain: str) -> list[str]:
+    """Paths out of `git status --porcelain`, renames resolved to their target.
+
+    Format is `XY path`, or `XY old -> new` for a rename. Taking the target of
+    a rename matters: gate 6 must test where the code lives now, not where it
+    used to.
+    """
+    paths = []
+    for line in porcelain.splitlines():
+        if len(line) < 4:
+            continue
+        path = line[3:].strip().strip('"')
+        if " -> " in path:
+            path = path.split(" -> ")[-1].strip().strip('"')
+        paths.append(path)
+    return paths
+
+
+def derive_scope(cwd: pathlib.Path, base: str, porcelain: str) -> str | None:
+    """Ask git what changed -- committed *and* uncommitted -- then scope it.
+
+    `base...HEAD` sees only commits, but dirty runs are explicitly supported,
+    so a scope derived from commits alone can send gate 6 at a directory the
+    current edits are not in. Uncommitted paths are folded in for that reason.
+
+    Raises Unreadable when git itself fails: an invalid --base is a broken
+    request, not an absent scope, and the two must not produce the same
+    quiet SKIPPED.
+    """
     try:
         result = run(["git", "diff", "--name-only", f"{base}...HEAD"], cwd, 120)
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return None
+    except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
+        raise Unreadable(f"could not run git diff against {base}: {exc}") from exc
     if result.returncode != 0:
-        return None
-    return common_scope(result.stdout.splitlines())
+        raise Unreadable(
+            f"git diff against {base} failed (exit {result.returncode}): "
+            f"{result.stderr.strip() or 'no stderr'}"
+        )
+    return common_scope(result.stdout.splitlines() + porcelain_paths(porcelain))
 
 
 def main() -> int:
@@ -325,9 +364,41 @@ def main() -> int:
 
     # Anchor the evidence to a commit. A gate result with no SHA cannot be
     # checked by anyone later, which is the whole point of recording it.
-    head = run(["git", "rev-parse", "--short", "HEAD"], cwd, 60)
-    branch = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd, 60)
-    porcelain = run(["git", "status", "--porcelain"], cwd, 60)
+    #
+    # Every one of these is checked for failure, because the first version of
+    # this script read only their stdout. `git status` failing left stdout
+    # empty, `dirty` computed to False, and --require-clean -- the guard added
+    # to enforce item 21 -- passed a tree it had never inspected. Running it in
+    # a directory that was not a git repository at all printed "tree clean".
+    #
+    # That is an absence of evidence read as evidence of absence, the failure
+    # family this project keeps hitting. A safety flag that disarms when the
+    # environment is broken is worse than no flag, because it reads as checked.
+    provenance = {
+        "git rev-parse --short HEAD": run(
+            ["git", "rev-parse", "--short", "HEAD"], cwd, 60
+        ),
+        "git rev-parse --abbrev-ref HEAD": run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd, 60
+        ),
+        "git status --porcelain": run(["git", "status", "--porcelain"], cwd, 60),
+    }
+    broken = {
+        cmd: result.returncode
+        for cmd, result in provenance.items()
+        if result.returncode != 0
+    }
+    if broken:
+        detail = "\n".join(f"  {cmd} -> exit {code}" for cmd, code in broken.items())
+        print(
+            "UNTRUSTWORTHY: cannot establish git provenance, so no result here "
+            "could be anchored to a commit:\n" + detail + "\n"
+            "Gates were not run. Check that --cwd is inside a git repository.",
+            file=sys.stderr,
+        )
+        return 2
+
+    head, branch, porcelain = provenance.values()
     sha = head.stdout.strip() or "unknown"
     branch_name = branch.stdout.strip() or "unknown"
     dirty = bool(porcelain.stdout.strip())
@@ -338,17 +409,33 @@ def main() -> int:
     # anyone will merge or review -- so a run that is about to become a verdict
     # refuses rather than printing a SHA its numbers do not describe. Left
     # advisory by default because mid-work runs are legitimate and frequent.
+    #
+    # The remedy deliberately does not mention `git stash`: AGENTS.md forbids it
+    # in this repository, and a tool meant to enforce the rules must not advise
+    # breaking one.
     if dirty and args.require_clean:
         print(
             f"UNTRUSTWORTHY: working tree is dirty at {sha} and --require-clean "
             "was given. These gates would describe uncommitted work while "
-            "naming a commit. Commit or stash first.\n"
+            "naming a commit.\n"
+            "Commit your own changes, or gate a clean dedicated worktree with "
+            "--cwd. Do not `git stash` -- AGENTS.md forbids it here, and "
+            "pre-existing changes must be preserved.\n"
             + porcelain.stdout.rstrip(),
             file=sys.stderr,
         )
         return 2
 
-    scope = args.scope or derive_scope(cwd, args.base)
+    try:
+        scope = args.scope or derive_scope(cwd, args.base, porcelain.stdout)
+    except Unreadable as exc:
+        print(
+            f"UNTRUSTWORTHY: {exc}\n"
+            "A --base that git cannot resolve is a broken request, not an "
+            "absent scope. Gates were not run.",
+            file=sys.stderr,
+        )
+        return 2
     scope_derived = args.scope is None and scope is not None
 
     gates = [
@@ -416,10 +503,17 @@ def main() -> int:
                 )
                 if baseline is not None:
                     gate.detail += f"  baseline {baseline} ({tests - baseline:+d})"
+                else:
+                    # Say so. A count with no baseline is a number, not a
+                    # regression check, and a block that shows only the number
+                    # reads as though the check ran and passed.
+                    gate.detail += "  (no baseline given — regression not checked)"
 
                 if files == 0 or tests == 0:
-                    # A run that collected nothing exits 0. That is the failure
-                    # mode a green tick hides, so it is a refusal, not a pass.
+                    # Insurance, not today's mechanism: vitest here exits 1 on
+                    # an empty match and prints no summary, so this branch is
+                    # reached only if someone sets passWithNoTests, which flips
+                    # an empty run to a green exit that proves nothing.
                     gate.status = UNTRUSTED
                     gate.note = "collected no tests -- a green exit here proves nothing"
                     untrusted = True

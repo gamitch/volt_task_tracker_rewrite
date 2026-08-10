@@ -66,6 +66,12 @@ A count that comes in **below** baseline fails the gate. Tests do not disappear
 by accident, and a suite that shrank while exiting 0 is the failure a green
 tick hides best.
 
+Run without a baseline and gates 5 and 6 print `(no baseline given — regression
+not checked)`. Nothing is wrong with that — plenty of runs legitimately have no
+baseline to compare against — but the block has to say so. A bare count next to
+a green PASS reads as though the comparison ran and succeeded, which is a
+stronger claim than the run actually made.
+
 ## Gate 6's scope
 
 Pass `--scope` when the packet names a path. Otherwise the script derives the
@@ -84,10 +90,13 @@ responses:
 
 - **FAIL** (exit 1) — a gate went red. The tree is not shippable. This is
   information; act on it.
-- **UNTRUSTWORTHY** (exit 2) — a summary could not be read, a run collected no
-  tests, eslint died for a non-lint reason, a gate timed out, `node_modules` is
-  missing, or the tree was dirty under `--require-clean`. **Do not record these
-  numbers as evidence.** Fix the condition and re-run.
+- **UNTRUSTWORTHY** (exit 2) — git provenance could not be established, `--base`
+  does not resolve, a summary could not be read, a run collected no tests,
+  eslint exited 2 or otherwise died for a non-lint reason, a gate timed out,
+  `node_modules` is missing, or the tree was dirty under `--require-clean`.
+  **Do not record these numbers as evidence.** Fix the condition and re-run.
+  The first three are checked before any gate runs, so a broken environment
+  costs you nothing.
 - **SKIPPED** — gate 6 had no defensible scope. Five gates passed. Say five.
 
 What actually catches a wrong `--scope`, measured rather than assumed: vitest
@@ -129,6 +138,20 @@ and "committed" are different claims, and T142 is the recorded case of work
 that was real, measured, and entirely uncommitted. Dirty runs stay allowed by
 default because mid-work gating is legitimate and frequent; the flag is how a
 final run stops relying on the operator to remember the difference.
+
+When it refuses, the remedy is to **commit your own changes, or point `--cwd`
+at a clean dedicated worktree**. Not `git stash` — `AGENTS.md` forbids it here,
+and pre-existing changes must be preserved.
+
+Provenance is established before any gate runs, and a failure there is fatal.
+This is worth knowing because it was once the opposite: `git status` failing
+left its stdout empty, `dirty` computed to `False`, and `--require-clean`
+passed a tree it had never inspected — in a directory that was not a git
+repository at all, it printed `tree clean`. A safety flag that disarms exactly
+when the environment is broken is worse than no flag, because it reads as
+checked. An unresolvable `--base` is fatal for the same reason: a request git
+cannot answer is not the same as a change with no scope, and the two must not
+produce the same quiet `SKIPPED`.
 
 Running in a worktree is the normal case for a checker: pass `--cwd
 /tmp/whatever-check`, and run `npm ci` there first. The script refuses outright
