@@ -1,6 +1,6 @@
 {
   "meta": {
-    "exportedAt": "2026-08-10T22:56:08.023Z",
+    "exportedAt": "2026-08-10T23:17:35.450Z",
     "team": "Gamitch",
     "teamKey": "GAM",
     "issueCount": 324,
@@ -5681,6 +5681,8 @@
       "stateType": "started",
       "archived": false,
       "labels": [
+        "escalated",
+        "gate/human",
         "provenance/other",
         "tier/heavy"
       ],
