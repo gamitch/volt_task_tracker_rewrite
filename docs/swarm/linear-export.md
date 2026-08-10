@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-10T19:54:08.487Z from team `Gamitch`.
+Exported 2026-08-10T22:56:08.023Z from team `Gamitch`.
 
-- **321** issues (242 archived)
-- **44** not yet completed or cancelled
+- **324** issues (242 archived)
+- **47** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -51,13 +51,16 @@ Exported 2026-08-10T19:54:08.487Z from team `Gamitch`.
 | [GAM-312](https://linear.app/gamitch/issue/GAM-312/two-live-dispatch-policies-exist-only-as-file-comments-no-constitution) | — | Backlog | provenance/other tier/unreviewed | Two live dispatch policies exist only as file comments — no constitution item, so nothing triages them |
 | [GAM-313](https://linear.app/gamitch/issue/GAM-313/resume-heremd-is-the-first-file-nine-kickoff-prompts-tell-an-agent-to) | — | Backlog | provenance/other tier/unreviewed | `RESUME-HERE.md` is the first file nine kickoff prompts tell an agent to read, and the word "Linear" appears in it zero times |
 | [GAM-314](https://linear.app/gamitch/issue/GAM-314/a-dispatched-run-reports-success-while-its-work-is-still-running-in) | — | Backlog | provenance/other tier/unreviewed | A dispatched run reports `success` while its work is still "running in the background" — and the process takes it |
-| [GAM-315](https://linear.app/gamitch/issue/GAM-315/any-branch-named-claudegam-nnn-closes-that-issue-on-merge-item-28f) | — | Backlog | provenance/other tier/unreviewed | Any branch named `claude/gam-nnn-*` closes that issue on merge — item 28f says it only links, and that is false here |
+| [GAM-315](https://linear.app/gamitch/issue/GAM-315/any-branch-named-claudegam-nnn-closes-that-issue-on-merge-item-28f) | — | In Progress | provenance/other tier/heavy | Any branch named `claude/gam-nnn-*` closes that issue on merge — item 28f says it only links, and that is false here |
 | [GAM-316](https://linear.app/gamitch/issue/GAM-316/item-19-requires-recording-the-premise-gate-verdict-the-dispatch-path) | — | Backlog | provenance/other tier/unreviewed | Item 19 requires recording the premise-gate verdict; the dispatch path has no mechanism, so the first real one lived only in a 30-day artifact |
 | [GAM-317](https://linear.app/gamitch/issue/GAM-317/an-escalated-row-has-no-reply-address-gatehuman-is-machine-settable) | — | Backlog | provenance/other tier/unreviewed | An escalated row has no reply address: `gate/human` is machine-settable, hand-clearable only, and sends the owner no notification |
 | [GAM-318](https://linear.app/gamitch/issue/GAM-318/studenthomes-per-row-rsvp-spinner-can-never-render-isloading-is-dead) | — | Backlog | area/w5 tier/standard | StudentHome's per-row RSVP spinner can never render — `isLoading` is dead code and its comment says otherwise |
 | [GAM-319](https://linear.app/gamitch/issue/GAM-319/a-failed-rsvp-save-tells-the-user-couldnt-load-this-data-read-copy-on) | — | Backlog | area/w5 tier/fast | A failed RSVP save tells the user "Couldn't load this data" — read copy on a write path |
 | [GAM-320](https://linear.app/gamitch/issue/GAM-320/arrowdown-opens-the-next-up-rows-aria-disabled-moremenu-mid-write) | — | Backlog | area/w5 tier/fast | ArrowDown opens the Next-up row's `aria-disabled` MoreMenu mid-write, while the mouse is correctly blocked |
 | [GAM-321](https://linear.app/gamitch/issue/GAM-321/the-opus-orchestrator-runs-the-gates-itself-238-bash-calls-and-checker) | — | Backlog | provenance/other tier/unreviewed | The opus orchestrator runs the gates itself: 238 Bash calls, and `checker-tests` is pinned haiku to do exactly that |
+| [GAM-322](https://linear.app/gamitch/issue/GAM-322/three-unscoped-linear-git-automations-are-live-where-item-28g-asked) | — | Backlog | gate/human provenance/premise-gate tier/unreviewed | Three unscoped Linear git automations are live where item 28g asked for one — `start → In Progress` is the rule that moved GAM-304 backwards |
+| [GAM-323](https://linear.app/gamitch/issue/GAM-323/agentsmd-tells-every-agent-a-branch-name-identifier-does-not-close-its) | — | Backlog | provenance/other tier/standard | AGENTS.md tells every agent a branch-name identifier does not close its issue — measured, it closes |
+| [GAM-324](https://linear.app/gamitch/issue/GAM-324/three-documents-state-the-protected-files-rule-and-all-three-disagree) | — | Backlog | provenance/other tier/unreviewed | Three documents state the protected-files rule and all three disagree — on who is bound, who owns, and which paths |
 
 ## Closed and cancelled
 
