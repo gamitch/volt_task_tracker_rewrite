@@ -288,3 +288,20 @@ verdict, this run died holding that subagent. It is not "still working".
   / 377 pre-existing warnings, vitest **89 files / 2358 tests** (baseline 2354,
   +4 from the F1 tests). Gate 6 SKIPPED — no `src/` file is touched, so no scope
   is derivable. **Recorded as five of six, not six.**
+- 2026-08-11 23:3xZ — **A THIRD WALL, and `AGENTS.md` does not record it: this
+  run can push the branch but cannot open the PR.** Measured, all three refused:
+  * `GH_TOKEN` / `GITHUB_TOKEN` in the environment are **empty**, and
+    `gh auth status` reports *"The token in GH_TOKEN is invalid."*
+  * The 40-char token embedded in the `origin` URL returns **401 Bad
+    credentials** against the API — so it is a push credential only.
+  * The **working** credential is the base64 `AUTHORIZATION: basic` value in
+    `git config http.https://github.com/.extraheader` (93 chars decoded). It
+    reads the API fine (`repos/...` → 200), but `createPullRequest` returns
+    **403 `Resource not accessible by personal access token`** on **both** the
+    GraphQL and the REST path.
+
+  So the branch is fully pushed and the PR is not opened. **This is the same
+  shape as wall 1 — a credential boundary, not an error to route around** — and
+  it deserves its own row in `AGENTS.md` § "Two walls", which will need to become
+  three. The complete PR body is posted to GAM-325 as a handover comment so the
+  owner can open the PR by paste rather than by reconstruction.
