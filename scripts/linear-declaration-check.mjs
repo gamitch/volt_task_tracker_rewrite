@@ -111,13 +111,16 @@ async function defaultImportModule(source) {
  * `branchIssue` and `CANONICAL`, all imported). Returns an array of
  * findings; the gate is green iff this array is empty.
  *
- * NOT HANDLED HERE, DELIBERATELY: `AMBIGUOUS_DECLARATION` (line 1 matches
- * `CANONICAL` by regex -- it IS the canonical anchored form -- but carries a
- * second identifier). §4's rule 1 text is scoped to "not the canonical
- * anchored form," which an ambiguous line 1 literally is not (it is), so it
- * is not added here. Lane B's sync already reports it (Slack ⚠, no state
- * move) at merge time. See this lane's worker report for the full reasoning
- * -- this is a judgment call, not a re-reading of an explicit rule.
+ * `AMBIGUOUS_DECLARATION` (line 1 matches `CANONICAL` by regex but names
+ * more than one issue, e.g. "Closes GAM-325 and GAM-326") goes red under
+ * rule 1, on parity with rule 2's `GAM-000` handling below: both are
+ * "canonical in shape, invalid in content," and treating one red and the
+ * other green is the inconsistency (checker review F1, binding). Left
+ * green, this sails through the gate while lane B's sync makes no state
+ * move (`action: none`) and lane C's own sweep drops it -- it filters on
+ * `declaration.ok === true`, which excludes every failed code including
+ * this one -- so the PR merges declared and is never closed, and nothing
+ * built to catch that ever looks at it again.
  */
 export function evaluateDeclaration({ body, headRef }, parser) {
   const { parseDeclaration, branchIssue, CANONICAL } = parser;
@@ -130,6 +133,17 @@ export function evaluateDeclaration({ body, headRef }, parser) {
     findings.push({
       rule: 1,
       message: `nothing closes unless line 1 starts with "Closes GAM-nnn" -- ${result.detail}`,
+    });
+  }
+
+  // Rule 1 (ambiguous case): line 1 IS the canonical anchored form but
+  // names more than one issue -- canonical in shape, invalid in content,
+  // same class as rule 2's GAM-000. Silent-green here is the exact failure
+  // this gate exists to close (see the doc comment above).
+  if (!result.ok && result.code === 'AMBIGUOUS_DECLARATION') {
+    findings.push({
+      rule: 1,
+      message: `line 1 is the canonical form but names more than one issue -- ${result.detail}; nothing closes unless line 1 declares exactly one "Closes GAM-nnn"`,
     });
   }
 

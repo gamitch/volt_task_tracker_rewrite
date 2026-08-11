@@ -52,6 +52,24 @@ describe('evaluateDeclaration -- rule 1: canonical-or-red, naming the canonical 
   });
 });
 
+describe('evaluateDeclaration -- rule 1 (ambiguous case): canonical in shape, invalid in content -- checker review F1', () => {
+  it('Closes GAM-325 and GAM-326 goes red under rule 1, naming both issues', () => {
+    const findings = evaluateDeclaration(
+      { body: 'Closes GAM-325 and GAM-326', headRef: 'chore/x' },
+      parser,
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0].rule).toBe(1);
+    expect(findings[0].message).toMatch(/GAM-325/);
+    expect(findings[0].message).toMatch(/GAM-326/);
+  });
+
+  it('a single-issue canonical line 1 produces no ambiguous-declaration finding', () => {
+    const findings = evaluateDeclaration({ body: 'Closes GAM-42', headRef: 'chore/x' }, parser);
+    expect(findings).toEqual([]);
+  });
+});
+
 describe('evaluateDeclaration -- rule 2: GAM-000 is never a valid declaration', () => {
   it('Closes GAM-000 goes red', () => {
     const findings = evaluateDeclaration({ body: 'Closes GAM-000', headRef: 'some-branch' }, parser);
@@ -357,6 +375,22 @@ describe('runGate -- explicit exit codes on every path (criterion 2)', () => {
     expect(result.findings.some((f) => f.rule === 2)).toBe(true);
   });
 
+  it('exit 1 on a red PR (ambiguous declaration: "Closes GAM-325 and GAM-326") -- checker review F1, rule 6', async () => {
+    const result = await runGate({
+      env: { GITHUB_EVENT_PATH: '/fake/event.json' },
+      readEventFile: vi.fn().mockResolvedValue(
+        JSON.stringify({
+          pull_request: { number: 5, body: 'Closes GAM-325 and GAM-326', head: { ref: 'chore/x' } },
+        }),
+      ),
+      fetchImpl: vi.fn(),
+      log: silentLog(),
+    });
+    expect(typeof result.exitCode).toBe('number');
+    expect(result.exitCode).toBe(1);
+    expect(result.findings.some((f) => f.rule === 1)).toBe(true);
+  });
+
   it("exit 0 when Also-fixes: names a nonexistent issue -- advisory never fails the gate, with a key present", async () => {
     const result = await runGate({
       env: { GITHUB_EVENT_PATH: '/fake/event.json', LINEAR_API_KEY: 'lin_api_x' },
@@ -435,6 +469,17 @@ describe('the actual CLI process (spawned, no network reachable from its env)', 
     // Informational lines (parser source, the green verdict) go to stdout;
     // only findings/warnings go to stderr -- see runGate's logInfo/logError.
     expect(result.stdout).toMatch(/green/);
+  });
+
+  it('exits 1 for a real (non-claude/gam-nnn-) branch declaring "Closes GAM-325 and GAM-326" -- checker review F1: the ambiguous case, reachable on a branch shape rule 3 never anchors', () => {
+    const file = writeEventFixture({
+      number: 45,
+      body: 'Closes GAM-325 and GAM-326',
+      head: { ref: 'chore/bump-deps' },
+    });
+    const result = runScript(file);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/RED \[rule 1\]/);
   });
 
   it('exits 0 for an infra PR with no declaration and no claude/gam-nnn- branch', () => {
