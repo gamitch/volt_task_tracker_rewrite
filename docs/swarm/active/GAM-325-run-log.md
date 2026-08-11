@@ -80,3 +80,45 @@ verdict, this run died holding that subagent. It is not "still working".
 
   **If this line is the last one in this file, the run died holding this
   subagent** — the fourth time on this issue. It is not "still working".
+- 2026-08-11 22:15Z — **premise gate round 2 VERDICT: DISPATCH**, conditional on
+  edits E1–E9 — all documentation-only, all in `docs/swarm/**`, which the
+  orchestrator owns. No lane's code changes. Full verdict:
+  `docs/swarm/active/GAM-325-gate-round2.md`. **2 MAJOR, 5 MINOR, 2 NIT, 0
+  BLOCKER.** Round 1's F1–F5 all **LANDED** (F3's text landed; the sentence draft
+  3 *added* to it — "this criterion is executable and is not a wish" — is the
+  thing that is false).
+  * **N1 MAJOR — the workflow-push wall covers 100% of lane D's Allowed Files**,
+    measured this round with a deliberately-wrong sha: `PUT` on
+    `.github/workflows/ci.yml` → **403** *Resource not accessible by integration*,
+    while `PUT` on `docs/swarm/constitution.md` → **409** *sha does not match*.
+    The permission check fires **before** the sha check on `.github/workflows/**`
+    and one directory over only the sha objects — so the refusal is the
+    directory, not the request. Both credentials, `gh` and the token in `origin`.
+    Ruling: **deliverability, not undispatchability.** Criteria 1–9 are local
+    and pass with nothing pushed; **criterion 10 is a wish** and becomes an owner
+    action.
+  * **N2 MAJOR — §0 contradicts criterion 10 inside the same document.** The
+    `/actions/*` channel is confirmed **open** (`/actions/runs` and
+    `/actions/workflows` 200, `/actions/secrets` still 403), but §0 still reads
+    "the observation channel is closed". §8's checklist really is still blocked —
+    by wall 1, not by the token. True conclusion, false premise.
+  * **C2 — the assertion is CONFIRMED, the inference is FALSE.**
+    `workflow_dispatch` does require the file on the default branch
+    (`github/docs` `branch-requirement.md`), so the orchestrator cannot execute
+    criterion 10 either — it holds the same two refused credentials. Bonus
+    measurement: `state: active` *is* readable from a non-default branch
+    (`claude-auth-smoke.yml`, id `330685844`, active, `GET /contents` on `main`
+    → 404), and GitHub keeps listing **deleted** workflows as `active` — so
+    record the run's `conclusion`, never the state alone.
+  * **N4 MINOR — GAM-303 is the wrong exhibit, twice.** Its `completedAt`
+    *agrees* with its single `Done`. The real reopen/re-close exhibit is
+    **GAM-315**: `completedAt` frozen at `2026-08-10T23:36:32.146Z` across a
+    `Done → In Progress` and an `In Progress → Done`. The rule holds; the fixture
+    source changes.
+  * **N7 MINOR — this branch is 24 commits behind `main` and its `AGENTS.md`
+    has no "Two walls" section** (it arrived in `9f91c23` / PR #161). Every
+    agent dispatched from this branch would read the pre-wall file. Fix in the
+    tree, not only in the packet.
+  * Also: N3 §0's stale "private" bullet, N5 the Slack subscription must
+    *replace* the as-built filter (`workflows:{}` clauses are ANDed, so F1's
+    defect is live today), N6 `deno` is not installed on the container, N8/N9 nits.
