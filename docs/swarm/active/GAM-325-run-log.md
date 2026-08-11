@@ -192,3 +192,36 @@ verdict, this run died holding that subagent. It is not "still working".
 
   **If this line is the last one in this file, the run died holding these two
   subagents.** It is not "still working".
+- 2026-08-11 23:0xZ — **lanes B and C RETURNED; commits verified in the blob:**
+  * **Lane B** `a06b63d` — `linear-sync.mjs` + tests, 1377 lines. **Ran the F4
+    probe first and pasted the raw response**: GAM-303's history is newest-first
+    with `fromState:null` non-state edits interleaved (5 of 9 nodes), exactly as
+    the packet asserted, and its `completedAt` `15:41:13.412Z` agrees with its
+    `Done` at `15:41:13.379Z` — independently confirming round 2's N4, that
+    GAM-303 is *not* the divergence case. Also read `gitAutomationStates` live:
+    one row, `event=merge → Done`, so the incumbent is still up. Mutation:
+    flipped `ownClaim` → `otherClaim`, collapsing the `ALREADY_DONE` /
+    `DUPLICATE_CLOSE_CLAIM` distinction — 2 red with real output, restored green.
+    Flags four under-specifications it resolved by inference, including that
+    **the "closed, not merged" row has no verbatim code** in §3's list (it named
+    it `CLOSED_WITHOUT_MERGE`) and that `client.mjs` hardcodes `LINEAR_API_KEY`
+    while lane B's secret is `LINEAR_SYNC_API_KEY`, bridged in exactly one place.
+  * **Lane C** `43c2a8a` — gate script + sweep + tests, 1428 lines. **Built the
+    criterion-3 fixture from GAM-315 as E6 required**, and live-verified both
+    GAM-315 and GAM-303 before writing a test. Mutation: hardcoded the gate's
+    `exitCode` to 0 — i.e. reproduced the exact always-green defect rule 6
+    exists to prevent — 2 red including the spawned-subprocess test, restored
+    green. Flags three judgement calls, the sharpest being that **the gate does
+    not flag `AMBIGUOUS_DECLARATION`** (`Closes GAM-325 and GAM-326` *is*
+    canonical by regex, just carrying a second identifier); it declined to
+    self-authorize a new rule and left it for review.
+- 2026-08-11 23:0xZ — lanes B and C merged and pushed. **Six-gate run on the
+  merged branch, `--require-clean`, tree clean at `f880fa9`: 5 of 6 PASS** —
+  tsc 0, vite build 0, format:check 0, eslint 0 errors / 377 pre-existing
+  warnings, vitest **89 files / 2354 tests** against the 2178 baseline (+176).
+  **Gate 6 SKIPPED and the verdict says 5, not 6** — this change touches no
+  `src/` file, so no scope is derivable. Recorded as five.
+- 2026-08-11 23:0xZ — **lane D preserved as
+  `docs/swarm/active/GAM-325-lane-d-workflows.patch`** (E3): 580 lines, 4 diffs,
+  and **`git apply --check` exits 0**, so it is a patch that applies rather than
+  a file that looks like one.
