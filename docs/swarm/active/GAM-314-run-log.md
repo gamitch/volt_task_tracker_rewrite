@@ -46,3 +46,15 @@ Append-only. One line per milestone, committed and pushed as it happens.
   the verdict rather than ending its turn with the subagent in flight, which is
   this very issue's failure mode. If this line is the last one in this file, the
   run died holding the gate and instance 5 has been recorded.
+- 19:50Z — **premise gate round 1 verdict: REVISE.** 1 BLOCKER, 3 MAJOR, 4
+  MINOR, 2 NIT. Tier judgement STANDARD upheld with reasoning. The BLOCKER is
+  the one that matters: the workflow's own prompt (`:197-199`, shipped in PR
+  #141) tells an agent near the wall clock to stop and push, which ends green
+  with the issue **legitimately** `In Progress` — a run shape the packet's rule
+  table did not enumerate. Also measured by the gate and not by me: **0 of 83
+  issues in this workspace are in `In Review` or `Todo`**, so acceptance
+  criterion 2 was unverifiable as written; and `filter.ts` rules 4-5 dispatch on
+  **any** transition into `Todo`, not just `Backlog → Todo` (GAM-304 went
+  `In Progress → Todo` at 13:11:21Z and run 31391626696 was created 13:11:25Z,
+  four seconds later) — so `Todo` is a re-dispatch trigger, not a resting state.
+  Full verdict text kept in the transcript; findings actioned below.
