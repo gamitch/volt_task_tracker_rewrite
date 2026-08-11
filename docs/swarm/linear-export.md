@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-11T14:46:46.014Z from team `Gamitch`.
+Exported 2026-08-11T20:31:32.318Z from team `Gamitch`.
 
-- **324** issues (242 archived)
-- **46** not yet completed or cancelled
+- **328** issues (242 archived)
+- **50** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -50,7 +50,7 @@ Exported 2026-08-11T14:46:46.014Z from team `Gamitch`.
 | [GAM-311](https://linear.app/gamitch/issue/GAM-311/kpi-viewssqls-two-views-never-got-t801s-catalog-comment-rls-correction) | — | Backlog | tier/unreviewed | kpi_views.sql's two views never got T801's catalog-comment RLS correction -- D010 chose header-prose only |
 | [GAM-312](https://linear.app/gamitch/issue/GAM-312/two-live-dispatch-policies-exist-only-as-file-comments-no-constitution) | — | Backlog | provenance/other tier/unreviewed | Two live dispatch policies exist only as file comments — no constitution item, so nothing triages them |
 | [GAM-313](https://linear.app/gamitch/issue/GAM-313/resume-heremd-is-the-first-file-nine-kickoff-prompts-tell-an-agent-to) | — | Backlog | provenance/other tier/unreviewed | `RESUME-HERE.md` is the first file nine kickoff prompts tell an agent to read, and the word "Linear" appears in it zero times |
-| [GAM-314](https://linear.app/gamitch/issue/GAM-314/a-dispatched-run-reports-success-while-its-work-is-still-running-in) | — | Backlog | provenance/other tier/unreviewed | A dispatched run reports `success` while its work is still "running in the background" — and the process takes it |
+| [GAM-314](https://linear.app/gamitch/issue/GAM-314/a-dispatched-run-reports-success-while-its-work-is-still-running-in) | — | In Review | provenance/other tier/standard | A dispatched run reports `success` while its work is still "running in the background" — and the process takes it |
 | [GAM-316](https://linear.app/gamitch/issue/GAM-316/item-19-requires-recording-the-premise-gate-verdict-the-dispatch-path) | — | Backlog | provenance/other tier/unreviewed | Item 19 requires recording the premise-gate verdict; the dispatch path has no mechanism, so the first real one lived only in a 30-day artifact |
 | [GAM-317](https://linear.app/gamitch/issue/GAM-317/an-escalated-row-has-no-reply-address-gatehuman-is-machine-settable) | — | Backlog | provenance/other tier/unreviewed | An escalated row has no reply address: `gate/human` is machine-settable, hand-clearable only, and sends the owner no notification |
 | [GAM-318](https://linear.app/gamitch/issue/GAM-318/studenthomes-per-row-rsvp-spinner-can-never-render-isloading-is-dead) | — | Backlog | area/w5 tier/standard | StudentHome's per-row RSVP spinner can never render — `isLoading` is dead code and its comment says otherwise |
@@ -60,6 +60,10 @@ Exported 2026-08-11T14:46:46.014Z from team `Gamitch`.
 | [GAM-322](https://linear.app/gamitch/issue/GAM-322/three-unscoped-linear-git-automations-are-live-where-item-28g-asked) | — | Backlog | gate/human provenance/premise-gate tier/unreviewed | Three unscoped Linear git automations are live where item 28g asked for one — `start → In Progress` is the rule that moved GAM-304 backwards |
 | [GAM-323](https://linear.app/gamitch/issue/GAM-323/agentsmd-tells-every-agent-a-branch-name-identifier-does-not-close-its) | — | Backlog | provenance/other tier/standard | AGENTS.md tells every agent a branch-name identifier does not close its issue — measured, it closes |
 | [GAM-324](https://linear.app/gamitch/issue/GAM-324/three-documents-state-the-protected-files-rule-and-all-three-disagree) | — | Backlog | provenance/other tier/unreviewed | Three documents state the protected-files rule and all three disagree — on who is bound, who owns, and which paths |
+| [GAM-325](https://linear.app/gamitch/issue/GAM-325/build-the-explicit-linear-closer-pr-merge-declares-its-issue-one-sync) | — | In Progress | provenance/other tier/heavy | Build the explicit Linear closer: PR merge declares its issue, one sync writes the state, every refusal is named — replacing the last semantic automation |
+| [GAM-326](https://linear.app/gamitch/issue/GAM-326/an-unfinished-dispatch-run-can-turn-its-own-job-green-by-moving-the) | — | Backlog | provenance/other tier/standard | An unfinished dispatch run can turn its own job green by moving the issue to `Todo` — which re-dispatches it four seconds later |
+| [GAM-327](https://linear.app/gamitch/issue/GAM-327/nothing-executes-the-three-github-workflow-files-so-a-yaml-mistake-in) | — | Backlog | provenance/other tier/fast | Nothing executes the three GitHub workflow files, so a YAML mistake in the dispatch loop ships and is found by a run that does not happen |
+| [GAM-328](https://linear.app/gamitch/issue/GAM-328/a-dispatched-run-cannot-push-githubworkflows-neither-of-its-two) | — | Backlog | provenance/other tier/fast | A dispatched run cannot push `.github/workflows/**` — neither of its two credentials is allowed to, so any workflow-file fix is written, verified and then undeliverable |
 
 ## Closed and cancelled
 
