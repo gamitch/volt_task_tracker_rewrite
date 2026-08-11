@@ -4,7 +4,7 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-11T21:55:07.568Z from team `Gamitch`.
+Exported 2026-08-11T23:18:55.976Z from team `Gamitch`.
 
 - **328** issues (242 archived)
 - **48** not yet completed or cancelled
