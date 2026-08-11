@@ -83,3 +83,17 @@ Append-only. One line per milestone, committed and pushed as it happens.
   **Item 19a's two-round cap is reached.** Not looping to a round 3: all four
   findings are mechanical wording or bookkeeping, none changes the prescription,
   and the prescription was measured working this round. Applying and dispatching.
+- 20:25Z — **round 2's four findings applied.** MAJOR resolved by actually
+  filing the two deferrals rather than rewording the claim:
+  **[GAM-326](https://linear.app/gamitch/issue/GAM-326)** (the `Todo`
+  self-re-dispatch incentive, `tier/standard`) and
+  **[GAM-327](https://linear.app/gamitch/issue/GAM-327)** (nothing executes the
+  three workflow YAMLs, `tier/fast`), both into `Backlog` — item 28a makes
+  promotion the owner's signal, and filing into `Todo` would have dispatched
+  them. Both written through the `linear-task-writing` skill per item 30.
+  MINOR fixes: criterion 7 now expects five paths (it was already false on this
+  branch), criterion 4 now measures the retry classifier, criterion 8 added, and
+  the failure message widened from one benign shape to three — round 2 found
+  that an item-19a/Loop-Limit escalation and a Linear automation both legitimately
+  leave a row `In Progress`, and GAM-304 was measured being moved
+  `In Review → In Progress` by `botActor: GitHub/integration`.

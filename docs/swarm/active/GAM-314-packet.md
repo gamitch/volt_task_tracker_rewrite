@@ -69,11 +69,26 @@ prevent. **So it fails, and the message must say why it might be expected**, in
 words close to:
 
 > `GAM-nnn is still In Progress: the run ended without releasing its claim.`
-> `If it stopped deliberately near the wall clock, that is the documented`
-> `partial-result path — the row still needs re-dispatching by hand.`
+> `This can also be a run that stopped deliberately near the wall clock, one`
+> `escalated to the owner under item 19a or the Loop Limit, or a row moved`
+> `back by a Linear automation. In every case it still needs a human — the`
+> `chain is unfinished and nothing else will say so.`
 
-The same sentence goes in the workflow comment block, so the first person to
-hit the benign case does not conclude the check is broken and delete it.
+**Three benign shapes, not one.** Gate round 2 found the other two and they
+belong in the message, because its whole purpose is that the first person to hit
+a benign case does not conclude the check is broken and delete it:
+`constitution.md:93-98` caps the premise gate at two rounds and escalates a
+third REVISE **to the human owner**; the Loop Limit (`:193-197`) escalates a
+third failed worker/checker attempt to `boss-arbiter`, whose options include
+"the human owner must decide". Neither the prompt nor item 28 gives an escalated
+run any state to move to, so it correctly rests in `In Progress`. Separately,
+this workspace has a live *On open in coding tool → started* automation
+(`constitution.md:622`), and GAM-304 was measured moving `In Review → In
+Progress` at `2026-08-10T14:00:04.088Z` with `botActor: GitHub/integration`.
+**The verdict is FAIL in all three** — each ends with an unfinished chain only a
+human will move — but the wording must be wide enough to be believed.
+
+The same sentence goes in the workflow comment block.
 
 **Retry only what is worth retrying.** Up to **3 attempts with a short backoff**
 for a transport-level failure, so one network blip is not a red run. Do **not**
@@ -81,6 +96,33 @@ retry a definite answer: an authentication error, a `4xx` `userError`, an
 `Entity not found: Issue`, or the client's own `Rate-limit floor reached:`
 throw. Three attempts against a rate floor burns the last requests in the
 window for no information.
+
+**How to tell them apart, since gate round 2 measured that the obvious way does
+not exist.** `gql` throws a bare `Error` — no status, no `cause`, no subclass —
+so the discrimination is **string-inspection of `err.message`, and there is no
+alternative**: `scripts/linear/client.mjs` is not in Allowed Files and must not
+be edited to attach structured errors. The client authors exactly four messages,
+enumerated here so nobody has to rediscover them:
+
+| Message prefix | Source | Retry? |
+| -- | -- | -- |
+| `LINEAR_API_KEY is not set.` | `client.mjs:27` | no |
+| `Rate-limit floor reached:` | `client.mjs:38` | no |
+| `GraphQL query too complex` | `client.mjs:52` | no |
+| `GraphQL: ` + JSON | `client.mjs:58` | no |
+| anything else — e.g. `TypeError: fetch failed` with `err.cause.code` | unwrapped `fetch` / `res.json()` | **yes** |
+
+Inside the `GraphQL: ` payload the JSON parses back out to give
+`extensions.statusCode` and `extensions.userError` — measured live in both gate
+rounds: authentication is `401` / `userError: true`, and a missing issue is
+`400` / `userError: true` with message `Entity not found: Issue`. That is how
+criterion 3's *not found* is told apart from *undetermined*.
+
+**Query the issue as `issue(id: $identifier)`.** Linear accepts the human
+identifier (`GAM-314`) in that field and raises `Entity not found: Issue` for a
+junk one. An `issues(filter: …)` shape returns an empty node list instead, which
+makes the *not found* case unreachable — measured, and worth one sentence here
+rather than a coin flip in the worker.
 
 **Do not add a write path.** This script reads. It must never move an issue.
 
@@ -92,7 +134,8 @@ fires a fresh dispatch — GAM-304 moved at `13:11:21.452Z` and run
 therefore correct but creates an incentive worth naming: an unfinished agent
 that wants a green job can reach one either by self-re-dispatching through
 `Todo` or by falsely claiming completion through `In Review`. **Out of scope
-here — filed as its own row under item 20 rather than left as this paragraph.**
+here — filed as [GAM-326](https://linear.app/gamitch/issue/GAM-326) under item
+20 rather than left as this paragraph.**
 
 ### 2. `scripts/linear-assert-released.test.mjs` — NEW
 
@@ -198,7 +241,12 @@ workspace are in `In Review` or `Todo`** (measured live), so the original
    says the state was *undetermined* — it must not claim the issue is
    `In Progress`. With a nonexistent identifier (`GAM-99999`) it exits **1**
    saying *not found*, distinctly from *undetermined*.
-4. `npx vitest run scripts/linear-assert-released.test.mjs` passes.
+4. `npx vitest run scripts/linear-assert-released.test.mjs` passes, covering
+   `classifyState` **and** the retry classifier as a second pure function over
+   an `Error`: a `4xx` `userError`, `Entity not found: Issue`, and
+   `Rate-limit floor reached:` → no retry; `TypeError: fetch failed` → retry.
+   Without this the retry MUST is unmeasured, and a naive 3× loop around the
+   whole call would pass every other criterion.
 5. **Named mutation:** invert the `In Progress` comparison in `classifyState`
    (make it return `released: true`), and criterion 4's suite turns **red** on
    the `In Progress` cases. Restore, re-run green. Commit before mutating
@@ -213,7 +261,16 @@ workspace are in `In Review` or `Todo`** (measured live), so the original
    `npx prettier --check scripts/linear-assert-released.mjs scripts/linear-assert-released.test.mjs`
    by hand and report it — otherwise the new files drift out of format with
    nothing able to notice.
-7. `git diff --name-only` against the base lists only the three allowed paths.
+7. `git diff --name-only ccf77b1` lists exactly **five** paths: the three
+   allowed implementation paths, plus `docs/swarm/active/GAM-314-packet.md` and
+   `docs/swarm/active/GAM-314-run-log.md`, which are the orchestrator's and sit
+   outside the worker's Allowed Files. (Round 2 caught that "only the three"
+   was already false on this branch before the worker started.)
+8. `GAM-326` and `GAM-327` exist in Linear — the `Todo` self-re-dispatch
+   incentive and the untested workflow YAML — and are named in the packet and
+   the PR. Item 20 makes the filed row what authorises the deferral, so this is
+   a criterion rather than a promise. **Satisfied by the orchestrator before
+   dispatch**, not by the worker.
 
 ## Least confident decisions
 
@@ -246,8 +303,9 @@ should spend its round here rather than re-reading the workflow file.
 5. **Testing `classifyState` and not the workflow YAML.** The YAML stays
    unexercised. The earlier claim that `GAM-312` owns that gap was wrong — that
    row is *"Two live dispatch policies exist only as file comments"* and is in
-   `Backlog`. **The gap is real and unowned**, and is filed under item 20 with
-   the `Todo`-incentive row. *Wrong if* the defect that actually ships is a YAML
+   `Backlog`. The gap is real and was unowned; it is now
+   [GAM-327](https://linear.app/gamitch/issue/GAM-327), filed under item 20
+   alongside GAM-326. *Wrong if* the defect that actually ships is a YAML
    typo (a wrong `env:` key, say), which no unit test can see. Mitigated only by
    the orchestrator running the script live against real issues, which criteria
    1-3 now require.
