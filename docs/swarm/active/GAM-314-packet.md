@@ -28,30 +28,71 @@ A Node CLI, ESM, in the style of the other `scripts/linear-*.mjs` files, that:
   `scripts/linear/client.mjs` — **import `gql` from there, do not open a second
   fetch path.** `gql` returns `{ data, remaining }`, not the raw payload;
 - exports a **pure, testable** decision function (name it `classifyState`)
-  taking the state name and returning `{ released: boolean, reason: string }`;
+  taking the state name and returning `{ released: boolean, reason: string }`.
+  **Follow `supabase/functions/linear-dispatch/filter.ts` as the in-repo
+  precedent** — a network-free decision module where every outcome carries a
+  machine-readable reason rather than a bare boolean, tested in isolation by
+  `filter.test.ts`. `scripts/migrate/manifest.test.ts` is the precedent for a
+  vitest file living under `scripts/`;
 - exits `0` when released, `1` when not, and `1` when the state could not be
   determined at all;
 - appends a one-line verdict to `$GITHUB_STEP_SUMMARY` when that variable is
   set, and prints the same line to stdout always.
 
-**The rule, exactly — this is the whole point of the row and it is narrow:**
+**The rule, exactly — this is the whole point of the row and it is narrow.**
+The team has exactly seven states (enumerated live, gate round 1):
 
 | Final state | Verdict | Why |
 | -- | -- | -- |
-| `In Progress` | **FAIL** | the run stopped holding a claim it never released |
+| `In Progress` | **FAIL** | the chain is unfinished and nothing else will say so |
 | `In Review` | pass | item 28e's finished state |
 | `Todo` | pass | **a correct refusal to proceed, which the prompt explicitly invites** |
 | `Backlog`, `Done`, `Canceled`, `Duplicate` | pass | not this assertion's business |
-| unreadable / API error | **FAIL**, with a message that says *undetermined*, not *In Progress* | a check that passes when it could not look is the same evidence-honesty defect this row is about |
+| any other / unknown name | pass | this is a denylist of one, not an allowlist |
+| issue not found | **FAIL**, saying *not found* | a junk `repository_dispatch` identifier must read as junk |
+| unreadable / API error | **FAIL**, saying *undetermined* | a check that passes when it could not look is the same evidence-honesty defect this row is about |
 
-Match the state name case-insensitively and on trimmed whitespace, but do not
-invent synonyms and **do not key off the state `type`** — `In Review` and
-`In Progress` are both type `started`, so type cannot distinguish them.
+Match the state name case-insensitively and on trimmed whitespace — the same
+shape `supabase/functions/linear-dispatch/filter.ts:273` already uses — but do
+not invent synonyms and **do not key off the state `type`**: `In Review` and
+`In Progress` are both type `started`, so type cannot distinguish them
+(verified live).
 
-Retry the read up to **3 attempts with a short backoff** so one transient
-network blip is not a red run; after that, fail as undetermined.
+**`In Progress` fails even when the run stopped deliberately.** Gate round 1
+raised this as a BLOCKER and it is now decided rather than overlooked. This same
+workflow's prompt (`.github/workflows/claude-linear-dispatch.yml:197-199`,
+shipped in PR #141) tells an agent near the wall clock to *"stop, push what
+exists, and say so"* — which ends the job green with the issue legitimately
+`In Progress`. That run is still an unfinished chain that nobody will
+re-dispatch, and a green tick on it is exactly the reading this row exists to
+prevent. **So it fails, and the message must say why it might be expected**, in
+words close to:
+
+> `GAM-nnn is still In Progress: the run ended without releasing its claim.`
+> `If it stopped deliberately near the wall clock, that is the documented`
+> `partial-result path — the row still needs re-dispatching by hand.`
+
+The same sentence goes in the workflow comment block, so the first person to
+hit the benign case does not conclude the check is broken and delete it.
+
+**Retry only what is worth retrying.** Up to **3 attempts with a short backoff**
+for a transport-level failure, so one network blip is not a red run. Do **not**
+retry a definite answer: an authentication error, a `4xx` `userError`, an
+`Entity not found: Issue`, or the client's own `Rate-limit floor reached:`
+throw. Three attempts against a rate floor burns the last requests in the
+window for no information.
 
 **Do not add a write path.** This script reads. It must never move an issue.
+
+**`Todo` is a re-dispatch trigger, not a resting state.** Measured in gate
+round 1 and confirmed independently: `filter.ts` rule 4 matches on the *new*
+state being `Todo` regardless of the previous one, so `In Progress → Todo`
+fires a fresh dispatch — GAM-304 moved at `13:11:21.452Z` and run
+`31391626696` was created at `13:11:25Z`, four seconds later. This assertion is
+therefore correct but creates an incentive worth naming: an unfinished agent
+that wants a green job can reach one either by self-re-dispatching through
+`Todo` or by falsely claiming completion through `In Review`. **Out of scope
+here — filed as its own row under item 20 rather than left as this paragraph.**
 
 ### 2. `scripts/linear-assert-released.test.mjs` — NEW
 
@@ -66,42 +107,72 @@ Cover at least: `In Progress` → not released; `in progress` and `" In Progress
 
 ### 3. `.github/workflows/claude-linear-dispatch.yml` — EDIT
 
-Add **one step, last in the job**, after `Record the session id`:
+Add a **second job**, after the existing `work` job. Not a step inside it —
+gate round 1 overturned that choice (MAJOR 4) and the reasoning is now part of
+the prescription:
 
 ```yaml
+  assert-released:
+    name: ${{ github.event.client_payload.identifier }} — claim released
+    needs: work
+    if: always() && github.event.client_payload.identifier != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
       - name: Assert the run released its claim
-        if: always()
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_DISPATCH_API_KEY }}
           ISSUE_IDENTIFIER: ${{ github.event.client_payload.identifier }}
         run: node scripts/linear-assert-released.mjs "$ISSUE_IDENTIFIER"
 ```
 
-Three things about that block are load-bearing and must not be "tidied":
+Five things about that block are load-bearing and must not be "tidied":
 
-1. **`if: always()`** — the run this catches is a *green* one, so a step that
-   only runs on success would still catch it; but a run killed by the
-   120-minute timeout is the other case worth reporting, and `always()` covers
-   both. It also means this step runs after a failed agent step, where it is
-   informative rather than harmful.
-2. **The identifier goes through `env:`, never interpolated into `run:`.**
+1. **A separate job with its own checkout, not a step in `work`.** The `work`
+   job has held `contents: write` and unrestricted `Bash` over that workspace
+   for up to 120 minutes; running the evidence-honesty check out of the tree it
+   is judging is the wrong shape. Concretely, an agent that left the tree on a
+   ref predating this script produces `ERR_MODULE_NOT_FOUND` → exit 1 → a red
+   job for no reason. On `repository_dispatch`, `actions/checkout` takes the
+   **default branch**, so this job runs `main`'s copy of the assertion.
+2. **`needs: work` with `if: always()`** so the job runs whether `work`
+   succeeded, failed, or was cancelled by `timeout-minutes`. The run this
+   catches is a *green* one, so a plain `needs:` would already cover the
+   headline case; `always()` is for the other two. **Note the limit honestly:**
+   when `work` is cancelled, the *run's* conclusion is `cancelled` regardless of
+   what this job does, so on that path this buys a red job and a Step Summary
+   line rather than a red run. Cite GitHub's documented `always()` semantics for
+   this, **not** this repository — the one cancelled run here (`31358757094`)
+   shows its post-steps `skipped` under a different, unrelated guard, which
+   proves nothing either way.
+3. **The identifier goes through `env:`, never interpolated into `run:`.**
    `client_payload` is attacker-controllable — the file's own `if:` guard at
    `:83` exists because "anyone able to fire a `repository_dispatch` reaches
    this file directly". `run: node … ${{ github.event.client_payload.identifier }}`
    would be a shell-injection sink. This is a BLOCKER if got wrong.
-3. **Last in the job**, so `Keep the execution log` has already uploaded the
-   transcript by the time this can turn the job red. The artifact from a failing
-   run is the one someone will want.
+4. **`permissions: contents: read`** — this job needs nothing else. It does not
+   inherit `work`'s `contents/pull-requests/issues: write`.
+5. **No `npm ci`.** `scripts/linear/client.mjs` uses global `fetch` and imports
+   nothing, so the script runs on the runner's stock Node. Adding an install
+   step would put a minute and a dependency graph between a failure and its
+   report.
 
-Add a comment block above the step in this file's established voice: what it
-asserts, why the assertion is *not* "a PR exists" (a correct refusal leaves no
-PR and must not fail), and that it is not a turn-budget fix.
+Add a comment block above the job in this file's established voice, covering:
+what it asserts and why the assertion is *not* "a PR exists" (a correct refusal
+leaves no PR and must not fail); that it is **not** a turn-budget fix (four
+measurements say so); the deliberate-stop sentence from §1 above; and one
+sentence noting that `Record the session id` at `:409` interpolates a *step
+output* into a `run:` block, which is safe there and is not a pattern to copy
+to `client_payload`.
 
 ## Allowed files — nothing else
 
 - `scripts/linear-assert-released.mjs` (new)
 - `scripts/linear-assert-released.test.mjs` (new)
-- `.github/workflows/claude-linear-dispatch.yml` (edit — the one added step and
+- `.github/workflows/claude-linear-dispatch.yml` (edit — the one added job and
   its comment only; **do not touch `--max-turns`, `timeout-minutes`, `--model`,
   the prompt, or any existing step**)
 
@@ -111,21 +182,37 @@ explicit paths; never `git add -A`.
 
 ## Acceptance criteria
 
+Criterion 2 was rewritten after gate round 1: **0 of 83 issues in this
+workspace are in `In Review` or `Todo`** (measured live), so the original
+"orchestrator supplies live identifiers" was unsatisfiable.
+
 1. `node scripts/linear-assert-released.mjs GAM-314` exits **1** while GAM-314
-   is `In Progress`, printing a line that names the state.
-2. The same command exits **0** against an issue that is `In Review`, and
-   **0** against one in `Todo`. (The orchestrator supplies live identifiers.)
-3. With `LINEAR_API_KEY` unset or invalid, it exits **1** and the message says
-   the state was *undetermined* — it must not claim the issue is `In Progress`.
+   is `In Progress`, printing a line that names the state. Run this **before**
+   the orchestrator's item-28e completion move, after which it stops holding.
+2. `node scripts/linear-assert-released.mjs GAM-304` exits **0** (that issue is
+   `Done`), proving the pass path over the real API rather than in a mock.
+   The `In Review` and `Todo` states are covered by criterion 4's unit tests;
+   **the orchestrator** closes the live gap by re-running criterion 1's command
+   after moving GAM-314 to `In Review` and recording the exit code.
+3. With `LINEAR_API_KEY` set to an invalid value, it exits **1** and the message
+   says the state was *undetermined* — it must not claim the issue is
+   `In Progress`. With a nonexistent identifier (`GAM-99999`) it exits **1**
+   saying *not found*, distinctly from *undetermined*.
 4. `npx vitest run scripts/linear-assert-released.test.mjs` passes.
 5. **Named mutation:** invert the `In Progress` comparison in `classifyState`
    (make it return `released: true`), and criterion 4's suite turns **red** on
    the `In Progress` cases. Restore, re-run green. Commit before mutating
    (item 26's fast-tier working rule).
-6. All six gates green: `tsc --noEmit`, `vite build`, `format:check`,
-   `eslint .` (0 errors), full `vitest run`, and the scoped run from 4. The
-   full-suite file/test count may rise by exactly the new file and its tests;
-   report the numbers.
+6. All six gates green, **against the measured base at `ccf77b1`: 83 files /
+   2162 tests**. `npx tsc --noEmit`, `npx vite build`, `npm run format:check`,
+   `npx eslint .` (0 errors; ~377 pre-existing warnings), full `npx vitest run`
+   (expect 84 files and 2162 + your new test count), and the scoped run from 4.
+   **Two of those six cannot see this change**: `tsconfig.json:22` includes only
+   `["src", "vite.config.ts"]` and `format:check`'s globs are `src/**` plus root
+   files, so neither reaches `scripts/**`. Therefore also run
+   `npx prettier --check scripts/linear-assert-released.mjs scripts/linear-assert-released.test.mjs`
+   by hand and report it — otherwise the new files drift out of format with
+   nothing able to notice.
 7. `git diff --name-only` against the base lists only the three allowed paths.
 
 ## Least confident decisions
@@ -150,12 +237,22 @@ should spend its round here rather than re-reading the workflow file.
    merging mid-run legitimately produces it, and the issue warns explicitly
    against asserting on the wrong signal. *Wrong if* the owner wants 28e
    enforced here too — that is a separate row, not this one.
-4. **Placing the step last rather than making it a separate job.** A separate
-   job would isolate the assertion from the agent's `permissions` block and
-   could be `needs: work` with `if: always()`. Rejected as more YAML for the
-   same signal. *Wrong if* the assertion ever needs to run when the `work` job
-   is skipped entirely — it does not, because a skipped job never claimed.
+4. ~~Placing the step last rather than making it a separate job.~~
+   **Overturned by gate round 1 (MAJOR 4) and now a separate job.** The
+   rejection weighed YAML volume and missed the decisive fact: the assertion
+   would have executed out of a workspace the run under test had unrestricted
+   write access to for two hours. Recorded rather than deleted, because the
+   whole point of the list is that it caught something.
 5. **Testing `classifyState` and not the workflow YAML.** The YAML stays
-   unexercised; `GAM-312` owns that gap. *Wrong if* the defect that actually
-   ships is a YAML typo (a wrong `env:` key, say), which the unit test cannot
-   see. Mitigated only by the orchestrator running the script live.
+   unexercised. The earlier claim that `GAM-312` owns that gap was wrong — that
+   row is *"Two live dispatch policies exist only as file comments"* and is in
+   `Backlog`. **The gap is real and unowned**, and is filed under item 20 with
+   the `Todo`-incentive row. *Wrong if* the defect that actually ships is a YAML
+   typo (a wrong `env:` key, say), which no unit test can see. Mitigated only by
+   the orchestrator running the script live against real issues, which criteria
+   1-3 now require.
+6. **Failing a deliberate near-wall-clock stop (BLOCKER 1's resolution).**
+   Decided as FAIL because the chain is unfinished either way and nothing else
+   reports it. *Wrong if* deliberate partial stops become common enough that
+   dispatch runs are routinely red — at which point the answer is a distinct
+   non-blocking outcome, not silence.

@@ -58,3 +58,14 @@ Append-only. One line per milestone, committed and pushed as it happens.
   `In Progress → Todo` at 13:11:21Z and run 31391626696 was created 13:11:25Z,
   four seconds later) — so `Todo` is a re-dispatch trigger, not a resting state.
   Full verdict text kept in the transcript; findings actioned below.
+- 20:00Z — **packet revised for round 1's findings.** BLOCKER 1 decided as
+  *still FAIL*, with the message and the workflow comment required to name the
+  benign deliberate-stop case so nobody deletes the check. MAJOR 4 accepted: the
+  assertion becomes a **separate `needs: work` job with its own checkout and
+  `contents: read`**, not a step in the job whose tree it is judging. MAJOR 2:
+  criterion 2 rebuilt on states that exist (GAM-304 is `Done` → exit 0), with
+  the live `In Review` leg assigned to the orchestrator after the item-28e move.
+  MAJOR 3, MINOR 5-8, NIT 10 all actioned. Baseline measured here, not
+  borrowed: **83 files / 2162 tests at `ccf77b1`**. Verified the gate's own
+  citations independently — GAM-312's real title, the 0/0 `In Review`/`Todo`
+  census, and `filter.ts:273`'s rule-4 match on the *new* state alone.
