@@ -31,17 +31,21 @@ Constitution **item 28** is binding and its order matters:
    human reading `git branch` can tell what it is. Claude Code's default name
    comes from the session title and carries neither; rename it after claiming.
    **If the branch only *mentions* an issue** — an investigation, a salvage, a
-   follow-up, an infrastructure fix — **keep the identifier out of the branch
-   name and the PR title** (`WORKFLOWS.md` rule 2), or merging will close a row
-   you never worked on.
+   follow-up, an infrastructure fix — give that work its own row, and **write
+   `Ignore GAM-nnn` in the PR body for the issue you are merely referring to.**
+   Linear suppresses the link outright, even when the branch name carries that
+   identifier. Otherwise merging closes a row you never worked on
+   (`WORKFLOWS.md` rule 2).
 6. On completion move it to `In Review` — **never `Done`**. A team automation
    closes the issue when the last linked PR merges; an agent closing its own is
    self-certification. Open the PR with **`Closes GAM-nnn` as its first body
    line** — that is the human-readable record of which PR is the work, and it
-   links the issue; it is **not** what closes it. An identifier in the title or
-   branch name links too, and **any** linked PR's merge can close the issue
-   (constitution item 28f). Add the trailer `Linear-Issue: GAM-nnn (Tnnn)` for
-   the git-side record, which Linear does not read.
+   links the issue; the automation, not the word, is what closes it. **A branch
+   name or PR title links on its own, and such a link closes on merge with no
+   magic word present** — omitting `Closes` protects nothing. Only `skip`/
+   `ignore`, or a non-closing word like `ref`, holds a linked PR back
+   (constitution item 28f quotes the full word list). Add the trailer
+   `Linear-Issue: GAM-nnn (Tnnn)` for the git-side record.
 
 Labels carry what custom fields used to: `tier/*` (item 26 process tier),
 `area/w1`…`w10` (workflow surface), `gate/human` (no machine may close it),

@@ -461,27 +461,95 @@ After the third failure, the task must be escalated to boss-arbiter.
        and was false in this workspace; the correction is GAM-315, measured
        2026-08-10.
 
-       **What links a PR to an issue.** Three channels are *known* to link: the
-       **branch name**, the **PR title**, and a **magic word**
-       (`Closes`/`Fixes`/`Resolves`) beside the identifier in the body. Two are
-       measured *not* to link: a bare prose mention elsewhere in the body, and a
-       commit message. Read that as "known to link", not as an exhaustive list —
-       the PR-comment channel was never testable here.
+       **What links a PR to an issue.** Three channels link: the **branch
+       name**, the **PR title**, and a **magic word** beside the identifier in
+       the body. A bare prose mention elsewhere in the body does not (measured).
+       Linear documents that PR **comments** do not link either, and this
+       repository could not test that channel — take the documentation, not our
+       silence, as the reason.
 
-       One thing is unresolved and is recorded rather than papered over: the
-       title channel and a magic-word token appearing in *negated* prose cannot
-       be separated by any data in this repository, because every candidate PR
-       carries both. The experiment that would settle it — a throwaway issue and
-       a PR carrying its identifier in the title with no magic-word token — was
-       **deliberately not run**, because it fires a live automation against the
-       tracker to learn something that changes no rule. The safe rule is
-       identical under both horns: keep the identifier out of the branch name
-       *and* the title, and away from `close`/`fix`/`resolve`.
+       **The magic words are a fixed list, quoted here rather than paraphrased,
+       because an earlier version of this item guessed at it and left a hole.**
+       From <https://linear.app/docs/github#link-through-pull-requests>, read
+       2026-08-11:
 
-       **What closes the issue is not the magic word.** It is the `Gamitch`
-       team's Linear automation *PR merged → Done* (item 28g), and it fires when
-       the **last open linked PR** merges. Any linked PR will do it. The PR body
-       never enters into it.
+       - **Closing** — `close`, `closes`, `closed`, `closing`, `fix`, `fixes`,
+         `fixed`, `fixing`, `resolve`, `resolves`, `resolved`, `resolving`,
+         `complete`, `completes`, `completed`, `completing`, `implement`,
+         `implements`, `implemented`, `implementing`, **`linear issue`**.
+       - **Non-closing** ("contributing") — `ref`, `refs`, `references`,
+         `part of`, `related to`, `relates to`, `contributes to`, `toward`,
+         `towards`. These link, and the issue still moves through the earlier
+         statuses, but the *On PR or commit merge* status is **not** applied.
+
+       **`implements GAM-nnn` closes.** So does `completes GAM-nnn`. A rule that
+       only watches `close`/`fix`/`resolve` — as an earlier version of this item
+       did — passes both.
+
+       **`skip GAM-nnn` or `ignore GAM-nnn` prevents linking entirely, even when
+       the branch name carries the identifier.** This is the escape hatch, and
+       it is better than the branch-renaming workaround this repository invented
+       before reading the documentation: it works when the identifier must stay
+       in the branch name. `WORKFLOWS.md` rule 2 leads with it.
+
+       ⚠ **The commit trailer this item requires contains a closing magic word,
+       and it is inert only because a workspace toggle is off.**
+       `Linear-Issue: GAM-nnn` is `linear issue` with a hyphen. Linear links
+       from commit messages when the workspace setting *Link commits to issues
+       with magic words* is enabled.
+
+       **Measured 2026-08-11: that setting is off.** The clean exhibit is
+       **PR #125** — branch `claude/w1-linear-autoclose` (no identifier), title
+       `GAM-000` (a placeholder, not a real issue), body never naming GAM-303 —
+       whose commit `56d9bc2` and merge commit `042ba45` both carry
+       `Closes GAM-303`. **GAM-303 has exactly one attachment, PR #126.** The
+       commit magic word produced nothing.
+
+       **Two positive controls, so the empty result is informative** — the thing
+       three earlier attempts on this subject lacked. PRs do produce attachments
+       (#126, on this same issue), and they do so *even when the issue is
+       already* `Done` (#151 attached to a closed GAM-304 at `22:48:31.430Z`).
+       GAM-303 was `Done` before #125 merged, so the *state* instrument was
+       blind here; the *attachment* instrument was not.
+
+       **The hazard is latent, not absent.** Enable that setting and every
+       commit carrying this trailer may become a closing instruction. Anything
+       built on the trailer being invisible to Linear rests on a workspace
+       setting, not on a property of the trailer.
+
+       **A question three gate rounds left open is closed by the documentation,
+       not by an experiment.** Those rounds could not separate the title channel
+       from a magic-word token in negated prose, because every candidate PR in
+       this repository carried both, and declined to run a live experiment to
+       find out. Linear documents both independently: the title links, and a
+       magic word links. There was never a disjunction — there are two channels,
+       and both are live. **The cheaper instrument was the vendor's own
+       documentation, and nobody read it for three rounds.** Record that, because
+       the same reflex will recur.
+
+       So the safe rule for a PR that must not move an issue: keep the
+       identifier out of the branch name *and* the title, keep it away from
+       **any** closing magic word above — or, more robustly, write
+       `Ignore GAM-nnn` and let Linear suppress the link outright.
+
+       **What closes the issue is the automation, not the magic word** — but
+       the PR body can *suppress* it. The closer is the `Gamitch` team's Linear
+       automation *PR merged → Done* (item 28g), firing when the **last open
+       linked PR** merges. What the body controls is whether that automation is
+       allowed to apply, in three cases:
+
+       | Link created by | On merge |
+       | -- | -- |
+       | **No magic word** — branch name or title alone | automation **applies** |
+       | A **closing** magic word (`Closes GAM-nnn`) | automation applies |
+       | A **contributing** magic word (`ref`, `related to`, …) | **suppressed** |
+
+       **The first row is the finding this item exists for, and it is the one
+       measured here.** PR #141 carried no magic word of any kind, linked only
+       by its branch name, and drove GAM-304 to `Done` 2.1 seconds after merge.
+       So a closing magic word is *not required* for the automation to fire —
+       omitting it is not a safeguard. A contributing magic word is a
+       safeguard; silence is not.
 
        Two consequences to act on:
 
@@ -494,20 +562,24 @@ After the third failure, the task must be escalated to boss-arbiter.
 
        - **`Closes GAM-nnn` as the PR body's first line — still required, on
          different grounds.** It is the explicit human-readable record of
-         *which* PR is the work, it survives a branch rename, and it is the only
-         link a branch without an identifier has. It is **not** what closes the
-         issue. Wherever this repository states what closes an issue, name the
+         *which* PR is the work, and it survives a branch rename. It is **not**
+         what closes the issue. Wherever this repository states what closes an
          mechanism and date the statement; never attribute closing to a token in
          a PR body. If the mechanism is ever replaced, one dated sentence
          changes and this requirement does not.
-       - **Commit trailer** — `Linear-Issue: GAM-nnn (Tnnn)`. **Linear does not
-         read commit messages** — an identifier appearing only in one produces
-         no attachment and no state change (measured on GAM-318/319/320, with a
-         positive control in the same PR delivery) — so the trailer gives
-         traceability and no automation. It survives in git history
-         independently of any hosted account, which is the same reason item 29
-         keeps an export. Item 24 joins recording to merging; this is that
-         rule's Linear form.
+       - **Commit trailer** — `Linear-Issue: GAM-nnn (Tnnn)`. **Commit messages
+         do not link in this workspace, for both forms and for different
+         reasons.** A *bare identifier* does not link at all — measured on
+         GAM-318/319/320, which took no attachment and no state change, with a
+         positive control in the same PR delivery. A *magic word* in a commit
+         message does not link either, but only because the *Link commits to
+         issues with magic words* setting is off — see the ⚠ above, and PR #125
+         / GAM-303. **The first is a property of Linear; the second is a
+         property of your settings, and only one of them is yours to keep
+         true.** So the trailer gives traceability and no automation, and it
+         survives in git history independently of any hosted account, which is
+         the same reason item 29 keeps an export. Item 24 joins recording to
+         merging; this is that rule's Linear form.
 
     g. **Branch names carry the issue identifier — `WORKFLOWS.md` rule 2 is
        the rule and is not restated here** (item 3). It already existed; item 29
