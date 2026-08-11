@@ -162,3 +162,9 @@ Append-only. One line per milestone, committed and pushed as it happens.
   real security boundary — an agent that can edit `claude-linear-dispatch.yml`
   can delete its own `--allowedTools`, `permissions:` and turn caps in one
   commit — so "just add the scope" is a choice with a cost, not a fix.
+- 21:20Z — **PR #159 opened** — https://github.com/gamitch/volt_task_tracker_rewrite/pull/159 —
+  `Closes GAM-314` as its first body line (item 28f), leading with the fact that
+  half the change is undeliverable rather than burying it.
+- 21:20Z — verification-log entry written and pushed, recording this **PARTIAL**
+  under item 27: the assertion is merged and correct, and inert until GAM-328
+  unblocks the wiring.
