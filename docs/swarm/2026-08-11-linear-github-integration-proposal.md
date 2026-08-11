@@ -345,17 +345,24 @@ concurrency:
   queue: max                  # verified against GitHub's concurrency reference:
                               # "Up to 100 jobs or workflow runs can be pending in
                               # the concurrency group"; incompatible only with
-                              # cancel-in-progress: TRUE. No pending run is ever
-                              # discarded, so every merged PR gets its own run,
-                              # its own decision, and its own Slack notice.
+                              # cancel-in-progress: TRUE. Within that documented
+                              # 100-pending limit no run is discarded, so every
+                              # merged PR gets its own run, decision, and Slack
+                              # notice; runs beyond a full queue are cancelled.
+                              # FIFO orders by when each run began waiting, not
+                              # by merge order. Neither bound is a practical
+                              # concern at ~10 merges/day, and the sweep
+                              # backstops the theoretical overflow.
 ```
 
 One guard travels with this: **a claim is only deferred to when its close
 completed.** A claim comment naming a PR whose run never drove the issue to
 `Done` is reported as ⚠ `STALE_CLAIM` naming that PR and run — a human replays
-it — never silently treated as another run's win (behaviour table below). With
-global FIFO and no discards, same-issue runs cannot interleave and no warning can
-be swallowed; R6 holds on every path, including a failed run ahead of queued
+it — never silently treated as another run's win; a replay of the *same* PR
+recognises its own claim and resumes the interrupted close rather than stopping
+at it (behaviour table below). With global FIFO and no discards inside the
+100-pending limit, same-issue runs cannot interleave and no warning can be
+swallowed; R6 holds on every path, including a failed run ahead of queued
 survivors.
 
 **Why plain `pull_request`, restored — and the one alternative, named.** Round 3
@@ -421,9 +428,9 @@ Behaviour table (every row either acts or produces a **named skip** — the
 | merged | none on line 1 | — | skip `NO_DECLARATION` (Slack, info level — legitimate for mention/infra/partial-work PRs) |
 | merged | two+ identifiers on line 1, or a non-canonical magic-word pairing | — | **no move**; Slack ⚠ `AMBIGUOUS_DECLARATION` |
 | merged | valid but issue does not exist | — | Slack ⚠ `UNKNOWN_ISSUE` |
-| merged | valid | a claim comment exists from a run that never completed its close (issue not `Done`) | **no move**; Slack ⚠ `STALE_CLAIM` naming that PR and run — a human replays |
+| merged | valid | a claim comment exists from a run that never completed its close (issue not `Done`) | same PR: the run **resumes the interrupted close** (its own claim is not an obstacle); different PR: **no move**, Slack ⚠ `STALE_CLAIM` naming the stale PR and run — a human adjudicates |
 | merged, base ≠ `main` (belt to the trigger filter's braces) | any | — | skip `NON_MAIN_BASE` |
-| merged, from a fork (no secrets delivered) | any | — | named skip in the Actions log only; the GitHub Slack app's workflow subscription is the witness (R6's stated exception) |
+| merged, from a fork (no secrets delivered) | any | — | named skip in the Actions log only; the GitHub Slack app's workflow subscription alerts the owner, who replays via the trusted `workflow_dispatch` path (R6's stated exception). If automatic fork handling ever becomes a requirement, that activates the `pull_request_target` fallback, not an ad-hoc widening |
 | closed, not merged | any | — | no state change; if declared, audit comment on the issue (`PR closed without merge`); Slack info |
 | opened / reopened | — | — | *(not in scope for v1 — no state move)* |
 
@@ -631,7 +638,7 @@ All free-tier:
 | **GitHub webhook → Supabase `github-sync` edge function** | Symmetric with `linear-dispatch` and fully viable — but adds a second public endpoint, second HMAC scheme, second deploy surface, and GitHub does not auto-redeliver failed webhook deliveries. Actions delivers the same events with less standing surface. Revisit only if Actions latency (typically seconds–low minutes) ever matters |
 | **Linear Agents platform** (AgentSession webhooks; delegate an issue to a "Claude" app user) | The genuinely first-class future: free plan includes it, agents aren't billable seats, delegation fires `AgentSessionEvent` webhooks. But it is a Developer Preview API requiring a hosted OAuth app — new standing infrastructure and a moving target. **Watch item, not this proposal.** The §6 design loses nothing to it: the closer stays correct under any inbound mechanism |
 | **GitHub Issues sync** (vendor two-way issue mirror) | Not an alternative for this flow, and its two-way mode syncs *status* — a second independent writer to issue state, incompatible with the single-writer premise here. Recorded as leave-off (§2) |
-| **Polling cron** (the webhook doc's §12 honest-cheaper-alternative) | No longer cheaper: the Actions transport in §6.3 is event-driven *and* needs no endpoint, so polling's one advantage (no relay) is now moot in both directions. A read-only daily *reconciliation* sweep survives as §6.3's optional drift detector — reporting, never moving |
+| **Polling cron** (the webhook doc's §12 honest-cheaper-alternative) | No longer cheaper: the Actions transport in §6.3 is event-driven *and* needs no endpoint, so polling's one advantage (no relay) is now moot in both directions. A read-only daily *reconciliation* sweep survives as §6.3's drift detector — a required Phase-2 deliverable since round 6, reporting, never moving |
 
 ---
 
