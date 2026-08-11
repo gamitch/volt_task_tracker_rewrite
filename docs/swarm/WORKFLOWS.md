@@ -489,36 +489,45 @@ These are not suggestions. Each one is written against a failure this project ha
    carries. Rename it after claiming, or create it from the issue's own `gitBranchName`.
 
    **A second reason, new since this rule was written:** Linear links a PR whose branch name
-   contains the issue identifier. *When* that link is created is **unmeasured** — do not claim it
-   happens on the first push. Constitution item 28f describes what a link then does, and it is not
-   what an earlier version of this paragraph implied.
+   contains the issue identifier, and its documentation says the mapped workflow applies *when the
+   branch is pushed*. This repository never managed to measure that timing — the one attempt was
+   refuted for want of a positive control — so it is **documented, not measured here.** Constitution
+   item 28f describes what a link then does.
 
-   **A branch that merely *mentions* an issue is not that issue's work, and this rule does not ask
-   for the identifier there.** Measured 2026-08-10: `claude/gam-304-failure-p3y021` carried five PRs
-   of CI and salvage work — #138, #139, #141, #142, #144 — and drove GAM-304 to `Done` four times.
-   The fifth was a no-op only because the issue was already closed. None of them touched its code.
+   **A branch that merely *mentions* an issue is not that issue's work.** Measured 2026-08-10:
+   `claude/gam-304-failure-p3y021` carried five PRs of CI and salvage work — #138, #139, #141, #142,
+   #144 — and drove GAM-304 to `Done` four times. The fifth was a no-op only because the issue was
+   already closed. None of them touched its code.
 
-   **Primary instruction: give mention-work its own issue.** Investigations, salvage, follow-ups and
-   infrastructure fixes are work in their own right. A row of their own costs a little tracker noise
-   and depends on no third-party parser's behaviour.
+   **There are exactly two compliant ways to handle mention-work. Pick one; they are not combined.**
 
-   *Same sentence* below is deliberately stricter than the parser. #142's body line 1 put `GAM-315`
-   in the same sentence as `closes`, and GAM-315 was measurably **not** linked — so Linear's parser
-   is tighter than that. A rule should prescribe the safe side of a boundary it knows only
-   approximately.
+   1. **Give it its own issue** — preferred. Investigations, salvage, follow-ups and infrastructure
+      fixes are work in their own right. Create and claim the new row, then treat it as the branch's
+      issue: its identifier in the branch name, and `Closes GAM-<new>` in the body. The originally
+      mentioned issue is then a *reference*, and must be suppressed per step 2's rule.
+   2. **No new issue** — use `claude/<short-slug>`, the same form governance edits and one-off fixes
+      use, and say so in the PR.
 
-   **And this constraint is not optional.** Prose written *about* a linking hazard reliably contains
-   the pattern it warns of: #142, #138 and #140 each carry `close(s) GAM-304` in the very sentence
+   **Under either option, suppress the mentioned issue explicitly: write `Ignore GAM-nnn` in the PR
+   body.** Linear documents that `skip` or `ignore` plus an identifier prevents linking outright,
+   **even when the branch name contains that identifier**. That is stronger than avoiding words, and
+   it is what this rule now asks for. Lexical avoidance is the fallback when you cannot edit the
+   body.
+
+   **The lexical fallback must cover the whole word list, not three verbs.** Closing magic words are
+   `close`, `fix`, `resolve`, `complete`, `implement` — every inflection — plus `linear issue`
+   (constitution item 28f quotes the full list). `implements GAM-304` closes the issue and an
+   earlier version of this rule permitted it.
+
+   **This constraint is not optional.** Prose written *about* a linking hazard reliably contains the
+   pattern it warns of: #142, #138 and #140 each carry `close(s) GAM-304` in the very sentence
    explaining that they must not close it. Renaming the branch while keeping that sentence converts
    a branch-name link into a magic-word link and changes nothing. The compliant form, since all
    three exhibits needed to say something like it: **"merging this must not close the issue this
    branch is named for"** — no identifier, so no channel.
 
    Work with no issue — a governance edit, a one-off fix — uses `claude/<short-slug>` and says so in
-   the PR. **So does work that only mentions an issue rather than implementing it**: for that, the
-   identifier must appear in **none** of the branch name, the PR title, or the same sentence as a
-   `close`/`fix`/`resolve` token. A bare prose mention elsewhere in the body is measured safe. That
-   is the exception, not the pattern.
+   the PR. That is the exception, not the pattern.
 
    **This is the row-number failure wearing different clothes.** A generic branch name looks
    reserved and is not. `claude/swarm-plan-zl575z` was used by one session for PR #27 and, the same
