@@ -492,14 +492,30 @@ After the third failure, the task must be escalated to boss-arbiter.
        before reading the documentation: it works when the identifier must stay
        in the branch name. `WORKFLOWS.md` rule 2 leads with it.
 
-       ⚠ **The commit trailer this item requires contains a closing magic
-       word.** `Linear-Issue: GAM-nnn` is `linear issue` with a hyphen. Linear
-       can link from commit messages when the workspace toggle *Link commits to
-       issues with magic words* is on. Whether that toggle is on here, and
-       whether the hyphenated form matches, are **both unverified** — the
-       trailer has ridden on many merged commits without an observed link, which
-       is suggestive but is not a measurement. **Verify before building anything
-       that assumes the trailer is inert.**
+       ⚠ **The commit trailer this item requires contains a closing magic word,
+       and it is inert only because a workspace toggle is off.**
+       `Linear-Issue: GAM-nnn` is `linear issue` with a hyphen. Linear links
+       from commit messages when the workspace setting *Link commits to issues
+       with magic words* is enabled.
+
+       **Measured 2026-08-11: that setting is off.** The clean exhibit is
+       **PR #125** — branch `claude/w1-linear-autoclose` (no identifier), title
+       `GAM-000` (a placeholder, not a real issue), body never naming GAM-303 —
+       whose commit `56d9bc2` and merge commit `042ba45` both carry
+       `Closes GAM-303`. **GAM-303 has exactly one attachment, PR #126.** The
+       commit magic word produced nothing.
+
+       **Two positive controls, so the empty result is informative** — the thing
+       three earlier attempts on this subject lacked. PRs do produce attachments
+       (#126, on this same issue), and they do so *even when the issue is
+       already* `Done` (#151 attached to a closed GAM-304 at `22:48:31.430Z`).
+       GAM-303 was `Done` before #125 merged, so the *state* instrument was
+       blind here; the *attachment* instrument was not.
+
+       **The hazard is latent, not absent.** Enable that setting and every
+       commit carrying this trailer may become a closing instruction. Anything
+       built on the trailer being invisible to Linear rests on a workspace
+       setting, not on a property of the trailer.
 
        **A question three gate rounds left open is closed by the documentation,
        not by an experiment.** Those rounds could not separate the title channel
@@ -551,20 +567,19 @@ After the third failure, the task must be escalated to boss-arbiter.
          mechanism and date the statement; never attribute closing to a token in
          a PR body. If the mechanism is ever replaced, one dated sentence
          changes and this requirement does not.
-       - **Commit trailer** — `Linear-Issue: GAM-nnn (Tnnn)`. **A bare
-         identifier in a commit message does not link** — measured on
+       - **Commit trailer** — `Linear-Issue: GAM-nnn (Tnnn)`. **Commit messages
+         do not link in this workspace, for both forms and for different
+         reasons.** A *bare identifier* does not link at all — measured on
          GAM-318/319/320, which took no attachment and no state change, with a
-         positive control in the same PR delivery. **Claim no more than that.**
-         The commit in question carried bare identifiers, not a magic word, so
-         it does not establish that a magic word in a commit message is
-         inert; Linear's own documentation is inconsistent here, saying commits
-         cannot link while elsewhere describing behaviour "when the MR or commit
-         merges". **Anything built on commit messages being invisible to Linear
-         must verify that first.** As used here — a bare trailer — it gives
-         traceability and no automation. It survives in git history
-         independently of any hosted account, which is the same reason item 29
-         keeps an export. Item 24 joins recording to merging; this is that
-         rule's Linear form.
+         positive control in the same PR delivery. A *magic word* in a commit
+         message does not link either, but only because the *Link commits to
+         issues with magic words* setting is off — see the ⚠ above, and PR #125
+         / GAM-303. **The first is a property of Linear; the second is a
+         property of your settings, and only one of them is yours to keep
+         true.** So the trailer gives traceability and no automation, and it
+         survives in git history independently of any hosted account, which is
+         the same reason item 29 keeps an export. Item 24 joins recording to
+         merging; this is that rule's Linear form.
 
     g. **Branch names carry the issue identifier — `WORKFLOWS.md` rule 2 is
        the rule and is not restated here** (item 3). It already existed; item 29
