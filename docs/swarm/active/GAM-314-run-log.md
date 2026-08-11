@@ -105,3 +105,26 @@ Append-only. One line per milestone, committed and pushed as it happens.
   from, and item 26's "commit before mutating" is the rule that actually
   protects the mutation replay here. AGENTS.md's worktree requirement is about
   parallel edits and the owner's shared tree; this is an ephemeral container.
+- 20:38Z — **worker verdict: complete**, 3 files / +480. It disclosed two
+  deviations unprompted (an extra exported `isIssueNotFoundError`; no YAML test,
+  which is GAM-327's). One reported figure is wrong on its face and is flagged
+  for replay: it claims the mutation run was "exit code 0 as a process but 3
+  tests failed". Vitest exits non-zero on failure.
+- 20:45Z — **BLOCKED, and this is the run's most important finding.**
+  `git push` was **rejected**: the dispatch run's credentials cannot write
+  `.github/workflows/**`. Measured three ways, not inferred:
+  1. push with `CLAUDE_PR_TOKEN` (the PAT the checkout uses) → `refusing to
+     allow a Personal Access Token to create or update workflow … without
+     workflow scope`;
+  2. push with `GH_TOKEN` (the `claude[bot]` App installation token, explicit
+     URL) → same rejection;
+  3. `PUT /repos/…/contents/.github/workflows/claude-linear-dispatch.yml` with
+     the App token → **403 `refusing to allow a GitHub App to create or update
+     workflow … without workflows permission`**.
+  **A dispatched run cannot modify the workflow that dispatches it.** GAM-314's
+  fix is exactly such a change, and so is GAM-327's.
+- 20:47Z — split the delivery so nothing is lost: `fd6720c` carries the script
+  and its tests (pushed, verified), and the wiring commit — which cannot exist
+  on the remote at all, since any push touching that path is rejected — is
+  preserved verbatim as `docs/swarm/active/GAM-314-workflow-wiring.patch`,
+  applyable with `git am`. Filing the credential gap as its own row.
