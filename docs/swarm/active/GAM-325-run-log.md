@@ -274,3 +274,17 @@ verdict, this run died holding that subagent. It is not "still working".
 
   **If this line is the last one in this file, the run died holding this
   subagent.** It is not "still working".
+- 2026-08-11 23:2xZ — **F1 fixed** (lane C, worker attempt 2 of 3), commit
+  `33158a0`, merged. **Independently replayed by the orchestrator** rather than
+  taken on the worker's report — four cases through `evaluateDeclaration` on the
+  merged tree: the ambiguous F1 case is now **RED** naming both issues, and
+  critically **nothing over-corrected** — a single canonical declaration stays
+  GREEN, `GAM-000` stays RED under rule 2, and an infra PR with no declaration
+  stays GREEN. The worker's own mutation (`if (false && …)`) turned exactly its
+  three new tests red and left the other 34 passing, so the new guard is what
+  the tests are measuring.
+- 2026-08-11 23:2xZ — **final six-gate run, `--require-clean`, tree clean at
+  `33158a0`: 5 of 6 PASS.** tsc 0, vite build 0, format:check 0, eslint 0 errors
+  / 377 pre-existing warnings, vitest **89 files / 2358 tests** (baseline 2354,
+  +4 from the F1 tests). Gate 6 SKIPPED — no `src/` file is touched, so no scope
+  is derivable. **Recorded as five of six, not six.**
