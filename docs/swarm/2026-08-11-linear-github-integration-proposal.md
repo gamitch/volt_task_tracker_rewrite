@@ -575,27 +575,27 @@ check.
    exact issue must be present — the #131 mismatch and the rows-1/8 stale-branch
    class both go red at PR time instead of moving the tracker at merge time.
 
-**Correction, measured 2026-08-11 during GAM-325's premise work — the paragraph
-below was wrong on its facts and is struck.** `gh api
-repos/gamitch/volt_task_tracker_rewrite` returns `"private": true,
-"visibility": "private"`, and `branches/main` returns `"protected": false`. This
-repository is **private**, so the "public repos get branch protection free"
-reasoning does not apply to it, and the parenthetical had the situation exactly
-backwards. Protected branches and required status checks on a **private**
-repository need GitHub Pro / Team / Enterprise on the owning account; the
-dispatch token cannot read the owner's plan, so **whether Phase 3 step (a) can
-be performed at all is now an open owner question, not a formality.** Nothing
-in the Phase 2 build depends on the answer — the sync ships in shadow mode and
-writes nothing — but **Phase 3's halt condition is live**: if the declaration
-check cannot be made blocking, cutover must not proceed, and disabling
-`merge → Done` (Phase 3 step b) must not happen either, since that would leave
-the tracker with no closer at all. If the plan does not cover it, the fallback
-worth pricing is GitHub Pro on the owner's account, or making the repository
-public — neither of which this document may decide.
+**Visibility changed twice on 2026-08-11; this paragraph records the sequence
+rather than flip-flopping silently.** GAM-325's premise work measured
+`"private": true` at 17:00 UTC and correctly struck the claim below. The owner
+made the repository **public** at ~17:57 UTC, in response to that finding; a
+re-read at 18:0x returns `"private": false, "visibility": "public"`. So the
+original claim is true again, the premise finding was correct when made, and
+**Phase 3's halt condition is no longer live** — required status checks are free
+on a public repository, so step (a) is performable. Two consequences worth
+keeping: this row's "$0" cost line depends on a setting the owner can change in
+one click, so **re-measure it at Phase 3 rather than trusting this sentence**;
+and the episode is item 28g's lesson applied to this document — a measured fact
+about a mutable setting has a shelf life, and the reproduction command matters
+more than the prose:
 
-~~Because this repo is **public, branch protection — including required status
+```
+gh api repos/gamitch/volt_task_tracker_rewrite --jq '{private,visibility}'
+```
+
+Because this repo is **public, branch protection — including required status
 checks — is free**. (Private repos would need GitHub Pro; not this repo's
-situation.)~~ When it becomes required is a migration-ordering question §8 answers:
+situation — re-verify at Phase 3, per the note above.) When it becomes required is a migration-ordering question §8 answers:
 **before cutover, not after — and verified blocking, as a hard precondition.**
 Findings 1 and 3 of round 3 are coupled: if the check cannot be made required,
 Phase 3 must not proceed, because the replacement's failure direction is a
@@ -762,11 +762,11 @@ nothing and risks a stale value in two places.
 
 | Component | Price |
 | --- | --- |
-| GitHub Actions | **Corrected 2026-08-11 (GAM-325):** this repository is **private**, not public, so Actions minutes are metered against the account's monthly allowance rather than unlimited. The three workflows this adds are small (one ~1-minute run per merged PR, one per PR event, one daily), but "$0 because public" was not a true reason |
+| GitHub Actions (public repo) | $0 — briefly private on 2026-08-11 and public again the same day (§6.4's note); the three workflows this adds are small regardless: one ~1-minute run per merged PR, one per PR event, one daily |
 | Linear webhooks + GraphQL API (free plan lists "API and webhook access"; documented limit 5,000 req/h for personal keys, 2,500/h measured here; the sync adds ~3–5 requests per merged PR) | $0 |
 | Supabase edge function (already deployed; one additive change in Phase 2) | $0 |
 | Slack incoming webhook + GitHub Slack app + Linear Slack app (free plan: 10-app limit — this uses 2–3 — and 90-day history; durable records live in the issues and this repo) | $0 |
-| Branch protection | **Corrected 2026-08-11 (GAM-325):** the repository is private (§6.4's correction). Required status checks on a private repository are a paid-plan feature; the owner's plan is not readable by the dispatch token. **This row is no longer known to be $0**, and Phase 3 step (a) may need GitHub Pro or a visibility change |
+| Branch protection on a public repo | $0 — and re-measure visibility at Phase 3 before relying on it (§6.4) |
 | **Total** | **$0** |
 
 ## 10. Risks and open questions
