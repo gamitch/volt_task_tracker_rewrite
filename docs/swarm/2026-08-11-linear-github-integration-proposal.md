@@ -342,6 +342,13 @@ on:
 concurrency:
   group: linear-sync          # ALL sync runs serialize, in arrival order
   cancel-in-progress: false
+
+# timeout-minutes: 5 on the job, and a per-request timeout in the script.
+# NOT optional decoration (round-6 review, reviewer 2): global FIFO is what
+# makes serialization correct, and it is also what makes a hang SYSTEMIC — one
+# stuck Linear call would otherwise block every subsequent close for GitHub's
+# default 360-minute job timeout while the queue silently fills behind it. The
+# whole sync is a handful of API calls; five minutes is generous.
   queue: max                  # verified against GitHub's concurrency reference:
                               # "Up to 100 jobs or workflow runs can be pending in
                               # the concurrency group"; incompatible only with
@@ -436,10 +443,15 @@ Behaviour table (every row either acts or produces a **named skip** — the
 
 Reverts are deliberately **not** special-cased (round 6 — cutting the earlier
 `REVERT_MERGED` heuristic, a body/branch pattern match that reintroduced exactly
-the infer-from-prose class this document exists to kill): a revert PR carries no
-declaration, lands in `NO_DECLARATION`, no automatic reopen ever happens, the
-human performing the revert already knows which issue it affects, and the sweep
-surfaces any resulting drift.
+the infer-from-prose class this document exists to kill). The honest, narrower
+position (round-6 review correction — the sweep reads merged *declared* PRs, so
+it structurally cannot see an undeclared revert): a revert cannot cause a wrong
+*move* — it carries no declaration, and a hand-copied one would land in the
+precondition check — so the only cost is that the issue stays `Done` while its
+fix is gone, and **the human performing the revert is the only detector**. At
+this repository's size, where the owner performs every merge, that is an
+accepted trade, stated rather than papered over with a sweep credit the sweep
+cannot earn.
 
 Deliberately **not** reproduced: `start → In Progress` and `review → In Review`.
 Items 28c/28e already make the agent perform both moves with read-back, the
@@ -672,6 +684,30 @@ declaring the already-closed throwaway → shadow `DUPLICATE_CLOSE_CLAIM`. Stage
 controls exist because the covering cases may never occur naturally in the window —
 the phase must not depend on luck to terminate.
 
+**The throwaway-PR measurement list** (round-6 review: these obligations were
+scattered across four sections and referenced as a list that did not exist — now
+it does, as the checklist the Phase-2 premise gate executes, in order, before
+anything is built on the answers):
+
+1. The `closed`-event payload: the PR number is resolvable from the event, the
+   API fetch of the PR object succeeds, and `merged` is distinguishable (§10
+   risk 1).
+2. Which workflow-file version a `closed` event runs — this decides whether
+   plain `pull_request` stands or the `pull_request_target` fallback activates
+   (§6.3).
+3. Secrets are present on a same-repo `closed` run and absent on a fork run
+   (§6.3, R6).
+4. Which SHA the gate's check registers against — head or test-merge (§6.4).
+5. Branch protection actually **blocks** on the required gate check, including
+   after a fresh push (§8 Phase 3's halt condition).
+6. The gate always reports a real conclusion — a conditionally-skipped required
+   job counts as Success, so the gate must be shown never to skip (§6.3 caveat).
+7. `timeout-minutes: 5` and the script's per-request timeouts actually bound a
+   hung run — kill one mid-flight once and watch the queue drain (§6.3).
+8. During shadow, opportunistically: whether `skip GAM-nnn` suppresses a
+   branch-name link while the native automations are still on (§7's interim
+   mitigation for the migration window).
+
 ## 9. Cost
 
 | Component | Price |
@@ -842,7 +878,8 @@ new findings, all accepted):**
    as doc-read; the throwaway PR measures it*), loading the shared parser from
    the default branch's ref via the API; the authority split is now stated — the gate is a convenience, the sync
    is the authority, so gate tampering cannot close anything. Which SHA the check
-   lands on stays on the throwaway-PR measurement list rather than being settled
+   lands on stays on the throwaway-PR measurement list (§8 Phase 2, item 4)
+   rather than being settled
    from docs.
 2. Concurrence on serialization, with the caution not to spec `queue: max`
    unverified → confirmed already satisfied: the spec names the one-pending-run
@@ -922,6 +959,19 @@ disposition-vs-edits consistency, vendor facts, design drift):**
    the `REVERT_MERGED` prose-inference row **cut**; and the reconciliation sweep
    **promoted from optional to a Phase-2 deliverable**, because three passages
    already leaned on it.
+
+**Round-6 follow-ups (both reviewers passed round 6; seven post-pass fixes, all
+applied):** reviewer 1 — same-PR stale-claim replays resume the interrupted
+close; the fork-skip row names its recovery path; the `queue: max` guarantees
+are qualified by the 100-pending limit and FIFO-by-wait-start; the alternatives
+table's stale "optional" sweep wording corrected. Reviewer 2 — `timeout-minutes:
+5` plus per-request timeouts added, because global FIFO makes a hung run
+systemic and GitHub's default job timeout is 360 minutes; the revert paragraph's
+sweep credit withdrawn (the sweep reads *declared* PRs and structurally cannot
+see an undeclared revert — the human performing the revert is the only detector,
+stated as the accepted trade); and the throwaway-PR measurement list now exists
+as an executable checklist in §8 rather than a dangling reference over scattered
+prose.
 
 **Drift check, final form (round 6):** the architecture has not moved since
 revision 1 — five decisions: disable the native automations; one explicit closer
