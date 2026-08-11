@@ -168,3 +168,18 @@ Append-only. One line per milestone, committed and pushed as it happens.
 - 21:20Z — verification-log entry written and pushed, recording this **PARTIAL**
   under item 27: the assertion is merged and correct, and inert until GAM-328
   unblocks the wiring.
+- 21:25Z — **issue moved `In Progress → In Review`** (item 28e — never `Done`;
+  the merge closes it, not me), read-back confirms. Full close-out comment
+  posted, leading with the credential blocker rather than the fix.
+- 21:26Z — **the acceptance leg nothing could satisfy is now satisfied.** Round 2
+  measured 0 of 83 issues in `In Review`, so the pass path had only unit-test
+  coverage. Moving this row created the first one, and the script was re-run
+  against it live:
+  `GAM-314 is in In Review — item 28e's finished state. (state: In Review)` →
+  **exit 0**. Both sides of the assertion are now proven against the real API on
+  the same issue, twenty minutes apart: exit 1 while `In Progress`, exit 0 once
+  released.
+- 21:26Z — **run complete.** Delivered: the assertion + 16 tests (merged, gates
+  green, mutation replayed), the wiring as a verified patch, three follow-up
+  rows (GAM-326/327/328), PR #159, this log and a verification-log entry.
+  Not delivered: the workflow job itself — blocked by GAM-328, not by the work.
