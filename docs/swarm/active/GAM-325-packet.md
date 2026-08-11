@@ -224,6 +224,22 @@ Daily, **read-only**, writes nothing to Linear ever.
 
 ## 5. Lane D — the three workflows
 
+### 5.0 Owner actions — three secrets, assigned to nobody by the first draft
+
+No lane can create these, and **every lane can pass its acceptance criteria while
+the system writes nothing and posts nothing**. The design makes absence the safe
+path (`NO_SYNC_KEY`, silent Slack no-op), so nothing breaks — it simply never
+works, quietly. They are listed here so the gap is owner-owned and named rather
+than discovered at cutover.
+
+| Secret | Store | Notes |
+| --- | --- | --- |
+| `LINEAR_SYNC_API_KEY` | GitHub repo secret | **New key**, write-scoped, team `Gamitch`. §6.3's one-key-per-job discipline forbids reusing `LINEAR_API_KEY` (read-only, export) or `LINEAR_DISPATCH_API_KEY` (scoped to the dispatch workflow) |
+| `SLACK_WEBHOOK_URL` | GitHub repo secret | Incoming webhook for `#tracker`; §8a deferred creating it to Phase 2, which is now |
+| `SLACK_WEBHOOK_URL` | **Supabase** secret | Lane E reads `Deno.env.get('SLACK_WEBHOOK_URL')` — a *different* store from the GitHub one, and setting one does not set the other |
+
+Carried to the issue as owner actions alongside checklist items 4, 5 and 8.
+
 ### `.github/workflows/linear-sync.yml`
 
 Copy this trigger and concurrency block **verbatim from §6.3** — every clause has a recorded reason and round-6 cut the alternatives:
@@ -240,7 +256,26 @@ on:
 concurrency:
   group: linear-sync
   cancel-in-progress: false
+  queue: max
 ```
+
+**`queue: max` is not decoration and was missing from this packet's first draft.**
+The default `queue: single` **cancels the pending run** when a newer one joins the
+group — GitHub's own words: *"any existing `pending` job or workflow in the same
+concurrency group will be canceled and the new queued job or workflow will take
+its place."* A discarded pending run here is **not** redundant: distinct PRs need
+distinct duplicate-claim decisions, distinct audit comments and distinct Slack
+notices even when the close they would perform is identical. Two PRs declaring
+one issue plus a third arriving loses the middle one's `DUPLICATE_CLOSE_CLAIM`
+warning — an R6 violation, not a lost optimisation. Round 5 withdrew its earlier
+acceptance of `queue: single` on exactly these grounds.
+
+*Measured by the orchestrator 2026-08-11, not copied from the design:* `queue:`
+is a real third key of the `concurrency` block, shipped in the GitHub Actions
+changelog of **2026-05-07** ("concurrency groups now allow larger queues"),
+values `single` (default) and `max` (up to 100 pending, FIFO by the time each
+entered the group). **`queue: max` with `cancel-in-progress: true` is a workflow
+validation error** — so the two keys above must stay `false` and `max` together.
 
 * **One job.** Not two. Round 6 collapsed the round-3 resolve/sync split.
 * `timeout-minutes: 5`. §6.3 calls this non-optional: global FIFO makes serialization correct and also makes a hang *systemic*.
@@ -248,7 +283,8 @@ concurrency:
 * `actions/checkout@v4` with **`ref:` pinned to the default branch** (§6.3: the script it runs is `main`'s under either trigger).
 * Node pinned to `22.22.2`, matching `ci.yml` and `linear-export.yml`. **No `npm ci`** — the script uses only `node:` builtins and global `fetch`, same as `linear-export.yml`'s stated reason.
 * Env: `LINEAR_SYNC_API_KEY` (**new secret** — do not reuse `LINEAR_API_KEY` or `LINEAR_DISPATCH_API_KEY`; §6.3's one-key-per-job discipline), `SLACK_WEBHOOK_URL`, `GITHUB_TOKEN`, and `SYNC_MODE: shadow` **hardcoded to `shadow` in this PR**.
-* **First step is the `measure` step** described in §0 — it prints the checklist answers and **never prints a secret value**, only booleans.
+* **First step is the `measure` step** described in §0 — it prints the checklist answers and **never prints a secret value**, only booleans. Two of the booleans it must print are `has_linear_key` and `has_slack_url`, so the very first run says out loud which owner secrets are missing (see §5.0).
+* **The replay seam.** Lane D declares the replay input as `workflow_dispatch.inputs.pr_number`; lane B reads `process.env.PR_NUMBER`. Nothing maps one to the other unless this workflow does, so the job must carry `env: { PR_NUMBER: ${{ inputs.pr_number }} }` (empty on the `pull_request` trigger, which is correct — lane B resolves the number from the event there). Without it the replay path silently no-ops, which is this project's named recurring defect shape.
 
 ### `.github/workflows/linear-declaration-gate.yml`
 
@@ -269,6 +305,9 @@ concurrency:
 2. Every workflow parses: `node -e "require('js-yaml')"` is not available, so validate with `python3 -c "import yaml,sys; [yaml.safe_load(open(p)) for p in sys.argv[1:]]"` over the three files, exit 0.
 3. No `${{ secrets.* }}` value is ever `echo`ed; the measure step prints booleans only. Prove with a grep in the worker output.
 4. `SYNC_MODE` is literally `shadow` in the committed file.
+6. `grep -c "queue: max" .github/workflows/linear-sync.yml` returns 1, and the same file does **not** carry `cancel-in-progress: true` (the pair is a validation error).
+7. `grep -n "PR_NUMBER" .github/workflows/linear-sync.yml` shows the `env:` mapping from `inputs.pr_number`, so lane B's replay path is actually reachable.
+8. The measure step prints `has_linear_key` and `has_slack_url`.
 5. Each file carries a header comment explaining *why* — matching the density of `linear-export.yml` and `ci.yml`, which is this repo's standard, not decoration.
 
 ---
@@ -312,7 +351,16 @@ A worker does not self-certify. `checker-reviewer` reviews against these criteri
 ## 8. Least confident decisions (item 19d)
 
 1. **Shipping the build while §8's throwaway-PR checklist is unexecuted, on the argument that shadow mode means "nothing relies on the answers".** *What would make it wrong:* if a `closed` event under plain `pull_request` does not run the workflow at all — or runs a version that cannot see the event — then the shadow window never starts, and this lands three workflows that look live and are inert. The `measure` step is designed to make that visible on the first merge rather than after ten silent ones, but it cannot make it visible *before* merging. A defensible alternative is to stop here and leave the issue in `Todo` until the owner runs the checklist. I judged that worse: the checklist needs the workflow to exist to be run at all, so refusing to build makes the measurement permanently unreachable rather than merely deferred.
-2. **Strict line-1 parsing (no leading blank line, exact `Closes`, single space, case-sensitive).** *What would make it wrong:* if real PR bodies in this repo commonly start with a blank line or `closes`, the gate becomes a nuisance that agents route around, which is exactly the "convention enforced by discipline" failure the document condemns. §6.2 measured 7-of-7 line-1 compliance, so I believe the risk is low — but I measured that from the document, not from the PRs. **The premise checker should re-measure it against PRs #124–#153 directly.**
-3. **Gate rule 4 (red when the canonical form appears on a later line) is mine, not §6.4's.** *What would make it wrong:* it is scope the design did not authorize, and §6.4's rule list was cut back deliberately in round 6 with "do not re-add without the measurement that justifies it". I added it because the silence's failure direction is the silent under-close. Cutting it is cheap and isolated.
+2. ~~**Strict line-1 parsing (no leading blank line, exact `Closes`, single space, case-sensitive).**~~ **DISCHARGED 2026-08-11 — do not spend a gate round on this.** The re-measurement this entry asked for was run live against the GitHub API (not the document) during the proposal's verification pass: all 7 completing work PRs (#126, #127, #131, #133, #136, #143, #153) match `^Closes (GAM-\d+)\b` on line 1; **no BOM and no leading whitespace on any of them** — the first codepoint is `0x43` (`C`) in every case, which is precisely the risk §2 rule 1's strictness runs; #126 and #127 carry the declaration as a line-1 *prefix* followed by prose, which §2 rule 2 permits by design; the other 23 carry no line-1 declaration, including #132, the deliberately-undeclared partial-work class §6.2 names. The strict parse is safe against this repository's real corpus.
+3. **Gate rule 4 (red when the canonical form appears on a later line) is mine, not §6.4's.** *What would make it wrong:* it is scope the design did not authorize, and §6.4's rule list was cut back deliberately in round 6 with "do not re-add without the measurement that justifies it". I added it because the silence's failure direction is the silent under-close. Cutting it is cheap and isolated. **Ruled 2026-08-11 by the design's author: keep it** — §6.4 is silent there, the silence's failure direction is the silent under-close that §6.4's halt condition exists to prevent, and the rule is a refinement of rule 1's intent isolated to one branch of one script, not the kind of scope round 6 cut. The gate need not re-litigate this.
 4. **The 120 s window for identifying the incumbent's merge-coincident transition in shadow mode.** *What would make it wrong:* §8 says `merge → Done` fires ~2 s after merge and an Actions run starts "seconds-to-minutes" later; the window is for matching a *history entry* to the merge timestamp, not for the run's own latency, so it should be safe. But if the owner hand-moves an issue to `Done` within two minutes of a merge, the reconstruction attributes it to the automation and the MATCH/MISMATCH line is wrong. It degrades a comparison, not a write.
 5. **Splitting into five lanes with disjoint files rather than one worker.** *What would make it wrong:* lanes B and C code against lane A's contract as written here rather than as built, so a contract drift lands as a broken import three lanes wide. Mitigated by running lane A first and by the contract in §2 being exact — but if §2 is wrong in any detail, it is wrong in three files.
+
+6. **`queue: max` is load-bearing and only measured today.** *What would make it wrong:* the key shipped 2026-05-07, so it is three months old at time of writing and the runner fleet is the thing that has to honour it. If a queued run is dropped anyway, the sync loses the duplicate-claim decision for the middle PR of any three that contend — a silent under-report, the same failure direction as everything else here. Verified as syntax against GitHub's changelog and workflow-syntax reference, **not** verified as behaviour under real contention; the first three-way contention in the shadow window is the real test, and the reconciliation sweep (D4) is what would surface a run that vanished.
+
+---
+
+## 9. Revision history
+
+* **Draft 1** — 2026-08-11, orchestrator run 1. Five lanes, 5 least-confident entries.
+* **Draft 2** — 2026-08-11, orchestrator run 2. Applied the three defects the design's author raised on the issue before any gate verdict was recorded: **(1)** `queue: max` restored to lane D's concurrency block with the round-5 reasoning and a fresh measurement of the key's existence; **(2)** §5.0 added — the three owner-owned secrets the build needs and no lane can create; **(3)** the `pr_number` → `PR_NUMBER` seam closed in lane D with an acceptance criterion. LCD 2 marked **discharged** by live measurement and LCD 3 **ruled keep**, so the gate spends its round on what is still open. LCD 6 added for `queue: max`.
