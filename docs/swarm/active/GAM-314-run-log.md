@@ -69,3 +69,17 @@ Append-only. One line per milestone, committed and pushed as it happens.
   borrowed: **83 files / 2162 tests at `ccf77b1`**. Verified the gate's own
   citations independently — GAM-312's real title, the 0/0 `In Review`/`Todo`
   census, and `filter.ts:273`'s rule-4 match on the *new* state alone.
+- 20:15Z — **premise gate round 2 verdict: REVISE** — 1 MAJOR, 3 MINOR, no
+  BLOCKER, and the checker **executed the prescription** against the real Linear
+  API rather than reading it (item 26: "a gate that only reads is worth much
+  less than one that runs"). Its prototype produced exactly the five outcomes
+  criteria 1-3 specify, including `not found` distinct from `undetermined`.
+  Every premise re-verified: baseline 83/2162 exact, eslint 0 errors/377
+  warnings exact, `filter.ts:273` verbatim, checkout-takes-default-branch
+  confirmed, `client.mjs` imports nothing, and the new job's `if:` expression
+  parsed and shown not to collapse.
+  The MAJOR is mine and it is fair: the packet said the two item-20 deferrals
+  were **"filed"** and no such rows existed. Filing them now.
+  **Item 19a's two-round cap is reached.** Not looping to a round 3: all four
+  findings are mechanical wording or bookkeeping, none changes the prescription,
+  and the prescription was measured working this round. Applying and dispatching.
