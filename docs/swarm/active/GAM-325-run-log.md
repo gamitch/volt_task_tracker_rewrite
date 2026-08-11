@@ -129,3 +129,23 @@ verdict, this run died holding that subagent. It is not "still working".
   set is undeliverable by push, that the worker commits without pushing, and that
   the orchestrator preserves a `git format-patch`. Gate round 2's condition is
   satisfied and no further gate round is available or needed (item 19a).
+- 2026-08-11 22:17Z — **baseline re-measured on run 4's container after the E9
+  merge: 84 test files / 2178 tests, all passing**, 77.6 s, exit 0. This is
+  **not** run 3's 83 / 2162 — merging `main` brought PR #161's
+  `scripts/linear-assert-released.test.mjs` and its siblings. Every lane's
+  before/after count gates on **84 / 2178**, measured on this tree, not on the
+  inherited figure.
+- 2026-08-11 22:17Z — worktrees created for lanes **A, D, E** under
+  `.claude/worktrees/` on `claude/gam-325-lane-{a,d,e}` off `a2fe6a8` (item 23),
+  `node_modules` symlinked to the shared install. `vite.config.ts` already
+  excludes `**/.claude/**`, so sibling worktrees cannot inflate the count.
+  Lanes **B and C are held** until lane A lands — §1's ordering is binding (F5).
+- 2026-08-11 22:18Z — **lanes A, D and E DISPATCHED concurrently**
+  (`worker-implementer`, all three `run_in_background: false`; this run blocks on
+  all three and does not end its turn while any is in flight). Disjoint Allowed
+  Files, so no two write the same path. Lane D is dispatched **knowing its output
+  cannot be pushed** — it commits in its worktree and the orchestrator preserves
+  the patch (E3).
+
+  **If this line is the last one in this file, the run died holding these three
+  subagents.** It is not "still working".
