@@ -617,12 +617,18 @@ After the third failure, the task must be escalated to boss-arbiter.
        | Link commits to issues with magic words | workspace → GitHub integration | **OFF** — keeps the item-28f trailer inert (see 28f) |
        | On git branch copy → started status | account → Code & reviews | **OFF** (was on; the likely cause of GAM-304's otherwise unexplained `Backlog → In Progress` at 02:23Z on 2026-08-10, which had no PR and no attachment) |
        | On open in coding tool → started status | account → Code & reviews | **ON**, deliberately — a stronger signal of intent than copying a branch name |
-       | **Auto-close stale issues** | team → Auto-close automations | **ON — 6 months → `Canceled`** |
+       | Auto-close stale issues | team → Auto-close automations | **OFF** — was ON at 6 months → `Canceled`; disabled by the owner 2026-08-11 |
+       | Auto-close parent issues / sub-issues | team → Auto-close automations | OFF (both) |
 
-       **That last row is a machine that can close a `gate/human` issue**, which
-       the label exists to forbid. `GAM-80`, `GAM-75` and `GAM-62` are the live
-       exposure. It is recorded here rather than changed, because changing it is
-       the owner's call — but no rule in this constitution anticipated it.
+       **Why that last one mattered: it was a machine able to close a
+       `gate/human` issue**, which the label exists to forbid — and it would
+       have fired on age alone, with no PR, no merge and no human act. `GAM-80`
+       (Vercel go-live), `GAM-75` (MIG-06 cutover) and `GAM-62` (production
+       email) were the live exposure: long-lived owner-gated rows are exactly
+       the shape a staleness rule cancels. Found only because the owner
+       screenshotted the settings page while disabling something else.
+       **Generalise it: this workspace's state-writers are not enumerable from
+       the repo, and three of the four found so far were found by accident.**
 
        **Reproduce this rather than trust it.** A prose enumeration goes stale
        silently the moment the owner changes a setting, which is the failure
