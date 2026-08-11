@@ -38,3 +38,6 @@ Append-only. One line per milestone, committed and pushed as it happens.
   YAML red" only in part: the YAML stays untestable, but the **decision** it
   calls can live in a tested pure function. That is what makes STANDARD's
   "orchestrator replays the mutation" satisfiable here.
+- 19:38Z — **packet written**: `docs/swarm/active/GAM-314-packet.md`. Three
+  allowed files (script, its test, one workflow step), 7 acceptance criteria
+  including a named mutation, and a 5-entry least-confident list for the gate.
