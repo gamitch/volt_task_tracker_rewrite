@@ -75,6 +75,11 @@
 import { SIGNATURE_HEADER, isFresh, verifySignature } from './signature.ts';
 import { decideDispatch } from './filter.ts';
 import { fireRepositoryDispatch } from './dispatch.ts';
+// D5 (GAM-325 §6): posts every `dispatched: true` and every named skip
+// reason to Slack, strictly AFTER the decision below. See notify.ts's
+// header for the four rules this must never violate. Additive only ---
+// nothing above this line changes.
+import { scheduleDispatchNotification } from './notify.ts';
 
 const DEFAULT_EVENT_TYPE = 'linear-issue-dispatch';
 
@@ -90,7 +95,14 @@ function errorResponse(status: number, code: string, message: string): Response 
   return jsonResponse(status, { error: { code, message } });
 }
 
-Deno.serve(async (req: Request) => {
+// Factored out of the `Deno.serve(...)` call below and exported so
+// notify.test.ts can drive it directly with a fabricated `Request` and
+// assert on the returned `Response` --- proving the notifier's own success
+// or failure never changes this function's status code or body (GAM-325
+// §6 acceptance criterion 2). Behaviour is byte-for-byte identical to the
+// previous inline handler; this is purely a name and an export, not a
+// logic change.
+export async function handleRequest(req: Request): Promise<Response> {
   if (req.method !== 'POST') {
     return errorResponse(405, 'METHOD_NOT_ALLOWED', 'Linear webhooks are delivered by POST.');
   }
@@ -154,6 +166,9 @@ Deno.serve(async (req: Request) => {
     // delivery. The reason is in the body AND the log, so this is a visible
     // no-op rather than a silent one.
     console.log(`linear-dispatch: no dispatch [${decision.reason}] ${decision.detail}`);
+    // Rides after the decision, never before it, never in place of it ---
+    // and is scheduled, not awaited, so it cannot change this response.
+    scheduleDispatchNotification({ dispatched: false, reason: decision.reason, detail: decision.detail });
     return jsonResponse(200, { dispatched: false, reason: decision.reason, detail: decision.detail });
   }
 
@@ -179,10 +194,32 @@ Deno.serve(async (req: Request) => {
   console.log(
     `linear-dispatch: dispatched ${clientPayload.identifier} (tier/${clientPayload.tier}) as "${eventType}".`,
   );
+  // Rides after the decision AND after GitHub confirmed the dispatch,
+  // never before either --- and is scheduled, not awaited, so it cannot
+  // change this response.
+  scheduleDispatchNotification({
+    dispatched: true,
+    identifier: clientPayload.identifier,
+    tier: clientPayload.tier,
+    eventType,
+  });
   return jsonResponse(200, {
     dispatched: true,
     identifier: clientPayload.identifier,
     tier: clientPayload.tier,
     eventType,
   });
-});
+}
+
+// `if (import.meta.main)` --- the same guard `checkin-token/index.ts` uses
+// and documents (Deno's own idiom for exactly this): `Deno.serve(...)` at
+// unguarded top level would try to bind a network listener the moment ANY
+// test imports this module for its exports, which trips `deno test`'s
+// resource sanitizer under the `--allow-env --allow-read` permissions this
+// suite runs with (no `--allow-net`). Guarding it changes nothing about
+// production behaviour --- `import.meta.main` is true exactly when this
+// file is the one Deno was told to run, which is how the Supabase Edge
+// Runtime invokes it.
+if (import.meta.main) {
+  Deno.serve(handleRequest);
+}
