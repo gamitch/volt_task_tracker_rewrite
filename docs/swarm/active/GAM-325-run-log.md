@@ -42,3 +42,24 @@ Append-only. One line per milestone, pushed immediately.
 
 - 2026-08-11 — **premise gate round 1 VERDICT: REVISE** (`docs/swarm/active/GAM-325-gate-round1.md`). Run by the session that authored the design, after two dispatched runs each ended with the verdict unrecorded. Five findings, all mechanical: **F1** the `measure` step is invisible under a `branch:"main"` Slack filter, because a `pull_request`-triggered run reports on the PR's head branch — filter by workflow *name* instead, and lane D's `name:` keys become a contract with that owner action; **F2** the shadow exit criterion inverts if `merge → Done` is disabled during the window, so the window must assert the incumbent is live and emit `INCUMBENT_DISABLED` rather than a false `MISMATCH`; **F3** nothing proves the three workflows parse and run, and a rejected `queue: max` would land three inert files; **F4** lane B's `issue.history` field names are single-source and unverifiable from this session — probe first, build the fixture from the printed response; **F5** lane ordering is advice, not a constraint. LCD 2 stays discharged, LCD 3 stays ruled keep, LCD 4 stands. Every repo-fact citation in draft 2 was re-verified against the branch and all six hold.
 - 2026-08-11 — **checker packet written** (`GAM-325-checker-packet.md`): severity anchored on failure *direction* (three BLOCKER classes — a write escaping shadow mode, a refusal becoming silence, a declaration read from anywhere but body line 1), the Allowed-Files and out-of-scope boundary checks, per-lane traps carrying gate findings F1–F4 forward into review, and an explicit "do not re-litigate" list so the checker does not re-spend the gate's settled rounds.
+
+## Run 4 — 2026-08-11 (run 3 was killed at the moment gate round 2 was dispatched)
+
+**Read the last line of this file first.** If it is a dispatch with no matching
+verdict, this run died holding that subagent. It is not "still working".
+
+- 2026-08-11 21:57Z — **re-claimed**: `GAM-325` was back in `Todo`; moved
+  `Todo → In Progress` via `issueUpdate` (`success: true`) and **read back** as
+  `In Progress` at `updatedAt 2026-08-11T21:57:33.928Z`, before opening any file
+  other than `AGENTS.md` and `constitution.md`. Item 28c satisfied.
+- 2026-08-11 21:57Z — this run first created a second branch
+  (`claude/gam-325-explicit-linear-closer`) before discovering run 3's branch.
+  It has been **deleted local and remote**; work continues on
+  `claude/gam-325-linear-closer` at `22cfc29`. Item 28f consequence 2 — keep the
+  linked set to one PR — is why, and no PR was ever opened on the stray.
+- 2026-08-11 — **state inherited from run 3**: packet **draft 3** written (round
+  1's five findings applied verbatim), checker packet written, F4's history shape
+  measured live, baseline 83 files / 2162 tests measured three times. Premise
+  gate **round 2 dispatched with no verdict recorded** — the third time this
+  issue has lost a gate verdict to a backgrounded subagent. Under item 19 no
+  worker may start, so round 2 is re-run here, **blocking**, not assumed.
