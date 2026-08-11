@@ -47,6 +47,37 @@ Constitution **item 28** is binding and its order matters:
    (constitution item 28f quotes the full word list). Add the trailer
    `Linear-Issue: GAM-nnn (Tnnn)` for the git-side record.
 
+## Two walls a dispatched run hits, and what to do about each
+
+Recorded 2026-08-11 from `GAM-328`, both measured rather than assumed. Neither
+is a bug to route around: each is a boundary doing real work.
+
+**1. You cannot push `.github/workflows/**`.** Both credentials a dispatched run
+holds are refused by GitHub — the PAT for want of the `workflow` scope, the
+`claude[bot]` App for want of the Workflows permission. This is deliberate: it
+is the only thing stopping an autonomous run from rewriting the workflow that
+constrains it, including its own `--allowedTools`, `permissions:` block and turn
+caps. **Do not attempt another channel.**
+
+*Check for `.github/workflows/**` in your packet's Allowed Files at packet time,
+not at push time.* `GAM-314`'s run spent two premise-gate rounds and a worker
+before discovering the wall at its integration boundary. When a change needs a
+workflow file: write it, verify it, then **preserve it as an applyable patch**
+(`git format-patch`) under `docs/swarm/active/`, say so in the PR body leading
+with the undeliverable half rather than burying it, and file the handover. An
+owner or a scoped session applies it as a normal PR so CI still runs on it —
+proven end to end by PRs #159/#160.
+
+**2. Never end your turn with a subagent in flight.** Dispatch every subagent
+with `run_in_background: false` and wait for its result. Backgrounded is the
+default, and when your turn ends the process exits and takes the subagent with
+it — while the SDK returns normally, so the job goes green and the work is
+lost. **Five runs have died this way**, none near `--max-turns` or
+`timeout-minutes`; the one run that completed a full chain differed only in
+passing that parameter. The `assert-released` job now fails any run that leaves
+its issue in `In Progress`, so this failure is loud rather than silent — but the
+job detects it, it does not prevent it. You do.
+
 Labels carry what custom fields used to: `tier/*` (item 26 process tier),
 `area/w1`…`w10` (workflow surface), `gate/human` (no machine may close it),
 `gate/unverified` (premise measured as false or partial — re-measure first).

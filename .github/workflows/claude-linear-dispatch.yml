@@ -165,6 +165,40 @@ jobs:
             that `AGENTS.md` is written for Codex and names Codex models — the
             constitution is the runtime-neutral version and outranks it.
 
+            **EVERY subagent you dispatch MUST be dispatched with
+            `run_in_background: false`, and you must NEVER end your turn with
+            one still in flight.** This is the single most load-bearing
+            instruction in this prompt, and it is measured, not stylistic.
+
+            Subagents run in the background BY DEFAULT. When your turn ends,
+            this process exits and takes every backgrounded subagent with it —
+            and the SDK returns normally, so the job goes GREEN while the work
+            you were waiting on never happened. Five runs have died exactly
+            this way: 31354278407 (round-2 gate), 31385764526 (checker, 54
+            turns of 300 and 59 minutes of 120), 31514339272, 31523233268 and
+            31527801235 — the last three all on GAM-325, all at the moment a
+            `checker-premise` was dispatched. **None was anywhere near
+            `--max-turns` or `timeout-minutes`.** More room would not have
+            saved any of them; blocking on the subagent would have saved all
+            five.
+
+            The one run that survived a full chain (31527801235's sibling on
+            GAM-314) did exactly one thing differently: it passed
+            `run_in_background: false` and waited. That is the whole fix.
+
+            So: dispatch, WAIT for the result, record the verdict in the run
+            log, and only then continue. If you catch yourself writing "is
+            running in the background", "I'll check on it", or any sentence in
+            the present continuous about work you have not seen finish — stop.
+            That sentence is the bug, and the `assert-released` job below will
+            turn your green run red for it.
+
+            When you dispatch a subagent, write the run-log line BEFORE you
+            wait, and word it so it indicts you if you vanish: *"if this line
+            is the last one in this file, the run died holding this subagent."*
+            One sentence, and the next reader knows exactly what happened
+            instead of guessing.
+
             Stop and leave the issue in `Todo` if the premise does not hold
             when you measure it. A correct refusal to proceed, recorded on the
             issue, is a better outcome than a confident change built on a
@@ -187,6 +221,13 @@ jobs:
             dispatched; each subagent's verdict; gates run; PR opened. Push
             the log even when nothing else is ready to push — a branch with
             only a log on it is a good outcome compared to silence.
+
+            **A dispatched subagent and its verdict are two separate
+            milestones, and the gap between them is where five runs have
+            died.** Push the dispatch line before you wait; push the verdict
+            line the moment it returns. A log whose last entry is a dispatch
+            with no verdict is the signature of this failure — write it so
+            that signature is unmistakable (see the delegation rule above).
 
             **Commit and push real work at every boundary too**, not once at
             the end. A packet, a verdict, a worker's diff: push each as it
