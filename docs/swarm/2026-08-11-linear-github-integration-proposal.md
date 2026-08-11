@@ -341,15 +341,26 @@ on:
 #             concurrency:
 #               group: linear-sync-${{ needs.resolve.outputs.identifier || format('pr-{0}', github.event.pull_request.number) }}
 #               cancel-in-progress: false
+#               queue: max
 # so two PRs declaring the SAME issue serialize on it, while unrelated merges run
-# freely. Known GitHub behaviour to design around: a concurrency group keeps only
-# ONE pending run — a replaced pending run is discarded. Acceptable here because a
-# discarded same-issue run is redundant by idempotency (the survivor performs the
-# identical close, and the sweep backstops the pathological case); it is named so
-# nobody reads the discard as a bug later. Global serialization (one fixed group)
-# is the simpler fallback if the needs-expression proves fragile — at this repo's
-# merge cadence it costs nothing.
+# freely. `queue: max` — verified against GitHub's concurrency reference this
+# session ("Up to 100 jobs or workflow runs can be pending in the concurrency
+# group"; incompatible only with cancel-in-progress: TRUE, which this is not) —
+# replaces round 4's acceptance of the default single-slot queue, WITHDRAWN in
+# round 5: a discarded pending run is not redundant, because distinct PRs need
+# distinct duplicate-claim decisions, audit records, and Slack notices even when
+# the close they would perform is identical.
 ```
+
+Two queue-independent guards travel with this (round-5 reviews). **Anomaly
+detection lives in `resolve`, not `sync`:** the duplicate-claim check — one Linear
+read of the issue's state and latest claim comment — runs in the resolve job,
+which sits outside any per-issue group and always runs, so no queue behaviour can
+ever swallow a `DUPLICATE_CLOSE_CLAIM` warning. And **a claim is only deferred to
+when its close completed:** a claim comment naming a PR whose run never drove the
+issue to `Done` is reported as ⚠ `STALE_CLAIM` naming that PR and run — a human
+replays it — never silently treated as another run's win. R6 stays true under
+every queue path, including a failed run ahead of queued survivors.
 
 **Why `pull_request_target`, stated carefully.** Three reasons, two of them from the
 post-merge reviews. (1) *The payload cannot be trusted:* GitHub's events reference
@@ -372,13 +383,24 @@ performed is correct behaviour.
 
 **That no-execution rule is checked, not trusted** (round-4 review — a stated
 invariant guarding a write-scoped key is exactly the discipline-enforced
-convention this document says always fails). Two mechanical guards: the sync's
-checkout step pins `ref:` to the repository's default branch explicitly rather
-than relying on the trigger's default, and a workflow-lint assertion in CI fails
-any PR that introduces a `pull_request.head` reference into a checkout or run
-step of a `pull_request_target` workflow — so the future edit that would quietly
-convert this into a secret-exfiltration path goes red at PR time instead of
-shipping.
+convention this document says always fails). Round 5 strengthened the check from
+a pattern blacklist to an **allowlist policy**, because `pull_request.head` is
+only one of the ingress shapes GitHub's own `pull_request_target` security
+guidance names — `github.head_ref`, `refs/pull/…/merge` refs, `git fetch` or
+`gh pr checkout` in run steps, artifact downloads, and fork-repository inputs
+all reach PR-controlled content too. The privileged workflow is therefore
+**static by policy**: its only permitted steps are a checkout pinned to the
+repository's default branch and the script invocation, and the CI
+workflow-policy check fails any PR that adds *any other step shape* to a
+`pull_request_target` workflow, rather than trying to enumerate bad ones.
+
+Stated once, honestly (round-5 review): **this guard chain terminates in review,
+not in mechanism.** The policy check is itself repo code a PR could edit — as is
+the gate. What bounds that regress is visibility, not structure: gutting a check
+is loud in a diff, a required check that goes missing *blocks* a merge rather
+than passing it, and the sync re-validates everything at merge time with `main`'s
+code regardless. The document claims structural guards where they are structural
+and says "the owner reads the diff" where that is the real backstop.
 
 Why Actions rather than a GitHub webhook → Supabase relay (the mirror of
 `linear-dispatch`): the inbound relay exists because **Linear cannot send custom
@@ -430,9 +452,11 @@ defect and GAM-323's, and could declare one — GAM-323 sits in `Backlog` today,
 defect fixed), the PR may carry an **`Also-fixes: GAM-nnn`** body line. The sync
 reads it, **never closes from it**, and Slack-flags it as a hand-close owed. Two
 round-4 corrections to this line's own hygiene: the gate **existence-validates**
-every `Also-fixes:` identifier against Linear (read-only key; skipped with a
-warning when secrets are absent), so a typo'd identifier goes red at PR time
-instead of nagging forever about a row that does not exist; and the sweep's
+every `Also-fixes:` identifier against Linear (read-only key; advisory only on
+runs without secrets, and **re-validated authoritatively by the sync at merge
+time**, which always holds its key — round-5 correction, so a fork PR's typo
+still cannot become a phantom reminder), so a typo'd identifier goes red at PR
+time instead of nagging forever about a row that does not exist; and the sweep's
 reminder is **bounded** — it re-flags a still-open `Also-fixes:` row at most
 three times, then parks it in a weekly digest line until the row moves, is
 archived, or is canceled. The acknowledge-and-stop gesture is deliberately a real
@@ -493,16 +517,29 @@ among completing work PRs — and it still gets a gate, because "enforced by age
 discipline" is this catalogue's recurring cause. A new workflow on plain
 **`pull_request`** (types opened/edited/synchronize/ready_for_review) — simplified
 in round 4 from the round-3 `pull_request_target` + hand-published-check design:
-on `pull_request` the check attaches to the PR **head SHA** naturally, which is
-where branch protection looks, so it can be marked required directly. The gate is
-metadata-only — no checkout, no secrets needed for the syntax half — and loads
-**the same parse as the sync** from the default branch's ref via one raw-file API
-fetch, so the judging code is still not the PR's own. And the deeper reason this
-simplification is safe (round-4 review): **the gate is a convenience; the sync is
-the authority.** Even a PR that somehow tampered its way past the gate closes
-nothing — the sync re-validates at merge time with `main`'s parser and refuses,
-loudly. Which SHA the check actually lands on is measured, not doc-read: it is on
-the Phase-2 throwaway-PR checklist:
+on `pull_request` the check registers where branch protection can evaluate it, so
+it can be marked required directly. (Stated no more precisely than that on
+purpose — round-5 correction: a plain `pull_request` run normally executes
+against the *test-merge* commit, and whether the check registers against the head
+or the merge SHA is exactly what the Phase-2 throwaway PR measures; the earlier
+"attaches to the head SHA naturally" assertion is withdrawn as doc-read rather
+than measured.) The gate is metadata-only — no checkout, no secrets needed for
+the syntax half — and loads **the same parse as the sync** from the default
+branch's ref via one raw-file API fetch, so the parser is not the PR's own. And
+the deeper reason this simplification is safe (round-4 review): **the gate is a
+convenience; the sync is the authority.** Even a PR that somehow tampered its way
+past the gate closes nothing — the sync re-validates at merge time with `main`'s
+parser and refuses, loudly.
+
+The trade is stated on both sides (round-5 review): plain `pull_request` means
+the gate *workflow* runs from the PR's merge ref, so a PR can edit the gate that
+judges it — and while tampering cannot close anything, it **can** let an
+undeclared PR merge, landing in the silent-under-close direction finding 3
+guards. The mitigations are real but not structural: a gutted check is visible in
+the diff, a required check that goes missing blocks the merge rather than
+passing it, and the sweep names any merged-but-open declared work. This is the
+same "terminates in review" honesty §6.3 now states for the workflow-policy
+check.
 
 1. If line 1 pairs a magic word with an identifier, it must be the canonical
    anchored declaration — `Closes GAM-nnn` opening the line, exactly one identifier
@@ -602,7 +639,7 @@ All free-tier:
 | --- | --- | --- | --- |
 | 0 | Owner, ~5 min | **First**: read the workspace **commit-linking toggle** in the GitHub integration settings and record its state — first because of the trailer collision (§2: `Linear-Issue:` contains the closing magic word `linear issue`); if it is on, turn it off before anything else. Then in **Settings → Team → Workflows & automations → Pull request and commit automations**: disable `start → In Progress` and `review → In Review`. Then the personal "move issue to started status on branch copy" automation (Settings → Account → Code & reviews — candidate cause of §4.1 row 11). Removes the backwards-move/reopen class (rows 5, 6, 8, 10) **today**, before any code. Same day: re-run the `gitAutomationStates` query and update item 28g's enumeration (owner-authorized edit path — its prose goes stale the moment settings change, by its own warning). One carried-forward caveat from the mechanism comparison (LCD 3): this assumes nothing machine-reads `In Progress` as an automation-set signal — not exhaustively checked across `.github/workflows/`; the premise gate re-checks it | re-enabling the toggles |
 | 1 | Owner, 15 min | Create the Slack channel + incoming webhook; `/github subscribe` the repo's workflows; enable Linear's per-team Slack notifications (§6.6 item 3 — non-optional through Phase 3); add `SLACK_WEBHOOK_URL` secret (GitHub) and Supabase secret | deleting the webhook |
-| 2 | HEAVY row + premise gate | Build `scripts/linear-sync.mjs` + workflow (`pull_request_target`, per-PR concurrency, claim-then-mutate ordering) + CI declaration check + **the edge-function Slack notification** (§6.6 item 1), with the sync in **shadow mode** — see below. The premise gate's live throwaway-PR test covers §10 risk 1 (payload, number resolution, API fetch, secrets) before anything relies on it. `merge → Done` stays on during shadow | deleting the workflow |
+| 2 | HEAVY row + premise gate | Build `scripts/linear-sync.mjs` + workflow (`pull_request_target`, per-issue queued concurrency via the resolve job, claim-then-mutate ordering) + CI declaration check + **the edge-function Slack notification** (§6.6 item 1), with the sync in **shadow mode** — see below. The premise gate's live throwaway-PR test covers §10 risk 1 (payload, number resolution, API fetch, secrets) before anything relies on it. `merge → Done` stays on during shadow | deleting the workflow |
 | 3 | Owner, ~5 min + flag flip | **In this order** (round-3 review, finding 3 — enforcement must precede cutover, or a missing declaration leaves completed work open with only an info-level skip): (a) mark the declaration check **required** under branch protection and **verify it blocks** (the Phase-2 throwaway PR already measures which SHA the check attaches to — round 4); if it cannot be made blocking, **halt here** — findings 1 and 3 are coupled and cutover must not proceed on an optional gate; (b) disable `merge → Done`; (c) set the sync live (`SYNC_MODE=live`). Item 28f, item 28g (again), AGENTS.md, and WORKFLOWS.md rule 2 get their dated-mechanism updates — including §6.5's surviving one-line text rule — via the authorized channel (owner-directed edit or `boss-architect`, per Authority Boundaries) | unmarking the check, re-enabling the automation, re-flagging shadow |
 | 4 | Owner's option | Close GAM-322 and GAM-323 with pointers here; any remaining niceties (e.g. widening Slack routing) | — |
 
@@ -808,3 +845,42 @@ new findings, all accepted):**
    enforced → the sync's checkout pins `ref:` to the default branch explicitly,
    and a CI workflow-lint fails any PR introducing `pull_request.head`
    references into `pull_request_target` workflows.
+
+**Round 5 (both reviewers on the round-3+4 revision; reviewer 1 passing with two
+additions, reviewer 2 FAIL/MAJOR with two majors and three minors — all seven
+points accepted):**
+1. Discarded pending runs are not redundant (both reviewers, from different
+   angles: distinct PRs need distinct decisions/audits/notices; the
+   two-pending case swallows a `DUPLICATE_CLOSE_CLAIM`) → round 4's acceptance
+   **withdrawn**; the sync job adopts `queue: max` — verified against GitHub's
+   concurrency reference this session, discharging reviewer 1's earlier caution
+   the honest way — and anomaly detection moves into the always-running
+   `resolve` job so no queue behaviour can swallow a warning. A claim whose
+   close never completed is now ⚠ `STALE_CLAIM`, never silently deferred to.
+2. The workflow-lint enforced too little (`pull_request.head` is one ingress
+   shape of many in GitHub's `pull_request_target` security guidance) → replaced
+   with an allowlist policy: the privileged workflow is static, and any
+   non-allowlisted step shape fails CI.
+3. The gate trade-off was stated on one side (reviewer 1) → §6.4 now states
+   that a PR can edit the gate that judges it, that tampering cannot close but
+   can produce the silent under-close, and that this chain — like the policy
+   check — terminates in review, not mechanism.
+4. (Minor) "attaches to the head SHA naturally" was doc-read overclaim →
+   withdrawn; the test-merge/head question is explicitly what the throwaway PR
+   measures.
+5. (Minor) Phase 2 still said "per-PR concurrency" → corrected to per-issue
+   queued concurrency.
+6. (Minor) `Also-fixes:` validation silently skipped without secrets → the sync
+   re-validates authoritatively at merge; gate-side validation is advisory on
+   secretless runs.
+
+**Drift check, because the owner asked (round 5):** the architecture has not
+moved since revision 1 — five decisions: disable the native automations; one
+explicit closer on the merge event; one declaration channel, gated; every
+refusal named and Slack-notified; free tooling only. Five review rounds changed
+**none of them**. What the rounds produced is implementation constraints for the
+Phase 2 packet (trigger choice, queue semantics, write ordering, validation
+scope, policy checks) plus one genuine simplification (the gate trigger). The
+constraints are the cost of making a small design safe rather than making a safe
+design big; if Phase 2's builder finds any of them over-specified against the
+real APIs, the premise gate is the place to say so.
