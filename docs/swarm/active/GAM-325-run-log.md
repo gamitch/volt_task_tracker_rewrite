@@ -19,3 +19,8 @@ Append-only. One line per milestone, pushed immediately.
 - 2026-08-11 — **premise gate round 1 dispatched** (`checker-premise`, opus, item 19 + 19a). Told to attack the least-confident list first and to *re-measure* LCD 2 (the 7-of-7 line-1 compliance claim) against real PRs #124–#153 rather than trusting §6.2.
 - 2026-08-11 — proposal corrected by the orchestrator (owner of `docs/swarm/**`) for measurement 3: §6.4's "this repo is public" paragraph struck and replaced with the measured finding; §9's two "$0 because public" cost rows corrected. Phase 3 step (a) is now an open owner question.
 - 2026-08-11 — premise findings posted to GAM-325 as a comment (`#comment-6dda6816`): the private-repo correction with the owner decision it forces before Phase 3, the blocked-checklist reasoning, and the three premises that hold.
+
+## Run 2 — 2026-08-11 (the first run was killed with the gate verdict unrecorded)
+
+- 2026-08-11 — **re-claimed**: `GAM-325` was back in `Todo`; moved `Todo → In Progress` via `issueUpdate` and **read back** as `In Progress` before opening any file other than `AGENTS.md`. Labels `other, heavy`; tier declared, so no tiering judgement owed (item 28d).
+- 2026-08-11 — resumed on the existing branch `claude/gam-325-linear-closer` at `7d5d8b1`. Prior run left: run log, packet (5 lanes), proposal correction + its own reversal, and three Linear comments. **Premise gate round 1 was dispatched with no verdict recorded** — per item 19 no worker may start, so round 1 is re-run rather than assumed.
