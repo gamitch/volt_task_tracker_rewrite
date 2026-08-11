@@ -149,3 +149,33 @@ verdict, this run died holding that subagent. It is not "still working".
 
   **If this line is the last one in this file, the run died holding these three
   subagents.** It is not "still working".
+- 2026-08-11 22:33Z — **lanes A, D and E all RETURNED. Commits verified to exist
+  in the committed blob (item 21), not merely reported:**
+  * **Lane A** `2a47135` — `declaration.mjs` + `slack.mjs` and their tests, 572
+    lines. Suite **84/2178 → 86/2244** (+2 files, +66 tests). Mutation:
+    `GAM-000` → `GAM-0` in the PLACEHOLDER check, 2 tests red with real output,
+    restored green. Flags two genuine under-specifications in §2 it implemented
+    as written rather than silently improving: rule 3's example `closes gam-325`
+    can only yield `HALF_DECLARATION` if the *identifier* half of the near-miss
+    check is case-**in**sensitive while `CANONICAL` stays case-sensitive, and
+    `detail`'s shape is unspecified. Both go to the checker.
+  * **Lane D** `38856b0` — three workflows, 390 lines, **never pushed** and
+    correctly so. All nine criteria pass locally. Discrimination proof: an
+    over-indent in `linear-reconcile.yml` produced a real
+    `yaml.scanner.ScannerError`, exit 1, restored to match the committed blob.
+    **Two findings worth keeping:** (1) the `measure` step must be *literally*
+    first and its own first draft put checkout ahead of it — caught and fixed in
+    its second commit; (2) **criteria 1 and 6 are literal greps over the whole
+    file, so the packet's own header-comment-density requirement collides with
+    them** — explanatory prose mentioning `queue: max` or `if:` fails a criterion
+    the YAML satisfies. That is a defect in how the packet wrote its criteria,
+    not in the work.
+  * **Lane E** `820d518` — notifier + tests + additive `index.ts` edit.
+    **Deno was genuinely absent and the worker installed it** (2.9.5) rather than
+    waiving E8's criterion: `deno test` **45 → 51 passed, exit 0**. Vitest
+    unmoved at 84/2178, confirming `supabase/functions/**` stays out of
+    discovery. Mutation: removed the absent-webhook early return, real red
+    `fetch should never have been attempted`, restored green. **Declares one
+    deviation rather than hiding it** — `index.ts` needed a `handleRequest`
+    export + `import.meta.main` guard for criterion 2's test to be writable at
+    all, with exact precedent in `checkin-token/index.ts`. Checker rules on it.
