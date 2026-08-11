@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-11T23:18:55.976Z from team `Gamitch`.
+Exported 2026-08-11T23:28:27.266Z from team `Gamitch`.
 
-- **328** issues (242 archived)
-- **48** not yet completed or cancelled
+- **333** issues (242 archived)
+- **51** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -59,9 +59,12 @@ Exported 2026-08-11T23:18:55.976Z from team `Gamitch`.
 | [GAM-322](https://linear.app/gamitch/issue/GAM-322/three-unscoped-linear-git-automations-are-live-where-item-28g-asked) | — | Backlog | gate/human provenance/premise-gate tier/unreviewed | Three unscoped Linear git automations are live where item 28g asked for one — `start → In Progress` is the rule that moved GAM-304 backwards |
 | [GAM-323](https://linear.app/gamitch/issue/GAM-323/agentsmd-tells-every-agent-a-branch-name-identifier-does-not-close-its) | — | Backlog | provenance/other tier/standard | AGENTS.md tells every agent a branch-name identifier does not close its issue — measured, it closes |
 | [GAM-324](https://linear.app/gamitch/issue/GAM-324/three-documents-state-the-protected-files-rule-and-all-three-disagree) | — | Backlog | provenance/other tier/unreviewed | Three documents state the protected-files rule and all three disagree — on who is bound, who owns, and which paths |
-| [GAM-325](https://linear.app/gamitch/issue/GAM-325/build-the-explicit-linear-closer-pr-merge-declares-its-issue-one-sync) | — | In Progress | provenance/other tier/heavy | Build the explicit Linear closer: PR merge declares its issue, one sync writes the state, every refusal is named — replacing the last semantic automation |
-| [GAM-326](https://linear.app/gamitch/issue/GAM-326/an-unfinished-dispatch-run-can-turn-its-own-job-green-by-moving-the) | — | Backlog | provenance/other tier/standard | An unfinished dispatch run can turn its own job green by moving the issue to `Todo` — which re-dispatches it four seconds later |
 | [GAM-327](https://linear.app/gamitch/issue/GAM-327/nothing-executes-the-three-github-workflow-files-so-a-yaml-mistake-in) | — | Backlog | provenance/other tier/fast | Nothing executes the three GitHub workflow files, so a YAML mistake in the dispatch loop ships and is found by a run that does not happen |
+| [GAM-329](https://linear.app/gamitch/issue/GAM-329/the-linear-declaration-gate-cannot-validate-also-fixes-or-fall-back) | — | Backlog | tier/fast | The Linear declaration gate cannot validate `Also-fixes:` or fall back locally — its job has no checkout |
+| [GAM-330](https://linear.app/gamitch/issue/GAM-330/linear-api-calls-have-no-timeout-scriptslinearclientmjs-sets-no) | — | Backlog | tier/fast | Linear API calls have no timeout — `scripts/linear/client.mjs` sets no `AbortSignal` |
+| [GAM-331](https://linear.app/gamitch/issue/GAM-331/verify-importmetamain-is-true-in-the-supabase-edge-runtime-after-the) | — | Backlog | gate/unverified tier/fast | Verify `import.meta.main` is true in the Supabase Edge Runtime after the next `linear-dispatch` deploy |
+| [GAM-332](https://linear.app/gamitch/issue/GAM-332/the-reconciliation-sweep-drops-merged-prs-whose-declaration-failed-to) | — | Backlog | tier/fast | The reconciliation sweep drops merged PRs whose declaration failed to parse — the cases most likely to be wrong |
+| [GAM-333](https://linear.app/gamitch/issue/GAM-333/a-dispatched-run-can-push-a-branch-but-cannot-open-a-pr-agentsmd) | — | Backlog | tier/fast | A dispatched run can push a branch but cannot open a PR — `AGENTS.md` records two walls and there are three |
 
 ## Closed and cancelled
 
@@ -346,6 +349,8 @@ Exported 2026-08-11T23:18:55.976Z from team `Gamitch`.
 | [GAM-310](https://linear.app/gamitch/issue/GAM-310/linear-claude-dispatch-is-built-and-unit-tested-but-not-live-7-owner) | — | Done | Linear → Claude dispatch is built and unit-tested but not live — 7 owner steps remain (PAT, secrets, webhook) |
 | [GAM-314](https://linear.app/gamitch/issue/GAM-314/a-dispatched-run-reports-success-while-its-work-is-still-running-in) | — | Done | A dispatched run reports `success` while its work is still "running in the background" — and the process takes it |
 | [GAM-315](https://linear.app/gamitch/issue/GAM-315/any-branch-named-claudegam-nnn-closes-that-issue-on-merge-item-28f) | — | Done | Any branch named `claude/gam-nnn-*` closes that issue on merge — item 28f says it only links, and that is false here |
+| [GAM-325](https://linear.app/gamitch/issue/GAM-325/build-the-explicit-linear-closer-pr-merge-declares-its-issue-one-sync) | — | Done | Build the explicit Linear closer: PR merge declares its issue, one sync writes the state, every refusal is named — replacing the last semantic automation |
+| [GAM-326](https://linear.app/gamitch/issue/GAM-326/an-unfinished-dispatch-run-can-turn-its-own-job-green-by-moving-the) | — | Done | An unfinished dispatch run can turn its own job green by moving the issue to `Todo` — which re-dispatches it four seconds later |
 | [GAM-328](https://linear.app/gamitch/issue/GAM-328/two-dispatch-loop-rules-live-where-a-dispatched-run-cannot-write-them) | — | Done | Two dispatch-loop rules live where a dispatched run cannot write them — the `.github/workflows/**` credential wall, and the subagent-blocking rule that decides whether a run finishes its chain |
 
 Full descriptions, relations and timestamps are in `linear-export.json`.
