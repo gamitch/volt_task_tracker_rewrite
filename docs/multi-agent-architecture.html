@@ -1,0 +1,1730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VOLT Portal — Multi-Agent Development Architecture</title>
+<style>
+  :root {
+    --ink:        #14181f;
+    --ink-soft:   #4a5462;
+    --ink-faint:  #6b7686;
+    --rule:       #d9dee6;
+    --rule-soft:  #eceff4;
+    --paper:      #ffffff;
+    --surface:    #f6f8fb;
+    --surface-2:  #eef2f8;
+    --accent:     #2d5bd7;
+    --accent-ink: #1c3f9e;
+    --accent-bg:  #eef3ff;
+    --warn:       #b4530a;
+    --warn-bg:    #fdf3e7;
+    --good:       #1e7a4d;
+    --good-bg:    #eaf6ef;
+    --fig-node:   #f6f8fb;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.62;
+    font-feature-settings: "kern" 1, "liga" 1;
+  }
+
+  .page {
+    max-width: 62rem;
+    margin: 0 auto;
+    padding: 3.5rem 2rem 6rem;
+  }
+
+  /* ---------- masthead ---------- */
+
+  .masthead {
+    border-top: 4px solid var(--ink);
+    padding-top: 1.6rem;
+    margin-bottom: 3rem;
+  }
+  .eyebrow {
+    font-size: .74rem;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    font-weight: 650;
+    color: var(--accent-ink);
+    margin: 0 0 .9rem;
+  }
+  h1 {
+    font-size: 2.7rem;
+    line-height: 1.1;
+    letter-spacing: -.022em;
+    font-weight: 700;
+    margin: 0 0 .7rem;
+  }
+  .deck {
+    font-size: 1.19rem;
+    line-height: 1.5;
+    color: var(--ink-soft);
+    max-width: 46rem;
+    margin: 0 0 1.6rem;
+  }
+  .byline {
+    font-size: .84rem;
+    color: var(--ink-faint);
+    border-top: 1px solid var(--rule);
+    padding-top: .9rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem 1.6rem;
+  }
+  .byline b { color: var(--ink-soft); font-weight: 600; }
+
+  /* ---------- structure ---------- */
+
+  h2 {
+    font-size: 1.55rem;
+    letter-spacing: -.015em;
+    font-weight: 680;
+    margin: 3.6rem 0 .3rem;
+    padding-top: 1.4rem;
+    border-top: 2px solid var(--ink);
+    line-height: 1.25;
+  }
+  h2 .num {
+    display: block;
+    font-size: .72rem;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+    font-weight: 650;
+    margin-bottom: .5rem;
+  }
+  h3 {
+    font-size: 1.08rem;
+    font-weight: 660;
+    letter-spacing: -.005em;
+    margin: 2.2rem 0 .55rem;
+  }
+  h4 {
+    font-size: .84rem;
+    font-weight: 680;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 1.7rem 0 .5rem;
+  }
+  p { margin: 0 0 1.05rem; }
+  .lede { font-size: 1.06rem; color: var(--ink-soft); margin-top: 1rem; }
+  ul, ol { margin: 0 0 1.1rem; padding-left: 1.35rem; }
+  li { margin-bottom: .42rem; }
+  li::marker { color: var(--ink-faint); }
+  strong { font-weight: 650; }
+  a { color: var(--accent-ink); }
+
+  code, .m {
+    font-family: var(--mono);
+    font-size: .855em;
+    background: var(--surface-2);
+    padding: .1em .36em;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+
+  /* ---------- callouts ---------- */
+
+  .note {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-bg);
+    padding: .95rem 1.15rem;
+    margin: 1.5rem 0;
+    border-radius: 0 5px 5px 0;
+    font-size: .95rem;
+  }
+  .note p:last-child { margin-bottom: 0; }
+  .note.warn { border-left-color: var(--warn); background: var(--warn-bg); }
+  .note.good { border-left-color: var(--good); background: var(--good-bg); }
+  .note .tag {
+    display: block;
+    font-size: .7rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--accent-ink);
+    margin-bottom: .35rem;
+  }
+  .note.warn .tag { color: var(--warn); }
+  .note.good .tag { color: var(--good); }
+
+  .pull {
+    font-size: 1.1rem;
+    line-height: 1.5;
+    color: var(--ink);
+    border-left: 3px solid var(--rule);
+    padding-left: 1.1rem;
+    margin: 1.6rem 0;
+    font-style: italic;
+  }
+  .pull cite {
+    display: block;
+    font-style: normal;
+    font-size: .82rem;
+    color: var(--ink-faint);
+    margin-top: .5rem;
+  }
+
+  /* ---------- tables ---------- */
+
+  .tw { overflow-x: auto; margin: 1.4rem 0; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: .885rem;
+    line-height: 1.45;
+  }
+  th, td {
+    text-align: left;
+    vertical-align: top;
+    padding: .58rem .7rem;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  thead th {
+    border-bottom: 1.5px solid var(--ink);
+    font-size: .72rem;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: 1px solid var(--rule); }
+  td code { white-space: normal; }
+  .nw { white-space: nowrap; }
+  .tag-pill {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: .72rem;
+    padding: .12em .48em;
+    border-radius: 3px;
+    background: var(--surface-2);
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  .tag-pill.t-opus  { background: #ede7fb; color: #4c2c92; }
+  .tag-pill.t-fable { background: #fbe7f2; color: #8c2159; }
+  .tag-pill.t-sonn  { background: #e3eefc; color: #17457f; }
+  .tag-pill.t-haiku { background: #e7f4ec; color: #1a5e3c; }
+
+  /* ---------- stat grid ---------- */
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr); /* 8 stats = exactly two full rows, no orphan cells */
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 1.6rem 0 2rem;
+  }
+  .stat { background: var(--paper); padding: .95rem 1rem; }
+  .stat .v {
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat .k {
+    font-size: .73rem;
+    color: var(--ink-faint);
+    line-height: 1.35;
+    margin-top: .3rem;
+  }
+
+  /* ---------- figures ---------- */
+
+  figure {
+    margin: 2rem 0;
+    padding: 1.4rem 1.3rem 1.1rem;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 7px;
+  }
+  figure svg { display: block; width: 100%; max-width: 100%; height: auto; color: var(--ink); }
+  figcaption {
+    font-size: .845rem;
+    color: var(--ink-soft);
+    line-height: 1.5;
+    margin-top: 1rem;
+    padding-top: .8rem;
+    border-top: 1px solid var(--rule-soft);
+  }
+  figcaption b { color: var(--ink); font-weight: 650; }
+
+  /* SVG primitives, styled from the page so the markup stays terse */
+  .n     { fill: var(--fig-node); stroke: currentColor; stroke-width: 1.2; }
+  .n-a   { fill: var(--accent-bg); stroke: var(--accent); stroke-width: 1.4; }
+  .n-w   { fill: var(--warn-bg);  stroke: var(--warn);   stroke-width: 1.4; }
+  .n-g   { fill: var(--good-bg);  stroke: var(--good);   stroke-width: 1.4; }
+  .n-d   { fill: none; stroke: currentColor; stroke-width: 1; stroke-dasharray: 5 4; opacity: .45; }
+  .e     { stroke: currentColor; stroke-width: 1.3; fill: none; }
+  .e-a   { stroke: var(--accent); stroke-width: 1.6; fill: none; }
+  .e-w   { stroke: var(--warn); stroke-width: 1.5; fill: none; }
+  .e-g   { stroke: var(--good); stroke-width: 1.5; fill: none; }
+  .e-d   { stroke: currentColor; stroke-width: 1.2; fill: none; stroke-dasharray: 5 4; opacity: .6; }
+  .t     { font-family: var(--sans); font-size: 13px; fill: currentColor; }
+  .t-b   { font-family: var(--sans); font-size: 13px; font-weight: 650; fill: currentColor; }
+  .t-s   { font-family: var(--sans); font-size: 11px; fill: var(--ink-faint); }
+  .t-m   { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); }
+  .t-hd  { font-family: var(--sans); font-size: 10.5px; font-weight: 700; letter-spacing: .09em; fill: var(--ink-faint); }
+  .t-acc { fill: var(--accent-ink); }
+  .t-warn{ fill: var(--warn); }
+  .t-good{ fill: var(--good); }
+
+  /* ---------- misc ---------- */
+
+  .cols2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+    gap: 0 2.2rem;
+  }
+
+  .kv {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: .4rem 1.1rem;
+    font-size: .9rem;
+    margin: 1.2rem 0;
+  }
+  .kv dt { font-weight: 650; color: var(--ink-soft); }
+  .kv dd { margin: 0; }
+
+  .footer {
+    margin-top: 4rem;
+    padding-top: 1.2rem;
+    border-top: 2px solid var(--ink);
+    font-size: .82rem;
+    color: var(--ink-faint);
+  }
+
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 7px;
+    padding: 1.3rem 1.5rem;
+    margin: 2.4rem 0;
+  }
+  .toc h4 { margin-top: 0; }
+  .toc ol { columns: 2; column-gap: 2.5rem; margin: 0; padding-left: 1.15rem; font-size: .9rem; }
+  .toc li { margin-bottom: .3rem; break-inside: avoid; }
+  .toc a { text-decoration: none; color: var(--ink); }
+  .toc a:hover { color: var(--accent-ink); text-decoration: underline; }
+
+  /* ---------- print / PDF ---------- */
+
+  @page { margin: 15mm 14mm 16mm; }
+
+  @media print {
+    :root { --paper: #fff; }
+    body { font-size: 10.2pt; line-height: 1.5; }
+    .page { max-width: none; padding: 0; }
+    h1 { font-size: 24pt; }
+    .deck { font-size: 11.5pt; }
+    h2 { font-size: 14pt; margin-top: 1.6rem; padding-top: .8rem; break-after: avoid; }
+    h3, h4 { break-after: avoid; }
+    figure, .note, .stats, .toc, .pull { break-inside: avoid; }
+    table { font-size: 8.4pt; }
+    tr, li { break-inside: avoid; }
+    thead { display: table-header-group; }
+    a { color: var(--ink); text-decoration: none; }
+    .toc { break-after: page; }
+    .sec-break { break-before: page; }
+  }
+
+  @media (max-width: 52rem) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 40rem) {
+    .page { padding: 2rem 1.1rem 4rem; }
+    h1 { font-size: 2rem; }
+    .toc ol { columns: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- ══════════════════════════ MASTHEAD ══════════════════════════ -->
+
+<header class="masthead">
+  <p class="eyebrow">Engineering Architecture Note</p>
+  <h1>A governed multi-agent development system</h1>
+  <p class="deck">
+    How the VOLT Team Portal is built by a hierarchy of AI agents under a written constitution —
+    with risk-tiered process, adversarial pre-dispatch review, executable verification harnesses,
+    and an event-driven pipeline that runs from a Linear card to a merged, CI-green pull request
+    without a human in the loop.
+  </p>
+  <div class="byline">
+    <span><b>Repository</b> gamitch/volt_task_tracker_rewrite</span>
+    <span><b>Subject</b> the development system, not the product</span>
+    <span><b>State of record</b> 11 August 2026</span>
+  </div>
+</header>
+
+<p class="lede">
+  This document describes the <em>machine that builds the app</em>, not the app itself. The product is a
+  private, role-aware attendance and volunteer-hours portal for a high-school robotics team — a small
+  application by any measure. The system that produces it is not small, and it is the interesting artifact:
+  a nine-role agent hierarchy with per-role model tiers, a 769-line constitution where nearly every rule is
+  a written-down post-mortem, three process tiers selected by risk rather than by ticket size, six
+  executable verification harnesses that agents are required to <em>run</em> rather than reason about, and a
+  webhook chain that turns dragging a card into <code>Todo</code> into an agent claiming that issue and
+  opening a pull request.
+</p>
+
+<p>
+  The through-line is a single design commitment, and everything else follows from it:
+  <strong>no agent may certify its own work, and no claim counts as evidence until something was executed
+  and observed.</strong> Every mechanism below exists either to enforce that, or to make it affordable.
+</p>
+
+<div class="stats">
+  <div class="stat"><div class="v">9</div><div class="k">agent roles, each with a pinned model tier</div></div>
+  <div class="stat"><div class="v">30</div><div class="k">constitution items, most written after a measured failure</div></div>
+  <div class="stat"><div class="v">3</div><div class="k">process tiers, chosen by blast radius</div></div>
+  <div class="stat"><div class="v">10</div><div class="k">skills — reusable, script-backed procedures</div></div>
+  <div class="stat"><div class="v">232</div><div class="k">verification-log entries with recorded evidence</div></div>
+  <div class="stat"><div class="v">324</div><div class="k">tracked issues in Linear (46 open)</div></div>
+  <div class="stat"><div class="v">4</div><div class="k">independent CI job graphs, incl. real Postgres</div></div>
+  <div class="stat"><div class="v">2</div><div class="k">agent runtimes sharing one process (Claude, Codex)</div></div>
+</div>
+
+<nav class="toc">
+  <h4>Contents</h4>
+  <ol>
+    <li><a href="#s1">The system at a glance</a></li>
+    <li><a href="#s2">The agent hierarchy</a></li>
+    <li><a href="#s3">Process tiers: paying for risk, not for ceremony</a></li>
+    <li><a href="#s4">The constitution as an incident log</a></li>
+    <li><a href="#s5">Evidence over assertion: the skill harnesses</a></li>
+    <li><a href="#s6">Intake: Linear as the dispatch queue</a></li>
+    <li><a href="#s7">Outbound: replacing semantic automation</a></li>
+    <li><a href="#s8">Continuous verification</a></li>
+    <li><a href="#s9">Parallelism, isolation, and a second runtime</a></li>
+    <li><a href="#s10">Observability and cost</a></li>
+    <li><a href="#s11">Honest limits and what is next</a></li>
+  </ol>
+</nav>
+
+<!-- ══════════════════════════ 1 ══════════════════════════ -->
+
+<h2 id="s1"><span class="num">Section 01</span>The system at a glance</h2>
+
+<p>
+  Work moves through three planes. <strong>Intake</strong> decides what gets worked and when — a human
+  gesture in Linear is the only trigger. <strong>Execution</strong> is the agent hierarchy: an orchestrator
+  chooses how much process a change deserves, then delegates to specialist roles that cannot grade
+  themselves. <strong>Verification and record</strong> is where a change has to survive: six local gates, four
+  independent CI job graphs, and a written record that is committed in the same commit as the code it
+  describes.
+</p>
+
+<figure>
+<svg viewBox="0 0 1040 482" role="img" aria-label="End-to-end flow: an owner drags a Linear issue to Todo, a signed webhook reaches a Supabase edge function which fires a repository dispatch into GitHub Actions, which starts a Claude orchestrator; the orchestrator tiers the work and delegates to premise checker, worker and reviewer agents; the result becomes a pull request that must pass four CI job graphs before merge, which closes the issue and refreshes a git-side export.">
+  <defs>
+    <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+    </marker>
+    <marker id="a1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+    </marker>
+  </defs>
+
+  <!-- plane frames -->
+  <rect class="n-d" x="12"  y="34" width="248" height="418" rx="8"/>
+  <rect class="n-d" x="286" y="34" width="446" height="418" rx="8"/>
+  <rect class="n-d" x="758" y="34" width="270" height="418" rx="8"/>
+  <text class="t-hd" x="24"  y="24">1 · INTAKE</text>
+  <text class="t-hd" x="298" y="24">2 · EXECUTION</text>
+  <text class="t-hd" x="770" y="24">3 · VERIFICATION &amp; RECORD</text>
+
+  <!-- INTAKE -->
+  <rect class="n-a" x="34" y="54" width="204" height="50" rx="6"/>
+  <text class="t-b t-acc" x="48" y="76">Owner drags GAM-nnn</text>
+  <text class="t-s" x="48" y="93">Backlog → Todo · the only trigger</text>
+
+  <rect class="n" x="34" y="140" width="204" height="62" rx="6"/>
+  <text class="t-b" x="48" y="161">Linear webhook</text>
+  <text class="t-m" x="48" y="178">HMAC-SHA256, raw body</text>
+  <text class="t-s" x="48" y="194">5 s budget · 60 s replay window</text>
+
+  <rect class="n" x="34" y="238" width="204" height="70" rx="6"/>
+  <text class="t-b" x="48" y="259">Supabase edge function</text>
+  <text class="t-m" x="48" y="276">linear-dispatch</text>
+  <text class="t-s" x="48" y="292">verify → parse → 8 filter rules</text>
+
+  <rect class="n" x="34" y="344" width="204" height="62" rx="6"/>
+  <text class="t-b" x="48" y="365">repository_dispatch</text>
+  <text class="t-s" x="48" y="382">7-field payload, incl. tier</text>
+  <text class="t-s" x="48" y="398">default branch only</text>
+
+  <line class="e-a" x1="136" y1="104" x2="136" y2="134" marker-end="url(#a1a)"/>
+  <line class="e"   x1="136" y1="202" x2="136" y2="232" marker-end="url(#a1)"/>
+  <line class="e"   x1="136" y1="308" x2="136" y2="338" marker-end="url(#a1)"/>
+
+  <!-- EXECUTION -->
+  <rect class="n-a" x="308" y="54" width="402" height="58" rx="6"/>
+  <text class="t-b t-acc" x="322" y="76">Orchestrator — model keyed to the issue tier</text>
+  <text class="t-s" x="322" y="94">claims the issue, judges FAST / STANDARD / HEAVY, defends the call</text>
+
+  <line class="e" x1="238" y1="375" x2="266" y2="375"/>
+  <path class="e" d="M266,375 L266,83 L302,83" marker-end="url(#a1)"/>
+
+  <!-- tier lanes -->
+  <rect class="n" x="308" y="140" width="122" height="118" rx="6"/>
+  <text class="t-b" x="322" y="161">FAST</text>
+  <text class="t-s" x="322" y="181">orchestrator</text>
+  <text class="t-s" x="322" y="197">implements</text>
+  <text class="t-s" x="322" y="213">directly</text>
+  <text class="t-s" x="322" y="237">no packet</text>
+  <text class="t-s" x="322" y="251">no worker</text>
+
+  <rect class="n" x="448" y="140" width="122" height="118" rx="6"/>
+  <text class="t-b" x="462" y="161">STANDARD</text>
+  <text class="t-s" x="462" y="181">one worker</text>
+  <text class="t-s" x="462" y="197">subagent</text>
+  <text class="t-s" x="462" y="221">orchestrator</text>
+  <text class="t-s" x="462" y="235">replays the</text>
+  <text class="t-s" x="462" y="249">mutation</text>
+
+  <rect class="n-w" x="588" y="140" width="122" height="118" rx="6"/>
+  <text class="t-b t-warn" x="602" y="161">HEAVY</text>
+  <text class="t-s" x="602" y="181">packet →</text>
+  <text class="t-s" x="602" y="197">premise gate →</text>
+  <text class="t-s" x="602" y="213">worker →</text>
+  <text class="t-s" x="602" y="229">checker</text>
+  <text class="t-s" x="602" y="251">write paths · RLS</text>
+
+  <line class="e" x1="369" y1="112" x2="369" y2="134" marker-end="url(#a1)"/>
+  <line class="e" x1="509" y1="112" x2="509" y2="134" marker-end="url(#a1)"/>
+  <line class="e-w" x1="649" y1="112" x2="649" y2="134" marker-end="url(#a1)"/>
+
+  <rect class="n" x="308" y="290" width="402" height="56" rx="6"/>
+  <text class="t-b" x="322" y="311">Six gates, run as one call</text>
+  <text class="t-m" x="322" y="329">tsc · build · format:check · eslint · vitest · scoped</text>
+
+  <line class="e" x1="369" y1="258" x2="369" y2="284" marker-end="url(#a1)"/>
+  <line class="e" x1="509" y1="258" x2="509" y2="284" marker-end="url(#a1)"/>
+  <line class="e" x1="649" y1="258" x2="649" y2="284" marker-end="url(#a1)"/>
+
+  <rect class="n-a" x="308" y="378" width="402" height="56" rx="6"/>
+  <text class="t-b t-acc" x="322" y="399">Pull request</text>
+  <text class="t-s" x="322" y="417">body line 1: Closes GAM-nnn · tier stated and defended</text>
+
+  <line class="e" x1="509" y1="346" x2="509" y2="372" marker-end="url(#a1)"/>
+
+  <!-- VERIFICATION -->
+  <rect class="n" x="780" y="54" width="226" height="112" rx="6"/>
+  <text class="t-b" x="794" y="75">GitHub Actions CI</text>
+  <text class="t-s" x="794" y="95">ci — typecheck…bundle budget</text>
+  <text class="t-s" x="794" y="113">sql — real Postgres 16 service</text>
+  <text class="t-s" x="794" y="131">edge-functions — Deno</text>
+  <text class="t-s" x="794" y="149">skill-scripts — the tools' tests</text>
+
+  <line class="e" x1="710" y1="406" x2="740" y2="406"/>
+  <path class="e" d="M740,406 L740,110 L774,110" marker-end="url(#a1)"/>
+
+  <rect class="n-g" x="780" y="200" width="226" height="52" rx="6"/>
+  <text class="t-b t-good" x="794" y="221">Merge to main</text>
+  <text class="t-s" x="794" y="239">record + code in one commit</text>
+  <line class="e" x1="893" y1="166" x2="893" y2="194" marker-end="url(#a1)"/>
+
+  <rect class="n" x="780" y="286" width="226" height="52" rx="6"/>
+  <text class="t-b" x="794" y="307">Issue → Done</text>
+  <text class="t-s" x="794" y="325">automation fires on merge</text>
+  <line class="e" x1="893" y1="252" x2="893" y2="280" marker-end="url(#a1)"/>
+
+  <rect class="n" x="780" y="372" width="226" height="62" rx="6"/>
+  <text class="t-b" x="794" y="393">Linear export job</text>
+  <text class="t-s" x="794" y="411">regenerates the git-side backup</text>
+  <text class="t-s" x="794" y="427">heals, never gates</text>
+  <line class="e" x1="893" y1="338" x2="893" y2="366" marker-end="url(#a1)"/>
+
+  <!-- feedback edge -->
+  <path class="e-d" d="M780,398 L756,398 L756,472 L136,472 L136,412" marker-end="url(#a1)"/>
+  <text class="t-s" x="392" y="468">state flows back to the queue — Linear is the source, git is the backup</text>
+</svg>
+<figcaption>
+  <b>Figure 1 — one card to one merge.</b> The only human act in the happy path is the drag into
+  <code>Todo</code> at top left. Everything to the right of it is machine-driven, and every stage either
+  produces evidence or refuses to proceed. Note the asymmetry that governs the whole design: the intake
+  side is <em>event-driven and signed</em>, while the return path on the far right is currently the piece
+  under active replacement (§7).
+</figcaption>
+</figure>
+
+<!-- ══════════════════════════ 2 ══════════════════════════ -->
+
+<h2 id="s2" class="sec-break"><span class="num">Section 02</span>The agent hierarchy</h2>
+
+<p>
+  Nine roles, each defined as a prompt file in <code>.claude/agents/</code> with its own tool grant and a
+  pinned model. The pin is the point: nobody selects a model by hand, and a role's cost profile is a
+  property of the role rather than of the operator's mood. A test checker that shells out to <code>npm
+  run test</code> runs on the cheapest tier available; an adversarial reviewer that has to find the flaw
+  in someone else's reasoning runs on the most capable one.
+</p>
+
+<figure>
+<svg viewBox="0 0 1040 452" role="img" aria-label="The agent hierarchy: a boss architect defines the constitution and a boss arbiter resolves disputes; a foreman planner writes compact task packets; a premise checker gates plans before dispatch; a worker implementer builds; four checker roles verify; the worker's output can only reach done through a checker, and three failed attempts escalate to the arbiter.">
+  <defs>
+    <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+    </marker>
+    <marker id="a2w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/>
+    </marker>
+    <marker id="a2g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--good)"/>
+    </marker>
+    <marker id="a2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+    </marker>
+  </defs>
+
+  <!-- governance row -->
+  <text class="t-hd" x="20" y="20">GOVERNANCE — may amend the standard</text>
+  <rect class="n" x="20" y="32" width="230" height="62" rx="6"/>
+  <text class="t-b" x="34" y="53">boss-architect</text>
+  <text class="t-s" x="34" y="70">constitution, architecture,</text>
+  <text class="t-s" x="34" y="86">final acceptance</text>
+  <text class="t-m" x="196" y="53">fable</text>
+
+  <rect class="n" x="272" y="32" width="230" height="62" rx="6"/>
+  <text class="t-b" x="286" y="53">boss-arbiter</text>
+  <text class="t-s" x="286" y="70">resolves worker/checker</text>
+  <text class="t-s" x="286" y="86">disputes · 19 rulings on record</text>
+  <text class="t-m" x="448" y="53">fable</text>
+
+  <!-- planning -->
+  <text class="t-hd" x="20" y="132">PLANNING</text>
+  <rect class="n" x="20" y="144" width="230" height="62" rx="6"/>
+  <text class="t-b" x="34" y="165">foreman-planner</text>
+  <text class="t-s" x="34" y="182">compact task packets,</text>
+  <text class="t-s" x="34" y="198">ledger, context compression</text>
+  <text class="t-m" x="190" y="165">sonnet</text>
+
+  <rect class="n-w" x="272" y="144" width="230" height="62" rx="6"/>
+  <text class="t-b t-warn" x="286" y="165">checker-premise</text>
+  <text class="t-s" x="286" y="182">adversarially attacks the plan</text>
+  <text class="t-s" x="286" y="198">BEFORE any worker sees it</text>
+  <text class="t-m" x="452" y="165">opus</text>
+
+  <line class="e" x1="135" y1="94" x2="135" y2="138" marker-end="url(#a2)"/>
+  <line class="e-w" x1="250" y1="175" x2="266" y2="175" marker-end="url(#a2w)"/>
+  <text class="t-s" x="516" y="170">verdict</text>
+  <text class="t-b t-warn" x="516" y="188">DISPATCH / REVISE</text>
+  <text class="t-s" x="516" y="204">capped at two rounds</text>
+
+  <!-- execution -->
+  <text class="t-hd" x="20" y="248">EXECUTION</text>
+  <rect class="n-a" x="20" y="260" width="230" height="76" rx="6"/>
+  <text class="t-b t-acc" x="34" y="281">worker-implementer</text>
+  <text class="t-s" x="34" y="298">one narrow task, only the</text>
+  <text class="t-s" x="34" y="314">files its packet allows</text>
+  <text class="t-s" x="34" y="330">cannot self-certify</text>
+  <text class="t-m" x="190" y="281">sonnet</text>
+
+  <path class="e-w" d="M387,206 L387,232 L135,232 L135,254" marker-end="url(#a2w)"/>
+  <text class="t-s" x="150" y="226">only a DISPATCH verdict opens this path</text>
+
+  <!-- checkers -->
+  <text class="t-hd" x="560" y="248">VERIFICATION — the only path to done</text>
+  <rect class="n" x="560" y="260" width="216" height="38" rx="5"/>
+  <text class="t-b" x="572" y="284">checker-reviewer</text>
+  <text class="t-m" x="726" y="284">opus</text>
+
+  <rect class="n" x="560" y="306" width="216" height="38" rx="5"/>
+  <text class="t-b" x="572" y="330">checker-tests</text>
+  <text class="t-m" x="722" y="330">haiku</text>
+
+  <rect class="n" x="798" y="260" width="222" height="38" rx="5"/>
+  <text class="t-b" x="810" y="284">checker-accessibility</text>
+  <text class="t-m" x="962" y="284">sonnet</text>
+
+  <rect class="n" x="798" y="306" width="222" height="38" rx="5"/>
+  <text class="t-b" x="810" y="330">checker-content</text>
+  <text class="t-m" x="962" y="330">sonnet</text>
+
+  <line class="e-a" x1="250" y1="298" x2="554" y2="298" marker-end="url(#a2a)"/>
+  <text class="t-s" x="300" y="292">diff + evidence — never the ledger or the logs</text>
+
+  <!-- outcomes -->
+  <rect class="n-g" x="560" y="376" width="216" height="52" rx="6"/>
+  <text class="t-b t-good" x="572" y="397">PASS → merge</text>
+  <text class="t-s" x="572" y="415">record written in the same commit</text>
+
+  <rect class="n-w" x="798" y="376" width="222" height="52" rx="6"/>
+  <text class="t-b t-warn" x="810" y="397">FAIL → rework</text>
+  <text class="t-s" x="810" y="415">3 attempts, then escalate</text>
+
+  <line class="e-g" x1="668" y1="344" x2="668" y2="370" marker-end="url(#a2g)"/>
+  <line class="e-w" x1="909" y1="344" x2="909" y2="370" marker-end="url(#a2w)"/>
+  <path class="e-w" d="M1020,402 L1032,402 L1032,16 L387,16 L387,26" marker-end="url(#a2w)"/>
+  <text class="t-s" x="430" y="12">escalation — after the third failed attempt the arbiter decides, not the worker</text>
+</svg>
+<figcaption>
+  <b>Figure 2 — the one edge that does not exist.</b> There is no arrow from the worker to
+  <em>PASS</em>. Completion is something a different agent, holding different tools and a different model,
+  says about work it did not do — and the checker is required to inspect the artifact, not the worker's
+  summary of it. The premise checker to its left is the same principle applied one stage earlier: plans
+  used to be the only artifact in the system nobody adversarially reviewed.
+</figcaption>
+</figure>
+
+<div class="tw">
+<table>
+  <thead>
+    <tr><th>Role</th><th>Model pin</th><th>Tool grant</th><th>Charter</th></tr>
+  </thead>
+  <tbody>
+    <tr><td class="nw"><code>boss-architect</code></td><td><span class="tag-pill t-fable">fable</span></td><td class="t-m">read, write, edit, bash, agent</td><td>Owns the constitution and architectural decisions; performs final milestone acceptance. Explicitly not for routine coding.</td></tr>
+    <tr><td class="nw"><code>boss-arbiter</code></td><td><span class="tag-pill t-fable">fable</span></td><td class="t-m">read, write, edit, bash</td><td>Decides worker-vs-checker disputes: redo, checker was wrong, spec ambiguous, constitution needs clarifying, or escalate to the human.</td></tr>
+    <tr><td class="nw"><code>foreman-planner</code></td><td><span class="tag-pill t-sonn">sonnet</span></td><td class="t-m">read, write, edit, agent</td><td>Converts approved plans into small packets, tracks attempts, and — critically — prevents context bloat by never handing a worker the full record.</td></tr>
+    <tr><td class="nw"><code>checker-premise</code></td><td><span class="tag-pill t-opus">opus</span></td><td class="t-m">read, glob, grep, bash</td><td>Fact-checks a plan against the real codebase before dispatch. Attacks the author's declared least-confident decisions first.</td></tr>
+    <tr><td class="nw"><code>worker-implementer</code></td><td><span class="tag-pill t-sonn">sonnet</span></td><td class="t-m">read, write, edit, bash</td><td>Implements exactly one narrow task inside its packet's allowed files. Upgraded to <span class="tag-pill t-opus">opus</span> per dispatch when the task touches migrations, RLS, metric SQL, or auth.</td></tr>
+    <tr><td class="nw"><code>checker-reviewer</code></td><td><span class="tag-pill t-opus">opus</span></td><td class="t-m">read, glob, grep, bash</td><td>Grades completed work against the packet's acceptance criteria and the constitution. Read-only by design — it cannot fix what it finds.</td></tr>
+    <tr><td class="nw"><code>checker-tests</code></td><td><span class="tag-pill t-haiku">haiku</span></td><td class="t-m">read, bash, glob, grep</td><td>Runs the deterministic commands. Deliberately the cheapest role in the roster, because its judgement is an exit code.</td></tr>
+    <tr><td class="nw"><code>checker-accessibility</code></td><td><span class="tag-pill t-sonn">sonnet</span></td><td class="t-m">read, bash, glob, grep</td><td>Keyboard paths, semantic HTML, visible focus, contrast, light/dark. A keyboard failure on a core flow is a BLOCKER, not a nit.</td></tr>
+    <tr><td class="nw"><code>checker-content</code></td><td><span class="tag-pill t-sonn">sonnet</span></td><td class="t-m">read, glob, grep</td><td>Protected wording, factual claims, citation fidelity. The narrowest tool grant in the system — it cannot even run a command.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Three mechanisms decide which model runs</h3>
+
+<p>
+  They compose, and confusing them has cost real money:
+</p>
+
+<ol>
+  <li><strong>Frontmatter pins.</strong> Spawning a role reads its <code>model:</code> field. This is why model
+    selection "just works" in an interactive session — the pins do it, not the orchestrator's judgement.</li>
+  <li><strong>The per-dispatch override.</strong> Constitution item 18 requires the orchestrator to pass
+    <code>model: "opus"</code> <em>on the call</em> when a task creates or edits a migration, an RLS policy or
+    <code>security definer</code> helper, metric-view SQL, or auth/session/role logic. It cannot live in
+    config, because the trigger depends on what the task turns out to touch.</li>
+  <li><strong>The orchestrator's own model</strong>, set by whoever launches the session — or, in the automated
+    dispatch path, keyed to the issue's tier label: frontier for <code>heavy</code> and <code>unreviewed</code>
+    (where the tier judgement itself decides every downstream cost), balanced for <code>standard</code> and
+    <code>fast</code>.</li>
+</ol>
+
+<div class="note warn">
+  <span class="tag">Measured failure — and the reason this is written down</span>
+  <p>
+    All three mechanisms depend on the orchestrator being <em>able</em> to spawn subagents. In an automated
+    run, <code>--allowedTools</code> <strong>replaces</strong> the default tool set rather than extending it,
+    and an allowlist that forgets the subagent tool silently removes delegation. Nothing reports it: the run
+    starts, thinks, works, and produces a plausible result with one model playing every role.
+    On 2026-08-10, issue GAM-304 was dispatched as <code>tier/unreviewed</code>, self-judged HEAVY on an RLS
+    write path — item 18's exact trigger — and ran the entire chain on a single balanced primary with no
+    ability to delegate any of it. It died at turn 81 having produced no branch, no commit and no PR.
+    Three constitution items become <em>unsatisfiable</em> rather than merely skipped in that state, and the
+    tell-tales are now documented: a HEAVY row completing with no premise-gate verdict, an init line naming
+    one model with no subagent ever appearing, and a row that should have delegated exhausting its turn budget.
+  </p>
+</div>
+
+<!-- ══════════════════════════ 3 ══════════════════════════ -->
+
+<h2 id="s3"><span class="num">Section 03</span>Process tiers: paying for risk, not for ceremony</h2>
+
+<p>
+  The full chain — packet, premise gate, worker, checker — is expensive. Running it on a one-line bug fix
+  is how a governed process discredits itself. The owner said so directly, and the answer became
+  constitution item 26:
+</p>
+
+<blockquote class="pull">
+  For small fixes like items T321 and T323 is there a faster path we can take to get those done? the
+  Boss→Checker→Foreman→Worker→Checker path seems to eat up alot of time for a few line bug fix
+  <cite>Human owner, 2026-08-02 — the authorization for the three-tier model</cite>
+</blockquote>
+
+<p>
+  The tier is chosen by one question, and it is not about ticket size, topic, or how many files are touched:
+  <strong>can a mistake here corrupt data, or lie to a user about their own data?</strong> The orchestrator must
+  state its choice and defend it in the pull request, so a wrong call is visible and correctable rather than silent.
+</p>
+
+<figure>
+<svg viewBox="0 0 1040 356" role="img" aria-label="Comparison of three process tiers. FAST has one stage: the orchestrator implements and verifies. STANDARD adds a worker subagent and an orchestrator mutation replay. HEAVY adds a packet, an adversarial premise gate capped at two rounds, and a separate checker with a three-attempt limit. All three run the same six verification gates and produce a pull request.">
+  <defs>
+    <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+
+  <!-- column headers -->
+  <text class="t-hd" x="20" y="18">TIER</text>
+  <text class="t-hd" x="150" y="18">STAGES THAT EXIST IN THIS TIER</text>
+  <text class="t-hd" x="838" y="18">SELECTED WHEN</text>
+  <line class="e" x1="20" y1="26" x2="1020" y2="26" stroke-width="1.5"/>
+
+  <!-- FAST -->
+  <text class="t-b" x="20" y="66">FAST</text>
+  <text class="t-s" x="20" y="84">orchestrator</text>
+  <text class="t-s" x="20" y="98">only</text>
+
+  <rect class="n" x="150" y="44" width="150" height="46" rx="6"/>
+  <text class="t-b" x="164" y="66">Implement</text>
+  <text class="t-s" x="164" y="82">directly, ≤ ~20 lines</text>
+
+  <rect class="n-g" x="470" y="44" width="180" height="46" rx="6"/>
+  <text class="t-b t-good" x="484" y="66">Mutation replay</text>
+  <text class="t-s" x="484" y="82">a named test must go red</text>
+
+  <rect class="n-g" x="676" y="44" width="140" height="46" rx="6"/>
+  <text class="t-b t-good" x="690" y="66">Six gates</text>
+  <text class="t-s" x="690" y="82">+ pull request</text>
+
+  <line class="e" x1="300" y1="67" x2="464" y2="67" marker-end="url(#a3)"/>
+  <line class="e" x1="650" y1="67" x2="670" y2="67" marker-end="url(#a3)"/>
+
+  <text class="t-s" x="838" y="60">no write path, no schema,</text>
+  <text class="t-s" x="838" y="76">no RLS/auth, no exported</text>
+  <text class="t-s" x="838" y="92">signature change</text>
+
+  <line class="e" x1="20" y1="118" x2="1020" y2="118" opacity=".35"/>
+
+  <!-- STANDARD -->
+  <text class="t-b" x="20" y="164">STANDARD</text>
+  <text class="t-s" x="20" y="182">one worker</text>
+
+  <rect class="n" x="150" y="142" width="150" height="46" rx="6"/>
+  <text class="t-b" x="164" y="164">Worker subagent</text>
+  <text class="t-s" x="164" y="180">compact packet only</text>
+
+  <rect class="n-g" x="470" y="142" width="180" height="46" rx="6"/>
+  <text class="t-b t-good" x="484" y="164">Mutation replay</text>
+  <text class="t-s" x="484" y="180">by the orchestrator, not the author</text>
+
+  <rect class="n-g" x="676" y="142" width="140" height="46" rx="6"/>
+  <text class="t-b t-good" x="690" y="164">Six gates</text>
+  <text class="t-s" x="690" y="180">+ pull request</text>
+
+  <line class="e" x1="300" y1="165" x2="464" y2="165" marker-end="url(#a3)"/>
+  <line class="e" x1="650" y1="165" x2="670" y2="165" marker-end="url(#a3)"/>
+
+  <text class="t-s" x="838" y="158">single module, may add a</text>
+  <text class="t-s" x="838" y="174">test seam, still no write path</text>
+
+  <line class="e" x1="20" y1="216" x2="1020" y2="216" opacity=".35"/>
+
+  <!-- HEAVY -->
+  <text class="t-b t-warn" x="20" y="262">HEAVY</text>
+  <text class="t-s" x="20" y="280">full chain</text>
+
+  <rect class="n-w" x="150" y="240" width="140" height="46" rx="6"/>
+  <text class="t-b t-warn" x="164" y="262">Packet</text>
+  <text class="t-s" x="164" y="278">+ least-confident list</text>
+
+  <rect class="n-w" x="306" y="240" width="148" height="46" rx="6"/>
+  <text class="t-b t-warn" x="320" y="262">Premise gate</text>
+  <text class="t-s" x="320" y="278">runs it, max 2 rounds</text>
+
+  <rect class="n" x="470" y="240" width="150" height="46" rx="6"/>
+  <text class="t-b" x="484" y="262">Worker</text>
+  <text class="t-s" x="484" y="278">3 attempts, then arbiter</text>
+
+  <rect class="n-w" x="636" y="240" width="150" height="46" rx="6"/>
+  <text class="t-b t-warn" x="650" y="262">Separate checker</text>
+  <text class="t-s" x="650" y="278">inspects the artifact</text>
+
+  <rect class="n-g" x="802" y="240" width="140" height="46" rx="6"/>
+  <text class="t-b t-good" x="816" y="262">Six gates</text>
+  <text class="t-s" x="816" y="278">+ pull request</text>
+
+  <line class="e-w" x1="290" y1="263" x2="300" y2="263" marker-end="url(#a3)"/>
+  <line class="e-w" x1="454" y1="263" x2="464" y2="263" marker-end="url(#a3)"/>
+  <line class="e" x1="620" y1="263" x2="630" y2="263" marker-end="url(#a3)"/>
+  <line class="e-w" x1="786" y1="263" x2="796" y2="263" marker-end="url(#a3)"/>
+
+  <text class="t-s t-warn" x="150" y="318">Required when the change touches a write path or destructive operation, RLS/auth/role logic,</text>
+  <text class="t-s t-warn" x="150" y="334">a migration or metric-view SQL, or an export another session builds against.</text>
+</svg>
+<figcaption>
+  <b>Figure 3 — what FAST removes is coordination, not evidence.</b> Read down the right-hand side: the
+  mutation replay and the six gates appear in <em>every</em> tier. A fast-tier change still has to name a
+  mutation that turns a test red, run it, and report the real output. What the heavy tier adds is
+  independent judgement — a gate that attacks the plan before anyone builds it, and a checker who did not
+  write the code deciding whether it is done.
+</figcaption>
+</figure>
+
+<div class="note good">
+  <span class="tag">Why the heavy tier keeps its cost</span>
+  <p>
+    Two cases, both recorded, both invisible to reading the code. On task T305 the premise gate <em>built</em>
+    the proposed prescription and captured the real upsert payload, proving the fix would have nulled a
+    student's recorded volunteer hours and attendance method. On T189 it proved the proposed detector relied
+    on a view that inner-joins on an active season — so a lapsed season would have told <strong>every</strong>
+    student their account was deactivated. The rule that generalises from both:
+    <em>a gate that only reads is worth much less than one that runs.</em>
+  </p>
+</div>
+
+<!-- ══════════════════════════ 4 ══════════════════════════ -->
+
+<h2 id="s4" class="sec-break"><span class="num">Section 04</span>The constitution as an incident log</h2>
+
+<p>
+  <code>docs/swarm/constitution.md</code> is 769 lines and it is not a style guide. Items 1–17 are the
+  project's fixed standards — precedence order, security posture, stack locks, accessibility as a shipping
+  requirement, and an unusual clause forbidding engagement mechanics because the users are minors and
+  volunteers. Items 18–30 are different in kind: each one is a post-mortem that was promoted into a rule,
+  and each carries its own evidence, its authorizing date, and the failure it exists to prevent.
+</p>
+
+<p>
+  This is the part colleagues tend to find most transferable, so it is reproduced in full below. Read the
+  right-hand column first — the rules are downstream of it.
+</p>
+
+<div class="tw">
+<table>
+  <thead>
+    <tr><th class="nw">Item</th><th>The rule</th><th>The incident that produced it</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="nw"><b>18</b></td>
+      <td>Upgrade the worker's model, per dispatch, for migrations, RLS or <code>security definer</code> helpers, metric-view SQL, and auth/session/role logic.</td>
+      <td>These are the four places where a silent error is a data or privacy problem and is hard to detect after the fact. Everywhere else, the worker/checker loop is cheaper than the upgrade.</td>
+    </tr>
+    <tr>
+      <td class="nw"><b>19</b></td>
+      <td>No plan reaches a worker until an adversarial premise checker returns <b>DISPATCH</b>. REVISE is not advisory.</td>
+      <td>Every artifact in the process was checked by someone who did not write it — <em>except plans</em>. A real PRD reached the approval gate carrying two false defect claims, one physically impossible prescription, one "fix" that would have stripped accessible names off six screens, and a silent reversal of a passed task's green test.</td>
+    </tr>
+    <tr>
+      <td class="nw"><b>19a</b></td>
+      <td>The gate is capped at two rounds; a third REVISE escalates to the human.</td>
+      <td>Measured: round 1 cost ~130K frontier tokens and caught 4 BLOCKERs; round 2 cost ~105K and caught 2 MAJORs. One round ≈ one prevented rework cycle, so two rounds is break-even-to-positive and a third is net negative. A plan still failing after two rounds has something wrong with the plan, not the wording.</td>
+    </tr>
+    <tr>
+      <td class="nw"><b>19d</b></td>
+      <td>Every heavy packet ends with three to five numbered <b>least confident decisions</b>, each naming the decision <em>and</em> what would make it wrong. The gate attacks that list first.</td>
+      <td>Roughly half of round 1's findings were the author's own unverified line numbers and claims — meaning the author was already in a position to know where the weak ground was. Declaring a doubt costs nothing and is never held against the author; concealing one costs a gate round.</td>
+    </tr>
+    <tr>
+      <td class="nw"><b>20</b></td>
+      <td>A deliberate deferral must file a task, not leave a code comment. Comments are not triaged; rows are.</td>
+      <td>Two team pickers shipped rendering fixture data because each task correctly declined out-of-scope wiring and said so only in a comment. Because <code>events.team_ids</code> is <code>uuid[]</code> while the fixture ids were plain strings, that deferral escalated into meeting creation failing outright in production. A light/dark toggle shipped inert for the same reason.</td>
+    </tr>
+    <tr>
+      <td class="nw"><b>21</b></td>
+      <td>Completion reports state a commit SHA, and existence is verified rather than assumed. "Clean" and "committed" are different claims.</td>
+      <td>A worker reported "final state confirmed clean" alongside an accurate account of 770 changed lines, live browser measurements at three viewports, and every command it ran. All of it was real and none of it was committed. Routine worktree cleanup would have destroyed the work; it surfaced only because an empty diff against the merge base contradicted the report.</td>
+    </tr>
+    <tr>
+      <td class="nw"><b>22</b></td>
+      <td>Explicit pathspecs only — never <code>git add -A</code> or <code>git add .</code>, by any agent, ever.</td>
+      <td>A subagent modified a source file without authorization during a documentation commit. A habitual <code>git add -A</code> would have swept that change into a commit whose message described packet authoring — no packet defining it, no checker verifying it, human owner away. Three safeguards bypassed at once, not by defeating them but by staging too broadly.</td>
+    </tr>
+    <tr>
+      <td class="nw"><b>23</b></td>
+      <td>Mutation experiments run in the agent's own git worktree, never the shared tree. Corollary: a dirty tree is not automatically an unauthorized change.</td>
+      <td>A premise gate ran four instrumented mutations against the shared tree, intending to revert each. The orchestrator found the tree dirty mid-experiment, reverted it, and misattributed the change to a different agent that was behaving correctly — three failures from one missing convention. The rule isolates the practice rather than discouraging it: mutation proofs have caught more real defects here than any other technique.</td>
+    </tr>
+    <tr>
+      <td class="nw"><b>24</b></td>
+      <td>Recording a task and merging it are one action. The ledger row and verification entry are updated <em>in the merge commit</em>.</td>
+      <td>Records were backfilled accurately at 11:39. Five tasks then merged over the following ten hours and not one row was updated — so the very document the owner reads to decide whether to merge still said "packet gated" for work already live. A gate had explicitly flagged the gap and it was acknowledged and not acted on. Splitting merge from record means the second step is always optional under pressure, and it is always the one dropped.</td>
+    </tr>
+    <tr>
+      <td class="nw"><b>25</b></td>
+      <td>Proportionality. Grade security findings against <em>this</em> threat model — one volunteer team, no PII stored — not a corporate one.</td>
+      <td>A finding about view semantics was escalated to a security-class task on two bad steps: reading a table-scoped rule as covering views, then grading its own extension as blocker-adjacent. The "exposure" was in fact the product — the leaderboard shows everyone's hours by design. The task closed as no-change. Written verbatim from the owner: <em>"This is a volunteer group, not a company… please keep it simple."</em></td>
+    </tr>
+    <tr>
+      <td class="nw"><b>26</b></td>
+      <td>Three process tiers triggered by risk, not by topic, ticket size, or habit (§3 above).</td>
+      <td>The full chain was eating hours on few-line fixes. The tier is now a judgement the orchestrator must state and defend in the pull request — so a wrong call is visible rather than silent.</td>
+    </tr>
+    <tr>
+      <td class="nw"><b>27</b></td>
+      <td>A user-visible surface reading from a fixture or stub is <b>Partial</b>, never Passed — and the wiring task is filed and linked before the row moves.</td>
+      <td>Item 20's three failures were one failure seen three times, and every one of them <em>passed a checker</em> — because in each case the checker was asked whether the component <em>rendered</em>, never whether it was connected to anything. Packets for user-visible work now name the real data source as an acceptance criterion, so the checker verifies the connection instead of the render.</td>
+    </tr>
+    <tr>
+      <td class="nw"><b>28</b></td>
+      <td>Work is dispatched from Linear, and claiming it is the first act. Move the issue, then <em>re-read it</em> to confirm you hold it.</td>
+      <td>The first agent dispatched through Linear found its issue correctly and unaided — and then did not claim it. The agent was not at fault: the constitution contained the word "Linear" zero times. The migration moved 296 rows of data and left the protocol behind. Linear has no compare-and-set, so without the read-back there is no claim at all, only a hope.</td>
+    </tr>
+    <tr>
+      <td class="nw"><b>29</b></td>
+      <td>The 301-row markdown ledger is frozen. Linear allocates ids atomically; the git-side record is <em>generated</em>, never maintained.</td>
+      <td>A hand-maintained table failed three independent ways in a single audit: merged, tested, live work with no row at all; a workflow document claiming 40 open rows against a true 50; and eleven rows recording their closure in the wrong column while Status still read "Filed", so an agent worked a row superseded four days earlier. None of it was carelessness — it is what a schema-less table does at 301 rows and four concurrent machines.</td>
+    </tr>
+    <tr>
+      <td class="nw"><b>30</b></td>
+      <td>Every issue an agent writes goes through the <code>linear-task-writing</code> skill: lead with the defect, state and defend a priority, re-verify every citation, preserve the original when rewriting.</td>
+      <td>Owner, verbatim: <em>"i have to know which ones to prioritize and i can't understand what it's saying."</em> Rewriting the trigger issue also surfaced three errors nobody had caught — a wrong line number, a second render site that does not exist, and a missing root cause that would have sent the implementer to the wrong function. The rewrite was not cosmetic; the verification it forced is what found the errors.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="note">
+  <span class="tag">The pattern worth stealing</span>
+  <p>
+    Every one of these rules is cheap to state and was expensive to learn. Writing the incident into the rule
+    is what stops a future agent — or a future engineer — from re-litigating it, and it is why the constitution
+    can be handed to a cold agent as its entire onboarding. The rules that carry a date and a quotation are the
+    ones a human authorized; the rest carry the measurement instead.
+  </p>
+</div>
+
+<!-- ══════════════════════════ 5 ══════════════════════════ -->
+
+<h2 id="s5"><span class="num">Section 05</span>Evidence over assertion: the skill harnesses</h2>
+
+<p>
+  A passing test proves nothing on its own. It proves something only when someone has watched it fail for
+  the right reason. This repository has shipped <strong>67 recorded instances</strong> of assertions that
+  passed for the wrong reason — including a test that passed with the feature entirely removed. The
+  counter-measure is a set of packaged procedures, invocable by name, that make the expensive-but-correct
+  method the cheap one.
+</p>
+
+<figure>
+<svg viewBox="0 0 1040 250" role="img" aria-label="The mutation replay loop: commit the fix first, run the test green, mutate the production code, require the test to go red naming the right assertion, revert the mutation, re-run green, and record all four observations. A green test that stays green under mutation is reported as untrustworthy rather than as passing.">
+  <defs>
+    <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+    </marker>
+    <marker id="a4w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/>
+    </marker>
+  </defs>
+
+  <rect class="n" x="16" y="40" width="150" height="52" rx="6"/>
+  <text class="t-b" x="30" y="62">1 · Commit</text>
+  <text class="t-s" x="30" y="79">the fix, before mutating</text>
+
+  <rect class="n-g" x="206" y="40" width="150" height="52" rx="6"/>
+  <text class="t-b t-good" x="220" y="62">2 · Green</text>
+  <text class="t-s" x="220" y="79">scoped run passes</text>
+
+  <rect class="n-a" x="396" y="40" width="150" height="52" rx="6"/>
+  <text class="t-b t-acc" x="410" y="62">3 · Mutate</text>
+  <text class="t-s" x="410" y="79">break the guarded line</text>
+
+  <rect class="n-w" x="586" y="40" width="176" height="52" rx="6"/>
+  <text class="t-b t-warn" x="600" y="62">4 · Must go RED</text>
+  <text class="t-s" x="600" y="79">and name the right assertion</text>
+
+  <rect class="n" x="802" y="40" width="150" height="52" rx="6"/>
+  <text class="t-b" x="816" y="62">5 · Revert</text>
+  <text class="t-s" x="816" y="79">re-run, green again</text>
+
+  <line class="e" x1="166" y1="66" x2="200" y2="66" marker-end="url(#a4)"/>
+  <line class="e" x1="356" y1="66" x2="390" y2="66" marker-end="url(#a4)"/>
+  <line class="e" x1="546" y1="66" x2="580" y2="66" marker-end="url(#a4)"/>
+  <line class="e" x1="762" y1="66" x2="796" y2="66" marker-end="url(#a4)"/>
+
+  <!-- failure branch -->
+  <path class="e-w" d="M674,92 L674,142" marker-end="url(#a4w)"/>
+  <rect class="n-w" x="524" y="146" width="300" height="52" rx="6"/>
+  <text class="t-b t-warn" x="538" y="168">stayed green → UNTRUSTWORTHY</text>
+  <text class="t-s" x="538" y="185">the test is not evidence — the criterion is not met</text>
+
+  <!-- record -->
+  <rect class="n-a" x="16" y="146" width="340" height="52" rx="6"/>
+  <text class="t-b t-acc" x="30" y="168">All four observations are recorded</text>
+  <text class="t-s" x="30" y="185">green · red + failing assertion · reverted · green</text>
+  <path class="e" d="M91,92 L91,140" marker-end="url(#a4)"/>
+
+  <text class="t-s" x="16" y="228">73 of 202 recorded task entries carry one of these · the single most-used mechanic in the project</text>
+  <text class="t-s t-warn" x="16" y="20">The tool that decides this is itself tested in CI — it once read a genuinely red run as "no tests executed."</text>
+</svg>
+<figcaption>
+  <b>Figure 4 — the anti-vacuity loop.</b> Step 1 is not obvious and was learned the hard way: reverting a
+  mutation with <code>git checkout --</code> also reverts an <em>uncommitted</em> fix, and only the full suite
+  revealed it. The bottom-right branch is the whole point — a test that survives the mutation is reported as
+  untrustworthy rather than as passing, which converts "the suite is green" from a conclusion into a question.
+</figcaption>
+</figure>
+
+<div class="tw">
+<table>
+  <thead>
+    <tr><th>Skill</th><th>What it makes cheap</th><th>Why it exists</th></tr>
+  </thead>
+  <tbody>
+    <tr><td class="nw"><code>mutation-replay</code></td><td>Proving a test guards what it claims, with a scripted red/green replay and a machine-checked verdict.</td><td>67 recorded assertions that passed for the wrong reason. Its own parser is unit-tested in CI, after it once read a genuinely red focused run as "executed no tests" and announced the wrong verdict.</td></tr>
+    <tr><td class="nw"><code>scratch-postgres</code></td><td>Standing up a disposable PostgreSQL cluster carrying the repo's real migrations, to settle an RLS, view, trigger or constraint claim by running it.</td><td>Database semantics is the one area where careful reading loses to execution most reliably. The recurring pattern is a migration comment asserting something Postgres does not do.</td></tr>
+    <tr><td class="nw"><code>e2e-personas</code></td><td>Driving the real app in a real browser as admin, coach, student or parent — against real migrations and real RLS — and reading every write back out of the database.</td><td>Rendering a control is not the same as saving anything. Constitution item 27 exists because checkers kept being asked the first question.</td></tr>
+    <tr><td class="nw"><code>layout-measurement</code></td><td>Measuring real overflow, wrapping and element widths in a browser at a named viewport.</td><td><b>jsdom performs no layout.</b> Every element has zero width, nothing wraps, nothing overflows — so the entire class of responsive bugs is invisible to a 2,000-test suite, and a unit test cannot be evidence for one.</td></tr>
+    <tr><td class="nw"><code>gate-run</code></td><td>Running the six verification gates in one call and printing one evidence block other agents can check.</td><td>The same six commands are run several times per task by different agents and quoted into logs and PR bodies. One way of running them beats six ad-hoc ways, and stops results being laundered through <code>tail</code> and <code>grep</code>.</td></tr>
+    <tr><td class="nw"><code>linear-task-writing</code></td><td>Filing an issue the owner can prioritize and the next agent can implement cold.</td><td>Constitution item 30. With the ledger frozen, the issue text is the whole record — and 46 rows had migrated in a house style written for the filer rather than the reader.</td></tr>
+    <tr><td class="nw"><code>shared-doc-merge</code></td><td>Resolving conflicts in append-only shared documents without losing either side's entry.</td><td>Several workflows append to the same handful of documents; this resolution happened roughly a dozen times in a single session. Taking one side wholesale silently deletes a real record.</td></tr>
+    <tr><td class="nw"><code>swarm-plan</code> · <code>swarm-run</code> · <code>swarm-check</code></td><td>The three slash commands that drive planning, a bounded worker/checker loop, and milestone acceptance.</td><td>The original template surface. Still available, but the natural entry point is now a Linear card rather than a command.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ══════════════════════════ 6 ══════════════════════════ -->
+
+<h2 id="s6" class="sec-break"><span class="num">Section 06</span>Intake: Linear as the dispatch queue</h2>
+
+<p>
+  The trigger the whole system was designed around, in the owner's words: <em>"part of the integration with
+  Linear over ClickUp is because Linear also has a webhook that would allow me to put an item in the TODO
+  state and trigger Claude to take action."</em> That is now live. On 2026-08-09 the owner dragged an issue
+  to <code>Todo</code>; an agent claimed it <strong>87 seconds later</strong>, worked it, and opened a pull
+  request with CI green.
+</p>
+
+<figure>
+<svg viewBox="0 0 1040 430" role="img" aria-label="The inbound dispatch chain. A Linear webhook signed with HMAC reaches a Supabase edge function that verifies the signature before parsing, checks a sixty second replay window, then applies eight filter rules each with a named skip reason, then fires a GitHub repository dispatch that starts a workflow which runs the Claude Code action as an orchestrator.">
+  <defs>
+    <marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+    </marker>
+    <marker id="a5a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+    </marker>
+  </defs>
+
+  <rect class="n-a" x="16" y="30" width="230" height="56" rx="6"/>
+  <text class="t-b t-acc" x="30" y="52">Linear · team Gamitch</text>
+  <text class="t-s" x="30" y="70">issue enters the Todo column</text>
+
+  <line class="e-a" x1="131" y1="86" x2="131" y2="112" marker-end="url(#a5a)"/>
+  <text class="t-m" x="146" y="103">POST + Linear-Signature</text>
+
+  <!-- edge function box -->
+  <rect class="n" x="16" y="118" width="470" height="228" rx="7"/>
+  <text class="t-hd" x="30" y="140">SUPABASE EDGE FUNCTION — linear-dispatch</text>
+
+  <rect class="n" x="32" y="152" width="200" height="40" rx="5"/>
+  <text class="t-b" x="44" y="177">1 · read raw body once</text>
+
+  <rect class="n-w" x="32" y="200" width="200" height="52" rx="5"/>
+  <text class="t-b t-warn" x="44" y="222">2 · verify HMAC</text>
+  <text class="t-s" x="44" y="240">before any parse — never after</text>
+
+  <rect class="n-w" x="32" y="260" width="200" height="40" rx="5"/>
+  <text class="t-b t-warn" x="44" y="285">3 · 60 s replay window</text>
+
+  <rect class="n" x="252" y="152" width="218" height="148" rx="5"/>
+  <text class="t-b" x="264" y="174">4 · eight filter rules</text>
+  <text class="t-s" x="264" y="194">is it an Issue event?</text>
+  <text class="t-s" x="264" y="210">is it an update, not a create?</text>
+  <text class="t-s" x="264" y="226">is the new state Todo?</text>
+  <text class="t-b t-acc" x="264" y="242">did stateId actually change?</text>
+  <text class="t-s" x="264" y="258">does it carry a tier label?</text>
+  <text class="t-s" x="264" y="274">is it free of gate/human?</text>
+  <text class="t-s t-warn" x="264" y="292">every skip carries a named reason</text>
+
+  <text class="t-s" x="32" y="322">45 Deno tests · 30 of them assert the skip reason, not merely that nothing happened</text>
+  <text class="t-s" x="32" y="338">four guard mutations proven red before shipping</text>
+
+  <line class="e" x1="486" y1="232" x2="524" y2="232" marker-end="url(#a5)"/>
+
+  <rect class="n" x="530" y="176" width="230" height="112" rx="6"/>
+  <text class="t-b" x="544" y="198">GitHub repository_dispatch</text>
+  <text class="t-m" x="544" y="217">linear-issue-dispatch</text>
+  <text class="t-s" x="544" y="236">7-field payload: identifier,</text>
+  <text class="t-s" x="544" y="252">title, url, tier, labels…</text>
+  <text class="t-s t-warn" x="544" y="274">runs default-branch workflows only</text>
+
+  <line class="e" x1="760" y1="232" x2="796" y2="232" marker-end="url(#a5)"/>
+
+  <rect class="n-a" x="802" y="150" width="222" height="164" rx="6"/>
+  <text class="t-b t-acc" x="814" y="172">claude-linear-dispatch.yml</text>
+  <text class="t-s" x="814" y="192">one run per issue —</text>
+  <text class="t-s" x="814" y="208">never cancel-in-progress</text>
+  <text class="t-s" x="814" y="230">orchestrator model keyed</text>
+  <text class="t-s" x="814" y="246">to the payload tier</text>
+  <text class="t-s" x="814" y="268">120-minute wall clock,</text>
+  <text class="t-s" x="814" y="284">300-turn backstop</text>
+  <text class="t-s t-warn" x="814" y="306">run log committed as it goes</text>
+
+  <!-- why a relay -->
+  <rect class="n-d" x="16" y="366" width="1008" height="48" rx="6"/>
+  <text class="t-b" x="32" y="388">Why the relay is not optional</text>
+  <text class="t-s" x="32" y="405">Linear cannot send custom headers; GitHub's dispatch endpoint requires an Authorization header and a typed body. Two fixed APIs, one adapter — not a preference that can be simplified away.</text>
+</svg>
+<figcaption>
+  <b>Figure 5 — verify, then parse; and every refusal has a name.</b> Two details carry most of the
+  reliability. <em>Rule 4</em> (highlighted) is load-bearing: Linear sends an update for every edit — a label,
+  a typo, an estimate — and on all of them the issue is still in <code>Todo</code>, so a state check alone
+  would re-dispatch on every keystroke and start a second agent on claimed work. Checking that
+  <code>stateId</code> appears in the changed-fields set is the precise signal "the state moved." It also
+  makes the loop self-limiting: the agent's own claim moves the issue out of <code>Todo</code>, and a failed
+  agent that leaves it there cannot re-trigger itself, because no further transition occurs.
+</figcaption>
+</figure>
+
+<h3>Four constraints that were verified rather than assumed</h3>
+
+<dl class="kv">
+  <dt class="nw">Free-plan webhooks</dt>
+  <dd>Available — confirmed three ways before building, then observed in production. Linear's role gate is satisfied automatically because free-plan members are all admins.</dd>
+  <dt class="nw">JWT verification</dt>
+  <dd>Supabase rejects unauthenticated requests <em>before the function's own code runs</em>, so the function looks dead rather than misconfigured and adding logging produces no new information. Disabled per-function; the platform check is <em>replaced by</em> the HMAC check, not merely removed.</dd>
+  <dt class="nw">Token identity</dt>
+  <dd>The dispatching token must belong to a <b>human</b> GitHub account. The action's human-actor check tests <code>user.type === "User"</code>; an App installation token or machine account resolves to <code>Bot</code> and the run dies before the agent starts, with an error that reads like a configuration problem rather than the identity problem it is.</dd>
+  <dt class="nw">Silent success</dt>
+  <dd>A <code>repository_dispatch</code> that matches no workflow returns <b>204</b> — the success code — and only ever runs workflows from the default branch. Testing on a feature branch produces no run and no error.</dd>
+</dl>
+
+<div class="note warn">
+  <span class="tag">The bug that would have been invisible</span>
+  <p>
+    The filter was written to match labels named <code>tier/fast</code>, because every document in the project
+    writes them that way. Linear does not store them that way — it stores a label <em>group</em> named
+    <code>tier</code> with a child named <code>fast</code>, and the slashes are synthesised by the exporter.
+    A prefix match on <code>tier/</code> would have matched <strong>nothing, ever</strong>: a queue that never
+    dispatches, a log full of lines each of which looks like a correct decision, and no error anywhere. Caught
+    one commit before shipping, by reading the live workspace instead of the repository's own prose.
+  </p>
+</div>
+
+<!-- ══════════════════════════ 7 ══════════════════════════ -->
+
+<h2 id="s7"><span class="num">Section 07</span>Outbound: replacing semantic automation</h2>
+
+<p>
+  The inbound half is signed, filtered and event-driven. The outbound half — how a merged pull request
+  moves the issue — was, until this month, the vendor's built-in automation, which infers intent from text:
+  an issue identifier appearing in a branch name, a pull request title, or beside one of twenty "magic
+  words" in the body. In under 48 hours of that being live, it produced <strong>thirteen catalogued wrong
+  state moves</strong> across three issues, plus one that was never explained.
+</p>
+
+<div class="tw">
+<table>
+  <thead>
+    <tr><th class="nw">Class</th><th>What went wrong</th><th>Root cause</th></tr>
+  </thead>
+  <tbody>
+    <tr><td class="nw">Wrong close ×6</td><td>Pull requests doing CI salvage, investigation and unrelated work closed an issue none of them touched. One of them opened with the literal sentence <em>"This PR does not close GAM-304."</em></td><td>The branch name carried the identifier. That alone links, and a linked PR's merge closes — no magic word required, so omitting one protects nothing.</td></tr>
+    <tr><td class="nw">Backwards move ×2</td><td>An issue's <em>own fix</em> merging moved it from In&nbsp;Review back to In&nbsp;Progress.</td><td>State is computed from the aggregate set of linked PRs. With another linked PR still open, the "start" rule outranks the "merge" rule.</td></tr>
+    <tr><td class="nw">Wrong reopen ×3</td><td>A closed issue reopened because someone opened a PR on a stale branch that still carried its identifier.</td><td>Branch names outlive the work they were named for.</td></tr>
+    <tr><td class="nw">Silent + misattributed</td><td>No notification anywhere in the chain. Automation transitions are attributed to the PR author's mapped user, and attach-time transitions are millisecond-identical with their attachment records.</td><td>Neither the actor column nor the timestamp distinguishes a human act from an automation firing.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  The vendor's own documentation confirms the scoping that would help is impossible: branch rules apply only
+  to <em>target</em> branches, and every pull request here targets <code>main</code>. So no head-branch naming
+  scheme can scope the risk away. Worse, the workaround the project had invented — avoiding identifiers in
+  branch names — cost real process: <strong>11 of 30 recent pull requests are deliberately identifier-free</strong>,
+  and prose written <em>about</em> a linking hazard reliably contains the pattern it warns of.
+</p>
+
+<figure>
+<svg viewBox="0 0 1040 400" role="img" aria-label="Before and after comparison. Before: five text channels — branch name, PR title, magic words in the body, commit messages and prose — all feed a semantic inference engine that computes issue state from the aggregate set of linked pull requests, producing wrong closes, backwards moves and silent failures. After: a single declared channel, the first line of the pull request body, is read by one shared parser used by both a required CI check and a merge-time sync worker, which checks preconditions, writes an audit comment, moves the issue and reads the state back, notifying Slack on every action and every named refusal.">
+  <defs>
+    <marker id="a6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+    </marker>
+    <marker id="a6w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/>
+    </marker>
+    <marker id="a6a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+    </marker>
+  </defs>
+
+  <!-- BEFORE -->
+  <text class="t-hd t-warn" x="16" y="18">BEFORE — SEMANTIC INFERENCE (13 wrong moves in 48 h)</text>
+  <rect class="n-d" x="16" y="28" width="480" height="356" rx="8"/>
+
+  <rect class="n" x="32" y="46" width="146" height="34" rx="5"/><text class="t-s" x="44" y="68">branch name</text>
+  <rect class="n" x="32" y="88" width="146" height="34" rx="5"/><text class="t-s" x="44" y="110">PR title</text>
+  <rect class="n" x="32" y="130" width="146" height="34" rx="5"/><text class="t-s" x="44" y="152">20 magic words</text>
+  <rect class="n" x="32" y="172" width="146" height="34" rx="5"/><text class="t-s" x="44" y="194">commit trailers</text>
+  <rect class="n" x="32" y="214" width="146" height="34" rx="5"/><text class="t-s" x="44" y="236">any prose mention</text>
+
+  <rect class="n-w" x="238" y="88" width="240" height="120" rx="6"/>
+  <text class="t-b t-warn" x="252" y="112">Vendor automation</text>
+  <text class="t-s" x="252" y="132">infers intent from text</text>
+  <text class="t-s" x="252" y="152">state = f(all linked PRs)</text>
+  <text class="t-s" x="252" y="172">no scoping possible</text>
+  <text class="t-s" x="252" y="192">no notification, ever</text>
+
+  <line class="e-w" x1="178" y1="63"  x2="232" y2="120" marker-end="url(#a6w)"/>
+  <line class="e-w" x1="178" y1="105" x2="232" y2="132" marker-end="url(#a6w)"/>
+  <line class="e-w" x1="178" y1="147" x2="232" y2="147" marker-end="url(#a6w)"/>
+  <line class="e-w" x1="178" y1="189" x2="232" y2="162" marker-end="url(#a6w)"/>
+  <line class="e-w" x1="178" y1="231" x2="232" y2="176" marker-end="url(#a6w)"/>
+
+  <rect class="n-w" x="238" y="240" width="240" height="120" rx="6"/>
+  <text class="t-b t-warn" x="252" y="264">Observed outcomes</text>
+  <text class="t-s" x="252" y="284">6 × wrong close</text>
+  <text class="t-s" x="252" y="302">3 × wrong reopen</text>
+  <text class="t-s" x="252" y="320">2 × backwards move</text>
+  <text class="t-s" x="252" y="338">1 unexplained · 0 alerts</text>
+  <line class="e-w" x1="358" y1="208" x2="358" y2="234" marker-end="url(#a6w)"/>
+
+  <!-- divider -->
+  <line class="e" x1="520" y1="28" x2="520" y2="384" stroke-dasharray="4 4" opacity=".4"/>
+
+  <!-- AFTER -->
+  <text class="t-hd t-acc" x="544" y="18">AFTER — ONE DECLARED CHANNEL, GATED AND AUDITED</text>
+  <rect class="n-d" x="544" y="28" width="480" height="356" rx="8"/>
+
+  <rect class="n-a" x="560" y="46" width="448" height="46" rx="6"/>
+  <text class="t-b t-acc" x="574" y="68">PR body, line 1 — the only channel ever parsed</text>
+  <text class="t-m" x="574" y="85">^Closes (GAM-\d+)\b   ·  exactly one identifier</text>
+
+  <rect class="n" x="560" y="110" width="216" height="56" rx="6"/>
+  <text class="t-b" x="574" y="132">Required CI check</text>
+  <text class="t-s" x="574" y="150">refuses a half-declaration at PR time</text>
+
+  <rect class="n" x="792" y="110" width="216" height="56" rx="6"/>
+  <text class="t-b" x="806" y="132">Merge-time sync</text>
+  <text class="t-s" x="806" y="150">re-validates — the authority</text>
+
+  <line class="e-a" x1="668" y1="92" x2="668" y2="104" marker-end="url(#a6a)"/>
+  <line class="e-a" x1="900" y1="92" x2="900" y2="104" marker-end="url(#a6a)"/>
+  <text class="t-s" x="560" y="186">one shared parser, loaded from main — not the PR's copy</text>
+
+  <rect class="n-a" x="560" y="196" width="448" height="122" rx="6"/>
+  <text class="t-b t-acc" x="574" y="218">Sync worker — ordered so a crash is recoverable</text>
+  <text class="t-s" x="574" y="240">1 · fetch the PR from the API — the event supplies only its number</text>
+  <text class="t-s" x="574" y="258">2 · precondition: is the issue actually In Progress or In Review?</text>
+  <text class="t-s" x="574" y="276">3 · write the audit comment FIRST — the durable claim record</text>
+  <text class="t-s" x="574" y="294">4 · move the issue, then read the state back and fail loudly on mismatch</text>
+  <line class="e-a" x1="900" y1="166" x2="900" y2="190" marker-end="url(#a6a)"/>
+
+  <rect class="n-g" x="560" y="332" width="216" height="40" rx="6"/>
+  <text class="t-b t-good" x="574" y="357">Slack — every action</text>
+  <rect class="n-w" x="792" y="332" width="216" height="40" rx="6"/>
+  <text class="t-b t-warn" x="806" y="357">Slack — every named refusal</text>
+  <line class="e" x1="668" y1="318" x2="668" y2="326" marker-end="url(#a6)"/>
+  <line class="e" x1="900" y1="318" x2="900" y2="326" marker-end="url(#a6)"/>
+</svg>
+<figcaption>
+  <b>Figure 6 — the difference is the number of channels, not the medium.</b> This is stated honestly in the
+  design: the replacement is still text. What changes the failure class is that there is <em>one</em> anchored
+  position, <em>one</em> parser shared by the gate and the sync, a CI check that refuses a malformed
+  declaration before merge, a precondition check that refuses to move an issue that is not where it should
+  be, and a Slack notice on every outcome including every refusal. Under the incumbent, this class of failure
+  fires from any of five channels with no gate at all.
+</figcaption>
+</figure>
+
+<h3>Status — what is built and what is not</h3>
+
+<div class="tw">
+<table>
+  <thead>
+    <tr><th class="nw">Phase</th><th>Scope</th><th class="nw">State</th></tr>
+  </thead>
+  <tbody>
+    <tr><td class="nw"><b>0</b></td><td>Disable the two automations that moved issues backwards and reopened closed ones. Audit every adjacent state-writer.</td><td class="nw"><b style="color:var(--good)">Done — 2026-08-11</b></td></tr>
+    <tr><td class="nw"><b>1</b></td><td>Slack channel, GitHub workflow subscription, Linear state-change notifications as an independent witness.</td><td class="nw"><b style="color:var(--good)">Done — 2026-08-11</b></td></tr>
+    <tr><td class="nw"><b>2</b></td><td>Build the sync script, its workflow, the CI declaration gate, a daily reconciliation sweep, and edge-function Slack notices — then run the sync in <em>shadow mode</em> against the incumbent.</td><td class="nw"><b style="color:var(--warn)">Filed, not built</b></td></tr>
+    <tr><td class="nw"><b>3</b></td><td>Make the check required and <em>verify it blocks</em>; only then disable the last automation and set the sync live. If the check cannot be made blocking, cutover halts.</td><td class="nw">Gated on Phase 2</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="note">
+  <span class="tag">Three things Phase 0 found by accident</span>
+  <p>
+    While disabling two automations, three further state-writers surfaced that nobody had catalogued. A
+    personal "move to started on branch copy" toggle was <em>on</em> — the likely cause of the one
+    unexplained state move that three investigations had failed to attribute. A workspace commit-linking
+    toggle was <em>off</em>, which is the only reason the project's required commit trailer
+    <code>Linear-Issue: GAM-nnn</code> is inert — it contains <code>linear issue</code>, which is on the
+    vendor's <em>closing</em> magic-word list. And <b>auto-close stale issues was on</b>, at six months, able
+    to cancel a <code>gate/human</code> row on age alone with no pull request, no merge and no human act —
+    which is exactly what that label exists to forbid. Three long-lived owner-gated rows were live exposure.
+    The generalisable lesson is in the document verbatim: <em>this workspace's state-writers are not
+    enumerable from the repository, and three of the four found so far were found by accident.</em>
+  </p>
+</div>
+
+<p>
+  The proposal itself went through <strong>six adversarial review rounds</strong> — four independent checkers
+  on the first pass, then five further rounds including two non-Claude reviewers — and the sixth round was
+  explicitly a <em>proportionality</em> review that asked whether the design had drifted. Its verdict is
+  worth quoting as a process outcome: no architecture drift, all five original decisions intact, but
+  moderate over-complication was real and concentrated in guard machinery grown to serve reviewers' threat
+  models rather than observed failures at ten merges a day. Four subsystems were cut on that finding before
+  a line of it was built.
+</p>
+
+<!-- ══════════════════════════ 8 ══════════════════════════ -->
+
+<h2 id="s8" class="sec-break"><span class="num">Section 08</span>Continuous verification</h2>
+
+<p>
+  Four independent job graphs, split deliberately so a failure names itself rather than hiding inside a
+  generic "CI failed". Three of the four exist because someone found a whole category of tests that
+  <em>nothing was running</em>.
+</p>
+
+<figure>
+<svg viewBox="0 0 1040 390" role="img" aria-label="Four CI job graphs run in parallel on every push and pull request: the main ci job runs typecheck, lint, format check, unit tests, build and a gzipped bundle budget; a sql job runs nine suites against a real Postgres 16 service container; an edge-functions job discovers and runs Deno tests per function directory; and a skill-scripts job tests the verification tools themselves. A separate healing job regenerates the Linear export on push to main, daily, and on demand.">
+  <defs>
+    <marker id="a7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+
+  <rect class="n-a" x="410" y="16" width="220" height="46" rx="6"/>
+  <text class="t-b t-acc" x="424" y="38">push · pull_request</text>
+  <text class="t-s" x="424" y="55">no branch filter — every branch</text>
+
+  <line class="e" x1="520" y1="62" x2="520" y2="78"/>
+  <line class="e" x1="140" y1="78" x2="899" y2="78"/>
+  <line class="e" x1="140" y1="78" x2="140" y2="98" marker-end="url(#a7)"/>
+  <line class="e" x1="395" y1="78" x2="395" y2="98" marker-end="url(#a7)"/>
+  <line class="e" x1="643" y1="78" x2="643" y2="98" marker-end="url(#a7)"/>
+  <line class="e" x1="899" y1="78" x2="899" y2="98" marker-end="url(#a7)"/>
+
+  <!-- job 1 -->
+  <rect class="n" x="16" y="104" width="248" height="196" rx="6"/>
+  <text class="t-b" x="30" y="126">ci</text>
+  <text class="t-s" x="30" y="148">typecheck</text>
+  <text class="t-s" x="30" y="166">eslint</text>
+  <text class="t-s" x="30" y="184">prettier --check</text>
+  <text class="t-s" x="30" y="202">vitest — ~2,100 cases</text>
+  <text class="t-s" x="30" y="220">vite build</text>
+  <text class="t-b t-acc" x="30" y="242">gzipped bundle budget</text>
+  <text class="t-s" x="30" y="260">measures the eager entry chunks</text>
+  <text class="t-s" x="30" y="276">only — so lazy route chunks</text>
+  <text class="t-s" x="30" y="292">never falsely fail the gate</text>
+
+  <!-- job 2 -->
+  <rect class="n" x="278" y="104" width="234" height="196" rx="6"/>
+  <text class="t-b" x="292" y="126">sql</text>
+  <text class="t-s" x="292" y="148">Postgres 16 service container</text>
+  <text class="t-s" x="292" y="166">with a health check</text>
+  <text class="t-b t-acc" x="292" y="188">9 suites, one step each</text>
+  <text class="t-s" x="292" y="208">RLS denial · metric views</text>
+  <text class="t-s" x="292" y="224">updatable-view write guard</text>
+  <text class="t-s" x="292" y="240">anon grant assertions</text>
+  <text class="t-s" x="292" y="256">calendar-feed lifecycle</text>
+  <text class="t-s t-warn" x="292" y="280">these were green-but-never-run</text>
+  <text class="t-s t-warn" x="292" y="294">until this job existed</text>
+
+  <!-- job 3 -->
+  <rect class="n" x="526" y="104" width="234" height="196" rx="6"/>
+  <text class="t-b" x="540" y="126">edge-functions</text>
+  <text class="t-s" x="540" y="148">Deno 2, per function directory</text>
+  <text class="t-s" x="540" y="166">— a single root invocation</text>
+  <text class="t-s" x="540" y="182">resolves the wrong config</text>
+  <text class="t-s" x="540" y="198">and dies at collection</text>
+  <text class="t-b t-acc" x="540" y="222">the loop DISCOVERS dirs</text>
+  <text class="t-s" x="540" y="240">a hardcoded list is how the gap</text>
+  <text class="t-s" x="540" y="256">would silently reopen</text>
+  <text class="t-s t-warn" x="540" y="280">a pass because nothing ran</text>
+  <text class="t-s t-warn" x="540" y="294">is an explicit error</text>
+
+  <!-- job 4 -->
+  <rect class="n" x="774" y="104" width="250" height="196" rx="6"/>
+  <text class="t-b" x="788" y="126">skill-scripts</text>
+  <text class="t-s" x="788" y="148">tests the verification tools</text>
+  <text class="t-s" x="788" y="164">themselves</text>
+  <text class="t-b t-acc" x="788" y="188">mutation-replay's parser</text>
+  <text class="t-s" x="788" y="206">once read a genuinely red run</text>
+  <text class="t-s" x="788" y="222">as "no tests executed" and</text>
+  <text class="t-s" x="788" y="238">announced UNTRUSTWORTHY</text>
+  <text class="t-s" x="788" y="262">caught only because a checker</text>
+  <text class="t-s" x="788" y="278">refused the tool's verdict and</text>
+  <text class="t-s" x="788" y="294">re-ran the mutation by hand</text>
+
+  <!-- healing job -->
+  <rect class="n-g" x="16" y="316" width="1008" height="64" rx="6"/>
+  <text class="t-b t-good" x="30" y="338">linear-export — a healing job, not a gate</text>
+  <text class="t-s" x="30" y="356">push to main · daily cron · on demand → regenerates the git-side backup and commits it</text>
+  <text class="t-s" x="30" y="372">gating on it would fail every task PR for a correct reason: claiming an issue makes the committed export stale by definition</text>
+</svg>
+<figcaption>
+  <b>Figure 7 — three of these four jobs exist because tests were found that nothing ran.</b> The SQL suites
+  had been unrunnable or silently failing since a schema change; five Deno test files had shipped with no
+  runner at all; and the mutation-replay tool — the thing that decides whether an agent may believe its own
+  evidence — was untested because <code>.claude/**</code> is excluded from the unit suite and the script is
+  Python. The bottom band is the counterpoint: the export job <em>heals</em> rather than blocks, because a
+  gate there would fail correct work by construction.
+</figcaption>
+</figure>
+
+<h3>The six gates agents run before opening a pull request</h3>
+
+<p>
+  <code>tsc --noEmit</code> · <code>vite build</code> · <code>prettier --check</code> · <code>eslint</code> ·
+  the full Vitest suite · a scoped Vitest run for the changed area. They are wrapped in a single skill so that
+  the same six commands, run several times per task by different agents and quoted into logs and PR bodies,
+  produce one comparable evidence block — and so that nobody can launder a result through
+  <code>tail</code> or <code>grep</code>. The format check itself was added after prettier drift landed
+  silently and every subsequent PR merged green while the repository failed its own <code>format:check</code>;
+  typecheck, lint, test and build are all blind to formatting.
+</p>
+
+<!-- ══════════════════════════ 9 ══════════════════════════ -->
+
+<h2 id="s9"><span class="num">Section 09</span>Parallelism, isolation, and a second runtime</h2>
+
+<h3>Two agent runtimes, one process</h3>
+
+<p>
+  The same constitution, ledger, packets, role prompts and verification history drive a second, adjacent
+  implementation lane: OpenAI Codex contributes code to this repository under the identical process. A root
+  <code>AGENTS.md</code> is the adapter. It does not fork the standard — the first line of it is a
+  prohibition on creating a second ledger, constitution, severity scale, or set of role definitions.
+</p>
+
+<div class="tw">
+<table>
+  <thead>
+    <tr><th>What the runtimes share</th><th>What the adapter translates</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>The constitution and its 30 items; the Linear queue and item 28's claim protocol; the frozen ledger's provenance; the FAST/STANDARD/HEAVY tiers; the severity scale; the verification and dispute logs; the role charters as portable prose.</td>
+      <td>Role prompts become compact subagent instructions rather than registered agents. Model pins map to two capability tiers — balanced and frontier — with a documented per-role mapping. Claude's hooks become explicit verification commands. And isolation becomes <em>manual</em>: Codex subagents share the filesystem by default, so the orchestrator must create a dedicated worktree and branch and hand the agent that exact path.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Isolation is a rule because sharing a tree corrupted a measurement</h3>
+
+<figure>
+<svg viewBox="0 0 1040 250" role="img" aria-label="Worktree isolation. On the left, agents sharing one working tree: a reader and a mutating agent collide, and the orchestrator reverting an unexpected change destroys an in-flight experiment. On the right, read-only audits use the shared tree while any agent that modifies files gets its own git worktree and branch, so mutations cannot be observed or reverted by anyone else.">
+  <defs>
+    <marker id="a8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+    </marker>
+    <marker id="a8w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/>
+    </marker>
+  </defs>
+
+  <text class="t-hd t-warn" x="16" y="18">WHAT HAPPENED ONCE</text>
+  <rect class="n-w" x="16" y="30" width="200" height="52" rx="6"/>
+  <text class="t-b t-warn" x="30" y="52">Premise gate</text>
+  <text class="t-s" x="30" y="70">4 instrumented mutations</text>
+
+  <rect class="n" x="16" y="150" width="200" height="52" rx="6"/>
+  <text class="t-b" x="30" y="172">Orchestrator</text>
+  <text class="t-s" x="30" y="190">sees a dirty tree, reverts it</text>
+
+  <rect class="n" x="256" y="90" width="180" height="52" rx="6"/>
+  <text class="t-b" x="270" y="112">One shared tree</text>
+  <text class="t-s" x="270" y="130">no ownership signal</text>
+
+  <line class="e-w" x1="216" y1="60" x2="250" y2="104" marker-end="url(#a8w)"/>
+  <line class="e-w" x1="216" y1="172" x2="250" y2="128" marker-end="url(#a8w)"/>
+  <text class="t-s t-warn" x="16" y="222">measurement corrupted · change misattributed</text>
+  <text class="t-s t-warn" x="16" y="236">a correct agent blamed — three failures, one missing convention</text>
+
+  <!-- divider -->
+  <line class="e" x1="480" y1="16" x2="480" y2="242" stroke-dasharray="4 4" opacity=".4"/>
+
+  <text class="t-hd t-acc" x="512" y="18">THE RULE THAT FOLLOWED</text>
+  <rect class="n" x="512" y="30" width="220" height="52" rx="6"/>
+  <text class="t-b" x="526" y="52">Read-only audits</text>
+  <text class="t-s" x="526" y="70">shared tree, unrestricted</text>
+
+  <rect class="n-a" x="512" y="98" width="220" height="52" rx="6"/>
+  <text class="t-b t-acc" x="526" y="120">Any agent that mutates</text>
+  <text class="t-s" x="526" y="138">creates its own worktree</text>
+
+  <rect class="n" x="792" y="30" width="232" height="52" rx="6"/>
+  <text class="t-b" x="806" y="52">main working tree</text>
+  <text class="t-s" x="806" y="70">the owner's, never mutated</text>
+
+  <rect class="n-a" x="792" y="98" width="232" height="52" rx="6"/>
+  <text class="t-b t-acc" x="806" y="120">isolated worktree + branch</text>
+  <text class="t-s" x="806" y="138">commit → mutate → revert → re-verify</text>
+
+  <line class="e" x1="732" y1="56" x2="786" y2="56" marker-end="url(#a8)"/>
+  <line class="e-a" x1="732" y1="124" x2="786" y2="124" marker-end="url(#a8)" stroke="var(--accent)"/>
+
+  <text class="t-s t-acc" x="512" y="186">Corollary: a dirty tree is not automatically an unauthorized change —</text>
+  <text class="t-s t-acc" x="512" y="200">establish which agents are running before reverting anything.</text>
+  <text class="t-s" x="512" y="222">Mutation proofs have caught more real defects here than any other</text>
+  <text class="t-s" x="512" y="236">technique. This rule isolates the practice; it does not restrict it.</text>
+</svg>
+<figcaption>
+  <b>Figure 8 — the isolation boundary is drawn around writes, not around agents.</b> Reading the shared
+  tree stays unrestricted precisely because a premise gate must check citations against live state,
+  including uncommitted work. Only modification requires a worktree.
+</figcaption>
+</figure>
+
+<h3>Ownership is per file, not per feature</h3>
+
+<p>
+  Work is cut into ten user-facing workflows, and which of them can run concurrently is decided by
+  <em>file overlap</em>, not by topic. The project has paid for that lesson twice: two branches once minted
+  the same task number from the same shared file on the same afternoon, and a change correctly scoped to one
+  workflow's own files broke six tests in two other workflows — because the file was a shared
+  <em>loader</em>, whose coupling is invisible from its path.
+</p>
+
+<div class="tw">
+<table>
+  <thead>
+    <tr><th>Coordination rule</th><th>The failure it was written against</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>One machine owns a <b>file</b>, not a workflow. If two workflows need the same page, the second waits.</td><td>Five files are documented collision magnets, one of them 4,164 lines with eight open rows touching it.</td></tr>
+    <tr><td>Branch names are task-scoped — <code>claude/gam-&lt;n&gt;-&lt;slug&gt;</code> — never session-derived.</td><td>A session-titled branch was used by one session for a PR and, the same afternoon, by another as a working branch: two machines on one mutable ref with nothing announcing the overlap. Caught by the owner asking a question, not by any check.</td></tr>
+    <tr><td>Before editing anything in the loaders directory, find its importers first — the owning workflow is whoever <em>imports</em> it.</td><td>A loader that reads like one workflow's territory is called at runtime by three.</td></tr>
+    <tr><td>Never resolve a shared-document conflict by taking one side wholesale.</td><td>Both sides are real entries. This has bitten once already, and is now a scripted skill.</td></tr>
+    <tr><td>The cross-cutting hygiene workflow runs alone — every row in it is a sweep across the whole source tree by definition.</td><td>It collides with all nine others.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ══════════════════════════ 10 ══════════════════════════ -->
+
+<h2 id="s10" class="sec-break"><span class="num">Section 10</span>Observability and cost</h2>
+
+<p>
+  Two hooks run inside the agent session itself. A <code>PostToolUse</code> hook lints after every edit or
+  write. A second hook fires after any pull-request merge call and <em>reads the pull request back</em>,
+  because a merge API returning <code>{"merged": true}</code> is the API's word for what it did, not proof
+  the branch landed — this session once reported a PR merged while it was still open. The hook never blocks;
+  it reports, loudly, and when it cannot verify it says so rather than succeeding silently. A
+  <code>SubagentStop</code> hook appends a line every time a worker finishes, recording that a checker is
+  still required.
+</p>
+
+<p>
+  Beyond the session, the observability story is deliberately cheap and was audited for gaps. A Slack channel
+  receives GitHub workflow events — subscribed explicitly to <code>repository_dispatch</code>,
+  <code>push</code> and <code>schedule</code>, because the default subscription covers pull requests only and
+  would have excluded the dispatch workflow entirely, which is exactly the silent failure the channel exists
+  to end. Linear posts status changes to the same workspace as an independent witness of every state move,
+  including any nobody can attribute.
+</p>
+
+<h3>What it costs, honestly</h3>
+
+<div class="note">
+  <span class="tag">A note on the dollar figures</span>
+  <p>
+    Automated runs authenticate against a Claude subscription rather than an API key, so no invoice follows
+    any figure below. The SDK still reports a notional cost by pricing each run's tokens at list rates, and
+    those numbers are kept rather than scrubbed because they are the only quantitative signal available —
+    proportional to tokens weighted by model tier, and therefore sound for comparing one run against another.
+    Read them as consumption, never as spend.
+  </p>
+</div>
+
+<div class="tw">
+<table>
+  <thead>
+    <tr><th>Measurement</th><th class="nw">Figure</th><th>Reading</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>A full heavy row, end to end, on the dispatch path</td><td class="nw">~$37–45 notional</td><td>One gate round at 64 turns / 22 min, plus worker + checker at 54 turns / 59 min.</td></tr>
+    <tr><td>The single largest reducible share</td><td class="nw">238 Bash calls</td><td>Mechanical work — <code>npm ci</code>, <code>tsc</code>, <code>vitest</code>, git — run on a <em>frontier orchestrator</em>, each result growing an expensive context. The cheap test-checker role exists precisely for this and was not being used.</td></tr>
+    <tr><td>Early tracked tasks, interactive sessions</td><td class="nw">~317K tokens each</td><td>Across a complete invocation chain of ~5.6 agent calls per task. The planning role, not the worker, is the largest recurring cost driver.</td></tr>
+    <tr><td>Effect of a rework loop</td><td class="nw">≈ 2×</td><td>Tasks needing a second attempt land at 330–400K tokens against 250–290K for comparable clean ones. This is the arithmetic that justifies the premise gate.</td></tr>
+    <tr><td>Total infrastructure cost of the integration</td><td class="nw">$0</td><td>Public-repo Actions, free-plan Linear webhooks and GraphQL, an already-deployed edge function, free Slack apps, and branch protection which is free on public repositories.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ══════════════════════════ 11 ══════════════════════════ -->
+
+<h2 id="s11"><span class="num">Section 11</span>Honest limits and what is next</h2>
+
+<p>
+  A document that only lists what works is the failure mode this project writes rules against. The open
+  items, as the repository itself records them:
+</p>
+
+<ul>
+  <li><strong>The outbound sync is designed, reviewed six times, and not built.</strong> Phases 0 and 1 shipped;
+    Phase 2 is a filed heavy row that has to pass its own premise gate before a line of it is written.
+    Until then the vendor's merge automation remains the only closer.</li>
+  <li><strong>Nothing tells the owner a dispatch was skipped.</strong> The design document calls this its
+    sharpest open item — a wrongly-skipped dispatch currently looks exactly like a quiet week. The Slack
+    notifier that closes it rides with Phase 2.</li>
+  <li><strong>An agent that dies mid-run strands its issue.</strong> It sits in <code>In Progress</code>, where
+    the <code>Backlog → Todo</code> webhook can never re-dispatch it. Recovery is a manual re-drag.</li>
+  <li><strong>Attribution is imperfect and will stay so.</strong> API-driven transitions attribute to the key
+    owner's user, exactly as the vendor automation's did. The audit comment sitting beside each move is the
+    mitigation; a first-class agent identity is the real fix, and it is a watch item rather than a plan.</li>
+  <li><strong>Two policies live only in workflow comments and owe ratification</strong> — the orchestrator's
+    model-by-tier mapping, and the delegation caveat in §2. The constitution reserves amendments to two
+    roles, so a comment does not become a rule by being merged. The repository flags this against itself as
+    an instance of item 20's own failure shape.</li>
+  <li><strong>Documentation drift is tracked, not hidden.</strong> One reference guide states a restriction
+    broader than the constitution's, and the disagreement is flagged in place rather than edited away —
+    because narrowing a stated restriction is a governance act, not a documentation fix, and the agent that
+    noticed it had just edited a workflow file.</li>
+</ul>
+
+<h3>What this demonstrates</h3>
+
+<p>
+  Three things, none of which required a large team or a budget.
+</p>
+
+<p>
+  <strong>Governance can be executable.</strong> A constitution that carries its own evidence — the incident,
+  the date, the measurement, the authorizing quotation — is not documentation overhead. It is the onboarding
+  material for every agent that will ever touch the repository, and it is why a cold agent dispatched from a
+  webhook can be trusted to judge its own process tier and defend the call in public.
+</p>
+
+<p>
+  <strong>Verification has to be executable too.</strong> Every technique that changed an outcome here came
+  from an agent that <em>ran</em> something — a mutation that had to go red, a throwaway Postgres cluster, a
+  real browser at a real viewport, a prescription executed in an isolated worktree before anyone built it.
+  The techniques that only read code have a much worse record, and the project measures the difference rather
+  than assuming it.
+</p>
+
+<p>
+  <strong>Cost discipline is a design constraint, not an afterthought.</strong> Three process tiers, four
+  model tiers, a two-round cap on the most expensive gate, and a proportionality clause that explicitly
+  forbids inflating a finding because its topic sounds serious. The system is built to be affordable enough
+  to actually run — which is the only version of it that produces the 232 verified entries behind this
+  document.
+</p>
+
+<div class="footer">
+  <p>
+    <b>VOLT Portal — multi-agent development architecture.</b> Compiled from the repository's own records:
+    <code>docs/swarm/constitution.md</code>, <code>WORKFLOWS.md</code>, <code>AGENTS.md</code>,
+    <code>SWARM-QUICKSTART.md</code>, the Linear webhook dispatch design, the Linear–GitHub integration
+    proposal and its six review rounds, the verification and dispute logs, and the three GitHub Actions
+    workflows. Every quotation is verbatim from those sources. State of record: 11 August 2026.
+  </p>
+  <p>
+    Figures are hand-authored inline SVG; this file is self-contained and prints to PDF directly from any
+    browser.
+  </p>
+</div>
+
+</div>
+</body>
+</html>
