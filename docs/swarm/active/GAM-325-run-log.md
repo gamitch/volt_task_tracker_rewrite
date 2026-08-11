@@ -225,3 +225,11 @@ verdict, this run died holding that subagent. It is not "still working".
   `docs/swarm/active/GAM-325-lane-d-workflows.patch`** (E3): 580 lines, 4 diffs,
   and **`git apply --check` exits 0**, so it is a patch that applies rather than
   a file that looks like one.
+- 2026-08-11 23:0xZ — **`checker-reviewer` DISPATCHED** (opus,
+  `run_in_background: false`; this run blocks on it and does not end its turn
+  while it is in flight). Charter: `GAM-325-checker-packet.md`, all five lanes,
+  with the six worker-declared ambiguities put in front of it as named questions
+  to rule on rather than left to be rediscovered.
+
+  **If this line is the last one in this file, the run died holding this
+  subagent.** It is not "still working".
