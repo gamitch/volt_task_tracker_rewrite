@@ -11876,3 +11876,158 @@ recorded instance, so closing it by repeating the failure would have been unusua
 
 All three carry branch-relative line numbers and say so, because GAM-304 had not merged when they
 were written.
+
+---
+
+## GAM-314 — a dispatched run reported `success` with its work still in flight (STANDARD tier) — **PARTIAL**
+
+**Partial, not Passed, and the reason is a credential and not the work.** The
+assertion and its tests are merged and verified; the workflow job that calls
+them could not be pushed by this run at all. See "Undeliverable half" below.
+
+### Tier judgement (item 26), stated and defended
+
+**STANDARD.** FAST was unavailable: its bar requires a named mutation that turns
+a test red, and nothing in this repository executes a workflow YAML — the issue
+said so itself. That constraint was only half true, and the half that was false
+is what made STANDARD workable: the *decision* the YAML calls can live in a pure
+function, and a pure function is testable. HEAVY's triggers are enumerated —
+write path or destructive operation, RLS/auth/role logic, migration or
+metric-view SQL, an export another session builds against — and none is present.
+Item 26's selecting question ("can a mistake here corrupt data, or lie to a user
+about their own data?") answers no: a mistake here fails dispatch runs loudly.
+Both premise-gate rounds were asked to overturn this and both upheld it.
+
+### The premise, measured before anything was written
+
+Holds. `.github/workflows/claude-linear-dispatch.yml` is 412 lines; after the
+`Work the issue` step (`:102-359`) there are exactly two steps — the artifact
+upload (`:387-396`) and the session-id summary (`:402-411`) — and both are
+`if: always()` bookkeeping. Nothing read the issue's final state. Item 28e sits
+at `constitution.md:451-456`, as the issue cites. The issue's own line numbers
+for the workflow (88-280, 174-198) had drifted; corrected in the run log.
+
+### Premise gate (item 19) — two rounds, both REVISE, cap respected
+
+Round 1 returned **REVISE** with a BLOCKER: the rule table treated `In Progress`
+at run end as always meaning "the agent stopped holding a claim", but this same
+workflow's prompt (`:197-199`, shipped in PR #141) instructs an agent near the
+wall clock to stop and push — which ends green with the issue *legitimately*
+`In Progress`. Resolved as **still FAIL**, because the chain is unfinished
+either way and nothing else reports it, with the failure message widened to name
+the benign shapes.
+
+Round 2 returned **REVISE** with no BLOCKER, and — item 26's "a gate that only
+reads is worth much less than one that runs" — it *executed* the prescription
+against the live API, producing exactly the five outcomes the criteria specify.
+It found two more benign `In Progress` shapes (an item-19a or Loop-Limit
+escalation, and the workspace's live *On open in coding tool → started*
+automation, measured moving GAM-304 `In Review → In Progress` with
+`botActor: GitHub/integration`), and it caught the author claiming two item-20
+deferrals were "filed" when no such rows existed.
+
+**Item 19a's two-round cap was respected**: no round 3. All four remaining
+findings were mechanical wording or bookkeeping, none changed the prescription,
+and the prescription had just been measured working.
+
+Between the rounds the gate also corrected two of the author's own citations
+(item 19c): GAM-312 does not own the untested-YAML gap, and **0 of 83 issues in
+this workspace are in `In Review` or `Todo`**, which made an acceptance criterion
+unsatisfiable as written.
+
+### Mutation replay (item 26) — and the worker's figure was wrong
+
+The worker reported the mutated run as "exit code 0 as a process but 3 tests
+failed". Replayed independently on a committed tree: **3 failed / 13 passed,
+exit code 1.** Vitest does exit non-zero; the guard is real. The stronger
+evidence is live rather than unit: the *mutated* script, run against GAM-314
+while that issue was genuinely `In Progress`, returned **exit 0** — precisely
+the green run on an unfinished chain this row exists to stop. Restored, tree
+clean, 16/16 green.
+
+This is the second recorded case of a worker's self-reported exit code not
+surviving replay, and it is why the orchestrator replays rather than reads.
+
+### Live behaviour, executed by the orchestrator against the real API
+
+```
+node scripts/linear-assert-released.mjs GAM-314    -> 1   (In Progress)
+node scripts/linear-assert-released.mjs GAM-304    -> 0   (Done)
+node scripts/linear-assert-released.mjs GAM-99999  -> 1   NOT FOUND
+LINEAR_API_KEY=<invalid> … GAM-314                 -> 1   UNDETERMINED (401 quoted)
+env -u LINEAR_API_KEY … GAM-314                    -> 1   UNDETERMINED
+```
+
+`NOT FOUND` and `UNDETERMINED` are deliberately different strings: a check that
+passed when it could not look would reproduce the evidence-honesty defect the
+row is about.
+
+### Gates
+
+Measured on `86fcbb1`, clean tree, via the `gate-run` skill so each exit code
+comes from the process and not from a pipe:
+
+```
+npx tsc --noEmit                                    -> 0
+npx vite build                                      -> 0
+npm run format:check                                -> 0
+npx eslint .                                        -> 0   0 errors, 377 warnings (all pre-existing)
+npx vitest run                                      -> 0   84 files / 2178 tests  (baseline 83 / 2162, +16)
+npx vitest run scripts/linear-assert-released.test.mjs -> 0   1 file / 16 tests
+```
+
+Run by worker and orchestrator independently with identical figures. Two of the
+six cannot see this change at all — `tsconfig.json:22` includes only
+`["src", "vite.config.ts"]` and `format:check`'s globs stop at `src/**` plus
+root files — so `npx prettier --check` was additionally run by hand on both new
+scripts (exit 0).
+
+### Boundary (item 22)
+
+`git diff --name-only ccf77b1` returns five paths and no more: the two new
+scripts and three `docs/swarm/active/` files. Zero hits under `src/`,
+`supabase/`, `.claude/`, `package.json`, or `scripts/linear/client.mjs` — the
+client was imported and never edited, which the packet forbade explicitly so the
+worker could not "fix" the error taxonomy by changing shared code.
+
+### Undeliverable half — why this row is PARTIAL
+
+The `assert-released` job **cannot be pushed by a dispatched run**. Measured
+three ways: `git push` with the `origin`-embedded `CLAUDE_PR_TOKEN` is refused
+for want of `workflow` scope; the same push with the `claude[bot]` App
+installation token is refused identically; and
+`PUT /repos/…/contents/.github/workflows/…` returns **403 — "refusing to allow a
+GitHub App to create or update workflow … without `workflows` permission"**. The
+branch pushed successfully the instant the workflow file left the commit, which
+isolates the cause to that path.
+
+The change is preserved verbatim and applyable as
+`docs/swarm/active/GAM-314-workflow-wiring.patch`, and was verified anyway
+despite being unpushable: it applies cleanly, `js-yaml` parses the result,
+`jobs` becomes `['work','assert-released']`, the new job carries `needs: work`,
+`if: always() && …identifier != ''`, `permissions: {contents: read}`,
+`timeout-minutes: 5`, the identifier in `env:` rather than interpolated into
+`run:`, and the `work` job is untouched at 120 minutes and 4 steps.
+
+**Under item 27 this is the shipped-but-inert case**: the assertion exists and
+asserts nothing until a workflow calls it. `GAM-328` is the wiring row.
+
+### Follow-up (item 20 — filed before the row moved, not after)
+
+Three rows, each filed through the `linear-task-writing` skill per item 30, all
+into `Backlog` because item 28a makes promotion the owner's signal:
+
+1. **`GAM-328`** (high, `tier/fast`) — the credential wall above. Deliberately
+   does **not** pick a remedy: the restriction is a real security boundary, since
+   an agent able to edit `claude-linear-dispatch.yml` can delete its own
+   `--allowedTools`, `permissions:` block and turn caps in one commit. The
+   trade-off is the owner's to make.
+2. **`GAM-326`** (medium, `tier/standard`) — this assertion's own incentive.
+   `Todo` is its only green non-completion outcome, and `filter.ts` rule 4
+   dispatches on *any* transition into `Todo`: GAM-304 moved
+   `In Progress → Todo` at `13:11:21.452Z` and run `31391626696` was created at
+   `13:11:25Z`, four seconds later. So an unfinished agent can reach green by
+   re-dispatching itself.
+3. **`GAM-327`** (medium, `tier/fast`) — nothing executes any of the three
+   workflow YAMLs. No actionlint, no yamllint, no test. This is the gap the
+   packet originally mis-attributed to GAM-312.
