@@ -122,3 +122,10 @@ verdict, this run died holding that subagent. It is not "still working".
   * Also: N3 §0's stale "private" bullet, N5 the Slack subscription must
     *replace* the as-built filter (`workflows:{}` clauses are ANDed, so F1's
     defect is live today), N6 `deno` is not installed on the container, N8/N9 nits.
+- 2026-08-11 22:2xZ — **packet draft 4 written: E1–E9 all applied.** E9 first (a
+  merge of `main`, so every dispatched agent reads the post-#161 `AGENTS.md`
+  carrying the wall), then E1–E8 to the packet. The load-bearing one is **E3**: a
+  new subsection at the head of §5 recording that lane D's entire Allowed Files
+  set is undeliverable by push, that the worker commits without pushing, and that
+  the orchestrator preserves a `git format-patch`. Gate round 2's condition is
+  satisfied and no further gate round is available or needed (item 19a).

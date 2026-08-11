@@ -12,8 +12,17 @@ Written: 2026-08-11
 
 Five checks, run live. Full text in `GAM-325-run-log.md`; the two that change this packet:
 
-* **The repository is `private`, not public.** §6.4 asserts *"Because this repo is public, branch protection — including required status checks — is free. (Private repos would need GitHub Pro; not this repo's situation.)"* `gh api repos/gamitch/volt_task_tracker_rewrite` returns `"visibility": "private"`, and `branches/main` returns `"protected": false`. This lands on **Phase 3 step (a)**, not on this build — but Phase 3's halt condition ("if it cannot be made blocking, halt") is now a live possibility rather than a formality, and the proposal must be corrected. **Orchestrator owns that correction; no worker touches `docs/swarm/**`.**
-* **§8's throwaway-PR measurement checklist cannot be executed by this agent.** The dispatch token gets HTTP 403 on `GET /actions/runs` and `/actions/secrets`. Every one of checklist items 1–7 is an *observation of a workflow run*, and the observation channel is closed. This is a capability limit, not an effort limit.
+* **The repository is `public` (E1 — run 1's "private" measurement is stale and was corrected three drafts ago).** `gh api repos/gamitch/volt_task_tracker_rewrite --jq '{private,visibility}'` → `{"private":false,"visibility":"public"}`, measured again by premise gate round 2 on 2026-08-11. `branches/main` is still `"protected": false`, so **Phase 3 step (a) remains an owner action — but it is not paywalled**, and its halt condition is no longer live. The proposal was already corrected in this direction at `7d5d8b1` (§6.4:580-597), so draft 1's *"the proposal must be corrected"* is spent work; nothing further is owed there. Run 1's measurement was **right when taken** (17:00Z, before the owner made the repo public at ~17:57Z) — a measured fact about a setting the owner can change in one click has a shelf life, which is why Phase 3 re-measures rather than trusting this paragraph.
+* **§8's throwaway-PR checklist is still unexecutable — but not for the reason draft 1 gave (E2).** The observation channel is **open**: measured by premise gate round 2, `GET /actions/runs` → **200**, `GET /actions/workflows` → **200**; only `GET /actions/secrets` (403) and `GET /user` (403) are refused. Run 1's blanket 403 no longer holds, and it may not hold in reverse either — this capability has flipped once already.
+
+  **The real blocker is the delivery channel, not the observation channel: a dispatched run cannot push `.github/workflows/**` at all** (`AGENTS.md` § *Two walls a dispatched run hits*, wall 1, on `main` at `9f91c23` / PR #161). So **no throwaway PR carrying the sync workflow can ever exist from here**, and every one of checklist items 1–7 — all of which are observations of *that workflow running* — stays out of reach. Measured by the gate, with a deliberately-wrong sha so nothing mutated:
+
+  ```
+  PUT /contents/.github/workflows/ci.yml    sha=000…0 → 403  Resource not accessible by integration
+  PUT /contents/docs/swarm/constitution.md  sha=000…0 → 409  sha does not match
+  ```
+
+  The permission check fires **before** the sha check on `.github/workflows/**`; one directory over, only the sha objects. The refusal is the directory, not the request, and it is identical on both credentials this run holds. **The conclusion draft 1 reached was right; its premise was wrong.** See §5's opening subsection.
 
 ### How this packet answers the blocked checklist — read this before objecting to it
 
@@ -226,7 +235,9 @@ A PR with no declaration at all and no `claude/gam-nnn-` branch is **green** (me
 Daily, **read-only**, writes nothing to Linear ever.
 
 * Lists PRs merged in the last **48 h** on **any base branch** (§6.3 — a stacked child merging into its parent hits `NON_MAIN_BASE` and closes nothing, so its declared row surfaces only here).
-* For each with a canonical declaration, reads the issue's **state history, never `completedAt`** (§6.3, measured 2026-08-11: a reopen/re-close left `completedAt` frozen at the original close while only the history recorded the truth — the orchestrator re-confirmed both fields exist and disagree in exactly this way on GAM-303).
+* For each with a canonical declaration, reads the issue's **state history, never `completedAt`** (§6.3: a reopen/re-close leaves `completedAt` frozen at the original close while only the history records the truth).
+
+  **The exhibit is GAM-315, not GAM-303 (E6) — draft 3 named the wrong issue twice.** Measured by premise gate round 2: **GAM-315**'s `completedAt` is `2026-08-10T23:36:32.146Z` and stays frozen there across a `Done → In Progress` at `2026-08-11T00:27:43.816Z` and an `In Progress → Done` at `2026-08-11T00:47:24.148Z`. That is the divergence the rule exists for. **GAM-303 does not show it**: its transitions are `Backlog → In Progress → In Review → In Progress → Done`, and its `completedAt` (`15:41:13.412Z`) *agrees* with its single `Done` (`15:41:13.379Z`) to 33 ms. The rule is unchanged and correct; only the citation was wrong. **Lane C's criterion-3 fixture is built from GAM-315's numbers above.**
 * Reports drift to Slack without writing. A human decides.
 * Exits 0 even when drift is found — it is a report, not a gate.
 
@@ -234,13 +245,57 @@ Daily, **read-only**, writes nothing to Linear ever.
 
 1. One named test per gate rule 1–4 above, plus a green case for an infra PR with no declaration and a non-identifier branch, plus a red case for `claude/gam-131-foo` declaring `GAM-130`.
 2. A test proving the gate's exit code is 1 on red and 0 on green, and that no code path returns without an explicit exit code.
-3. A test proving the sweep reads history and not `completedAt` — assert against a fixture where the two disagree.
+3. A test proving the sweep reads history and not `completedAt` — assert against a fixture where the two disagree, **built from GAM-315's measured numbers above** (`completedAt` `2026-08-10T23:36:32.146Z`; transitions `00:27:43.816Z` and `00:47:24.148Z` on 2026-08-11). Do not use GAM-303: measured, its two fields agree, so a fixture drawn from it would assert nothing.
 4. A test proving `Also-fixes:` validation is advisory (exit 0) when no key is present.
 5. No network in tests. `npx eslint scripts/` exits 0.
 
 ---
 
 ## 5. Lane D — the three workflows
+
+### Lane D cannot be delivered by push (AGENTS.md wall 1) — read this first (E3)
+
+**Every one of lane D's three Allowed Files is under `.github/workflows/`, and a
+dispatched run cannot push that directory.** No draft before this one said so.
+`AGENTS.md` § *Two walls a dispatched run hits* (on `main` at `9f91c23`, PR #161)
+records both credentials being refused — the PAT for want of the `workflow`
+scope, the `claude[bot]` App for want of the Workflows permission — and premise
+gate round 2 re-measured it (§0, E2): `PUT` on `.github/workflows/ci.yml` returns
+**403 `Resource not accessible by integration`** where the identical request one
+directory over returns a 409 sha-mismatch.
+
+**This is deliberate.** `AGENTS.md` calls it *"the only thing stopping an
+autonomous run from rewriting the workflow that constrains it, including its own
+`--allowedTools`, `permissions:` block and turn caps."* **Do not attempt another
+channel.** Trying one is a BLOCKER finding, not resourcefulness.
+
+What follows from it, and all five points are binding on lane D:
+
+1. **Lane D's worker builds and commits the three files in its own worktree and
+   never pushes.** A push whose pack touches `.github/workflows/**` is rejected
+   outright and **strands the entire commit**, not merely those files — so a
+   worker that "just tries the push" loses its own work as well.
+2. **Lane D is still fully reviewable.** Criteria 1–9 are local `grep` and
+   `python3 -c "import yaml, sys; [yaml.safe_load(open(p)) for p in sys.argv[1:]]"`
+   checks that pass with nothing pushed anywhere. `checker-reviewer` reviews the
+   committed blob in the worktree; item 21 applies as normal.
+3. **The orchestrator preserves the commit as an applyable patch.** `git
+   format-patch` over lane D's commit, written to
+   `docs/swarm/active/GAM-325-lane-d-workflows.patch` — the same route taken for
+   `docs/swarm/active/GAM-314-workflow-wiring.patch` in `86fcbb1`. No lane may
+   write under `docs/swarm/**` (§1), so this is the orchestrator's action.
+4. **The PR body leads with the undeliverable half**, rather than burying it
+   under what did ship, and a handover is filed on the issue.
+5. **The route is proven end to end**, not hoped: PR #159 (`app/claude`, no
+   workflow file) → PR #160 (`gamitch`, `.github/workflows/claude-linear-dispatch.yml`
+   only). An owner or a scoped session applies the patch as a normal PR, so CI
+   still runs on it.
+
+**Cascade — say it out loud rather than discovering it at cutover.** Because the
+three workflow files cannot reach any ref from here, the shadow window (§8 Phase
+2) does not start, the `measure` step does not run, and §8's checklist items 1–7
+stay unmeasured, **until the owner applies the patch**. That is the dominant risk
+on this build and it is now LCD 1's lead sentence.
 
 ### 5.0 Owner actions — three secrets, assigned to nobody by the first draft
 
@@ -282,6 +337,19 @@ while keeping the four that matter.
 ```
 /github subscribe gamitch/volt_task_tracker_rewrite workflows:{name:"Linear sync","Linear declaration","Linear reconcile","Claude — Linear dispatch","Linear export"}
 ```
+
+**This subscription REPLACES the as-built one; it does not add to it (E7).** What
+is live today, recorded in proposal §8a, is:
+
+```
+workflows:{event:"repository_dispatch","push","schedule"}
+```
+
+**Filters inside `workflows:{}` are ANDed.** Keeping the event filter alongside
+the name filter would still drop every `pull_request` run of the sync and gate
+workflows — which is the whole of F1's defect, so it would survive the fix. Note
+that this means **F1's defect is live in `#tracker` today, not hypothetical**: the
+current subscription already cannot show a `pull_request`-triggered run.
 
 **This makes lane D's `name:` keys a contract with an owner action.** The three
 workflow files must carry exactly `Linear sync`, `Linear declaration` and
@@ -353,15 +421,24 @@ validation error** — so the two keys above must stay `false` and `max` togethe
 2. Every workflow parses: `node -e "require('js-yaml')"` is not available, so validate with `python3 -c "import yaml,sys; [yaml.safe_load(open(p)) for p in sys.argv[1:]]"` over the three files, exit 0.
 3. No `${{ secrets.* }}` value is ever `echo`ed; the measure step prints booleans only. Prove with a grep in the worker output.
 4. `SYNC_MODE` is literally `shadow` in the committed file.
+5. Each file carries a header comment explaining *why* — matching the density of `linear-export.yml` and `ci.yml`, which is this repo's standard, not decoration.
 6. `grep -c "queue: max" .github/workflows/linear-sync.yml` returns 1, and the same file does **not** carry `cancel-in-progress: true` (the pair is a validation error).
 7. `grep -n "PR_NUMBER" .github/workflows/linear-sync.yml` shows the `env:` mapping from `inputs.pr_number`, so lane B's replay path is actually reachable.
 8. The measure step prints `has_linear_key` and `has_slack_url`.
-5. Each file carries a header comment explaining *why* — matching the density of `linear-export.yml` and `ci.yml`, which is this repo's standard, not decoration.
 9. **The three top-level `name:` keys are exactly `Linear sync`, `Linear declaration` and `Linear reconcile`** — §5.0's fourth owner action subscribes `#tracker` by workflow name, and any other spelling silently matches nothing. Prove with a grep of the three `name:` lines.
-10. **The workflows are proved to parse and run, not merely to lint (gate round 1, F3).** `eslint`/`typecheck`/`test`/`format:check` all pass happily on three YAML files GitHub would reject outright, and LCD 6 concedes `queue:` is three months old. The failure mode that concedes does not name is the worse one: **if the runner rejects `queue: max`, the workflow does not run at all** and the build lands three inert files that look shipped — this project's named recurring defect reached by a new road. So, once the workflows are on the branch:
-    * trigger `linear-reconcile.yml` once via `workflow_dispatch` and record the run's `conclusion` and URL;
+10. **OWNER ACTION, not a lane or orchestrator criterion (E4). The workflows must be proved to parse and run, not merely to lint (gate round 1, F3)** — but nobody in this run can do it. `eslint`/`typecheck`/`test`/`format:check` all pass happily on three YAML files GitHub would reject outright, and LCD 6 concedes `queue:` is three months old. The failure mode LCD 6 does not name is the worse one: **if the runner rejects `queue: max`, the workflow does not run at all** and the build lands three inert files that look shipped — this project's named recurring defect reached by a new road.
+
+    **Draft 3 said "the orchestrator executes this at integration, not the worker". That is false and is struck.** The orchestrator holds the same two refused credentials as the worker (see §5's opening subsection) and can put these files on no ref at all.
+
+    **`workflow_dispatch` requiring the default branch is CONFIRMED**, from `github/docs` `data/reusables/actions/branch-requirement.md`: *"This event will only trigger a workflow run if the workflow file exists on the default branch."* `linear-reconcile.yml` carries only `schedule` and `workflow_dispatch`, so **it cannot run by any trigger** until the owner's PR merges.
+
+    So, **after the owner applies `GAM-325-lane-d-workflows.patch`**:
+    * trigger `linear-reconcile.yml` once via `workflow_dispatch` and record the run's **`conclusion` and URL** — this is the strong signal;
     * confirm all three appear in `GET /actions/workflows` with `"state": "active"` rather than in the `invalid workflow file` state.
-    **The orchestrator executes this at integration, not the worker** — the worker's branch is not the default branch, and `workflow_dispatch` on a non-default branch requires the workflow to exist on the default branch first. Recorded here as a lane-D criterion because it is lane D's work that it verifies, and because it must not be silently dropped. **Measured this run: `GET /actions/runs` and `GET /actions/workflows` both return 200 for the dispatch token** — the observation channel that run 1 recorded as 403 is open, so this criterion is executable and is not a wish.
+
+    **`state: active` is a weak instrument on its own, measured.** The gate's exhibit `claude-auth-smoke.yml` (workflow id `330685844`) reports `"state": "active"` while `GET /contents/` for it on `main` returns **404** — so the state half *is* readable from a non-default branch once the files exist somewhere, but GitHub also keeps listing a **deleted** workflow as `active`. Record the `conclusion`, never the state alone.
+
+    **The observation channel is open and may close again.** Run 1 measured 403 on both `/actions/runs` and `/actions/workflows`; runs 3 and 4 measure 200. The fallback instrument needs no token at all: the Actions tab in the GitHub UI shows the *invalid workflow file* state directly. Carried to the issue as an owner action beside §8 checklist items 4, 5 and 8 and §5.0's three secrets.
 
 ---
 
@@ -381,7 +458,7 @@ Read `index.ts`, `dispatch.ts` and `filter.ts` first. The notifier must, per §6
 
 1. `notify.test.ts` proves: absent env → no fetch attempted, no throw; a rejecting fetch → swallowed; a non-2xx response → swallowed.
 2. A test proving `index.ts`'s response status and body are **byte-identical** with the notifier failing and with it absent, for at least one dispatch case and one skip case.
-3. Every existing test in `supabase/functions/linear-dispatch/` still passes: `cd supabase/functions/linear-dispatch && deno test --allow-env --allow-read` exits 0.
+3. Every existing test in `supabase/functions/linear-dispatch/` still passes: `cd supabase/functions/linear-dispatch && deno test --allow-env --allow-read` exits 0. **`deno` is not installed on the dispatch container (E8)** — CI installs it per-run via `denoland/setup-deno@v2` (`ci.yml:316-321`). So the lane E worker **installs Deno itself and reports the real exit code**; if that install fails, the criterion is **not** silently waived — the worker says so, and the criterion moves to observation of the PR's `Edge Function tests (Deno)` job (`ci.yml:309`) with the run URL recorded. What is forbidden is reporting this criterion as met without a command that actually ran.
 4. The diff to `index.ts` is additive — no existing branch's behaviour changes.
 
 ---
@@ -403,7 +480,13 @@ A worker does not self-certify. `checker-reviewer` reviews against these criteri
 
 ## 8. Least confident decisions (item 19d)
 
-1. **Shipping the build while §8's throwaway-PR checklist is unexecuted, on the argument that shadow mode means "nothing relies on the answers".** *What would make it wrong:* if a `closed` event under plain `pull_request` does not run the workflow at all — or runs a version that cannot see the event — then the shadow window never starts, and this lands three workflows that look live and are inert. The `measure` step is designed to make that visible on the first merge rather than after ten silent ones, but it cannot make it visible *before* merging. A defensible alternative is to stop here and leave the issue in `Todo` until the owner runs the checklist. I judged that worse: the checklist needs the workflow to exist to be run at all, so refusing to build makes the measurement permanently unreachable rather than merely deferred.
+1. **Shipping the build while §8's throwaway-PR checklist is unexecuted, on the argument that shadow mode means "nothing relies on the answers".** *What would make it wrong — rewritten at E5 to lead with the risk that actually dominates:* **the three workflows land as a patch file under `docs/swarm/active/` and the owner never applies them.** Then shadow mode never starts, the `measure` step never runs, §8's checklist stays unexecuted **indefinitely rather than "merely deferred"**, and this build is five lanes of tested code wired to nothing. That is a larger and likelier failure than draft 3's stated one, and it is a direct consequence of AGENTS.md wall 1 (§5's opening subsection), which no earlier draft had noticed.
+
+   *Draft 3's stated failure mode, now second:* if a `closed` event under plain `pull_request` does not run the workflow at all — or runs a version that cannot see the event — the window never starts even once the patch is applied. The `measure` step makes that visible on the first merge rather than after ten silent ones, but cannot make it visible *before* merging.
+
+   *Mitigations, both real and both named so nobody has to infer them:* the handover is filed on GAM-325 carrying the patch path from E3, so the un-applied state is **recorded** rather than merely true; and `NO_SYNC_KEY` plus the `shadow` default mean the un-applied state is **silent but safe** — nothing writes to the tracker, and the incumbent `merge → Done` keeps closing issues exactly as it does today. The build degrades to "not yet installed", never to "installed and wrong".
+
+   *The alternative I still reject:* stopping and leaving the issue in `Todo` until the owner runs the checklist. The checklist needs the workflow to exist to be run at all, so refusing to build makes the measurement permanently unreachable rather than deferred.
 2. ~~**Strict line-1 parsing (no leading blank line, exact `Closes`, single space, case-sensitive).**~~ **DISCHARGED 2026-08-11 — do not spend a gate round on this.** The re-measurement this entry asked for was run live against the GitHub API (not the document) during the proposal's verification pass: all 7 completing work PRs (#126, #127, #131, #133, #136, #143, #153) match `^Closes (GAM-\d+)\b` on line 1; **no BOM and no leading whitespace on any of them** — the first codepoint is `0x43` (`C`) in every case, which is precisely the risk §2 rule 1's strictness runs; #126 and #127 carry the declaration as a line-1 *prefix* followed by prose, which §2 rule 2 permits by design; the other 23 carry no line-1 declaration, including #132, the deliberately-undeclared partial-work class §6.2 names. The strict parse is safe against this repository's real corpus.
 3. **Gate rule 4 (red when the canonical form appears on a later line) is mine, not §6.4's.** *What would make it wrong:* it is scope the design did not authorize, and §6.4's rule list was cut back deliberately in round 6 with "do not re-add without the measurement that justifies it". I added it because the silence's failure direction is the silent under-close. Cutting it is cheap and isolated. **Ruled 2026-08-11 by the design's author: keep it** — §6.4 is silent there, the silence's failure direction is the silent under-close that §6.4's halt condition exists to prevent, and the rule is a refinement of rule 1's intent isolated to one branch of one script, not the kind of scope round 6 cut. The gate need not re-litigate this.
 4. **The 120 s window for identifying the incumbent's merge-coincident transition in shadow mode.** *What would make it wrong:* §8 says `merge → Done` fires ~2 s after merge and an Actions run starts "seconds-to-minutes" later; the window is for matching a *history entry* to the merge timestamp, not for the run's own latency, so it should be safe. But if the owner hand-moves an issue to `Done` within two minutes of a merge, the reconstruction attributes it to the automation and the MATCH/MISMATCH line is wrong. It degrades a comparison, not a write.
@@ -415,6 +498,27 @@ A worker does not self-certify. `checker-reviewer` reviews against these criteri
 
 ## 9. Revision history
 
+* **Draft 4** — 2026-08-11, orchestrator run 4. Applies premise gate **round 2**'s
+  nine required edits (`GAM-325-gate-round2.md`, verdict **DISPATCH conditional**;
+  round 1's F1–F5 all confirmed LANDED). Round 2 was the final round — item 19a
+  allows no third. **E1/E2** §0's two bullets were both false: the repo is
+  `public` (run 1's "private" was corrected three drafts ago and the bullet
+  survived), and the `/actions/*` observation channel is **open** (200/200, only
+  `/actions/secrets` still 403). **E3** the finding this round exists for — a new
+  subsection at the head of §5 records that **AGENTS.md wall 1 covers 100% of
+  lane D's Allowed Files**: the worker commits and never pushes, the orchestrator
+  preserves a `format-patch`, the PR leads with the undeliverable half. **E4**
+  criterion 10 is reclassified from an orchestrator criterion to an **owner
+  action** — `workflow_dispatch` provably requires the default branch, and the
+  orchestrator holds the same refused credentials as the worker. **E5** LCD 1
+  now leads with the risk that dominates: the patch is never applied. **E6** the
+  `completedAt` exhibit is **GAM-315**, not GAM-303 — measured, GAM-303's two
+  fields *agree* and a fixture drawn from it would assert nothing. **E7** the
+  Slack subscription **replaces** the as-built event filter (`workflows:{}`
+  clauses are ANDed, so F1's defect is live today). **E8** `deno` is absent from
+  the container. **E9** `main` merged into the branch, so dispatched agents read
+  the post-#161 `AGENTS.md` carrying the wall. Plus N9's renumbering. **No design
+  question reopened and no lane's code changed.**
 * **Draft 1** — 2026-08-11, orchestrator run 1. Five lanes, 5 least-confident entries.
 * **Draft 3** — 2026-08-11, orchestrator run 3. Applies premise gate round 1's five findings verbatim (`GAM-325-gate-round1.md`, verdict REVISE): **F1** §5.0 gains a fourth owner action — subscribe `#tracker` by workflow *name*, not `branch:"main"`, which would drop every `pull_request`-triggered run; lane D criterion 9 makes the three `name:` keys a contract with it. **F2** lane B must assert the incumbent `merge → Done` automation is still live and emit `INCUMBENT_DISABLED` with a void comparison rather than a false `MISMATCH`; criterion 3a added. **F3** lane D criterion 10 — the workflows must be proved to parse and run (`workflow_dispatch` a run, confirm `state: active`), because lint passes happily on YAML the runner rejects; the orchestrator executes it at integration and the observation channel was re-measured open this run. **F4** lane B's first action is a live probe of GAM-303's `history` shape, and the fixture is built from the printed response rather than from this packet's prose. **F5** lane ordering promoted from LCD 5's prose to a binding constraint in §1. No design question reopened; the lane split, behaviour table, claim-comment format and §5.0 secrets stand.
 * **Draft 2** — 2026-08-11, orchestrator run 2. Applied the three defects the design's author raised on the issue before any gate verdict was recorded: **(1)** `queue: max` restored to lane D's concurrency block with the round-5 reasoning and a fresh measurement of the key's existence; **(2)** §5.0 added — the three owner-owned secrets the build needs and no lane can create; **(3)** the `pr_number` → `PR_NUMBER` seam closed in lane D with an acceptance criterion. LCD 2 marked **discharged** by live measurement and LCD 3 **ruled keep**, so the gate spends its round on what is still open. LCD 6 added for `queue: max`.
