@@ -41,3 +41,8 @@ Append-only. One line per milestone, committed and pushed as it happens.
 - 19:38Z — **packet written**: `docs/swarm/active/GAM-314-packet.md`. Three
   allowed files (script, its test, one workflow step), 7 acceptance criteria
   including a named mutation, and a 5-entry least-confident list for the gate.
+- 19:40Z — **premise gate round 1 dispatched** (`checker-premise`, its pinned
+  opus). Dispatched with `run_in_background: false` — the orchestrator blocks on
+  the verdict rather than ending its turn with the subagent in flight, which is
+  this very issue's failure mode. If this line is the last one in this file, the
+  run died holding the gate and instance 5 has been recorded.
