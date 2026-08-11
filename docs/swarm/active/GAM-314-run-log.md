@@ -128,3 +128,37 @@ Append-only. One line per milestone, committed and pushed as it happens.
   on the remote at all, since any push touching that path is rejected — is
   preserved verbatim as `docs/swarm/active/GAM-314-workflow-wiring.patch`,
   applyable with `git am`. Filing the credential gap as its own row.
+- 21:05Z — **orchestrator's independent verification, run rather than read.**
+  Every worker claim re-measured from scratch:
+  * Live behaviour, all five, executed against the real Linear API by me:
+    GAM-314 (`In Progress`) → **exit 1**; GAM-304 (`Done`) → **exit 0**;
+    `GAM-99999` → **exit 1** `NOT FOUND`; invalid key → **exit 1**
+    `UNDETERMINED` (401 quoted in the message, never claiming `In Progress`);
+    unset key → **exit 1** `UNDETERMINED`.
+  * **Mutation replay (criterion 5), and the worker's figure was wrong.** It
+    reported "exit code 0 as a process but 3 tests failed". Replayed on a
+    committed tree: 3 failed / 13 passed and **exit code 1**. Vitest does exit
+    non-zero; the guard is real. Stronger still — the *mutated* script run live
+    against `In Progress` GAM-314 returned **exit 0**, i.e. exactly the green
+    run on an unfinished chain this row exists to stop. Restored, tree clean,
+    16/16 green.
+  * **Six gates on `86fcbb1`, clean tree, via the `gate-run` skill** (exit codes
+    from the process, not a pipe): tsc 0, vite build 0, format:check 0, eslint 0
+    (**0 errors / 377 warnings**), full vitest 0 — **84 files / 2178 tests**
+    against the 83 / 2162 baseline (+16) — scoped vitest 0 (1 file / 16 tests).
+    Identical to the worker's figures.
+  * **Boundary (item 22):** `git diff --name-only ccf77b1` is five paths, none
+    under `src/`, `supabase/`, `.claude/`, `package.json`, or
+    `scripts/linear/client.mjs`. The client was imported, never edited.
+  * **The stranded YAML verified anyway**, since GAM-327 says nothing does:
+    the patch applies cleanly, `js-yaml` parses the result, `jobs` is
+    `['work','assert-released']`, the new job carries `needs: work`,
+    `if: always() && …identifier != ''`, `permissions: {contents: read}`,
+    `timeout-minutes: 5`, two steps, the identifier in `env:` and not in `run:`
+    — and the `work` job is untouched at 120 minutes / 4 steps.
+- 21:08Z — **[GAM-328](https://linear.app/gamitch/issue/GAM-328) filed** (high
+  priority) for the credential wall, with all three rejections quoted and the
+  trade-off left to the owner rather than decided here: the restriction is a
+  real security boundary — an agent that can edit `claude-linear-dispatch.yml`
+  can delete its own `--allowedTools`, `permissions:` and turn caps in one
+  commit — so "just add the scope" is a choice with a cost, not a fix.
