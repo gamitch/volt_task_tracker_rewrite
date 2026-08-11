@@ -97,3 +97,11 @@ Append-only. One line per milestone, committed and pushed as it happens.
   that an item-19a/Loop-Limit escalation and a Linear automation both legitimately
   leave a row `In Progress`, and GAM-304 was measured being moved
   `In Review → In Progress` by `botActor: GitHub/integration`.
+- 20:28Z — **worker dispatched** (`worker-implementer`, its pinned sonnet — item
+  18's `model: "opus"` override does **not** apply: no migration, no RLS or
+  `security definer`, no metric-view SQL, no auth/session/role logic). Dispatched
+  `run_in_background: false`; the orchestrator blocks on the diff.
+  No worktree, deliberately: one sequential worker, nothing parallel to isolate
+  from, and item 26's "commit before mutating" is the rule that actually
+  protects the mutation replay here. AGENTS.md's worktree requirement is about
+  parallel edits and the owner's shared tree; this is an ephemeral container.
