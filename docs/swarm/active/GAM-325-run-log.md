@@ -233,3 +233,44 @@ verdict, this run died holding that subagent. It is not "still working".
 
   **If this line is the last one in this file, the run died holding this
   subagent.** It is not "still working".
+- 2026-08-11 23:1xZ — **`checker-reviewer` VERDICT: FAIL — one MAJOR, no
+  BLOCKER**, 3 MINOR, 2 NIT. Full review: `GAM-325-checker-review.md`. Lanes
+  **A, B, D, E PASS; lane C FAILS.**
+  * **Its gate block matches mine exactly** — 5 of 6, 89 files / 2354 tests,
+    baseline 2178. Independent agreement, not a quoted figure.
+  * **Sabotage check clean**: no lane wrote outside its Allowed Files; nothing
+    touched `.claude/**`, `AGENTS.md`, `package.json`, `eslint.config.js`,
+    `vite.config.ts`, an existing workflow, or any governance record.
+    `client.mjs` verified unmodified.
+  * **Shadow mode traced, not assumed**: the only three Linear writes all sit
+    below the shadow return at `linear-sync.mjs:635`, and `resolveSyncMode`
+    admits the exact string `live` alone. The packet's top BLOCKER class — a
+    write escaping shadow mode — **does not occur.**
+  * **F1 MAJOR (lane C) — a silent under-close, reproduced end to end.** The
+    gate has no `AMBIGUOUS_DECLARATION` branch, so `Closes GAM-325 and GAM-326`
+    goes **green** through the required check, then the sync refuses it
+    (`action: none`), and then the sweep drops it because it filters
+    `declaration.ok === true`. Declared, merged, never closed, **and the one
+    instrument built to catch exactly that never looks at it.** The checker
+    rejected the worker's grammatical reading on parity: rule 2 already reds
+    `GAM-000`, which is the same "canonical in shape, invalid in content" class.
+    Reachable in practice — `^claude/gam-(\d+)-` misses `codex/*`, `gate/*`,
+    `claude/w1-*` and `chore/*`, all present on this remote.
+  * Rulings on the six declared ambiguities: lane A's case-sensitivity split
+    **correct**; `detail` shape **reasonable** (no consumer parses it);
+    `CLOSED_WITHOUT_MERGE` **acceptable** (§3 describes the row and names no
+    code); the `LINEAR_SYNC_API_KEY` bridge **compliant and safe** — `gql` reads
+    the env at *call* time, so it works rather than being a no-op, and no child
+    process is spawned; lane E's `index.ts` refactor **satisfies criterion 4 in
+    substance**, verified by running the byte-identical test.
+  * MINORs (follow-ups, not blockers): **F2** the gate job has no checkout, so
+    rule 5's `Also-fixes` existence check and the documented local fallback are
+    both dead — fail-closed, never silent; **F3** Linear fetches carry no
+    `AbortSignal` because `client.mjs` has none and §1 forbids editing it,
+    contradicting §3's "every fetch"; **F4** lane E adds `import.meta.main` to an
+    already-deployed function, inert until the next deploy.
+- 2026-08-11 23:1xZ — **lane C rework DISPATCHED** for F1 (worker attempt 2 of
+  the 3-attempt cap, `run_in_background: false`; this run blocks on it).
+
+  **If this line is the last one in this file, the run died holding this
+  subagent.** It is not "still working".
