@@ -219,7 +219,10 @@ Derived from §4, each traceable to a failure it prevents:
   so this is an **enforced declaration channel**, not structured metadata; what
   changes the failure class is one channel, one shared parser, a CI gate, and
   preconditions, not the medium. §6.2 records why structured alternatives lost. (RC1)
-- **R2 — Exactly one issue per PR.** Multiplicity is rejected loudly, not resolved
+- **R2 — At most one automatically-closing issue per PR.** (Renamed in round 3:
+  "exactly one issue per PR" stopped being the true invariant the moment
+  `Also-fixes:` existed — that line names issues, but only the single declaration
+  can close.) Multiplicity in the closing channel is rejected loudly, not resolved
   by an aggregate rule. The live counterexample (post-merge review): PR #153 fixed
   two rows by owner ruling and could declare one — GAM-323 sits in `Backlog` today
   with its defect fixed. §6.3's `Also-fixes:` advisory line handles folded-in work
@@ -232,8 +235,9 @@ Derived from §4, each traceable to a failure it prevents:
   claims), and is safe to re-deliver. Stated precisely (post-merge review finding):
   the two Linear writes cannot be atomic, so processing is **at-least-once**, made
   safe by ordering — the audit comment is written *first* as the durable claim
-  record, then the state mutation, then read-back — plus a per-issue workflow
-  `concurrency` group serializing concurrent merges (§6.3).
+  record, then the state mutation, then read-back — plus a per-issue `concurrency`
+  group **derived from the declared identifier in a resolve job** (§6.3), which is
+  what actually serializes same-issue merges; the claim comment is never a lock.
 - **R5 — Audited.** Every state move leaves a comment on the issue naming the PR,
   the event, and the mechanism — because Linear's actor column is proven unreliable.
 - **R6 — Loud on every refusal.** Every skip and every failure is named and
@@ -329,11 +333,22 @@ on:
     types: [closed]        # fires for merged and unmerged closes; the script branches on merged
     branches: [main]       # a stacked or backport PR merging elsewhere must not close anything
 
-concurrency:
-  group: linear-sync-${{ github.event.pull_request.number }}   # replays serialize;
-  cancel-in-progress: false                                    # per-ISSUE serialization
-                                                               # is enforced in the script
-                                                               # via the claim comment (below)
+# Two jobs, because serialization must key on the ISSUE, which is not knowable
+# at workflow level (round-3 review, finding 2):
+#   resolve:  metadata-only — API-fetch the PR, parse the declaration, output the
+#             identifier (or the named skip)
+#   sync:     needs: resolve — carries job-level
+#             concurrency:
+#               group: linear-sync-${{ needs.resolve.outputs.identifier || format('pr-{0}', github.event.pull_request.number) }}
+#               cancel-in-progress: false
+# so two PRs declaring the SAME issue serialize on it, while unrelated merges run
+# freely. Known GitHub behaviour to design around: a concurrency group keeps only
+# ONE pending run — a replaced pending run is discarded. Acceptable here because a
+# discarded same-issue run is redundant by idempotency (the survivor performs the
+# identical close, and the sweep backstops the pathological case); it is named so
+# nobody reads the discard as a bug later. Global serialization (one fixed group)
+# is the simpler fallback if the needs-expression proves fragile — at this repo's
+# merge cadence it costs nothing.
 ```
 
 **Why `pull_request_target`, stated carefully.** Three reasons, two of them from the
@@ -372,7 +387,7 @@ Behaviour table (every row either acts or produces a **named skip** — the
 
 | Event | Declaration | Precondition | Action |
 | --- | --- | --- | --- |
-| merged | `Closes GAM-nnn`, valid | issue in `In Progress` or `In Review` | `issueUpdate → Done`; read back; audit comment; Slack ✓ |
+| merged | `Closes GAM-nnn`, valid | issue in `In Progress` or `In Review` | claim comment (the audit record, first); `issueUpdate → Done`; read back; Slack ✓ |
 | merged | valid | issue already `Done`, closed by **this** PR (audit comment matches) | skip `ALREADY_DONE` — genuine re-delivery, benign |
 | merged | valid | issue already `Done`, closed by a **different** PR | **no move**; Slack ⚠ `DUPLICATE_CLOSE_CLAIM` — two PRs declared one issue; a human decides |
 | merged | valid | issue archived | skip `ARCHIVED` (info if `Done`, ⚠ otherwise) |
@@ -419,9 +434,13 @@ and fails the run loudly if the read-back disagrees. A crash between claim and
 mutation leaves a comment pointing at an issue still in `In Review` — visible,
 replayable, and the replay recognises its own claim (that is what distinguishes
 `ALREADY_DONE` from `DUPLICATE_CLOSE_CLAIM`); a crash after the mutation leaves
-both records consistent. Concurrent merges declaring the *same* issue serialize on
-the claim comment: a second run finding a fresh claim it did not write defers to
-it. Processing is at-least-once by declaration (R4), never silently at-most-once.
+both records consistent. Serialization of same-issue merges comes from the
+**derived per-issue concurrency group** (the YAML note above), not from the claim
+comment — a Linear comment is not an atomic lock, and two racing runs could both
+observe no claim and both write one; Linear has no compare-and-set, which is this
+repo's own item 28c lesson (round-3 review, finding 2). The claim comment's jobs
+are audit, crash recovery, and duplicate disambiguation — never mutual exclusion.
+Processing is at-least-once by declaration (R4), never silently at-most-once.
 The audit comment also answers attribution: the tracker's history is explained by
 the issue itself even though the API attributes the transition to the key's owner —
 the same misattribution the native automation has; the difference is the comment
@@ -473,9 +492,24 @@ anything from the PR head, and imports **the same parse as the sync**:
    exact issue must be present — the #131 mismatch and the rows-1/8 stale-branch
    class both go red at PR time instead of moving the tracker at merge time.
 
+**Making it required needs one deliberate mechanism** (round-3 review, finding 1):
+branch protection evaluates required checks against the PR's **latest head SHA**,
+while a `pull_request_target` run executes against the base branch's SHA — so the
+gate must not assume its run attaches where branch protection looks. The gate
+therefore **publishes its verdict explicitly as a check run on
+`github.event.pull_request.head.sha`** (one Checks-API call with the run's own
+`GITHUB_TOKEN`), re-publishing on every `synchronize`/`edited` event so the latest
+head always carries a fresh verdict. The premise gate's live throwaway-PR test
+includes verifying that branch protection actually blocks on this check. (The
+fallback shape, if the explicit check-run publication misbehaves: a separate
+`pull_request`-triggered required check whose parser is fetched from `main`'s ref
+via the API rather than imported from the merge-ref checkout — same trusted-parser
+property, different transport.)
+
 Because this repo is **public, branch protection — including required status
-checks — is free**; the owner can mark this check required so an undeclarable PR
-cannot merge. (Private repos would need GitHub Pro; not this repo's situation.)
+checks — is free**. (Private repos would need GitHub Pro; not this repo's
+situation.) When it becomes required is a migration-ordering question §8 now
+answers: **before cutover, not after.**
 
 ### 6.5 What this retires — and the one rule that survives
 
@@ -550,8 +584,8 @@ All free-tier:
 | 0 | Owner, ~5 min | **First**: read the workspace **commit-linking toggle** in the GitHub integration settings and record its state — first because of the trailer collision (§2: `Linear-Issue:` contains the closing magic word `linear issue`); if it is on, turn it off before anything else. Then in **Settings → Team → Workflows & automations → Pull request and commit automations**: disable `start → In Progress` and `review → In Review`. Then the personal "move issue to started status on branch copy" automation (Settings → Account → Code & reviews — candidate cause of §4.1 row 11). Removes the backwards-move/reopen class (rows 5, 6, 8, 10) **today**, before any code. Same day: re-run the `gitAutomationStates` query and update item 28g's enumeration (owner-authorized edit path — its prose goes stale the moment settings change, by its own warning). One carried-forward caveat from the mechanism comparison (LCD 3): this assumes nothing machine-reads `In Progress` as an automation-set signal — not exhaustively checked across `.github/workflows/`; the premise gate re-checks it | re-enabling the toggles |
 | 1 | Owner, 15 min | Create the Slack channel + incoming webhook; `/github subscribe` the repo's workflows; enable Linear's per-team Slack notifications (§6.6 item 3 — non-optional through Phase 3); add `SLACK_WEBHOOK_URL` secret (GitHub) and Supabase secret | deleting the webhook |
 | 2 | HEAVY row + premise gate | Build `scripts/linear-sync.mjs` + workflow (`pull_request_target`, per-PR concurrency, claim-then-mutate ordering) + CI declaration check + **the edge-function Slack notification** (§6.6 item 1), with the sync in **shadow mode** — see below. The premise gate's live throwaway-PR test covers §10 risk 1 (payload, number resolution, API fetch, secrets) before anything relies on it. `merge → Done` stays on during shadow | deleting the workflow |
-| 3 | Owner, 1 min + flag flip | Disable `merge → Done`; set the sync live (`SYNC_MODE=live`). Item 28f, item 28g (again), AGENTS.md, and WORKFLOWS.md rule 2 get their dated-mechanism updates — including §6.5's surviving one-line text rule — via the authorized channel (owner-directed edit or `boss-architect`, per Authority Boundaries) | re-enabling the automation, re-flagging shadow |
-| 4 | Owner's option | Mark the declaration check required under branch protection; close GAM-322 and GAM-323 with pointers here | unmarking |
+| 3 | Owner, ~5 min + flag flip | **In this order** (round-3 review, finding 3 — enforcement must precede cutover, or a missing declaration leaves completed work open with only an info-level skip): (a) mark the declaration check **required** under branch protection, on the head-SHA check §6.4 publishes; (b) disable `merge → Done`; (c) set the sync live (`SYNC_MODE=live`). Item 28f, item 28g (again), AGENTS.md, and WORKFLOWS.md rule 2 get their dated-mechanism updates — including §6.5's surviving one-line text rule — via the authorized channel (owner-directed edit or `boss-architect`, per Authority Boundaries) | unmarking the check, re-enabling the automation, re-flagging shadow |
+| 4 | Owner's option | Close GAM-322 and GAM-323 with pointers here; any remaining niceties (e.g. widening Slack routing) | — |
 
 **Shadow mode, specified against the confound.** The naive spec — "run the shadow,
 compare with the incumbent" — is broken by the incumbent itself: `merge → Done`
@@ -659,9 +693,10 @@ where they stand (§10 items 1 and 6).
 ## 13. Post-merge review disposition (2026-08-11)
 
 Two further independent reviews arrived after PR #155 merged (recorded verbatim in
-its comments, per owner direction, before any of this revision was written). All
-eleven findings were accepted; this section records what each changed, so the
-revision is auditable against the reviews.
+its comments, per owner direction, before any of this revision was written), and a
+third round followed on the round-2 revision after PR #156 merged. All findings —
+eleven in rounds 1–2, five in round 3 — were accepted; this section records what
+each changed, so the revision is auditable against the reviews.
 
 **Review 1 (agent, six findings):**
 1. Trailer/`linear issue` collision → §2 reworded; §8 Phase 0 now checks the
@@ -704,3 +739,27 @@ identifier.
 Both reviewers approved the direction while holding Phase 2; this revision is the
 response their holds asked for. The §11 asks are unchanged in kind — the Phase 2
 row now carries these constraints into its packet.
+
+**Round 3 (non-Claude agent, verdict FAIL/MAJOR on the round-2 revision — three
+majors, two minors, all accepted):**
+1. The gate, as a `pull_request_target` run, could not reliably satisfy branch
+   protection (required checks evaluate against the PR's latest head SHA; the run
+   executes against base) → §6.4 now has the gate publish its verdict explicitly
+   as a check run on `github.event.pull_request.head.sha`, re-published per head
+   event, with the `pull_request`-plus-parser-from-`main`-ref fallback named and
+   the premise gate verifying that protection actually blocks.
+2. Same-issue merges were still not serialized — the PR-number concurrency group
+   could not see the issue, and a Linear comment is not an atomic lock → §6.3
+   restructured into resolve + sync jobs, with the sync job's concurrency group
+   derived from the declared identifier; the pending-run-replacement behaviour is
+   named and accepted as idempotent-redundant; the claim comment is demoted
+   explicitly to audit/recovery/disambiguation, never mutual exclusion; R4
+   updated to match.
+3. Enforcement was optional until after cutover → Phase 3 reordered: the check
+   becomes required *before* `merge → Done` is disabled and the sync goes live;
+   Phase 4 shrinks to cleanup.
+4. (Minor) The behaviour table's success row kept the obsolete write order →
+   corrected to claim → update → read-back → notify.
+5. (Minor) R2's name ("exactly one issue per PR") was falsified by `Also-fixes:`
+   → renamed to the true invariant, "at most one automatically-closing issue per
+   PR."
