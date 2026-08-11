@@ -588,31 +588,55 @@ After the third failure, the task must be escalated to boss-arbiter.
        looks reserved and is not, and two sessions once worked one mutable ref
        because of it.
 
-       **The owner action this item used to request is done, and there are
-       three automations, not one.** Read from Linear on **2026-08-10**; all
-       three are unscoped, so they apply to every branch:
+       **Only ONE PR automation is live. Changed by the owner on 2026-08-11**
+       (Phase 0 of `docs/swarm/2026-08-11-linear-github-integration-proposal.md`),
+       read from the settings UI at *Settings → Team → Workflows & automations →
+       Pull request and commit automations*:
 
        ```
-       event=start   targetBranch=null (ANY) -> In Progress
-       event=review  targetBranch=null (ANY) -> In Review
-       event=merge   targetBranch=null (ANY) -> Done
+       On draft PR open              -> No action
+       On PR open                    -> No action   (was: In Progress)
+       On PR review request/activity -> No action   (was: In Review)
+       On PR ready for merge         -> No action
+       On PR merge                   -> Done        (unchanged — the only closer)
+       Branch-specific rules         -> none
        ```
+
+       The two that were disabled are the ones that moved an issue **backwards**
+       when a second linked PR was still open, and **reopened** a closed issue
+       when a PR opened on a stale branch carrying its identifier — four of the
+       thirteen catalogued wrong moves. Nothing is lost: items 28c and 28e
+       already require the agent to make both of those moves by hand, with a
+       read-back the automation could never provide.
+
+       **Three further state-writers exist. Two are off; one is ON and nobody
+       had catalogued it.** All read from the UI on 2026-08-11:
+
+       | Setting | Where | State |
+       | -- | -- | -- |
+       | Link commits to issues with magic words | workspace → GitHub integration | **OFF** — keeps the item-28f trailer inert (see 28f) |
+       | On git branch copy → started status | account → Code & reviews | **OFF** (was on; the likely cause of GAM-304's otherwise unexplained `Backlog → In Progress` at 02:23Z on 2026-08-10, which had no PR and no attachment) |
+       | On open in coding tool → started status | account → Code & reviews | **ON**, deliberately — a stronger signal of intent than copying a branch name |
+       | **Auto-close stale issues** | team → Auto-close automations | **ON — 6 months → `Canceled`** |
+
+       **That last row is a machine that can close a `gate/human` issue**, which
+       the label exists to forbid. `GAM-80`, `GAM-75` and `GAM-62` are the live
+       exposure. It is recorded here rather than changed, because changing it is
+       the owner's call — but no rule in this constitution anticipated it.
 
        **Reproduce this rather than trust it.** A prose enumeration goes stale
        silently the moment the owner changes a setting, which is the failure
-       this item is being corrected for:
+       this item was corrected for once already:
 
        ```js
        gql('{ teams(first:5){ nodes{ key gitAutomationStates(first:30){ nodes{ event targetBranch{ id branchPattern isRegex } state{ name type } } } } } }')
        ```
 
        `targetBranch` scopes the PR's **base** branch, not its head, so no
-       branch-naming scheme can be expressed there. `start → In Progress` is the
-       rule that moves an issue backwards when a second linked PR is still open,
-       and that reopens a closed issue when a PR is opened on a stale branch
-       carrying its identifier. Whether to change any of this is the owner's
-       decision, outside the repo, and is tracked separately — do not change it
-       from here.
+       branch-naming scheme can be expressed there — vendor-confirmed:
+       *"Branch rules apply only to target branches… Automations are not
+       supported for source branches."* Whether to change any of this is the
+       owner's decision, outside the repo — do not change it from here.
 
     **Authorized by the human owner 2026-08-09, and filed because the failure was
     measured rather than imagined.** The first agent dispatched through Linear
