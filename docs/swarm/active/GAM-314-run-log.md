@@ -19,3 +19,22 @@ Append-only. One line per milestone, committed and pushed as it happens.
 - 19:27Z — **claimed.** `Todo → In Progress` via `issueUpdate`, labels set to
   `other` + `standard`; read-back confirms `In Progress` at 19:27:39Z.
 - 19:28Z — branch created, run log opened (first file write).
+- 19:32Z — **premise measured against `ccf77b1`: HOLDS.**
+  `.github/workflows/claude-linear-dispatch.yml` is 412 lines; after the
+  `Work the issue` step (`:102-359`) there are exactly two steps —
+  `Keep the execution log` (`:387-396`) and `Record the session id`
+  (`:402-411`) — and both are `if: always()` bookkeeping. **No step reads the
+  issue's final state, and nothing asserts anything about it.** Item 28e is at
+  `docs/swarm/constitution.md:451-456`, exactly as the issue cites. The issue's
+  line numbers for the workflow (88-280, 174-198) have drifted and are recorded
+  here as corrected; the substance is unchanged.
+  Also measured: `tsconfig.json` includes only `src` and `vite.config.ts`, so a
+  `scripts/**.mjs` file is not typechecked; `eslint.config.js` has a
+  `scripts/**/*.mjs` Node-globals block, so it *is* linted; `format:check`
+  covers `src/**` and root files only, so it is not format-checked; and
+  `scripts/migrate/*.test.ts` proves a script under `scripts/` is a normal
+  vitest target in this repo.
+- 19:32Z — this contradicts the issue's "no named mutation can turn a workflow
+  YAML red" only in part: the YAML stays untestable, but the **decision** it
+  calls can live in a tested pure function. That is what makes STANDARD's
+  "orchestrator replays the mutation" satisfiable here.
