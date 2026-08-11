@@ -179,3 +179,16 @@ verdict, this run died holding that subagent. It is not "still working".
     deviation rather than hiding it** — `index.ts` needed a `handleRequest`
     export + `import.meta.main` guard for criterion 2's test to be writable at
     all, with exact precedent in `checkin-token/index.ts`. Checker rules on it.
+- 2026-08-11 22:35Z — lanes **A and E merged** into `claude/gam-325-linear-closer`
+  and pushed. **Lane D is deliberately NOT merged** — merging it would put
+  `.github/workflows/**` in the push pack and strand the whole thing (E3). It
+  ships as a preserved patch.
+- 2026-08-11 22:36Z — **lanes B and C DISPATCHED concurrently**
+  (`worker-implementer`, both `run_in_background: false`; this run blocks on both
+  and does not end its turn while either is in flight). Worktrees created off the
+  post-lane-A HEAD, so both import the **built** `declaration.mjs` rather than
+  the packet's description of it — which is the whole point of §1's binding
+  ordering (F5).
+
+  **If this line is the last one in this file, the run died holding these two
+  subagents.** It is not "still working".
