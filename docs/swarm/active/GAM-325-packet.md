@@ -47,6 +47,18 @@ Six deliverables from the issue's table, split into five lanes with **strictly d
 
 `scripts/linear/client.mjs` is **reused unchanged**. Do not modify it; do not copy its logic.
 
+### Lane ordering is binding, not advice (gate round 1, F5)
+
+Draft 2 stated "run lane A first" only inside LCD 5's prose, where a foreman
+reading the table above would never see it. It is a **constraint**:
+
+* **Lane A lands before lanes B and C start.** Both import `declaration.mjs`; if
+  they code against the contract *as written* and it ships with any difference,
+  the drift is three files wide — which is exactly the risk LCD 5 names.
+* **Lanes D and E may run in parallel with A.** Neither imports anything from it.
+  Lane D references lane B's env-var name (`PR_NUMBER`) and lane A's workflow
+  `name:` strings, but consumes no module.
+
 **Out of scope, and a worker doing any of it is a BLOCKER finding:** flipping `SYNC_MODE` to live by default; touching branch protection; disabling `merge → Done`; editing item 28f/28g, `AGENTS.md` or `WORKFLOWS.md` (those are Phase 3, owner-directed, per §8); adding a `REVERT_MERGED` heuristic (§6.3 cut it deliberately); adding the round-4 three-strikes/weekly-digest reminder state machine for `Also-fixes:` (§6.3 cut it deliberately); re-adding the `pull_request_target` apparatus (round 6 cut it — it is the *named fallback*, activated only by a measurement that has not happened).
 
 ---
@@ -160,9 +172,14 @@ Claim detection parses the HTML-comment marker with `/<!-- linear-sync:claim pr=
 
 In shadow: perform every read, compute the intended action, **write nothing** — no comment, no `issueUpdate`. Post the shadow line to Slack.
 
+**The shadow window requires the incumbent to stay enabled, and the run must assert it (gate round 1, F2).** `MATCH`/`MISMATCH` compares the sync's intended action against *the incumbent automation's observed transition*, which is only meaningful while `On PR merge → Done` is still enabled. §8's phase order keeps it on through Phase 2, but draft 2 never **said** so — and the owner has spent today disabling automations one by one with good reason. If `merge → Done` is switched off mid-window, every declared merge yields "shadow would close / automation did nothing": **`MISMATCH` on correct behaviour**, and the 10-consecutive-`MATCH` exit criterion becomes unreachable while looking like the sync is broken.
+
+So: on every shadow run, read `gitAutomationStates` for team `Gamitch` once at startup. If no `event=merge → Done` automation is present, post ⚠ `INCUMBENT_DISABLED`, mark the comparison **void**, and do **not** emit a `MATCH` or a `MISMATCH` for that merge. A void run neither advances nor resets the consecutive-`MATCH` counter.
+
 The comparison must **not** use the live precondition read (§8: `merge → Done` fires ~2 s after merge, an Actions run starts seconds-to-minutes later, so the live read sees `Done` and reports `ALREADY_DONE` on exactly the happy-path merges the test needs). Instead:
 
-* read `issue.history(first: 50)` — `createdAt`, `fromState{name}`, `toState{name}`, `actor{name}` (verified live by the orchestrator 2026-08-11: these fields exist, the connection is newest-first, and entries with `fromState: null, toState: null` are non-state edits that must be filtered out);
+* **Probe the history shape before writing a line of reconstruction code (gate round 1, F4).** Lane B's *first* action is a live probe that prints the raw `history` connection of one issue — **GAM-303**, the documented reopen/re-close case — and pastes the printed response into the worker output. The fixture in acceptance criterion 3 is built from **that printed response**, not from this packet's description of it. Draft 2 marked the field names "verified live by the orchestrator" on the authority of a run that ended without recording its own gate verdict, and the gate could not re-verify them. If the names differ, the probe costs minutes; inheriting them costs a lane. The shape draft 2 asserts, to be confirmed or corrected by the probe:
+* read `issue.history(first: 50)` — `createdAt`, `fromState{name}`, `toState{name}`, `actor{name}` (asserted newest-first, with entries carrying `fromState: null, toState: null` being non-state edits that must be filtered out);
 * reconstruct the state immediately **before** any transition whose `createdAt` is within **120 s** of `pr.merged_at` and whose `toState.name` is `Done` — that transition is the incumbent automation's;
 * compute the intended action from that **reconstructed** state;
 * post `MATCH` / `MISMATCH` per merged PR: *shadow's intended outcome (close / named-skip)* vs *the automation's observed transition (closed / no-op)* for the declared issue.
@@ -178,7 +195,8 @@ The comparison must **not** use the live precondition read (§8: `merge → Done
 
 1. `scripts/linear-sync.test.mjs` drives the script's exported pure functions (extract `decide({pr, issue, claims})` so the whole table is testable without network) with **one named test per row of the behaviour table**, asserting the exact code string.
 2. A test proving `SYNC_MODE` unset, `SYNC_MODE=shadow`, `SYNC_MODE=Live` (wrong case) and `SYNC_MODE=garbage` all resolve to shadow, and only the exact `live` resolves to live.
-3. A test proving the shadow reconstruction ignores `fromState: null` history entries and picks the pre-automation state, given a fixture built from GAM-303's real history shape.
+3. A test proving the shadow reconstruction ignores `fromState: null` history entries and picks the pre-automation state, given a fixture built from **the printed output of the GAM-303 probe run at the top of this lane** — not from this packet's prose. Paste the probe's raw response in the worker output so the reviewer can check the fixture against it.
+3a. A test proving that when the `gitAutomationStates` read returns no `merge → Done` automation, the run emits `INCUMBENT_DISABLED` and emits **neither** `MATCH` nor `MISMATCH`.
 4. A test proving a `fetch` that rejects with a timeout surfaces as a named failure, not an unhandled rejection.
 5. A test proving claim detection reads the HTML marker and distinguishes `pr=158` from `pr=159`.
 6. `npx eslint scripts/` exits 0.
@@ -239,6 +257,36 @@ than discovered at cutover.
 | `SLACK_WEBHOOK_URL` | **Supabase** secret | Lane E reads `Deno.env.get('SLACK_WEBHOOK_URL')` — a *different* store from the GitHub one, and setting one does not set the other |
 
 Carried to the issue as owner actions alongside checklist items 4, 5 and 8.
+
+#### Fourth owner action — the Slack subscription filter (gate round 1, F1)
+
+LCD 1's entire mitigation is *"the `measure` step makes it visible on the first
+merge"*, and that visibility runs through `#tracker`. It does **not** survive the
+branch-scoped noise filter the owner was separately advised to set:
+
+```
+/github subscribe gamitch/volt_task_tracker_rewrite workflows:{… branch:"main"}
+```
+
+For a `pull_request`-triggered run GitHub sets the run's branch to the **PR's head
+branch**, not the base. The sync workflow (`pull_request: [closed]`) and the gate
+workflow (`pull_request`) therefore report on `claude/…` branches, and a
+`branch:"main"` filter drops **every one of them** — the measure step's output and
+every sync failure included. The build would run correctly into a channel that had
+been told not to listen.
+
+Filter by workflow **name** instead. It is a better noise fix anyway: the
+cancellation noise is entirely `CI` runs, and this excludes CI on every branch
+while keeping the four that matter.
+
+```
+/github subscribe gamitch/volt_task_tracker_rewrite workflows:{name:"Linear sync","Linear declaration","Linear reconcile","Claude — Linear dispatch","Linear export"}
+```
+
+**This makes lane D's `name:` keys a contract with an owner action.** The three
+workflow files must carry exactly `Linear sync`, `Linear declaration` and
+`Linear reconcile` as their top-level `name:`, or the subscription silently
+matches nothing. Lane D has an acceptance criterion for it.
 
 ### `.github/workflows/linear-sync.yml`
 
@@ -309,6 +357,11 @@ validation error** — so the two keys above must stay `false` and `max` togethe
 7. `grep -n "PR_NUMBER" .github/workflows/linear-sync.yml` shows the `env:` mapping from `inputs.pr_number`, so lane B's replay path is actually reachable.
 8. The measure step prints `has_linear_key` and `has_slack_url`.
 5. Each file carries a header comment explaining *why* — matching the density of `linear-export.yml` and `ci.yml`, which is this repo's standard, not decoration.
+9. **The three top-level `name:` keys are exactly `Linear sync`, `Linear declaration` and `Linear reconcile`** — §5.0's fourth owner action subscribes `#tracker` by workflow name, and any other spelling silently matches nothing. Prove with a grep of the three `name:` lines.
+10. **The workflows are proved to parse and run, not merely to lint (gate round 1, F3).** `eslint`/`typecheck`/`test`/`format:check` all pass happily on three YAML files GitHub would reject outright, and LCD 6 concedes `queue:` is three months old. The failure mode that concedes does not name is the worse one: **if the runner rejects `queue: max`, the workflow does not run at all** and the build lands three inert files that look shipped — this project's named recurring defect reached by a new road. So, once the workflows are on the branch:
+    * trigger `linear-reconcile.yml` once via `workflow_dispatch` and record the run's `conclusion` and URL;
+    * confirm all three appear in `GET /actions/workflows` with `"state": "active"` rather than in the `invalid workflow file` state.
+    **The orchestrator executes this at integration, not the worker** — the worker's branch is not the default branch, and `workflow_dispatch` on a non-default branch requires the workflow to exist on the default branch first. Recorded here as a lane-D criterion because it is lane D's work that it verifies, and because it must not be silently dropped. **Measured this run: `GET /actions/runs` and `GET /actions/workflows` both return 200 for the dispatch token** — the observation channel that run 1 recorded as 403 is open, so this criterion is executable and is not a wish.
 
 ---
 
@@ -363,4 +416,5 @@ A worker does not self-certify. `checker-reviewer` reviews against these criteri
 ## 9. Revision history
 
 * **Draft 1** — 2026-08-11, orchestrator run 1. Five lanes, 5 least-confident entries.
+* **Draft 3** — 2026-08-11, orchestrator run 3. Applies premise gate round 1's five findings verbatim (`GAM-325-gate-round1.md`, verdict REVISE): **F1** §5.0 gains a fourth owner action — subscribe `#tracker` by workflow *name*, not `branch:"main"`, which would drop every `pull_request`-triggered run; lane D criterion 9 makes the three `name:` keys a contract with it. **F2** lane B must assert the incumbent `merge → Done` automation is still live and emit `INCUMBENT_DISABLED` with a void comparison rather than a false `MISMATCH`; criterion 3a added. **F3** lane D criterion 10 — the workflows must be proved to parse and run (`workflow_dispatch` a run, confirm `state: active`), because lint passes happily on YAML the runner rejects; the orchestrator executes it at integration and the observation channel was re-measured open this run. **F4** lane B's first action is a live probe of GAM-303's `history` shape, and the fixture is built from the printed response rather than from this packet's prose. **F5** lane ordering promoted from LCD 5's prose to a binding constraint in §1. No design question reopened; the lane split, behaviour table, claim-comment format and §5.0 secrets stand.
 * **Draft 2** — 2026-08-11, orchestrator run 2. Applied the three defects the design's author raised on the issue before any gate verdict was recorded: **(1)** `queue: max` restored to lane D's concurrency block with the round-5 reasoning and a fresh measurement of the key's existence; **(2)** §5.0 added — the three owner-owned secrets the build needs and no lane can create; **(3)** the `pr_number` → `PR_NUMBER` seam closed in lane D with an acceptance criterion. LCD 2 marked **discharged** by live measurement and LCD 3 **ruled keep**, so the gate spends its round on what is still open. LCD 6 added for `queue: max`.
