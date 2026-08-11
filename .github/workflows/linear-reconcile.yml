@@ -1,0 +1,96 @@
+name: Linear reconcile
+
+# GAM-325 / D4. The daily safety net behind `linear-sync.yml`: a read-only
+# sweep that looks back over the last 48 hours of merged PRs on ANY base
+# branch (not just `main` — a stacked child merging into its parent hits
+# `linear-sync.yml`'s `NON_MAIN_BASE` skip and closes nothing, so its
+# declared row only ever surfaces here, per §6.3), re-derives each declared
+# issue's true state from its Linear HISTORY (never `completedAt` — a
+# reopen/re-close leaves `completedAt` frozen at the original close while
+# only the history records the truth; measured on GAM-315, whose
+# `completedAt` stays frozen at `2026-08-10T23:36:32.146Z` across a later
+# `Done -> In Progress -> Done` round trip), and reports any drift to Slack.
+# Design of record: `docs/swarm/2026-08-11-linear-github-integration-
+# proposal.md` §6.3.
+#
+# THIS NEVER WRITES TO LINEAR. It runs `scripts/linear-reconcile.mjs` (lane
+# C), which is read-only by construction — a human reads the Slack report
+# and decides what, if anything, to change by hand. It exits 0 even when
+# drift is found: this is a report, not a gate, so there is nothing here for
+# `if:`/branch-protection semantics to interact with in the first place.
+#
+# SCHEDULED AT 07:00 UTC, one hour after `linear-export.yml`'s 06:00 UTC
+# daily run, so the two jobs do not contend for the same Linear API budget
+# in the same minute.
+#
+# THE NAME IS A CONTRACT, same as the other two lane-D workflows: the
+# top-level `name:` below (`Linear reconcile`) is what §5.0's fourth owner
+# action (gate round 1 finding F1) subscribes the `#tracker` Slack channel
+# to by exact string match. Renaming this workflow without updating that
+# subscription makes its daily report invisible.
+#
+# `workflow_dispatch` REQUIRES THE WORKFLOW FILE TO EXIST ON THE DEFAULT
+# BRANCH before it can be triggered at all (`github/docs`
+# `data/reusables/actions/branch-requirement.md`) — and this file has no
+# other trigger besides `schedule`, which only starts firing once the
+# schedule itself is on the default branch too. So this workflow cannot run
+# by any trigger until the owner applies the patch this lane ships as (see
+# below); that is expected, not a defect in this file.
+#
+# THIS FILE CANNOT REACH ANY REF FROM A DISPATCHED RUN (AGENTS.md § "Two
+# walls a dispatched run hits", wall 1) — see linear-sync.yml's header for
+# the full explanation, which applies identically here. It ships as a `git
+# format-patch`, per §5's opening subsection of the GAM-325 packet.
+
+on:
+  schedule:
+    # 07:00 UTC daily — one hour after linear-export.yml's 06:00 UTC run.
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+# Same shape as linear-export.yml's own concurrency block: never let two
+# sweeps race each other. Unlike linear-sync.yml this does not need
+# `queue: max` — a skipped/superseded sweep loses nothing but a day's
+# report, and tomorrow's sweep covers the same 48-hour window again.
+concurrency:
+  group: linear-reconcile
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    name: Linear reconcile
+    runs-on: ubuntu-latest
+    # Longer than the other two lane-D jobs: this walks history for every
+    # declared PR merged in the last 48 hours plus one GitHub search query,
+    # not a single PR's worth of API calls.
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Pinned to the default branch, same reasoning as linear-sync.yml:
+          # the script this job runs must always be main's copy.
+          ref: main
+
+      # Pinned to match ci.yml / linear-export.yml / linear-sync.yml.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.2'
+
+      # No `npm ci`. scripts/linear-reconcile.mjs uses only node: builtins,
+      # global fetch and scripts/linear/{client,declaration}.mjs — no npm
+      # dependency — matching linear-export.yml's stated reason.
+      - name: Run the reconciliation sweep
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Read-only key: this sweep never writes to Linear, so it needs
+          # no more than linear-export.yml's own key already grants.
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: node scripts/linear-reconcile.mjs
