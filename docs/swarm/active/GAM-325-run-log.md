@@ -305,3 +305,14 @@ verdict, this run died holding that subagent. It is not "still working".
   it deserves its own row in `AGENTS.md` § "Two walls", which will need to become
   three. The complete PR body is posted to GAM-325 as a handover comment so the
   owner can open the PR by paste rather than by reconstruction.
+- 2026-08-11 23:4xZ — **five follow-ups filed under item 20**, each written to
+  lead with the defect and defend a priority (item 30): **GAM-329** gate job has
+  no checkout; **GAM-330** `client.mjs` has no `AbortSignal`; **GAM-331** verify
+  `import.meta.main` at the next deploy; **GAM-332** the sweep drops
+  failed-declaration merged PRs; **GAM-333** the third dispatch wall.
+- 2026-08-11 23:4xZ — **handover comment posted to GAM-325**
+  (`#comment-fbab056d`) carrying the complete PR body in a `<details>` block, so
+  the owner opens the PR by paste rather than reconstruction.
+- 2026-08-11 23:4xZ — **GAM-325 moved `In Progress → In Review`, read back as
+  `In Review`** (item 28e — never `Done`; the merge closes the issue, not the
+  author). **Run 4 ends with no subagent in flight and every verdict recorded.**
