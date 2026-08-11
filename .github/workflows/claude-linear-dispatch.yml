@@ -165,6 +165,40 @@ jobs:
             that `AGENTS.md` is written for Codex and names Codex models — the
             constitution is the runtime-neutral version and outranks it.
 
+            **EVERY subagent you dispatch MUST be dispatched with
+            `run_in_background: false`, and you must NEVER end your turn with
+            one still in flight.** This is the single most load-bearing
+            instruction in this prompt, and it is measured, not stylistic.
+
+            Subagents run in the background BY DEFAULT. When your turn ends,
+            this process exits and takes every backgrounded subagent with it —
+            and the SDK returns normally, so the job goes GREEN while the work
+            you were waiting on never happened. Five runs have died exactly
+            this way: 31354278407 (round-2 gate), 31385764526 (checker, 54
+            turns of 300 and 59 minutes of 120), 31514339272, 31523233268 and
+            31527801235 — the last three all on GAM-325, all at the moment a
+            `checker-premise` was dispatched. **None was anywhere near
+            `--max-turns` or `timeout-minutes`.** More room would not have
+            saved any of them; blocking on the subagent would have saved all
+            five.
+
+            The one run that survived a full chain (31527801235's sibling on
+            GAM-314) did exactly one thing differently: it passed
+            `run_in_background: false` and waited. That is the whole fix.
+
+            So: dispatch, WAIT for the result, record the verdict in the run
+            log, and only then continue. If you catch yourself writing "is
+            running in the background", "I'll check on it", or any sentence in
+            the present continuous about work you have not seen finish — stop.
+            That sentence is the bug, and the `assert-released` job below will
+            turn your green run red for it.
+
+            When you dispatch a subagent, write the run-log line BEFORE you
+            wait, and word it so it indicts you if you vanish: *"if this line
+            is the last one in this file, the run died holding this subagent."*
+            One sentence, and the next reader knows exactly what happened
+            instead of guessing.
+
             Stop and leave the issue in `Todo` if the premise does not hold
             when you measure it. A correct refusal to proceed, recorded on the
             issue, is a better outcome than a confident change built on a
@@ -187,6 +221,13 @@ jobs:
             dispatched; each subagent's verdict; gates run; PR opened. Push
             the log even when nothing else is ready to push — a branch with
             only a log on it is a good outcome compared to silence.
+
+            **A dispatched subagent and its verdict are two separate
+            milestones, and the gap between them is where five runs have
+            died.** Push the dispatch line before you wait; push the verdict
+            line the moment it returns. A log whose last entry is a dispatch
+            with no verdict is the signature of this failure — write it so
+            that signature is unmistakable (see the delegation rule above).
 
             **Commit and push real work at every boundary too**, not once at
             the end. A packet, a verdict, a worker's diff: push each as it
@@ -409,3 +450,83 @@ jobs:
             echo "claude --resume ${{ steps.claude.outputs.session_id }}"
             echo "\`\`\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # GAM-314. A dispatched run that ends its turn with a subagent still in
+  # flight returns normally, so `work` above goes green while the issue it
+  # was working sits `In Progress` with the chain unfinished — measured four
+  # times (runs 31354278407, 31385764526, 31514339272, 31523233268), none of
+  # them anywhere near `--max-turns` or `timeout-minutes`. This job is the
+  # only thing in the workflow that reports that condition; without it a
+  # green tick is the only signal anyone sees, and it is the wrong one.
+  #
+  # NOT a turn-budget or clock fix. It changes nothing about when `work`
+  # stops; it only checks, after the fact, where the issue was left. Raising
+  # either budget above would not have caught any of the four measured runs.
+  #
+  # NOT "a PR exists". A correct refusal to proceed (the `work` prompt above
+  # explicitly invites one, and item 26 rewards a premise check that stops
+  # rather than builds on a false premise) leaves no PR at all, and must not
+  # fail this job — that is exactly why the check reads the issue's Linear
+  # state rather than the run's own artifacts.
+  #
+  # `In Progress` fails even when `work` stopped deliberately. The prompt
+  # above (see "near the wall clock") tells an agent to stop, push what
+  # exists, and say so — which ends `work` green with the issue legitimately
+  # `In Progress`. That run is still an unfinished chain nobody will
+  # re-dispatch, and this job fails it anyway: a green tick on it is exactly
+  # the false-success reading GAM-314 is about. Two more shapes end the same
+  # way and are not bugs either — an escalation to the human owner under the
+  # premise-gate cap or the Loop Limit, or the workspace's own "On open in
+  # coding tool -> started" Linear automation moving a row back on its own —
+  # and `scripts/linear-assert-released.mjs` names all three so nobody reads
+  # a red run here as this check being broken.
+  assert-released:
+    name: ${{ github.event.client_payload.identifier }} — claim released
+    needs: work
+    # `always()`, not a plain `needs:`, because the run this exists to catch
+    # is a GREEN one — a plain `needs:` already covers that headline case.
+    # `always()` additionally runs this job when `work` failed or was
+    # cancelled by its `timeout-minutes`. Cite GitHub's documented `always()`
+    # semantics for this, not this repository: the one cancelled run measured
+    # here (31358757094) shows its post-steps `skipped` under a different,
+    # unrelated guard, which proves nothing either way about this job.
+    # Note the limit honestly: when `work` is cancelled, the *run's* overall
+    # conclusion is `cancelled` regardless of what this job reports, so on
+    # that path this buys a red job and a Step Summary line, not a red run.
+    if: always() && github.event.client_payload.identifier != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Nothing more than this. This job does not inherit `work`'s
+    # `contents/pull-requests/issues: write` — it only ever reads Linear.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      # A separate job with its own checkout, not a step appended to `work`.
+      # `work` has held `contents: write` and unrestricted Bash over that
+      # workspace for up to 120 minutes; running the evidence-honesty check
+      # inside the tree it is judging is the wrong shape — concretely, an
+      # agent that left the tree on a ref predating this script would produce
+      # `ERR_MODULE_NOT_FOUND` -> exit 1 -> a red job for no reason. On
+      # `repository_dispatch`, `actions/checkout` takes the DEFAULT BRANCH, so
+      # this job always runs `main`'s copy of the assertion regardless of what
+      # `work` did to its own checkout.
+      - name: Assert the run released its claim
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_DISPATCH_API_KEY }}
+          # The identifier goes through `env:`, never interpolated into
+          # `run:`. `client_payload` is attacker-controllable — the `work`
+          # job's own `if:` guard above exists because "anyone able to fire a
+          # `repository_dispatch` reaches this file directly" — so
+          # `run: node … ${{ github.event.client_payload.identifier }}` would
+          # be a shell-injection sink. (Contrast "Record the session id"
+          # above, which interpolates `steps.claude.outputs.session_id` — a
+          # STEP OUTPUT, not attacker-controlled payload data — directly into
+          # a `run:` block; that is safe there for a different reason and is
+          # not a pattern to copy to `client_payload`.)
+          ISSUE_IDENTIFIER: ${{ github.event.client_payload.identifier }}
+        # No `npm ci`. `scripts/linear/client.mjs` uses global `fetch` and
+        # imports nothing, so this runs on the runner's stock Node — adding an
+        # install step would put a minute and a dependency graph between a
+        # failure and its report.
+        run: node scripts/linear-assert-released.mjs "$ISSUE_IDENTIFIER"
