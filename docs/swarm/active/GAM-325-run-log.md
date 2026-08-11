@@ -63,3 +63,20 @@ verdict, this run died holding that subagent. It is not "still working".
   gate **round 2 dispatched with no verdict recorded** — the third time this
   issue has lost a gate verdict to a backgrounded subagent. Under item 19 no
   worker may start, so round 2 is re-run here, **blocking**, not assumed.
+- 2026-08-11 22:0xZ — **premise gate round 2 DISPATCHED** (`checker-premise`, opus,
+  `run_in_background: false` — this run blocks on it and does not end its turn
+  while it is in flight). **Final round: item 19a allows no third.** Charter:
+  (i) confirm round 1's F1–F5 landed verbatim, LANDED/PARTIAL/MISSING with quoted
+  evidence; (ii) do not re-derive what round 1 settled (LCD 2 discharged, LCD 3
+  ruled keep, LCD 4 stands, lane split / behaviour table / claim format / §5.0
+  sound); (iii) attack the two claims draft 3 introduced that no gate has seen —
+  the re-opened `/actions/*` observation channel and criterion 10's
+  "`workflow_dispatch` needs the default branch" assertion; (iv) **new this
+  round** — `AGENTS.md` § "Two walls" says a dispatched run cannot push
+  `.github/workflows/**` at all, and **lane D's entire Allowed Files set is three
+  workflow files**. That wall is the one AGENTS.md says to check *at packet time*,
+  and no draft mentions it. Rule on whether the packet is dispatchable as written.
+  Verdict: DISPATCH or REFUSE.
+
+  **If this line is the last one in this file, the run died holding this
+  subagent** — the fourth time on this issue. It is not "still working".
