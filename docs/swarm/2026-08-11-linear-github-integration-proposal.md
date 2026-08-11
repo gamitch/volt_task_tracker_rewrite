@@ -708,6 +708,38 @@ anything is built on the answers):
    branch-name link while the native automations are still on (§7's interim
    mitigation for the migration window).
 
+### 8a. As-built — Phases 0 and 1 are done (2026-08-11)
+
+Recorded here so the plan above is not read as pending work it no longer is.
+Constitution item 28g carries the authoritative automation enumeration.
+
+**Phase 0, complete.** `On PR open` and `On PR review request or activity` are
+now **No action**; `On PR merge → Done` is untouched and remains the only
+closer until Phase 3. Four adjacent state-writers were read while in the
+settings, three of them never previously catalogued: the workspace
+commit-linking toggle is **off** (which is what keeps item 28f's required
+trailer inert — the trailer contains `linear issue`, a closing magic word); the
+personal *on git branch copy → started* automation was **on and is now off** —
+it is the likely cause of catalogue row 11, the `Backlog → In Progress` move
+with no PR and no attachment that three investigations failed to attribute;
+*on open in coding tool → started* stays **on**, deliberately; and **auto-close
+stale issues was on** at 6 months → `Canceled`, able to cancel a `gate/human`
+row on age alone with no human act — **now off**. Generalisable lesson: three
+of those four were found by accident while looking at something else, so this
+workspace's state-writers are not enumerable from the repository.
+
+**Phase 1, complete.** Slack workspace *Southern Illinois Robotics*, channel
+`#tracker`. GitHub app subscribed as
+`workflows:{event:"repository_dispatch","push","schedule"}` — note the default
+`workflows` subscription is `event:"pull_request"` only, which would have
+excluded the Linear dispatch workflow, i.e. exactly the silent failure §6.6
+exists to end. Linear team notifications post *issue changes status* and
+*issue marked completed or canceled* (the witness pair), with *issue added to
+the team* off as noise. The incoming webhook and `SLACK_WEBHOOK_URL` secret are
+**deliberately deferred to Phase 2**, when the sync script and edge-function
+notifier that consume them are built — pre-wiring a secret weeks early buys
+nothing and risks a stale value in two places.
+
 ## 9. Cost
 
 | Component | Price |
