@@ -457,6 +457,16 @@ import { submitRsvpChange, type SubmitRsvpChangeFn } from '../../lib/supabase/lo
 // own DES-16 copy) instead of silently falling through to the generic
 // fallback the way a bare `error instanceof Error` check would.
 import { isSupabaseLoaderError } from '../../lib/supabase/loader';
+// GAM-319 -- `toLoaderError` (`loader.ts`) sets `.message` to its
+// read-flavoured `DEFAULT_LOADER_ERROR_MESSAGE` for every rejection except a
+// `SupabaseNotConfiguredError`, whose own DES-16 copy it reuses verbatim
+// (`loader.ts`'s `cause` field is always the raw pre-wrap error, so
+// `cause instanceof SupabaseNotConfiguredError` is exactly that passthrough
+// condition). Importing the class here lets `extractRsvpErrorMessage` below
+// reserve the passthrough for that one case and use write-flavoured copy for
+// every other loader rejection, without changing `loader.ts` itself (which
+// would re-word every read failure across the app).
+import { SupabaseNotConfiguredError } from '../../lib/supabase/client';
 // GAM-301 (T407) round 3 -- `isEventInTeamScope`/`getUnansweredOutreachOpportunities`
 // and the `HomeEventRow`/`HomeSessionRow`/`HomeRsvpRow`/`SignupOpportunityRow`
 // types below MOVED verbatim to this pure leaf module so
@@ -918,10 +928,27 @@ export function withLocalRsvpOverride(
  * always show the generic fallback -- defeating criterion 1's own "no
  * injected seam reaches the real client and its failure surfaces" proof.
  * Falls back to the same generic copy those three files already use for
- * every other rejection shape. */
+ * every other rejection shape.
+ *
+ * GAM-319 -- forwarding `error.message` unconditionally for every
+ * `isSupabaseLoaderError` value also forwarded `loader.ts`'s read-flavoured
+ * `DEFAULT_LOADER_ERROR_MESSAGE` ("Couldn't load this data...") on a write
+ * path, for every rejection except the one `SupabaseNotConfiguredError` case
+ * criterion 1 actually needs verbatim. `error.cause instanceof
+ * SupabaseNotConfiguredError` narrows the passthrough to exactly that case
+ * (`toLoaderError` always sets `cause` to the pre-wrap raw error), so every
+ * other loader rejection now gets write-flavoured copy instead, matching
+ * `functions.ts`'s `NETWORK_ERROR_MESSAGE` house style ("reworded for an
+ * action rather than a load"). */
+const RSVP_SAVE_ERROR_MESSAGE = "Couldn't save your RSVP. Check your connection and try again.";
+
 export function extractRsvpErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
-  if (isSupabaseLoaderError(error)) return error.message;
+  if (isSupabaseLoaderError(error)) {
+    return error.cause instanceof SupabaseNotConfiguredError
+      ? error.message
+      : RSVP_SAVE_ERROR_MESSAGE;
+  }
   return 'Something went wrong saving your RSVP.';
 }
 

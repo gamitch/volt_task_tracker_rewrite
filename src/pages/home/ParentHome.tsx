@@ -419,6 +419,14 @@ import { submitRsvpChange, type SubmitRsvpChangeFn } from '../../lib/supabase/lo
 // through to the generic fallback the way a bare `error instanceof Error`
 // check would.
 import { isSupabaseLoaderError } from '../../lib/supabase/loader';
+// GAM-319 -- `toLoaderError` (`loader.ts`) sets `.message` to its
+// read-flavoured `DEFAULT_LOADER_ERROR_MESSAGE` for every rejection except a
+// `SupabaseNotConfiguredError`, whose own DES-16 copy it reuses verbatim
+// (`loader.ts`'s `cause` field is always the raw pre-wrap error, so `cause
+// instanceof SupabaseNotConfiguredError` is exactly that passthrough
+// condition). Importing the class here lets `extractRsvpErrorMessage` below
+// reserve the passthrough for that one case, same fix as `StudentHome.tsx`.
+import { SupabaseNotConfiguredError } from '../../lib/supabase/client';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real columns/views. Module docs #1/#2.
@@ -1013,10 +1021,27 @@ export function applyRsvpOverride(
  * cause}` object for which `error instanceof Error` is `false`, so an
  * `instanceof Error`-only check would silently swallow that message. Falls
  * back to the same generic copy those three files already use for every
- * other rejection shape. */
+ * other rejection shape.
+ *
+ * GAM-319 -- forwarding `error.message` unconditionally for every
+ * `isSupabaseLoaderError` value also forwarded `loader.ts`'s read-flavoured
+ * `DEFAULT_LOADER_ERROR_MESSAGE` ("Couldn't load this data...") on a write
+ * path, for every rejection except the one `SupabaseNotConfiguredError` case
+ * this comment's own criterion actually needs verbatim. `error.cause
+ * instanceof SupabaseNotConfiguredError` narrows the passthrough to exactly
+ * that case (`toLoaderError` always sets `cause` to the pre-wrap raw error),
+ * so every other loader rejection now gets write-flavoured copy instead,
+ * matching `functions.ts`'s `NETWORK_ERROR_MESSAGE` house style ("reworded
+ * for an action rather than a load"). */
+const RSVP_SAVE_ERROR_MESSAGE = "Couldn't save this RSVP. Check your connection and try again.";
+
 export function extractRsvpErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
-  if (isSupabaseLoaderError(error)) return error.message;
+  if (isSupabaseLoaderError(error)) {
+    return error.cause instanceof SupabaseNotConfiguredError
+      ? error.message
+      : RSVP_SAVE_ERROR_MESSAGE;
+  }
   return 'Something went wrong saving this RSVP.';
 }
 

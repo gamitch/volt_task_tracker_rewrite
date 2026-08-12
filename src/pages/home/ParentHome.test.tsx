@@ -1336,6 +1336,45 @@ describe('GAM-304 -- the parent card writes for the child with the parent as res
     }
     expect(container.textContent).toContain('boom parent rsvp write failed');
   });
+
+  it("GAM-319 -- a generic write failure gets save-flavoured copy, not loader.ts's read-flavoured default", async () => {
+    // Same plain, non-`Error` `SupabaseLoaderError` shape `runMutation`
+    // (`loader.ts`) actually rejects with for any Postgrest failure -- NOT
+    // the `SupabaseNotConfiguredError` case. Before this fix,
+    // `extractRsvpErrorMessage` forwarded `.message` unconditionally for
+    // this shape, surfacing `loader.ts`'s read-flavoured
+    // `DEFAULT_LOADER_ERROR_MESSAGE` on this write path (GAM-319).
+    const onRsvpChange = vi.fn<SubmitRsvpChangeFn>(async () => {
+      throw {
+        code: '23505',
+        message: "Couldn't load this data. Check your connection and try again.",
+        cause: new Error('duplicate key value violates unique constraint'),
+      };
+    });
+    renderAsUser(PARENT_USER, {
+      loadLinkedStudents: async () => RSVP_WRITE_LINKED,
+      loadStudentData: async () => RSVP_WRITE_CARD_DATA,
+      onRsvpChange,
+    });
+    await flushMicrotasks();
+
+    const group = Array.from(container.querySelectorAll('[role="radiogroup"]')).find((el) =>
+      el
+        .getAttribute('aria-label')
+        ?.startsWith('RSVP on behalf of Nia P. for Neighborhood Cleanup'),
+    );
+    const goingButton = group?.querySelector('button[data-value="going"]');
+
+    act(() => {
+      goingButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain("Couldn't save this RSVP. Check your connection and try again.");
+    expect(container.textContent).not.toContain(
+      "Couldn't load this data. Check your connection and try again.",
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
