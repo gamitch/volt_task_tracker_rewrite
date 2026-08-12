@@ -132,3 +132,36 @@ line names.
   file under `supabase/migrations/`, creates an RLS policy — two triggers) and
   `run_in_background: false`. *If this line is the last one in this file, the run
   died holding this subagent.*
+- **Worker returned. Commit `3f1a262e3fce6bfa580a5b0b477ef4ba973b7283`.**
+  Subagent returned; nothing left in flight.
+
+  **Existence verified independently (item 21), not taken from the report:**
+  `git show --stat` at that SHA lists exactly the four Allowed Files
+  (migration 168 lines, `gam299_assertions.sql` 191, `gam299_seed.sql` 134,
+  `run.sh` +23/-1); `git diff --name-only 28f7394..HEAD` matched **no**
+  forbidden path (`.github/`, `src/`, `.claude/`, `20260717000002_rls.sql`,
+  `tests/rls/assertions.sql`, `tests/rls/seed.sql`); working tree clean. The
+  policy SQL in the committed blob is byte-identical to packet §5.1.
+
+  Worker's own headline results (to be graded by a separate checker, not
+  accepted here): all ten criteria green with the change and red under each
+  named mutation, `run.sh` exit 0 with 38 PASS / 0 FAIL, the six pre-existing
+  cases byte-identical to a merge-base run, and — the one this row has never
+  had — **criterion 7 measured on real PostgreSQL 16.14**: without the
+  migration the dual-team student sees 0 of team B's event and 0 of its
+  session; with it, 1 and 1.
+
+  Three things it reported that I am recording rather than smoothing over:
+  * **Gate 6 (scoped vitest) did not run — 5 of 6 gates, and the worker said
+    five.** There is no `src/` change, so no scope is derivable. Correct, and
+    stated instead of rounded up.
+  * **The performance regression reproduced**: ~+40% at 20,004 events, ~+9 ms
+    at 500, on faster hardware than the gate's (+57% / +22 ms). Direction and
+    cause match; absolute numbers are machine-dependent. It is in the migration
+    header and must be in the PR body.
+  * **The migration comment says the item-20 follow-up "is filed as a Linear
+    issue". It is not filed yet** — that is orchestrator-owned work and the
+    comment is currently ahead of reality. Filing it before the PR is what
+    makes the sentence true.
+- **Dispatching `checker-reviewer` (opus, `run_in_background: false`).** *If this
+  line is the last one in this file, the run died holding this subagent.*
