@@ -19,6 +19,16 @@ describes, not a mystery.
 - `2026-08-12T19:45Z` — **Packet written** (`GAM-305-packet.md`), citations verified against `main` first (item 19c). Three corrections to the issue text found: `meetings.ts:392`→`:402` and the loader path is `src/lib/supabase/loaders/`; `coachHome.ts:39-40`→`:36-40`; criterion 5's "or a type error" is false (both loaders cast `as TeamDbRow[]`, so a select-string change compiles). Four sites the issue does not name found: `ScheduleMeetingsDialog.tsx:876,908` and `OutreachEventDialog.tsx:1048,1072` — the edit/open resets, which extend the criterion-4 sentinel hazard to the edit path.
 - `2026-08-12T19:47Z` — **Dispatched `checker-premise` (round 1, opus) on the packet** (item 19, `run_in_background: false`). *If this line is the last one in this file, the run died holding this subagent.*
 
+- `2026-08-12T19:57Z` — **`checker-premise` round 1 returned: REVISE.** Subagent completed; nothing left in flight. 1 BLOCKER, 3 MAJOR, 3 MINOR, 1 NIT. It ran real experiments in its own worktree (item 23) — `npx tsc --noEmit` ×4 and a purpose-built `gate305.test.tsx` driven across baseline / two mutations / full prescription — rather than only reading. Verdict summary:
+  - **F1 BLOCKER** — packet §3b is not implementable inside its own Allowed Files. `outreach.ts:722`'s mapper returns `TeamOption` from `OutreachDetail.tsx:822` (a *cross-page* exported interface), and `MeetingsList.tsx:627` has its own `Team`. Measured cascade: 5 files outside Allowed Files fail `tsc`, in two waves.
+  - **F2 MAJOR** — **my own headline claim in §2 was false.** I wrote that leaving `allTeamIds` unfiltered makes re-saving an all-teams event write an explicit array. Measured: it writes `null` on both paths, because `resolveTeamScope` compares against the same unfiltered list, and Astryx `MultiSelector` never prunes out-of-option values on mount. The real hazard is the inverse and is what criterion 7 already names.
+  - **F3 MAJOR** — criterion 4's declared mutation leaves criterion 4 **green**. Exactly the "criterion that cannot fail" class criterion 3 exists to prevent.
+  - **F4 MAJOR** — the prescription *introduces* a defect: an event already scoped to a since-archived team renders a raw uuid in the Team scope trigger while "Expected attendees" renders the same team's real name.
+  - **F5-F8** — `groupStudentsByTeam` does not exist (it is `groupActiveRosterByTeam:901`); `queryAllTeams` has a second consumer at `outreach.ts:1131`; `StudentDialog.tsx:118-119` carries a second "ONLY place" claim; minor citation drift.
+  - Confirmed: all 21 of §2's other citations exact, all three of my corrections to the issue text, HEAVY tier correct, item 18's four triggers correctly judged unmet, and the §3d out-of-scope list safe (`coachHome.test.ts:110` verified, and it refuted one live-fire risk it raised itself).
+- `2026-08-12T20:05Z` — **Packet revised (round 2 submitted).** All five required revisions applied; kept `archived` required rather than taking the gate's cheaper optional path, and recorded that tradeoff explicitly as the gate asked.
+- `2026-08-12T20:06Z` — **Dispatched `checker-premise` (round 2, opus).** *If this line is the last one in this file, the run died holding this subagent.*
+
 ## Tier decision — HEAVY, and why
 
 Item 26's question is *can a mistake here corrupt data, or lie to a user about
