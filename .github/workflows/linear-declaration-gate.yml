@@ -1,0 +1,99 @@
+name: Linear declaration
+
+# GAM-325 / D3. The PR-time half of the closer, and the one that catches a
+# mistake before it merges rather than after: this gate runs
+# `scripts/linear-declaration-check.mjs` (lane C) against a PR's body and
+# head branch and reports red/green on the shape of the declaration, not on
+# whether Linear ever sees a write. Design of record: `docs/swarm/2026-08-11-
+# linear-github-integration-proposal.md` §6.4.
+#
+# THIS JOB CARRIES NO CONDITIONAL-SKIP KEYWORD ANYWHERE — NOT ON THE JOB,
+# NOT ON ANY STEP, AND THAT IS THE WHOLE POINT. A required job that is
+# conditionally skipped still reports Success to branch protection and does
+# not block the merge — GitHub's own documented trap, and the one this
+# workflow exists to avoid. The script this job runs always exits with a
+# real 0 or 1; nothing in this file may add such a condition, since that
+# would let it exit without running at all. Adding one here would reopen the
+# exact hole this gate was built to close — don't. (This paragraph
+# deliberately spells the keyword with a space so it does not itself match
+# the acceptance-criterion grep for the literal token, which checks this
+# file has none in force.)
+#
+# METADATA-ONLY, deliberately. No checkout of the PR's own code and no
+# secrets are required for the syntax half (canonical-form checking, branch
+# consistency): the script fetches the parser from the DEFAULT BRANCH's ref
+# via a raw-file API call, not from the PR's own copy, so a PR cannot alter
+# the rule that judges it (§6.4: "so the parser is not the PR's own"). The
+# local module (`scripts/linear-declaration-check.mjs`'s own copy of
+# `scripts/linear/declaration.mjs`) is an explicit, logged fallback used only
+# when that fetch fails — see the script itself for that path; this workflow
+# does not need a checkout to make it possible.
+#
+# `Also-fixes:` identifier existence-checking is the one part of this script
+# that can use a read-only Linear key, and it is advisory (warn, never fail)
+# when that key is absent — see `scripts/linear-declaration-check.mjs`.
+#
+# THE JOB NAME IS A CONTRACT: the owner types `Linear declaration` (this
+# job's `name:`, job id `declaration`) directly into branch protection's
+# required-checks list at Phase 3, and the workflow's own top-level `name:`
+# is the same string because §5.0's fourth owner action (gate round 1
+# finding F1) subscribes the `#tracker` Slack channel to workflow runs
+# filtered by exactly this name. Renaming either without updating both of
+# those breaks silently — branch protection stops finding the check, or the
+# Slack subscription stops matching the run.
+#
+# THIS FILE CANNOT REACH ANY REF FROM A DISPATCHED RUN (AGENTS.md § "Two
+# walls a dispatched run hits", wall 1) — see linear-sync.yml's header for
+# the full explanation, which applies identically here. It ships as a `git
+# format-patch`, per §5's opening subsection of the GAM-325 packet.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, ready_for_review]
+
+jobs:
+  declaration:
+    name: Linear declaration
+    runs-on: ubuntu-latest
+    # Bounded, same reasoning as linear-sync.yml: a hung run here blocks a
+    # merge behind a required check that never reports, which is worse than
+    # a fast, loud failure.
+    timeout-minutes: 5
+
+    # Read-only. The gate never writes anything — not a comment, not a
+    # label, not a Linear field — it only reports pass/fail to the PR's
+    # check-run list.
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      # No `npm ci`: scripts/linear-declaration-check.mjs uses only node:
+      # builtins and global fetch, same as linear-sync.yml's script. No
+      # checkout of the PR's tree either — the header comment above explains
+      # why the parser is fetched from the default branch's ref instead of
+      # trusted from a local checkout; a checkout step here would tempt a
+      # future edit into reading the PR's own copy by accident.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.2'
+
+      - name: Fetch the checker script from the default branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -sSf \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github.raw" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/scripts/linear-declaration-check.mjs?ref=main" \
+            -o linear-declaration-check.mjs
+
+      - name: Run the declaration gate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          # Read-only key, used only for Also-fixes existence validation.
+          # Absent is a supported, advisory-only path (see header comment).
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: node linear-declaration-check.mjs

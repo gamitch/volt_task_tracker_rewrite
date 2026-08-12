@@ -1,0 +1,195 @@
+name: Linear sync
+
+# GAM-325 / D2. The explicit closer: when a PR merges to `main` declaring
+# `Closes GAM-nnn` on line 1 of its body, this workflow moves that issue to
+# `Done` in Linear and leaves an auditable trail of exactly what it did and
+# why. Design of record: `docs/swarm/2026-08-11-linear-github-integration-
+# proposal.md` §6, §8. The full behaviour table, the claim-comment format and
+# the precondition rules all live in `scripts/linear-sync.mjs` (lane B) —
+# this file's only job is to get that script running at the right time, with
+# the right inputs, and to say out loud what it is doing before it does it.
+#
+# THIS FILE SHIPS IN SHADOW MODE ONLY (see `SYNC_MODE` below). Shadow reads
+# everything, writes nothing to Linear, and posts what it *would* have done
+# to Slack. §8's ten-consecutive-MATCH exit criterion — comparing shadow's
+# intended action against the incumbent `On PR merge -> Done` Linear
+# automation's actually-observed transition — is what promotes this to
+# `live`. Do not flip `SYNC_MODE` to `live` in this PR; that is a Phase 3
+# owner action per §8.
+#
+# THE NAME MATTERS: `Linear sync` (exact string, top-level `name:` below) is
+# a contract with an owner-side Slack subscription filter that matches
+# workflow runs by name (§5.0's fourth owner action, gate round 1 finding
+# F1). A `branch:"main"` filter would silently drop this workflow's own
+# runs, because `pull_request`-triggered runs report the PR's HEAD branch,
+# not `main` — so the subscription is keyed on name instead. Renaming this
+# workflow without updating the subscription makes it invisible again.
+#
+# THIS FILE CANNOT REACH ANY REF FROM A DISPATCHED RUN (AGENTS.md § "Two
+# walls a dispatched run hits", wall 1) — `.github/workflows/**` refuses
+# both credentials a dispatched run holds, deliberately, so an autonomous
+# run can never rewrite the workflow that constrains it. This file is
+# committed in a worktree and shipped as a `git format-patch`, per §5's
+# opening subsection of the GAM-325 packet. It does not run anywhere until
+# an owner (or a scoped human session) applies that patch as a normal PR.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      pr_number: { description: 'PR number to replay', required: true }
+
+# Every merge into `main` that might close an issue goes through ONE global
+# FIFO queue, never in parallel. This is deliberate, not a missed
+# optimisation: two PRs racing to close the same issue (or to claim/dispute
+# a `DUPLICATE_CLOSE_CLAIM`) need a stable order to produce a correct
+# decision, and a hung run must not let a second merge's close silently
+# skip the line.
+#
+# The `queue` key below, set to its non-default `max` value (rather than
+# the default `single`), is load-bearing — NOT decoration, and it was
+# missing from an earlier draft of the design. The default `single` CANCELS
+# a pending run outright when a newer one joins the group (GitHub's own
+# words: "any existing pending job or workflow in the same concurrency
+# group will be canceled and the new queued job or workflow will take its
+# place"). A cancelled pending run here is not redundant work — it is a
+# lost audit comment, a lost Slack notice and a lost `DUPLICATE_CLOSE_CLAIM`
+# decision for whichever PR got dropped. The non-default queue value below
+# queues up to 100 pending runs FIFO instead of discarding them.
+#
+# The `queue` key's non-default value together with `cancel-in-progress`
+# set to true is a documented GitHub Actions workflow validation error, so
+# the two keys below must stay `false` and non-default together as a pair —
+# never change one without the other. (This paragraph deliberately avoids
+# spelling either key's literal `key: value` form so it does not itself
+# match the acceptance-criterion grep for the single real occurrence below.)
+concurrency:
+  group: linear-sync
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  sync:
+    name: Linear sync
+    runs-on: ubuntu-latest
+    # ONE job, not a resolve/sync split (an earlier draft of the design had
+    # two; the split was cut because a two-job pipeline just adds a second
+    # place for the FIFO ordering above to be undone by scheduling).
+    #
+    # 5 minutes, not longer. The whole point of the queue setting above is
+    # that later merges wait behind this run in a global FIFO, so a hang
+    # here is not a local problem — it is systemic, stalling every close
+    # behind it. A short timeout is what keeps that failure mode from
+    # compounding.
+    timeout-minutes: 5
+
+    # Read-only on GitHub. The script's write path is entirely against
+    # Linear's API (`LINEAR_SYNC_API_KEY` below); nothing here ever needs to
+    # push a commit, open a PR or touch an Issue on this repository, so
+    # scope is kept to what reading the PR and its metadata requires.
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      # THIS IS THE FIRST STEP, DELIBERATELY — §0/§5 require the measure
+      # step to run before anything else, so it needs neither a checkout
+      # nor a Node.js setup: it is pure shell plus GitHub Actions context
+      # expressions, and putting it ahead of both means it still runs (and
+      # still tells you which secrets are missing) even if a later step
+      # were to fail.
+      #
+      # §0's "measure step" — this answers, from inside the run where the
+      # answers actually live, the parts of §8's throwaway-PR checklist
+      # that shadow mode leaves otherwise unmeasured (items 1, 2 and 3). It
+      # prints ONLY booleans for secret presence, never a secret value —
+      # grep this file for `secrets.` to confirm nothing here is ever
+      # echoed.
+      - name: Measure the checklist answers before doing anything else
+        env:
+          PR_NUMBER: ${{ inputs.pr_number }}
+          LINEAR_SYNC_API_KEY: ${{ secrets.LINEAR_SYNC_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "event.action=${{ github.event.action }}"
+          echo "resolved pr number (payload)=${{ github.event.pull_request.number }}"
+          echo "resolved pr number (payload.number)=${{ github.event.number }}"
+          echo "resolved pr number (workflow_dispatch)=${{ inputs.pr_number }}"
+          echo "payload.pull_request.merged=${{ github.event.pull_request.merged }}"
+          echo "github.sha=${{ github.sha }}"
+          echo "github.ref=${{ github.ref }}"
+          echo "github.workflow_ref=${{ github.workflow_ref }}"
+          echo "WORKFLOW_FILE_VERSION_MARKER=GAM-325-lane-d-v1"
+          echo "event.pull_request.head.repo.fork=${{ github.event.pull_request.head.repo.fork }}"
+          if [ -n "${LINEAR_SYNC_API_KEY}" ]; then
+            echo "has_linear_key=true"
+          else
+            echo "has_linear_key=false"
+          fi
+          if [ -n "${SLACK_WEBHOOK_URL}" ]; then
+            echo "has_slack_url=true"
+          else
+            echo "has_slack_url=false"
+          fi
+          if [ -n "${GITHUB_TOKEN}" ]; then
+            echo "has_gh_token=true"
+          else
+            echo "has_gh_token=false"
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Pinned to the default branch under EITHER trigger. The script
+          # this job runs must always be `main`'s copy: under
+          # `workflow_dispatch` GitHub already requires the workflow file
+          # itself to live on the default branch, and under `pull_request`
+          # trusting the PR's own copy of `linear-sync.mjs` would let a PR
+          # author's branch decide how its own close is evaluated.
+          ref: main
+
+      # Pinned to match ci.yml / linear-export.yml rather than left
+      # floating — see ci.yml's own note on why 22.22.2 specifically (jsdom's
+      # transitive ESM interop requirement).
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.2'
+
+      # No `npm ci`. scripts/linear-sync.mjs uses only node: builtins, the
+      # global fetch and scripts/linear/{client,declaration,slack}.mjs — no
+      # npm dependency — matching linear-export.yml's stated reason: an
+      # install step here would add minutes and a supply-chain surface for a
+      # script that needs neither.
+      #
+      # The replay seam: this workflow declares the replay input as
+      # `workflow_dispatch.inputs.pr_number`; scripts/linear-sync.mjs reads
+      # `process.env.PR_NUMBER`. Nothing connects the two unless this `env:`
+      # block does it — without it the replay path silently no-ops, which is
+      # this project's named recurring defect shape. Left empty on the
+      # `pull_request` trigger, which is correct: the script resolves the PR
+      # number from the event payload there instead.
+      - name: Run the sync
+        env:
+          # NEW secret, write-scoped, team Gamitch. §6.3's one-key-per-job
+          # discipline forbids reusing LINEAR_API_KEY (read-only, used by
+          # linear-export.yml) or LINEAR_DISPATCH_API_KEY (scoped to
+          # claude-linear-dispatch.yml) for this job's writes.
+          LINEAR_SYNC_API_KEY: ${{ secrets.LINEAR_SYNC_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # `PR_NUMBER` closes the replay seam described above — see the
+          # comment on the previous step. Empty under `pull_request`, which
+          # is correct: the script resolves the number from the event there.
+          PR_NUMBER: ${{ inputs.pr_number }}
+          # Hardcoded to `shadow` in THIS PR. Fails toward safety: any value
+          # other than the exact string `live` (unset, a typo, `Live` with
+          # the wrong case) resolves to shadow inside the script too, so
+          # this is belt-and-braces, not the only guard. Flipping this to
+          # `live` is a Phase 3 owner action per §8, gated on the shadow
+          # window's ten-consecutive-MATCH exit criterion.
+          SYNC_MODE: shadow
+        run: node scripts/linear-sync.mjs
