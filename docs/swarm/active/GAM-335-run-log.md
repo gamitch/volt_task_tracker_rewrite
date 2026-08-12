@@ -107,3 +107,16 @@ Append-only. One line per milestone, committed and pushed immediately.
   git-side record (no `Tnnn` — this issue has no legacy number, matching this
   repo's existing convention for `GAM-nnn`-only rows, e.g. GAM-332's commits).
   No workflow file touched, so the item 28 two-PR wall does not apply.
+- **moved `In Progress` → `In Review`** (item 28e — never `Done`; the merge
+  automation closes it, not this run). Read back: `state.name = "In Review"`,
+  `attachments = [".../pull/167"]`. Work is finished and awaiting human
+  acceptance.
+
+## Outcome
+
+**FAST tier, complete.** Fix implemented directly by the orchestrator, no
+worker/checker dispatched (item 26 does not require one at this tier, and none
+was used — no subagent was in flight at any point this run, so the
+run_in_background hazard this dispatch warns about never applied). Premise
+measured and held; named mutation run red then green; all six gates pass; PR
+#167 open; GAM-335 `In Review`. Nothing left in flight.
