@@ -351,6 +351,24 @@ export function reconstructAutomationTransition(historyNodes, mergedAt, windowMs
 }
 
 /**
+ * Shadow-only (GAM-335): `decide()` must be handed the issue's state
+ * immediately BEFORE any merge-coincident automation transition, not the
+ * live post-automation read -- otherwise an ordinary declared merge always
+ * looks like `DUPLICATE_CLOSE_CLAIM` against the incumbent's own already-
+ * applied `Done`. If reconstruction finds no merge-coincident transition,
+ * the live read already IS the prior state and `issue` is returned
+ * unchanged (this is what keeps the already-`Done` case degenerate-MATCH
+ * rather than broken). Never call this for live mode: after cutover the
+ * incumbent is gone and the live read is the true precondition.
+ */
+export function resolveShadowIssueState(issue, historyNodes, mergedAt) {
+  if (!issue) return issue;
+  const transition = reconstructAutomationTransition(historyNodes, mergedAt);
+  if (!transition) return issue;
+  return { ...issue, state: { name: transition.fromState.name } };
+}
+
+/**
  * §3 / gate round 1 F2: the shadow window is only meaningful while the
  * incumbent `merge -> Done` automation stays enabled. Read once at startup;
  * `gitAutomationStates` shape confirmed live (query pasted in the worker's
@@ -621,7 +639,17 @@ async function main() {
     }
   }
 
-  const decision = decide({ pr, issue, claims });
+  // Shadow-only (GAM-335): decide() must see the reconstructed prior state,
+  // not the live post-automation read. Live mode passes `issue` through
+  // unchanged -- after cutover the incumbent is gone and the live read is
+  // the true precondition.
+  let decideIssue = issue;
+  if (syncMode === 'shadow' && issue) {
+    const history = await fetchIssueHistory(issue.id);
+    decideIssue = resolveShadowIssueState(issue, history, pr.merged_at);
+  }
+
+  const decision = decide({ pr, issue: decideIssue, claims });
   console.log(
     `decide() -> ${decision.code}${
       decision.code !== decision.slackCode ? ` (Slack: ${decision.slackCode})` : ''

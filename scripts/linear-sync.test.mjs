@@ -20,6 +20,7 @@ import {
   parseClaimMarker,
   reconstructAutomationTransition,
   resolvePrNumber,
+  resolveShadowIssueState,
   resolveSyncMode,
 } from './linear-sync.mjs';
 
@@ -400,6 +401,42 @@ describe('reconstructAutomationTransition -- AC3, fixture from the GAM-303 probe
     expect(match).not.toBeNull();
     expect(match.fromState.name).toBe('In Progress');
     expect(match.toState.name).toBe('Done');
+  });
+});
+
+describe('resolveShadowIssueState -- GAM-335: decide() must see the prior state, not the live post-automation read', () => {
+  it('overrides the issue state to the reconstructed prior state when a merge-coincident transition is found', () => {
+    const mergedAt = '2026-08-09T15:41:13.879Z';
+    const postAutomationIssue = issue({ state: { name: 'Done' } });
+    const resolved = resolveShadowIssueState(postAutomationIssue, GAM_303_HISTORY_PROBE, mergedAt);
+    expect(resolved.state.name).toBe('In Progress');
+    expect(resolved.id).toBe(postAutomationIssue.id);
+  });
+
+  it('returns the issue unchanged when no merge-coincident transition is found -- the live read already is the prior state', () => {
+    const mergedAt = '2026-08-09T15:30:19.848Z'; // coincides with In Progress -> In Review, not -> Done
+    const liveIssue = issue({ state: { name: 'In Review' } });
+    const resolved = resolveShadowIssueState(liveIssue, GAM_303_HISTORY_PROBE, mergedAt);
+    expect(resolved).toBe(liveIssue);
+  });
+
+  it('passes a null issue through unchanged (UNKNOWN_ISSUE path never touched)', () => {
+    expect(resolveShadowIssueState(null, GAM_303_HISTORY_PROBE, '2026-08-09T15:41:13.879Z')).toBeNull();
+  });
+
+  it('GAM-335: feeding the resolved issue into decide() flips DUPLICATE_CLOSE_CLAIM to CLOSE for an ordinary declared merge', () => {
+    const mergedAt = '2026-08-09T15:41:13.879Z';
+    // What the live read sees: the incumbent automation already closed it.
+    const postAutomationIssue = issue({ state: { name: 'Done' } });
+
+    const withoutFix = decide({ pr: pr(), issue: postAutomationIssue, claims: [] });
+    expect(withoutFix.code).toBe('DUPLICATE_CLOSE_CLAIM');
+    expect(withoutFix.action).toBe('none');
+
+    const resolved = resolveShadowIssueState(postAutomationIssue, GAM_303_HISTORY_PROBE, mergedAt);
+    const withFix = decide({ pr: pr(), issue: resolved, claims: [] });
+    expect(withFix.code).toBe('CLOSE');
+    expect(withFix.action).toBe('close');
   });
 });
 
