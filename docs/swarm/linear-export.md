@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-11T23:28:27.266Z from team `Gamitch`.
+Exported 2026-08-12T07:04:38.492Z from team `Gamitch`.
 
-- **333** issues (242 archived)
-- **51** not yet completed or cancelled
+- **334** issues (242 archived)
+- **52** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -65,6 +65,7 @@ Exported 2026-08-11T23:28:27.266Z from team `Gamitch`.
 | [GAM-331](https://linear.app/gamitch/issue/GAM-331/verify-importmetamain-is-true-in-the-supabase-edge-runtime-after-the) | — | Backlog | gate/unverified tier/fast | Verify `import.meta.main` is true in the Supabase Edge Runtime after the next `linear-dispatch` deploy |
 | [GAM-332](https://linear.app/gamitch/issue/GAM-332/the-reconciliation-sweep-drops-merged-prs-whose-declaration-failed-to) | — | Backlog | tier/fast | The reconciliation sweep drops merged PRs whose declaration failed to parse — the cases most likely to be wrong |
 | [GAM-333](https://linear.app/gamitch/issue/GAM-333/a-dispatched-run-can-push-a-branch-but-cannot-open-a-pr-agentsmd) | — | Backlog | tier/fast | A dispatched run can push a branch but cannot open a PR — `AGENTS.md` records two walls and there are three |
+| [GAM-334](https://linear.app/gamitch/issue/GAM-334/the-declaration-gate-cannot-express-second-half-of-a-two-pr-row-so) | — | Backlog | provenance/other tier/fast | The declaration gate cannot express "second half of a two-PR row", so every workflow-touching row will go red on the PR that completes it |
 
 ## Closed and cancelled
 
