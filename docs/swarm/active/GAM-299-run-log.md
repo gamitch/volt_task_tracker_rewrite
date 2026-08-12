@@ -123,3 +123,12 @@ line names.
     20,004 events (1922-1936 ms → 2997-3038 ms), +22 ms at a realistic 500
     events.** Accepted at this scale, and now stated instead of implied.
 - **Folding findings 1-8 into packet revision 3, then dispatching the worker.**
+- **Packet revision 3 written** — all eight round-2 findings folded in (§12 tables
+  them). The three that change what the worker will actually do: §5.2 now names
+  **two** given-up configurations and withdraws the false defence, §6.4 carries the
+  criterion-4 mutation that actually reddens, and §5.4 states the perf regression
+  instead of claiming a win that belonged to the rejected route.
+- **Dispatching `worker-implementer` with `model: "opus"`** (item 18: creates a
+  file under `supabase/migrations/`, creates an RLS policy — two triggers) and
+  `run_in_background: false`. *If this line is the last one in this file, the run
+  died holding this subagent.*

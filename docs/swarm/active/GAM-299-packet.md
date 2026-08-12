@@ -1,4 +1,10 @@
-# GAM-299 task packet (HEAVY) — revision 2
+# GAM-299 task packet (HEAVY) — revision 3, DISPATCH
+
+> **Gate status: premise-gate round 2 returned DISPATCH** (5 MINOR, 2 NIT, no
+> MAJOR, no BLOCKER), satisfying constitution item 19 and Definition of Ready #1.
+> Revision 3 is revision 2 with those eight findings folded in; §12 tables them.
+> Everything in this packet marked *(measured)* was executed against a real
+> PostgreSQL 16 cluster by a gate agent, not reasoned about.
 
 **Issue:** GAM-299 — `events`/`event_sessions` RLS scopes by the legacy
 `students.team_id`, so a dual-team student never receives their second team's
@@ -25,10 +31,14 @@ student who is a member of two teams, an event scoped to their *second* team
 satisfies the page's scope test and is filtered out by RLS before it reaches the
 browser. Nothing on screen indicates rows are missing.
 
-*(The four views span `20260722000000_membership_views.sql:59` and `:86`,
-`20260723000000_kpi_views.sql:256`, `20260723000001_dashboard_views.sql:205` and
-`20260806000000_met01_explicit_marks.sql:109` — round 1's MINOR-6 correcting
-revision 1, which attributed all four to one file.)*
+*(The four views are `v_student_participation` — defined at
+`20260722000000_membership_views.sql:59` and **superseded** by
+`20260806000000_met01_explicit_marks.sql:102-137`, membership join at `:109` —
+plus `20260722000000_membership_views.sql:86`,
+`20260723000000_kpi_views.sql:256` and
+`20260723000001_dashboard_views.sql:205`. Round 1's MINOR-6 corrected revision 1,
+which attributed all four to one file; round 2's NIT-6 corrected revision 2,
+which then listed five sites for four views by counting one view twice.)*
 
 ## 2. The premise, measured
 
@@ -66,7 +76,7 @@ Corrections from round 1 are folded in and marked.
 | -- | -- | -- |
 | `events` read policy tests `s.team_id = any(events.team_ids)` | `20260717000002_rls.sql:153-161` | verified verbatim, lines current |
 | `event_sessions` policy repeats the test via `event_id` | `20260717000002_rls.sql:180-189` | verified; the issue's `:180-188` omits the closing `);` |
-| `v_student_participation` joins `student_teams … left_on is null` | `20260722000000_membership_views.sql:59-65` (join on `:63`) | verified verbatim |
+| `v_student_participation` joins `student_teams … left_on is null` | verbatim at `20260722000000_membership_views.sql:59-65` (join on `:63`), but **that definition is superseded**: `pg_get_viewdef` on a live cluster returns the `marked` CTE from `20260806000000_met01_explicit_marks.sql:102-137`, membership join at `:109` | verified *(round 2 MINOR-5; the substance — active memberships — holds in both, but cite the live one)* |
 | Nothing writes `student_teams` | no `insert`/`upsert`/`update`/`delete` in `src/`, `supabase/functions/`, `scripts/`, or any migration except the one-time backfill at `20260721000000_student_teams.sql:37`; **and no trigger writes it** (gate enumerated `pg_trigger` on a live cluster) | verified |
 | Its one non-test **query** in `src/` | `src/lib/supabase/loaders/students.ts:486` is `.from('student_teams')`, `:487` is `.select('team_id')` | verified *(MINOR-5: revision 1 put the `.select` on `:486`, and said "reference" where it meant "query" — there are ~20 non-test comment references)* |
 | `student_teams` is readable by any authenticated session | `20260721000000_student_teams.sql:86-87`, `read_all … using (true)` | verified — **and load-bearing**, see §5.3 |
@@ -108,6 +118,19 @@ verbatim. Re-deriving either → BLOCKER."*
    on this same policy name and chose an additive second policy, recording:
    *"Postgres ORs permissive policies together, so a second `using (true)` policy
    is sufficient; nothing is dropped or rewritten."*
+5. **Two authorities stronger than the argument above, supplied by gate round 2
+   (NIT-8) and cited here because they are cheaper and more durable.** First, the
+   owner's ruling **D018, 2026-08-06, verbatim: *"it has to be multi-team"***
+   (`docs/swarm/auto-mode-decisions.md`) — that fixes the direction of travel and
+   is not an inference from matrix wording. Second, and directly on item 3:
+   `20260722000000_membership_views.sql:59-65` moved a PRD-8.4-**normative** view
+   onto memberships **with no dispute-log entry** — `grep -n
+   "student_teams\|membership" docs/swarm/dispute-log.md` returns zero hits. Item
+   3 names RLS and metric SQL in one sentence, so that is an uncontested in-repo
+   precedent for exactly this decision, on the *stricter* half of the rule.
+   *(Also verified by round 2: PRD 8.4 contains **no** `events` policy text at
+   all — only canonical shapes — so the shipped `own_or_linked_read` is itself a
+   derivation, and nothing 8.4-verbatim is touched by this change.)*
 
 **Decision: no dispute-log entry is required.** D013 and D014 needed owner rulings
 because each *widened access beyond the matrix* or *changed a metric denominator*.
@@ -170,33 +193,61 @@ more than the one configuration it gives up.
 
 `staff_all` on both tables is **not touched**. No `team_ids is null` branch is
 needed — the shipped policy already covers global events, including its
-deliberate deviation at `20260717000002_rls.sql:176-179` that a caller needs at
-least one linked student for **any** event.
+deliberate deviation that a caller needs at least one linked student for **any**
+event, documented at `20260717000002_rls.sql:133-145` (the `events` copy) and
+`:176-179` (the `event_sessions` copy). *(Round 2's NIT-7: revision 2 cited only
+the second and called it the `events` one.)*
 
 **Item 10** is respected (new file; `20260717000002_rls.sql` untouched).
 **Item 16** is respected: **the migration ships unapplied.** CI applies it to a
 disposable scratch cluster; that is not cutover.
 
-### 5.2 What this route gives up, stated plainly
+### 5.2 What this route gives up — TWO configurations, stated plainly
 
-A student whose membership in a team is `left_on`-set **and** whose legacy
-`students.team_id` still names that same team keeps seeing that team's events,
-because the shipped policy still grants it. Measured by the gate: `leftonly sees
-event A | 1`.
+*Round 2's MINOR-1. Revision 2 said "the ONLY configuration", and that was
+measurably false. Both are recorded here, and both belong in the migration
+comment and the PR body.*
 
-Three reasons this is the right trade, and the packet takes responsibility for it
-rather than hiding it in a criterion:
+Because the shipped policy stays live and grants by `students.team_id`, this
+route does not *remove* any grant that column produces. Two states therefore keep
+a grant that a memberships-only policy would deny:
 
-1. **No code path can produce that state.** Nothing writes `student_teams`, so no
-   `left_on` can be non-null outside the migration backfill and hand-written
-   fixtures. The gate makes the same point: criterion 3 tests a state the
-   application cannot currently reach.
+**(a) Left team that is also the legacy team.** A student whose membership in a
+team is `left_on`-set **and** whose `students.team_id` still names that same team
+keeps seeing it. *(Measured: `leftlegacy` still sees event A.)*
+
+**(b) Re-teamed student — and this one the application actually produces.** The
+only write path, `loaders/students.ts`, updates `students.team_id` and never
+touches memberships (D018). So a student moved from team A to team B has
+`students.team_id` = B while the 2026-07-21 backfill row for **A** is still
+`left_on is null`. The new policy therefore grants A as an "active" membership,
+and the student gains read of their **former** team's events and sessions.
+*(Measured: 0 → 1 on both tables — visibility that does not exist today.)*
+
+**Revision 2's blanket defence — "no code path can produce that state" — is
+withdrawn.** It is true of `left_on`, and false for (b): the app's only write path
+produces (b), and D018 records the drift as already present in real data. Do not
+repeat that sentence.
+
+Three reasons this remains the right trade, and the packet takes responsibility
+for it rather than hiding it in a criterion:
+
+1. **RLS is moving *toward* what the app already computes, not away from it.**
+   `v_student_participation` already counts that same stale membership
+   (`20260806000000_met01_explicit_marks.sql:109`), so (b) makes the policy agree
+   with the participation numbers the student is already shown. The alternative
+   route would have made them disagree in the opposite direction.
 2. **Criterion 3 as the issue words it is still satisfied**, with its named
-   mutation still going red — see §6.3.
-3. **It is not a security finding under item 25.** A student who left a team
-   continuing to see that team's meeting list, in a volunteer robotics portal
-   whose dashboard already shows every student's hours to every student, is not a
-   concrete plausible harm in this threat model.
+   mutation still going red — measured, see §6.3.
+3. **Neither is a security finding under item 25.** A former teammate seeing a
+   meeting list, on a ~20-student volunteer robotics portal whose dashboard
+   already shows every student's hours to every student, is not a concrete
+   plausible harm in this threat model. Correctness is untouched: no number
+   changes, and no student is shown anything about themselves that is false.
+
+**Both are closed by the same trigger** — §8's deferral. When a `student_teams`
+writer ships, it fixes (b) at the source *and* unblocks dropping the legacy
+policies, which fixes (a).
 
 **The trigger that closes it** is the same one that ends every other compromise
 here: when a `student_teams` writer ships, the legacy `own_or_linked_read`
@@ -204,7 +255,7 @@ policies get dropped and memberships become the only source. That is §8's
 deferral, and dropping them is what finally satisfies criterion 3 in every
 configuration.
 
-### 5.3 A dependency the migration must name in its own comment
+### 5.3 TWO dependencies the migration must name in its own comment
 
 *Round 1's MINOR-8. Revision 1 asserted a subquery on `student_teams` inside an
 `events` policy "is not silently filtered". Right conclusion, wrong mechanism.*
@@ -213,16 +264,26 @@ RLS on `student_teams` **is** evaluated inside the `events` policy expression.
 The gate ran it in both directions:
 
 ```
--- student_teams read_all replaced with using (false):
- dual sees event B | 0      <- visibility COLLAPSES
--- read_all restored to using (true):
- dual sees event B | 1
+ who                  | sees_event_b | sees_session_b
+----------------------+--------------+----------------
+ dual, read_all=false |            0 |              0     <- visibility COLLAPSES
+ dual, read_all=true  |            1 |              1
 ```
 
 So this policy works **because** `read_all … using (true)`
-(`20260721000000_student_teams.sql:86-87`) admits every row — a hard coupling.
-**The migration's comment must name that dependency**, so that a future narrowing
-of `student_teams`' read policy does not silently break event visibility.
+(`20260721000000_student_teams.sql:86-87`) admits every row — a hard coupling,
+and it holds for `event_sessions` as well as `events`.
+
+**There is a second coupling, and revision 2 missed it entirely** *(round 2's
+MINOR-3)*: **RLS on `students`**. Under the orphan session,
+`select count(*) from students` is **0** while `select count(*) from
+student_teams` is **6** — so the orphan denial in criterion 4 rests on `students`'
+own policy filtering the new policy's subquery, **not** on `my_student_ids()`.
+This is why criterion 4's original mutation was vacuous (§6.4).
+
+**The migration's comment must name both dependencies**, so that a future
+narrowing of either table's read policy does not silently change event
+visibility.
 
 The grant question resolves the other way and does so loudly, not silently:
 
@@ -235,20 +296,35 @@ and production must already carry that grant, because T187 reads `student_teams`
 from the browser as `authenticated` (`students.ts:486-487`) and `StudentHome`
 works.
 
-### 5.4 Performance: measured, not argued
+### 5.4 Performance: a real regression, accepted at this scale
 
-Revision 1 listed "three OR branches in a hot read policy" as a doubt. The gate
-measured it at 20,004 events with `explain (analyze)`, two runs each:
+*Round 2's MINOR-4, and revision 2 got this backwards. Revision 2 wrote "the doubt
+is closed in the packet's favour" on the strength of round 1's "~33% faster" —
+but that number belongs to the **rejected** drop-and-replace route, which
+**replaced** the shipped subplan. The adopted route **stacks** a subplan on top of
+it.*
+
+Measured by gate round 2 on the route actually adopted (shipped + additive, both
+live), same cluster, same query, only the policy set changing:
 
 ```
-shipped policy alone (baseline):    4009.510 ms / 3975.268 ms
-revision 1's 3-OR-branch policy:    2681.693 ms / 2670.538 ms
+20,004 events, `select count(*) from events` as the dual student
+  shipped policy alone (today):       1922.744 / 1931.783 / 1936.876 ms
+  shipped + additive (ADOPTED):       2997.920 / 3038.421 / 3034.084 ms   <- +57%
+500 events (realistic scale)
+  shipped policy alone (today):         49.794 /  49.259 /  49.575 ms
+  shipped + additive (ADOPTED):         71.260 /  71.383 /  71.747 ms     <- +22 ms
 ```
 
-The doubt is closed in the packet's favour. **The worker should re-measure for the
-route actually adopted** (shipped policy + additive policy, both live), because
-that configuration was not the one benchmarked. Report the number; do not treat a
-regression as a blocker without discussing it.
+The plan says why: `Filter: (is_staff() OR (SubPlan 2) OR (SubPlan 4))` — the new
+subplan runs for every row the shipped one rejects (`SubPlan 4 … loops=10002`).
+
+**This is a regression and the packet accepts it.** +22 ms on a bare unfiltered
+`count(*)` at the scale this team actually runs at is not a shipping concern, and
+it buys the structural safety in §5.1. **Say this in the PR; do not let a reader
+discover it.** The worker reproduces the number in its own worktree for the
+completion report — the experiment is already designed, so this is a replay, not
+a design task.
 
 ### 5.5 The assertions, and where they land
 
@@ -342,8 +418,19 @@ redden it; a criterion with no such mutation is not a criterion.
    criterion describes, and not where the left team is also the legacy
    `students.team_id`.
 4. **A session with no linked student still sees zero rows**, including for events
-   with `team_ids is null` (`rls.sql:176-179`).
-   *Mutation: relax the linked-student requirement in the new policy → red.*
+   with `team_ids is null`.
+   *Mutation: **remove the `students` table from the new policy entirely**,
+   leaving `exists (select 1 from student_teams st where st.left_on is null and
+   st.team_id = any(events.team_ids))` → red (measured: orphan 0 → 2 events, 0 → 2
+   sessions).*
+   **Do not use revision 2's mutation ("relax the linked-student requirement",
+   i.e. drop `s.id in (select my_student_ids())` and keep the rest) — gate round 2
+   ran it and it stays GREEN**, because the orphan is denied by a second mechanism:
+   RLS on `students` filters the subquery (§5.3). That was a packet defect, and a
+   worker replaying it would have reported "mutation applied, still green" and
+   burned a rework loop on it. Note also that the `team_ids is null` half of this
+   criterion is carried entirely by the **shipped** policy, so no mutation of the
+   new policy can redden it — criterion 2's mutation is what covers that half.
 5. **`events` and `event_sessions` stay in agreement**, on every case above.
    *Mutation: change one policy and not the other → red.*
 6. **Staff visibility is unchanged.** `staff_all` returns everything for admin and
@@ -411,17 +498,25 @@ correct action may be reopening it rather than filing a new row.
 
 ## 10. Least confident decisions (item 19d)
 
-1. **Trading criterion 3's legacy-team configuration for structural safety
+1. **Trading §5.2's two over-granting configurations for structural safety
    (§5.1/§5.2).** *Wrong if* the issue's author meant criterion 3 to be absolute,
    in which case the drop-and-replace route and its bridge clause come back and
-   the packet has picked the wrong side of a stated requirement. The defence is
-   that no code path can produce the state, and that the additive route makes
-   "student sees no events at all" structurally unreachable. **This is the
-   decision to attack first.**
+   the packet has picked the wrong side of a stated requirement. **Round 2
+   attacked this and returned "SOUND on the trade, WRONG on the scope of what is
+   traded"** — the second configuration (b), a re-teamed student seeing their
+   former team, is produced by the app's only write path, so half of revision 2's
+   defence was withdrawn (§5.2). What survives is the argument that now carries
+   the decision: the additive route makes "student sees no events at all"
+   structurally unreachable, and (b) makes RLS agree with participation numbers
+   the student is *already* shown. **This remains the decision `checker-reviewer`
+   should attack first, on the amended facts.**
 2. **Deciding no dispute-log entry is required (§4).** *Wrong if* "read
    team-scoped" in PRD 8.3 is read as naming `students.team_id` specifically
    rather than a student's team membership — then this is a widening beyond the
    matrix and D013 is the governing precedent, which took an owner ruling.
+   *Round 2 graded this SOUND and supplied §4.5's two stronger authorities; the
+   doubt is much reduced but the decision is still the orchestrator's, so it
+   stays on this list.*
 3. **The permanent residue is acceptable.** Both legacy policies keep granting by
    `students.team_id` indefinitely, with only a deferral row scheduling their
    removal. *Wrong if* that row goes the way of the deferrals item 20 was written
@@ -441,6 +536,23 @@ correct action may be reopening it rather than filing a new row.
 
 ## 11. Process
 
-`checker-premise` round 2 (opus) — the last round before item 19a escalates to the
-owner. It must **run**, not only read; §10.1 is the target. Then worker (opus,
-item 18), then `checker-reviewer` replaying the criterion mutations.
+Premise gate: **round 1 REVISE → round 2 DISPATCH.** Item 19 is satisfied; the
+two-round cap (19a) was not exceeded and no owner escalation is needed. Next:
+worker (opus, item 18), then `checker-reviewer` replaying the criterion mutations
+in its own worktree (item 23).
+
+## 12. Round 2 findings, and where each landed
+
+| Round 2 finding | Disposition in revision 3 |
+| -- | -- |
+| MINOR-1 §5.2 named only one given-up configuration; its blanket defence was false | §5.2 rewritten around **two** configurations; "no code path can produce that state" explicitly **withdrawn**; both required in the migration comment and the PR |
+| MINOR-2 criterion 4's mutation is vacuous (measured green) | §6.4 replaced with the mutation that reddens, and the old one recorded as a trap so nobody re-derives it |
+| MINOR-3 §5.3 named one coupling, there are two | §5.3 now names `student_teams.read_all` **and** `students`' RLS; both go in the migration comment |
+| MINOR-4 §5.4's perf headline was wrong for the adopted route | §5.4 rewritten: **+57% at 20,004 events, +22 ms at 500**, cause named, accepted on the record, and required in the PR |
+| MINOR-5 `v_student_participation` citation is superseded | §3 now cites the live definition (`met01_explicit_marks.sql:102-137`, join `:109`) alongside the original |
+| NIT-6 five sites listed for four views | §1 corrected — one view was counted twice, before and after supersession |
+| NIT-7 `rls.sql:176-179` is the `event_sessions` comment | §5.1 now cites `:133-145` (events) and `:176-179` (sessions) |
+| NIT-8 §4 should cite D018 and the `membership_views` precedent | §4.5 added — the owner's *"it has to be multi-team"* ruling, and a PRD-8.4-normative view migrated with no dispute entry |
+
+Two things round 2 supplied that the worker should **use rather than re-derive**:
+the correct criterion-4 mutation (§6.4) and the performance experiment (§5.4).
