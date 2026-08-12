@@ -177,20 +177,80 @@ renders a **raw uuid** in the Team scope trigger — while "Expected attendees"
 renders that same team's real name from the unfiltered list. Same dialog, same
 team, two labels, one of them a uuid. Measured by the gate.
 
-So the options list is **selectable teams plus any team already selected**:
+So the options list is **selectable teams plus any team already selected, with
+the archived ones rendered `disabled`**:
 
 ```ts
+// NOTE: must be declared AFTER the `selectedTeamIds` useState — it reads it.
 const teamOptions = useMemo(
   () => teams.filter((t) => !t.archived || selectedTeamIds.includes(t.id)),
   [teams, selectedTeamIds],
 );
+// ...
+options={teamOptions.map((t) => ({ value: t.id, label: t.name, disabled: t.archived }))}
 ```
 
-`allTeamIds` stays derived from `selectableTeams` only. A legacy event scoped to
-`[active, archived]` therefore has `selectedTeamIds.length === 2` against
-`allTeamIds.length === 1`, so `resolveTeamScope` correctly returns the explicit
-array and preserves the stored value. Nothing a coach has already saved is
-silently rewritten; they simply cannot *newly* scope to an archived team.
+`allTeamIds` stays derived from `selectableTeams` only.
+
+> **`disabled` is mandatory, not decorative — gate round 2, R1 BLOCKER.**
+> This packet previously omitted it, and that omission **destroyed stored
+> data.** `MultiSelector.handleSelectAll`
+> (`node_modules/@astryxdesign/core/src/MultiSelector/MultiSelector.tsx:868-883`)
+> deliberately deselects only *enabled* items and preserves selected values that
+> are not enabled options. Re-adding the archived team as a **fully enabled**
+> row defeats that protection. Measured on a legacy `[active, archived]` event:
+>
+> ```
+> initial trigger = "Active Team, Legacy Forge"
+> click Select all → trigger "Select...",  Legacy Forge GONE from options
+> click Select all → trigger "Active Team"
+> STORED teamIds WAS = ["1111…","2222…"]
+> SAVED  teamIds NOW = null          ← the all-teams sentinel
+> ```
+>
+> Two clicks of the control **criterion 4 itself mandates driving** widen a
+> two-team scope to every team. Unticking the archived team also stranded it —
+> the row vanished and could not be re-ticked. With `disabled` added, the same
+> probe preserves the array and the row never disappears.
+>
+> `disabled` is documented at `docs/swarm/astryx-api.md:4879` ("objects with
+> value/label/icon/**disabled**") and typed at
+> `@astryxdesign/core/src/Selector/types.ts:18`. Constitution item 2 is
+> satisfied — this is not a hallucinated prop.
+
+The trigger still renders the team's **name** because `MultiSelector` resolves
+labels from `getSelectableOptions(options)`, which includes disabled items
+(`MultiSelector.tsx:962-967`). Clicking a disabled row is a no-op (`:1085-1089`),
+so an archived team can never be **newly** scoped. A coach also cannot *remove*
+an archived team from an existing scope through this control — that is the
+guarantee this section wants, stated plainly rather than as a side effect.
+
+### 3d-bis. The all-teams-archived guard (gate round 2, R2 — MAJOR)
+
+**`resolveTeamScope` IS modified, and this section is the authorization**
+(overriding §3c's "not modified" for this one case only).
+
+When every team on the roster is archived, `selectableTeams` is empty, so
+`allTeamIds` is `[]`. `resolveTeamScope`'s existing `allTeamIds.length > 0`
+guard then fails and it returns `[...selectedTeamIds]` — i.e. `[]`. Measured:
+an event stored `team_ids = NULL`, opened in edit mode and saved untouched, is
+rewritten `NULL → []`. `'{}'` matches no student under `rls.sql:159`, `:187`,
+`metric_views.sql:26`, `met01_explicit_marks.sql:114`, `membership_views.sql:65`
+and `dashboard_views.sql:206`: **the event becomes invisible to every student
+and parent and drops out of every participation metric.** Pre-fix this path
+wrote `null`, so the packet would be introducing it.
+
+Add the empty case to **both** copies of `resolveTeamScope`
+(`ScheduleMeetingsDialog.tsx:492-501`, `OutreachEventDialog.tsx:886-895`):
+
+```ts
+if (allTeamIds.length === 0 && selectedTeamIds.length === 0) return null;
+```
+
+`null` is chosen over `[]` because it preserves the pre-fix behaviour exactly
+and because `[]` means "no one", which is never what an untouched save intends.
+This is a correctness guard, not an empty-state feature — item 27's scope note
+forbids enlarging the task, so no new empty state is added here.
 
 ### 3e. Explicitly out of scope — do not touch
 
@@ -242,9 +302,13 @@ No `.github/workflows/**` is involved, checked at packet time per `AGENTS.md`
 
 Adopted from the issue, with criterion 5 repaired and 7-8 added.
 
-1. **Archived teams absent from the options.** Fixture: one archived, one
-   active. `ScheduleMeetingsDialog`'s Team scope offers only the active team.
-   *Mutation: delete the `excludeArchivedTeams` call at the options site → red.*
+1. **Archived teams absent from the options, in create mode.** Fixture: one
+   archived, one active. `ScheduleMeetingsDialog`'s Team scope offers only the
+   active team. *Mutation: make the options site read `teams` unfiltered → red.*
+   Asserted in **create** mode specifically — in edit mode an already-scoped
+   archived team is legitimately present and disabled (criterion 9).
+   *(Mutation restated per gate round 2 R3: the previous wording named an
+   `excludeArchivedTeams` call at the options site that §3d removed.)*
 2. **Archived teams absent from the default selection.** Dialog opens with the
    archived team unticked. *Mutation: restore `allTeamIds` to `teams.map(...)`
    while leaving options filtered → red.*
@@ -294,6 +358,23 @@ Adopted from the issue, with criterion 5 repaired and 7-8 added.
    certainly occurs — archiving a team after scheduling for it is what
    `teams.archived` is *for*.
 
+   > **Clause 2 is not falsifiable by that mutation and must not be counted as
+   > if it were** (gate round 2). The stored array survives the uuid mutation
+   > regardless, because `MultiSelector` never prunes out-of-option values.
+   > Clause 1 (name, not uuid) is what that mutation proves. Clause 2 is proved
+   > by criterion 10 instead.
+
+10. **Select-all cannot widen an existing archived scope.** On a legacy event
+    stored as `[active, archived]`, driving Select-all **twice** leaves the
+    saved `teamIds` still containing the archived id. *Mutation: drop
+    `disabled: t.archived` from the options mapping → the second Select-all
+    writes `null` → red.* The gate measured both halves of this.
+
+11. **An all-archived roster still writes `null`, never `[]`.** With every team
+    archived, opening an event stored `teamIds: null` and saving unchanged
+    writes `null`. *Mutation: remove the `allTeamIds.length === 0 &&
+    selectedTeamIds.length === 0` guard from `resolveTeamScope` → `[]` → red.*
+
 Every criterion above must be proved with the `mutation-replay` skill: commit
 first, mutate, capture the red output and exit code, revert, re-verify green.
 A criterion whose mutation does not redden is not satisfied.
@@ -303,6 +384,32 @@ A criterion whose mutation does not redden is not satisfied.
 All six gates via the `gate-run` skill (tsc, vite build, format:check, eslint,
 full vitest, scoped vitest), plus the eight mutation replays, plus the commit
 SHA the work landed in (item 21).
+
+## 8. Gate status: cap reached, dispatched on measured prescription
+
+**Two rounds run, two REVISE verdicts. Item 19a caps the gate at two, so there
+is no round 3.** I am dispatching on the gate's own explicitly recommended
+change set rather than escalating, and the reasoning is here so a wrong call is
+visible (item 26's closing requirement) rather than silent:
+
+- Round 2 did not return "revise and resubmit". It returned **three specific
+  edits, each with the corrected behaviour already measured in its worktree** —
+  R1 (`disabled`), R2 (the empty-roster guard), R3 (criterion repairs). All
+  three are applied above verbatim.
+- Both BLOCKERs were defects **this packet introduced**, not defects in the
+  original diagnosis. The core prescription — fetch `archived`, widen the chain,
+  narrow options and `allTeamIds` from one list — has been stable and
+  independently confirmed across both rounds. What kept failing was the
+  edge-handling I bolted on.
+- The gate verified Allowed Files is complete (`tsc` exit 0, no sixth file) and
+  that the full suite stays green (2408 tests). Those were round 1's BLOCKER and
+  are closed.
+- I independently re-verified the one item-2 claim the whole R1 fix rests on:
+  `disabled` is at `docs/swarm/astryx-api.md:4879`. Not taken on the gate's word.
+
+**Flagged for the owner** in the PR body and on the issue: this row consumed its
+full gate budget, and a reviewer who disagrees with dispatching here should say
+so — that is why it is written down rather than assumed.
 
 ## 7. Least confident decisions (item 19d) — round 2
 

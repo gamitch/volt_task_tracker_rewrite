@@ -68,3 +68,8 @@ policy later reads, which is not the same thing. Item 25 explicitly retires
 bumping a worker because a topic *sounds* sensitive (T157 is the cited error).
 HEAVY already buys a premise gate before dispatch and a reviewer after, which
 item 18 names as the mechanism that catches the errors this tier makes.
+
+---
+
+- `2026-08-12T20:32Z` — **Packet finalised** with R1/R2/R3 applied; criteria now 1-11. Independently re-verified `disabled` at `astryx-api.md:4879` rather than taking the gate's word (item 2).
+- `2026-08-12T20:33Z` — **Dispatched `worker-implementer` (pinned default model, per item 18/25).** *If this line is the last one in this file, the run died holding this subagent.*
