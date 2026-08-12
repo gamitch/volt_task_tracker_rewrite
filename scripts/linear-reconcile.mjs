@@ -253,11 +253,30 @@ export async function runReconcile({
       logError('No GITHUB_REPOSITORY -- cannot list merged PRs. Reporting zero checked.');
     }
 
-    const declared = prs
-      .map((pr) => ({ pr, declaration: parser.parseDeclaration(pr.body) }))
-      .filter(({ declaration }) => declaration.ok === true);
+    const parsed = prs.map((pr) => ({ pr, declaration: parser.parseDeclaration(pr.body) }));
+    const declared = parsed.filter(({ declaration }) => declaration.ok === true);
+    // A line 1 that ATTEMPTED a declaration and failed -- as opposed to
+    // NO_DECLARATION, where line 1 never paired an identifier with a
+    // closing verb at all -- is exactly the case most likely to be a
+    // mis-handled close (GAM-332): the author meant to declare something.
+    // Report it as its own drift class rather than dropping it silently.
+    // Never fetch its issue: the parse failure means there is no single
+    // issue this can safely be attributed to.
+    const failedParse = parsed.filter(({ declaration }) =>
+      ['AMBIGUOUS_DECLARATION', 'HALF_DECLARATION', 'PLACEHOLDER'].includes(declaration.code),
+    );
 
     const entries = [];
+    for (const { pr, declaration } of failedParse) {
+      entries.push({
+        drift: true,
+        code: declaration.code,
+        message:
+          `PR #${pr.number} ("${pr.title}") merged ${pr.mergedAt} with a declaration that failed to ` +
+          `parse (${declaration.code}${declaration.detail ? `: ${declaration.detail}` : ''}) -- check by ` +
+          'hand whether it should have closed an issue.',
+      });
+    }
     for (const { pr, declaration } of declared) {
       let issueTruth;
       try {
@@ -280,7 +299,8 @@ export async function runReconcile({
 
     const level = drifted.length > 0 ? 'warn' : 'info';
     const lines = [
-      `${declared.length} declared PR(s) checked, merged in the last ${hoursWindow}h (any base branch).`,
+      `${declared.length} declared PR(s) checked, ${failedParse.length} with a failed declaration parse, ` +
+        `merged in the last ${hoursWindow}h (any base branch).`,
       ...drifted.map((e) => `⚠ ${e.message}`),
       ...informational.map((e) => `ℹ️ ${e.message}`),
     ];
@@ -296,7 +316,7 @@ export async function runReconcile({
 
     logInfo(`Reconcile sweep complete: ${declared.length} checked, ${drifted.length} drift. Exiting 0 (report, not a gate).`);
 
-    return { exitCode: 0, entries, checked: declared.length, drifted: drifted.length };
+    return { exitCode: 0, entries, checked: declared.length, drifted: drifted.length, failedParse: failedParse.length };
   } catch (err) {
     logError(`UNEXPECTED ERROR: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
     return { exitCode: 1, error: true };
