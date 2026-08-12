@@ -119,3 +119,28 @@ of the item 19a cap. A third REVISE escalates to the owner rather than looping.
 | -- | -- | -- |
 | 11 | 2026-08-12 | Packet revised to revision 2, accepting all nine round-1 findings. "The meeting is still open" struck from the prescription; Part A (close the modal on failure) added so the fix is reachable at all; code map replaced with GAM-319's landed passthrough shape; corrections table de-contradicted; measured test-break scope recorded. New item-19d list written. |
 | 12 | 2026-08-12 | **DISPATCHED `checker-premise` (round 2 of 2, item 19a cap), `run_in_background: false`, orchestrator is blocking on it now.** *If this line is the last one in this file, the run died holding this subagent — no verdict was ever seen.* A REVISE here escalates to the human owner rather than looping into a round 3. |
+| 13 | 2026-08-12 | **VERDICT RECEIVED: `checker-premise` round 2 → DISPATCH.** 3 MINOR + 2 NIT, all worker-absorbable, none blocking. Gate ran Part A alone (**95 files / 2437 tests, reddens nothing** — the one change nobody had run) and Part A+B combined (**exactly 1 reddened assertion**, `EndMeetingDialog.test.tsx:613`, unchanged from round 1's scope). Item 19 satisfied; the packet may now reach a worker. |
+
+## Premise gate round 2 — verdict DISPATCH
+
+Least-confident list outcomes: **1 SOUND and my worry was a misattribution** —
+the stale-screen disagreement is not caused by Part A (`data.session.status` is
+mutated only on the success path, so it stays `scheduled` whether the modal is
+open or closed); leaving it open is strictly worse, because the coach then reads
+"This meeting will be marked completed" with no error. The gate also measured
+that the retry affordance survives, that the stale screen self-heals on a
+successful retry, and that `Banner status="error"` maps to `role="alert"`, so the
+newly-reachable banner is announced. No reload/refetch needed. **2** move
+criterion 7 to an instruction rather than drop it. **3** collapse to the
+zero-parameter helper — I was right to prefer the simpler shape. **4** SOUND,
+and the idempotency regression test becomes an item 20 follow-up.
+
+One finding I would have shipped a hole on: **criterion 1's named mutation was
+inert.** Re-adding `instanceof Error` *inside* the new helper leaves the
+criterion's own input byte-identical, because a `SupabaseLoaderError` is a plain
+object and never an `Error` instance — measured, `MUTATION CHANGES BEHAVIOUR:
+false`. The mutation must revert the whole original ternary. A criterion whose
+mutation cannot redden it is not a criterion, which is this packet's own stated
+standard, and I had written one anyway.
+
+Folding MINOR-1/2/3 and NIT-1/2 into revision 3 before dispatching the worker.
