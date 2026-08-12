@@ -29,3 +29,12 @@ Tier label at dispatch: `tier/fast`.
   fix via `git checkout HEAD -- scripts/linear-reconcile.mjs`; full suite
   green again (22/22). Mutation proof: real red output confirmed the new
   tests exercise the fix, not a vacuous assertion.
+- 2026-08-12: Baselines measured at merge-base `6867b8f` via a throwaway
+  worktree (`git worktree add`, `npm ci`, `npx vitest run` / `npx vitest run
+  scripts/`): full suite 2358 tests, `scripts/` scope 234 tests (both
+  worktrees removed after measuring). All six gates run via
+  `.claude/skills/gate-run` on commit `76a3093` with `--scope scripts/
+  --require-clean`: tsc PASS, vite build PASS, format:check PASS, eslint
+  PASS (0 errors, 377 pre-existing warnings), vitest full PASS (89 files /
+  2359 tests, baseline 2358, +1), vitest scripts/ PASS (9 files / 235
+  tests, baseline 234, +1). VERDICT: PASS — all six gates exit 0.
