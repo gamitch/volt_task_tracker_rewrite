@@ -99,3 +99,11 @@ Append-only. One line per milestone, committed and pushed immediately.
   **All six, not five** — `--scope scripts/` gave gate 6 a real scope, since
   the diff is entirely under `scripts/`. Both counts are +4, matching the 4
   new tests exactly; no other test moved.
+- **PR opened — #167** — https://github.com/gamitch/volt_task_tracker_rewrite/pull/167.
+  `Closes GAM-335` first body line (item 28f); branch
+  `claude/gam-335-shadow-mode-prior-state` carries the identifier and this PR
+  *is* GAM-335's own work, so that's correct per item 28g, not the "mentions
+  only" case. `Linear-Issue: GAM-335` trailer present in this commit for the
+  git-side record (no `Tnnn` — this issue has no legacy number, matching this
+  repo's existing convention for `GAM-nnn`-only rows, e.g. GAM-332's commits).
+  No workflow file touched, so the item 28 two-PR wall does not apply.
