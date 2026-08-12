@@ -1,282 +1,310 @@
-# GAM-301 (T407) worker packet — STANDARD — round 2 (revised after premise gate round 1)
+# GAM-301 (T407) worker packet — STANDARD — round 3 (owner-directed, post-escalation)
 
-Round 1 verdict: REVISE, 1 BLOCKER + 5 MAJOR + 3 MINOR. Full verdict text is
-in the run log's premise-gate entry. Every finding is addressed below; this
-is a redesign, not a patch, so read it whole rather than diffing against
-round 1.
+Round 1 verdict: REVISE, 1 BLOCKER + 5 MAJOR + 3 MINOR.
+Round 2 verdict: REVISE, 2 BLOCKER + 3 MAJOR + 5 MINOR + 2 NIT.
 
-## What changed and why (maps to round-1 findings)
+Per constitution item 19a the run escalated at round 2 rather than looping to a
+round 3. **The human owner has directed the work forward**, accepting round 2's
+own verification as sufficient in place of a third adversarial gate. This
+round 3 packet applies round 2's two BLOCKER fixes and their consequences.
 
-- **BLOCKER 1 (bundle regression, T093 code-splitting reversed):** the round-1
-  design value-imported `getUnansweredRsvpCount`/`filterOutreachEvents` from
-  `src/pages/outreach/OutreachList.tsx`, a lazy-loaded page component, into
-  always-eager chrome — measured +71.5 kB gz on the entry chunk, 25 lazy
-  chunks collapsed into it. **Fixed by not touching `OutreachList.tsx` at
-  all.** See "Correct semantics" below — the badge now reuses a different,
-  more correct existing function that lives on a page which needed the same
-  extraction anyway.
-- **MAJOR 4 (semantics)**\+**MAJOR 5 (undefined coach/admin badge):**
-  `getUnansweredRsvpCount` (`OutreachList.tsx:1459`) has no future-only filter
-  and no team scope — it does not match PRD BEH-04 (`VOLT_Portal_PRD.md:248`,
-  quoted verbatim): *"a neutral count Badge of unanswered **future** outreach
-  sessions (**student: own; parent: linked kids combined**)."* BEH-04 defines
-  **no coach/admin badge at all.** `StudentHome.tsx:836`'s
-  `getUnansweredOutreachOpportunities` already implements the *correct*
-  BEH-04 semantics (future cutoff at :852, team scope via `isEventInTeamScope`
-  at :846) and is already tested (`StudentHome.test.tsx`). **This packet
-  switches to that function and drops the coach/admin case entirely** — a
-  coach/admin viewer sees no Outreach badge, matching the spec instead of
-  inventing an unspecified roster-wide pair-count.
-- **MAJOR 3 (MobileNav has the identical defect, was out of scope) +
-  MAJOR 6 (broken T140 testability seam) + cheaper-path #5 (refetch storm
-  risk if SideNav and MobileNav each fetch independently):** all three are
-  solved by one change — **the fetch moves up to `AppShell.tsx`**, which
-  calls a new hook exactly once and threads the resolved count down as a
-  plain prop to both `<SideNav>` and `<MobileNav>` (both are mounted
-  simultaneously — Astryx swaps which one is visible by CSS breakpoint, not
-  by mount/unmount — so a single shared fetch is required, not two). This
-  also completes T140's own pattern (`AppShell.tsx:92-114`,
-  `seasonProviderProps`/`kpiStripProps`) with a third injectable
-  `outreachBadgeCountProps`, rather than reopening the gap T140 closed.
-- **MAJOR 2 (self-referential acceptance criteria):** criteria below now
-  specify literal hand-computed integers against a named fixture, not a call
-  to the function under test.
-- **Least-confident #5 (tier):** STANDARD is kept — see "Tier, re-affirmed"
-  below — but the packet now touches more files, so orchestrator replay is
-  widened to a full-suite regression proof, not a spot check.
+## Provenance limit — read this before trusting the finding list below
 
-## Correct semantics (supersedes round 1 entirely)
+Round 2's **full verdict text was held in that run's transcript, which is
+gone.** What survives is the run log's summary entry and the escalation comment
+on GAM-301: both BLOCKERs in full detail, plus the note that the leaf-module
+relocation, the re-export shape, `StudentHome.test.tsx` staying green, the
+mutation replay, the BEH-04 semantics fix, and dropping the coach/admin badge
+all checked out clean.
 
-Reuse, do not re-derive (constitution item 3):
+**The 3 MAJOR / 5 MINOR / 2 NIT items are not individually recoverable.** This
+packet therefore applies the two BLOCKERs faithfully and re-derives what it can
+from source. Treat the criteria below as necessary but possibly not sufficient;
+the reviewer should look for small defects this packet could not know to name.
+One such gap was already found while writing this round and is fixed below
+(§"Relocation list" — the missing sixth name).
 
-- `isEventInTeamScope` and `getUnansweredOutreachOpportunities`
-  (`src/pages/home/StudentHome.tsx:727` and `:836`), plus the three row types
-  they take (`HomeEventRow` :469, `HomeSessionRow` :480, `HomeRsvpRow` :488).
-  **Move** (not copy) all five into a new leaf module,
-  `src/lib/outreach/unansweredOutreach.ts` — pure, dependency-free, no
-  Astryx/React import, safe to statically import from eager chrome without
-  reopening BLOCKER 1. `StudentHome.tsx` re-exports every one of them from
-  the new path (`export { isEventInTeamScope, getUnansweredOutreachOpportunities } from '../../lib/outreach/unansweredOutreach';`
-  and `export type { HomeEventRow, HomeSessionRow, HomeRsvpRow } from '../../lib/outreach/unansweredOutreach';`
-  — both forms are valid under this repo's `isolatedModules: true`,
-  confirmed in `tsconfig.json:11`). **This must be a pure relocation**:
-  `StudentHome.test.tsx:48,50,62-64` already imports these five names from
-  `./StudentHome` and must keep passing completely unmodified — that is the
-  proof the move changed nothing observable.
-- `loadStudentHomeData` and `resolveStudentScope`
-  (`src/lib/supabase/loaders/students.ts:1002` and `:537` — real, already the
-  production defaults, no fixture). Note the loader's real signature is
-  `(studentId, seasonId)` — **student id first**, resolved before this call,
-  not after.
-- `resolveCurrentStudentId` (`src/lib/supabase/loaders/meetings.ts:1120`,
-  input `CurrentViewerIdentity = { id, role }`, output `string | null`) —
-  same shared resolver round 1 already cited correctly.
+## What changed from round 2, and why
 
-None of `loaders/students.ts`, `loaders/meetings.ts`, or the new leaf module
-import React/Astryx or any lazy-loaded page component, so none of this
-touches the eager/lazy boundary beyond what `AppShell.tsx` (already eager)
-already crosses today for `SeasonProvider`/`KpiStrip`.
+### BLOCKER 1 — the `AppShell` seam is impossible, not merely costly
 
-## Seam decision (revised)
+Round 2 put the fetch in `AppShell.tsx` and threaded a prop down. That cannot
+work: **`AppShell.tsx:159` renders `<SeasonProvider>`, and mounts both navs
+inside it at `:162`/`:163`.** A hook calling `useActiveSeason()` from
+`AppShell`'s own body sits *outside* the provider it renders, and throws.
+Measured by the gate: `AppShell.test.tsx` **25/25 failed**,
+`useActiveSeason() must be called within a <SeasonProvider>`. This would have
+crashed the shell on every route in production.
 
-**`AppShell.tsx` owns the one fetch, via a new hook
-`useOutreachBadgeCount` (`src/app/useOutreachBadgeCount.ts`, new file), and
-threads the result to `SideNav`/`MobileNav` as a plain prop.** Neither nav
-component fetches anything itself.
+Round 2 also justified the shell-level fetch with "both navs are mounted
+simultaneously, so a single shared fetch is required." **That premise is
+false.** Astryx mounts `sideNav` and `mobileNav` mutually exclusively, driven
+by JS state (`isMobile` / `isMobileNavEnabled` in the shell context), not by a
+CSS breakpoint over two live subtrees. There is no second concurrent consumer,
+so there is no shared-fetch requirement and no refetch storm to avoid.
+
+**Fix: each nav component calls the hook itself.** `SideNav` and `MobileNav`
+each call `useOutreachBadgeCount()` at the same render position `KpiStrip`
+already occupies — inside `SeasonProvider`, where `useActiveSeason()` is legal.
+**`AppShell.tsx` is not edited at all.** The gate built and ran this shape:
+`AppShell.test.tsx` + `TopNav.test.tsx` **34/34 green**.
+
+### BLOCKER 2 — `loaders/meetings.ts` still drags lazy page code
+
+Round 2 imported `resolveCurrentStudentId` from
+`src/lib/supabase/loaders/meetings.ts`, believing no new import reached a lazy
+page component. False: that module **value-imports** from two page modules —
+`buildCoachMeetingRows`/`buildStudentMeetingsData` from `MeetingsList.tsx`
+(`meetings.ts:163-176`) and `computeMeetingSeriesReconcilePlan` from
+`ScheduleMeetingsDialog.tsx` (`:177-185`). Its own header discloses the cycle.
+Importing *anything* from `meetings.ts` pulls both pages into eager chrome.
+Measured: entry chunk 199.02 → **249.49 kB gz (+50.47 kB), 18 lazy chunks
+collapsed** — round 1's BLOCKER at ~70% magnitude, not fixed.
+
+**Fix: relocate `resolveCurrentStudentId` into a leaf module**, rather than
+relocating the page functions. Verified while writing this packet:
+`makeResolveCurrentStudentId` (`meetings.ts:1090-1117`) depends only on
+`createLoader`, `getClient`, its two query helpers, and its two DB row types.
+The `CurrentViewerIdentity` / `ResolveCurrentStudentIdFn` types it uses come
+from `MeetingsList.tsx` as **`import type` only**, which is erased at runtime
+and creates no bundle edge. So the function can move to a pure leaf module with
+no page dependency, and `meetings.ts` re-exports it for its existing callers.
+This is smaller than the escalation's suggested "relocate the two page
+value-imports," and achieves the same result.
+
+### Consequences of the two fixes
+
+- The hook moves from `src/app/useOutreachBadgeCount.ts` to
+  **`src/components/nav/useOutreachBadgeCount.ts`**. Round 2's least-confident
+  #4 argued `src/app/` was right *because `AppShell` owned the call*. That
+  reasoning inverts now that the nav components own it.
+- `AppShellProps.outreachBadgeCountProps` is **dropped entirely**. The T140
+  injectable-props pattern is no longer the seam. Injection moves to an
+  optional prop on each nav component (below), which preserves testability
+  without touching `AppShell`.
+- Round 2's acceptance criterion 9 (prove `AppShell.test.tsx`'s ready-season
+  tests inject a fake loader) is replaced by a stronger one: **`AppShell.tsx`
+  and `AppShell.test.tsx` must both be byte-identical** at the end of this
+  task. See criterion 9.
+- Allowed Files drops from 10 to 10 but changes membership: two `AppShell`
+  entries out, two meetings-leaf entries in.
+
+## Correct semantics (unchanged from round 2 — the gate passed this part)
+
+Reuse, do not re-derive (constitution item 3). BEH-04
+(`VOLT_Portal_PRD.md:248`) specifies *"a neutral count Badge of unanswered
+**future** outreach sessions (**student: own; parent: linked kids
+combined**)"* — and defines **no coach/admin badge at all**.
+`getUnansweredOutreachOpportunities` implements exactly these semantics
+(future cutoff, team scope, `type === 'outreach'`, unanswered-by-student);
+`OutreachList.tsx`'s `getUnansweredRsvpCount` does **not** and must not be
+used. Do not touch `OutreachList.tsx`.
+
+### Relocation list — six names, not five
+
+Move (do not copy) into a new leaf module
+**`src/lib/outreach/unansweredOutreach.ts`** — pure, no React/Astryx import:
+
+1. `isEventInTeamScope` (`StudentHome.tsx:727`)
+2. `getUnansweredOutreachOpportunities` (`StudentHome.tsx:836`)
+3. `HomeEventRow` (type, `:469`)
+4. `HomeSessionRow` (type, `:480`)
+5. `HomeRsvpRow` (type, `:488`)
+6. **`SignupOpportunityRow`** (type) — round 2's list omitted this. It is
+   `getUnansweredOutreachOpportunities`'s **return type**, so the move does not
+   compile without it. Move it too, or type-import it — whichever the worker
+   picks, it must not leave the new leaf module importing back from
+   `StudentHome.tsx`, which would recreate exactly the cycle this relocation
+   exists to prevent. State which you chose and why in the run log.
+
+`StudentHome.tsx` re-exports all six from the new path. Both `export { … } from`
+and `export type { … } from` are valid under this repo's `isolatedModules: true`
+(`tsconfig.json:11`). **This must be a pure relocation**:
+`StudentHome.test.tsx` already imports these names from `./StudentHome` and
+must keep passing **completely unmodified** — that is the proof the move
+changed nothing observable.
+
+Also move into a new leaf module
+**`src/lib/meetings/resolveCurrentStudentId.ts`**:
+
+- `makeResolveCurrentStudentId`, `resolveCurrentStudentId`, their two query
+  helpers (`queryStudentIdByProfileId`, `queryFirstLinkedStudentId`) and the two
+  DB row types (`StudentIdDbRow`, `GuardianLinkStudentIdDbRow`).
+- `meetings.ts` re-exports `resolveCurrentStudentId` (and
+  `makeResolveCurrentStudentId` if anything else imports it — check) so its
+  existing callers are untouched.
+- The new module may `import type` from `MeetingsList.tsx`; it must not
+  value-import from any page module.
+
+Other reuse, unchanged: `loadStudentHomeData` and `resolveStudentScope`
+(`src/lib/supabase/loaders/students.ts:1002` and `:537` — real production
+defaults). The loader's real signature is `(studentId, seasonId)` — **student
+id first**.
+
+## Seam decision (round 3, final)
+
+**Each nav component calls the hook itself. `AppShell.tsx` is not touched.**
 
 ```ts
-// src/app/useOutreachBadgeCount.ts
+// src/components/nav/useOutreachBadgeCount.ts
 export interface UseOutreachBadgeCountOptions {
   loadStudentHomeData?: LoadStudentHomeDataFn;   // defaults to the real loadStudentHomeData
   resolveStudentScope?: ResolveStudentScopeFn;   // defaults to the real resolveStudentScope
   resolveStudentId?: ResolveCurrentStudentIdFn;  // defaults to the real resolveCurrentStudentId
   now?: () => number;                            // defaults to Date.now
 }
-// Returns `number | null`. `null` = do not render a badge (unknown/loading/
-// error/not-applicable-role). A real, computed `0` is a NUMBER, not null.
+// Returns `number | null`. `null` = render no badge (unknown/loading/error/
+// not-applicable-role). A real, computed `0` is a NUMBER, not null.
 export function useOutreachBadgeCount(options?: UseOutreachBadgeCountOptions): number | null
 ```
 
-Behavior:
+Behavior (unchanged from round 2 — the gate did not fault this logic):
 
-1. Calls `useAuth()` and `useActiveSeason()` unconditionally (Rules of
-   Hooks — same precedent `KpiStrip.tsx:150-151` already establishes for
-   exactly this pair of hooks).
-2. `user === null`, or `user.role` is `'admin'`/`'coach'` (same
-   `isStaffRole` check already at `SideNav.tsx:143`) → return `null`. BEH-04
-   defines no staff badge; do not invent one.
-3. `useActiveSeason()` status `'loading'` → `null`. `'error'` → `null` (never
-   fabricate a number). `'none'` → `0` (a real computed zero: no active
-   season means nothing to RSVP to).
+1. Calls `useAuth()` and `useActiveSeason()` unconditionally (Rules of Hooks —
+   the precedent `KpiStrip.tsx:150-151` already sets for this exact pair).
+2. `user === null`, or `user.role` is `'admin'`/`'coach'` (the same
+   `isStaffRole` check already at `SideNav.tsx:143`) → `null`.
+3. `useActiveSeason()` `'loading'` → `null`. `'error'` → `null` (never fabricate
+   a number). `'none'` → `0` (a real computed zero).
 4. `'ready'`: call `resolveStudentId({ id: user.id, role: user.role })`.
-   - Resolves `null` (no linked student yet) → `0` (real zero, not an error;
-     matches `resolveCurrentStudentId`'s own documented `null` case,
-     `loaders/meetings.ts:1103-1116`).
+   - Resolves `null` → `0` (real zero; matches `resolveCurrentStudentId`'s own
+     documented `null` case).
    - Resolves a `studentId` → call `loadStudentHomeData(studentId, season.id)`
-     and `resolveStudentScope(studentId)` (parallel), then
+     and `resolveStudentScope(studentId)` in parallel, then
      `getUnansweredOutreachOpportunities(sessions, events, rsvps, studentId, teamIds, now()).length`.
-     `teamIds` from the resolved `StudentScope` — mirror `StudentHome.tsx`'s
-     own handling of a `null` scope (`StudentHome.tsx:1725` area) exactly;
-     do not invent new null-handling.
-   - Either loader rejecting → `null` (no crash, no fabricated number).
-5. One effect, re-running only when `[user?.id, user?.role, seasonState.status, seasonState.status==='ready' ? seasonState.season.id : null, loadStudentHomeData, resolveStudentScope, resolveStudentId]`
-   changes — not on every render, matching `KpiStrip`'s own "one fetch per
-   page load" property (`KpiStrip.tsx:61-72`), now genuinely satisfied for
-   both nav surfaces at once since there is exactly one call site.
+     `teamIds` from the resolved `StudentScope`; mirror `StudentHome.tsx`'s own
+     handling of a `null` scope exactly, do not invent new null-handling.
+   - Either loader rejecting → `null`.
+5. One effect, re-running only when
+   `[user?.id, user?.role, seasonState.status, seasonState.status==='ready' ? seasonState.season.id : null, loadStudentHomeData, resolveStudentScope, resolveStudentId]`
+   changes.
 
-`AppShell.tsx` changes:
+**Nav component changes.** Both `SideNav.tsx` and `MobileNav.tsx`:
 
 ```ts
-export interface AppShellProps {
-  // ...existing...
-  outreachBadgeCountProps?: UseOutreachBadgeCountOptions; // new, mirrors seasonProviderProps/kpiStripProps (T140, AppShell.tsx:92-114)
+interface SideNavProps {   // and MobileNavProps
+  /** Test seam: injected options for the badge hook. Production passes nothing. */
+  outreachBadgeCountOptions?: UseOutreachBadgeCountOptions;
 }
-// inside the component:
-const outreachBadgeCount = useOutreachBadgeCount(outreachBadgeCountProps);
-// ...
-sideNav={<SideNav outreachBadgeCount={outreachBadgeCount} />}
-mobileNav={{ content: <MobileNav outreachBadgeCount={outreachBadgeCount} /> }}
+const outreachBadgeCount = useOutreachBadgeCount(outreachBadgeCountOptions);
 ```
 
-`SideNav`/`MobileNav` changes: add `outreachBadgeCount?: number | null` to
-each props interface; remove
-`PLACEHOLDER_OUTREACH_BADGE_COUNT` from both files (it is duplicated
-verbatim in each, per `MobileNav.tsx:127-132`'s own module doc admission);
-render `<Badge variant="neutral" label={outreachBadgeCount} />` only when
-`outreachBadgeCount !== null && outreachBadgeCount !== undefined`, else
-`undefined` (no badge) for the Outreach item's `endContent`. No other
-behavior in either file changes.
+Remove `PLACEHOLDER_OUTREACH_BADGE_COUNT` from both files (it is duplicated
+verbatim in each — `SideNav.tsx:117`, `MobileNav.tsx:133`). Render
+`<Badge variant="neutral" label={outreachBadgeCount} data-testid="outreach-nav-badge" />`
+for the Outreach item's `endContent` only when `outreachBadgeCount !== null`,
+else `undefined`. No other behavior in either file changes. Delete the stale
+`PLACEHOLDER_OUTREACH_BADGE_COUNT` module-doc paragraphs that reference "the
+real count is wired by T038" (`SideNav.tsx:89` area, and `MobileNav.tsx:127-132`).
+
+**Watch for this** (unproven, resolve it rather than assume): `AppShell.test.tsx`
+renders `SideNav`, which now self-fetches. If those tests have a `'ready'`
+season, the hook's *default* real loaders could fire an unmocked Supabase call
+from a test. The gate reported 34/34 green for this shape, so it is probably
+already handled by an existing global mock — but **verify it, don't infer it**.
+If a real call does fire, the fix is a test-level injection, not an
+`AppShell.tsx` edit. See criterion 9.
 
 ## Tier, re-affirmed: STANDARD
 
-Item 26's enumerated HEAVY triggers — write path, RLS/auth/role logic,
-migration or metric-view SQL, an export another session builds against —
-still do not apply: every new read is a plain client-side Supabase query
-through an existing loader, nothing is written, no SQL changes. The blast
-radius grew from round 1 (now 5 edits + 5 new files, up from 2), which is
-exactly what item 26 says is *not* by itself a HEAVY trigger ("the number of
-files touched" is explicitly named as a non-trigger) — but because the
-radius grew, orchestrator verification below is widened accordingly: full
-suite, not a spot check, plus an explicit proof that `StudentHome.tsx`'s
-existing behavior is unchanged (its own full test file green, unmodified).
+Item 26's enumerated HEAVY triggers — write path, RLS/auth/role logic, migration
+or metric-view SQL, an export another session builds against — still do not
+apply: every new read is a client-side query through an existing loader, nothing
+is written, no SQL changes. Blast radius is 10 files, and item 26 names file
+count explicitly as a non-trigger. Verification is widened to the full suite
+plus a bundle measurement, as below.
 
 ## Allowed Files
 
-1. `src/lib/outreach/unansweredOutreach.ts` — new. Houses the five relocated
-   names.
-2. `src/pages/home/StudentHome.tsx` — edit. Delete the five definitions,
-   replace with two re-export lines. Nothing else in this file changes.
-3. `src/app/useOutreachBadgeCount.ts` — new. The hook.
-4. `src/app/useOutreachBadgeCount.test.ts` — new. Hook-level tests.
-5. `src/app/AppShell.tsx` — edit. Call the hook, thread the prop, add
-   `outreachBadgeCountProps` to `AppShellProps`.
-6. `src/app/AppShell.test.tsx` — edit. Extend existing coverage; the
-   existing `T140_FIXTURE_SEASON` `'ready'`-season tests
-   (`AppShell.test.tsx:298-320`) must supply a fake `outreachBadgeCountProps`
-   loader so they do not newly perform a real, unmocked Supabase call.
-7. `src/components/nav/SideNav.tsx` — edit. Prop-driven badge, remove
-   placeholder.
+1. `src/lib/outreach/unansweredOutreach.ts` — new. The six relocated names.
+2. `src/pages/home/StudentHome.tsx` — edit. Delete the six definitions, replace
+   with re-export lines. Nothing else changes.
+3. `src/lib/meetings/resolveCurrentStudentId.ts` — new. The relocated resolver.
+4. `src/lib/supabase/loaders/meetings.ts` — edit. Delete the relocated
+   definitions, re-export from the new leaf module. Nothing else changes.
+5. `src/components/nav/useOutreachBadgeCount.ts` — new. The hook.
+6. `src/components/nav/useOutreachBadgeCount.test.ts` — new. Hook-level tests.
+7. `src/components/nav/SideNav.tsx` — edit. Hook-driven badge, remove placeholder.
 8. `src/components/nav/SideNav.test.tsx` — new (no such file exists today).
 9. `src/components/nav/MobileNav.tsx` — edit. Same as SideNav.
-10. `src/components/nav/MobileNav.test.tsx` — new (no such file exists
-    today).
+10. `src/components/nav/MobileNav.test.tsx` — new (no such file exists today).
 
-Nothing else. In particular: do not edit `OutreachList.tsx`,
-`loaders/outreach.ts`, `loaders/meetings.ts`, `loaders/students.ts` (import
-from them only), no migration, no new Supabase view.
+Nothing else. In particular: **do not edit `AppShell.tsx` or `AppShell.test.tsx`**
+(criterion 9 asserts they are byte-identical), do not edit `OutreachList.tsx`,
+`loaders/outreach.ts`, or `loaders/students.ts` (import from them only), no
+migration, no new Supabase view.
 
 ## Acceptance criteria
 
-Use one named fixture (define once, reuse across `SideNav.test.tsx` and
-`MobileNav.test.tsx`): 2 outreach sessions in team scope and unanswered by
-`studentId = 'student-1'`, 1 outreach session out of team scope, 1 meeting
-session (never counted — `getUnansweredOutreachOpportunities` filters
-`event.type === 'outreach'` internally), 1 already-answered outreach
-session. State the exact rows in the test file; the expected badge count for
-this fixture is a **literal `2`**, written as `2` in the assertion, never as
-a call to the function under test.
+Use one named fixture, defined once and reused across `SideNav.test.tsx` and
+`MobileNav.test.tsx`: 2 outreach sessions in team scope, future, unanswered by
+`studentId = 'student-1'`; 1 outreach session out of team scope; 1 meeting
+session (never counted); 1 already-answered outreach session; 1 outreach session
+in the **past** (excluded by the future cutoff — this is the BEH-04 clause
+`getUnansweredRsvpCount` lacked, so it must be exercised). State the exact rows
+in the test file. The expected badge count is a **literal `2`**, written as `2`,
+never as a call to the function under test.
 
-1. `PLACEHOLDER_OUTREACH_BADGE_COUNT` is gone from both `SideNav.tsx` and
-   `MobileNav.tsx` (grep-clean, repo-wide — round 1's criterion 1 was
-   wrongly scoped to one file only).
-2. A student viewer with the fixture above renders the Outreach badge with
-   literal `2` in both `SideNav` and `MobileNav`.
+1. `PLACEHOLDER_OUTREACH_BADGE_COUNT` is gone repo-wide (grep-clean), from both
+   `SideNav.tsx` and `MobileNav.tsx`.
+2. A student viewer with the fixture renders the Outreach badge with literal
+   `2`, in both `SideNav` and `MobileNav`.
 3. A parent viewer renders identically to criterion 2 (this repo resolves
-   exactly one linked student per parent viewer today — a disclosed existing
-   simplification, not something this task changes; do not attempt "linked
-   kids combined").
-4. A student/parent viewer whose `resolveStudentId` resolves `null` sees a
+   exactly one linked student per parent today — a disclosed existing
+   simplification; do not attempt "linked kids combined").
+4. A student/parent viewer whose `resolveStudentId` resolves `null` renders a
    literal `0` badge (not absent, not the old placeholder).
 5. `useActiveSeason()` `'loading'` or `'error'`, or a rejected
    `loadStudentHomeData`/`resolveStudentScope`, each render **no** Outreach
-   Badge in either nav component (assert absence via a `data-testid` you add
-   to the `<Badge>` render in this task, not by asserting `0` — round 1's
-   MINOR 8, now resolved by adding the id).
+   badge in either nav — assert absence via the `data-testid`, not by asserting `0`.
 6. `useActiveSeason()` `'none'` renders literal `0`.
-7. An admin or coach viewer renders **no** Outreach Badge, in both nav
-   components, regardless of season/data state (BEH-04 defines no staff
-   badge — assert this explicitly, it is new coverage round 1 lacked).
-8. `useOutreachBadgeCount.test.ts` covers the same 3/4/5/6/7 states directly
-   at the hook level (not just through the two nav components), asserting
-   the returned `number | null` value.
-9. `AppShell.test.tsx`'s existing `T140_FIXTURE_SEASON` ready-season tests
-   (`:298-320`) stay green with an injected fake `outreachBadgeCountProps`
-   loader — prove no real network call fires from them (a spy/counter on the
-   injected loader, asserted called, is sufficient; a real
-   `loadStudentHomeData` call from a test is itself a failure).
-10. `StudentHome.test.tsx` passes **unmodified** (byte-identical diff on that
-    file — the relocation must be behavior-invisible from that file's own
-    test suite).
-11. `npm run typecheck`, `npm run lint`, `npm run format:check`, full
-    `npm run test`, and `npm run build` all exit 0. Report file/test counts
-    against the measured baseline: **89 files / 2363 tests green on
-    `3190342`, build exit 0, eager entry chunk 199.02 kB gz.** Report the new
-    eager entry chunk gzip size explicitly — it must not regress materially
-    (the new imports are all leaf/loader modules, so it should be
-    approximately unchanged; if it grows by more than ~5 kB gz, stop and
-    report why before proceeding).
-12. **Mutation replay (constitution item 26 — commit real work before
-    mutating):** commit the finished change first. Then, in
-    `unansweredOutreach.ts`, invert `getUnansweredOutreachOpportunities`'s
-    `!rsvps.some(...)` to `rsvps.some(...)`. Confirm `SideNav.test.tsx`'s
-    criterion-2 assertion (literal `2`) goes red, and separately confirm
-    `StudentHome.test.tsx` also reddens (it exercises the same function,
-    now relocated) — report both. Revert, confirm the full suite is green
-    again.
+7. An admin or coach viewer renders **no** Outreach badge in either nav,
+   regardless of season/data state (BEH-04 defines no staff badge).
+8. `useOutreachBadgeCount.test.ts` covers states 3/4/5/6/7 directly at the hook
+   level, asserting the returned `number | null`.
+9. **`AppShell.tsx` and `AppShell.test.tsx` are byte-identical to their state at
+   `a19cbb3`** (`git diff --exit-code a19cbb3 -- src/app/AppShell.tsx src/app/AppShell.test.tsx` exits 0),
+   **and** `AppShell.test.tsx` passes unmodified, **and** no test performs a real
+   unmocked Supabase call through the new hook. If proving the last part
+   requires a change, report it and stop rather than editing `AppShell`.
+10. `StudentHome.test.tsx` passes **unmodified** (byte-identical) — the
+    relocation must be invisible to that file's own suite. Same for any existing
+    test covering `resolveCurrentStudentId` via `meetings.ts`.
+11. All six gates exit 0: `npm run typecheck`, `npm run lint`,
+    `npm run format:check`, full `npm run test`, `npm run build`, plus a scoped
+    run. Baseline to report against: **89 files / 2363 tests green on
+    `3190342`, build exit 0, eager entry chunk 199.02 kB gz.**
+12. **Bundle proof — this is the criterion two rounds died on.** Report the new
+    eager entry chunk gzip size explicitly, and the lazy chunk count. It must
+    not regress materially: round 1 measured +71.5 kB / 25 chunks collapsed,
+    round 2 measured +50.47 kB / 18 chunks collapsed. **If the entry chunk grows
+    by more than 5 kB gz, or any lazy chunk count drops, stop and report — do
+    not proceed.** Both relocations exist specifically to keep this flat.
+13. **Mutation replay (item 26 — commit real work before mutating):** commit the
+    finished change first. Then, in `unansweredOutreach.ts`, invert
+    `getUnansweredOutreachOpportunities`'s `!rsvps.some(...)` to
+    `rsvps.some(...)`. Confirm `SideNav.test.tsx`'s criterion-2 assertion goes
+    red, **and** that `StudentHome.test.tsx` also reddens (it exercises the same
+    now-relocated function) — report both. Revert, confirm the suite is green.
 
 ## Least confident decisions
 
-1. **Coach/admin viewers get no Outreach badge at all**, a visible behavior
-   change from today's always-shown placeholder `0`. What would make this
-   wrong: if the human owner actually wants a staff-facing roster count
-   despite BEH-04 not specifying one — round 1's MAJOR 5 flagged the
-   session×student pair-count as a fabricated, un-clearable number, and I am
-   now removing it rather than fixing its scope, since no spec exists to fix
-   it *to*. Revisit if disputed.
-2. **The fetch moves to `AppShell.tsx`, expanding this packet from 2 files to
-   10.** What would make this wrong: if a reviewer judges this now belongs in
-   HEAVY given the blast radius (see "Tier, re-affirmed" above for why I
-   judge it doesn't) or if a smaller design existed I didn't find — the
-   cheaper-path alternative (each nav component fetches independently) was
-   explicitly rejected by round 1's own finding of a refetch-storm risk.
+1. **Coach/admin viewers get no Outreach badge at all** — a visible change from
+   today's always-shown placeholder `0`. Wrong if the owner wants a staff-facing
+   roster count despite BEH-04 not specifying one. Round 1 flagged the
+   session×student pair-count as fabricated and un-clearable; removing it beats
+   fixing its scope when no spec exists to fix it *to*.
+2. **The `SignupOpportunityRow` handling** (move vs type-import) is left to the
+   worker. Wrong if one of those choices recreates the page cycle — which is why
+   criterion 12 measures rather than trusts.
 3. **Parent = same single-student resolution as student**, not "linked kids
-   combined" despite BEH-04's literal wording. What would make this wrong:
-   if multi-child parent support is more load-bearing than the existing
-   precedent suggests — but implementing real multi-child aggregation here
-   would mean `resolveCurrentStudentId` itself changing (`rows[0].student_id`,
-   `loaders/meetings.ts:1111-1114`, a Forbidden File), which is a
-   pre-existing gap this task inherits rather than introduces, same as
-   `OutreachList.tsx`'s own `StudentParentOutreachView` already does.
-4. **`useOutreachBadgeCount` is a new file under `src/app/`, not
-   `src/components/nav/`**, even though its output is nav-domain. What would
-   make this wrong: if this repo's own conventions place shell-owned
-   fetch-hooks elsewhere — I judged `src/app/` correct because the hook is
-   now owned and called by `AppShell.tsx`, matching where `SeasonProvider`
-   (also `src/app/`) already lives, not where its *consumers* (`SideNav`,
-   `TopNav`) live.
-5. **`0` for "no linked student yet" and `0` for "no active season," rather
-   than two visually distinguishable states.** What would make this wrong:
-   same as round 1's least-confident #3 — a user reading "0 unanswered" as
-   "you're caught up" when the true state is "we can't resolve who you are."
-   Kept from round 1 since the checker's verdict called this SOUND as a
-   declared judgement, not a factual error.
+   combined" despite BEH-04's literal wording. Real multi-child aggregation
+   would require changing `resolveCurrentStudentId` itself
+   (`rows[0].student_id`) — a pre-existing gap this task inherits rather than
+   introduces, same as `OutreachList.tsx`'s `StudentParentOutreachView` already does.
+4. **`0` for "no linked student" and `0` for "no active season"** rather than two
+   distinguishable states. Round 2's gate called this SOUND as a declared
+   judgement, not a factual error. Kept.
+5. **The three unrecoverable MINOR/NIT tiers.** See the provenance note at the
+   top: round 2 raised 10 findings below BLOCKER and only some are reconstructable.
+   This is the packet's weakest point and the reviewer should treat it as such.
