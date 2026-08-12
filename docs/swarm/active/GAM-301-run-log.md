@@ -24,3 +24,17 @@ Append-only. One line per milestone, committed and pushed as it happens.
   them are present, so this stays STANDARD rather than escalating on file
   count alone ("it sounds important is not a trigger, and neither is the
   number of files touched").
+- premise measured against `3190342`: `SideNav.tsx:117`'s
+  `PLACEHOLDER_OUTREACH_BADGE_COUNT = 0` confirmed live; `getUnansweredRsvpCount`
+  (`OutreachList.tsx:1459`) confirmed real, exported, tested, and already wired
+  to real Supabase data via `loadOutreachData` (`loaders/outreach.ts:1122`,
+  the actual production default, not the fixture seam). `resolveCurrentStudentId`
+  (`loaders/meetings.ts:1120`) confirmed as the shared real viewer→student
+  resolver already reused by three other files. No existing `SideNav.test.tsx`.
+  No existing "unanswered"/"awaiting" Supabase view (grepped `supabase/`) —
+  confirms a lighter read path does not already exist.
+- **packet written**: `docs/swarm/active/GAM-301-packet.md`. Seam decision:
+  `SideNav` owns its own badge fetch (mirrors `KpiStrip`'s precedent for
+  chrome-level data), via two optional defaulted props so `AppShell.tsx`
+  needs no changes. Two allowed files, 9 acceptance criteria including a
+  named mutation, 5-entry least-confident-decisions list.
