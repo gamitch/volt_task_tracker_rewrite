@@ -165,3 +165,40 @@ line names.
     makes the sentence true.
 - **Dispatching `checker-reviewer` (opus, `run_in_background: false`).** *If this
   line is the last one in this file, the run died holding this subagent.*
+- **`checker-reviewer` verdict: FAIL** — 1 MAJOR, 2 MINOR, 2 NIT, no BLOCKER.
+  Subagent returned; nothing left in flight.
+
+  It replayed rather than trusted: seven mutations on its own PostgreSQL 16.14
+  cluster, six reddening (criteria 1, 2, 3, 4, 5, 6) and the seventh confirming
+  the documented trap stays green. Criterion 10 reproduced in both directions
+  (`tee -a` → exit 1; plain `tee` → exit 0 with the FAIL printed on screen).
+  Criterion 8: the pre-existing report block is **byte-identical** to a
+  merge-base run. Every citation in the migration header spot-checked correct,
+  including D018's verbatim quote and both PRD references — the T801/D010
+  defect class, clean here. It also verified the perf figures independently
+  (500 events: 22.86/23.07/25.06 ms → 31.61/32.78/34.21 ms).
+
+  * **MAJOR-1 — the artifact ships a false sentence.** The migration comment
+    says the item-20 follow-up *"is filed as a Linear issue"*. It is not filed.
+    The checker queried Linear live and found no such row. This is worse than
+    the T101/T121 failure item 20 was written about: those comments at least
+    told the reader work was outstanding; this one tells a future reader the
+    triage record already exists, so nobody files it — while the additive route
+    leaves both legacy policies granting by `students.team_id` permanently and
+    that row is the only thing scheduling their removal. **Correct call, and my
+    error rather than the worker's** — I flagged the discrepancy in this log
+    when the worker returned and then dispatched the checker without fixing it.
+  * MINOR-1 — the checker partly disagrees with packet §4: it accepts that item
+    3 does not bite, but argues §5.2(b)'s former-team over-grant is a widening
+    the 8.3 matrix does not describe, and that D013's precedent took an owner
+    ruling for exactly that. Packet §4 invited this disagreement and said it
+    would be an escalation, not a rework. **Routing it to `boss-arbiter`.**
+  * MINOR-2 — the `my_student_ids()` clause in the new policies is currently an
+    *equivalent* mutation (removing it stays green, because `students`' own RLS
+    already restricts the join). Not a defect today; becomes the sole guard if
+    `students`' read policy is ever widened, which `rls.sql:90-92` anticipates.
+    Follow-up row.
+  * NIT-1 — the suite is **37 PASS / 0 FAIL** (6 pre-existing + 31 new), not the
+    38 the worker reported and this log repeated. 37 is the number to carry.
+- **Fixing MAJOR-1: filing the item-20 deferral in Linear first, so the sentence
+  the migration ships is true when it cites an identifier.**
