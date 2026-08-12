@@ -1,182 +1,269 @@
-# GAM-283 (T607) — worker packet
+# GAM-283 (T607) — worker packet, revision 2
 
-**Tier: HEAVY** (constitution item 26). Gate status: **awaiting `checker-premise`.**
-No worker sees this until the gate returns DISPATCH (item 19).
+**Tier: HEAVY** (constitution item 26). Gate status: **revised after
+`checker-premise` round 1 returned REVISE** (2 BLOCKER, 3 MAJOR, 4 MINOR).
+Round 2 is the last available round — a third REVISE escalates to the human
+owner (item 19a). Round 1's findings and my dispositions are in
+`GAM-283-run-log.md`; every one was accepted.
+
+**Baseline at `28f7394`: 95 test files / 2437 tests green.** Measured by the
+gate, not quoted from `vite.config.ts` (whose comment still says a stale
+"1414 / 61").
 
 ## The defect, in one paragraph
 
-When ending a meeting fails, the coach sees a fixed string — *"Couldn't end this
-meeting. Something went wrong ending this meeting."* — that tells them neither
-what failed nor whether the attendance they just recorded was saved. Ending a
-meeting is three sequenced writes, so a failure can leave three different
-partial states behind. The database handles all three safely; the coach is told
-none of it, and will either re-enter attendance that already saved or walk away
-from attendance that did not.
+When ending a meeting fails, the coach is told nothing useful — and, as round 1
+measured, is in practice told *nothing at all*. Ending a meeting is three
+sequenced writes, so a failure can leave several partial states behind. The
+database handles them safely; the coach learns none of it, and will either
+re-enter attendance that already saved or walk away from attendance that did
+not.
+
+## What round 1 changed, and why it matters more than the original filing
+
+Two findings invalidate parts of revision 1. Both were produced by *running* the
+code, not reading it.
+
+### The claim I was going to put on screen is false in a reachable state
+
+Revision 1 required telling the coach **"the meeting is still open and a retry
+is safe."** Its only source was `endMeeting.ts:86-87` — the file describing
+itself. That claim is true *about ordering* and does not cover the **ambiguous
+write**. If step 3's request commits server-side but the response is lost
+(network drop, proxy timeout, laptop sleep), `runMutation`'s `catch`
+(`loader.ts:214-216`) rejects with `code: 'UNKNOWN'` **while
+`event_sessions.status` is already `'completed'`.** The gate asserted it:
+
+```
+await expect(fn(PAYLOAD)).rejects.toMatchObject({ code: 'UNKNOWN' });
+expect(db.sessionStatus).toBe('completed');   // "still open" is FALSE
+```
+
+**"The meeting is still open" is struck from this packet.** Do not write it, do
+not imply it. The retry-safety half *survives and was verified*: all six failure
+modes converge on the clean-run state after an identical retry (`ignoreDuplicates:
+true` → ON CONFLICT DO NOTHING; `.is('check_out_at', null)`; the flip re-sets the
+same terminal value; `unique (session_id, student_id)` at
+`20260717000000_scheduling_attendance.sql:94`).
+
+### The banner the fix writes into is invisible
+
+`setIsConfirmOpen(false)` (`EndMeetingDialog.tsx:826`) sits **inside the `try`**,
+so it is reached only on success. On failure the confirm `AlertDialog` stays
+open; Astryx's `Dialog` calls `showModal()`, putting it in the top layer with the
+document inert behind a `::backdrop` at `#00000080` / `blur(2px)`. The error
+`Banner` (`:901-907`) renders **outside** that layer. The coach sees a still-open
+modal reading *"This meeting will be marked completed."* and no error at all.
+
+Every criterion in revision 1 would have passed while the coach saw nothing,
+because `document.body.textContent` cannot distinguish *rendered* from *rendered
+behind an inert layer*. **Better copy in an unreachable banner is not a fix.**
 
 ## Premise corrections — read these before the filing
 
-I re-read all four cited sources against `main` at `28f7394`. The filing's core
-claim holds. **Four corrections**, three of which change what the worker must do.
+Re-read against `main` at `28f7394`, then independently re-measured by the gate.
 
 | # | The filing says | Measured | Consequence |
 | -- | -- | -- | -- |
-| 1 | Both catch blocks have "the identical defect" | **False for `:863-865`.** `makeOnEditAttendance` (`endMeeting.ts:509-512`) throws a real `new Error('No signed-in coach identity is available…')` *before* any network call. On the edit path the `instanceof Error` branch is **reachable and live**. Only `:829` is genuinely dead — `makeOnEndMeeting` rejects solely through `runMutation`. | Criterion 6 is not "apply the same fix twice". The two paths differ in fact and must be reasoned about separately. |
-| 2 | (not mentioned) | **An existing test encodes the current behaviour.** `EndMeetingDialog.test.tsx:594-617` injects `new Error('write failed')` and asserts `document.body.textContent` contains `'write failed'`. Criterion 1's mutation (remove the `instanceof Error` gate) **necessarily reddens it.** | This test must be **re-derived, never deleted**, with a comment saying what changed and why — the precedent this very file already set for T508. Flagged to the gate as a Definition-of-Done question (non-negotiable: "existing tests must pass unless the boss explicitly approves a test update"). |
-| 3 | `:903` is "the fixed `AlertDialog` title" | It is a **`Banner`** title (`:901-907`), not an `AlertDialog`. The `AlertDialog` is at `:930`. | Cosmetic, but the worker will look in the wrong place. The rendered string is `Banner title` + `description={endError}`. |
-| 4 | (not mentioned) | **The edit path is unreachable in product today.** `LiveConsole.tsx:1192` passes `hasAttendanceCorrections={false}`, and `EndMeetingDialog.tsx:969` gates the only caller of `onEditAttendance` on that prop. T601 is the owner ruling that keeps it. | This is the strongest input to criterion 6's "covered or consciously excluded" judgement. |
+| 1 | Both catch blocks have "the identical defect" | **Both qualified.** `:829` is dead *for product wiring* (`makeOnEndMeeting` rejects only through `runMutation`, never an `Error`) but **alive for the injected test seam** — which is exactly why `EndMeetingDialog.test.tsx:613` exists. `:863-865` is reachable *in type/test terms* via `makeOnEditAttendance`'s identity throw (`endMeeting.ts:509-512`) but **unreachable in product** — see correction 4. Revision 1 said "reachable and live" and contradicted its own correction 4. | Neither block is simply "dead". Do not reason from the filing's symmetry claim. |
+| 2 | (not mentioned) | **Exactly one existing assertion breaks, and it is measured:** `EndMeetingDialog.test.tsx:613` (`expect(document.body.textContent).toContain('write failed')`) — **1 of 30 in that file, 1 of 2437 suite-wide.** `LiveConsole.endMeeting.test.tsx` is unaffected. | Re-derive it, never delete it, with a comment saying what changed and why. Authorized by the T508 §3g precedent in this same file (`T508-worker-packet.md:175-190`), **which conditions the authorization on naming measured tests one by one** — that is why the number above is stated. Gate ruled: **no boss-architect escalation required.** |
+| 3 | `:903` is "the fixed `AlertDialog` title" | It is a **`Banner`** title (`:901-907`). The `AlertDialog` is at `:930`. | The worker would otherwise look in the wrong place. |
+| 4 | (not mentioned) | **The edit path is unreachable in product.** `LiveConsole.tsx:1192` passes `hasAttendanceCorrections={false}`; `EndMeetingDialog.tsx:969` gates `onEditAttendance`'s only caller on it; that is the sole mount (`grep -rn hasAttendanceCorrections src/`). T601 is the owner ruling that keeps the factory. | Decides criterion 6, and means nothing of user value is lost by not authoring separate edit-path copy. |
 
-Correction 1 also means the issue title's framing — "never the real error" — is
-doubly misleading: on the edit path the real error *is* shown today.
+The issue title's framing — *"never the real error"* — is misleading in both
+directions, and `loader.ts:74-76` forbids the fix it appears to ask for.
 
-## Constraints (these are the guardrails, not suggestions)
+## Constraints
 
 1. **The raw error must never reach the screen.** `loader.ts:74-76`: `cause`
    "is never itself DES-16-compliant copy and must never be rendered to a user
-   directly." Postgrest/network text is not the goal — hand-authored DES-16
-   copy is (PRD line 230: *errors say what happened and what to do; no
-   apologies, no "Oops"*).
+   directly." The goal is hand-authored DES-16 copy (PRD line 230: *say what
+   happened and what to do; no apologies, no "Oops"*).
 2. **Do not edit `loader.ts`.** Rewording `DEFAULT_LOADER_ERROR_MESSAGE`
-   re-words every read failure in the app. GAM-319 faced this exact choice two
-   days ago and deliberately fixed at the call site (`5081b1e`). Follow it.
+   re-words every read failure in the app. GAM-319 (`5081b1e`) faced this exact
+   choice and fixed at the call site.
 3. **Do not change `endMeeting.ts`'s write behaviour.** Ordering, the opt-in
-   absence guard, and retry idempotency are load-bearing and independently
-   justified at `endMeeting.ts:76-96`.
-4. **Never tell the coach "nothing was saved."** It is false: if step 1 landed
-   and step 2 rejected, absences *are* recorded. The true, safe statement is
-   that the **meeting is still open and retrying is safe** — which
-   `endMeeting.ts:76-89` guarantees for every reachable partial state. Getting
-   this wrong is the whole reason this row is HEAVY.
-5. **The retry-safety sentence belongs to the end-meeting path only.** The edit
-   path renders only when `session.status === 'completed'` (`:910` vs `:969`),
-   so "the meeting is still open" is **false** there. That path *does* roll the
-   optimistic update back (`:859-861`), so "your change was not saved" is true
-   there and false on the end path. Do not share one sentence between them.
-6. **`endMeeting.ts:113` cites T607 by number** — do not renumber it. If its
-   module doc `:98-115` becomes stale because this row lands, say so in the
-   completion report; do not edit that file to fix it (out of Allowed Files).
+   absence guard and retry idempotency are load-bearing (`endMeeting.ts:76-96`).
+4. **Never claim the meeting is still open, and never claim nothing was saved.**
+   The first is false in the ambiguous-write state above. The second is false
+   whenever step 1 landed and a later step rejected — the absences *are*
+   recorded. Getting either wrong is the T189 failure this row's tier exists to
+   prevent.
+5. **What you may assert, because it was verified:** that **retrying is safe and
+   will not double-record anything**, and that **anything already recorded was
+   kept**. Nothing stronger.
+6. **Two disclosed divergences — do not overclaim past them.** (a) If the coach
+   *unticks* the opt-in checkbox before retrying, absences that already landed
+   are **not** undone. (b) A student who checks in *between* attempts is not in
+   the stale `checkoutStudentIds`, so the retry can complete the session leaving
+   that student without a `check_out_at`. Neither corrupts data; both mean
+   "retrying is safe" must be worded as *safe to repeat*, not as *guaranteed to
+   produce a perfect result*.
+7. **`endMeeting.ts:113` cites T607 by number** — do not renumber it. Its module
+   doc `:98-115` will go partly stale when this lands; report that, do not edit
+   it (outside Allowed Files).
 
 ## Prescribed shape
 
-Add to `EndMeetingDialog.tsx` two **exported pure helpers** — exported so they
-are unit-testable without rendering, matching GAM-319's `extractRsvpErrorMessage`:
+### Part A — make the failure reachable (BLOCKER-2)
 
-```
-export function describeEndMeetingFailure(error: unknown): string
-export function describeAttendanceEditFailure(error: unknown): string
+Move `setIsConfirmOpen(false)` out of the `try` so the confirm modal closes on
+failure as well as success, making the existing `Banner` at `:901-907` reachable.
+The `finally` block at `:831-833` is the natural home.
+
+*Rejected alternative, recorded so it is not re-litigated:* putting the error in
+the `AlertDialog`'s own `description` (`:936`). `AlertDialogProps` accepts **no
+children** (`AlertDialog.d.ts:17-60`) so only the plain `string` `description` is
+available, and overwriting it would destroy the confirm copy the coach needs
+while deciding — and would leave a second, invisible error surface in the
+`Banner`. One error surface, the one that already exists.
+
+**Measure the suite impact of this change before assuming it is free.** Round 1
+only measured Part B. If it reddens further assertions, re-derive them under the
+same correction-2 discipline and report the count.
+
+### Part B — one helper, parameterised (MAJOR-1, and the gate's "one helper" path)
+
+Add a single **exported pure helper** to `EndMeetingDialog.tsx` — exported so it
+is unit-testable without rendering, matching GAM-319's `extractRsvpErrorMessage`:
+
+```ts
+export function describeWriteFailure(error: unknown, writeFlavouredMessage: string): string
 ```
 
-Branch order, both helpers (GAM-319's shape, `instanceof Error` **removed**):
+Branch order:
 
 1. `isSupabaseLoaderError(error) && error.cause instanceof SupabaseNotConfiguredError`
-   → return `error.message` verbatim. `toLoaderError` always sets `cause` to the
-   pre-wrap raw error, so this is exactly the passthrough condition, and that
-   message is already hand-authored DES-16 copy (`loader.ts:106-121`).
-2. `isSupabaseLoaderError(error)` → copy selected from `error.code`, a stable
-   machine-readable string (`loader.ts:96-104`; Postgrest's code, else
-   `'UNKNOWN'`). **At least two distinct codes must map to distinct copy** or
-   criterion 2 has no mutation that reddens it.
-3. otherwise → a hand-authored fallback.
+   → `error.message` verbatim. `toLoaderError` always sets `cause` to the pre-wrap
+   raw error, so this is exactly the passthrough condition, and that message is
+   already hand-authored DES-16 copy (`loader.ts:106-121`).
+2. everything else → `writeFlavouredMessage`.
 
-Then `:828-830` and `:862-866` call their respective helper.
+**`instanceof Error` is deliberately absent, and this diverges from the
+precedent this packet cites.** The landed GAM-319 (`StudentHome.tsx:963`)
+*keeps* `if (error instanceof Error) return error.message;` as its first branch.
+We drop it because criterion 4 needs an absolute guarantee that no raw text
+reaches the DOM, and because correction 4 shows the one hand-authored `Error`
+this dialog could receive is unreachable in product. **Say this in the code
+comment** — otherwise a later reader "restores consistency" with GAM-319 and
+silently reintroduces the defect.
 
-Copy is the worker's to author within DES-16 and the constraints above.
-`functions.ts:76,86` is the house style (*"Couldn't reach the server. Check your
-connection and try again."*). The end-meeting copy must carry the
-retry-safety fact (constraint 4); the edit copy must not (constraint 5).
+**No code map.** Round 1 enumerated what revision 1 guessed at: `42501` cannot
+arise from steps 2 or 3 (an RLS `using` failure on `UPDATE` matches zero rows and
+returns *success* — `rls.sql:226-228`); network failures and
+`SupabaseNotConfiguredError` all resolve to `'UNKNOWN'` (`loader.ts:96-103`); the
+only broadly reachable non-`UNKNOWN` code is `PGRST301`. Branching on code would
+also *conflict* with the retry-safety copy, since "try again" is wrong advice for
+an expired JWT. This mirrors GAM-319's landed shape, which has no code branching.
+
+Then `:828-830` calls the helper with end-meeting copy carrying constraint 5's
+two facts. `:862-866` — see criterion 6.
+
+Copy is yours to author within DES-16 and the constraints. `functions.ts:76,86`
+is the house style (*"Couldn't reach the server. Check your connection and try
+again."*).
 
 ## Allowed Files
 
 | Path | Why |
 | -- | -- |
-| `src/pages/meetings/EndMeetingDialog.tsx` | the two catch blocks and the new helpers |
-| `src/pages/meetings/EndMeetingDialog.test.tsx` | new coverage + the re-derivation in correction 2 |
+| `src/pages/meetings/EndMeetingDialog.tsx` | Parts A and B |
+| `src/pages/meetings/EndMeetingDialog.test.tsx` | new coverage + correction 2's re-derivation |
 
-**Forbidden, explicitly:** `src/lib/supabase/loader.ts` (constraint 2),
-`src/lib/supabase/loaders/endMeeting.ts` (constraint 3),
-`src/pages/meetings/LiveConsole.tsx`, `docs/swarm/**`, `.claude/**`,
-`.github/workflows/**`.
+**Forbidden, explicitly:** `src/lib/supabase/loader.ts`,
+`src/lib/supabase/loaders/endMeeting.ts`, `src/pages/meetings/LiveConsole.tsx`,
+`docs/swarm/**`, `.claude/**`, `.github/workflows/**`.
 
-*Workflow-file check performed at packet time per `AGENTS.md` § "Two walls":
-this row needs no `.github/workflows/**` change, so the push wall is not on
-this path.*
+*Workflow-file check performed at packet time per `AGENTS.md` § "Two walls": this
+row needs no `.github/workflows/**` change, so the push wall is not on this path.*
 
 ## Acceptance criteria
 
-Numbering follows the issue. Each names the mutation that reddens it — a
-criterion with no such mutation is not a criterion.
+Each names the mutation that reddens it. Assert on the DOM for anything the coach
+is said to see.
 
 1. **A failed end-meeting no longer produces the fixed fallback.** A rejection
    carrying the real `SupabaseLoaderError` shape surfaces something else.
    *Mutation: restore the `instanceof Error` gate → red.*
-2. **Different failures produce different messages.** Two rejections with
-   different `code`s render different copy. *Mutation: collapse the code map to
-   one string → red.*
-3. **The coach is told the meeting is still open and a retry is safe.**
-   *Mutation: delete that sentence → red.*
+2. **The error is actually reachable at the moment of failure.** After a rejected
+   end-meeting, no open modal covers the message: assert
+   `document.querySelector('dialog[open]')` is `null` **and** the banner copy is
+   present. *Mutation: move `setIsConfirmOpen(false)` back inside the `try` →
+   red.* (Replaces revision 1's code-map criterion.)
+3. **The coach is told retrying is safe and that anything already recorded was
+   kept.** *Mutation: delete that sentence from the copy → red.* **Do not assert
+   "the meeting is still open" — it is false (see above).**
 4. **Raw underlying error text never renders.** *Mutation: pass `cause` through
-   into the surfaced string → red.* Assert on the DOM, not on the helper's
-   return value alone.
+   into the surfaced string → red.*
 5. **The copy is write-flavoured.** A failed save never tells the coach to check
    whether their data *loaded*. *Mutation: forward `error.message` verbatim from
    a generic loader rejection → red* (that message is
    `DEFAULT_LOADER_ERROR_MESSAGE`, "Couldn't load this data…").
-6. **The attendance-edit catch is covered or consciously excluded** — and the
-   decision cites correction 1 and correction 4, not the filing's false premise
-   that the two blocks are identical.
-7. **`endMeeting.ts`'s write behaviour is unchanged.** *Mutation: move the
-   status flip earlier → red in the existing `endMeeting` tests.* Since
-   `endMeeting.ts` is forbidden here, this is satisfied by the file being
-   untouched in the diff plus the existing suite staying green.
-8. **The re-derived test from correction 2 keeps real coverage.** It must still
-   prove the banner appears and the session is not flipped — only the assertion
-   on the raw injected string may change, and the comment must say why.
+6. **A `SupabaseNotConfiguredError` still passes through verbatim.** *Mutation:
+   collapse branch 1 into branch 2 → red.* This is the reachable, precedented
+   differentiation that replaces the code map.
+7. **The attendance-edit catch is consciously excluded, and the exclusion is
+   recorded in the code.** Correction 4 is the reason: the path cannot be reached
+   from any product surface, so authoring separate copy for it is work with no
+   user. Leave `:862-866` functionally as-is and add a comment naming GAM-283,
+   correction 4 and `LiveConsole.tsx:1192`, so that whoever flips
+   `hasAttendanceCorrections` to `true` finds the note. *Mutation: none — this is
+   a documentation criterion, and it is stated as such rather than dressed up
+   with a fake one.* If you judge that covering it is cheaper than excluding it,
+   you may instead call the same helper there with edit-flavoured copy — but then
+   constraint 5's facts must **not** be reused, because that path rolls the
+   optimistic update back (`:859-861`) and renders only when the session is
+   already `completed` (`:951`).
+8. **`endMeeting.ts`'s write behaviour is unchanged.** *Mutation: move the status
+   flip earlier → red in the existing `endMeeting` tests* (verified by the gate:
+   reddens 2). Satisfied here by the file being absent from the diff plus a green
+   suite.
+9. **The re-derived assertion from correction 2 keeps real coverage.** It must
+   still prove the banner appears and the session is not flipped; only the
+   assertion on the raw injected string may change, and the comment must say why.
 
 ## Evidence required from the worker
 
-- Real red output (command + exit code) for each mutation above, run per item 26
-  after committing the fix (*commit before mutating*), in the worker's **own
+- Real red output (command + exit code) for each mutation above, run **after
+  committing the fix** (item 26's *commit before mutating*), in your **own
   worktree** (item 23) — never the shared tree.
-- All six gates via the `gate-run` skill.
+- All six gates via the `gate-run` skill. **Expected baseline: 95 files / 2437
+  tests**, plus your additions, minus nothing. Report the exact count and account
+  for every delta.
+- The count of assertions your Part A change reddens, if any.
 - The commit SHA the work landed in (item 21). "Clean" is not "committed".
 - The diff's file list, proving no forbidden file moved.
 
-## Least confident decisions (item 19d — attack these first)
+## Least confident decisions (item 19d)
 
-1. **Dropping the `instanceof Error` passthrough on the *edit* path.** My
-   prescription removes it from both helpers for uniformity and for criterion
-   4's absolute guarantee. That is a real specificity regression: the identity
-   precondition error (`endMeeting.ts:511`) is hand-authored copy that surfaces
-   verbatim today and would become generic. **What would make it wrong:** if the
-   gate judges that losing a live, accurate message is worse than the
-   uniformity — in which case the edit helper should keep a narrow passthrough.
-   I lean toward removing it because correction 4 shows the path is unreachable
-   in product, but I hold this loosely.
-2. **That the re-derivation in correction 2 is a legitimate test update rather
-   than a boss-approval gate.** The non-negotiable says existing tests must pass
-   unless the boss approves a change. I read T508's precedent in this same file
-   as authorizing deliberate, commented re-derivation when a row's own accepted
-   criteria require it. **What would make it wrong:** if that precedent is
-   narrower than I think, this needs boss-architect sign-off before the worker
-   starts, not after.
-3. **Which `code` values are actually reachable**, and therefore whether
-   criterion 2's differentiation is real rather than theatre. I have not
-   enumerated the Postgrest codes these three writes can produce; a plausible
-   set is `42501` (RLS denial), `PGRST301` (expired JWT) and `UNKNOWN`
-   (network — `TypeError` carries no `code`). **What would make it wrong:** if
-   in practice essentially every failure here resolves to `UNKNOWN`, then a code
-   map is dead code wearing the costume of a feature, and criterion 2 should be
-   satisfied differently (or dropped with the reason recorded).
-4. **That criterion 3's sentence is true for *every* reachable failure**, which
-   is the claim that made this HEAVY. I read `endMeeting.ts:76-89` as
-   guaranteeing it. **What would make it wrong:** any reachable path where the
-   status flip lands but a later step does not, or where a retry is not
-   idempotent. The module doc asserts no such path exists ("There is NO ordering
-   under this design in which the flip lands and the checkout doesn't") — but
-   that is the file describing itself, and this criterion puts that self-
-   description on screen in front of a coach. **Gate: verify it against the
-   code, not the comment.**
-5. **Tier HEAVY over STANDARD.** Defended in the run log. **What would make it
-   wrong:** if decision 4 is verified cheaply and holds, the remainder is
-   call-site copy on a single module with a worked precedent — which is
-   STANDARD's description. I took the heavier tier under item 26's
-   "if two tiers are arguable, take the heavier one."
+Revision 1's list is resolved: 1 SOUND (reasoning corrected), 2 SOUND (no boss
+gate), 3 settled by the gate's enumeration, **4 WRONG — became BLOCKER-1**, 5
+SOUND (HEAVY confirmed; the defect needed running code to find), 6 SOUND with two
+divergences now recorded as constraint 6. New list:
+
+1. **That closing the modal on failure is the right correction for BLOCKER-2,
+   rather than keeping it open and putting the error inside it.** Closing returns
+   the coach to a dialog whose local state still says `scheduled` even in the
+   ambiguous-write case, so the screen may disagree with the database until
+   reload. **What would make it wrong:** if that stale-screen disagreement is
+   judged worse than the invisible-banner defect being fixed — in which case Part
+   A needs a reload/refetch, which is a larger change than this row.
+2. **That criterion 7's documentation-only form is acceptable.** The issue's own
+   criterion 6 permits "covered or consciously excluded", and I chose excluded on
+   correction 4. It is the one criterion here with no mutation, which by this
+   packet's own standard makes it not a criterion. **What would make it wrong:**
+   if the gate holds that every criterion must be mechanically measurable, in
+   which case criterion 7 should be dropped entirely rather than kept in a weaker
+   form.
+3. **That the parameterised single helper is better than two helpers or one
+   constant.** It satisfies the gate's "one helper" path while keeping the two
+   call sites' copy honestly different. **What would make it wrong:** if the
+   second call site never uses it (criterion 7's excluded route), the parameter
+   has exactly one caller and should collapse to a plain constant — a simpler
+   shape I would then prefer.
+4. **That no test can verify criterion 3's truth, only its presence.** Round 1
+   said so explicitly. I have written the copy to claim only what was verified,
+   but the verification lives in the gate's transcript and this packet, not in
+   the suite. **What would make it wrong:** if a cheap regression test could pin
+   the retry-idempotency property in `endMeeting.test.ts` — which is a forbidden
+   file here, so it would be a follow-up row under item 20 rather than this one.

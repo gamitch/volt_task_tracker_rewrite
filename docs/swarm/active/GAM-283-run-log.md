@@ -114,3 +114,8 @@ attempts check-in is not checked out by the stale payload).
 
 **Disposition: I accept all nine findings.** Revising the packet now — round 2
 of the item 19a cap. A third REVISE escalates to the owner rather than looping.
+
+| # | When (UTC) | Milestone |
+| -- | -- | -- |
+| 11 | 2026-08-12 | Packet revised to revision 2, accepting all nine round-1 findings. "The meeting is still open" struck from the prescription; Part A (close the modal on failure) added so the fix is reachable at all; code map replaced with GAM-319's landed passthrough shape; corrections table de-contradicted; measured test-break scope recorded. New item-19d list written. |
+| 12 | 2026-08-12 | **DISPATCHED `checker-premise` (round 2 of 2, item 19a cap), `run_in_background: false`, orchestrator is blocking on it now.** *If this line is the last one in this file, the run died holding this subagent — no verdict was ever seen.* A REVISE here escalates to the human owner rather than looping into a round 3. |
