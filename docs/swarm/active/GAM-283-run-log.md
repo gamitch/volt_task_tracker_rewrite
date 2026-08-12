@@ -18,6 +18,7 @@ silently succeeded.
 | 6 | 2026-08-12 | Run log created — first file write of this run. |
 | 7 | 2026-08-12 | Read the four cited sources directly (item 19c, verify your own citations before submitting): `EndMeetingDialog.tsx`, `loaders/endMeeting.ts`, `loader.ts`, GAM-319's landed diff (`5081b1e`). Four corrections to the filing found — recorded in the packet's Premise corrections table. |
 | 8 | 2026-08-12 | Packet written: `docs/swarm/active/GAM-283-packet.md`. Not yet gated — no worker may see it until `checker-premise` returns DISPATCH (item 19). |
+| 9 | 2026-08-12 | **DISPATCHED `checker-premise` (round 1 of 2, item 19a cap), `run_in_background: false`, orchestrator is blocking on it now.** *If this line is the last one in this file, the run died holding this subagent — that is the failure AGENTS.md § "Two walls" #2 records, and no verdict was ever seen.* |
 
 ## Tier reasoning (item 26, stated so a wrong call is correctable)
 
