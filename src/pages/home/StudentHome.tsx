@@ -206,6 +206,24 @@
  *    down from `StudentHome`) -- never `studentId` (a `students` row id;
  *    passing it is denied by RLS with sqlstate `42501`, T174's exact defect).
  *
+ *    **GAM-318 UPDATE -- there is deliberately NO per-row "saving" spinner,
+ *    and one cannot be added here.** Both buttons take
+ *    `isDisabled={isRsvpSubmitting}` and nothing else. The optimistic
+ *    `withLocalRsvpOverride` update and `setIsRsvpSubmitting` are called in
+ *    the same tick, which React 18's automatic batching commits as ONE
+ *    render; `getUnansweredOutreachOpportunities` counts ANY `rsvps` row as
+ *    an answer, so the clicked row leaves this list in the very commit that
+ *    would have switched a spinner on. An `isLoading` prop on these buttons
+ *    is therefore unreachable, not merely unused -- measured mid-write, the
+ *    clicked `Button` is already detached (`isConnected === false`) and no
+ *    element in the tree carries `aria-busy`. A `pendingSessionId` prop and
+ *    its backing state existed only to feed that unreachable prop; GAM-318
+ *    deleted both. Nothing is lost: the in-flight write stays legible
+ *    because the row visibly disappears and every sibling control disables.
+ *    Do NOT restore a spinner by keeping the answered row mounted -- an
+ *    answered opportunity is not an unanswered one, and that filter is
+ *    shared with the nav badge (`components/nav/useOutreachBadgeCount.ts`).
+ *
  * `getUnansweredOutreachOpportunities` below uses the exact same
  * "unanswered" definition `OutreachList.tsx`'s `getUnansweredRsvpCount`
  * already established: a future (`status === 'scheduled'`, not yet started)
@@ -1276,8 +1294,11 @@ function NextUpRowItem({
    * methods disagreed about whether the row was operable. Per-entry disable
    * makes both agree: the menu opens either way, and the guarded action does
    * nothing either way. `MoreMenu` has no `isLoading` concept of its own
-   * (verified directly against its real prop table), so the clicked-row
-   * spinner affordance lives on `SignupOpportunityRowItem`'s `Button`s only. */
+   * (verified directly against its real prop table). GAM-318 -- this used to
+   * add "so the clicked-row spinner affordance lives on
+   * `SignupOpportunityRowItem`'s `Button`s only"; there is no such affordance
+   * anywhere in this file now, because it was unreachable there too (module
+   * doc #7). No row type shows a per-row spinner during an RSVP write. */
   isRsvpSubmitting: boolean;
 }): ReactNode {
   const description = (
@@ -1306,18 +1327,19 @@ function SignupOpportunityRowItem({
   row,
   onRespond,
   isRsvpSubmitting,
-  pendingSessionId,
 }: {
   row: SignupOpportunityRow;
   onRespond: (sessionId: string, status: RsvpStatus) => void | Promise<void>;
-  /** GAM-304 -- module doc §1d: `isDisabled` on BOTH buttons is driven by
-   * `isRsvpSubmitting` alone (every other control disables while any write
-   * is in flight); `isLoading` (below) is additionally scoped to THIS row. */
+  /** GAM-304 -- `isDisabled` on BOTH buttons is driven by `isRsvpSubmitting`
+   * alone: every control disables while any write is in flight. GAM-318 --
+   * there is no per-row `isLoading` here, and adding one would be dead code:
+   * this row is unmounted by `getUnansweredOutreachOpportunities` in the same
+   * batched commit that sets the flag, so the spinner could never paint. See
+   * module doc #7 for the measurement and for why the answer is NOT to keep
+   * the answered row mounted. */
   isRsvpSubmitting: boolean;
-  pendingSessionId: string | null;
 }): ReactNode {
   const description = <Text type="supporting">{formatDateOnly(row.startsAt)}</Text>;
-  const isThisRowPending = isRsvpSubmitting && pendingSessionId === row.sessionId;
 
   const endContent = (
     <HStack gap={2}>
@@ -1325,14 +1347,12 @@ function SignupOpportunityRowItem({
         label="Sign up"
         variant="secondary"
         onClick={() => onRespond(row.sessionId, 'going')}
-        isLoading={isThisRowPending}
         isDisabled={isRsvpSubmitting}
       />
       <Button
         label="Can't go"
         variant="ghost"
         onClick={() => onRespond(row.sessionId, 'declined')}
-        isLoading={isThisRowPending}
         isDisabled={isRsvpSubmitting}
       />
     </HStack>
@@ -1456,11 +1476,11 @@ function StudentHomeContent({
   // the snapshot-array rollback below concurrency-safe -- "Next up" and
   // "Sign-up opportunities" share this ONE handler, so without it a click on
   // a second row could snapshot an array a first in-flight write already
-  // mutated. `pendingSessionId` additionally scopes the `isLoading` spinner
-  // (module doc §1d) to the exact row that was clicked; every OTHER row's
-  // control disables via `isRsvpSubmitting` alone.
+  // mutated. GAM-318 -- this ONE flag is also all there is: a companion
+  // `pendingSessionId` state used to scope a per-row `isLoading` spinner, but
+  // the row it scoped is torn out of the tree in the same batched commit, so
+  // the spinner was unreachable and both were deleted (module doc #7).
   const [isRsvpSubmitting, setIsRsvpSubmitting] = useState(false);
-  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
   const [rsvpError, setRsvpError] = useState<string | null>(null);
   const opportunitiesSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -1541,7 +1561,6 @@ function StudentHomeContent({
     setRsvps((prev) => withLocalRsvpOverride(prev, studentId, sessionId, status)); // optimistic
     setRsvpError(null);
     setIsRsvpSubmitting(true);
-    setPendingSessionId(sessionId);
     try {
       await onRsvpChange({
         sessionId,
@@ -1554,7 +1573,6 @@ function StudentHomeContent({
       setRsvpError(extractRsvpErrorMessage(error));
     } finally {
       setIsRsvpSubmitting(false);
-      setPendingSessionId(null);
     }
   }
 
@@ -1680,7 +1698,6 @@ function StudentHomeContent({
                     row={row}
                     onRespond={handleRsvpChange}
                     isRsvpSubmitting={isRsvpSubmitting}
-                    pendingSessionId={pendingSessionId}
                   />
                 ))}
               </List>
