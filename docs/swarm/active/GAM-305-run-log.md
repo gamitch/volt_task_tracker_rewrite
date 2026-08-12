@@ -16,6 +16,9 @@ describes, not a mystery.
 - `2026-08-12T19:32Z` — **Tiered HEAVY** (item 28d, item 26). Label `tier/unreviewed → tier/heavy`, read back and confirmed. Reasoning recorded below.
 - `2026-08-12T19:33Z` — Branch `claude/gam-305-archived-team-pickers` created off `main` (item 28g / `WORKFLOWS.md` rule 2).
 
+- `2026-08-12T19:45Z` — **Packet written** (`GAM-305-packet.md`), citations verified against `main` first (item 19c). Three corrections to the issue text found: `meetings.ts:392`→`:402` and the loader path is `src/lib/supabase/loaders/`; `coachHome.ts:39-40`→`:36-40`; criterion 5's "or a type error" is false (both loaders cast `as TeamDbRow[]`, so a select-string change compiles). Four sites the issue does not name found: `ScheduleMeetingsDialog.tsx:876,908` and `OutreachEventDialog.tsx:1048,1072` — the edit/open resets, which extend the criterion-4 sentinel hazard to the edit path.
+- `2026-08-12T19:47Z` — **Dispatched `checker-premise` (round 1, opus) on the packet** (item 19, `run_in_background: false`). *If this line is the last one in this file, the run died holding this subagent.*
+
 ## Tier decision — HEAVY, and why
 
 Item 26's question is *can a mistake here corrupt data, or lie to a user about
