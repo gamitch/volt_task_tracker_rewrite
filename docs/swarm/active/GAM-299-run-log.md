@@ -295,3 +295,19 @@ line names.
   is derivable. Saying five.
 - **Moving GAM-299 `In Progress → In Review`** (item 28e — never `Done`; the merge
   closes it, not the author).
+- **GAM-299 moved to `In Review`, confirmed by read-back** (state `In Review`,
+  labels `w5` + `heavy`). PR body also posted as a comment on the issue, so it
+  exists outside this repository.
+- **Run complete. Nothing was left in flight at any point:** every one of the five
+  subagents (`checker-premise` ×2, `worker-implementer`, `checker-reviewer`,
+  `boss-arbiter`) was dispatched with `run_in_background: false`, waited on, and
+  has a verdict line above its dispatch line's successor. There is no dispatch
+  line in this file without a matching verdict.
+
+  **What a human still owns:**
+  1. **Open the PR** — `docs/swarm/active/GAM-299-pr-body.md`, one paste. This run
+     could push but not create pull requests.
+  2. **Apply the migration** (item 16 — cutover is the owner's, never an agent's).
+  3. **Optionally promote GAM-340** `Backlog → Todo` when the former-team
+     visibility and the two-sources-of-truth schema should end. Nothing is blocked
+     on it.
