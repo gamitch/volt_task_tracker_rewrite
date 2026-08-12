@@ -219,3 +219,41 @@ line names.
   entry and an owner ruling under the D013 precedent. Packet §4 committed to
   treating this disagreement as an escalation rather than a worker rework.
   *If this line is the last one in this file, the run died holding this subagent.*
+- **`boss-arbiter` ruling returned.** Subagent returned; nothing left in flight.
+  It stood up its own PostgreSQL 16.14 cluster and re-measured rather than
+  reasoning, **and that overturned a premise of my own packet.**
+
+  1. **Dispute-log entry: YES — but not the one the checker asked for.** An
+     entry is required because this arbitration happened, not because item 3
+     needs an exemption. Writing an item-3 authorisation entry in the D013/D014
+     shape would falsely enlarge item 3. The checker is textually right that
+     `PRD:611` makes 8.4 reach `events` by reference — but the shipped
+     `own_or_linked_read` is *already* a derivation (8.4's version is
+     `student_id in (select my_student_ids())` and `events` has no `student_id`)
+     and shipped with no entry. Item 3's real trigger is a change to the 8.3
+     **matrix grant** (D013) or an 8.4 **normative formula** (D014); neither
+     moves here. Entry is **D019** — D018 is already allocated.
+  2. **`gate/human`: NO.** Not because it is unimportant, but because **there is
+     no second option to put to the owner** — see 4. D018 §3 already catalogues
+     this exact drift, and D014 blessed a view carrying the *identical predicate
+     on the identical two tables*.
+  3. Action items for me, listed below.
+  4. **Route: right, and my argument for it was partly wrong.** I wrote in §5.2
+     that the rejected drop-and-replace route would have denied configuration
+     (b). **Measured, that is false.** On a re-teamed student the rejected route
+     also grants the former team (the stale row reads `left_on is null`, so a
+     memberships-only test grants it too) **and additionally removes their
+     CURRENT team's events and sessions**, because the bridge only fires for a
+     student with no membership rows at all:
+
+     | re-teamed student | former team A | current team B |
+     | -- | -- | -- |
+     | shipped only (today) | 0 / 0 | 1 / 1 |
+     | **shipped + additive (adopted)** | **1 / 1** | **1 / 1** |
+     | memberships-only + bridge (rejected) | **1 / 1** | **0 / 0** |
+
+     So (b) is **route-independent and data-caused** — no policy reading
+     `left_on is null` can tell a stale backfill row from a live membership.
+     The adopted route is not a trade; on the only reachable configuration it is
+     **strictly better on both axes**. "The packet reached the right answer on a
+     partly wrong argument."
