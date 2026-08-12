@@ -1266,9 +1266,16 @@ function NextUpRowItem({
 }: {
   row: NextUpRow;
   onCantGo: (sessionId: string, status: RsvpStatus) => void | Promise<void>;
-  /** GAM-304 -- disables this row's `MoreMenu` trigger while ANY row's write
-   * is in flight (`Button.isDisabled` -- module doc §1d, packet
-   * `astryx-api.md:4822`). `MoreMenu` has no `isLoading` concept of its own
+  /** GAM-320 -- disables this row's "Can't go" menu ITEM (per-entry
+   * `DropdownMenuOption.isDisabled`, packet `astryx-api.md:1884`) while ANY
+   * row's write is in flight, not the `MoreMenu` trigger itself. The
+   * trigger-level `isDisabled` this replaced (GAM-304) blocked mouse clicks
+   * via `Button.isDisabled` but left `ArrowDown` able to open the menu
+   * anyway (`Button` only suppresses Enter/Space when aria-disabled --
+   * verified directly in `Button.js`/`DropdownMenu.js`), so the two input
+   * methods disagreed about whether the row was operable. Per-entry disable
+   * makes both agree: the menu opens either way, and the guarded action does
+   * nothing either way. `MoreMenu` has no `isLoading` concept of its own
    * (verified directly against its real prop table), so the clicked-row
    * spinner affordance lives on `SignupOpportunityRowItem`'s `Button`s only. */
   isRsvpSubmitting: boolean;
@@ -1278,17 +1285,17 @@ function NextUpRowItem({
   );
 
   const menuItems: DropdownMenuOption[] = [
-    { label: "Can't go", onClick: () => onCantGo(row.sessionId, 'declined') },
+    {
+      label: "Can't go",
+      onClick: () => onCantGo(row.sessionId, 'declined'),
+      isDisabled: isRsvpSubmitting,
+    },
   ];
 
   const endContent = row.isOutreachGoing ? (
     <HStack gap={2} vAlign="center">
       <Badge variant="neutral" label="Going" />
-      <MoreMenu
-        items={menuItems}
-        label={`Actions for ${row.title}`}
-        isDisabled={isRsvpSubmitting}
-      />
+      <MoreMenu items={menuItems} label={`Actions for ${row.title}`} />
     </HStack>
   ) : undefined;
 
