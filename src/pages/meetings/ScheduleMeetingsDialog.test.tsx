@@ -1345,6 +1345,115 @@ describe('<ScheduleMeetingsDialog /> archived teams -- edit mode (GAM-305 criter
     expect(payload.event.teamIds).not.toBeNull();
     expect(payload.event.teamIds).toContain('team-archived');
   });
+
+  it('criterion 12: an untouched save preserves an explicit stored scope, even when it equals every selectable team (mutation: remove the untouched-save short-circuit so the save falls through to `resolveTeamScope`)', async () => {
+    const onSaveMeetingSeries = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={ARCHIVED_TEST_TEAMS}
+          initialData={{
+            eventId: 'event-active-only-scope',
+            title: 'Active-only meeting',
+            teamIds: ['team-active'],
+            locationName: 'Robotics Lab',
+            description: '',
+            sessions: [EDIT_SESSION],
+          }}
+          onSaveMeetingSeries={onSaveMeetingSeries}
+        />,
+      );
+    });
+
+    // No interaction with the Team scope control at all -- this is the
+    // regression: `['team-active']` equals the NARROWED `allTeamIds` (the
+    // archived `team-archived` is excluded), so re-deriving via
+    // `resolveTeamScope` unconditionally would wrongly collapse it to the
+    // `null` "all teams" sentinel.
+    await confirmSave();
+
+    expect(onSaveMeetingSeries).toHaveBeenCalledTimes(1);
+    const payload = onSaveMeetingSeries.mock.calls[0][0] as SaveMeetingSeriesPayload;
+    expect(payload.event.teamIds).toEqual(['team-active']);
+  });
+
+  it('criterion 13: touching the control still re-derives the saved scope from the current selection (mutation: make the short-circuit unconditional, ignoring the touched flag)', async () => {
+    const onSaveMeetingSeries = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={ARCHIVED_TEST_TEAMS}
+          initialData={{
+            eventId: 'event-active-only-scope',
+            title: 'Active-only meeting',
+            teamIds: ['team-active'],
+            locationName: 'Robotics Lab',
+            description: '',
+            sessions: [EDIT_SESSION],
+          }}
+          onSaveMeetingSeries={onSaveMeetingSeries}
+        />,
+      );
+    });
+
+    // The stored scope (`['team-active']`) already equals every selectable
+    // team, so the control opens fully ticked. One real "Select all" click
+    // clears it (`MultiSelector.handleSelectAll`'s own `allEnabledSelected`
+    // branch) -- a genuine interaction that must latch `teamScopeTouched` and
+    // make the save re-derive from the now-empty selection instead of
+    // writing the originally stored `['team-active']` back verbatim.
+    openTeamScopeDropdown();
+    const selectAllOption = findTeamScopeOption('Select all');
+    expect(selectAllOption).toBeDefined();
+    clickButton(selectAllOption as HTMLElement);
+
+    await confirmSave();
+
+    expect(onSaveMeetingSeries).toHaveBeenCalledTimes(1);
+    const payload = onSaveMeetingSeries.mock.calls[0][0] as SaveMeetingSeriesPayload;
+    expect(payload.event.teamIds).toEqual([]);
+  });
+
+  it('criterion 13 (collapse case): after touching the control, re-selecting every selectable team still collapses to null', async () => {
+    const onSaveMeetingSeries = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={ARCHIVED_TEST_TEAMS}
+          initialData={{
+            eventId: 'event-active-only-scope',
+            title: 'Active-only meeting',
+            teamIds: ['team-active'],
+            locationName: 'Robotics Lab',
+            description: '',
+            sessions: [EDIT_SESSION],
+          }}
+          onSaveMeetingSeries={onSaveMeetingSeries}
+        />,
+      );
+    });
+
+    openTeamScopeDropdown();
+    let selectAllOption = findTeamScopeOption('Select all');
+    clickButton(selectAllOption as HTMLElement); // clears -- touches the control
+    selectAllOption = findTeamScopeOption('Select all');
+    clickButton(selectAllOption as HTMLElement); // re-selects every selectable team
+
+    await confirmSave();
+
+    expect(onSaveMeetingSeries).toHaveBeenCalledTimes(1);
+    const payload = onSaveMeetingSeries.mock.calls[0][0] as SaveMeetingSeriesPayload;
+    // Touched AND every selectable team chosen -- re-derived via
+    // `resolveTeamScope`, which collapses to the `null` sentinel, NOT the
+    // originally stored `['team-active']` array.
+    expect(payload.event.teamIds).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------

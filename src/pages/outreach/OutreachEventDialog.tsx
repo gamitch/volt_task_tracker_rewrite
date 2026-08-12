@@ -1027,6 +1027,19 @@ export function OutreachEventDialog({
   const [sessionDetails, setSessionDetails] = useState<Record<string, OutreachSessionDetail>>({});
 
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>(allTeamIds);
+  // GAM-305 fix round 2 -- tracks whether the coach has actually interacted
+  // with the Team scope control this edit session. `allTeamIds` is now the
+  // NARROWED (selectable-only) list (§3c), so an untouched EDIT-mode save
+  // whose stored scope happens to equal every selectable team (e.g. a stored
+  // `['team-active']` with an archived `team-legacy` on the roster) would
+  // otherwise collapse through `resolveTeamScope` to the `null` "all teams"
+  // sentinel on a save the coach never touched, silently granting the
+  // archived team's students visibility/participation. An untouched edit-mode
+  // save instead writes the stored `teamIds` back verbatim (see
+  // `handleSubmit`). Reset alongside every other selection default, in
+  // `resetForm()`'s single shared reset point. Keeps this file byte-identical
+  // in shape to `ScheduleMeetingsDialog.tsx`'s own `teamScopeTouched`.
+  const [teamScopeTouched, setTeamScopeTouched] = useState(false);
   // GAM-305 §3d (round 1 finding F4) -- narrowing the options list to
   // `selectableTeams` alone would make an already-scoped archived team
   // render as a raw uuid in the trigger (`MultiSelector` falls back to the
@@ -1112,6 +1125,9 @@ export function OutreachEventDialog({
       setShareToCalendarFeed(true);
     }
     setSubmitError(null);
+    // GAM-305 fix round 2 -- single shared reset point (mirrors
+    // `ScheduleMeetingsDialog.tsx`'s own `teamScopeTouched` reset).
+    setTeamScopeTouched(false);
   }
 
   // Nothing persists across opens -- every fresh open starts from either
@@ -1199,6 +1215,14 @@ export function OutreachEventDialog({
     onOpenChange(false);
   }
 
+  // GAM-305 fix round 2 -- wraps the MultiSelector's own `onChange` so any
+  // real coach interaction latches `teamScopeTouched`. Mirrors
+  // `ScheduleMeetingsDialog.tsx`'s own `handleTeamScopeChange`.
+  function handleTeamScopeChange(value: string[]): void {
+    setTeamScopeTouched(true);
+    setSelectedTeamIds(value);
+  }
+
   async function handleSubmit(): Promise<void> {
     if (!isValid) return; // extra guard; the button is already natively disabled.
     setIsSubmitting(true);
@@ -1213,7 +1237,14 @@ export function OutreachEventDialog({
         type,
         countsParticipation: effectiveFlags.countsParticipation,
         countsVolunteerHours: effectiveFlags.countsVolunteerHours,
-        teamIds: resolveTeamScope(selectedTeamIds, allTeamIds),
+        // GAM-305 fix round 2 -- an untouched edit-mode save writes the
+        // originally stored scope back verbatim instead of re-deriving it
+        // through `resolveTeamScope` against the now-narrowed `allTeamIds`
+        // (see `teamScopeTouched`'s own doc comment above).
+        teamIds:
+          initialEvent !== undefined && !teamScopeTouched
+            ? initialEvent.teamIds
+            : resolveTeamScope(selectedTeamIds, allTeamIds),
         adultVolunteersCount,
         adultVolunteerHours,
         shareToCalendarFeed,
@@ -1532,7 +1563,7 @@ export function OutreachEventDialog({
                     disabled: team.archived,
                   }))}
                   value={selectedTeamIds}
-                  onChange={setSelectedTeamIds}
+                  onChange={handleTeamScopeChange}
                   hasSelectAll
                   triggerDisplay="labels"
                 />
