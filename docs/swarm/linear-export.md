@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-12T17:46:56.126Z from team `Gamitch`.
+Exported 2026-08-12T18:08:12.067Z from team `Gamitch`.
 
 - **335** issues (242 archived)
-- **46** not yet completed or cancelled
+- **45** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -50,7 +50,6 @@ Exported 2026-08-12T17:46:56.126Z from team `Gamitch`.
 | [GAM-316](https://linear.app/gamitch/issue/GAM-316/item-19-requires-recording-the-premise-gate-verdict-the-dispatch-path) | — | Backlog | provenance/other tier/unreviewed | Item 19 requires recording the premise-gate verdict; the dispatch path has no mechanism, so the first real one lived only in a 30-day artifact |
 | [GAM-317](https://linear.app/gamitch/issue/GAM-317/an-escalated-row-has-no-reply-address-gatehuman-is-machine-settable) | — | Backlog | provenance/other tier/unreviewed | An escalated row has no reply address: `gate/human` is machine-settable, hand-clearable only, and sends the owner no notification |
 | [GAM-318](https://linear.app/gamitch/issue/GAM-318/studenthomes-per-row-rsvp-spinner-can-never-render-isloading-is-dead) | — | Backlog | area/w5 tier/standard | StudentHome's per-row RSVP spinner can never render — `isLoading` is dead code and its comment says otherwise |
-| [GAM-320](https://linear.app/gamitch/issue/GAM-320/arrowdown-opens-the-next-up-rows-aria-disabled-moremenu-mid-write) | — | Backlog | area/w5 tier/fast | ArrowDown opens the Next-up row's `aria-disabled` MoreMenu mid-write, while the mouse is correctly blocked |
 | [GAM-321](https://linear.app/gamitch/issue/GAM-321/the-opus-orchestrator-runs-the-gates-itself-238-bash-calls-and-checker) | — | Backlog | provenance/other tier/unreviewed | The opus orchestrator runs the gates itself: 238 Bash calls, and `checker-tests` is pinned haiku to do exactly that |
 | [GAM-323](https://linear.app/gamitch/issue/GAM-323/agentsmd-tells-every-agent-a-branch-name-identifier-does-not-close-its) | — | Backlog | provenance/other tier/standard | AGENTS.md tells every agent a branch-name identifier does not close its issue — measured, it closes |
 | [GAM-324](https://linear.app/gamitch/issue/GAM-324/three-documents-state-the-protected-files-rule-and-all-three-disagree) | — | Backlog | provenance/other tier/unreviewed | Three documents state the protected-files rule and all three disagree — on who is bound, who owns, and which paths |
@@ -348,6 +347,7 @@ Exported 2026-08-12T17:46:56.126Z from team `Gamitch`.
 | [GAM-314](https://linear.app/gamitch/issue/GAM-314/a-dispatched-run-reports-success-while-its-work-is-still-running-in) | — | Done | A dispatched run reports `success` while its work is still "running in the background" — and the process takes it |
 | [GAM-315](https://linear.app/gamitch/issue/GAM-315/any-branch-named-claudegam-nnn-closes-that-issue-on-merge-item-28f) | — | Done | Any branch named `claude/gam-nnn-*` closes that issue on merge — item 28f says it only links, and that is false here |
 | [GAM-319](https://linear.app/gamitch/issue/GAM-319/a-failed-rsvp-save-tells-the-user-couldnt-load-this-data-read-copy-on) | — | Done | A failed RSVP save tells the user "Couldn't load this data" — read copy on a write path |
+| [GAM-320](https://linear.app/gamitch/issue/GAM-320/arrowdown-opens-the-next-up-rows-aria-disabled-moremenu-mid-write) | — | Done | ArrowDown opens the Next-up row's `aria-disabled` MoreMenu mid-write, while the mouse is correctly blocked |
 | [GAM-322](https://linear.app/gamitch/issue/GAM-322/three-unscoped-linear-git-automations-are-live-where-item-28g-asked) | — | Done | Three unscoped Linear git automations are live where item 28g asked for one — `start → In Progress` is the rule that moved GAM-304 backwards |
 | [GAM-325](https://linear.app/gamitch/issue/GAM-325/build-the-explicit-linear-closer-pr-merge-declares-its-issue-one-sync) | — | Done | Build the explicit Linear closer: PR merge declares its issue, one sync writes the state, every refusal is named — replacing the last semantic automation |
 | [GAM-326](https://linear.app/gamitch/issue/GAM-326/an-unfinished-dispatch-run-can-turn-its-own-job-green-by-moving-the) | — | Done | An unfinished dispatch run can turn its own job green by moving the issue to `Todo` — which re-dispatches it four seconds later |

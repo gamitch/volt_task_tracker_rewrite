@@ -1,6 +1,6 @@
 {
   "meta": {
-    "exportedAt": "2026-08-12T17:46:56.126Z",
+    "exportedAt": "2026-08-12T18:08:12.067Z",
     "team": "Gamitch",
     "teamKey": "GAM",
     "issueCount": 335,
@@ -5783,8 +5783,8 @@
       "identifier": "GAM-320",
       "legacyId": null,
       "title": "ArrowDown opens the Next-up row's `aria-disabled` MoreMenu mid-write, while the mouse is correctly blocked",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "Done",
+      "stateType": "completed",
       "archived": false,
       "labels": [
         "area/w5",
@@ -5794,7 +5794,7 @@
       "blockedBy": [],
       "blocks": [],
       "createdAt": "2026-08-10T13:33:09.176Z",
-      "completedAt": null,
+      "completedAt": "2026-08-12T18:07:56.839Z",
       "canceledAt": null,
       "url": "https://linear.app/gamitch/issue/GAM-320/arrowdown-opens-the-next-up-rows-aria-disabled-moremenu-mid-write",
       "description": "While an RSVP write is in flight, the Next-up row's \"...\" menu is disabled for the mouse and open to the keyboard. Clicking the trigger does nothing (correct); pressing **ArrowDown** on it opens the menu anyway.\n\nNo data is at risk. The menu's action is guarded a second time, and a write launched from the opened menu is swallowed — measured, the write count stayed at **1**. The window is sub-second. What is wrong is that the same control answers two input methods differently, which is an accessibility consistency defect rather than a correctness one.\n\n## Why it happens\n\nThe row uses `MoreMenu`'s menu-level `isDisabled`, which `astryx-api.md:4822` documents as disabling *the trigger*. That maps to `Button`'s disabled handling, and `@astryxdesign/core`'s `Button` only suppresses **Enter and Space** (`Button.js:372-380`); every other key is forwarded to `DropdownMenu`'s `handleButtonKeyDown`, which opens on ArrowDown. Mouse clicks are stopped earlier (`Button.js:355` early-returns before `props.onClick`), hence the asymmetry.\n\nSo `isDisabled` on this component means \"not clickable\", not \"not operable\".\n\n## Where it lives\n\n| File | Line | What it does |\n| -- | -- | -- |\n| `StudentHome.tsx` | 1301 | the `MoreMenu` on a Next-up row |\n| `StudentHome.tsx` | 1283-1286 | the comment choosing the menu-level prop, and why |\n| `node_modules/@astryxdesign/core/dist/Button/Button.js` | 355, 372-380 | click blocked, ArrowDown forwarded |\n\n## The one constraint\n\n**Two fixes, and they are not equivalent.** Per-entry `DropdownMenuOption.isDisabled` disables the *action* and would not have this gap, but it changes what the user sees: the menu opens and shows an unavailable item, rather than the row appearing inert. The menu-level prop was chosen deliberately to match \"every other control disables while any write is in flight\", so swapping it is a UX decision, not a refactor.\n\nThe alternative is to leave the code and file the keydown composition upstream against `@astryxdesign/core`.\n\nDo **not** reach for a native `disabled` attribute. The trigger currently renders `aria-disabled=\"true\"` with `tabIndex=0`, which was measured to preserve focus order and create no focus trap; a native `disabled` would remove it from the tab sequence and is the worse accessibility outcome.\n\n## Size and tier\n\nOne prop on one component, or one upstream bug report. No write path, no schema.\n\nSuggested tier **FAST** if the decision is \"swap to the per-entry prop\" — but the decision itself is the work, and item 2 binds any Astryx prop to `docs/swarm/astryx-api.md`.\n\n## Suggested priority: low\n\n1. **No data risk, measured.** The `isRsvpSubmitting` guard held and the concurrency guard kept the write count at 1 even when the menu was opened by keyboard and its item activated.\n2. **The window is the duration of one network write**, and only a keyboard user who presses ArrowDown during it is affected.\n3. **Nothing is blocked on it.**\n\nAgainst that: item 15 makes accessibility a shipping requirement and keyboard path failures on core flows a BLOCKER. This is not a keyboard *failure* — the keyboard user gets more access, not less, and cannot corrupt anything — so it does not meet that bar. Worth resolving in the same pass as the next Astryx accessibility review rather than on its own.\n\n## Verification note\n\nFound by `checker-reviewer` during GAM-304's HEAVY acceptance check. It is exactly the trade-off GAM-304's packet named in its own least-confident decision #2 (`docs/swarm/active/GAM-304-worker-packet.md:500-507`) — which is item 19d working as intended: the author declared the doubt, and the check found the thing the doubt predicted.\n\nMeasured in the DOM, not read from source: mouse click → `aria-expanded=false` (blocked); ArrowDown → `aria-expanded=true` (opens); trigger renders `aria-disabled=\"true\"`, `nativeDisabled=false`, `tabIndex=0`, `focusable=true`.\n\nThe checker also recorded that its *first* probe reported \"menu opened\" for the mouse path and that this was a **false positive** — the `role=\"menu\"` popover node is always present in the jsdom DOM, so `aria-expanded` is the real signal. That correction is kept here rather than deleted, because it is the evidence the check actually happened.\n\nLine numbers re-checked at `4460dec` on `claude/gam-304-rsvp-write` on 2026-08-10. **They refer to the GAM-304 branch, not to** `main` — GAM-304 has not merged as this is written."
