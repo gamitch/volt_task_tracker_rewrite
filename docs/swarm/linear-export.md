@@ -4,9 +4,9 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-12T19:07:07.561Z from team `Gamitch`.
+Exported 2026-08-12T21:46:13.898Z from team `Gamitch`.
 
-- **335** issues (242 archived)
+- **336** issues (242 archived)
 - **44** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
@@ -42,7 +42,6 @@ Exported 2026-08-12T19:07:07.561Z from team `Gamitch`.
 | [GAM-297](https://linear.app/gamitch/issue/GAM-297/t512-workflowsmd-reports-three-different-open-row-totals-60-42-36-item) | T512 | Backlog | area/w2 tier/unreviewed | T512 — `WORKFLOWS.md` reports three different open-row totals (~60, 42, 36); item 29 moved the source to the Linear export |
 | [GAM-299](https://linear.app/gamitch/issue/GAM-299/t806-eventsevent-sessions-rls-scopes-by-the-legacy-studentsteam-id-so) | T806 | Backlog | area/w5 tier/unreviewed | T806 — `events`/`event_sessions` RLS scopes by the legacy `students.team_id`, so a dual-team student never receives their second team's events |
 | [GAM-300](https://linear.app/gamitch/issue/GAM-300/t807-two-loaders-still-apply-the-greatestx-1-floor-t509-removed-and) | T807 | Backlog | area/w5 tier/unreviewed | T807 — Two loaders still apply the `greatest(x, 1)` floor T509 removed, and three row types still declare `participation_pct` non-nullable |
-| [GAM-305](https://linear.app/gamitch/issue/GAM-305/t615-the-schedule-meetings-team-picker-offers-archived-teams-the) | T615 | Backlog | area/w3 tier/unreviewed | T615 — The schedule-meetings team picker offers archived teams; the roster picker excludes them |
 | [GAM-306](https://linear.app/gamitch/issue/GAM-306/t616-no-event-records-who-created-it-so-outreach-detail-permanently) | T616 | Backlog | area/w3 tier/unreviewed | T616 — No event records who created it, so outreach detail permanently reads "Unknown creator" |
 | [GAM-311](https://linear.app/gamitch/issue/GAM-311/kpi-viewssqls-two-views-never-got-t801s-catalog-comment-rls-correction) | — | Backlog | tier/unreviewed | kpi_views.sql's two views never got T801's catalog-comment RLS correction -- D010 chose header-prose only |
 | [GAM-312](https://linear.app/gamitch/issue/GAM-312/two-live-dispatch-policies-exist-only-as-file-comments-no-constitution) | — | Backlog | provenance/other tier/unreviewed | Two live dispatch policies exist only as file comments — no constitution item, so nothing triages them |
@@ -58,6 +57,7 @@ Exported 2026-08-12T19:07:07.561Z from team `Gamitch`.
 | [GAM-331](https://linear.app/gamitch/issue/GAM-331/verify-importmetamain-is-true-in-the-supabase-edge-runtime-after-the) | — | Backlog | gate/unverified tier/fast | Verify `import.meta.main` is true in the Supabase Edge Runtime after the next `linear-dispatch` deploy |
 | [GAM-333](https://linear.app/gamitch/issue/GAM-333/a-dispatched-run-can-push-a-branch-but-cannot-open-a-pr-agentsmd) | — | Backlog | tier/fast | A dispatched run can push a branch but cannot open a PR — `AGENTS.md` records two walls and there are three |
 | [GAM-334](https://linear.app/gamitch/issue/GAM-334/the-declaration-gate-cannot-express-second-half-of-a-two-pr-row-so) | — | Backlog | provenance/other tier/fast | The declaration gate cannot express "second half of a two-PR row", so every workflow-touching row will go red on the PR that completes it |
+| [GAM-336](https://linear.app/gamitch/issue/GAM-336/two-unguarded-lines-in-the-archived-team-scope-fix-reinstate-a-data) | — | Backlog | area/w3 provenance/checker tier/standard | Two unguarded lines in the archived-team scope fix reinstate a data-correctness MAJOR if deleted |
 
 ## Closed and cancelled
 
@@ -339,6 +339,7 @@ Exported 2026-08-12T19:07:07.561Z from team `Gamitch`.
 | [GAM-302](https://linear.app/gamitch/issue/GAM-302/9-closed-ledger-rows-are-sitting-in-linear-as-pickable-backlog-because) | — | Done | ~9 closed ledger rows are sitting in Linear as pickable Backlog, because their closure never touched the Status column |
 | [GAM-303](https://linear.app/gamitch/issue/GAM-303/t808-students-and-parents-see-raw-float-hours-39999983633333334-100-h) | T808 | Done | T808 — Students and parents see raw float hours (`3.9999983633333334 / 100 h`) beside a rounded percentage |
 | [GAM-304](https://linear.app/gamitch/issue/GAM-304/t809-studenthomes-sign-up-cant-go-control-writes-nothing-and-says) | T809 | Done | T809 — `StudentHome`'s Sign up / Can't go control writes nothing and says nothing — a documented deferral with no follow-up row |
+| [GAM-305](https://linear.app/gamitch/issue/GAM-305/t615-the-schedule-meetings-team-picker-offers-archived-teams-the) | T615 | Done | T615 — The schedule-meetings team picker offers archived teams; the roster picker excludes them |
 | [GAM-307](https://linear.app/gamitch/issue/GAM-307/t1300-sweep-the-four-non-fixed-closures-for-residual-work-left-behind) | T1300 | Done | T1300 — Sweep the four non-"fixed" closures for residual work left behind when the row closed |
 | [GAM-308](https://linear.app/gamitch/issue/GAM-308/coachhomes-goal-projection-row-prints-the-same-raw-float-hours-t808) | — | Done | CoachHome's goal-projection row prints the same raw float hours T808 fixed for students and parents |
 | [GAM-309](https://linear.app/gamitch/issue/GAM-309/replaypy-cannot-read-python-test-runner-output-so-mutating-a-python) | — | Done | replay.py cannot read Python test-runner output, so mutating a Python file needs a hand-written shim |
