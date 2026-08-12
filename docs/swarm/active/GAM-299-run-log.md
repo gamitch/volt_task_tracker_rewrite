@@ -202,3 +202,20 @@ line names.
     38 the worker reported and this log repeated. 37 is the number to carry.
 - **Fixing MAJOR-1: filing the item-20 deferral in Linear first, so the sentence
   the migration ships is true when it cites an identifier.**
+- **MAJOR-1 fixed.** Filed the item-20 deferral as **GAM-340** (`Backlog` — item
+  28a makes promotion to `Todo` the owner's signal, not mine), written through
+  `.claude/skills/linear-task-writing` per item 30: leads with the defect a user
+  sees, states a priority and the trigger that ends the deferral, and records the
+  GAM-298/T705 discrepancy so the owner can reopen that row and close GAM-340 as
+  a duplicate if they prefer. Also filed **GAM-341** for the checker's MINOR-2.
+  The migration comment now cites both identifiers instead of claiming a filing
+  that did not exist.
+- **Re-ran `tests/rls/run.sh` after the comment edit on a fresh scratch cluster:
+  exit 0, `ALL CASES PASSED`, and the count is 37 PASS / 0 FAIL** — confirming
+  the checker's NIT-1 against the worker's reported 38. 37 is the number that
+  goes in the PR.
+- **Dispatching `boss-arbiter` (opus, `run_in_background: false`)** for the
+  checker's MINOR-1: whether §5.2(b)'s former-team over-grant needs a dispute-log
+  entry and an owner ruling under the D013 precedent. Packet §4 committed to
+  treating this disagreement as an escalation rather than a worker rework.
+  *If this line is the last one in this file, the run died holding this subagent.*

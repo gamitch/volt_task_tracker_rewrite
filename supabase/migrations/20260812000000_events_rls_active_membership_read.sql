@@ -114,9 +114,17 @@
 --   fixes (a). Dropping them additionally requires adding `student_teams` rows
 --   to `tests/rls/seed.sql`, because the existing fixture students have none
 --   (the backfill runs at migration time, before any seed) and would otherwise
---   lose all event visibility. That follow-up is filed as a Linear issue, not
---   left in this comment (constitution item 20); check GAM-298 (T705) first,
---   which reads Done while the writer is still absent.
+--   lose all event visibility. That follow-up is filed as GAM-340, not left in
+--   this comment (constitution item 20). GAM-340 also records why it is a new
+--   row: GAM-299's text names T705 as "the open row for that missing writer",
+--   but T705 is GAM-298 and it reads Done while no writer exists, so the owner
+--   may prefer to reopen GAM-298 and close GAM-340 as a duplicate.
+--
+--   A second, narrower follow-up is GAM-341: removing the `my_student_ids()`
+--   test from the policies below currently leaves the assertion suite green,
+--   because `students`' own RLS (coupling 2) already does that filtering. That
+--   is an equivalent mutation today and a real hole if `students`' read policy
+--   is ever widened, which `20260717000002_rls.sql:90-92` anticipates.
 --
 -- ---------------------------------------------------------------------------
 -- PERFORMANCE, disclosed rather than discovered: this route STACKS a subplan
