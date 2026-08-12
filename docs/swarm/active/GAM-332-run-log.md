@@ -38,3 +38,11 @@ Tier label at dispatch: `tier/fast`.
   PASS (0 errors, 377 pre-existing warnings), vitest full PASS (89 files /
   2359 tests, baseline 2358, +1), vitest scripts/ PASS (9 files / 235
   tests, baseline 234, +1). VERDICT: PASS — all six gates exit 0.
+- 2026-08-12: PR opened: https://github.com/gamitch/volt_task_tracker_rewrite/pull/166
+  (`Closes GAM-332` as body line 1, branch name also carries the identifier,
+  `Linear-Issue: GAM-332` trailer on every commit). No `.github/workflows/**`
+  files touched, so no dispatch-wall handling needed.
+- 2026-08-12: Issue moved `In Progress → In Review` via `issueUpdate`, read
+  back and confirmed `state.name === "In Review"`. Per item 28e this agent
+  does not move it to Done — the PR merge and team automation do that. Run
+  complete.
