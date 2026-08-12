@@ -832,6 +832,14 @@ export interface TeamOption {
    * consumer (`AttendancePanel.tsx`'s resolver) is the one place that is
    * handled. */
   color: string;
+  /** T615/GAM-305 -- `teams.archived boolean not null default false`
+   * (`20260716000000_identity_roster.sql`), REQUIRED for the same reason
+   * `color` above is required: `tsc` must police every construction site so
+   * a loader that forgets to populate it cannot silently fall back to
+   * "not archived" and re-offer an archived team. See
+   * `src/lib/teams/archivedTeams.ts` for the one place archived teams are
+   * excluded from a selectable option list. */
+  archived: boolean;
 }
 
 export interface ProfileOption {
@@ -948,8 +956,8 @@ export interface SessionAttendanceGroups {
 const PLACEHOLDER_SEASON_ID = 'season-placeholder-current';
 
 const FIXTURE_TEAMS: readonly TeamOption[] = [
-  { id: 'team-ravens', name: 'Ravens', color: 'blue' },
-  { id: 'team-titans', name: 'Titans', color: 'green' },
+  { id: 'team-ravens', name: 'Ravens', color: 'blue', archived: false },
+  { id: 'team-titans', name: 'Titans', color: 'green', archived: false },
 ];
 
 const FIXTURE_PROFILES: readonly ProfileOption[] = [

@@ -1057,8 +1057,8 @@ describe('<MeetingsList /> coach view', () => {
       return {
         ...base,
         teams: [
-          { id: 'd4444444-4444-4444-8444-444444444444', name: 'Photon Phalanx' },
-          { id: 'd5555555-5555-4555-8555-555555555555', name: 'Kinetic Krew' },
+          { id: 'd4444444-4444-4444-8444-444444444444', name: 'Photon Phalanx', archived: false },
+          { id: 'd5555555-5555-4555-8555-555555555555', name: 'Kinetic Krew', archived: false },
         ],
       };
     }

@@ -1035,8 +1035,8 @@ const FIXTURE_STUDENTS: readonly OutreachStudentFixture[] = [
  * deliberately non-uuid strings and the whole root cause this task exists to
  * fix. Names are fabricated (constitution item 6); nothing asserts on them. */
 const FIXTURE_TEAMS: readonly OutreachTeamOption[] = [
-  { id: 'b1c11111-1111-4111-8111-111111111111', name: 'Crimson Circuit' },
-  { id: 'b1c22222-2222-4222-8222-222222222222', name: 'Voltage Vanguard' },
+  { id: 'b1c11111-1111-4111-8111-111111111111', name: 'Crimson Circuit', archived: false },
+  { id: 'b1c22222-2222-4222-8222-222222222222', name: 'Voltage Vanguard', archived: false },
 ];
 
 const FIXTURE_GOAL_CONFIG: OutreachGoalConfig = {

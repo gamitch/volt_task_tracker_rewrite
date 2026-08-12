@@ -551,6 +551,7 @@ interface TeamDbRow {
   id: string;
   name: string;
   color: string;
+  archived: boolean;
 }
 
 interface ProfileDbRow {
@@ -720,7 +721,7 @@ function mapGuardianLinkDbRowToGuardianLinkRow(row: GuardianLinkDbRow): Guardian
 /** T143 -- `color` carried through unchanged (required field, module doc
  * above the `TeamDbRow` interface). */
 function mapTeamDbRowToTeamOption(row: TeamDbRow): TeamOption {
-  return { id: row.id, name: row.name, color: row.color };
+  return { id: row.id, name: row.name, color: row.color, archived: row.archived };
 }
 
 function mapProfileDbRowToProfileOption(row: ProfileDbRow): ProfileOption {
@@ -952,9 +953,12 @@ async function queryActiveSeasonId(
  * selected the column at all, so it never reached `AttendancePanel`'s chips
  * regardless of what a coach set in `TeamsTab`). */
 async function queryAllTeams(client: SupabaseClient): Promise<LoaderQueryResult<TeamDbRow[]>> {
-  const result = await client.from('teams').select('id, name, color').order('sort_order', {
-    ascending: true,
-  });
+  const result = await client
+    .from('teams')
+    .select('id, name, color, archived')
+    .order('sort_order', {
+      ascending: true,
+    });
   return { data: (result.data as TeamDbRow[] | null) ?? null, error: result.error };
 }
 

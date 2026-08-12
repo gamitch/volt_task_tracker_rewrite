@@ -271,6 +271,10 @@ import {
 // T125 (UXP-09 / UXD-06) module doc 9 -- shared full-height sectioned-form
 // primitives, consumed by both this file and `OutreachEventDialog.tsx`.
 import { EventFormLayout, EventFormSection } from '../../components/forms/EventFormLayout';
+// GAM-305 (legacy T615) §3a/§3c -- the shared predicate that narrows
+// `allTeamIds`; the options list itself is derived separately (§3d) to keep
+// an already-scoped archived team visible-but-disabled.
+import { excludeArchivedTeams } from '../../lib/teams/archivedTeams';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase shapes of the real `events`/`event_sessions`
@@ -282,6 +286,12 @@ export type ScheduleMode = 'single' | 'weekly' | 'custom';
 export interface ScheduleTeamOption {
   id: string;
   name: string;
+  /** T615/GAM-305 -- `teams.archived boolean not null default false`
+   * (`20260716000000_identity_roster.sql`). REQUIRED, not optional: an
+   * optional field fails open (`undefined` reads as "not archived" and
+   * silently re-offers an archived team). See
+   * `src/lib/teams/archivedTeams.ts`. */
+  archived: boolean;
 }
 
 export interface CreateMeetingsEventPayload {
@@ -493,6 +503,12 @@ export function resolveTeamScope(
   selectedTeamIds: readonly string[],
   allTeamIds: readonly string[],
 ): string[] | null {
+  // GAM-305 §3d-bis -- when every team on the roster is archived, `allTeamIds`
+  // is `[]`, so the `allTeamIds.length > 0` guard below can never fire and an
+  // untouched save would wrongly write `[]` instead of preserving the
+  // pre-fix `null` ("all teams") sentinel. `[]` means "no one", which is
+  // never what an untouched save intends.
+  if (allTeamIds.length === 0 && selectedTeamIds.length === 0) return null;
   const allSelected =
     allTeamIds.length > 0 &&
     selectedTeamIds.length === allTeamIds.length &&
@@ -829,13 +845,46 @@ export function ScheduleMeetingsDialog({
   initialData,
   onSaveMeetingSeries = defaultOnSaveMeetingSeries,
 }: ScheduleMeetingsDialogProps): ReactNode {
-  const allTeamIds = useMemo(() => teams.map((team) => team.id), [teams]);
+  // GAM-305 §3c -- one filtered list feeds both `allTeamIds` (the
+  // "all teams" sentinel comparison) and, via `teamOptions` below, the
+  // rendered picker. `selectableTeams`/`allTeamIds` never include an
+  // archived team, so the edit-mode/create-mode resets that already read
+  // `allTeamIds` (below) automatically stop seeding one -- no second filter
+  // is added at those sites.
+  const selectableTeams = useMemo(() => excludeArchivedTeams(teams), [teams]);
+  const allTeamIds = useMemo(() => selectableTeams.map((team) => team.id), [selectableTeams]);
   // T510 -- present => edit mode (mirrors `OutreachEventDialog.tsx`'s own
   // `isEditMode = initialEvent !== undefined`).
   const isEditMode = initialData !== undefined;
 
   const [title, setTitle] = useState(DEFAULT_TITLE);
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>(allTeamIds);
+  // GAM-305 fix round 2 -- tracks whether the coach has actually interacted
+  // with the Team scope control this edit session. `allTeamIds` is now the
+  // NARROWED (selectable-only) list (§3c), so an untouched EDIT-mode save
+  // whose stored scope happens to equal every selectable team (e.g. a stored
+  // `['team-active']` with an archived `team-legacy` on the roster) would
+  // otherwise collapse through `resolveTeamScope` to the `null` "all teams"
+  // sentinel on a save the coach never touched, silently granting the
+  // archived team's students visibility/participation. An untouched edit-mode
+  // save instead writes the stored `teamIds` back verbatim (see
+  // `handleConfirmEditSave`). Reset alongside every other selection default,
+  // in `resetForm()`'s single shared reset point (mirrors `timeFieldsTouched`
+  // below).
+  const [teamScopeTouched, setTeamScopeTouched] = useState(false);
+  // GAM-305 §3d (round 1 finding F4) -- narrowing the options list to
+  // `selectableTeams` alone would make an already-scoped archived team
+  // render as a raw uuid in the trigger (`MultiSelector` falls back to the
+  // raw `value` when no option matches it). The options list is therefore
+  // selectable teams PLUS any team already selected, with the archived ones
+  // rendered `disabled` (§3d, R1 BLOCKER -- `disabled` is what stops
+  // `MultiSelector.handleSelectAll` from re-adding an archived team as a
+  // fully enabled row and widening the stored scope). Declared AFTER
+  // `selectedTeamIds` above -- it reads it.
+  const teamOptions = useMemo(
+    () => teams.filter((team) => !team.archived || selectedTeamIds.includes(team.id)),
+    [teams, selectedTeamIds],
+  );
   const [location, setLocation] = useState('');
   // T510 -- edit-mode-only field (rendered only when `isEditMode`).
   const [description, setDescription] = useState('');
@@ -923,6 +972,8 @@ export function ScheduleMeetingsDialog({
     // T611 -- single shared reset point (worker packet §3.4); NOT duplicated
     // inside either branch above.
     setTimeFieldsTouched(false);
+    // GAM-305 fix round 2 -- same shared reset point as `timeFieldsTouched`.
+    setTeamScopeTouched(false);
   }
 
   // Nothing persists across opens (module doc "Nothing persists" acceptance
@@ -1024,6 +1075,15 @@ export function ScheduleMeetingsDialog({
     setEndTime(value);
   }
 
+  // GAM-305 fix round 2 -- wraps the MultiSelector's own `onChange` so any
+  // real coach interaction (including a no-op re-selection of the same set,
+  // matching `MultiSelector`'s own `onChange`-only-fires-on-interaction
+  // contract cited at §3c) latches `teamScopeTouched`.
+  function handleTeamScopeChange(value: string[]): void {
+    setTeamScopeTouched(true);
+    setSelectedTeamIds(value);
+  }
+
   async function handleConfirmEditSave(): Promise<void> {
     if (pendingEditSave === null) return;
     const { eventId, desiredFutureSessions } = pendingEditSave;
@@ -1035,7 +1095,20 @@ export function ScheduleMeetingsDialog({
         eventId,
         event: {
           title: title.trim(),
-          teamIds: resolveTeamScope(selectedTeamIds, allTeamIds),
+          // GAM-305 fix round 2 -- an untouched edit-mode save writes the
+          // originally stored scope back verbatim instead of re-deriving it
+          // through `resolveTeamScope` against the now-narrowed `allTeamIds`
+          // (see `teamScopeTouched`'s own doc comment above). `initialData`
+          // is guaranteed defined on this path (`handleSubmit`'s edit-mode
+          // branch is the only caller that populates `pendingEditSave`), but
+          // TS can't see that across the closure boundary, so it is
+          // re-checked here explicitly.
+          teamIds:
+            initialData !== undefined && !teamScopeTouched
+              ? initialData.teamIds !== null
+                ? [...initialData.teamIds]
+                : null
+              : resolveTeamScope(selectedTeamIds, allTeamIds),
           locationName: location,
           description,
           address: '', // T510 -- always ignored by the update mutation; matches the create default.
@@ -1157,9 +1230,13 @@ export function ScheduleMeetingsDialog({
 
                 <MultiSelector
                   label="Team scope"
-                  options={teams.map((team) => ({ value: team.id, label: team.name }))}
+                  options={teamOptions.map((team) => ({
+                    value: team.id,
+                    label: team.name,
+                    disabled: team.archived,
+                  }))}
                   value={selectedTeamIds}
-                  onChange={setSelectedTeamIds}
+                  onChange={handleTeamScopeChange}
                   hasSelectAll
                   triggerDisplay="labels"
                 />
