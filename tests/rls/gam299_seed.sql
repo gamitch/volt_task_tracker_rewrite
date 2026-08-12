@@ -64,14 +64,16 @@ insert into auth.users (id, email) values
   ('c2990000-0000-0000-0000-000000000002', 'fixture.gam299.nomembership@example.com'),
   ('c2990000-0000-0000-0000-000000000003', 'fixture.gam299.leftteam@example.com'),
   ('c2990000-0000-0000-0000-000000000004', 'fixture.gam299.admin@example.com'),
-  ('c2990000-0000-0000-0000-000000000005', 'fixture.gam299.coach@example.com');
+  ('c2990000-0000-0000-0000-000000000005', 'fixture.gam299.coach@example.com'),
+  ('c2990000-0000-0000-0000-000000000006', 'fixture.gam299.reteamed@example.com');
 
 insert into profiles (id, display_name, email, role) values
   ('c2990000-0000-0000-0000-000000000001', 'Fixture Dual Team Student', 'fixture.gam299.dual@example.com', 'student'),
   ('c2990000-0000-0000-0000-000000000002', 'Fixture No Membership Student', 'fixture.gam299.nomembership@example.com', 'student'),
   ('c2990000-0000-0000-0000-000000000003', 'Fixture Left Team Student', 'fixture.gam299.leftteam@example.com', 'student'),
   ('c2990000-0000-0000-0000-000000000004', 'Fixture GAM299 Admin', 'fixture.gam299.admin@example.com', 'admin'),
-  ('c2990000-0000-0000-0000-000000000005', 'Fixture GAM299 Coach', 'fixture.gam299.coach@example.com', 'coach');
+  ('c2990000-0000-0000-0000-000000000005', 'Fixture GAM299 Coach', 'fixture.gam299.coach@example.com', 'coach'),
+  ('c2990000-0000-0000-0000-000000000006', 'Fixture Re-teamed Student', 'fixture.gam299.reteamed@example.com', 'student');
 
 -- ---------------------------------------------------------------------------
 -- teams (Alpha = the legacy `students.team_id` for all three students below;
@@ -82,9 +84,24 @@ insert into teams (id, name, short_name, program, color, archived, sort_order) v
   ('c2990000-0000-0000-0000-0000000000b1', 'Fixture GAM299 Team Bravo', 'GAM299B', 'FRC', '#b1b1b1', false, 300);
 
 -- ---------------------------------------------------------------------------
--- students -- ALL THREE carry `students.team_id` = Alpha, so the legacy column
--- is held constant across the three personas and every difference measured by
--- the assertions is attributable to `student_teams` alone.
+-- students -- the first THREE carry `students.team_id` = Alpha, so the legacy
+-- column is held constant across those personas and every difference measured
+-- by the assertions is attributable to `student_teams` alone.
+--
+-- `...d4` is the deliberate exception and the reason it exists: it is the
+-- RE-TEAMED student, and it is the only persona here that the APPLICATION can
+-- actually produce. `src/lib/supabase/loaders/students.ts` updates
+-- `students.team_id` and never writes `student_teams` (there is no writer
+-- anywhere in the repo -- GAM-340), so a student moved Alpha -> Bravo ends up
+-- with `students.team_id` = Bravo while the 2026-07-21 backfill row for ALPHA
+-- is still `left_on is null`. Its `team_id` is therefore Bravo, not Alpha.
+--
+-- Added on `boss-arbiter`'s ruling (D019). The original five personas covered
+-- every configuration EXCEPT the one the app produces, so the residue this
+-- migration discloses in capitals was pinned by nothing. D019 also measured
+-- that this is NOT a consequence of the route chosen: a memberships-only
+-- policy grants the stale Alpha row too, and additionally denies this
+-- student's CURRENT team. The cause is the missing writer, not the policy.
 -- ---------------------------------------------------------------------------
 insert into students (id, profile_id, display_name, team_id, grad_year, is_active, goal_hours_override) values
   ('c2990000-0000-0000-0000-0000000000d1', 'c2990000-0000-0000-0000-000000000001', 'Fixture Dual Team Student',
@@ -92,7 +109,9 @@ insert into students (id, profile_id, display_name, team_id, grad_year, is_activ
   ('c2990000-0000-0000-0000-0000000000d2', 'c2990000-0000-0000-0000-000000000002', 'Fixture No Membership Student',
     'c2990000-0000-0000-0000-0000000000a1', 2028, true, null),
   ('c2990000-0000-0000-0000-0000000000d3', 'c2990000-0000-0000-0000-000000000003', 'Fixture Left Team Student',
-    'c2990000-0000-0000-0000-0000000000a1', 2028, true, null);
+    'c2990000-0000-0000-0000-0000000000a1', 2028, true, null),
+  ('c2990000-0000-0000-0000-0000000000d4', 'c2990000-0000-0000-0000-000000000006', 'Fixture Re-teamed Student',
+    'c2990000-0000-0000-0000-0000000000b1', 2028, true, null);
 
 -- ---------------------------------------------------------------------------
 -- student_teams -- the junction the new policy reads. NOTE what is absent:
@@ -105,7 +124,14 @@ insert into student_teams (student_id, team_id, joined_on, left_on) values
   ('c2990000-0000-0000-0000-0000000000d1', 'c2990000-0000-0000-0000-0000000000b1', '2026-02-09', null),
   -- left-team: ACTIVE in Alpha, LEFT Bravo
   ('c2990000-0000-0000-0000-0000000000d3', 'c2990000-0000-0000-0000-0000000000a1', '2026-01-05', null),
-  ('c2990000-0000-0000-0000-0000000000d3', 'c2990000-0000-0000-0000-0000000000b1', '2026-02-09', '2026-06-30');
+  ('c2990000-0000-0000-0000-0000000000d3', 'c2990000-0000-0000-0000-0000000000b1', '2026-02-09', '2026-06-30'),
+  -- re-teamed (`...d4`): exactly what the backfill left behind after the roster
+  -- moved this student to Bravo. ONE row, for the team they LEFT, still
+  -- `left_on is null` because nothing ever closed it -- and NO row for Bravo,
+  -- because nothing ever opened one. Do not "fix" this fixture by adding a
+  -- Bravo row or setting `left_on`: the absence and the null ARE the fixture,
+  -- and GAM-340 is what makes them impossible.
+  ('c2990000-0000-0000-0000-0000000000d4', 'c2990000-0000-0000-0000-0000000000a1', '2026-01-05', null);
 
 -- ---------------------------------------------------------------------------
 -- events (season reused -- see the header note on seasons_single_active_idx)

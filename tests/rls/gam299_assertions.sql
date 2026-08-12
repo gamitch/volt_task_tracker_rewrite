@@ -101,6 +101,36 @@ select count(*) as leftteam_se_bravo from event_sessions where id = 'c2990000-00
 rollback;
 
 -- ---------------------------------------------------------------------------
+-- Scenario R (C11) -- the RE-TEAMED student, and the only persona in this file
+-- that the application can actually produce today. `students.team_id` = Bravo
+-- (the roster moved them), while the 2026-07-21 backfill row for ALPHA is
+-- still `left_on is null` because nothing has ever written `student_teams`.
+--
+-- THIS IS A CHARACTERISATION TEST, NOT AN ENDORSEMENT. It pins a disclosed
+-- residue so that it is measured rather than described: this student sees
+-- their FORMER team's event and session (Alpha = 1) as well as their current
+-- team's (Bravo = 1). Before this migration they saw Alpha 0 / Bravo 1.
+--
+-- Added on `boss-arbiter`'s ruling (D019), which measured that this is NOT
+-- caused by the route chosen: a memberships-only policy grants the stale Alpha
+-- row too, AND additionally denies Bravo — strictly worse on the only
+-- configuration the app produces. The cause is the missing writer.
+--
+-- WHEN GAM-340 SHIPS, THESE FOUR ROWS ARE THE RED/GREEN WITNESS. A real writer
+-- closes the Alpha membership, `reteamed_ev_alpha` becomes 0, and this block
+-- must be updated to expect 0 in the same change — that flip is the proof the
+-- writer worked, so do not delete these cases, invert them.
+-- ---------------------------------------------------------------------------
+begin;
+set local role authenticated;
+set local request.jwt.claim.sub = 'c2990000-0000-0000-0000-000000000006';
+select count(*) as reteamed_ev_alpha from events where id = 'c2990000-0000-0000-0000-0000000000e1' \gset
+select count(*) as reteamed_ev_bravo from events where id = 'c2990000-0000-0000-0000-0000000000e2' \gset
+select count(*) as reteamed_se_alpha from event_sessions where id = 'c2990000-0000-0000-0000-0000000000f1' \gset
+select count(*) as reteamed_se_bravo from event_sessions where id = 'c2990000-0000-0000-0000-0000000000f2' \gset
+rollback;
+
+-- ---------------------------------------------------------------------------
 -- Scenario O (C4, C5) -- the profile-less ORPHAN session, reused from
 -- `tests/rls/seed.sql` (a real `auth.users` row with no `profiles` row
 -- anywhere). Unqualified counts, so this asserts zero rows across EVERY event
@@ -186,6 +216,14 @@ from (
     ('C6-admin-sees-all-events',    :'all_events_ct',     :'admin_ev_total'),
     ('C6-admin-sees-all-sessions',  :'all_sessions_ct',   :'admin_se_total'),
     ('C6-coach-sees-all-events',    :'all_events_ct',     :'coach_ev_total'),
-    ('C6-coach-sees-all-sessions',  :'all_sessions_ct',   :'coach_se_total')
+    ('C6-coach-sees-all-sessions',  :'all_sessions_ct',   :'coach_se_total'),
+    -- C11 -- the re-teamed student: the disclosed residue, pinned rather than
+    -- merely described. Alpha is the team they LEFT (see Scenario R).
+    ('C11-reteamed-sees-current-team-event',   '1', :'reteamed_ev_bravo'),
+    ('C11-reteamed-sees-current-team-session', '1', :'reteamed_se_bravo'),
+    ('C11-reteamed-still-sees-former-team-event',   '1', :'reteamed_ev_alpha'),
+    ('C11-reteamed-still-sees-former-team-session', '1', :'reteamed_se_alpha'),
+    ('C5-agree-reteamed-former-team', :'reteamed_ev_alpha', :'reteamed_se_alpha'),
+    ('C5-agree-reteamed-current-team', :'reteamed_ev_bravo', :'reteamed_se_bravo')
 ) as t(case_name, expected, actual)
 order by case_name;
