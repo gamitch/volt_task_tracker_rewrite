@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-12T13:12:44.237Z from team `Gamitch`.
+Exported 2026-08-12T13:18:12.241Z from team `Gamitch`.
 
 - **334** issues (242 archived)
-- **51** not yet completed or cancelled
+- **50** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -62,7 +62,6 @@ Exported 2026-08-12T13:12:44.237Z from team `Gamitch`.
 | [GAM-329](https://linear.app/gamitch/issue/GAM-329/the-linear-declaration-gate-cannot-validate-also-fixes-or-fall-back) | — | Backlog | tier/fast | The Linear declaration gate cannot validate `Also-fixes:` or fall back locally — its job has no checkout |
 | [GAM-330](https://linear.app/gamitch/issue/GAM-330/linear-api-calls-have-no-timeout-scriptslinearclientmjs-sets-no) | — | Backlog | tier/fast | Linear API calls have no timeout — `scripts/linear/client.mjs` sets no `AbortSignal` |
 | [GAM-331](https://linear.app/gamitch/issue/GAM-331/verify-importmetamain-is-true-in-the-supabase-edge-runtime-after-the) | — | Backlog | gate/unverified tier/fast | Verify `import.meta.main` is true in the Supabase Edge Runtime after the next `linear-dispatch` deploy |
-| [GAM-332](https://linear.app/gamitch/issue/GAM-332/the-reconciliation-sweep-drops-merged-prs-whose-declaration-failed-to) | — | In Review | tier/fast | The reconciliation sweep drops merged PRs whose declaration failed to parse — the cases most likely to be wrong |
 | [GAM-333](https://linear.app/gamitch/issue/GAM-333/a-dispatched-run-can-push-a-branch-but-cannot-open-a-pr-agentsmd) | — | Backlog | tier/fast | A dispatched run can push a branch but cannot open a PR — `AGENTS.md` records two walls and there are three |
 | [GAM-334](https://linear.app/gamitch/issue/GAM-334/the-declaration-gate-cannot-express-second-half-of-a-two-pr-row-so) | — | Backlog | provenance/other tier/fast | The declaration gate cannot express "second half of a two-PR row", so every workflow-touching row will go red on the PR that completes it |
 
@@ -353,5 +352,6 @@ Exported 2026-08-12T13:12:44.237Z from team `Gamitch`.
 | [GAM-325](https://linear.app/gamitch/issue/GAM-325/build-the-explicit-linear-closer-pr-merge-declares-its-issue-one-sync) | — | Done | Build the explicit Linear closer: PR merge declares its issue, one sync writes the state, every refusal is named — replacing the last semantic automation |
 | [GAM-326](https://linear.app/gamitch/issue/GAM-326/an-unfinished-dispatch-run-can-turn-its-own-job-green-by-moving-the) | — | Done | An unfinished dispatch run can turn its own job green by moving the issue to `Todo` — which re-dispatches it four seconds later |
 | [GAM-328](https://linear.app/gamitch/issue/GAM-328/two-dispatch-loop-rules-live-where-a-dispatched-run-cannot-write-them) | — | Done | Two dispatch-loop rules live where a dispatched run cannot write them — the `.github/workflows/**` credential wall, and the subagent-blocking rule that decides whether a run finishes its chain |
+| [GAM-332](https://linear.app/gamitch/issue/GAM-332/the-reconciliation-sweep-drops-merged-prs-whose-declaration-failed-to) | — | Done | The reconciliation sweep drops merged PRs whose declaration failed to parse — the cases most likely to be wrong |
 
 Full descriptions, relations and timestamps are in `linear-export.json`.

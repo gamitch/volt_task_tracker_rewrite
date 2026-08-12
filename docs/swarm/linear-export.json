@@ -1,6 +1,6 @@
 {
   "meta": {
-    "exportedAt": "2026-08-12T13:12:44.237Z",
+    "exportedAt": "2026-08-12T13:18:12.241Z",
     "team": "Gamitch",
     "teamKey": "GAM",
     "issueCount": 334,
@@ -6026,8 +6026,8 @@
       "identifier": "GAM-332",
       "legacyId": null,
       "title": "The reconciliation sweep drops merged PRs whose declaration failed to parse — the cases most likely to be wrong",
-      "state": "In Review",
-      "stateType": "started",
+      "state": "Done",
+      "stateType": "completed",
       "archived": false,
       "labels": [
         "tier/fast"
@@ -6036,7 +6036,7 @@
       "blockedBy": [],
       "blocks": [],
       "createdAt": "2026-08-11T23:19:49.576Z",
-      "completedAt": null,
+      "completedAt": "2026-08-12T13:17:58.694Z",
       "canceledAt": null,
       "url": "https://linear.app/gamitch/issue/GAM-332/the-reconciliation-sweep-drops-merged-prs-whose-declaration-failed-to",
       "description": "`scripts/linear-reconcile.mjs` filters to `declaration.ok === true` before checking anything, so a merged PR whose line 1 *attempted* a declaration and failed — `AMBIGUOUS_DECLARATION`, `HALF_DECLARATION`, `PLACEHOLDER` — is never examined by the daily sweep.\n\nThose are exactly the PRs most likely to have been mis-handled. The sweep is the backstop for \"declared, merged, and somehow not `Done`\", and it currently cannot see the class of declaration that the sync deliberately refuses to act on.\n\n**This is the residue of a MAJOR that was fixed on the other side.** GAM-325's checker reproduced the full silent under-close — gate green → sync `action: none` → sweep drops it. The gate half is fixed: an ambiguous declaration now goes **red** at PR time, so such a PR should not merge in the first place. This row is the belt to that fix's braces, and it matters because the gate is not yet a required check.\n\n## Suggested priority: medium\n\n* **Who is affected today:** nobody — none of GAM-325's machinery is live until the owner applies `docs/swarm/active/GAM-325-lane-d-workflows.patch`.\n* **What it blocks:** nothing, but it should land **before** the declaration gate is made required and `On PR merge → Done` is switched off (GAM-325 Phase 3). After cutover the sweep is the only remaining backstop.\n* **What it costs:** small — report failed-declaration merged PRs as their own drift class rather than filtering them out.\n* **Trigger that ends the deferral:** GAM-325's Phase 3 cutover.\n\n| Provenance |  |\n| -- | -- |\n| Found by | `checker-reviewer` on GAM-325, finding F1, recorded as the optional half |\n| Filed under | Constitution item 20 |\n| Record | `docs/swarm/active/GAM-325-checker-review.md` |\n"
