@@ -1318,10 +1318,16 @@ describe('GAM-304 -- pending affordance: a DIFFERENT row disables while a write 
   // to the loading values because that instance never renders again after
   // the click. This holds for a real browser too (not a jsdom/`act()`
   // artifact) -- React never exposes an intermediate, un-batched paint here.
-  // The `isLoading` prop IS wired correctly in the source (verified by
-  // reading the render output) and would show correctly for a hypothetical
-  // status change that keeps the row in the SAME list, but no such
-  // transition exists in this file's own RSVP status vocabulary.
+  //
+  // GAM-318 UPDATE: this comment previously closed by saying the `isLoading`
+  // prop "IS wired correctly in the source" and would work for a hypothetical
+  // same-list status change. That was the misleading half -- no such
+  // transition exists in this file's RSVP vocabulary, so the prop was
+  // unreachable rather than merely unexercised. GAM-318 deleted it and the
+  // `pendingSessionId` state that fed it; the sibling-disable assertion below
+  // is unchanged, and the unreachability itself is now pinned by an
+  // executable test (see the GAM-318 describe block further down) instead of
+  // by this prose alone.
   it('clicking Sign-up-opportunity "Sign up" disables a DIFFERENT row\'s "Can\'t go" menu item (Next up MoreMenu, via per-entry aria-disabled -- GAM-320) while the write is in flight', async () => {
     // A controllable, never-auto-resolving write so the DOM can be inspected
     // mid-flight -- resolved manually at the end of the test.
@@ -2715,5 +2721,65 @@ describe('<StudentHome /> T184 -- "sees nothing" is proven with a positive contr
     expect(container.textContent).not.toContain('Hi Ada Reyes');
     expect(container.querySelector('[role="progressbar"]')).toBeNull();
     expect(container.textContent).toContain('Your student account is inactive');
+  });
+});
+
+describe('GAM-318 -- the clicked Sign-up row unmounts in the same commit, so a per-row spinner is unreachable', () => {
+  // This is the executable half of module doc #7's GAM-318 paragraph. The
+  // deleted `isLoading`/`pendingSessionId` pair could not be guarded by a
+  // mutation of its own (deleting provably-inert code changes no observable
+  // behaviour -- GAM-318's stated reason for STANDARD rather than FAST tier).
+  // What IS guardable, and what the module doc now leans on to justify having
+  // no spinner, is the mechanism underneath: the optimistic
+  // `withLocalRsvpOverride` update and `setIsRsvpSubmitting` land in ONE
+  // batched commit, and `getUnansweredOutreachOpportunities` counts any
+  // `rsvps` row as an answer -- so the clicked row is gone from the tree
+  // before anything could paint a loading state on it. If a later change
+  // keeps the answered row mounted (the fix GAM-318 explicitly forbids,
+  // because the same filter feeds `useOutreachBadgeCount`), this test goes
+  // red and the module doc's claim gets re-examined rather than silently
+  // becoming false.
+  it('detaches the clicked button and paints no aria-busy while the write is in flight', async () => {
+    let resolveWrite: (() => void) | undefined;
+    const onRsvpChange = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveWrite = resolve;
+        }),
+    );
+    const loadData = async (): Promise<StudentHomeData> =>
+      buildDataFixture({
+        events: [UNANSWERED_EVENT],
+        sessions: [UNANSWERED_SESSION],
+        rsvps: [],
+      });
+
+    renderAsUser(STUDENT_USER, { loadData, onRsvpChange, nowFn: () => FIXTURE_REFERENCE_NOW });
+    await flushMicrotasks();
+
+    const signUpButton = findButtonByText('Sign up');
+    expect(signUpButton, 'expected an unanswered opportunity row before the click').toBeDefined();
+    expect(container.querySelectorAll('[aria-busy="true"]')).toHaveLength(0);
+
+    act(() => {
+      signUpButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    // The write is genuinely still outstanding at the moment of inspection --
+    // without this, every assertion below would pass trivially post-settle.
+    expect(onRsvpChange).toHaveBeenCalledTimes(1);
+
+    // The exact `Button` instance that was clicked is out of the tree, so no
+    // prop on it (`isLoading` included) can reach the user.
+    expect(signUpButton?.isConnected).toBe(false);
+    expect(findButtonByText('Sign up')).toBeUndefined();
+    // `Button` renders `aria-busy` from `isLoading` (@astryxdesign/core
+    // `Button.js:478`), so this is the observable signal for a spinner
+    // anywhere in the tree -- not just on the detached instance.
+    expect(container.querySelectorAll('[aria-busy="true"]')).toHaveLength(0);
+
+    resolveWrite?.();
+    await flushMicrotasks();
   });
 });
