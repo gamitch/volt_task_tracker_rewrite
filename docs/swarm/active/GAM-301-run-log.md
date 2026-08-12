@@ -38,3 +38,7 @@ Append-only. One line per milestone, committed and pushed as it happens.
   chrome-level data), via two optional defaulted props so `AppShell.tsx`
   needs no changes. Two allowed files, 9 acceptance criteria including a
   named mutation, 5-entry least-confident-decisions list.
+- **premise gate round 1 dispatched** (`checker-premise`). Dispatched with
+  `run_in_background: false` — the orchestrator blocks on the verdict rather
+  than ending its turn with the subagent in flight. If this line is the last
+  one in this file, the run died holding this subagent.
