@@ -19,7 +19,11 @@
 # to the `authenticated` role, mirroring the real Supabase platform's default
 # schema grants), then loads `tests/rls/seed.sql` (fabricated-name fixture
 # data, constitution item 6), then runs `tests/rls/assertions.sql`, which
-# prints a PASS/FAIL table for every scenario. The scratch database is
+# prints a PASS/FAIL table for every scenario -- and then, AFTER that has run,
+# the same seed/assertions pair a second time for GAM-299
+# (`tests/rls/gam299_seed.sql` + `tests/rls/gam299_assertions.sql`, active
+# `student_teams` membership event visibility), whose report is APPENDED to the
+# same file (see the `tee -a` note at that step). The scratch database is
 # dropped again on exit, whether the run passed or failed, so this script is
 # safely re-runnable, and never leaves scratch data committed anywhere.
 #
@@ -114,6 +118,23 @@ echo "==> loading RLS-denial fixture data"
 
 echo "==> running RLS-denial assertions"
 "${PSQL[@]}" -d "$DBNAME" -f "$SCRIPT_DIR/assertions.sql" | tee "$REPORT_FILE"
+
+# GAM-299 (T806): active-membership event visibility. Loaded HERE, after the
+# assertions above have already run, so no row this fixture adds can move a
+# pre-existing case's count or expected value.
+#
+# `tee -a`, NOT `tee`, and this is load-bearing rather than stylistic: plain
+# `tee` TRUNCATES, so the grep below would only ever see this second report and
+# every case in `assertions.sql` above would become advisory -- a guard that no
+# longer fires. That was measured, twice: with plain `tee` a deliberately
+# planted FAIL in `assertions.sql` printed on screen and the script still
+# exited 0. Any future suite appended here must use `tee -a` for the same
+# reason.
+echo "==> loading GAM-299 active-membership fixture data"
+"${PSQL[@]}" -d "$DBNAME" -f "$SCRIPT_DIR/gam299_seed.sql"
+
+echo "==> running GAM-299 active-membership event-visibility assertions"
+"${PSQL[@]}" -d "$DBNAME" -f "$SCRIPT_DIR/gam299_assertions.sql" | tee -a "$REPORT_FILE"
 
 if grep -q 'FAIL' "$REPORT_FILE"; then
   echo "==> T020 NFR-02 RLS-denial test suite: AT LEAST ONE CASE FAILED"
