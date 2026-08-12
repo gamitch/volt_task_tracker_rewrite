@@ -74,3 +74,18 @@ line names.
     what ships today (2670-2681 ms vs 3975-4009 ms over 20,004 events).
 - **Revising the packet for gate round 2** (19a caps this at two rounds; round 2 is
   the last one before escalation to the owner).
+- **Packet revision 2 written**, answering all 10 round-1 findings (§9 tables the
+  dispositions). The substantive change: **the route flipped from drop-and-replace
+  to an additive second permissive policy** (MAJOR-3). Reasoning, which is the
+  orchestrator's call and is defended in packet §5.1: an additive policy can only
+  ever *add* visibility, so the failure the issue itself feared — "every event is
+  missing" instead of "one team's events are missing" — becomes structurally
+  unreachable rather than merely guarded against by a bridge clause. It also
+  leaves the shipped 8.4-derived policy byte-for-byte intact, which dissolves most
+  of MAJOR-2's item-3 exposure. The cost is stated openly in §5.2 rather than
+  hidden: a student who left a team that is *also* their legacy `students.team_id`
+  keeps seeing it — a state no code path can produce, since nothing writes
+  `student_teams`.
+- **Dispatching `checker-premise` round 2 (opus, `run_in_background: false`)** —
+  the last round before item 19a escalates to the owner. *If this line is the last
+  one in this file, the run died holding this subagent.*
