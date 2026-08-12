@@ -1322,7 +1322,7 @@ describe('GAM-304 -- pending affordance: a DIFFERENT row disables while a write 
   // reading the render output) and would show correctly for a hypothetical
   // status change that keeps the row in the SAME list, but no such
   // transition exists in this file's own RSVP status vocabulary.
-  it('clicking Sign-up-opportunity "Sign up" disables a DIFFERENT row (Next up MoreMenu, via aria-disabled) while the write is in flight', async () => {
+  it('clicking Sign-up-opportunity "Sign up" disables a DIFFERENT row\'s "Can\'t go" menu item (Next up MoreMenu, via per-entry aria-disabled -- GAM-320) while the write is in flight', async () => {
     // A controllable, never-auto-resolving write so the DOM can be inspected
     // mid-flight -- resolved manually at the end of the test.
     let resolveWrite: (() => void) | undefined;
@@ -1393,18 +1393,43 @@ describe('GAM-304 -- pending affordance: a DIFFERENT row disables while a write 
     await flushMicrotasks();
 
     expect(onRsvpChange).toHaveBeenCalledTimes(1);
-    // A DIFFERENT row's control (Park Cleanup's `MoreMenu` trigger, in the
-    // Next-up section, an entirely separate component instance from the
-    // clicked row -- unaffected by the churn described above) is disabled
-    // while Library Demo's write is in flight, via `isRsvpSubmitting`
-    // alone. Astryx's `MoreMenu` trigger always sets its own `tooltip`
-    // (`MoreMenu.tsx`: `button={{..., tooltip: label}}`), so `Button.tsx`'s
-    // `useAriaDisabled` branch fires and the disabled state is expressed as
-    // `aria-disabled="true"` -- NOT the native `disabled` DOM property
-    // (measured directly against the rendered output for this task; the
-    // native property stays `false` throughout, which would silently pass
-    // a `.disabled`-only assertion for the wrong reason).
-    expect(parkCleanupMenuTrigger?.getAttribute('aria-disabled')).toBe('true');
+    // GAM-320 -- the trigger itself stays operable (both mouse and keyboard
+    // can open the menu) while Library Demo's write is in flight; only the
+    // "Can't go" ITEM inside is disabled, via per-entry
+    // `DropdownMenuOption.isDisabled` (`astryx-api.md:1884`). Before GAM-320
+    // this asserted the trigger itself carried `aria-disabled="true"`
+    // (`Button.tsx`'s `useAriaDisabled` branch, since `MoreMenu.tsx` always
+    // sets `button={{..., tooltip: label}}`) -- correct for a mouse click,
+    // but `Button.js`'s aria-disabled keydown handler only suppresses
+    // Enter/Space, so `ArrowDown` reached `DropdownMenu`'s
+    // `handleButtonKeyDown` and opened the menu anyway: the same control
+    // answered mouse and keyboard differently. Moving the guard to the item
+    // makes both agree.
+    expect(parkCleanupMenuTrigger?.getAttribute('aria-disabled')).toBeNull();
+
+    // Astryx's `DropdownMenu` renders every item unconditionally into the
+    // DOM regardless of open/closed state (native popover semantics, same
+    // jsdom finding `TeamsTab.test.tsx`'s `openMoreMenuFor` documents), so
+    // the item is reachable via the trigger's `aria-controls` without first
+    // opening the menu.
+    const menuId = parkCleanupMenuTrigger?.getAttribute('aria-controls') ?? null;
+    const menu = menuId ? document.getElementById(menuId) : null;
+    expect(menu, 'expected a scoped menu element for "Park Cleanup"').toBeTruthy();
+    const cantGoItem = Array.from(menu?.querySelectorAll('[role="menuitem"]') ?? []).find(
+      (el) => el.textContent?.trim() === "Can't go",
+    );
+    expect(cantGoItem, 'expected a "Can\'t go" menu item').toBeTruthy();
+    expect(cantGoItem?.getAttribute('aria-disabled')).toBe('true');
+
+    // Doubly guarded: clicking the disabled item does nothing, both because
+    // `DropdownMenuItem` itself no-ops a disabled item's `onClick`, and
+    // because `handleRsvpChange`'s own `isRsvpSubmitting` early-return would
+    // catch it even if the first guard did not.
+    act(() => {
+      cantGoItem?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+    expect(onRsvpChange).toHaveBeenCalledTimes(1);
 
     // Clean up: let the write settle so no dangling promise/act warning
     // leaks into the next test.
