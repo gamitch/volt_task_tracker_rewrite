@@ -1255,6 +1255,46 @@ describe('GAM-304 -- a rejected RSVP write rolls back and renders the error bann
   });
 });
 
+describe("GAM-319 -- a generic write failure gets save-flavoured copy, not loader.ts's read-flavoured default", () => {
+  it('renders "Couldn\'t save your RSVP..." and never the read-flavoured DEFAULT_LOADER_ERROR_MESSAGE', async () => {
+    // Same plain, non-`Error` `SupabaseLoaderError` shape `runMutation`
+    // (`loader.ts`) actually rejects with for any Postgrest failure -- NOT
+    // the `SupabaseNotConfiguredError` case criterion 1 covers. Before this
+    // fix, `extractRsvpErrorMessage` forwarded `.message` unconditionally
+    // for this shape, surfacing `loader.ts`'s read-flavoured
+    // `DEFAULT_LOADER_ERROR_MESSAGE` on this write path (GAM-319).
+    const onRsvpChange = vi.fn(async () => {
+      throw {
+        code: '23505',
+        message: "Couldn't load this data. Check your connection and try again.",
+        cause: new Error('duplicate key value violates unique constraint'),
+      };
+    });
+    const loadData = async (): Promise<StudentHomeData> =>
+      buildDataFixture({
+        events: [UNANSWERED_EVENT],
+        sessions: [UNANSWERED_SESSION],
+        rsvps: [],
+      });
+
+    renderAsUser(STUDENT_USER, { loadData, onRsvpChange, nowFn: () => FIXTURE_REFERENCE_NOW });
+    await flushMicrotasks();
+
+    const signUpButton = findButtonByText('Sign up');
+    act(() => {
+      signUpButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain(
+      "Couldn't save your RSVP. Check your connection and try again.",
+    );
+    expect(container.textContent).not.toContain(
+      "Couldn't load this data. Check your connection and try again.",
+    );
+  });
+});
+
 describe('GAM-304 -- pending affordance: a DIFFERENT row disables while a write is in flight (criterion 7, sibling half)', () => {
   // MEASURED (this task's own worker output -- see the final report, not
   // reasoned): criterion 7's OTHER half ("the clicked button shows
