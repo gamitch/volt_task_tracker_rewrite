@@ -1,6 +1,6 @@
 {
   "meta": {
-    "exportedAt": "2026-08-12T14:02:52.914Z",
+    "exportedAt": "2026-08-12T16:10:52.463Z",
     "team": "Gamitch",
     "teamKey": "GAM",
     "issueCount": 335,
@@ -5398,18 +5398,18 @@
       "identifier": "GAM-301",
       "legacyId": "T407",
       "title": "T407 — The Outreach nav badge is a hardcoded `0` while the page it links to reads \"74 awaiting your RSVP\"",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "Done",
+      "stateType": "completed",
       "archived": false,
       "labels": [
         "area/w1",
         "tier/standard"
       ],
-      "assignee": null,
+      "assignee": "George Mitchom",
       "blockedBy": [],
       "blocks": [],
       "createdAt": "2026-08-09T12:52:48.166Z",
-      "completedAt": null,
+      "completedAt": "2026-08-12T16:10:35.133Z",
       "canceledAt": null,
       "url": "https://linear.app/gamitch/issue/GAM-301/t407-the-outreach-nav-badge-is-a-hardcoded-0-while-the-page-it-links",
       "description": "**Confirmed live, two surfaces disagreeing in the same session:** the left nav shows **Outreach 0**, while `/outreach` shows **\"74 awaiting your RSVP\"** and the student home banner reads **\"You have 74 events to answer\"**. **Cause:** `src/components/nav/SideNav.tsx:117` — `const PLACEHOLDER_OUTREACH_BADGE_COUNT = 0`, whose own comment says *\"the real count is wired by T038\"*. **T038 has PASSED and did not do it** — that row's checker note records it *\"independently confirmed* `SideNav.tsx` *byte-unchanged\"*, so the forward reference has been dangling ever since. This is the same dangling-forward-reference shape that left T199 unfixed for weeks, and the same placeholder-default family as T155 (`CoachHome`), T176 (`StudentHome`) and T181 (`ParentHome`); **T168 is the sweep that should have caught it and did not — worth a line in T168 rather than a separate finding.** **The computation already exists and must not be re-derived** (constitution item 3): `getUnansweredRsvpCount` (`OutreachList.tsx:1459`), signature `(sessions, rsvps, studentIds) => number`, already counts a `scheduled` session with no matching `rsvps` row per student. **Do NOT scope this as a one-line swap.** That signature is the whole difficulty: `SideNav` currently takes no data at all, so wiring it means giving the app-shell nav a real loader plus the viewer's resolved student ids — a new data dependency in the chrome, which is why T038 correctly declined to do it inline. Expect **STANDARD**, and expect the seam design (does the badge load its own data, or does `AppShell` thread it down?) to be the actual decision. **OWNERSHIP IS OPEN — the owner must assign it.** `src/components/nav/**` belongs to no workflow; the data is outreach (**W2**, CLOSED, 0 open rows) and the mount point is the shell (**W5**/W10 territory). Same situation as **T507**, which is parked in the WORKFLOWS table as *unowned surface* awaiting exactly this call. Filed in W1's block because W1 found it, **not** as an ownership claim.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T407` |\n| Epic | Bug (placeholder default on a live surface, same family as T199/T155/T176/T181) — **found by W1 2026-08-07 from the owner's screenshots** |\n| Worker | *not yet packeted* — **needs an owner assignment first** |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Filed 2026-08-07 (item 20). UNOWNED SURFACE — see below. Live and user-visible.** |\n"
