@@ -1,6 +1,6 @@
 {
   "meta": {
-    "exportedAt": "2026-08-12T16:33:25.909Z",
+    "exportedAt": "2026-08-12T17:46:56.126Z",
     "team": "Gamitch",
     "teamKey": "GAM",
     "issueCount": 335,
@@ -4502,8 +4502,8 @@
       "identifier": "GAM-256",
       "legacyId": "T404",
       "title": "T404 — A post-completion attendance write that INSERTS a fresh row is never audited",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "Canceled",
+      "stateType": "canceled",
       "archived": false,
       "labels": [
         "area/w1",
@@ -4514,7 +4514,7 @@
       "blocks": [],
       "createdAt": "2026-08-09T12:49:03.169Z",
       "completedAt": null,
-      "canceledAt": null,
+      "canceledAt": "2026-08-12T16:40:03.801Z",
       "url": "https://linear.app/gamitch/issue/GAM-256/t404-a-post-completion-attendance-write-that-inserts-a-fresh-row-is",
       "description": "**The row's premise was overruled, not its evidence.** The observation stands — `trg_audit_attendance_post_completion` was `after update` only, so a post-completion INSERT wrote 0 audit rows vs 1 for UPDATE. **But widening it was the wrong fix.** Owner ruling 2026-08-03 (`auto-mode-decisions.md`, *\"no need to have this strict policy for fraud prevention... i'll go in and put them in. no fraud\"*): adding a student who was present but never marked **is the normal correction workflow for this team**, not a fraud signal. Widening the audit would have logged the single most ordinary action in the app — and, missed by the packet entirely, would have written a row for **every routine** `self` **check-off**, which is retroactive by design (`20260724000000_self_checkoff.sql`). **PR #45 (**`c9b4698`**) REMOVED the trigger instead.** Attendance record-keeping is now `recorded_by` + `updated_at` on the row, which T124's activity feed already reads. `VOLT_Portal_PRD.md` DATA-02 updated to exclude attendance and carries a *\"do not re-add\"* note. **Two packet claims tested FALSE and recorded so they are not inherited:** the QR-check-in abort trap (blocked by `checkSessionLiveness`, `liveness.ts:30-32`, 409 before any write) and trigger-name ordering (BEFORE always precedes AFTER). Packet: `active/T404-T405-schema-worker-packet.md`, ⛔ banner-marked.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T404` |\n| Epic | Bug (audit gap) — **found by T403 step 3's premise gate, pre-existing** |\n| Worker | *packeted, then **CANCELLED** — packet retained with a ⛔ banner* |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **❌ CANCELLED 2026-08-03 by owner ruling — NOT a deferral. Do not re-open.** |\n"
     },
@@ -5763,8 +5763,8 @@
       "identifier": "GAM-319",
       "legacyId": null,
       "title": "A failed RSVP save tells the user \"Couldn't load this data\" — read copy on a write path",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "Done",
+      "stateType": "completed",
       "archived": false,
       "labels": [
         "area/w5",
@@ -5774,7 +5774,7 @@
       "blockedBy": [],
       "blocks": [],
       "createdAt": "2026-08-10T13:33:08.769Z",
-      "completedAt": null,
+      "completedAt": "2026-08-12T17:46:39.699Z",
       "canceledAt": null,
       "url": "https://linear.app/gamitch/issue/GAM-319/a-failed-rsvp-save-tells-the-user-couldnt-load-this-data-read-copy-on",
       "description": "When a student's or parent's RSVP fails to save, the banner tells them to check whether their data **loaded**:\n\n> **Couldn't save your RSVP**\n> Couldn't load this data. Check your connection and try again.\n\nThe title is right and the advice happens to still apply, so nobody is told a failed save succeeded. But the sentence describes the wrong operation, and it is the copy a real user hits on a configured deployment — the dominant failure mode, not an edge case.\n\n## Why it happens\n\n`extractRsvpErrorMessage` (`StudentHome.tsx:963`, `ParentHome.tsx:1017`) forwards `error.message` verbatim for anything matching `isSupabaseLoaderError`. For every rejection except one, `toLoaderError` (`loader.ts:120`) has already replaced that message with the module-wide constant:\n\n```ts\nconst DEFAULT_LOADER_ERROR_MESSAGE =\n  \"Couldn't load this data. Check your connection and try again.\";\n```\n\nThat constant is correct for the reads it was written for (`loader.ts:88-93` explains the fixed-copy rule, and it is deliberate DES-16 policy, not an oversight). It is simply the wrong verb for a write, and the RSVP controls are the first write path to reuse it.\n\nThe passthrough itself is **not** the bug and must be kept: it is what lets `SupabaseNotConfiguredError`'s hand-authored copy reach the banner (`loader.ts:105-119`), which is the single exception `toLoaderError` carves out and which GAM-304's acceptance criterion 1 exists to prove.\n\n## Where it lives\n\n| File | Line | What it does |\n| -- | -- | -- |\n| `StudentHome.tsx` | 963-967 | `extractRsvpErrorMessage`, forwards the loader message |\n| `StudentHome.tsx` | 1582 | `title=\"Couldn't save your RSVP\"` — the correct half |\n| `ParentHome.tsx` | 1017-1021 | the same function, independently reimplemented |\n| `loader.ts` | 93 | `DEFAULT_LOADER_ERROR_MESSAGE`, the read-flavoured string |\n\n## The one constraint\n\n`src/lib/supabase/loader.ts` **is the root cause and is the wrong place to fix it.** Changing `DEFAULT_LOADER_ERROR_MESSAGE` would re-word every read failure across the app to say \"save\". Fix at the call site, in the two home files, by branching on `error.code` or by reserving the passthrough for the not-configured message only.\n\nKeep the `SupabaseNotConfiguredError` passthrough working — it is pinned by a test that asserts the \"Supabase isn't configured yet\" copy reaches the banner with **no injected seam**. Breaking it silently re-opens the packet defect GAM-304's worker found by execution.\n\n`extractRsvpErrorMessage` is duplicated in both files on purpose (the files' established independent-reimplementation convention, like `applyRsvpOverride`/`withLocalRsvpOverride`). Change both; do not extract a shared helper without a ruling.\n\n## Size and tier\n\nTwo files, one function each, display strings only. No write path, no schema, no signature another module imports.\n\nSuggested tier **FAST**: a named mutation exists that turns it red — restore the unconditional passthrough and the new save-copy assertion fails.\n\n## Suggested priority: medium urgency, very low cost\n\n1. **A user can actually see this one**, unlike the other two GAM-304 follow-ups. It needs only a failed write on a configured deployment.\n2. **Nobody has hit it yet.** Public go-live is still an unopened human gate (`GAM-80`/T070) and the MIG-06 cutover (`GAM-75`/T065) is Backlog — but a production database does exist, so confirm rather than assume.\n3. **Nothing is blocked on it**, and the fix is a few display strings.\n\nIt stops being deferrable at go-live, alongside the rest of the DES-16 copy pass.\n\n## Verification note\n\nFound by `checker-reviewer` during GAM-304's HEAVY acceptance check, by rendering the real banner for a generic `SupabaseLoaderError` rather than by reading the code:\n\n```\nP3 BANNER=\"Couldn't save your RSVPCouldn't load this data. Check your connection and try again.Dismiss\"\n```\n\nGraded **MINOR, not MAJOR**, on the explicit ground that the title is correct and no user is told a failed save succeeded.\n\nIndependently re-checked at `4460dec` on `claude/gam-304-rsvp-write` on 2026-08-10: `extractRsvpErrorMessage` at `StudentHome.tsx:963` and `ParentHome.tsx:1017` both forward `error.message`; `loader.ts:120` sets it to `DEFAULT_LOADER_ERROR_MESSAGE` for every rejection except `SupabaseNotConfiguredError`; the banner title at `StudentHome.tsx:1582` reads \"Couldn't save your RSVP\".\n\n**These line numbers refer to the GAM-304 branch, not to** `main` — GAM-304 has not merged as this is written. Re-verify after it lands."

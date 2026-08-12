@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-12T16:33:25.909Z from team `Gamitch`.
+Exported 2026-08-12T17:46:56.126Z from team `Gamitch`.
 
 - **335** issues (242 archived)
-- **48** not yet completed or cancelled
+- **46** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -32,7 +32,6 @@ Exported 2026-08-12T16:33:25.909Z from team `Gamitch`.
 | [GAM-249](https://linear.app/gamitch/issue/GAM-249/t331-the-staff-kpi-strip-dominates-small-viewports) | T331 | Backlog | tier/unreviewed | T331 — The staff KPI strip dominates small viewports |
 | [GAM-250](https://linear.app/gamitch/issue/GAM-250/t332-the-login-shell-has-slight-overflow-and-weak-landmarks) | T332 | Backlog | tier/unreviewed | T332 — The login shell has slight overflow and weak landmarks |
 | [GAM-251](https://linear.app/gamitch/issue/GAM-251/t333-the-migration-attached-all-16-imported-events-to-a-new-inactive) | T333 | Backlog | tier/unreviewed | T333 — ~~The migration attached all 16 imported events to a NEW inactive season~~ — **DATA HALF FIXED BY THE OWNER IN SQL.** Narrowed to: the ETL will do it again on the next import |
-| [GAM-256](https://linear.app/gamitch/issue/GAM-256/t404-a-post-completion-attendance-write-that-inserts-a-fresh-row-is) | T404 | Backlog | area/w1 tier/unreviewed | T404 — A post-completion attendance write that INSERTS a fresh row is never audited |
 | [GAM-264](https://linear.app/gamitch/issue/GAM-264/t600-aggregateparticipationrows-and-aggregateparticipationforstudent) | T600 | Backlog | area/w3 tier/unreviewed | T600 — `aggregateParticipationRows` and `aggregateParticipationForStudent` are the same MET-01 arithmetic maintained in two files |
 | [GAM-271](https://linear.app/gamitch/issue/GAM-271/t507-the-login-card-overflows-the-viewport-on-every-phone-narrower) | T507 | Backlog | tier/unreviewed | T507 — The login card overflows the viewport on every phone narrower than ~400px |
 | [GAM-282](https://linear.app/gamitch/issue/GAM-282/t606-a-single-meeting-cannot-have-its-own-location-this-week-were-in) | T606 | Backlog | area/w3 tier/heavy | T606 — A single meeting cannot have its own location ("this week we're in the shop") |
@@ -51,7 +50,6 @@ Exported 2026-08-12T16:33:25.909Z from team `Gamitch`.
 | [GAM-316](https://linear.app/gamitch/issue/GAM-316/item-19-requires-recording-the-premise-gate-verdict-the-dispatch-path) | — | Backlog | provenance/other tier/unreviewed | Item 19 requires recording the premise-gate verdict; the dispatch path has no mechanism, so the first real one lived only in a 30-day artifact |
 | [GAM-317](https://linear.app/gamitch/issue/GAM-317/an-escalated-row-has-no-reply-address-gatehuman-is-machine-settable) | — | Backlog | provenance/other tier/unreviewed | An escalated row has no reply address: `gate/human` is machine-settable, hand-clearable only, and sends the owner no notification |
 | [GAM-318](https://linear.app/gamitch/issue/GAM-318/studenthomes-per-row-rsvp-spinner-can-never-render-isloading-is-dead) | — | Backlog | area/w5 tier/standard | StudentHome's per-row RSVP spinner can never render — `isLoading` is dead code and its comment says otherwise |
-| [GAM-319](https://linear.app/gamitch/issue/GAM-319/a-failed-rsvp-save-tells-the-user-couldnt-load-this-data-read-copy-on) | — | Backlog | area/w5 tier/fast | A failed RSVP save tells the user "Couldn't load this data" — read copy on a write path |
 | [GAM-320](https://linear.app/gamitch/issue/GAM-320/arrowdown-opens-the-next-up-rows-aria-disabled-moremenu-mid-write) | — | Backlog | area/w5 tier/fast | ArrowDown opens the Next-up row's `aria-disabled` MoreMenu mid-write, while the mouse is correctly blocked |
 | [GAM-321](https://linear.app/gamitch/issue/GAM-321/the-opus-orchestrator-runs-the-gates-itself-238-bash-calls-and-checker) | — | Backlog | provenance/other tier/unreviewed | The opus orchestrator runs the gates itself: 238 Bash calls, and `checker-tests` is pinned haiku to do exactly that |
 | [GAM-323](https://linear.app/gamitch/issue/GAM-323/agentsmd-tells-every-agent-a-branch-name-identifier-does-not-close-its) | — | Backlog | provenance/other tier/standard | AGENTS.md tells every agent a branch-name identifier does not close its issue — measured, it closes |
@@ -304,6 +302,7 @@ Exported 2026-08-12T16:33:25.909Z from team `Gamitch`.
 | [GAM-253](https://linear.app/gamitch/issue/GAM-253/t401-markeventcompletedialogs-attendance-row-cap-truncation-guard-is) | T401 | Done | T401 — `MarkEventCompleteDialog`'s `ATTENDANCE_ROW_CAP` truncation guard is falsified by T320's pagination |
 | [GAM-254](https://linear.app/gamitch/issue/GAM-254/t402-loadersoutreachtss-own-queryattendanceforsessions-has-the) | T402 | Done | T402 — `loaders/outreach.ts`'s own `queryAttendanceForSessions` has the identical missing-`.range()` defect T320 fixed |
 | [GAM-255](https://linear.app/gamitch/issue/GAM-255/t403-liveconsoles-four-data-seams-are-fixturesno-ops-so-a-meeting-run) | T403 | Done | T403 — `LiveConsole`'s four data seams are fixtures/no-ops, so a meeting run through it records nothing |
+| [GAM-256](https://linear.app/gamitch/issue/GAM-256/t404-a-post-completion-attendance-write-that-inserts-a-fresh-row-is) | T404 | Canceled | T404 — A post-completion attendance write that INSERTS a fresh row is never audited |
 | [GAM-257](https://linear.app/gamitch/issue/GAM-257/t405-loadersattendancetss-write-paths-never-bump-attendanceupdated-at) | T405 | Done | T405 — **`loaders/attendance.ts`'s write paths** never bump `attendance.updated_at` on conflict-update, so it drifts from reality |
 | [GAM-258](https://linear.app/gamitch/issue/GAM-258/t406-markdaycomplete-can-clobber-a-concurrent-qr-scan-with-the-dialogs) | T406 | Done | T406 — `markDayComplete` can clobber a concurrent QR scan with the dialog's stale snapshot |
 | [GAM-259](https://linear.app/gamitch/issue/GAM-259/t500-an-orphan-events-adult-volunteer-figures-double-count-in-the) | T500 | Canceled | T500 — An orphan event's adult-volunteer figures double-count in the season totals |
@@ -348,6 +347,7 @@ Exported 2026-08-12T16:33:25.909Z from team `Gamitch`.
 | [GAM-310](https://linear.app/gamitch/issue/GAM-310/linear-claude-dispatch-is-built-and-unit-tested-but-not-live-7-owner) | — | Done | Linear → Claude dispatch is built and unit-tested but not live — 7 owner steps remain (PAT, secrets, webhook) |
 | [GAM-314](https://linear.app/gamitch/issue/GAM-314/a-dispatched-run-reports-success-while-its-work-is-still-running-in) | — | Done | A dispatched run reports `success` while its work is still "running in the background" — and the process takes it |
 | [GAM-315](https://linear.app/gamitch/issue/GAM-315/any-branch-named-claudegam-nnn-closes-that-issue-on-merge-item-28f) | — | Done | Any branch named `claude/gam-nnn-*` closes that issue on merge — item 28f says it only links, and that is false here |
+| [GAM-319](https://linear.app/gamitch/issue/GAM-319/a-failed-rsvp-save-tells-the-user-couldnt-load-this-data-read-copy-on) | — | Done | A failed RSVP save tells the user "Couldn't load this data" — read copy on a write path |
 | [GAM-322](https://linear.app/gamitch/issue/GAM-322/three-unscoped-linear-git-automations-are-live-where-item-28g-asked) | — | Done | Three unscoped Linear git automations are live where item 28g asked for one — `start → In Progress` is the rule that moved GAM-304 backwards |
 | [GAM-325](https://linear.app/gamitch/issue/GAM-325/build-the-explicit-linear-closer-pr-merge-declares-its-issue-one-sync) | — | Done | Build the explicit Linear closer: PR merge declares its issue, one sync writes the state, every refusal is named — replacing the last semantic automation |
 | [GAM-326](https://linear.app/gamitch/issue/GAM-326/an-unfinished-dispatch-run-can-turn-its-own-job-green-by-moving-the) | — | Done | An unfinished dispatch run can turn its own job green by moving the issue to `Todo` — which re-dispatches it four seconds later |
