@@ -627,6 +627,12 @@ type BadgeVariant =
 interface Team {
   id: string;
   name: string;
+  /** T615/GAM-305 -- `teams.archived boolean not null default false`
+   * (`20260716000000_identity_roster.sql`), REQUIRED so `tsc` polices every
+   * construction site (`ScheduleTeamOption`'s own required field, which this
+   * type is passed into at `ScheduleMeetingsDialog`'s `teams` prop). See
+   * `src/lib/teams/archivedTeams.ts`. */
+  archived: boolean;
 }
 
 interface FixtureEvent {
@@ -825,8 +831,8 @@ const PLACEHOLDER_SEASON_ID = 'season-placeholder-current';
 // ---------------------------------------------------------------------------
 
 const FIXTURE_TEAMS: readonly Team[] = [
-  { id: 'team-ravens', name: 'Ravens' },
-  { id: 'team-titans', name: 'Titans' },
+  { id: 'team-ravens', name: 'Ravens', archived: false },
+  { id: 'team-titans', name: 'Titans', archived: false },
 ];
 
 const FIXTURE_EVENTS: readonly FixtureEvent[] = [

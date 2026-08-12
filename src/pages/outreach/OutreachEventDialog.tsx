@@ -497,6 +497,10 @@ import { EventFormLayout, EventFormSection } from '../../components/forms/EventF
 // replaced below) -- seeded from `CoachHome.tsx`'s own `formatSessionDateLabel`
 // UTC-midnight handling, not re-derived.
 import { formatFriendlyDate } from '../../lib/format/dates';
+// GAM-305 (legacy T615) §3a/§3c -- the shared predicate that narrows
+// `allTeamIds`; the options list itself is derived separately (§3d) to keep
+// an already-scoped archived team visible-but-disabled.
+import { excludeArchivedTeams } from '../../lib/teams/archivedTeams';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase shapes of the real `events`/`event_sessions`
@@ -513,6 +517,12 @@ export type OutreachScheduleMode = 'single' | 'multiDay' | 'recurring' | 'custom
 export interface OutreachTeamOption {
   id: string;
   name: string;
+  /** T615/GAM-305 -- `teams.archived boolean not null default false`
+   * (`20260716000000_identity_roster.sql`). REQUIRED, not optional: an
+   * optional field fails open (`undefined` reads as "not archived" and
+   * silently re-offers an archived team). See
+   * `src/lib/teams/archivedTeams.ts`. */
+  archived: boolean;
 }
 
 /** T118 (UXP-02) module doc 11e -- roster row shape for the "Expected
@@ -887,6 +897,12 @@ export function resolveTeamScope(
   selectedTeamIds: readonly string[],
   allTeamIds: readonly string[],
 ): string[] | null {
+  // GAM-305 §3d-bis -- when every team on the roster is archived, `allTeamIds`
+  // is `[]`, so the `allTeamIds.length > 0` guard below can never fire and an
+  // untouched save would wrongly write `[]` instead of preserving the
+  // pre-fix `null` ("all teams") sentinel. `[]` means "no one", which is
+  // never what an untouched save intends.
+  if (allTeamIds.length === 0 && selectedTeamIds.length === 0) return null;
   const allSelected =
     allTeamIds.length > 0 &&
     selectedTeamIds.length === allTeamIds.length &&
@@ -981,7 +997,14 @@ export function OutreachEventDialog({
   onSaveEvent = defaultOnSaveEvent,
   initialEvent,
 }: OutreachEventDialogProps): ReactNode {
-  const allTeamIds = useMemo(() => teams.map((team) => team.id), [teams]);
+  // GAM-305 §3c -- one filtered list feeds both `allTeamIds` (the
+  // "all teams" sentinel comparison) and, via `teamOptions` below, the
+  // rendered picker. `selectableTeams`/`allTeamIds` never include an
+  // archived team, so the edit-mode/create-mode resets that already read
+  // `allTeamIds` (below) automatically stop seeding one -- no second filter
+  // is added at those sites.
+  const selectableTeams = useMemo(() => excludeArchivedTeams(teams), [teams]);
+  const allTeamIds = useMemo(() => selectableTeams.map((team) => team.id), [selectableTeams]);
   const isEditMode = initialEvent !== undefined;
 
   const [title, setTitle] = useState('');
@@ -1004,6 +1027,19 @@ export function OutreachEventDialog({
   const [sessionDetails, setSessionDetails] = useState<Record<string, OutreachSessionDetail>>({});
 
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>(allTeamIds);
+  // GAM-305 §3d (round 1 finding F4) -- narrowing the options list to
+  // `selectableTeams` alone would make an already-scoped archived team
+  // render as a raw uuid in the trigger (`MultiSelector` falls back to the
+  // raw `value` when no option matches it). The options list is therefore
+  // selectable teams PLUS any team already selected, with the archived ones
+  // rendered `disabled` (§3d, R1 BLOCKER -- `disabled` is what stops
+  // `MultiSelector.handleSelectAll` from re-adding an archived team as a
+  // fully enabled row and widening the stored scope). Declared AFTER
+  // `selectedTeamIds` above -- it reads it.
+  const teamOptions = useMemo(
+    () => teams.filter((team) => !team.archived || selectedTeamIds.includes(team.id)),
+    [teams, selectedTeamIds],
+  );
   // T118 (UXP-02) -- "Expected attendees" checklist state.
   const [expectedStudentIds, setExpectedStudentIds] = useState<string[]>([]);
   const [adultVolunteersCount, setAdultVolunteersCount] = useState<number>(0);
@@ -1490,7 +1526,11 @@ export function OutreachEventDialog({
               >
                 <MultiSelector
                   label="Team scope"
-                  options={teams.map((team) => ({ value: team.id, label: team.name }))}
+                  options={teamOptions.map((team) => ({
+                    value: team.id,
+                    label: team.name,
+                    disabled: team.archived,
+                  }))}
                   value={selectedTeamIds}
                   onChange={setSelectedTeamIds}
                   hasSelectAll

@@ -257,6 +257,7 @@ interface EventSessionDbRow {
 interface TeamDbRow {
   id: string;
   name: string;
+  archived: boolean;
 }
 
 interface AttendanceDbRow {
@@ -342,7 +343,7 @@ function mapSessionDbRow(row: EventSessionDbRow) {
 }
 
 function mapTeamDbRow(row: TeamDbRow) {
-  return { id: row.id, name: row.name };
+  return { id: row.id, name: row.name, archived: row.archived };
 }
 
 function mapAttendanceDbRow(row: AttendanceDbRow) {
@@ -399,7 +400,7 @@ async function querySessions(
 }
 
 async function queryTeams(client: SupabaseClient): Promise<LoaderQueryResult<TeamDbRow[]>> {
-  const result = await client.from('teams').select('id, name').order('sort_order', {
+  const result = await client.from('teams').select('id, name, archived').order('sort_order', {
     ascending: true,
   });
   return { data: (result.data as TeamDbRow[] | null) ?? null, error: result.error };

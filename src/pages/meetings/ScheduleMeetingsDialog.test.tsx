@@ -75,8 +75,15 @@ vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-08-06T12:00:00.000Z') }
 // but reusing the same ones avoids inventing new names for no reason).
 // ---------------------------------------------------------------------------
 const TEST_TEAMS: readonly ScheduleTeamOption[] = [
-  { id: 'team-ravens', name: 'Ravens' },
-  { id: 'team-titans', name: 'Titans' },
+  { id: 'team-ravens', name: 'Ravens', archived: false },
+  { id: 'team-titans', name: 'Titans', archived: false },
+];
+
+// GAM-305 (legacy T615) -- one active, one archived team, for the
+// acceptance-criteria tests below (packet §5, criteria 1-4/7/9/10/11).
+const ARCHIVED_TEST_TEAMS: readonly ScheduleTeamOption[] = [
+  { id: 'team-active', name: 'Active Team', archived: false },
+  { id: 'team-archived', name: 'Legacy Forge', archived: true },
 ];
 
 // ---------------------------------------------------------------------------
@@ -157,7 +164,15 @@ function setNativeInputValue(input: HTMLInputElement, value: string): void {
   input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-function clickButton(button: HTMLButtonElement): void {
+// GAM-305 (legacy T615) widens this from `HTMLButtonElement` to
+// `HTMLElement` -- `MultiSelector`'s own options are `role="option"` DIVs,
+// not buttons (`node_modules/@astryxdesign/core/src/MultiSelector/
+// MultiSelector.tsx`'s own `renderItem`), same widening
+// `OutreachEventDialog.test.tsx`'s own `clickButton` already carries for its
+// `Selector` option clicks. Every existing call site here already passes an
+// `HTMLButtonElement`, which is assignable to `HTMLElement`, so this is
+// additive, not a behavior change for any pre-existing test.
+function clickButton(button: HTMLElement): void {
   act(() => {
     button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
   });
@@ -176,6 +191,30 @@ function blurInput(input: HTMLInputElement): void {
   act(() => {
     input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
   });
+}
+
+// ---------------------------------------------------------------------------
+// GAM-305 (legacy T615) -- MultiSelector dropdown helpers. Options render as
+// `role="option"` divs (`node_modules/@astryxdesign/core/src/MultiSelector/
+// MultiSelector.tsx`'s own `renderItem`), same `role="option"` query
+// `OutreachEventDialog.test.tsx`'s own type-Selector tests already use.
+// ---------------------------------------------------------------------------
+
+/** Opens the "Team scope" `MultiSelector`'s dropdown via its real trigger. */
+function openTeamScopeDropdown(): void {
+  clickButton(getFieldControl('Team scope') as HTMLButtonElement);
+}
+
+function teamScopeOptionTexts(): string[] {
+  return Array.from(document.querySelectorAll('[role="option"]')).map(
+    (el) => el.textContent?.trim() ?? '',
+  );
+}
+
+function findTeamScopeOption(text: string): HTMLElement | undefined {
+  return Array.from(document.querySelectorAll('[role="option"]')).find(
+    (el) => el.textContent?.trim() === text,
+  ) as HTMLElement | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -389,6 +428,14 @@ describe('resolveTeamScope', () => {
 
   it('returns an empty array (not null) when nothing is selected', () => {
     expect(resolveTeamScope([], ['a', 'b'])).toEqual([]);
+  });
+
+  // GAM-305 §3d-bis / criterion 11 -- an all-archived roster narrows
+  // `allTeamIds` to `[]`. Without the empty/empty guard, an untouched save
+  // would wrongly write `[]` ("no one") instead of preserving the pre-fix
+  // `null` ("all teams") sentinel.
+  it('GAM-305 §3d-bis: returns null (not []) when both selected and known teams are empty (all-archived roster)', () => {
+    expect(resolveTeamScope([], [])).toBeNull();
   });
 });
 
@@ -1059,6 +1106,244 @@ describe('<ScheduleMeetingsDialog /> submit + cancel behavior', () => {
     // not persist across the close/re-open cycle.
     expect(findButtonByText('Create 0 meetings')).toBeDefined();
     expect(findButtonByText('Create 1 meeting')).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GAM-305 (legacy T615) -- archived teams excluded from the Team scope
+// picker. Acceptance criteria 1-4, 7, 9, 10 (packet §5; criterion 11 is
+// proven at the pure-function level, in the `resolveTeamScope` describe
+// above).
+// ---------------------------------------------------------------------------
+
+describe('<ScheduleMeetingsDialog /> archived teams (GAM-305 criteria 1-4)', () => {
+  it('criterion 1: create mode offers only the active team, never the archived one (mutation: options site reads unfiltered `teams`)', () => {
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog isOpen onOpenChange={() => {}} teams={ARCHIVED_TEST_TEAMS} />,
+      );
+    });
+    openTeamScopeDropdown();
+    const texts = teamScopeOptionTexts();
+    expect(texts).toContain('Active Team');
+    expect(texts).not.toContain('Legacy Forge');
+  });
+
+  it('criterion 2: the archived team is absent from the default selection, before any interaction (mutation: `allTeamIds` reverts to unfiltered `teams`)', () => {
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog isOpen onOpenChange={() => {}} teams={ARCHIVED_TEST_TEAMS} />,
+      );
+    });
+    // No interaction at all -- the `teamOptions` "keep already-selected
+    // archived teams visible" carve-out (§3d) only ever surfaces the
+    // archived team when it is a MEMBER of `selectedTeamIds`. If the
+    // default selection wrongly included it (the `allTeamIds` mutation),
+    // it would appear here as a disabled, already-ticked row.
+    openTeamScopeDropdown();
+    expect(teamScopeOptionTexts()).not.toContain('Legacy Forge');
+  });
+
+  it('criterion 3: the active team is offered AND ticked (mutation: invert the exclusion predicate to `team.archived`)', () => {
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog isOpen onOpenChange={() => {}} teams={ARCHIVED_TEST_TEAMS} />,
+      );
+    });
+    openTeamScopeDropdown();
+    expect(teamScopeOptionTexts()).not.toContain('Legacy Forge');
+    const activeOption = findTeamScopeOption('Active Team');
+    expect(activeOption).toBeDefined();
+    expect(activeOption?.getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('criterion 4: driving the picker (clear-all via Select-all, then select-all again) still collapses to null (mutation: filter the options but leave `allTeamIds` unfiltered)', async () => {
+    const onCreateMeetings = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          onCreateMeetings={onCreateMeetings}
+          teams={ARCHIVED_TEST_TEAMS}
+        />,
+      );
+    });
+    const dateInput = getFieldControl('Date') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(dateInput, '2026-07-22');
+    });
+
+    openTeamScopeDropdown();
+    let selectAllOption = findTeamScopeOption('Select all');
+    expect(selectAllOption).toBeDefined();
+    clickButton(selectAllOption as HTMLElement); // clear-all
+    // The dropdown re-renders between clicks; re-query rather than reuse a
+    // stale element reference.
+    selectAllOption = findTeamScopeOption('Select all');
+    clickButton(selectAllOption as HTMLElement); // select-all
+
+    clickButton(findButtonByText('Create 1 meeting') as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(onCreateMeetings).toHaveBeenCalledTimes(1);
+    const payload = onCreateMeetings.mock.calls[0][0] as CreateMeetingsPayload;
+    expect(payload.event.teamIds).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GAM-305 (legacy T615) -- edit-mode archived-team behaviour. Acceptance
+// criteria 7, 9, 10 (packet §5).
+// ---------------------------------------------------------------------------
+
+describe('<ScheduleMeetingsDialog /> archived teams -- edit mode (GAM-305 criteria 7, 9, 10)', () => {
+  const EDIT_SESSION: ExistingMeetingSeriesSession = {
+    sessionId: 'session-archived-fixture',
+    sessionDate: '2026-08-10',
+    startsAt: '2026-08-10T23:00:00.000Z',
+    endsAt: '2026-08-11T01:00:00.000Z',
+    status: 'scheduled',
+  };
+
+  function findAlertDialogElement(): HTMLElement | undefined {
+    return (
+      (document.querySelector('dialog[role="alertdialog"]') as HTMLElement | null) ?? undefined
+    );
+  }
+
+  function findButtonInAlertDialog(text: string): HTMLButtonElement | undefined {
+    return Array.from(findAlertDialogElement()?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent?.trim() === text,
+    );
+  }
+
+  async function confirmSave(): Promise<void> {
+    clickButton(findButtonByText('Save changes') as HTMLButtonElement);
+    await flushMicrotasks();
+    clickButton(findButtonInAlertDialog('Save changes') as HTMLButtonElement);
+    await flushMicrotasks();
+  }
+
+  it('criterion 7: an edit-mode event stored `teamIds: null`, with an archived team present, still saves `teamIds: null` when untouched (mutation: seed the edit-mode reset from unfiltered `teams`)', async () => {
+    const onSaveMeetingSeries = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={ARCHIVED_TEST_TEAMS}
+          initialData={{
+            eventId: 'event-archived-null-scope',
+            title: 'All-teams meeting',
+            teamIds: null,
+            locationName: 'Robotics Lab',
+            description: '',
+            sessions: [EDIT_SESSION],
+          }}
+          onSaveMeetingSeries={onSaveMeetingSeries}
+        />,
+      );
+    });
+
+    await confirmSave();
+
+    expect(onSaveMeetingSeries).toHaveBeenCalledTimes(1);
+    const payload = onSaveMeetingSeries.mock.calls[0][0] as SaveMeetingSeriesPayload;
+    expect(payload.event.teamIds).toBeNull();
+  });
+
+  it('criterion 9: a team archived after an event was scoped to it stays legible (name, not uuid) in the Team scope trigger (mutation: drop the `|| selectedTeamIds.includes(t.id)` carve-out)', () => {
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={ARCHIVED_TEST_TEAMS}
+          initialData={{
+            eventId: 'event-legacy-archived-scope',
+            title: 'Legacy scoped meeting',
+            teamIds: ['team-active', 'team-archived'],
+            locationName: 'Robotics Lab',
+            description: '',
+            sessions: [EDIT_SESSION],
+          }}
+        />,
+      );
+    });
+
+    const trigger = getFieldControl('Team scope');
+    expect(trigger.textContent).toContain('Legacy Forge');
+    // The raw id (this fixture's uuid stand-in) must never leak into the
+    // trigger -- that is precisely the defect this criterion guards.
+    expect(trigger.textContent).not.toContain('team-archived');
+  });
+
+  it('criterion 9 (clause 2, corroborated by criterion 10 below): saving a legacy `[active, archived]` scope unchanged writes the same explicit array back', async () => {
+    const onSaveMeetingSeries = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={ARCHIVED_TEST_TEAMS}
+          initialData={{
+            eventId: 'event-legacy-archived-scope',
+            title: 'Legacy scoped meeting',
+            teamIds: ['team-active', 'team-archived'],
+            locationName: 'Robotics Lab',
+            description: '',
+            sessions: [EDIT_SESSION],
+          }}
+          onSaveMeetingSeries={onSaveMeetingSeries}
+        />,
+      );
+    });
+
+    await confirmSave();
+
+    expect(onSaveMeetingSeries).toHaveBeenCalledTimes(1);
+    const payload = onSaveMeetingSeries.mock.calls[0][0] as SaveMeetingSeriesPayload;
+    expect(payload.event.teamIds).toEqual(expect.arrayContaining(['team-active', 'team-archived']));
+    expect(payload.event.teamIds).toHaveLength(2);
+  });
+
+  it('criterion 10: Select-all cannot widen an existing archived scope -- driving it twice on a legacy `[active, archived]` event still saves the archived id (mutation: drop `disabled: t.archived` from the options mapping)', async () => {
+    const onSaveMeetingSeries = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={ARCHIVED_TEST_TEAMS}
+          initialData={{
+            eventId: 'event-legacy-archived-scope',
+            title: 'Legacy scoped meeting',
+            teamIds: ['team-active', 'team-archived'],
+            locationName: 'Robotics Lab',
+            description: '',
+            sessions: [EDIT_SESSION],
+          }}
+          onSaveMeetingSeries={onSaveMeetingSeries}
+        />,
+      );
+    });
+
+    openTeamScopeDropdown();
+    let selectAllOption = findTeamScopeOption('Select all');
+    expect(selectAllOption).toBeDefined();
+    clickButton(selectAllOption as HTMLElement); // 1st Select-all
+    selectAllOption = findTeamScopeOption('Select all');
+    clickButton(selectAllOption as HTMLElement); // 2nd Select-all
+
+    await confirmSave();
+
+    expect(onSaveMeetingSeries).toHaveBeenCalledTimes(1);
+    const payload = onSaveMeetingSeries.mock.calls[0][0] as SaveMeetingSeriesPayload;
+    // Never null (that would mean the archived id silently widened the
+    // scope to "all teams"), and the archived id itself must survive.
+    expect(payload.event.teamIds).not.toBeNull();
+    expect(payload.event.teamIds).toContain('team-archived');
   });
 });
 

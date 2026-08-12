@@ -86,7 +86,7 @@ describe('queryAllTeams (via makeLoadOutreachDetail) -- T146 select-string guard
     // than exporting the module-private `queryAllTeams` itself.
     const teamsSelectSpy = vi.fn(() => ({
       order: vi.fn().mockResolvedValue({
-        data: [{ id: 't1', name: 'Ravens', color: 'blue' }],
+        data: [{ id: 't1', name: 'Ravens', color: 'blue', archived: false }],
         error: null,
       }),
     }));
@@ -122,15 +122,21 @@ describe('queryAllTeams (via makeLoadOutreachDetail) -- T146 select-string guard
     const columns = parseSelectedColumns(recordedSelectArg);
     const askedForColor = columns.has('*') || columns.has('color');
     expect(askedForColor).toBe(true);
+    // GAM-305 (legacy T615) criterion 5 -- the select-string guard for
+    // `archived`. A type assertion cannot catch this (both loaders cast with
+    // `as TeamDbRow[]`, so a dropped column compiles fine); only reading the
+    // recorded `.select()` argument catches a revert.
+    const askedForArchived = columns.has('*') || columns.has('archived');
+    expect(askedForArchived).toBe(true);
     if (!columns.has('*')) {
       expect(columns.has('id')).toBe(true);
       expect(columns.has('name')).toBe(true);
     }
 
     // The mapper hop (`mapTeamDbRowToTeamOption`, outreach.ts:607-609): a
-    // stubbed `color` on the raw DB row must survive into the loader's
-    // reshaped result, not just get asked for.
-    expect(result?.teams).toEqual([{ id: 't1', name: 'Ravens', color: 'blue' }]);
+    // stubbed `color`/`archived` on the raw DB row must survive into the
+    // loader's reshaped result, not just get asked for.
+    expect(result?.teams).toEqual([{ id: 't1', name: 'Ravens', color: 'blue', archived: false }]);
   });
 
   // T157: the same guard, for the same reason, applied to the OTHER column

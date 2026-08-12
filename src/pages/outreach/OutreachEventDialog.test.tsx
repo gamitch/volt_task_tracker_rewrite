@@ -97,8 +97,8 @@ function t(value: string): ISOTimeString {
 // Chen" visible) break.
 // ---------------------------------------------------------------------------
 const TEST_TEAMS: readonly OutreachTeamOption[] = [
-  { id: 'team-ravens', name: 'Ravens' },
-  { id: 'team-titans', name: 'Titans' },
+  { id: 'team-ravens', name: 'Ravens', archived: false },
+  { id: 'team-titans', name: 'Titans', archived: false },
 ];
 
 // ---------------------------------------------------------------------------
@@ -216,6 +216,34 @@ function clickButton(button: HTMLElement): void {
     button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
   });
 }
+
+// ---------------------------------------------------------------------------
+// GAM-305 (legacy T615) -- Team scope `MultiSelector` dropdown helpers, same
+// `role="option"` query this file's own type-Selector tests already use.
+// ---------------------------------------------------------------------------
+
+function openTeamScopeDropdown(): void {
+  clickButton(getFieldControl('Team scope'));
+}
+
+function teamScopeOptionTexts(): string[] {
+  return Array.from(document.querySelectorAll('[role="option"]')).map(
+    (el) => el.textContent?.trim() ?? '',
+  );
+}
+
+function findTeamScopeOption(text: string): HTMLElement | undefined {
+  return Array.from(document.querySelectorAll('[role="option"]')).find(
+    (el) => el.textContent?.trim() === text,
+  ) as HTMLElement | undefined;
+}
+
+// GAM-305 -- one active, one archived team, for the acceptance-criteria
+// tests below (packet §5, criteria 1-4/6/7/9/10).
+const ARCHIVED_TEST_TEAMS: readonly OutreachTeamOption[] = [
+  { id: 'team-active', name: 'Active Team', archived: false },
+  { id: 'team-archived', name: 'Legacy Forge', archived: true },
+];
 
 // ---------------------------------------------------------------------------
 // Pure session-generation math -- one describe block per schedule mode.
@@ -507,14 +535,22 @@ describe('resolveTeamScope', () => {
   it('returns the explicit list when only a subset is selected', () => {
     expect(resolveTeamScope(['a'], ['a', 'b'])).toEqual(['a']);
   });
+
+  // GAM-305 §3d-bis / criterion 11 -- an all-archived roster narrows
+  // `allTeamIds` to `[]`. Without the empty/empty guard, an untouched save
+  // would wrongly write `[]` ("no one") instead of preserving the pre-fix
+  // `null` ("all teams") sentinel.
+  it('GAM-305 §3d-bis: returns null (not []) when both selected and known teams are empty (all-archived roster)', () => {
+    expect(resolveTeamScope([], [])).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
 // T118 (UXP-02) -- "Expected attendees" roster pure functions.
 // ---------------------------------------------------------------------------
 
-const TEAM_A = { id: 'team-a', name: 'Alpha' };
-const TEAM_B = { id: 'team-b', name: 'Beta' };
+const TEAM_A = { id: 'team-a', name: 'Alpha', archived: false };
+const TEAM_B = { id: 'team-b', name: 'Beta', archived: false };
 const ROSTER: readonly OutreachRosterStudent[] = [
   { id: 'student-1', name: 'Amara', teamId: 'team-a', isActive: true },
   { id: 'student-2', name: 'Beto', teamId: 'team-a', isActive: false }, // inactive -- excluded.
@@ -1018,6 +1054,100 @@ describe('<OutreachEventDialog /> submit + cancel behavior', () => {
 });
 
 // ---------------------------------------------------------------------------
+// GAM-305 (legacy T615) criterion 6 -- OutreachEventDialog holds criteria
+// 1-4 (packet §5) by its own tests, mirroring
+// `ScheduleMeetingsDialog.test.tsx`'s equivalent describe block.
+// ---------------------------------------------------------------------------
+
+describe('<OutreachEventDialog /> archived teams (GAM-305 criteria 1-4)', () => {
+  it('criterion 1: create mode offers only the active team, never the archived one (mutation: options site reads unfiltered `teams`)', () => {
+    act(() => {
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={ARCHIVED_TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
+    });
+    openTeamScopeDropdown();
+    const texts = teamScopeOptionTexts();
+    expect(texts).toContain('Active Team');
+    expect(texts).not.toContain('Legacy Forge');
+  });
+
+  it('criterion 2: the archived team is absent from the default selection, before any interaction (mutation: `allTeamIds` reverts to unfiltered `teams`)', () => {
+    act(() => {
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={ARCHIVED_TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
+    });
+    openTeamScopeDropdown();
+    expect(teamScopeOptionTexts()).not.toContain('Legacy Forge');
+  });
+
+  it('criterion 3: the active team is offered AND ticked (mutation: invert the exclusion predicate to `team.archived`)', () => {
+    act(() => {
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={ARCHIVED_TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
+    });
+    openTeamScopeDropdown();
+    const activeOption = findTeamScopeOption('Active Team');
+    expect(activeOption).toBeDefined();
+    expect(activeOption?.getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('criterion 4: driving the picker (clear-all via Select-all, then select-all again) still collapses to null (mutation: filter the options but leave `allTeamIds` unfiltered)', async () => {
+    const onSaveEvent = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          onSaveEvent={onSaveEvent}
+          teams={ARCHIVED_TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
+    });
+    const titleInput = getFieldControl('Title') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(titleInput, 'Community Food Bank Sort');
+    });
+    const dateInput = getFieldControl('Date') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(dateInput, '2026-07-22');
+    });
+
+    openTeamScopeDropdown();
+    let selectAllOption = findTeamScopeOption('Select all');
+    expect(selectAllOption).toBeDefined();
+    clickButton(selectAllOption as HTMLElement); // clear-all
+    selectAllOption = findTeamScopeOption('Select all');
+    clickButton(selectAllOption as HTMLElement); // select-all
+
+    clickButton(findButtonByText('Create event — 1 session') as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(onSaveEvent).toHaveBeenCalledTimes(1);
+    const payload = onSaveEvent.mock.calls[0][0] as SaveOutreachEventPayload;
+    expect(payload.event.teamIds).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Edit mode (module doc #8 -- the "edit" half of "New/edit outreach event").
 // ---------------------------------------------------------------------------
 
@@ -1122,6 +1252,136 @@ describe('<OutreachEventDialog /> edit mode (module doc #8)', () => {
     });
     const checkbox = getFieldControl('Riley Chen') as HTMLInputElement;
     expect(checkbox.checked).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GAM-305 (legacy T615) -- edit-mode archived-team behaviour. Acceptance
+// criteria 7, 9, 10 (packet §5), mirroring
+// `ScheduleMeetingsDialog.test.tsx`'s equivalent describe block.
+// ---------------------------------------------------------------------------
+
+describe('<OutreachEventDialog /> archived teams -- edit mode (GAM-305 criteria 7, 9, 10)', () => {
+  const ARCHIVED_EXISTING_EVENT_BASE = {
+    id: 'event-archived-fixture',
+    title: 'Legacy scoped outreach event',
+    description: '',
+    locationName: 'Riverside Food Bank',
+    address: '100 Riverside Dr',
+    type: 'outreach' as const,
+    countsParticipation: false,
+    countsVolunteerHours: true,
+    adultVolunteersCount: 0,
+    adultVolunteerHours: 0,
+    shareToCalendarFeed: true,
+    sessions: [
+      { sessionDate: '2026-08-02', startTime: '09:00', endTime: '12:00', peopleReached: null },
+    ],
+  };
+
+  it('criterion 7: an edit-mode event stored `teamIds: null`, with an archived team present, still saves `teamIds: null` when untouched (mutation: seed the edit-mode reset from unfiltered `teams`)', async () => {
+    const onSaveEvent = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          initialEvent={{ ...ARCHIVED_EXISTING_EVENT_BASE, teamIds: null }}
+          onSaveEvent={onSaveEvent}
+          teams={ARCHIVED_TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
+    });
+
+    clickButton(findButtonByText('Save changes — 1 session') as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(onSaveEvent).toHaveBeenCalledTimes(1);
+    const payload = onSaveEvent.mock.calls[0][0] as SaveOutreachEventPayload;
+    expect(payload.event.teamIds).toBeNull();
+  });
+
+  it('criterion 9: a team archived after an event was scoped to it stays legible (name, not uuid) in the Team scope trigger (mutation: drop the `|| selectedTeamIds.includes(t.id)` carve-out)', () => {
+    act(() => {
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          initialEvent={{
+            ...ARCHIVED_EXISTING_EVENT_BASE,
+            teamIds: ['team-active', 'team-archived'],
+          }}
+          teams={ARCHIVED_TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
+    });
+
+    const trigger = getFieldControl('Team scope');
+    expect(trigger.textContent).toContain('Legacy Forge');
+    expect(trigger.textContent).not.toContain('team-archived');
+  });
+
+  it('criterion 9 (clause 2, corroborated by criterion 10 below): saving a legacy `[active, archived]` scope unchanged writes the same explicit array back', async () => {
+    const onSaveEvent = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          initialEvent={{
+            ...ARCHIVED_EXISTING_EVENT_BASE,
+            teamIds: ['team-active', 'team-archived'],
+          }}
+          onSaveEvent={onSaveEvent}
+          teams={ARCHIVED_TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
+    });
+
+    clickButton(findButtonByText('Save changes — 1 session') as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(onSaveEvent).toHaveBeenCalledTimes(1);
+    const payload = onSaveEvent.mock.calls[0][0] as SaveOutreachEventPayload;
+    expect(payload.event.teamIds).toEqual(expect.arrayContaining(['team-active', 'team-archived']));
+    expect(payload.event.teamIds).toHaveLength(2);
+  });
+
+  it('criterion 10: Select-all cannot widen an existing archived scope -- driving it twice on a legacy `[active, archived]` event still saves the archived id (mutation: drop `disabled: t.archived` from the options mapping)', async () => {
+    const onSaveEvent = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          initialEvent={{
+            ...ARCHIVED_EXISTING_EVENT_BASE,
+            teamIds: ['team-active', 'team-archived'],
+          }}
+          onSaveEvent={onSaveEvent}
+          teams={ARCHIVED_TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
+    });
+
+    openTeamScopeDropdown();
+    let selectAllOption = findTeamScopeOption('Select all');
+    expect(selectAllOption).toBeDefined();
+    clickButton(selectAllOption as HTMLElement); // 1st Select-all
+    selectAllOption = findTeamScopeOption('Select all');
+    clickButton(selectAllOption as HTMLElement); // 2nd Select-all
+
+    clickButton(findButtonByText('Save changes — 1 session') as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(onSaveEvent).toHaveBeenCalledTimes(1);
+    const payload = onSaveEvent.mock.calls[0][0] as SaveOutreachEventPayload;
+    expect(payload.event.teamIds).not.toBeNull();
+    expect(payload.event.teamIds).toContain('team-archived');
   });
 });
 
@@ -1277,8 +1537,8 @@ describe('<OutreachEventDialog /> "Expected attendees" checklist (UXP-02)', () =
 
   it('scopes the visible roster to the currently-selected teams via the injectable students/teams props', () => {
     const teams = [
-      { id: 'team-a', name: 'Alpha' },
-      { id: 'team-b', name: 'Beta' },
+      { id: 'team-a', name: 'Alpha', archived: false },
+      { id: 'team-b', name: 'Beta', archived: false },
     ];
     const students: readonly OutreachRosterStudent[] = [
       { id: 'student-a', name: 'Ann', teamId: 'team-a', isActive: true },

@@ -115,11 +115,13 @@
  * (`supabase/migrations/20260716000000_identity_roster.sql` lines 29-38 --
  * `StudentsTab.tsx`'s own `TeamRow` didn't need `archived` for its screen,
  * so this is a superset built directly off the same migration, not copied
- * from that file). `filterSelectableTeams` is the ONLY place archived teams
- * are excluded from the `Selector`'s option list -- same "archived teams
- * disappear from selectors" rule `TeamsTab.tsx`/T026 will also need to
- * respect independently (no coordination needed; this file applies it on
- * its own). `StudentDialog.test.tsx`'s own `TEST_TEAMS` fixture deliberately
+ * from that file). `filterSelectableTeams` delegates to
+ * `src/lib/teams/archivedTeams.ts`'s `excludeArchivedTeams` -- GAM-305
+ * (legacy T615) made that shared helper the ONE place archived teams are
+ * excluded from a selectable option list, once `ScheduleMeetingsDialog.tsx`
+ * and `OutreachEventDialog.tsx` needed the same exclusion this file already
+ * had; this function keeps its own name/signature for its existing callers
+ * and tests. `StudentDialog.test.tsx`'s own `TEST_TEAMS` fixture deliberately
  * includes one archived team specifically to prove the exclusion is real,
  * not vacuous (see that file's own `filterSelectableTeams` module doc #4
  * test).
@@ -225,6 +227,9 @@ import {
 // `SupabaseLoaderError` rejection's own `.message` win over the generic
 // fallback below, same fix `InviteParentDialog.tsx` already made (T087).
 import { isSupabaseLoaderError } from '../../lib/supabase';
+// GAM-305 (legacy T615) §3a -- the shared predicate `filterSelectableTeams`
+// below now delegates to.
+import { excludeArchivedTeams } from '../../lib/teams/archivedTeams';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real column subsets, plus one
@@ -317,12 +322,14 @@ export function computeGoalOverrideHelperText(defaultGoalHours: number): string 
   return `Uses the season default (${defaultGoalHours} h) if left blank`;
 }
 
-/** Module doc #4 -- the ONLY place archived teams are excluded from the
- * `Selector`'s option list. */
+/** Module doc #4 -- delegates to `src/lib/teams/archivedTeams.ts`'s
+ * `excludeArchivedTeams`, GAM-305's (legacy T615) shared predicate. Keeps
+ * this function's own exported name/signature for its existing callers and
+ * tests; the exclusion itself now lives in exactly one place. */
 export function filterSelectableTeams(
   teams: readonly StudentDialogTeamOption[],
 ): StudentDialogTeamOption[] {
-  return teams.filter((team) => !team.archived);
+  return excludeArchivedTeams(teams);
 }
 
 interface StudentFormState {

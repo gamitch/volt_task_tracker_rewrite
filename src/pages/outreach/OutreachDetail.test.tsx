@@ -882,8 +882,10 @@ describe('<OutreachDetail /> MetadataList content', () => {
   });
 
   it('resolveCreatorName / formatScopeLabel pure-function proof', () => {
-    // T143 -- `color` required.
-    const TEAMS: TeamOption[] = [{ id: 'team-ravens', name: 'Ravens', color: 'blue' }];
+    // T143 -- `color` required. GAM-305 -- `archived` required.
+    const TEAMS: TeamOption[] = [
+      { id: 'team-ravens', name: 'Ravens', color: 'blue', archived: false },
+    ];
     expect(formatScopeLabel(null, TEAMS)).toBe('All teams');
     expect(formatScopeLabel(['team-ravens'], TEAMS)).toBe('Ravens');
     expect(formatScopeLabel(['team-unknown'], TEAMS)).toBe('No teams');
@@ -1730,8 +1732,18 @@ describe('T147: OutreachEventDialog (edit mode) submits real team UUIDs, not DEF
   // (`teams.id uuid primary key`); fabricated names (constitution item 6) --
   // never asserted on, so no naming trap to avoid here.
   const REAL_TEAMS: TeamOption[] = [
-    { id: 'c2222222-2222-4222-8222-222222222222', name: 'Nimbus Ninjas', color: 'blue' },
-    { id: 'c3333333-3333-4333-8333-333333333333', name: 'Solar Sentinels', color: 'green' },
+    {
+      id: 'c2222222-2222-4222-8222-222222222222',
+      name: 'Nimbus Ninjas',
+      color: 'blue',
+      archived: false,
+    },
+    {
+      id: 'c3333333-3333-4333-8333-333333333333',
+      name: 'Solar Sentinels',
+      color: 'green',
+      archived: false,
+    },
   ];
 
   async function loadDataWithRealTeams(eventId: string): Promise<OutreachDetailData | null> {
@@ -2044,8 +2056,8 @@ function makeParentLoadData(rsvps: readonly RsvpRow[] = []) {
       rsvps,
       students: [LINKED_STUDENT, UNLINKED_TEAMMATE, OUT_OF_SCOPE_LINKED_STUDENT],
       teams: [
-        { id: 'team-ravens', name: 'Ravens', color: 'blue' },
-        { id: 'team-titans', name: 'Titans', color: 'green' },
+        { id: 'team-ravens', name: 'Ravens', color: 'blue', archived: false },
+        { id: 'team-titans', name: 'Titans', color: 'green', archived: false },
       ],
       profiles: [],
     };
@@ -2639,8 +2651,8 @@ function makeStudentSelfLoadData(
       rsvps,
       students,
       teams: [
-        { id: 'team-ravens', name: 'Ravens', color: 'blue' },
-        { id: 'team-titans', name: 'Titans', color: 'green' },
+        { id: 'team-ravens', name: 'Ravens', color: 'blue', archived: false },
+        { id: 'team-titans', name: 'Titans', color: 'green', archived: false },
       ],
       profiles: [],
     };
@@ -3128,7 +3140,7 @@ function makeMarkDayCompleteLoadData(
     sessions: [MDC_SESSION_1, MDC_SESSION_2, MDC_SESSION_3],
     rsvps: [],
     students: MDC_ROSTER,
-    teams: [{ id: 'team-comets', name: 'Comets', color: 'purple' }],
+    teams: [{ id: 'team-comets', name: 'Comets', color: 'purple', archived: false }],
     profiles: [],
     ...overrides,
   });
