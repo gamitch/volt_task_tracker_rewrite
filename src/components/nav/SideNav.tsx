@@ -85,10 +85,13 @@
  * the CLI shows `label` is `string`, not `ReactNode`, so that composition
  * would itself be an undocumented-prop-type guess). `variant="neutral"` is
  * passed explicitly (never inferred from the component default) so the
- * "never error/red" requirement is visible in the code. The count itself
- * (`PLACEHOLDER_OUTREACH_BADGE_COUNT`) is a disclosed placeholder, same
- * spirit as TopNav's `PLACEHOLDER_SEASON_OPTIONS` (T006) -- the real
- * unanswered-RSVP count is wired later by T038.
+ * "never error/red" requirement is visible in the code. GAM-301 (T407)
+ * round 3: the count is now the real BEH-04 unanswered-future-outreach
+ * count, via `useOutreachBadgeCount` (`./useOutreachBadgeCount.ts`), called
+ * directly by this component (not threaded through `AppShell.tsx` -- see
+ * that hook's own module doc for the full seam-decision record). The badge
+ * is omitted entirely (not rendered with a fabricated `0`) whenever the hook
+ * returns `null` (unknown/loading/error/staff role).
  *
  * Icons: deliberately omitted. None of `Icon`'s built-in semantic names is
  * a clean match for these 7 items, and the dependency allowlist
@@ -107,14 +110,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Badge, SideNav as AstryxSideNav, SideNavItem, SideNavSection } from '@astryxdesign/core';
 import { routePaths } from '../../app/router';
 import { useAuth } from '../../app/guards';
-
-/**
- * BEH-04 placeholder unanswered-RSVP count for the Outreach nav item. No
- * real outreach/RSVP data source exists yet as of this task -- the real
- * count is wired by T038. Same category of clearly-labeled placeholder as
- * TopNav's `PLACEHOLDER_SEASON_OPTIONS` (T006).
- */
-const PLACEHOLDER_OUTREACH_BADGE_COUNT = 0;
+import { useOutreachBadgeCount, type UseOutreachBadgeCountOptions } from './useOutreachBadgeCount';
 
 interface NavItemConfig {
   label: string;
@@ -134,9 +130,16 @@ const NAV_ITEMS: readonly NavItemConfig[] = [
   { label: 'Settings', route: routePaths.settings, staffOnly: false },
 ];
 
-export function SideNav(): ReactNode {
+export interface SideNavProps {
+  /** Test seam: injected options for the badge hook. Production passes
+   * nothing (the hook's own real defaults apply). */
+  outreachBadgeCountOptions?: UseOutreachBadgeCountOptions;
+}
+
+export function SideNav({ outreachBadgeCountOptions }: SideNavProps = {}): ReactNode {
   const { user } = useAuth();
   const location = useLocation();
+  const outreachBadgeCount = useOutreachBadgeCount(outreachBadgeCountOptions);
 
   // K2 gap workaround -- see module doc above. Matches TopNav's (T006)
   // `isStaffRole` check verbatim, including null-safety.
@@ -170,9 +173,15 @@ export function SideNav(): ReactNode {
               // BEH-04: neutral, never-red badge slot -- see module doc
               // "Badge-slot resolution" above. NAV-07: Meetings and
               // Outreach stay two separate SideNavItems with two separate
-              // hrefs; only Outreach's own item gets a badge.
-              item.label === 'Outreach' ? (
-                <Badge variant="neutral" label={PLACEHOLDER_OUTREACH_BADGE_COUNT} />
+              // hrefs; only Outreach's own item gets a badge. `null` means
+              // "no badge" (module doc, `useOutreachBadgeCount`'s own
+              // return-type contract) -- never a fabricated `0`.
+              item.label === 'Outreach' && outreachBadgeCount !== null ? (
+                <Badge
+                  variant="neutral"
+                  label={outreachBadgeCount}
+                  data-testid="outreach-nav-badge"
+                />
               ) : undefined
             }
           />

@@ -123,14 +123,7 @@ import {
 } from '@astryxdesign/core';
 import { routePaths } from '../../app/router';
 import { useAuth } from '../../app/guards';
-
-/**
- * BEH-04 placeholder unanswered-RSVP count for the Outreach nav item. No
- * real outreach/RSVP data source exists yet as of this task -- the real
- * count is wired by T038. Duplicated verbatim from `SideNav.tsx`'s own
- * placeholder (see "Item-list duplication" note above).
- */
-const PLACEHOLDER_OUTREACH_BADGE_COUNT = 0;
+import { useOutreachBadgeCount, type UseOutreachBadgeCountOptions } from './useOutreachBadgeCount';
 
 interface NavItemConfig {
   label: string;
@@ -154,9 +147,16 @@ const NAV_ITEMS: readonly NavItemConfig[] = [
   { label: 'Settings', route: routePaths.settings, staffOnly: false },
 ];
 
-export function MobileNav(): ReactNode {
+export interface MobileNavProps {
+  /** Test seam: injected options for the badge hook. Production passes
+   * nothing (the hook's own real defaults apply). */
+  outreachBadgeCountOptions?: UseOutreachBadgeCountOptions;
+}
+
+export function MobileNav({ outreachBadgeCountOptions }: MobileNavProps = {}): ReactNode {
   const { user } = useAuth();
   const location = useLocation();
+  const outreachBadgeCount = useOutreachBadgeCount(outreachBadgeCountOptions);
 
   // K2 gap workaround (same as SideNav/TopNav) -- see module doc above.
   const isStaffRole = user?.role === 'admin' || user?.role === 'coach';
@@ -190,9 +190,14 @@ export function MobileNav(): ReactNode {
             endContent={
               // BEH-04: neutral, never-red badge slot -- see SideNav.tsx's
               // own "Badge-slot resolution" doc for the full reasoning
-              // (duplicated behavior, not re-derived here).
-              item.label === 'Outreach' ? (
-                <Badge variant="neutral" label={PLACEHOLDER_OUTREACH_BADGE_COUNT} />
+              // (duplicated behavior, not re-derived here). `null` means "no
+              // badge" -- never a fabricated `0`.
+              item.label === 'Outreach' && outreachBadgeCount !== null ? (
+                <Badge
+                  variant="neutral"
+                  label={outreachBadgeCount}
+                  data-testid="outreach-nav-badge"
+                />
               ) : undefined
             }
           />
