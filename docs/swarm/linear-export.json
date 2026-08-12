@@ -1,6 +1,6 @@
 {
   "meta": {
-    "exportedAt": "2026-08-12T18:08:12.067Z",
+    "exportedAt": "2026-08-12T19:07:07.561Z",
     "team": "Gamitch",
     "teamKey": "GAM",
     "issueCount": 335,
@@ -5743,18 +5743,18 @@
       "identifier": "GAM-318",
       "legacyId": null,
       "title": "StudentHome's per-row RSVP spinner can never render — `isLoading` is dead code and its comment says otherwise",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "Done",
+      "stateType": "completed",
       "archived": false,
       "labels": [
         "area/w5",
         "tier/standard"
       ],
-      "assignee": null,
+      "assignee": "George Mitchom",
       "blockedBy": [],
       "blocks": [],
       "createdAt": "2026-08-10T13:33:06.738Z",
-      "completedAt": null,
+      "completedAt": "2026-08-12T19:06:45.625Z",
       "canceledAt": null,
       "url": "https://linear.app/gamitch/issue/GAM-318/studenthomes-per-row-rsvp-spinner-can-never-render-isloading-is-dead",
       "description": "A student's per-row \"Sign up\" spinner never appears. The button is passed `isLoading={isThisRowPending}`, and `isThisRowPending` cannot be true for a button that is still on screen — so the code is inert and the comment above it describes an affordance the app does not have.\n\nNothing is broken for the user: the row visibly disappears and every sibling control disables, so the in-flight write is still legible. What is wrong is the record. This is the same shape as item 20's three cited failures — an inert control whose inertness is recorded only in a comment — except that here the comment does not even say it is inert.\n\n## Why it happens\n\n`withLocalRsvpOverride` commits the optimistic RSVP override in the **same batched render** as `setIsRsvpSubmitting`/`setPendingSessionId`. `getUnansweredOutreachOpportunities` then treats any answered RSVP as no-longer-unanswered, so the clicked `SignupOpportunityRowItem` is torn out of the tree in the very commit that sets the flag. The `Button` instance never renders again with `isThisRowPending === true`.\n\nMeasured, not reasoned: a DOM probe during an in-flight write counted `SIGNUP_BUTTON_COUNT_BEFORE=2` → `SIGNUP_BUTTON_COUNT_DURING=1`, with no `aria-busy` on any button anywhere in the tree. Reproduced on both the `going` and the `declined` paths.\n\n**This is not a jsdom artifact and not a test-harness limitation — the spinner is unreachable for a real user too.**\n\n## Where it lives\n\n| File | Line | What it does |\n| -- | -- | -- |\n| `StudentHome.tsx` | 1327 | `isThisRowPending`, provably always `false` while mounted |\n| `StudentHome.tsx` | 1335, 1342 | `isLoading={isThisRowPending}` on both buttons |\n| `StudentHome.tsx` | 1321-1323 | the comment claiming `isLoading` \"is additionally scoped to THIS row\" |\n| `StudentHome.tsx` | 1318, 1324, 1470, 1690 | the `pendingSessionId` prop and state that exist only to feed it |\n| `StudentHome.test.tsx` | 1258-1284 | the only place the limitation is currently written down |\n\n## The one constraint\n\n**Do not \"fix\" this by making the row stay mounted.** The row disappearing is the correct product behaviour — an answered opportunity is no longer an unanswered one — and `getUnansweredOutreachOpportunities` is shared. The choice is between deleting the dead code and documenting it honestly, not between those and resurrecting the spinner.\n\nNote also that `isDisabled` on the same two buttons is **not** dead and must stay: it was measured working on the real components (`nativeDisabled=true` on sibling rows mid-flight). Only the `isLoading`/`pendingSessionId` pair is inert.\n\n## Size and tier\n\nOne file. Either delete `pendingSessionId` and the two `isLoading` props and the state that feeds them (~15 lines across 4 sites), or move `StudentHome.test.tsx:1258-1284`'s caveat into the module doc (~5 lines). No write path changes either way — the `rsvps` upsert is untouched.\n\nSuggested tier **STANDARD**: it is small and safe, but a deletion has no natural mutation that turns a test red, which is one of item 26's FAST preconditions.\n\n## Suggested priority: low\n\n1. **No user is harmed and none will report it.** The in-flight state is already legible through the row's disappearance and the sibling disable.\n2. **Nothing is blocked on it.** No row cites it.\n3. **The cost is a misleading comment in a file the next RSVP task will read.** That is the whole case for fixing it — an implementer who trusts `StudentHome.tsx:1321-1323` will believe the per-row spinner works.\n\nIt stops being deferrable the next time someone edits this control, because they will read the comment.\n\n## Verification note\n\nFound by `checker-reviewer` during GAM-304's HEAVY acceptance check and **confirmed by execution twice** — once by the worker, once independently by the checker in its own worktree. Line numbers re-checked at `4460dec` on `claude/gam-304-rsvp-write` on 2026-08-10.\n\n**These line numbers refer to the GAM-304 branch, not to** `main` — GAM-304 has not merged as this is written. Re-verify after it lands.\n\nThe related acceptance criterion (GAM-304's packet criterion 7, \"the **clicked** button shows `isLoading`\") was graded **structurally unsatisfiable as written**. The worker asserted only the observable sibling-disable half and disclosed the rest rather than fabricating an assertion, which is the correct outcome; the criterion was defective, not the implementation."
