@@ -1255,7 +1255,7 @@ describe('GAM-304 -- a rejected RSVP write rolls back and renders the error bann
   });
 });
 
-describe('GAM-319 -- a generic write failure gets save-flavoured copy, not loader.ts\'s read-flavoured default', () => {
+describe("GAM-319 -- a generic write failure gets save-flavoured copy, not loader.ts's read-flavoured default", () => {
   it('renders "Couldn\'t save your RSVP..." and never the read-flavoured DEFAULT_LOADER_ERROR_MESSAGE', async () => {
     // Same plain, non-`Error` `SupabaseLoaderError` shape `runMutation`
     // (`loader.ts`) actually rejects with for any Postgrest failure -- NOT
@@ -1286,7 +1286,9 @@ describe('GAM-319 -- a generic write failure gets save-flavoured copy, not loade
     });
     await flushMicrotasks();
 
-    expect(container.textContent).toContain("Couldn't save your RSVP. Check your connection and try again.");
+    expect(container.textContent).toContain(
+      "Couldn't save your RSVP. Check your connection and try again.",
+    );
     expect(container.textContent).not.toContain(
       "Couldn't load this data. Check your connection and try again.",
     );

@@ -1370,7 +1370,9 @@ describe('GAM-304 -- the parent card writes for the child with the parent as res
     });
     await flushMicrotasks();
 
-    expect(container.textContent).toContain("Couldn't save this RSVP. Check your connection and try again.");
+    expect(container.textContent).toContain(
+      "Couldn't save this RSVP. Check your connection and try again.",
+    );
     expect(container.textContent).not.toContain(
       "Couldn't load this data. Check your connection and try again.",
     );
