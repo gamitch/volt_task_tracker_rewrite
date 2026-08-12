@@ -267,10 +267,10 @@ describe('runReconcile -- read-only, exits 0 even when drift is found', () => {
     expect(result.drifted).toBe(0);
   });
 
-  it('never calls gqlImpl for a PR with no canonical declaration (nothing to check)', async () => {
+  it('never calls gqlImpl for a HALF_DECLARATION PR -- reported, but with no single issue to attribute it to', async () => {
     const listPRs = vi.fn().mockResolvedValue([{ number: 12, title: 'x', body: 'This PR does not close GAM-1', mergedAt: 't' }]);
     const gqlImpl = vi.fn();
-    await runReconcile({
+    const result = await runReconcile({
       env: { GITHUB_REPOSITORY: 'gamitch/volt_task_tracker_rewrite' },
       listPRs,
       gqlImpl,
@@ -278,6 +278,39 @@ describe('runReconcile -- read-only, exits 0 even when drift is found', () => {
       log: { error: vi.fn(), log: vi.fn() },
     });
     expect(gqlImpl).not.toHaveBeenCalled();
+    expect(result.failedParse).toBe(1);
+  });
+
+  it('GAM-332: a merged PR whose declaration failed to parse (AMBIGUOUS_DECLARATION, HALF_DECLARATION, PLACEHOLDER) is reported as its own drift class, not silently dropped', async () => {
+    const listPRs = vi.fn().mockResolvedValue([
+      { number: 20, title: 'Ambiguous', body: 'Closes GAM-1 GAM-2', mergedAt: '2026-08-11T00:00:00Z' },
+      { number: 21, title: 'Half', body: 'Fixes GAM-3', mergedAt: '2026-08-11T01:00:00Z' },
+      { number: 22, title: 'Placeholder', body: 'Closes GAM-000', mergedAt: '2026-08-11T02:00:00Z' },
+    ]);
+    const gqlImpl = vi.fn();
+    const postSlackImpl = vi.fn().mockResolvedValue({ posted: true });
+
+    const result = await runReconcile({
+      env: { GITHUB_REPOSITORY: 'gamitch/volt_task_tracker_rewrite' },
+      listPRs,
+      gqlImpl,
+      postSlackImpl,
+      log: { error: vi.fn(), log: vi.fn() },
+    });
+
+    expect(gqlImpl).not.toHaveBeenCalled();
+    expect(result.exitCode).toBe(0);
+    expect(result.checked).toBe(0);
+    expect(result.failedParse).toBe(3);
+    expect(result.drifted).toBe(3);
+    const codes = result.entries.map((e) => e.code).sort();
+    expect(codes).toEqual(['AMBIGUOUS_DECLARATION', 'HALF_DECLARATION', 'PLACEHOLDER']);
+    for (const e of result.entries) expect(e.drift).toBe(true);
+
+    const [, message] = postSlackImpl.mock.calls[0];
+    expect(message.lines.join('\n')).toMatch(/PR #20.*failed to.*parse/);
+    expect(message.lines.join('\n')).toMatch(/PR #21.*failed to.*parse/);
+    expect(message.lines.join('\n')).toMatch(/PR #22.*failed to.*parse/);
   });
 
   it('never calls fetch/listPRs when GITHUB_REPOSITORY is unset, and still exits 0', async () => {
