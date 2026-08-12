@@ -81,3 +81,21 @@ Append-only. One line per milestone, committed and pushed immediately.
   `expected 'DUPLICATE_CLOSE_CLAIM' to be 'CLOSE'`. No other test moved.
   `git checkout -- scripts/linear-sync.mjs` restored the real fix; re-ran:
   60/60 green again. Real red output captured above, not summarized.
+- **gates run** — `gate-run --require-clean`, baseline measured fresh at merge
+  base `2d22664` (== `origin/main`) via a dedicated worktree (`npm ci` +
+  `npx vitest run` there): full suite 2359, `scripts/` scoped 235.
+
+  ```
+  GATE RUN — 3d79876 on claude/gam-335-shadow-mode-prior-state — tree clean
+    1 tsc              exit 0  PASS
+    2 vite build       exit 0  PASS
+    3 format:check     exit 0  PASS
+    4 eslint           exit 0  PASS       0 errors, 377 warnings
+    5 vitest (full)    exit 0  PASS       89 files / 2363 tests  baseline 2359 (+4)
+    6 vitest scripts/  exit 0  PASS       9 files / 239 tests   baseline 235 (+4)
+  VERDICT: PASS — all six gates exit 0
+  ```
+
+  **All six, not five** — `--scope scripts/` gave gate 6 a real scope, since
+  the diff is entirely under `scripts/`. Both counts are +4, matching the 4
+  new tests exactly; no other test moved.
