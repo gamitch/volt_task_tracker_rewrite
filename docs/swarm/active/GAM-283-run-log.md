@@ -16,6 +16,8 @@ silently succeeded.
 | 4 | 2026-08-12 | **CLAIMED** — `Todo → In Progress`, read back and confirmed `In Progress`. Label `tier/unreviewed → tier/heavy`, read back and confirmed. |
 | 5 | 2026-08-12 | Branch `claude/gam-283-end-meeting-failure-copy` created off clean `main` (`28f7394`). |
 | 6 | 2026-08-12 | Run log created — first file write of this run. |
+| 7 | 2026-08-12 | Read the four cited sources directly (item 19c, verify your own citations before submitting): `EndMeetingDialog.tsx`, `loaders/endMeeting.ts`, `loader.ts`, GAM-319's landed diff (`5081b1e`). Four corrections to the filing found — recorded in the packet's Premise corrections table. |
+| 8 | 2026-08-12 | Packet written: `docs/swarm/active/GAM-283-packet.md`. Not yet gated — no worker may see it until `checker-premise` returns DISPATCH (item 19). |
 
 ## Tier reasoning (item 26, stated so a wrong call is correctable)
 
