@@ -19,6 +19,7 @@ silently succeeded.
 | 7 | 2026-08-12 | Read the four cited sources directly (item 19c, verify your own citations before submitting): `EndMeetingDialog.tsx`, `loaders/endMeeting.ts`, `loader.ts`, GAM-319's landed diff (`5081b1e`). Four corrections to the filing found — recorded in the packet's Premise corrections table. |
 | 8 | 2026-08-12 | Packet written: `docs/swarm/active/GAM-283-packet.md`. Not yet gated — no worker may see it until `checker-premise` returns DISPATCH (item 19). |
 | 9 | 2026-08-12 | **DISPATCHED `checker-premise` (round 1 of 2, item 19a cap), `run_in_background: false`, orchestrator is blocking on it now.** *If this line is the last one in this file, the run died holding this subagent — that is the failure AGENTS.md § "Two walls" #2 records, and no verdict was ever seen.* |
+| 10 | 2026-08-12 | **VERDICT RECEIVED: `checker-premise` round 1 → REVISE.** 2 BLOCKER, 3 MAJOR, 4 MINOR. It ran the code rather than reading it (worktree `/tmp/gate-283`, removed; shared tree clean). Full findings and my dispositions below. Round 1 of 2 consumed. |
 
 ## Tier reasoning (item 26, stated so a wrong call is correctable)
 
@@ -46,3 +47,70 @@ modified. Item 26 resolves an arguable pair by taking the heavier tier.
 premise (which partial states are reachable, and whether "still open, retry is
 safe" is true for every one of them), not aimed as a full re-audit — GAM-319 is
 a worked precedent for the call-site pattern itself.
+
+## Premise gate round 1 — verdict REVISE (2 BLOCKER, 3 MAJOR, 4 MINOR)
+
+The gate executed the prescription in its own worktree rather than reviewing it,
+which is what item 26 says separates a gate worth its cost from one that is not.
+Baseline it established: **95 files / 2437 tests green at `28f7394`.**
+
+**BLOCKER-1 — my criterion 3 would have put a false statement in front of a
+coach.** I prescribed telling them "the meeting is still open and a retry is
+safe," sourced from `endMeeting.ts:86-87`'s claim that no ordering exists where
+the flip lands and the checkout does not. That claim is true *about ordering*
+and does not cover the **ambiguous write**: if step 3's request commits
+server-side but the response is lost (network drop, proxy timeout, laptop
+sleep), `runMutation`'s `catch` at `loader.ts:214-216` rejects with
+`code: 'UNKNOWN'` **while `event_sessions.status` is already `'completed'`.**
+The gate asserted this and it passes:
+
+    await expect(fn(PAYLOAD)).rejects.toMatchObject({ code: 'UNKNOWN' });
+    expect(db.sessionStatus).toBe('completed');   // "still open" is FALSE
+
+This is precisely the T189 shape my own tier reasoning cited. I trusted a module
+doc describing itself — the packet even told the gate not to, and I had still
+written the constraint as though it were settled. **The retry-safety half
+survives** (all six failure modes converge on the clean-run state after an
+identical retry); the state claim does not.
+
+**BLOCKER-2 — the fix as I specified it would have been invisible.**
+`setIsConfirmOpen(false)` (`EndMeetingDialog.tsx:826`) is *inside* the `try`, so
+on failure the confirm `AlertDialog` stays open. Astryx's `Dialog` calls
+`showModal()`, so the error `Banner` at `:901-907` renders **outside** the top
+layer, behind an inert `::backdrop` at `#00000080`/`blur(2px)`, while the still-
+open modal reads "This meeting will be marked completed." Better copy in an
+unreachable banner is not a fix. Every criterion 1-5 assertion I wrote would
+have passed while the coach saw nothing, because `document.body.textContent`
+cannot tell "rendered" from "rendered behind an inert layer."
+
+**MAJOR-1 — criterion 2's code map was dead code in a costume.** The gate
+enumerated what I did not: `42501` cannot arise from steps 2 or 3 at all (an RLS
+`using` failure on `UPDATE` matches zero rows and returns *success*); network
+failures and `SupabaseNotConfiguredError` all resolve to `'UNKNOWN'`. The only
+broadly reachable non-`UNKNOWN` code is `PGRST301`. Worse, code-differentiated
+copy *conflicts* with criterion 3: "retrying is safe" is wrong advice for an
+expired JWT. My own least-confident decision 3 guessed at this; the gate settled
+it.
+
+**MAJOR-2 — my correction 1 contradicted my correction 4** in the same table.
+The edit path is not "reachable and live"; correction 4 proves it is not.
+
+**MAJOR-3 — correction 2 must state measured scope**, since that is what the
+T508 §3g precedent conditions the test re-derivation on. Measured: exactly
+`EndMeetingDialog.test.tsx:613`, 1 of 30 in that file, 1 of 2437 suite-wide.
+Gate ruled **no boss-architect escalation needed** (my least-confident decision
+2 resolved SOUND).
+
+**MINORs:** GAM-319 actually *keeps* `instanceof Error` as its first branch, so
+this row deliberately diverges from the precedent it cites and must say so;
+`:951` not `:910` is the completed branch; state the 2437 baseline; criterion 6
+was unmeasurable prose.
+
+**Least-confident list outcomes:** 1 SOUND (wrong reasoning), 2 SOUND, 3
+unresolved→settled by gate, **4 WRONG (BLOCKER-1)**, 5 SOUND (HEAVY confirmed —
+the defect required running the code), 6 SOUND with two disclosed divergences
+(unticking the opt-in before retry does not undo landed absences; a between-
+attempts check-in is not checked out by the stale payload).
+
+**Disposition: I accept all nine findings.** Revising the packet now — round 2
+of the item 19a cap. A third REVISE escalates to the owner rather than looping.
