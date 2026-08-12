@@ -277,3 +277,21 @@ line names.
   * **Suite now 43 PASS / 0 FAIL, exit 0**, with all six pre-existing cases still
     PASS at their original expected values (criterion 8 holds).
 - **Opening the PR and moving GAM-299 to `In Review`.**
+- **PR creation refused — same wall as GAM-305 (`c1575bc`), and not routed around.**
+  Both credentials this run holds (`GH_TOKEN` and `GITHUB_TOKEN`, and the
+  `x-access-token` in the remote URL — all the same `ghs_` value) return **HTTP
+  401 Bad credentials** against `api.github.com`, via `gh` and via a direct REST
+  `POST /pulls`. The same token pushes fine, so this is an API-scope boundary, not
+  an expiry: the branch and every commit are on `origin`.
+
+  Following `AGENTS.md` "Two walls" — preserve the undeliverable half as an
+  artifact and lead with it, rather than seeking another channel. The full PR body
+  is committed verbatim at **`docs/swarm/active/GAM-299-pr-body.md`**; opening the
+  PR is one paste. It is also posted as a comment on GAM-299 so it exists outside
+  this repository too.
+- **Gates on the final commit `be3b50c`, tree clean: 5 of 6 PASS** — tsc, vite
+  build, format:check, eslint (0 errors / 377 warnings), full vitest (95 files,
+  2437 tests). Scoped vitest **SKIPPED, not passed**: no `src/` change, so no scope
+  is derivable. Saying five.
+- **Moving GAM-299 `In Progress → In Review`** (item 28e — never `Done`; the merge
+  closes it, not the author).
