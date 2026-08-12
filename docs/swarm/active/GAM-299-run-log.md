@@ -257,3 +257,23 @@ line names.
      The adopted route is not a trade; on the only reachable configuration it is
      **strictly better on both axes**. "The packet reached the right answer on a
      partly wrong argument."
+- **Arbiter action items 1-4 and 6 done.**
+  * **D019 written** to `docs/swarm/dispute-log.md` (numbered D019 because D018 is
+    already allocated to the multi-team ruling in `auto-mode-decisions.md:4128`).
+    It records the dispute, the item-3 ruling and — explicitly — that it
+    **authorises nothing and exempts nothing**, the measured correction to my own
+    §5.2, the coverage gap, both closers, and a named revisit trigger.
+  * **Packet §5.2 corrected**, with the withdrawn sentence struck in place rather
+    than deleted, so the error and its correction both survive.
+  * **Migration comment: (b) re-headed** — it now leads with "(b) IS NOT something
+    this route gives up" and carries the three-route table, so a future reader
+    cannot conclude a different policy would have avoided it.
+  * **Coverage gap closed** (item 6, and the one that mattered): added the
+    re-teamed persona `...d4` and six assertion rows. **Verified non-vacuous by
+    mutation** — with both `create policy` statements removed,
+    `C11-reteamed-still-sees-former-team-event` goes `1 → 0` and the suite exits 1,
+    matching the arbiter's table exactly. Committed before mutating, mutated in a
+    throwaway worktree (items 23/26), worktree removed, cluster stopped.
+  * **Suite now 43 PASS / 0 FAIL, exit 0**, with all six pre-existing cases still
+    PASS at their original expected values (criterion 8 holds).
+- **Opening the PR and moving GAM-299 to `In Review`.**

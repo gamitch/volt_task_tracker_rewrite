@@ -208,9 +208,30 @@ disposable scratch cluster; that is not cutover.
 measurably false. Both are recorded here, and both belong in the migration
 comment and the PR body.*
 
+> **WITHDRAWN, post-merge-gate, by `boss-arbiter` (D019 §4).** The framing
+> sentence below — *"Two states therefore keep a grant that a memberships-only
+> policy would deny"* — **is false for (b)** and is withdrawn on the same terms
+> revision 2's *"no code path can produce that state"* was. **Measured:** the
+> rejected memberships-only route grants the former team **too** (the stale row
+> reads `left_on is null`, so a membership test cannot tell it from a live one)
+> **and additionally denies the student's current team** (1/1 → 0/0), because its
+> bridge fires only for a student with *no* membership rows. So (b) is
+> **route-independent and data-caused**, not a cost of this route:
+>
+> | re-teamed student | former team A | current team B |
+> | -- | -- | -- |
+> | shipped only (today) | 0 / 0 | 1 / 1 |
+> | **shipped + additive (adopted)** | **1 / 1** | **1 / 1** |
+> | memberships-only + bridge (rejected) | **1 / 1** | **0 / 0** |
+>
+> On the only configuration the application can actually produce, the adopted
+> route is **strictly better on both axes** — so §5.1's table understates it. Only
+> (a) below is genuinely given up by this route, and (a) is unreachable today.
+
 Because the shipped policy stays live and grants by `students.team_id`, this
-route does not *remove* any grant that column produces. Two states therefore keep
-a grant that a memberships-only policy would deny:
+route does not *remove* any grant that column produces. Two states keep a grant a
+memberships-only policy would deny **(a)** or that the missing writer produces
+regardless of policy **(b)**:
 
 **(a) Left team that is also the legacy team.** A student whose membership in a
 team is `left_on`-set **and** whose `students.team_id` still names that same team

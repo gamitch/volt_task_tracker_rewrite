@@ -88,6 +88,23 @@
 --       (Measured: such a student still sees that team's event.)
 --
 --   (b) RE-TEAMED STUDENT -- AND THE APPLICATION ACTUALLY PRODUCES THIS ONE.
+--       READ THIS FIRST: (b) IS NOT SOMETHING THIS ROUTE GIVES UP. It is a
+--       consequence of the stale backfill data, and it survives EVERY policy
+--       shape available. Measured by `boss-arbiter` (D019 §4) on a real
+--       cluster, rows visible to a re-teamed student, events / sessions:
+--
+--         route                                  former team | current team
+--         shipped only (before this migration)      0 / 0    |    1 / 1
+--         shipped + additive (THIS migration)       1 / 1    |    1 / 1
+--         memberships-only + bridge (rejected)      1 / 1    |    0 / 0
+--
+--       The rejected alternative grants the former team TOO -- a stale row
+--       reads `left_on is null`, and no policy can tell it from a live
+--       membership -- and additionally DENIES this student their CURRENT
+--       team's events. So the fix exists only at the writer (GAM-340), never
+--       in the policy. It is recorded under this heading because that is where
+--       a reader will look for it, not because a different policy would help.
+--
 --       The only write path, `src/lib/supabase/loaders/students.ts`, updates
 --       `students.team_id` and never writes `student_teams` (no writer exists
 --       anywhere in `src/`, `supabase/functions/`, `scripts/`, or any
