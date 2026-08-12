@@ -41,6 +41,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SupabaseNotConfiguredError } from '../../lib/supabase/client';
 import {
   applyEndMeetingResult,
   buildEndMeetingConfirmDescription,
@@ -50,6 +51,8 @@ import {
   computeEndMeetingSummaryCounts,
   computeNoRecordCount,
   computeUnmarkedStudentIds,
+  describeEndMeetingFailure,
+  END_MEETING_FAILURE_MESSAGE,
   EndMeetingDialog,
   formatEndMeetingSummaryLine,
   type AttendanceRecordState,
@@ -430,6 +433,60 @@ describe('buildMarkRemainingAbsentLabel (module doc section 1a -- C7)', () => {
   });
 });
 
+describe('T607 (GAM-283): describeEndMeetingFailure', () => {
+  it('criterion 6: a SupabaseNotConfiguredError-shaped rejection passes through verbatim (the reachable, precedented differentiation)', () => {
+    const cause = new SupabaseNotConfiguredError();
+    const rejection = { code: 'UNKNOWN', message: cause.message, cause };
+    expect(describeEndMeetingFailure(rejection)).toBe(cause.message);
+    expect(describeEndMeetingFailure(rejection)).toContain("Supabase isn't configured yet");
+  });
+
+  it('criterion 5: a generic SupabaseLoaderError rejection (loader.ts read-flavoured shape, e.g. a Postgrest failure) gets write-flavoured copy, never the read-flavoured DEFAULT_LOADER_ERROR_MESSAGE forwarded verbatim', () => {
+    // Same plain, non-`Error` `SupabaseLoaderError` shape `runMutation`
+    // (`loader.ts`) actually rejects with for any ordinary Postgrest
+    // failure -- NOT the `SupabaseNotConfiguredError` case criterion 6
+    // covers. `cause` here is a plain Postgrest error object, not a
+    // `SupabaseNotConfiguredError` instance.
+    const rejection = {
+      code: '23505',
+      message: "Couldn't load this data. Check your connection and try again.",
+      cause: { message: 'duplicate key value violates unique constraint' },
+    };
+    expect(describeEndMeetingFailure(rejection)).toBe(END_MEETING_FAILURE_MESSAGE);
+    expect(describeEndMeetingFailure(rejection)).not.toContain("Couldn't load this data");
+  });
+
+  it('criterion 4: raw underlying error text (an Error instance, and a SupabaseLoaderError whose cause carries raw text) never renders in the returned copy', () => {
+    // A plain `Error` -- deliberately NOT special-cased (see the function's
+    // own doc comment for why `instanceof Error` is dropped here, diverging
+    // from `extractRsvpErrorMessage`'s landed shape).
+    const rawError = new Error('duplicate key value violates unique constraint "uq_x"');
+    expect(describeEndMeetingFailure(rawError)).toBe(END_MEETING_FAILURE_MESSAGE);
+    expect(describeEndMeetingFailure(rawError)).not.toContain('duplicate key value');
+
+    // A SupabaseLoaderError whose `cause` carries raw Postgrest text.
+    const wrapped = {
+      code: 'PGRST301',
+      message: "Couldn't load this data. Check your connection and try again.",
+      cause: { message: 'JWT expired at 2026-08-12T00:00:00Z' },
+    };
+    expect(describeEndMeetingFailure(wrapped)).not.toContain('JWT expired');
+  });
+
+  it('criterion 3: the fallback copy states retrying is safe and will not double-record, and that anything already recorded was kept -- never that the meeting is still open', () => {
+    expect(END_MEETING_FAILURE_MESSAGE).toContain('already recorded was kept');
+    expect(END_MEETING_FAILURE_MESSAGE).toContain('nothing will be recorded twice');
+    expect(END_MEETING_FAILURE_MESSAGE.toLowerCase()).not.toContain('still open');
+    expect(END_MEETING_FAILURE_MESSAGE.toLowerCase()).not.toContain('nothing was saved');
+    expect(END_MEETING_FAILURE_MESSAGE.toLowerCase()).not.toContain('nothing was recorded');
+  });
+
+  it('falls back for a plain string/undefined rejection too', () => {
+    expect(describeEndMeetingFailure('some string')).toBe(END_MEETING_FAILURE_MESSAGE);
+    expect(describeEndMeetingFailure(undefined)).toBe(END_MEETING_FAILURE_MESSAGE);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Render tests -- DES-12 states.
 // ---------------------------------------------------------------------------
@@ -592,7 +649,7 @@ describe('<EndMeetingDialog /> End meeting confirm flow', () => {
     expect(document.body.textContent).toContain('0 present · 0 late · 0 excused · 0 absent');
   });
 
-  it('shows an error banner and leaves the session unflipped when onEndMeeting rejects', async () => {
+  it("T607 (GAM-283) RE-DERIVED, correction 2 (was: asserted the raw rejected Error's own message, 'write failed', rendered verbatim -- exactly 1 of 30 assertions in this file, 1 of 2437 suite-wide, per the packet's measured scope). That assertion is now IMPOSSIBLE ON PURPOSE: describeEndMeetingFailure drops the old `error instanceof Error ? error.message : ...` passthrough so no raw rejected-error text can ever reach the DOM (criterion 4/1) -- only its OWN raw-string assertion changed; the real coverage (banner appears, session stays unflipped) is unchanged and re-asserted below, plus two facts this test never covered before: the confirm modal actually CLOSES on failure so the banner is reachable, not hidden behind an inert layer (criterion 2, Part A), and the fixed copy carries the retry-safe/kept-recorded facts (criterion 3): shows a reachable error banner (no dialog left open over it) and leaves the session unflipped when onEndMeeting rejects", async () => {
     const onEndMeeting = vi.fn().mockRejectedValue(new Error('write failed'));
     renderDialog({
       sessionId: 'session-test-001',
@@ -609,12 +666,53 @@ describe('<EndMeetingDialog /> End meeting confirm flow', () => {
     clickButton(actionButton as HTMLButtonElement);
     await flushMicrotasks();
 
+    // Criterion 2: the confirm AlertDialog actually closed -- no open
+    // <dialog> is left covering the banner (Astryx's `Dialog` puts an open
+    // `<dialog>` in an inert top layer; before Part A this assertion would
+    // have found one still open here).
+    expect(document.querySelector('dialog[open]')).toBeNull();
+
+    // Criterion 1/4: the fixed, hand-authored copy renders; the raw
+    // rejected-error text never does.
     expect(document.body.textContent).toContain("Couldn't end this meeting");
-    expect(document.body.textContent).toContain('write failed');
+    expect(document.body.textContent).toContain(END_MEETING_FAILURE_MESSAGE);
+    expect(document.body.textContent).not.toContain('write failed');
+
+    // Criterion 3: retry-safe / kept-recorded facts are on screen, never
+    // "still open" or "nothing was saved".
+    expect(document.body.textContent).toContain('already recorded was kept');
+    expect(document.body.textContent).toContain('nothing will be recorded twice');
+    expect(document.body.textContent?.toLowerCase()).not.toContain('still open');
+
     // Session was never flipped -- the trigger button (not the completed
     // banner) is still present.
     expect(findButtonByText('End meeting')).toBeTruthy();
     expect(document.body.textContent).not.toContain('This meeting has ended');
+  });
+
+  it('criterion 6 (real component, not just the pure helper): a SupabaseNotConfiguredError-shaped rejection from onEndMeeting renders its own DES-16 copy verbatim, reachably (no open dialog over it)', async () => {
+    const cause = new SupabaseNotConfiguredError();
+    const onEndMeeting = vi
+      .fn()
+      .mockRejectedValue({ code: 'UNKNOWN', message: cause.message, cause });
+    renderDialog({
+      sessionId: 'session-test-001',
+      loadSummary: () => Promise.resolve(testSummary()),
+      onEndMeeting,
+    });
+    await flushMicrotasks();
+
+    clickButtonWithText('End meeting');
+    const dialogEl = document.querySelector('dialog[open]') as HTMLElement;
+    const actionButton = Array.from(dialogEl.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'End meeting',
+    );
+    clickButton(actionButton as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(document.querySelector('dialog[open]')).toBeNull();
+    expect(document.body.textContent).toContain("Supabase isn't configured yet");
+    expect(document.body.textContent).not.toContain(END_MEETING_FAILURE_MESSAGE);
   });
 });
 

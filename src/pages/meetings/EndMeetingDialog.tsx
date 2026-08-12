@@ -214,9 +214,14 @@
  * `loadSummary`/`onEndMeeting`/`onEditAttendance` are all injectable props,
  * each defaulting to an obviously-fake stub (`defaultLoadEndMeetingSummary`
  * returns fixture data; `defaultOnEndMeeting`/`defaultOnEditAttendance` only
- * `console.warn` the payload they would have sent). No
- * `src/lib/supabase/**` import exists anywhere in this file (that directory
- * is read-only/reference-only per this task's Forbidden Files).
+ * `console.warn` the payload they would have sent). No shared Supabase
+ * CLIENT (`getSupabaseClient`/`runMutation`) is wired into this file --
+ * T607 UPDATE: `describeEndMeetingFailure` below imports two read-only type
+ * helpers from `../../lib/supabase/loader` and `../../lib/supabase/client`
+ * (`isSupabaseLoaderError`, `SupabaseNotConfiguredError`) so a rejection's
+ * SHAPE can be classified into DES-16 copy at the call site, same posture
+ * `StudentHome.tsx`'s `extractRsvpErrorMessage` (GAM-319) already
+ * established -- neither file calls the client itself.
  *
  * -----------------------------------------------------------------------
  * 6. `event_sessions`/`attendance` ground truth (ground-truth section) --
@@ -317,6 +322,11 @@ import {
   StatusDot,
   VStack,
 } from '@astryxdesign/core';
+// T607: read-only type-shape helpers, not the shared client itself -- see
+// module doc section 5's update. Same import posture `StudentHome.tsx`'s
+// `extractRsvpErrorMessage` (GAM-319) already established.
+import { SupabaseNotConfiguredError } from '../../lib/supabase/client';
+import { isSupabaseLoaderError } from '../../lib/supabase/loader';
 
 // ---------------------------------------------------------------------------
 // Ground truth -- module doc section 6. Re-derived locally, not imported
@@ -560,6 +570,86 @@ export function buildEndMeetingConfirmDescription(
  * count-naming requirement is testable without relying on JSX. */
 export function buildMarkRemainingAbsentLabel(count: number): string {
   return `Mark ${count} ${count === 1 ? 'student' : 'students'} with no attendance record absent`;
+}
+
+/**
+ * T607 -- DES-16, write-flavoured, hand-authored fallback for a rejected
+ * `onEndMeeting` call (constraint 1, `loader.ts:74-76`: the raw underlying
+ * error must never reach the screen). States only what T607's gate verified
+ * true for every reachable partial-failure state of `endMeeting.ts`'s three
+ * sequenced writes (`endMeeting.ts:76-96`):
+ *   - "anything already recorded was kept" -- none of the three writes is
+ *     rolled back on a later failure, so whatever landed before a rejection
+ *     stays landed.
+ *   - retrying "won't record anything twice" -- true for all six measured
+ *     failure modes (`ignoreDuplicates: true` on the mark-absent insert,
+ *     `.is('check_out_at', null)` on the checkout update, the status flip
+ *     re-setting the same terminal value, and the `unique (session_id,
+ *     student_id)` constraint, `20260717000000_scheduling_attendance.sql:94`).
+ *
+ * Deliberately does NOT say the meeting is "still open" -- FALSE in the
+ * ambiguous-write state: step 3's `UPDATE` can commit server-side while its
+ * response is lost (network drop, proxy timeout, laptop sleep), leaving
+ * `code: 'UNKNOWN'` while `event_sessions.status` is already `'completed'`.
+ * Does NOT say "nothing was saved" -- FALSE whenever step 1 (mark-absent)
+ * and/or step 2 (checkout) landed before a later step rejected; the
+ * absences/checkouts ARE recorded. Worded as "safe to repeat", never as
+ * "guaranteed to produce a perfect result": unticking the opt-in checkbox
+ * before retrying does not undo absences that already landed, and a student
+ * who checks in between attempts is not covered by the stale
+ * `checkoutStudentIds` and can be left without a `check_out_at`. Neither
+ * divergence corrupts data or contradicts "safe to repeat".
+ */
+export const END_MEETING_FAILURE_MESSAGE =
+  "Couldn't finish ending this meeting. Anything already recorded was kept, and it's safe to try again — nothing will be recorded twice.";
+
+/**
+ * T607 -- classifies a rejected `onEndMeeting` call into the one passthrough
+ * case that already has hand-authored DES-16 copy, or the fixed
+ * write-flavoured fallback above. Exported, pure, and unit-testable without
+ * rendering -- matching `StudentHome.tsx`'s landed `extractRsvpErrorMessage`
+ * (GAM-319) shape.
+ *
+ * Branch order:
+ *   1. `isSupabaseLoaderError(error) && error.cause instanceof
+ *      SupabaseNotConfiguredError` -> `error.message` verbatim.
+ *      `toLoaderError` (`loader.ts`) always sets `cause` to the pre-wrap raw
+ *      error, so this is exactly the passthrough condition, and that
+ *      message is already hand-authored DES-16 copy (`loader.ts:106-121`).
+ *   2. everything else -> `END_MEETING_FAILURE_MESSAGE`.
+ *
+ * DELIBERATELY NO `instanceof Error` branch, diverging from
+ * `extractRsvpErrorMessage`'s own landed shape (`StudentHome.tsx:963`),
+ * which keeps `if (error instanceof Error) return error.message;` as its
+ * first branch. Do not "restore consistency" by adding it back here: a real
+ * `SupabaseLoaderError` -- the shape `onEndMeeting`'s real implementation
+ * (`endMeeting.ts`, via `runMutation`) actually rejects with -- is a plain
+ * `{code, message, cause}` object and is never `instanceof Error`, so that
+ * branch would be inert for it either way. Criterion 4 needs an absolute
+ * guarantee that no raw error text reaches the DOM; the one hand-authored
+ * `Error` this dialog's factories could throw is the identity-throw on the
+ * attendance-EDIT path (`endMeeting.ts:509-512`, surfaced through
+ * `handleEditAttendance`'s own catch below, NOT this one), which product
+ * cannot reach at all (`LiveConsole.tsx:1192` always passes
+ * `hasAttendanceCorrections={false}`, gating that path's only mount) -- so
+ * keeping an `instanceof Error` branch here would buy no real coverage while
+ * leaving the door open for some future `Error` thrown into THIS catch to
+ * leak its raw `.message` onto the screen.
+ *
+ * No `error.code` branching (no code map): `42501`/RLS failures cannot arise
+ * from this dialog's two write steps (an RLS `using` failure on `UPDATE`
+ * matches zero rows and returns SUCCESS, not an error); network failures and
+ * `SupabaseNotConfiguredError` itself both resolve to `code: 'UNKNOWN'`; the
+ * only broadly reachable non-`UNKNOWN` code is `PGRST301` (expired JWT), and
+ * "try again" -- this copy's own retry-safety claim -- would be actively
+ * wrong advice for that case, so branching on code would conflict with, not
+ * support, the copy above.
+ */
+export function describeEndMeetingFailure(error: unknown): string {
+  if (isSupabaseLoaderError(error) && error.cause instanceof SupabaseNotConfiguredError) {
+    return error.message;
+  }
+  return END_MEETING_FAILURE_MESSAGE;
 }
 
 /** DES-05's literal mapping (PRD line 195) -- module doc section 7. */
@@ -823,13 +913,21 @@ export function EndMeetingDialog({
               attendanceByStudentId: applyEndMeetingResult(prev.attendanceByStudentId, payload),
             },
       );
-      setIsConfirmOpen(false);
     } catch (error) {
-      setEndError(
-        error instanceof Error ? error.message : 'Something went wrong ending this meeting.',
-      );
+      // T607: `describeEndMeetingFailure` above, not `error instanceof
+      // Error` -- see its own doc comment for why that branch is dropped.
+      setEndError(describeEndMeetingFailure(error));
     } finally {
       setIsEnding(false);
+      // T607 Part A: moved out of the `try`'s success-only path so the
+      // confirm `AlertDialog` closes on failure too, not just success --
+      // previously it stayed open on failure (Astryx's `Dialog` calls
+      // `showModal()`, putting it in an inert top layer), and the `Banner`
+      // above (`endError !== null`) rendered outside that layer, invisibly.
+      // `data.session.status` is mutated only on the success path above, so
+      // closing here does not touch it either way -- a stale "scheduled"
+      // screen self-heals on a successful retry.
+      setIsConfirmOpen(false);
     }
   }
 
@@ -856,6 +954,24 @@ export function EndMeetingDialog({
       // doc section 2) -- nothing else happens here.
       await onEditAttendance(data.session.id, studentId, status);
     } catch (error) {
+      // T607 (GAM-283) Part C -- this catch is CONSCIOUSLY left as-is,
+      // unlike `handleConfirmEndMeeting`'s sibling above. T607's own
+      // correction 4: this whole edit path is unreachable from any product
+      // surface today -- `LiveConsole.tsx:1192` always passes
+      // `hasAttendanceCorrections={false}`, which gates this component's own
+      // ONLY caller of `onEditAttendance` (`handleEditAttendance` is called
+      // solely from the `AttendanceCorrectionRow` list below, which itself
+      // only renders when `hasAttendanceCorrections` is true) -- so there is
+      // no coach in front of this fallback to mislead, and authoring
+      // edit-flavoured copy here is work with no user. If you are flipping
+      // `hasAttendanceCorrections` to `true` somewhere, that reachability
+      // premise no longer holds: revisit this catch (T607's packet has an
+      // escape-hatch shape ready -- calling `describeEndMeetingFailure`-style
+      // classification here too, but with edit-flavoured copy, since this
+      // path rolls the optimistic update back and only renders once the
+      // session is already `completed`, so `describeEndMeetingFailure`'s own
+      // "already recorded was kept" / "safe to retry" claims do NOT apply
+      // here and must not be reused verbatim).
       setData((prev) =>
         prev === null ? prev : { ...prev, attendanceByStudentId: previousAttendance },
       );
