@@ -42,3 +42,30 @@ Append-only. One line per milestone, committed and pushed as it happens.
   `run_in_background: false` — the orchestrator blocks on the verdict rather
   than ending its turn with the subagent in flight. If this line is the last
   one in this file, the run died holding this subagent.
+- **premise gate round 1 verdict: REVISE.** 1 BLOCKER, 5 MAJOR, 3 MINOR.
+  BLOCKER: value-importing `getUnansweredRsvpCount`/`filterOutreachEvents`
+  from the lazy-loaded `OutreachList.tsx` into always-eager `SideNav.tsx`
+  measured +71.5 kB gz on the entry chunk and collapsed 25 lazy chunks
+  (T093's code-splitting reversed). MAJOR findings: self-referential
+  acceptance criteria (mutation would go undetected), `getUnansweredRsvpCount`
+  lacks BEH-04's future/team-scope filters that the *other* existing
+  implementation (`StudentHome.tsx`'s `getUnansweredOutreachOpportunities`)
+  already has, an undefined/fabricated coach-admin badge magnitude, a second
+  file (`MobileNav.tsx`) carrying the identical placeholder left unaddressed,
+  and the T140 injectable-loader testability seam broken for two currently-green
+  `AppShell.test.tsx` cases. Full verdict recorded by the subagent; baseline
+  measured by the gate on `3190342`: 89 files / 2363 tests green, build exit
+  0, eager entry chunk 199.02 kB gz.
+- **packet rewritten (round 2), not patched — full redesign.** Reuses
+  `StudentHome.tsx`'s `getUnansweredOutreachOpportunities` (correct BEH-04
+  semantics) instead of `OutreachList.tsx`'s function, relocates it plus 4
+  related names into a new pure leaf module
+  (`src/lib/outreach/unansweredOutreach.ts`) so neither `OutreachList.tsx`
+  nor `StudentHome.tsx`'s page-level code is statically imported into eager
+  chrome. Fetch moves to `AppShell.tsx` (one hook, one call site, threaded as
+  a plain prop to both `SideNav` and `MobileNav`, since Astryx mounts both
+  simultaneously and picks by CSS breakpoint — a shared fetch, not two).
+  Coach/admin viewers now get no badge at all (BEH-04 defines none). 10
+  Allowed Files (up from 2), 12 acceptance criteria with literal
+  hand-computed integers, tier re-affirmed STANDARD with reasoning for the
+  size increase.
