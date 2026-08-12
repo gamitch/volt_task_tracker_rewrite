@@ -171,23 +171,34 @@
  *
  * The ledger's Acceptance line for T038 says "Outreach nav badge (BEH-04)
  * wired to real unanswered-RSVP count." `src/components/nav/SideNav.tsx`
- * (the file that actually renders that badge, via its own
- * `PLACEHOLDER_OUTREACH_BADGE_COUNT = 0` constant and an explicit module
- * comment reading "the real count is wired by T038") is a forbidden,
- * read-only file for this task -- it is rendered by `AppShell`, not by this
- * page, so this component's render tree cannot reach into it, and this
- * task must not edit it. That literal clause of the Acceptance line is
- * therefore NOT reachable from within `OutreachList.tsx` alone.
+ * (the file that actually renders that badge) was a forbidden, read-only
+ * file for this task -- it is rendered by `AppShell`, not by this page, so
+ * this component's render tree could not reach into it. That literal clause
+ * of the Acceptance line was therefore NOT reachable from within
+ * `OutreachList.tsx` alone.
+ *
+ * RESOLVED BY GAM-301 (T407). The nav badge is real now, and neither nav
+ * file carries a placeholder constant any more. Read the next paragraph
+ * before reusing anything from this file for badge work -- GAM-301
+ * deliberately did NOT use `getUnansweredRsvpCount`.
  *
  * What this file DOES instead: `getUnansweredRsvpCount` below is a real,
  * exported, reusable, well-named computation -- "unanswered" means an
  * upcoming (`status === 'scheduled'`) outreach session with NO `rsvps` row
  * at all (not `declined`/`maybe`, which ARE answers) for a given list of
  * student ids. It is generic over `studentIds` specifically so a future
- * small wiring task can call it with whichever set applies to the current
+ * small wiring task could call it with whichever set applies to the current
  * viewer (a single linked student for student/parent, or the full roster
- * for staff/coach) and plug the result straight into
- * `PLACEHOLDER_OUTREACH_BADGE_COUNT` in `SideNav.tsx`. This file also
+ * for staff/coach).
+ *
+ * THAT WIRING TASK HAPPENED, AND DELIBERATELY USED A DIFFERENT FUNCTION.
+ * GAM-301 (T407) wired the nav badge to `getUnansweredOutreachOpportunities`
+ * (`src/lib/outreach/unansweredOutreach.ts`), not to this one, because this
+ * function implements neither of BEH-04's two scoping clauses -- no
+ * future-only cutoff and no team-scope filter -- so it over-counts for that
+ * purpose. An early GAM-301 design round that did reuse it was rejected by
+ * the premise gate for exactly that reason. It remains correct for what THIS
+ * page asks of it; do not promote it to chrome. This file also
  * exercises the function for real, visibly, in both views (a neutral
  * `Badge` count near each view's heading), so it is provably correct
  * against the fixture data, not just an inert unused export -- see this

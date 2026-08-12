@@ -457,6 +457,22 @@ import { submitRsvpChange, type SubmitRsvpChangeFn } from '../../lib/supabase/lo
 // own DES-16 copy) instead of silently falling through to the generic
 // fallback the way a bare `error instanceof Error` check would.
 import { isSupabaseLoaderError } from '../../lib/supabase/loader';
+// GAM-301 (T407) round 3 -- `isEventInTeamScope`/`getUnansweredOutreachOpportunities`
+// and the `HomeEventRow`/`HomeSessionRow`/`HomeRsvpRow`/`SignupOpportunityRow`
+// types below MOVED verbatim to this pure leaf module so
+// `src/components/nav/useOutreachBadgeCount.ts` (eager nav chrome) can reuse
+// the same BEH-04 predicate without value-importing this (lazy) page. This
+// file re-exports all six below, at their original definition points, so its
+// own existing imports/tests are unaffected -- see that new file's own
+// module doc for the full decision record.
+import {
+  getUnansweredOutreachOpportunities,
+  isEventInTeamScope,
+  type HomeEventRow,
+  type HomeRsvpRow,
+  type HomeSessionRow,
+  type SignupOpportunityRow,
+} from '../../lib/outreach/unansweredOutreach';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real columns/views. Module docs #4/#5/#6.
@@ -466,32 +482,11 @@ export type EventType = 'meeting' | 'outreach' | 'competition';
 export type SessionStatus = 'scheduled' | 'completed' | 'canceled';
 export type RsvpStatus = 'going' | 'maybe' | 'declined';
 
-export interface HomeEventRow {
-  id: string;
-  seasonId: string;
-  type: EventType;
-  title: string;
-  /** `null` = all teams, per `events.team_ids`. */
-  teamIds: readonly string[] | null;
-  /** Verbatim rename of `events.counts_volunteer_hours`. */
-  countsVolunteerHours: boolean;
-}
-
-export interface HomeSessionRow {
-  id: string;
-  eventId: string;
-  startsAt: string;
-  endsAt: string;
-  status: SessionStatus;
-}
-
-export interface HomeRsvpRow {
-  id: string;
-  sessionId: string;
-  studentId: string;
-  status: RsvpStatus;
-  updatedAt: string;
-}
+// GAM-301 (T407) round 3 -- relocated to `../../lib/outreach/unansweredOutreach`
+// (imported above); re-exported here so `import { HomeEventRow, ... } from
+// './StudentHome'` (this file's own `StudentHomeData` below, and
+// `StudentHome.test.tsx`) keeps working completely unmodified.
+export type { HomeEventRow, HomeRsvpRow, HomeSessionRow };
 
 /** Verbatim camelCase rename of `v_student_hours`'s three real columns
  * (module doc #4, MET-04's numerator). Never recomputed in this file. */
@@ -719,17 +714,12 @@ function round1(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
-/** The ONLY team-scope predicate in this file -- honors `team_ids === null`
- * as "all teams" per the real `events` schema. T187: the second parameter is
- * the student's own ACTIVE team ids (plural -- a dual-team student), not a
- * single primary team; an event is in scope when it shares AT LEAST ONE id
- * with that set. */
-export function isEventInTeamScope(
-  event: { teamIds: readonly string[] | null },
-  teamIds: readonly string[],
-): boolean {
-  return event.teamIds === null || event.teamIds.some((id) => teamIds.includes(id));
-}
+// GAM-301 (T407) round 3 -- relocated to `../../lib/outreach/unansweredOutreach`
+// (imported above); re-exported here so this file's own existing imports
+// (`selectLiveMeetingSession`, `buildNextUp`) keep resolving the identical
+// binding, and so any external `import { isEventInTeamScope } from
+// './StudentHome'` keeps working completely unmodified.
+export { isEventInTeamScope };
 
 /** MTG-10's own literal wireframe annotation: "only while a session is
  * live" -- currently within [startsAt, endsAt], not a "starts soon" window
@@ -823,44 +813,13 @@ export function buildNextUp(
     });
 }
 
-export interface SignupOpportunityRow {
-  sessionId: string;
-  title: string;
-  startsAt: string;
-}
-
-/** Module doc #7 -- "unanswered" = a future, team-scoped, `outreach`-type
- * session with NO `rsvps` row at all for this student. Sorted
- * earliest-starting first ("oldest unanswered", module doc #7's disclosed
- * interpretation). */
-export function getUnansweredOutreachOpportunities(
-  sessions: readonly HomeSessionRow[],
-  events: readonly HomeEventRow[],
-  rsvps: readonly HomeRsvpRow[],
-  studentId: string,
-  teamIds: readonly string[],
-  nowMs: number,
-): SignupOpportunityRow[] {
-  const eventById = new Map(
-    events
-      .filter((event) => event.type === 'outreach' && isEventInTeamScope(event, teamIds))
-      .map((event) => [event.id, event] as const),
-  );
-  return sessions
-    .filter((session) => {
-      if (session.status !== 'scheduled') return false;
-      if (new Date(session.startsAt).getTime() < nowMs) return false;
-      const event = eventById.get(session.eventId);
-      if (!event) return false;
-      return !rsvps.some((rsvp) => rsvp.sessionId === session.id && rsvp.studentId === studentId);
-    })
-    .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
-    .map((session) => ({
-      sessionId: session.id,
-      title: eventById.get(session.eventId)!.title,
-      startsAt: session.startsAt,
-    }));
-}
+// GAM-301 (T407) round 3 -- `SignupOpportunityRow`/`getUnansweredOutreachOpportunities`
+// relocated to `../../lib/outreach/unansweredOutreach` (imported above) --
+// re-exported here so this file's own render body (below) and any external
+// `import { SignupOpportunityRow, getUnansweredOutreachOpportunities } from
+// './StudentHome'` keep working completely unmodified.
+export type { SignupOpportunityRow };
+export { getUnansweredOutreachOpportunities };
 
 /** `ends_at - starts_at`, in hours. */
 export function sessionHours(session: { startsAt: string; endsAt: string }): number {

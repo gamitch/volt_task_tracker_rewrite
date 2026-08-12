@@ -151,6 +151,20 @@
  *      (below) sums those rows' own already-computed counters and reapplies
  *      the view's own `participation_pct` expression verbatim -- see that
  *      function's own doc for the full decision record and citation.
+ *
+ * -----------------------------------------------------------------------
+ * GAM-301 (T407) round 3, BLOCKER 2 fix: `makeResolveCurrentStudentId`/
+ * `resolveCurrentStudentId` (Trap #4 above) and their private helpers
+ * (`queryStudentIdByProfileId`/`queryFirstLinkedStudentId`,
+ * `StudentIdDbRow`/`GuardianLinkStudentIdDbRow`) have MOVED, verbatim, to
+ * `../../lib/meetings/resolveCurrentStudentId.ts` -- a pure leaf module with
+ * no value-import of `MeetingsList.tsx`/`ScheduleMeetingsDialog.tsx`, unlike
+ * this file (see the two value-imports directly below). Re-exported here so
+ * every existing caller of this file (this file's own tests,
+ * `StudentMeetingView.tsx`, `OutreachList.tsx`, `DashboardPage.test.tsx`'s
+ * `vi.mock('.../loaders/meetings', ...)`) is unaffected -- see that new
+ * file's own module doc for the full reasoning (measured bundle cost of NOT
+ * relocating it: entry chunk +50.47 kB gz, 18 lazy chunks collapsed).
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
@@ -166,11 +180,9 @@ import {
   type AttendanceStatus,
   type CancelMeetingSessionFn,
   type CoachMeetingsData,
-  type CurrentViewerIdentity,
   type EventType,
   type LoadCoachMeetingsDataFn,
   type LoadStudentMeetingsDataFn,
-  type ResolveCurrentStudentIdFn,
   type SessionStatus,
   type StudentMeetingsData,
 } from '../../../pages/meetings/MeetingsList';
@@ -195,6 +207,12 @@ import type {
   SaveMeetingSessionPayload,
   OnSaveMeetingSessionFn,
 } from '../../../pages/meetings/EditMeetingSessionDialog';
+// GAM-301 round 3 module doc above -- re-exported for this file's existing
+// callers/tests, not used internally by anything else in this file.
+export {
+  makeResolveCurrentStudentId,
+  resolveCurrentStudentId,
+} from '../../meetings/resolveCurrentStudentId';
 
 // ---------------------------------------------------------------------------
 // Raw DB row shapes (snake_case, exactly as Postgrest returns them). Cited
@@ -281,14 +299,6 @@ interface ParticipationDbRow {
   late_ct: number;
   excused_ct: number;
   participation_pct: number;
-}
-
-interface StudentIdDbRow {
-  id: string;
-}
-
-interface GuardianLinkStudentIdDbRow {
-  student_id: string;
 }
 
 interface SeasonIdDbRow {
@@ -524,35 +534,6 @@ export function aggregateParticipationRows(
     late_ct: lateCt,
     excused_ct: excusedCt,
     participation_pct: participationPct,
-  };
-}
-
-async function queryStudentIdByProfileId(
-  client: SupabaseClient,
-  profileId: string,
-): Promise<LoaderQueryResult<StudentIdDbRow>> {
-  const result = await client
-    .from('students')
-    .select('id')
-    .eq('profile_id', profileId)
-    .maybeSingle();
-  return { data: (result.data as StudentIdDbRow | null) ?? null, error: result.error };
-}
-
-/** Trap #4 -- EARLIEST-linked child only (module doc above). */
-async function queryFirstLinkedStudentId(
-  client: SupabaseClient,
-  parentProfileId: string,
-): Promise<LoaderQueryResult<GuardianLinkStudentIdDbRow[]>> {
-  const result = await client
-    .from('guardian_links')
-    .select('student_id')
-    .eq('parent_profile_id', parentProfileId)
-    .order('created_at', { ascending: true })
-    .limit(1);
-  return {
-    data: (result.data as GuardianLinkStudentIdDbRow[] | null) ?? null,
-    error: result.error,
   };
 }
 
@@ -1086,38 +1067,6 @@ export function makeSaveMeetingSession(
 
 /** `EditMeetingSessionDialog.tsx`'s own default `onSaveMeetingSession`. */
 export const saveMeetingSession: OnSaveMeetingSessionFn = makeSaveMeetingSession();
-
-/** Trap #4 -- real `studentId` resolution (module doc above; full reasoning
- * also documented directly on `MeetingsList.tsx`'s own module doc #6). */
-export function makeResolveCurrentStudentId(
-  getClient: () => SupabaseClient = getSupabaseClient,
-): ResolveCurrentStudentIdFn {
-  const loadStudentByProfile = createLoader<string, StudentIdDbRow>(
-    queryStudentIdByProfileId,
-    getClient,
-  );
-  const loadFirstLinkedStudent = createLoader<string, GuardianLinkStudentIdDbRow[]>(
-    queryFirstLinkedStudentId,
-    getClient,
-  );
-  return async (viewer: CurrentViewerIdentity): Promise<string | null> => {
-    if (viewer.role === 'student') {
-      const row = await loadStudentByProfile(viewer.id);
-      return row?.id ?? null;
-    }
-    if (viewer.role === 'parent') {
-      const rows = await loadFirstLinkedStudent(viewer.id);
-      return rows !== null && rows.length > 0 ? rows[0].student_id : null;
-    }
-    // Defensive only -- `MeetingsList.tsx`'s own `isCoachOrAdminView` branch
-    // never renders the student/parent view (and never calls this function)
-    // for a coach/admin viewer.
-    return null;
-  };
-}
-
-/** `MeetingsList.tsx`'s own default `resolveStudentId`. */
-export const resolveCurrentStudentId: ResolveCurrentStudentIdFn = makeResolveCurrentStudentId();
 
 /** Trap #3 -- real `onCreateMeetings` default for `ScheduleMeetingsDialog`
  * (module doc above). Two sequential writes (events, then event_sessions),

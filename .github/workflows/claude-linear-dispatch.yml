@@ -530,3 +530,27 @@ jobs:
         # install step would put a minute and a dependency graph between a
         # failure and its report.
         run: node scripts/linear-assert-released.mjs "$ISSUE_IDENTIFIER"
+
+      # The step above goes red for three benign shapes (that script's header
+      # lists them). Exactly one — an item-19a escalation — is waiting on the
+      # human owner, and nothing else surfaces it: the issue stays `In
+      # Progress`, which is indistinguishable from healthy active work, and it
+      # lands in no triage queue. Measured on GAM-301: the run escalated, left
+      # a detailed comment, and the owner found out by asking.
+      #
+      # Never a gate. `linear-escalation-notify.mjs` always exits 0, so it
+      # cannot add a second, unrelated red cause to an already-failing job, and
+      # it stays silent for the other two benign shapes.
+      #
+      # Same `env:`-not-`run:` rule as above for the identifier —
+      # `client_payload` is attacker-controllable and interpolating it into a
+      # `run:` block would be a shell-injection sink. Same no-`npm ci` property
+      # too: this script uses global `fetch` and imports only
+      # `scripts/linear/{client,slack}.mjs`, which do the same.
+      - name: Tell the owner if this was an escalation
+        if: failure()
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_DISPATCH_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          ISSUE_IDENTIFIER: ${{ github.event.client_payload.identifier }}
+        run: node scripts/linear-escalation-notify.mjs "$ISSUE_IDENTIFIER"
