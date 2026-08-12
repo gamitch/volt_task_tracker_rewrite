@@ -24,3 +24,17 @@ line names.
   own-data failure — item 26's exact test.
 - **Label swapped** `tier/unreviewed` → `tier/heavy`, then state `Todo → In Progress`,
   then re-read: state `In Progress`, labels `w5` + `heavy`. Claim confirmed (item 28c).
+- **Packet written** — `docs/swarm/active/GAM-299-packet.md`. Citations re-verified
+  against `main` (`28f7394`) while writing it (item 19c). Two corrections to the
+  issue text recorded in the packet §2: the `event_sessions` policy ends at
+  `:189` not `:188`, and T705 (the missing `student_teams` writer) is **GAM-298,
+  which reads `Done` in Linear while the writer still does not exist in code** —
+  re-measured by grep rather than taken from the tracker.
+- **Packet-time wall check (`AGENTS.md` "Two walls", #1):** the packet's Allowed
+  Files contain **no** `.github/workflows/**` path, deliberately. The new
+  assertions land in `tests/rls/`, which `ci.yml:227` already runs inside the
+  `sql` job, so criterion 7 is satisfied with no workflow edit and nothing
+  undeliverable.
+- **Dispatching `checker-premise` (opus, `run_in_background: false`)** — round 1
+  of the item-19 gate, capped at two rounds (19a). *If this line is the last one
+  in this file, the run died holding this subagent.*
