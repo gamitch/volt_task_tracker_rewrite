@@ -4,9 +4,9 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-12T13:18:12.241Z from team `Gamitch`.
+Exported 2026-08-12T14:02:52.914Z from team `Gamitch`.
 
-- **334** issues (242 archived)
+- **335** issues (242 archived)
 - **50** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
@@ -353,5 +353,6 @@ Exported 2026-08-12T13:18:12.241Z from team `Gamitch`.
 | [GAM-326](https://linear.app/gamitch/issue/GAM-326/an-unfinished-dispatch-run-can-turn-its-own-job-green-by-moving-the) | — | Done | An unfinished dispatch run can turn its own job green by moving the issue to `Todo` — which re-dispatches it four seconds later |
 | [GAM-328](https://linear.app/gamitch/issue/GAM-328/two-dispatch-loop-rules-live-where-a-dispatched-run-cannot-write-them) | — | Done | Two dispatch-loop rules live where a dispatched run cannot write them — the `.github/workflows/**` credential wall, and the subagent-blocking rule that decides whether a run finishes its chain |
 | [GAM-332](https://linear.app/gamitch/issue/GAM-332/the-reconciliation-sweep-drops-merged-prs-whose-declaration-failed-to) | — | Done | The reconciliation sweep drops merged PRs whose declaration failed to parse — the cases most likely to be wrong |
+| [GAM-335](https://linear.app/gamitch/issue/GAM-335/shadow-mode-computes-its-intended-action-from-the-post-automation) | — | Done | Shadow mode computes its intended action from the post-automation state, so an ordinary declared merge always scores MISMATCH — the 10-MATCH exit criterion is unreachable |
 
 Full descriptions, relations and timestamps are in `linear-export.json`.
