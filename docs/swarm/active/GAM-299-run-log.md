@@ -89,3 +89,37 @@ line names.
 - **Dispatching `checker-premise` round 2 (opus, `run_in_background: false`)** —
   the last round before item 19a escalates to the owner. *If this line is the last
   one in this file, the run died holding this subagent.*
+- **Premise gate round 2 verdict: DISPATCH** (5 MINOR, 2 NIT, no MAJOR, no
+  BLOCKER). Subagent returned; nothing left in flight. The item-19 gate is
+  satisfied and a worker may now be dispatched (Definition of Ready #1).
+
+  Round 2 re-reproduced the premise independently on its own cluster and
+  fixtures, then measured the **adopted** route (shipped policies untouched +
+  the additive policy) across all ten acceptance criteria in both directions,
+  and executed the whole four-file change end to end: six pre-existing cases
+  PASS, four new cases PASS, `run.sh` exit 0, no `.github/workflows/**` edit.
+
+  Three findings are corrections the orchestrator got wrong and is recording
+  rather than quietly fixing:
+  * **§5.2 was incomplete, and its blanket defence was false.** The route gives
+    up a **second** configuration, not one: a **re-teamed** student. The app's
+    only write path (`loaders/students.ts`) moves `students.team_id` and never
+    touches memberships, so the 2026-07-21 backfill row for the *old* team is
+    still `left_on is null` — and that student gains read of their **former**
+    team's events (measured 0 → 1). "No code path can produce that state" is
+    true of `left_on` and **false** here: the app's only write path produces it,
+    and D018 records the drift as already present in data. Graded MINOR because
+    `v_student_participation` already counts that stale membership, so RLS moves
+    toward what the app already computes, and item 25's threat model does not
+    make a former teammate's meeting list a security finding.
+  * **Criterion 4's mutation was vacuous** — it does not redden. The orphan is
+    denied by a *second* mechanism the packet never named: RLS on `students`
+    filters the policy's own subquery. A worker replaying it would have reported
+    "mutation applied, still green" and burned a rework loop on a packet defect.
+    The gate supplied the mutation that does redden.
+  * **§5.4's perf headline was wrong for the route actually adopted.** Round 1's
+    "~33% faster" belongs to the *rejected* drop-and-replace route, which
+    replaced the subplan. The additive route stacks a subplan on top: **+57% at
+    20,004 events (1922-1936 ms → 2997-3038 ms), +22 ms at a realistic 500
+    events.** Accepted at this scale, and now stated instead of implied.
+- **Folding findings 1-8 into packet revision 3, then dispatching the worker.**
