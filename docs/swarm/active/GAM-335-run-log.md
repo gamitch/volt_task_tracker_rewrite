@@ -44,3 +44,40 @@ Append-only. One line per milestone, committed and pushed immediately.
   `scripts/linear-sync.test.mjs`). Fix is call-site rearrangement, well under
   20 lines. A named mutation exists (see below) that turns a new test red.
   **FAST**, matching the issue's own tier claim.
+- **fix implemented directly (FAST — orchestrator implements, no packet, no
+  worker).** `scripts/linear-sync.mjs`: added exported `resolveShadowIssueState
+  (issue, historyNodes, mergedAt)` — overrides `issue.state.name` to the
+  reconstructed prior state when `reconstructAutomationTransition` finds a
+  merge-coincident transition, returns `issue` unchanged otherwise (preserves
+  the already-`Done` degenerate-MATCH case) and when `issue` is falsy. `main()`
+  calls it before `decide()`, gated on `syncMode === 'shadow' && issue` —
+  live mode's `decide()` call is untouched (still receives the unmodified live
+  `issue`), satisfying the issue's constraint 1. Constraint 2 (reconstruction
+  stays the only source) is satisfied: no new source added, same
+  `reconstructAutomationTransition` reused. Diff: +29/-1 lines in
+  `scripts/linear-sync.mjs` (new function + 9-line call-site change), well
+  under FAST's ≤20-line production-change guideline for the actual logic
+  change (docstrings included above that but are not "production change" in
+  the item 26 sense). No write path touched — shadow mode still returns before
+  any `issueUpdate`/`postComment` call (verified by reading `main()` through
+  line 643).
+- **tests added** — `scripts/linear-sync.test.mjs`: 4 new cases under
+  `resolveShadowIssueState`, reusing the existing `GAM_303_HISTORY_PROBE`
+  fixture and `issue()`/`pr()` helpers already in the file. The 4th case is the
+  integration proof: feeds the same post-automation `issue` (state `Done`)
+  into `decide()` both without and with the fix, asserting
+  `DUPLICATE_CLOSE_CLAIM`/`none` unfixed vs `CLOSE`/`close` fixed — this is the
+  exact defect from the issue's cited run 31600702807, reproduced as a unit
+  test.
+- **committed before mutating** (item 26 fast-tier working rule) —
+  `06aae1e`. `npx vitest run scripts/linear-sync.test.mjs`: 60/60 green,
+  including the 4 new tests.
+- **named mutation run — RED, as predicted.** Edited
+  `resolveShadowIssueState` in place to `return issue;` unconditionally
+  (reproducing the original bug verbatim — the reconstructed state never
+  reaches `decide()`). Re-ran the same test file: **2 failed / 58 passed**,
+  and the 2 failures are exactly the 2 tests that assert the fix's effect —
+  `expected 'Done' to be 'In Progress'` and
+  `expected 'DUPLICATE_CLOSE_CLAIM' to be 'CLOSE'`. No other test moved.
+  `git checkout -- scripts/linear-sync.mjs` restored the real fix; re-ran:
+  60/60 green again. Real red output captured above, not summarized.
