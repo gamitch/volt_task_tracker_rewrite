@@ -73,3 +73,51 @@ Append-only. One line per milestone, committed and pushed as it happens.
   `run_in_background: false` — the orchestrator blocks on the verdict rather
   than ending its turn with the subagent in flight. If this line is the last
   one in this file, the run died holding this subagent.
+- **premise gate round 2 verdict: REVISE.** 2 BLOCKER, 3 MAJOR, 5 MINOR, 2 NIT
+  — and the checker built the prescription and ran it rather than reading it
+  (item 26's "a gate that only reads is worth much less than one that runs").
+  BLOCKER 1: `useOutreachBadgeCount()` called from `AppShell`'s own body
+  cannot work — `AppShell` is the component that *renders* `<SeasonProvider>`,
+  so `useActiveSeason()` there throws outside a provider. Measured:
+  `AppShell.test.tsx` **25/25 failed**, `useActiveSeason() must be called
+  within a <SeasonProvider>`. This would crash the entire shell in production
+  on every route. BLOCKER 2: the packet's claim that none of the new imports
+  reach a lazy page component is false for `loaders/meetings.ts` — it
+  value-imports from `MeetingsList.tsx`/`ScheduleMeetingsDialog.tsx` (its own
+  header discloses the cycle). Measured: entry chunk 199.02 → **249.49 kB
+  gz (+50.47 kB), 18 lazy chunks collapsed** — round 1's BLOCKER at ~70%
+  magnitude, not fixed. Also: the "both navs mount simultaneously, so one
+  shared fetch is required" premise is **false** — Astryx's real
+  `AppShell.tsx` source shows the two are mutually exclusive, JS-media-query
+  driven mounts, never both mounted at once. The checker verified a cheaper,
+  working alternative in the same worktree: calling the hook from `SideNav`
+  directly (same render position `KpiStrip` already occupies, inside
+  `SeasonProvider`) — `AppShell.test.tsx` + `TopNav.test.tsx` **34/34 green**,
+  zero `AppShell.tsx` edits needed. Full verdict text held in this run's
+  transcript.
+- **Per constitution item 19a, two rounds is the cap — this is round 2's
+  REVISE, so it escalates to the human owner rather than looping to round 3.**
+  I am not applying round 2's fixes myself and re-submitting a third time;
+  that would make me my own gate on a design an independent check already
+  caught real production-breaking defects in twice. Stopping here.
+- **Escalation posted to the Linear issue** (comment below), issue left
+  `In Progress` deliberately — per `scripts/linear-assert-released.mjs`'s own
+  documented rule, an item-19a escalation is one of three named benign
+  shapes that still legitimately fails that CI check (`released: false`),
+  because "the chain is unfinished and nothing else will say so." The red
+  check is the intended signal here, not a defect in this run.
+- **No PR opened.** No source file was changed — only planning artifacts
+  under `docs/swarm/active/`, already pushed to
+  `claude/gam-301-outreach-nav-badge`. Nothing to merge yet.
+- **Run complete (escalated, not delivered).** Delivered: confirmed-live
+  defect measurement, a fully-designed and twice-independently-checked
+  packet with a concrete, verified-working path forward (round 2's cheaper
+  path A: call the badge hook from `SideNav`/`MobileNav` directly, not from
+  `AppShell`; solve `loaders/meetings.ts`'s bundle cost by relocating its two
+  page-value-imports the same way this packet already relocates the outreach
+  predicate). Not delivered: working code — item 19a's cap stops this run
+  one packet-revision short of a dispatchable plan. Next session: apply
+  round 2's 10 required revisions (see packet + verdict), most of which are
+  now narrow and mechanical, and this does not need a third premise-gate
+  round if the human owner (or `boss-architect`) accepts the verified fixes
+  directly.
