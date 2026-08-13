@@ -1,6 +1,6 @@
 {
   "meta": {
-    "exportedAt": "2026-08-13T11:37:07.852Z",
+    "exportedAt": "2026-08-13T11:37:43.643Z",
     "team": "Gamitch",
     "teamKey": "GAM",
     "issueCount": 365,
@@ -6249,8 +6249,8 @@
       "identifier": "GAM-343",
       "legacyId": null,
       "title": "E2E — W2 Run an outreach event: create → RSVP → attend → complete → hours land",
-      "state": "In Review",
-      "stateType": "started",
+      "state": "Done",
+      "stateType": "completed",
       "archived": false,
       "labels": [
         "area/w2",
@@ -6261,7 +6261,7 @@
       "blockedBy": [],
       "blocks": [],
       "createdAt": "2026-08-13T01:15:29.889Z",
-      "completedAt": null,
+      "completedAt": "2026-08-13T11:37:27.353Z",
       "canceledAt": null,
       "url": "https://linear.app/gamitch/issue/GAM-343/e2e-w2-run-an-outreach-event-create-rsvp-attend-complete-hours-land",
       "description": "Drive the full outreach lifecycle in a real browser — a coach creating an event, students answering it, the coach marking the day complete — and prove the volunteer hours that come out the end are the ones the actions should have produced.\n\nThis workflow has no end-to-end coverage at all.\n\n## Why it is worth doing\n\nWORKFLOWS.md calls this \"the most-worked path in the project and still the most defect-dense\", and its three worst rows were all silent: an RSVP that wrote nothing (T193), unchecking a student in Mark day complete doing nothing (T309), and a non-atomic completion that could not recover from a failed request (T327). All three are fixed. None has ever been watched working, and every one of them was invisible from the screen.\n\nHours are the number students are measured on, and this is where they come from.\n\n## What exists already\n\nNothing. No spec file touches `pages/outreach/**`.\n\nThe RSVP write path itself was recently exercised from a different direction: [GAM-304](https://linear.app/gamitch/issue/GAM-304/t809-studenthomes-sign-up-cant-go-control-writes-nothing-and-says) wired the home-page controls to `makeSubmitRsvpChange`, the same upsert `RsvpControl.tsx` uses. That is the loader, not this journey.\n\n## What we want\n\nThe whole chain driven as the people who use it, with the database checked after each step:\n\nA coach opens the outreach dialog, fills the title, picks a date range, opens the team-scope selector and narrows it, sets the expected-attendee checklist, saves. A student opens the event and answers Going, then changes their answer to Can't go. The coach opens Mark day complete, checks and unchecks students, records people reached, completes it. Then the hours those actions imply are read back and compared.\n\nScreens: `pages/outreach/**` (all ten files), backed by `loaders/outreach.ts` and `loaders/selfCheckoff.ts`.\n\n## The one constraint\n\n**A student's own answer and a staff-entered one are different records, and the difference is load-bearing.** `rsvps` write policies require `responded_by = auth.uid()`, and `loaders/outreach.ts` treats a student's own `responded_by` as never a deletion candidate during completion fan-out. Drive the student answer as the student, not as a coach acting for them, or the test proves something the RLS policy would not have allowed.\n\n**Completion is a multi-step write.** T327 made it recoverable; a spec that only checks the happy path will not notice if that regresses. Verify the state after completion in the database, not from the screen.\n\n## How to run it\n\nUse the `e2e-personas` skill. The harness, the four personas, `capture()` and the RLS-accurate `readRowsAs`/`execAs` all exist — read `tests/e2e-personas/personaHarness.ts` and copy the shape of `coach-checkin.spec.ts`. Read the skill's trap list before writing selectors; the `MultiSelector` and date-range traps apply directly to this dialog.\n\nScreenshots land in `tests/e2e-personas/screenshots/` and are committed. Capture the moments that carry evidence, not every page.\n\nFindings go to `docs/swarm/inbox/<branch>-findings.json` and are filed by `scripts/linear-file-findings.mjs` into Backlog, deduped by `findingKey`, linked back to this issue. Promotion to Todo stays the owner's call under item 28a.\n\n## Acceptance criteria\n\n 1. **Every step is driven, not inspected** — text typed, selectors opened and chosen from, checkboxes toggled, forms saved, and at least one saved record edited afterwards.\n 2. **Every write is proven by reading the row back and comparing values.** *Mutation: drop the RSVP upsert → red.*\n 3. **A student's own RSVP is written as that student**, with `responded_by` matching their auth id. *Mutation: write it with the coach's id → red, via an RLS denial.*\n 4. **Changing an answer updates rather than accumulates.** Going then Can't go leaves one row with the later status. *Mutation: switch the upsert to an insert → red.*\n 5. **Unchecking a student in Mark day complete changes the database.** *Mutation: make the uncheck a no-op → red.* This is T309's exact defect and it was invisible from the screen.\n 6. **Hours after completion match what the recorded attendance implies**, read from the database rather than from the page.\n 7. **Screenshots exist for the evidence-bearing moments** and are committed.\n 8. **Findings are emitted as JSON and filed.** A run that finds nothing records that explicitly.\n 9. **The suite is re-runnable without a reseed.** Cleanup in `beforeEach`, touching only rows the run created.\n10. **Each new spec is proven non-vacuous by at least one mutation**, per the `mutation-replay` skill, with the red output recorded.\n\n## Size and tier\n\nThe largest of the seven: ten page files and the longest chain. Likely more than one spec file. No production code changes are expected; if the run needs one to proceed, that is a finding.\n\nTier unjudged, because item 28c makes that the picker's first act.\n\n## Suggested priority: high urgency, high cost\n\nMost defect-dense path, zero coverage, and three fixed-but-unwatched silent-failure bugs sitting in it."
@@ -6270,8 +6270,8 @@
       "identifier": "GAM-344",
       "legacyId": null,
       "title": "E2E — W3 Run a meeting: schedule → attendance → participation %",
-      "state": "Todo",
-      "stateType": "unstarted",
+      "state": "In Progress",
+      "stateType": "started",
       "archived": false,
       "labels": [
         "area/w3",
