@@ -159,11 +159,12 @@ RSVPs already destroyed. **If a spec makes this look like a bug, the spec is
 describing a deliberate decision — record it in a comment, do not file it and
 do not change it.**
 
-**Ending a meeting reports failures poorly — already tracked as
-[GAM-283](https://linear.app/gamitch/issue/GAM-283).** `endMeeting.ts:98-114`
+**Ending a meeting reports failures poorly — already tracked.** **GAM-283 is
+`Done`; the live rows are GAM-337 and GAM-338 (both `Backlog`).**
+`endMeeting.ts:98-114`
 explains why (`runMutation` normalises rejections to a non-`Error` object, so
 `EndMeetingDialog.tsx`'s `instanceof Error` check always falls through to a
-generic string). If you reach it, **cite GAM-283; do not file a duplicate.**
+generic string). If you reach it, **cite GAM-337/GAM-338; do not file a duplicate.**
 
 ### Allowed Files
 
@@ -187,11 +188,14 @@ physically cannot push those — do not try).**
 > cluster that **had already run the persona suite**, not from a pristine seed.
 > The gate caught me claiming "before any spec runs" and it was false — the
 > cluster carries a `Priya / …-04 / late / coach` row that `seed.sql` never
-> writes (it seeds `…-01/02/03/06` only); `coach-checkin.spec.ts` put it there.
-> Anything you assert about **Priya's participation** is reseed-sensitive.
-> `sudo bash tests/e2e-harness/start.sh` is documented re-runnable and recreates
-> the cluster and reloads the seed, so **reseed before the AC 6 spec** rather
-> than engineering around the drift.
+> writes; `coach-checkin.spec.ts` put it there.
+>
+> **That particular drift turns out to be harmless** (`…-04` is `scheduled`, and
+> the view admits `completed` only — the gate re-measured the drifted cluster at
+> exactly §4's table). **What is NOT harmless is a completed `E2E %` meeting
+> left behind by your own AC 4 test.** The prediction table below is valid only
+> with **zero completed `E2E %` sessions present** — see §5b, which makes that a
+> `beforeAll` requirement and explains how AC 6 otherwise passes vacuously.
 
 Seed structure, `psql` output:
 
@@ -250,12 +254,14 @@ move at all (100.0 → 100.0, gate-measured in a rolled-back transaction).
 
 | Student | before | after | why |
 | -- | -- | -- | -- |
-| Priya | 4/4 → **100.0** | 5 marked, 4 present → **80.0** | gains one `absent`. **Reseed-sensitive — this is the one that drifts.** |
-| Jordan | 3/2 → **66.7** | 4 marked, 2 present → **50.0** | gains one `absent`. Held in every state the gate tested. |
-| Sam | 3/2/1ex → **100.0** | 4 marked, 2 present, 1 excused → **66.7** | denominator 3. Held in every state the gate tested. |
+| Priya | 4/4 → **100.0** | 5 marked, 4 present → **80.0** | gains one `absent` |
+| Jordan | 3/2 → **66.7** | 4 marked, 2 present → **50.0** | gains one `absent` |
+| Sam | 3/2/1ex → **100.0** | 4 marked, 2 present, 1 excused → **66.7** | denominator 3 |
 
-Assert the *predicted numbers*, not merely "it changed" — but **reseed first**,
-and say in a comment that you did.
+Both rounds of the gate recomputed these against the live view definition and
+confirmed them **under this heading**. Assert them **and** the computed
+before → after delta (§5b) — the numbers alone cannot tell a real write from a
+contaminated baseline.
 
 ### The student's own surface, and its exact rendered format
 
@@ -279,7 +285,11 @@ string on `/`. One extra `goto` proves the figure is not route-local.
 * **The series-edit confirm has the SAME trap and it is silent.** The row button
   and the confirm `AlertDialog` are **both** named **"Save changes"** — the count
   goes 1 → 2 on open. A single click appears to work and **saves nothing**; the
-  gate reproduced exactly that. Scope the second one.
+  gate reproduced exactly that. Scope the second one — the cleanest handle is
+  the confirm dialog's own title, **"Save changes to this meeting series?"**
+  (`ScheduleMeetingsDialog.tsx:1437`). *(A third `Save changes` also exists at
+  `EditMeetingSessionDialog.tsx:533`, and a per-session `Edit <date> session`
+  (`MeetingsList.tsx:1739`) sits beside `Edit – <title>`.)*
 * **The series-edit trigger uses an EN DASH:** `Edit – <title>`, e.g.
   `Edit – Weeknight Build Session`. `getByRole('button', { name: 'Edit', exact: true })`
   **times out** — the gate burned a 90s timeout on precisely this.
@@ -349,6 +359,10 @@ delete from rsvps where session_id in (
 delete from events where title like 'E2E %' or title = 'Rogue Meeting';
 ```
 
+*(The child deletes cover `E2E %` only, not `'Rogue Meeting'`. Harmless: the
+`Rogue Meeting` insert at `coach-meeting.spec.ts:233-249` is RLS-blocked and
+never lands, which is that test's whole point.)*
+
 **AC 3 — opt-in OFF writes nothing.** Create a meeting, go to
 `/meetings/live/<its session id>`, leave the checkbox **unticked**, confirm.
 Then assert **zero** `attendance` rows for that session — *and* assert the
@@ -371,7 +385,7 @@ Sam got `absent`/`coach`/`null`). `ignoreDuplicates: true`
 > `Current attendance: 0 present · 0 late · 0 excused · 0 absent. 3 students
 > with no attendance record will be marked absent.` **This is a real defect and
 > it is yours to file** (§7) — the coach is shown a count that the write will
-> not honour. It is *not* GAM-283, which is about failure *reporting*. Record
+> not honour. It is *not* GAM-337/GAM-338, which are about failure *reporting*. Record
 > the stale count in a comment; the row assertions are the real test.
 
 **AC 5 — a series edit changes only what was touched.** Create a **recurring**
@@ -397,10 +411,16 @@ the duplicate "Save changes" trap in §4), then assert **every** session's
 > session's time (e.g. `update event_sessions set starts_at = …` on the second
 > one) so the series is genuinely non-uniform, then do the shared-field save.
 
-**Free on-screen witness for AC 5 — take it.** The series-edit confirm
-`AlertDialog` states, before any write: *"0 session(s) added · 0 session(s)
-removed · 3 session(s) kept."* That is the user-visible form of this criterion,
-in one locator. Assert it alongside the row read.
+**Two free on-screen witnesses for AC 5 — take both.**
+1. The series-edit confirm `AlertDialog` states, before any write: *"0
+   session(s) added · 0 session(s) removed · 3 session(s) kept."*
+   (`ScheduleMeetingsDialog.tsx:745`) — the user-visible form of this criterion,
+   in one locator.
+2. **A non-vacuity witness that costs nothing.** `:1361` renders *"Sessions in
+   this series currently have different times…"* only when
+   `timesDivergeAcrossSessions && !timeFieldsTouched`. Asserting that string
+   **proves your mixed-time fixture really is non-uniform, before the save** —
+   i.e. it proves the test is not vacuous without the mutation having to do it.
 
 **Cancelling one occurrence** — drive the per-session Cancel, which is
 **`makeCancelMeetingSession` (`meetings.ts:966-977`)** reached via
@@ -413,8 +433,26 @@ single-meeting case; do the same for anything new you create.
 
 ### 5b. `student-participation.spec.ts` — new file, AC 6
 
-**Reseed first** (`sudo bash tests/e2e-harness/start.sh`) — §4's numbers are
-reseed-relative and Priya's is the one that drifts.
+> **DO NOT RESEED — and this criterion can pass vacuously if you get the
+> cleanup wrong.** Run the §5a widened `E2E %` cleanup in this file's
+> **`beforeAll`** instead. Gate-proven: that SQL alone restores the view to
+> §4's exact table (`100.0 / 66.7 / 100.0`) on a drifted, many-times-run
+> cluster. A `start.sh` reseed is both unnecessary (the `…-04` drift row is
+> `scheduled` and can never enter a view that admits `completed` only) and
+> harmful (it erases the leftovers §9.3's "run twice" evidence depends on).
+>
+> **Why the cleanup is load-bearing here, not hygiene.**
+> `coach-meeting.spec.ts` sorts **before** this file, and its AC 4 test leaves
+> behind a **completed, participation-counting** `E2E %` meeting. With that
+> leftover present the gate measured Priya/Jordan/Sam at `100.0 / 50.0 / 66.7`
+> — so **Jordan's and Sam's contaminated *before* values are numerically
+> identical to their predicted *after* values.** A spec asserting "after ==
+> 50.0 / 66.7" would pass **without the write having moved anything**.
+>
+> **So assert a computed before → after DELTA as well as the absolute
+> numbers.** Read the row before the end-meeting action, read it after, and
+> assert the change. The absolute numbers alone cannot distinguish a real
+> write from a contaminated baseline.
 
 Sign in as the **student**, land on `/meetings`, read the participation figure
 off the screen, and compare it against `readRowsAs('student', 'select … from
@@ -468,18 +506,44 @@ bundle the browser loads — every mutation stays green and proves nothing.** Th
 gate measured this: probe runs finished in 4-6s with no build step, because
 Playwright adopted the already-running preview.
 
-**Port 4174 is owned by whatever preview is currently serving it.** For a
-mutation run you must take it over and give it back. The loop, in full:
+**This loop is PROVEN, not proposed.** The premise gate ran it end to end three
+times and watched the bundle hash swap `index-D5F4-Gt_.js` →
+`index-BLwGxaPO.js` → back byte-for-byte. `--strictPort` does **not** race the
+dying preview, and `globalSetup.mjs` pins nothing about the bundle (it does one
+health `fetch` and nothing else). Copy it; do not redesign it.
+
+**Port 4174 is owned by whatever preview is currently serving it.** Take it over
+and give it back.
 
 ```bash
-# in YOUR OWN worktree (item 23), with the mutation applied:
-npm run build -- --mode e2e --outDir dist-e2e          # build the MUTATED bundle
-# stop whatever holds 4174, then serve YOUR dist-e2e on it:
+git worktree add /tmp/gam344-work            # item 23: mutate ONLY here
+ln -s "$REPO/node_modules" /tmp/gam344-work/node_modules   # or npm ci there
+cp "$REPO/.env.e2e" /tmp/gam344-work/.env.e2e              # <- DO NOT SKIP
+
+# with the mutation applied, in the worktree:
+npm run build -- --mode e2e --outDir dist-e2e     # runs tsc --noEmit first
+# take port 4174 — get the PID from ss, do NOT pkill (see below):
+ss -ltnp | grep 4174        # kill that PID
 npm run preview -- --outDir dist-e2e --port 4174 --strictPort --host 127.0.0.1 &
 npx playwright test -c tests/e2e-harness/playwright.personas.config.ts <spec>
 #   ^ expect RED. Paste the real "Expected … Received …".
-# revert the mutation, rebuild, restart the preview, re-run -> expect GREEN.
+# revert, rebuild, restart, re-run -> expect GREEN.
 ```
+
+**Three traps the gate hit so you do not have to:**
+
+* **Without `.env.e2e` the `--mode e2e` build SUCCEEDS SILENTLY** and yields a
+  bundle that throws *"Supabase isn't configured yet"* (`src/lib/supabase/client.ts:33`)
+  — **which reads exactly like a successful mutation.** Copy the file.
+* **Do not `pkill -f "vite preview …"`** — the pattern matches the invoking
+  shell's own command line and kills it. Take the PID from `ss -ltnp`.
+* **Verify the bundle actually swapped**, or you are testing the old one:
+  compare `dist-e2e/index.html`'s `index-*.js` hash before and after, and
+  confirm the served hash with `curl 127.0.0.1:4174`.
+
+**A mutation must stay type-clean** — `npm run build` runs `tsc --noEmit` first,
+so deleting a now-unused reference fails with `TS6133` rather than producing a
+red test.
 
 Commit before mutating (item 26's fast-tier rule, which applies to any
 mutation). Never commit a mutation. Restore port 4174 to a clean-tree bundle
@@ -488,17 +552,43 @@ when you are done and say that you did.
 | # | Mutation | Where | Must turn red |
 | -- | -- | -- | -- |
 | 1 | point the status flip at a wrong session id | `endMeeting.ts:423` | AC 2 |
-| 2 | remove the `markAbsentStudentIds.length > 0` guard so the upsert always sends | `endMeeting.ts:434` | AC 3 |
+| 2 | **ignore the opt-in** — always pass `computeUnmarkedStudentIds(...)` regardless of `markRemainingAbsent` | `EndMeetingDialog.tsx:456` | AC 3 |
 | 3 | in `buildEditDesiredFutureSessions`'s call site, **ignore `timeFieldsTouched`/`originalTimesByDate`** and apply the dialog's shared start/end to **every** date | `ScheduleMeetingsDialog.tsx:1145-1151` | AC 5 |
 
-**Mutation 2 is the one that matters most:** it is *literally* the defect T508
-closed. If AC 3 stays green with the guard removed, AC 3 is worthless.
+**Mutation 2 was WRONG in the previous draft and the correction matters more
+than the mutation.** The old target (remove the
+`markAbsentStudentIds.length > 0` guard at `endMeeting.ts:434`) is a **false
+proof**: with the box unticked `markAbsentStudentIds` is already `[]`, so the
+guardless upsert sends an **empty row array and writes nothing** — AC 3's row
+assertion stays **green**. The gate measured `count(*) = 0` after the mutated
+run. Any red it produced came from a *different* assertion, and only because
+this harness rejects empty inserts (`postgrest.mjs:255`); against real PostgREST
+it would be green throughout. **Do not use it.**
 
-**Mutation 3 was wrong in the first draft and is corrected here.** The original
-("force every session into `plan.toUpdate`") is a **no-op** — `toUpdate` already
-holds every kept session, measured 3/3. It also only bites if the fixture has
-**mixed times** (§5a); with a uniform series even the correct mutation writes
-identical values and stays green.
+The real mutation, gate-measured, with its actual red:
+
+```
+Expected length: 0
+Received length: 3
+Received array:  [{"status": "absent", "student_id": "…-000000000001"},
+                  {"status": "absent", "student_id": "…-000000000002"},
+                  {"status": "absent", "student_id": "…-000000000003"}]
+  > 55 |     expect(rows).toHaveLength(0);
+```
+
+Keep it type-clean: deleting the `markRemainingAbsent` reference fails
+`TS6133`. `markAbsentStudentIds: markRemainingAbsent || true ? computeUnmarkedStudentIds(roster, attendanceByStudentId) : []`
+builds clean and produces the red above.
+
+*(The `endMeeting.ts:434` guard is a genuine **no-request** property, observable
+here only because the harness rejects empty inserts. It is GAM-338's territory,
+not AC 3's — do not conflate them.)*
+
+**Mutation 3 was also wrong in the first draft.** The original ("force every
+session into `plan.toUpdate`") is a **no-op** — `toUpdate` already holds every
+kept session, measured 3/3. It only bites with a **mixed-time** fixture (§5a);
+with a uniform series even the correct mutation writes identical values and
+stays green.
 
 Report each as: the exact diff, the exact failing assertion text
 (`Expected … Received …`), and the restored green run.
@@ -528,7 +618,7 @@ right and the *number the coach was shown* is wrong. Gate-measured in a browser.
 This is **not** GAM-283 (failure reporting) and has no existing row.
 
 Already known — **do not re-file**: the `cancelSession` asymmetry (§3, by
-design), partial-failure reporting (**GAM-283**), the IPv6 preview bind and the
+design), partial-failure reporting (**GAM-337 / GAM-338**), the IPv6 preview bind and the
 five pre-existing suite failures (**GAM-355**, `Backlog` — its `findingKey`
 `e2e-personas/five-pre-existing-w1-suite-failures-not-in-scope` is taken),
 `events.created_by` never set (`coach-meeting.spec.ts:169-175`), and the
