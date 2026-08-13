@@ -166,3 +166,20 @@ Every subagent here is dispatched `run_in_background: false` and waited on.
   - Also returned four cheaper paths I had missed, including that the
     series-edit confirm dialog **already states** "0 added · 0 removed · 3 kept"
     on screen — the user-visible form of AC 5, free in one locator.
+- **05:05Z — packet revised (round 2).** All ten required revisions applied:
+  the `beforeEach` cleanup widened and editing line 63 explicitly authorised;
+  §6 given the full mutate → build-in-worktree → serve-on-4174 → run → revert
+  loop plus a statement of who owns the port; mutation 3 repointed from the
+  no-op at `plan.toUpdate` to `ScheduleMeetingsDialog.tsx:1145-1151`'s
+  `buildEditDesiredFutureSessions`, with a **mixed-time fixture** now required
+  or the test is vacuous either way; AC 4's label assertion reduced to a regex
+  with the stale-count defect pre-specified as a §7 finding; §4's prediction
+  table re-headed for a newly created meeting and disclosed as reseed-relative;
+  the gate's measured locator names added (en-dash `Edit – <title>`, the
+  duplicate "Save changes" confirm, the three-way `Cancel` ambiguity); §5b's
+  RLS overclaim corrected and the rendered format stated outright; §3 given a
+  table separating `cancelSession` from `makeCancelMeetingSession`; §0a's
+  cause for `student-parent.spec.ts:66` corrected and cited in §5c; findings
+  filename renamed to match the branch; two citation drifts fixed. Round 1's
+  doubts are preserved with the gate's verdicts, and a new round-2 list of five
+  written.
