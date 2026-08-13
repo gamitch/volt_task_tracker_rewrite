@@ -82,3 +82,32 @@ Every subagent here is dispatched `run_in_background: false` and waited on.
   attendance, API on `127.0.0.1:54321`. `psql` as `runner` over loopback TCP
   works, so `readRows`/`execAs` need no change. **This `sudo` correction is not
   in the skill and not in the issue; it goes in the packet.**
+  Two further gaps, both matching GAM-342's record: `playwright` is not in
+  `package.json` at all, installed `--no-save` at `1.62.1` (`package.json` and
+  the lockfile verified byte-identical afterwards); and `vite preview` binds
+  IPv6-only while the config polls `127.0.0.1`, so the preview is started by
+  hand with `--host 127.0.0.1` and `reuseExistingServer` adopts it.
+- **04:05Z — BASELINE MEASURED: full persona suite `27 passed / 5 failed`,
+  exit 1**, and it is not what I expected. **Two of the five failures are in
+  `coach-meeting.spec.ts` — the exact file this row extends.** Root-caused
+  rather than noted: both fail because `'Volt Legacy 2201'` (archived) is no
+  longer offered in the team-scope picker. `coach-meeting.spec.ts:100-105`
+  pinned that team as visible and its own comment says *"If a fix lands that
+  filters archived teams out of the scope picker, this line is the one to
+  delete."* **That fix landed** — `dd6e166` / `1c9dbbb` (GAM-305), filter at
+  `ScheduleMeetingsDialog.tsx:885`/`:1236`. The assertion is stale exactly as
+  its author predicted.
+- **04:08Z — and I nearly widened scope on it.** My first instinct was that the
+  worker should fix the two stale assertions, since unlike GAM-342 this row
+  *owns* `coach-meeting.spec.ts`. Checked before acting: the failures are
+  already filed as **GAM-355**, which sits in **`Backlog`**. Item 28a says
+  `Backlog` means filed, not dispatchable — so fixing them here is taking
+  Backlog work and would put two rows on one change. **Owning the file is not
+  owning the row.** The packet now forbids both fixing and re-filing them, and
+  the tension is recorded as Least confident decision #6 for the gate to
+  attack rather than buried.
+- **04:10Z — packet written** — `docs/swarm/active/GAM-344-packet.md`. Carries
+  the four corrected premises, the measured baseline and its delta rule, the
+  live `v_student_participation` arithmetic with exact predicted numbers for
+  AC 6, the two-controls-named-"End meeting" strict-mode trap, an explicit
+  forbidden list, and six Least confident decisions (item 19d).

@@ -45,8 +45,40 @@ npx playwright test -c tests/e2e-harness/playwright.personas.config.ts
 `psql -h 127.0.0.1 -p 55432 -U postgres -d scratch` works as `runner` once the
 cluster is up, so `readRows` / `readRowsAs` / `execAs` need no change.
 
-**Baseline (§0a) is filled in below by the orchestrator before dispatch.** Do
-not report a suite figure without comparing against it.
+### §0a. Baseline — measured on this container, twice, at `93c89d0`
+
+**Full persona suite: `27 passed, 5 failed`, exit 1.** These five are
+pre-existing and are **not yours**. Report your figures as a *delta* against
+this; a bare pass count is not a result.
+
+| Failing test | Cause |
+| -- | -- |
+| `coach-meeting.spec.ts:88` | `'Volt Legacy 2201'` (archived) is **no longer offered** in the scope picker. Measured: `Expected − 1 / Received + 0`, the array is missing exactly that entry. |
+| `coach-meeting.spec.ts:115` | Same root cause — times out 90s on `getByRole('option', { name: 'Volt Legacy 2201' })`, an option that no longer exists. |
+| `student-parent.spec.ts:27`, `:121` | `getByText(/\/ 100 h \(/)` not found — the hours-float assertions. |
+| `student-parent.spec.ts:66` | The RSVP control genuinely writes; that test's premise is stale. |
+
+**Two of those five are in the file you are extending, and you must still leave
+them alone.** Diagnosis, verified: `coach-meeting.spec.ts:100-105` deliberately
+pinned the archived team as visible, and its own comment says *"If a fix lands
+that filters archived teams out of the scope picker, this line is the one to
+delete."* **That fix landed** — `dd6e166` ("GAM-305: exclude archived teams from
+meeting/outreach team-scope pickers") and `1c9dbbb`, with the filter at
+`ScheduleMeetingsDialog.tsx:885` and `:1236`. The assertion is stale, exactly as
+predicted.
+
+**Do not fix it anyway.** It is already filed as **GAM-355**, which sits in
+`Backlog` — and constitution item 28a says `Backlog` means filed, not
+dispatchable. Fixing it here would be taking work from `Backlog` and would put
+two rows on one change. This is the one place where "the file is in your Allowed
+Files" does **not** mean "you may repair it": ownership of the file is not
+ownership of the row. **Do not re-file it either** — GAM-355 exists, and the
+`findingKey` `e2e-personas/five-pre-existing-w1-suite-failures-not-in-scope` is
+already taken.
+
+Practical consequence for you: after your change the suite should read
+**`27 + <your new passing tests>` passed, `5` failed**. If any *other* number
+appears in the failed column, it is yours.
 
 ---
 
@@ -360,6 +392,14 @@ the archived team in the scope picker (`:100-105`).
 5. **That `--host 127.0.0.1` is still needed.** GAM-342 filed it; I reproduced
    the *fix* but never watched the *failure* on this container, so I am asserting
    a workaround for a symptom I did not personally observe here.
+6. **That leaving `coach-meeting.spec.ts`'s two red tests alone is right.** I
+   argued it from item 28a (GAM-355 is in `Backlog`), and I believe that is the
+   correct rule. But the competing reading is real: the file is in Allowed
+   Files, its own comment prescribes the one-line remedy, and AC 10 asks for a
+   suite that is re-runnable and non-vacuous — which is harder to demonstrate
+   with two permanent reds in the same file. **What would make it wrong:** if
+   the checker cannot separate the worker's signal from the baseline noise, the
+   cost of the rule lands on the deliverable rather than on the queue.
 
 ---
 
