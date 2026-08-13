@@ -272,3 +272,18 @@ thing that survives if the container is killed.
   Removing the generated directory returns gate 4 to green. `eslint.config.js`
   was outside Allowed Files, so per item 20 this is a filed row and not a
   comment: **GAM-365** (Backlog, `tier/unreviewed`, `area/w10`).
+- **PR creation REFUSED by credentials** — `gh pr create` and `gh api user` both
+  return `HTTP 401: Bad credentials`. `GH_TOKEN` and `GITHUB_TOKEN` are both
+  present in the environment but **empty**; the branch pushes fine because the
+  git remote carries its own credential, so push access and API access are
+  different things here. This is the same wall GAM-342 hit (`30bbc12`), and the
+  precedent it set is followed: the PR body is preserved verbatim as
+  `docs/swarm/active/GAM-343-pr-body.md` for an owner or a scoped session to
+  open as a normal PR, so CI still runs on it.
+  **Consequence to be explicit about:** with no PR, the `PR merged → Done`
+  automation (item 28g) has nothing to fire on. GAM-343 is moved to `In Review`
+  by hand per item 28e and stays there until a human accepts it. Nothing here
+  closes it, which is correct — an agent closing its own issue is
+  self-certification.
+- **Issue moved `In Progress → In Review`** (item 28e — never `Done`), with a
+  comment carrying the outcome, the gate figures and the three filed findings.
