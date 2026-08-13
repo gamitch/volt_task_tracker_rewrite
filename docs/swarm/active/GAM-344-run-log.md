@@ -84,3 +84,33 @@ tiering judgement was required as part of claiming under item 28d).
   run died holding this subagent* — that is the failure `AGENTS.md` § "Two
   walls" item 2 records, and its absence of a verdict line below is the
   evidence, not an oversight.
+- **12:17Z — `checker-premise` VERDICT: REVISE** (round 1 of the two item-19a
+  rounds). Returned in ~11 min, 129,887 subagent tokens. It ran the gate rather
+  than reading it — psql against the live cluster, a `begin … rollback`
+  mutation experiment, its own `git worktree` (item 23) and three headless
+  browser probes — and it was right on the things that mattered. Three
+  BLOCKERs, four MAJORs:
+  - **BLOCKER 1 — my §3.2 cites a superseded view.** `v_student_participation`
+    was redefined by `20260806000000_met01_explicit_marks.sql` (T509/D014);
+    `pg_get_viewdef` shows an INNER JOIN on `attendance`, so `expected_ct`
+    counts **explicit marks**, not eligibility. Measured: an unmarked student
+    contributes **no row at all**, so my headline claim — that the status flip
+    is itself what moves the participation figure — is false for the journey I
+    designed. Measured table: unmarked ⇒ `4/4/100.0`; present ⇒ `5/5/100.0`;
+    absent ⇒ `5/4/80.0`. My `80.0` was right by accident, for the wrong reason.
+  - **BLOCKER 2 — the `check_out_at` assertion is unreachable through any UI
+    path.** `computeCheckoutStudentIds` needs `checkInAt !== null`, and no UI
+    writer sets `check_in_at` (the coach upsert deliberately never includes it;
+    self-checkoff writes `null`; only the QR Edge Function would, and it is a
+    harness stand-in). So `checkoutStudentIds` is always empty.
+  - **BLOCKER 3 — my decision-5 doubt was right and the ordering was backwards.**
+    `'E2E END Opt-Out Night' like 'E2E %'` is `t`, and `--list` shows
+    `coach-meeting-end.spec.ts` runs **before** `coach-meeting.spec.ts` (`-`
+    0x2D < `.` 0x2E). Worse, `attendance_session_id_fkey` is **ON DELETE
+    RESTRICT**, not cascade — so the sibling file's `beforeEach` delete would
+    throw and take all five of its tests down with it.
+  - MAJOR: mutation 3 is **vacuous** (`plan.toUpdate` is the whole loaded set
+    for a fresh future-only series, so "run it over all sessions" is a no-op);
+    the `Mark 2 students` label needs a team-scope step I never prescribed;
+    criterion 6's rendered-value comparison cannot be literal string equality.
+  Revising now — round 2 is the last one item 19a allows before escalation.
