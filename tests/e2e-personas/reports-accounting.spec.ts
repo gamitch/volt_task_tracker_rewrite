@@ -507,22 +507,35 @@ test.describe('MET-01 an all-excused student has no participation rate', () => {
     // Actually rendered:   an accessible name of "Participation: null%" over a
     //                      ProgressBar that reads 0%.
     //
-    // Mechanism, all four links verified:
-    //   1. `loaders/meetings.ts:302` declares `participation_pct: number` for a
-    //      column `v_student_participation` returns as SQL NULL (met01:123-128).
-    //   2. `aggregateParticipationRows` (`meetings.ts:519`) returns the single
-    //      row VERBATIM, so the `Math.max(expectedCt - excusedCt, 1)` floor at
-    //      `:527` — GAM-300's floor — is never reached on this path.
-    //   3. `StudentMeetingView.tsx:757` interpolates it:
-    //      label={`Participation: ${participation.participationPct}%`}
-    //   4. `ProgressBar value={null}` clamps to 0 and renders "0%".
+    // Mechanism. NOTE: the loader on this path is `checkin.ts`, NOT
+    // `meetings.ts`. `MeetingsList.tsx:2769` renders
+    // `<StudentMeetingView variant="own" studentId={…} />` with no `loadStripData`,
+    // so the default at `StudentMeetingView.tsx:1068` wins:
+    // `loadConsistencyStripData` from `loaders/checkin.ts` (imported as
+    // `loadConsistencyStripDataFromSupabase` at `StudentMeetingView.tsx:317`).
+    // `meetings.ts`'s own `aggregateParticipationRows` feeds a DIFFERENT
+    // consumer (`meetings.ts:949`'s `loadStudentMeetingsData`). Established by
+    // mutation: changing `meetings.ts:519` left this assertion GREEN; changing
+    // `checkin.ts:363-365` turned it red.
     //
-    // `loaders/reports.ts:221` carries the IDENTICAL type lie; the Participation
-    // tab escapes the symptom only because `ParticipationTab.tsx:838` does a
-    // runtime `=== null` check. One mistyped column, two loaders, one guard.
+    //   1. `loaders/checkin.ts:239` declares `participation_pct: number` for a
+    //      column `v_student_participation` returns as SQL NULL (met01:123-128).
+    //   2. `aggregateParticipationForStudent` (`checkin.ts:363-365`) returns the
+    //      single row VERBATIM, so the `Math.max(expectedCt - excusedCt, 1)`
+    //      floor at `checkin.ts:375` — GAM-300's floor — is never reached here.
+    //   3. `checkin.ts:291` renames it to `participationPct` unchanged.
+    //   4. `StudentMeetingView.tsx:757` interpolates it:
+    //      label={`Participation: ${participation.participationPct}%`}
+    //   5. `ProgressBar value={null}` clamps to 0 and renders "0%".
+    //
+    // `loaders/meetings.ts:302` and `loaders/reports.ts:221` carry the IDENTICAL
+    // type lie. The Participation tab escapes the symptom only because
+    // `ParticipationTab.tsx:838` does a runtime `=== null` check. One mistyped
+    // column, three loaders, one guard.
     //
     // WHEN THIS IS FIXED — widen `participation_pct` to `number | null` in
-    // `meetings.ts:302` and give `StudentMeetingView.tsx:757` the same
+    // `checkin.ts:239` (and, for the same reason, `meetings.ts:302` and
+    // `reports.ts:221`) and give `StudentMeetingView.tsx:757` the same
     // `=== null` branch `ParticipationTab.tsx:838` already has — change the two
     // assertions below to the em-dash form:
     //     await expect(page.getByText('—')).toBeVisible();
