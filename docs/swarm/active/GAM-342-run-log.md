@@ -54,3 +54,13 @@ summary.
      written for.
   With those closed, the baseline spec passes in a real browser:
   `coach-checkin.spec.ts` → **1 passed (5.4s)**. Premise holds; proceeding.
+- **Packet written** — `docs/swarm/active/GAM-342-packet.md`. Corrects three
+  wrong paths in the issue body (loaders live at `src/lib/supabase/loaders/`;
+  `SelfCheckoffDialog` is an outreach surface; `selfCheckoff.ts` is
+  INSERT+DELETE, so AC 3's upsert claim belongs to the coach console only), and
+  records the structural finding that `/checkin`'s code field and session picker
+  render inside the **error** state. Also measured that the `checkin` Edge
+  Function stand-in (`tests/e2e-harness/server.mjs:475-492`) only *mints* a QR
+  token and has **no redemption branch at all** — so no code submission can
+  produce an `attendance` row here. Ends with five Least confident decisions
+  (item 19d).
