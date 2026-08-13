@@ -56,7 +56,7 @@ this; a bare pass count is not a result.
 | `coach-meeting.spec.ts:88` | `'Volt Legacy 2201'` (archived) is **no longer offered** in the scope picker. Measured: `Expected − 1 / Received + 0`, the array is missing exactly that entry. |
 | `coach-meeting.spec.ts:115` | Same root cause — times out 90s on `getByRole('option', { name: 'Volt Legacy 2201' })`, an option that no longer exists. |
 | `student-parent.spec.ts:27`, `:121` | `getByText(/\/ 100 h \(/)` not found — the hours-float assertions. |
-| `student-parent.spec.ts:66` | The RSVP control genuinely writes; that test's premise is stale. |
+| `student-parent.spec.ts:66` | Fails at its **precondition**, line 71 (`expect(before).toHaveLength(0)`), on a leftover `rsvps` row for Priya on session `…-08`. The deeper stale-premise story (the RSVP control genuinely writes) is real but is *not* the observed failure. **This is a live example of the re-runnability hazard §5c warns you about — read it before you write your own cleanup.** |
 
 **Two of those five are in the file you are extending, and you must still leave
 them alone.** Diagnosis, verified: `coach-meeting.spec.ts:100-105` deliberately
@@ -115,19 +115,35 @@ these were checked, not assumed.
 3. **The opt-in checkbox's accessible name is dynamic.**
    `EndMeetingDialog.tsx:572` builds it as
    `Mark ${count} ${count === 1 ? 'student' : 'students'} with no attendance record absent`.
-   Match by **regex**. It renders **only when `unmarkedCount > 0`**
-   (`:1034`, gated at `:989`) — if everyone already has a mark, there is no
-   checkbox to tick and AC 4 has nothing to assert.
+   Match by **regex**. It renders only when `unmarkedCount > 0` (gate at
+   `:1033`, control at `:1035`).
+
+   **But the count in it is STALE, and that is a real defect — see §5a AC 4.**
+   The summary is loaded exactly once (`EndMeetingDialog.tsx:875`,
+   `useLoadState(() => loadSummary(sessionId), [loadSummary, sessionId])`) and
+   nothing in `LiveConsole` invalidates it. Gate-measured: after marking Priya
+   **Present** in the console and waiting for the row to land, the label still
+   read `Mark 3 students with no attendance record absent`. **Never assert the
+   number.**
 
 4. **The seed's live session cannot be *edited*.** `makeSaveMeetingSession`
-   (`meetings.ts:1036-1046`) guards `.eq('status','scheduled')` **and**
-   `.gt('starts_at','now')` and *rejects* on zero matched rows.
-   `SEED.liveSession` (`5e550000-…-04`) starts **in the past**. Single-session
-   edits must target a **future** session (`…-05`, +7 days) or one you created.
+   (`meetings.ts:1029`, guards at `:1043-1044`, throw at `:1062`) requires
+   `.eq('status','scheduled')` **and** `.gt('starts_at','now')` and *rejects* on
+   zero matched rows. `SEED.liveSession` (`5e550000-…-04`) starts **in the
+   past**. Single-session edits must target a **future** session (`…-05`, +7
+   days) or one you created.
 
 ---
 
 ## §3. The one thing that must not happen
+
+**First, disambiguate two functions with confusingly similar names.** They are
+different, and only one is protected:
+
+| Function | Where | Role here |
+| -- | -- | -- |
+| `cancelSession` | `meetings.ts:788-792`, a closure inside `makeSaveMeetingSeries` | **PROTECTED — do not touch.** This is the D016 asymmetry below. |
+| `makeCancelMeetingSession` | `meetings.ts:966-977`, reached from `MeetingsList.tsx:2946` | **This is the one §5a tells you to drive** for "cancel one occurrence". Also unguarded. |
 
 **Do not "fix" the `cancelSession` asymmetry in `meetings.ts`.** Verified live:
 
@@ -156,7 +172,7 @@ generic string). If you reach it, **cite GAM-283; do not file a duplicate.**
 | `tests/e2e-personas/coach-meeting.spec.ts` | extend — end-meeting + series edit |
 | `tests/e2e-personas/student-participation.spec.ts` | **new** — AC 6 |
 | `tests/e2e-personas/screenshots/*.png` | AC 8 |
-| `docs/swarm/inbox/claude-gam-344-e2e-w3-meeting-findings.json` | AC 9 |
+| `docs/swarm/inbox/claude-gam-344-e2e-w3-run-a-meeting-findings.json` | AC 9 |
 
 **Forbidden:** all of `src/**`, `supabase/**`, `tests/e2e-harness/**`,
 `package.json`, `package-lock.json`, `.claude/**`, `docs/swarm/**` except the
@@ -167,7 +183,17 @@ physically cannot push those — do not try).**
 
 ## §4. Ground truth — measured on the live cluster, copy these numbers
 
-Seed state, `psql` output, before any spec runs:
+> **Read this before trusting any number below.** These figures were read from a
+> cluster that **had already run the persona suite**, not from a pristine seed.
+> The gate caught me claiming "before any spec runs" and it was false — the
+> cluster carries a `Priya / …-04 / late / coach` row that `seed.sql` never
+> writes (it seeds `…-01/02/03/06` only); `coach-checkin.spec.ts` put it there.
+> Anything you assert about **Priya's participation** is reseed-sensitive.
+> `sudo bash tests/e2e-harness/start.sh` is documented re-runnable and recreates
+> the cluster and reloads the seed, so **reseed before the AC 6 spec** rather
+> than engineering around the drift.
+
+Seed structure, `psql` output:
 
 ```
 event e0e00000-…-01  "Weeknight Build Session"  type=meeting
@@ -212,32 +238,59 @@ The view (`\d+ v_student_participation`, read from the live database):
 
 **This is why AC 6 is a real test and not decoration:** the end-meeting action
 moves this figure by *both* of its writes — the absence rows add to the
-numerator's denominator, and the status flip is what admits the session to the
-view at all. Ending session `…-04` with the opt-in **on** and nobody marked
-predicts, exactly:
+denominator, and the status flip is what admits the session to the view at all.
+
+### The prediction table — for a NEWLY CREATED meeting, from a pristine reseed
+
+These numbers are for **a meeting you create yourself** on team FRC with
+`counts_participation`, ended with the opt-in **on** and nobody marked, against
+**freshly reseeded** fixtures. They are **not** for `SEED.liveSession`
+(`…-04`) — §5a forbids using it, and against the drifted cluster Priya does not
+move at all (100.0 → 100.0, gate-measured in a rolled-back transaction).
 
 | Student | before | after | why |
 | -- | -- | -- | -- |
-| Priya | 4/4 → **100.0** | 5 marked, 4 present → **80.0** | gains one `absent` |
-| Jordan | 3/2 → **66.7** | 4 marked, 2 present → **50.0** | gains one `absent` |
-| Sam | 3/2/1ex → **100.0** | 4 marked, 2 present, 1 excused → **66.7** | denominator 3 |
+| Priya | 4/4 → **100.0** | 5 marked, 4 present → **80.0** | gains one `absent`. **Reseed-sensitive — this is the one that drifts.** |
+| Jordan | 3/2 → **66.7** | 4 marked, 2 present → **50.0** | gains one `absent`. Held in every state the gate tested. |
+| Sam | 3/2/1ex → **100.0** | 4 marked, 2 present, 1 excused → **66.7** | denominator 3. Held in every state the gate tested. |
 
-Assert the *predicted numbers*, not merely "it changed".
+Assert the *predicted numbers*, not merely "it changed" — but **reseed first**,
+and say in a comment that you did.
 
-### The student's own surface
+### The student's own surface, and its exact rendered format
 
 `MeetingsList.tsx:2769` renders `<StudentMeetingView variant="own" …>`, so a
-student reads their participation figure at **`/meetings`** — the same route the
-coach uses, rendering differently by role. Read it as the student
-(`readRowsAs('student', …)`) **and** off the screen, and compare.
+student reads their participation figure at **`/meetings`**. **The format is
+already pinned in-repo — do not spend a turn discovering it.**
+`StudentMeetingView.tsx:757` renders ``​`Participation: ${participation.participationPct}%`​``
+(`StudentHome.tsx:1649` the same), and `MeetingsList.test.tsx:2045` already pins
+`'Participation: 85.7%'`. So: **a whole number renders `80%`, a fractional one
+renders `66.7%`.**
 
-### Locator traps on THIS surface (beyond the skill's list)
+**Cheap second witness (take it):** `StudentHome.tsx:1649` renders the same
+string on `/`. One extra `goto` proves the figure is not route-local.
+
+### Locator traps on THIS surface — gate-measured, use verbatim
 
 * **Two controls are named "End meeting"** — the trigger `Button`
   (`EndMeetingDialog.tsx:1042`) and the confirm `AlertDialog`'s `actionLabel`
-  (`:1057`). An unscoped `getByRole('button', { name: 'End meeting' })` is a
-  strict-mode violation once the dialog opens. Scope to the `alertdialog`
-  (title **"End this meeting?"**) for the confirm.
+  (`:1057`). Unscoped, that is a strict-mode violation once the dialog opens.
+  Scope the confirm to the `alertdialog` titled **"End this meeting?"**.
+* **The series-edit confirm has the SAME trap and it is silent.** The row button
+  and the confirm `AlertDialog` are **both** named **"Save changes"** — the count
+  goes 1 → 2 on open. A single click appears to work and **saves nothing**; the
+  gate reproduced exactly that. Scope the second one.
+* **The series-edit trigger uses an EN DASH:** `Edit – <title>`, e.g.
+  `Edit – Weeknight Build Session`. `getByRole('button', { name: 'Edit', exact: true })`
+  **times out** — the gate burned a 90s timeout on precisely this.
+* **The expander** is `Show session details – <title>` /
+  `Hide session details – <title>` (en dash again); its *visible* text is
+  `Session details (5)`.
+* **Per-session cancel has three overlapping names:** the row trigger
+  `Cancel <date> session` (e.g. `Cancel Tue, Sep 1 session`), the alert dialog's
+  dismiss `Cancel`, and its confirm `Cancel session`. Scope all three.
+* The dialog that opens is titled **"Edit meeting series"** and is prefilled in
+  **Custom dates** mode with a *single shared* Start/End pair.
 * The skill's `Escape`-closes-the-whole-dialog trap and the
   recurring-mode-needs-a-date-range trap were both learned on **this** file.
   Re-read `.claude/skills/e2e-personas/SKILL.md` § "Traps" before writing.
@@ -263,10 +316,38 @@ cannot be met, say so and why in your report and emit it as a finding.
 ### 5a. `coach-meeting.spec.ts` — new `describe` blocks
 
 **Build the journey on a meeting the spec creates through the UI**, not on
-`SEED.liveSession`. Two reasons, both measured: `coach-checkin.spec.ts` already
-writes to `…-04` and asserts on it, and the existing `beforeEach` in
-`coach-meeting.spec.ts:63` only clears `title like 'E2E %'`. A self-created
-event keeps you inside that cleanup and collides with nothing.
+`SEED.liveSession` — `coach-checkin.spec.ts` already writes to `…-04` and
+asserts on it.
+
+#### FIRST, FIX THE CLEANUP — otherwise every test in this file dies on run 2
+
+`attendance_session_id_fkey` is **`ON DELETE RESTRICT`**. The existing
+`beforeEach` at `coach-meeting.spec.ts:63` does
+`delete from events where title like 'E2E %'`, which cascades to
+`event_sessions` — and `attendance` **blocks it**. Gate-measured:
+
+```
+ERROR:  update or delete on table "event_sessions" violates foreign key constraint
+        "attendance_session_id_fkey" on table "attendance"
+```
+
+`execAdmin` throws, so from the second run onward **every test in the file**
+errors in `beforeEach`, including the three that pass today. AC 10 fails
+outright.
+
+**Editing line 63 is explicitly AUTHORISED** — it is the one repair in this file
+you *are* meant to make (unlike the two stale archived-team assertions, which
+belong to GAM-355). Widen it, children first:
+
+```sql
+delete from attendance where session_id in (
+  select id from event_sessions where event_id in (
+    select id from events where title like 'E2E %'));
+delete from rsvps where session_id in (
+  select id from event_sessions where event_id in (
+    select id from events where title like 'E2E %'));
+delete from events where title like 'E2E %' or title = 'Rogue Meeting';
+```
 
 **AC 3 — opt-in OFF writes nothing.** Create a meeting, go to
 `/meetings/live/<its session id>`, leave the checkbox **unticked**, confirm.
@@ -275,46 +356,95 @@ session flipped to `completed` anyway, because `endMeeting.ts:442-449` runs
 steps 2 and 3 unconditionally. Ticking nothing must not mean doing nothing.
 
 **AC 4 — opt-in ON writes one row per unmarked student.** Same shape, but mark
-**one** student present in the live console first, then tick the checkbox
-(regex-matched; assert its label says the count you expect) and confirm.
-Assert: exactly one `absent`/`method='coach'`/`recorded_by is null` row per
-*unmarked* student, and the already-marked student's row **unchanged** —
-`ignoreDuplicates: true` (`endMeeting.ts:405`) is what protects it, so that is
-the property under test.
+**one** student present in the live console first, then tick the checkbox and
+confirm. Assert: exactly one `absent`/`method='coach'`/`recorded_by is null` row
+per *unmarked* student, and the already-marked student's row **unchanged**
+(gate-verified: Priya stayed `present`/`recorded_by=<coach>` while Jordan and
+Sam got `absent`/`coach`/`null`). `ignoreDuplicates: true`
+(`endMeeting.ts:405`) is what protects it, so that is the property under test.
+
+> **Match the checkbox label by regex ONLY —
+> `/Mark \d+ students? with no attendance record absent/` — and do NOT assert
+> the number.** The summary is loaded once (`EndMeetingDialog.tsx:875`) and
+> LiveConsole never invalidates it, so after marking Priya the label still says
+> `Mark 3 …` and the confirm dialog still says
+> `Current attendance: 0 present · 0 late · 0 excused · 0 absent. 3 students
+> with no attendance record will be marked absent.` **This is a real defect and
+> it is yours to file** (§7) — the coach is shown a count that the write will
+> not honour. It is *not* GAM-283, which is about failure *reporting*. Record
+> the stale count in a comment; the row assertions are the real test.
 
 **AC 5 — a series edit changes only what was touched.** Create a **recurring**
-event (several sessions), note every session's `starts_at`, reopen it in edit
-mode and change only a **shared** field (title / location / description), save,
-then assert **every** session's `starts_at`/`ends_at` is byte-identical to
-before and only the `events` row moved. `makeSaveMeetingSeries`
-(`meetings.ts:842`) only issues `updateSessionTime` for `plan.toUpdate`; this
-test is what proves the plan is not "everything".
+event, note every session's `starts_at`, reopen it via `Edit – <title>`, change
+only a **shared** field (title / location / description), save (**twice** — see
+the duplicate "Save changes" trap in §4), then assert **every** session's
+`starts_at`/`ends_at` is byte-identical and only the `events` row moved.
 
-**Cancelling one occurrence** — drive the per-session Cancel
-(`MeetingsList.tsx` module doc #7c/#10d, `onCancelSession` →
-`cancelMeetingSession`) and assert that session is `canceled` and **its
-siblings are not**. Cancel a **future** session; see §2.4.
+> **Correction — my first draft taught a false mechanism, and the gate proved it
+> by running the real function.** `plan.toUpdate` **already contains every kept
+> session** (measured 3/3 for an unchanged three-session series; the app's own
+> confirm dialog agrees: *"0 session(s) added · 0 session(s) removed · 3
+> session(s) kept"*). So `makeSaveMeetingSeries` is **not** where T611's
+> protection lives. It lives in
+> **`ScheduleMeetingsDialog.tsx:1145-1151`**, whose
+> `buildEditDesiredFutureSessions(sessionDates, startTime, endTime, timeFieldsTouched, originalTimesByDate)`
+> reuses each untouched date's **own stored time verbatim**. That is what your
+> test and your mutation must target.
+
+> **The fixture must carry MIXED times or the test is vacuous.** If every
+> session already shares one start time, even a correct mutation writes
+> identical values and stays green. After creating the series, move one
+> session's time (e.g. `update event_sessions set starts_at = …` on the second
+> one) so the series is genuinely non-uniform, then do the shared-field save.
+
+**Free on-screen witness for AC 5 — take it.** The series-edit confirm
+`AlertDialog` states, before any write: *"0 session(s) added · 0 session(s)
+removed · 3 session(s) kept."* That is the user-visible form of this criterion,
+in one locator. Assert it alongside the row read.
+
+**Cancelling one occurrence** — drive the per-session Cancel, which is
+**`makeCancelMeetingSession` (`meetings.ts:966-977`)** reached via
+`MeetingsList.tsx:2946` — **not** the protected `cancelSession` of §3. Assert
+that session is `canceled` and **its siblings are not**. Cancel a **future**
+session; see §2.4. Mind the three-way `Cancel` naming in §4.
 
 **AC 7 — UTC.** `coach-meeting.spec.ts:166-167` already does this for the
 single-meeting case; do the same for anything new you create.
 
 ### 5b. `student-participation.spec.ts` — new file, AC 6
 
-Sign in as the **student**, land on `/meetings`, read the participation figure
-off the screen, and compare it against **`readRowsAs('student',
-'select … from v_student_participation …')`** — the persona read, so the
-assertion also proves RLS lets the student see their own row. Then run the
-end-meeting action and assert the figure moves **to the predicted number** in
-§4's table, on both the screen and the row.
+**Reseed first** (`sudo bash tests/e2e-harness/start.sh`) — §4's numbers are
+reseed-relative and Priya's is the one that drifts.
 
-Note honestly in a comment whether the screen renders `80.0` or `80` — read it,
-do not guess the formatting.
+Sign in as the **student**, land on `/meetings`, read the participation figure
+off the screen, and compare it against `readRowsAs('student', 'select … from
+v_student_participation where student_id = …')`. Then run the end-meeting action
+and assert the figure moves **to the predicted number** in §4's table, on both
+the screen and the row. Format is settled: `80%` / `66.7%` (§4).
+
+> **Do not claim this proves RLS scopes the view.** It does not.
+> `readRowsAs('student', 'select * from v_student_participation')` returns **all
+> three students** — the view has no `security_invoker`. A worker writing
+> `toHaveLength(1)` goes red for the wrong reason, so **filter by
+> `student_id`**. Under item 25 this is *not* a security finding: a leaderboard
+> that shows everyone is the product, and item 25 explicitly says do not extend
+> item 4's table rule to views. State what the assertion actually proves — that
+> the figure the student is shown matches the recorded attendance — and nothing
+> more.
 
 ### 5c. Re-runnability (AC 10) — the trap that bit GAM-342
 
+**The hazard is not hypothetical — it is failing on `main` right now.**
+`student-parent.spec.ts:66` fails at its own precondition (line 71,
+`expect(before).toHaveLength(0)`) because a **leftover `rsvps` row** for Priya on
+session `…-08` survived a previous run. That is exactly the failure mode this
+section exists to stop you from adding a second instance of.
+
 `beforeEach` cleanup alone is not enough: **`student-parent.spec.ts:48-64`
-asserts a global row count for Priya with no session predicate**, and path order
-runs files alphabetically. Before you finish:
+asserts a global row count for Priya with no session predicate**
+(`select 1 from attendance where student_id = <Priya> and method = 'self'` — no
+session filter, so no choice of session avoids it), and path order runs files
+alphabetically. Before you finish:
 
 1. Run the **full** persona suite twice in a row without reseeding and show both
    figures.
@@ -327,18 +457,48 @@ runs files alphabetically. Before you finish:
 
 ## §6. Mutations (AC 10) — each must produce real red output, pasted
 
-Commit before mutating; revert and re-verify green after (item 26's fast-tier
-rule, which applies to any mutation). **Mutations of `src/**` run in your own
-worktree (item 23), never the shared tree, and are never committed.**
+### READ THIS FIRST: a `src/**` mutation does NOT reach the browser by default
+
+The persona suite drives a **prebuilt bundle**.
+`playwright.personas.config.ts` hardcodes `baseURL = http://127.0.0.1:4174` and
+sets `reuseExistingServer: true`, and `tests/e2e-harness/**` is Forbidden so you
+cannot change the port. Item 23 requires you to mutate `src/**` only in your own
+worktree. **Put those together and the mutated source is never built into the
+bundle the browser loads — every mutation stays green and proves nothing.** The
+gate measured this: probe runs finished in 4-6s with no build step, because
+Playwright adopted the already-running preview.
+
+**Port 4174 is owned by whatever preview is currently serving it.** For a
+mutation run you must take it over and give it back. The loop, in full:
+
+```bash
+# in YOUR OWN worktree (item 23), with the mutation applied:
+npm run build -- --mode e2e --outDir dist-e2e          # build the MUTATED bundle
+# stop whatever holds 4174, then serve YOUR dist-e2e on it:
+npm run preview -- --outDir dist-e2e --port 4174 --strictPort --host 127.0.0.1 &
+npx playwright test -c tests/e2e-harness/playwright.personas.config.ts <spec>
+#   ^ expect RED. Paste the real "Expected … Received …".
+# revert the mutation, rebuild, restart the preview, re-run -> expect GREEN.
+```
+
+Commit before mutating (item 26's fast-tier rule, which applies to any
+mutation). Never commit a mutation. Restore port 4174 to a clean-tree bundle
+when you are done and say that you did.
 
 | # | Mutation | Where | Must turn red |
 | -- | -- | -- | -- |
 | 1 | point the status flip at a wrong session id | `endMeeting.ts:423` | AC 2 |
 | 2 | remove the `markAbsentStudentIds.length > 0` guard so the upsert always sends | `endMeeting.ts:434` | AC 3 |
-| 3 | force every session into `plan.toUpdate` so all times are rewritten | `meetings.ts:842` | AC 5 |
+| 3 | in `buildEditDesiredFutureSessions`'s call site, **ignore `timeFieldsTouched`/`originalTimesByDate`** and apply the dialog's shared start/end to **every** date | `ScheduleMeetingsDialog.tsx:1145-1151` | AC 5 |
 
-Mutation 2 is the one that matters most: it is *literally* the defect T508
-closed, and if AC 3 stays green with the guard removed, AC 3 is worthless.
+**Mutation 2 is the one that matters most:** it is *literally* the defect T508
+closed. If AC 3 stays green with the guard removed, AC 3 is worthless.
+
+**Mutation 3 was wrong in the first draft and is corrected here.** The original
+("force every session into `plan.toUpdate`") is a **no-op** — `toUpdate` already
+holds every kept session, measured 3/3. It also only bites if the fixture has
+**mixed times** (§5a); with a uniform series even the correct mutation writes
+identical values and stays green.
 
 Report each as: the exact diff, the exact failing assertion text
 (`Expected … Received …`), and the restored green run.
@@ -347,20 +507,84 @@ Report each as: the exact diff, the exact failing assertion text
 
 ## §7. Findings (AC 9)
 
-Emit `docs/swarm/inbox/claude-gam-344-e2e-w3-meeting-findings.json` in the
+Emit `docs/swarm/inbox/claude-gam-344-e2e-w3-run-a-meeting-findings.json` in the
 schema in `docs/swarm/active/FINDINGS-PIPELINE.md`, **even if you find
 nothing** — an empty `findings` array is a claim that you looked; a missing file
 is indistinguishable from never having checked. `findingKey` is
 `e2e-personas/<stable-slug>`, never `file:line`.
 
+### One finding is pre-specified — file it
+
+`findingKey`: **`e2e-personas/end-meeting-summary-stale-after-console-marking`**
+Severity **MAJOR**, `area` `w3`, `verifiedBy` `browser`.
+The end-meeting summary loads once (`EndMeetingDialog.tsx:875`) and nothing in
+`LiveConsole` invalidates it, so attendance marked in the console during the
+meeting is invisible to the dialog. The coach is shown
+`Mark 3 students with no attendance record absent` and
+`Current attendance: 0 present · … 3 students … will be marked absent` **immediately
+before confirming a write that will not do that** — the upsert's
+`ignoreDuplicates` correctly spares the already-marked student, so the *write* is
+right and the *number the coach was shown* is wrong. Gate-measured in a browser.
+This is **not** GAM-283 (failure reporting) and has no existing row.
+
 Already known — **do not re-file**: the `cancelSession` asymmetry (§3, by
-design), partial-failure reporting (**GAM-283**), the IPv6 preview bind
-(GAM-342), `events.created_by` never set (`coach-meeting.spec.ts:169-175`), and
-the archived team in the scope picker (`:100-105`).
+design), partial-failure reporting (**GAM-283**), the IPv6 preview bind and the
+five pre-existing suite failures (**GAM-355**, `Backlog` — its `findingKey`
+`e2e-personas/five-pre-existing-w1-suite-failures-not-in-scope` is taken),
+`events.created_by` never set (`coach-meeting.spec.ts:169-175`), and the
+archived team in the scope picker (`:100-105`).
 
 ---
 
-## §8. Least confident decisions (item 19d) — attack these first
+## §8. Least confident decisions — ROUND 2 (item 19d)
+
+Round 1's list is preserved below as §8-round-1 with the gate's verdicts, per
+item 30d's principle that a rewrite keeps the original. These are the *new*
+doubts, after the gate closed the old ones.
+
+1. **That the mutation loop in §6 actually works end to end.** I wrote it from
+   the gate's diagnosis; **nobody has run it**. It assumes a second `vite
+   preview` can take port 4174 after the first is stopped, and that
+   `globalSetup.mjs` will not object to a bundle built from a worktree.
+   **What would make it wrong:** `--strictPort` races the dying preview, or
+   `globalSetup` pins something to the original build.
+2. **That reseeding before the AC 6 spec is safe for the rest of the suite.**
+   `start.sh` recreates the cluster wholesale. If the worker reseeds mid-run,
+   every other spec's assumptions reset too. **What would make it wrong:** the
+   suite is order-dependent in a way that makes a mid-run reseed worse than the
+   drift it fixes — in which case AC 6 should run against a computed
+   *before/after delta* instead of absolute numbers.
+3. **That widening the `beforeEach` cleanup is sufficient and not excessive.**
+   My SQL deletes `attendance` and `rsvps` for `E2E %` sessions. **What would
+   make it wrong:** another table also has a RESTRICT FK to `event_sessions`
+   that no test has hit yet, or the delete is broad enough to catch a fixture
+   row some other spec reads.
+4. **That the stale-summary defect is genuinely unfiled.** The gate searched and
+   found nothing, and I checked GAM-283 is a different row. **What would make it
+   wrong:** an existing row phrased around "the coach sees the wrong count"
+   rather than around the summary loading once.
+5. **That AC 5 is now provable.** It depends on both corrections landing
+   together — the repointed mutation *and* the mixed-time fixture. **What would
+   make it wrong:** `buildEditDesiredFutureSessions` is not reachable from a
+   worktree mutation in a way that survives the build, making AC 5 verifiable as
+   an outcome but still not provably non-vacuous.
+
+---
+
+## §8-round-1. The original list, with the gate's verdicts (preserved)
+
+| # | Doubt | Gate verdict |
+| -- | -- | -- |
+| 1 | Can a future session be ended through `LiveConsole`? | **REFUTED — it can.** Drove `/meetings/live/…-05`, got `End meeting` + `Mark 3 students…`, completed a full end. Design safe. |
+| 2 | Is the series-edit surface reachable as described? | **REFUTED as a risk**, but the description was wrong in three ways (en-dash `Edit – <title>` row button, not a menu; dialog "Edit meeting series"; prefilled Custom dates). Corrected in §4/§5a. |
+| 3 | Is AC 4's already-marked case reachable? | **CONFIRMED as a real defect** — the summary is stale. Became the §7 finding. |
+| 4 | Do §4's participation predictions hold exactly? | **PARTLY WRONG.** Jordan/Sam hold everywhere; Priya's 80.0 needs a pristine reseed. Corrected in §4. |
+| 5 | Is `--host 127.0.0.1` still needed? | **SOUND**, and now directly observed (`LISTEN [::1]:4179`; `curl 127.0.0.1` → 000, `curl [::1]` → 200). |
+| 6 | Is leaving the two red tests alone right? | **SOUND.** GAM-355 confirmed in `Backlog`; §0a's delta rule neutralises the competing reading. |
+
+Original text of the six, verbatim:
+
+## §8-original. Least confident decisions (item 19d) — attack these first
 
 1. **That a *future* session can be ended at all through `LiveConsole`.** §5a
    builds the whole journey on a self-created meeting, which is necessarily in
