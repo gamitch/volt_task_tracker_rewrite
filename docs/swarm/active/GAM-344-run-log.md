@@ -111,3 +111,11 @@ Every subagent here is dispatched `run_in_background: false` and waited on.
   live `v_student_participation` arithmetic with exact predicted numbers for
   AC 6, the two-controls-named-"End meeting" strict-mode trap, an explicit
   forbidden list, and six Least confident decisions (item 19d).
+- **04:12Z — DISPATCHED `checker-premise` (opus, round 1)** on
+  `docs/swarm/active/GAM-344-packet.md`, with **`run_in_background: false`**,
+  scoped per item 19b to this surface's facts and the six declared doubts rather
+  than a re-audit of the proven harness pattern. **If this line is the last one
+  in this file, the run died holding this subagent** — the gate never returned a
+  verdict, no worker was dispatched, and nothing below was written. The next
+  reader should treat the packet as UNGATED and re-run the gate rather than
+  trust it. Round 2 is the cap (item 19a); a third REVISE escalates to the owner.
