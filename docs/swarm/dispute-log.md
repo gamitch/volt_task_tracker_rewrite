@@ -1828,3 +1828,150 @@ preserved; instrument now used three times — ratification into 19a's text rema
 owner). No owner input required: nothing owner-ruled moves, and every fix is additive verification
 or disclosure. Round 2's execution-based method — building the prescription and mutating it — is
 what made this dispute cheap to rule; both gate instances' substantive work stands confirmed.
+
+---
+
+## D018-A / D019 - GAM-299: `checker-reviewer` disputes the packet's item-3 authority for scoping `events` RLS by `student_teams`; arbiter rules no exemption entry is required, no owner gate, and corrects the packet's own account of the route
+
+**Numbered D019.** `D018` is already allocated — to the owner's multi-team ruling
+in `auto-mode-decisions.md:4128` — so this entry does not reuse it.
+
+**Date:** 2026-08-12. **Issue:** GAM-299 (legacy T806), tier HEAVY.
+**Artifact:** `supabase/migrations/20260812000000_events_rls_active_membership_read.sql`,
+plus `tests/rls/gam299_seed.sql` / `gam299_assertions.sql` / `run.sh`.
+**Parties:** packet §4 (orchestrator) vs `checker-reviewer` MINOR-1. Ruled by
+`boss-arbiter`, which stood up its own PostgreSQL 16.14 cluster rather than
+reasoning from the documents.
+
+### 1. The dispute
+
+The packet decided no dispute-log entry was required for adding a second,
+permissive `select` policy on `events`/`event_sessions` scoped by ACTIVE
+`student_teams` memberships. `checker-reviewer` dissented: `VOLT_Portal_PRD.md:611`
+says the canonical policy shapes apply *"with the matrix's scoping"*, so PRD 8.4
+is normative for `events` **by reference** even though it prints no `events`
+policy; the change keeps the shape but moves the scoping; and it produces a grant
+the 8.3 matrix does not describe (§4 below). It cited D013 — an RLS widening that
+took an owner ruling — and graded the point MINOR, escalating rather than failing
+the worker.
+
+### 2. Ruling on item 3: an entry IS required, but NOT an item-3 exemption
+
+An entry is required **because this arbitration happened** — a checker formally
+dissented and a boss overruled part of a packet — not because item 3 needs an
+exemption here. Writing an item-3 authorisation entry in the D013/D014 shape would
+falsely enlarge item 3 and create a precedent that every memberships-scoped policy
+needs one.
+
+The checker is textually right and remedially wrong. Follow its reading to its end:
+the **shipped** `own_or_linked_read` on `events` (`20260717000002_rls.sql:153-161`)
+is *already* a derivation — 8.4's `own_or_linked_read` is
+`student_id in (select my_student_ids())`, and `events` has no `student_id` column —
+and it carries its own documented deliberate deviation at `:133-145`. It shipped
+with no dispute entry and nobody has ever treated `main` as in violation.
+
+**The operative rule this repository has actually run on:** an entry is required
+when the **8.3 matrix grant** moves (D013: `rsvps` "read/write own" → any
+authenticated reads) or an **8.4 normative formula** moves (D014: MET-01's
+denominator). Neither is present. The matrix row
+`| events / sessions | full | read team-scoped | … |` (`:577`) still describes the
+grant; what moved is the definition of "their team".
+
+**This entry authorises nothing and exempts nothing.** Every other table's policy
+still comes from PRD 8.4.
+
+### 3. Ruling on a human gate: NO, and the reason is not proportionality
+
+Not `gate/human`. Two things decide it.
+
+First, the owner has already ruled on both halves. **D018** fixes the direction
+(*"it has to be multi-team"*) and **its own §3 catalogues this exact drift**:
+*"any student re-teamed since then has a stale row still `left_on is null`, so they
+currently roll up under their old team while the badge shows the new one."* And
+**D014**, an owner ruling, blessed a `v_student_participation` whose live
+definition (`20260806000000_met01_explicit_marks.sql:109-114`) carries **the
+identical predicate on the identical two tables**. A re-teamed student's
+participation percentage is already computed against their former team's sessions,
+under an owner-ruled view, on the stricter half of item 3.
+
+Second, and decisively: **there is no second option to put to the owner.** A
+question is owner-gateable only if the owner could answer it two ways. See §4 —
+the rejected route does not fix it either. Escalating a question whose alternative
+branch does not exist is the failure item 25's rationale records.
+
+### 4. Correction to packet §5.2, measured — and it corrects the orchestrator, not the worker
+
+The packet claimed both given-up configurations were consequences of the route
+chosen: *"Two states therefore keep a grant that a memberships-only policy would
+deny."* **For configuration (b) — the re-teamed student — that is false.**
+Counts are rows visible to a re-teamed student (`students.team_id` = Bravo, stale
+backfill row for Alpha still `left_on is null`, no Bravo membership because
+nothing writes one), `events` / `event_sessions` agreeing throughout:
+
+| re-teamed student | former team A | current team B |
+| -- | -- | -- |
+| shipped only (today's `main`) | 0 / 0 | 1 / 1 |
+| **shipped + additive (ADOPTED)** | **1 / 1** | **1 / 1** |
+| memberships-only + bridge (REJECTED) | **1 / 1** | **0 / 0** |
+
+The rejected route **does not remove the former-team grant** — the stale Alpha row
+reads `left_on is null`, so a memberships-only test grants it too — and it
+**additionally removes the student's current team's events and sessions**, because
+its bridge fires only for a student with *no* membership rows and this student has
+one. That is the failure the issue itself calls worse than the bug, landing on the
+one configuration the application actually produces.
+
+**Configuration (b) is route-independent and data-caused.** No policy reading
+`left_on is null` can distinguish a stale backfill row from a live membership. The
+fix exists only at the writer.
+
+**Configuration (a)** — a left team that is also the legacy `students.team_id` — is
+unreachable in production: nothing in the repository ever sets `left_on` (the only
+writer to `student_teams` anywhere is the backfill at
+`20260721000000_student_teams.sql:37`). So the rejected route's only genuine
+advantage is over a state the app cannot create.
+
+**The adopted route is therefore not a trade.** On the only reachable
+configuration it is strictly better on both axes. The packet reached the right
+answer on a partly wrong argument, and the argument is corrected here rather than
+quietly dropped.
+
+### 5. The coverage gap this dispute surfaced, and its closure
+
+`tests/rls/gam299_seed.sql` seeded dual-team, membership-less, left-team, admin and
+coach personas — **every configuration except the one the app produces.** The
+residue was disclosed in capitals in the migration header and pinned by nothing.
+
+Closed in the same change: a re-teamed persona (`...d4`) plus six assertion rows
+(`C11-*`, `C5-agree-reteamed-*`). Verified non-vacuous by mutation — removing both
+`create policy` statements takes `C11-reteamed-still-sees-former-team-event` from
+`1` to `0` and fails the suite (exit 1), matching the table in §4 exactly. Suite is
+43 PASS / 0 FAIL, exit 0.
+
+These are **characterisation** cases, not endorsement. **When GAM-340 ships they are
+the red/green witness**: a real writer closes the stale Alpha membership,
+`reteamed_ev_alpha` becomes 0, and the expectations invert in that same change.
+Do not delete them.
+
+### 6. Closers and a named revisit trigger
+
+- **GAM-340** — the `student_teams` writer, and then dropping both legacy
+  `own_or_linked_read` policies so memberships become the single source. Filed
+  `Backlog`; promotion is the owner's signal (item 28a). Dropping the legacy
+  policies additionally requires seeding `student_teams` rows into
+  `tests/rls/seed.sql`, or the existing fixture students lose all event visibility.
+- **GAM-341** — the `my_student_ids()` test in the new policies is an *equivalent*
+  mutation today (`students`' own RLS already filters the join) and becomes the
+  sole guard if `students`' read policy is ever widened, which
+  `20260717000002_rls.sql:90-92` anticipates.
+- **Revisit trigger, stated because item 20's real failure mode is "filed, never
+  triaged":** *if GAM-340 is still unpromoted when the roster write path next
+  changes, D019 must be revisited.* The residue is permanent until GAM-340 lands.
+
+### 7. Not ordered
+
+No rework of the route. No owner gate. No item-3 exemption entry. No change to
+`checker-reviewer`'s MINOR grade — it graded correctly, escalated instead of
+failing the worker, and its reading of `PRD:611` is textually sound. It was wrong
+only in believing the rejected route answered the question, which nobody had
+measured until this ruling.
