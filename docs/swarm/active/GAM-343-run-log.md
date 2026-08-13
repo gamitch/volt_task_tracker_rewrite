@@ -238,3 +238,11 @@ thing that survives if the container is killed.
   - Also confirmed `delta(Jordan) == 0` is a **real detector**, not a tautology:
     flipping only his status to `present` in a rolled-back transaction returns
     `1.5`.
+- **Findings amended and filed.** The checker's two findings written into
+  `docs/swarm/inbox/claude-gam-343-e2e-w2-outreach-lifecycle-findings.json`
+  (schema per `FINDINGS-PIPELINE.md`, each with `notClaimed` scope honesty), then
+  filed by `scripts/linear-file-findings.mjs --execute` into **Backlog** as
+  **GAM-363** (attendance panel stale after completion) and **GAM-364** (RSVP
+  buckets stale after save), both `tier/unreviewed` / `provenance/e2e-personas`
+  / `area/w2`. Filing is not dispatching — promotion stays the owner's call
+  (item 28a). This closes item 20: the findings are rows, not prose in a PR body.

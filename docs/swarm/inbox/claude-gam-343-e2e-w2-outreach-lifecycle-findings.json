@@ -1,7 +1,58 @@
 {
   "source": "e2e-personas",
   "branch": "claude/gam-343-e2e-w2-outreach-lifecycle",
-  "commit": "78853832b494c1ea259b70614ebb6b95be929fc1",
+  "commit": "61c1e53",
   "measuredAt": "2026-08-13T05:05:54Z",
-  "findings": []
+  "findings": [
+    {
+      "findingKey": "e2e-personas/outreach-attendance-panel-stale-after-completion",
+      "title": "After Mark day complete, the attendance panel still shows the pre-completion roster",
+      "severity": "MINOR",
+      "area": "w2",
+      "evidence": [
+        {
+          "file": "src/pages/outreach/AttendancePanel.tsx",
+          "line": 529,
+          "quote": "useAttendanceLoadState(loadAttendance, sessionIdsKey)"
+        },
+        {
+          "file": "src/pages/outreach/AttendancePanel.tsx",
+          "line": 652,
+          "quote": "deps: [loadAttendance, sessionIdsKey, retryToken]"
+        },
+        {
+          "file": "src/pages/outreach/OutreachDetail.tsx",
+          "line": 2012,
+          "quote": "reloadDetail() replaces the page's own `data` only"
+        }
+      ],
+      "observed": "Immediately after confirming Mark day complete, the session header updates to '— completed' but the AttendancePanel below it still renders Jordan Okafor checked at 1.5 h and Priya Raman at 0 h, with the section badge reading '2 attending · 1.5 h'. The database at that moment holds Jordan 'absent' and Priya 'present' with a 2.5 h override.",
+      "expected": "The panel reflects the rows just written — Jordan unchecked/absent, Priya at 2.5 h — without a manual page reload.",
+      "verifiedBy": "browser",
+      "reproduction": "npx playwright test -c tests/e2e-harness/playwright.personas.config.ts outreach-lifecycle.spec.ts ; then open tests/e2e-personas/screenshots/77-coach-mark-day-complete-confirmed.png",
+      "consequence": "The coach who just recorded the day sees the page contradict what they wrote. Worse, a subsequent toggle in that stale panel writes from the pre-completion snapshot, so a coach correcting one student can silently re-assert the old status of another.",
+      "notClaimed": "The write itself is correct — every database assertion in the spec passes. This is post-write staleness in one panel, not a lost write. Not reproduced on a fresh page load (screenshot 74 shows correct buckets), and not checked on any surface outside /outreach/:eventId.",
+      "crossRefs": ["GAM-343", "T309", "T327"]
+    },
+    {
+      "findingKey": "e2e-personas/outreach-rsvp-buckets-stale-after-save",
+      "title": "The 'Who said they were coming' buckets do not refresh after an RSVP is saved",
+      "severity": "MINOR",
+      "area": "w2",
+      "evidence": [
+        {
+          "file": "src/pages/outreach/OutreachDetail.tsx",
+          "line": 2406,
+          "quote": "<RsvpControl … /> is rendered beside the RSVP summary buckets"
+        }
+      ],
+      "observed": "Right after the student saves 'Can't go', the radiogroup shows the new answer but the summary still lists Priya Raman under 'No response (1)' with 'Can't go (0)'. The rsvps row is already updated to 'declined'.",
+      "expected": "The buckets move the student from 'No response' to 'Can't go' when the write lands, without a reload.",
+      "verifiedBy": "browser",
+      "reproduction": "npx playwright test -c tests/e2e-harness/playwright.personas.config.ts outreach-lifecycle.spec.ts ; then open tests/e2e-personas/screenshots/73-student-outreach-cant-go.png",
+      "consequence": "A student who answers sees the page appear not to have registered their answer, which invites a second click. Same failure class as the attendance panel above; likely one fix serves both.",
+      "notClaimed": "The write lands correctly — the spec's database assertion on status='declined' passes. A fresh load shows the right buckets. Not checked on the /outreach list view or the student home.",
+      "crossRefs": ["GAM-343", "T193"]
+    }
+  ]
 }
