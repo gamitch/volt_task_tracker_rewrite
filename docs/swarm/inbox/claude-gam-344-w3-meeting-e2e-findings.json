@@ -1,0 +1,57 @@
+{
+  "source": "e2e-personas",
+  "branch": "claude/gam-344-w3-meeting-e2e",
+  "commit": "PENDING",
+  "measuredAt": "2026-08-13T12:49:53Z",
+  "findings": [
+    {
+      "findingKey": "e2e-personas/persona-suite-not-in-ci",
+      "title": "The persona e2e suite is not run by any CI workflow",
+      "severity": "MAJOR",
+      "area": "w3",
+      "evidence": [
+        { "file": ".github/workflows", "line": 0,
+          "quote": "grep -rn \"e2e-personas\" .github/workflows/  ->  (no matches)" }
+      ],
+      "observed": "Re-verified for this task: `grep -rn \"e2e-personas\" .github/workflows/` returns nothing. The suite (now 8 spec files, 33+ tests covering all four personas' real write paths against a real Postgres cluster) only runs when a human or agent invokes it by hand. Two of its five tests in coach-meeting.spec.ts had silently gone stale on `main` (GAM-305's archived-team fix shipped without this suite noticing) until this task's Task 1 repaired them, and three more (in student-parent.spec.ts, out of this task's allowed files) are red right now and have been for at least one prior task (GAM-342) without anyone being paged.",
+      "expected": "The suite that most directly proves the app's riskiest write paths (attendance marking, meeting scheduling, end-meeting) should run on every PR touching those paths, the same way the unit/vitest suite does.",
+      "verifiedBy": "source",
+      "reproduction": "grep -rn \"e2e-personas\" .github/workflows/",
+      "proposedScope": "Add a CI job that runs `sudo -E bash tests/e2e-harness/start.sh` then `npx playwright test -c tests/e2e-harness/playwright.personas.config.ts`. This is a `.github/workflows/**` change, which is outside every dispatched worker's allowed files (AGENTS.md's \"Two walls\") -- filed here rather than attempted, per the packet's own instruction."
+    },
+    {
+      "findingKey": "meetings/end-meeting-summary-stale-after-console-marks",
+      "title": "EndMeetingDialog shows a stale attendance summary after the coach marks students in the same console",
+      "severity": "MINOR",
+      "area": "w3",
+      "evidence": [
+        { "file": "src/pages/meetings/EndMeetingDialog.tsx", "line": 875,
+          "quote": "const loadState = useLoadState(() => loadSummary(sessionId), [loadSummary, sessionId]);" },
+        { "file": "src/pages/meetings/LiveConsole.tsx", "line": 1187,
+          "quote": "<EndMeetingDialog" }
+      ],
+      "observed": "Re-verified directly in the browser for this task (temporarily removing the reload step from A1 of coach-meeting-end.spec.ts and re-running): after marking Priya present through the real console, opening End meeting WITHOUT a page reload shows the checkbox as \"Mark 3 students with no attendance record absent\" -- still counting Priya as unmarked, even though her `attendance` row already exists in the database. `EndMeetingDialog` loads its summary once at mount (`useLoadState(() => loadSummary(sessionId), [loadSummary, sessionId])`, both deps stable) and `LiveConsole.tsx:1187-1192` mounts it with no `key` and no refresh trigger, so nothing tells it the console's own writes happened. Data is not lost -- `ignoreDuplicates: true` (`endMeeting.ts:405`) means an already-marked row is never overwritten -- so this is a lying interface, not data corruption.",
+      "expected": "A coach who marks students present/late/excused and then opens End meeting should see those marks reflected in the summary and the opt-in checkbox's count, not a snapshot from before they started marking.",
+      "verifiedBy": "browser",
+      "reproduction": "npx playwright test -c tests/e2e-harness/playwright.personas.config.ts tests/e2e-personas/coach-meeting-end.spec.ts -g 'A1:' (with the `await page.reload()` step in A1 temporarily deleted -- the checkbox reads 'Mark 3 students...' instead of 'Mark 2 students...' even though one student was just marked in the same session)",
+      "proposedScope": "Refresh EndMeetingDialog's summary when the dialog opens (e.g. re-run loadSummary on isConfirmOpen/trigger-click transition), or key/remount it off a value that changes when LiveConsole's own attendance state changes, rather than only at initial mount."
+    },
+    {
+      "findingKey": "e2e-personas/student-sees-peer-participation",
+      "title": "A student's read of v_student_participation returns every student's row, not just their own",
+      "severity": "MINOR",
+      "area": "w3",
+      "evidence": [
+        { "file": "supabase/migrations/20260806000000_met01_explicit_marks.sql", "line": 102,
+          "quote": "create or replace view v_student_participation as" },
+        { "file": "tests/rls/grants.sql", "line": 18,
+          "quote": "grant select, insert, update, delete on all tables in schema public to authenticated;" }
+      ],
+      "observed": "Measured directly against the running cluster for this task: signed in (via `readRowsAs`, real `authenticated` role + real `auth.uid()`) as the student persona and selected `student_id, expected_ct, present_ct, participation_pct from v_student_participation` with no predicate -- the result carried all three rostered students' rows (Priya's own, plus Jordan's and Sam's), not just the caller's own. The view carries no `security_invoker` (matching every other view in this schema, confirmed by grep) and the base `students`/`attendance` tables' own RLS is therefore bypassed entirely when read through the view -- the same mechanism `20260731000000_leaderboard_students_view.sql` documents at length for `v_leaderboard_students`.",
+      "expected": "Judged against item 25's actual threat model (a volunteer robotics team, no PII beyond first/last names already visible team-wide, and an existing leaderboard that shows every active student's name and hours to every authenticated role BY DESIGN): this may be an acceptable non-finding rather than a defect. What makes it worth recording rather than silently accepted, and why it is NOT the same shape as the T185 mistake item 25 warns against: `v_leaderboard_students`'s migration contains an explicit, multi-paragraph design ruling that broad visibility is intentional (OUT-08's own requirement). `v_student_participation`'s migrations (`20260717000003_metric_views.sql`, `20260722000000_membership_views.sql`, `20260806000000_met01_explicit_marks.sql`) contain NO such discussion anywhere -- its broad readability appears to be an unexamined side effect of every view in this schema lacking `security_invoker`, not a considered decision for this specific view. A student today can fetch every teammate's participation percentage via a direct PostgREST call even though the shipped UI never renders it (StudentHome/StudentMeetingView both filter to the signed-in student's own id client-side before rendering) -- so there is no rendered leak today, only an unenforced boundary one API call away.",
+      "verifiedBy": "database",
+      "reproduction": "psql as postgres: begin; set local role authenticated; set local request.jwt.claim.sub = '<student-profile-id>'; set local request.jwt.claim.role = 'authenticated'; select student_id, participation_pct from v_student_participation; commit; -- returns all three students' rows",
+      "proposedScope": "Either add an explicit design ruling (like the leaderboard's) that participation percentages are intentionally team-visible, or narrow the view (security_invoker + a students-can-only-see-own-or-linked filter, mirroring students' own base-table RLS) if the intent was always 'own data only'. No code change proposed here -- this is a scope question for the owner, not an obvious bug."
+    }
+  ]
+}
