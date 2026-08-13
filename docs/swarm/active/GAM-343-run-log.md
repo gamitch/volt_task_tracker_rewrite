@@ -89,3 +89,8 @@ thing that survives if the container is killed.
   (`tests/e2e-personas/student-parent.spec.ts:66`) — do not route through it.
   One unresolved: two green specs disagree on `CheckboxListItem`'s role
   (`checkbox` vs `button`) — the worker verifies live.
+- **Packet written** — `docs/swarm/active/GAM-343-packet.md`. HEAVY shape:
+  environment, AC verbatim, five measured corrections to the issue body (§2),
+  a cited selector map (§3), the six-step journey (§4), four required mutations
+  (§5), Allowed Files (§6), and the item-19d Least-confident list (§7, five
+  entries). `npm ci` completed exit 0.
