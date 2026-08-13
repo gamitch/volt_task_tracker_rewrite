@@ -300,13 +300,33 @@ test.describe('W3 end-meeting journeys (GAM-344 Turn A)', () => {
 
     await expect.poll(() => sessionsFor(event.id)[0]?.status, { timeout: 20_000 }).toBe('completed');
 
-    // Criterion 3, stated exactly: with the opt-in unticked, the app must
-    // issue NO `attendance` write at all for the unmarked students -- not
-    // "no absent rows", *no rows at all*. A weaker "no rows with
-    // status='absent'" assertion would not catch an unconditional upsert
-    // that (say) wrote `status: null` or otherwise malformed rows for
-    // Jordan/Sam; asserting the total row count is exactly one is what
-    // actually proves nothing was written for them.
+    // Criterion 3, scoped to exactly what these assertions can prove: with
+    // the opt-in unticked, NO `attendance` ROW EXISTS for the unmarked
+    // students. Asserting the total row count is exactly one is stronger than
+    // "no rows with status='absent'" -- it also catches an unconditional
+    // upsert that wrote `status: null` or otherwise malformed rows for
+    // Jordan/Sam.
+    //
+    // GAM-344 checker MAJOR, corrected here: this does NOT prove the stronger
+    // claim that no write REQUEST was issued. T508's ruling is about the
+    // request, and database state cannot see it -- real PostgREST accepts an
+    // empty-array insert and writes zero rows, so an unguarded upsert would
+    // leave the rows below byte-identical and every assertion here would still
+    // pass. The transport half is guarded, but by `endMeeting.test.ts:507`
+    // (C1, T508 -- "asserted at the transport, not by reading the payload
+    // object"), which CI runs on every push. This spec covers the state half.
+    //
+    // The mutation that discriminates THIS block is the dialog's opt-in
+    // branch: make `buildEndMeetingPayload` (`EndMeetingDialog.tsx:456`)
+    // compute `markAbsentStudentIds` unconditionally instead of honouring
+    // `markRemainingAbsent`. That sends a NON-empty array, so the session
+    // still completes and the assertions below are reached and go red.
+    // Removing the `endMeeting.ts:434` length guard does NOT discriminate
+    // here: the harness's mock PostgREST rejects an empty-array upsert
+    // (`postgrest.mjs:255`, stricter than real PostgREST), so the whole chain
+    // rejects and the `status='completed'` poll above times out first -- the
+    // block never executes, and that red is the write path breaking, which
+    // criterion 1's mutation already covers.
     const attendanceRows = attendanceForSession(session.id);
     expect(attendanceRows).toHaveLength(1);
     expect(attendanceRows.filter((r) => r.student_id === SEED.studentJordan)).toHaveLength(0);
