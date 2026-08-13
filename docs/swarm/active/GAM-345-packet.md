@@ -131,6 +131,19 @@ verbatim before reaching the floor:
 - `src/lib/supabase/loaders/checkin.ts:363-365` — `if (seasonRows.length === 1) { return seasonRows[0]; }`
 - `src/lib/supabase/loaders/meetings.ts:519` — `if (rows.length === 1) return rows[0];`
 
+> **CORRECTED AFTER THE RUN, by mutation, twice.** `/meetings` does **not**
+> render its participation strip through `loaders/meetings.ts` at all.
+> `MeetingsList.tsx:2769` mounts `<StudentMeetingView variant="own">` with no
+> `loadStripData`, so `StudentMeetingView.tsx:1068`'s default wins and the strip
+> comes from **`loaders/checkin.ts`** (`:239` carries the same
+> `participation_pct: number` type lie; `:363-365` is the single-row early
+> return). Mutating `meetings.ts:519` leaves the test GREEN; mutating
+> `checkin.ts:363-365` turns it red. Both the worker and the reviewer proved
+> this independently, in both directions. **This mechanism was asserted in
+> revision 1, corrected by gate round 1, its citation confirmed by round 2 — and
+> only running it found the path was wrong.** Item 26's "a gate that only reads
+> is worth much less than one that runs", earned rather than quoted.
+
 The `Math.max(expectedCt - excusedCt, 1)` at `checkin.ts:375` and
 `meetings.ts:527` executes **only** for a student with ≥2
 `v_student_participation` rows in one season — a dual-team member with a mark on
@@ -161,9 +174,11 @@ Participation: null%
 0%
 ```
 
-Mechanism, all four links verified: `src/lib/supabase/loaders/meetings.ts:302`
-declares `participation_pct: number` while the view returns SQL NULL →
-`aggregateParticipationRows` returns the row verbatim (`meetings.ts:519`) →
+Mechanism — **read the correction above: the live path is `loaders/checkin.ts`,
+not `loaders/meetings.ts`.** The shape is identical either way:
+`src/lib/supabase/loaders/checkin.ts:239` declares `participation_pct: number`
+while the view returns SQL NULL → the single-row early return at `:363-365`
+passes it through verbatim →
 `src/pages/meetings/StudentMeetingView.tsx:757` interpolates it into
 `` label={`Participation: ${participation.participationPct}%`} `` →
 `ProgressBar value={null}` renders `0%`.
@@ -352,7 +367,7 @@ afterwards.
    | --- | --- |
    | StudentHome `Participation: —` | `src/lib/supabase/loaders/students.ts:839-840` — reintroduce a `Math.max(x, 1)` floor |
    | Participation tab `—` | `src/lib/supabase/loaders/reports.ts:290` — `participationPct: row.participation_pct ?? 0` |
-   | `/meetings` `Participation: null%` | `src/lib/supabase/loaders/meetings.ts:519`, or `StudentMeetingView.tsx:757` |
+   | `/meetings` `Participation: null%` | **`src/lib/supabase/loaders/checkin.ts:363-365`** — NOT `meetings.ts:519`, which leaves this test green (proven twice) |
 
    Record the real red output for each.
 

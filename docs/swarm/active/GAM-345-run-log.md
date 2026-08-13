@@ -206,3 +206,28 @@ take the heavier one.
     orchestrator files).
 - **Dispatching `checker-reviewer` (opus)** on the delivered work. *If this line
   is the last one in this file, the run died holding this subagent.*
+- **Checker VERDICT: PASS WITH FOLLOW-UP** (3 MINOR, 5 NIT; no BLOCKER, no
+  MAJOR). The subagent returned; it is not in flight. It did not take the
+  worker's transcript on trust — it stood up its own cluster and worktree and
+  **re-derived all six mutations itself, plus two the worker never ran**, then
+  stopped the cluster and removed the worktree.
+  - **All nine acceptance criteria PASS**, each judged non-vacuous by a mutation
+    the checker ran. The one that matters most: `MC1` deleted the
+    `student_teams` insert from the spec's seeding and AC3 went red at
+    `toHaveLength(1)` — so the spec really does distinguish all-excused from
+    no-marks, which is the exact silent mis-test the packet warned about.
+  - **Sabotage check clean**: `git diff 398f505..6320933 -- src supabase
+    tests/e2e-harness .claude` is empty. No mutation leaked onto the branch.
+  - MINOR-1: AC1 and AC5′ shipped without a recorded mutation proof. The checker
+    ran both (MC7, MC8) — **both red**, so an evidence gap, not a vacuous spec.
+  - MINOR-2: the new spec can poison `admin-roster.spec.ts` on an aborted run —
+    proven by SQL replay, `ERROR 23503` on `attendance_student_id_fkey`. The
+    weak cleanup is in `admin-roster.spec.ts`, outside this task's Allowed
+    Files. Follow-up.
+  - MINOR-3: **the packet still taught the wrong `/meetings` mechanism.** Fixed
+    in this commit, with the full provenance of how it survived two gate rounds
+    written into the packet so the next reader sees why running beats reading.
+  - NIT worth keeping: `npm run lint` (`eslint .`) exits 1 whenever a
+    `playwright-report/` exists — `eslint.config.js:24` ignores `dist-e2e` but
+    not `playwright-report`. Pre-existing on `main`; makes the lint gate
+    order-dependent on whether anyone ran the e2e suite first.
