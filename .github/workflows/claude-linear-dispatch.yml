@@ -71,10 +71,36 @@ jobs:
     # doubles; the cost of a run that does 90 minutes of work and is killed at
     # 60 is all of it, which is what happened.
     #
+    # RAISED AGAIN TO 180, 2026-08-13 (GAM-366). The same reasoning has now
+    # applied twice, which is itself the finding: 120 was not a bound with
+    # headroom, it was a cliff every HEAVY run skated. Measured, claim
+    # timestamp to last commit, across every HEAVY run to date:
+    #
+    #   GAM-345  1h44m  completed, 16 min spare
+    #   GAM-343  1h56m  completed,  4 min spare
+    #   GAM-305  1h57m  completed, ~2 min spare
+    #   GAM-344  killed at the cap, TWICE, on two separate attempts
+    #
+    # Not one completed run had meaningful headroom. The variable that decides
+    # survival is the checker's verdict: a PASS finishes inside 120, a FAIL
+    # costs a 30-45 minute rework round that no completed run had left. That
+    # makes the cap a filter on `checker-reviewer` returning FAIL — which is
+    # the tier working as designed, since a checker that never fails is not
+    # a checker. GAM-344 attempt 2 claimed at 11:37:16Z and last committed at
+    # 13:24:20Z, thirteen minutes short of its 13:37Z kill, immediately after
+    # dispatching the rework the checker had just required.
+    #
+    # 180 buys one full rework round on top of the slowest observed completion.
+    # `--max-turns 300` below is still the real runaway backstop; this number
+    # bounds capacity spend, not looping, and a genuinely stuck run hits turns
+    # rather than minutes.
+    #
     # The better fix is probably to stop making one run hold the whole chain —
     # worker and checker racing a single clock is the actual design smell —
     # but that is a redesign, and this is the measurement-backed increment.
-    timeout-minutes: 120
+    # It is now the SECOND such increment; if a third is ever needed, raise the
+    # redesign instead of the integer.
+    timeout-minutes: 180
 
     # The edge function already filters, but a workflow must not assume its
     # only caller is the one it was written for — anyone able to fire a
