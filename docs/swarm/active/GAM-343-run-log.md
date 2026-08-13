@@ -197,3 +197,23 @@ thing that survives if the container is killed.
   migration, RLS, metric SQL or auth logic). *If this line is the last one in
   this file, the run died holding this subagent.* Dispatched
   `run_in_background: false`.
+- **Verdict: `worker-implementer` returned.** Existence verified per item 21 —
+  not taken on the report's word: HEAD moved to `61c1e53`, and
+  `git cat-file -p HEAD:tests/e2e-personas/outreach-lifecycle.spec.ts` returns
+  457 lines, so the work is in the committed blob and survives worktree removal.
+  Three commits: `7885383` (spec + 8 screenshots), `ea7a46b` (findings JSON,
+  empty array — the honest form of "I looked"), `61c1e53` (screenshot refresh).
+  Suite **28 passed, 5 failed** — the +1 is the new test and the 5 are the same
+  pre-existing failures, unchanged. All four mutations run in the worker's own
+  worktree (`/tmp/gam343-mutate`, item 23) with real red output recorded:
+  AC 2 `Expected: 1 / Received: 0`; AC 3 same signature plus an independent
+  `psql` confirmation of `42501`; AC 4 `Expected: "declined" / Received:
+  "going"` — **exactly the red the gate's BLOCKER 6 predicted**, with the naive
+  row-count assertion confirmed to stay green; AC 5 `Expected: "absent" /
+  Received: "present"`. The worker surfaced one nuance the packet missed: AC 2
+  and AC 3 produce byte-identical UI-level red, because `RsvpControl` converts
+  the RLS denial into an inline banner — so AC 3's distinctness lives in the
+  out-of-band probe, not the journey.
+- **Dispatched `checker-reviewer`** (HEAVY requires a separate checker; a worker
+  may not self-certify). *If this line is the last one in this file, the run
+  died holding this subagent.* Dispatched `run_in_background: false`.
