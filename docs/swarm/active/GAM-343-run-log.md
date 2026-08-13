@@ -165,3 +165,26 @@ thing that survives if the container is killed.
 - **Dispatched `checker-premise` (item 19 gate, round 2 of a cap of 2)** on the
   revised packet, environment still live. *If this line is the last one in this
   file, the run died holding this subagent.* Dispatched `run_in_background: false`.
+- **Verdict: `checker-premise` round 2 returned DISPATCH** (2 MAJOR, both with
+  measured one-line remedies; no BLOCKER). The gate did the strongest possible
+  thing: it **drove the entire §4 journey green end to end, twice**, in its own
+  worktree (11.6s), and confirmed cleanup returned `v_student_hours` to the
+  byte-exact baseline. All six round-1 BLOCKERs verified **fixed by
+  measurement**, not by acknowledgement.
+  - Least-confident #1 was sound but **worse than I wrote it**: the dialog does
+    seed from recorded attendance, but there is an observable transient RSVP-only
+    seed first (`DLG IMMEDIATE Priya false Jordan true` → `DLG ARRIVAL Priya
+    true Jordan true`), and `hasCoachTouchedChecklistRef`
+    (`MarkDayCompleteDialog.tsx:1072-1075`) **latches** — so an uncheck during
+    that window freezes the wrong seed and inverts AC 5 and AC 6 silently.
+  - Least-confident #3 was right: the confirm label and the view do **not**
+    agree exactly — `2.5` vs `2.4999999999999996`. A tolerance is mandatory.
+  - The gate found a defect my §2e fix introduced: `11:59 PM` start = end makes
+    the session zero-duration, so AC 6 would read `delta == label == 0` and
+    **pass with the whole attendance write path deleted** — round 1's MAJOR 11
+    re-entering through my own blocker fix.
+  - Three caveats folded into the packet verbatim and binding: click the date
+    combobox **before** filling (the prescribed order destroys the form —
+    measured, cost the gate a 7-minute timeout); set an explicit per-student
+    hours override so AC 6 is non-vacuous; use auto-retrying
+    `toBeChecked()` on both students before the uncheck.
