@@ -287,3 +287,34 @@ thing that survives if the container is killed.
   self-certification.
 - **Issue moved `In Progress → In Review`** (item 28e — never `Done`), with a
   comment carrying the outcome, the gate figures and the three filed findings.
+- **Read-back confirms `In Review`** (state `In Review`, labels `w2 / other /
+  heavy`). Comment posted carrying the outcome, the stale-premise corrections,
+  the gate figures and the three filed rows.
+- **Harness torn down** — `stop.sh` reports *"stopped API server on port 54321 /
+  stopped and deleted /tmp/scratch-pg-55432 / removed generated .env.e2e"*;
+  `pg_isready` now returns no response and the data directory is gone. A
+  leftover cluster holds port 55432 and silently breaks the next run, so this is
+  not housekeeping. Generated `playwright-report/`, `test-results/` and
+  `dist-e2e/` removed; the 24 screenshots my own suite runs re-captured were
+  restored with `git checkout --`, not committed — the tree was clean at session
+  start, so nothing pre-existing was destroyed.
+
+## Outcome
+
+**Delivered.** `tests/e2e-personas/outreach-lifecycle.spec.ts` (457 lines), 8
+committed screenshots, 3 findings filed to Backlog. Suite 28/5 against a
+measured 27/5 baseline; 5 of 6 gates green with the sixth honestly skipped; all
+four required mutations red, two independently replayed by the checker.
+
+**Not delivered: the PR.** This run's credentials cannot open one. The body is
+preserved at `docs/swarm/active/GAM-343-pr-body.md`; an owner or scoped session
+opens it so CI runs on it. Because nothing is linked, no automation will move
+GAM-343 — it sits in `In Review` awaiting a human, which is where item 28e wants
+it.
+
+**The line worth keeping.** The premise gate rejected the first packet with six
+blockers, four of which no amount of reading would have caught — the journey as
+written was literally impossible, and its central criterion was unfalsifiable.
+Then the checker falsified the worker's "no findings" using the run's own
+committed screenshot. Every layer of the chain caught something the previous one
+missed, which is the only argument for paying for the chain.
