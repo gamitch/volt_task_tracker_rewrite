@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-13T00:08:24.340Z from team `Gamitch`.
+Exported 2026-08-13T03:35:08.492Z from team `Gamitch`.
 
-- **341** issues (242 archived)
-- **47** not yet completed or cancelled
+- **355** issues (242 archived)
+- **60** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -61,6 +61,19 @@ Exported 2026-08-13T00:08:24.340Z from team `Gamitch`.
 | [GAM-339](https://linear.app/gamitch/issue/GAM-339/three-near-identical-supabase-write-error-copy-helpers-and-a-fourth) | — | Backlog | Improvement area/w3 tier/standard | Three near-identical Supabase write-error copy helpers, and a fourth call site already needs one — share the classification, not the words |
 | [GAM-340](https://linear.app/gamitch/issue/GAM-340/student-teams-has-no-writer-so-a-re-teamed-student-keeps-receiving) | — | Backlog | area/w5 tier/unreviewed | `student_teams` has no writer, so a re-teamed student keeps receiving their former team's events |
 | [GAM-341](https://linear.app/gamitch/issue/GAM-341/no-assertion-guards-the-my-student-ids-test-in-the-new-events-rls) | — | Backlog | area/w5 tier/unreviewed | No assertion guards the `my_student_ids()` test in the new events RLS policies — removing it leaves the suite green |
+| [GAM-343](https://linear.app/gamitch/issue/GAM-343/e2e-w2-run-an-outreach-event-create-rsvp-attend-complete-hours-land) | — | Todo | area/w2 provenance/other tier/unreviewed | E2E — W2 Run an outreach event: create → RSVP → attend → complete → hours land |
+| [GAM-344](https://linear.app/gamitch/issue/GAM-344/e2e-w3-run-a-meeting-schedule-attendance-participation-percent) | — | Backlog | area/w3 provenance/other tier/unreviewed | E2E — W3 Run a meeting: schedule → attendance → participation % |
+| [GAM-345](https://linear.app/gamitch/issue/GAM-345/e2e-w4-hours-and-goal-accounting-the-same-students-numbers-agree-on) | — | Backlog | area/w4 provenance/other tier/unreviewed | E2E — W4 Hours and goal accounting: the same student's numbers agree on every screen |
+| [GAM-346](https://linear.app/gamitch/issue/GAM-346/e2e-w5-home-dashboards-what-each-role-lands-on-and-what-they-can-act) | — | Backlog | area/w5 provenance/other tier/unreviewed | E2E — W5 Home dashboards: what each role lands on, and what they can act on |
+| [GAM-347](https://linear.app/gamitch/issue/GAM-347/e2e-w6-calendar-and-subscribe-a-student-subscribes-and-the-feed-stays) | — | Backlog | area/w6 provenance/other tier/unreviewed | E2E — W6 Calendar and subscribe: a student subscribes and the feed stays current |
+| [GAM-348](https://linear.app/gamitch/issue/GAM-348/e2e-w7-roster-and-invites-adding-people-changing-them-and-inviting-a) | — | Backlog | area/w7 provenance/other tier/unreviewed | E2E — W7 Roster and invites: adding people, changing them, and inviting a parent |
+| [GAM-349](https://linear.app/gamitch/issue/GAM-349/e2e-sweep-drive-all-seven-user-workflows-in-a-real-browser-and-file) | — | Backlog | provenance/other tier/unreviewed | E2E sweep — drive all seven user workflows in a real browser and file what breaks |
+| [GAM-350](https://linear.app/gamitch/issue/GAM-350/the-persona-e2e-suite-cannot-run-from-a-clean-checkout-playwright-is) | — | Backlog | area/w10 provenance/e2e-personas tier/unreviewed | The persona E2E suite cannot run from a clean checkout: `playwright` is imported but never declared as a dependency |
+| [GAM-351](https://linear.app/gamitch/issue/GAM-351/vite-preview-binds-ipv6-only-while-the-persona-config-polls-127001-so) | — | Backlog | area/w10 provenance/e2e-personas tier/unreviewed | `vite preview` binds IPv6-only while the persona config polls `127.0.0.1`, so a fresh checkout dies on a silent 180s timeout |
+| [GAM-352](https://linear.app/gamitch/issue/GAM-352/checkinresult-crashes-to-a-blank-page-on-an-unvalidated-200-check-in) | — | Backlog | area/w1 provenance/e2e-personas tier/unreviewed | CheckinResult crashes to a blank page on an unvalidated 200 check-in payload |
+| [GAM-353](https://linear.app/gamitch/issue/GAM-353/selfcheckoffdialog-is-unreachable-in-the-unmodified-seed-fixtures) | — | Backlog | area/w1 provenance/e2e-personas tier/unreviewed | SelfCheckoffDialog is unreachable in the unmodified seed fixtures |
+| [GAM-354](https://linear.app/gamitch/issue/GAM-354/the-harness-has-no-stand-in-for-the-checkin-token-edge-function-the) | — | Backlog | area/w1 provenance/e2e-personas tier/unreviewed | The harness has no stand-in for the checkin-token Edge Function the kiosk calls |
+| [GAM-355](https://linear.app/gamitch/issue/GAM-355/five-pre-existing-persona-suite-failures-are-stale-against-shipped) | — | Backlog | area/w1 provenance/e2e-personas tier/unreviewed | Five pre-existing persona-suite failures are stale against shipped fixes, not real regressions |
 
 ## Closed and cancelled
 
@@ -360,5 +373,6 @@ Exported 2026-08-13T00:08:24.340Z from team `Gamitch`.
 | [GAM-328](https://linear.app/gamitch/issue/GAM-328/two-dispatch-loop-rules-live-where-a-dispatched-run-cannot-write-them) | — | Done | Two dispatch-loop rules live where a dispatched run cannot write them — the `.github/workflows/**` credential wall, and the subagent-blocking rule that decides whether a run finishes its chain |
 | [GAM-332](https://linear.app/gamitch/issue/GAM-332/the-reconciliation-sweep-drops-merged-prs-whose-declaration-failed-to) | — | Done | The reconciliation sweep drops merged PRs whose declaration failed to parse — the cases most likely to be wrong |
 | [GAM-335](https://linear.app/gamitch/issue/GAM-335/shadow-mode-computes-its-intended-action-from-the-post-automation) | — | Done | Shadow mode computes its intended action from the post-automation state, so an ordinary declared merge always scores MISMATCH — the 10-MATCH exit criterion is unreachable |
+| [GAM-342](https://linear.app/gamitch/issue/GAM-342/e2e-w1-check-in-a-student-arrives-and-gets-counted) | — | Done | E2E — W1 Check in: a student arrives and gets counted |
 
 Full descriptions, relations and timestamps are in `linear-export.json`.
