@@ -246,3 +246,29 @@ thing that survives if the container is killed.
   buckets stale after save), both `tier/unreviewed` / `provenance/e2e-personas`
   / `area/w2`. Filing is not dispatching — promotion stays the owner's call
   (item 28a). This closes item 20: the findings are rows, not prose in a PR body.
+- **Gates run** on `1949e77`, clean tree, `--require-clean`, directly and not
+  through a pipe:
+  ```
+  1 tsc            exit 0  PASS
+  2 vite build     exit 0  PASS
+  3 format:check   exit 0  PASS
+  4 eslint         exit 0  PASS   0 errors, 378 warnings
+  5 vitest (full)  exit 0  PASS   95 files / 2443 tests
+  6 vitest scoped     –    SKIP   no src/ file changed -> no derivable scope
+  VERDICT: PASS — 5 of 6 gates. NOT all six: 1 skipped.
+  ```
+  Gate 6 is legitimately skipped, not evaded: this change touches zero `src/`
+  files, so the only shared prefix would be `src/` itself, which is gate 5
+  again. Scoping it at `tests/e2e-personas/` returns UNTRUSTWORTHY — those are
+  Playwright specs and vitest collects nothing there. **Five gates, and I say
+  five.**
+  The 378 warnings are **not** mine: `npx eslint .` on `main` returns the same
+  378, and the new spec lints with zero output. The skill's documented standing
+  count of 377 is one stale.
+  First attempt reported `4 eslint exit 1 FAIL 1124 errors`. All 1124 were in
+  `playwright-report/personas/trace/**` — Playwright's own report viewer bundle,
+  gitignored but **absent from `eslint.config.js`'s ignores** (`dist-e2e` is in
+  both lists; `playwright-report` and `test-results` are in `.gitignore` only).
+  Removing the generated directory returns gate 4 to green. `eslint.config.js`
+  was outside Allowed Files, so per item 20 this is a filed row and not a
+  comment: **GAM-365** (Backlog, `tier/unreviewed`, `area/w10`).

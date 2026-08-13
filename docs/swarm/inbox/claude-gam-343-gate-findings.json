@@ -1,0 +1,33 @@
+{
+  "source": "other",
+  "branch": "claude/gam-343-e2e-w2-outreach-lifecycle",
+  "commit": "1949e77",
+  "measuredAt": "2026-08-13T05:40:00Z",
+  "findings": [
+    {
+      "findingKey": "gate-run/eslint-lints-playwright-report-output",
+      "title": "Running the persona suite turns the eslint gate red with 1124 errors in generated output",
+      "severity": "MINOR",
+      "area": "w10",
+      "evidence": [
+        {
+          "file": "eslint.config.js",
+          "line": 24,
+          "quote": "{ ignores: ['dist', 'dist-e2e', 'node_modules', '.claude', 'supabase/functions/**'] },"
+        },
+        {
+          "file": ".gitignore",
+          "line": 59,
+          "quote": "playwright-report/"
+        }
+      ],
+      "observed": "After `npx playwright test -c tests/e2e-harness/playwright.personas.config.ts`, the gate-run block reports `4 eslint exit 1 FAIL 1124 errors, 378 warnings`. All 1124 are in `playwright-report/personas/trace/**` — Playwright's own bundled report viewer (`codeMirrorModule`, `sw.bundle.js`, etc). Deleting the directory returns the gate to `exit 0 PASS, 0 errors, 378 warnings`.",
+      "expected": "eslint ignores generated, gitignored output. `dist-e2e` is in both .gitignore and eslint's ignores; `playwright-report` and `test-results` are in .gitignore only.",
+      "verifiedBy": "mutation",
+      "reproduction": "npx playwright test -c tests/e2e-harness/playwright.personas.config.ts ; python3 .claude/skills/gate-run/scripts/gates.py ; rm -rf playwright-report test-results ; python3 .claude/skills/gate-run/scripts/gates.py",
+      "consequence": "Every agent that runs the persona suite and then runs the gates — which is the prescribed order for any e2e task — gets a red lint gate caused entirely by test-report artifacts. It cost this run a turn to diagnose, and the failure mode invites either a false 'the branch broke lint' report or a habit of ignoring gate 4. The fix is adding two entries to the ignores array.",
+      "notClaimed": "Not a defect in any shipped product surface, and it does not affect CI if CI lints a fresh checkout. I did not check whether the CI lint job runs after any Playwright job. `eslint.config.js` was outside this task's Allowed Files, so it was deliberately not changed.",
+      "crossRefs": ["GAM-343"]
+    }
+  ]
+}
