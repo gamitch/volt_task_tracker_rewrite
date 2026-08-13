@@ -61,3 +61,31 @@ thing that survives if the container is killed.
   `src/pages/outreach/**`, so the packet carries selectors the worker does not
   have to guess. *If this line is the last one in this file, the run died
   holding this subagent.* Dispatched `run_in_background: false`.
+- **Verdict: `Explore` returned.** High value; two findings change the shape of
+  the packet, and both would have cost the worker a round:
+  1. 🔴 **The issue's journey is not achievable on one session as described.**
+     `RsvpControl` is editable only while `now < starts_at` and status is
+     `scheduled` (`src/pages/outreach/RsvpControl.tsx:327-329, 518`), while the
+     Mark-day-complete trigger only appears when
+     `formatChicagoDateOnly(now) >= session.sessionDate`
+     (`src/pages/outreach/OutreachDetail.tsx:1492-1497`). Future-only vs
+     today-or-past. Resolution the packet adopts: **one session dated today
+     that starts later today** satisfies both predicates simultaneously.
+     Fallback if the create dialog cannot express that: two sessions via
+     `Custom dates`. Carried into the packet's Least-confident list.
+  2. 🔴 **`RsvpControl` has no "Going" label.** `RSVP_ITEMS` is `Sign up` /
+     `Maybe` / `Can't go` (`RsvpControl.tsx:301-308`), and
+     `RsvpControl.test.tsx:100` asserts exactly that against "Going". "Going"
+     exists only in `OutreachList.tsx:3534-3538`'s own inline copy. The issue
+     says "answers Going"; the surface it names (`RsvpControl`) says
+     `Sign up`. Packet routes through `/outreach/:eventId`, the only mount of
+     `RsvpControl` (`OutreachDetail.tsx:812, 2406-2419`), and uses `Sign up`.
+  Also carried: `Mark day complete — {date}` is the accessible name (Astryx
+  `label` beats `children`, `OutreachDetail.tsx:2337-2345`) so a bare
+  `Mark day complete` never matches; `AttendancePanel` and
+  `MarkDayCompleteDialog` both render `checkbox`es named for the same students,
+  so every dialog interaction must be scoped to `getByRole('dialog')`; and
+  `StudentHome`'s RSVP is a known-open finding
+  (`tests/e2e-personas/student-parent.spec.ts:66`) — do not route through it.
+  One unresolved: two green specs disagree on `CheckboxListItem`'s role
+  (`checkbox` vs `button`) — the worker verifies live.
