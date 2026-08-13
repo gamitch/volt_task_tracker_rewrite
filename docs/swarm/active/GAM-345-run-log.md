@@ -159,3 +159,17 @@ take the heavier one.
     `participation_pct: number` type lie as `meetings.ts:302` — the tab escapes
     the symptom only via a runtime null check. Added to AC3's finding.
   Gate closed at two rounds (item 19a); no escalation needed.
+- **All nine round-2 corrections folded into the packet** (per-leg mutation
+  targets for AC3; `student_teams.team_id` + `is_active` seeding correction;
+  `:123-128`, `meetings.ts:519`, `checkin.ts:363-365` citation fixes;
+  `StudentHome.tsx:1649` and the stale `:1471` comment noted; the KPI
+  season-rollup-vs-sum check promoted out of Traps into AC2; the
+  `admin-roster.spec.ts:99` screenshot precedent restored; `HoursTab.tsx:1017` /
+  `Leaderboard.tsx:527` formatting lines handed over; "no non-test file" and the
+  `grep -c` exit-1 trap). Packet is now DISPATCH-clean at revision 2.
+- **Dispatching `worker-implementer` (opus, item 18 override)** on packet
+  revision 2. Opus rather than the pinned sonnet because the deliverable's whole
+  value is arithmetic about students' own data across metric views, and a silent
+  error here is exactly the "lies to a user about their own data" case item 18
+  and item 26 exist for. *If this line is the last one in this file, the run
+  died holding this subagent.*

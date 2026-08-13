@@ -37,7 +37,8 @@ statements did not survive measurement:
 1. **"the CSV export" / "confirm the exported file carries the same figures".**
    There is no CSV control. `buildRosterCsv`, `buildEventsCsv` and
    `buildAttendanceCsv` (`src/pages/reports/csvExport.ts:305,372,437`) are
-   **called from nowhere in `src/`**; `csvExport.ts:24-32` says so itself, and
+   **called from no non-test file** (the only callers are
+   `src/pages/reports/csvExport.test.ts:167,231,315`); `csvExport.ts:24-32` says so itself, and
    the gate confirmed in-browser that no export, download or CSV control exists
    on any of the three tabs. The issue's AC5 is therefore unsatisfiable. It is
    replaced by **AC5′**, a finding obligation — dead RPT-05/RPT-06 builders are
@@ -96,7 +97,7 @@ data. **Budget nothing for extending the harness.**
 
 ### The metric semantics under test
 
-`supabase/migrations/20260806000000_met01_explicit_marks.sql:119-125`, quoted
+`supabase/migrations/20260806000000_met01_explicit_marks.sql:123-128`, quoted
 verbatim (view spans `:102-130`; `v_team_participation` `:139-146`):
 
 ```sql
@@ -127,8 +128,8 @@ Revision 1 claimed an all-excused student reads `0%` through `checkin.ts` and
 `meetings.ts`. **That was false.** Both functions return the single view row
 verbatim before reaching the floor:
 
-- `src/lib/supabase/loaders/checkin.ts:362-365` — `if (seasonRows.length === 1) { return seasonRows[0]; }`
-- `src/lib/supabase/loaders/meetings.ts:517` — `if (rows.length === 1) return rows[0];`
+- `src/lib/supabase/loaders/checkin.ts:363-365` — `if (seasonRows.length === 1) { return seasonRows[0]; }`
+- `src/lib/supabase/loaders/meetings.ts:519` — `if (rows.length === 1) return rows[0];`
 
 The `Math.max(expectedCt - excusedCt, 1)` at `checkin.ts:375` and
 `meetings.ts:527` executes **only** for a student with ≥2
@@ -162,14 +163,29 @@ Participation: null%
 
 Mechanism, all four links verified: `src/lib/supabase/loaders/meetings.ts:302`
 declares `participation_pct: number` while the view returns SQL NULL →
-`aggregateParticipationRows` returns the row verbatim (`meetings.ts:517`) →
+`aggregateParticipationRows` returns the row verbatim (`meetings.ts:519`) →
 `src/pages/meetings/StudentMeetingView.tsx:757` interpolates it into
 `` label={`Participation: ${participation.participationPct}%`} `` →
 `ProgressBar value={null}` renders `0%`.
 
 **The other two surfaces are correct.** StudentHome shows `Participation: —`
-(`src/lib/supabase/loaders/students.ts:838-840` returns `null` when the
-denominator is 0) and the reports Participation tab shows `—`.
+(rendered at `src/pages/home/StudentHome.tsx:1649`; the `null` comes from
+`src/lib/supabase/loaders/students.ts:839-840`, which returns `null` when the
+denominator is 0 — note `students.ts:826`'s own comment points at
+`StudentHome.tsx:1471`, which is **stale**: that line is a `useLoadState` call).
+The reports Participation tab shows `—` at `ParticipationTab.tsx:838-839`, and
+that em dash is a **genuine database NULL**: an all-excused student *has* a view
+row, so `buildDisplayRows` takes the metric-driven branch
+(`ParticipationTab.tsx:571,573-587`) and passes `participation_pct` straight
+through. The synthesised all-null row (`:589-602`) applies only to students with
+**no** view row.
+
+**`reports.ts:221` carries the identical type lie to `meetings.ts:302`** — both
+declare `participation_pct: number` for a column that is nullable. The
+Participation tab escapes the symptom only because `ParticipationTab.tsx:838`
+does a runtime `=== null` check. Put this in AC3's finding as a second evidence
+line: it is one mistyped column reached through two loaders, and only one of
+them happens to be guarded.
 
 Reproduce this **from your spec**, on your own seeded student, and file it as a
 new finding cross-referencing GAM-300 — the type lie is a distinct defect from
@@ -182,10 +198,11 @@ the arithmetic floor, and filing it under GAM-300 would bury it.
 | Hours tab | `.from('v_student_hours').select('student_id, season_id, confirmed_hours').eq('season_id', …)` — `reports.ts:424-428` | — |
 | Leaderboard (`CoachHome.tsx:2817` → `leaderboard.ts:137-142,175`) | **byte-identical query** | **No** |
 | StudentHome hours | `v_student_goal_projection` = `coalesce(sh.confirmed_hours, 0)` over the same view — `students.ts:457`, `20260723000001_dashboard_views.sql:328-332` | **No** |
-| KPI strip (`AppShell.tsx:165`, `kpi.ts:175-191`) | `v_season_kpis` (season) + `v_season_kpi_team_counts` (team) — **four tiles, nothing per-student** | n/a |
+| KPI strip (`src/app/AppShell.tsx:165`, `src/lib/supabase/loaders/kpi.ts:175-191`) | `v_season_kpis` (season) + `v_season_kpi_team_counts` (team) — **four tiles, nothing per-student** | n/a |
 | `readRows` | straight to Postgres, superuser | **Yes — the only one** |
 
-`Leaderboard.tsx:394` `defaultLoadLeaderboardData` is a **fixture** and is not
+`src/pages/outreach/Leaderboard.tsx:394` `defaultLoadLeaderboardData` is a
+**fixture** (`:390-391` says so itself) and is not
 the user's path. Do not test through it.
 
 **What actually varies across those three renderers is formatting**, and the
@@ -196,7 +213,7 @@ leaderboard renders `4 hrs`.
 
 Gate-measured on a fresh seed: Priya's `v_student_hours.confirmed_hours` is
 **`3.999999112222222`** (`now()`-relative seed timestamps through
-`extract(epoch …)/3600.0`, `metric_views.sql:7-14`). Screens show `4.0` / `4
+`extract(epoch …)/3600.0`, `supabase/migrations/20260717000003_metric_views.sql:7-14`). Screens show `4.0` / `4
 hrs`. **No screen carries the underlying value** — this is precisely GAM-303's
 shape, and `docs/swarm/active/FINDINGS-PIPELINE.md:44-52` uses it as its worked
 example. Compare with a stated tolerance.
@@ -236,8 +253,21 @@ no genuine `0%`. Build both from the spec.
   `harness_password = encode(sha256('VoltTest!2026'::bytea), 'hex')`),
   a `profiles` row with `role='student'`, and `students.profile_id` pointing at
   it. `seed.sql:40-54` is the pattern.
-- `students.team_id` must intersect the event's `team_ids`, and the marks must
-  land on **completed** sessions of an event with `counts_participation`.
+- **`student_teams.team_id` — not `students.team_id` — must intersect the
+  event's `team_ids`.** `v_student_participation` never reads `students.team_id`:
+  it joins `student_teams` (`met01:109`) and compares
+  `st.team_id = any(e.team_ids)` (`met01:114`). Set one and not the other and
+  you get **zero view rows** — the same silent mis-test as above, by a different
+  route.
+- `students.is_active` must be `true` (`met01:115`, `where s.is_active`).
+- `students.team_id` still matters, for a *different* reason: the Participation
+  tab's roster grouping (`reports.ts:270`) and `v_student_goal_projection`
+  (`20260723000001_dashboard_views.sql:326`). Set both, consistently.
+- Marks must land on **completed** sessions of an event with
+  `counts_participation`. Hours use a different flag: `v_student_hours` requires
+  `e.counts_volunteer_hours`
+  (`supabase/migrations/20260717000003_metric_views.sql:17`). Do not seed the
+  wrong one.
 
 **Copy `tests/e2e-personas/admin-roster.spec.ts:30-34` for cleanup** — it
 already does `delete from student_teams …; delete from students where
@@ -278,8 +308,10 @@ afterwards.
 
 1. **The run interacts, not just loads.** Switch between all three reports tabs,
    then **change the Participation tab's filter and apply its sort** — filter
-   and sort exist *only* on that tab (`grep -c onChange` is **0** for both
-   `HoursTab.tsx` and `EventsTab.tsx`). Screenshot each tab.
+   and sort exist *only* on that tab (`grep -c onChange` prints **0** for both
+   `HoursTab.tsx` and `EventsTab.tsx`, and **5** for `ParticipationTab.tsx`;
+   note `grep -c` **exits 1** on a zero count, so do not paste it under
+   `set -e`). Screenshot each tab.
    *Falsified by:* a spec that only calls `page.goto` and reads text.
 
 2. **One student's figures are read from every surface that shows them and
@@ -288,8 +320,18 @@ afterwards.
    The three hours surfaces share one database read, so a cross-screen *value*
    agreement there could not fail — say that plainly in the spec rather than
    claiming a comparison you did not really make. The comparison that *can*
-   fail is database → each screen, and `4.0` (Hours tab) vs `4 hrs`
-   (leaderboard).
+   fail is database → each screen, and `4.0` (Hours tab,
+   `src/pages/reports/HoursTab.tsx:1017`, `{value.toFixed(1)}`) vs `4 hrs`
+   (leaderboard, `src/pages/outreach/Leaderboard.tsx:527`, where
+   `roundForDisplay` at `:314-316` returns a **number**, so `4` interpolates as
+   `4`, not `4.0`).
+   **Also assert, via `readRows`, that `v_season_kpis.active_students_count`
+   equals the sum of `v_season_kpi_team_counts.active_students_count`**
+   (`kpi.ts:175`, `:188`). That is the honest KPI-strip comparison — season
+   rollup against the sum beneath it — since the strip carries no per-student
+   figure. Round 1 watched the strip read `Active students 7` against a
+   breakdown of `5 · 3 = 8`, so expect red; if it is red, that is a finding of
+   its own.
    *Mutation proof required:* in your own worktree, change
    `loaders/reports.ts`'s hours mapping, re-run, record the **real red output**,
    revert, re-run green.
@@ -302,9 +344,17 @@ afterwards.
    `meetings.ts:302` + `StudentMeetingView.tsx:757` and what to change when
    fixed (skill rule: record behaviour, do not bless it). File a **new**
    finding cross-referencing GAM-300.
-   *Mutation proof required, in your own worktree:* reintroduce a
-   `Math.max(x, 1)`-style floor in `loaders/students.ts`'s participation path →
-   the StudentHome em-dash assertion goes red.
+   *Mutation proof required, in your own worktree — one target PER LEG.* One
+   mutation cannot redden all three, and round 2 caught the packet prescribing
+   only the first:
+
+   | Assertion | Mutate |
+   | --- | --- |
+   | StudentHome `Participation: —` | `src/lib/supabase/loaders/students.ts:839-840` — reintroduce a `Math.max(x, 1)` floor |
+   | Participation tab `—` | `src/lib/supabase/loaders/reports.ts:290` — `participationPct: row.participation_pct ?? 0` |
+   | `/meetings` `Participation: null%` | `src/lib/supabase/loaders/meetings.ts:519`, or `StudentMeetingView.tsx:757` |
+
+   Record the real red output for each.
 
 4. **A genuine zero still reads as zero.** Seed a student with marks, none
    excused, none present — `readRows` must show `0.0`, screens `0%`.
@@ -334,7 +384,10 @@ afterwards.
    able to hide a wrong value.
 
 7. **A screenshot exists for every surface compared**, committed, named
-   `<nn>-<persona>-<moment>`.
+   `<nn>-<persona>-<moment>` — `tests/e2e-personas/admin-roster.spec.ts:99`
+   (`await capture(page, '33-coach-reports');`) is the in-repo precedent. Pick
+   numbers that do not collide with the existing files in
+   `tests/e2e-personas/screenshots/`.
 
 8. **Findings are emitted as JSON and filed.** Write the inbox file in
    `docs/swarm/active/FINDINGS-PIPELINE.md`'s schema **even if empty** — an
@@ -377,9 +430,9 @@ skipping a mutation on 2–4 is **not** a pass.
   `tests/e2e/public-routes.spec.ts` fail on a clean checkout. Not yours.
 - **Stop the cluster** (`stop.sh`) when done, and say you did — a leftover
   cluster holds port 55432 and breaks the next run.
-- Candidate finding the gate spotted in passing, worth confirming: the KPI strip
-  showed `Active students 7` against a team breakdown of `5 · 3 = 8` — the
-  breakdown appears to double-count a dual-team student.
+- The KPI strip's `Active students 7` vs its `5 · 3 = 8` breakdown is now an
+  explicit AC2 assertion, not a candidate — see AC2's final paragraph. It looks
+  like the team breakdown double-counts a dual-team student.
 
 ---
 
@@ -409,12 +462,14 @@ were wrong in the direction feared. These are the remaining doubts.
    explicitly did **not** run it — it ran only throwaway probes. AC9 rests on
    that baseline. *Wrong if:* something in the suite is already red, in which
    case report the pre-existing failure separately and do not absorb it.
-2. **That `loaders/students.ts` is the right mutation target for AC3.** I chose
-   it because `students.ts:838-840` is the code that correctly produces the
-   em dash on StudentHome. *Wrong if:* the Participation tab's em dash comes
-   from `ParticipationTab.tsx`'s own `buildDisplayRows` synthesising an
-   all-null row rather than from that loader — then the mutation turns only one
-   of the two assertions red and the other is vacuous.
+2. ~~That `loaders/students.ts` is the right mutation target for AC3.~~
+   **Settled by round 2, and the fear was half right.** The Participation tab's
+   em dash is *not* a synthesised row — an all-excused student takes the
+   metric-driven branch (`ParticipationTab.tsx:571,573-587`), so the `—` is a
+   real NULL. But `students.ts:831-840` feeds **StudentHome only**, so the
+   single prescribed mutation would indeed have left two of AC3's three
+   assertions vacuous. AC3 now names a target per leg. Kept rather than deleted
+   because it is the entry that earned this list its cost.
 3. **That the all-excused student can be given a working login from the spec.**
    The gate proved the *view* needs only `students` + `student_teams`, and read
    the `auth.users` seeding pattern, but never created a spec-seeded student and
