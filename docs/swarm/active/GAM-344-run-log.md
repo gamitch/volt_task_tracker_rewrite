@@ -246,3 +246,11 @@ Every subagent here is dispatched `run_in_background: false` and waited on.
   specifics. What is left is mechanical. The HEAVY tier's independent
   `checker-reviewer` round on the finished work is kept, and that is the check
   that actually protects the deliverable.
+- **05:40Z — DISPATCHED `worker-implementer`** (default pin, sonnet — **none of
+  item 18's four triggers apply**: no migration, no RLS or security definer, no
+  metric-view SQL, no auth/session/role logic; this row ships tests only) with
+  **`run_in_background: false`**. Environment handed over live and verified
+  immediately before dispatch: preview `127.0.0.1:4174` HTTP 200, harness API
+  `54321` HTTP 200, cluster holding 11 attendance rows, HEAD `59d2c73`.
+  **If this line is the last one in this file, the run died holding this
+  subagent** — no worker diff landed, no gates were run, and no PR was opened.
