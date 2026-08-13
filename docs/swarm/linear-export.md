@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-12T21:46:13.898Z from team `Gamitch`.
+Exported 2026-08-13T00:08:24.340Z from team `Gamitch`.
 
-- **336** issues (242 archived)
-- **44** not yet completed or cancelled
+- **341** issues (242 archived)
+- **47** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -35,12 +35,10 @@ Exported 2026-08-12T21:46:13.898Z from team `Gamitch`.
 | [GAM-264](https://linear.app/gamitch/issue/GAM-264/t600-aggregateparticipationrows-and-aggregateparticipationforstudent) | T600 | Backlog | area/w3 tier/unreviewed | T600 — `aggregateParticipationRows` and `aggregateParticipationForStudent` are the same MET-01 arithmetic maintained in two files |
 | [GAM-271](https://linear.app/gamitch/issue/GAM-271/t507-the-login-card-overflows-the-viewport-on-every-phone-narrower) | T507 | Backlog | tier/unreviewed | T507 — The login card overflows the viewport on every phone narrower than ~400px |
 | [GAM-282](https://linear.app/gamitch/issue/GAM-282/t606-a-single-meeting-cannot-have-its-own-location-this-week-were-in) | T606 | Backlog | area/w3 tier/heavy | T606 — A single meeting cannot have its own location ("this week we're in the shop") |
-| [GAM-283](https://linear.app/gamitch/issue/GAM-283/t607-ending-a-meeting-can-fail-partway-and-the-coach-is-told-nothing) | T607 | Backlog | area/w3 tier/unreviewed | T607 — Ending a meeting can fail partway and the coach is told nothing useful — never the real error, never which partial state was reached |
 | [GAM-284](https://linear.app/gamitch/issue/GAM-284/t608-collapse-the-three-surviving-narrow-copies-of-the-method-shape) | T608 | Backlog | area/w3 tier/unreviewed | T608 — Collapse the THREE surviving narrow copies of the `method` shape — `selfCheckoff.ts`'s fork plus two more T603 could not reach — and fix the module doc that T603 made false |
 | [GAM-286](https://linear.app/gamitch/issue/GAM-286/t610-item-10-names-two-different-rules-depending-on-which-part-of-the) | T610 | Backlog | area/w3 tier/unreviewed | T610 — "Item 10" names two different rules depending on which part of the constitution you read |
 | [GAM-290](https://linear.app/gamitch/issue/GAM-290/t614-the-end-time-field-has-no-lower-bound-so-a-series-edit-can) | T614 | Backlog | area/w3 tier/unreviewed | T614 — The End time field has no lower bound, so a series edit can persist a meeting whose end is before its start |
 | [GAM-297](https://linear.app/gamitch/issue/GAM-297/t512-workflowsmd-reports-three-different-open-row-totals-60-42-36-item) | T512 | Backlog | area/w2 tier/unreviewed | T512 — `WORKFLOWS.md` reports three different open-row totals (~60, 42, 36); item 29 moved the source to the Linear export |
-| [GAM-299](https://linear.app/gamitch/issue/GAM-299/t806-eventsevent-sessions-rls-scopes-by-the-legacy-studentsteam-id-so) | T806 | Backlog | area/w5 tier/unreviewed | T806 — `events`/`event_sessions` RLS scopes by the legacy `students.team_id`, so a dual-team student never receives their second team's events |
 | [GAM-300](https://linear.app/gamitch/issue/GAM-300/t807-two-loaders-still-apply-the-greatestx-1-floor-t509-removed-and) | T807 | Backlog | area/w5 tier/unreviewed | T807 — Two loaders still apply the `greatest(x, 1)` floor T509 removed, and three row types still declare `participation_pct` non-nullable |
 | [GAM-306](https://linear.app/gamitch/issue/GAM-306/t616-no-event-records-who-created-it-so-outreach-detail-permanently) | T616 | Backlog | area/w3 tier/unreviewed | T616 — No event records who created it, so outreach detail permanently reads "Unknown creator" |
 | [GAM-311](https://linear.app/gamitch/issue/GAM-311/kpi-viewssqls-two-views-never-got-t801s-catalog-comment-rls-correction) | — | Backlog | tier/unreviewed | kpi_views.sql's two views never got T801's catalog-comment RLS correction -- D010 chose header-prose only |
@@ -58,6 +56,11 @@ Exported 2026-08-12T21:46:13.898Z from team `Gamitch`.
 | [GAM-333](https://linear.app/gamitch/issue/GAM-333/a-dispatched-run-can-push-a-branch-but-cannot-open-a-pr-agentsmd) | — | Backlog | tier/fast | A dispatched run can push a branch but cannot open a PR — `AGENTS.md` records two walls and there are three |
 | [GAM-334](https://linear.app/gamitch/issue/GAM-334/the-declaration-gate-cannot-express-second-half-of-a-two-pr-row-so) | — | Backlog | provenance/other tier/fast | The declaration gate cannot express "second half of a two-PR row", so every workflow-touching row will go red on the PR that completes it |
 | [GAM-336](https://linear.app/gamitch/issue/GAM-336/two-unguarded-lines-in-the-archived-team-scope-fix-reinstate-a-data) | — | Backlog | area/w3 provenance/checker tier/standard | Two unguarded lines in the archived-team scope fix reinstate a data-correctness MAJOR if deleted |
+| [GAM-337](https://linear.app/gamitch/issue/GAM-337/ending-a-meeting-can-report-failure-for-a-meeting-that-actually-ended) | — | Backlog | Improvement area/w3 tier/standard | Ending a meeting can report failure for a meeting that actually ended — the coach is told to retry an action that succeeded |
+| [GAM-338](https://linear.app/gamitch/issue/GAM-338/the-on-screen-promise-that-retrying-an-end-meeting-wont-record) | — | Backlog | Improvement area/w3 tier/fast | The on-screen promise that retrying an end-meeting "won't record anything twice" is guarded by no test — removing `ignoreDuplicates: true` keeps the suite green |
+| [GAM-339](https://linear.app/gamitch/issue/GAM-339/three-near-identical-supabase-write-error-copy-helpers-and-a-fourth) | — | Backlog | Improvement area/w3 tier/standard | Three near-identical Supabase write-error copy helpers, and a fourth call site already needs one — share the classification, not the words |
+| [GAM-340](https://linear.app/gamitch/issue/GAM-340/student-teams-has-no-writer-so-a-re-teamed-student-keeps-receiving) | — | Backlog | area/w5 tier/unreviewed | `student_teams` has no writer, so a re-teamed student keeps receiving their former team's events |
+| [GAM-341](https://linear.app/gamitch/issue/GAM-341/no-assertion-guards-the-my-student-ids-test-in-the-new-events-rls) | — | Backlog | area/w5 tier/unreviewed | No assertion guards the `my_student_ids()` test in the new events RLS policies — removing it leaves the suite green |
 
 ## Closed and cancelled
 
@@ -324,6 +327,7 @@ Exported 2026-08-12T21:46:13.898Z from team `Gamitch`.
 | [GAM-279](https://linear.app/gamitch/issue/GAM-279/t603-attendancemethods-three-value-shape-omits-self-in-seven-places) | T603 | Done | T603 — `AttendanceMethod`'s three-value shape omits `'self'` in **SEVEN** places (this row originally said four); the database has allowed it since 2026-07-24 |
 | [GAM-280](https://linear.app/gamitch/issue/GAM-280/t604-loadersendmeetingts-still-calls-endmeetingdialogtsx-frozen-in) | T604 | Done | T604 — `loaders/endMeeting.ts` still calls `EndMeetingDialog.tsx` "frozen" in four places outside T602's named ranges |
 | [GAM-281](https://linear.app/gamitch/issue/GAM-281/t605-edit-one-meeting-inside-a-series-its-date-time-and-notes-and) | T605 | Done | T605 — Edit ONE meeting inside a series — its date, time and notes — and cancel it from the edit flow |
+| [GAM-283](https://linear.app/gamitch/issue/GAM-283/t607-ending-a-meeting-can-fail-partway-and-the-coach-is-told-nothing) | T607 | Done | T607 — Ending a meeting can fail partway and the coach is told nothing useful — never the real error, never which partial state was reached |
 | [GAM-285](https://linear.app/gamitch/issue/GAM-285/t609-the-edit-dialogs-notes-field-renders-in-edit-mode-accepts-typing) | T609 | Done | T609 — The edit dialog's Notes field renders in edit mode, accepts typing, and is silently discarded on save |
 | [GAM-287](https://linear.app/gamitch/issue/GAM-287/t611-once-one-meeting-in-a-series-has-its-own-time-any-later-series) | T611 | Done | T611 — Once one meeting in a series has its own time, any later series edit silently rewrites it back — including a title-only save |
 | [GAM-288](https://linear.app/gamitch/issue/GAM-288/t612-mutation-replays-replaypy-reports-a-genuine-red-replay-as) | T612 | Done | T612 — `mutation-replay`'s `replay.py` reports a genuine red replay as `UNTRUSTWORTHY: the mutated run executed no tests` |
@@ -335,6 +339,7 @@ Exported 2026-08-12T21:46:13.898Z from team `Gamitch`.
 | [GAM-295](https://linear.app/gamitch/issue/GAM-295/t804-v-student-participation-scopes-membership-off-the-legacy) | T804 | Canceled | T804 — ~~`v_student_participation` scopes membership off the legacy `students.team_id`~~ |
 | [GAM-296](https://linear.app/gamitch/issue/GAM-296/t805-outreachdetailtesttsx-and-outreachlisttesttsx-failed-once-in-a) | T805 | Done | T805 — `OutreachDetail.test.tsx` and `OutreachList.test.tsx` failed once in a full-suite run and have not been reproduced since |
 | [GAM-298](https://linear.app/gamitch/issue/GAM-298/t705-the-schema-and-all-four-consuming-views-are-multi-team-the-roster) | T705 | Done | T705 — The schema and all four consuming views are multi-team; the roster UI and write path are still single-team, and three roster filters still scope on the legacy `students.team_id` |
+| [GAM-299](https://linear.app/gamitch/issue/GAM-299/t806-eventsevent-sessions-rls-scopes-by-the-legacy-studentsteam-id-so) | T806 | Done | T806 — `events`/`event_sessions` RLS scopes by the legacy `students.team_id`, so a dual-team student never receives their second team's events |
 | [GAM-301](https://linear.app/gamitch/issue/GAM-301/t407-the-outreach-nav-badge-is-a-hardcoded-0-while-the-page-it-links) | T407 | Done | T407 — The Outreach nav badge is a hardcoded `0` while the page it links to reads "74 awaiting your RSVP" |
 | [GAM-302](https://linear.app/gamitch/issue/GAM-302/9-closed-ledger-rows-are-sitting-in-linear-as-pickable-backlog-because) | — | Done | ~9 closed ledger rows are sitting in Linear as pickable Backlog, because their closure never touched the Status column |
 | [GAM-303](https://linear.app/gamitch/issue/GAM-303/t808-students-and-parents-see-raw-float-hours-39999983633333334-100-h) | T808 | Done | T808 — Students and parents see raw float hours (`3.9999983633333334 / 100 h`) beside a rounded percentage |
