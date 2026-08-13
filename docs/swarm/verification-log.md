@@ -12138,3 +12138,93 @@ The banner reads "Couldn't end this meeting" immediately followed by "Couldn't f
 meeting" — a near-duplicate pair a screen reader hears as one utterance. Graded NIT by the checker
 and folded into `GAM-339`'s optional copy polish rather than fixed here, because changing the copy
 without the suite's two constraint tests in front of you is how the forbidden claims come back.
+
+---
+
+## GAM-345 — E2E: W4 hours and goal accounting agree on every screen
+
+**Tier:** HEAVY (packet → premise gate ×2 → worker → checker). Branch
+`claude/gam-345-e2e-w4-hours-accounting`, work at `6320933`.
+**Result:** PASS WITH FOLLOW-UP. All nine acceptance criteria pass; each was
+proven non-vacuous by a mutation the *checker* ran independently, not by the
+worker's transcript.
+
+**Deliverable:** `tests/e2e-personas/reports-accounting.spec.ts` (632 lines), 14
+screenshots, and `docs/swarm/inbox/claude-gam-345-e2e-w4-hours-accounting-findings.json`.
+No production file changed — `git diff 398f505..6320933 -- src supabase
+tests/e2e-harness .claude` is empty.
+
+**Gates at `6320933`:** tsc 0 · vite build 0 · format:check 0 · eslint 0 errors
+(378 warnings) · vitest 2443 tests 0 · scoped vitest 112 tests 0.
+
+**Mutation evidence.** Eight proofs across the two rounds, each in an isolated
+worktree (item 23). The load-bearing one is the checker's `MC1`: deleting the
+`student_teams` insert from the spec's seeding turns AC3 red at
+`toHaveLength(1)` — so the spec genuinely distinguishes the all-excused NULL
+from the no-marks absent row, which is the precise silent mis-test the packet
+warned about.
+
+### The finding this row exists for
+
+**A claim about where `/meetings` gets its participation figure survived being
+asserted, corrected once, and citation-checked twice — and was still wrong.**
+Revision 1 of the packet said the strip came from `loaders/meetings.ts`. Premise
+gate round 1 corrected the *mechanism* around it; round 2 confirmed the *line
+numbers*. Both were reading. The worker mutated `meetings.ts:519` and the test
+stayed **green**; mutating `checkin.ts:363-365` turned it red. The real path is
+`MeetingsList.tsx:2769` → `<StudentMeetingView variant="own">` with no
+`loadStripData` → `StudentMeetingView.tsx:1068`'s default → `loaders/checkin.ts`.
+The checker reproduced both directions independently.
+
+Constitution item 26 says "a gate that only reads is worth much less than one
+that runs." This row is that sentence measured rather than quoted: two rounds of
+careful reading refined a false claim instead of catching it, and one mutation
+settled it in a single run.
+
+The same `participation_pct: number` type lie sits at `checkin.ts:239`,
+`meetings.ts:302` **and** `reports.ts:221`. Only `ParticipationTab.tsx:838`'s
+runtime `=== null` check guards any of them — which is why one of three surfaces
+shows the defect and two do not.
+
+### Follow-up (item 20 — filed before the row moved)
+
+Findings, all `Backlog`, `tier/unreviewed`, `provenance/e2e-personas`:
+
+1. **`GAM-356`** (MAJOR) — `/meetings` renders `Participation: null%` with
+   `aria-valuenow="0"` for a student who has no rate. A **new** row rather than a
+   filing under `GAM-300`: that row's `Math.max` floor is unreachable here,
+   guarded by the single-row early return at `checkin.ts:363-365`.
+2. **`GAM-357`** (MAJOR) — RPT-05/06's three CSV builders ship in the bundle and
+   **no user path reaches them**. `GAM-69`/`T059` is marked `Done` against that
+   surface, which is constitution item 27's exact shape and needs an owner
+   decision, not just a fix.
+3. **`GAM-358`** (MINOR) — the `Active students` KPI tile's per-team breakdown
+   double-counts a dual-team student. Proven at the database level only; the
+   packet forbade building a dual-team student, and the finding says so.
+4. **`GAM-359`** (NIT) — one student's hours are spelled `4.0`, `4 hrs` and
+   `4.0 / 100.0 h` on three screens. No wrong *value* was found.
+5. **`GAM-360`** (MAJOR) — the persona suite is **not green**: five tests fail on
+   this branch without the new spec, confirmed by running the suite with the new
+   file removed. Reported separately and deliberately not absorbed.
+
+Plus two from the checker round:
+
+6. **`GAM-361`** (MINOR) — `admin-roster.spec.ts:32-34` cannot delete a student
+   holding attendance rows (`23503`, `attendance_student_id_fkey` is RESTRICT),
+   so one aborted run poisons the next. Latent, self-healing, outside GAM-345's
+   Allowed Files.
+7. **`GAM-362`** (NIT) — `npm run lint` exits 1 whenever `playwright-report/`
+   exists, making the lint gate depend on whether the e2e suite ran first.
+
+### Known residue, disclosed
+
+`GAM-345`'s spec deliberately **pins two defects green** so the suite stays
+green: `/meetings`' `null%` and the leaderboard's cosmetic `4 hrs`. Both carry a
+comment naming the mechanism and what to change when fixed, per the
+`e2e-personas` skill's "record behaviour, do not bless it" rule. If either is
+fixed without reading the comment, the suite goes red for the right reason.
+
+AC6's `toBeCloseTo(dbHours, 3)` reads tighter than it is: every screen rounds to
+one decimal before the spec parses it, so the load-bearing assertion is
+`toBe(dbHours.toFixed(1))`. Graded NIT by the checker; no better resolution is
+reachable through a browser.

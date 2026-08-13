@@ -1,0 +1,163 @@
+{
+  "source": "e2e-personas",
+  "branch": "claude/gam-345-e2e-w4-hours-accounting",
+  "commit": "319835d",
+  "measuredAt": "2026-08-13T05:30:00Z",
+  "findings": [
+    {
+      "findingKey": "e2e-personas/meetings-participation-null-percent",
+      "title": "The student meetings view labels a student with no participation rate \"Participation: null%\" and announces it as 0%",
+      "severity": "MAJOR",
+      "area": "w4",
+      "evidence": [
+        {
+          "file": "src/lib/supabase/loaders/checkin.ts",
+          "line": 239,
+          "quote": "participation_pct: number;"
+        },
+        {
+          "file": "src/lib/supabase/loaders/checkin.ts",
+          "line": 363,
+          "quote": "if (seasonRows.length === 1) {\n    return seasonRows[0];\n  }"
+        },
+        {
+          "file": "src/pages/meetings/StudentMeetingView.tsx",
+          "line": 757,
+          "quote": "label={`Participation: ${participation.participationPct}%`}"
+        },
+        {
+          "file": "supabase/migrations/20260806000000_met01_explicit_marks.sql",
+          "line": 124,
+          "quote": "when count(*) - count(*) filter (where status = 'excused') = 0 then null"
+        },
+        {
+          "file": "src/lib/supabase/loaders/meetings.ts",
+          "line": 302,
+          "quote": "participation_pct: number;"
+        },
+        {
+          "file": "src/lib/supabase/loaders/reports.ts",
+          "line": 221,
+          "quote": "participation_pct: number;"
+        }
+      ],
+      "observed": "On /meetings, signed in as a student whose every attendance mark this season is 'excused' (v_student_participation: expected_ct 3, excused_ct 3, participation_pct NULL): the consistency strip renders a ProgressBar whose accessible name is \"Participation: null%\", with aria-valuenow=\"0\" and aria-valuetext=\"0%\". Watched in a real browser through tests/e2e-personas/reports-accounting.spec.ts.",
+      "expected": "An em dash / no-rate, which is what the same student's other two surfaces already show for the same database NULL: StudentHome renders \"Participation: —\" (students.ts:839-840 returns null for a zero denominator, StudentHome.tsx:1649 renders it) and the reports Participation tab renders \"—\" (ParticipationTab.tsx:838-839's runtime `=== null` check). MET-01's own column comment is explicit: \"the UI renders that as an em dash, never 0%\".",
+      "verifiedBy": "browser",
+      "reproduction": "bash tests/e2e-harness/start.sh && npx playwright test -c tests/e2e-harness/playwright.personas.config.ts reports-accounting -g \"each screen says so in its own way\"",
+      "proposedScope": "CANDIDATE, not a prescription. Widen `participation_pct` to `number | null` in checkin.ts:239 and give StudentMeetingView.tsx:757 the same `=== null` branch ParticipationTab.tsx:838 already has, reusing that guard's shape rather than writing a second one (item 3). meetings.ts:302 and reports.ts:221 carry the identical mistyping of the same column and should move with it. Do NOT coalesce the null to 0 in the loader — that fabricates the very 0% the em dash exists to avoid, and is what GAM-300's arithmetic floor already did.\n\nWHAT IS NOT CLAIMED: this is a DIFFERENT defect from GAM-300. GAM-300's `Math.max(expectedCt - excusedCt, 1)` floor is real but UNREACHABLE on this path — checkin.ts:363-365 returns the single view row before ever reaching checkin.ts:375, proven by mutation (changing that early return to `> 1` makes the strip read \"Participation: 0%\" and turns the spec red). Filing under GAM-300 would bury a type-level defect inside an arithmetic one. Cross-references GAM-300.\n\nALSO NOT CLAIMED: the parent-facing `variant=\"linked\"` strip was not exercised, and no non-student role was checked on /meetings.\n\nPACKET CORRECTION worth carrying forward: the GAM-345 packet (revision 2) attributes this strip to loaders/meetings.ts:302/:519. It is not on that path. MeetingsList.tsx:2769 renders StudentMeetingView with no loadStripData, so StudentMeetingView.tsx:1068's default — loadConsistencyStripData from loaders/checkin.ts — is what runs. Established by mutation in both directions: mutating meetings.ts:519 left the assertion GREEN; mutating checkin.ts:363-365 turned it RED."
+    },
+    {
+      "findingKey": "e2e-personas/rpt-05-06-csv-builders-unreachable",
+      "title": "RPT-05/06's CSV builders ship in the bundle and no user path reaches them — no export control exists on any reports tab",
+      "severity": "MAJOR",
+      "area": "w4",
+      "evidence": [
+        {
+          "file": "src/pages/reports/csvExport.ts",
+          "line": 305,
+          "quote": "export function buildRosterCsv(rows: readonly RosterCsvRow[]): string {"
+        },
+        {
+          "file": "src/pages/reports/csvExport.ts",
+          "line": 372,
+          "quote": "export function buildEventsCsv(rows: readonly EventsCsvRow[]): string {"
+        },
+        {
+          "file": "src/pages/reports/csvExport.ts",
+          "line": 437,
+          "quote": "export function buildAttendanceCsv(rows: readonly AttendanceCsvRow[]): string {"
+        },
+        {
+          "file": "src/pages/reports/csvExport.ts",
+          "line": 24,
+          "quote": "This file also does NOT build the `Button variant=\"secondary\"`-per-tab UI trigger or wire a download button into `ReportsShell.tsx`/`ParticipationTab.tsx`/`HoursTab.tsx`/`EventsTab.tsx`"
+        }
+      ],
+      "observed": "Signed in as a coach at /reports, every `role=button` and every `role=link` on each of the three tabs was enumerated in a real browser. Verbatim:\n  Participation buttons: [\"C\", \"Participation\", \"Hours\", \"Events\", \"Below 70%\", \"Sort descending\"]\n  Hours buttons:         [\"C\", \"Participation\", \"Hours\", \"Events\"]\n  Events buttons:        [\"C\", \"Participation\", \"Hours\", \"Events\"]\n  links (identical on all three): [\"Skip to content\", \"VOLT\", \"Home\", \"Meetings\", \"Outreach\", \"Calendar\", \"Roster\", \"Reports\", \"Settings\"]\n(\"C\" is the account avatar in the top nav; the Participation tab's PowerSearch is role=combobox, not a button, which is why it is absent above.) Not one control matches /export|download|csv/i. Repo-wide, the only callers of the three builders are src/pages/reports/csvExport.test.ts:167,231,315 — no non-test file calls any of them.",
+      "expected": "Either an export control on each tab (which is what RPT-05/06 describes and what the builders exist for), or no shipped builders. A user cannot export anything today.",
+      "verifiedBy": "browser",
+      "reproduction": "npx playwright test -c tests/e2e-harness/playwright.personas.config.ts reports-accounting -g \"no export, download or CSV control\"",
+      "proposedScope": "CANDIDATE. The finding is the RECORD, not the missing button: GAM-69 (T059 — CSV exports (RPT-05/06)) is marked Done, and a Linear search plus a grep of docs/swarm/linear-export.md found no open row covering the gap. That is constitution item 27's exact shape — a task recorded Passed whose user-visible surface no user can reach. Triage should decide between (a) wiring the existing pure builders to a per-tab control, reusing them rather than writing new ones, and (b) recording explicitly that RPT-05/06 is not shipped and reopening GAM-69. Cross-references GAM-69.\n\nWHAT IS NOT CLAIMED: the builders' own correctness was not re-tested — csvExport.test.ts covers them. Only reachability was measured, and only on /reports; the roster and outreach surfaces were not enumerated."
+    },
+    {
+      "findingKey": "e2e-personas/kpi-team-breakdown-double-counts-dual-team",
+      "title": "The Active students KPI tile's per-team breakdown counts a dual-team student twice while its own headline counts them once",
+      "severity": "MINOR",
+      "area": "w4",
+      "evidence": [
+        {
+          "file": "supabase/migrations/20260723000000_kpi_views.sql",
+          "line": 207,
+          "quote": "select count(*) as active_students_count from students where is_active"
+        },
+        {
+          "file": "supabase/migrations/20260723000000_kpi_views.sql",
+          "line": 252,
+          "quote": "count(distinct st.student_id) filter (\n    where s.is_active and st.left_on is null\n  ) as active_students_count"
+        },
+        {
+          "file": "src/components/kpi/KpiStrip.tsx",
+          "line": 402,
+          "quote": "return teamBreakdown.map((team) => `${team.teamName} ${team.activeStudentsCount}`).join(' · ');"
+        }
+      ],
+      "observed": "Measured in the live cluster inside a transaction that was then ROLLED BACK, so no fixture changed:\n  BEFORE                      season_rollup 7   team_sum 7\n  AFTER dual-team membership  season_rollup 7   team_sum 8\n  ROLLED BACK                 season_rollup 7   team_sum 7\nOne extra `student_teams` row for an existing student moves the per-team sum and not the headline. The tile prints both, one line apart.",
+      "expected": "A breakdown printed directly beneath a headline should sum to it, or should say what it is counting (team memberships, not students).",
+      "verifiedBy": "database",
+      "reproduction": "psql -h 127.0.0.1 -p 55432 -U postgres -d scratch: begin; select active_students_count from v_season_kpis; insert into student_teams (student_id, team_id, joined_on) values (<existing student>, <second team>, current_date); select sum(active_students_count) from v_season_kpi_team_counts; rollback;",
+      "proposedScope": "CANDIDATE. Either label the breakdown as team memberships, or make the headline count memberships too — the two views deliberately count different things (kpi_views.sql:93 calls active_students_count 'the season-INDEPENDENT current active' roster), so which one is 'right' is a product decision, not a bug fix.\n\nWHAT IS NOT CLAIMED: this was NOT reproduced in the browser. tests/e2e-harness/seed.sql has no dual-team student and the GAM-345 packet explicitly forbids building one, so the spec asserts only that the two agree on the current fixture (7 = 5 + 2) and that assertion passes. The GAM-345 premise gate reported watching the strip read 'Active students 7' against a 5 · 3 breakdown in round 1; that observation is second-hand here and was not re-measured. The AREA label is a guess: the tile lives in the app shell (AppShell.tsx:165), not in W4's reports, and w4 is used only because this run met it there."
+    },
+    {
+      "findingKey": "e2e-personas/confirmed-hours-three-spellings",
+      "title": "One student's confirmed hours are spelled three different ways on three screens",
+      "severity": "NIT",
+      "area": "w4",
+      "evidence": [
+        {
+          "file": "src/pages/reports/HoursTab.tsx",
+          "line": 1017,
+          "quote": "{value.toFixed(1)}"
+        },
+        {
+          "file": "src/pages/outreach/Leaderboard.tsx",
+          "line": 527,
+          "quote": "label={`${roundForDisplay(entry.confirmedHours)} hrs`}"
+        },
+        {
+          "file": "src/pages/home/StudentHome.tsx",
+          "line": 1643,
+          "quote": "`${value.toFixed(1)} / ${max.toFixed(1)} h (${hoursPercent}%)`"
+        }
+      ],
+      "observed": "v_student_hours.confirmed_hours for the seeded student is 3.9999991352777778. The reports Hours tab renders \"4.0\", the CoachHome leaderboard renders \"4 hrs\" (roundForDisplay at Leaderboard.tsx:314-316 returns a NUMBER, so 4 interpolates as \"4\"), and StudentHome renders \"4.0 / 100.0 h (4%)\". All three read the same database value; none carries it.",
+      "expected": "Not obviously a defect — a leaderboard badge and a report grid may legitimately differ. Recorded so the divergence is a decision rather than an accident.",
+      "verifiedBy": "browser",
+      "reproduction": "npx playwright test -c tests/e2e-harness/playwright.personas.config.ts reports-accounting -g \"confirmed hours agree\"",
+      "proposedScope": "CANDIDATE, low value. If it is ever unified, round at the format boundary only — every one of the three already does, and the underlying float must keep reaching the ProgressBar arithmetic. Related in shape to GAM-303. NOT CLAIMED: no parent-facing surface was compared, and no wrong VALUE was found — the spec compares database to screen with toBeCloseTo(…, 3) precisely so a formatting change cannot hide one."
+    },
+    {
+      "findingKey": "e2e-personas/persona-suite-red-on-branch",
+      "title": "The persona end-to-end suite is not green: five tests fail on a clean checkout of this branch before any new work",
+      "severity": "MAJOR",
+      "area": "w4",
+      "evidence": [
+        {
+          "file": "tests/e2e-personas/student-parent.spec.ts",
+          "line": 125,
+          "quote": "await expect(progress).toBeVisible({ timeout: 20_000 });"
+        },
+        {
+          "file": "tests/e2e-personas/coach-meeting.spec.ts",
+          "line": 124,
+          "quote": "await scope.click();"
+        }
+      ],
+      "observed": "Baseline run at 93c89d0 + this branch's packet commits, BEFORE the new spec existed: `npx playwright test -c tests/e2e-harness/playwright.personas.config.ts` exited 1 — 27 passed, 5 failed.\n  1. coach-meeting.spec.ts:88 team-scope dropdown — expected the archived team 'Volt Legacy 2201' in the option list, received a list without it.\n  2. coach-meeting.spec.ts:115 a single meeting round-trips — 90s timeout; the run also printed `ERROR: 42501: new row violates row-level security policy for table \"events\"`.\n  3. student-parent.spec.ts:27 'FINDING 3 hours rendered as a raw float' — the locator /\\/ 100 h \\(/ no longer matches; StudentHome.tsx:1643 now renders '4.0 / 100.0 h', i.e. the test pins behaviour that has since been FIXED.\n  4. student-parent.spec.ts:66 'FINDING 4 RSVP never reaches the database' — an rsvps row WAS written ([{\"status\": \"going\"}]), i.e. the test pins behaviour that has since been fixed.\n  5. student-parent.spec.ts:121 same locator as (3), parent view.",
+      "expected": "A green suite, or rows tracking each failure. Two of the five are stale assertions pinning defects that were fixed without updating the test that recorded them — exactly the failure mode the e2e-personas skill's 'record behaviour, do not bless it' rule is meant to make visible.",
+      "verifiedBy": "browser",
+      "reproduction": "bash tests/e2e-harness/start.sh && npx playwright test -c tests/e2e-harness/playwright.personas.config.ts",
+      "proposedScope": "CANDIDATE. Triage as at least two separate items: the two stale student-parent 'FINDING' tests (retarget them at the fixed behaviour, keeping the pin), and the two coach-meeting failures (NOT diagnosed here — the 42501 on `events` may be a real RLS regression or a fixture problem, and this run did not establish which).\n\nWHAT IS NOT CLAIMED: none of the five was diagnosed beyond reading its failure output. They are reported so they are not silently absorbed into GAM-345's own result; GAM-345's new spec passes 5/5 independently of them."
+    }
+  ]
+}
