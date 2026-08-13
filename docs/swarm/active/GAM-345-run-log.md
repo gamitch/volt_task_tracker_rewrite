@@ -231,3 +231,32 @@ take the heavier one.
     `playwright-report/` exists — `eslint.config.js:24` ignores `dist-e2e` but
     not `playwright-report`. Pre-existing on `main`; makes the lint gate
     order-dependent on whether anyone ran the e2e suite first.
+- **Findings filed to Linear `Backlog`:** `GAM-356` (MAJOR, `/meetings`
+  `null%`), `GAM-357` (MAJOR, unreachable CSV builders vs. `GAM-69` marked
+  `Done`), `GAM-358` (MINOR, KPI team-breakdown double count), `GAM-359` (NIT,
+  three spellings of one hours figure), `GAM-360` (MAJOR, persona suite red on a
+  clean checkout). Filed via `scripts/linear-file-findings.mjs` — dry run first,
+  then `--execute`; 15 requests.
+- **Checker follow-ups filed:** `GAM-361` (MINOR — `admin-roster.spec.ts:32-34`
+  cannot delete a student holding attendance rows; `23503` on
+  `attendance_student_id_fkey`) and `GAM-362` (NIT — `npm run lint` exits 1
+  whenever `playwright-report/` exists, so the lint gate depends on whether the
+  e2e suite ran first). Both `Backlog`, `tier/unreviewed`.
+  The checker's third follow-up — record the two missing AC1/AC5′ mutation
+  proofs — is **closed by the checker's own run**, not deferred: it executed
+  both (MC7, MC8) and both were red. No row, and this line is why.
+  Its fourth — correct the packet's `/meetings` mechanism — is done in this
+  branch.
+- **Verification-log entry written** (`docs/swarm/verification-log.md`), in the
+  same push as the follow-ups, per item 24. The frozen ledger (item 29) gets no
+  row — `GAM-345` carries no `Tnnn`.
+- **PR creation REFUSED by credentials** — `gh pr create` returned
+  `HTTP 401: Bad credentials`. Same wall `GAM-342` hit (`30bbc12`). Body
+  preserved as `docs/swarm/active/GAM-345-pr-body.md`, leading with the
+  undeliverable half rather than burying it, per `AGENTS.md` § "Two walls".
+  **The branch is pushed and complete**; an owner or a scoped session opens the
+  PR from that body so CI still runs on it.
+- **Issue moved `In Progress → In Review`** (item 28e — never `Done`; the merge
+  closes it, not the author), with a comment naming the branch and the artifact.
+- **Run complete.** No subagent in flight; all three returned and every verdict
+  is recorded above.
