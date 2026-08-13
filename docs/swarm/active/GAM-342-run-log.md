@@ -218,3 +218,34 @@ summary.
   after a mutation run that failed *mid-write* the database was still clean, so
   the `finally` genuinely fires. Suite went 26 → 32 tests, 21 → 27 passing, with
   the same 5 pre-existing failures neither broken further nor silently fixed.
+- **Checker's MINOR/NIT items fixed directly** (all three inside this task's
+  Allowed Files, so filing follow-ups under item 20 would have been ceremony):
+  the AC 3 comment now says plainly that the unique constraint makes `length 2`
+  impossible and that `status === 'late'` is the real detector; the locked
+  self-checkoff row is now asserted `toBeDisabled()` rather than merely
+  labelled; and the findings JSON's figures are corrected to 27 passed / 5
+  failed and 6 new tests, with `commit` repointed at `135b8bb`. Re-ran the
+  affected specs: **7 passed (17.1s), exit 0.** Commit `a8cf8f8`.
+- **GATES RUN** on `a8cf8f8`, tree clean, via `gate-run` with `--require-clean`
+  so the numbers describe a commit rather than a hope:
+
+  ```
+  GATE RUN — a8cf8f8 on claude/gam-342-e2e-w1-checkin — tree clean
+    1 tsc              exit 0  PASS
+    2 vite build       exit 0  PASS
+    3 format:check     exit 0  PASS
+    4 eslint           exit 0  PASS   0 errors, 378 warnings
+    5 vitest (full)    exit 0  PASS   95 files / 2443 tests
+    6 vitest (scoped)      –  SKIP    no scope derivable from the diff
+  VERDICT: PASS — 5 of 6 gates. NOT all six: 1 skipped.
+  ```
+
+  **Five of six, and I am saying five rather than six.** Gate 6 is skipped
+  because it scopes to changed `src/**` files and this task changed none — it
+  is a test-only branch, which is exactly the shape the skill says to report as
+  SKIPPED rather than dress up. Gate 4's 378 warnings sit one above the 377 the
+  skill documents as standing; I attributed every warning by file and **none is
+  in a file this branch touched**, so the delta is pre-existing drift in the
+  skill's figure, not a regression here. Gate 5 ran without a baseline and the
+  block says so; no `src/**` and no vitest test file changed, so the count could
+  not have moved.
