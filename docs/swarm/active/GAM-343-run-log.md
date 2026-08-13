@@ -217,3 +217,24 @@ thing that survives if the container is killed.
 - **Dispatched `checker-reviewer`** (HEAVY requires a separate checker; a worker
   may not self-certify). *If this line is the last one in this file, the run
   died holding this subagent.* Dispatched `run_in_background: false`.
+- **Verdict: `checker-reviewer` returned PASS (MINOR).** It independently
+  replayed two of the four mutations in its own worktree rather than trusting the
+  worker's transcript, and added a third of its own (`hours_override → null`,
+  also red). Confirmed 28/5 with the five pre-existing unchanged; the new spec
+  green twice standalone with no reseed (AC 9); Allowed Files respected in the
+  committed blobs; screenshots real and populated.
+  - It **falsified the worker's empty findings array**, which is exactly what a
+    checker is for. The run's own committed screenshot
+    `77-coach-mark-day-complete-confirmed.png` shows `AttendancePanel` still
+    rendering Jordan checked at 1.5 h *after* the spec's own DB assertions proved
+    him `absent` — the page contradicting the database in front of the coach who
+    just wrote it. Confirmed in source, not inferred from a screenshot race:
+    the panel's load effect keys on `sessionIdsKey`/`retryToken`
+    (`AttendancePanel.tsx:529-551, 652-658`) and `reloadDetail()`
+    (`OutreachDetail.tsx:2012-2015`) never reaches it. Screenshot `73` shows the
+    same class on the student side. MINOR, not MAJOR: every spec assertion goes
+    to Postgres, so the deliverable is unweakened — but "we found nothing" was
+    incomplete rather than dishonest.
+  - Also confirmed `delta(Jordan) == 0` is a **real detector**, not a tautology:
+    flipping only his status to `present` in a rolled-back transaction returns
+    `1.5`.
