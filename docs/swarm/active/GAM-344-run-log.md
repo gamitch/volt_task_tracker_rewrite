@@ -163,3 +163,39 @@ tiering judgement was required as part of claiming under item 28d).
   references while Turn A's three sequential writes against real Postgres have
   none. *If this line is the last one in this file, the run died holding this
   subagent.*
+- **13:08Z — `worker-implementer` Turn A VERDICT: delivered.** 48 min, 267,072
+  subagent tokens, 164 tool calls. **Existence verified by the orchestrator
+  under item 21, not taken on report:** HEAD moved to `e135ade` (work in
+  `e95418e`); `git show --stat` shows `coach-meeting-end.spec.ts` (+492),
+  `coach-meeting.spec.ts` (±24), three screenshots and the findings file in
+  the committed blob. **Forbidden-file boundary checked independently:**
+  `git diff --stat main...HEAD -- src/ supabase/ tests/e2e-harness/ .github/`
+  is **empty**. The mutation worktree and its branch are gone.
+  - Suite: **31 passed / 3 failed, exit 1**, twice with no reseed. All 3
+    failures are in `student-parent.spec.ts`, which the worker did not touch;
+    to be checked by the reviewer against `main` rather than accepted.
+    `coach-meeting.spec.ts` is **5/5** (was 3/5) and `coach-meeting-end.spec.ts`
+    is 2/2, in both runs — criterion 10.
+  - Gates: tsc, vite build, format:check, eslint all exit 0; full vitest 95
+    files / 2443 tests exit 0. Scoped vitest correctly SKIPPED — a tests-only
+    change touching no `src/` file has no defensible scope.
+  - **Two things the packet told the worker that were false, both reported
+    rather than worked around** — which is the outcome item 19c's whole
+    apparatus is for: (1) Task 1 had a **third** `Volt Legacy 2201` click at
+    `~:110` that neither I nor two gate rounds spotted; the worker found it by
+    running the tests after the literal two-site edit and watching it stay red.
+    (2) **Mutation 2 turns the test red at a different assertion than the
+    packet predicted** — the harness's mock PostgREST rejects an empty-array
+    upsert outright (`postgrest.mjs:254 UnsupportedQueryError`), which is
+    *stricter* than real PostgREST, so the whole `onEndMeeting` chain rejects
+    and the `status='completed'` poll times out first. The guard is still
+    proven load-bearing; the mechanism is harness-shaped, not app-shaped, and
+    the worker said so instead of paraphrasing the failure into the expected
+    one.
+  - It also re-verified the stale-summary finding **by experiment** rather than
+    restating it from the packet: deleted A1's `page.reload()`, re-ran, watched
+    the checkbox read `Mark 3 students…`, then reverted and re-confirmed green.
+  - Three findings filed (1 MAJOR, 2 MINOR); it deliberately did not duplicate
+    GAM-342's already-filed `e2e-personas/preview-ipv6-only-webserver-timeout`.
+- **13:10Z — DISPATCHED `checker-reviewer` (opus, blocking).** *If this line is
+  the last one in this file, the run died holding this subagent.*
