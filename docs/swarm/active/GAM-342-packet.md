@@ -47,8 +47,10 @@ in files you may not edit, and are **not yours**:
 | Failing test | Why |
 | -- | -- |
 | `coach-meeting.spec.ts:88` and `:115` | `Volt Legacy 2201` (archived) is no longer offered in the team picker — the test is stale against shipped archived-team-picker work |
-| `student-parent.spec.ts:66` | `expect(before).toHaveLength(0)` got `[{"status":"going"}]` — an rsvp row on `5e550000-…-0008` left by a prior run |
-| (2 further failures in the same files) | same shape |
+| `student-parent.spec.ts:66` | **The RSVP control genuinely writes** — the gate deleted the suspected residue row, re-ran the test alone, and it still failed with a *fresh* `rsvps` row appearing. That test's premise is stale. (Round 2 corrected round 1's "leftover row" theory.) |
+| `student-parent.spec.ts:27` and `:121` | both fail on `getByText(/\/ 100 h \(/)` not found — the hours-float assertions |
+
+These five are **deterministic across three separate runs**, not order-dependent.
 
 Do not chase or "fix" these. Record them; they are findings, not your task.
 
@@ -69,10 +71,12 @@ Do not chase or "fix" these. Record them; they are findings, not your task.
 **Two criteria are re-scoped, with reasons, because the gate proved them
 unmeasurable as written:**
 
-- **AC 4** cannot be met through the UI — the surface is unreachable in seeded
-  fixtures (§4). It is met against **real RLS** instead, via `execAs`, plus a
-  filed finding. The substance of AC 4 (a `method='self'` row is genuinely
-  written and is not the QR path) is fully preserved.
+- **AC 4 is met through the real UI.** *(Round 2 correction — the round-1
+  packet wrongly declared this impossible.)* The surface is unreachable in
+  **unmodified** seeded fixtures, but it is **reachable from a spec via one
+  `execAdmin` arrangement line**, which is a thing specs in this suite already
+  do (`coach-checkin.spec.ts:28-31`). The gate drove the whole path in a real
+  browser and got a real `method='self'` row. Build it as a UI test (§6b.3).
 - **AC 8** is scoped to **the new spec files' own re-runnability**, not the
   whole suite, because five pre-existing failures live in files you may not
   edit and one of them is *caused* by prior-run residue. Prove your own files
@@ -147,21 +151,41 @@ CheckinResponsePayload` without validating, and `:773`/`:792` then dereference
 session liveness and team scope are **not proven here** because Deno does not
 run in this harness. A green suite must not read as QR coverage.
 
-### 4b. The self-checkoff UI is unreachable in seeded fixtures — this is a fact, not a task
+### 4b. The self-checkoff UI is unreachable in *unmodified* fixtures — and one line fixes that
 
-*(gate revision 2. Do not go looking for a way in; the gate already did, in a
-browser, and there is none.)*
+*(Round 2 correction. The round-1 packet said "impossible, do not go looking."
+That was **false**: the gate went looking and drove the entire path to a real
+row. Arrange the fixture and test the feature.)*
+
+Why it is invisible by default:
 
 - Library STEM Night (`e0e00000-…-0002`) buckets **Upcoming**, because its
   session `5e550000-…-0008` is `scheduled` (2026-08-23) — and Upcoming passes
-  `allowSelfCheckoff={false}`.
-- Its only `completed` session, `5e550000-…-0006`, **already holds a
-  `method='coach'` row for Priya**, so `computeLockedSessionIds` would render it
-  `isDisabled` even if the section allowed it.
-- Measured: `/outreach` as student exposes only `button "Hide session details –
-  Library STEM Night"` and `radiogroup "Your RSVP for Library STEM Night on Sun,
-  Aug 23"`. **No `Mark attendance` button exists.** `/outreach/e0e00000-…-0002`
-  renders no self-checkoff control at all.
+  `allowSelfCheckoff={false}` (`OutreachList.tsx:4019`).
+- Measured on unmodified seed: `/outreach` as student exposes only
+  `button "Hide session details – Library STEM Night"` and a `radiogroup` for
+  RSVP. No `Mark attendance` button.
+
+**The arrangement, both lines gate-measured:**
+
+```ts
+// beforeEach — moves STEM Night into Past, where allowSelfCheckoff is true
+execAdmin(`update event_sessions set status = 'completed' where id = '5e550000-0000-4000-8000-000000000008'`);
+// finally / afterAll — MANDATORY restore, or student-parent.spec.ts:66/74-78
+// loses the "Sign-up opportunities" fixture it reads
+execAdmin(`update event_sessions set status = 'scheduled' where id = '5e550000-0000-4000-8000-000000000008'`);
+```
+
+With that in place the gate measured, in a real browser as `student`:
+
+1. `/outreach` exposes `button "Mark attendance – Library STEM Night"` (**en
+   dash U+2013**, byte-checked).
+2. The dialog opens with two rows: `…-0006` **disabled / "Already recorded"**
+   (Priya's existing coach row, via `computeLockedSessionIds`) and `…-0008`
+   checkable, labelled "Counts as about 4h".
+3. Checking `…-0008` and pressing `button "Save"` wrote, through the real app
+   and real RLS: `session_id=…-0008, student_id=57000000-…-0001,
+   status=present, method=self, recorded_by=a0000000-…-0003`.
 
 ## 5. Allowed Files
 
@@ -222,19 +246,32 @@ File the finding in §6d. Note §6b.1 partially overlaps
 `student-parent.spec.ts:48-64`, which already drives a bad code through
 `StudentHome`'s field — say so; the new ground is the **picker**.
 
-**3. Self-checkoff proven against real RLS (AC 4).** The UI path does not exist
-(§4b), so prove the substance directly with `execAs`, which runs as
-`authenticated` with the persona's real `auth.uid()`
-(`personaHarness.ts:138-150`) — i.e. against the **real `self_insert` /
-`self_delete` policies**, not a superuser bypass:
+**3. Self-checkoff through the real UI (AC 4) — this is the criterion the issue
+cares most about.** Arrange the fixture (§4b), then drive it as a person does:
 
-- `execAs('student', …)` INSERT into `attendance` with `method='self'`,
-  `status='present'`, `recorded_by = PERSONAS.student.profileId`, on a session
-  the student may self-record. Read the row back and compare values.
-- `execAs('student', …)` DELETE it and prove it is gone.
-- Comment that this is a **policy-level** proof and that the UI route is
-  unreachable, cross-referencing the filed finding. Do not describe it as UI
-  coverage.
+- `beforeEach`: the `…-0008 → completed` line, **plus** a defensive
+  `execAdmin("delete from attendance where student_id = '${SEED.studentPriya}' and method = 'self'")`.
+- Sign in as `student` → `/outreach` → click
+  `button "Mark attendance – Library STEM Night"` (**en dash U+2013** — copy it,
+  do not retype it).
+- In the dialog, check the **`…-0008` / `Sun, Aug 23`** row (the `…-0006` row is
+  disabled, "Already recorded" — assert that too; it is real evidence that the
+  lock works) and press `button "Save"`.
+- **Read the row back and compare values:** exactly one `attendance` row for
+  `(…-0008, SEED.studentPriya)` with `status='present'`, `method='self'`,
+  `recorded_by = PERSONAS.student.profileId`.
+- `capture()` the dialog with the day checked.
+- Wrap the write in **`try/finally`**, restoring `…-0008` to `scheduled` and
+  deleting the self row in the `finally`.
+
+**3b. The same write proven against real RLS (recommended, and the natural home
+for mutation 3).** A second, clearly-labelled describe using `execAs`, which
+runs as `authenticated` with the persona's real `auth.uid()`
+(`personaHarness.ts:138-150`) — the **real `self_insert`/`self_delete`
+policies**, not a superuser bypass. Use the verified SQL in §9, on session
+**`5e550000-0000-4000-8000-000000000005`** (Priya has no row there, and a self
+row there leaves `v_student_hours` unchanged — measured). Label it as a
+**policy-level** proof; it complements §6b.3 and does not replace it.
 
 **4. Kiosk (AC 1/6; gate revision 4 — cheap and high value).** Coach →
 `/kiosk/5e550000-0000-4000-8000-000000000004`. Assert, measured:
@@ -245,6 +282,10 @@ text "1 of 3 checked in"
 text "No student names are shown on this screen."
 link "Back to meetings"
 ```
+**`1 of 3 checked in` is data-dependent** — it holds only because
+`coach-checkin.spec.ts` runs first, clears `…-0004` and re-marks Priya (and
+`late` counts, `kiosk.ts:326`). **Corroborate the number with `readRows`**
+rather than hard-coding it, or state the ordering dependency in a comment.
 `capture()` it. This is the app degrading **honestly** when its Edge Function is
 absent — record that. File the missing-stand-in finding (§6d).
 
@@ -252,11 +293,19 @@ absent — record that. File the missing-stand-in finding (§6d).
 
 - Reuse the established pattern: `execAdmin` delete scoped to the session, in
   `beforeEach` (`coach-checkin.spec.ts:28-31`).
-- **Add an `afterAll` too**, not `beforeEach` only. `student-parent.spec.ts:48-64`
-  is **green today** and asserts **zero `method='self'` rows for Priya
-  globally** — and Playwright runs files in path order, so
-  `student-checkin.spec.ts` runs **before** it. A failed or aborted self-checkoff
-  test that leaves a row turns a passing test red. Clean up on the way out.
+- **`student-parent.spec.ts:48-64` is green today and asserts ZERO
+  `method='self'` rows for Priya — with NO session predicate** (`:59-61`).
+  Playwright runs files in path order, so `student-checkin.spec.ts` runs
+  **before** it. **No choice of session avoids this hazard** *(round 2 corrected
+  my round-1 suggestion that one could)*. Defend it three ways, all required:
+  1. **Defensive `beforeEach`:**
+     `execAdmin("delete from attendance where student_id = '${SEED.studentPriya}' and method = 'self'")`
+  2. **`try/finally`** around every self-checkoff write.
+  3. **`afterAll`** as the backstop — and note it does *not* run on a hard crash
+     or timeout kill, which is exactly why 1 and 2 exist.
+- **Also restore `…-0008` to `status='scheduled'`** in the same `finally` /
+  `afterAll`, or `student-parent.spec.ts:66` and `:74-78` lose the
+  "Sign-up opportunities" fixture they read.
 - **FORBIDDEN:** `delete from attendance where session_id =
   '5e550000-0000-4000-8000-000000000006'`. The gate measured that this removes
   Priya's only `v_student_hours` row (`3.9999990941666667` → 0 rows), which
@@ -273,7 +322,7 @@ and must be included** (all `source: e2e-personas`, `area: w1`):
 | findingKey | Severity | Substance |
 | -- | -- | -- |
 | `checkin/unvalidated-200-payload-white-screens-result-page` | MINOR | `CheckinResult.tsx:343` casts an unvalidated payload; `:773` then dereferences `state.attendance.check_in_at` → `TypeError`, blank `#root`, no error boundary. Harness-shaped input; `StudentHome` does not crash on the same response. `verifiedBy`: watched it happen. |
-| `e2e-personas/self-checkoff-unreachable-in-seeded-fixtures` | MAJOR | No reachable path to `SelfCheckoffDialog` for any persona in seeded data (§4b, with the two gating reasons). AC 4 could only be met at the policy layer. |
+| `e2e-personas/self-checkoff-requires-fixture-arrangement` | MINOR | `SelfCheckoffDialog` is unreachable in **unmodified** seeded fixtures — Library STEM Night buckets Upcoming, where `allowSelfCheckoff={false}`. One `execAdmin` line in a spec makes it reachable. **The UI is not broken**; the seed simply has no Past outreach event with an unrecorded session. Retitled and downgraded from MAJOR in round 2, after the gate drove the real path successfully. |
 | `e2e-personas/harness-missing-checkin-token-stand-in` | MINOR | `kiosk.ts:369` invokes `checkin-token`; `EDGE_FUNCTIONS` has no such key → 404, kiosk shows "QR not available yet". `tests/e2e-harness/**` is forbidden here, so a finding is the correct deliverable. |
 | `e2e-personas/preview-ipv6-only-webserver-timeout` | MINOR | `vite preview` binds `[::1]` only while `playwright.personas.config.ts:29` polls `127.0.0.1` → silent 180s `webServer` timeout on a fresh checkout. |
 
@@ -310,23 +359,75 @@ rule — `git checkout --` on an uncommitted fix loses the fix). Record the
 - Anything you could not prove, named. **Do not report green with an unfiled
   finding.**
 
-## 8. Least confident decisions (item 19d), round 2
+## 9. Settled ground truth — copy this, do not re-derive it
 
-1. **That `execAs('student', …)` will actually satisfy `self_insert`'s `with
-   check` on a session of my choosing.** The policy requires `student_id in
-   (select my_student_ids()) and method='self' and recorded_by = auth.uid()`.
-   `PERSONAS.student.profileId` is a **profile** id; `SEED.studentPriya` is a
-   **student** id. Confusing the two would make §6b.3 fail for a reason that
-   looks like a policy denial. The worker must check which column takes which.
-2. **That asserting a white-screen is a legitimate test rather than pinning a
+*(Round 2 replaced my open §8.1 question with a measured answer. All of this was
+run against the live cluster by the gate.)*
+
+**Column truth.** `attendance.student_id` takes a **`students.id`**
+(`attendance_student_id_fkey → students(id)`; `my_student_ids()` returns
+`students.id`). `attendance.recorded_by` takes a **`profiles.id`** and must
+equal `auth.uid()`. So: `SEED.studentPriya` → `student_id`,
+`PERSONAS.student.profileId` → `recorded_by`. Getting these backwards produces a
+`42501` that reads exactly like a policy bug.
+
+**Verified INSERT** (exit 0; row landed; readable back as the student through
+`own_or_linked_read`):
+
+```ts
+execAs('student', `insert into attendance (session_id, student_id, status, method, recorded_by)
+  values ('5e550000-0000-4000-8000-000000000005',
+          '${SEED.studentPriya}',
+          'present', 'self', '${PERSONAS.student.profileId}')`);
+```
+
+**Verified DELETE** (exit 0; satisfies `self_delete`):
+
+```ts
+execAs('student', `delete from attendance
+  where session_id = '5e550000-0000-4000-8000-000000000005'
+    and student_id = '${SEED.studentPriya}'
+    and method = 'self'`);
+```
+
+**Measured negative controls** — all real, and all usable as mutation evidence:
+
+| Mutation | Result |
+| -- | -- |
+| `student_id` = the **profile** id | `42501` RLS violation |
+| `recorded_by` omitted | `42501` |
+| `method='coach'` as the student | `42501` |
+| session `…-0006` (Priya has a coach row) | `23505` `attendance_session_id_student_id_key` |
+
+**Session choice for the policy proof: `5e550000-0000-4000-8000-000000000005`.**
+Priya has no row there and a self row there leaves `v_student_hours` unchanged.
+Do **not** use `…-0006` (23505) or `…-0004` (the coach-console fixture).
+
+## 10. Least confident decisions (item 19d), round 3
+
+1. **That asserting a white-screen is a legitimate test rather than pinning a
    bug.** The skill says record behaviour, do not bless it — §6b.2 follows that,
    but a future reader could mistake it for approval. The comment is doing all
    the work, and comments rot.
-3. **That `afterAll` is sufficient** to protect `student-parent.spec.ts`. It is
-   not run on a hard crash or a `--timeout` kill. If that worries the checker,
-   the stronger form is for §6b.3 to write to a session Priya has no `self` row
-   expectation on at all.
-4. **That the five pre-existing failures are genuinely pre-existing** and not
-   something this branch introduced. The gate reproduced them twice, but one is
-   explicitly caused by prior-run residue, which means the suite is not
-   currently idempotent and "pre-existing" is a slightly soft claim.
+2. **That the fixture arrangement in §6b.3 is safe under parallel pressure.**
+   The config is `workers: 1, fullyParallel: false`, so it should be — but the
+   `…-0008` mutation is globally visible while it is in effect, and any spec
+   reading "Sign-up opportunities" during that window would see the wrong thing.
+   Serial execution is what makes this safe; if that ever changes, this breaks.
+3. **That the `1 of 3 checked in` corroboration is worth the complexity.**
+   Reading the tally back with `readRows` is more honest but couples the kiosk
+   test to attendance state; hard-coding it is simpler and stale-prone. I chose
+   corroboration; a checker could reasonably prefer the comment.
+
+---
+
+## 11. Gate status — read this before treating the packet as blessed
+
+`checker-premise` ran **two rounds** (item 19a's cap) and returned **REVISE**
+both times. This packet does **not** carry a DISPATCH verdict. Round 2's
+remaining items were titled by the gate itself "Required Revisions (mechanical;
+last round)" and each came with measured, copy-paste-ready ground truth; all six
+are applied above. The orchestrator's judgment to proceed to a worker without a
+third round is recorded and defended in `GAM-342-run-log.md` and in the PR body,
+so it is visible and correctable rather than silent. The HEAVY tier's
+independent `checker-reviewer` round on the finished work is **not** waived.

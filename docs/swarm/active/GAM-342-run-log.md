@@ -155,3 +155,17 @@ summary.
   prescribed. I am applying exactly those six, running **no** third premise
   round, and keeping the HEAVY tier's independent `checker-reviewer` round on
   the finished work — which is the check that actually protects the deliverable.
+- **Packet round 3 written** — all six of round 2's mechanical revisions applied:
+  AC 4 restored to a real UI test with the measured arrangement lines and
+  locators; the false "unreachable" section rewritten as "unreachable in
+  *unmodified* fixtures"; the self-checkoff finding downgraded MAJOR→MINOR and
+  retitled (the UI is not broken); the cleanup section given all three defences
+  plus the `…-0008` restore; the kiosk tally marked data-dependent; §0's failure
+  causes corrected and the other two failures named; and §8.1's open question
+  replaced by a §9 "settled ground truth" block carrying the verified SQL,
+  column truth and four negative controls for the worker to copy. §11 records
+  the gate status honestly: no DISPATCH verdict, proceeding by stated judgment.
+- **DISPATCHED `worker-implementer` (default pin, sonnet — none of item 18's
+  four triggers apply)** with `run_in_background: false`. **If this line is the
+  last one in this file, the run died holding this subagent** — no worker diff
+  landed, no gates were run, and no PR was opened.
