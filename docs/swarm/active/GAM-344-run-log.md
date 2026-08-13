@@ -183,3 +183,12 @@ Every subagent here is dispatched `run_in_background: false` and waited on.
   filename renamed to match the branch; two citation drifts fixed. Round 1's
   doubts are preserved with the gate's verdicts, and a new round-2 list of five
   written.
+- **05:08Z — DISPATCHED `checker-premise` (opus, round 2)** on the revised
+  packet, with **`run_in_background: false`**. Scoped per item 19b to the
+  deltas, not a re-audit — and pointed hard at round-2 doubt #1, because the
+  §6 mutation loop is prescribed from the gate's own diagnosis and **has never
+  been run by anyone**. If it does not work, the worker burns its attempts
+  discovering that. **If this line is the last one in this file, the run died
+  holding this subagent** — no worker was dispatched and nothing below was
+  written. **Round 2 is the cap (item 19a); a third REVISE escalates to the
+  owner rather than looping.**
