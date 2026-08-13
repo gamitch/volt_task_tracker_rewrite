@@ -199,3 +199,40 @@ tiering judgement was required as part of claiming under item 28d).
     GAM-342's already-filed `e2e-personas/preview-ipv6-only-webserver-timeout`.
 - **13:10Z — DISPATCHED `checker-reviewer` (opus, blocking).** *If this line is
   the last one in this file, the run died holding this subagent.*
+- **13:25Z — `checker-reviewer` VERDICT: FAIL**, one MAJOR, no BLOCKER. 14 min,
+  105,236 tokens. It re-ran everything rather than reading the report, and the
+  MAJOR is one neither the worker nor I saw:
+  - **Criterion 3's evidence does not cover the half T508 actually ruled on.**
+    The assertion is written correctly ("exactly one row", zero for Jordan and
+    Sam) and a row-writing regression would turn it red. But mutation 2 kills
+    the run **at `:301`**, the `status='completed'` poll — so lines `:310-322`,
+    the entire criterion-3 block, **never execute**. The mutation therefore
+    supplies zero evidence about them, and duplicates what mutation 1 already
+    covers. Under real PostgREST, which accepts an empty-array insert and
+    writes zero rows, the post-mutation database state is byte-identical and
+    **every one of those assertions would pass green**. So the "no write
+    request at all" half is unproven, and the spec's own comment overstates it.
+    The checker also caught that the harness's rejection is at
+    `postgrest.mjs:255`, not `:254`.
+  - **The 3 `student-parent.spec.ts` failures are independently confirmed
+    pre-existing** — it checked out the merge base `bebcded` into its own
+    worktree and measured **5 failed / 27 passed** there, the same three plus
+    the two this task repaired. Not a BLOCKER. It also found that
+    `student-parent.spec.ts:71` fails on a **stale premise** (it asserts an
+    RSVP "never reaches the database"; the app now writes it) — the same rot
+    class as the archived-team assertion, and more evidence for the
+    not-in-CI finding, which it judged arguably understated at MAJOR.
+  - Criteria 4, 6, Task 1, item 27, item 6, item 22 and the findings file all
+    PASS on its own re-measurement; it specifically upheld the
+    `student-sees-peer-participation` argument as not the T185 shape.
+  - Sabotage check clean; gates re-run by the checker: typecheck 0,
+    format:check 0, eslint 0.
+  **Not deferring this.** The checker offered a defensible deferral (the
+  transport half is already guarded by `endMeeting.test.ts:507`, which CI does
+  run) but correctly said that is a boss call. The fix is ~4 lines, inside
+  Allowed Files, and the packet's own §5 rule — a mutation that does not turn
+  *its* test red is a finding about the test — makes it required rework, not a
+  preference.
+- **13:27Z — DISPATCHED `worker-implementer` attempt 2 of 3 (blocking)** with
+  the checker's exact prescription. *If this line is the last one in this file,
+  the run died holding this subagent.*
