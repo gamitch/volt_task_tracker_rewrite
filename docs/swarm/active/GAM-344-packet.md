@@ -1,4 +1,21 @@
-# GAM-344 — worker packet (HEAVY) — **revision 2**
+# GAM-344 — worker packet (HEAVY) — **revision 2b, DISPATCHED**
+
+> **Gate status.** Round 1: REVISE (3 BLOCKERs). Round 2: REVISE (1 new
+> BLOCKER — the mount-time summary). **This is revision 2b, and it is
+> dispatched rather than sent to a third round.** Item 19a caps the gate at two
+> rounds because *"a plan still failing after two rounds has something wrong
+> with the plan, not the wording"* — and the escalation it prescribes is for a
+> plan nobody can settle. That is not this. Round 2's BLOCKER came with its own
+> fix **measured end to end by the gate**, quoted verbatim into A1 steps 3-7,
+> including the row values the corrected sequence produces. Folding in a
+> prescription the gate wrote and ran is applying the gate's output, not
+> authoring a third draft for it to re-audit. Escalating a settled question to
+> the human owner would spend his attention on nothing.
+> **The orchestrator owns this call** (item 26: state and defend it, so a wrong
+> call is visible). What would make it wrong: if the gate's measured sequence
+> does not reproduce for the worker — in which case the worker must stop and
+> say so rather than adjust the assertion, and the escalation happens then,
+> with evidence.
 
 **Issue:** E2E — W3 Run a meeting: schedule → attendance → participation %
 <https://linear.app/gamitch/issue/GAM-344>
@@ -48,12 +65,12 @@ it worth recording.
 `workers: 1`). **Measured with `npx playwright test --list`:**
 
 ```
-coach-checkin.spec.ts / coach-meeting-end.spec.ts / coach-meeting.spec.ts
+coach-checkin.spec.ts / coach-meeting-end.spec.ts / coach-meeting-series.spec.ts / coach-meeting.spec.ts
 ```
 
-`coach-meeting-end.spec.ts` runs **BEFORE** `coach-meeting.spec.ts` — `-`
-(0x2D) sorts before `.` (0x2E). Revision 1 asserted the opposite. This is
-load-bearing; see §3.1.
+Both new files run **BEFORE** `coach-meeting.spec.ts` — `-` (0x2D) sorts before
+`.` (0x2E). Revision 1 asserted the opposite. So `W3SER ` is exactly as
+load-bearing a prefix as `W3END `; see §3.1.
 
 ---
 
@@ -209,9 +226,11 @@ eligibility.** Three consequences, all of which revision 1 got wrong:
 | **present** | 5 | 5 | 100.0 |
 | **absent** | 5 | 4 | **80.0** |
 
-**Only an explicit `absent` mark moves the figure.** That is what makes the
-opt-in checkbox — not the status flip — the thing criterion 6 hangs on, and it
-is why 2b and 2e are one test in this revision.
+**Only an explicit `absent` mark moves the figure.** So the **explicit mark, not
+the flip alone, is what moves it — the flip is still required, it is just not
+enough**: the view still joins `es.status = 'completed'`, so both must happen.
+That is why the opt-in checkbox is what criterion 6 hangs on, and why A2 and
+the participation assertions are one test in this revision.
 
 **Do not hardcode a final percentage.** Turn A ends two meetings, so the
 absolute numbers depend on test order within the file. Read the row
@@ -368,24 +387,50 @@ again. Narrowing removes the whole dependency.
 2. Assert the stored rows: `events` — `type`, `season_id`, `location_name`,
    `team_ids = [SEED.teamFrc]`; `event_sessions` — `status='scheduled'`,
    `notes`, and **`starts_at`/`ends_at` in UTC** (criterion 7, §3.6).
-3. `execAdmin` a `check_in_at` onto **Priya**'s row *after* step 4 marks her —
-   see §3.3. Comment that the UI cannot produce this state.
-4. Go to `/meetings/live/<sessionId>` (no time shift needed — §3.3). Mark
+3. Go to `/meetings/live/<sessionId>` (no time shift needed — §3.3). Mark
    **Priya** present through the real control: `role=radio` named `Present`
    **scoped to** the `role=radiogroup` named `Attendance for Priya Raman`. An
    unscoped `Present` matches one control per student. Leave Jordan and Sam
    unmarked.
-5. Open **End meeting**. Assert the checkbox reads
+4. **`expect.poll` until Priya's `attendance` row for this session exists**,
+   then `execAdmin` a `check_in_at` onto it. The poll is required, not
+   tidiness: `handleSetStatus` (`LiveConsole.tsx:1117`) fires the upsert
+   optimistically and does **not** await it, so an `UPDATE` that beats the
+   insert touches 0 rows. (It fails safe — `check_out_at` stays null and the
+   assertion goes red, never falsely green — but a red test you have to
+   re-run is still a defect.) Comment that the UI cannot produce this state
+   (§3.3).
+5. **Reload the page. This is required, not hygiene.**
+   `EndMeetingDialog` loads its summary **once at mount** —
+   `EndMeetingDialog.tsx:875`,
+   `useLoadState(() => loadSummary(sessionId), [loadSummary, sessionId])`,
+   where `loadSummary` is a module-level constant and `sessionId` is stable —
+   and `LiveConsole.tsx:1187-1192` mounts it unconditionally with no `key` and
+   no refresh trigger. **Measured by the premise gate:** without a reload the
+   checkbox still reads `Mark 3 students…` and the confirm description still
+   reads `0 present` *after* the coach has marked someone. The seeded
+   `check_in_at` is likewise invisible to `computeCheckoutStudentIds` until the
+   summary is re-read.
+   **This staleness is a product finding and §6 requires you to file it** —
+   `findingKey: meetings/end-meeting-summary-stale-after-console-marks`.
+6. Open **End meeting**. Assert the checkbox reads
    `Mark 2 students with no attendance record absent` — the count is itself an
    assertion about roster resolution and **proves Casey (`is_active=false`) was
    excluded**. Leave it **unticked**. Screenshot.
-6. Confirm (mind the two `End meeting` controls — §3.3). Then assert:
+7. Confirm (mind the two `End meeting` controls — §3.3). Then assert:
    - `event_sessions.status = 'completed'`;
    - `attendance` for this session has **exactly one row**, Priya's, and
      **zero** rows for Jordan and Sam. Not "no absent rows": *no rows at all*.
      **This is criterion 3.**
    - Priya's `status` is still `present`, and her `check_out_at` equals the
-     session's `ends_at` (write-path step 2, reachable only because of step 3).
+     session's `ends_at` (write-path step 2, reachable only because of steps
+     4-5).
+
+   **The gate ran this exact sequence end to end and it passes**, so a red here
+   is your spec, not the app: `Mark 2 students…`; one attendance row; Priya
+   `present`; `check_out_at` = `2026-08-13 14:13:14.213243+00` = the session's
+   `ends_at` exactly; `event_sessions.status = completed`; and Priya's
+   participation row `5 / 5 / 100.0`, matching §3.2's table.
 
 #### A2. The same journey with the opt-in **ON**, and the participation figure (criteria 1, 2, 4, 6)
 
@@ -394,7 +439,10 @@ One test, because the participation move is produced by this ending.
 1. New meeting `W3END Opt-In Night`, same shape, scope narrowed.
 2. In the live console mark **Jordan** present. **Leave Priya and Sam
    unmarked** — this is deliberate and is what makes criterion 6 measurable
-   (§3.2: only an explicit `absent` mark moves the figure).
+   (§3.2: only an explicit `absent` mark moves the figure). Then **poll for
+   Jordan's row and reload the page**, for the same mount-time-summary reason
+   as A1 steps 4-5 — without the reload the payload would carry all three
+   students, including the one just marked present.
 3. **Immediately before confirming**, read and record, for Priya and for
    Jordan: `readRowsAs('student', "select … from v_student_participation where
    student_id = '<id>'")`. **Filter by `student_id`** — measured: the student
@@ -418,7 +466,11 @@ One test, because the participation move is produced by this ending.
      equals how many of those are `present` or `late`. Read those counts with
      their own SQL against `attendance`, **not** by re-running the view's own
      formula — recomputing the view's arithmetic and comparing it to the view
-     proves nothing.
+     proves nothing. **State in a comment what the cross-check omits**: the
+     view's team-scope predicate (`e.team_ids is null or st.team_id = any(e.team_ids)`)
+     and its `season_id` grouping. Neither can diverge here — every Turn A
+     meeting is FRC-scoped and the seed has one active season — but a reader
+     should not have to work that out.
    - Jordan corroborates in the other direction (he was marked present).
 7. Sign in as `student` and read the **rendered** figure. Measured: it renders
    at `/` as `Participation: 100%` (`StudentHome.tsx:1649`) and on `/meetings`.
@@ -531,6 +583,25 @@ Established already; **re-verify rather than take on trust**:
   change, which **a dispatched run cannot push** (`AGENTS.md` § "Two walls"), so
   this necessarily lands as a filed row. `findingKey`:
   `e2e-personas/persona-suite-not-in-ci`.
+
+**Second established finding, measured by the premise gate — file it:**
+
+- **The End-meeting summary is stale relative to the console the coach just
+  used.** `EndMeetingDialog` loads its summary once at mount
+  (`EndMeetingDialog.tsx:875`) and `LiveConsole.tsx:1187-1192` never refreshes
+  it. Measured: after marking one student present, the dialog still reads
+  `Current attendance: 0 present · …` and offers
+  `Mark 3 students with no attendance record absent`. **User-visible
+  consequence, and state it in these terms:** a coach who marks ten students
+  present and opens End meeting is shown "0 present" and invited to mark all
+  ten absent. The data is protected — `ignoreDuplicates: true`
+  (`endMeeting.ts:405`) means the already-marked rows are not overwritten — so
+  this is a **lying interface, not data corruption**, and you should grade it
+  on that basis rather than inflating it. Note that the
+  `hasAttendanceCorrections={false}` prop and the "updates aren't shared live
+  yet" banner cover *other tabs*, not this one.
+  `findingKey`: `meetings/end-meeting-summary-stale-after-console-marks`.
+  Re-verify it yourself; you will walk straight through it in A1 step 5.
 
 Candidates you will be in a position to judge — file them only if you can state
 the user-visible consequence:

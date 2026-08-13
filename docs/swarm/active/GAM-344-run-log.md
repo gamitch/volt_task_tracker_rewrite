@@ -130,3 +130,36 @@ tiering judgement was required as part of claiming under item 28d).
   with **Turn A named as the priority if only one lands**.
 - **12:15Z — DISPATCHED `checker-premise` round 2 (opus, blocking).** *If this
   line is the last one in this file, the run died holding this subagent.*
+- **12:24Z — `checker-premise` round 2 VERDICT: REVISE**, one new BLOCKER, and
+  it found it by driving the browser. `EndMeetingDialog` loads its summary
+  **once at mount** (`:875`) and `LiveConsole.tsx:1187-1192` never refreshes
+  it, so my A1/A2 sequence asserted a label the app does not render at that
+  point: measured `Mark 3 students…` and `0 present` *after* the coach marks
+  someone. The seeded `check_in_at` was invisible for the same reason, making
+  the `check_out_at` assertion unreachable as sequenced. Everything else in
+  revision 2 verified clean — including that my §7 decision-1 worry was NOT
+  real (no earlier spec marks Priya on a session that becomes `completed`),
+  that the cleanup runs idempotently against both RESTRICT constraints
+  (`PASS 1: exit 0 / PASS 2: exit 0`), and that the replacement mutation 3 is
+  non-vacuous.
+- **12:26Z — packet revision 2b, DISPATCHED, not sent to a third round.** My
+  call under item 19a and defended in the packet header: the cap exists for a
+  plan nobody can settle, and this BLOCKER arrived with its own fix measured
+  end to end by the gate — including the exact row values the corrected
+  sequence produces. Folding in a prescription the gate wrote and ran is
+  applying its output, not authoring a third draft. Escalating a settled
+  question would spend the owner's attention on nothing. **What would make it
+  wrong:** if the gate's sequence does not reproduce for the worker — in which
+  case the worker stops and says so rather than adjusting the assertion.
+  A second product finding came out of round 2 and is now in the packet: the
+  End-meeting summary is stale relative to the console, so a coach who marks
+  ten students present is shown "0 present" and invited to mark all ten absent
+  (`ignoreDuplicates` protects the data, so it is a lying interface, not
+  corruption).
+- **12:27Z — DISPATCHED `worker-implementer` for Turn A (blocking).** Turn A is
+  Task 1 + the end-meeting write path + participation + mutations 1-2; the gate
+  independently argued A is the half to protect, because
+  `computeMeetingSeriesReconcilePlan` (Turn B's logic) already has 15 real unit
+  references while Turn A's three sequential writes against real Postgres have
+  none. *If this line is the last one in this file, the run died holding this
+  subagent.*
