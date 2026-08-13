@@ -1,9 +1,9 @@
 {
   "meta": {
-    "exportedAt": "2026-08-13T03:35:08.492Z",
+    "exportedAt": "2026-08-13T07:08:30.647Z",
     "team": "Gamitch",
     "teamKey": "GAM",
-    "issueCount": 355,
+    "issueCount": 365,
     "generator": "scripts/linear-export.mjs",
     "note": "GENERATED FILE — DO NOT EDIT. Regenerated whole by `scripts/linear-export.mjs`.\nLinear is the source of truth; this is a backup so the history survives the account.\nEdits here are lost on the next run and change nothing in Linear."
   },
@@ -6249,13 +6249,13 @@
       "identifier": "GAM-343",
       "legacyId": null,
       "title": "E2E — W2 Run an outreach event: create → RSVP → attend → complete → hours land",
-      "state": "Todo",
-      "stateType": "unstarted",
+      "state": "In Review",
+      "stateType": "started",
       "archived": false,
       "labels": [
         "area/w2",
         "provenance/other",
-        "tier/unreviewed"
+        "tier/heavy"
       ],
       "assignee": null,
       "blockedBy": [],
@@ -6270,13 +6270,13 @@
       "identifier": "GAM-344",
       "legacyId": null,
       "title": "E2E — W3 Run a meeting: schedule → attendance → participation %",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "In Progress",
+      "stateType": "started",
       "archived": false,
       "labels": [
         "area/w3",
         "provenance/other",
-        "tier/unreviewed"
+        "tier/heavy"
       ],
       "assignee": null,
       "blockedBy": [],
@@ -6291,13 +6291,13 @@
       "identifier": "GAM-345",
       "legacyId": null,
       "title": "E2E — W4 Hours and goal accounting: the same student's numbers agree on every screen",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "In Review",
+      "stateType": "started",
       "archived": false,
       "labels": [
         "area/w4",
         "provenance/other",
-        "tier/unreviewed"
+        "tier/heavy"
       ],
       "assignee": null,
       "blockedBy": [],
@@ -6516,6 +6516,215 @@
       "canceledAt": null,
       "url": "https://linear.app/gamitch/issue/GAM-355/five-pre-existing-persona-suite-failures-are-stale-against-shipped",
       "description": "|  |  |\n| -- | -- |\n| Observed | Baseline before and after this task's changes, reproducible across separate runs: the full persona suite is 21 passed, 5 failed before this task; 27 passed, 5 failed after it (this branch adds 6 tests -- 5 in student-checkin.spec.ts, 1 in coach-checkin.spec.ts -- and the same 5 keep failing), exit 1. coach-meeting.spec.ts:88/:115 fail because 'Volt Legacy 2201' (archived) is no longer offered in the team picker -- stale against shipped archived-team-picker work. student-parent.spec.ts:66 fails because the RSVP control now genuinely writes a fresh rsvps row, contradicting that test's own premise (its module doc claims 'local-only. No Supabase write happens here.'). student-parent.spec.ts:27 and :121 fail on getByText(// 100 h (/) not found -- the hours-float assertions. |\n| Expected | These are pre-existing and out of this task's allowed-files scope (coach-meeting.spec.ts, student-parent.spec.ts are not in [GAM-342](https://linear.app/gamitch/issue/GAM-342/e2e-w1-check-in-a-student-arrives-and-gets-counted)'s allowed-files list). Recorded here per packet instruction rather than chased or fixed. |\n\n`tests/e2e-personas/coach-meeting.spec.ts:88`\n\n```\nVolt Legacy 2201\n```\n\n`tests/e2e-personas/coach-meeting.spec.ts:115`\n\n```\nVolt Legacy 2201\n```\n\n`tests/e2e-personas/student-parent.spec.ts:66`\n\n```\nFINDING 4: an RSVP made on the student home never reaches the database\n```\n\n`tests/e2e-personas/student-parent.spec.ts:27`\n\n```\ngetByText(/\\/ 100 h \\(/)\n```\n\n`tests/e2e-personas/student-parent.spec.ts:121`\n\n```\ngetByText(/\\/ 100 h \\(/)\n```\n\n**Proposed scope** (a candidate, not a prescription)\n\nSeparate task: update coach-meeting.spec.ts's team-picker expectations, re-verify and fix/relabel student-parent.spec.ts's RSVP premise (FINDING 4 may itself be stale now that the control writes), and investigate the hours-float selector regression.\n\n**Reproduce**\n\n```bash\nnpx playwright test -c tests/e2e-harness/playwright.personas.config.ts\n```\n\n---\n\n**Severity** MINOR · **Verified by** `browser` · **Source** `e2e-personas`\nMeasured against `135b8bb41ce1240c21b02ce8320f2e95a9aa5776` on `claude/gam-342-e2e-w1-checkin`.\n\nIndependently reproduced on `28f7394` on 2026-08-13: same five failures, same files, before this branch's tests existed.\n\nEach of the five is a test that outlived the fix it described. Three trace to work that has since shipped — the archived-team pickers ([GAM-305](https://linear.app/gamitch/issue/GAM-305/t615-the-schedule-meetings-team-picker-offers-archived-teams-the)), the RSVP write ([GAM-304](https://linear.app/gamitch/issue/GAM-304/t809-studenthomes-sign-up-cant-go-control-writes-nothing-and-says)) and the hours rounding ([GAM-303](https://linear.app/gamitch/issue/GAM-303/t808-students-and-parents-see-raw-float-hours-39999983633333334-100-h)). [GAM-346](https://linear.app/gamitch/issue/GAM-346/e2e-w5-home-dashboards-what-each-role-lands-on-and-what-they-can-act) carries the same observation for the two `FINDING` tests as something to reconcile before extending W5.\n\nEmitted by the `e2e-personas` run on [GAM-342](https://linear.app/gamitch/issue/GAM-342/e2e-w1-check-in-a-student-arrives-and-gets-counted) and filed from that run's findings file. An input to triage, not a verdict.\nRe-verify before acting: this project has filed rows on premises that turned out false.\n\nFinding-Key: e2e-personas/five-pre-existing-w1-suite-failures-not-in-scope"
+    },
+    {
+      "identifier": "GAM-356",
+      "legacyId": null,
+      "title": "The student meetings view labels a student with no participation rate \"Participation: null%\" and announces it as 0%",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "archived": false,
+      "labels": [
+        "area/w4",
+        "provenance/e2e-personas",
+        "tier/unreviewed"
+      ],
+      "assignee": null,
+      "blockedBy": [],
+      "blocks": [],
+      "createdAt": "2026-08-13T05:19:01.321Z",
+      "completedAt": null,
+      "canceledAt": null,
+      "url": "https://linear.app/gamitch/issue/GAM-356/the-student-meetings-view-labels-a-student-with-no-participation-rate",
+      "description": "|  |  |\n| -- | -- |\n| Observed | On /meetings, signed in as a student whose every attendance mark this season is 'excused' (v_student_participation: expected_ct 3, excused_ct 3, participation_pct NULL): the consistency strip renders a ProgressBar whose accessible name is \"Participation: null%\", with aria-valuenow=\"0\" and aria-valuetext=\"0%\". Watched in a real browser through tests/e2e-personas/reports-accounting.spec.ts. |\n| Expected | An em dash / no-rate, which is what the same student's other two surfaces already show for the same database NULL: StudentHome renders \"Participation: —\" (students.ts:839-840 returns null for a zero denominator, StudentHome.tsx:1649 renders it) and the reports Participation tab renders \"—\" (ParticipationTab.tsx:838-839's runtime `=== null` check). MET-01's own column comment is explicit: \"the UI renders that as an em dash, never 0%\". |\n\n`src/lib/supabase/loaders/checkin.ts:239`\n\n```\nparticipation_pct: number;\n```\n\n`src/lib/supabase/loaders/checkin.ts:363`\n\n```\nif (seasonRows.length === 1) {\n    return seasonRows[0];\n  }\n```\n\n`src/pages/meetings/StudentMeetingView.tsx:757`\n\n```\nlabel={`Participation: ${participation.participationPct}%`}\n```\n\n`supabase/migrations/20260806000000_met01_explicit_marks.sql:124`\n\n```\nwhen count(*) - count(*) filter (where status = 'excused') = 0 then null\n```\n\n`src/lib/supabase/loaders/meetings.ts:302`\n\n```\nparticipation_pct: number;\n```\n\n`src/lib/supabase/loaders/reports.ts:221`\n\n```\nparticipation_pct: number;\n```\n\n**Proposed scope** (a candidate, not a prescription)\n\nCANDIDATE, not a prescription. Widen `participation_pct` to `number | null` in checkin.ts:239 and give StudentMeetingView.tsx:757 the same `=== null` branch ParticipationTab.tsx:838 already has, reusing that guard's shape rather than writing a second one (item 3). meetings.ts:302 and reports.ts:221 carry the identical mistyping of the same column and should move with it. Do NOT coalesce the null to 0 in the loader — that fabricates the very 0% the em dash exists to avoid, and is what GAM-300's arithmetic floor already did.\n\nWHAT IS NOT CLAIMED: this is a DIFFERENT defect from GAM-300. GAM-300's `Math.max(expectedCt - excusedCt, 1)` floor is real but UNREACHABLE on this path — checkin.ts:363-365 returns the single view row before ever reaching checkin.ts:375, proven by mutation (changing that early return to `> 1` makes the strip read \"Participation: 0%\" and turns the spec red). Filing under GAM-300 would bury a type-level defect inside an arithmetic one. Cross-references GAM-300.\n\nALSO NOT CLAIMED: the parent-facing `variant=\"linked\"` strip was not exercised, and no non-student role was checked on /meetings.\n\nPACKET CORRECTION worth carrying forward: the GAM-345 packet (revision 2) attributes this strip to loaders/meetings.ts:302/:519. It is not on that path. MeetingsList.tsx:2769 renders StudentMeetingView with no loadStripData, so StudentMeetingView.tsx:1068's default — loadConsistencyStripData from loaders/checkin.ts — is what runs. Established by mutation in both directions: mutating meetings.ts:519 left the assertion GREEN; mutating checkin.ts:363-365 turned it RED.\n\n**Reproduce**\n\n```bash\nbash tests/e2e-harness/start.sh && npx playwright test -c tests/e2e-harness/playwright.personas.config.ts reports-accounting -g \"each screen says so in its own way\"\n```\n\n---\n\n**Severity** MAJOR · **Verified by** `browser` · **Source** `e2e-personas`\nMeasured against `319835d` on `claude/gam-345-e2e-w4-hours-accounting`.\n\nThis was filed automatically and is an input to triage, not a verdict.\nRe-verify before acting: this project has filed rows on premises that turned out false.\n\nFinding-Key: e2e-personas/meetings-participation-null-percent"
+    },
+    {
+      "identifier": "GAM-357",
+      "legacyId": null,
+      "title": "RPT-05/06's CSV builders ship in the bundle and no user path reaches them — no export control exists on any reports tab",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "archived": false,
+      "labels": [
+        "area/w4",
+        "provenance/e2e-personas",
+        "tier/unreviewed"
+      ],
+      "assignee": null,
+      "blockedBy": [],
+      "blocks": [],
+      "createdAt": "2026-08-13T05:19:01.490Z",
+      "completedAt": null,
+      "canceledAt": null,
+      "url": "https://linear.app/gamitch/issue/GAM-357/rpt-0506s-csv-builders-ship-in-the-bundle-and-no-user-path-reaches",
+      "description": "|  |  |\n| -- | -- |\n| Observed | Signed in as a coach at /reports, every `role=button` and every `role=link` on each of the three tabs was enumerated in a real browser. Verbatim: |\n\nParticipation buttons: [\"C\", \"Participation\", \"Hours\", \"Events\", \"Below 70%\", \"Sort descending\"]\n  Hours buttons:         [\"C\", \"Participation\", \"Hours\", \"Events\"]\n  Events buttons:        [\"C\", \"Participation\", \"Hours\", \"Events\"]\n  links (identical on all three): [\"Skip to content\", \"VOLT\", \"Home\", \"Meetings\", \"Outreach\", \"Calendar\", \"Roster\", \"Reports\", \"Settings\"]\n(\"C\" is the account avatar in the top nav; the Participation tab's PowerSearch is role=combobox, not a button, which is why it is absent above.) Not one control matches /export|download|csv/i. Repo-wide, the only callers of the three builders are src/pages/reports/csvExport.test.ts:167,231,315 — no non-test file calls any of them. |\n| Expected | Either an export control on each tab (which is what RPT-05/06 describes and what the builders exist for), or no shipped builders. A user cannot export anything today. |\n\n`src/pages/reports/csvExport.ts:305`\n\n```\nexport function buildRosterCsv(rows: readonly RosterCsvRow[]): string {\n```\n\n`src/pages/reports/csvExport.ts:372`\n\n```\nexport function buildEventsCsv(rows: readonly EventsCsvRow[]): string {\n```\n\n`src/pages/reports/csvExport.ts:437`\n\n```\nexport function buildAttendanceCsv(rows: readonly AttendanceCsvRow[]): string {\n```\n\n`src/pages/reports/csvExport.ts:24`\n\n```\nThis file also does NOT build the `Button variant=\"secondary\"`-per-tab UI trigger or wire a download button into `ReportsShell.tsx`/`ParticipationTab.tsx`/`HoursTab.tsx`/`EventsTab.tsx`\n```\n\n**Proposed scope** (a candidate, not a prescription)\n\nCANDIDATE. The finding is the RECORD, not the missing button: GAM-69 (T059 — CSV exports (RPT-05/06)) is marked Done, and a Linear search plus a grep of docs/swarm/linear-export.md found no open row covering the gap. That is constitution item 27's exact shape — a task recorded Passed whose user-visible surface no user can reach. Triage should decide between (a) wiring the existing pure builders to a per-tab control, reusing them rather than writing new ones, and (b) recording explicitly that RPT-05/06 is not shipped and reopening GAM-69. Cross-references GAM-69.\n\nWHAT IS NOT CLAIMED: the builders' own correctness was not re-tested — csvExport.test.ts covers them. Only reachability was measured, and only on /reports; the roster and outreach surfaces were not enumerated.\n\n**Reproduce**\n\n```bash\nnpx playwright test -c tests/e2e-harness/playwright.personas.config.ts reports-accounting -g \"no export, download or CSV control\"\n```\n\n---\n\n**Severity** MAJOR · **Verified by** `browser` · **Source** `e2e-personas`\nMeasured against `319835d` on `claude/gam-345-e2e-w4-hours-accounting`.\n\nThis was filed automatically and is an input to triage, not a verdict.\nRe-verify before acting: this project has filed rows on premises that turned out false.\n\nFinding-Key: e2e-personas/rpt-05-06-csv-builders-unreachable"
+    },
+    {
+      "identifier": "GAM-358",
+      "legacyId": null,
+      "title": "The Active students KPI tile's per-team breakdown counts a dual-team student twice while its own headline counts them once",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "archived": false,
+      "labels": [
+        "area/w4",
+        "provenance/e2e-personas",
+        "tier/unreviewed"
+      ],
+      "assignee": null,
+      "blockedBy": [],
+      "blocks": [],
+      "createdAt": "2026-08-13T05:19:01.694Z",
+      "completedAt": null,
+      "canceledAt": null,
+      "url": "https://linear.app/gamitch/issue/GAM-358/the-active-students-kpi-tiles-per-team-breakdown-counts-a-dual-team",
+      "description": "|  |  |\n| -- | -- |\n| Observed | Measured in the live cluster inside a transaction that was then ROLLED BACK, so no fixture changed: |\n\nBEFORE                      season_rollup 7   team_sum 7\n  AFTER dual-team membership  season_rollup 7   team_sum 8\n  ROLLED BACK                 season_rollup 7   team_sum 7\nOne extra `student_teams` row for an existing student moves the per-team sum and not the headline. The tile prints both, one line apart. |\n| Expected | A breakdown printed directly beneath a headline should sum to it, or should say what it is counting (team memberships, not students). |\n\n`supabase/migrations/20260723000000_kpi_views.sql:207`\n\n```\nselect count(*) as active_students_count from students where is_active\n```\n\n`supabase/migrations/20260723000000_kpi_views.sql:252`\n\n```\ncount(distinct st.student_id) filter (\n    where s.is_active and st.left_on is null\n  ) as active_students_count\n```\n\n`src/components/kpi/KpiStrip.tsx:402`\n\n```\nreturn teamBreakdown.map((team) => `${team.teamName} ${team.activeStudentsCount}`).join(' · ');\n```\n\n**Proposed scope** (a candidate, not a prescription)\n\nCANDIDATE. Either label the breakdown as team memberships, or make the headline count memberships too — the two views deliberately count different things (kpi_views.sql:93 calls active_students_count 'the season-INDEPENDENT current active' roster), so which one is 'right' is a product decision, not a bug fix.\n\nWHAT IS NOT CLAIMED: this was NOT reproduced in the browser. tests/e2e-harness/seed.sql has no dual-team student and the GAM-345 packet explicitly forbids building one, so the spec asserts only that the two agree on the current fixture (7 = 5 + 2) and that assertion passes. The GAM-345 premise gate reported watching the strip read 'Active students 7' against a 5 · 3 breakdown in round 1; that observation is second-hand here and was not re-measured. The AREA label is a guess: the tile lives in the app shell (AppShell.tsx:165), not in W4's reports, and w4 is used only because this run met it there.\n\n**Reproduce**\n\n```bash\npsql -h 127.0.0.1 -p 55432 -U postgres -d scratch: begin; select active_students_count from v_season_kpis; insert into student_teams (student_id, team_id, joined_on) values (<existing student>, <second team>, current_date); select sum(active_students_count) from v_season_kpi_team_counts; rollback;\n```\n\n---\n\n**Severity** MINOR · **Verified by** `database` · **Source** `e2e-personas`\nMeasured against `319835d` on `claude/gam-345-e2e-w4-hours-accounting`.\n\nThis was filed automatically and is an input to triage, not a verdict.\nRe-verify before acting: this project has filed rows on premises that turned out false.\n\nFinding-Key: e2e-personas/kpi-team-breakdown-double-counts-dual-team"
+    },
+    {
+      "identifier": "GAM-359",
+      "legacyId": null,
+      "title": "One student's confirmed hours are spelled three different ways on three screens",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "archived": false,
+      "labels": [
+        "area/w4",
+        "provenance/e2e-personas",
+        "tier/unreviewed"
+      ],
+      "assignee": null,
+      "blockedBy": [],
+      "blocks": [],
+      "createdAt": "2026-08-13T05:19:01.862Z",
+      "completedAt": null,
+      "canceledAt": null,
+      "url": "https://linear.app/gamitch/issue/GAM-359/one-students-confirmed-hours-are-spelled-three-different-ways-on-three",
+      "description": "|  |  |\n| -- | -- |\n| Observed | v_student_hours.confirmed_hours for the seeded student is 3.9999991352777778. The reports Hours tab renders \"4.0\", the CoachHome leaderboard renders \"4 hrs\" (roundForDisplay at Leaderboard.tsx:314-316 returns a NUMBER, so 4 interpolates as \"4\"), and StudentHome renders \"4.0 / 100.0 h (4%)\". All three read the same database value; none carries it. |\n| Expected | Not obviously a defect — a leaderboard badge and a report grid may legitimately differ. Recorded so the divergence is a decision rather than an accident. |\n\n`src/pages/reports/HoursTab.tsx:1017`\n\n```\n{value.toFixed(1)}\n```\n\n`src/pages/outreach/Leaderboard.tsx:527`\n\n```\nlabel={`${roundForDisplay(entry.confirmedHours)} hrs`}\n```\n\n`src/pages/home/StudentHome.tsx:1643`\n\n```\n`${value.toFixed(1)} / ${max.toFixed(1)} h (${hoursPercent}%)`\n```\n\n**Proposed scope** (a candidate, not a prescription)\n\nCANDIDATE, low value. If it is ever unified, round at the format boundary only — every one of the three already does, and the underlying float must keep reaching the ProgressBar arithmetic. Related in shape to GAM-303. NOT CLAIMED: no parent-facing surface was compared, and no wrong VALUE was found — the spec compares database to screen with toBeCloseTo(…, 3) precisely so a formatting change cannot hide one.\n\n**Reproduce**\n\n```bash\nnpx playwright test -c tests/e2e-harness/playwright.personas.config.ts reports-accounting -g \"confirmed hours agree\"\n```\n\n---\n\n**Severity** NIT · **Verified by** `browser` · **Source** `e2e-personas`\nMeasured against `319835d` on `claude/gam-345-e2e-w4-hours-accounting`.\n\nThis was filed automatically and is an input to triage, not a verdict.\nRe-verify before acting: this project has filed rows on premises that turned out false.\n\nFinding-Key: e2e-personas/confirmed-hours-three-spellings"
+    },
+    {
+      "identifier": "GAM-360",
+      "legacyId": null,
+      "title": "The persona end-to-end suite is not green: five tests fail on a clean checkout of this branch before any new work",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "archived": false,
+      "labels": [
+        "area/w4",
+        "provenance/e2e-personas",
+        "tier/unreviewed"
+      ],
+      "assignee": null,
+      "blockedBy": [],
+      "blocks": [],
+      "createdAt": "2026-08-13T05:19:02.060Z",
+      "completedAt": null,
+      "canceledAt": null,
+      "url": "https://linear.app/gamitch/issue/GAM-360/the-persona-end-to-end-suite-is-not-green-five-tests-fail-on-a-clean",
+      "description": "|  |  |\n| -- | -- |\n| Observed | Baseline run at 93c89d0 + this branch's packet commits, BEFORE the new spec existed: `npx playwright test -c tests/e2e-harness/playwright.personas.config.ts` exited 1 — 27 passed, 5 failed. |\n\n1. coach-meeting.spec.ts:88 team-scope dropdown — expected the archived team 'Volt Legacy 2201' in the option list, received a list without it.\n2. coach-meeting.spec.ts:115 a single meeting round-trips — 90s timeout; the run also printed `ERROR: 42501: new row violates row-level security policy for table \"events\"`.\n3. student-parent.spec.ts:27 'FINDING 3 hours rendered as a raw float' — the locator // 100 h (/ no longer matches; StudentHome.tsx:1643 now renders '4.0 / 100.0 h', i.e. the test pins behaviour that has since been FIXED.\n4. student-parent.spec.ts:66 'FINDING 4 RSVP never reaches the database' — an rsvps row WAS written ([{\"status\": \"going\"}]), i.e. the test pins behaviour that has since been fixed.\n5. student-parent.spec.ts:121 same locator as (3), parent view. |\n   | Expected | A green suite, or rows tracking each failure. Two of the five are stale assertions pinning defects that were fixed without updating the test that recorded them — exactly the failure mode the e2e-personas skill's 'record behaviour, do not bless it' rule is meant to make visible. |\n\n`tests/e2e-personas/student-parent.spec.ts:125`\n\n```\nawait expect(progress).toBeVisible({ timeout: 20_000 });\n```\n\n`tests/e2e-personas/coach-meeting.spec.ts:124`\n\n```\nawait scope.click();\n```\n\n**Proposed scope** (a candidate, not a prescription)\n\nCANDIDATE. Triage as at least two separate items: the two stale student-parent 'FINDING' tests (retarget them at the fixed behaviour, keeping the pin), and the two coach-meeting failures (NOT diagnosed here — the 42501 on `events` may be a real RLS regression or a fixture problem, and this run did not establish which).\n\nWHAT IS NOT CLAIMED: none of the five was diagnosed beyond reading its failure output. They are reported so they are not silently absorbed into GAM-345's own result; GAM-345's new spec passes 5/5 independently of them.\n\n**Reproduce**\n\n```bash\nbash tests/e2e-harness/start.sh && npx playwright test -c tests/e2e-harness/playwright.personas.config.ts\n```\n\n---\n\n**Severity** MAJOR · **Verified by** `browser` · **Source** `e2e-personas`\nMeasured against `319835d` on `claude/gam-345-e2e-w4-hours-accounting`.\n\nThis was filed automatically and is an input to triage, not a verdict.\nRe-verify before acting: this project has filed rows on premises that turned out false.\n\nFinding-Key: e2e-personas/persona-suite-red-on-branch"
+    },
+    {
+      "identifier": "GAM-361",
+      "legacyId": null,
+      "title": "`admin-roster.spec.ts` cleanup cannot delete a student who has attendance rows, so one aborted persona run poisons the next",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "archived": false,
+      "labels": [
+        "area/w4",
+        "provenance/other",
+        "tier/unreviewed"
+      ],
+      "assignee": null,
+      "blockedBy": [],
+      "blocks": [],
+      "createdAt": "2026-08-13T05:19:46.599Z",
+      "completedAt": null,
+      "canceledAt": null,
+      "url": "https://linear.app/gamitch/issue/GAM-361/admin-rosterspects-cleanup-cannot-delete-a-student-who-has-attendance",
+      "description": "Established by SQL replay against a live scratch cluster during GAM-345's checker round, re-verified in source on `claude/gam-345-e2e-w4-hours-accounting` at `6320933`. Not inferred from reading.\n\n## The defect\n\n`tests/e2e-personas/admin-roster.spec.ts:32-34` cleans up by deleting `student_teams` and then `students where display_name like 'E2E %'`. It never deletes `attendance` or `rsvps`, and `attendance_student_id_fkey` is `RESTRICT`. Replayed verbatim against a leftover `E2E ` student holding attendance:\n\n```\nERROR:  update or delete on table students violates foreign key constraint\n        attendance_student_id_fkey on table attendance```\n\n## Why it matters now\n\n`tests/e2e-personas/reports-accounting.spec.ts` (GAM-345, merged) seeds `E2E …` students **with attendance rows**, because the all-excused and genuine-zero cases it exists to test are made of attendance marks. `admin-roster` sorts **first** alphabetically, so on the run after an aborted one it hits the leftover before `reports-accounting`'s own `beforeEach` can clear it.\n\n## What is NOT claimed\n\nThis does **not** fire on a normal run — three full suite runs during GAM-345 were clean, and the condition self-heals after one run. It needs an abnormal termination (timeout, cancelled CI job) to leave the rows behind. It is a latent trap, not a live failure.\n\nThe weakness is in `admin-roster.spec.ts`, not in the new spec: `reports-accounting.spec.ts:98-101` already deletes `attendance` and `rsvps` before `students`, which is the pattern to copy in the other direction.\n\n## Candidate scope\n\nMirror `reports-accounting.spec.ts:98-101` in `admin-roster.spec.ts`'s cleanup — delete `attendance` and `rsvps` for `E2E %` students first. Prefer extracting the one cleanup helper into `personaHarness.ts` over maintaining a second copy (constitution item 3). Every other spec that seeds `E2E %` rows should use it.\n\n**Severity: MINOR.** Test-infrastructure flake, no user-facing surface, no data at risk. Filed under constitution item 20 by GAM-345's checker round rather than left as a note.\n\nRef GAM-345.\n```"
+    },
+    {
+      "identifier": "GAM-362",
+      "legacyId": null,
+      "title": "`npm run lint` exits 1 whenever a `playwright-report/` directory exists, so the lint gate depends on whether anyone ran the e2e suite first",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "archived": false,
+      "labels": [
+        "provenance/other",
+        "tier/unreviewed"
+      ],
+      "assignee": null,
+      "blockedBy": [],
+      "blocks": [],
+      "createdAt": "2026-08-13T05:19:46.781Z",
+      "completedAt": null,
+      "canceledAt": null,
+      "url": "https://linear.app/gamitch/issue/GAM-362/npm-run-lint-exits-1-whenever-a-playwright-report-directory-exists-so",
+      "description": "Established while running GAM-345's verification gates; the false red appeared to contradict the worker's `eslint 0 errors` claim until the cause was found. Re-verified in source on `main`.\n\n## The defect\n\n`eslint.config.js:24` ignores `dist-e2e` but not `playwright-report`. `npm run lint` runs `eslint .`, so once `tests/e2e-harness/playwright.personas.config.ts` has produced a report, the next lint run walks that directory's bundled JavaScript and fails:\n\n```\nnpm run lint      -> exit 1, 1124 errors, every one inside playwright-report/\nnpx eslint src tests -> exit 0, 0 errors, 378 warnings\n```\n\n## The user-visible consequence\n\nNobody's product is broken — this costs **agent and reviewer time**, and it costs it in the most expensive way: a green gate and a red gate for the same commit, decided by whether the persona suite happened to run first. An agent that trusts `npm run lint` will report a repository-wide lint failure that does not exist, and the natural next move is to go looking for it in `src/`.\n\nThis is pre-existing on `main` and predates GAM-345.\n\n## What is NOT claimed\n\nThat any real lint error is being hidden — the scoped run is clean. And this says nothing about the other five gates; `tsc`, `vite build`, `format:check` and both vitest runs are unaffected.\n\n## Candidate scope\n\nAdd `playwright-report` (and `blob-report`, if used) to the ignores at `eslint.config.js:24`, beside `dist-e2e`. One line. Check `.gitignore` at the same time so the two lists agree about what is generated output.\n\n**Severity: NIT** by the constitution's scale — cosmetic, no shipping impact — but worth the one line, because a gate that reports differently for the same commit is the kind of thing that gets worked around rather than fixed."
+    },
+    {
+      "identifier": "GAM-363",
+      "legacyId": null,
+      "title": "After Mark day complete, the attendance panel still shows the pre-completion roster",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "archived": false,
+      "labels": [
+        "area/w2",
+        "provenance/e2e-personas",
+        "tier/unreviewed"
+      ],
+      "assignee": null,
+      "blockedBy": [],
+      "blocks": [],
+      "createdAt": "2026-08-13T05:22:28.648Z",
+      "completedAt": null,
+      "canceledAt": null,
+      "url": "https://linear.app/gamitch/issue/GAM-363/after-mark-day-complete-the-attendance-panel-still-shows-the-pre",
+      "description": "|  |  |\n| -- | -- |\n| Observed | Immediately after confirming Mark day complete, the session header updates to '— completed' but the AttendancePanel below it still renders Jordan Okafor checked at 1.5 h and Priya Raman at 0 h, with the section badge reading '2 attending · 1.5 h'. The database at that moment holds Jordan 'absent' and Priya 'present' with a 2.5 h override. |\n| Expected | The panel reflects the rows just written — Jordan unchecked/absent, Priya at 2.5 h — without a manual page reload. |\n\n`src/pages/outreach/AttendancePanel.tsx:529`\n\n```\nuseAttendanceLoadState(loadAttendance, sessionIdsKey)\n```\n\n`src/pages/outreach/AttendancePanel.tsx:652`\n\n```\ndeps: [loadAttendance, sessionIdsKey, retryToken]\n```\n\n`src/pages/outreach/OutreachDetail.tsx:2012`\n\n```\nreloadDetail() replaces the page's own `data` only\n```\n\n**Reproduce**\n\n```bash\nnpx playwright test -c tests/e2e-harness/playwright.personas.config.ts outreach-lifecycle.spec.ts ; then open tests/e2e-personas/screenshots/77-coach-mark-day-complete-confirmed.png\n```\n\n---\n\n**Severity** MINOR · **Verified by** `browser` · **Source** `e2e-personas`\nMeasured against `61c1e53` on `claude/gam-343-e2e-w2-outreach-lifecycle`.\n\nThis was filed automatically and is an input to triage, not a verdict.\nRe-verify before acting: this project has filed rows on premises that turned out false.\n\nFinding-Key: e2e-personas/outreach-attendance-panel-stale-after-completion"
+    },
+    {
+      "identifier": "GAM-364",
+      "legacyId": null,
+      "title": "The 'Who said they were coming' buckets do not refresh after an RSVP is saved",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "archived": false,
+      "labels": [
+        "area/w2",
+        "provenance/e2e-personas",
+        "tier/unreviewed"
+      ],
+      "assignee": null,
+      "blockedBy": [],
+      "blocks": [],
+      "createdAt": "2026-08-13T05:22:29.127Z",
+      "completedAt": null,
+      "canceledAt": null,
+      "url": "https://linear.app/gamitch/issue/GAM-364/the-who-said-they-were-coming-buckets-do-not-refresh-after-an-rsvp-is",
+      "description": "|  |  |\n| -- | -- |\n| Observed | Right after the student saves 'Can't go', the radiogroup shows the new answer but the summary still lists Priya Raman under 'No response (1)' with 'Can't go (0)'. The rsvps row is already updated to 'declined'. |\n| Expected | The buckets move the student from 'No response' to 'Can't go' when the write lands, without a reload. |\n\n`src/pages/outreach/OutreachDetail.tsx:2406`\n\n```\n<RsvpControl … /> is rendered beside the RSVP summary buckets\n```\n\n**Reproduce**\n\n```bash\nnpx playwright test -c tests/e2e-harness/playwright.personas.config.ts outreach-lifecycle.spec.ts ; then open tests/e2e-personas/screenshots/73-student-outreach-cant-go.png\n```\n\n---\n\n**Severity** MINOR · **Verified by** `browser` · **Source** `e2e-personas`\nMeasured against `61c1e53` on `claude/gam-343-e2e-w2-outreach-lifecycle`.\n\nThis was filed automatically and is an input to triage, not a verdict.\nRe-verify before acting: this project has filed rows on premises that turned out false.\n\nFinding-Key: e2e-personas/outreach-rsvp-buckets-stale-after-save"
+    },
+    {
+      "identifier": "GAM-365",
+      "legacyId": null,
+      "title": "Running the persona suite turns the eslint gate red with 1124 errors in generated output",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "archived": false,
+      "labels": [
+        "area/w10",
+        "provenance/other",
+        "tier/unreviewed"
+      ],
+      "assignee": null,
+      "blockedBy": [],
+      "blocks": [],
+      "createdAt": "2026-08-13T05:30:39.678Z",
+      "completedAt": null,
+      "canceledAt": null,
+      "url": "https://linear.app/gamitch/issue/GAM-365/running-the-persona-suite-turns-the-eslint-gate-red-with-1124-errors",
+      "description": "|  |  |\n| -- | -- |\n| Observed | After `npx playwright test -c tests/e2e-harness/playwright.personas.config.ts`, the gate-run block reports `4 eslint exit 1 FAIL 1124 errors, 378 warnings`. All 1124 are in `playwright-report/personas/trace/**` — Playwright's own bundled report viewer (`codeMirrorModule`, `sw.bundle.js`, etc). Deleting the directory returns the gate to `exit 0 PASS, 0 errors, 378 warnings`. |\n| Expected | eslint ignores generated, gitignored output. `dist-e2e` is in both .gitignore and eslint's ignores; `playwright-report` and `test-results` are in .gitignore only. |\n\n`eslint.config.js:24`\n\n```\n{ ignores: ['dist', 'dist-e2e', 'node_modules', '.claude', 'supabase/functions/**'] },\n```\n\n`.gitignore:59`\n\n```\nplaywright-report/\n```\n\n**Reproduce**\n\n```bash\nnpx playwright test -c tests/e2e-harness/playwright.personas.config.ts ; python3 .claude/skills/gate-run/scripts/gates.py ; rm -rf playwright-report test-results ; python3 .claude/skills/gate-run/scripts/gates.py\n```\n\n---\n\n**Severity** MINOR · **Verified by** `mutation` · **Source** `other`\nMeasured against `1949e77` on `claude/gam-343-e2e-w2-outreach-lifecycle`.\n\nThis was filed automatically and is an input to triage, not a verdict.\nRe-verify before acting: this project has filed rows on premises that turned out false.\n\nFinding-Key: gate-run/eslint-lints-playwright-report-output"
     }
   ]
 }
