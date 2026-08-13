@@ -192,3 +192,57 @@ Every subagent here is dispatched `run_in_background: false` and waited on.
   holding this subagent** — no worker was dispatched and nothing below was
   written. **Round 2 is the cap (item 19a); a third REVISE escalates to the
   owner rather than looping.**
+- **05:25Z — VERDICT round 2: REVISE (3 MAJOR, 5 MINOR, 2 NIT — no BLOCKER).**
+  The gate ran the loop rather than reasoning about it, in its own worktree
+  (`/tmp/gam344-gate`, removed), and gave port 4174 and the database back
+  verified.
+  - **The §6 mutation loop WORKS, and is now proven rather than derived.**
+    Green → mutate → **red** → revert → green, three times, with the bundle
+    hash swapping `index-D5F4-Gt_.js` → `index-BLwGxaPO.js` → back byte-for-byte
+    as the evidence it really rebuilt. **Both risks I named are refuted:**
+    `--strictPort` never raced, and `globalSetup.mjs` pins nothing about the
+    bundle (it does one health `fetch` and nothing else). The worker now copies
+    a proven procedure instead of rediscovering it.
+  - **MAJOR-1 — but mutation 2 was a FALSE PROOF, and this is the round's best
+    catch.** With the box unticked `markAbsentStudentIds` is `[]`
+    (`EndMeetingDialog.tsx:456`), so removing the guard sends an **empty** row
+    array and still writes nothing: AC 3's row assertion stays **green**. The red
+    I would have quoted came from a *different* assertion, and only because the
+    harness rejects empty inserts (`postgrest.mjs:255`) — against real PostgREST
+    it would be green throughout. My line "if AC 3 stays green with the guard
+    removed, AC 3 is worthless" was **backwards**. The gate supplied the real
+    mutation (`EndMeetingDialog.tsx:456`, ignore `markRemainingAbsent`) with its
+    measured red: `Expected length: 0 / Received length: 3`, three `absent` rows.
+    That *is* T508's defect.
+  - **MAJOR-2 — AC 6 could have passed vacuously.** `coach-meeting.spec.ts`
+    sorts before `student-participation.spec.ts` and its AC 4 test leaves a
+    **completed, participation-counting** `E2E %` meeting behind. With that
+    leftover, Jordan's and Sam's *contaminated before* values are numerically
+    **identical to their predicted after** values (50.0 / 66.7) — so a spec
+    asserting the after numbers passes without the write having moved anything.
+    A false green in the one criterion §4 calls "a real test and not decoration".
+  - **MAJOR-3 — the loop needs two steps I omitted:** a fresh worktree has
+    neither `node_modules` nor `.env.e2e`, and **without `.env.e2e` the
+    `--mode e2e` build succeeds silently** and yields a bundle that throws
+    "Supabase isn't configured yet" — which reads exactly like a successful
+    mutation.
+  - **My round-2 doubt #2 was real but backwards.** The mid-run reseed is
+    *unnecessary and harmful*: the `…-04` drift row can never enter
+    `v_student_participation` (it is `scheduled`; the view admits `completed`
+    only), and reseeding would erase the leftovers that §9.3's "run twice"
+    evidence depends on. Doubts #3, #4, #5 all SOUND and proven; my transcribed
+    locator names were spot-checked and **none was corrupted**.
+  - Also: **GAM-283 is `Done`** — the live rows are GAM-337/GAM-338 (Backlog).
+    My citation was stale.
+- **05:27Z — GATE CAP REACHED (item 19a), and I am stating the judgment rather
+  than burying it.** Two rounds is the cap; a third is priced net-negative.
+  **I am applying round 2's revisions and proceeding to a worker without a
+  third round — a deliberate call the owner may overrule.** Reasoning: 19a's
+  cap exists to stop looping on a plan that is wrong *in substance*, and its
+  rationale is "a plan still failing after two rounds has something wrong with
+  the plan, not the wording." That is not this case — round 2 returned **no
+  BLOCKER**, closed all five open doubts by measurement, proved the one
+  procedure nobody had run, and prescribed each remaining fix with copy-paste
+  specifics. What is left is mechanical. The HEAVY tier's independent
+  `checker-reviewer` round on the finished work is kept, and that is the check
+  that actually protects the deliverable.
