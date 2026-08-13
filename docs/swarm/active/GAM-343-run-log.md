@@ -108,3 +108,45 @@ thing that survives if the container is killed.
   gate that only reads is worth much less than one that runs"). *If this line
   is the last one in this file, the run died holding this subagent.* Dispatched
   `run_in_background: false`.
+- **Verdict: `checker-premise` round 1 returned REVISE — 6 BLOCKER, 5 MAJOR,
+  6 MINOR, 1 NIT.** It ran 8 probe specs in its own worktree (item 23) against
+  the live cluster and browser, and confirmed its cleanup afterwards. This is
+  item 26's "a gate that only reads is worth much less than one that runs"
+  earning its cost: four of the six blockers are things no amount of reading
+  would have found.
+  - **B1** §4 step 5 is **impossible**: step 4 flips the session to `completed`,
+    and `isSessionMarkDayCompleteEligible` requires `scheduled`
+    (`OutreachDetail.tsx:1496`) — measured `MARK DAY TRIGGER COUNT 0`. AC 5 was
+    unreachable through the prescribed journey.
+  - **B2** §4 step 1 **poisons** AC 3: checking Priya in Expected attendees makes
+    `computeExpectedAttendeeRsvpPlan` upsert her `going` row authored by the
+    **coach** at save time — measured `responded_by` = coach id before the
+    student acted. Her later click is then a no-op on an already-selected
+    control. §2a documented the fan-out and I still sequenced around it wrongly.
+  - **B3** AC 9 cleanup **fails**: `rsvps_session_id_fkey` and
+    `attendance_session_id_fkey` are `ON DELETE RESTRICT`, so the prescribed
+    cascade raises `23503` and `beforeEach` kills run 2.
+  - **B4** The keystone (§7 #1) is sound **only** under two conditions I did not
+    state: the date must be Chicago-derived (measured divergence *right now* —
+    `CHICAGO_TODAY 2026-08-12` vs `UTC_TODAY 2026-08-13`, and the UTC value makes
+    the completion trigger invisible), and the start time must be set explicitly
+    late (the dialog defaults to 09:00, which locks `RsvpControl` for any run
+    after 9am Chicago).
+  - **B5** The `role=status` loading gate can **never** pass — permanent empty
+    live regions mean it is 4 on the detail page, 8 on the list.
+  - **B6** AC 4's mutation **cannot go red**: the `UNIQUE (session_id,
+    student_id)` constraint turns `.insert()` into `23505`, so "still exactly one
+    row" stays green.
+  - **MAJOR 7** reverses my Escape guidance: the calendar is its own
+    `role=dialog`, Escape closes only it, and **without** that Escape the team
+    option click is intercepted by the footer. I had imported the skill's trap
+    list, which describes a different dialog.
+  - Also: persona switching needs explicit cookie/storage clearing (M8); only 3
+    team options, archived filtered by GAM-305 (M9); a bare
+    `Mark day complete` name **does** match, Playwright names are substrings
+    (M10); AC 6 as written is vacuous — Priya carries 4.0 **seed** hours, so
+    "Priya > 0" passes with the whole write path deleted (M11).
+  - Two of my five declared doubts resolved in my favour (the dialog *can*
+    express today; the additive `events` update does *not* drift a fixture), and
+    `CheckboxListItem` turns out to expose **both** roles by construction, so
+    neither disagreeing spec was wrong.
