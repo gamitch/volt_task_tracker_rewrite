@@ -12031,3 +12031,110 @@ into `Backlog` because item 28a makes promotion the owner's signal:
 3. **`GAM-327`** (medium, `tier/fast`) — nothing executes any of the three
    workflow YAMLs. No actionlint, no yamllint, no test. This is the gap the
    packet originally mis-attributed to GAM-312.
+
+## GAM-283 (T607) — a failed end-meeting told the coach nothing, and the message it did render was invisible (HEAVY tier)
+Result: PASS
+Worker: `worker-implementer` (pinned default) · Checker: `checker-reviewer`, independent · Gate: `checker-premise` (opus), two rounds
+Branch: `claude/gam-283-end-meeting-failure-copy` · commit `51192fb` · base `28f7394`
+
+### Tier, stated and defended (item 26)
+
+**HEAVY.** Not on topic or ticket size. The row's own acceptance criteria required putting a
+**factual claim about database state** in front of a coach — that they may safely retry — and the
+truth of that claim rests on `endMeeting.ts`'s write ordering and idempotency. A mistake there
+lies to a user about their own data, which is item 26's literal trigger and the shape of the two
+precedents it cites (T305, T189).
+
+**Item 18's opus override was NOT applied to the worker.** None of its four triggers is present:
+no migration, no RLS policy or `security definer` helper, no metric-view SQL, no auth, session or
+role-resolution logic. Item 25's second obligation — do not bump a worker because a topic sounds
+sensitive — kept it on the pinned default. The gate and checker caught what that tier missed.
+
+### The premise gate earned its cost twice, and both findings needed running code
+
+Round 1 returned **REVISE** with two BLOCKERs against the orchestrator's own packet.
+
+**BLOCKER-1 — the prescribed copy was false in a reachable state.** The packet required telling the
+coach *"the meeting is still open and a retry is safe"*, sourced from `endMeeting.ts:86-87` — the
+file describing itself. The gate built the ambiguous-write case: step 3's `UPDATE` commits
+server-side and its response is lost, so `runMutation` rejects with `code: 'UNKNOWN'` while
+`event_sessions.status` is already `'completed'`. Asserted and passing:
+
+```
+await expect(fn(PAYLOAD)).rejects.toMatchObject({ code: 'UNKNOWN' });
+expect(db.sessionStatus).toBe('completed');   // "still open" is FALSE
+```
+
+The retry-safety half survived — all six failure modes converge on the clean-run state after an
+identical retry. The state claim was struck from the packet.
+
+**BLOCKER-2 — the fix would have been invisible.** `setIsConfirmOpen(false)` sat inside the `try`,
+so on failure the confirm `AlertDialog` stayed open; Astryx's `Dialog` calls `showModal()`, and the
+error `Banner` renders outside that top layer, behind an inert `::backdrop`. Every criterion in the
+packet's revision 1 would have passed while the coach saw nothing, because `document.body.textContent`
+cannot distinguish rendered from rendered-behind-an-inert-layer.
+
+Round 2 returned **DISPATCH** (3 MINOR, 2 NIT) and caught one more real hole: **criterion 1's named
+mutation was inert.** Re-adding `instanceof Error` inside the new helper leaves the criterion's own
+input byte-identical, because a `SupabaseLoaderError` is a plain object and never an `Error`
+instance. A criterion whose mutation cannot redden it is not a criterion — the packet's own stated
+standard, which the packet had violated.
+
+Artifacts: packet `docs/swarm/active/GAM-283-packet.md` (revision 3), run log `-run-log.md`.
+
+### Four corrections to the filing, three of which changed the work
+
+1. The filing's "two catch blocks with the identical defect" is wrong in both directions. `:829` is
+   dead for product wiring but alive for the injected test seam; `:863-865` is reachable in type
+   terms but unreachable in product (`LiveConsole.tsx:1192` passes `hasAttendanceCorrections={false}`).
+2. Exactly one existing assertion breaks — measured at 1 of 30 in its file, 1 of 2437 suite-wide.
+   Re-derived under the T508 §3g precedent in that same file; no boss-architect escalation needed.
+3. `:903` is a `Banner` title, not an `AlertDialog` title.
+4. The issue title's "never the real error" invites a fix `loader.ts:74-76` forbids outright.
+
+### Verification
+
+Six gates at `51192fb`, tree clean: tsc, vite build, format:check, eslint (0 errors), full vitest
+**95 files / 2443 tests** (baseline 2437, +6 fully accounted as `EndMeetingDialog.test.tsx` 30→36,
+no test deleted), scoped vitest 8 files / 348 tests. All exit 0.
+
+Mutations replayed **three times independently** — worker, orchestrator, checker — each in its own
+worktree (item 23), shared tree never mutated. The orchestrator's first attempt at criterion 2's
+mutation was malformed (added to `try` while leaving it in `finally`, which always runs) and showed
+a false green; re-run correctly as a real move it reddens 2. Recorded because a malformed mutation
+showing green is exactly how a criterion gets certified against nothing.
+
+The checker ran five mutations **distinct** from the orchestrator's, re-derived the copy's truth from
+source rather than from the packet, and confirmed the one claim the orchestrator asked a second pair
+of eyes on: "nothing will be recorded twice" survives both disclosed divergences, because a non-undo
+and an omission are neither of them a duplicate write. It went further and checked whether a retry
+could be blocked once the session is already `completed` — `20260717000002_rls.sql:226-228` has no
+status predicate, so it is not, and the shipped advice holds.
+
+Item 27: satisfied, not Partial. Real path traced `router.tsx:124/228` → `LiveConsole.tsx:640/1187`
+→ the real loader; the rejection shape a real coach's failure produces is the shape both new
+component tests inject.
+
+Accessibility (item 15 / DES-17): `Banner status="error"` maps to `role="alert"`; measured after a
+real rejection that the alert node is outside any open dialog and `document.activeElement` is the
+"End meeting" trigger, so focus lands on the retry affordance.
+
+### Follow-up (item 20 — filed before the row moved, not after)
+
+Three rows through the `linear-task-writing` skill per item 30, all into `Backlog` because item 28a
+makes promotion the owner's signal:
+
+1. **`GAM-337`** (medium, `tier/standard`) — the ambiguous-write residue this row could not remove:
+   the coach is told the ending did not finish when it did. Needs a refetch-and-reconcile, which the
+   gate explicitly ruled out of GAM-283's scope.
+2. **`GAM-338`** (medium, `tier/fast`) — the on-screen promise that a retry "won't record anything
+   twice" is guarded by **no test**. Removing `ignoreDuplicates: true` keeps all 2443 green while
+   making the shipped sentence false.
+3. **`GAM-339`** (low, `tier/standard`) — three near-identical write-error copy helpers.
+
+### Known residue, disclosed
+
+The banner reads "Couldn't end this meeting" immediately followed by "Couldn't finish ending this
+meeting" — a near-duplicate pair a screen reader hears as one utterance. Graded NIT by the checker
+and folded into `GAM-339`'s optional copy polish rather than fixed here, because changing the copy
+without the suite's two constraint tests in front of you is how the forbidden claims come back.
