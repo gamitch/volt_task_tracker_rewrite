@@ -249,3 +249,27 @@ summary.
   skill's figure, not a regression here. Gate 5 ran without a baseline and the
   block says so; no `src/**` and no vitest test file changed, so the count could
   not have moved.
+- **PR CREATION REFUSED BY CREDENTIALS — branch is pushed, PR is NOT open.**
+  `gh pr create` returns `HTTP 401: Bad credentials` on the GraphQL API for
+  both credentials this run holds. Diagnosed rather than assumed:
+  `GITHUB_TOKEN` is present and 40 characters, `OVERRIDE_GITHUB_TOKEN` is
+  empty, and `gh api user` also 401s — while `git push` works throughout. So
+  the token is git-scoped only and the REST/GraphQL API refuses it. **This is
+  the same wall GAM-299 hit** (`5e76d4b`, "PR creation refused by
+  credentials"), so it is a standing boundary of dispatched runs and not a
+  transient failure. I did not attempt another channel.
+  - **Everything needed to open the PR is preserved in the repository:**
+    `docs/swarm/active/GAM-342-pr-body.md`, first line `Closes GAM-342`.
+    An owner or a scoped session can open it with
+    `gh pr create --base main --head claude/gam-342-e2e-w1-checkin \
+       --title "GAM-342: E2E — W1 check-in journey driven and proven in a real browser" \
+       --body-file docs/swarm/active/GAM-342-pr-body.md`.
+  - The branch name carries the identifier, so the PR will link and its merge
+    will close GAM-342 through the team automation (item 28f).
+- **Issue moved `In Progress → In Review`** with read-back (item 28e — never
+  `Done`; the merge closes it, not me). The work is complete and independently
+  checked; what is outstanding is a human opening the PR and accepting it.
+- **Run complete.** No subagent was left in flight at any point: all three
+  (`checker-premise` ×2, `worker-implementer`, `checker-reviewer`) were
+  dispatched with `run_in_background: false` and each verdict was recorded
+  before the next step began.
