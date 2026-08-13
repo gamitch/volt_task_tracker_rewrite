@@ -1,4 +1,4 @@
-# GAM-343 worker packet — E2E W2 outreach lifecycle
+# GAM-343 worker packet — E2E W2 outreach lifecycle (round 2, post-gate)
 
 **Issue:** GAM-343 — E2E — W2 Run an outreach event: create → RSVP → attend →
 complete → hours land
@@ -14,47 +14,61 @@ Item 26's tiebreak: when two tiers are arguable, take the heavier one.
 auth/session/role logic. Test files only.
 **Branch:** `claude/gam-343-e2e-w2-outreach-lifecycle` (already checked out).
 
-> **Where this packet and the Linear issue body disagree, this packet is right
-> and the issue is stale.** Three of the issue's operative claims were measured
-> against the tree before this packet was written; two were wrong. They are
-> corrected in §2 with citations. Do not "restore" the issue's wording.
+> **Round 1 of the premise gate returned REVISE (6 BLOCKER, 5 MAJOR, 6 MINOR)
+> and this is the revision.** Everything marked *(gate-measured)* was verified
+> by `checker-premise` in a real browser or against the live cluster, running 8
+> probe specs in its own worktree — not read from source. **Where this packet
+> and the Linear issue body disagree, this packet is right and the issue is
+> stale.** Where this packet and round 1 disagree, round 1 was wrong; do not
+> restore it.
 
 ---
 
 ## 0. Environment
 
-Nothing is running on a fresh container and `node_modules` starts absent. Bring
-it up in this order:
+**The environment is already up. Do NOT run `start.sh`** — it recreates the
+cluster and would destroy state *(gate MINOR 17)*. Only run it if you have
+verified the services are down.
+
+| Service | Where |
+| -- | -- |
+| Postgres | `psql -h 127.0.0.1 -p 55432 -U postgres -d scratch` |
+| Harness API | http://127.0.0.1:54321 |
+| Preview bundle | http://127.0.0.1:4174 (already built and **IPv4-bound**) |
+| Runner | `playwright@1.62.1`, installed `--no-save`; chromium present |
 
 ```bash
-npm ci                                   # several minutes
-bash tests/e2e-harness/start.sh          # ~40s; needs root for `su postgres`
-npx playwright install chromium          # if the browser is missing
 npx playwright test -c tests/e2e-harness/playwright.personas.config.ts
-bash tests/e2e-harness/stop.sh           # ALWAYS, at the end
 ```
 
-`start.sh` recreates the cluster and reloads `seed.sql` each time, so a dirtied
-run starts clean again. `stop.sh` deletes the data directory and `.env.e2e`; a
-leftover cluster holds port 55432 and silently breaks the next run.
+If the preview has died, restart it **IPv4-bound** — `npm run preview` alone
+binds `[::1]` while the config polls `127.0.0.1`, costing a silent 180s timeout:
 
-**Establish your own baseline before writing a line of spec.** Run the existing
-persona suite and record the pass/fail split. GAM-342's run recorded `21 passed,
-5 failed` with all five pre-existing and in files you may not edit. **Do not
-assume that number still holds — measure it, and report what you measure.**
-Known-stale among them (measured by GAM-342's own premise gate, round 2):
-`student-parent.spec.ts:66` is titled *"an RSVP made on the student home never
-reaches the database"* and **that premise is false** — the gate deleted the
-suspected residue row, re-ran the test alone, and a *fresh* `rsvps` row still
-appeared. The control writes. Do not treat that test as evidence about the RSVP
-path, and do not fix it — it is not yours.
+```bash
+(setsid npm run preview -- --outDir dist-e2e --port 4174 --strictPort \
+   --host 127.0.0.1 > /tmp/preview.log 2>&1 < /dev/null &)
+```
+
+**Measured baseline, this run: `27 passed, 5 failed` (3.4m).** All five are
+pre-existing, live in files you may not edit, and are **not yours**:
+`coach-meeting.spec.ts:88` and `:115` (the archived team is no longer offered —
+stale against shipped work), and `student-parent.spec.ts:27`, `:66`, `:121`.
+
+Note `student-parent.spec.ts:66` is titled *"an RSVP made on the student home
+never reaches the database"* and **that premise is false** — GAM-342's gate
+deleted the suspected residue row, re-ran it alone, and a *fresh* `rsvps` row
+still appeared. The control writes. Do not treat it as evidence about the RSVP
+path, and do not fix it.
+
+Run `bash tests/e2e-harness/stop.sh` only if you are the last consumer; the
+orchestrator will otherwise handle teardown.
 
 ---
 
 ## 1. Acceptance criteria
 
-Verbatim from GAM-343, renumbered only for reference. Corrections in §2 change
-*how* some are satisfied, never *whether*.
+Verbatim from GAM-343, renumbered for reference. §2 and §4 change *how* several
+are satisfied — never *whether*.
 
 1. **Every step is driven, not inspected** — text typed, selectors opened and
    chosen from, checkboxes toggled, forms saved, and at least one saved record
@@ -86,288 +100,406 @@ Verbatim from GAM-343, renumbered only for reference. Corrections in §2 change
 ### 2a. ❌ The "never a deletion candidate" constraint is stale (T118, reversed by T119)
 
 The issue says `loaders/outreach.ts` *"treats a student's own `responded_by` as
-never a deletion candidate during completion fan-out."* Two errors in one
-sentence:
+never a deletion candidate during completion fan-out."* Two errors:
 
 - **The protection is gone.** `src/lib/supabase/loaders/outreach.ts:1398-1441`
-  (`computeExpectedAttendeeRsvpPlan`) documents T119 / PRD v2 D-7, George's
-  2026-07-20 override: *"`selfAuthoredKeys` (T118's protection mechanism) is
-  gone -- there is no longer any row this fan-out skips."*
-- **It is not "completion" fan-out.** It is the expected-attendee
-  reconciliation inside `makeSaveOutreachEvent`. `markDayComplete`
-  (`outreach.ts:1281-1377`) never touches `rsvps` at all — it writes
-  `attendance`, flips `event_sessions.status`, then does a disclosed
-  non-atomic additive `events` update.
+  documents T119 / PRD v2 D-7, George's 2026-07-20 override: *"`selfAuthoredKeys`
+  (T118's protection mechanism) is gone -- there is no longer any row this
+  fan-out skips."* *(gate-confirmed)*
+- **It is not "completion" fan-out.** It is the expected-attendee reconciliation
+  inside `makeSaveOutreachEvent`. `markDayComplete` (`:1355-1377`) touches only
+  `attendance`, `event_sessions.status` and `events` totals — never `rsvps`.
+  *(gate-confirmed)*
 
-**The current rule — "the checklist wins" — is what you test instead**
-(`outreach.ts:1403-1420`): a **checked** student gets `status: 'going'` upserted
-for every final session id regardless of the prior row's author or status, with
-`responded_by` becoming the acting coach's id; an **unchecked** student has
-their `status = 'going'` rows **deleted** regardless of author; and a
-`'declined'`/`'maybe'` row is left completely untouched by an uncheck. That last
-clause is a status filter, not an author rule.
+**The current rule — "the checklist wins"** (`outreach.ts:1403-1420`): a
+**checked** student gets `status: 'going'` upserted for every final session id
+regardless of the prior row's author or status, with `responded_by` becoming the
+**acting coach's** id; an **unchecked** student has their `'going'` rows deleted
+regardless of author; a `'declined'`/`'maybe'` row is untouched by an uncheck.
 
-### 2b. ✅ The RLS constraint is real, with a nuance that decides AC 3
+🔴 **This fan-out is a trap for AC 3 and §4 sequences around it — see §4 step 1.**
 
-`supabase/migrations/20260717000002_rls.sql:205-211` — both write policies
-carry `responded_by = auth.uid()`:
+### 2b. ✅ The RLS constraint is real, with the nuance that decides AC 3
 
-```sql
-create policy own_or_linked_write on rsvps
-  for insert to authenticated
-  with check (student_id in (select my_student_ids()) and responded_by = auth.uid());
-
-create policy own_or_linked_update on rsvps
-  for update to authenticated
-  using (student_id in (select my_student_ids()))
-  with check (student_id in (select my_student_ids()) and responded_by = auth.uid());
-```
-
-**Nuance the mutation depends on:** `staff_all` (`:197-199`) is `for all` with
+`supabase/migrations/20260717000002_rls.sql:205-211` — both write policies carry
+`responded_by = auth.uid()`. But `staff_all` (`:197-199`) is `for all` with
 `using (is_staff()) with check (is_staff())`, and PostgreSQL OR's permissive
-policies. **A coach may write any `responded_by` it likes.** AC 3's mutation is
-therefore only red when the actor is the **student** — as the student,
-`own_or_linked_write` fails on the uid mismatch and `staff_all` fails on
-`is_staff()`, so the INSERT raises `42501`. Drive it as the student or the
-mutation proves nothing.
+policies, so **a coach may write any `responded_by`**.
 
-Per the skill's trap list: a blocked INSERT raises `42501`, but a blocked
-**UPDATE** does not — it reports `UPDATE 0`. Use `execAs` and assert the
-SQLSTATE for the insert case; re-read the row for the update case.
+*(gate-measured, live cluster, through `execAs`'s exact statement shape)*:
+
+- student inserting `responded_by = <coach>` →
+  `ERROR: 42501: new row violates row-level security policy for table "rsvps"`
+- coach inserting `responded_by = <student>` → **succeeds silently**
+
+AC 3's mutation is therefore only red when the actor is the **student**.
+
+Skill trap that still applies: a blocked INSERT raises `42501`, a blocked
+**UPDATE** reports `UPDATE 0` and raises nothing. Assert the SQLSTATE for the
+insert; re-read the row for the update.
 
 ### 2c. ✅ AC 5 / T309 is real and sharper than stated
 
-`src/pages/outreach/MarkDayCompleteDialog.tsx:494-515` and `:831`: the uncheck
-writes `status: 'absent'` — it does **not** delete. `'absent'` was chosen over
-DELETE precisely because a DELETE would need a second non-atomic write step in
-`markDayComplete`.
+`src/pages/outreach/MarkDayCompleteDialog.tsx:815-840`: the uncheck writes
+`status: 'absent'` — it does **not** delete. `'absent'` was chosen over DELETE
+because a DELETE would need a second non-atomic write step in `markDayComplete`.
 
-**The precision that matters:** the dialog only emits an `'absent'` row for a
-student who **already has a recorded attendance row** whose status is an
-attending one. Unchecking a student who was never recorded is a **legitimate
-no-op**, not a bug. A spec that unchecks a never-recorded student and asserts a
-database change will fail against correct code; one that asserts "no change" is
-vacuous. **Seed the recorded row first, by checking the student and completing,
-then re-open and uncheck** — that is also AC 1's "at least one saved record
-edited afterwards".
+**The precision that matters** *(gate-confirmed at the `isAttendingStatus(existing?.status)`
+guard)*: the dialog only emits an `'absent'` row for a student who **already has
+a recorded attending row**. Unchecking a never-recorded student is a
+**legitimate no-op**, not a bug. §4 step 4 therefore records the row first,
+through a different surface.
 
 ### 2d. ❌ `RsvpControl` has no "Going" label
 
-`src/pages/outreach/RsvpControl.tsx:301-308`:
+`src/pages/outreach/RsvpControl.tsx:301-308` — `Sign up` / `Maybe` / `Can't go`;
+`RsvpControl.test.tsx:100` asserts exactly this against "Going". *(gate-measured
+live: `RADIOS [ 'Sign up', 'Maybe', "Can't go" ]`.)* "Going" exists only in
+`OutreachList.tsx:3534-3538`'s inline copy for the `/outreach` list.
 
-```ts
-export const RSVP_ITEMS: readonly { value: RsvpStatus; label: string }[] = [
-  { value: 'going',    label: 'Sign up' },
-  { value: 'maybe',    label: 'Maybe' },
-  { value: 'declined', label: "Can't go" },
-];
-```
+Route the student through `/outreach/:eventId` — the only mount of `RsvpControl`
+(`OutreachDetail.tsx:812`, rendered `:2406-2419`) — and click **`Sign up`** then
+**`Can't go`**. The written `status` values are still `going` then `declined`.
+Apostrophe is ASCII `U+0027`.
 
-`RsvpControl.test.tsx:100` asserts this explicitly against "Going". "Going"
-exists only in `OutreachList.tsx:3534-3538`'s own inline copy for the
-`/outreach` list view. **Route the student through `/outreach/:eventId`** — the
-only mount of `RsvpControl` (`OutreachDetail.tsx:812`, rendered at
-`:2406-2419`) and the surface the issue names — and click **`Sign up`**, then
-**`Can't go`**. The `status` values written are still `going` then `declined`,
-so the issue's database-level claim is unchanged; only the label differs.
-
-Apostrophe in `Can't go` is ASCII `U+0027`, codepoint-verified in both files. A
-plain `"Can't go"` in a Playwright name matches.
-
-### 2e. 🔴 The journey is not achievable on one session *as the issue describes it*
-
-Two predicates pull in opposite directions:
+### 2e. 🔴 The keystone: one session dated today — sound, under two conditions
 
 | Control | Predicate | Citation |
 | -- | -- | -- |
-| `RsvpControl` editable | `now < starts_at` **and** status `scheduled` | `RsvpControl.tsx:327-329`, `:518` |
-| `Mark day complete` trigger visible | staff **and** `formatChicagoDateOnly(now) >= session.sessionDate` | `OutreachDetail.tsx:1492-1497` |
+| `RsvpControl` editable | `now < starts_at` **and** status `scheduled` | `RsvpControl.tsx:318-329`, `:518` |
+| `Mark day complete` visible | staff **and** `formatChicagoDateOnly(now) >= session.sessionDate` **and** status `scheduled` | `OutreachDetail.tsx:1493-1497` |
 
-Future-only versus today-or-past. **Resolution this packet adopts: one session
-dated *today* whose start time is later today.** `today >= today` satisfies the
-completion predicate, and `now < starts_at` satisfies the RSVP predicate, so a
-single session carries the whole chain. **Verify this holds in the browser
-before building the spec around it** — it is decision #1 in §7. If the create
-dialog cannot express a same-day-but-later start, fall back to `Custom dates`
-mode with two sessions (one today, one future) and say so in your report.
+*(gate-measured — both true simultaneously on one session)*:
+
+```
+SESSIONS [{"session_date":"2026-08-12","starts_at":"2026-08-13 04:59:00+00","status":"scheduled"}]
+NOW { n: '2026-08-13 04:02:50+00', chi: '2026-08-12 23:02:50' }
+SIGNUP aria-disabled null          <- editable
+TRIG aria= "Mark day complete — Wed, Aug 12"
+```
+
+**Two conditions round 1 omitted, both BLOCKER-grade:**
+
+1. **Derive the date in Chicago, never from `toISOString()`.** The container
+   clock is UTC and the two diverge *right now* — gate-measured
+   `CHICAGO_TODAY 2026-08-12` vs `UTC_TODAY 2026-08-13`. The UTC value makes
+   `formatChicagoDateOnly(now) >= session_date` false and **the completion
+   trigger never renders**. Use:
+   ```ts
+   new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date())
+   ```
+   `session_date` itself is stored verbatim from the picked calendar date
+   (`OutreachEventDialog.tsx:884`), so the risk lives entirely in *your* date
+   arithmetic.
+2. **Set the start time explicitly and late.** `DEFAULT_START_TIME` is `09:00`
+   Chicago (`OutreachEventDialog.tsx:641`), so with the defaults `now <
+   starts_at` is **false for any run after 9am Chicago** and `RsvpControl` is
+   locked. Set start `11:59 PM` (and end at or after it).
+
+**Disclosed residual — a real dead window.** No single session can satisfy both
+predicates in the final minutes of the Chicago day, and a run that crosses the
+chosen `starts_at` mid-execution locks the RSVP control between steps 2 and 3.
+**Order the spec so both RSVP writes complete before the completion step**, and
+if the window is missed, report it as an environment condition rather than a
+product defect.
 
 ---
 
 ## 3. Measured terrain — selectors
 
-Every row below carries a citation. Where a role is **not** established, the
-packet says so; verify live rather than guessing.
+Every claim below was **gate-measured in the live browser** unless marked
+otherwise. Round 1 got four of these wrong; the corrections are flagged.
 
 ### Routes
 `/outreach` → `OutreachList`, `/outreach/:eventId` → `OutreachDetail`
-(`src/app/router.tsx:169-170, 241, 249`). Both auth-only, **no `RequireRole`** —
-students reach the same two paths.
+(`src/app/router.tsx:169-170, 241, 249`). Both auth-only, **no `RequireRole`**.
 
 ### Coach creates the event — `OutreachEventDialog.tsx`
 
 | Control | Locator | Citation |
 | -- | -- | -- |
-| Open dialog | `getByRole('button', { name: 'New outreach event' })` — **see RISK 1** | `OutreachList.tsx:3419` |
-| Scope | `page.getByRole('dialog').filter({ hasText: 'Basics' }).first()` | `OutreachEventDialog.tsx:1294, 1314` |
-| Title | `dialog.getByLabel(/^Title/)` — regex because `isRequired` decorates the label | `:1317-1323` |
-| Schedule mode | `getByRole('radiogroup', { name: 'Schedule mode' })` → `radio` `Single`/`Multi-day`/`Recurring`/`Custom dates` | `:1386-1392` |
-| Date (single) | `getByRole('combobox', { name: /^Date/ })`, fill `MM/DD/YYYY`, press Enter | `:1397`; proven live at `coach-meeting.spec.ts:129` |
-| Team scope | `getByRole('combobox', { name: 'Team scope' })`; options are `role=option`, **portalled** — query `page.getByRole('option')`, not `dialog.…`; `hasSelectAll` injects a first `Select all` row | `:1558-1567`; `coach-meeting.spec.ts:92-111` |
+| Open dialog | `getByRole('button', { name: 'New outreach event' })` (see hazard 1) | `OutreachList.tsx:3419` |
+| Scope | `page.getByRole('dialog').filter({ hasText: 'Basics' }).first()` | `:1294`, `:1314` |
+| Title | `dialog.getByLabel(/^Title/)` — regex; `isRequired` decorates the label | `:1317` |
+| Schedule mode | `getByRole('radiogroup', { name: 'Schedule mode' })` → `radio` | `:1386-1392` |
+| Date (single) | `getByRole('combobox', { name: /^Date/ })`, fill `MM/DD/YYYY`, press Enter | `:1397` |
+| **Start time** | `dialog.getByLabel(/^Start time/)` — label is `Start time ({friendly date})`; also `input[placeholder="Select a time"]` nth(0) | `:1492-1503` |
+| **End time** | `dialog.getByLabel(/^End time/)` — or nth(1) | `:1492-1503` |
+| Team scope | `getByRole('combobox', { name: 'Team scope' })`; options `role=option` | `:1558-1567` |
 | Expected attendees | one `CheckboxList` **per team**, labelled with the team name; each item named by the **student display name** | `:1596-1611` |
-| Submit | `dialog.locator('button', { hasText: /^Create event — \d+ session/ })` | `:1639-1645`, `:951-954` |
+| Submit | `dialog.locator('button', { hasText: /^Create event — \d+ session/ })` | `:951-954`, `:1639-1645` |
 
-**Submit label is dynamic and uses an EM DASH (U+2014):** `Create event — 1
-session` / `Create event — 3 sessions` / `Save changes — 1 session`
-(`computeConfirmLabel`, `:951-954`). It is **not** the meetings dialog's "Create
-N meetings" form. Read the label, then assert the database agrees with the
-number it promised.
+Time defaults *(gate-measured)*: `9:00 AM` / `12:00 PM`. `fill('11:59 PM')` works.
 
-`DateRangeInput`'s role is **not established** by any spec here. The proven path
-is text-then-day-cell: click `getByText('Select date range').first()`, then
-`page.getByRole('button', { name: /^\w+day, \w+ \d+, \d{4}$/ })`
-(`coach-meeting.spec.ts:198`). **Never press Escape to close the calendar** — it
-closes the whole `Dialog` and loses the form. Escape after a `MultiSelector` is
-fine.
+Submit label *(gate-measured)*: `"Create event — 1 session"`, EM DASH U+2014, and
+its `aria-label` is `null` — `hasText` is the correct matcher, not a name match.
+Read the label, then assert the database agrees with the count it promised.
+
+🔴 **`Team scope` has THREE options, not four** *(gate-measured:
+`OPTIONS [ 'Select all', 'Volt Robotics 9911', 'Volt Junior 4402' ]`)*. Archived
+teams are filtered out of `teamOptions` (`:1052-1055`, GAM-305) — **unlike** the
+meetings dialog. A worker copying `coach-meeting.spec.ts:92-111` will wait
+forever on `Volt Legacy 2201`. All three start `aria-selected="true"`; narrowing
+means **deselecting** `Volt Junior 4402`.
+
+🔴 **Round 1's Escape guidance was BACKWARDS — you MUST press Escape**
+*(gate MAJOR 7)*. The calendar popover is **its own `role=dialog`**, and Escape
+closes only that layer:
+
+```
+after Enter:  dialogs 2
+after Escape: dialogs 1, dateValue "August 12, 2026"   <- form intact
+```
+
+**Without** the Escape, the team-option click is intercepted:
+`<div class="astryx-layout-footer …"> subtree intercepts pointer events`, and
+`force: true` silently lands on the footer, leaving the scope unnarrowed.
+Prescribed order: **fill date → Enter → Escape → open `Team scope` → plain
+click.** (`Close calendar` resolves to **2** buttons and its footer button is
+itself covered — Escape is the only working route.)
+
+*Round 1 imported this trap from the `e2e-personas` skill's list, which
+describes the meetings dialog. It does not transfer.*
 
 ### Student answers — `RsvpControl.tsx` on `/outreach/:eventId`
 
 - Group: `getByRole('radiogroup', { name: 'Your RSVP for {title} on {date}' })`
   (`:508`, `:517`). Date is `en-US` `{ weekday:'short', month:'short',
-  day:'numeric' }` in `America/Chicago` → e.g. `Sat, Aug 15` (`:356-361`).
+  day:'numeric' }` in `America/Chicago` (`:356-361`). *(gate-measured:
+  `"Your RSVP for E2E GATE Lifecycle on Wed, Aug 12"`.)*
 - Options: `role=radio` named `Sign up` / `Maybe` / `Can't go`; assert
   `aria-checked`.
-- **Locks** when `now >= starts_at` or status ≠ `scheduled` (`:327-329`,
-  `:518`) — this is §2e's constraint.
+- **Locks** when `now >= starts_at` or status ≠ `scheduled` — §2e.
 
 ### Coach completes the day — `MarkDayCompleteDialog.tsx`
 
 | Control | Locator | Citation |
 | -- | -- | -- |
 | Trigger | `getByRole('button', { name: /^Mark day complete — / })` | `OutreachDetail.tsx:2337-2345` |
-| Scope | `page.getByRole('dialog')` — **mandatory, see RISK 2** | `MarkDayCompleteDialog.tsx:1126-1133` |
+| Scope | `page.getByRole('dialog')` — **mandatory**, hazard 2 | `:1140-1175` |
 | Per-student | `dialog.getByRole('checkbox', { name: student.name })` | `:1151-1160` |
 | People reached | `dialog.getByLabel(/^People reached/)` | `:1162-1170` |
-| Confirm | `dialog.locator('button', { hasText: /^Mark complete — / })` | `:1058`, `:758-760` |
+| Confirm | `dialog.locator('button', { hasText: /^Mark complete — / })` | `:758-760` |
 
-🔴 **The trigger is the highest-risk selector in the flow.** Astryx `Button`'s
-`label` becomes the `aria-label` and `children` only sets visible text, so the
-accessible name is `Mark day complete — Sat, Aug 15` and **a bare
-`getByRole('button', { name: 'Mark day complete' })` will not match.**
-`OutreachDetail.tsx:2331-2336` says this is deliberate — N sessions get N
-distinct names. EM DASH U+2014.
+⚠ **Round 1 claimed a bare `getByRole('button', { name: 'Mark day complete' })`
+would not match. That is FALSE** *(gate: `BARE COUNT 1`, `BARE EXACT 0`)* —
+Playwright's default name match is a case-insensitive **substring**, so the bare
+name matches and only `exact: true` fails. The accessible name really is
+`Mark day complete — Wed, Aug 12` (Astryx `label` beats `children`), so **keep
+the regex** — but for the real reason: **multi-session disambiguation**, not
+non-matching.
 
-Confirm label is also dynamic: `Mark complete — {n} attended · {h} h`
-(`:758-760`) — EM DASH U+2014 **and** MIDDLE DOT U+00B7, both codepoint-verified.
-It recomputes on every checkbox toggle.
+Confirm label *(gate-measured)*: `"Mark complete — 2 attended · 0 h"` — EM DASH
+U+2014 **and** MIDDLE DOT U+00B7. It recomputes on every toggle.
 
-**Do not assert that the confirm label's hour sum equals `v_student_hours`.**
-`MarkDayCompleteDialog.tsx:463-467` discloses that the two can legitimately
-disagree when preserved check-in/out timestamps make the view's tier-2 rule
-fire. AC 6 reads hours from the database; the label is not the witness.
+**Ineligible branch:** if `status !== 'scheduled'` the dialog renders no
+checklist, no inputs, no confirm — only `Close` and a banner
+`This session can't be marked complete from here` (`:1142`, `:1246`). Landing
+here means the session is already `completed` — see §4 step 5.
 
-**Ineligible branch:** if `session.status !== 'scheduled'` the dialog renders no
-checklist, no inputs and no confirm — only a `Close` button and a banner
-`This session can't be marked complete from here` (`:1142`, `:1246`). If you
-land here, your session predicate is wrong; re-read §2e.
+### Coach records attendance on the page — `AttendancePanel.tsx`
 
-### Strict-mode hazards — all six are real
+New in round 2; this is how AC 5 becomes reachable.
 
-1. 🔴 **`New outreach event` renders twice on an empty `/outreach`** — page
-   header (`OutreachList.tsx:3419`, unconditional) **and** the `EmptyState`
-   action (`:3451`, when `events.length === 0`). Not mutually exclusive. The
-   seed ships outreach events so you should be safe, but wait for real data
-   (`await expect(page.getByText('Library STEM Night').first()).toBeVisible()`)
-   before clicking, exactly as `coach-meeting.spec.ts:48-52` documents.
-2. 🔴 **Student-named checkboxes exist twice on the detail page while the
-   dialog is open** — `AttendancePanel.tsx:611-616` renders a page-level
-   `CheckboxInput label={student.name}` and the dialog renders
-   `CheckboxListItem label={student.name}`. Same role, byte-identical name. The
-   hours fields collide too (`AttendancePanel.tsx:621` vs
-   `MarkDayCompleteDialog.tsx:1209`, both `${student.name} hours`). **Scope
-   every dialog interaction to `getByRole('dialog')`.**
-3. `Mark day complete` is both the trigger's visible text and the dialog's
-   header title — `getByText` is ambiguous once open; role queries are safe
-   because the trigger's name carries the date.
-4. Multi-session events multiply every per-session control; names differ only
-   by date, so two sessions on one calendar day collide.
+- Mounted staff-only at `OutreachDetail.tsx:2429-2435`.
+- Per student: `CheckboxInput label={student.name}` (`AttendancePanel.tsx:609-616`),
+  plus a `NumberInput` `${student.name} hours` once checked (`:621`).
+- Toggling **writes `attendance` directly** via `onUpsertAttendance`
+  (`:641`, `:712`, `:785`) and **does not flip `event_sessions.status`** —
+  verified independently of the gate. Unchecking here calls `onRemoveAttendance`
+  (`:725`), a DELETE — which is *not* the dialog's `'absent'` behaviour; do not
+  conflate them.
+
+### `CheckboxListItem` — settled
+
+It exposes **both** roles by construction: `CheckboxListItem` composes
+`ListItem`→`Item`, which renders an invisible `<button>` carrying the label
+(`node_modules/@astryxdesign/core/src/Item/Item.tsx:438-447`) **and** a real
+`<input type="checkbox">` with the same accessible name
+(`CheckboxInput.tsx:487-495`). Neither disagreeing spec was wrong. `.check()` on
+the `checkbox` role works *(gate-measured: `DLG CB Priya 1 … PAGE BTN Priya 1`)*.
+
+### Strict-mode hazards
+
+1. **`New outreach event` renders twice on an empty `/outreach`** — header
+   (`OutreachList.tsx:3419`, unconditional) and `EmptyState` action (`:3451`).
+   With the seed present it is 1 *(gate-measured)*, but your spec creates and
+   deletes events — wait for real data before clicking.
+2. 🔴 **Student names collide page-vs-dialog** *(gate: `DLG CB Priya 1`,
+   `PAGE CB Priya 2`)* — `AttendancePanel` and `MarkDayCompleteDialog` both
+   render controls named for the same students, and the hours fields collide
+   byte-for-byte. **Scope every dialog interaction to `getByRole('dialog')`.**
+3. While the calendar is open `page.getByRole('dialog')` resolves to **2**, and
+   `Close calendar` resolves to **2** buttons.
+4. Multi-session events multiply per-session controls; names differ only by date.
 5. `Retry` appears six times across the two pages — never target a bare one.
 6. `Cancel` / `Close` appear in both dialogs — scope.
 
-**Loading gate.** Every loading state is `role="status"` with `aria-busy="true"`
-and visually-hidden text (`OutreachList.tsx:4211-4213`,
-`OutreachDetail.tsx:2105-2107`). `await expect(page.getByRole('status')).toHaveCount(0)`
-is the cleanest "data has loaded" wait.
+🔴 **Do NOT use `role=status` as a loading gate** *(gate BLOCKER 5)*. It never
+reaches 0 — measured **4** on the detail page and **8** on the list. Those are
+permanent empty live regions (`<span role="status" aria-live="polite">`),
+distinct from the real announcers at `OutreachDetail.tsx:2105-2107`. Use a
+content wait (`await expect(page.getByText(title).first()).toBeVisible()`) or
+`await expect(page.locator('[aria-busy="true"]')).toHaveCount(0)`.
 
-**One unresolved role.** Two green specs disagree on `CheckboxListItem`:
-`student-checkin.spec.ts:216-218` drives it as `checkbox`,
-`coach-meeting.spec.ts:191-192` as `button`. The `checkbox` reading has more
-support (jsdom sees a real `input[type=checkbox]`;
-`MarkDayCompleteDialog.test.tsx:123-126, 580`). **Verify live before committing
-to a role, and record which one was true.**
+### Switching personas — required, and not in the harness
+
+*(gate MAJOR 8)* No existing persona spec switches persona inside a test.
+`page.goto('/login')` while authenticated redirects to `/` with
+`EMAIL INPUT COUNT 0`, and `signIn` then hangs to the 90s timeout. Before each
+**subsequent** `signIn`, inline this **in the spec file**:
+
+```ts
+await context.clearCookies();
+await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
+```
+
+*(gate-measured working: `AFTER CLEAR: URL .../login EMAIL COUNT 1`.)*
+`personaHarness.ts` stays **out** of Allowed Files — do not "fix" it there.
 
 ---
 
 ## 4. The journey to drive
 
-One spec file, `tests/e2e-personas/outreach-lifecycle.spec.ts`. Split into a
-second file only if a single one becomes unreadable; say so if you do.
+One spec file, `tests/e2e-personas/outreach-lifecycle.spec.ts`. Split only if it
+becomes unreadable; say so if you do.
+
+Use a distinctive title prefix (e.g. `GAM343 Lifecycle`) — cleanup keys on it.
 
 1. **Coach creates the outreach event.** Sign in as `coach`. `/outreach` → open
-   the dialog → type a title → set the date (§2e: today, starting later today)
-   → open the `Team scope` `MultiSelector` and **narrow** it (do not leave
-   `Select all`) → set the expected-attendee checklist → read the submit
-   label's session count → save. **Read back:** an `events` row with your title
-   and the `team_ids` you chose, and `event_sessions` rows matching the count
-   the button promised.
-2. **Student answers.** Sign in as `student` (Priya). `/outreach/{eventId}` →
-   `Sign up`. **Read back:** exactly one `rsvps` row, `status = 'going'`,
-   `responded_by = PERSONAS.student.profileId`.
+   the dialog → type the title → set the date to **Chicago-today** and **start
+   time `11:59 PM`** (§2e) → fill date, Enter, **Escape** → open `Team scope`
+   and **deselect `Volt Junior 4402`** → in Expected attendees check
+   **Jordan only** → read the submit label's session count → save.
+
+   🔴 **Leave Priya UNCHECKED, and this is the whole reason** *(gate BLOCKER 2)*:
+   `computeExpectedAttendeeRsvpPlan`'s fan-out upserts a `going` row for every
+   checked student **at save time, authored by the coach**. Gate-measured
+   immediately after create, before the student acted:
+   ```
+   RSVP ROWS [{"student_id":"…0001","status":"going","responded_by":"a0000000-…-002"}]
+   SIGNUP … checked true
+   ```
+   If Priya is checked, her control is already selected, her click is a no-op,
+   the row stays coach-authored, and **AC 3 and AC 2 both become unfalsifiable.**
+
+   **Read back:** the `events` row with your title and chosen `team_ids`;
+   `event_sessions` rows matching the promised count; and — a free bonus
+   assertion — **Jordan's** `rsvps` row `going` with `responded_by` = the
+   **coach**, which proves the fan-out documented in §2a.
+
+2. **Student answers.** Clear cookies/storage (§3), sign in as `student`.
+   `/outreach/{eventId}` → `Sign up`. **Read back:** exactly one `rsvps` row for
+   Priya, `status='going'`, `responded_by = PERSONAS.student.profileId`.
+
 3. **Student changes the answer.** `Can't go`. **Read back:** still exactly one
-   row, `status = 'declined'`, later `updated_at`.
-4. **Coach records the day and completes it.** Sign in as `coach`. Open
-   `Mark day complete — {date}` → check Priya and Jordan → type a people-reached
-   number → confirm. **Read back:** `attendance` rows with `status='present'`,
-   `method='coach'`, `recorded_by` = the coach; `event_sessions.status =
-   'completed'` and `people_reached` = what you typed.
-5. **Coach edits a saved record — the uncheck.** Re-open the dialog on the same
-   session and **uncheck Jordan**, confirm. **Read back:** Jordan's row is now
-   `status='absent'` (§2c — this only works because step 4 recorded him first).
-   This is AC 1's "saved record edited afterwards" and AC 5's whole point.
-6. **Hours land.** Read `v_student_hours`
-   (`supabase/migrations/20260717000003_metric_views.sql:3`) and compare against
-   what the recorded attendance implies: Priya present contributes, Jordan
-   absent contributes zero (`MarkDayCompleteDialog.tsx:481`). Read from the
-   database, not the page.
+   row, `status='declined'`, `updated_at` later than step 2's.
+
+4. **Coach records attendance on the page.** Clear, sign in as `coach`,
+   `/outreach/{eventId}`. In **`AttendancePanel`** (not the dialog) check
+   **Priya and Jordan**. This writes `attendance` while the session stays
+   `scheduled`. **Read back:** two rows, `status='present'`.
+
+   This exists so step 5's uncheck has a recorded row to change — §2c.
+
+5. **Coach completes the day, unchecking Jordan — ONE dialog pass.** Open
+   `Mark day complete — {date}`. Both students arrive **pre-checked** (the
+   dialog derives checked state from the recorded rows). **Uncheck Jordan.**
+   Type a people-reached number. Read the confirm label's hours. Confirm.
+
+   🔴 **There is no second pass** *(gate BLOCKER 1)*. Round 1 prescribed
+   completing first and re-opening to uncheck; measured, the trigger is **gone**
+   once the session is `completed` (`MARK DAY TRIGGER COUNT 0`), because
+   `isSessionMarkDayCompleteEligible` requires `scheduled`. The uncheck must
+   happen in the same pass that completes.
+
+   **Read back:** Jordan `status='absent'` (AC 5, T309's exact defect); Priya
+   `status='present'`, `method='coach'`, `recorded_by` = coach;
+   `event_sessions.status='completed'` and `people_reached` = what you typed.
+
+   AC 1's "at least one saved record edited afterwards" is satisfied here:
+   Jordan's row was saved in step 4 and edited in step 5.
+
+6. **Hours land — before/after delta, no formula re-derivation.** Constitution
+   item 3 makes duplicating a metric formula in TypeScript a **BLOCKER** (PRD
+   DATA-01), so read `v_student_hours`
+   (`supabase/migrations/20260717000003_metric_views.sql:3`) — never compute
+   expected hours yourself.
+
+   🔴 **"Priya > 0" is VACUOUS** *(gate MAJOR 11)*: she carries **4.0 seed
+   hours** before your spec writes anything (`HOURS [{…"confirmed_hours":3.99999…}]`),
+   so it passes with the entire write path deleted. Assert instead:
+   - read `v_student_hours` **before** step 5 and **after**;
+   - `delta(Priya)` equals the hours the confirm label promised (`· {h} h`) —
+     the app's own UI as an independent witness, nothing duplicated;
+   - `delta(Jordan) == 0` — he is `absent` and contributes nothing
+     (`MarkDayCompleteDialog.tsx:481`);
+   - while the session is still `scheduled` its contribution is **0** (the view
+     inner-joins `es.status = 'completed'`), which makes the delta attributable.
+
+   The `MarkDayCompleteDialog.tsx:463-467` disclaimer (label vs view can
+   disagree) **does not apply here**: it fires only when preserved check-in/out
+   timestamps trigger the view's tier-2 rule, and neither write path in this
+   journey sets them *(gate-measured `check_in_at: null, check_out_at: null`;
+   `AttendancePanel` never writes them either)*.
 
 **Assert post-write row state, never the request.** Use `expect.poll(() =>
 rows(...).length, { timeout: 20_000 })` before reading values —
 `coach-checkin.spec.ts:54` is the idiom.
 
-**Cleanup in `beforeEach`, only rows this spec creates** (AC 9). The spec
-creates its own event, so delete by the title it uses — cascade from the
-`events` row rather than truncating anything. **Fixtures stay.** The seed's own
-outreach event (`e0e00000-…-002`, `Library STEM Night`) and its sessions are
-read by other specs; do not touch them.
+### Cleanup (AC 9) — ordered, three statements
+
+🔴 **Round 1's "cascade from the `events` row" FAILS** *(gate BLOCKER 3)*:
+
+```
+ERROR: 23503: update or delete on table "event_sessions" violates foreign key
+constraint "rsvps_session_id_fkey" on table "rsvps"
+```
+
+`rsvps_session_id_fkey` and `attendance_session_id_fkey` are both
+`ON DELETE RESTRICT`; only `event_sessions.event_id` cascades. `execAdmin` runs
+with `ON_ERROR_STOP=1`, so `beforeEach` throws and the whole file dies on run 2.
+Delete in this order, scoped by your title prefix:
+
+```sql
+delete from attendance where session_id in (
+  select id from event_sessions where event_id in (
+    select id from events where title like 'GAM343 Lifecycle%'));
+delete from rsvps where session_id in (
+  select id from event_sessions where event_id in (
+    select id from events where title like 'GAM343 Lifecycle%'));
+delete from events where title like 'GAM343 Lifecycle%';
+```
+
+**Fixtures stay.** Never touch the seed's `Library STEM Night`
+(`e0e00000-…-002`) or its sessions — other specs read them.
 
 ---
 
 ## 5. Mutations required — AC 2, 3, 4, 5, 10
 
-Per the `mutation-replay` skill, and item 26's fast-tier working rule that
-applies to every tier: **commit before mutating, mutate, capture the red output
-and exit code, revert, re-run green.** Run mutations in **your own worktree**
-(item 23) — never the shared tree.
+Per `mutation-replay`, and item 26's rule that applies at every tier: **commit
+before mutating, mutate, capture the real red output and exit code, revert,
+re-run green.** Mutations run in **your own worktree** (item 23) — never the
+shared tree, which other agents are using.
 
 | # | Mutation | Expected red |
 | -- | -- | -- |
-| AC 2 | Drop the `rsvps` upsert in `makeSubmitRsvpChange` (`outreach.ts:1226-1239`) | the step-2 row-count assertion |
-| AC 3 | Send the **coach's** id as `respondedBy` while acting as the student | `42501` from the RLS insert policy — see §2b, this only works as the student |
-| AC 4 | Switch the upsert to a plain `.insert()` | step 3's "still exactly one row" |
-| AC 5 | Make the uncheck a no-op — return early from the `'absent'` branch (`MarkDayCompleteDialog.tsx:831`) | step 5's `status='absent'` assertion |
+| AC 2 | Drop the `rsvps` upsert in `makeSubmitRsvpChange` (`outreach.ts:1226-1239`) | step 2's row-count assertion |
+| AC 3 | Send the **coach's** id as `respondedBy` while acting as the student | `42501` from the RLS insert policy — only red as the student (§2b) |
+| AC 4 | Switch the upsert to a plain `.insert()` | **the `status='declined'` assertion** — see below |
+| AC 5 | Return early from the `'absent'` branch (`MarkDayCompleteDialog.tsx:831`) | step 5's `status='absent'` assertion |
 
-Record the **real** red output — the actual assertion text and exit code, not a
-paraphrase. A mutation that does not turn the spec red means the spec does not
-test what it claims; fix the spec, not the mutation.
+🔴 **AC 4's red is NOT the row count** *(gate BLOCKER 6)*. `rsvps` carries
+`UNIQUE (session_id, student_id)`, so `.insert()` raises `23505`, the write is
+rejected, and "still exactly one row" stays **green**. The detector is that the
+row remains `going` with its original `updated_at` instead of becoming
+`declined`. (This is the same shape `coach-checkin.spec.ts:68-80` already
+documents for `attendance`.)
+
+Record the **real** red output — actual assertion text and exit code, not a
+paraphrase. A mutation that will not go red means the spec does not test what it
+claims: fix the spec, not the mutation.
 
 ---
 
@@ -383,59 +515,59 @@ test what it claims; fix the spec, not the mutation.
 
 **You may not edit anything else.** In particular:
 
-- **`tests/e2e-harness/seed.sql` is off limits.** The skill offers editing it as
-  a route to different data, but ~26 other persona tests read those fixtures and
-  the spec is supposed to *create* its own event through the UI anyway (AC 1).
-  If you become convinced you need a seed change, **stop and report it** — that
-  is an escalation, not a decision you take.
+- **`tests/e2e-personas/personaHarness.ts` is NOT allowed** — the persona-switch
+  fix (§3) is inlined in your spec file.
+- **`tests/e2e-harness/seed.sql` is off limits.** ~32 other persona tests read
+  those fixtures, and the spec creates its own event through the UI anyway
+  (AC 1). If you become convinced you need a seed change, **stop and report it**.
 - No production source. The issue is explicit: *"No production code changes are
   expected; if the run needs one to proceed, that is a finding."* File it.
 - Not `.claude/**`, `docs/swarm/**` other than the inbox file, `AGENTS.md`, or
-  any governance record. Those are the orchestrator's.
-- Not `.github/workflows/**` — a dispatched run **cannot push it** (both
-  credentials are refused by design). Nothing here should need one.
+  any governance record.
+- Not `.github/workflows/**` — a dispatched run **cannot push it**
+  *(gate-confirmed nothing here needs one)*.
 
 Stage explicit pathspecs. **Never `git add -A` or `git add .`** (item 22).
 
 ---
 
-## 7. Least confident decisions (item 19d)
+## 7. Least confident decisions (round 2)
 
-Attack these first.
+Round 1's five are resolved: #1 and #2 confirmed sound under §2e's two stated
+conditions; #3 settled (both roles exist by construction); #4 was justified and
+is fixed by §4 step 6's delta; #5 was wrong in my favour — the additive `events`
+update targets the spec's own event and drifts no fixture *(gate-measured
+`EVENT AFTER adult_volunteers_count 0`)*. These are the new ones.
 
-1. **That one session dated today, starting later today, satisfies both the
-   RSVP-editable and mark-day-complete-eligible predicates simultaneously**
-   (§2e). This is the packet's structural keystone — if it is false, the whole
-   journey needs two sessions and step 4 acts on a different session than steps
-   2-3. *What would make it wrong:* `sessionDate` being derived from
-   `starts_at` in UTC rather than Chicago wall time, so a late-evening Chicago
-   start rolls to tomorrow's date and the completion predicate fails; or the
-   create dialog defaulting `starts_at` to a fixed morning hour with no way to
-   set a later one, making `now < starts_at` false for any afternoon run. **The
-   gate should measure this in the browser, not read it.**
-2. **That the create dialog can express "today" at all.** `DateInput` may floor
-   or reject a same-day pick, and `Single` mode may derive times from a preset.
-   *What would make it wrong:* a `min` on the date input, or a validation rule
-   requiring a future start. If so, §2e's `Custom dates` fallback is not a
-   fallback but the only path.
-3. **That `CheckboxListItem` resolves as `role=checkbox`.** Two green specs in
-   this repo disagree and I did not resolve it — `node_modules` was absent
-   during the survey so Astryx's compiled DOM could not be read. *What would
-   make it wrong:* Astryx rendering a `button[role=checkbox]`-less toggle, in
-   which case every checklist locator in §3 is wrong and `coach-meeting.spec.ts`
-   has the right idiom.
-4. **That AC 6's "hours the attendance implies" is computable without
-   re-deriving the metric formula.** Constitution item 3 makes duplicating a
-   metric formula in TypeScript a BLOCKER (PRD DATA-01), so the spec must read
-   `v_student_hours` rather than compute expected hours itself — but then the
-   assertion risks being a tautology (the view agreeing with itself). *What
-   would make it wrong:* if the only honest assertion is "Priya > 0 and Jordan
-   unchanged", that is thin, and the gate should say so and propose a stronger
-   one that still does not re-derive the formula.
-5. **That the spec can clean up after itself without a reseed (AC 9)** when
-   step 4 also mutates `events.adult_volunteers_count` additively
-   (`outreach.ts:1363-1375`). *What would make it wrong:* the additive update
-   landing on a **seed** event rather than the spec's own — it targets the
-   session's own event, so it should be self-created, but if the spec ever
-   completes a seeded session it would permanently drift a fixture other specs
-   read.
+1. **That the dialog pre-checks BOTH students from the `AttendancePanel` rows
+   in step 5.** The whole re-route depends on `MarkDayCompleteDialog` deriving
+   checked state from recorded attendance (`:693`, `:722` —
+   `checked iff isAttendingStatus(row.status)`). *What would make it wrong:* the
+   dialog seeding its checklist from **RSVPs** rather than attendance, in which
+   case Jordan (whose RSVP is coach-authored `going`) and Priya (`declined` as
+   of step 3) arrive in the opposite states from what step 5 assumes, and the
+   uncheck targets the wrong student. **Verify the arrival state before
+   unchecking, and assert it.**
+2. **That `AttendancePanel`'s checkbox write completes before the dialog reads
+   it.** Two surfaces on one page, one cache. *What would make it wrong:* the
+   dialog reading a stale react-query snapshot, so the row exists in Postgres
+   but the checklist shows unchecked. Poll the database after step 4 **and**
+   assert the dialog's arrival state in step 5 rather than assuming.
+3. **That the confirm label's `· {h} h` equals `delta(Priya)` exactly.** AC 6's
+   cross-witness assumes the label and the view agree to the decimal. *What
+   would make it wrong:* the label rounding (`formatHours`) while the view
+   returns a float — the seed already shows `3.9999970769444446`, so an
+   equality assertion on a rounded label would be red for a correct app. **Use a
+   tolerance, and say what it is.**
+4. **That the dead window in §2e does not fire during a real run.** A run
+   starting near midnight Chicago, or slow enough to cross `11:59 PM`, locks the
+   RSVP control mid-spec. *What would make it wrong:* CI scheduling. If it
+   fires, it is an environment condition — report it, do not "fix" it by
+   loosening an assertion.
+5. **That no production defect is found.** The issue budgets for one
+   (*"if the run needs [a production change] to proceed, that is a finding"*),
+   and this path has three fixed-but-never-watched silent bugs in it. *What
+   would make it wrong:* discovering that one of T193/T309/T327's fixes does not
+   hold in a real browser. **That is a finding to file, not a spec to bend** —
+   pin the real behaviour, say so in a comment per the skill, and emit it in the
+   findings JSON.

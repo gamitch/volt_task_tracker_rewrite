@@ -150,3 +150,18 @@ thing that survives if the container is killed.
     express today; the additive `events` update does *not* drift a fixture), and
     `CheckboxListItem` turns out to expose **both** roles by construction, so
     neither disagreeing spec was wrong.
+- **Packet revised (round 2)** — all 6 BLOCKERs and 5 MAJORs addressed. Journey
+  re-routed per the gate's Cheaper Path 1: Priya is left **unchecked** in
+  Expected attendees (so the coach-authored fan-out cannot poison AC 3),
+  attendance is recorded through `AttendancePanel` while the session is still
+  `scheduled`, and the uncheck happens in the **same** dialog pass that
+  completes — there is no second pass. AC 6 becomes a before/after delta on
+  `v_student_hours` cross-witnessed by the confirm label, replacing the vacuous
+  "Priya > 0". AC 4's mutation red re-pointed at the status assertion (the
+  UNIQUE constraint makes the row-count red impossible). Escape guidance
+  reversed. Cleanup rewritten as three ordered deletes. New five-entry
+  Least-confident list, all genuinely new doubts. Verified `AttendancePanel`'s
+  write path myself before building on it (`AttendancePanel.tsx:641, 712, 785`).
+- **Dispatched `checker-premise` (item 19 gate, round 2 of a cap of 2)** on the
+  revised packet, environment still live. *If this line is the last one in this
+  file, the run died holding this subagent.* Dispatched `run_in_background: false`.
