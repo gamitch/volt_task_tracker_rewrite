@@ -67,9 +67,16 @@ test.describe('coach records attendance in the live console', () => {
 
   test('changing a mark overwrites the existing row rather than duplicating it', async ({ page }) => {
     // AC 3: Present -> Late must leave exactly one row for
-    // (session_id, student_id), with the LATER value. If the write path ever
-    // regressed from an upsert to a plain insert, this would start failing
-    // with length 2 instead of red on the wrong value -- both are checked.
+    // (session_id, student_id), with the LATER value.
+    //
+    // Which assertion actually protects you, precisely: `attendance` carries a
+    // live `attendance_session_id_student_id_key UNIQUE (session_id, student_id)`
+    // constraint, so a regression from upsert to a plain insert raises 23505
+    // and can NEVER produce length 2. The count below is therefore a
+    // schema-backed corroboration, not the detector. **`status === 'late'` is
+    // the assertion that detects a regression** -- verified by mutation: with
+    // the Late click and its aria assertion both removed, this test goes red on
+    // `Expected "late" / Received "present"`.
     expect(attendanceFor(SEED.studentPriya)).toHaveLength(0);
 
     await signIn(page, 'coach');

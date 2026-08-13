@@ -210,6 +210,10 @@ test.describe('student self-checkoff through the real UI (AC 4)', () => {
       // coach-recorded row from this surface.
       const lockedRow = dialog.getByText('Already recorded');
       await expect(lockedRow).toBeVisible();
+      // Assert the lock itself, not just its label -- a visible "Already
+      // recorded" string next to an ENABLED control would be the exact
+      // "looks right, does nothing" failure this suite exists to catch.
+      await expect(dialog.getByRole('checkbox', { name: /Jul 14/ })).toBeDisabled();
 
       const eligibleDay = dialog.getByRole('checkbox', { name: /Sun, Aug 23/ });
       await expect(eligibleDay).toBeVisible();

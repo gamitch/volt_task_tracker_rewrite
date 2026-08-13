@@ -1,7 +1,7 @@
 {
   "source": "e2e-personas",
   "branch": "claude/gam-342-e2e-w1-checkin",
-  "commit": "014f5cc4685029e54673f26efe0229062bf042f1",
+  "commit": "135b8bb41ce1240c21b02ce8320f2e95a9aa5776",
   "measuredAt": "2026-08-13T02:24:52Z",
   "findings": [
     {
@@ -85,7 +85,7 @@
         { "file": "tests/e2e-personas/student-parent.spec.ts", "line": 121,
           "quote": "getByText(/\\/ 100 h \\(/)" }
       ],
-      "observed": "Baseline before and after this task's changes, reproducible across separate runs: the full persona suite is 21 passed, 5 failed (25 with this task's own 8 new/changed tests added, still 5 failed), exit 1. coach-meeting.spec.ts:88/:115 fail because 'Volt Legacy 2201' (archived) is no longer offered in the team picker -- stale against shipped archived-team-picker work. student-parent.spec.ts:66 fails because the RSVP control now genuinely writes a fresh rsvps row, contradicting that test's own premise (its module doc claims 'local-only. No Supabase write happens here.'). student-parent.spec.ts:27 and :121 fail on getByText(/\\/ 100 h \\(/) not found -- the hours-float assertions.",
+      "observed": "Baseline before and after this task's changes, reproducible across separate runs: the full persona suite is 21 passed, 5 failed before this task; 27 passed, 5 failed after it (this branch adds 6 tests -- 5 in student-checkin.spec.ts, 1 in coach-checkin.spec.ts -- and the same 5 keep failing), exit 1. coach-meeting.spec.ts:88/:115 fail because 'Volt Legacy 2201' (archived) is no longer offered in the team picker -- stale against shipped archived-team-picker work. student-parent.spec.ts:66 fails because the RSVP control now genuinely writes a fresh rsvps row, contradicting that test's own premise (its module doc claims 'local-only. No Supabase write happens here.'). student-parent.spec.ts:27 and :121 fail on getByText(/\\/ 100 h \\(/) not found -- the hours-float assertions.",
       "expected": "These are pre-existing and out of this task's allowed-files scope (coach-meeting.spec.ts, student-parent.spec.ts are not in GAM-342's allowed-files list). Recorded here per packet instruction rather than chased or fixed.",
       "verifiedBy": "browser",
       "reproduction": "npx playwright test -c tests/e2e-harness/playwright.personas.config.ts",
