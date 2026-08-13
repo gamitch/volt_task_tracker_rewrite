@@ -112,3 +112,30 @@ take the heavier one.
   **Four of the five doubts I declared under item 19d were load-bearing, and
   two of them were wrong in the direction I feared.** Item 19d earned its cost
   here.
+- **Packet revision 2 written**, applying all ten of the gate's required
+  revisions verbatim — the corrections are the gate's own measurements, not the
+  author's second guess. Substantive changes: AC5 (CSV) **struck and replaced**
+  by AC5′, a finding obligation; the GAM-300 mechanism paragraph rewritten
+  around the single-row early returns; AC3 retargeted at the watched
+  `Participation: null%` defect on `/meetings` with a **new** row cross-
+  referencing GAM-300; AC2/AC6 rebuilt around `readRows` as the only
+  independent witness plus a formatting-divergence check and a float tolerance;
+  KpiStrip removed from the per-student comparison; a worktree-mutation clause
+  added to Allowed Files and repeated on AC3/AC4; the full seeding recipe
+  (`students` **+ `student_teams`**, plus `auth.users`/`profiles` for the login
+  legs) lifted into Verified context; the `role=button`-not-`role=tab` and
+  filter/sort-only-on-Participation traps added; both citation slips fixed; the
+  dead harness-extension contingency deleted. New "Where this packet departs
+  from the issue" section states plainly which three of the issue's own
+  statements did not survive measurement.
+- **LCD 5 resolved before dispatch, not deferred.** Queried Linear and grepped
+  `docs/swarm/linear-export.md` for an existing CSV row: the only one is
+  **GAM-69 / T059 — "CSV exports (RPT-05/06)", state `Done`**. Nothing open
+  covers the gap. That sharpens AC5′ considerably: this is not a missing button,
+  it is **constitution item 27's exact shape — a task recorded Passed whose
+  user-visible surface no user can reach.**
+- **Dispatching `checker-premise` round 2 (opus), LIGHT scope per item 19b** —
+  read-only verification that the ten prescribed revisions landed faithfully and
+  that revision 2 introduced no new unverified claim. No cluster run: round 1
+  already executed the environment, and item 19a caps this gate at two rounds.
+  *If this line is the last one in this file, the run died holding this subagent.*

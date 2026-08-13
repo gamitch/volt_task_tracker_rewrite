@@ -1,64 +1,103 @@
-# GAM-345 — worker packet (HEAVY)
+# GAM-345 — worker packet (HEAVY) — **revision 2**
 
 **Issue:** [GAM-345](https://linear.app/gamitch/issue/GAM-345/e2e-w4-hours-and-goal-accounting-the-same-students-numbers-agree-on)
 **Tier:** HEAVY (packet → `checker-premise` → worker → `checker-reviewer`), judged and defended in `GAM-345-run-log.md`.
 **Branch:** `claude/gam-345-e2e-w4-hours-accounting`
-**Baseline:** `main` at `93c89d0`; every citation below was read in the working tree at that commit.
+**Baseline:** `main` at `93c89d0`.
+
+**Revision 2 supersedes revision 1 in full.** Round 1 of the premise gate
+returned **REVISE (BLOCKER)** and every correction below is the gate's, measured
+by it against a live cluster and a live browser — not the author's second guess.
+Two of the author's own claims were false and are struck. **Where this packet
+contradicts the Linear issue's wording, this packet wins, and the paragraph
+"Where this packet departs from the issue" says exactly where and why.**
 
 ---
 
 ## Goal
 
 One new persona end-to-end spec that drives the W4 reporting surfaces in a real
-browser as real personas, against the real cluster, and proves that **the same
-student's numbers agree on every screen that shows them** — including the two
-cases the metric views deliberately distinguish: a real `0%` and a genuine
-*no rate*.
+browser as real personas, against the real cluster, and establishes whether the
+same student's numbers agree across every surface that shows them — including
+the two cases the metric views deliberately distinguish: a real `0%` and a
+genuine *no rate*.
 
-**This is a measurement task, not a fix.** No production file changes. If a
-screen disagrees with the database or with another screen, that is a **finding**
-filed as JSON and into Linear `Backlog` — not something to correct here, and
-explicitly not something to correct by editing a view (the issue forbids it and
-T509's SQL is correct).
+**This is a measurement task, not a fix.** No production file changes are
+landed. Disagreements are **findings**, filed as JSON and into Linear `Backlog`
+— never corrected by editing a view (the issue forbids it; T509's SQL is
+correct and the gate confirmed it returns the right values).
 
 ---
 
-## Verified context — read this before writing a line
+## Where this packet departs from the issue, and why
 
-Everything in this section was measured against the tree, not assumed. Line
-numbers are from the baseline commit; re-check before quoting them anywhere.
+The issue was written before anyone drove these screens. Three of its
+statements did not survive measurement:
 
-### The harness API is exactly this, and it is all you need
+1. **"the CSV export" / "confirm the exported file carries the same figures".**
+   There is no CSV control. `buildRosterCsv`, `buildEventsCsv` and
+   `buildAttendanceCsv` (`src/pages/reports/csvExport.ts:305,372,437`) are
+   **called from nowhere in `src/`**; `csvExport.ts:24-32` says so itself, and
+   the gate confirmed in-browser that no export, download or CSV control exists
+   on any of the three tabs. The issue's AC5 is therefore unsatisfiable. It is
+   replaced by **AC5′**, a finding obligation — dead RPT-05/RPT-06 builders are
+   a real item-27-shaped defect and a better deliverable than a test of a button
+   that does not exist.
+2. **"the leaderboard" and "the staff KPI strip" as independent witnesses.**
+   The leaderboard, the Hours tab and the student's home page share **one**
+   database read (see Verified context). The KPI strip carries **no per-student
+   figure at all**. AC2 and AC6 are rewritten so the comparison is one that
+   could actually fail.
+3. **"if it is still live, the finding cites [GAM-300] rather than opening a
+   new one".** GAM-300's `Math.max` floor is real but *unreachable* on the path
+   this test takes. A different, live, watched defect sits there instead. It
+   gets its **own** row, cross-referencing GAM-300.
 
-`tests/e2e-personas/personaHarness.ts` exports, verified by reading the file:
+Nothing here reduces the issue's intent. The cross-screen check it asks for is
+still the deliverable; it is now aimed at comparisons that can fail.
 
-| Export | Signature | Note |
+---
+
+## Verified context — measured, not assumed
+
+Every line below was either read in the tree at `93c89d0` or **executed** by the
+round-1 premise gate against a live cluster and browser. Where a fact was
+executed, it says so.
+
+### The harness API
+
+`tests/e2e-personas/personaHarness.ts` — confirmed line-by-line by the gate:
+
+| Export | Line | Note |
 | --- | --- | --- |
-| `PERSONAS` | `{admin, coach, student, parent}` | each `{email, displayName, role, profileId}` |
-| `SEED` | fixed ids | `teamFrc`, `teamFtc`, `teamArchived`, `activeSeason`, `meetingEvent`, `liveSession`, `studentPriya`, `studentJordan` |
-| `readRows<T>(select)` | superuser, **bypasses RLS** | use for ground truth |
-| `readRowsAs<T>(persona, select)` | `authenticated` + that persona's `auth.uid()` | use when visibility is the point |
-| `execAdmin(stmt)` | superuser write | fixture seeding only, never an assertion |
-| `execAs(persona, stmt)` | persona write, top-level | throws on RLS denial (42501) |
-| `signIn(page, persona)` | real login form | polls until the path leaves `/login` |
-| `capture(page, name)` | full-page PNG into `tests/e2e-personas/screenshots/` | committed |
-| `visibleNavLinks(page)` | side-nav link texts | |
+| `PERSONA_PASSWORD` | `:30` | `'VoltTest!2026'` |
+| `PERSONAS` | `:41` | `{admin, coach, student, parent}`, each `{email, displayName, role, profileId}` |
+| `SEED` | `:71` | all 8 ids verified verbatim |
+| `readRows<T>` | `:101` | superuser, **bypasses RLS** — this is your ground-truth witness |
+| `readRowsAs<T>` | `:110` | `authenticated` + that persona's `auth.uid()` |
+| `execAdmin` | `:126` | fixture seeding only, never an assertion |
+| `execAs` | `:138` | persona write, top-level; throws 42501 on RLS denial |
+| `signIn` | `:153` | real login form |
+| `capture` | `:167` | full-page PNG into `tests/e2e-personas/screenshots/` |
+| `visibleNavLinks` | `:173` | |
 
-`PERSONA_PASSWORD` is `VoltTest!2026`. Copy the shape of
-`tests/e2e-personas/coach-checkin.spec.ts`.
-
-Run:
 ```bash
 bash tests/e2e-harness/start.sh          # ~40s
 npx playwright test -c tests/e2e-harness/playwright.personas.config.ts
 bash tests/e2e-harness/stop.sh           # ALWAYS, even on failure
 ```
 
-### The metric semantics you are testing — quoted, not paraphrased
+**The harness serves every one of these surfaces.** The gate curled every query
+`loaders/reports.ts`, `loaders/leaderboard.ts` and `loaders/kpi.ts` emit —
+including all four `.in(...)` list queries, the two `maybeSingle` reads, and
+every view read — and got **HTTP 200 on all of them**, zero
+`HARNESS_UNSUPPORTED`, zero console errors, all three tabs rendering real seeded
+data. **Budget nothing for extending the harness.**
 
-`supabase/migrations/20260806000000_met01_explicit_marks.sql:102-130` is the
-current `v_student_participation`. The denominator is **explicit marks minus
-excused**, and the no-rate case is a real SQL `NULL`:
+### The metric semantics under test
+
+`supabase/migrations/20260806000000_met01_explicit_marks.sql:119-125`, quoted
+verbatim (view spans `:102-130`; `v_team_participation` `:139-146`):
 
 ```sql
 case
@@ -69,261 +108,328 @@ case
 end as participation_pct
 ```
 
-The `marked` CTE **inner joins** `attendance`, so a student with **no marks at
-all has no row in the view whatsoever** — a different mechanism from the
-all-excused NULL, and both must reach the screen as an em dash.
-`v_team_participation` (`:139-148`) carries the same `case ... then null`.
+The `marked` CTE **inner joins** `attendance`, so a student with no marks has no
+row at all. Three states, and the spec must tell all three apart:
 
-Three distinct states, and the spec must tell all three apart:
-
-| Case | View row | `participation_pct` | Screen must read |
+| Case | View row | `participation_pct` | Screens must read |
 | --- | --- | --- | --- |
 | Marks exist, some non-excused, none present | present | `0.0` | `0%` |
 | Every mark excused | **row exists** | `NULL` | em dash |
 | No marks at all | **no row** | — | em dash |
 
-`expected_ct` **does not mean eligibility** since T509 — the migration's own
-`comment on column` says so and says the name was kept deliberately because
-three loaders select it by name. RPT-02 labels it "Marked".
+`expected_ct` does **not** mean eligibility since T509; RPT-02 labels it
+"Marked" (gate confirmed the live header row is
+`Student Marked Present Late Excused Participation %`).
 
-### GAM-300 is still live, and this is where
+### GAM-300's floor is real but unreachable here — **corrected**
 
-The issue says two loaders still apply the removed floor. **Confirmed at the
-baseline commit:**
+Revision 1 claimed an all-excused student reads `0%` through `checkin.ts` and
+`meetings.ts`. **That was false.** Both functions return the single view row
+verbatim before reaching the floor:
 
-- `src/lib/supabase/loaders/checkin.ts:375` — `const denominator = Math.max(expectedCt - excusedCt, 1);`
-- `src/lib/supabase/loaders/meetings.ts:527` — `const denominator = Math.max(expectedCt - excusedCt, 1);`
+- `src/lib/supabase/loaders/checkin.ts:362-365` — `if (seasonRows.length === 1) { return seasonRows[0]; }`
+- `src/lib/supabase/loaders/meetings.ts:517` — `if (rows.length === 1) return rows[0];`
 
-Both reproduce the pre-T509 `greatest(x, 1)` floor client-side, so an
-all-excused student reads `0%` through those two paths while
-`v_student_participation` returns `NULL`. `src/lib/supabase/loaders/reports.ts`
-does **not** (its module doc #1 claims no arithmetic, and grep confirms). If the
-spec catches this disagreement on screen, **the finding cites GAM-300 and does
-not open a new row** (issue AC3). If it does *not* surface it, say so and name
-which surfaces those two loaders actually feed — that is a real result too.
+The `Math.max(expectedCt - excusedCt, 1)` at `checkin.ts:375` and
+`meetings.ts:527` executes **only** for a student with ≥2
+`v_student_participation` rows in one season — a dual-team member with a mark on
+a team-agnostic event. Gate-measured:
 
-### Which surfaces are wired to real data (item 27 matters here)
+```
+A no student_teams        -> 0 view rows
+A with student_teams      -> expected 3, excused 3, participation_pct = NULL  (ONE row)
+C dual-team all-excused   -> still ONE row (build event team_ids = [FRC] only)
+C2 + team-agnostic mark   -> TWO rows (FRC 4/4 excused, FTC 1/1 excused)
+```
 
-Verified by grep at the baseline; do not re-derive:
+**Do not build a dual-team student to reach the floor.** The single-team
+all-excused student already produces a live red, for a different and better
+reason — next section.
 
-- **Reports tabs** — `src/pages/reports/{ParticipationTab,HoursTab,EventsTab}.tsx`
-  under `ReportsShell.tsx`, backed by `src/lib/supabase/loaders/reports.ts`
-  (`loadParticipationData`, `loadHoursData`, `loadEventSessionsData`). Real.
-  `/reports` is `coach`/`admin` only via `RequireRole` — a student is denied
-  (there is already a screenshot `02-student-denied-reports.png`).
-- **Leaderboard** — `src/pages/outreach/Leaderboard.tsx`, rendered **only** from
-  `src/pages/home/CoachHome.tsx:2817`, wired to the real
-  `loadLeaderboardData` (`src/lib/supabase/loaders/leaderboard.ts:175`,
-  imported at `CoachHome.tsx:653`). **`defaultLoadLeaderboardData`
-  (`Leaderboard.tsx:394`) is a fixture and is NOT the path a user takes** — do
-  not test through it and do not report the fixture as the shipped surface.
-- **KPI strip** — `src/components/kpi/KpiStrip.tsx`, mounted in
-  `src/app/AppShell.tsx:165`, backed by `src/lib/supabase/loaders/kpi.ts`
-  over `v_season_kpis` / `v_season_kpi_team_counts`.
-- **Student home** — `src/pages/home/StudentHome.tsx`; parent equivalent
-  `ParentHome.tsx`.
+### The live defect this run will find, already watched once
 
-### The seed, and what it does *not* contain
+The gate set every one of Priya's marks to `excused` (confirming
+`participation_pct` read back as `null` *before* touching a screen), signed in
+as `student`, and loaded `/meetings`:
 
-`tests/e2e-harness/seed.sql` (135 lines). Students on season
-`SEED.activeSeason`:
+```
+Recent attendance
+Last 4 completed meetings
+Participation
+Participation: null%
+0%
+```
 
-| Student | id suffix | Team | Marks on completed participation sessions |
-| --- | --- | --- | --- |
-| Priya Raman | `…0001` | FRC | 3 build present + 1 outreach present = 4 present |
-| Jordan Okafor | `…0002` | FRC | present, **absent**, present |
-| Sam Whitfield | `…0003` | FRC | present, present, **excused** |
-| Nina Kowalski | `…0004` | FTC | none → **no view row** |
-| Theo Brandt | `…0005` | FTC | none → **no view row** |
-| Casey Lindqvist | `…0006` | FRC | inactive (`is_active = false`) |
+Mechanism, all four links verified: `src/lib/supabase/loaders/meetings.ts:302`
+declares `participation_pct: number` while the view returns SQL NULL →
+`aggregateParticipationRows` returns the row verbatim (`meetings.ts:517`) →
+`src/pages/meetings/StudentMeetingView.tsx:757` interpolates it into
+`` label={`Participation: ${participation.participationPct}%`} `` →
+`ProgressBar value={null}` renders `0%`.
 
-**Neither of the two cases the issue's constraint is about exists in the
-seed.** There is no all-excused student and no genuine-`0%` student. You must
-build both deliberately, in `beforeAll`/`beforeEach`, with `execAdmin`, and
-delete only your own rows so rule 3 (re-runnable without a reseed) holds.
+**The other two surfaces are correct.** StudentHome shows `Participation: —`
+(`src/lib/supabase/loaders/students.ts:838-840` returns `null` when the
+denominator is 0) and the reports Participation tab shows `—`.
 
-Note `counts_participation` is true on all three seeded events, and the
-outreach event has `team_ids = null` so it counts for everyone — Priya's
-denominator is **4**, not 3. Do the arithmetic from the rows you seed, not from
-this table.
+Reproduce this **from your spec**, on your own seeded student, and file it as a
+new finding cross-referencing GAM-300 — the type lie is a distinct defect from
+the arithmetic floor, and filing it under GAM-300 would bury it.
+
+### Which surfaces are genuinely independent — **corrected**
+
+| Surface | Reads | Independent? |
+| --- | --- | --- |
+| Hours tab | `.from('v_student_hours').select('student_id, season_id, confirmed_hours').eq('season_id', …)` — `reports.ts:424-428` | — |
+| Leaderboard (`CoachHome.tsx:2817` → `leaderboard.ts:137-142,175`) | **byte-identical query** | **No** |
+| StudentHome hours | `v_student_goal_projection` = `coalesce(sh.confirmed_hours, 0)` over the same view — `students.ts:457`, `20260723000001_dashboard_views.sql:328-332` | **No** |
+| KPI strip (`AppShell.tsx:165`, `kpi.ts:175-191`) | `v_season_kpis` (season) + `v_season_kpi_team_counts` (team) — **four tiles, nothing per-student** | n/a |
+| `readRows` | straight to Postgres, superuser | **Yes — the only one** |
+
+`Leaderboard.tsx:394` `defaultLoadLeaderboardData` is a **fixture** and is not
+the user's path. Do not test through it.
+
+**What actually varies across those three renderers is formatting**, and the
+gate measured a real divergence: Hours tab renders `4.0`, the CoachHome
+leaderboard renders `4 hrs`.
+
+### `confirmed_hours` is a non-terminating float
+
+Gate-measured on a fresh seed: Priya's `v_student_hours.confirmed_hours` is
+**`3.999999112222222`** (`now()`-relative seed timestamps through
+`extract(epoch …)/3600.0`, `metric_views.sql:7-14`). Screens show `4.0` / `4
+hrs`. **No screen carries the underlying value** — this is precisely GAM-303's
+shape, and `docs/swarm/active/FINDINGS-PIPELINE.md:44-52` uses it as its worked
+example. Compare with a stated tolerance.
+
+### The seed, and the exact recipe for a new student
+
+`tests/e2e-harness/seed.sql` (135 lines). Live values, gate-measured — do not
+re-derive:
+
+| Student | id suffix | Team | Marked | Present | Excused | `participation_pct` |
+| --- | --- | --- | --- | --- | --- | --- |
+| Priya Raman | `…0001` | FRC | 4 | 4 | 0 | `100` |
+| Jordan Okafor | `…0002` | FRC | 3 | 2 | 0 | `66.7` |
+| Sam Whitfield | `…0003` | FRC | 3 | 2 | 1 | `100.0` |
+| Nina Kowalski | `…0004` | FTC | — | — | — | **no row** |
+| Theo Brandt | `…0005` | FTC | — | — | — | **no row** |
+| Casey Lindqvist | `…0006` | FRC | inactive | | | **no row** |
+
+Note **Sam's excused mark raises his rate to 100%** — excused leaves the
+denominator, it does not depress the rate. The three-state table invites the
+opposite expectation; it is wrong.
+
+**Neither case this task is about exists in the seed** — no all-excused student,
+no genuine `0%`. Build both from the spec.
+
+**The recipe, measured by the gate in three experiments:**
+
+- `insert into students (…)` **alone → ZERO view rows.** This silently produces
+  the *no-marks* case while you believe you built the all-excused one. It is the
+  single easiest way to write a green test that proves nothing.
+- Add `insert into student_teams (student_id, team_id, joined_on)` with
+  `left_on` **null** → the row appears, `participation_pct` NULL.
+- `students.profile_id` may be `null` — `profiles`/`auth.users` are **not**
+  required for the view.
+- **But AC2/AC3 read StudentHome and `/meetings`, which require a login.** For
+  those legs you also need `auth.users` (with
+  `harness_password = encode(sha256('VoltTest!2026'::bytea), 'hex')`),
+  a `profiles` row with `role='student'`, and `students.profile_id` pointing at
+  it. `seed.sql:40-54` is the pattern.
+- `students.team_id` must intersect the event's `team_ids`, and the marks must
+  land on **completed** sessions of an event with `counts_participation`.
+
+**Copy `tests/e2e-personas/admin-roster.spec.ts:30-34` for cleanup** — it
+already does `delete from student_teams …; delete from students where
+display_name like 'E2E %'`. Do not invent a second pattern. Clean up in
+`beforeEach` **and** after the run: seeded students move
+`v_season_kpi_team_counts.active_students_count`, which the gate watched shift
+the KPI strip to `5 · 3`.
 
 ---
 
 ## Allowed Files
 
-Create or edit **only** these:
+Create or edit **only**:
 
-- `tests/e2e-personas/reports-accounting.spec.ts` — new. The whole deliverable.
+- `tests/e2e-personas/reports-accounting.spec.ts` — new. The deliverable.
 - `tests/e2e-personas/screenshots/*.png` — new captures, committed.
 - `docs/swarm/inbox/claude-gam-345-e2e-w4-hours-accounting-findings.json` — new.
 
-**Forbidden, without exception:** anything under `src/`, anything under
-`supabase/`, `tests/e2e-harness/**` (including `seed.sql` — seed your awkward
-cases from the spec instead, so the fixture stays shared), `.github/workflows/**`,
-`.claude/**`, `docs/swarm/**` other than the inbox file above, `AGENTS.md`.
+**Forbidden:** anything under `src/`, anything under `supabase/`,
+`tests/e2e-harness/**` (including `seed.sql` — seed your awkward cases from the
+spec so the shared fixture stays stable), `.github/workflows/**`, `.claude/**`,
+`docs/swarm/**` other than the inbox file above, `AGENTS.md`.
 
-If you conclude the task cannot be done without editing a forbidden file, **stop
-and say so** with the specific reason. Do not edit it and disclose afterwards.
+**Mutation proofs are not an exception to this list.** A mutation is a
+temporary, uncommitted edit made inside an **isolated `git worktree` you create**
+(constitution item 23), measured, reverted, and **never landed on
+`claude/gam-345-e2e-w4-hours-accounting`**. Commit your spec *before* mutating
+(item 26's fast-tier working rule: T323's mutation was reverted with
+`git checkout --`, which also reverted the uncommitted fix).
+
+If a criterion genuinely cannot be met without landing a change in a forbidden
+file, **stop and say so** with the specific reason. Do not edit it and disclose
+afterwards.
 
 ---
 
 ## Acceptance criteria
 
-Each is graded against evidence you produce, and each names how a checker
-falsifies it.
-
-1. **The run interacts, not just loads.** At minimum: switch between all three
-   reports tabs, change one filter, apply one sort, and trigger the CSV export.
-   *Evidence:* the spec's own actions plus a screenshot per tab.
+1. **The run interacts, not just loads.** Switch between all three reports tabs,
+   then **change the Participation tab's filter and apply its sort** — filter
+   and sort exist *only* on that tab (`grep -c onChange` is **0** for both
+   `HoursTab.tsx` and `EventsTab.tsx`). Screenshot each tab.
    *Falsified by:* a spec that only calls `page.goto` and reads text.
 
-2. **One student's figure is read from every surface that shows it, and the
-   surfaces are compared to each other — not each to a hardcoded literal.**
-   The comparison is between screens, so a single wrong loader turns the
-   *comparison* red rather than only its own screen's assertion.
-   *Mutation proof required:* change one loader's arithmetic in **your own
-   worktree** (item 23 — commit first, then mutate), re-run, and record the real
-   red output showing the **cross-screen comparison** failing. Restore, re-run
-   green.
+2. **One student's figures are read from every surface that shows them and
+   compared against `readRows` as the witness**, plus an explicit
+   **formatting-divergence** check between the renderers.
+   The three hours surfaces share one database read, so a cross-screen *value*
+   agreement there could not fail — say that plainly in the spec rather than
+   claiming a comparison you did not really make. The comparison that *can*
+   fail is database → each screen, and `4.0` (Hours tab) vs `4 hrs`
+   (leaderboard).
+   *Mutation proof required:* in your own worktree, change
+   `loaders/reports.ts`'s hours mapping, re-run, record the **real red output**,
+   revert, re-run green.
 
-3. **The all-excused case reads as no-rate, not zero, on every surface that
-   shows it.** Seed a student whose every mark on completed
-   participation-counting sessions is `excused`, and confirm
-   `v_student_participation.participation_pct is null` via `readRows` **before**
-   reading any screen.
-   *Mutation proof required:* reintroduce a `Math.max(x, 1)`-style floor in a
-   loader → red. `checkin.ts:375` and `meetings.ts:527` already contain one, so
-   if either feeds a surface you read, the red is available without mutating
-   anything — say which.
-   If the defect is live, the finding **cites GAM-300** and opens no new row.
+3. **The all-excused case reads as no-rate, not zero.** Seed the student per the
+   recipe; assert `participation_pct is null` via `readRows` **before** reading
+   any screen. Then assert: Participation tab `—`, StudentHome
+   `Participation: —`, and `/meetings` — where the expected result is the
+   **defect**, `Participation: null%`. Pin it with a comment naming
+   `meetings.ts:302` + `StudentMeetingView.tsx:757` and what to change when
+   fixed (skill rule: record behaviour, do not bless it). File a **new**
+   finding cross-referencing GAM-300.
+   *Mutation proof required, in your own worktree:* reintroduce a
+   `Math.max(x, 1)`-style floor in `loaders/students.ts`'s participation path →
+   the StudentHome em-dash assertion goes red.
 
-4. **A genuine zero still reads as zero.** Seed a student with marks present,
-   none excused, none present — expect `0.0`, displayed `0%`.
-   *Mutation proof required:* make a loader return no-rate whenever the
-   percentage is zero → red.
+4. **A genuine zero still reads as zero.** Seed a student with marks, none
+   excused, none present — `readRows` must show `0.0`, screens `0%`.
+   *Mutation proof required, in your own worktree:* make that loader return
+   no-rate whenever the percentage is zero → red.
 
-5. **The CSV export matches the table it came from, field by field.** Not a row
-   count, not a substring. Parse the download and compare cell values against
-   the values read from the rendered table for the same student.
+5. **(AC5′, replacing the issue's CSV criterion.) File the dead CSV builders as
+   a finding.** `buildRosterCsv`/`buildEventsCsv`/`buildAttendanceCsv`
+   (`csvExport.ts:305,372,437`) are unreachable from any user path — RPT-05/06
+   ship no export. Confirm it yourself in the browser (enumerate the buttons on
+   each tab and record the list), then file it with `verifiedBy: "browser"`,
+   `area: "w4"`, in constitution item 27's shape. **Do not build a download
+   assertion and do not add the missing control** — it is out of scope and out
+   of Allowed Files.
+   **Name [GAM-69](https://linear.app/gamitch/issue/GAM-69/t059-csv-exports-rpt-0506)
+   in the finding.** The orchestrator searched Linear: GAM-69 (`T059 — CSV
+   exports (RPT-05/06)`) is marked **Done**, and no open row covers the gap.
+   So this is item 27's exact shape — a task recorded Passed whose user-visible
+   surface no user can reach — and that, not the missing button, is the finding
+   worth writing.
 
-6. **Hours are read back from the database and compared to what the screens
-   show.** `readRows` on `v_student_hours.confirmed_hours` for your student, and
-   compare to the Hours tab, the leaderboard and the student's own home page.
-   State the rounding/formatting rule you had to apply to compare, and assert
-   the **underlying value**, so a formatting fix cannot hide a wrong number
-   (this is what GAM-303 was).
+6. **Hours are read back from the database and compared to the screens, with a
+   stated tolerance.** `readRows` on `v_student_hours.confirmed_hours`, compared
+   via `toBeCloseTo(…, 3)` or equivalent — the real value is
+   `3.999999112222222`-shaped and **no screen carries it**. State the
+   rounding/formatting rule each screen applies. A formatting fix must not be
+   able to hide a wrong value.
 
 7. **A screenshot exists for every surface compared**, committed, named
-   `<nn>-<persona>-<moment>` per the harness convention.
+   `<nn>-<persona>-<moment>`.
 
-8. **Findings are emitted as JSON and filed.** Write the inbox file in the
-   schema in `docs/swarm/active/FINDINGS-PIPELINE.md` **even if you found
-   nothing** — an empty `findings` array is a claim that you looked. Every
-   finding carries `findingKey`, `area: "w4"`, `source` for
-   `provenance/e2e-personas`, and `verifiedBy` naming the strongest evidence
-   (`browser` > `mutation` > `database` > `source`).
+8. **Findings are emitted as JSON and filed.** Write the inbox file in
+   `docs/swarm/active/FINDINGS-PIPELINE.md`'s schema **even if empty** — an
+   empty `findings` array is a claim that you looked. Each finding carries
+   `findingKey`, `area: "w4"`, the `provenance/e2e-personas` source, and
+   `verifiedBy` naming the strongest evidence (`browser` > `mutation` >
+   `database` > `source`).
 
-9. **The suite is re-runnable without a reseed** — prove it by running the
-   persona suite twice in a row and reporting both exit codes — and **each new
-   assertion group is proven non-vacuous by at least one mutation with the real
-   red output recorded**, per `mutation-replay`.
+9. **The suite is re-runnable without a reseed** — run the **whole** persona
+   suite twice and report both exit codes — and every new assertion group is
+   proven non-vacuous by at least one mutation with the real red output
+   recorded. Note: the round-1 gate did **not** verify the existing suite is
+   green today, so establish that baseline first and report it separately from
+   your own spec's result.
 
-Criteria 2, 3 and 4 are the point of the task. A green run that satisfies 1 and
-5–9 while quietly skipping a mutation on 2–4 is **not** a pass.
+Criteria 2, 3 and 4 are the point. A green run that satisfies the rest while
+skipping a mutation on 2–4 is **not** a pass.
 
 ---
 
-## Traps that have already cost time here
+## Traps — do not rediscover these
 
-From the skill and from this repo's own history — do not rediscover them:
-
-- **`readRows` bypasses RLS.** For "can this persona see it", use `readRowsAs`.
-- **`execAs` for persona writes**, not `readRowsAs` — a data-modifying CTE is
-  only legal at the top level.
+- **The reports tabs are NOT `role=tab`.** Gate-measured: `getByRole('tab')`
+  and `getByRole('tablist')` both count **0**. Astryx `Tab` renders
+  `<button type="button" … aria-current="page">` inside `<nav aria-label="Tabs">`.
+  Switch with `getByRole('button', { name: 'Hours', exact: true })`.
+- Live Participation-tab controls: `Filter students` (`role=combobox`), a
+  `Below 70%` toggle, `Student name` / `Participation %` radios, `Sort
+  descending`. Nothing equivalent on Hours or Events.
+- **`readRows` bypasses RLS.** Use `readRowsAs` when visibility is the point.
+- **`execAs` for persona writes** — a data-modifying CTE is only legal at top level.
 - **A blocked INSERT raises 42501; a blocked UPDATE reports `UPDATE 0`.** An
   exception-catching assertion silently passes for the UPDATE case.
 - **`getByRole('heading', {name})` matches substrings** — pass `exact: true`.
 - **Lists render an empty-state card with a duplicate primary button while the
   query is in flight** — wait for real data before selecting a control.
 - **`Escape` closes the whole Dialog**, not just a popover inside it.
-- **Downloads:** use Playwright's `waitForEvent('download')` and read the
-  saved file. Do not assert on the anchor's `href`.
 - **`pg_cron` is unavailable**, so `20260719000000_cron.sql` is not applied.
 - Known unrelated baseline: three `/accept-invite` tests in
   `tests/e2e/public-routes.spec.ts` fail on a clean checkout. Not yours.
-- **Stop the cluster** (`stop.sh`) when done and say that you did — a leftover
+- **Stop the cluster** (`stop.sh`) when done, and say you did — a leftover
   cluster holds port 55432 and breaks the next run.
+- Candidate finding the gate spotted in passing, worth confirming: the KPI strip
+  showed `Active students 7` against a team breakdown of `5 · 3 = 8` — the
+  breakdown appears to double-count a dual-team student.
 
 ---
 
 ## Evidence required in the completion report
 
-Per constitution "Evidence Requirements" and item 21:
-
-- Files inspected and files changed, with the **commit SHA** the work landed in
+- Files inspected and changed, with the **commit SHA** the work landed in
   (item 21 — "clean" is not "committed").
-- Every command run, with its **real exit code**. Do not infer success from a
-  pass count when the process exited nonzero.
-- The **verbatim red output** of every mutation, and the green re-run after
-  restoring it, plus confirmation the mutation happened in an isolated worktree
-  (item 23).
-- The six gates via the `gate-run` skill — one evidence block, not piped
-  through `tail`/`grep`/`wc`.
-- The findings JSON path and, per finding, either a Linear issue id or a stated
+- Every command with its **real exit code**. Do not infer success from a pass
+  count when the process exited nonzero.
+- The **verbatim red output** of every mutation, the green re-run after
+  reverting, and confirmation each mutation happened in an isolated worktree
+  (item 23) that you then removed.
+- The six gates via the `gate-run` skill — one evidence block, not piped through
+  `tail`/`grep`/`wc`.
+- The findings JSON path, and per finding either a Linear issue id or a stated
   reason there is none.
 - An explicit statement of **what you did not check**.
 
 ---
 
-## Least confident decisions (item 19d)
+## Least confident decisions (revision 2)
 
-Five, each with what would make it wrong. Attack these first.
+Round 1's list is retired: four of its five entries were load-bearing and two
+were wrong in the direction feared. These are the remaining doubts.
 
-1. **That the persona harness can reach `/reports` and render all three tabs at
-   all.** The skill's Tier 1 list names "roster/reports/settings/calendar/
-   outreach" as verified, but no committed spec drives the reports tabs, and
-   `33-coach-reports.png` exists without a spec I could attribute it to. *Wrong
-   if:* any reports query hits `HARNESS_UNSUPPORTED` in
-   `tests/e2e-harness/lib/postgrest.mjs` — most likely on a **view** read
-   (`v_student_participation`, `v_student_hours`, `v_season_kpis`) or on the
-   `.in(...)` list queries. If so the harness needs extending, which is
-   **outside Allowed Files**, and the packet must come back for that decision
-   rather than the worker widening its own scope.
-
-2. **That the CSV export is reachable and downloadable in this harness.**
-   `csvExport.ts` exports `buildRosterCsv`/`buildEventsCsv`/
-   `buildAttendanceCsv` as pure functions; I did **not** verify which control on
-   which tab invokes them, nor that the download path works headless. *Wrong
-   if:* the export is triggered by a code path Playwright cannot observe, or the
-   button lives on a surface other than the three reports tabs — in which case
-   AC5 needs restating against whatever the real control is.
-
-3. **That seeding the all-excused and genuine-zero students from the spec (not
-   from `seed.sql`) keeps the suite re-runnable.** I forbade editing `seed.sql`
-   so the shared fixture stays stable for other specs. *Wrong if:* the new
-   students must exist before the app's first render in a way `beforeEach`
-   cannot achieve, or if creating a `students` row also requires
-   `student_teams`, `profiles` and `auth.users` rows to make the view's joins
-   fire — `v_student_participation` joins `student_teams` on
-   `left_on is null`, so a bare `students` insert produces **no view row**, and
-   a spec that missed that would silently test the no-marks case while
-   believing it tested all-excused.
-
-4. **That the leaderboard is a genuine cross-check rather than the same read
-   twice.** `Leaderboard.tsx` and `HoursTab.tsx` may both bottom out in
-   `v_student_hours`, in which case AC2's "comparison" across those two is
-   nearly tautological and the real independent witness is `readRows`. *Wrong
-   if:* they share a loader — then say so plainly and rest AC6 on the database
-   read, rather than claiming a cross-screen agreement that could not have
-   failed.
-
-5. **That the KPI strip shows a per-student figure at all.** `kpi.ts` reads
-   `v_season_kpis` (season-level) and `v_season_kpi_team_counts` (per-team) —
-   neither is per-student. *Wrong if:* the strip carries no figure traceable to
-   one student, in which case the honest comparison is *team* or *season*
-   rollup vs. the sum of the students beneath it, and the packet's AC2 should
-   be read that way rather than forced.
-
-**Not on this list because they are disclosed and accepted:** that the harness's
-PostgREST is a subset (it fails loudly by design); that Edge Functions are
-stand-ins (none of these surfaces uses one).
+1. **That the existing persona suite is green on this branch today.** The gate
+   explicitly did **not** run it — it ran only throwaway probes. AC9 rests on
+   that baseline. *Wrong if:* something in the suite is already red, in which
+   case report the pre-existing failure separately and do not absorb it.
+2. **That `loaders/students.ts` is the right mutation target for AC3.** I chose
+   it because `students.ts:838-840` is the code that correctly produces the
+   em dash on StudentHome. *Wrong if:* the Participation tab's em dash comes
+   from `ParticipationTab.tsx`'s own `buildDisplayRows` synthesising an
+   all-null row rather than from that loader — then the mutation turns only one
+   of the two assertions red and the other is vacuous.
+3. **That the all-excused student can be given a working login from the spec.**
+   The gate proved the *view* needs only `students` + `student_teams`, and read
+   the `auth.users` seeding pattern, but never created a spec-seeded student and
+   logged in as them. *Wrong if:* `harness_password` or the profile trigger
+   (`20260718000000_invite_trigger.sql`) rejects a row inserted this way — then
+   AC3's StudentHome and `/meetings` legs must run against **Priya** with her
+   marks temporarily set to excused and restored in cleanup, which is what the
+   gate itself did.
+4. **That a formatting-divergence check is worth asserting rather than just
+   recording.** `4.0` vs `4 hrs` is a deliberate difference between a report and
+   a leaderboard, not obviously a defect. *Wrong if:* asserting it pins
+   cosmetic behaviour and makes the suite brittle — in which case record the
+   divergence in the findings JSON as a NIT and assert only database → screen.
+5. ~~That AC5′'s finding is not already filed.~~ **Resolved before dispatch.**
+   The orchestrator queried Linear and grepped `docs/swarm/linear-export.md`:
+   the only CSV row is **GAM-69 / T059, state `Done`**. No open row covers the
+   unreachable builders, so AC5′ files a new one and cites GAM-69. Recorded
+   here rather than deleted, because the search itself is the evidence.
