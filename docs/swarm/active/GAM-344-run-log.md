@@ -114,3 +114,19 @@ tiering judgement was required as part of claiming under item 28d).
     the `Mark 2 students` label needs a team-scope step I never prescribed;
     criterion 6's rendered-value comparison cannot be literal string equality.
   Revising now — round 2 is the last one item 19a allows before escalation.
+- **12:14Z — packet revision 2 written**, addressing all 12 required revisions.
+  The three that changed what the specs assert, not merely how: §3.2 rewritten
+  against `pg_get_viewdef` and the MET-01 migration with the gate's measured
+  table inline; criterion 6's journey redesigned so Priya is left **unmarked**
+  in the opt-in-ON meeting and receives an explicit `absent` (the only thing
+  that moves the figure), asserted as a delta plus a raw-`attendance`
+  cross-check rather than a hardcoded percentage; and the cleanup rewritten to
+  delete `attendance` and `rsvps` before `events`, with the title prefix moved
+  to `W3END `/`W3SER ` so it cannot collide with `'E2E %'`. Also: the
+  `execAdmin` time-shift is deleted outright (there is no time gate — the
+  affordance is gated on `status === 'scheduled'`), mutation 3 is replaced with
+  one that perturbs the written value, and the work is split into Turn A
+  (Task 1 + end-meeting + participation) and Turn B (series edit + cancel),
+  with **Turn A named as the priority if only one lands**.
+- **12:15Z — DISPATCHED `checker-premise` round 2 (opus, blocking).** *If this
+  line is the last one in this file, the run died holding this subagent.*
