@@ -139,3 +139,23 @@ take the heavier one.
   that revision 2 introduced no new unverified claim. No cluster run: round 1
   already executed the environment, and item 19a caps this gate at two rounds.
   *If this line is the last one in this file, the run died holding this subagent.*
+- **Premise gate round 2 VERDICT: DISPATCH** (nine MINOR/NIT corrections, no
+  BLOCKER, no MAJOR). The subagent returned; it is not in flight. Read-only, as
+  scoped. All ten prescribed revisions landed; **two landed only in their first
+  half**, which is exactly what a round-2 check is for. Worth recording:
+  - **My LCD 2 doubt was unfounded in the direction I feared, and real in
+    another.** `ParticipationTab.tsx:571,573-587` shows an all-excused student
+    takes the *metric-driven* branch, so the tab's `—` is a genuine database
+    NULL, not a synthesised row. But `students.ts:831-840` feeds **StudentHome
+    only**, so my one prescribed mutation could not have turned the other two of
+    AC3's three assertions red. Per-leg targets now named.
+  - **The seeding recipe named the wrong column** — `v_student_participation`
+    never reads `students.team_id`; it compares **`student_teams.team_id`**
+    (`met01:109,114`). Setting one and not the other yields zero view rows,
+    which is the precise silent mis-test the packet warns about two paragraphs
+    earlier. Corrected.
+  - Two more citation slips of mine (`meetings.ts:517`→`:519`, SQL quote
+    `:119-125`→`:123-128`), and `reports.ts:221` carries the **identical**
+    `participation_pct: number` type lie as `meetings.ts:302` — the tab escapes
+    the symptom only via a runtime null check. Added to AC3's finding.
+  Gate closed at two rounds (item 19a); no escalation needed.
