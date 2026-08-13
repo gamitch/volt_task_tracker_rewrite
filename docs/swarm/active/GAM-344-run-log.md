@@ -119,3 +119,50 @@ Every subagent here is dispatched `run_in_background: false` and waited on.
   verdict, no worker was dispatched, and nothing below was written. The next
   reader should treat the packet as UNGATED and re-run the gate rather than
   trust it. Round 2 is the cap (item 19a); a third REVISE escalates to the owner.
+- **04:40Z — VERDICT round 1: REVISE (3 BLOCKER, 3 MAJOR, 4 MINOR, 2 NIT).**
+  The gate returned. It ran rather than read — ~10 throwaway browser probes, a
+  full suite run, `psql` simulations in rolled-back transactions, and `vitest`
+  against the real exported `computeMeetingSeriesReconcilePlan`. It worked in
+  its own worktree (`/tmp/gate-344`, removed) and restored the shared database
+  to identical counts. **All three BLOCKERs were things my packet missed
+  entirely, not things it got wrong** — which is the distinction item 19d exists
+  to buy.
+  - **BLOCKER 1 — my "collides with nothing" was false.**
+    `attendance_session_id_fkey` is `ON DELETE RESTRICT`, so
+    `coach-meeting.spec.ts:63`'s `delete from events where title like 'E2E %'`
+    **throws** once any new test has written attendance. From run 2 onward every
+    test in the file errors in `beforeEach`. AC 10 fails outright.
+  - **BLOCKER 2 — none of my three mutations could reach the browser.** The
+    suite drives a **prebuilt bundle** with `reuseExistingServer: true` against a
+    hardcoded `127.0.0.1:4174`. A `src/**` mutation in the worker's worktree
+    (which item 23 requires) never gets built into the bundle the browser loads,
+    so all three mutations stay green and the required red output is
+    unobtainable. Measured: probe runs finished in 4-6s with no build step.
+  - **BLOCKER 3 — mutation 3 was a no-op and my stated mechanism was wrong.**
+    `plan.toUpdate` already contains **every** kept session (measured 3/3 by
+    running the real function), so "force every session into `toUpdate`" changes
+    nothing. T611's actual protection lives in
+    `ScheduleMeetingsDialog.tsx:1145-1151`'s `buildEditDesiredFutureSessions`.
+    My §5a taught the worker a false mechanism.
+  - **Two of my six declared doubts were REFUTED, and the design survives.**
+    §8.1: a future session **can** be ended through `LiveConsole` — the gate
+    drove `/meetings/live/…-05` and got `End meeting` plus `Mark 3 students…`,
+    then completed a full end. §8.2: the series edit **is** reachable, though my
+    description was wrong in three ways (a row button named `Edit – <title>`
+    with an **en dash**, dialog "Edit meeting series", prefilled Custom dates).
+  - **§8.3 CONFIRMED as a real defect.** The end-meeting summary loads once
+    (`EndMeetingDialog.tsx:875`) and never invalidates, so marking a student in
+    the console does **not** change the checkbox count. The coach is shown
+    "0 present · 3 will be marked absent" immediately before a write that will
+    not do that. New finding; not GAM-283 (that is failure *reporting*).
+  - **§8.4 PARTLY WRONG.** Jordan 50.0 / Sam 66.7 hold everywhere; **Priya's
+    100.0 → 80.0 holds only from a pristine reseed** — against the cluster as it
+    stands she goes 100.0 → 100.0, because `coach-checkin.spec.ts` has already
+    left her a `late` row on `…-04`. My §4 said "before any spec runs" and that
+    was false.
+  - **§8.5 and §8.6 SOUND.** The IPv6 bind was reproduced directly
+    (`LISTEN [::1]:4179`, `curl 127.0.0.1 → 000`, `curl [::1] → 200`), and
+    GAM-355's existence in `Backlog` was confirmed in the export.
+  - Also returned four cheaper paths I had missed, including that the
+    series-edit confirm dialog **already states** "0 added · 0 removed · 3 kept"
+    on screen — the user-visible form of AC 5, free in one locator.
