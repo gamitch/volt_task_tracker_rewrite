@@ -59,3 +59,28 @@ tiering judgement was required as part of claiming under item 28d).
   `npm install --no-save playwright` (no `--no-package-lock`), verified to
   leave `@astryxdesign/core` at 0.1.6, `package.json`/`package-lock.json`
   untouched, and typecheck clean.
+- **12:02Z — harness proven end to end, and a second measured fact about
+  `main`.** `vite preview` binds `[::1]` only in this container while the
+  persona config polls `http://127.0.0.1:4174`, so the config's own `webServer`
+  block times out at 180 s; pre-starting the preview with `--host 127.0.0.1`
+  and letting `reuseExistingServer: true` adopt it works. With that,
+  `coach-meeting.spec.ts` ran: **3 passed, 2 failed**. Both failures are the
+  archived team `Volt Legacy 2201` no longer being offered in the scope picker
+  — correct behaviour since GAM-305/T615 shipped `excludeArchivedTeams`
+  (`src/lib/teams/archivedTeams.ts`), and the spec's own comment at `:101-105`
+  nominates that exact line for deletion when it happens. So the spec is stale,
+  not the app. Root cause of the rot: `grep -n "e2e-personas"
+  .github/workflows/*.yml` returns nothing — **CI never runs this suite.**
+  That is a finding and is in the packet.
+- **12:05Z — packet written** (`docs/swarm/active/GAM-344-packet.md`), with the
+  item-19d Least confident decisions list. Writing it surfaced one defect in my
+  own plan before any agent saw it: `coach-meeting.spec.ts`'s `beforeEach` does
+  `delete from events where title like 'E2E %'`, and `'E2E %'` matches the
+  `'E2E END %'` prefix I had chosen for the new file. Recorded as decision 5
+  rather than quietly renamed, because the premise checker should judge whether
+  alphabetical file ordering is a property worth relying on.
+- **12:06Z — DISPATCHED `checker-premise` (opus, blocking, `run_in_background:
+  false`)** against the packet. *If this line is the last one in this file, the
+  run died holding this subagent* — that is the failure `AGENTS.md` § "Two
+  walls" item 2 records, and its absence of a verdict line below is the
+  evidence, not an oversight.
