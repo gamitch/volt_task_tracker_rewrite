@@ -64,4 +64,46 @@ test.describe('coach records attendance in the live console', () => {
 
     await capture(page, '41-coach-live-console-after-mark');
   });
+
+  test('changing a mark overwrites the existing row rather than duplicating it', async ({ page }) => {
+    // AC 3: Present -> Late must leave exactly one row for
+    // (session_id, student_id), with the LATER value.
+    //
+    // Which assertion actually protects you, precisely: `attendance` carries a
+    // live `attendance_session_id_student_id_key UNIQUE (session_id, student_id)`
+    // constraint, so a regression from upsert to a plain insert raises 23505
+    // and can NEVER produce length 2. The count below is therefore a
+    // schema-backed corroboration, not the detector. **`status === 'late'` is
+    // the assertion that detects a regression** -- verified by mutation: with
+    // the Late click and its aria assertion both removed, this test goes red on
+    // `Expected "late" / Received "present"`.
+    expect(attendanceFor(SEED.studentPriya)).toHaveLength(0);
+
+    await signIn(page, 'coach');
+    await page.goto(`/meetings/live/${SEED.liveSession}`);
+
+    const marks = page.getByRole('radiogroup', {
+      name: `Attendance for ${PERSONAS.student.displayName}`,
+    });
+    await expect(marks).toBeVisible({ timeout: 20_000 });
+
+    const present = marks.getByRole('radio', { name: 'Present' });
+    await present.click();
+    await expect.poll(() => attendanceFor(SEED.studentPriya).length, { timeout: 20_000 }).toBe(1);
+    expect(attendanceFor(SEED.studentPriya)[0].status).toBe('present');
+
+    const late = marks.getByRole('radio', { name: 'Late' });
+    await late.click();
+    await expect(late).toHaveAttribute('aria-checked', 'true');
+
+    // The database is the witness, not the radio's aria state: exactly one
+    // row for this (session, student) pair, and its value is the later mark.
+    await expect
+      .poll(() => attendanceFor(SEED.studentPriya).length, { timeout: 20_000 })
+      .toBe(1);
+    const [row] = attendanceFor(SEED.studentPriya);
+    expect(row.status).toBe('late');
+
+    await capture(page, '42-coach-live-console-after-overwrite');
+  });
 });

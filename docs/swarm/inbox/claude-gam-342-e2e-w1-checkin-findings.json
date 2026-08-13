@@ -1,0 +1,95 @@
+{
+  "source": "e2e-personas",
+  "branch": "claude/gam-342-e2e-w1-checkin",
+  "commit": "135b8bb41ce1240c21b02ce8320f2e95a9aa5776",
+  "measuredAt": "2026-08-13T02:24:52Z",
+  "findings": [
+    {
+      "findingKey": "checkin/unvalidated-200-payload-white-screens-result-page",
+      "title": "CheckinResult crashes to a blank page on an unvalidated 200 check-in payload",
+      "severity": "MINOR",
+      "area": "w1",
+      "evidence": [
+        { "file": "src/pages/checkin/CheckinResult.tsx", "line": 343,
+          "quote": "return { ok: true, data: payload as CheckinResponsePayload };" },
+        { "file": "src/pages/checkin/CheckinResult.tsx", "line": 773,
+          "quote": "{state.attendance.check_in_at ? (" }
+      ],
+      "observed": "Submitting a 6-character code through /checkin's manual short-code form posts { session_id, code } to the harness's checkin stand-in, gets 200 with a rotating-QR-token body back, and the page white-screens: `pageerror: TypeError: Cannot read properties of undefined (reading 'check_in_at')`, document.body.innerText === '', #root empty. There is no error boundary.",
+      "expected": "Either the response is validated before being cast, or a missing check_in_at renders a generic fallback the way the 'already checked in' branch already does for method='coach' rows with no check_in_at.",
+      "verifiedBy": "browser",
+      "reproduction": "npx playwright test -c tests/e2e-harness/playwright.personas.config.ts tests/e2e-personas/student-checkin.spec.ts -g 'code-submit boundary'",
+      "proposedScope": "Validate the checkin response shape before casting at CheckinResult.tsx:343, or add an error boundary around the result card. Note: StudentHome's own code field does NOT crash on the same response -- this is CheckinResult-specific. This is a harness-shaped input (the harness's `checkin` stand-in has no short-code redemption branch and mints a QR token instead); a real deployed checkin Edge Function would not return this shape for a code POST, so triage should weigh how reachable an equivalently-shaped response is from production before prioritizing."
+    },
+    {
+      "findingKey": "e2e-personas/self-checkoff-requires-fixture-arrangement",
+      "title": "SelfCheckoffDialog is unreachable in the unmodified seed fixtures",
+      "severity": "MINOR",
+      "area": "w1",
+      "evidence": [
+        { "file": "src/pages/outreach/OutreachList.tsx", "line": 4019,
+          "quote": "allowSelfCheckoff={false}" },
+        { "file": "src/pages/outreach/OutreachList.tsx", "line": 4031,
+          "quote": "allowSelfCheckoff" },
+        { "file": "src/pages/outreach/OutreachList.tsx", "line": 3592,
+          "quote": "const showSelfCheckoffButton = allowSelfCheckoff && hasCompletedSession;" }
+      ],
+      "observed": "On the unmodified seed, Library STEM Night (e0e00000-...-0002) buckets into 'Upcoming' because its session 5e550000-...-0008 is still 'scheduled' (2026-08-23), and Upcoming always passes allowSelfCheckoff={false}. /outreach as student exposes only a 'Hide session details' toggle and an RSVP radiogroup for that event -- no 'Mark attendance' button anywhere in the seed.",
+      "expected": "This is not a defect in the UI -- the seed simply has no Past outreach event carrying an unrecorded, self-checkoff-eligible session. A spec (or a future seed change) that wants to exercise this surface must arrange one.",
+      "verifiedBy": "browser",
+      "reproduction": "npx playwright test -c tests/e2e-harness/playwright.personas.config.ts tests/e2e-personas/student-checkin.spec.ts -g 'self-checkoff'",
+      "proposedScope": "No code change proposed. Candidate: add a Past, unrecorded, self-checkoff-eligible outreach session directly to tests/e2e-harness/seed.sql so future specs do not each need their own execAdmin arrangement line."
+    },
+    {
+      "findingKey": "e2e-personas/harness-missing-checkin-token-stand-in",
+      "title": "The harness has no stand-in for the checkin-token Edge Function the kiosk calls",
+      "severity": "MINOR",
+      "area": "w1",
+      "evidence": [
+        { "file": "src/lib/supabase/loaders/kiosk.ts", "line": 369,
+          "quote": "'checkin-token'," }
+      ],
+      "observed": "Kiosk.tsx's loader invokes the 'checkin-token' Edge Function via the loader at kiosk.ts:369. tests/e2e-harness/server.mjs's EDGE_FUNCTIONS map (lines 474-500) has no such key, so the call 404s with {\"message\":\"harness: no stand-in for Edge Function \\\"checkin-token\\\"\"}. The kiosk page catches this and shows 'QR not available yet.' -- it degrades honestly rather than crashing, and the live tally (e.g. '1 of 3 checked in') still renders correctly from the attendance/students tables, which do go through PostgREST.",
+      "expected": "N/A for the app -- this is a harness coverage gap, not a production bug. tests/e2e-harness/** is forbidden to this worker's allowed-files list, so filing this as a finding (rather than fixing it) is the correct deliverable here.",
+      "verifiedBy": "browser",
+      "reproduction": "npx playwright test -c tests/e2e-harness/playwright.personas.config.ts tests/e2e-personas/student-checkin.spec.ts -g kiosk",
+      "proposedScope": "Add a 'checkin-token' entry to EDGE_FUNCTIONS in tests/e2e-harness/server.mjs, against the real function's contract in supabase/functions/checkin-token/, if QR-token display coverage is ever wanted from this harness."
+    },
+    {
+      "findingKey": "e2e-personas/preview-ipv6-only-webserver-timeout",
+      "title": "vite preview binds IPv6-only, causing a silent 180s webServer timeout against the IPv4-polling Playwright config",
+      "severity": "MINOR",
+      "area": "w1",
+      "evidence": [
+        { "file": "tests/e2e-harness/playwright.personas.config.ts", "line": 29,
+          "quote": "127.0.0.1" }
+      ],
+      "observed": "`npm run preview` alone (no --host flag) binds `vite preview` to [::1] only. playwright.personas.config.ts's webServer readiness check polls 127.0.0.1:4174, which never connects, and the run times out silently after 180s on a fresh checkout with no explanatory error pointing at the mismatch.",
+      "expected": "The preview server should be reachable on the same address family the config polls, or the config/README should say explicitly that --host 127.0.0.1 is required.",
+      "verifiedBy": "browser",
+      "reproduction": "npm run preview -- --outDir dist-e2e --port 4174 --strictPort   (binds [::1] only; contrast with --host 127.0.0.1)",
+      "proposedScope": "Document the required --host 127.0.0.1 flag in tests/e2e-harness/README.md (out of this worker's allowed files) or bake it into the npm script the harness itself invokes."
+    },
+    {
+      "findingKey": "e2e-personas/five-pre-existing-w1-suite-failures-not-in-scope",
+      "title": "Five pre-existing persona-suite test failures live in files this task may not edit and are not this task's regression",
+      "severity": "MINOR",
+      "area": "w1",
+      "evidence": [
+        { "file": "tests/e2e-personas/coach-meeting.spec.ts", "line": 88, "quote": "Volt Legacy 2201" },
+        { "file": "tests/e2e-personas/coach-meeting.spec.ts", "line": 115, "quote": "Volt Legacy 2201" },
+        { "file": "tests/e2e-personas/student-parent.spec.ts", "line": 66,
+          "quote": "FINDING 4: an RSVP made on the student home never reaches the database" },
+        { "file": "tests/e2e-personas/student-parent.spec.ts", "line": 27,
+          "quote": "getByText(/\\/ 100 h \\(/)" },
+        { "file": "tests/e2e-personas/student-parent.spec.ts", "line": 121,
+          "quote": "getByText(/\\/ 100 h \\(/)" }
+      ],
+      "observed": "Baseline before and after this task's changes, reproducible across separate runs: the full persona suite is 21 passed, 5 failed before this task; 27 passed, 5 failed after it (this branch adds 6 tests -- 5 in student-checkin.spec.ts, 1 in coach-checkin.spec.ts -- and the same 5 keep failing), exit 1. coach-meeting.spec.ts:88/:115 fail because 'Volt Legacy 2201' (archived) is no longer offered in the team picker -- stale against shipped archived-team-picker work. student-parent.spec.ts:66 fails because the RSVP control now genuinely writes a fresh rsvps row, contradicting that test's own premise (its module doc claims 'local-only. No Supabase write happens here.'). student-parent.spec.ts:27 and :121 fail on getByText(/\\/ 100 h \\(/) not found -- the hours-float assertions.",
+      "expected": "These are pre-existing and out of this task's allowed-files scope (coach-meeting.spec.ts, student-parent.spec.ts are not in GAM-342's allowed-files list). Recorded here per packet instruction rather than chased or fixed.",
+      "verifiedBy": "browser",
+      "reproduction": "npx playwright test -c tests/e2e-harness/playwright.personas.config.ts",
+      "proposedScope": "Separate task: update coach-meeting.spec.ts's team-picker expectations, re-verify and fix/relabel student-parent.spec.ts's RSVP premise (FINDING 4 may itself be stale now that the control writes), and investigate the hours-float selector regression."
+    }
+  ]
+}
