@@ -64,3 +64,8 @@ summary.
   token and has **no redemption branch at all** — so no code submission can
   produce an `attendance` row here. Ends with five Least confident decisions
   (item 19d).
+- **DISPATCHED `checker-premise` (opus, round 1)** on `GAM-342-packet.md`, with
+  `run_in_background: false`. **If this line is the last one in this file, the
+  run died holding this subagent** — the gate never returned a verdict, no
+  worker was dispatched, and nothing below was written. The next reader should
+  assume the packet is ungated and re-run the gate rather than trust it.
