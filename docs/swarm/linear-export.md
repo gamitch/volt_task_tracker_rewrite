@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-13T07:08:30.647Z from team `Gamitch`.
+Exported 2026-08-13T11:37:07.852Z from team `Gamitch`.
 
 - **365** issues (242 archived)
-- **70** not yet completed or cancelled
+- **69** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -62,8 +62,7 @@ Exported 2026-08-13T07:08:30.647Z from team `Gamitch`.
 | [GAM-340](https://linear.app/gamitch/issue/GAM-340/student-teams-has-no-writer-so-a-re-teamed-student-keeps-receiving) | — | Backlog | area/w5 tier/unreviewed | `student_teams` has no writer, so a re-teamed student keeps receiving their former team's events |
 | [GAM-341](https://linear.app/gamitch/issue/GAM-341/no-assertion-guards-the-my-student-ids-test-in-the-new-events-rls) | — | Backlog | area/w5 tier/unreviewed | No assertion guards the `my_student_ids()` test in the new events RLS policies — removing it leaves the suite green |
 | [GAM-343](https://linear.app/gamitch/issue/GAM-343/e2e-w2-run-an-outreach-event-create-rsvp-attend-complete-hours-land) | — | In Review | area/w2 provenance/other tier/heavy | E2E — W2 Run an outreach event: create → RSVP → attend → complete → hours land |
-| [GAM-344](https://linear.app/gamitch/issue/GAM-344/e2e-w3-run-a-meeting-schedule-attendance-participation-percent) | — | In Progress | area/w3 provenance/other tier/heavy | E2E — W3 Run a meeting: schedule → attendance → participation % |
-| [GAM-345](https://linear.app/gamitch/issue/GAM-345/e2e-w4-hours-and-goal-accounting-the-same-students-numbers-agree-on) | — | In Review | area/w4 provenance/other tier/heavy | E2E — W4 Hours and goal accounting: the same student's numbers agree on every screen |
+| [GAM-344](https://linear.app/gamitch/issue/GAM-344/e2e-w3-run-a-meeting-schedule-attendance-participation-percent) | — | Todo | area/w3 provenance/other tier/heavy | E2E — W3 Run a meeting: schedule → attendance → participation % |
 | [GAM-346](https://linear.app/gamitch/issue/GAM-346/e2e-w5-home-dashboards-what-each-role-lands-on-and-what-they-can-act) | — | Backlog | area/w5 provenance/other tier/unreviewed | E2E — W5 Home dashboards: what each role lands on, and what they can act on |
 | [GAM-347](https://linear.app/gamitch/issue/GAM-347/e2e-w6-calendar-and-subscribe-a-student-subscribes-and-the-feed-stays) | — | Backlog | area/w6 provenance/other tier/unreviewed | E2E — W6 Calendar and subscribe: a student subscribes and the feed stays current |
 | [GAM-348](https://linear.app/gamitch/issue/GAM-348/e2e-w7-roster-and-invites-adding-people-changing-them-and-inviting-a) | — | Backlog | area/w7 provenance/other tier/unreviewed | E2E — W7 Roster and invites: adding people, changing them, and inviting a parent |
@@ -384,5 +383,6 @@ Exported 2026-08-13T07:08:30.647Z from team `Gamitch`.
 | [GAM-332](https://linear.app/gamitch/issue/GAM-332/the-reconciliation-sweep-drops-merged-prs-whose-declaration-failed-to) | — | Done | The reconciliation sweep drops merged PRs whose declaration failed to parse — the cases most likely to be wrong |
 | [GAM-335](https://linear.app/gamitch/issue/GAM-335/shadow-mode-computes-its-intended-action-from-the-post-automation) | — | Done | Shadow mode computes its intended action from the post-automation state, so an ordinary declared merge always scores MISMATCH — the 10-MATCH exit criterion is unreachable |
 | [GAM-342](https://linear.app/gamitch/issue/GAM-342/e2e-w1-check-in-a-student-arrives-and-gets-counted) | — | Done | E2E — W1 Check in: a student arrives and gets counted |
+| [GAM-345](https://linear.app/gamitch/issue/GAM-345/e2e-w4-hours-and-goal-accounting-the-same-students-numbers-agree-on) | — | Done | E2E — W4 Hours and goal accounting: the same student's numbers agree on every screen |
 
 Full descriptions, relations and timestamps are in `linear-export.json`.

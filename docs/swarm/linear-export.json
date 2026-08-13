@@ -1,6 +1,6 @@
 {
   "meta": {
-    "exportedAt": "2026-08-13T07:08:30.647Z",
+    "exportedAt": "2026-08-13T11:37:07.852Z",
     "team": "Gamitch",
     "teamKey": "GAM",
     "issueCount": 365,
@@ -6257,7 +6257,7 @@
         "provenance/other",
         "tier/heavy"
       ],
-      "assignee": null,
+      "assignee": "George Mitchom",
       "blockedBy": [],
       "blocks": [],
       "createdAt": "2026-08-13T01:15:29.889Z",
@@ -6270,8 +6270,8 @@
       "identifier": "GAM-344",
       "legacyId": null,
       "title": "E2E — W3 Run a meeting: schedule → attendance → participation %",
-      "state": "In Progress",
-      "stateType": "started",
+      "state": "Todo",
+      "stateType": "unstarted",
       "archived": false,
       "labels": [
         "area/w3",
@@ -6291,19 +6291,19 @@
       "identifier": "GAM-345",
       "legacyId": null,
       "title": "E2E — W4 Hours and goal accounting: the same student's numbers agree on every screen",
-      "state": "In Review",
-      "stateType": "started",
+      "state": "Done",
+      "stateType": "completed",
       "archived": false,
       "labels": [
         "area/w4",
         "provenance/other",
         "tier/heavy"
       ],
-      "assignee": null,
+      "assignee": "George Mitchom",
       "blockedBy": [],
       "blocks": [],
       "createdAt": "2026-08-13T01:16:34.589Z",
-      "completedAt": null,
+      "completedAt": "2026-08-13T11:36:50.777Z",
       "canceledAt": null,
       "url": "https://linear.app/gamitch/issue/GAM-345/e2e-w4-hours-and-goal-accounting-the-same-students-numbers-agree-on",
       "description": "Drive the reporting surfaces in a real browser, with a student whose data is known, and check that every screen showing a number about them shows the same number.\n\nThis workflow has no end-to-end coverage, and it is the one where a wrong answer looks exactly like a right one.\n\n## Why it is worth doing\n\nThese are the figures the team is judged on. Two open rows already say the app disagrees with itself here: [GAM-300](https://linear.app/gamitch/issue/GAM-300/t807-two-loaders-still-apply-the-greatestx-1-floor-t509-removed-and) records an all-excused student reading `—` on one screen and `0%` on another, and [GAM-303](https://linear.app/gamitch/issue/GAM-303/t808-students-and-parents-see-raw-float-hours-39999983633333334-100-h) fixed raw float hours that reached students before anyone noticed. Both were found by reading source, not by looking at the screens together.\n\nA cross-screen comparison is the test that would have caught both, and nothing does it today.\n\n## What exists already\n\nNothing. No spec file touches `pages/reports/**`, the leaderboard, or the KPI strip.\n\n## What we want\n\nA run that sets up one student's attendance and hours through the app, then reads that student's numbers from every surface that shows them and compares:\n\n* the three reports tabs — Participation, Hours, Events — including their filters and the CSV export\n* the leaderboard\n* the staff KPI strip\n* the same student's own home page\n\nInteract rather than observe: change the tab, change a filter, sort, export, and confirm the exported file carries the same figures the table showed.\n\nScreens: `pages/reports/**`, `pages/outreach/Leaderboard.tsx`, backed by `loaders/reports.ts` and `loaders/kpi.ts`. The views underneath are W4's migrations.\n\n## The one constraint\n\n**Zero and \"no rate\" are different answers and the test must be able to tell them apart.** A student with five expected sessions and none attended is a real `0%`. A student excused from all five has no participation rate and should read as an em dash. T509 changed the database specifically to stop fabricating the zero. A fixture that only covers the ordinary case cannot see the difference, so build the all-excused student deliberately.\n\n**Do not change the views to make a screen agree.** If a figure is wrong, the finding is which screen is lying; T509's SQL is applied and correct.\n\n## How to run it\n\nUse the `e2e-personas` skill. The harness, the four personas, `capture()` and the RLS-accurate `readRowsAs`/`execAs` all exist — read `tests/e2e-personas/personaHarness.ts` and copy the shape of `coach-checkin.spec.ts`. Seed the student's attendance with `execAdmin` so the arithmetic is known before the screens are read.\n\nScreenshots land in `tests/e2e-personas/screenshots/` and are committed. Capture each screen showing the figure, so a disagreement is visible side by side.\n\nFindings go to `docs/swarm/inbox/<branch>-findings.json` and are filed by `scripts/linear-file-findings.mjs` into Backlog, deduped by `findingKey`, linked back to this issue. Promotion to Todo stays the owner's call under item 28a.\n\n## Acceptance criteria\n\n1. **The run interacts, not just loads** — tabs switched, filters changed, a sort applied, the CSV exported.\n2. **One student's figure is read from every surface that shows it and compared.** *Mutation: change one loader's arithmetic → red on the comparison, not just on that screen's own test.*\n3. **The all-excused case is covered and reads as no-rate everywhere**, not as zero. *Mutation: restore a* `greatest(x, 1)`*-style floor in a loader → red.* This is [GAM-300](https://linear.app/gamitch/issue/GAM-300/t807-two-loaders-still-apply-the-greatestx-1-floor-t509-removed-and)'s open defect; if it is still live, the finding cites that row rather than opening a new one.\n4. **A genuine zero still reads as zero.** *Mutation: return no-rate whenever the percentage is zero → red.*\n5. **The CSV export matches the table it came from**, compared field by field rather than by row count.\n6. **Hours are read back from the database and compared to what the screens show**, so a formatting fix cannot hide a wrong value.\n7. **Screenshots exist for every surface compared** and are committed.\n8. **Findings are emitted as JSON and filed.** A run that finds nothing records that explicitly.\n9. **The suite is re-runnable without a reseed**, and each new spec is proven non-vacuous by at least one mutation with the red output recorded.\n\n## Size and tier\n\nOne or two spec files, plus fixture setup for a student with a deliberately awkward attendance pattern. No production code changes expected; a disagreement found here is a finding, not a fix to make in this run.\n\nTier unjudged, because item 28c makes that the picker's first act.\n\n## Suggested priority: high urgency, medium cost\n\nTwo known disagreements are already filed against this surface and both were found by reading rather than looking. The cross-screen check is the cheapest way to stop the next one."
